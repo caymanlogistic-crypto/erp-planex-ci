@@ -1,20 +1,26 @@
 name: P41 Finance Runtime Acceptance
 on:
-  workflow_run:
-    workflows: ["ERPv2 Controlled Deploy"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed 40-character SHA expected on /erpv2'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_P41_MIGRATION to authorize production migration 063'
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
   verify:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ inputs.confirm_migration == 'APPLY_P41_MIGRATION' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
       - name: Configure SSH and verify deployed SHA
         env:
@@ -23,17 +29,18 @@ jobs:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
           PORT: ${{ secrets.ERPV2_SSH_PORT }}
           USER: ${{ secrets.ERPV2_SSH_USER }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ inputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SHA"
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/p41"
           printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/p41" "$HOME/.ssh/known_hosts"
           got="$(ssh -p "$PORT" -i "$HOME/.ssh/p41" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt')"
           test "$got" = "$SHA"
-          echo "EXPECTED_SHA=$SHA" >> "$GITHUB_ENV"
       - name: Apply tenant migration 063
         env:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -42,8 +49,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          root=/home/s/spugovxsim/planexp
-          live="$root/public_html/""erpv2"
+          live=/home/s/spugovxsim/planexp/public_html/erpv2
           ssh -p "$PORT" -i "$HOME/.ssh/p41" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "cd '$live' && /usr/bin/php8.5 scripts/p41_apply_finance_matching_migration.php" | tee P41_MIGRATION.txt
           grep -q 'P41_FINANCE_MIGRATION_OK' P41_MIGRATION.txt
       - uses: actions/setup-node@v4
@@ -73,14 +79,11 @@ jobs:
           echo "::add-mask::$cred"
           echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
       - name: Read-only finance Playwright acceptance
-        shell: bash
-        run: |
-          set -euo pipefail
-          node .github/p41/P41_finance_runtime.js | tee P41_RUNTIME.txt
+        run: node .github/p41/P41_finance_runtime.js | tee P41_RUNTIME.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P41_finance_runtime_${{ github.event.workflow_run.head_sha }}
+          name: P41_finance_runtime_${{ inputs.source_sha }}
           path: |
             P41_MIGRATION.txt
             P41_RUNTIME.txt

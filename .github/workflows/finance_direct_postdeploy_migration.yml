@@ -1,10 +1,16 @@
 name: Finance Direct Postdeploy Migration
 
 on:
-  workflow_run:
-    workflows: ["ERPv2 Controlled Deploy"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed 40-character SHA expected on /erpv2'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_FINANCE_076 to authorize production migration 076'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -19,16 +25,21 @@ env:
 
 jobs:
   migrate-and-verify:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ inputs.confirm_migration == 'APPLY_FINANCE_076' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 1
-      - name: Syntax
+      - name: Validate source SHA and syntax
+        env:
+          SHA: ${{ inputs.source_sha }}
         run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SHA"
           php -l scripts/finance_direct_verify.php
           php -l scripts/finance_direct_apply_076.php
       - name: Configure SSH
@@ -46,7 +57,7 @@ jobs:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
           marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/finance_direct_post_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt')"
@@ -143,7 +154,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: finance_direct_postdeploy_${{ github.event.workflow_run.head_sha }}
+          name: finance_direct_postdeploy_${{ inputs.source_sha }}
           path: finance_direct_post_*.txt
           if-no-files-found: error
           retention-days: 30

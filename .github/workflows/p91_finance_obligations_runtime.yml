@@ -1,20 +1,26 @@
 name: P91 Finance Obligations Runtime
 on:
-  workflow_run:
-    workflows: ["ERPv2 Controlled Deploy"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed 40-character SHA expected on /erpv2'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_P91_MIGRATION to authorize finance obligations production migration'
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
   migrate-and-verify:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ inputs.confirm_migration == 'APPLY_P91_MIGRATION' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
       - name: Configure SSH and verify deployed SHA
         env:
@@ -23,10 +29,12 @@ jobs:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
           PORT: ${{ secrets.ERPV2_SSH_PORT }}
           USER: ${{ secrets.ERPV2_SSH_USER }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ inputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SHA"
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/p91"
           printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
@@ -41,14 +49,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          live="/home/s/spugovxsim/planexp/public""_html/erpv2"
+          live=/home/s/spugovxsim/planexp/public_html/erpv2
           ssh -p "$PORT" -i "$HOME/.ssh/p91" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "cd '$live' && /usr/bin/php8.5 -l scripts/p91_apply_finance_obligations_migration.php && /usr/bin/php8.5 scripts/p91_apply_finance_obligations_migration.php" | tee P91_FINANCE_OBLIGATIONS.txt
           grep -q 'No syntax errors detected' P91_FINANCE_OBLIGATIONS.txt
           grep -q 'P91_FINANCE_OBLIGATIONS_OK' P91_FINANCE_OBLIGATIONS.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P91_finance_obligations_${{ github.event.workflow_run.head_sha }}
+          name: P91_finance_obligations_${{ inputs.source_sha }}
           path: P91_FINANCE_OBLIGATIONS.txt
           if-no-files-found: warn
       - name: Cleanup SSH

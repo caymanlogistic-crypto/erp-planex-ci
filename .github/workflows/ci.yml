@@ -131,14 +131,13 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          allowed = {
-              Path('.github/workflows/erpv2_controlled_deploy.yml'),
-              Path('.github/workflows/ci.yml'),
-          }
+
           deploy_engine = 'P07_' + 'deploy_erpv2.sh'
           violations = []
+          production_write = []
+
           for p in Path('.github/workflows').glob('*.y*ml'):
-              if p in allowed:
+              if p.name == 'ci.yml':
                   continue
               text = p.read_text(encoding='utf-8')
               mutating = any(token in text for token in [
@@ -147,14 +146,81 @@ jobs:
                   'deploy_backups',
                   'git push origin',
               ])
-              if mutating:
+              if not mutating:
+                  continue
+
+              production_write.append(str(p))
+              manual = '\n  workflow_dispatch:' in text
+              automatic = any(trigger in text for trigger in [
+                  '\n  workflow_run:',
+                  '\n  push:',
+                  '\n  pull_request:',
+                  '\n  schedule:',
+              ])
+              if not manual or automatic:
                   violations.append(str(p))
-          print('deploy-capable workflow violations=', violations)
+
+          print('production-write workflows=', production_write)
+          print('automatic production-write violations=', violations)
           raise SystemExit(1 if violations else 0)
           PY
 
-      - name: Canonical P21 control-plane policy
+      - name: Canonical manual deploy policy
         shell: bash
         run: |
           set -euo pipefail
-          python3 tools/p21_control_plane_audit.py --root .
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          workflows = Path('.github/workflows')
+          deploy_files = []
+          for p in workflows.glob('*.y*ml'):
+              if p.name == 'ci.yml':
+                  continue
+              text = p.read_text(encoding='utf-8')
+              if 'P07_deploy_erpv2.sh' in text:
+                  deploy_files.append((p, text))
+
+          assert len(deploy_files) == 1, f'expected exactly one deploy workflow, found {len(deploy_files)}'
+          p, text = deploy_files[0]
+          assert p.name == 'erpv2_controlled_deploy.yml', f'unexpected deploy workflow: {p}'
+
+          on_match = re.search(r'(?ms)^on:\s*\n(.*?)(?=^[A-Za-z_][A-Za-z0-9_-]*:\s*$)', text)
+          assert on_match, 'deploy workflow on: block not found'
+          on_block = on_match.group(1)
+          events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', on_block, flags=re.M)
+          assert sorted(set(events)) == ['workflow_dispatch'], f'deploy triggers must be workflow_dispatch only, got {events}'
+
+          for required in [
+              'source_sha:',
+              'confirm_deploy:',
+              'required: true',
+              'DEPLOY_ERPV2',
+              '^[0-9a-f]{40}$',
+              'git cat-file -e "${SOURCE_SHA}^{commit}"',
+              'git checkout --detach "$SOURCE_SHA"',
+              'test "$(git rev-parse HEAD)" = "$SOURCE_SHA"',
+              'P07_erpv2_deployed_commit.txt',
+          ]:
+              assert required in text, f'missing deploy safety contract: {required}'
+
+          forbidden_auto = ['workflow_run:', '\n  push:', '\n  pull_request:', '\n  schedule:']
+          for token in forbidden_auto:
+              assert token not in on_block, f'forbidden deploy trigger: {token.strip()}'
+
+          migration_patterns = [
+              r'php\s+artisan\s+migrate',
+              r'doctrine:migrations',
+              r'\bLocalMigrationService\b',
+              r'\bmigrate\.php\b',
+              r'\bmysql\b[^\n]*(?:database/migrations|migration)',
+          ]
+          for pattern in migration_patterns:
+              assert re.search(pattern, text, re.I) is None, f'migration command found in standard deploy: {pattern}'
+
+          old_erp_write = re.compile(r'(?:rsync|cp|mv|install|tar\s+[^\n]*-C)\b[^\n]*(?:public_html/erp)(?:\s|/|$)(?!v2)', re.I)
+          assert old_erp_write.search(text) is None, 'legacy /erp write detected in deploy workflow'
+
+          print('CANONICAL_MANUAL_DEPLOY_POLICY=PASS')
+          PY

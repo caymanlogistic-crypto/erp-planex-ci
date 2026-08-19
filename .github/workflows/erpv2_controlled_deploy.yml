@@ -11,10 +11,6 @@ on:
         description: 'Type DEPLOY_ERPV2 to authorize the deploy'
         required: true
         type: string
-  workflow_run:
-    workflows: ["ERP PLANEX CI"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
 
 permissions:
   contents: read
@@ -30,14 +26,7 @@ env:
 
 jobs:
   deploy:
-    if: >-
-      ${{
-        (github.event_name == 'workflow_dispatch' && inputs.confirm_deploy == 'DEPLOY_ERPV2') ||
-        (github.event_name == 'workflow_run' &&
-         github.event.workflow_run.conclusion == 'success' &&
-         github.event.workflow_run.event == 'push' &&
-         github.event.workflow_run.head_branch == 'chatgpt/production-stabilization-20260802')
-      }}
+    if: ${{ inputs.confirm_deploy == 'DEPLOY_ERPV2' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -57,29 +46,18 @@ jobs:
         id: source
         shell: bash
         env:
-          EVENT_NAME: ${{ github.event_name }}
-          MANUAL_SOURCE_SHA: ${{ inputs.source_sha }}
-          AUTO_SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
-          MANUAL_CONFIRM: ${{ inputs.confirm_deploy }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          CONFIRM_DEPLOY: ${{ inputs.confirm_deploy }}
         run: |
           set -euo pipefail
-          if [ "$EVENT_NAME" = 'workflow_run' ]; then
-            SOURCE_SHA="$AUTO_SOURCE_SHA"
-            CONFIRM_DEPLOY='DEPLOY_ERPV2'
-            DEPLOY_MODE='automatic_after_green_ci'
-          else
-            SOURCE_SHA="$MANUAL_SOURCE_SHA"
-            CONFIRM_DEPLOY="$MANUAL_CONFIRM"
-            DEPLOY_MODE='manual_exact_sha'
-          fi
           test "$CONFIRM_DEPLOY" = 'DEPLOY_ERPV2'
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           git fetch --no-tags --depth=1 origin "$SOURCE_SHA"
           git cat-file -e "${SOURCE_SHA}^{commit}"
           git checkout --detach "$SOURCE_SHA"
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          printf 'SOURCE_SHA=%s\nTARGET=%s\nDEPLOY_MODE=%s\n' "$SOURCE_SHA" "$TARGET" "$DEPLOY_MODE"
-          printf 'source_sha=%s\ndeploy_mode=%s\n' "$SOURCE_SHA" "$DEPLOY_MODE" >> "$GITHUB_OUTPUT"
+          printf 'SOURCE_SHA=%s\nTARGET=%s\nDEPLOY_MODE=manual_exact_sha\n' "$SOURCE_SHA" "$TARGET"
+          printf 'source_sha=%s\ndeploy_mode=manual_exact_sha\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Build artifact strictly from source SHA
         id: artifact
