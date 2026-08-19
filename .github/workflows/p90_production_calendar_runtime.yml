@@ -1,20 +1,26 @@
 name: P90 Production Calendar Runtime
 on:
-  workflow_run:
-    workflows: ["ERPv2 Controlled Deploy"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed 40-character SHA expected on /erpv2'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_P90_MIGRATION to authorize production calendar migration/seed'
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
   migrate-and-verify:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ inputs.confirm_migration == 'APPLY_P90_MIGRATION' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
       - name: Configure SSH and verify deployed SHA
         env:
@@ -23,10 +29,12 @@ jobs:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
           PORT: ${{ secrets.ERPV2_SSH_PORT }}
           USER: ${{ secrets.ERPV2_SSH_USER }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ inputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SHA"
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/p90"
           printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
@@ -41,14 +49,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          webroot=/home/s/spugovxsim/planexp/public_html
-          live="$webroot/erpv2"
+          live=/home/s/spugovxsim/planexp/public_html/erpv2
           ssh -p "$PORT" -i "$HOME/.ssh/p90" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "cd '$live' && /usr/bin/php8.5 scripts/p90_apply_production_calendar_migration.php" | tee P90_PRODUCTION_CALENDAR.txt
           grep -q 'P90_PRODUCTION_CALENDAR_OK' P90_PRODUCTION_CALENDAR.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P90_production_calendar_${{ github.event.workflow_run.head_sha }}
+          name: P90_production_calendar_${{ inputs.source_sha }}
           path: P90_PRODUCTION_CALENDAR.txt
           if-no-files-found: warn
       - name: Cleanup SSH
