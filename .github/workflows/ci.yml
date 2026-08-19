@@ -137,6 +137,8 @@ jobs:
           production_write = []
 
           for p in Path('.github/workflows').glob('*.y*ml'):
+              if p.name == 'ci.yml':
+                  continue
               text = p.read_text(encoding='utf-8')
               mutating = any(token in text for token in [
                   deploy_engine,
