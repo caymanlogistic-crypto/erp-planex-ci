@@ -176,6 +176,8 @@ jobs:
           workflows = Path('.github/workflows')
           deploy_files = []
           for p in workflows.glob('*.y*ml'):
+              if p.name == 'ci.yml':
+                  continue
               text = p.read_text(encoding='utf-8')
               if 'P07_deploy_erpv2.sh' in text:
                   deploy_files.append((p, text))
