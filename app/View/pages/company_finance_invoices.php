@@ -53,14 +53,14 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
 <style>
 .invoice-stages-col{min-width:390px}
 .invoice-stages{display:flex;flex-wrap:wrap;gap:6px;min-width:370px;max-width:520px;font-size:11px;line-height:1.35;color:var(--text)}
-.invoice-stage-card{flex:0 1 190px;min-width:170px;border:1px solid var(--border);border-radius:5px;padding:7px 8px;background:transparent}
+.invoice-stage-card{display:flex;flex-direction:column;flex:0 1 190px;min-width:170px;border:1px solid var(--border);border-radius:5px;padding:7px 8px;background:transparent}
 .invoice-stage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:5px}
 .invoice-stage-title{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .invoice-stage-route{color:var(--muted);font-size:10px;white-space:nowrap}
 .invoice-stage-line{display:flex;justify-content:space-between;gap:8px;align-items:baseline;white-space:nowrap;padding-top:1px}
 .invoice-stage-line span:first-child{color:var(--muted)}
 .invoice-stage-line strong{font-weight:700}
-.invoice-stage-status{margin-top:6px;min-height:18px}
+.invoice-stage-status{margin-top:auto;padding-top:6px;min-height:24px}
 .invoice-stage-status .badge{white-space:nowrap}
 .invoice-stage-empty{color:var(--muted);padding:3px 0}
 .invoice-status-cell{min-width:180px}
@@ -273,9 +273,7 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
                         <?php endif; ?>
                     </td>
                     <td class="invoice-status-cell<?= $displayStatus === 'paid' ? ' is-paid' : '' ?>">
-                        <?php if ($displayStatus === 'paid'): ?>
-                            <span>Оплачен полностью</span>
-                        <?php else: ?>
+                        <?php if ($displayStatus !== 'paid'): ?>
                             <div class="invoice-status-stack">
                                 <span class="<?= e(FinanceInvoiceService::statusBadgeClass($displayStatus)) ?>"><span class="dot"></span><?= e($statusLabel) ?></span>
                                 <?php if ($statusSub !== ''): ?><span class="invoice-status-sub"><?= e($statusSub) ?></span><?php endif; ?>
