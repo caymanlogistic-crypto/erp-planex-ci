@@ -1,18 +1,13 @@
 name: Finance Direct Predeploy Guard
 
 on:
-  push:
-    branches:
-      - feature/finance-remove-cash-20260818
-  pull_request:
-    branches:
-      - chatgpt/production-stabilization-20260802
+  workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: finance-direct-predeploy-guard-${{ github.event_name }}
+  group: finance-direct-predeploy-guard
   cancel-in-progress: true
 
 env:
@@ -33,6 +28,8 @@ jobs:
           KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
+          test -n "$PRIVATE_KEY"
+          test -n "$KNOWN_HOSTS"
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/finance_direct_pre_key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
@@ -44,6 +41,9 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
+          test -n "$SSH_HOST"
+          test -n "$SSH_PORT"
+          test -n "$SSH_USER"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/finance_direct_pre_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             scripts/finance_direct_verify.php "$SSH_USER@$SSH_HOST:/tmp/finance_direct_pre_${GITHUB_RUN_ID}.php"
       - name: Resolve standalone verifier PHP
@@ -71,7 +71,6 @@ jobs:
           REMOTE
           )"
           test -n "$phpbin"
-          echo "REMOTE_PHP=$phpbin"
           echo "phpbin=$phpbin" >> "$GITHUB_OUTPUT"
       - name: Production read-only snapshot twice
         env:
@@ -94,7 +93,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: finance_direct_predeploy_${{ github.sha }}_${{ github.event_name }}
+          name: finance_direct_predeploy_${{ github.sha }}
           path: finance_direct_pre_*.txt
           if-no-files-found: warn
           retention-days: 30
@@ -105,7 +104,7 @@ jobs:
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
-          if [ -f "$HOME/.ssh/finance_direct_pre_key" ]; then
+          if [ -f "$HOME/.ssh/finance_direct_pre_key" ] && [ -n "$SSH_HOST" ] && [ -n "$SSH_PORT" ] && [ -n "$SSH_USER" ]; then
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/finance_direct_pre_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
               "rm -f '/tmp/finance_direct_pre_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
           fi
