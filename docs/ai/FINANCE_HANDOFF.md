@@ -1,8 +1,8 @@
 # ERP PLANEX — Finance / accounting handoff
 
-Updated: 2026-08-19.
+Updated: 2026-08-20.
 
-Focused entry point for finance/accounting work. Read with `AGENTS.md`, `HANDOFF_FOR_NEW_AGENT.md`, `PROJECT_STATE.md`, `CURRENT_TASK.md`, `DECISIONS.md` and current code/schema.
+Focused entry point for finance/accounting work. Read with `AGENTS.md`, `docs/GITHUB_CONTROL_PLANE.md`, `HANDOFF_FOR_NEW_AGENT.md`, `PROJECT_STATE.md`, `CURRENT_TASK.md`, `DECISIONS.md` and current code/schema.
 
 ## Scope and access
 
@@ -42,7 +42,7 @@ Do not assume service autoloading. Web runtime dependencies must be explicit whe
 
 ERP is multi-tenant. Central DB contains global/control data; operational company data lives in `erp_company_{id}`. Identify DB ownership before schema work.
 
-Any schema change requires a numbered migration. Standard deploy does not run migrations. Production migration/reconciliation is a separate manual-only operation requiring explicit OWNER approval. Never run ad-hoc ALTER/CREATE from controller/temp web code.
+Any schema change requires a numbered migration. Standard deploy does not run migrations. Production migration/reconciliation remains a separate manual-only operation requiring separate task-specific OWNER authorization. Never run ad-hoc ALTER/CREATE from controller/temp web code.
 
 ## Bank statement import
 
@@ -79,11 +79,13 @@ Engineering path:
 
 `branch -> PR -> safe CI -> merge`
 
-Merge never deploys.
+Merge by itself never deploys.
 
-Production `/erpv2` deploy is a separate manual exact-SHA operation requiring explicit OWNER approval. Standard deploy does not run migrations. Any production finance schema/data migration is a separate manual-only OWNER-approved operation.
+For a merged finance **code/UI** change intended for production, an authorized agent may continue autonomously after merge: wait for canonical `ERP PLANEX CI` PASS on the exact SHA, reconfirm that SHA is current canonical HEAD, then non-force advance `deploy/erpv2-agent`. The guarded request workflow rechecks owner actor, exact canonical HEAD and successful canonical CI, then dispatches the existing exact-SHA Controlled Deploy. The agent must verify production marker and focused runtime evidence before reporting deployed.
 
-Never report a commit/green CI/merge as production READY. Report repository state and production state separately.
+This standing authorization covers code deployment only. Any finance schema/data migration, seed, reconciliation or synchronization that changes production DB remains a separate manual-only operation requiring separate task-specific OWNER authorization.
+
+Never report a commit/green PR CI/merge/deploy request as production READY. Report repository state, canonical CI state, deploy state and migration state separately.
 
 ## First step for a finance task
 
