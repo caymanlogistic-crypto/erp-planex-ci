@@ -131,15 +131,12 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          allowed = {
-              Path('.github/workflows/erpv2_controlled_deploy.yml'),
-              Path('.github/workflows/ci.yml'),
-          }
+
           deploy_engine = 'P07_' + 'deploy_erpv2.sh'
           violations = []
+          production_write = []
+
           for p in Path('.github/workflows').glob('*.y*ml'):
-              if p in allowed:
-                  continue
               text = p.read_text(encoding='utf-8')
               mutating = any(token in text for token in [
                   deploy_engine,
@@ -147,9 +144,22 @@ jobs:
                   'deploy_backups',
                   'git push origin',
               ])
-              if mutating:
+              if not mutating:
+                  continue
+
+              production_write.append(str(p))
+              manual = '\n  workflow_dispatch:' in text
+              automatic = any(trigger in text for trigger in [
+                  '\n  workflow_run:',
+                  '\n  push:',
+                  '\n  pull_request:',
+                  '\n  schedule:',
+              ])
+              if not manual or automatic:
                   violations.append(str(p))
-          print('deploy-capable workflow violations=', violations)
+
+          print('production-write workflows=', production_write)
+          print('automatic production-write violations=', violations)
           raise SystemExit(1 if violations else 0)
           PY
 
