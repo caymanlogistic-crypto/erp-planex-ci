@@ -1,54 +1,55 @@
 # ERP PLANEX — текущее состояние проекта
 
-Актуально на 2026-08-12.
+Актуально на 2026-08-19.
 
 ## Каноническое состояние
 
-Repository: `caymanlogistic-crypto/erp-planex`.
+Repository: `planexerp/erp-planex`.
 Default/canonical branch: `chatgpt/production-stabilization-20260802`.
+Control-plane baseline HEAD: `d58d415ae8d961c9310829f9ab07b4ed83275884`.
 Production: `https://plan-ex.ru/erpv2/`.
-Legacy `/erp` не менять.
+Legacy `/erp` — запрещено менять.
+Old `caymanlogistic-crypto/erp-planex` — read-only insurance only.
 
-Проект стабилизирован после параллельных P26–P40 линий и работает последовательно: один агент, один canonical branch, один production path. Recovery evidence: `backup/pre-stabilization-default-20260812`.
+## Engineering flow
 
-## Control plane
+`branch -> PR -> safe CI -> merge`
 
-Canonical workflows: `.github/workflows/ci.yml` и `.github/workflows/erpv2_controlled_deploy.yml`.
+Merge never deploys.
 
-Normal path: push canonical -> CI -> только successful push CI -> `workflow_run` -> controlled deploy. Deploy использует exact green SHA, backup, P07, marker/HTTP/DB/old-ERP/.env/runtime guards. Manual `workflow_dispatch` exact-SHA fallback сохранён с `DEPLOY_ERPV2`.
+## Production control plane
 
-Standard deploy не запускает migrations. Поэтому schema work требует отдельного controlled migration/reconciliation.
+- `.github/workflows/ci.yml` — automatic non-production engineering gate.
+- `.github/workflows/erpv2_controlled_deploy.yml` — only standard production deploy workflow.
+- Production deploy is manual-only (`workflow_dispatch`), exact SHA, confirmation contract, explicit OWNER approval.
+- Automatic production writes from `push`, `pull_request`, `schedule` or `workflow_run` are prohibited.
+- Standard deploy does not run DB migrations.
+- Production migrations/reconciliation are separate manual-only OWNER-approved operations.
+
+Repository HEAD, merged HEAD and deployed production SHA are independent states and must be reported separately.
 
 ## Архитектура данных
 
-ERP multi-tenant: central DB для global/control data; company operational data — `erp_company_{id}`. Local migrations обслуживаются `LocalMigrationService`. Номера/journal identity должны быть однозначны. Нормализованные migration names включают `057_create_crew_drivers.sql` и `058_create_linear_route_points.sql`; historical aliases нельзя слепо повторно выполнять.
+ERP multi-tenant: central DB для global/control data; company operational data — `erp_company_{id}`. Local migrations обслуживаются `LocalMigrationService`. Номера/journal identity должны быть однозначны. Normalized migration names включают `057_create_crew_drivers.sql` и `058_create_linear_route_points.sql`; historical aliases нельзя слепо повторно выполнять.
 
 ## Текущая продуктовая база
 
-Система содержит стабилизированные модули контрагентов/клиентов/водителей/ТС/исполнителей рейса, multi-driver crews, linear trips с единым блоком загрузка/выгрузка и dual-operation points, документы и finance/accounting. Persistent documents находятся в `storage/companies/{company_id}/...` и должны переживать deploy.
+Система содержит модули контрагентов/клиентов/водителей/ТС/исполнителей рейса, multi-driver crews, linear trips с loading/unloading points, документы и finance/accounting. Persistent documents находятся в `storage/companies/{company_id}/...` и должны переживать deploy.
 
 UI — desktop-first industrial ERP, table-first, compact, brown/copper.
 
-## Finance / accounting — следующий цикл
+## Finance / accounting
 
-Следующая зона разработки — бухгалтерский/финансовый блок. Специализированный source of truth: `docs/ai/FINANCE_HANDOFF.md` + current code/schema.
+Finance доступен только `company_owner`. Tenant isolation, auditability и fail-closed reconciliation обязательны. Основные зоны: bank accounts/statements, XLSX parser/settings/import, invoices/payments/operations, allocations/actions/history, categories/reports/settings, trip-linked financial data. Historical cash code may still exist; new product behavior follows latest OWNER decisions and current code.
 
-Finance доступен только `company_owner`. Tenant isolation, auditability и fail-closed reconciliation обязательны. Основные зоны: bank accounts/statements, XLSX parser/settings/import, cash, invoices/payments/operations, allocations/actions/history, categories/reports/settings, trip-linked financial data.
+Ключевые места для targeted audit: `app/Http/Controllers/Company/BankFinance*`, `Finance*`, finance services, finance views/assets/routes, `app/Support/entrypoint_dependencies.php`, finance migrations/tables/tests.
 
-Ключевые места для первичного аудита: `app/Http/Controllers/Company/BankFinance*`, `Finance*`, `app/Service/BankFinanceService.php`, `BankStatementSettingsService.php`, `BankStatementXlsxParser.php`, остальные finance services, finance views/assets/routes, `app/Support/entrypoint_dependencies.php`, finance migrations/tables/tests.
-
-Исторически finance operation history давал live 500 из-за отсутствующей web runtime dependency; сервис был в source, но не был подключён entrypoint. Поэтому dependency chain обязателен к проверке. History должен сохранять 200 existing/empty, 404 nonexistent/foreign, 403 unauthorized.
-
-Деньги — decimal data. Нельзя преобразовывать `97500.00` в digit-only string: такой класс ошибки уже приводил к отображению миллионов. Formatting принадлежит UI, persisted numeric value не должен меняться.
-
-Production finance rows нельзя изменять ради тестов. Bank XLSX import/matching/deduplication/allocation должны тестироваться fail-closed и без скрытых side effects.
+Money = decimal data. UI formatting must not alter persisted numeric values. Production finance rows must not be mutated to manufacture tests.
 
 ## Security / engineering gates
 
-Finance role gate и tenant isolation — обязательные regression checks. Dynamic SQL identifier sites контролируются fail-closed audit. New/changed JS требует syntax check. Schema changes требуют fresh-schema + upgrade path + tenant journal verification.
-
-Для material UI/runtime checks использовать proven Chromium/Playwright contour: Ubuntu 24.04, Node 22, Playwright 1.54.2, Chromium headless, 1920x1080; при layout-sensitive work также 1536x864 и 1366x768; ru-RU, Europe/Moscow, deviceScaleFactor 1.
+Finance role gate и tenant isolation — mandatory regression checks. Dynamic SQL identifier sites are guarded fail-closed. New/changed JS requires syntax check. Schema changes require fresh-schema + upgrade-path checks before any separately approved production migration.
 
 ## Source of truth
 
-Приоритет: current code/schema -> `README.md` -> `AGENTS.md` -> `HANDOFF_FOR_NEW_AGENT.md` -> этот файл -> `CURRENT_TASK.md` -> `FINANCE_HANDOFF.md` -> `DECISIONS.md`/`DOCUMENTATION_INDEX.md`. Historical Pxx docs — только evidence.
+Priority: OWNER decisions + current code/schema + actual GitHub control plane -> `README.md`/`AGENTS.md` -> current handoffs/state/task -> reference -> historical evidence.
