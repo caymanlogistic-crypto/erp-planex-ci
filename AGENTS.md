@@ -6,6 +6,8 @@
 
 Обязательно прочитать: `README.md`, `docs/ai/HANDOFF_FOR_NEW_AGENT.md`, `docs/ai/PROJECT_STATE.md`, `docs/ai/CURRENT_TASK.md`, `docs/ai/DECISIONS.md`. Для finance дополнительно `docs/ai/FINANCE_HANDOFF.md`; для UI — `docs/ui/DESIGN_STANDARD.md`.
 
+Если подключён Notion ERP PLANEX MASTER MEMORY, сначала использовать `00 — START HERE`, `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, затем только релевантные structured registries/maps. Notion не заменяет current code/schema: latest OWNER decision и фактический GitHub имеют приоритет.
+
 ## Каноническая линия
 
 Repository: `planexerp/erp-planex`.
@@ -53,6 +55,29 @@ Finance доступен только `company_owner`. Tenant isolation, auditab
 
 Desktop-first industrial ERP, minimum production desktop width 1440px, table-first registries, compact density, strict borders/small radii, brown/copper system. Не заменять generic SaaS/Bootstrap/AdminLTE styling без прямого задания.
 
+## Notion MASTER MEMORY / Memory Gate
+
+Для material ERP work обязательна поддержка живой памяти проекта.
+
+Перед работой:
+
+1. Определить `MEMORY IMPACT`: `NONE | MODULE | SCREEN | DATABASE | BUSINESS_RULE | STATE_MACHINE | UI | SECURITY | INTEGRATION | FLOW | AUTOMATION | DECISION`.
+2. Если Notion подключён, проверить релевантные записи `MODULE REGISTRY DB`, `SCREEN CATALOG DB`, `BUSINESS RULES DB`, `DATA ENTITY CATALOG DB`, `INTEGRATIONS DB` и `MEMORY HEALTH REGISTER DB`.
+3. Если релевантная memory area имеет `NEEDS REVERIFY` или расходится с current GitHub, сначала выполнить локальную read-only верификацию и не продолжать из устаревшего предположения.
+
+После merge, до финального ответа:
+
+1. Подтвердить canonical HEAD.
+2. Обновить `01 — CURRENT STATE`, если изменился HEAD/status.
+3. Обновить все затронутые registry records: `Freshness`, `Verified SHA`, `Verified Date`, `Evidence` и фактическую семантику/связи.
+4. При изменении flows/rules/state/security обновить соответствующие SYSTEM FLOW / FINANCE MAP / BUSINESS RULES / STATE MACHINES / ACCESS maps.
+5. Обновить `MEMORY HEALTH REGISTER DB`; если область фактически не была перепроверена, ставить `NEEDS REVERIFY`, а не оставлять старый `VERIFIED`.
+6. Добавить короткий delta-handoff в `07 — AGENT HANDOFFS` с `MEMORY IMPACT` и результатом `MEMORY PASS`.
+
+**Definition of Done для material ERP task: `CODE PASS + CI PASS + MEMORY PASS`.**
+
+Исключение: чистый read-only вопрос без изменения устойчивого состояния может иметь `MEMORY IMPACT: NONE`; в этом случае Notion write не нужен. Не копировать большие code snippets в Notion — хранить смысл, связи, пути, решения и evidence.
+
 ## Acceptance semantics
 
 - commit != READY;
@@ -64,4 +89,4 @@ Desktop-first industrial ERP, minimum production desktop width 1440px, table-fir
 
 ## Документация
 
-Приоритет: current code/schema + фактический GitHub control plane -> `README.md`/`AGENTS.md` -> current handoffs/state/task -> reference -> historical evidence. Если CURRENT-документ конфликтует с фактическим workflow/OWNER decision, фиксировать documentation drift и исправлять через обычный branch/PR/CI/merge путь.
+Приоритет: latest OWNER decision + current code/schema + фактический GitHub control plane -> current Notion MASTER MEMORY -> `README.md`/`AGENTS.md` -> current handoffs/state/task -> reference -> historical evidence. Если CURRENT-документ или Notion конфликтует с фактическим workflow/code/OWNER decision, фиксировать drift, исправлять через обычный branch/PR/CI/merge путь и завершать Memory Gate.
