@@ -1,12 +1,12 @@
 # ERP PLANEX — текущая задача
 
-Актуально на 2026-08-19.
+Актуально на 2026-08-20.
 
 ## Статус
 
-`OWNER_TASK_DRIVEN / MEMORY_BOOTSTRAP_READY`
+`OWNER_TASK_DRIVEN / MEMORY_BOOTSTRAP_READY / AGENT_DEPLOY_READY`
 
-Стабилизационный control-plane этап завершён. Репозиторий и документация должны использовать модель branch → PR → safe CI → merge; merge не deploy.
+Стабилизационный control-plane этап завершён. Репозиторий и документация используют модель branch → PR → safe CI → merge; merge сам по себе не deploy. OWNER дополнительно разрешил агентам самостоятельно деплоить свои merged code/UI изменения через guarded agent-driven deploy flow без отдельного OWNER-клика на каждый релиз.
 
 Новый агент не должен автоматически продолжать старый Pxx/finance plan только потому, что он указан в historical handoff. Конкретная функциональная задача определяется последним OWNER instruction.
 
@@ -14,14 +14,15 @@
 
 - Repository: `planexerp/erp-planex`
 - Canonical/default branch: `chatgpt/production-stabilization-20260802`
-- Control-plane baseline HEAD: `d58d415ae8d961c9310829f9ab07b4ed83275884`
+- Agent-driven deploy control-plane introduced at: `6e28266556e3342eff1a697633b2c7041f091c56`
 - Old `caymanlogistic-crypto/erp-planex`: read-only insurance
-- Production `/erpv2`: manual-only OWNER-approved deploy
+- Production `/erpv2`: agent-driven exact-SHA deploy allowed only through guarded deploy-ref flow after canonical CI PASS
+- Deploy request ref: `deploy/erpv2-agent`
 - Legacy `/erp`: never touch
 
 ## Перед функциональным изменением
 
-1. Прочитать `README.md` и `AGENTS.md`.
+1. Прочитать `README.md`, `AGENTS.md` и `docs/GITHUB_CONTROL_PLANE.md`.
 2. Прочитать `HANDOFF_FOR_NEW_AGENT.md` и `PROJECT_STATE.md`.
 3. Прочитать только focused handoff/module docs для текущей задачи.
 4. Проверить фактический current HEAD и релевантный code/schema path.
@@ -31,11 +32,13 @@
 
 ## Production / DB boundary
 
-- Merge never deploys.
-- Deploy `/erpv2` is a separate manual exact-SHA operation requiring explicit OWNER approval.
+- Merge by itself never deploys.
+- Для merged code/UI task, intended for production, агент после merge обязан дождаться canonical `ERP PLANEX CI` PASS на exact SHA, убедиться что SHA всё ещё current canonical HEAD, затем non-force передвинуть `deploy/erpv2-agent` на этот SHA.
+- `ERPv2 Agent Deploy Request` обязан проверить owner actor + exact current canonical HEAD + successful canonical CI для того же SHA и повторно проверить HEAD непосредственно перед dispatch.
+- Только после downstream `ERPv2 Controlled Deploy` PASS, exact production marker и focused runtime verification агент может заявить, что изменение deployed.
 - Standard deploy does not run migrations.
-- Production migration/reconciliation is a separate manual operation requiring explicit OWNER approval.
-- Green CI, merge, deploy and migration are four distinct states.
+- Production migration/reconciliation is a separate manual operation requiring separate task-specific OWNER authorization. Standing agent deploy authorization does not include DB migrations.
+- Green PR CI, merge, canonical CI, deploy request, deploy PASS and migration are distinct states.
 
 ## Общие инварианты
 
@@ -48,4 +51,4 @@
 
 ## Следующее действие
 
-Take the latest OWNER functional/fix request, inspect only the affected subsystem, and execute through branch → PR → safe CI → merge. Stop before production deploy or DB migration unless the OWNER explicitly authorizes that exact operation.
+Take the latest OWNER functional/fix request, inspect only the affected subsystem, execute branch → PR → safe CI → merge. If that merged code/UI change is intended for production, continue autonomously through canonical CI PASS → guarded deploy-ref request → Controlled Deploy → focused verification. Stop before any production DB migration/reconciliation unless the OWNER separately authorizes that operation.
