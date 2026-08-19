@@ -1,12 +1,12 @@
 # ERP PLANEX — текущее состояние проекта
 
-Актуально на 2026-08-19.
+Актуально на 2026-08-20.
 
 ## Каноническое состояние
 
 Repository: `planexerp/erp-planex`.
 Default/canonical branch: `chatgpt/production-stabilization-20260802`.
-Control-plane baseline HEAD: `d58d415ae8d961c9310829f9ab07b4ed83275884`.
+Agent-driven deploy control-plane introduced at: `6e28266556e3342eff1a697633b2c7041f091c56`.
 Production: `https://plan-ex.ru/erpv2/`.
 Legacy `/erp` — запрещено менять.
 Old `caymanlogistic-crypto/erp-planex` — read-only insurance only.
@@ -15,18 +15,22 @@ Old `caymanlogistic-crypto/erp-planex` — read-only insurance only.
 
 `branch -> PR -> safe CI -> merge`
 
-Merge never deploys.
+Merge by itself never deploys. If the merged code/UI change is intended for production, an authorized agent may separately request deploy only after exact canonical push CI PASS.
 
 ## Production control plane
 
 - `.github/workflows/ci.yml` — automatic non-production engineering gate.
-- `.github/workflows/erpv2_controlled_deploy.yml` — only standard production deploy workflow.
-- Production deploy is manual-only (`workflow_dispatch`), exact SHA, confirmation contract, explicit OWNER approval.
-- Automatic production writes from `push`, `pull_request`, `schedule` or `workflow_run` are prohibited.
+- `.github/workflows/erpv2_controlled_deploy.yml` — only workflow that performs standard production `/erpv2` deployment; remains `workflow_dispatch` only for exact SHA.
+- `.github/workflows/erpv2_agent_deploy_request.yml` — guarded agent-driven request gate.
+- Deploy request ref: `deploy/erpv2-agent`.
+- OWNER has granted standing authorization for agents to deploy their own merged changes without a separate OWNER click per release, only through the guarded flow.
+- Required sequence: PR/CI PASS -> merge -> canonical `ERP PLANEX CI` PASS for exact SHA -> confirm SHA is still current canonical HEAD -> non-force advance `deploy/erpv2-agent` -> request gate -> Controlled Deploy -> exact production evidence.
+- The request gate fail-closes unless actor is repository owner, request SHA equals current canonical HEAD, successful canonical push CI exists for the exact SHA, and HEAD still matches immediately before dispatch.
+- Deploy ref must not move before CI PASS and must never be force-moved backwards.
 - Standard deploy does not run DB migrations.
-- Production migrations/reconciliation are separate manual-only OWNER-approved operations.
+- Production migrations/reconciliation remain separate manual-only OWNER-authorized operations and are not covered by standing agent code-deploy authorization.
 
-Repository HEAD, merged HEAD and deployed production SHA are independent states and must be reported separately.
+Repository HEAD, merged HEAD, deploy-request SHA, deployed production SHA and migration state are independent states and must be reported separately.
 
 ## Архитектура данных
 
@@ -52,4 +56,4 @@ Finance role gate и tenant isolation — mandatory regression checks. Dynamic S
 
 ## Source of truth
 
-Priority: OWNER decisions + current code/schema + actual GitHub control plane -> `README.md`/`AGENTS.md` -> current handoffs/state/task -> reference -> historical evidence.
+Priority: OWNER decisions + current code/schema + actual GitHub control plane -> `docs/GITHUB_CONTROL_PLANE.md` -> `README.md`/`AGENTS.md` -> current handoffs/state/task -> reference -> historical evidence.
