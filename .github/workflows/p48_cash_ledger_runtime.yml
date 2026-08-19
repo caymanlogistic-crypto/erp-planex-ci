@@ -1,35 +1,27 @@
 name: P48 Cash Ledger Runtime
 on:
-  workflow_run:
-    workflows: ["ERPv2 Controlled Deploy"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed 40-character SHA expected on /erpv2'
+        required: true
+        type: string
+      confirm_migrations:
+        description: 'Type APPLY_P48_MIGRATIONS to authorize production migrations 073-075'
+        required: true
+        type: string
 permissions:
   contents: read
 jobs:
   verify:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ inputs.confirm_migrations == 'APPLY_P48_MIGRATIONS' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
-      - name: Resolve deployed SHA
-        id: sha
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          else
-            echo "sha=$WORKFLOW_SHA" >> "$GITHUB_OUTPUT"
-          fi
       - name: Verify exact deployed marker
         env:
           KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
@@ -37,10 +29,12 @@ jobs:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
           PORT: ${{ secrets.ERPV2_SSH_PORT }}
           USER: ${{ secrets.ERPV2_SSH_USER }}
-          SHA: ${{ steps.sha.outputs.sha }}
+          SHA: ${{ inputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SHA"
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/p48"
           printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
@@ -55,8 +49,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          root=/home/s/spugovxsim/planexp
-          live="$root/public_html/""erpv2"
+          live=/home/s/spugovxsim/planexp/public_html/erpv2
           ssh -p "$PORT" -i "$HOME/.ssh/p48" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "cd '$live' && /usr/bin/php8.5 scripts/p97_apply_finance_manual_facts_migration.php" | tee P97_MIGRATION.txt
           grep -q 'P97_FINANCE_MANUAL_FACTS_MIGRATION_OK' P97_MIGRATION.txt
           ssh -p "$PORT" -i "$HOME/.ssh/p48" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "cd '$live' && /usr/bin/php8.5 scripts/p98_apply_employee_personal_expense_event_migration.php" | tee P98_MIGRATION.txt
@@ -103,7 +96,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P48_cash_ledger_runtime_${{ steps.sha.outputs.sha }}
+          name: P48_cash_ledger_runtime_${{ inputs.source_sha }}
           path: |
             P97_MIGRATION.txt
             P98_MIGRATION.txt
