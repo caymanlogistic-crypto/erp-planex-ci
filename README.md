@@ -2,14 +2,24 @@
 
 Production PHP/MySQL multi-tenant ERP for PLANEX logistics operations.
 
-## Canonical state — 2026-08-12
+## Canonical state — 2026-08-19
 
-Repository: `caymanlogistic-crypto/erp-planex`.
+Repository: `planexerp/erp-planex`.
 Canonical/default branch: `chatgpt/production-stabilization-20260802`.
+Canonical HEAD at the control-plane reset: `d58d415ae8d961c9310829f9ab07b4ed83275884`.
 Production runtime: `https://plan-ex.ru/erpv2/`.
-Legacy `/erp` is separate and must not be changed.
+Legacy `/erp` is separate and must never be changed.
+Old `caymanlogistic-crypto/erp-planex` is read-only insurance/recovery evidence, not a development or deploy source.
 
-Development is serial: one agent, current canonical HEAD, one production path. Historical Pxx branches/reports are evidence only.
+## Development contract
+
+Normal engineering flow:
+
+`branch -> pull request -> safe CI -> merge`
+
+Merge never deploys production.
+
+Do not develop directly in the read-only insurance repository. Do not use historical Pxx branches/reports as current instructions.
 
 ## Start here
 
@@ -19,41 +29,42 @@ Read in order:
 2. `docs/ai/HANDOFF_FOR_NEW_AGENT.md`
 3. `docs/ai/PROJECT_STATE.md`
 4. `docs/ai/CURRENT_TASK.md`
-5. `docs/ai/FINANCE_HANDOFF.md` for the current accounting/finance work
-6. `docs/ai/DECISIONS.md` and `DOCUMENTATION_INDEX.md`
+5. `docs/ai/FINANCE_HANDOFF.md` for finance/accounting work
+6. `docs/ai/DECISIONS.md` and `docs/ai/DOCUMENTATION_INDEX.md`
 7. `docs/ui/DESIGN_STANDARD.md` for UI work
 
-## CI / production deployment
+## CI / production control plane
 
-There are two canonical workflows:
+- `.github/workflows/ci.yml` is the automatic, non-production engineering gate.
+- `.github/workflows/erpv2_controlled_deploy.yml` is the only standard production deploy workflow and is `workflow_dispatch` only.
+- Any production-write workflow must be manual-only. Automatic production mutation from `push`, `pull_request`, `schedule` or `workflow_run` is prohibited.
+- Production `/erpv2` deploy requires an explicit OWNER decision for the exact SHA and the deploy confirmation contract.
+- Merge never implies deploy.
+- Standard deploy does not run database migrations.
+- Production DB migrations/reconciliation are separate explicit manual-only operations and require OWNER approval.
 
-- `.github/workflows/ci.yml` — automatic engineering gate;
-- `.github/workflows/erpv2_controlled_deploy.yml` — the only production-capable workflow.
-
-Normal release path:
-
-`push to canonical -> ERP PLANEX CI -> successful push CI -> workflow_run -> ERPv2 Controlled Deploy`.
-
-The deploy resolves the exact green CI `head_sha`, creates a server backup, builds the artifact strictly from that SHA, deploys through the proven P07 engine and verifies server marker, `/erpv2/login`, DB fingerprint, old `/erp`, `.env` and runtime directory preservation. Manual `workflow_dispatch` exact-SHA deployment remains available as fallback and requires `confirm_deploy=DEPLOY_ERPV2`.
-
-Standard deploy does NOT run database migrations.
+Never report a merged SHA as deployed unless the exact production marker and post-deploy verification prove it.
 
 ## Database
 
-Central DB stores global/control data; company operational data lives in `erp_company_{id}`. Schema changes require migrations and explicit controlled migration/reconciliation after deployment. Never mutate production schema ad hoc from web code. Local migration numbers must remain unique; normalized route/crew migrations include `057_create_crew_drivers.sql` and `058_create_linear_route_points.sql`.
+Central DB stores global/control data; company operational data lives in `erp_company_{id}`. Schema changes require numbered migrations. Never mutate production schema ad hoc from web/controller code. Local migration identities must remain unique; normalized route/crew migrations include `057_create_crew_drivers.sql` and `058_create_linear_route_points.sql`.
 
 ## Finance
 
-The next development cycle focuses on the accounting/finance block. Finance remains restricted to `company_owner`; tenant isolation and auditability are mandatory. The module includes bank accounts/statements and XLSX import, cash, invoices/payments/operations, allocations/actions/history, categories/reports/settings and trip-linked finance. See `docs/ai/FINANCE_HANDOFF.md` before changing it.
+Finance remains restricted to `company_owner`; tenant isolation and auditability are mandatory. Current finance areas include bank accounts/statements and XLSX import, invoices/payments/operations, allocations/actions/history, cash-flow categories/reports/settings and trip-linked finance. Historical cash code may still exist in the repository; current product changes must follow the latest owner decisions and `docs/ai/FINANCE_HANDOFF.md`.
 
-Money is decimal data. Never parse persisted decimal money by stripping non-digits. UI formatting must not alter values. Do not mutate production financial rows to create test fixtures.
+Money is decimal data. Never parse persisted decimal money by stripping non-digits. UI formatting must not alter persisted values. Do not mutate production financial rows to manufacture test fixtures.
 
 ## UI
 
 ERP PLANEX is desktop-first, table-first and compact, with brown/copper accents, strict borders and small radii. Do not replace it with generic Bootstrap/AdminLTE/SaaS styling unless explicitly requested.
 
-## Completion rule
+## Completion semantics
 
-A commit is not READY. Green CI alone is not READY. Ordinary code/UI work is ready only after successful triggered deploy plus focused verification. Schema work additionally requires explicit migration/reconciliation and tenant journal verification.
+- Commit: source change exists.
+- Green CI: engineering checks passed.
+- Merge: change entered the canonical branch.
+- Deploy: separate OWNER-approved production operation.
+- Migration: separate OWNER-approved production data/schema operation.
 
-Recovery evidence: `backup/pre-stabilization-default-20260812`. Do not deploy from it without an explicit recovery decision.
+These states must never be conflated.
