@@ -2,11 +2,11 @@
 
 Production PHP/MySQL multi-tenant ERP for PLANEX logistics operations.
 
-## Canonical state — 2026-08-19
+## Canonical state — 2026-08-20
 
 Repository: `planexerp/erp-planex`.
 Canonical/default branch: `chatgpt/production-stabilization-20260802`.
-Canonical HEAD at the control-plane reset: `d58d415ae8d961c9310829f9ab07b4ed83275884`.
+Agent-driven deploy control-plane introduced at: `6e28266556e3342eff1a697633b2c7041f091c56`.
 Production runtime: `https://plan-ex.ru/erpv2/`.
 Legacy `/erp` is separate and must never be changed.
 Old `caymanlogistic-crypto/erp-planex` is read-only insurance/recovery evidence, not a development or deploy source.
@@ -17,7 +17,7 @@ Normal engineering flow:
 
 `branch -> pull request -> safe CI -> merge`
 
-Merge never deploys production.
+Merge by itself never deploys production. After merge, an authorized agent may separately request deploy of the exact current canonical SHA through the guarded deploy-ref flow documented in `docs/GITHUB_CONTROL_PLANE.md`.
 
 Do not develop directly in the read-only insurance repository. Do not use historical Pxx branches/reports as current instructions.
 
@@ -26,22 +26,25 @@ Do not develop directly in the read-only insurance repository. Do not use histor
 Read in order:
 
 1. `AGENTS.md`
-2. `docs/ai/HANDOFF_FOR_NEW_AGENT.md`
-3. `docs/ai/PROJECT_STATE.md`
-4. `docs/ai/CURRENT_TASK.md`
-5. `docs/ai/FINANCE_HANDOFF.md` for finance/accounting work
-6. `docs/ai/DECISIONS.md` and `docs/ai/DOCUMENTATION_INDEX.md`
-7. `docs/ui/DESIGN_STANDARD.md` for UI work
+2. `docs/GITHUB_CONTROL_PLANE.md`
+3. `docs/ai/HANDOFF_FOR_NEW_AGENT.md`
+4. `docs/ai/PROJECT_STATE.md`
+5. `docs/ai/CURRENT_TASK.md`
+6. `docs/ai/FINANCE_HANDOFF.md` for finance/accounting work
+7. `docs/ai/DECISIONS.md` and `docs/ai/DOCUMENTATION_INDEX.md`
+8. `docs/ui/DESIGN_STANDARD.md` for UI work
 
 ## CI / production control plane
 
 - `.github/workflows/ci.yml` is the automatic, non-production engineering gate.
-- `.github/workflows/erpv2_controlled_deploy.yml` is the only standard production deploy workflow and is `workflow_dispatch` only.
-- Any production-write workflow must be manual-only. Automatic production mutation from `push`, `pull_request`, `schedule` or `workflow_run` is prohibited.
-- Production `/erpv2` deploy requires an explicit OWNER decision for the exact SHA and the deploy confirmation contract.
-- Merge never implies deploy.
+- `.github/workflows/erpv2_controlled_deploy.yml` is the only workflow that performs the standard production `/erpv2` deployment and remains `workflow_dispatch` only for exact SHA.
+- `.github/workflows/erpv2_agent_deploy_request.yml` is the guarded request path that lets agents deploy their own merged changes without requiring the OWNER to open GitHub for each release.
+- Dedicated deploy request ref: `deploy/erpv2-agent`.
+- Allowed flow: `branch -> PR -> safe CI -> merge -> canonical ERP PLANEX CI PASS -> exact current canonical HEAD check -> non-force update deploy/erpv2-agent -> guarded request -> Controlled Deploy -> production evidence`.
+- The guard requires repository-owner actor, exact current canonical HEAD and successful canonical `ERP PLANEX CI` for the same SHA before dispatch.
+- Do not move the deploy ref before canonical CI passes and never force-move it backwards.
 - Standard deploy does not run database migrations.
-- Production DB migrations/reconciliation are separate explicit manual-only operations and require OWNER approval.
+- Production DB migrations/reconciliation remain separate explicit manual-only operations and require separate task-specific OWNER authorization.
 
 Never report a merged SHA as deployed unless the exact production marker and post-deploy verification prove it.
 
@@ -62,9 +65,11 @@ ERP PLANEX is desktop-first, table-first and compact, with brown/copper accents,
 ## Completion semantics
 
 - Commit: source change exists.
-- Green CI: engineering checks passed.
+- Green PR CI: engineering checks passed on the PR.
 - Merge: change entered the canonical branch.
-- Deploy: separate OWNER-approved production operation.
-- Migration: separate OWNER-approved production data/schema operation.
+- Green canonical CI: exact merged SHA passed `ERP PLANEX CI` on canonical push.
+- Deploy request: agent explicitly advanced `deploy/erpv2-agent` to that exact current canonical SHA.
+- Deploy PASS: controlled deploy marker and post-deploy verification prove production is on that SHA.
+- Migration: separate OWNER-authorized production data/schema operation.
 
 These states must never be conflated.
