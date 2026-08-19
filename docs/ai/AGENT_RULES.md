@@ -1,6 +1,6 @@
 # ERP PLANEX — правила агента
 
-Актуально на 2026-08-12. Параллельная схема KILO/Codex/Pxx больше не является текущим способом управления репозиторием. До отдельного решения владельца изменения выполняет один агент последовательно от канонической ветки.
+Актуально на 2026-08-19. Это техническое дополнение к `AGENTS.md`.
 
 ## Обязательное чтение
 
@@ -8,60 +8,51 @@
 
 ## Git / branch discipline
 
-- Repository: `caymanlogistic-crypto/erp-planex`.
+- Repository: `planexerp/erp-planex`.
 - Canonical/default branch: `chatgpt/production-stabilization-20260802`.
-- Не работать из старых Pxx branches.
-- `backup/pre-stabilization-default-20260812` — recovery evidence, не development/deploy source.
-- Не force-push без отдельной необходимости и recovery point.
-- Не создавать параллельные automatic deploy branches/workflows.
+- Baseline control-plane HEAD: `d58d415ae8d961c9310829f9ab07b4ed83275884`.
+- Standard development path: `branch -> PR -> safe CI -> merge`.
+- Merge never deploys.
+- Old `caymanlogistic-crypto/erp-planex` is read-only insurance only.
+- Не работать из старых Pxx branches и не использовать recovery evidence как development/deploy source.
+- Не force-push canonical без отдельного recovery решения.
 
 ## Production discipline
 
-- Active runtime: `/erpv2`; old `/erp` запрещено менять.
-- Единственный production workflow: `.github/workflows/erpv2_controlled_deploy.yml`.
-- Он остаётся `workflow_dispatch` only, exact SHA + `DEPLOY_ERPV2`.
-- `.github/workflows/ci.yml` может запускаться автоматически, но production/data не мутирует.
-- Любой новый push/PR/schedule/workflow_run production deploy запрещён.
-- Нельзя объявлять новый SHA deployed, пока exact marker и post-deploy guards фактически не подтверждены.
+- Active runtime: `/erpv2`; legacy `/erp` запрещено менять.
+- `.github/workflows/ci.yml` — автоматический non-production gate.
+- `.github/workflows/erpv2_controlled_deploy.yml` — единственный standard production deploy workflow.
+- Production deploy = manual `workflow_dispatch`, exact SHA, confirmation contract, explicit OWNER approval.
+- Любой `push`/`pull_request`/`schedule`/`workflow_run` production write запрещён.
+- Standard deploy не выполняет migrations.
+- Production migrations/reconciliation = отдельная manual-only OWNER-approved operation.
+- Нельзя объявлять SHA deployed без exact marker + focused post-deploy evidence.
 
 ## Schema / tenant rules
 
 - Central DB и `erp_company_{id}` имеют разные обязанности.
-- Schema change только миграцией.
+- Schema change только numbered migration.
 - Local migration numbers уникальны.
 - Нормализованные migration names: `057_create_crew_drivers.sql`, `058_create_linear_route_points.sql`.
-- Старые journal names `029_create_crew_drivers.sql` и `052_create_linear_route_points.sql` — только через reconciliation script.
-- Нельзя выполнять migration DDL «на всякий случай» из UI/controller кода.
+- Старые journal names `029_create_crew_drivers.sql` и `052_create_linear_route_points.sql` — только через controlled reconciliation.
+- Нельзя выполнять migration DDL из UI/controller/temp web code.
 
 ## Protected domain rules
 
-- Route executor = contractor + driver + vehicle set, технически `driver_vehicle_blocks` + `crews`.
-- `driver_vehicle_blocks.vehicle_id` запрещён; использовать `vehicle_set_id`.
+- Route executor = contractor + driver(s) + vehicle set через `driver_vehicle_blocks` + `crews`.
+- Использовать `driver_vehicle_blocks.vehicle_set_id`, не `vehicle_id`.
 - Finance = `company_owner` only, включая AJAX/JSON/POST endpoints.
-- Tenant isolation и `entity_access_grants` нельзя ослаблять ради удобства UI.
-- `storage/companies/*` — persistent user data, не cleanup artifact.
+- Tenant isolation и `entity_access_grants` нельзя ослаблять ради UI convenience.
+- `storage/companies/*` — persistent user data.
 
 ## UI lock
 
-Глобальные shell/sidebar/page-header patterns и утверждённая коричнево-медная ERP PLANEX визуальная система меняются только по явной UI-задаче владельца. Desktop-first, minimum 1440px. Реестры table-first. Generic SaaS/AdminLTE/Bootstrap restyle запрещён.
-
-Create/edit для одной сущности должны сохранять единый field/layout contract. Frontend-правки не должны менять `name`, route/action/method, CSRF или business semantics без функциональной задачи.
+ERP PLANEX: desktop-first, minimum 1440px, table-first, compact industrial density, strict borders/small radii, brown/copper system. Generic SaaS/AdminLTE/Bootstrap restyle запрещён без прямой UI-задачи OWNER.
 
 ## Acceptance
 
-Минимум перед commit/acceptance:
-
-- PHP lint по затронутым PHP;
-- focused tests;
-- architecture guard;
-- duplicate migration scan;
-- JS syntax при JS changes;
-- green canonical CI.
-
-Для UI/runtime изменений: Playwright/Chromium 1920×1080, `ru-RU`, `Europe/Moscow`, console/page/request/http failure review.
-
-Для production deploy: backup, exact SHA build, server marker equality, `/erpv2/login` 200, old `/erp` unchanged, `.env`/runtime dirs preserved, expected tenant migration journal state.
+Перед merge: focused checks + green CI. Для production acceptance merge недостаточно: нужен отдельный OWNER-approved deploy и runtime verification. Schema work дополнительно требует OWNER-approved migration/reconciliation и tenant journal verification.
 
 ## Documentation
 
-Управляющие CURRENT документы должны описывать только текущее состояние. Исторические E/P reports не переписываются как будто их старые статусы не существовали; их статус определяется `DOCUMENTATION_INDEX.md`. Если текущая информация конфликтует с historical report, приоритет у current code + current governing docs.
+CURRENT docs должны описывать только текущую реальность. Исторические E/P reports не переписываются; при конфликте они уступают OWNER decisions, current code/schema и current GitHub control plane.
