@@ -64,6 +64,7 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
 .invoice-stage-status .badge{white-space:nowrap}
 .invoice-stage-empty{color:var(--muted);padding:3px 0}
 .invoice-status-cell{min-width:180px}
+.invoice-status-cell.is-paid{background:var(--success-bg)}
 .invoice-status-stack{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
 .invoice-status-sub{color:var(--muted);font-size:10px;line-height:1.25}
 @media (max-width:1280px){.invoice-stages-col{min-width:330px}.invoice-stages{min-width:310px}.invoice-stage-card{flex-basis:170px}}
@@ -271,11 +272,15 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
                             </div>
                         <?php endif; ?>
                     </td>
-                    <td class="invoice-status-cell">
-                        <div class="invoice-status-stack">
-                            <span class="<?= e(FinanceInvoiceService::statusBadgeClass($displayStatus)) ?>"><span class="dot"></span><?= e($statusLabel) ?></span>
-                            <?php if ($statusSub !== ''): ?><span class="invoice-status-sub"><?= e($statusSub) ?></span><?php endif; ?>
-                        </div>
+                    <td class="invoice-status-cell<?= $displayStatus === 'paid' ? ' is-paid' : '' ?>">
+                        <?php if ($displayStatus === 'paid'): ?>
+                            <span>Оплачен полностью</span>
+                        <?php else: ?>
+                            <div class="invoice-status-stack">
+                                <span class="<?= e(FinanceInvoiceService::statusBadgeClass($displayStatus)) ?>"><span class="dot"></span><?= e($statusLabel) ?></span>
+                                <?php if ($statusSub !== ''): ?><span class="invoice-status-sub"><?= e($statusSub) ?></span><?php endif; ?>
+                            </div>
+                        <?php endif; ?>
                     </td>
                 </tr>
             <?php endforeach; ?>
