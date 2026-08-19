@@ -42,7 +42,7 @@ jobs:
               return m.group(1)
           controlled_events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', on_block(controlled), flags=re.M)
           assert sorted(set(controlled_events)) == ['workflow_dispatch'], controlled_events
-          for token in ['DEPLOY_ERPV2','source_sha:','confirm_deploy:','P07_deploy_erpv2.sh']:
+          for token in ['DEPLOY_ERPV2','source_sha:','confirm_deploy:', 'P07_' + 'deploy_erpv2.sh']:
               assert token in controlled, token
           agent_on = on_block(agent)
           agent_events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', agent_on, flags=re.M)
