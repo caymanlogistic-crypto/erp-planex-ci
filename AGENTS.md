@@ -1,10 +1,10 @@
 # ERP PLANEX — правила работы агентов
 
-Актуально на 2026-08-19. Это текущий операционный контракт. Исторические E7–P40 документы — evidence, а не инструкция.
+Актуально на 2026-08-20. Это текущий операционный контракт. Исторические E7–P40 документы — evidence, а не инструкция.
 
 ## Перед началом
 
-Обязательно прочитать: `README.md`, `docs/ai/HANDOFF_FOR_NEW_AGENT.md`, `docs/ai/PROJECT_STATE.md`, `docs/ai/CURRENT_TASK.md`, `docs/ai/DECISIONS.md`. Для finance дополнительно `docs/ai/FINANCE_HANDOFF.md`; для UI — `docs/ui/DESIGN_STANDARD.md`.
+Обязательно прочитать: `README.md`, `docs/GITHUB_CONTROL_PLANE.md`, `docs/ai/HANDOFF_FOR_NEW_AGENT.md`, `docs/ai/PROJECT_STATE.md`, `docs/ai/CURRENT_TASK.md`, `docs/ai/DECISIONS.md`. Для finance дополнительно `docs/ai/FINANCE_HANDOFF.md`; для UI — `docs/ui/DESIGN_STANDARD.md`.
 
 Если подключён Notion ERP PLANEX MASTER MEMORY, сначала использовать `00 — START HERE`, `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, затем только релевантные structured registries/maps. Notion не заменяет current code/schema: latest OWNER decision и фактический GitHub имеют приоритет.
 
@@ -12,7 +12,7 @@
 
 Repository: `planexerp/erp-planex`.
 Canonical/default branch: `chatgpt/production-stabilization-20260802`.
-Control-plane baseline: `d58d415ae8d961c9310829f9ab07b4ed83275884`.
+Agent-driven deploy control-plane introduced at: `6e28266556e3342eff1a697633b2c7041f091c56`.
 Old `caymanlogistic-crypto/erp-planex` = read-only insurance only.
 Production runtime: `https://plan-ex.ru/erpv2/`.
 Legacy `/erp` must never be touched.
@@ -24,17 +24,21 @@ Legacy `/erp` must never be touched.
 - Не делать feature-work напрямую в canonical branch.
 - Не использовать старые Pxx/recovery branches как development/deploy source.
 - Не force-push canonical без отдельного recovery решения.
-- Merge не означает deploy.
+- Merge сам по себе не означает deploy.
 - Historical reports/SHA are evidence only.
 
 ## Production control plane
 
 - `.github/workflows/ci.yml` — автоматический non-production engineering gate.
-- `.github/workflows/erpv2_controlled_deploy.yml` — единственный standard production deploy workflow.
-- Production deploy допускается только вручную (`workflow_dispatch`) для exact SHA и только после явного OWNER approval.
-- Любой production-write trigger через `push`, `pull_request`, `schedule` или `workflow_run` запрещён.
+- `.github/workflows/erpv2_controlled_deploy.yml` — единственный workflow, который фактически выполняет standard production deploy `/erpv2`; он остаётся `workflow_dispatch` only для exact SHA.
+- `.github/workflows/erpv2_agent_deploy_request.yml` — разрешённый agent-driven deploy request gate.
+- Dedicated deploy request ref: `deploy/erpv2-agent`.
+- OWNER разрешил агентам самостоятельно деплоить **свои уже merged изменения** без отдельного OWNER-клика для каждого релиза, но только через guarded flow ниже.
+- Разрешённая последовательность: `branch -> PR -> safe CI -> merge -> canonical ERP PLANEX CI PASS -> verify exact current canonical HEAD -> non-force update deploy/erpv2-agent -> guarded request -> ERPv2 Controlled Deploy -> verify evidence`.
+- Agent deploy request обязан fail-closed проверить: owner actor, exact current canonical HEAD, successful canonical `ERP PLANEX CI` для того же SHA и повторно HEAD непосредственно перед dispatch.
+- Нельзя двигать `deploy/erpv2-agent` до canonical CI PASS, нельзя force-move его назад и нельзя использовать иной push-branch как deploy trigger.
 - Standard deploy не выполняет DB migrations.
-- Production DB migrations/reconciliation — отдельные manual-only операции с явным OWNER approval.
+- Production DB migrations/reconciliation остаются отдельными manual-only операциями и требуют отдельного task-specific OWNER authorization.
 - Нельзя сообщать, что SHA deployed, пока exact production marker и focused post-deploy verification фактически не подтверждены.
 
 ## БД
@@ -81,11 +85,12 @@ Desktop-first industrial ERP, minimum production desktop width 1440px, table-fir
 ## Acceptance semantics
 
 - commit != READY;
-- green CI != deployed;
+- green PR CI != deployed;
 - merge != deploy;
+- agent deploy request != deploy PASS;
 - deploy != migration.
 
-Для code/UI production acceptance требуется отдельный OWNER-approved deploy + focused runtime verification. Для schema work дополнительно требуется OWNER-approved migration/reconciliation + tenant journal verification.
+Для code/UI production acceptance после merge агент должен дождаться canonical `ERP PLANEX CI`, запросить deploy через `deploy/erpv2-agent` и подтвердить production marker + focused runtime verification. Для schema work дополнительно требуется отдельно OWNER-authorized migration/reconciliation + tenant journal verification.
 
 ## Документация
 
