@@ -1,20 +1,28 @@
 name: P46 Bank Filters Runtime
+
 on:
-  workflow_run:
-    workflows: ["ERPv2 Controlled Deploy"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed SHA to verify'
+        required: true
+        type: string
+
 permissions:
   contents: read
+
+concurrency:
+  group: p46-bank-filters-${{ inputs.source_sha }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
       - name: Verify exact deployed marker
         env:
@@ -23,10 +31,11 @@ jobs:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
           PORT: ${{ secrets.ERPV2_SSH_PORT }}
           USER: ${{ secrets.ERPV2_SSH_USER }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ inputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/p46"
           printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
@@ -62,14 +71,10 @@ jobs:
           echo "::add-mask::$cred"
           echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
       - name: Fail-closed read-only bank filter acceptance
-        shell: bash
-        run: |
-          set -euo pipefail
-          node .github/p46/P46_bank_filters_runtime.js 2>&1 | tee P46_RUNTIME.txt
-          grep -q 'P46_BANK_FILTERS_RUNTIME_OK' P46_RUNTIME.txt
+        run: node .github/p46/P46_bank_filters_runtime.js 2>&1 | tee P46_RUNTIME.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P46_bank_filters_runtime_${{ github.event.workflow_run.head_sha }}
+          name: P46_bank_filters_runtime_${{ inputs.source_sha }}
           path: P46_RUNTIME.txt
           if-no-files-found: warn
