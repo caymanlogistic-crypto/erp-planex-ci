@@ -4,9 +4,9 @@
 
 ## Быстрый bootstrap
 
-Если доступен Notion `ERP PLANEX — MASTER MEMORY`, прочитать один раз в начале задачи: `00 — START HERE`, актуальный блок `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, затем только релевантные каталоги/`23 — CHANGE PLAYBOOKS`. Не перечитывать всю документацию ERP без evidence of drift.
+Если доступен Notion `ERP PLANEX — MASTER MEMORY`, прочитать один раз в начале задачи: `00 — START HERE`, актуальный блок `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, затем только релевантные записи/`23 — CHANGE PLAYBOOKS`. Не перечитывать всю документацию ERP без evidence of drift.
 
-После этого проверить current canonical HEAD и изучать только затронутую цепочку `screen → route → controller/action → significant service → data/rules/state/access → relevant test contract`.
+После этого проверить current canonical HEAD и изучать только затронутую цепочку `screen → route → controller/action → significant service → data/rules/state/access → relevant test contract`. Для чистого UI FAST-path цепочку сокращать до `screen/view → cheap UI contract`, если route/controller/service semantics не меняются.
 
 Repository: `planexerp/erp-planex`.
 Canonical branch: `chatgpt/production-stabilization-20260802`.
@@ -18,9 +18,9 @@ Production: `/erpv2`. Legacy `/erp` — never touch.
 ### FAST
 Только presentation/view/CSS/text/local UI. FAST допустим только если НЕ меняются route/controller behavior, business rules/state, finance amount/debt/settlement semantics, DB/schema, security/access, integrations или control plane.
 
-Путь: `bootstrap once → relevant screen/code → focused/local check → один осмысленный commit/push где возможно → PR → ERP PLANEX CI + только path-triggered contracts → merge → one final MEMORY delta → guarded deploy → built-in deploy evidence`.
+Целевой путь: `bootstrap once → exact relevant file(s) → focused check → feature branch write → один PR → cheap CI → merge → minimal MEMORY delta → guarded deploy → one deploy-status check`.
 
-Обычно `MEMORY IMPACT: SCREEN + UI`. Не запускать нерелевантные MySQL/finance/browser regressions вручную.
+Цель OWNER для микроправки порядка нескольких строк — стремиться к ~1 минуте wall-clock при свободных GitHub runners. Это performance target, а не основание пропускать safety gates.
 
 ### STANDARD
 Controller/service/business behavior без production DB/schema mutation. Использовать только owning module/service/rule/test contracts. Path-triggered domain regressions обязательны, если они относятся к изменённой семантике.
@@ -28,34 +28,44 @@ Controller/service/business behavior без production DB/schema mutation. Ис�
 ### CRITICAL
 Finance settlement/matching/debt semantics, security/access, DB/schema, integrations that create financial facts, control plane, destructive operations. Использовать полный релевантный gate set и fail-closed evidence. Production DB write всё равно требует отдельного task-specific OWNER approval.
 
-## Git / CI discipline
+## HARD WRITE SAFETY — canonical write запрещён
 
-Рабочий путь: `branch → PR → safe CI → merge`.
+Рабочий путь: `feature branch → PR → safe CI → merge`.
 
-- Не делать feature-work напрямую в canonical.
-- Не создавать commit на каждую микро-правку: сначала свести изменение и локально/статически проверить, затем push.
-- **Запрещён empty/technical commit только ради retrigger CI/release.** Если такой commit кажется необходимым — это process bug; исправить workflow или rerun только failed job/run, если failure transient.
-- Не создавать temporary branch/PR/workflow только ради обычной postdeploy-проверки.
-- Не опрашивать Actions каждые несколько секунд. Сделать агрегированную проверку, разумно подождать, проверить ещё раз; при failure открыть конкретный failed job/log.
-- Не rerun-ить уже успешные нерелевантные workflows.
-- Main `ERP PLANEX CI` работает на PR и canonical push; feature-branch push сам по себе не запускает дублирующий main CI.
-- Heavy domain regressions — PR-only и path-scoped; устаревшие PR runs отменяются через `concurrency/cancel-in-progress`.
+- **Никогда не вызывать `create_file`, `update_file`, `delete_file` или эквивалентную write-операцию с canonical branch.**
+- Перед первой file mutation сначала создать/подтвердить отдельную feature/fix branch.
+- Для connector writes всегда явно указывать feature branch; отсутствие branch argument считается unsafe.
+- Canonical разрешено менять только штатным merge PR.
+- Нельзя создавать placeholder/temp/probe файл для проверки write-доступа.
+- Нельзя делать empty/technical/release-checkpoint commit только ради retrigger CI/deploy.
+- Если transient CI failed — rerun failed job/run, а не создавать новый commit без product change.
+- Не создавать temporary verification PR/workflow для обычной postdeploy-проверки.
+
+## FAST tool discipline
+
+Если primary GitHub/Notion connector работает, **не переходить к `gh`, `git ls-remote`, web search, public HTTP или container fallback** для той же операции. Fallback допустим только после фактического failure primary connector и только если действительно нужен для результата.
+
+Для FAST:
+- не читать layout/main/controller/service «для уверенности», если view + cheap contract уже доказывают scope;
+- не делать draft PR → ready; сразу открывать обычный PR;
+- не дробить одну микроправку и её cheap contract на отдельные commits, если можно сделать атомарно;
+- CI status смотреть агрегированно: обычно initial check + final check; не polling loop каждые секунды;
+- не запускать тяжёлые finance/MySQL/Playwright regressions вручную без path/risk причины.
 
 ## Production deploy `/erpv2`
 
 OWNER дал standing authorization агентам деплоить собственные merged code/UI изменения через guarded flow без отдельного OWNER-клика.
 
 После merge:
-1. Подтвердить exact current canonical HEAD.
-2. Если задача предназначена для production — **сразу** non-force передвинуть `deploy/erpv2-agent` на этот exact HEAD. Не ждать и не poll-ить canonical CI вручную.
-3. `ERPv2 Agent Deploy Request` сам ждёт exact-SHA canonical `ERP PLANEX CI`, fail-closed останавливается при failure/timeout, затем повторно проверяет HEAD.
-4. Только после PASS guard dispatch-ит `ERPv2 Controlled Deploy` exact SHA.
-5. Routine deploy PASS подтверждается built-in evidence Controlled Deploy: exact marker, artifact SHA, HTTP 200, DB fingerprint unchanged, legacy `/erp` fingerprint unchanged, `.env`/runtime preservation, migrations=false.
-6. Дополнительные P44/P46/P47/P49/P50/P93 Playwright/runtime workflows запускаются вручную только когда task-specific risk действительно этого требует. Они не являются обязательным fan-out после каждого deploy.
+1. Подтвердить exact current canonical HEAD один раз.
+2. Если задача предназначена для production — сразу non-force передвинуть `deploy/erpv2-agent` на exact HEAD. Не poll-ить canonical CI вручную.
+3. `ERPv2 Agent Deploy Request` сам ждёт exact-SHA canonical `ERP PLANEX CI`, fail-closed останавливается при failure/timeout и повторно проверяет HEAD.
+4. На PASS guard dispatch-ит `ERPv2 Controlled Deploy` exact SHA.
+5. Controlled Deploy публикует commit status context `erpv2/deploy`; агент проверяет этот exact-SHA status вместо web/HTTP/connector archaeology.
+6. `erpv2/deploy = success` означает, что built-in deploy evidence прошёл: exact marker, artifact, HTTP 200, DB fingerprint unchanged, legacy `/erp` unchanged, `.env`/runtime preserved, migrations=false.
+7. Дополнительные P44/P46/P47/P49/P50/P93 запускать вручную только для реально соответствующего STANDARD/CRITICAL риска.
 
-Если canonical HEAD изменился во время ожидания — guard обязан fail closed; старый SHA не выкатывать.
-
-Merge сам не deploy-ит. CI сам не deploy-ит. Deploy request != deploy PASS.
+Merge != deploy. Deploy request != deploy PASS. Если canonical HEAD ушёл вперёд — stale SHA не deploy-ить.
 
 ## Production database boundary
 
@@ -65,19 +75,24 @@ Standing code/UI deploy authorization НЕ включает production migration
 
 Finance доступен только `company_owner`, пока OWNER не изменит policy. Tenant isolation, auditability, fail-closed reconciliation и decimal money обязательны. Не менять production finance rows ради тестов. Uncertain matching не должен автоматически создавать money/debt mutation.
 
-## Notion / Memory Gate — read once, write once
+## Notion / Memory Gate — FAST whitelist
 
-В начале задачи память читается один раз по минимальному relevant slice. В процессе Notion не обновлять, кроме реального blocker/drift, который нельзя отложить.
+В начале задачи память читается один раз по минимальному relevant slice. В процессе Notion не обновлять.
 
-После merge сделать **один финальный delta MEMORY PASS**:
-- подтвердить canonical HEAD;
-- обновить только реально затронутые registry records и `01 — CURRENT STATE`, если нужен current-state delta;
-- обновить health/flow/rules только если они действительно затронуты;
-- добавить один короткий handoff.
+Для `FAST + SCREEN/UI` финальный MEMORY PASS по умолчанию ограничен:
+1. affected Screen record;
+2. affected cheap Test/Contract record — только если он реально изменён;
+3. один короткий delta handoff.
 
-FAST UI не требует переписывать Modules/Services/Business Rules, если они не изменились. `Verified` нельзя механически переносить на незатронутые области только потому, что canonical HEAD вырос.
+**Не обновлять для обычной FAST UI-задачи:** `00 — START HERE`, `01 — CURRENT STATE`, Module Registry, Service Catalog, Business Rules, broad Memory Health или другие каталоги только потому, что canonical SHA изменился.
 
-Если Notion SQL quota ограничена — использовать fetch/view/search fallback из `22 — DEPLOY & NOTION LIMITS RUNBOOK`; не повторять SQL циклически.
+`00/01` хранят operational checkpoint, но exact current HEAD всегда проверяется в GitHub. Они обновляются только при meaningful architecture/control-plane/current-state change, а не после каждой микроправки.
+
+Для FAST использовать уже найденные page IDs; не делать повторные semantic search перед каждым write. Цель — примерно 3–5 Notion reads total и 2–3 writes total максимум.
+
+STANDARD/CRITICAL обновляют только реально затронутые rules/state/security/flow/health records. `Verified` нельзя механически переносить на незатронутые области только потому, что HEAD вырос.
+
+Если Notion SQL quota ограничена — direct fetch по известному ID → scoped search только при необходимости; не повторять SQL/search циклически.
 
 **Definition of Done: `CODE PASS + CI PASS + MEMORY PASS`.** Read-only/no-durable-state задача может иметь `MEMORY IMPACT: NONE` и не требует Notion write.
 
