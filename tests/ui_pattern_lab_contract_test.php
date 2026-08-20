@@ -56,6 +56,30 @@ $expect(preg_match('/(^|\})\s*\.(btn|table|tbl|field|field-input|field-select|pa
 $expect(str_contains($visual, 'ui-pattern-lab-v0-1920.png'), '1920 screenshot contract missing');
 $expect(str_contains($visual, 'ui-pattern-lab-v0-1440.png'), '1440 screenshot contract missing');
 
+$expect(str_contains($route, "'/ui-library/linear-table-design-test'"), 'linear table design test index route missing');
+$expect(str_contains($route, "'/ui-library/linear-table-design-test/{variant}'"), 'linear table design variant route missing');
+$expect(str_contains($controller, 'LINEAR_TABLE_VARIANTS'), 'linear table variant allowlist missing');
+$expect(str_contains($controller, "requireRole('superadmin')"), 'linear table route must reuse superadmin gate');
+$expect(str_contains($controller, "Cache-Control: no-store, private"), 'linear table response must be private/no-store');
+$expect(str_contains($controller, 'X-Robots-Tag: noindex'), 'linear table response must be noindex');
+$expect(str_contains($controller, "app/View/ui-tests/linear-table-design-test/"), 'linear table artifacts must stay outside public web-root');
+
+$linearFiles = [
+    'app/View/ui-tests/linear-table-design-test/linear-table-v1-baseline.html',
+    'app/View/ui-tests/linear-table-design-test/linear-table-v2-hierarchy.html',
+    'app/View/ui-tests/linear-table-design-test/linear-table-v3-compact.html',
+    'app/View/ui-tests/linear-table-design-test/linear-table-v4-structured.html',
+];
+$referenceRows = ['#9', '#2', '#1', 'ООО «ПОТОК»', 'ООО «ЭКОВТОРРЕСУРС»', 'ООО «ФРЕГАТ»', '775 000 ₽', '760 000 ₽', '230 000 ₽', '195 000 ₽', '16 000 ₽', '14 600 ₽'];
+foreach ($linearFiles as $linearFile) {
+    $html = $read($linearFile);
+    foreach ($referenceRows as $needle) {
+        $expect(str_contains($html, $needle), $linearFile . ' missing shared real-data marker: ' . $needle);
+    }
+    $expect(str_contains($html, 'FINAL3') || str_contains($html, 'DESIGN TEST'), $linearFile . ' missing design-test marker');
+    $expect(!str_contains($html, 'ООО «Пример»'), $linearFile . ' must not use synthetic company data');
+}
+
 if ($failures !== []) {
     fwrite(STDERR, "UI_PATTERN_LAB_CONTRACT=FAIL\n- " . implode("\n- ", $failures) . "\n");
     exit(1);
