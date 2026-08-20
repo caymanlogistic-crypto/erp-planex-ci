@@ -4,29 +4,28 @@
 
 ## Bootstrap / context budget
 
-Notion default bootstrap: `ERP PLANEX — MASTER MEMORY` → `24 — AGENT BOOTSTRAP MANIFEST` **один раз**, затем только task-owned records по direct IDs/routing.
+Notion default bootstrap: `ERP PLANEX — MASTER MEMORY` → `00 — START HERE` **один раз**, затем только task-owned records через direct registry IDs/scoped lookup.
 
 Exact canonical HEAD всегда читать из GitHub. `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, `22 — DEPLOY & NOTION LIMITS RUNBOOK`, `23 — CHANGE PLAYBOOKS`, handoffs и historical reports читать только когда конкретная задача требует их контекста.
 
-Запрещён старый broad-start pattern вида `README → AGENTS → control-plane docs → handoff → project state → current task → decisions → documentation index` для каждой локальной задачи. Governing docs открываются по необходимости; `AGENTS.md` остаётся repository enforcement source.
+Запрещён broad-start pattern с последовательным чтением README / handoff / project-state / decision-log / control-plane docs для каждой локальной задачи. `AGENTS.md` остаётся repository enforcement source; specialist docs открываются по impact/risk.
 
-Для UI дополнительно читать `docs/ui/DESIGN_STANDARD.md` только когда меняется системный UI/design contract, а не для каждой локальной текстовой/CSS правки.
+Для UI `docs/ui/DESIGN_STANDARD.md` читать только когда меняется system UI/design contract, а не для каждой локальной текстовой/CSS правки.
 
 ## Git / branch discipline
 
 - Repository: `planexerp/erp-planex`.
 - Canonical branch: `chatgpt/production-stabilization-20260802`.
-- Development path: `feature branch → PR → required gates → merge`.
+- Development: `feature branch → PR → required gates → merge`.
 - Merge by itself never deploys.
 - Old `caymanlogistic-crypto/erp-planex` is read-only insurance only.
-- Не использовать old Pxx/recovery branches как development/deploy source.
 - Direct canonical connector writes, force-push, placeholder/probe files и technical CI commits запрещены.
 
 ## Production discipline
 
 - Active runtime: `/erpv2`; legacy `/erp` запрещено менять.
 - `ERPv2 Controlled Deploy` остаётся единственным standard production write engine.
-- FAST использует guarded FAST release path; STANDARD/CRITICAL code deploy используют guarded `deploy/erpv2-agent` path согласно `AGENTS.md` / Notion `22`.
+- FAST использует guarded FAST release path; STANDARD/CRITICAL code deploy используют guarded `deploy/erpv2-agent` path.
 - Exact-SHA production evidence обязательно.
 - Standard deploy не выполняет migrations.
 - Production migrations/reconciliation/seeds/backfills/destructive SQL = отдельная task-specific OWNER-authorized operation.
@@ -46,15 +45,11 @@ Exact canonical HEAD всегда читать из GitHub. `01 — CURRENT STAT
 - Finance = `company_owner` only, включая AJAX/JSON/POST endpoints.
 - `storage/companies/*` — persistent user data.
 
-## UI lock
-
-ERP PLANEX: desktop-first, minimum 1440px, table-first, compact industrial density, strict borders/small radii, brown/copper system. Generic SaaS/AdminLTE/Bootstrap restyle запрещён без прямой UI-задачи OWNER.
-
 ## Acceptance / memory
 
 Required gates выбираются по фактическому impact set и Test/Contract routing; green соседние домены не переаудируются без drift evidence.
 
-Notion Memory Pass обязателен, но targeted: обновляются только реально затронутые durable records. `01` и handoff — только при durable current-state/continuation change. Exact live HEAD не зеркалируется в broad memory pages.
+Notion Memory Pass обязателен, но targeted: обновляются только реально затронутые durable records. `01`, handoff и broad health — только при соответствующем durable state/continuation/health change. Exact live HEAD не зеркалируется в broad memory pages.
 
 ## Source precedence
 
