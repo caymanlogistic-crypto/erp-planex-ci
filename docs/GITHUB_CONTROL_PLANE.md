@@ -9,22 +9,27 @@
 - Production target: `/home/s/spugovxsim/planexp/public_html/erpv2`.
 - Legacy `/erp` must never be changed.
 
+## Canonical write protection contract
+
+Agents must never perform file-content writes directly against canonical. Before any `create_file` / `update_file` / `delete_file` / equivalent connector mutation, a feature/fix branch must already exist and the write call must explicitly target it. Omitted branch arguments are unsafe. Canonical changes only through PR merge.
+
+Placeholder/probe writes, empty commits, zero-change release checkpoints and temporary verification PRs are prohibited. A transient failed job should be rerun directly when appropriate.
+
 ## Adaptive CI policy
 
 CI cost must match change risk.
 
-- `ERP PLANEX CI`: pull requests to canonical + canonical pushes only. Feature-branch pushes do not start a duplicate main-CI run.
-- Heavy domain regressions (matching, employee money, obligations, production calendar, etc.) are PR-only and path-scoped. They run only when their implementation/test/workflow surface is touched.
-- `concurrency: cancel-in-progress` cancels obsolete PR runs after a newer commit.
-- Workflow/control-plane changes still trigger the relevant policy checks.
+- `ERP PLANEX CI`: pull requests to canonical + canonical pushes only. Feature-branch pushes do not start duplicate main CI.
+- Heavy domain regressions are PR-only and path-scoped.
+- `concurrency: cancel-in-progress` cancels obsolete PR runs.
 - Safe CI never deploys production or mutates production DB.
 
 Task classes:
-- **FAST** — presentation/view/CSS/text/local UI only, no business/DB/security/route semantics. Main CI + cheap path-relevant UI contract.
-- **STANDARD** — controller/service/business behavior without production DB mutation. Main CI + owning path-triggered regression(s).
-- **CRITICAL** — settlement/matching/debt, security/access, DB/schema, financial integrations, control plane, destructive operations. Full relevant gates.
+- **FAST** — presentation/view/CSS/text/local UI only. Target for a several-line microchange is ~1 minute wall-clock when runners are free; this target does not waive safety gates.
+- **STANDARD** — controller/service/business behavior without production DB mutation.
+- **CRITICAL** — settlement/matching/debt, security/access, DB/schema, financial integrations, control plane, destructive operations.
 
-Never create an **empty commit** or zero-change PR merely to retrigger CI/release. If a specific failed job is transient, rerun the failed job/run rather than replaying every successful workflow. Do not create a temporary verification PR/workflow for a routine deploy.
+FAST execution should normally be: `read exact view + cheap contract → one feature change → PR → cheap CI → merge → exact HEAD → deploy ref → commit-status evidence → minimal memory delta`.
 
 ## Agent-driven production deploy
 
@@ -33,24 +38,22 @@ Never create an **empty commit** or zero-change PR merely to retrigger CI/releas
 Dedicated request ref: `deploy/erpv2-agent`.
 Request guard: `.github/workflows/erpv2_agent_deploy_request.yml`.
 
-A merge by itself does not deploy. A CI success by itself does not deploy.
-
 Optimized sequence:
 1. Branch → PR.
 2. Path-targeted PR CI passes.
 3. Merge into canonical.
-4. Agent confirms exact current canonical HEAD.
-5. If intended for production, agent may immediately non-force advance `deploy/erpv2-agent` to that exact HEAD. The agent does **not** manually poll/wait for canonical CI first.
-6. `ERPv2 Agent Deploy Request` validates the request SHA equals current canonical HEAD and then waits for the exact-SHA canonical `ERP PLANEX CI` push run.
-7. CI failure/timeout fails closed. On success, guard immediately rechecks canonical HEAD.
-8. Guard dispatches `ERPv2 Controlled Deploy` for that exact SHA.
-9. Controlled Deploy performs backup/artifact/deploy and built-in postdeploy evidence.
+4. Agent confirms exact current canonical HEAD once.
+5. If intended for production, immediately non-force advance `deploy/erpv2-agent` to exact HEAD. Do not manually poll canonical CI first.
+6. `ERPv2 Agent Deploy Request` waits for exact-SHA canonical `ERP PLANEX CI`, fails closed on failure/timeout, then rechecks HEAD.
+7. Guard dispatches `ERPv2 Controlled Deploy` exact SHA.
+8. Controlled Deploy performs backup/artifact/deploy/built-in verification and publishes commit status context `erpv2/deploy` on that exact SHA.
+9. Agent reads exact-SHA combined commit status. `erpv2/deploy=success` is routine DEPLOY PASS evidence; no public-web or workflow archaeology is needed.
 
-The request ref must never be force-moved backwards. If canonical HEAD changes while the request is waiting, the guard must fail closed; do not deploy the stale SHA.
+The deploy request ref must never be force-moved backwards. If canonical HEAD changes while waiting, stale SHA must not deploy.
 
 ## Routine postdeploy evidence
 
-A normal code/UI release does not need another verification PR. `ERPv2 Controlled Deploy` already proves:
+`erpv2/deploy=success` is published only after the existing Controlled Deploy safeguards complete successfully:
 - exact deployed marker SHA;
 - exact artifact SHA;
 - `/erpv2/login` HTTP 200;
@@ -60,7 +63,15 @@ A normal code/UI release does not need another verification PR. `ERPv2 Controlle
 - runtime directories preserved;
 - migrations were not run.
 
-Expensive browser/runtime acceptances `P44`, `P46`, `P47`, `P49`, `P50` runtime and `P93` are task-specific manual tools. Run them for STANDARD/CRITICAL risk when their protected surface is relevant; they must not automatically fan out after every ordinary deploy.
+The JSON artifact remains retained for deeper review. Expensive browser/runtime acceptances P44/P46/P47/P49/P50/P93 are task-specific manual tools for relevant STANDARD/CRITICAL risk, not default FAST fan-out.
+
+## FAST tool discipline
+
+When a primary connector works, do not try `gh`, `git ls-remote`, public web, container or HTTP fallback for the same operation. Do not reread stable deploy workflows/runbooks in every FAST task. Use known IDs and exact files. Typical CI observation is one initial status read and one final read, not repeated second-level polling.
+
+## FAST Memory policy
+
+For ordinary `FAST + SCREEN/UI`, memory delta is intentionally small: affected Screen record, affected cheap Test/Contract record only if changed, and one handoff. Do not churn `00 — START HERE`, `01 — CURRENT STATE`, Module/Service/Business Rules or broad Health merely because canonical SHA advanced. GitHub is always the source of exact current HEAD.
 
 ## Production database policy
 
@@ -75,17 +86,9 @@ Production migrations must never run automatically after CI or deploy.
 - `ERPV2_SSH_HOST`
 - `ERPV2_SSH_PORT`
 - `ERPV2_SSH_USER`
-- `P11_RUNTIME_CREDENTIALS_B64` (preferred runtime credential path; legacy encrypted fallback exists in historical runtime tooling)
+- `P11_RUNTIME_CREDENTIALS_B64`
 
 Never print or commit secret values.
-
-## Agent efficiency rules
-
-- Read relevant GitHub/Notion evidence once; do not repeatedly reconstruct the same state.
-- Prefer one meaningful commit/push after focused checks instead of push-on-every-micro-edit.
-- Check Actions in aggregate; avoid 4–8 second polling loops.
-- A failed unrelated historical contract is a test-boundary problem, not a reason to run every suite repeatedly.
-- Business regressions protect business state/behavior. Presentation copy/layout belongs in cheap UI contract tests.
 
 ## Emergency rule
 
