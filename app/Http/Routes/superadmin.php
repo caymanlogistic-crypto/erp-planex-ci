@@ -2,10 +2,13 @@
 
 require_once base_path('app/Http/Controllers/Superadmin/CompanyController.php');
 require_once base_path('app/Http/Controllers/Superadmin/CompanyOwnerController.php');
+require_once base_path('app/Http/Controllers/Superadmin/UiPatternLabController.php');
 
 $companyController = new \App\Http\Controllers\Superadmin\CompanyController($config, $db);
 $ownerController = new \App\Http\Controllers\Superadmin\CompanyOwnerController($config, $db);
+$uiPatternLabController = new \App\Http\Controllers\Superadmin\UiPatternLabController();
 
+$router->get('/ui-library', [$uiPatternLabController, 'index']);
 $router->get('/superadmin/companies', [$companyController, 'index']);
 $router->get('/superadmin/companies/create', [$companyController, 'createForm']);
 $router->post('/superadmin/companies/create', [$companyController, 'createSubmit']);

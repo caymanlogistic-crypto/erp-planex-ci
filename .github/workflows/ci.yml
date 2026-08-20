@@ -97,6 +97,7 @@ jobs:
             echo "migrations=$(has '^(database/|scripts/.*migrat|scripts/p[0-9]+_apply_)')"
             echo "migration_normalization=$(has '^(database/migrations-local/(057_create_crew_drivers|058_create_linear_route_points)\.sql|scripts/p40_reconcile_migration_names\.php)$')"
             echo "tenant_schema=$(has '^(database/migrations-local/|app/Service/LocalMigrationService\.php$|app/Support/company_database\.php$|app/Http/Controllers/Superadmin/CompanyActions/create_submit\.php$|tools/database/|tests/tenant_schema_provisioning_contract_test\.php$|docs/database/|\.github/workflows/ci\.yml$)')"
+            echo "ui_lab=$(has '^(app/Http/Controllers/Superadmin/UiPatternLabController\.php$|app/Http/Routes/superadmin\.php$|app/View/pages/ui_pattern_lab\.php$|app/View/components/(button|input|page_header|status_badge|table)\.php$|public/assets/css/(ui-pattern-lab|erp-ui|app|app-base|workspace-benchmark)\.css$|tests/ui_pattern_lab_contract_test\.php$|\.github/ui-pattern-lab/ui_pattern_lab_visual\.js$)')"
           } >> "$GITHUB_OUTPUT"
 
           echo 'Changed files:'
@@ -134,6 +135,10 @@ jobs:
       - name: Targeted linear-route regression
         if: steps.changes.outputs.linear == 'true'
         run: php tests/linear_route_point_dual_operation_test.php
+
+      - name: Targeted UI Pattern Lab contract
+        if: steps.changes.outputs.ui_lab == 'true'
+        run: php tests/ui_pattern_lab_contract_test.php
 
       - name: Changed Python syntax
         if: steps.changes.outputs.python == 'true'
@@ -228,6 +233,74 @@ jobs:
               node --check "$f"
             done
           fi
+
+      - name: Setup Node for UI Pattern Lab visual QA
+        if: steps.changes.outputs.ui_lab == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Chromium for UI Pattern Lab visual QA
+        if: steps.changes.outputs.ui_lab == 'true'
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: UI Pattern Lab browser QA
+        if: steps.changes.outputs.ui_lab == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          session_dir=/tmp/erp-ui-pattern-lab-sessions
+          cookie_name=ERPUI
+          mkdir -p "$session_dir" artifacts
+
+          SESSION_SAVE_PATH="$session_dir" SESSION_COOKIE_NAME="$cookie_name" php -r '
+            session_name(getenv("SESSION_COOKIE_NAME"));
+            session_save_path(getenv("SESSION_SAVE_PATH"));
+            session_id("uiadmin");
+            session_start();
+            $_SESSION = ["user_id" => 1, "user_name" => "UI Reviewer", "role_code" => "superadmin", "company_id" => 0];
+            session_write_close();
+          '
+          SESSION_SAVE_PATH="$session_dir" SESSION_COOKIE_NAME="$cookie_name" php -r '
+            session_name(getenv("SESSION_COOKIE_NAME"));
+            session_save_path(getenv("SESSION_SAVE_PATH"));
+            session_id("uilogist");
+            session_start();
+            $_SESSION = ["user_id" => 2, "user_name" => "UI Restricted", "role_code" => "logist", "company_id" => 0];
+            session_write_close();
+          '
+
+          SESSION_SAVE_PATH="$session_dir" SESSION_COOKIE_NAME="$cookie_name" APP_BASE_PATH="" \
+            php -S 127.0.0.1:8016 -t public public/index.php >/tmp/ui-pattern-lab-server.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+
+          ready=false
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8016/login >/dev/null; then
+              ready=true
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" != true ]; then
+            cat /tmp/ui-pattern-lab-server.log
+            exit 1
+          fi
+
+          UI_LAB_BASE_URL=http://127.0.0.1:8016 UI_LAB_SESSION_COOKIE="$cookie_name" \
+            node .github/ui-pattern-lab/ui_pattern_lab_visual.js
+
+      - name: Upload UI Pattern Lab screenshot artifact
+        if: always() && steps.changes.outputs.ui_lab == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-pattern-lab-v0-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 14
 
       - name: Control-plane guard
         shell: bash
