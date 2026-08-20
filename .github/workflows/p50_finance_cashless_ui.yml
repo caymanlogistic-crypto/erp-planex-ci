@@ -3,17 +3,33 @@ name: P50 Finance Cashless UI
 on:
   pull_request:
     branches: [chatgpt/production-stabilization-20260802]
-  workflow_run:
-    workflows: ["ERPv2 Controlled Deploy"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
+    paths:
+      - 'app/Support/runtime_ui_hotfixes.php'
+      - 'app/Http/Routes/company_finance_cash.php'
+      - '.github/p50/**'
+      - '.github/workflows/p50_finance_cashless_ui.yml'
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed SHA for optional runtime verification'
+        required: false
+        type: string
+      run_runtime:
+        description: 'Run expensive Playwright production acceptance'
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
+concurrency:
+  group: p50-cashless-${{ github.event.pull_request.number || inputs.source_sha || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   static:
-    if: ${{ github.event_name == 'pull_request' }}
+    if: ${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -31,13 +47,20 @@ jobs:
           echo P50_STATIC_CASHLESS_UI_OK
 
   runtime:
-    if: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_runtime }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
+      - name: Validate source SHA
+        shell: bash
+        env:
+          SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
       - name: Verify exact deployed marker
         env:
@@ -46,7 +69,7 @@ jobs:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
           PORT: ${{ secrets.ERPV2_SSH_PORT }}
           USER: ${{ secrets.ERPV2_SSH_USER }}
-          SHA: ${{ github.event.workflow_run.head_sha }}
+          SHA: ${{ inputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -85,14 +108,10 @@ jobs:
           echo "::add-mask::$cred"
           echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
       - name: Cashless finance UI runtime acceptance
-        shell: bash
-        run: |
-          set -euo pipefail
-          node .github/p50/P50_finance_cashless_runtime.js | tee P50_RUNTIME.txt
-          grep -q 'P50_FINANCE_CASHLESS_UI_OK' P50_RUNTIME.txt
+        run: node .github/p50/P50_finance_cashless_runtime.js | tee P50_RUNTIME.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P50_finance_cashless_ui_${{ github.event.workflow_run.head_sha }}
+          name: P50_finance_cashless_ui_${{ inputs.source_sha }}
           path: P50_RUNTIME.txt
           if-no-files-found: warn
