@@ -113,7 +113,12 @@ jobs:
           ]
           for token in fast_required:
               assert token in fast, f'missing FAST safeguard: {token}'
-          forbidden_fast = ['ERPV2_SSH_PRIVATE_KEY', 'P07_' + 'deploy_erpv2.sh', 'public_html/erpv2', 'deploy_backups']
+          forbidden_fast = [
+              'ERPV2_SSH_PRIVATE_KEY',
+              'P07_' + 'deploy_erpv2.sh',
+              'public_html/' + 'erpv2',
+              'deploy_' + 'backups',
+          ]
           for forbidden in forbidden_fast:
               assert forbidden not in fast, f'FAST workflow must not own production secret/write engine: {forbidden}'
 
