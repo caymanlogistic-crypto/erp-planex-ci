@@ -44,6 +44,15 @@ concurrency:
 
 jobs:
   static:
+    if: >-
+      !(
+        github.event_name == 'pull_request' &&
+        startsWith(github.head_ref, 'fast/') &&
+        startsWith(github.event.pull_request.title, 'FAST:')
+      ) && !(
+        github.event_name == 'push' &&
+        startsWith(github.event.head_commit.message, 'FAST:')
+      )
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:

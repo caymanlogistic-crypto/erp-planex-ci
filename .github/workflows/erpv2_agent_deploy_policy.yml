@@ -6,7 +6,9 @@ on:
     paths:
       - '.github/workflows/erpv2_agent_deploy_request.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
+      - '.github/workflows/erpv2_fast_release.yml'
       - '.github/workflows/erpv2_agent_deploy_policy.yml'
+      - '.github/workflows/ci.yml'
       - 'docs/GITHUB_CONTROL_PLANE.md'
       - 'AGENTS.md'
   push:
@@ -14,7 +16,9 @@ on:
     paths:
       - '.github/workflows/erpv2_agent_deploy_request.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
+      - '.github/workflows/erpv2_fast_release.yml'
       - '.github/workflows/erpv2_agent_deploy_policy.yml'
+      - '.github/workflows/ci.yml'
       - 'docs/GITHUB_CONTROL_PLANE.md'
       - 'AGENTS.md'
   workflow_dispatch:
@@ -42,6 +46,8 @@ jobs:
 
           controlled = Path('.github/workflows/erpv2_controlled_deploy.yml').read_text(encoding='utf-8')
           agent = Path('.github/workflows/erpv2_agent_deploy_request.yml').read_text(encoding='utf-8')
+          fast = Path('.github/workflows/erpv2_fast_release.yml').read_text(encoding='utf-8')
+          ci = Path('.github/workflows/ci.yml').read_text(encoding='utf-8')
           docs = Path('docs/GITHUB_CONTROL_PLANE.md').read_text(encoding='utf-8')
           agents = Path('AGENTS.md').read_text(encoding='utf-8')
 
@@ -83,12 +89,51 @@ jobs:
           for token in required:
               assert token in agent, f'missing safeguard: {token}'
 
+          fast_on = on_block(fast)
+          fast_events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', fast_on, flags=re.M)
+          assert sorted(set(fast_events)) == ['pull_request_target'], fast_events
+          fast_required = [
+              'github.actor == github.repository_owner',
+              'github.event.pull_request.head.repo.full_name == github.repository',
+              "startsWith(github.event.pull_request.head.ref, 'fast/')",
+              "startsWith(github.event.pull_request.title, 'FAST:')",
+              "allowed = re.compile(r'^(?:app/View/pages/",
+              "tests/[A-Za-z0-9_]+_ui_contract_test",
+              "changed_lines <= 120",
+              "len(files) <= 6",
+              "persist-credentials: false",
+              "php -l",
+              "tests/*_ui_contract_test.php",
+              "'merge_method': 'squash'",
+              "'sha': os.environ['EXPECTED_HEAD']",
+              'Verify merge SHA is exact canonical HEAD',
+              'erpv2/fast-release',
+              'actions/workflows/$CONTROLLED_DEPLOY_WORKFLOW/dispatches',
+              "'confirm_deploy': 'DEPLOY_ERPV2'",
+          ]
+          for token in fast_required:
+              assert token in fast, f'missing FAST safeguard: {token}'
+          forbidden_fast = [
+              'ERPV2_SSH_PRIVATE_KEY',
+              'P07_' + 'deploy_erpv2.sh',
+              'public_html/' + 'erpv2',
+              'deploy_' + 'backups',
+          ]
+          for forbidden in forbidden_fast:
+              assert forbidden not in fast, f'FAST workflow must not own production secret/write engine: {forbidden}'
+
+          assert "startsWith(github.head_ref, 'fast/')" in ci
+          assert "startsWith(github.event.pull_request.title, 'FAST:')" in ci
+          assert "startsWith(github.event.head_commit.message, 'FAST:')" in ci
+
           assert 'deploy/erpv2-agent' in docs
           assert 'erpv2/deploy' in docs
+          assert 'ERPv2 FAST Release' in docs
           assert 'Canonical changes only through PR merge' in docs
           assert 'Production migrations must never run automatically' in docs
           assert 'FAST' in agents and 'STANDARD' in agents and 'CRITICAL' in agents
           assert 'Никогда не вызывать `create_file`, `update_file`, `delete_file`' in agents
           assert 'FAST whitelist' in agents
+          assert 'Notion обязателен' in agents
           print('ERPV2_AGENT_DEPLOY_POLICY=PASS')
           PY
