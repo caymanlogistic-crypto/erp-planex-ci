@@ -56,6 +56,7 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
 .invoice-stage-card{display:flex;flex-direction:column;flex:0 0 190px;min-width:170px;border:1px solid var(--border);border-radius:5px;padding:7px 8px;background:transparent}
 .invoice-stage-card.is-paid{background:transparent;border-color:var(--border)}
 td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stages > .invoice-stage-card:not(.is-paid))){background:var(--success-bg)}
+.table tbody tr:hover td.invoice-stages-col:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stages > .invoice-stage-card:not(.is-paid))){background:color-mix(in srgb,var(--success-bg) 86%,var(--line) 14%)}
 .invoice-stage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:5px}
 .invoice-stage-title{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .invoice-stage-route{color:var(--muted);font-size:10px;white-space:nowrap}
@@ -66,6 +67,10 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
 .invoice-stage-status{margin-top:auto;padding-top:6px;min-height:24px}
 .invoice-stage-status .badge{white-space:nowrap}
 .invoice-stage-empty{color:var(--muted);padding:3px 0}
+.invoice-toolbar-filters{display:flex;align-items:center;gap:8px;min-width:0}
+.invoice-filter-select{width:142px;min-width:142px;height:26px;min-height:26px;padding:0 6px;font-size:11px}
+.invoice-paid-filter{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--text-muted);font-size:11px;cursor:pointer;user-select:none}
+.invoice-paid-filter input{margin:0;accent-color:var(--accent)}
 @media (max-width:1280px){.invoice-stage-card{flex-basis:170px}}
 </style>
 <div class="page-head">
@@ -83,19 +88,21 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
 <?php if ($successFlash): ?><div class="notice success"><?= e($successFlash) ?></div><?php endif; ?>
 <?php if (!empty($formError)): ?><div class="notice warn"><?= e($formError) ?></div><?php endif; ?>
 
-<div class="tabs-page">
-    <a href="<?= app_url('/company/finance/invoices') ?>" class="tab-link<?= $selectedDirection === '' ? ' is-active' : '' ?>">Все счета</a>
-    <a href="<?= app_url('/company/finance/invoices?direction=' . FinanceInvoiceService::DIRECTION_OUTGOING) ?>" class="tab-link<?= $selectedDirection === FinanceInvoiceService::DIRECTION_OUTGOING ? ' is-active' : '' ?>">Выставленные</a>
-    <a href="<?= app_url('/company/finance/invoices?direction=' . FinanceInvoiceService::DIRECTION_INCOMING) ?>" class="tab-link<?= $selectedDirection === FinanceInvoiceService::DIRECTION_INCOMING ? ' is-active' : '' ?>">Полученные</a>
-</div>
-
 <?php if (empty($invoices)): ?>
 <div class="panel"><div class="panel-body"><div class="empty-state"><p class="empty-title">Счета ещё не созданы.</p><p class="empty-desc">Создайте первый счёт через модальное окно.</p></div></div></div>
 <?php else: ?>
-<div class="table-card table-card--standard">
+<div class="table-card table-card--standard" data-invoice-grid>
     <div class="table-toolbar">
         <div class="found-label">Найдено: <b><?= count($invoices) ?></b> из <b><?= $invTotal ?></b> счетов (страница <?= $invPage ?>/<?= $invPages ?>)</div>
-        <div class="toolbar-right"><input type="text" class="toolbar-search" placeholder="Поиск по таблице"></div>
+        <div class="toolbar-right invoice-toolbar-filters">
+            <select class="field-select invoice-filter-select" data-invoice-direction aria-label="Направление счёта">
+                <option value=""<?= $selectedDirection === '' ? ' selected' : '' ?>>Все счета</option>
+                <option value="<?= e(FinanceInvoiceService::DIRECTION_OUTGOING) ?>"<?= $selectedDirection === FinanceInvoiceService::DIRECTION_OUTGOING ? ' selected' : '' ?>>Выставленные</option>
+                <option value="<?= e(FinanceInvoiceService::DIRECTION_INCOMING) ?>"<?= $selectedDirection === FinanceInvoiceService::DIRECTION_INCOMING ? ' selected' : '' ?>>Полученные</option>
+            </select>
+            <label class="invoice-paid-filter"><input type="checkbox" data-hide-paid checked>Убрать полностью оплаченные счета</label>
+            <input type="text" class="toolbar-search" data-invoice-search placeholder="Поиск по таблице" autocomplete="off">
+        </div>
     </div>
     <div class="table-scroll">
         <table class="table">
@@ -203,8 +210,12 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
                         ];
                     }
                 }
+                $invoiceFullyPaid = !empty($stageCards);
+                foreach ($stageCards as $stageCard) {
+                    if (!$stageCard['is_paid']) { $invoiceFullyPaid = false; break; }
+                }
             ?>
-                <tr data-invoice-id="<?= (int)($inv['id'] ?? 0) ?>">
+                <tr data-invoice-id="<?= (int)($inv['id'] ?? 0) ?>" data-direction="<?= e((string)($inv['direction'] ?? '')) ?>" data-fully-paid="<?= $invoiceFullyPaid ? '1' : '0' ?>">
                     <td class="col-mono"><?= e($inv['number'] ?? '—') ?></td>
                     <td class="col-mono"><?= e($fmtDate($inv['invoice_date'] ?? '')) ?></td>
                     <td><?= e(FinanceInvoiceService::directionLabel($inv['direction'] ?? null)) ?></td>
@@ -297,6 +308,35 @@ window.planexSetHtmlAndRunScripts = window.planexSetHtmlAndRunScripts || functio
 };
 
 document.addEventListener('DOMContentLoaded', function() {
+    var invoiceGrid = document.querySelector('[data-invoice-grid]');
+    if (invoiceGrid) {
+        var searchInput = invoiceGrid.querySelector('[data-invoice-search]');
+        var directionSelect = invoiceGrid.querySelector('[data-invoice-direction]');
+        var hidePaidInput = invoiceGrid.querySelector('[data-hide-paid]');
+        var countEl = invoiceGrid.querySelector('.found-label b');
+        var rows = Array.from(invoiceGrid.querySelectorAll('tbody tr[data-invoice-id]'));
+        var normalize = function(value) { return String(value || '').toLocaleLowerCase('ru-RU').trim(); };
+        var applyInvoiceFilters = function() {
+            var query = normalize(searchInput ? searchInput.value : '');
+            var direction = directionSelect ? directionSelect.value : '';
+            var hidePaid = hidePaidInput ? hidePaidInput.checked : false;
+            var visible = 0;
+            rows.forEach(function(row) {
+                var matchesSearch = query === '' || normalize(row.textContent).includes(query);
+                var matchesDirection = direction === '' || row.dataset.direction === direction;
+                var matchesPaid = !hidePaid || row.dataset.fullyPaid !== '1';
+                var show = matchesSearch && matchesDirection && matchesPaid;
+                row.classList.toggle('is-hidden', !show);
+                if (show) visible++;
+            });
+            if (countEl) countEl.textContent = String(visible);
+        };
+        if (searchInput) searchInput.addEventListener('input', applyInvoiceFilters);
+        if (directionSelect) directionSelect.addEventListener('change', applyInvoiceFilters);
+        if (hidePaidInput) hidePaidInput.addEventListener('change', applyInvoiceFilters);
+        applyInvoiceFilters();
+    }
+
     document.querySelectorAll('table.table tbody tr[data-invoice-id]').forEach(function(row) {
         row.addEventListener('dblclick', function() {
             var id = parseInt(this.dataset.invoiceId || '0', 10);
