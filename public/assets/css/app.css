@@ -30,3 +30,25 @@ select:not([multiple]) {
 .production-calendar > .table-card > .table-toolbar {
     min-height: 36px;
 }
+
+/* Invoice grid: wide non-wrapping payment stages must stay inside the visible
+   card. The table may be intrinsically wider, but only .table-scroll owns it. */
+.table-card[data-invoice-grid] {
+    min-width: 0;
+    max-width: 100%;
+    overflow: hidden;
+}
+.table-card[data-invoice-grid] > .table-toolbar,
+.table-card[data-invoice-grid] > .table-scroll {
+    min-width: 0;
+    max-width: 100%;
+}
+.table-card[data-invoice-grid] > .table-scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+.table-card[data-invoice-grid] .table {
+    width: max-content;
+    min-width: 100%;
+    max-width: none;
+}
