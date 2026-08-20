@@ -1,0 +1,59 @@
+name: Temporary Invoice Stage Production Verify
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: ${{ github.head_ref == 'chatgpt/verify-invoice-stage-prod-20260820' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Verify exact production marker and invoice UI source
+        shell: bash
+        env:
+          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+          EXPECTED_SHA: e6cfaeae6264d7f14105009c12a91135ad3186fd
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/verify_key"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/verify_key" "$HOME/.ssh/known_hosts"
+          out="$(ssh -p "$PORT" -i "$HOME/.ssh/verify_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          ROOT=/home/s/spugovxsim/planexp
+          LIVE="$ROOT/public_html/erpv2"
+          MARKER="$(cat "$ROOT/deploy/P07_erpv2_deployed_commit.txt")"
+          test "$MARKER" = "$EXPECTED_SHA"
+          FILE="$LIVE/app/View/pages/company_finance_invoices.php"
+          test -f "$FILE"
+          ! grep -q 'Статус счёта' "$FILE"
+          grep -q 'invoice-stage-card.is-paid' "$FILE"
+          grep -q "\$statusText = 'Оплачен';" "$FILE"
+          ! grep -q 'Оплачен с просрочкой' "$FILE"
+          grep -q 'Частично · просрочка' "$FILE"
+          grep -q 'badge badge-warning' "$FILE"
+          grep -q 'is-overdue-remaining' "$FILE"
+          grep -q 'var(--danger-text)' "$FILE"
+          printf 'PRODUCTION_MARKER=%s\nINVOICE_STAGE_UI_SOURCE=PASS\n' "$MARKER"
+          REMOTE
+          )"
+          printf '%s\n' "$out"
+          http="$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)"
+          test "$http" = 200
+          printf 'HTTP_LOGIN=%s\nPRODUCTION_VERIFY=PASS\n' "$http"
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/verify_key"
