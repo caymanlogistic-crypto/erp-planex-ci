@@ -52,7 +52,11 @@ jobs:
 
           controlled_events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', on_block(controlled), flags=re.M)
           assert sorted(set(controlled_events)) == ['workflow_dispatch'], controlled_events
-          for token in ['DEPLOY_ERPV2', 'source_sha:', 'confirm_deploy:', 'P07_' + 'deploy_erpv2.sh']:
+          for token in [
+              'DEPLOY_ERPV2', 'source_sha:', 'confirm_deploy:', 'P07_' + 'deploy_erpv2.sh',
+              'statuses: write', 'erpv2/deploy', 'Publish deploy pending status',
+              'Publish final deploy status', "JOB_STATUS: ${{ job.status }}",
+          ]:
               assert token in controlled, token
 
           agent_on = on_block(agent)
@@ -80,9 +84,11 @@ jobs:
               assert token in agent, f'missing safeguard: {token}'
 
           assert 'deploy/erpv2-agent' in docs
-          assert 'A merge by itself does not deploy' in docs
+          assert 'erpv2/deploy' in docs
+          assert 'Canonical changes only through PR merge' in docs
           assert 'Production migrations must never run automatically' in docs
-          assert 'empty commit' in docs.lower()
           assert 'FAST' in agents and 'STANDARD' in agents and 'CRITICAL' in agents
+          assert 'Никогда не вызывать `create_file`, `update_file`, `delete_file`' in agents
+          assert 'FAST whitelist' in agents
           print('ERPV2_AGENT_DEPLOY_POLICY=PASS')
           PY
