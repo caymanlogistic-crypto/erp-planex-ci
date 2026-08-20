@@ -122,6 +122,22 @@ jobs:
           for forbidden in forbidden_fast:
               assert forbidden not in fast, f'FAST workflow must not own production secret/write engine: {forbidden}'
 
+          # STANDARD/CRITICAL main CI must stay incremental rather than repository-wide,
+          # while global safety guards and task-specific heavy workflows remain intact.
+          for token in [
+              'fetch-depth: 2',
+              'Detect changed scope',
+              'git diff --name-only --diff-filter=ACMR HEAD^1 HEAD',
+              'Changed PHP syntax',
+              'Targeted finance regressions',
+              'Targeted linear-route regression',
+              'Migration checks when relevant',
+              'Dynamic identifier safety audit',
+              'Architecture guard',
+              'Control-plane guard',
+              'Canonical manual deploy policy',
+          ]:
+              assert token in ci, f'missing incremental CI safeguard: {token}'
           assert "startsWith(github.head_ref, 'fast/')" in ci
           assert "startsWith(github.event.pull_request.title, 'FAST:')" in ci
           assert "startsWith(github.event.head_commit.message, 'FAST:')" in ci
@@ -135,5 +151,7 @@ jobs:
           assert 'Никогда не вызывать `create_file`, `update_file`, `delete_file`' in agents
           assert 'FAST whitelist' in agents
           assert 'Notion обязателен' in agents
+          assert 'STANDARD execution discipline' in agents
+          assert 'CRITICAL execution discipline' in agents
           print('ERPV2_AGENT_DEPLOY_POLICY=PASS')
           PY

@@ -28,10 +28,34 @@ Production: `/erpv2`. Legacy `/erp` — never touch.
 Цель OWNER для микроправки в несколько строк — стремиться к ~1 минуте wall-clock при свободных runners. Это performance target, а не основание пропускать guards.
 
 ### STANDARD
-Controller/service/business behavior без production DB/schema mutation. Использовать owning module/service/rule/test contracts. После merge — обычный guarded `deploy/erpv2-agent` flow.
+Controller/service/business behavior без production DB/schema mutation и без finance settlement/matching/debt/security semantics.
+
+**STANDARD execution discipline:**
+- использовать `standard/<slug>` и один содержательный commit там, где это практично;
+- bootstrap: owning Module/Screen → exact controller/service → Business Rule/State только если реально затронуты → owning Test Contract; повторно найденные Notion IDs не искать снова;
+- `ERP PLANEX CI` проверяет только changed PHP/JS/Python, всегда оставляет быстрые global architecture/security/control-plane guards и запускает cheap domain regressions только когда их scope затронут;
+- path-triggered owning workflows запускаются параллельно самим GitHub. Не запускать их вручную второй раз и не ждать каждый последовательно;
+- после PR creation: один aggregated status read после разумного runner window. При failure открыть только failed job; transient failure rerun, а не новый commit;
+- после всех required owning checks PASS: merge один раз → exact canonical HEAD один раз → сразу non-force `deploy/erpv2-agent`; guard сам ждёт lightweight exact-SHA canonical CI → один final `erpv2/deploy` read;
+- Notion: один final delta write по реально затронутым Module/Screen/Service/Rule/Test records; `00/01` и broad Health только если durable current state действительно изменился.
+
+Performance target для небольшой локальной STANDARD behavioral change при свободных runners: обычно **~2–4 минуты end-to-end**, без удаления owning regressions.
 
 ### CRITICAL
-Finance settlement/matching/debt semantics, security/access, DB/schema, financial integrations, control plane, destructive operations. Полный релевантный gate set. Production DB write всё равно требует отдельного task-specific OWNER approval.
+Finance settlement/matching/debt semantics, security/access, DB/schema, financial integrations, control plane, destructive operations.
+
+**CRITICAL execution discipline:**
+- использовать `critical/<slug>` и до edit зафиксировать impact set: authoritative service/data/rule/state/security/integration + owning test contracts;
+- `full relevant gates` означает **все проверки затронутых критических областей**, а не весь исторический ERP test inventory;
+- main `ERP PLANEX CI` остаётся incremental changed-file + global safety gate; Finance Matching / Obligations / Employee / Calendar и другие path-owned critical workflows запускаются GitHub параллельно по реальному diff;
+- нельзя вручную сериализовать уже автоматически запущенные critical workflows или добавлять Pxx/browser/runtime «на всякий случай». Manual runtime нужен только если соответствующий Test Contract/риск прямо требует его;
+- после PR creation сделать один aggregated status read после ожидаемого окна запуска. Если что-то упало — разбирать конкретный failed job; не делать широкую повторную диагностику green областей;
+- merge только после PASS всех реально требуемых critical checks. После merge code-only/backward-compatible change может идти через обычный guarded deploy-ref flow;
+- если code требует ещё не применённую production schema/data migration, **не deploy-ить несовместимый code**. Сначала выбрать backward-compatible sequencing либо остановиться перед production write и получить отдельное task-specific OWNER approval;
+- production migration/seed/reconciliation/backfill/destructive SQL никогда не наследует code-deploy authorization;
+- Memory Pass обязателен, но только по impact set: affected Module/Data/Rule/State/Security/Integration/Test + `01` только при durable current-state change. Не переаудировать соседние домены без evidence of drift.
+
+Performance target для небольшого focused **CRITICAL code-only** change без production DB write при свободных runners: ориентир **~4–7 минут end-to-end**. Для задач с production migration время OWNER approval и самой migration не искусственно оптимизируется.
 
 ## HARD WRITE SAFETY
 
@@ -40,17 +64,25 @@ Finance settlement/matching/debt semantics, security/access, DB/schema, financia
 - **Никогда не вызывать `create_file`, `update_file`, `delete_file` или эквивалентную write-операцию с canonical branch.**
 - Перед file mutation сначала создать feature branch; connector write всегда явно target-ит её.
 - Для FAST branch naming: `fast/<short-slug>`.
-- Одна микроправка + её cheap contract должны по возможности попасть в один atomic commit.
+- Для STANDARD: `standard/<short-slug>`; для CRITICAL: `critical/<short-slug>`.
+- Одна локальная задача + её owning contracts должны по возможности попасть в один содержательный commit, а не commit на каждую микро-правку.
 - Canonical изменяется только штатным PR merge; FAST merge выполняет guarded workflow через GitHub merge API.
 - Placeholder/temp/probe writes запрещены.
 - Empty/technical/release-checkpoint commit ради CI/deploy запрещён.
 - Temporary verification PR/workflow запрещён.
 
-## FAST tool discipline
+## Tool / polling discipline
 
 При рабочем GitHub/Notion connector не переходить к `gh`, `git ls-remote`, web/public HTTP или container fallback для той же операции.
 
-Для FAST:
+Для всех классов:
+- reuse already-discovered connector schemas и known Notion page IDs внутри текущей задачи;
+- успешный lookup не повторять без drift/ambiguity;
+- Actions не poll-ить каждые несколько секунд: один initial/aggregated read и один terminal read; во время known `pending` использовать разумный backoff;
+- не проверять green workflow повторно после того, как новый diff его не затронул;
+- не создавать диагностический commit/PR ради observability.
+
+Для FAST дополнительно:
 - не читать layout/controller/service «для уверенности», если view + cheap contract уже доказывают scope;
 - PR создавать сразу non-draft с title `FAST: <задача>`;
 - после PR creation не poll-ить обычный CI: ждать terminal `erpv2/deploy` status exact merged SHA;
@@ -61,7 +93,8 @@ Finance settlement/matching/debt semantics, security/access, DB/schema, financia
 OWNER дал standing authorization агентам деплоить собственные merged code/UI изменения без отдельного OWNER-клика.
 
 - **FAST:** `ERPv2 FAST Release` сам выполняет gate → squash merge → exact HEAD → dispatch `ERPv2 Controlled Deploy`.
-- **STANDARD/CRITICAL code deploy:** прежний guarded `deploy/erpv2-agent` flow остаётся действующим.
+- **STANDARD/CRITICAL code deploy:** прежний guarded `deploy/erpv2-agent` flow остаётся действующим; агент двигает ref сразу после exact merged HEAD, не ждёт canonical CI вручную.
+- `ERPv2 Agent Deploy Request` сам ждёт exact-SHA canonical `ERP PLANEX CI`, повторно проверяет HEAD и fail-closed dispatch-ит Controlled Deploy.
 - `ERPv2 Controlled Deploy` остаётся единственным workflow с production write engine и SSH secrets.
 - `erpv2/deploy = success` на exact SHA означает PASS встроенных marker/artifact/HTTP/DB fingerprint/legacy `/erp`/env/runtime/migrations=false checks.
 - P44/P46/P47/P49/P50/P93 — только task-specific runtime acceptance.
@@ -76,22 +109,27 @@ Standing code/UI deploy authorization НЕ включает production migration
 
 Finance доступен только `company_owner`, пока OWNER не изменит policy. Tenant isolation, auditability, fail-closed reconciliation и decimal money обязательны. Не менять production finance rows ради тестов.
 
-## Notion / Memory Gate — FAST whitelist
+## Notion / Memory Gate
 
-**Notion обязателен.** Ускорение FAST не отменяет MEMORY PASS.
+**Notion обязателен.** Ускорение любого класса не отменяет MEMORY PASS.
 
-В начале — один bootstrap read + exact affected Screen/Test records по known IDs или одному scoped search. В процессе Notion не обновлять.
+В начале — один bootstrap read + exact affected records по known IDs или одному scoped search. В процессе Notion не обновлять, кроме доказанного drift/blocker.
 
+### FAST whitelist
 После successful FAST deploy выполнить минимальный подтверждённый MEMORY PASS:
 1. affected Screen record — **обязательный write** с current semantics/evidence/exact merged SHA;
 2. affected cheap Test/Contract record — только если тест реально изменён;
 3. handoff для микроправки не обязателен, если Screen record сам полностью хранит delta.
 
-Для обычного FAST не обновлять `00`, `01`, Module/Service/Business Rules/broad Health только из-за нового SHA. Exact HEAD всегда брать из GitHub.
+Для обычного FAST не обновлять `00`, `01`, Module/Service/Business Rules/broad Health только из-за нового SHA. Target FAST Notion budget: обычно 1–3 relevant reads и 1–2 writes.
 
-Target FAST Notion budget: обычно 1–3 relevant reads и 1–2 writes. Использовать уже известные page IDs. После write считать MEMORY PASS только если tool вернул успешный result; при ambiguous response сделать один direct fetch/readback. Никогда не заявлять MEMORY PASS без подтверждённого Notion write.
+### STANDARD
+Обычно достаточно owning Module/Screen/Service/Rule/Test records. Target — примерно **3–6 relevant reads / 2–4 writes**, если задача локальная. Handoff/`01` только при реальном durable state change.
 
-STANDARD/CRITICAL обновляют только реально затронутые rules/state/security/flow/health records.
+### CRITICAL
+Сначала определить impact set, затем читать/писать только его: Module/Data/Rule/State/Security/Integration/Test. Типичный focused budget — **5–10 relevant reads / 3–6 writes**. Более широкий Memory Pass оправдан только если diff реально пересекает несколько critical domains или обнаружен drift.
+
+После write считать MEMORY PASS только если tool вернул успешный result; при ambiguous response сделать один direct fetch/readback. Никогда не заявлять MEMORY PASS без подтверждённого Notion write.
 
 **Definition of Done: `CODE PASS + CI PASS + MEMORY PASS`; production code/UI task additionally requires `DEPLOY PASS`.**
 
