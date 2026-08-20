@@ -51,9 +51,9 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
 <div class="notice warn"><?= e($dbError) ?></div>
 <?php else: ?>
 <style>
-.invoice-stages-col{width:1%;min-width:0}
-.invoice-stages{display:flex;flex-wrap:wrap;gap:6px;width:max-content;min-width:0;max-width:520px;font-size:11px;line-height:1.35;color:var(--text)}
-.invoice-stage-card{display:flex;flex-direction:column;flex:0 1 190px;min-width:170px;border:1px solid var(--border);border-radius:5px;padding:7px 8px;background:transparent}
+.invoice-stages-col{width:1%;min-width:0;white-space:nowrap}
+.invoice-stages{display:inline-flex;flex-wrap:nowrap;gap:6px;width:max-content;min-width:0;max-width:none;vertical-align:top;font-size:11px;line-height:1.35;color:var(--text)}
+.invoice-stage-card{display:flex;flex-direction:column;flex:0 0 190px;min-width:170px;border:1px solid var(--border);border-radius:5px;padding:7px 8px;background:transparent}
 .invoice-stage-card.is-paid{background:transparent;border-color:var(--border)}
 td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stages > .invoice-stage-card:not(.is-paid))){background:var(--success-bg)}
 .invoice-stage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:5px}

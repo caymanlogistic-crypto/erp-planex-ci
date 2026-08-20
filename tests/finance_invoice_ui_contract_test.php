@@ -21,8 +21,11 @@ uiMustNotContain($view,'Оплачен с просрочкой','closed stage hi
 uiMustContain($view,'.invoice-stage-card.is-paid{background:transparent;border-color:var(--border)}','paid stage card no longer owns success background');
 uiMustContain($view,'td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stages > .invoice-stage-card:not(.is-paid))){background:var(--success-bg)}','fully paid invoice paints the whole payment cell');
 uiMustNotContain($view,'.invoice-stage-card.is-paid{background:var(--success-bg)','paid stage card must not be green');
-uiMustContain($view,'.invoice-stages-col{width:1%;min-width:0}','payment stages column shrinks to its content');
-uiMustContain($view,'.invoice-stages{display:flex;flex-wrap:wrap;gap:6px;width:max-content;min-width:0;max-width:520px','payment stage strip uses intrinsic content width');
+uiMustContain($view,'.invoice-stages-col{width:1%;min-width:0;white-space:nowrap}','payment stages column stays shrink-to-content without trailing space');
+uiMustContain($view,'.invoice-stages{display:inline-flex;flex-wrap:nowrap;gap:6px;width:max-content;min-width:0;max-width:none;vertical-align:top','payment stage strip stays on one horizontal line at intrinsic width');
+uiMustContain($view,'.invoice-stage-card{display:flex;flex-direction:column;flex:0 0 190px;min-width:170px','payment stage cards keep stable side-by-side width');
+uiMustNotContain($view,'flex-wrap:wrap;gap:6px;width:max-content','payment stages must not wrap into a vertical stack');
+uiMustNotContain($view,'max-width:520px','payment stage strip must not retain the old wrapping cap');
 uiMustContain($view,'<td class="invoice-stages-col">','payment stage body cell shares the shrink-to-content column contract');
 uiMustContain($view,'Частично · просрочка','partial overdue state remains explicit');
 uiMustContain($view,"$statusClass = 'badge badge-warning';",'partial overdue uses warning badge');
