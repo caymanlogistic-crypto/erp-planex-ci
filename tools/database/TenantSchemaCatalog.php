@@ -146,15 +146,13 @@ final class TenantSchemaCatalog
             '```mermaid', 'flowchart LR',
             '  Central["Central DB<br/>companies / pool reservations / platform identity"] --> Tenant["Tenant DB<br/>erp_company_{id}"]',
         ];
-        $ids = [];
         foreach (array_keys($groups) as $domain) {
             $id = 'D' . substr(hash('sha1', $domain), 0, 8);
-            $ids[$domain] = $id;
             $out[] = '  Tenant --> ' . $id . '["' . str_replace('"', '', $domain) . '"]';
         }
         $out[] = '```';
         $out[] = '';
-        $out[] = 'The Central DB box is conceptual navigation only; this generator introspects the Tenant DB. Physical tenant columns live in `TENANT_SCHEMA.md` / `tenant-schema.json`.';
+        $out[] = 'The Central DB box is conceptual navigation only; this generator introspects the Tenant DB. Physical tenant columns live in `TENANT_SCHEMA.md`.';
         $out[] = '';
 
         foreach ($groups as $domain => $tables) {
@@ -218,7 +216,9 @@ final class TenantSchemaCatalog
             $name = (string) $r['INDEX_NAME'];
             $indexes[$name] ??= ['name' => $name, 'primary' => $name === 'PRIMARY', 'unique' => (int) $r['NON_UNIQUE'] === 0, 'columns' => []];
             $col = (string) $r['COLUMN_NAME'];
-            if ($r['SUB_PART'] !== null) $col .= '(' . (int) $r['SUB_PART'] . ')';
+            if ($r['SUB_PART'] !== null) {
+                $col .= '(' . (int) $r['SUB_PART'] . ')';
+            }
             $indexes[$name]['columns'][] = $col;
         }
         ksort($indexes, SORT_STRING);
@@ -241,8 +241,12 @@ final class TenantSchemaCatalog
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $name = (string) $r['CONSTRAINT_NAME'];
             $fks[$name] ??= [
-                'name' => $name, 'columns' => [], 'referenced_table' => (string) $r['REFERENCED_TABLE_NAME'],
-                'referenced_columns' => [], 'update_rule' => (string) $r['UPDATE_RULE'], 'delete_rule' => (string) $r['DELETE_RULE'],
+                'name' => $name,
+                'columns' => [],
+                'referenced_table' => (string) $r['REFERENCED_TABLE_NAME'],
+                'referenced_columns' => [],
+                'update_rule' => (string) $r['UPDATE_RULE'],
+                'delete_rule' => (string) $r['DELETE_RULE'],
             ];
             $fks[$name]['columns'][] = (string) $r['COLUMN_NAME'];
             $fks[$name]['referenced_columns'][] = (string) $r['REFERENCED_COLUMN_NAME'];
@@ -254,21 +258,40 @@ final class TenantSchemaCatalog
     private static function groupByDomain(array $catalog): array
     {
         $groups = [];
-        foreach ($catalog['tables'] as $table => $meta) $groups[$meta['domain']][] = $table;
+        foreach ($catalog['tables'] as $table => $meta) {
+            $groups[$meta['domain']][] = $table;
+        }
         ksort($groups, SORT_STRING);
-        foreach ($groups as &$tables) sort($tables, SORT_STRING);
+        foreach ($groups as &$tables) {
+            sort($tables, SORT_STRING);
+        }
+        unset($tables);
         return $groups;
     }
 
     private static function domainFor(string $table): string
     {
-        if ($table === 'schema_migrations') return 'System / Migration metadata';
-        if (str_starts_with($table, 'finance_') || str_starts_with($table, 'bank_') || str_contains($table, 'invoice') || str_contains($table, 'obligation')) return 'Finance';
-        if (str_starts_with($table, 'linear_route') || in_array($table, ['cargo_types', 'production_calendar'], true)) return 'Operations / Routes';
-        if (str_contains($table, 'vehicle') || str_contains($table, 'driver') || $table === 'crews') return 'Transport';
-        if (str_contains($table, 'document')) return 'Documents';
-        if (str_contains($table, 'access') || str_contains($table, 'grant') || $table === 'users') return 'Access / Security';
-        if (str_contains($table, 'client') || str_contains($table, 'contractor') || str_contains($table, 'assignment')) return 'CRM';
+        if ($table === 'schema_migrations') {
+            return 'System / Migration metadata';
+        }
+        if (str_starts_with($table, 'finance_') || str_starts_with($table, 'bank_') || str_contains($table, 'invoice') || str_contains($table, 'obligation')) {
+            return 'Finance';
+        }
+        if (str_starts_with($table, 'linear_route') || str_starts_with($table, 'production_calendar_') || $table === 'cargo_types') {
+            return 'Operations / Routes';
+        }
+        if (str_contains($table, 'vehicle') || str_contains($table, 'driver') || $table === 'crews') {
+            return 'Transport';
+        }
+        if (str_contains($table, 'document')) {
+            return 'Documents';
+        }
+        if (str_contains($table, 'access') || str_contains($table, 'grant') || $table === 'users') {
+            return 'Access / Security';
+        }
+        if (str_contains($table, 'client') || str_contains($table, 'contractor') || str_contains($table, 'assignment')) {
+            return 'CRM';
+        }
         return 'Other tenant domain';
     }
 
