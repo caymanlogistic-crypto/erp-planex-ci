@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 
 concurrency:
   group: erpv2-controlled-deploy
@@ -58,6 +59,22 @@ jobs:
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           printf 'SOURCE_SHA=%s\nTARGET=%s\nDEPLOY_MODE=manual_exact_sha\n' "$SOURCE_SHA" "$TARGET"
           printf 'source_sha=%s\ndeploy_mode=manual_exact_sha\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Publish deploy pending status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" \
+            -d "{\"state\":\"pending\",\"context\":\"erpv2/deploy\",\"description\":\"ERPv2 controlled deploy in progress\"}" >/dev/null
 
       - name: Build artifact strictly from source SHA
         id: artifact
@@ -236,6 +253,30 @@ jobs:
           path: ${{ env.RESULT_DIR }}/
           if-no-files-found: error
           retention-days: 30
+
+      - name: Publish final deploy status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          state=failure
+          description='ERPv2 controlled deploy failed'
+          if [ "$JOB_STATUS" = success ]; then
+            state=success
+            description='ERPv2 controlled deploy verified'
+          fi
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" \
+            -d "{\"state\":\"$state\",\"context\":\"erpv2/deploy\",\"description\":\"$description\"}" >/dev/null
 
       - name: Cleanup temporary SSH material
         if: always()
