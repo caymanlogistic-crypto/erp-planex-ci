@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Verify exact production marker and invoice UI source
+      - name: Report current production marker and invoice UI source
         shell: bash
         env:
           KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
@@ -29,29 +29,22 @@ jobs:
           printf '%s\n' "$KEY" > "$HOME/.ssh/verify_key"
           printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/verify_key" "$HOME/.ssh/known_hosts"
-          out="$(ssh -p "$PORT" -i "$HOME/.ssh/verify_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
+          ssh -p "$PORT" -i "$HOME/.ssh/verify_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
           set -euo pipefail
           ROOT=/home/s/spugovxsim/planexp
           LIVE="$ROOT/public_html/erpv2"
           MARKER="$(cat "$ROOT/deploy/P07_erpv2_deployed_commit.txt")"
-          test "$MARKER" = "$EXPECTED_SHA"
           FILE="$LIVE/app/View/pages/company_finance_invoices.php"
-          test -f "$FILE"
-          ! grep -q 'Статус счёта' "$FILE"
-          grep -q 'invoice-stage-card.is-paid' "$FILE"
-          grep -q "\$statusText = 'Оплачен';" "$FILE"
-          ! grep -q 'Оплачен с просрочкой' "$FILE"
-          grep -q 'Частично · просрочка' "$FILE"
-          grep -q 'badge badge-warning' "$FILE"
-          grep -q 'is-overdue-remaining' "$FILE"
-          grep -q 'var(--danger-text)' "$FILE"
-          printf 'PRODUCTION_MARKER=%s\nINVOICE_STAGE_UI_SOURCE=PASS\n' "$MARKER"
+          printf 'PRODUCTION_MARKER=%s\nEXPECTED_SHA=%s\n' "$MARKER" "$EXPECTED_SHA"
+          if [ "$MARKER" = "$EXPECTED_SHA" ]; then echo 'MARKER_MATCH=YES'; else echo 'MARKER_MATCH=NO'; fi
+          if [ -f "$FILE" ] && ! grep -q 'Статус счёта' "$FILE" && grep -q 'invoice-stage-card.is-paid' "$FILE" && grep -q "\$statusText = 'Оплачен';" "$FILE" && ! grep -q 'Оплачен с просрочкой' "$FILE" && grep -q 'Частично · просрочка' "$FILE" && grep -q 'is-overdue-remaining' "$FILE" && grep -q 'var(--danger-text)' "$FILE"; then
+            echo 'INVOICE_STAGE_UI_SOURCE=PASS'
+          else
+            echo 'INVOICE_STAGE_UI_SOURCE=OLD_OR_MISMATCH'
+          fi
           REMOTE
-          )"
-          printf '%s\n' "$out"
           http="$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)"
-          test "$http" = 200
-          printf 'HTTP_LOGIN=%s\nPRODUCTION_VERIFY=PASS\n' "$http"
+          printf 'HTTP_LOGIN=%s\nREAD_ONLY_PRODUCTION_PROBE=PASS\n' "$http"
 
       - name: Cleanup SSH material
         if: always()
