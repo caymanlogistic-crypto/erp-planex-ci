@@ -25,7 +25,27 @@ $slug = static function (string $value): string {
     return trim($value, '_') ?: 'DOMAIN';
 };
 
-$buildSchemaFiles = static function (array $catalog) use ($slug): array {
+$chunkSections = static function (array $sections, int $maxBytes = 12000): array {
+    $chunks = [];
+    $current = [];
+    $currentBytes = 0;
+    foreach ($sections as $section) {
+        $bytes = strlen($section['section']);
+        if ($current !== [] && $currentBytes + $bytes > $maxBytes) {
+            $chunks[] = $current;
+            $current = [];
+            $currentBytes = 0;
+        }
+        $current[] = $section;
+        $currentBytes += $bytes;
+    }
+    if ($current !== []) {
+        $chunks[] = $current;
+    }
+    return $chunks;
+};
+
+$buildSchemaFiles = static function (array $catalog) use ($slug, $chunkSections): array {
     $full = TenantSchemaCatalog::renderMarkdown($catalog);
     $parts = preg_split('/(?=^## `)/m', $full) ?: [$full];
     $header = array_shift($parts) ?? '';
@@ -41,7 +61,7 @@ $buildSchemaFiles = static function (array $catalog) use ($slug): array {
     $files = [];
     $links = [];
     foreach ($byDomain as $domain => $sections) {
-        $chunks = array_chunk($sections, 8);
+        $chunks = $chunkSections($sections);
         foreach ($chunks as $index => $chunk) {
             $suffix = count($chunks) > 1 ? sprintf('_%02d', $index + 1) : '';
             $name = 'TENANT_SCHEMA_' . $slug($domain) . $suffix . '.md';
