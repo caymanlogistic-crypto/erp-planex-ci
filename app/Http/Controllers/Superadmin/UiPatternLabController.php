@@ -87,7 +87,7 @@ final class UiPatternLabController
         header('Content-Type: text/html; charset=utf-8');
         header('Cache-Control: no-store, private');
         header('X-Robots-Tag: noindex, nofollow, noarchive');
-        header("Content-Security-Policy: default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; frame-ancestors 'self'");
+        header("Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; base-uri 'none'; frame-ancestors 'self'");
         readfile($file);
     }
 }
