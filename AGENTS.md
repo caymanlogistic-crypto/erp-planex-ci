@@ -26,12 +26,12 @@ Production FAST uses guarded `fast/*` + `FAST:` pipeline. **FAST whitelist** rem
 ### STANDARD
 Controller/service/business behavior without production DB/schema mutation and without critical settlement/security semantics.
 
-Use owning Module/Screen → exact controller/service → Rule/State only if affected → owning Test Contract. Main CI is incremental; path-owned regressions run in parallel. Do not manually duplicate or serialize them. Small local target remains roughly 2–4 min when runners are free.
+**STANDARD execution discipline:** Use owning Module/Screen → exact controller/service → Rule/State only if affected → owning Test Contract. Main CI is incremental; path-owned regressions run in parallel. Do not manually duplicate or serialize them. Small local target remains roughly 2–4 min when runners are free.
 
 ### CRITICAL
 Finance settlement/matching/debt, security/access, DB/schema, financial integrations, control plane, destructive operations.
 
-Define impact set before edit: authoritative Service/Data/Rule/State/Security/Integration + owning Test Contracts. `Full relevant gates` means all gates protecting impacted critical domains, not every historical ERP suite. Do not remove finance/security/DB guards for speed. Code that depends on unapplied production schema must remain backward-compatible or stop before incompatible deploy pending separate OWNER approval.
+**CRITICAL execution discipline:** Define impact set before edit: authoritative Service/Data/Rule/State/Security/Integration + owning Test Contracts. `Full relevant gates` means all gates protecting impacted critical domains, not every historical ERP suite. Do not remove finance/security/DB guards for speed. Code that depends on unapplied production schema must remain backward-compatible or stop before incompatible deploy pending separate OWNER approval.
 
 ## HARD WRITE SAFETY
 
