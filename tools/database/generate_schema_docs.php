@@ -5,7 +5,6 @@ declare(strict_types=1);
 
 use App\Service\LocalMigrationService;
 use Planex\Tools\Database\TenantSchemaCatalog;
-use PDO;
 
 require_once dirname(__DIR__, 2) . '/bootstrap/app.php';
 require_once BASE_PATH . '/app/Service/LocalMigrationService.php';
@@ -28,17 +27,24 @@ try {
     $files = [
         'TENANT_SCHEMA.md' => TenantSchemaCatalog::renderMarkdown($catalog),
         'TENANT_ERD.md' => TenantSchemaCatalog::renderErd($catalog),
-        'tenant-schema.json' => TenantSchemaCatalog::renderJson($catalog),
     ];
 
     $repoDir = BASE_PATH . '/docs/database';
     $candidateDir = getenv('PLANEX_SCHEMA_CANDIDATE_DIR') ?: sys_get_temp_dir() . '/planex-tenant-schema-docs';
-    if (!is_dir($candidateDir) && !mkdir($candidateDir, 0777, true) && !is_dir($candidateDir)) throw new RuntimeException('Cannot create candidate dir.');
-    foreach ($files as $name => $content) file_put_contents($candidateDir . '/' . $name, $content);
+    if (!is_dir($candidateDir) && !mkdir($candidateDir, 0777, true) && !is_dir($candidateDir)) {
+        throw new RuntimeException('Cannot create candidate dir.');
+    }
+    foreach ($files as $name => $content) {
+        file_put_contents($candidateDir . '/' . $name, $content);
+    }
 
     if ($mode === 'write') {
-        if (!is_dir($repoDir) && !mkdir($repoDir, 0777, true) && !is_dir($repoDir)) throw new RuntimeException('Cannot create docs dir.');
-        foreach ($files as $name => $content) file_put_contents($repoDir . '/' . $name, $content);
+        if (!is_dir($repoDir) && !mkdir($repoDir, 0777, true) && !is_dir($repoDir)) {
+            throw new RuntimeException('Cannot create docs dir.');
+        }
+        foreach ($files as $name => $content) {
+            file_put_contents($repoDir . '/' . $name, $content);
+        }
         fwrite(STDOUT, "TENANT_SCHEMA_DOCS=WRITTEN\nSCHEMA_FINGERPRINT=" . TenantSchemaCatalog::fingerprint($catalog) . "\n");
         exit(0);
     }
@@ -47,7 +53,9 @@ try {
         $drift = [];
         foreach ($files as $name => $content) {
             $path = $repoDir . '/' . $name;
-            if (!is_file($path) || file_get_contents($path) !== $content) $drift[] = $name;
+            if (!is_file($path) || file_get_contents($path) !== $content) {
+                $drift[] = $name;
+            }
         }
         if ($drift !== []) {
             fwrite(STDERR, 'TENANT_SCHEMA_DOCS_DRIFT=' . implode(',', $drift) . "\n");
