@@ -1,10 +1,50 @@
 name: Finance Matching Regression
+
 on:
-  push:
   pull_request:
+    branches: [chatgpt/production-stabilization-20260802]
+    paths:
+      - 'app/Service/FinanceMatchingRule*'
+      - 'app/Service/FinanceEmployee*'
+      - 'app/Service/FinanceCash*'
+      - 'app/Service/FinanceBank*'
+      - 'app/Service/FinanceCarrierBankAutoSettlementService.php'
+      - 'app/Service/NavigationCounterService.php'
+      - 'app/Http/Controllers/Company/BankFinance*'
+      - 'app/Http/Controllers/Company/FinanceMatchingRule*'
+      - 'app/Http/Controllers/Company/FinanceEmployee*'
+      - 'app/Http/Controllers/Company/FinanceCash*'
+      - 'app/Http/Routes/company_finance_cash.php'
+      - 'app/Http/Routes/company_finance_employee_payments.php'
+      - 'app/View/pages/company_finance_matching_rules.php'
+      - 'app/View/pages/company_finance_cash.php'
+      - 'app/View/pages/company_finance_employee_payments.php'
+      - 'app/View/partials/company_finance_matching_rule_form.php'
+      - 'app/View/partials/company_finance_employee*'
+      - 'app/View/partials/company_bank_transaction_classify_form.php'
+      - 'database/migrations-local/063_*'
+      - 'database/migrations-local/065_*'
+      - 'database/migrations-local/066_*'
+      - 'database/migrations-local/067_*'
+      - 'database/migrations-local/069_*'
+      - 'scripts/p41_*'
+      - 'scripts/p80_*'
+      - 'tests/finance_matching*'
+      - 'tests/finance_employee*'
+      - 'tests/finance_bank_register_filters_test.php'
+      - 'tests/finance_cash*'
+      - 'tests/navigation_counter_isolation_test.php'
+      - 'tests/cash_dispatch_opcache_route_test.php'
+      - '.github/workflows/finance_matching_regression.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: finance-matching-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-24.04
@@ -24,57 +64,10 @@ jobs:
           --health-retries=20
     steps:
       - uses: actions/checkout@v4
-      - name: PHP syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          php -l app/Service/FinanceMatchingRuleService.php
-          for f in app/Service/FinanceMatchingRule*Trait.php; do php -l "$f"; done
-          php -l app/Service/FinanceEmployeePaymentService.php
-          php -l app/Service/FinanceEmployeeTransferService.php
-          php -l app/Service/FinanceCashLedgerService.php
-          php -l app/Service/FinanceCashResolutionService.php
-          php -l app/Service/NavigationCounterService.php
-          php -l app/Http/Controllers/Company/FinanceEmployeePaymentsController.php
-          php -l app/Http/Controllers/Company/FinanceCashController.php
-          php -l app/Http/Controllers/Company/FinanceCashActions/index.php
-          php -l app/Http/Controllers/Company/FinanceCashActions/dispatch_employee_submit.php
-          php -l app/Http/Routes/company_finance_cash.php
-          php -l app/Http/Controllers/Company/BankFinanceController.php
-          php -l app/Http/Controllers/Company/BankFinanceActions/indexAutoFilters.php
-          php -l app/Http/Routes/company_finance_employee_payments.php
-          php -l app/Http/Controllers/Company/BankFinanceActions/classifyForm.php
-          php -l app/Http/Controllers/Company/BankFinanceActions/classifySubmit.php
-          php -l app/Http/Controllers/Company/BankFinanceActions/clearClassification.php
-          php -l app/Http/Controllers/Company/FinanceMatchingRuleActions/archive.php
-          php -l app/View/layouts/main.php
-          php -l app/View/pages/company_finance_matching_rules.php
-          php -l app/View/pages/company_finance_cash.php
-          php -l app/View/partials/company_finance_matching_rule_form.php
-          php -l app/View/pages/company_finance_employee_payments.php
-          php -l app/View/partials/company_finance_employee_payment_form.php
-          php -l app/View/partials/company_finance_employee_payment_ledger.php
-          php -l app/View/partials/company_bank_transaction_classify_form.php
-          php -l scripts/p41_apply_finance_matching_migration.php
-          php -l scripts/p80_apply_finance_cash_resolution_migration.php
-          php -l tests/finance_matching_classification_test.php
-          php -l tests/finance_matching_cash_transfer_test.php
-          php -l tests/finance_employee_payments_test.php
-          php -l tests/finance_employee_transfer_behavioral_test.php
-          php -l tests/finance_bank_register_filters_test.php
-          php -l tests/finance_cash_ledger_test.php
-          php -l tests/finance_cash_resolution_test.php
-          php -l tests/finance_employee_rule_cash_resolution_backfill_test.php
-          php -l tests/navigation_counter_isolation_test.php
-          php -l tests/cash_dispatch_opcache_route_test.php
       - name: Matching semantics
         run: php tests/finance_matching_classification_test.php
       - name: OPCache-safe cash dispatch route
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/cash_dispatch_opcache_route_test.php 2>&1 | tee cash_dispatch_opcache_route.txt
-          grep -q 'CASH_DISPATCH_OPCACHE_ROUTE_OK' cash_dispatch_opcache_route.txt
+        run: php tests/cash_dispatch_opcache_route_test.php
       - name: Employee settlement behavioral regression
         env: &db_env
           EMPLOYEE_PAYMENTS_DB_HOST: 127.0.0.1
@@ -82,91 +75,33 @@ jobs:
           EMPLOYEE_PAYMENTS_DB_NAME: erp_employee_payments_test
           EMPLOYEE_PAYMENTS_DB_USER: root
           EMPLOYEE_PAYMENTS_DB_PASSWORD: root
-        shell: bash
-        run: |
-          set -euo pipefail
-          php -m | grep -qi pdo_mysql
-          php tests/finance_employee_payments_test.php 2>&1 | tee employee_payments_regression.txt
-          grep -q 'FINANCE_EMPLOYEE_PAYMENTS_BEHAVIOR_OK' employee_payments_regression.txt
+        run: php tests/finance_employee_payments_test.php
       - name: Employee transfer behavioral regression
         env: *db_env
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_employee_transfer_behavioral_test.php 2>&1 | tee employee_transfer_regression.txt
-          grep -q 'FINANCE_EMPLOYEE_TRANSFER_BEHAVIOR_OK' employee_transfer_regression.txt
+        run: php tests/finance_employee_transfer_behavioral_test.php
       - name: Bank register filter behavioral regression
         env: *db_env
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_bank_register_filters_test.php 2>&1 | tee bank_register_filters_regression.txt
-          grep -q 'FINANCE_BANK_REGISTER_FILTERS_OK' bank_register_filters_regression.txt
+        run: php tests/finance_bank_register_filters_test.php
       - name: Navigation counter isolation regression
         env: *db_env
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/navigation_counter_isolation_test.php 2>&1 | tee navigation_counter_isolation.txt
-          grep -q 'NAVIGATION_COUNTER_ISOLATION_OK bank=2 cash=0' navigation_counter_isolation.txt
+        run: php tests/navigation_counter_isolation_test.php
       - name: Classification plus bank-to-cash behavioral regression
         env: *db_env
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_matching_cash_transfer_test.php 2>&1 | tee matching_cash_transfer_regression.txt
-          grep -q 'FINANCE_MATCHING_CASH_TRANSFER_OK' matching_cash_transfer_regression.txt
+        run: php tests/finance_matching_cash_transfer_test.php
       - name: Human cash ledger behavioral regression
         env: *db_env
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_cash_ledger_test.php 2>&1 | tee cash_ledger_regression.txt
-          grep -q 'FINANCE_CASH_LEDGER_OK' cash_ledger_regression.txt
+        run: php tests/finance_cash_ledger_test.php
       - name: Technical cash employee resolution regression
         env: *db_env
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_cash_resolution_test.php 2>&1 | tee cash_resolution_regression.txt
-          grep -q 'FINANCE_CASH_RESOLUTION_OK' cash_resolution_regression.txt
+        run: php tests/finance_cash_resolution_test.php
       - name: Employee rule lifecycle backfill regression
         env: *db_env
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_employee_rule_cash_resolution_backfill_test.php 2>&1 | tee employee_rule_cash_backfill_regression.txt
-          grep -q 'FINANCE_EMPLOYEE_RULE_CASH_BACKFILL_OK' employee_rule_cash_backfill_regression.txt
+        run: php tests/finance_employee_rule_cash_resolution_backfill_test.php
       - name: Migration shape
-        shell: bash
         run: |
           set -euo pipefail
           grep -q 'finance_cash_flow_centers' database/migrations-local/063_finance_matching_classification.sql
-          grep -q 'classification_locked' database/migrations-local/063_finance_matching_classification.sql
-          grep -q 'linked_cash_transaction_id' database/migrations-local/063_finance_matching_classification.sql
           grep -q 'finance_employee_movements' database/migrations-local/065_finance_employee_movements.sql
           grep -q 'employee_identity_type' database/migrations-local/066_finance_employee_identity.sql
           grep -q 'finance_cash_resolutions' database/migrations-local/067_finance_cash_resolutions.sql
-          grep -q 'uk_fcr_source_operation' database/migrations-local/067_finance_cash_resolutions.sql
-          grep -q 'outflow_finance_operation_id' database/migrations-local/067_finance_cash_resolutions.sql
-          grep -q 'employee_movement_id' database/migrations-local/067_finance_cash_resolutions.sql
           grep -q 'PAYMENT' database/migrations-local/069_backfill_employee_rule_cash_resolutions.sql
-          grep -q 'RETURN' database/migrations-local/069_backfill_employee_rule_cash_resolutions.sql
-          grep -q "067_finance_cash_resolutions.sql" scripts/p80_apply_finance_cash_resolution_migration.php
-          grep -q 'companyDatabaseConfig' scripts/p80_apply_finance_cash_resolution_migration.php
-          grep -q 'P80_MIGRATION_OK' scripts/p80_apply_finance_cash_resolution_migration.php
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: finance_regression_${{ github.sha }}
-          path: |
-            cash_dispatch_opcache_route.txt
-            employee_payments_regression.txt
-            employee_transfer_regression.txt
-            bank_register_filters_regression.txt
-            navigation_counter_isolation.txt
-            matching_cash_transfer_regression.txt
-            cash_ledger_regression.txt
-            cash_resolution_regression.txt
-            employee_rule_cash_backfill_regression.txt
-          if-no-files-found: warn

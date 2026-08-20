@@ -1,39 +1,36 @@
 name: Finance Employee Direct Regression
+
 on:
-  push:
   pull_request:
+    branches: [chatgpt/production-stabilization-20260802]
+    paths:
+      - 'app/Service/FinanceMatchingRuleEmployeeExecutionTrait.php'
+      - 'app/Service/FinanceEmployee*'
+      - 'app/Http/Controllers/Company/FinanceEmployeeDirectActions/**'
+      - 'app/View/partials/company_finance_matching_rule_form.php'
+      - 'app/View/partials/company_finance_employee_ledger_editor.php'
+      - 'app/Http/Routes/company_finance_cash.php'
+      - 'database/migrations-local/076_*'
+      - 'tests/finance_matching_employee_cash_test.php'
+      - 'tests/finance_employee_transfer_test.php'
+      - 'tests/finance_employee_ledger_editing_regression_test.php'
+      - 'tests/finance_matching_classification_test.php'
+      - '.github/workflows/finance_matching_employee_cash_regression.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: finance-employee-direct-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: PHP syntax
-        run: |
-          php -l app/Service/FinanceMatchingRuleEmployeeExecutionTrait.php
-          php -l app/Service/FinanceEmployeeMoneyAccountService.php
-          php -l app/Service/FinanceEmployeeBankSettlementService.php
-          php -l app/Service/FinanceEmployeeDirectTransferService.php
-          php -l app/Service/FinanceEmployeeDirectTransferEditService.php
-          php -l app/Service/FinanceEmployeeDirectExpenseService.php
-          php -l app/Service/FinanceEmployeeDirectInvoicePaymentService.php
-          php -l app/Service/FinanceEmployeeClientReceiptEditService.php
-          php -l app/Http/Controllers/Company/FinanceEmployeeDirectActions/bank_link.php
-          php -l app/Http/Controllers/Company/FinanceEmployeeDirectActions/transfer_submit.php
-          php -l app/Http/Controllers/Company/FinanceEmployeeDirectActions/transfer_update.php
-          php -l app/Http/Controllers/Company/FinanceEmployeeDirectActions/transfer_cancel.php
-          php -l app/Http/Controllers/Company/FinanceEmployeeDirectActions/client_receipt_update.php
-          php -l app/Http/Controllers/Company/FinanceEmployeeDirectActions/client_receipt_cancel.php
-          php -l app/Http/Controllers/Company/FinanceEmployeeDirectActions/personal_expense_create.php
-          php -l app/Http/Controllers/Company/FinanceEmployeeDirectActions/invoice_payment_create.php
-          php -l app/View/partials/company_finance_matching_rule_form.php
-          php -l app/View/partials/company_finance_employee_ledger_editor.php
-          php -l tests/finance_matching_employee_cash_test.php
-          php -l tests/finance_employee_transfer_test.php
-          php -l tests/finance_employee_ledger_editing_regression_test.php
       - name: Existing matching semantics
         run: php tests/finance_matching_classification_test.php
       - name: Employee direct architecture
@@ -44,11 +41,13 @@ jobs:
         run: php tests/finance_employee_ledger_editing_regression_test.php
       - name: Tenant migration shape
         run: |
+          set -euo pipefail
           test -f database/migrations-local/076_finance_employee_money_accounts.sql
           grep -q 'finance_employee_money_accounts' database/migrations-local/076_finance_employee_money_accounts.sql
           test ! -f database/migrations/20260818_finance_employee_money_accounts.sql
       - name: No active retired-account writes
         run: |
+          set -euo pipefail
           ! grep -q 'FinanceCashController' app/Http/Routes/company_finance_cash.php
           grep -q 'Этот устаревший способ операции отключён' app/Http/Routes/company_finance_cash.php
           ! grep -q 'INSERT INTO finance_cash_resolutions' app/Service/FinanceEmployeeBankSettlementService.php

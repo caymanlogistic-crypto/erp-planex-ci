@@ -2,14 +2,44 @@ name: ERP PLANEX CI
 
 on:
   push:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/**'
+      - 'bootstrap/**'
+      - 'config/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'database/**'
+      - '.github/workflows/**'
+      - 'AGENTS.md'
+      - 'docs/GITHUB_CONTROL_PLANE.md'
+      - '.github/pull_request_template.md'
   pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/**'
+      - 'bootstrap/**'
+      - 'config/**'
+      - 'public/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'tools/**'
+      - 'database/**'
+      - '.github/workflows/**'
+      - 'AGENTS.md'
+      - 'docs/GITHUB_CONTROL_PLANE.md'
+      - '.github/pull_request_template.md'
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: erp-planex-ci-${{ github.ref }}
+  group: erp-planex-ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

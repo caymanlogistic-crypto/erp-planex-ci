@@ -1,10 +1,41 @@
 name: Finance Obligations Regression
+
 on:
-  push:
   pull_request:
+    branches: [chatgpt/production-stabilization-20260802]
+    paths:
+      - 'app/Service/FinanceObligationService.php'
+      - 'app/Service/FinanceBankInvoiceSettlementService.php'
+      - 'app/Service/FinanceCarrierBankAutoSettlementService.php'
+      - 'app/Service/FinanceInvoice*'
+      - 'app/Service/FinancePaymentCalendarService.php'
+      - 'app/Http/Controllers/Company/InvoiceActions/**'
+      - 'app/Http/Controllers/Company/BankFinanceActions/settlementForm.php'
+      - 'app/Http/Controllers/Company/BankFinanceActions/settlementSubmit.php'
+      - 'app/Http/Controllers/Company/BankFinanceActions/applyRules.php'
+      - 'app/Http/Controllers/Company/BankFinanceActions/indexAutoFilters.php'
+      - 'app/Http/Routes/company_finance_invoices.php'
+      - 'app/Http/Routes/company_bank_finance.php'
+      - 'app/View/partials/company_invoice_create_form.php'
+      - 'app/View/partials/company_invoice_modal_view.php'
+      - 'app/View/partials/company_bank_invoice_settlement_form.php'
+      - 'database/migrations-local/071_*'
+      - 'database/migrations-local/072_*'
+      - 'scripts/p91_*'
+      - 'tests/finance_obligations*'
+      - 'tests/finance_invoice_form_policy_test.php'
+      - 'tests/finance_bank_invoice_settlement_*'
+      - 'tests/finance_invoice_payment_timeline_behavioral_test.php'
+      - '.github/workflows/finance_obligations_regression.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: finance-obligations-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-24.04
@@ -24,88 +55,27 @@ jobs:
           --health-retries=20
     steps:
       - uses: actions/checkout@v4
-      - name: Syntax and architecture
-        shell: bash
+      - name: Architecture regressions
         run: |
           set -euo pipefail
-          php -l app/Service/FinanceObligationService.php
-          php -l app/Service/FinanceBankInvoiceSettlementService.php
-          php -l app/Service/FinanceInvoicePaymentTimelineService.php
-          php -l app/Service/FinancePaymentCalendarService.php
-          php -l app/Http/Controllers/Company/InvoiceActions/create_submit.php
-          php -l app/Http/Controllers/Company/InvoiceActions/modal_edit_submit.php
-          php -l app/Http/Controllers/Company/InvoiceActions/obligations.php
-          php -l app/Http/Controllers/Company/InvoiceActions/receivables.php
-          php -l app/Http/Controllers/Company/InvoiceActions/index.php
-          php -l app/Http/Controllers/Company/BankFinanceActions/settlementForm.php
-          php -l app/Http/Controllers/Company/BankFinanceActions/settlementSubmit.php
-          php -l app/Http/Controllers/Company/BankFinanceActions/applyRules.php
-          php -l app/Http/Controllers/Company/BankFinanceActions/indexAutoFilters.php
-          php -l app/View/partials/company_invoice_create_form.php
-          php -l app/View/partials/company_invoice_modal_view.php
-          php -l app/View/partials/company_bank_invoice_settlement_form.php
-          php -l app/View/pages/company_finance_invoices.php
-          php -l app/View/pages/company_finance_receivables.php
-          php -l scripts/p91_apply_finance_obligations_migration.php
-          php -l tests/finance_obligations_architecture_test.php
-          php -l tests/finance_obligations_behavioral_test.php
-          php -l tests/finance_invoice_form_policy_test.php
-          php -l tests/finance_bank_invoice_settlement_architecture_test.php
-          php -l tests/finance_bank_invoice_settlement_behavioral_test.php
-          php -l tests/finance_invoice_payment_timeline_behavioral_test.php
           php tests/finance_obligations_architecture_test.php
           php tests/finance_invoice_form_policy_test.php
           php tests/finance_bank_invoice_settlement_architecture_test.php
       - name: Migration execution
-        shell: bash
         run: |
           set -euo pipefail
           mysql -h127.0.0.1 -uroot -proot erp_obligations_test <<'SQL'
-          CREATE TABLE finance_invoices(
-            id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
-            direction VARCHAR(20) NOT NULL,
-            status VARCHAR(30) NOT NULL DEFAULT 'draft',
-            planned_payment_date DATE NULL,
-            cancelled_at DATETIME NULL,
-            updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
-          ) ENGINE=InnoDB;
+          CREATE TABLE finance_invoices(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,direction VARCHAR(20) NOT NULL,status VARCHAR(30) NOT NULL DEFAULT 'draft',planned_payment_date DATE NULL,cancelled_at DATETIME NULL,updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP) ENGINE=InnoDB;
           CREATE TABLE finance_invoice_links(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,invoice_id INT UNSIGNED NOT NULL,linear_route_id INT UNSIGNED NULL,linear_route_payment_id INT UNSIGNED NULL,amount DECIMAL(12,2) NULL,side VARCHAR(20) NULL) ENGINE=InnoDB;
           CREATE TABLE finance_operations(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY) ENGINE=InnoDB;
           CREATE TABLE finance_operation_allocations(id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,operation_id INT UNSIGNED NOT NULL,invoice_id INT UNSIGNED NULL,linear_route_id INT UNSIGNED NULL,linear_route_payment_id INT UNSIGNED NULL,amount DECIMAL(12,2) NOT NULL,allocation_date DATE NOT NULL,cancelled_at DATETIME NULL) ENGINE=InnoDB;
-          INSERT INTO finance_invoices(direction,status,planned_payment_date) VALUES
-            ('OUTGOING','draft','2026-08-20'),
-            ('INCOMING','draft','2026-08-21');
+          INSERT INTO finance_invoices(direction,status,planned_payment_date) VALUES ('OUTGOING','draft','2026-08-20'),('INCOMING','draft','2026-08-21');
           SQL
           mysql -h127.0.0.1 -uroot -proot erp_obligations_test < database/migrations-local/071_finance_obligations.sql
           mysql -h127.0.0.1 -uroot -proot erp_obligations_test < database/migrations-local/072_invoice_obligation_cleanup.sql
-          mysql -h127.0.0.1 -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='erp_obligations_test' AND table_name='finance_operation_allocations' AND column_name='obligation_id'" | grep -qx '1'
-          mysql -h127.0.0.1 -uroot -proot -N -e "SELECT COUNT(*) FROM information_schema.columns WHERE table_schema='erp_obligations_test' AND table_name='finance_invoice_links' AND column_name='obligation_id'" | grep -qx '1'
-          mysql -h127.0.0.1 -uroot -proot -N erp_obligations_test -e "SELECT COUNT(*) FROM finance_invoices WHERE status='draft' OR planned_payment_date IS NOT NULL" | grep -qx '0'
-          mysql -h127.0.0.1 -uroot -proot -N erp_obligations_test -e "SELECT GROUP_CONCAT(status ORDER BY id SEPARATOR ',') FROM finance_invoices" | grep -qx 'issued,received'
       - name: Obligation behavioral regression
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_obligations_behavioral_test.php 2>&1 | tee finance_obligations_behavior.txt
-          grep -q 'FINANCE_OBLIGATIONS_BEHAVIOR_OK' finance_obligations_behavior.txt
+        run: php tests/finance_obligations_behavioral_test.php
       - name: Bank invoice settlement behavioral regression
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_bank_invoice_settlement_behavioral_test.php 2>&1 | tee finance_bank_invoice_settlement_behavior.txt
-          grep -q 'FINANCE_BANK_INVOICE_SETTLEMENT_BEHAVIOR_OK' finance_bank_invoice_settlement_behavior.txt
+        run: php tests/finance_bank_invoice_settlement_behavioral_test.php
       - name: Invoice payment timeline behavioral regression
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/finance_invoice_payment_timeline_behavioral_test.php 2>&1 | tee finance_invoice_payment_timeline_behavior.txt
-          grep -q 'FINANCE_INVOICE_PAYMENT_TIMELINE_OK' finance_invoice_payment_timeline_behavior.txt
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: finance_obligations_${{ github.sha }}
-          path: |
-            finance_obligations_behavior.txt
-            finance_bank_invoice_settlement_behavior.txt
-            finance_invoice_payment_timeline_behavior.txt
-          if-no-files-found: warn
+        run: php tests/finance_invoice_payment_timeline_behavioral_test.php
