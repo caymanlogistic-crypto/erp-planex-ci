@@ -54,19 +54,17 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
 .invoice-stages-col{min-width:390px}
 .invoice-stages{display:flex;flex-wrap:wrap;gap:6px;min-width:370px;max-width:520px;font-size:11px;line-height:1.35;color:var(--text)}
 .invoice-stage-card{display:flex;flex-direction:column;flex:0 1 190px;min-width:170px;border:1px solid var(--border);border-radius:5px;padding:7px 8px;background:transparent}
+.invoice-stage-card.is-paid{background:var(--success-bg);border-color:var(--success-border)}
 .invoice-stage-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px;margin-bottom:5px}
 .invoice-stage-title{font-weight:800;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .invoice-stage-route{color:var(--muted);font-size:10px;white-space:nowrap}
 .invoice-stage-line{display:flex;justify-content:space-between;gap:8px;align-items:baseline;white-space:nowrap;padding-top:1px}
 .invoice-stage-line span:first-child{color:var(--muted)}
 .invoice-stage-line strong{font-weight:700}
+.invoice-stage-line.is-overdue-remaining span:first-child,.invoice-stage-line.is-overdue-remaining strong{color:var(--danger-text)}
 .invoice-stage-status{margin-top:auto;padding-top:6px;min-height:24px}
 .invoice-stage-status .badge{white-space:nowrap}
 .invoice-stage-empty{color:var(--muted);padding:3px 0}
-.invoice-status-cell{min-width:180px}
-.invoice-status-cell.is-paid{background:var(--success-bg)}
-.invoice-status-stack{display:flex;flex-direction:column;align-items:flex-start;gap:4px}
-.invoice-status-sub{color:var(--muted);font-size:10px;line-height:1.25}
 @media (max-width:1280px){.invoice-stages-col{min-width:330px}.invoice-stages{min-width:310px}.invoice-stage-card{flex-basis:170px}}
 </style>
 <div class="page-head">
@@ -100,10 +98,9 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
     </div>
     <div class="table-scroll">
         <table class="table">
-            <thead><tr><th>№</th><th>Дата</th><th>Направление</th><th>Контрагент</th><th>Сумма</th><th>НДС</th><th>Срок оплаты</th><th class="invoice-stages-col">Этапы оплаты</th><th class="invoice-status-cell">Статус счёта</th></tr></thead>
+            <thead><tr><th>№</th><th>Дата</th><th>Направление</th><th>Контрагент</th><th>Сумма</th><th>НДС</th><th>Срок оплаты</th><th class="invoice-stages-col">Этапы оплаты</th></tr></thead>
             <tbody>
             <?php foreach ($invoices as $inv):
-                $displayStatus = (string)($inv['display_status'] ?? $inv['status'] ?? '');
                 $dueText = $fmtDue($inv['display_due_text'] ?? '—');
                 $timeline = is_array($inv['payment_timeline'] ?? null) ? $inv['payment_timeline'] : null;
                 $today = new DateTimeImmutable('today');
@@ -144,7 +141,6 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
                         }
 
                         sort($actualDates);
-                        $lastActualDate = !empty($actualDates) ? end($actualDates) : null;
                         $expectedDate = trim((string)($plan['expected_date'] ?? ''));
                         $dueDate = null;
                         if ($expectedDate !== '') {
@@ -159,34 +155,18 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
                         }
                         if ($title === '') $title = ($stageIndex + 1) . ' платёж';
 
+                        $isPaid = $plannedCents > 0 && $remainingCents <= 0;
+                        $isOverdueRemaining = !$isPaid && $remainingCents > 0 && $dueDate !== null && $today > $dueDate;
                         $statusText = '';
                         $statusClass = 'badge badge-neutral';
-                        if ($plannedCents > 0 && $remainingCents <= 0) {
-                            if ($dueDate !== null && $lastActualDate !== null) {
-                                $actual = DateTimeImmutable::createFromFormat('!Y-m-d', $lastActualDate);
-                                if ($actual !== false && $actual->format('Y-m-d') === $lastActualDate) {
-                                    $delta = (int)$dueDate->diff($actual)->format('%a');
-                                    if ($actual > $dueDate) {
-                                        $statusText = 'Оплачен с просрочкой ' . $delta . ' дн.';
-                                        $statusClass = 'badge badge-warning';
-                                    } elseif ($actual < $dueDate) {
-                                        $statusText = 'Оплачен на ' . $delta . ' дн. раньше';
-                                        $statusClass = 'badge badge-ok';
-                                    } else {
-                                        $statusText = 'Оплачен';
-                                        $statusClass = 'badge badge-ok';
-                                    }
-                                }
-                            }
-                            if ($statusText === '') {
-                                $statusText = 'Оплачен';
-                                $statusClass = 'badge badge-ok';
-                            }
+                        if ($isPaid) {
+                            $statusText = 'Оплачен';
+                            $statusClass = 'badge badge-ok';
                         } elseif ($paidCents > 0) {
-                            if ($dueDate !== null && $today > $dueDate) {
+                            if ($isOverdueRemaining) {
                                 $days = (int)$dueDate->diff($today)->format('%a');
                                 $statusText = 'Частично · просрочка ' . $days . ' дн.';
-                                $statusClass = 'badge badge-danger';
+                                $statusClass = 'badge badge-warning';
                             } else {
                                 $statusText = 'Частично';
                                 $statusClass = 'badge badge-warning';
@@ -216,25 +196,11 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
                             'expected_date' => $dueDate?->format('Y-m-d'),
                             'status_text' => $statusText,
                             'status_class' => $statusClass,
+                            'is_paid' => $isPaid,
+                            'is_overdue_remaining' => $isOverdueRemaining,
                             'actual_dates' => $actualDates,
                         ];
                     }
-                }
-
-                $statusLabel = FinanceInvoiceService::statusLabel($displayStatus);
-                $statusSub = '';
-                if ($displayStatus === 'paid') {
-                    $statusSub = 'Оплачен полностью';
-                } elseif ($displayStatus === 'overdue_partial') {
-                    $statusSub = 'Есть просрочка';
-                } elseif ($displayStatus === 'overdue') {
-                    $statusLabel = 'Не оплачен, просрочен';
-                    $statusSub = 'Есть просрочка';
-                } elseif ($displayStatus === 'partially_paid') {
-                    $statusSub = 'Ожидается следующий платёж';
-                } elseif (in_array($displayStatus, ['issued', 'received'], true)) {
-                    $statusLabel = 'Ожидается оплата';
-                    $statusSub = 'Не оплачен';
                 }
             ?>
                 <tr data-invoice-id="<?= (int)($inv['id'] ?? 0) ?>">
@@ -257,26 +223,18 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
                                         $tooltip = 'Фактические даты: ' . implode(', ', $formattedActuals);
                                     }
                                 ?>
-                                <div class="invoice-stage-card"<?= $tooltip !== '' ? ' title="' . e($tooltip) . '"' : '' ?>>
+                                <div class="invoice-stage-card<?= $stage['is_paid'] ? ' is-paid' : '' ?>"<?= $tooltip !== '' ? ' title="' . e($tooltip) . '"' : '' ?>>
                                     <div class="invoice-stage-head">
                                         <span class="invoice-stage-title"><?= e($stage['title']) ?></span>
                                         <?php if ($stage['route_id'] > 0): ?><span class="invoice-stage-route">#<?= (int)$stage['route_id'] ?></span><?php endif; ?>
                                     </div>
                                     <div class="invoice-stage-line"><span>План:</span><strong><?= e($fmtMoney($centsToMoney($stage['planned']))) ?></strong></div>
                                     <div class="invoice-stage-line"><span><?= ($inv['direction'] ?? '') === FinanceInvoiceService::DIRECTION_OUTGOING ? 'Получено:' : 'Оплачено:' ?></span><strong><?= e($fmtMoney($centsToMoney($stage['paid']))) ?></strong></div>
-                                    <?php if ($stage['remaining'] > 0 && $stage['paid'] > 0): ?><div class="invoice-stage-line"><span>Остаток:</span><strong><?= e($fmtMoney($centsToMoney($stage['remaining']))) ?></strong></div><?php endif; ?>
+                                    <?php if ($stage['remaining'] > 0 && ($stage['paid'] > 0 || $stage['is_overdue_remaining'])): ?><div class="invoice-stage-line<?= $stage['is_overdue_remaining'] ? ' is-overdue-remaining' : '' ?>"><span>Остаток:</span><strong><?= e($fmtMoney($centsToMoney($stage['remaining']))) ?></strong></div><?php endif; ?>
                                     <div class="invoice-stage-line"><span>Срок:</span><strong><?= e($stage['expected_date'] !== null ? $fmtDate($stage['expected_date']) : 'по событию') ?></strong></div>
                                     <div class="invoice-stage-status"><span class="<?= e($stage['status_class']) ?>"><span class="dot"></span><?= e($stage['status_text']) ?></span></div>
                                 </div>
                                 <?php endforeach; ?>
-                            </div>
-                        <?php endif; ?>
-                    </td>
-                    <td class="invoice-status-cell<?= $displayStatus === 'paid' ? ' is-paid' : '' ?>">
-                        <?php if ($displayStatus !== 'paid'): ?>
-                            <div class="invoice-status-stack">
-                                <span class="<?= e(FinanceInvoiceService::statusBadgeClass($displayStatus)) ?>"><span class="dot"></span><?= e($statusLabel) ?></span>
-                                <?php if ($statusSub !== ''): ?><span class="invoice-status-sub"><?= e($statusSub) ?></span><?php endif; ?>
                             </div>
                         <?php endif; ?>
                     </td>
