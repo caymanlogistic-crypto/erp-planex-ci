@@ -4,56 +4,69 @@
 
 - Repository: `planexerp/erp-planex`
 - Canonical branch: `chatgpt/production-stabilization-20260802`
-- Feature/fix work uses a separate branch and PR.
 - `caymanlogistic-crypto/erp-planex` is read-only insurance.
 - Production target: `/home/s/spugovxsim/planexp/public_html/erpv2`.
 - Legacy `/erp` must never be changed.
 
 ## Canonical write protection contract
 
-Agents must never perform file-content writes directly against canonical. Before any `create_file` / `update_file` / `delete_file` / equivalent connector mutation, a feature/fix branch must already exist and the write call must explicitly target it. Omitted branch arguments are unsafe. Canonical changes only through PR merge.
+Agents must never perform file-content writes directly against canonical. Before any `create_file` / `update_file` / `delete_file` mutation, a feature branch must exist and the write must explicitly target it. Canonical changes only through PR merge.
 
-Placeholder/probe writes, empty commits, zero-change release checkpoints and temporary verification PRs are prohibited. A transient failed job should be rerun directly when appropriate.
+Placeholder/probe writes, empty commits, zero-change release checkpoints and temporary verification PRs are prohibited.
 
-## Adaptive CI policy
+## Adaptive release policy
 
-CI cost must match change risk.
-
-- `ERP PLANEX CI`: pull requests to canonical + canonical pushes only. Feature-branch pushes do not start duplicate main CI.
-- Heavy domain regressions are PR-only and path-scoped.
-- `concurrency: cancel-in-progress` cancels obsolete PR runs.
-- Safe CI never deploys production or mutates production DB.
-
-Task classes:
-- **FAST** — presentation/view/CSS/text/local UI only. Target for a several-line microchange is ~1 minute wall-clock when runners are free; this target does not waive safety gates.
+- **FAST** — presentation/view/CSS/text/local UI only.
 - **STANDARD** — controller/service/business behavior without production DB mutation.
 - **CRITICAL** — settlement/matching/debt, security/access, DB/schema, financial integrations, control plane, destructive operations.
 
-FAST execution should normally be: `read exact view + cheap contract → one feature change → PR → cheap CI → merge → exact HEAD → deploy ref → commit-status evidence → minimal memory delta`.
+Several-line FAST changes target ~1 minute wall-clock when runners are free without waiving safety.
 
-## Agent-driven production deploy
+## ERPv2 FAST Release
 
-`ERPv2 Controlled Deploy` remains the only workflow that actually writes `/erpv2`. It is `workflow_dispatch` only and accepts exact `source_sha` + `DEPLOY_ERPV2`.
+Workflow: `.github/workflows/erpv2_fast_release.yml`.
 
-Dedicated request ref: `deploy/erpv2-agent`.
-Request guard: `.github/workflows/erpv2_agent_deploy_request.yml`.
+FAST convention:
+- branch must be `fast/<slug>`;
+- PR must target canonical;
+- PR title must start `FAST:`;
+- PR must be same-repository, non-draft and triggered by repository OWNER;
+- max 6 changed files and max 120 changed lines;
+- allowed files only: `app/View/pages/**.php`, `public/assets/css/**`, `public/assets/js/**`, `tests/*_ui_contract_test.php`;
+- deletions are not allowed;
+- at least one actual UI file is required.
 
-Optimized sequence:
-1. Branch → PR.
-2. Path-targeted PR CI passes.
-3. Merge into canonical.
-4. Agent confirms exact current canonical HEAD once.
-5. If intended for production, immediately non-force advance `deploy/erpv2-agent` to exact HEAD. Do not manually poll canonical CI first.
-6. `ERPv2 Agent Deploy Request` waits for exact-SHA canonical `ERP PLANEX CI`, fails closed on failure/timeout, then rechecks HEAD.
-7. Guard dispatches `ERPv2 Controlled Deploy` exact SHA.
-8. Controlled Deploy performs backup/artifact/deploy/built-in verification and publishes commit status context `erpv2/deploy` on that exact SHA.
-9. Agent reads exact-SHA combined commit status. `erpv2/deploy=success` is routine DEPLOY PASS evidence; no public-web or workflow archaeology is needed.
+The workflow uses `pull_request_target`, therefore its definition comes from canonical. It validates scope **before checkout of PR head**. PR checkout uses `persist-credentials: false`. Production SSH secrets are not present in this workflow.
 
-The deploy request ref must never be force-moved backwards. If canonical HEAD changes while waiting, stale SHA must not deploy.
+Guarded sequence inside one FAST gate:
+1. Verify event base SHA equals exact current canonical HEAD.
+2. Verify owner/same-repo/branch/title/scope/size whitelist.
+3. Checkout exact PR head only after validation.
+4. Lint changed PHP/JS only.
+5. Run cheap `tests/*_ui_contract_test.php` contracts.
+6. Reconfirm canonical base has not drifted.
+7. Squash merge the exact expected PR head through GitHub merge API.
+8. Verify returned merge SHA is exact canonical HEAD.
+9. Publish `erpv2/fast-release=success` on exact merge SHA.
+10. Dispatch the existing `ERPv2 Controlled Deploy` for that exact SHA with `DEPLOY_ERPV2`.
 
-## Routine postdeploy evidence
+`ERPv2 FAST Release` never contains SSH secret references, P07 deployment engine calls, `/erpv2` server write commands, migrations or DB writes. It only gates, merges and dispatches the existing controlled deploy.
 
-`erpv2/deploy=success` is published only after the existing Controlled Deploy safeguards complete successfully:
+## FAST CI de-duplication
+
+A correctly formed `fast/*` + `FAST:` PR is validated by `ERPv2 FAST Release`. The normal repository-wide `ERP PLANEX CI` runner job is skipped for that FAST PR. The squash merge commit keeps a `FAST:` title, so canonical push full-CI runner is also skipped. This removes duplicate cold-start/runtime cost.
+
+FAST is fail-closed: if branch/title/scope/base/size/test conditions do not match, the special workflow does not merge or deploy; use the normal STANDARD path instead.
+
+## Standard agent-driven production deploy
+
+For non-FAST code/UI work, `deploy/erpv2-agent` + `.github/workflows/erpv2_agent_deploy_request.yml` remains active. The guard waits exact canonical `ERP PLANEX CI`, rechecks HEAD and dispatches `ERPv2 Controlled Deploy`.
+
+## Single production write engine
+
+`ERPv2 Controlled Deploy` remains the only workflow containing the actual `/erpv2` production write engine and SSH secrets. It remains `workflow_dispatch` exact-SHA and requires `DEPLOY_ERPV2`; FAST only dispatches it after the guarded merge.
+
+Controlled Deploy proves:
 - exact deployed marker SHA;
 - exact artifact SHA;
 - `/erpv2/login` HTTP 200;
@@ -63,24 +76,29 @@ The deploy request ref must never be force-moved backwards. If canonical HEAD ch
 - runtime directories preserved;
 - migrations were not run.
 
-The JSON artifact remains retained for deeper review. Expensive browser/runtime acceptances P44/P46/P47/P49/P50/P93 are task-specific manual tools for relevant STANDARD/CRITICAL risk, not default FAST fan-out.
+It publishes exact-SHA commit status `erpv2/deploy`. `erpv2/deploy=success` is routine DEPLOY PASS evidence.
 
-## FAST tool discipline
+## Mandatory Notion Memory Gate
 
-When a primary connector works, do not try `gh`, `git ls-remote`, public web, container or HTTP fallback for the same operation. Do not reread stable deploy workflows/runbooks in every FAST task. Use known IDs and exact files. Typical CI observation is one initial status read and one final read, not repeated second-level polling.
+Notion is mandatory for material ERP work, including FAST. Performance optimization reduces memory breadth, not memory correctness.
 
-## FAST Memory policy
-
-For ordinary `FAST + SCREEN/UI`, memory delta is intentionally small: affected Screen record, affected cheap Test/Contract record only if changed, and one handoff. Do not churn `00 — START HERE`, `01 — CURRENT STATE`, Module/Service/Business Rules or broad Health merely because canonical SHA advanced. GitHub is always the source of exact current HEAD.
+FAST memory policy after successful deploy:
+- mandatory write to the affected Screen record with current semantics/evidence/exact merged SHA;
+- Test/Contract record write only if the cheap test changed;
+- no `00`, `01`, module/service/rules/broad-health churn solely because HEAD advanced;
+- no handoff required for a microchange when the Screen record contains the complete delta;
+- target 1–3 relevant reads and 1–2 writes;
+- MEMORY PASS may be reported only after a successful Notion write result; ambiguous responses require one direct readback.
 
 ## Production database policy
 
-Agent-driven code/UI deploy authorization does not authorize production DB changes. Migrations, seeds, reconciliation, backfills, destructive SQL or other production data/schema writes remain separate manual-only operations requiring task-specific OWNER approval.
+FAST/standard code deploy authorization does not authorize production DB changes. Migrations, seeds, reconciliation, backfills, destructive SQL or other production data/schema writes remain separate manual-only operations requiring task-specific OWNER approval.
 
 Production migrations must never run automatically after CI or deploy.
 
 ## Required GitHub Actions secrets
 
+Production secrets remain referenced only by controlled/manual production workflows:
 - `ERPV2_SSH_PRIVATE_KEY`
 - `ERPV2_SSH_KNOWN_HOSTS`
 - `ERPV2_SSH_HOST`
