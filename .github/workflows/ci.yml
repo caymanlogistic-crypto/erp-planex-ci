@@ -13,6 +13,7 @@ on:
       - 'tests/**'
       - 'tools/**'
       - 'database/**'
+      - 'docs/database/**'
       - '.github/workflows/**'
       - 'AGENTS.md'
       - 'docs/GITHUB_CONTROL_PLANE.md'
@@ -29,6 +30,7 @@ on:
       - 'tests/**'
       - 'tools/**'
       - 'database/**'
+      - 'docs/database/**'
       - '.github/workflows/**'
       - 'AGENTS.md'
       - 'docs/GITHUB_CONTROL_PLANE.md'
@@ -94,6 +96,7 @@ jobs:
             echo "linear=$(has '^(app/(Service/Linear|Http/Controllers/Company/LinearTrip|Http/Routes/company_linear|View/(pages|partials)/company_linear)|tests/(linear_|p1[345]_linear|stage2_route)|database/migrations-local/058_|scripts/p39_)')"
             echo "migrations=$(has '^(database/|scripts/.*migrat|scripts/p[0-9]+_apply_)')"
             echo "migration_normalization=$(has '^(database/migrations-local/(057_create_crew_drivers|058_create_linear_route_points)\.sql|scripts/p40_reconcile_migration_names\.php)$')"
+            echo "tenant_schema=$(has '^(database/migrations-local/|app/Service/LocalMigrationService\.php$|app/Support/company_database\.php$|app/Http/Controllers/Superadmin/CompanyActions/create_submit\.php$|tools/database/|tests/tenant_schema_provisioning_contract_test\.php$|docs/database/|\.github/workflows/ci\.yml$)')"
           } >> "$GITHUB_OUTPUT"
 
           echo 'Changed files:'
@@ -181,6 +184,30 @@ jobs:
           test ! -f database/migrations-local/052_create_linear_route_points.sql
           grep -q "029_create_crew_drivers.sql.*057_create_crew_drivers.sql" scripts/p40_reconcile_migration_names.php
           grep -q "052_create_linear_route_points.sql.*058_create_linear_route_points.sql" scripts/p40_reconcile_migration_names.php
+
+      - name: Tenant provisioning and schema contract
+        if: steps.changes.outputs.tenant_schema == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+          php tests/tenant_schema_provisioning_contract_test.php
+          PLANEX_SCHEMA_CANDIDATE_DIR=/tmp/planex-tenant-schema-docs php tools/database/generate_schema_docs.php --check
+
+      - name: Upload tenant schema drift candidate
+        if: always() && steps.changes.outputs.tenant_schema == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tenant-schema-docs-candidate
+          path: /tmp/planex-tenant-schema-docs
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Dynamic identifier safety audit
         run: python3 tools/dynamic_table_safety_audit.py
