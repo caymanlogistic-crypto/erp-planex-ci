@@ -55,7 +55,7 @@ jobs:
           for token in [
               'DEPLOY_ERPV2', 'source_sha:', 'confirm_deploy:', 'P07_' + 'deploy_erpv2.sh',
               'statuses: write', 'erpv2/deploy', 'Publish deploy pending status',
-              'Publish final deploy status', "JOB_STATUS: ${{ job.status }}",
+              'Publish final deploy status', 'JOB_STATUS:', 'state=success',
           ]:
               assert token in controlled, token
 
