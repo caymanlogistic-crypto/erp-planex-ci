@@ -1,0 +1,62 @@
+/* ERP PLANEX UI Pattern Lab V0 — gallery chrome only.
+   Production controls keep their actual ERP classes and are not restyled here. */
+.ui-lab{max-width:1690px;margin:0 auto;padding-bottom:40px}
+.ui-lab-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--line);background:var(--surface-strong);margin-bottom:8px}
+.ui-lab-hero-copy{min-width:0}
+.ui-lab-kicker{font-size:9px;font-weight:700;letter-spacing:.11em;text-transform:uppercase;color:var(--text-faint)}
+.ui-lab-hero h1{margin:4px 0 0;font-size:20px;line-height:1.1;color:var(--text-main)}
+.ui-lab-hero p{margin:5px 0 0;max-width:920px;font-size:11px;color:var(--text-muted)}
+.ui-lab-owner-state{flex:0 0 auto;min-width:180px;padding:9px 11px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:10px;color:var(--text-muted)}
+.ui-lab-owner-state strong{display:block;margin-bottom:2px;font-size:12px;color:var(--text-main)}
+.ui-lab-nav{position:sticky;top:0;z-index:20;display:flex;gap:3px;align-items:center;overflow-x:auto;padding:5px;border:1px solid var(--line-soft);background:var(--surface-form);margin-bottom:8px}
+.ui-lab-nav a{display:inline-flex;align-items:center;min-height:26px;padding:0 9px;border:1px solid transparent;text-decoration:none;white-space:nowrap;font-size:10px;font-weight:700;color:var(--text-muted)}
+.ui-lab-nav a:hover,.ui-lab-nav a:focus-visible{background:var(--surface-strong);border-color:var(--line-soft);color:var(--text-main);outline:none}
+.ui-lab-section{scroll-margin-top:44px;margin-bottom:12px;border:1px solid var(--line-soft);background:var(--surface)}
+.ui-lab-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;padding:10px 12px;border-bottom:1px solid var(--line-soft);background:var(--surface-form)}
+.ui-lab-section-title{font-size:13px;font-weight:700;color:var(--text-main)}
+.ui-lab-section-note{margin-top:2px;font-size:10px;color:var(--text-faint)}
+.ui-lab-section-body{padding:12px}
+.ui-lab-meta{display:grid;grid-template-columns:minmax(180px,.7fr) minmax(0,1.5fr);gap:8px 16px;padding:8px 10px;border:1px solid var(--line-hair);background:var(--surface-strong);margin-bottom:10px}
+.ui-lab-meta-main{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.ui-lab-pattern-id{font:700 11px/1.2 var(--font-mono);color:var(--text-main)}
+.ui-lab-meta-copy{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.ui-lab-meta-copy div{min-width:0}
+.ui-lab-meta-copy strong{display:block;margin-bottom:2px;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--text-faint)}
+.ui-lab-meta-copy span{display:block;font-size:10px;line-height:1.35;color:var(--text-muted)}
+.ui-lab-compare{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.ui-lab-compare.cols-3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.ui-lab-stack{display:grid;gap:8px}
+.ui-lab-variant{min-width:0;border:1px solid var(--line-soft);background:var(--surface-strong)}
+.ui-lab-variant-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:34px;padding:6px 9px;border-bottom:1px solid var(--line-hair);background:var(--surface-form)}
+.ui-lab-variant-title{font-size:10px;font-weight:700;color:var(--text-main)}
+.ui-lab-variant-source{font-size:9px;color:var(--text-faint)}
+.ui-lab-canvas{min-width:0;padding:10px;background:var(--app-bg);overflow:auto}
+.ui-lab-canvas.is-plain{background:var(--surface-strong)}
+.ui-lab-foundation{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px}
+.ui-lab-swatch{display:grid;grid-template-columns:26px minmax(0,1fr);gap:7px;align-items:center;min-height:42px;padding:6px 7px;border:1px solid var(--line-hair);background:var(--surface-strong)}
+.ui-lab-swatch-chip{width:26px;height:26px;border:1px solid var(--line)}
+.ui-lab-swatch-chip.is-accent{background:var(--accent)}
+.ui-lab-swatch-chip.is-background{background:var(--app-bg)}
+.ui-lab-swatch-chip.is-surface{background:var(--surface-strong)}
+.ui-lab-swatch-chip.is-text{background:var(--text-main)}
+.ui-lab-swatch-chip.is-muted{background:var(--text-muted)}
+.ui-lab-swatch-chip.is-border-hair{background:var(--line-hair)}
+.ui-lab-swatch-chip.is-border-soft{background:var(--line-soft)}
+.ui-lab-swatch-chip.is-success{background:var(--success)}
+.ui-lab-swatch-chip.is-warning{background:var(--warning)}
+.ui-lab-swatch-chip.is-danger{background:var(--danger)}
+.ui-lab-swatch strong{display:block;font-size:9px;color:var(--text-main)}
+.ui-lab-swatch span{display:block;margin-top:1px;font:9px/1.2 var(--font-mono);color:var(--text-faint)}
+.ui-lab-foundation-facts{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}
+.ui-lab-fact{padding:5px 7px;border:1px solid var(--line-hair);background:var(--surface-form);font-size:9px;color:var(--text-muted)}
+.ui-lab-demo-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ui-lab-demo-stack{display:grid;gap:7px}
+.ui-lab-button-grid{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.ui-lab-field-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.ui-lab-density-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:10px}
+.ui-lab-density-item{min-width:0;padding:8px;border:1px solid var(--line-hair);background:var(--surface-form)}
+.ui-lab-density-label{display:flex;justify-content:space-between;gap:8px;margin-bottom:6px;font-size:9px;color:var(--text-faint)}
+.ui-lab-gap{padding:8px 10px;border:1px dashed var(--warning-border);background:var(--warning-field);font-size:10px;color:var(--warning-text)}
+.ui-lab-caption{font-size:9px;color:var(--text-faint)}
+@media(max-width:1280px){.ui-lab-foundation{grid-template-columns:repeat(3,minmax(0,1fr))}.ui-lab-compare.cols-3{grid-template-columns:1fr}.ui-lab-field-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ui-lab-density-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.ui-lab-meta-copy{grid-template-columns:1fr}}
+@media(max-width:900px){.ui-lab-hero{flex-direction:column}.ui-lab-owner-state{width:100%}.ui-lab-compare,.ui-lab-field-grid{grid-template-columns:1fr}.ui-lab-foundation{grid-template-columns:repeat(2,minmax(0,1fr))}.ui-lab-meta{grid-template-columns:1fr}}
