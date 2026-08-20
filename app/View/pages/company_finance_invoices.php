@@ -51,8 +51,8 @@ $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTI
 <div class="notice warn"><?= e($dbError) ?></div>
 <?php else: ?>
 <style>
-.invoice-stages-col{min-width:390px}
-.invoice-stages{display:flex;flex-wrap:wrap;gap:6px;min-width:370px;max-width:520px;font-size:11px;line-height:1.35;color:var(--text)}
+.invoice-stages-col{width:1%;min-width:0}
+.invoice-stages{display:flex;flex-wrap:wrap;gap:6px;width:max-content;min-width:0;max-width:520px;font-size:11px;line-height:1.35;color:var(--text)}
 .invoice-stage-card{display:flex;flex-direction:column;flex:0 1 190px;min-width:170px;border:1px solid var(--border);border-radius:5px;padding:7px 8px;background:transparent}
 .invoice-stage-card.is-paid{background:transparent;border-color:var(--border)}
 td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stages > .invoice-stage-card:not(.is-paid))){background:var(--success-bg)}
@@ -66,7 +66,7 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
 .invoice-stage-status{margin-top:auto;padding-top:6px;min-height:24px}
 .invoice-stage-status .badge{white-space:nowrap}
 .invoice-stage-empty{color:var(--muted);padding:3px 0}
-@media (max-width:1280px){.invoice-stages-col{min-width:330px}.invoice-stages{min-width:310px}.invoice-stage-card{flex-basis:170px}}
+@media (max-width:1280px){.invoice-stage-card{flex-basis:170px}}
 </style>
 <div class="page-head">
     <div class="page-head-left">
@@ -212,7 +212,7 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
                     <td class="col-mono"><?= e(FinanceInvoiceService::formatAmount($inv['amount'] ?? null)) ?></td>
                     <td><?= $inv['vat_rate'] !== null ? e(((float)$inv['vat_rate'] == 0.0 ? '0' : rtrim(rtrim((string)$inv['vat_rate'], '0'), '.')) . '%') : 'Без НДС' ?></td>
                     <td class="col-mono"><?= e($dueText) ?></td>
-                    <td>
+                    <td class="invoice-stages-col">
                         <?php if (empty($stageCards)): ?>
                             <div class="invoice-stage-empty">Нет связанных платёжных обязательств.</div>
                         <?php else: ?>
