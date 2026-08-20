@@ -3,90 +3,90 @@
 ## Canonical repository
 
 - Repository: `planexerp/erp-planex`
-- Canonical integration branch: `chatgpt/production-stabilization-20260802`
-- Feature work must be performed on separate `feature/...`, `chatgpt/...`, `fix/...`, or `hotfix/...` branches and integrated through pull requests.
-- The legacy repository `caymanlogistic-crypto/erp-planex` is a read-only insurance copy until explicit OWNER approval says otherwise.
+- Canonical branch: `chatgpt/production-stabilization-20260802`
+- Feature/fix work uses a separate branch and PR.
+- `caymanlogistic-crypto/erp-planex` is read-only insurance.
+- Production target: `/home/s/spugovxsim/planexp/public_html/erpv2`.
+- Legacy `/erp` must never be changed.
 
-## CI policy
+## Adaptive CI policy
 
-CI may run on pull requests, pushes, and explicit manual dispatch where supported. Safe CI itself must not deploy production or apply production database migrations.
+CI cost must match change risk.
 
-Safe CI workflows are limited to GitHub-hosted runner checks, local tests, and local/containerized test databases. Production SSH or production database access is not part of safe CI.
+- `ERP PLANEX CI`: pull requests to canonical + canonical pushes only. Feature-branch pushes do not start a duplicate main-CI run.
+- Heavy domain regressions (matching, employee money, obligations, production calendar, etc.) are PR-only and path-scoped. They run only when their implementation/test/workflow surface is touched.
+- `concurrency: cancel-in-progress` cancels obsolete PR runs after a newer commit.
+- Workflow/control-plane changes still trigger the relevant policy checks.
+- Safe CI never deploys production or mutates production DB.
 
-## Production deploy policy
+Task classes:
+- **FAST** — presentation/view/CSS/text/local UI only, no business/DB/security/route semantics. Main CI + cheap path-relevant UI contract.
+- **STANDARD** — controller/service/business behavior without production DB mutation. Main CI + owning path-triggered regression(s).
+- **CRITICAL** — settlement/matching/debt, security/access, DB/schema, financial integrations, control plane, destructive operations. Full relevant gates.
 
-Production target is `/erpv2` under `/home/s/spugovxsim/planexp`.
+Never create an **empty commit** or zero-change PR merely to retrigger CI/release. If a specific failed job is transient, rerun the failed job/run rather than replaying every successful workflow. Do not create a temporary verification PR/workflow for a routine deploy.
 
-`ERPv2 Controlled Deploy` remains the only workflow that performs the actual `/erpv2` deployment. It is `workflow_dispatch` only and requires an exact 40-character source SHA plus the explicit `DEPLOY_ERPV2` confirmation input.
+## Agent-driven production deploy
 
-Agents are authorized to deploy their own merged ERP changes without requiring the OWNER to open GitHub for each release, but only through the guarded agent deploy request path described below.
+`ERPv2 Controlled Deploy` remains the only workflow that actually writes `/erpv2`. It is `workflow_dispatch` only and accepts exact `source_sha` + `DEPLOY_ERPV2`.
 
-A merge by itself does not deploy. A CI success by itself does not deploy. The agent must perform a separate explicit deploy-request action after the merged canonical SHA has passed canonical push CI.
+Dedicated request ref: `deploy/erpv2-agent`.
+Request guard: `.github/workflows/erpv2_agent_deploy_request.yml`.
 
-### Agent-driven deploy request
+A merge by itself does not deploy. A CI success by itself does not deploy.
 
-Dedicated deploy request ref: `deploy/erpv2-agent`.
+Optimized sequence:
+1. Branch → PR.
+2. Path-targeted PR CI passes.
+3. Merge into canonical.
+4. Agent confirms exact current canonical HEAD.
+5. If intended for production, agent may immediately non-force advance `deploy/erpv2-agent` to that exact HEAD. The agent does **not** manually poll/wait for canonical CI first.
+6. `ERPv2 Agent Deploy Request` validates the request SHA equals current canonical HEAD and then waits for the exact-SHA canonical `ERP PLANEX CI` push run.
+7. CI failure/timeout fails closed. On success, guard immediately rechecks canonical HEAD.
+8. Guard dispatches `ERPv2 Controlled Deploy` for that exact SHA.
+9. Controlled Deploy performs backup/artifact/deploy and built-in postdeploy evidence.
 
-Guard workflow: `.github/workflows/erpv2_agent_deploy_request.yml`.
+The request ref must never be force-moved backwards. If canonical HEAD changes while the request is waiting, the guard must fail closed; do not deploy the stale SHA.
 
-Allowed sequence:
+## Routine postdeploy evidence
 
-1. Agent creates a feature/fix branch.
-2. Agent opens a PR to `chatgpt/production-stabilization-20260802`.
-3. Safe PR CI passes.
-4. Agent reviews the diff/evidence and merges the PR.
-5. Agent waits for `ERP PLANEX CI` to pass on the exact canonical push SHA.
-6. Agent verifies that the SHA is still the current canonical HEAD.
-7. Agent advances `deploy/erpv2-agent` to that exact canonical HEAD using a non-force ref update.
-8. `ERPv2 Agent Deploy Request` runs only for that ref and only for the repository owner actor.
-9. The guard rechecks exact canonical HEAD and successful canonical `ERP PLANEX CI` for the same SHA.
-10. The guard dispatches `ERPv2 Controlled Deploy` with the exact SHA and `DEPLOY_ERPV2`.
-11. The controlled deploy performs its existing backup, artifact, marker, HTTP, database fingerprint, legacy `/erp` fingerprint and runtime-preservation safeguards.
-12. Agent verifies deploy evidence and reports the deployed SHA.
+A normal code/UI release does not need another verification PR. `ERPv2 Controlled Deploy` already proves:
+- exact deployed marker SHA;
+- exact artifact SHA;
+- `/erpv2/login` HTTP 200;
+- production DB fingerprint unchanged;
+- legacy `/erp` fingerprint unchanged;
+- `.env` unchanged;
+- runtime directories preserved;
+- migrations were not run.
 
-The deploy request ref must never be force-moved backwards. Do not update it before canonical CI has passed. Do not use another branch as a production deploy trigger.
+Expensive browser/runtime acceptances `P44`, `P46`, `P47`, `P49`, `P50` runtime and `P93` are task-specific manual tools. Run them for STANDARD/CRITICAL risk when their protected surface is relevant; they must not automatically fan out after every ordinary deploy.
 
-Legacy `/erp` is forbidden: never modify, deploy, migrate, delete, or repurpose it.
+## Production database policy
 
-## Production database migration policy
+Agent-driven code/UI deploy authorization does not authorize production DB changes. Migrations, seeds, reconciliation, backfills, destructive SQL or other production data/schema writes remain separate manual-only operations requiring task-specific OWNER approval.
 
-Agent-driven code deploy authorization does **not** authorize production database migrations automatically.
+Production migrations must never run automatically after CI or deploy.
 
-Every workflow capable of changing production database state, applying a migration, seeding production data, or synchronizing production state remains `workflow_dispatch` only and requires its explicit confirmation input.
-
-Production migrations must never run automatically after CI or deploy. They require separate task-specific authorization when needed.
-
-## Required GitHub Actions secret names
-
-The active workflows reference these secret names:
+## Required GitHub Actions secrets
 
 - `ERPV2_SSH_PRIVATE_KEY`
 - `ERPV2_SSH_KNOWN_HOSTS`
 - `ERPV2_SSH_HOST`
 - `ERPV2_SSH_PORT`
 - `ERPV2_SSH_USER`
-- `P11_RUNTIME_CREDENTIALS_B64`
+- `P11_RUNTIME_CREDENTIALS_B64` (preferred runtime credential path; legacy encrypted fallback exists in historical runtime tooling)
 
-Secret values must never be committed to the repository, printed to logs, pasted into issues/PRs, or sent in chat.
+Never print or commit secret values.
 
-Some historical runtime workflows contain a legacy fallback that can recover encrypted runtime credentials from branch `p11-audit-v2` using the SSH private key. This is compatibility behavior, not the preferred secret-management model. The preferred model is an explicitly configured `P11_RUNTIME_CREDENTIALS_B64` repository secret.
+## Agent efficiency rules
 
-## Production read-only verification
-
-Playwright/HTTP verification may access production only when the workflow has been reviewed as read-only. A workflow is not read-only if it performs POST/mutation actions, applies migrations, seeds data, changes production files, or otherwise changes persistent production state.
-
-## Release model
-
-1. Create a feature branch.
-2. Open a PR to `chatgpt/production-stabilization-20260802`.
-3. Run safe CI.
-4. Review and merge.
-5. Wait for successful canonical `ERP PLANEX CI` on the exact merged SHA.
-6. If the task is intended for production, explicitly advance `deploy/erpv2-agent` to that exact current canonical SHA.
-7. Verify `ERPv2 Agent Deploy Request` and downstream `ERPv2 Controlled Deploy` evidence.
-8. Run any required production database migration only as a separate explicitly authorized operation.
-9. Run read-only runtime verification when appropriate.
+- Read relevant GitHub/Notion evidence once; do not repeatedly reconstruct the same state.
+- Prefer one meaningful commit/push after focused checks instead of push-on-every-micro-edit.
+- Check Actions in aggregate; avoid 4–8 second polling loops.
+- A failed unrelated historical contract is a test-boundary problem, not a reason to run every suite repeatedly.
+- Business regressions protect business state/behavior. Presentation copy/layout belongs in cheap UI contract tests.
 
 ## Emergency rule
 
-Never bypass the control plane. Never force-push or rewrite canonical history or the deploy request ref as an emergency shortcut. Preserve `/erp`, `/erpv2` runtime data, secrets, and backups according to the deployment safeguards.
+Never bypass the control plane, force-push canonical/deploy ref, touch legacy `/erp`, or use production DB writes as a shortcut.
