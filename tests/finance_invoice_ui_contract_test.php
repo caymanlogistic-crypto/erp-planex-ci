@@ -13,6 +13,7 @@ function uiMustNotContain(string $path,string $needle,string $message):void{
 }
 
 $view='app/View/pages/company_finance_invoices.php';
+$css='public/assets/css/app.css';
 uiMustContain($view,'$stageCards','invoice timeline is projected into stage cards');
 uiMustContain($view,'Этапы оплаты','payment stages are the primary payment column');
 uiMustNotContain($view,'Статус счёта','separate invoice status column remains removed');
@@ -39,6 +40,9 @@ uiMustContain($view,"directionSelect.addEventListener('change', applyInvoiceFilt
 uiMustContain($view,"hidePaidInput.addEventListener('change', applyInvoiceFilters)",'paid checkbox shares the combined filter function');
 uiMustContain($view,'var show = matchesSearch && matchesDirection && matchesPaid;','all three invoice filters combine with AND semantics');
 uiMustNotContain($view,'<div class="tabs-page">','legacy invoice direction links are removed');
+uiMustContain($css,'.table-card[data-invoice-grid]','invoice grid has a scoped width boundary');
+uiMustContain($css,'overflow-x: auto;','invoice table overflow stays inside its scroll container');
+uiMustContain($css,'width: max-content;','wide payment stages may keep intrinsic table width without expanding the page');
 uiMustContain($view,'Частично · просрочка','partial overdue state remains explicit');
 uiMustContain($view,"$statusClass = 'badge badge-warning';",'partial overdue uses warning badge');
 uiMustContain($view,'is-overdue-remaining','overdue remainder uses dedicated styling');
