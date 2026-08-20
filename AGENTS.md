@@ -4,9 +4,13 @@
 
 ## Быстрый bootstrap
 
-Notion обязателен для каждой material ERP задачи. В начале один раз прочитать `ERP PLANEX — MASTER MEMORY`: `00 — START HERE`, актуальный блок `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, затем только релевантную запись/`23 — CHANGE PLAYBOOKS`. Не делать broad-memory scan.
+**Notion обязателен** для каждой material ERP задачи. Default bootstrap теперь один: `ERP PLANEX — MASTER MEMORY` → `24 — AGENT BOOTSTRAP MANIFEST`.
 
-После этого проверить current canonical HEAD и изучать только затронутую цепочку. Для чистого UI FAST-path: `Screen record → exact view/assets → cheap UI contract`.
+Manifest хранит только stable coordinates, source precedence, change-class selector и direct registry/page IDs. Exact canonical HEAD всегда читать из GitHub; volatile SHA не является bootstrap datum.
+
+После manifest открыть только task-owned records по direct IDs/routing. `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, `22 — DEPLOY & NOTION LIMITS RUNBOOK`, `23 — CHANGE PLAYBOOKS` и historical handoffs читать **условно**, когда задача реально требует их контекста. Не делать broad-memory scan и не повторять semantic search, если ID уже известен.
+
+Для чистого UI FAST-path: `Screen record → exact view/assets → cheap UI contract`. Для STANDARD/CRITICAL — только owning chain/impact set.
 
 Repository: `planexerp/erp-planex`.
 Canonical branch: `chatgpt/production-stabilization-20260802`.
@@ -37,7 +41,7 @@ Controller/service/business behavior без production DB/schema mutation и б�
 - path-triggered owning workflows запускаются параллельно самим GitHub. Не запускать их вручную второй раз и не ждать каждый последовательно;
 - после PR creation: один aggregated status read после разумного runner window. При failure открыть только failed job; transient failure rerun, а не новый commit;
 - после всех required owning checks PASS: merge один раз → exact canonical HEAD один раз → сразу non-force `deploy/erpv2-agent`; guard сам ждёт lightweight exact-SHA canonical CI → один final `erpv2/deploy` read;
-- Notion: один final delta write по реально затронутым Module/Screen/Service/Rule/Test records; `00/01` и broad Health только если durable current state действительно изменился.
+- Notion: один final delta write по реально затронутым Module/Screen/Service/Rule/Test records; `01` и broad Health только если durable current state действительно изменился.
 
 Performance target для небольшой локальной STANDARD behavioral change при свободных runners: обычно **~2–4 минуты end-to-end**, без удаления owning regressions.
 
@@ -113,7 +117,7 @@ Finance доступен только `company_owner`, пока OWNER не из�
 
 **Notion обязателен.** Ускорение любого класса не отменяет MEMORY PASS.
 
-В начале — один bootstrap read + exact affected records по known IDs или одному scoped search. В процессе Notion не обновлять, кроме доказанного drift/blocker.
+Default start = один read `24 — AGENT BOOTSTRAP MANIFEST`, затем exact affected records по direct IDs/routing или максимум одному scoped search, если route ещё не существует. `01`, `11`, `22`, `23` не являются обязательными default reads. В процессе Notion не обновлять, кроме доказанного drift/blocker.
 
 ### FAST whitelist
 После successful FAST deploy выполнить минимальный подтверждённый MEMORY PASS:
@@ -124,12 +128,14 @@ Finance доступен только `company_owner`, пока OWNER не из�
 Для обычного FAST не обновлять `00`, `01`, Module/Service/Business Rules/broad Health только из-за нового SHA. Target FAST Notion budget: обычно 1–3 relevant reads и 1–2 writes.
 
 ### STANDARD
-Обычно достаточно owning Module/Screen/Service/Rule/Test records. Target — примерно **3–6 relevant reads / 2–4 writes**, если задача локальная. Handoff/`01` только при реальном durable state change.
+Обычно достаточно owning Module/Screen/Service/Rule/Test records. Target — примерно **2–5 relevant reads / 1–3 writes**, если задача локальная. Handoff/`01` только при реальном durable state/continuation change.
 
 ### CRITICAL
-Сначала определить impact set, затем читать/писать только его: Module/Data/Rule/State/Security/Integration/Test. Типичный focused budget — **5–10 relevant reads / 3–6 writes**. Более широкий Memory Pass оправдан только если diff реально пересекает несколько critical domains или обнаружен drift.
+Сначала определить impact set, затем читать/писать только его: Module/Data/Rule/State/Security/Integration/Test. Типичный focused budget — **4–8 relevant reads / 2–5 writes**. Более широкий Memory Pass оправдан только если diff реально пересекает несколько critical domains или обнаружен drift.
 
-После write считать MEMORY PASS только если tool вернул успешный result; при ambiguous response сделать один direct fetch/readback. Никогда не заявлять MEMORY PASS без подтверждённого Notion write.
+`Verified SHA` конкретного record — provenance его семантики, а не global current HEAD. Не переписывать соседние records только потому, что canonical SHA продвинулся.
+
+После write считать MEMORY PASS завершённым, если connector вернул однозначный successful result. Direct readback делать только при ambiguous result или для critical semantics, где независимое подтверждение оправдано. Никогда не заявлять MEMORY PASS без подтверждённого Notion write.
 
 **Definition of Done: `CODE PASS + CI PASS + MEMORY PASS`; production code/UI task additionally requires `DEPLOY PASS`.**
 
