@@ -9,6 +9,8 @@ $ownerController = new \App\Http\Controllers\Superadmin\CompanyOwnerController($
 $uiPatternLabController = new \App\Http\Controllers\Superadmin\UiPatternLabController();
 
 $router->get('/ui-library', [$uiPatternLabController, 'index']);
+$router->get('/ui-library/linear-table-design-test', [$uiPatternLabController, 'linearTableIndex']);
+$router->get('/ui-library/linear-table-design-test/{variant}', [$uiPatternLabController, 'linearTableVariant']);
 $router->get('/superadmin/companies', [$companyController, 'index']);
 $router->get('/superadmin/companies/create', [$companyController, 'createForm']);
 $router->post('/superadmin/companies/create', [$companyController, 'createSubmit']);
