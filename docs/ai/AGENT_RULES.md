@@ -4,13 +4,13 @@
 
 ## Bootstrap / context budget
 
-Notion default bootstrap: `ERP PLANEX — MASTER MEMORY` → `24 — AGENT BOOTSTRAP MANIFEST` **один раз**, затем только task-owned records по direct IDs/routing.
+Notion default bootstrap: `ERP PLANEX — MASTER MEMORY` → **`00 — START HERE` один раз**, затем только task-owned records по direct registry IDs/routing.
 
 Exact canonical HEAD всегда читать из GitHub. `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, `22 — DEPLOY & NOTION LIMITS RUNBOOK`, `23 — CHANGE PLAYBOOKS`, handoffs и historical reports читать только когда конкретная задача требует их контекста.
 
-Запрещён старый broad-start pattern вида `README → AGENTS → control-plane docs → handoff → project state → current task → decisions → documentation index` для каждой локальной задачи. Governing docs открываются по необходимости; `AGENTS.md` остаётся repository enforcement source.
+Запрещён broad-start pattern вида `README → AGENTS → control-plane docs → handoff → project state → current task → decisions → documentation index` для каждой локальной задачи. Governing docs открываются по необходимости; `AGENTS.md` остаётся repository enforcement source.
 
-Для UI дополнительно читать `docs/ui/DESIGN_STANDARD.md` только когда меняется системный UI/design contract, а не для каждой локальной текстовой/CSS правки.
+Для UI `docs/ui/DESIGN_STANDARD.md` читать только когда меняется системный UI/design contract, а не для каждой локальной текстовой/CSS правки.
 
 ## Git / branch discipline
 
