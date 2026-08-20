@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use App\Service\LocalMigrationService;
 use Planex\Tools\Database\TenantSchemaCatalog;
-use PDO;
 
 require_once dirname(__DIR__) . '/bootstrap/app.php';
 require_once BASE_PATH . '/app/Support/company_database.php';
@@ -22,9 +21,15 @@ $dbDirty = $prefix . '_dirty';
 
 $quote = static fn(string $db): string => '`' . str_replace('`', '``', $db) . '`';
 $connect = static fn(string $db): PDO => new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4", $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-$assert = static function (bool $ok, string $message): void { if (!$ok) throw new RuntimeException($message); };
+$assert = static function (bool $ok, string $message): void {
+    if (!$ok) {
+        throw new RuntimeException($message);
+    }
+};
 
-foreach ([$dbEmpty, $dbDirty] as $db) $admin->exec('CREATE DATABASE ' . $quote($db) . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+foreach ([$dbEmpty, $dbDirty] as $db) {
+    $admin->exec('CREATE DATABASE ' . $quote($db) . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+}
 try {
     // CASE 1: truly empty resource -> canonical migrations.
     $empty = $connect($dbEmpty);
@@ -35,14 +40,15 @@ try {
     $applied = $empty->query('SELECT migration FROM schema_migrations ORDER BY migration')->fetchAll(PDO::FETCH_COLUMN);
     $assert(count($applied) === count($migrationFiles), 'Empty DB has pending/missing migrations.');
     $assert((string) end($applied) === $expectedLatest, 'Empty DB latest migration mismatch.');
-    foreach (['schema_migrations','users','clients','contractors','vehicle_units','documents','linear_routes','finance_invoices'] as $table) {
+
+    foreach (['schema_migrations', 'users', 'clients', 'contractors', 'vehicle_units', 'documents', 'linear_routes', 'finance_invoices'] as $table) {
         $stmt = $empty->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?');
         $stmt->execute([$table]);
         $assert((int) $stmt->fetchColumn() === 1, 'Missing required core table: ' . $table);
     }
-    foreach ([['users','email'],['linear_routes','status'],['finance_invoices','id']] as [$table,$column]) {
+    foreach ([['users', 'email'], ['linear_routes', 'status'], ['finance_invoices', 'id']] as [$table, $column]) {
         $stmt = $empty->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ?');
-        $stmt->execute([$table,$column]);
+        $stmt->execute([$table, $column]);
         $assert((int) $stmt->fetchColumn() === 1, "Missing representative column {$table}.{$column}");
     }
     $idx = $empty->query("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'PRIMARY'")->fetchColumn();
@@ -57,10 +63,14 @@ try {
     $dirty->exec('CREATE VIEW stale_view AS SELECT id FROM stale_parent');
     $dirty->exec('CREATE TRIGGER stale_trigger BEFORE INSERT ON stale_parent FOR EACH ROW SET NEW.payload = COALESCE(NEW.payload, \'legacy\')');
     $dirty->exec('CREATE PROCEDURE stale_proc() SELECT 1');
-    try { $dirty->exec("CREATE EVENT stale_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY DO INSERT INTO stale_parent VALUES (2, 'event')"); } catch (Throwable $e) { /* event_scheduler/privilege may be unavailable; cleanup of other object classes remains mandatory */ }
+    try {
+        $dirty->exec("CREATE EVENT stale_event ON SCHEDULE AT CURRENT_TIMESTAMP + INTERVAL 1 DAY DO INSERT INTO stale_parent VALUES (2, 'event')");
+    } catch (Throwable $e) {
+        // Some MySQL test runners disable event creation. Other stale object classes remain mandatory.
+    }
 
     cleanCompanyPoolDatabase($dirty);
-    foreach (['BASE TABLE','VIEW'] as $type) {
+    foreach (['BASE TABLE', 'VIEW'] as $type) {
         $stmt = $dirty->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA = DATABASE() AND TABLE_TYPE = ?');
         $stmt->execute([$type]);
         $assert((int) $stmt->fetchColumn() === 0, "Cleanup left {$type} objects.");
@@ -79,5 +89,7 @@ try {
 
     fwrite(STDOUT, "TENANT_PROVISIONING_EMPTY=PASS\nDIRTY_POOL_CLEANUP=PASS\nDIRTY_POOL_EQUIVALENCE=PASS\nLATEST_MIGRATION={$expectedLatest}\nSCHEMA_FINGERPRINT={$emptyFp}\n");
 } finally {
-    foreach ([$dbEmpty, $dbDirty] as $db) $admin->exec('DROP DATABASE IF EXISTS ' . $quote($db));
+    foreach ([$dbEmpty, $dbDirty] as $db) {
+        $admin->exec('DROP DATABASE IF EXISTS ' . $quote($db));
+    }
 }
