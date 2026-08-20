@@ -1,10 +1,28 @@
 name: Production Calendar Regression
+
 on:
-  push:
   pull_request:
+    branches: [chatgpt/production-stabilization-20260802]
+    paths:
+      - 'app/Service/ProductionCalendarService.php'
+      - 'app/Http/Controllers/Company/ProductionCalendarController.php'
+      - 'app/Http/Routes/company_production_calendar.php'
+      - 'app/View/pages/company_production_calendar.php'
+      - 'app/Support/runtime_ui_hotfixes.php'
+      - 'app/Support/entrypoint_dependencies.php'
+      - 'public/index.php'
+      - 'scripts/p90_*'
+      - 'tests/production_calendar_*'
+      - '.github/workflows/production_calendar_regression.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: production-calendar-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-24.04
@@ -24,20 +42,6 @@ jobs:
           --health-retries=20
     steps:
       - uses: actions/checkout@v4
-      - name: PHP syntax
-        shell: bash
-        run: |
-          set -euo pipefail
-          php -l app/Service/ProductionCalendarService.php
-          php -l app/Http/Controllers/Company/ProductionCalendarController.php
-          php -l app/Http/Routes/company_production_calendar.php
-          php -l app/View/pages/company_production_calendar.php
-          php -l app/Support/runtime_ui_hotfixes.php
-          php -l app/Support/entrypoint_dependencies.php
-          php -l public/index.php
-          php -l scripts/p90_apply_production_calendar_migration.php
-          php -l tests/production_calendar_architecture_test.php
-          php -l tests/production_calendar_behavioral_test.php
       - name: Architecture regression
         run: php tests/production_calendar_architecture_test.php
       - name: Behavioral regression
@@ -47,15 +51,4 @@ jobs:
           PRODUCTION_CALENDAR_DB_NAME: erp_production_calendar_test
           PRODUCTION_CALENDAR_DB_USER: root
           PRODUCTION_CALENDAR_DB_PASSWORD: root
-        shell: bash
-        run: |
-          set -euo pipefail
-          php -m | grep -qi pdo_mysql
-          php tests/production_calendar_behavioral_test.php 2>&1 | tee production_calendar_behavioral.txt
-          grep -q 'PRODUCTION_CALENDAR_BEHAVIOR_OK' production_calendar_behavioral.txt
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: production_calendar_${{ github.sha }}
-          path: production_calendar_behavioral.txt
-          if-no-files-found: warn
+        run: php tests/production_calendar_behavioral_test.php

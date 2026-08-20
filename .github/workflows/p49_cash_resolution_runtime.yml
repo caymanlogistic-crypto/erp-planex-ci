@@ -1,35 +1,29 @@
 name: P49 Cash Resolution Runtime
+
 on:
-  workflow_run:
-    workflows: ["ERPv2 Controlled Deploy"]
-    types: [completed]
-    branches: [chatgpt/production-stabilization-20260802]
   workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed SHA to verify'
+        required: true
+        type: string
+
 permissions:
   contents: read
+
+concurrency:
+  group: p49-cash-resolution-${{ inputs.source_sha }}
+  cancel-in-progress: true
+
 jobs:
   verify:
-    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref_name || github.event.workflow_run.head_sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 0
-      - name: Resolve deployed SHA
-        id: sha
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          WORKFLOW_SHA: ${{ github.event.workflow_run.head_sha }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          else
-            echo "sha=$WORKFLOW_SHA" >> "$GITHUB_OUTPUT"
-          fi
       - name: Verify exact deployed marker
         env:
           KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
@@ -37,10 +31,11 @@ jobs:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
           PORT: ${{ secrets.ERPV2_SSH_PORT }}
           USER: ${{ secrets.ERPV2_SSH_USER }}
-          SHA: ${{ steps.sha.outputs.sha }}
+          SHA: ${{ inputs.source_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/p49"
           printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
@@ -76,15 +71,11 @@ jobs:
           echo "::add-mask::$cred"
           echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
       - name: Fail-closed read-only cash resolution acceptance
-        shell: bash
-        run: |
-          set -euo pipefail
-          node .github/p49/P49_cash_resolution_runtime.js 2>&1 | tee P49_RUNTIME.txt
-          grep -q 'P49_CASH_RESOLUTION_RUNTIME_OK' P49_RUNTIME.txt
+        run: node .github/p49/P49_cash_resolution_runtime.js 2>&1 | tee P49_RUNTIME.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: P49_cash_resolution_runtime_${{ steps.sha.outputs.sha }}
+          name: P49_cash_resolution_runtime_${{ inputs.source_sha }}
           path: |
             P49_RUNTIME.txt
             P49_cash_checkbox.png

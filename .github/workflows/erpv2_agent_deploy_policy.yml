@@ -2,23 +2,29 @@ name: ERPv2 Agent Deploy Policy
 
 on:
   pull_request:
+    branches: [chatgpt/production-stabilization-20260802]
     paths:
       - '.github/workflows/erpv2_agent_deploy_request.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
       - '.github/workflows/erpv2_agent_deploy_policy.yml'
       - 'docs/GITHUB_CONTROL_PLANE.md'
+      - 'AGENTS.md'
   push:
-    branches:
-      - chatgpt/production-stabilization-20260802
+    branches: [chatgpt/production-stabilization-20260802]
     paths:
       - '.github/workflows/erpv2_agent_deploy_request.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
       - '.github/workflows/erpv2_agent_deploy_policy.yml'
       - 'docs/GITHUB_CONTROL_PLANE.md'
+      - 'AGENTS.md'
   workflow_dispatch:
 
 permissions:
   contents: read
+
+concurrency:
+  group: erpv2-agent-policy-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   policy:
@@ -33,29 +39,38 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import re
+
           controlled = Path('.github/workflows/erpv2_controlled_deploy.yml').read_text(encoding='utf-8')
           agent = Path('.github/workflows/erpv2_agent_deploy_request.yml').read_text(encoding='utf-8')
           docs = Path('docs/GITHUB_CONTROL_PLANE.md').read_text(encoding='utf-8')
+          agents = Path('AGENTS.md').read_text(encoding='utf-8')
+
           def on_block(text: str) -> str:
               m = re.search(r'(?ms)^on:\s*\n(.*?)(?=^[A-Za-z_][A-Za-z0-9_-]*:\s*$)', text)
               assert m, 'on block not found'
               return m.group(1)
+
           controlled_events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', on_block(controlled), flags=re.M)
           assert sorted(set(controlled_events)) == ['workflow_dispatch'], controlled_events
-          for token in ['DEPLOY_ERPV2','source_sha:','confirm_deploy:', 'P07_' + 'deploy_erpv2.sh']:
+          for token in ['DEPLOY_ERPV2', 'source_sha:', 'confirm_deploy:', 'P07_' + 'deploy_erpv2.sh']:
               assert token in controlled, token
+
           agent_on = on_block(agent)
           agent_events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', agent_on, flags=re.M)
           assert sorted(set(agent_events)) == ['push'], agent_events
           assert '      - deploy/erpv2-agent' in agent_on
-          for forbidden in ['workflow_run:','pull_request:','schedule:','workflow_dispatch:']:
+          for forbidden in ['workflow_run:', 'pull_request:', 'schedule:', 'workflow_dispatch:']:
               assert forbidden not in agent_on, forbidden
+
           required = [
-              'actions: write', 'contents: read', 'github.actor == github.repository_owner',
+              'actions: write',
+              'github.actor == github.repository_owner',
               'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
               'DEPLOY_REQUEST_BRANCH: deploy/erpv2-agent',
               'test "$SOURCE_SHA" = "$canonical_sha"',
-              'actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&status=completed',
+              'Wait for exact canonical ERP PLANEX CI',
+              'for attempt in $(seq 1 72)',
+              'actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push',
               "run.get('conclusion') == 'success'",
               'Reconfirm canonical HEAD immediately before dispatch',
               'actions/workflows/$CONTROLLED_DEPLOY_WORKFLOW/dispatches',
@@ -63,8 +78,11 @@ jobs:
           ]
           for token in required:
               assert token in agent, f'missing safeguard: {token}'
+
           assert 'deploy/erpv2-agent' in docs
           assert 'A merge by itself does not deploy' in docs
           assert 'Production migrations must never run automatically' in docs
+          assert 'empty commit' in docs.lower()
+          assert 'FAST' in agents and 'STANDARD' in agents and 'CRITICAL' in agents
           print('ERPV2_AGENT_DEPLOY_POLICY=PASS')
           PY
