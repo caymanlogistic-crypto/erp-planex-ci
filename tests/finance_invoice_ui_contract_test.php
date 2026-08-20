@@ -18,7 +18,9 @@ uiMustContain($view,'Этапы оплаты','payment stages are the primary pa
 uiMustNotContain($view,'Статус счёта','separate invoice status column remains removed');
 uiMustContain($view,"$statusText = 'Оплачен';",'closed stage shows current paid fact');
 uiMustNotContain($view,'Оплачен с просрочкой','closed stage hides historical lateness');
-uiMustContain($view,'invoice-stage-card.is-paid','paid stage has success styling');
+uiMustContain($view,'.invoice-stage-card.is-paid{background:transparent;border-color:var(--border)}','paid stage card no longer owns success background');
+uiMustContain($view,'td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stages > .invoice-stage-card:not(.is-paid))){background:var(--success-bg)}','fully paid invoice paints the whole payment cell');
+uiMustNotContain($view,'.invoice-stage-card.is-paid{background:var(--success-bg)','paid stage card must not be green');
 uiMustContain($view,'Частично · просрочка','partial overdue state remains explicit');
 uiMustContain($view,"$statusClass = 'badge badge-warning';",'partial overdue uses warning badge');
 uiMustContain($view,'is-overdue-remaining','overdue remainder uses dedicated styling');
