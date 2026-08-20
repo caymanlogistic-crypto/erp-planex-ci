@@ -28,7 +28,7 @@ Production FAST использует guarded `ERPv2 FAST Release`: owner same-re
 
 FAST whitelist остаётся machine-enforced; агент не расширяет FAST на controller/service/DB/security/finance semantics.
 
-### STANDARD
+### STANDARD execution discipline
 Controller/service/business behavior без production DB/schema mutation и без critical finance/security semantics.
 
 - branch `standard/<slug>`;
@@ -40,7 +40,7 @@ Controller/service/business behavior без production DB/schema mutation и б�
 
 Target для небольшой локальной behavioral-задачи: примерно `2–4 min`, если runners свободны.
 
-### CRITICAL
+### CRITICAL execution discipline
 Finance settlement/matching/debt, security/access, DB/schema, financial integrations, control plane, destructive operations.
 
 - branch `critical/<slug>`;
