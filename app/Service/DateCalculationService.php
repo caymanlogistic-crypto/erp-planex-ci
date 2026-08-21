@@ -20,10 +20,10 @@ final class DateCalculationService
     public const CONDITION_LABELS = [
         self::CONDITION_PREPAYMENT => 'Предоплата',
         self::CONDITION_START_DAY => 'На загрузке',
-        self::CONDITION_AFTER_START => 'После начала рейса',
+        self::CONDITION_AFTER_START => 'После загрузки',
         self::CONDITION_END_DAY => 'На выгрузке',
-        self::CONDITION_AFTER_END => 'После окончания рейса',
-        self::CONDITION_AFTER_DOCUMENTS => 'После получения документов',
+        self::CONDITION_AFTER_END => 'После выгрузки',
+        self::CONDITION_AFTER_DOCUMENTS => 'Документы получены',
         self::CONDITION_SPECIFIC_DATE => 'Конкретная дата',
     ];
 
