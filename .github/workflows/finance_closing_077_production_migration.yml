@@ -1,0 +1,157 @@
+name: Finance Closing 077 Production Migration
+
+on:
+  push:
+    branches:
+      - chatgpt/production-stabilization-20260802
+
+permissions:
+  contents: read
+
+concurrency:
+  group: finance-closing-077-production-migration
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+
+jobs:
+  migrate-077:
+    if: ${{ github.event.head_commit.message == 'CRITICAL: apply production migration 077' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Validate exact source and migration tooling
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          php -l scripts/finance_closing_apply_077.php
+          php -l scripts/finance_closing_verify_077.php
+          test -s database/migrations-local/077_finance_closing_documents.sql
+
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/finance_closing_077_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/finance_closing_077_key" "$HOME/.ssh/known_hosts"
+
+      - name: Upload isolated migration tooling
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/finance_closing_077_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/finance_closing_verify_077.php "$SSH_USER@$SSH_HOST:/tmp/finance_closing_verify_077_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/finance_closing_077_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/finance_closing_apply_077.php "$SSH_USER@$SSH_HOST:/tmp/finance_closing_apply_077_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/finance_closing_077_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes database/migrations-local/077_finance_closing_documents.sql "$SSH_USER@$SSH_HOST:/tmp/077_finance_closing_documents_${GITHUB_RUN_ID}.sql"
+
+      - name: Resolve standalone DB PHP
+        id: php
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          phpbin="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/finance_closing_077_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "GITHUB_RUN_ID='$GITHUB_RUN_ID' bash -s" <<'REMOTE'
+          set -e
+          candidates="$(command -v php 2>/dev/null || true) $(which -a php 2>/dev/null || true)"
+          for pattern in /usr/local/bin/php* /usr/local/php*/bin/php /opt/php*/bin/php /opt/*/php*/bin/php /usr/bin/php*; do
+            for p in $pattern; do [ -x "$p" ] && candidates="$candidates $p"; done
+          done
+          for p in $candidates; do
+            [ -x "$p" ] || continue
+            case "$p" in *php-config*|*phpize*) continue ;; esac
+            "$p" -l "/tmp/finance_closing_verify_077_${GITHUB_RUN_ID}.php" >/dev/null 2>&1 || continue
+            "$p" -l "/tmp/finance_closing_apply_077_${GITHUB_RUN_ID}.php" >/dev/null 2>&1 || continue
+            "$p" -r 'exit(extension_loaded("pdo_mysql") ? 0 : 1);' >/dev/null 2>&1 || continue
+            echo "$p"; exit 0
+          done
+          exit 1
+          REMOTE
+          )"
+          test -n "$phpbin"
+          echo "phpbin=$phpbin" >> "$GITHUB_OUTPUT"
+
+      - name: Snapshot before migration
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          PHPBIN: ${{ steps.php.outputs.phpbin }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/finance_closing_077_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' '$PHPBIN' '/tmp/finance_closing_verify_077_${GITHUB_RUN_ID}.php'" | tee finance_closing_077_before.txt
+          grep -q 'FINANCE_CLOSING_077_READ_ONLY_OK' finance_closing_077_before.txt
+
+      - name: Apply only migration 077
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          PHPBIN: ${{ steps.php.outputs.phpbin }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/finance_closing_077_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' '$PHPBIN' '/tmp/finance_closing_apply_077_${GITHUB_RUN_ID}.php' '$LIVE_ROOT' '/tmp/077_finance_closing_documents_${GITHUB_RUN_ID}.sql'" | tee finance_closing_077_migration.txt
+          grep -q 'FINANCE_CLOSING_077_OK' finance_closing_077_migration.txt
+
+      - name: Snapshot after migration and compare invariants
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          PHPBIN: ${{ steps.php.outputs.phpbin }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/finance_closing_077_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' '$PHPBIN' '/tmp/finance_closing_verify_077_${GITHUB_RUN_ID}.php'" | tee finance_closing_077_after.txt
+          grep -q 'FINANCE_CLOSING_077_READ_ONLY_OK' finance_closing_077_after.txt
+          before_json="$(sed -n 's/^FINANCE_CLOSING_077_SNAPSHOT=//p' finance_closing_077_before.txt)"
+          after_json="$(sed -n 's/^FINANCE_CLOSING_077_SNAPSHOT=//p' finance_closing_077_after.txt)"
+          python3 - "$before_json" "$after_json" <<'PY'
+          import json, sys
+          before=json.loads(sys.argv[1]); after=json.loads(sys.argv[2])
+          for key in ('bank_transactions','documents','finance_employee_movements'):
+              if before[key] != after[key]:
+                  raise SystemExit(f'business invariant changed: {key}: {before[key]} -> {after[key]}')
+          if after['closing_counterparties_table'] != 1 or after['closing_document_links_table'] != 1:
+              raise SystemExit('migration 077 tables missing')
+          if after['migration_077_applied'] != 1:
+              raise SystemExit('migration 077 registry record missing')
+          print('FINANCE_CLOSING_077_INVARIANTS_OK')
+          PY
+
+      - name: HTTP acceptance
+        run: |
+          set -euo pipefail
+          test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: finance_closing_077_${{ github.sha }}
+          path: finance_closing_077_*.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          if [ -f "$HOME/.ssh/finance_closing_077_key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/finance_closing_077_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/finance_closing_verify_077_${GITHUB_RUN_ID}.php' '/tmp/finance_closing_apply_077_${GITHUB_RUN_ID}.php' '/tmp/077_finance_closing_documents_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/finance_closing_077_key" 2>/dev/null || true
