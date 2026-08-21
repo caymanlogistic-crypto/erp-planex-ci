@@ -9,6 +9,7 @@ on:
       - chatgpt/production-stabilization-20260802
     paths:
       - '.github/workflows/_diag_postdeploy_closing_078.yml'
+      - 'scripts/_diag_live_closing_078.php'
 
 permissions:
   contents: read
@@ -19,6 +20,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+      - name: PHP verifier syntax
+        run: php -l scripts/_diag_live_closing_078.php
       - name: Configure SSH
         env:
           PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
@@ -29,7 +32,15 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Wait exact live marker and render both closing screens
+      - name: Upload quote-safe live verifier
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/_diag_live_closing_078.php "$SSH_USER@$SSH_HOST:/tmp/live_closing078_${GITHUB_RUN_ID}.php"
+      - name: Verify exact live marker and render both closing screens
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -37,33 +48,10 @@ jobs:
           EXPECTED_SHA: 9e44e685562742ffed9abf8a9105209836ee5384
         run: |
           set -euo pipefail
-          for n in $(seq 1 72); do
-            marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt" 2>/dev/null || true)"
-            echo "live_marker=$marker"
-            if [ "$marker" = "$EXPECTED_SHA" ]; then break; fi
-            if [ "$n" -eq 72 ]; then echo 'Timed out waiting for exact deploy marker' >&2; exit 1; fi
-            sleep 10
-          done
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "EXPECTED_SHA='$EXPECTED_SHA' /usr/bin/php8.5 -d display_errors=1 -r '
-            $root=\"/home/s/spugovxsim/planexp/public_html/erpv2\";
-            chdir($root);
-            $config=require \"bootstrap/app.php\";
-            require \"app/Support/entrypoint_dependencies.php\";
-            require \"app/Http/Controllers/Company/ClosingDocumentsController.php\";
-            $_SESSION=[\"user_id\"=>1,\"role_code\"=>\"company_owner\",\"company_id\"=>25];
-            $_SERVER[\"REQUEST_METHOD\"]=\"GET\";
-            $_SERVER[\"REQUEST_URI\"]=\"/erpv2/company/finance/closing-documents\";
-            $db=new \\App\\Core\\Database($config[\"database\"]);
-            ob_start(); (new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController($config,$db))->index(); $a=ob_get_clean();
-            if(strpos($a,\"Закрывающие документы\")===false||strpos($a,\"Исключения по документам\")===false){fwrite(STDERR,\"main render markers missing\\n\");exit(7);} 
-            ob_start(); (new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController($config,$db))->exceptions(); $b=ob_get_clean();
-            if(strpos($b,\"Исключения по документам\")===false){fwrite(STDERR,\"exceptions render marker missing\\n\");exit(8);} 
-            $central=$db->connection(); $s=$central->prepare(\"SELECT * FROM companies WHERE id=? LIMIT 1\"); $s->execute([25]); $company=$s->fetch(PDO::FETCH_ASSOC); if(!$company) exit(9);
-            $tenant=(new \\App\\Core\\Database(companyDatabaseConfig($config,$company)))->connection();
-            $q=$tenant->query(\"SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=\\\"finance_closing_document_exceptions\\\"\"); if((int)$q->fetchColumn()!==1){fwrite(STDERR,\"078 table missing\\n\");exit(10);} 
-            $rows=\\App\\Service\\ClosingDocumentService::reportRows($tenant,false); $problems=\\App\\Service\\ClosingDocumentService::problemCount($tenant);
-            echo \"POSTDEPLOY_CLOSING_078_LIVE_RENDER=PASS rows=\".count($rows).\" problems=\".$problems.PHP_EOL;
-          '"
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt")"
+          echo "live_marker=$marker"
+          test "$marker" = "$EXPECTED_SHA"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 -d display_errors=1 '/tmp/live_closing078_${GITHUB_RUN_ID}.php'"
       - name: HTTP login acceptance
         run: |
           set -euo pipefail
@@ -71,4 +59,10 @@ jobs:
           echo 'POSTDEPLOY_HTTP_LOGIN=PASS'
       - name: Cleanup
         if: always()
-        run: rm -f "$HOME/.ssh/key" 2>/dev/null || true
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/live_closing078_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+          rm -f "$HOME/.ssh/key" 2>/dev/null || true
