@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `5a11731243c253a3b263a05621d2f811d7aa9438f658137356dbc913d830917c`
+**Schema fingerprint:** `7d9108ee0188cd8a24782257374c006bd2d829a0a738e82f1b860a3400313ccd`
 
 ## `finance_cash_resolutions`
 
@@ -66,6 +66,55 @@
 
 - `fk_fcrr_allocation`: (`finance_allocation_id`) → `finance_operation_allocations`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
 - `fk_fcrr_operation`: (`finance_operation_id`) → `finance_operations`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+
+## `finance_closing_counterparties`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `bank_transaction_id` | `int unsigned` | NO | NULL | — | `PRI` |
+| `entity_type` | `varchar(20)` | NO | NULL | — | `MUL` |
+| `entity_id` | `int unsigned` | NO | NULL | — | — |
+| `assigned_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`bank_transaction_id`)
+- **INDEX** `idx_fcc_entity` (`entity_type`, `entity_id`)
+
+### Physical foreign keys
+
+- `fk_fcc_bank_transaction`: (`bank_transaction_id`) → `bank_transactions`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
+
+## `finance_closing_document_links`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `bank_transaction_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `document_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `requirement_code` | `varchar(32)` | NO | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_fcdl_document` (`document_id`)
+- **INDEX** `idx_fcdl_transaction` (`bank_transaction_id`)
+- **UNIQUE** `uk_fcdl_transaction_document_requirement` (`bank_transaction_id`, `document_id`, `requirement_code`)
+
+### Physical foreign keys
+
+- `fk_fcdl_bank_transaction`: (`bank_transaction_id`) → `bank_transactions`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
+- `fk_fcdl_document`: (`document_id`) → `documents`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `finance_dds_categories`
 
@@ -182,41 +231,4 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
-
-## `finance_employee_movements`
-
-**Domain:** Finance  
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `employee_user_id` | `int unsigned` | YES | NULL | — | `MUL` |
-| `employee_identity_type` | `varchar(20)` | NO | `TENANT_USER` | — | `MUL` |
-| `employee_identity_id` | `int unsigned` | YES | NULL | — | — |
-| `employee_name_snapshot` | `varchar(255)` | YES | NULL | — | — |
-| `employee_role_snapshot` | `varchar(50)` | YES | NULL | — | — |
-| `movement_type` | `varchar(20)` | NO | NULL | — | `MUL` |
-| `source_type` | `varchar(20)` | NO | NULL | — | — |
-| `finance_operation_id` | `int unsigned` | NO | NULL | — | `UNI` |
-| `bank_transaction_id` | `int unsigned` | YES | NULL | — | `UNI` |
-| `note` | `varchar(1000)` | YES | NULL | — | — |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_fem_employee_created` (`employee_user_id`, `created_at`)
-- **INDEX** `idx_fem_employee_identity` (`employee_identity_type`, `employee_identity_id`, `created_at`)
-- **INDEX** `idx_fem_type_source` (`movement_type`, `source_type`)
-- **UNIQUE** `uk_fem_bank_transaction` (`bank_transaction_id`)
-- **UNIQUE** `uk_fem_finance_operation` (`finance_operation_id`)
-
-### Physical foreign keys
-
-- `fk_fem_bank_tx`: (`bank_transaction_id`) → `bank_transactions`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
-- `fk_fem_employee`: (`employee_user_id`) → `users`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
-- `fk_fem_operation`: (`finance_operation_id`) → `finance_operations`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
 

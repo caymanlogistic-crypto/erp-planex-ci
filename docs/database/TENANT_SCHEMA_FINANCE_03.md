@@ -2,7 +2,44 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `5a11731243c253a3b263a05621d2f811d7aa9438f658137356dbc913d830917c`
+**Schema fingerprint:** `7d9108ee0188cd8a24782257374c006bd2d829a0a738e82f1b860a3400313ccd`
+
+## `finance_employee_movements`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `employee_user_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `employee_identity_type` | `varchar(20)` | NO | `TENANT_USER` | — | `MUL` |
+| `employee_identity_id` | `int unsigned` | YES | NULL | — | — |
+| `employee_name_snapshot` | `varchar(255)` | YES | NULL | — | — |
+| `employee_role_snapshot` | `varchar(50)` | YES | NULL | — | — |
+| `movement_type` | `varchar(20)` | NO | NULL | — | `MUL` |
+| `source_type` | `varchar(20)` | NO | NULL | — | — |
+| `finance_operation_id` | `int unsigned` | NO | NULL | — | `UNI` |
+| `bank_transaction_id` | `int unsigned` | YES | NULL | — | `UNI` |
+| `note` | `varchar(1000)` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_fem_employee_created` (`employee_user_id`, `created_at`)
+- **INDEX** `idx_fem_employee_identity` (`employee_identity_type`, `employee_identity_id`, `created_at`)
+- **INDEX** `idx_fem_type_source` (`movement_type`, `source_type`)
+- **UNIQUE** `uk_fem_bank_transaction` (`bank_transaction_id`)
+- **UNIQUE** `uk_fem_finance_operation` (`finance_operation_id`)
+
+### Physical foreign keys
+
+- `fk_fem_bank_tx`: (`bank_transaction_id`) → `bank_transactions`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+- `fk_fem_employee`: (`employee_user_id`) → `users`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+- `fk_fem_operation`: (`finance_operation_id`) → `finance_operations`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
 
 ## `finance_employee_personal_expenses`
 
@@ -159,93 +196,6 @@
 - **INDEX** `idx_fmr_operation` (`finance_operation_id`)
 - **INDEX** `idx_fmr_result` (`result`)
 - **INDEX** `idx_fmr_rule` (`rule_id`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.
-
-## `finance_matching_rules`
-
-**Domain:** Finance  
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `name` | `varchar(255)` | NO | NULL | — | — |
-| `active` | `tinyint(1)` | YES | `1` | — | `MUL` |
-| `priority` | `int` | YES | `100` | — | — |
-| `direction` | `varchar(20)` | YES | NULL | — | `MUL` |
-| `bank_account_id` | `int unsigned` | YES | NULL | — | `MUL` |
-| `counterparty_inn` | `varchar(20)` | YES | NULL | — | — |
-| `counterparty_id` | `int unsigned` | YES | NULL | — | — |
-| `counterparty_type` | `varchar(20)` | YES | NULL | — | — |
-| `invoice_number_pattern` | `varchar(255)` | YES | NULL | — | — |
-| `purpose_contains` | `varchar(255)` | YES | NULL | — | — |
-| `purpose_regex` | `varchar(500)` | YES | NULL | — | — |
-| `amount_from` | `decimal(15,2)` | YES | NULL | — | — |
-| `amount_to` | `decimal(15,2)` | YES | NULL | — | — |
-| `action_type` | `varchar(30)` | NO | `categorize` | — | — |
-| `target_dds_category_id` | `int unsigned` | YES | NULL | — | — |
-| `target_cash_flow_center_id` | `int unsigned` | YES | NULL | — | — |
-| `target_cash_account_id` | `int unsigned` | YES | NULL | — | — |
-| `target_employee_identity_type` | `varchar(20)` | YES | NULL | — | `MUL` |
-| `target_employee_identity_id` | `int unsigned` | YES | NULL | — | — |
-| `target_employee_name_snapshot` | `varchar(255)` | YES | NULL | — | — |
-| `target_employee_role_snapshot` | `varchar(50)` | YES | NULL | — | — |
-| `target_counterparty_id` | `int unsigned` | YES | NULL | — | — |
-| `target_counterparty_type` | `varchar(20)` | YES | NULL | — | — |
-| `auto_apply` | `tinyint(1)` | YES | `0` | — | `MUL` |
-| `deleted_at` | `datetime` | YES | NULL | — | — |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `created_at` | `datetime` | YES | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | YES | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_fmr_active_priority` (`active`, `priority`)
-- **INDEX** `idx_fmr_auto_apply` (`auto_apply`)
-- **INDEX** `idx_fmr_bank_account` (`bank_account_id`)
-- **INDEX** `idx_fmr_direction` (`direction`)
-- **INDEX** `idx_fmr_employee_target` (`target_employee_identity_type`, `target_employee_identity_id`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.
-
-## `finance_money_accounts`
-
-**Domain:** Finance  
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `type` | `varchar(20)` | NO | NULL | — | `MUL` |
-| `name` | `varchar(255)` | NO | NULL | — | — |
-| `bank_account_id` | `int unsigned` | YES | NULL | — | `UNI` |
-| `currency` | `varchar(10)` | NO | `RUR` | — | — |
-| `opening_balance` | `decimal(15,2)` | NO | `0.00` | — | — |
-| `opening_balance_date` | `date` | YES | NULL | — | — |
-| `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_fma_active` (`is_active`)
-- **INDEX** `idx_fma_bank_account` (`bank_account_id`)
-- **INDEX** `idx_fma_type` (`type`)
-- **UNIQUE** `uk_fma_bank_account` (`bank_account_id`)
 
 ### Physical foreign keys
 
