@@ -1,9 +1,9 @@
 name: DIAG Closing Documents Production
 
 on:
-  push:
+  pull_request:
     branches:
-      - diag/closing-documents-production-run
+      - chatgpt/production-stabilization-20260802
 
 permissions:
   contents: read
