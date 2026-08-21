@@ -1,0 +1,36 @@
+name: TEMP Sync Schema 078
+on:
+  push:
+    branches: [sync/schema-078]
+    paths: ['.github/workflows/_tmp_sync_schema_078.yml']
+permissions:
+  contents: write
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: sync/schema-078
+          fetch-depth: 2
+      - name: Generate exact schema docs
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+          php tools/database/generate_schema_docs.php --write
+          git diff -- docs/database
+      - name: Commit generated docs to sync branch
+        run: |
+          set -euo pipefail
+          git config user.name 'planexerp-schema-bot'
+          git config user.email 'info@plan-ex.ru'
+          git add docs/database
+          if git diff --cached --quiet; then echo 'No schema drift'; exit 0; fi
+          git commit -m 'DOCS: sync generated tenant schema for migration 078'
+          git push origin HEAD:sync/schema-078
