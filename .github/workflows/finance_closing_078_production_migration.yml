@@ -30,13 +30,15 @@ jobs:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 1
       - name: Validate exact source and tooling
-        env: { SOURCE_SHA: "${{ inputs.source_sha }}" }
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           php -l scripts/finance_closing_apply_078.php
           php -l scripts/finance_closing_verify_078.php
+          php -l app/Service/ClosingDocumentService.php
           test -s database/migrations-local/078_finance_closing_document_exceptions.sql
       - name: Configure SSH
         env:
@@ -49,7 +51,10 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
       - name: Upload isolated migration tooling
-        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/finance_closing_verify_078.php "$SSH_USER@$SSH_HOST:/tmp/verify078_${GITHUB_RUN_ID}.php"
@@ -57,19 +62,28 @@ jobs:
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes database/migrations-local/078_finance_closing_document_exceptions.sql "$SSH_USER@$SSH_HOST:/tmp/078_${GITHUB_RUN_ID}.sql"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes app/Service/ClosingDocumentService.php "$SSH_USER@$SSH_HOST:/tmp/ClosingDocumentService078_${GITHUB_RUN_ID}.php"
       - name: Snapshot before migration
-        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/verify078_${GITHUB_RUN_ID}.php'" | tee finance_closing_078_before.txt
           grep -q 'FINANCE_CLOSING_078_READ_ONLY_OK' finance_closing_078_before.txt
       - name: Apply only migration 078
-        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_MIGRATION_PATH='/tmp/078_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/apply078_${GITHUB_RUN_ID}.php'" | tee finance_closing_078_migration.txt
           grep -q 'FINANCE_CLOSING_078_OK' finance_closing_078_migration.txt
       - name: Snapshot after and verify invariants
-        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/verify078_${GITHUB_RUN_ID}.php'" | tee finance_closing_078_after.txt
@@ -83,10 +97,28 @@ jobs:
           print('FINANCE_CLOSING_078_INVARIANTS_OK')
           PY
       - name: Candidate service real-tenant read-only preflight after migration
-        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' CANDIDATE='/tmp/ClosingDocumentService078_${GITHUB_RUN_ID}.php' /usr/bin/php8.5 -d display_errors=1 -r 'require getenv(\"CANDIDATE\"); require getenv(\"PLANEX_ROOT\").\"/scripts/finance_closing_verify_077.php\"; $rows=\\App\\Service\\ClosingDocumentService::reportRows($pdo,false); echo \"CLOSING_078_REAL_TENANT_SERVICE_PREFLIGHT=PASS rows=\".count($rows).PHP_EOL;'" | tee finance_closing_078_preflight.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "RUN_ID='$GITHUB_RUN_ID' PLANEX_ROOT='$LIVE_ROOT' bash -se" <<'REMOTE' | tee finance_closing_078_preflight.txt
+          set -euo pipefail
+          PROBE="/tmp/closing078_probe_${RUN_ID}.php"
+          cat > "$PROBE" <<'PHP'
+          <?php
+          $root = (string)getenv('PLANEX_ROOT');
+          $runId = (string)getenv('RUN_ID');
+          require '/tmp/ClosingDocumentService078_' . $runId . '.php';
+          require $root . '/scripts/finance_closing_verify_077.php';
+          $rows = \App\Service\ClosingDocumentService::reportRows($pdo, false);
+          $problems = \App\Service\ClosingDocumentService::problemCount($pdo);
+          echo 'CLOSING_078_REAL_TENANT_SERVICE_PREFLIGHT=PASS rows=' . count($rows) . ' problems=' . $problems . PHP_EOL;
+          PHP
+          RUN_ID="$RUN_ID" PLANEX_ROOT="$PLANEX_ROOT" /usr/bin/php8.5 -d display_errors=1 "$PROBE"
+          rm -f "$PROBE"
+          REMOTE
           grep -q 'CLOSING_078_REAL_TENANT_SERVICE_PREFLIGHT=PASS' finance_closing_078_preflight.txt
       - name: HTTP acceptance
         run: test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
@@ -98,6 +130,9 @@ jobs:
           retention-days: 30
       - name: Cleanup
         if: always()
-        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/verify078_${GITHUB_RUN_ID}.php' '/tmp/apply078_${GITHUB_RUN_ID}.php' '/tmp/078_${GITHUB_RUN_ID}.sql' '/tmp/ClosingDocumentService078_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/verify078_${GITHUB_RUN_ID}.php' '/tmp/apply078_${GITHUB_RUN_ID}.php' '/tmp/078_${GITHUB_RUN_ID}.sql' '/tmp/ClosingDocumentService078_${GITHUB_RUN_ID}.php' '/tmp/closing078_probe_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
