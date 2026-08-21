@@ -60,6 +60,7 @@ require_once base_path('app/Service/FinanceCashFlowReportService.php');
 require_once base_path('app/Service/FinanceManagementBalanceService.php');
 require_once base_path('app/Service/FinancePaymentPlanFactService.php');
 require_once base_path('app/Service/FinanceDashboardService.php');
+require_once base_path('app/Service/ClosingDocumentService.php');
 require_once base_path('app/Service/NavigationCounterService.php');
 
 require_once base_path('app/Support/runtime_migration_policy.php');
