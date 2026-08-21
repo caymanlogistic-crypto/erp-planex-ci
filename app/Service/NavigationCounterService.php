@@ -17,7 +17,7 @@ final class NavigationCounterService
      * Every counter is intentionally isolated. A missing/temporarily unavailable
      * schema object for one finance module must never suppress unrelated badges.
      *
-     * @return array{bank_attention:int,cash_attention:int}
+     * @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int}
      */
     public static function forCompany(array $config, Database $centralDb, int $companyId, ?array $knownCompany = null): array
     {
@@ -37,7 +37,6 @@ final class NavigationCounterService
 
             $tenant = (new Database(companyDatabaseConfig($config, $company)))->connection();
         } catch (Throwable) {
-            // Tenant resolution itself failed, so no finance counter can be trusted.
             return self::$requestCache[$cacheKey] = self::emptyCounters();
         }
 
@@ -51,30 +50,35 @@ final class NavigationCounterService
                     AND COALESCE(is_internal_transfer, 0) = 0"
             )->fetchColumn());
         } catch (Throwable) {
-            // Keep the bank badge at zero only; other counters remain independent.
             $counters['bank_attention'] = 0;
         }
 
         try {
-            // Use the same source of truth as the cash page itself. Keeping a
-            // second SQL implementation here caused the sidebar badge to show
-            // stale "unresolved" rows after the cash ledger had already folded
-            // them into completed employee lifecycles.
             $counters['cash_attention'] = max(
                 0,
                 (int)(FinanceCashResolutionService::unresolvedSummary($tenant)['count'] ?? 0)
             );
         } catch (Throwable) {
-            // A cash-schema rollout issue must not hide the bank attention badge.
             $counters['cash_attention'] = 0;
+        }
+
+        try {
+            // Deliberately call the report source itself instead of duplicating a
+            // SQL predicate here. This is the architectural contract:
+            // sidebar count === report rows under "Только проблемные".
+            $counters['closing_documents_problem'] = max(0, ClosingDocumentService::problemCount($tenant));
+        } catch (Throwable) {
+            // During a staged rollout migration 077 may not yet exist. The new
+            // counter alone degrades to zero; bank/cash navigation remains intact.
+            $counters['closing_documents_problem'] = 0;
         }
 
         return self::$requestCache[$cacheKey] = $counters;
     }
 
-    /** @return array{bank_attention:int,cash_attention:int} */
+    /** @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int} */
     private static function emptyCounters(): array
     {
-        return ['bank_attention' => 0, 'cash_attention' => 0];
+        return ['bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0];
     }
 }

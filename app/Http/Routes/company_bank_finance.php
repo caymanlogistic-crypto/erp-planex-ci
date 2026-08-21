@@ -1,5 +1,6 @@
 <?php
 require_once base_path('app/Http/Controllers/Company/BankFinanceController.php');
+require_once base_path('app/Http/Controllers/Company/ClosingDocumentsController.php');
 $controller=new \App\Http\Controllers\Company\BankFinanceController($config,$db);
 $router->get('/company/finance/bank-accounts',[$controller,'index']);
 $router->get('/company/bank-statement-settings',[$controller,'bankStatementSettings']);
@@ -14,3 +15,10 @@ $router->post('/company/finance/bank-transactions/{id}/settlement',[$controller,
 $router->get('/company/finance/bank-transactions/{id}/classify',[$controller,'classifyForm']);
 $router->post('/company/finance/bank-transactions/{id}/classify',[$controller,'classifySubmit']);
 $router->post('/company/finance/bank-transactions/{id}/classification/delete',[$controller,'clearClassification']);
+
+$closingDocumentsController = new \App\Http\Controllers\Company\ClosingDocumentsController($config, $db);
+$router->get('/company/finance/closing-documents', [$closingDocumentsController, 'index']);
+$router->post('/company/finance/closing-documents/counterparty', [$closingDocumentsController, 'assignCounterparty']);
+$router->post('/company/finance/closing-documents/link-document', [$closingDocumentsController, 'linkDocument']);
+$router->post('/company/finance/closing-documents/upload-document', [$closingDocumentsController, 'uploadDocument']);
+$router->post('/company/finance/closing-documents/unlink-document', [$closingDocumentsController, 'unlinkDocument']);

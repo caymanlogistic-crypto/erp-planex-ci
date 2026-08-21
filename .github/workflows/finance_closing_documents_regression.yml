@@ -1,0 +1,62 @@
+name: Finance Closing Documents Regression
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Service/ClosingDocumentService.php'
+      - 'app/Service/NavigationCounterService.php'
+      - 'app/Http/Controllers/Company/ClosingDocumentsController.php'
+      - 'app/Http/Routes/company_bank_finance.php'
+      - 'app/View/pages/company_finance_closing_documents.php'
+      - 'app/View/layouts/main.php'
+      - 'database/migrations-local/077_finance_closing_documents.sql'
+      - 'tests/finance_closing_documents_contract_test.php'
+      - '.github/workflows/finance_closing_documents_regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  closing-documents:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: PHP syntax
+        run: |
+          php -l app/Service/ClosingDocumentService.php
+          php -l app/Service/NavigationCounterService.php
+          php -l app/Http/Controllers/Company/ClosingDocumentsController.php
+          php -l app/Http/Routes/company_bank_finance.php
+          php -l app/View/pages/company_finance_closing_documents.php
+          php -l app/View/layouts/main.php
+          php -l tests/finance_closing_documents_contract_test.php
+
+      - name: Start disposable MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+
+      - name: Closing documents contract
+        env:
+          PLANEX_TEST_MYSQL_HOST: 127.0.0.1
+          PLANEX_TEST_MYSQL_USER: planex_ci
+          PLANEX_TEST_MYSQL_PASSWORD: planex_ci
+        run: php tests/finance_closing_documents_contract_test.php
+
+      - name: Existing bank and finance regressions
+        run: |
+          php tests/finance_manual_facts_regression_test.php
+          php tests/finance_invoice_ui_contract_test.php
+          php tests/finance_employee_personal_expense_event_regression_test.php
