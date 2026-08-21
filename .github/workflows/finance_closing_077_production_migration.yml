@@ -1,9 +1,16 @@
 name: Finance Closing 077 Production Migration
 
 on:
-  push:
-    branches:
-      - chatgpt/production-stabilization-20260802
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact canonical SHA containing migration 077 tooling'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_FINANCE_077 to authorize production migration 077'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -17,19 +24,22 @@ env:
 
 jobs:
   migrate-077:
-    if: ${{ github.event.head_commit.message == 'CRITICAL: apply production migration 077' }}
+    if: ${{ inputs.confirm_migration == 'APPLY_FINANCE_077' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ inputs.source_sha }}
           fetch-depth: 1
 
       - name: Validate exact source and migration tooling
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           php -l scripts/finance_closing_apply_077.php
           php -l scripts/finance_closing_verify_077.php
           test -s database/migrations-local/077_finance_closing_documents.sql
@@ -139,7 +149,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: finance_closing_077_${{ github.sha }}
+          name: finance_closing_077_${{ inputs.source_sha }}
           path: finance_closing_077_*.txt
           if-no-files-found: error
           retention-days: 30
