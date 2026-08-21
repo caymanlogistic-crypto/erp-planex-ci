@@ -24,43 +24,16 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
 
-      - name: Execute closing report on production tenant read-only
+      - name: Verify live SHA and full closing controller render READ ONLY
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          EXPECTED_SHA: 78feb21ec78f901753c70c9c614ad28ab93c7b7f
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE' | tee closing_diag.txt
-          set -euo pipefail
-          ROOT=/home/s/spugovxsim/planexp
-          LIVE="$ROOT/public_html/erpv2"
-          echo "DEPLOYED_SHA=$(cat "$ROOT/deploy/P07_erpv2_deployed_commit.txt")"
-          cat > /tmp/closing_report_probe.php <<'PHP'
-          <?php
-          putenv('PLANEX_ROOT=/home/s/spugovxsim/planexp/public_html/erpv2');
-          require '/home/s/spugovxsim/planexp/public_html/erpv2/app/Service/ClosingDocumentService.php';
-          require '/home/s/spugovxsim/planexp/public_html/erpv2/scripts/finance_closing_verify_077.php';
-          try {
-              $rows = \App\Service\ClosingDocumentService::reportRows($pdo, false);
-              $problems = \App\Service\ClosingDocumentService::reportRows($pdo, true);
-              $options = \App\Service\ClosingDocumentService::counterpartyOptions($pdo);
-              echo 'REPORT_ROWS=' . count($rows) . PHP_EOL;
-              echo 'PROBLEM_ROWS=' . count($problems) . PHP_EOL;
-              echo 'COUNTERPARTY_OPTIONS=' . count($options) . PHP_EOL;
-              echo "CLOSING_REPORT_PROBE=PASS\n";
-          } catch (Throwable $e) {
-              echo 'CLOSING_REPORT_PROBE=FAIL' . PHP_EOL;
-              echo 'EXCEPTION_CLASS=' . get_class($e) . PHP_EOL;
-              echo 'EXCEPTION_MESSAGE=' . $e->getMessage() . PHP_EOL;
-              echo 'EXCEPTION_FILE=' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
-              exit(9);
-          }
-          PHP
-          /usr/bin/php8.5 -l /tmp/closing_report_probe.php
-          /usr/bin/php8.5 /tmp/closing_report_probe.php
-          rm -f /tmp/closing_report_probe.php
-          REMOTE
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' /usr/bin/php8.5 -d display_errors=1 -r 'chdir(\"/home/s/spugovxsim/planexp/public_html/erpv2\"); \$marker=trim(file_get_contents(\"/home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt\")); echo \"DEPLOYED_SHA=\".\$marker.PHP_EOL; if(\$marker!==getenv(\"EXPECTED_SHA\")){fwrite(STDERR,\"deploy marker not ready\\n\"); exit(8);} \$config=require \"bootstrap/app.php\"; require \"app/Support/entrypoint_dependencies.php\"; require \"app/Http/Controllers/Company/ClosingDocumentsController.php\"; \$_SESSION=[\"user_id\"=>1,\"role_code\"=>\"company_owner\",\"company_id\"=>25]; \$_SERVER[\"REQUEST_METHOD\"]=\"GET\"; \$_SERVER[\"REQUEST_URI\"]=\"/erpv2/company/finance/closing-documents\"; \$db=new \\App\\Core\\Database(\$config[\"database\"]); ob_start(); (new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController(\$config,\$db))->index(); \$html=ob_get_clean(); if(strpos(\$html,\"Закрывающие документы\")===false){fwrite(STDERR,\"live render marker missing\\n\"); exit(9);} echo \"LIVE_CLOSING_DOCUMENTS_FULL_RENDER=PASS\\n\";'" | tee closing_diag.txt
 
       - uses: actions/upload-artifact@v4
         if: always()
