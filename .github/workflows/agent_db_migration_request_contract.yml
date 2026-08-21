@@ -1,0 +1,19 @@
+name: Agent DB Migration Request Contract
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/erpv2_agent_db_migration_request.yml'
+      - '.github/agent_db_migration_request.json'
+      - 'tests/agent_db_migration_request_contract_test.php'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: php -l tests/agent_db_migration_request_contract_test.php
+      - run: php tests/agent_db_migration_request_contract_test.php
