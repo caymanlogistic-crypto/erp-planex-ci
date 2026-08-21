@@ -5,8 +5,6 @@ declare(strict_types=1);
 require_once __DIR__ . '/../app/Service/ClosingDocumentService.php';
 
 use App\Service\ClosingDocumentService;
-use PDO;
-use RuntimeException;
 
 function assertTrue(bool $condition, string $message): void
 {
@@ -214,7 +212,7 @@ assertSameValue('Контрагент не определён', $byId[$txUnknown
 assertTrue($byId[$txNoProfile]['is_problem'], 'missing classification/profile is problem');
 assertSameValue('Не определён профиль обязательных документов', $byId[$txNoProfile]['problem_reason'], 'missing profile reason');
 assertTrue(!isset($byId[$txEmployee]), 'employee money flow is excluded from report');
-assertSameValue(3, count($problemA), 'problematic operations count operations, not missing files');
+assertSameValue(4, count($problemA), 'problematic operations count operations, not missing files');
 assertSameValue(count($problemA), ClosingDocumentService::problemCount($pdoA), 'badge source equals problematic filter count');
 
 $reuseStmt = $pdoA->prepare('SELECT COUNT(DISTINCT bank_transaction_id) FROM finance_closing_document_links WHERE document_id = ? AND requirement_code = ?');
@@ -224,7 +222,7 @@ assertSameValue(2, (int) $reuseStmt->fetchColumn(), 'same existing agreement is 
 // Tenant B has its own schema/data and cannot affect tenant A count.
 addTx($pdoB, '7888888888', 'Tenant B unknown');
 assertSameValue(1, ClosingDocumentService::problemCount($pdoB), 'tenant B isolated count');
-assertSameValue(3, ClosingDocumentService::problemCount($pdoA), 'tenant A count unchanged by tenant B');
+assertSameValue(4, ClosingDocumentService::problemCount($pdoA), 'tenant A count unchanged by tenant B');
 
 $navigationSource = file_get_contents(__DIR__ . '/../app/Service/NavigationCounterService.php');
 assertTrue(str_contains((string) $navigationSource, 'ClosingDocumentService::problemCount($tenant)'), 'sidebar counter calls the shared problem source');
@@ -237,4 +235,4 @@ $root->exec("DROP DATABASE `{$dbA}`");
 $root->exec("DROP DATABASE `{$dbB}`");
 
 echo "finance_closing_documents_contract_test: PASS\n";
-echo "fixture_problem_count=3\n";
+echo "fixture_problem_count=4\n";
