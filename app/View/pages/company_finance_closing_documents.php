@@ -10,7 +10,7 @@ $requirementLabels = \App\Service\ClosingDocumentService::requirementLabels();
 <div class="page-head">
     <div>
         <h1 class="page-title">Закрывающие документы</h1>
-        <div class="page-subtitle">Контроль обязательного комплекта по банковским операциям</div>
+        <div class="page-subtitle">Контроль обязательного комплекта по исходящим банковским расходам PLANEX</div>
     </div>
     <?php if (!empty($schemaReady)): ?>
     <div class="page-actions">
@@ -35,7 +35,7 @@ $requirementLabels = \App\Service\ClosingDocumentService::requirementLabels();
             <?= !empty($problemOnly) ? 'Проблемные операции' : 'Все релевантные операции' ?>
             <span class="field-note">Проблемных в текущей выборке: <?= (int) $problemCountOnPage ?></span>
         </div>
-        <div class="field-note">Employee flows и внутренние переводы исключены</div>
+        <div class="field-note">Только исходящие расходы (дебет); входящие оплаты клиентов, employee flows и внутренние переводы исключены</div>
     </div>
 
     <div class="table-wrap">
@@ -104,6 +104,8 @@ $requirementLabels = \App\Service\ClosingDocumentService::requirementLabels();
                                 <input type="hidden" name="entity_id" value="">
                                 <button class="btn btn-secondary btn-sm" type="submit">Сохранить</button>
                             </form>
+                            <button type="button" class="btn btn-ghost btn-sm" onclick="window.openModal('closing-contractor-create-modal')">Создать контрагента</button>
+                            <div class="field-note">После создания список обновится; выберите нового контрагента для операции.</div>
                         </details>
                     </td>
                     <td>
@@ -183,4 +185,26 @@ $requirementLabels = \App\Service\ClosingDocumentService::requirementLabels();
         </table>
     </div>
 </div>
+
+<div id="closing-contractor-create-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="0" data-close-on-escape="1">
+    <div class="modal modal-xl">
+        <div class="modal-head">
+            <span class="modal-title">Создать контрагента</span>
+            <button type="button" class="modal-close" data-close-modal="closing-contractor-create-modal">&times;</button>
+        </div>
+        <div id="closing-contractor-create-modal-body" class="modal-body">
+            <div class="empty-state compact"><p>Загрузка формы...</p></div>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (!window.LegalEntityModal) return;
+    window.LegalEntityModal.init({
+        modalId: 'closing-contractor-create-modal',
+        formAction: <?= json_encode(app_url('/company/contractors/create'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+        typeField: 'contractor_type'
+    });
+});
+</script>
 <?php endif; ?>
