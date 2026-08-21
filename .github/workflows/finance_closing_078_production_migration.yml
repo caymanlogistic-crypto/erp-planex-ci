@@ -1,0 +1,103 @@
+name: Finance Closing 078 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact canonical SHA containing migration 078 tooling'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_FINANCE_078 to authorize production migration 078'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+concurrency:
+  group: finance-closing-078-production-migration
+  cancel-in-progress: false
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+jobs:
+  migrate-078:
+    if: ${{ inputs.confirm_migration == 'APPLY_FINANCE_078' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+      - name: Validate exact source and tooling
+        env: { SOURCE_SHA: "${{ inputs.source_sha }}" }
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          php -l scripts/finance_closing_apply_078.php
+          php -l scripts/finance_closing_verify_078.php
+          test -s database/migrations-local/078_finance_closing_document_exceptions.sql
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Upload isolated migration tooling
+        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        run: |
+          set -euo pipefail
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/finance_closing_verify_078.php "$SSH_USER@$SSH_HOST:/tmp/verify078_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/finance_closing_apply_078.php "$SSH_USER@$SSH_HOST:/tmp/apply078_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes database/migrations-local/078_finance_closing_document_exceptions.sql "$SSH_USER@$SSH_HOST:/tmp/078_${GITHUB_RUN_ID}.sql"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes app/Service/ClosingDocumentService.php "$SSH_USER@$SSH_HOST:/tmp/ClosingDocumentService078_${GITHUB_RUN_ID}.php"
+      - name: Snapshot before migration
+        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/verify078_${GITHUB_RUN_ID}.php'" | tee finance_closing_078_before.txt
+          grep -q 'FINANCE_CLOSING_078_READ_ONLY_OK' finance_closing_078_before.txt
+      - name: Apply only migration 078
+        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_MIGRATION_PATH='/tmp/078_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/apply078_${GITHUB_RUN_ID}.php'" | tee finance_closing_078_migration.txt
+          grep -q 'FINANCE_CLOSING_078_OK' finance_closing_078_migration.txt
+      - name: Snapshot after and verify invariants
+        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/verify078_${GITHUB_RUN_ID}.php'" | tee finance_closing_078_after.txt
+          grep -q 'FINANCE_CLOSING_078_READ_ONLY_OK' finance_closing_078_after.txt
+          python3 - "$(sed -n 's/^FINANCE_CLOSING_078_SNAPSHOT=//p' finance_closing_078_before.txt)" "$(sed -n 's/^FINANCE_CLOSING_078_SNAPSHOT=//p' finance_closing_078_after.txt)" <<'PY'
+          import json,sys
+          b,a=map(json.loads,sys.argv[1:3])
+          for k in ('bank_transactions','documents','finance_employee_movements','closing_document_links'):
+              if b[k]!=a[k]: raise SystemExit(f'business invariant changed: {k}')
+          if a['exceptions_table']!=1 or a['migration_078_applied']!=1: raise SystemExit('078 schema missing')
+          print('FINANCE_CLOSING_078_INVARIANTS_OK')
+          PY
+      - name: Candidate service real-tenant read-only preflight after migration
+        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' CANDIDATE='/tmp/ClosingDocumentService078_${GITHUB_RUN_ID}.php' /usr/bin/php8.5 -d display_errors=1 -r 'require getenv(\"CANDIDATE\"); require getenv(\"PLANEX_ROOT\").\"/scripts/finance_closing_verify_077.php\"; $rows=\\App\\Service\\ClosingDocumentService::reportRows($pdo,false); echo \"CLOSING_078_REAL_TENANT_SERVICE_PREFLIGHT=PASS rows=\".count($rows).PHP_EOL;'" | tee finance_closing_078_preflight.txt
+          grep -q 'CLOSING_078_REAL_TENANT_SERVICE_PREFLIGHT=PASS' finance_closing_078_preflight.txt
+      - name: HTTP acceptance
+        run: test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: finance_closing_078_${{ inputs.source_sha }}
+          path: finance_closing_078_*.txt
+          retention-days: 30
+      - name: Cleanup
+        if: always()
+        env: { SSH_HOST: "${{ secrets.ERPV2_SSH_HOST }}", SSH_PORT: "${{ secrets.ERPV2_SSH_PORT }}", SSH_USER: "${{ secrets.ERPV2_SSH_USER }}" }
+        run: |
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/verify078_${GITHUB_RUN_ID}.php' '/tmp/apply078_${GITHUB_RUN_ID}.php' '/tmp/078_${GITHUB_RUN_ID}.sql' '/tmp/ClosingDocumentService078_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
