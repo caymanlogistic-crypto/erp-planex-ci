@@ -24,7 +24,7 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
 
-      - name: Collect production runtime facts read-only
+      - name: Execute closing report on production tenant read-only
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -32,44 +32,38 @@ jobs:
         run: |
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE' | tee closing_diag.txt
-          set -u
+          set -euo pipefail
           ROOT=/home/s/spugovxsim/planexp
           LIVE="$ROOT/public_html/erpv2"
-          echo "DEPLOYED_SHA=$(cat "$ROOT/deploy/P07_erpv2_deployed_commit.txt" 2>/dev/null || true)"
-          echo "SERVICE_PRESENT=$(test -f "$LIVE/app/Service/ClosingDocumentService.php" && echo yes || echo no)"
-          echo "MANIFEST_REF=$(grep -n "ClosingDocumentService.php" "$LIVE/app/Support/entrypoint_dependencies.php" 2>/dev/null || true)"
-          echo '--- HTACCESS / HANDLER HINTS ---'
-          for f in "$LIVE/.htaccess" "$ROOT/public_html/.htaccess" "$HOME/.htaccess"; do
-            if [ -f "$f" ]; then echo "### $f"; grep -E -i 'php|handler|cgi|fpm|fcgi|AddHandler|SetHandler' "$f" || true; fi
-          done
-          echo '--- PHP CANDIDATES ---'
-          candidates="$(command -v php 2>/dev/null || true) $(which -a php 2>/dev/null || true)"
-          for pattern in /usr/local/bin/php* /usr/local/php*/bin/php /opt/php*/bin/php /opt/*/php*/bin/php /usr/bin/php*; do
-            for p in $pattern; do [ -x "$p" ] && candidates="$candidates $p"; done
-          done
-          seen=' '
-          for p in $candidates; do
-            case "$seen" in *" $p "*) continue ;; esac
-            seen="$seen$p "
-            [ -x "$p" ] || continue
-            case "$p" in *php-config*|*phpize*) continue ;; esac
-            printf 'PHPBIN=%s VERSION=' "$p"
-            "$p" -r 'echo PHP_VERSION;' 2>/dev/null || "$p" -v 2>/dev/null | head -1 || true
-            echo
-            printf '  SERVICE_LINT='; "$p" -l "$LIVE/app/Service/ClosingDocumentService.php" >/dev/null 2>&1 && echo PASS || echo FAIL
-            printf '  CONTROLLER_LINT='; "$p" -l "$LIVE/app/Http/Controllers/Company/ClosingDocumentsController.php" >/dev/null 2>&1 && echo PASS || echo FAIL
-            printf '  VIEW_LINT='; "$p" -l "$LIVE/app/View/pages/company_finance_closing_documents.php" >/dev/null 2>&1 && echo PASS || echo FAIL
-          done
-          echo '--- RECENT LOG CANDIDATES ---'
-          find "$ROOT" "$HOME" -maxdepth 6 -type f \( -iname '*error*.log' -o -iname 'php*.log' -o -iname '*.error' -o -iname 'error_log' \) -mmin -240 2>/dev/null | head -60
-          echo '--- MATCHING ERROR TAILS ---'
-          for f in $(find "$ROOT" "$HOME" -maxdepth 6 -type f \( -iname '*error*.log' -o -iname 'php*.log' -o -iname '*.error' -o -iname 'error_log' \) -mmin -240 2>/dev/null | head -60); do
-            echo "### $f"
-            tail -n 500 "$f" 2>/dev/null | grep -E -i -C 6 'closing.documents|ClosingDocument|Fatal error|Parse error|Uncaught|PDOException|SQLSTATE|HTTP 500' | tail -n 180 || true
-          done
+          echo "DEPLOYED_SHA=$(cat "$ROOT/deploy/P07_erpv2_deployed_commit.txt")"
+          cat > /tmp/closing_report_probe.php <<'PHP'
+          <?php
+          putenv('PLANEX_ROOT=/home/s/spugovxsim/planexp/public_html/erpv2');
+          require '/home/s/spugovxsim/planexp/public_html/erpv2/app/Service/ClosingDocumentService.php';
+          require '/home/s/spugovxsim/planexp/public_html/erpv2/scripts/finance_closing_verify_077.php';
+          try {
+              $rows = \App\Service\ClosingDocumentService::reportRows($pdo, false);
+              $problems = \App\Service\ClosingDocumentService::reportRows($pdo, true);
+              $options = \App\Service\ClosingDocumentService::counterpartyOptions($pdo);
+              echo 'REPORT_ROWS=' . count($rows) . PHP_EOL;
+              echo 'PROBLEM_ROWS=' . count($problems) . PHP_EOL;
+              echo 'COUNTERPARTY_OPTIONS=' . count($options) . PHP_EOL;
+              echo "CLOSING_REPORT_PROBE=PASS\n";
+          } catch (Throwable $e) {
+              echo 'CLOSING_REPORT_PROBE=FAIL' . PHP_EOL;
+              echo 'EXCEPTION_CLASS=' . get_class($e) . PHP_EOL;
+              echo 'EXCEPTION_MESSAGE=' . $e->getMessage() . PHP_EOL;
+              echo 'EXCEPTION_FILE=' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+              exit(9);
+          }
+          PHP
+          /usr/bin/php8.5 -l /tmp/closing_report_probe.php
+          /usr/bin/php8.5 /tmp/closing_report_probe.php
+          rm -f /tmp/closing_report_probe.php
           REMOTE
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: closing_documents_production_diag
           path: closing_diag.txt
