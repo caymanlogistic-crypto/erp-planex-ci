@@ -84,8 +84,12 @@ final class ClosingDocumentService
 
     /**
      * SINGLE SOURCE OF TRUTH for both the report and menu badge.
-     * Filtering is deliberately performed only after enrich/evaluateProblem,
-     * so no second SQL predicate can drift from the report behavior.
+     * V1 scope is outgoing PLANEX bank expense only. The bank statement parser
+     * uses debit as money leaving the account and credit as money entering it
+     * (closing = opening + credit - debit), so incoming client receipts never
+     * enter this closing-documents expense contour.
+     * Filtering is deliberately performed only after this common scope query
+     * and enrich/evaluateProblem, so no second badge predicate can drift.
      */
     public static function reportRows(PDO $pdo, bool $problemOnly = false): array
     {
@@ -101,7 +105,8 @@ final class ClosingDocumentService
                     fcc.entity_type AS assigned_entity_type, fcc.entity_id AS assigned_entity_id
              FROM bank_transactions bt
              LEFT JOIN finance_closing_counterparties fcc ON fcc.bank_transaction_id = bt.id
-             WHERE COALESCE(bt.is_internal_transfer, 0) = 0
+             WHERE COALESCE(bt.debit_amount, 0) > 0
+               AND COALESCE(bt.is_internal_transfer, 0) = 0
                AND NOT EXISTS (
                     SELECT 1 FROM finance_employee_movements fem
                     WHERE fem.bank_transaction_id = bt.id
@@ -474,6 +479,7 @@ final class ClosingDocumentService
         $stmt = $pdo->prepare(
             'SELECT 1 FROM bank_transactions bt
              WHERE bt.id = ?
+               AND COALESCE(bt.debit_amount, 0) > 0
                AND COALESCE(bt.is_internal_transfer, 0) = 0
                AND NOT EXISTS (
                     SELECT 1 FROM finance_employee_movements fem
