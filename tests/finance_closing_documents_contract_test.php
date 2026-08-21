@@ -119,8 +119,15 @@ function addClient(PDO $pdo, string $name, string $inn, ?string $type): int
 
 function addTx(PDO $pdo, string $inn, string $name = 'Контрагент'): int
 {
-    $stmt = $pdo->prepare("INSERT INTO bank_transactions(operation_date,document_number,operation_type,counterparty_name,counterparty_inn,debit_amount,purpose) VALUES(CURDATE(), ?, 'PAYMENT', ?, ?, 1000, 'Тест')");
+    $stmt = $pdo->prepare("INSERT INTO bank_transactions(operation_date,document_number,operation_type,counterparty_name,counterparty_inn,debit_amount,purpose) VALUES(CURDATE(), ?, 'PAYMENT', ?, ?, 1000, 'Исходящий расход')");
     $stmt->execute([uniqid('TX', false), $name, $inn]);
+    return (int) $pdo->lastInsertId();
+}
+
+function addIncomingTx(PDO $pdo, string $inn, string $name = 'Клиент'): int
+{
+    $stmt = $pdo->prepare("INSERT INTO bank_transactions(operation_date,document_number,operation_type,counterparty_name,counterparty_inn,credit_amount,purpose) VALUES(CURDATE(), ?, 'PAYMENT', ?, ?, 1000, 'Входящая оплата клиента')");
+    $stmt->execute([uniqid('IN', false), $name, $inn]);
     return (int) $pdo->lastInsertId();
 }
 
@@ -184,6 +191,9 @@ $txMissingSeveral = addTx($pdoA, '7700000003');
 $txUnknown = addTx($pdoA, '7999999999', 'Неизвестный');
 $txNoProfile = addTx($pdoA, '7700000005');
 
+// Incoming client receipts belong to the bank statement, but not to this V1 expense-closing contour.
+$txIncomingClient = addIncomingTx($pdoA, '7700000001', 'ООО Тест');
+
 // Optional documents do not participate in the profile. A complete required set remains complete.
 $txOptional = addTx($pdoA, '7700000001'); complete($pdoA, $txOptional, 'legal_entity', $legal);
 
@@ -203,7 +213,7 @@ foreach ($allA as $row) $byId[(int) $row['id']] = $row;
 foreach ([$txLegal, $txIp, $txNpd, $txPerson, $txOptional, $txReuse1, $txReuse2] as $id) {
     assertTrue(isset($byId[$id]) && !$byId[$id]['is_problem'], 'complete required set is not problematic tx=' . $id);
 }
-assertTrue($byId[$txMissingOne]['is_problem'], 'missing one required document is problem');
+assertTrue($byId[$txMissingOne]['is_problem'], 'outgoing supplier payment missing one required document is problem');
 assertSameValue(1, count($byId[$txMissingOne]['missing_requirements']), 'exactly one missing requirement');
 assertTrue($byId[$txMissingSeveral]['is_problem'], 'missing several required documents is problem');
 assertSameValue(3, count($byId[$txMissingSeveral]['missing_requirements']), 'NPD missing several requirements');
@@ -212,8 +222,10 @@ assertSameValue('Контрагент не определён', $byId[$txUnknown
 assertTrue($byId[$txNoProfile]['is_problem'], 'missing classification/profile is problem');
 assertSameValue('Не определён профиль обязательных документов', $byId[$txNoProfile]['problem_reason'], 'missing profile reason');
 assertTrue(!isset($byId[$txEmployee]), 'employee money flow is excluded from report');
-assertSameValue(4, count($problemA), 'problematic operations count operations, not missing files');
+assertTrue(!isset($byId[$txIncomingClient]), 'incoming client payment is excluded from expense closing report');
+assertSameValue(4, count($problemA), 'incoming client payment does not increase problematic operations count');
 assertSameValue(count($problemA), ClosingDocumentService::problemCount($pdoA), 'badge source equals problematic filter count');
+assertSameValue(4, ClosingDocumentService::problemCount($pdoA), 'badge count excludes incoming client payment');
 
 $reuseStmt = $pdoA->prepare('SELECT COUNT(DISTINCT bank_transaction_id) FROM finance_closing_document_links WHERE document_id = ? AND requirement_code = ?');
 $reuseStmt->execute([$sharedAgreement, 'agreement']);
@@ -221,18 +233,26 @@ assertSameValue(2, (int) $reuseStmt->fetchColumn(), 'same existing agreement is 
 
 // Tenant B has its own schema/data and cannot affect tenant A count.
 addTx($pdoB, '7888888888', 'Tenant B unknown');
-assertSameValue(1, ClosingDocumentService::problemCount($pdoB), 'tenant B isolated count');
+addIncomingTx($pdoB, '7888888889', 'Tenant B incoming client');
+assertSameValue(1, ClosingDocumentService::problemCount($pdoB), 'tenant B incoming client receipt is excluded from isolated count');
 assertSameValue(4, ClosingDocumentService::problemCount($pdoA), 'tenant A count unchanged by tenant B');
 
 $navigationSource = file_get_contents(__DIR__ . '/../app/Service/NavigationCounterService.php');
 assertTrue(str_contains((string) $navigationSource, 'ClosingDocumentService::problemCount($tenant)'), 'sidebar counter calls the shared problem source');
+$serviceSource = file_get_contents(__DIR__ . '/../app/Service/ClosingDocumentService.php');
+assertTrue(str_contains((string) $serviceSource, 'COALESCE(bt.debit_amount, 0) > 0'), 'shared closing source explicitly scopes outgoing debit expenses');
 $layoutSource = file_get_contents(__DIR__ . '/../app/View/layouts/main.php');
 assertTrue(str_contains((string) $layoutSource, 'nav-count is-alert'), 'closing badge reuses system nav-count is-alert pattern');
 assertTrue(str_contains((string) $layoutSource, '$closingDocumentsProblemCount > 999 ? \'999+\' : $closingDocumentsProblemCount'), 'closing badge preserves 999+ cap');
 assertTrue(str_contains((string) $layoutSource, 'Закрывающие документы'), 'closing documents menu item exists');
+$viewSource = file_get_contents(__DIR__ . '/../app/View/pages/company_finance_closing_documents.php');
+assertTrue(str_contains((string) $viewSource, "window.openModal('closing-contractor-create-modal')"), 'unknown counterparty offers create-new flow');
+assertTrue(str_contains((string) $viewSource, "app_url('/company/contractors/create')"), 'create-new flow reuses existing contractor entity route');
+assertTrue(str_contains((string) $viewSource, "typeField: 'contractor_type'"), 'create-new flow captures legal classification used by document profiles');
 
 $root->exec("DROP DATABASE `{$dbA}`");
 $root->exec("DROP DATABASE `{$dbB}`");
 
 echo "finance_closing_documents_contract_test: PASS\n";
 echo "fixture_problem_count=4\n";
+echo "direction_scope=debit_outgoing_only\n";
