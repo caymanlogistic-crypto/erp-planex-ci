@@ -12,13 +12,8 @@ final class ClosingDocumentService
         'legal_entity' => 'Юридическое лицо',
         'individual' => 'ИП',
         'self_employed' => 'Самозанятый / НПД',
-        'private_person' => 'Физическое лицо',
     ];
 
-    /**
-     * Requirement groups are the V1 business contract. A group is satisfied
-     * when at least one linked document has one of its accepted codes.
-     */
     private const PROFILES = [
         'legal_entity' => [
             ['key' => 'agreement', 'label' => 'Договор', 'accepted' => ['agreement']],
@@ -33,10 +28,6 @@ final class ClosingDocumentService
             ['key' => 'act', 'label' => 'Акт', 'accepted' => ['act']],
             ['key' => 'npd_receipt', 'label' => 'Чек НПД', 'accepted' => ['npd_receipt']],
         ],
-        'private_person' => [
-            ['key' => 'gph_agreement', 'label' => 'Договор ГПХ', 'accepted' => ['gph_agreement']],
-            ['key' => 'act', 'label' => 'Акт', 'accepted' => ['act']],
-        ],
     ];
 
     private const REQUIREMENT_LABELS = [
@@ -44,14 +35,13 @@ final class ClosingDocumentService
         'act' => 'Акт',
         'upd' => 'УПД',
         'npd_receipt' => 'Чек НПД',
-        'gph_agreement' => 'Договор ГПХ',
     ];
 
     public static function schemaReady(PDO $pdo): bool
     {
         try {
-            $pdo->query('SELECT 1 FROM finance_closing_counterparties LIMIT 1')->fetchColumn();
             $pdo->query('SELECT 1 FROM finance_closing_document_links LIMIT 1')->fetchColumn();
+            $pdo->query('SELECT 1 FROM finance_closing_document_exceptions LIMIT 1')->fetchColumn();
             return true;
         } catch (Throwable) {
             return false;
@@ -69,7 +59,6 @@ final class ClosingDocumentService
         if ($legalType === '' || !isset(self::PROFILES[$legalType])) {
             return null;
         }
-
         return [
             'code' => $legalType,
             'label' => self::PROFILE_LABELS[$legalType],
@@ -82,15 +71,28 @@ final class ClosingDocumentService
         return self::REQUIREMENT_LABELS;
     }
 
+    public static function normalizeInn(?string $inn): string
+    {
+        return preg_replace('/\D+/', '', (string) $inn) ?? '';
+    }
+
     /**
-     * SINGLE SOURCE OF TRUTH for both the report and menu badge.
-     * V1 scope is outgoing PLANEX bank expense only. The bank statement parser
-     * uses debit as money leaving the account and credit as money entering it
-     * (closing = opening + credit - debit), so incoming client receipts never
-     * enter this closing-documents expense contour.
-     * Filtering is deliberately performed only after this common scope query
-     * and enrich/evaluateProblem, so no second badge predicate can drift.
+     * OWNER V2 rule: use the recipient name exactly as received from bank data.
+     * ООО => legal entity; ИП => individual entrepreneur; otherwise => NPD/self-employed.
      */
+    public static function profileCodeForBankName(?string $name): string
+    {
+        $upper = mb_strtoupper(trim((string) $name), 'UTF-8');
+        if (preg_match('/(?:^|[^\p{L}\p{N}])ООО(?:$|[^\p{L}\p{N}])/u', $upper)) {
+            return 'legal_entity';
+        }
+        if (preg_match('/(?:^|[^\p{L}\p{N}])ИП(?:$|[^\p{L}\p{N}])/u', $upper)) {
+            return 'individual';
+        }
+        return 'self_employed';
+    }
+
+    /** SINGLE SOURCE OF TRUTH for report rows, problem filter and sidebar badge. */
     public static function reportRows(PDO $pdo, bool $problemOnly = false): array
     {
         if (!self::schemaReady($pdo)) {
@@ -101,10 +103,8 @@ final class ClosingDocumentService
             "SELECT bt.id, bt.account_id, bt.operation_date, bt.document_number,
                     bt.operation_type, bt.counterparty_name, bt.counterparty_inn,
                     bt.debit_amount, bt.credit_amount, bt.purpose,
-                    bt.classification_status, COALESCE(bt.is_internal_transfer, 0) AS is_internal_transfer,
-                    fcc.entity_type AS assigned_entity_type, fcc.entity_id AS assigned_entity_id
+                    bt.classification_status, COALESCE(bt.is_internal_transfer, 0) AS is_internal_transfer
              FROM bank_transactions bt
-             LEFT JOIN finance_closing_counterparties fcc ON fcc.bank_transaction_id = bt.id
              WHERE COALESCE(bt.debit_amount, 0) > 0
                AND COALESCE(bt.is_internal_transfer, 0) = 0
                AND NOT EXISTS (
@@ -115,18 +115,24 @@ final class ClosingDocumentService
         )->fetchAll(PDO::FETCH_ASSOC);
 
         $linksByTransaction = self::loadLinksByTransaction($pdo);
-        $entityCache = [];
+        $exceptions = self::exceptionMap($pdo);
         $result = [];
 
         foreach ($rows as $row) {
-            $counterparty = self::resolveCounterparty($pdo, $row, $entityCache);
-            $profile = self::profileFor($counterparty['legal_type'] ?? null);
+            $inn = self::normalizeInn($row['counterparty_inn'] ?? '');
+            $profileCode = self::profileCodeForBankName($row['counterparty_name'] ?? '');
+            $profile = self::profileFor($profileCode);
             $links = $linksByTransaction[(int) $row['id']] ?? [];
-            $evaluation = self::evaluateProblem($counterparty, $profile, $links);
+            $isExempt = $inn !== '' && isset($exceptions[$inn]);
+            $evaluation = $isExempt
+                ? ['is_problem' => false, 'problem_reason' => null, 'missing_requirements' => []]
+                : self::evaluateProblem($profile, $links);
 
-            $row['counterparty'] = $counterparty;
+            $row['normalized_inn'] = $inn;
             $row['profile'] = $profile;
             $row['links'] = $links;
+            $row['is_exempt'] = $isExempt;
+            $row['exception_comment'] = $isExempt ? (string) ($exceptions[$inn]['comment'] ?? '') : '';
             $row['missing_requirements'] = $evaluation['missing_requirements'];
             $row['is_problem'] = $evaluation['is_problem'];
             $row['problem_reason'] = $evaluation['problem_reason'];
@@ -135,7 +141,6 @@ final class ClosingDocumentService
                 $result[] = $row;
             }
         }
-
         return $result;
     }
 
@@ -144,16 +149,8 @@ final class ClosingDocumentService
         return count(self::reportRows($pdo, true));
     }
 
-    public static function evaluateProblem(?array $counterparty, ?array $profile, array $links): array
+    public static function evaluateProblem(?array $profile, array $links): array
     {
-        if ($counterparty === null) {
-            return [
-                'is_problem' => true,
-                'problem_reason' => 'Контрагент не определён',
-                'missing_requirements' => [],
-            ];
-        }
-
         if ($profile === null) {
             return [
                 'is_problem' => true,
@@ -194,62 +191,73 @@ final class ClosingDocumentService
         ];
     }
 
-    public static function counterpartyOptions(PDO $pdo): array
+    public static function exceptions(PDO $pdo): array
     {
-        $options = [];
-        foreach ($pdo->query('SELECT id, name, inn, entity_type FROM clients ORDER BY name, id')->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $options[] = [
-                'entity_type' => 'client',
-                'entity_id' => (int) $row['id'],
-                'name' => (string) $row['name'],
-                'inn' => (string) ($row['inn'] ?? ''),
-                'legal_type' => (string) ($row['entity_type'] ?? ''),
-            ];
-        }
-        foreach ($pdo->query('SELECT id, name, inn, contractor_type FROM contractors ORDER BY name, id')->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $options[] = [
-                'entity_type' => 'contractor',
-                'entity_id' => (int) $row['id'],
-                'name' => (string) $row['name'],
-                'inn' => (string) ($row['inn'] ?? ''),
-                'legal_type' => (string) ($row['contractor_type'] ?? ''),
-            ];
-        }
-        return $options;
+        return $pdo->query(
+            "SELECT e.id, e.inn, e.comment, e.active, e.created_at, e.updated_at,
+                    (SELECT bt.counterparty_name
+                     FROM bank_transactions bt
+                     WHERE REPLACE(REPLACE(REPLACE(bt.counterparty_inn, ' ', ''), '-', ''), '.', '') = e.inn
+                     ORDER BY bt.operation_date DESC, bt.id DESC LIMIT 1) AS counterparty_name
+             FROM finance_closing_document_exceptions e
+             ORDER BY e.active DESC, e.inn ASC"
+        )->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public static function assignCounterparty(PDO $pdo, int $transactionId, string $entityType, int $entityId, int $userId): void
+    public static function addException(PDO $pdo, string $inn, string $comment, int $userId): void
     {
-        self::assertTransactionInScope($pdo, $transactionId);
-        self::loadEntity($pdo, $entityType, $entityId);
-
+        $inn = self::normalizeInn($inn);
+        if (!in_array(strlen($inn), [10, 12], true)) {
+            throw new RuntimeException('ИНН должен содержать 10 или 12 цифр');
+        }
         $stmt = $pdo->prepare(
-            'INSERT INTO finance_closing_counterparties
-                (bank_transaction_id, entity_type, entity_id, assigned_by_user_id)
-             VALUES (?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE
-                entity_type = VALUES(entity_type),
-                entity_id = VALUES(entity_id),
-                assigned_by_user_id = VALUES(assigned_by_user_id),
-                updated_at = CURRENT_TIMESTAMP'
+            'INSERT INTO finance_closing_document_exceptions (inn, comment, active, created_by_user_id)
+             VALUES (?, ?, 1, ?)
+             ON DUPLICATE KEY UPDATE comment = VALUES(comment), active = 1, updated_at = CURRENT_TIMESTAMP'
         );
-        $stmt->execute([$transactionId, $entityType, $entityId, $userId > 0 ? $userId : null]);
+        $stmt->execute([$inn, trim($comment) !== '' ? trim($comment) : null, $userId > 0 ? $userId : null]);
+    }
+
+    public static function removeException(PDO $pdo, int $id): void
+    {
+        if ($id <= 0) {
+            throw new RuntimeException('Некорректное правило исключения');
+        }
+        $stmt = $pdo->prepare('DELETE FROM finance_closing_document_exceptions WHERE id = ?');
+        $stmt->execute([$id]);
+    }
+
+    public static function existingDocumentsForInn(PDO $pdo, string $inn): array
+    {
+        $inn = self::normalizeInn($inn);
+        if ($inn === '') {
+            return [];
+        }
+        $stmt = $pdo->prepare(
+            "SELECT DISTINCT d.id, d.original_name, d.document_type, d.created_at,
+                    dt.name AS type_name, dt.code AS type_code
+             FROM finance_closing_document_links l
+             INNER JOIN bank_transactions bt ON bt.id = l.bank_transaction_id
+             INNER JOIN documents d ON d.id = l.document_id AND d.deleted_at IS NULL
+             LEFT JOIN document_types dt ON dt.id = d.document_type_id
+             WHERE REPLACE(REPLACE(REPLACE(bt.counterparty_inn, ' ', ''), '-', ''), '.', '') = ?
+             ORDER BY d.created_at DESC, d.id DESC"
+        );
+        $stmt->execute([$inn]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public static function linkExistingDocument(PDO $pdo, int $transactionId, int $documentId, string $requirementCode, int $userId): void
     {
         self::assertTransactionInScope($pdo, $transactionId);
         $row = self::findReportRow($pdo, $transactionId);
-        if ($row === null || empty($row['counterparty'])) {
-            throw new RuntimeException('Сначала определите контрагента');
+        if ($row === null || !empty($row['is_exempt'])) {
+            throw new RuntimeException('Для этой операции документы не требуются');
         }
-
         self::assertRequirementAllowed($row['profile'], $requirementCode);
-        $document = self::documentForCounterparty($pdo, $documentId, $row['counterparty']);
-        if (!$document) {
-            throw new RuntimeException('Документ не найден у выбранного контрагента');
+        if (!self::documentReusableForInn($pdo, $documentId, (string) $row['normalized_inn'])) {
+            throw new RuntimeException('Документ не найден среди документов этого ИНН');
         }
-
         $stmt = $pdo->prepare(
             'INSERT IGNORE INTO finance_closing_document_links
                 (bank_transaction_id, document_id, requirement_code, created_by_user_id)
@@ -265,24 +273,6 @@ final class ClosingDocumentService
         $stmt->execute([$linkId, $transactionId]);
     }
 
-    public static function documentsForCounterparty(PDO $pdo, string $entityType, int $entityId): array
-    {
-        if (!in_array($entityType, ['client', 'contractor'], true) || $entityId <= 0) {
-            return [];
-        }
-
-        $stmt = $pdo->prepare(
-            'SELECT d.id, d.original_name, d.document_type, d.created_at,
-                    dt.name AS type_name, dt.code AS type_code
-             FROM documents d
-             LEFT JOIN document_types dt ON dt.id = d.document_type_id
-             WHERE d.entity_type = ? AND d.entity_id = ? AND d.deleted_at IS NULL
-             ORDER BY d.created_at DESC, d.id DESC'
-        );
-        $stmt->execute([$entityType, $entityId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
     public static function uploadAndLink(
         PDO $pdo,
         int $companyId,
@@ -294,8 +284,8 @@ final class ClosingDocumentService
     ): int {
         self::assertTransactionInScope($pdo, $transactionId);
         $row = self::findReportRow($pdo, $transactionId);
-        if ($row === null || empty($row['counterparty'])) {
-            throw new RuntimeException('Сначала определите контрагента');
+        if ($row === null || !empty($row['is_exempt'])) {
+            throw new RuntimeException('Для этой операции документы не требуются');
         }
         self::assertRequirementAllowed($row['profile'], $requirementCode);
 
@@ -314,13 +304,11 @@ final class ClosingDocumentService
             throw new RuntimeException('Недопустимый тип файла');
         }
 
-        $counterparty = $row['counterparty'];
-        $relativeDir = 'companies/' . $companyId . '/documents/' . $counterparty['entity_type'] . '/' . $counterparty['entity_id'];
+        $relativeDir = 'companies/' . $companyId . '/documents/bank_transaction/' . $transactionId;
         $absoluteDir = storage_path($relativeDir);
         if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0755, true) && !is_dir($absoluteDir)) {
             throw new RuntimeException('Не удалось подготовить каталог документов');
         }
-
         $storedName = uniqid('doc_', true) . '.' . $extension;
         $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $storedName;
         if (!move_uploaded_file((string) $file['tmp_name'], $absolutePath)) {
@@ -337,7 +325,7 @@ final class ClosingDocumentService
                  VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insert->execute([
-                $counterparty['entity_type'], $counterparty['entity_id'], self::REQUIREMENT_LABELS[$requirementCode],
+                'bank_transaction', $transactionId, self::REQUIREMENT_LABELS[$requirementCode],
                 (string) $file['name'], $storedName, $relativeDir . '/' . $storedName,
                 (string) ($file['type'] ?? 'application/octet-stream'), (int) $file['size'], 'uploaded',
                 $userId > 0 ? $userId : null, $roleCode, $userId > 0 ? $userId : null, $roleCode,
@@ -362,6 +350,19 @@ final class ClosingDocumentService
         }
     }
 
+    private static function exceptionMap(PDO $pdo): array
+    {
+        $rows = $pdo->query('SELECT id, inn, comment FROM finance_closing_document_exceptions WHERE active = 1')->fetchAll(PDO::FETCH_ASSOC);
+        $map = [];
+        foreach ($rows as $row) {
+            $inn = self::normalizeInn($row['inn'] ?? '');
+            if ($inn !== '') {
+                $map[$inn] = $row;
+            }
+        }
+        return $map;
+    }
+
     private static function loadLinksByTransaction(PDO $pdo): array
     {
         $rows = $pdo->query(
@@ -372,7 +373,6 @@ final class ClosingDocumentService
              INNER JOIN documents d ON d.id = l.document_id
              ORDER BY l.id'
         )->fetchAll(PDO::FETCH_ASSOC);
-
         $grouped = [];
         foreach ($rows as $row) {
             $grouped[(int) $row['bank_transaction_id']][] = $row;
@@ -380,82 +380,23 @@ final class ClosingDocumentService
         return $grouped;
     }
 
-    private static function resolveCounterparty(PDO $pdo, array $row, array &$cache): ?array
+    private static function documentReusableForInn(PDO $pdo, int $documentId, string $inn): bool
     {
-        $assignedType = trim((string) ($row['assigned_entity_type'] ?? ''));
-        $assignedId = (int) ($row['assigned_entity_id'] ?? 0);
-        if ($assignedType !== '' && $assignedId > 0) {
-            return self::loadEntityCached($pdo, $assignedType, $assignedId, $cache);
+        $inn = self::normalizeInn($inn);
+        if ($documentId <= 0 || $inn === '') {
+            return false;
         }
-
-        $inn = preg_replace('/\D+/', '', (string) ($row['counterparty_inn'] ?? '')) ?? '';
-        if ($inn === '') {
-            return null;
-        }
-
-        $matches = [];
-        $stmt = $pdo->prepare('SELECT id FROM clients WHERE REPLACE(REPLACE(inn, " ", ""), "-", "") = ?');
-        $stmt->execute([$inn]);
-        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
-            $entity = self::loadEntityCached($pdo, 'client', (int) $id, $cache);
-            if ($entity) {
-                $matches[] = $entity;
-            }
-        }
-        $stmt = $pdo->prepare('SELECT id FROM contractors WHERE REPLACE(REPLACE(inn, " ", ""), "-", "") = ?');
-        $stmt->execute([$inn]);
-        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
-            $entity = self::loadEntityCached($pdo, 'contractor', (int) $id, $cache);
-            if ($entity) {
-                $matches[] = $entity;
-            }
-        }
-
-        return count($matches) === 1 ? $matches[0] : null;
-    }
-
-    private static function loadEntityCached(PDO $pdo, string $entityType, int $entityId, array &$cache): ?array
-    {
-        $key = $entityType . ':' . $entityId;
-        if (!array_key_exists($key, $cache)) {
-            try {
-                $cache[$key] = self::loadEntity($pdo, $entityType, $entityId);
-            } catch (RuntimeException) {
-                $cache[$key] = null;
-            }
-        }
-        return $cache[$key];
-    }
-
-    private static function loadEntity(PDO $pdo, string $entityType, int $entityId): array
-    {
-        if ($entityType === 'client') {
-            $stmt = $pdo->prepare('SELECT id, name, inn, entity_type AS legal_type FROM clients WHERE id = ? LIMIT 1');
-        } elseif ($entityType === 'contractor') {
-            $stmt = $pdo->prepare('SELECT id, name, inn, contractor_type AS legal_type FROM contractors WHERE id = ? LIMIT 1');
-        } else {
-            throw new RuntimeException('Недопустимый тип контрагента');
-        }
-        $stmt->execute([$entityId]);
-        $entity = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$entity) {
-            throw new RuntimeException('Контрагент не найден');
-        }
-        $entity['entity_type'] = $entityType;
-        $entity['entity_id'] = (int) $entity['id'];
-        return $entity;
-    }
-
-    private static function documentForCounterparty(PDO $pdo, int $documentId, array $counterparty): ?array
-    {
         $stmt = $pdo->prepare(
-            'SELECT id FROM documents
-             WHERE id = ? AND entity_type = ? AND entity_id = ? AND deleted_at IS NULL
-             LIMIT 1'
+            "SELECT 1
+             FROM finance_closing_document_links l
+             INNER JOIN bank_transactions bt ON bt.id = l.bank_transaction_id
+             INNER JOIN documents d ON d.id = l.document_id AND d.deleted_at IS NULL
+             WHERE d.id = ?
+               AND REPLACE(REPLACE(REPLACE(bt.counterparty_inn, ' ', ''), '-', ''), '.', '') = ?
+             LIMIT 1"
         );
-        $stmt->execute([$documentId, $counterparty['entity_type'], $counterparty['entity_id']]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return $row ?: null;
+        $stmt->execute([$documentId, $inn]);
+        return (bool) $stmt->fetchColumn();
     }
 
     private static function assertRequirementAllowed(?array $profile, string $requirementCode): void
