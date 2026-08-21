@@ -1,0 +1,58 @@
+name: DIAG Closing Documents Production
+
+on:
+  push:
+    branches:
+      - diag/closing-documents-production-run
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Collect recent production PHP/web errors read-only
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE' | tee closing_diag.txt
+          set -u
+          ROOT=/home/s/spugovxsim/planexp
+          LIVE="$ROOT/public_html/erpv2"
+          echo "DEPLOYED_SHA=$(cat "$ROOT/deploy/P07_erpv2_deployed_commit.txt" 2>/dev/null || true)"
+          echo "SERVICE_PRESENT=$(test -f "$LIVE/app/Service/ClosingDocumentService.php" && echo yes || echo no)"
+          echo "MANIFEST_REF=$(grep -n "ClosingDocumentService.php" "$LIVE/app/Support/entrypoint_dependencies.php" 2>/dev/null || true)"
+          echo '--- RECENT LOG CANDIDATES ---'
+          find "$ROOT" "$HOME" -maxdepth 5 -type f \( -iname '*error*.log' -o -iname 'php*.log' -o -iname '*.error' -o -iname 'error_log' \) -mmin -180 2>/dev/null | head -40
+          echo '--- MATCHING ERROR TAILS ---'
+          for f in $(find "$ROOT" "$HOME" -maxdepth 5 -type f \( -iname '*error*.log' -o -iname 'php*.log' -o -iname '*.error' -o -iname 'error_log' \) -mmin -180 2>/dev/null | head -40); do
+            echo "### $f"
+            tail -n 300 "$f" 2>/dev/null | grep -E -i -C 5 'closing.documents|ClosingDocument|Fatal error|Uncaught|PDOException|SQLSTATE|HTTP 500' | tail -n 120 || true
+          done
+          echo '--- PHP LINT LIVE ---'
+          php -l "$LIVE/app/Service/ClosingDocumentService.php" 2>&1 || true
+          php -l "$LIVE/app/Http/Controllers/Company/ClosingDocumentsController.php" 2>&1 || true
+          php -l "$LIVE/app/View/pages/company_finance_closing_documents.php" 2>&1 || true
+          REMOTE
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: closing_documents_production_diag
+          path: closing_diag.txt
+          retention-days: 3
