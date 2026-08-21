@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - diag/postdeploy-closing-078
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - '.github/workflows/_diag_postdeploy_closing_078.yml'
 
 permissions:
   contents: read
