@@ -1,0 +1,49 @@
+name: Temporary Closing Schema Docs Writer
+
+on:
+  push:
+    branches:
+      - chatgpt/closing-documents-20260821
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/closing-documents-20260821
+          fetch-depth: 2
+
+      - name: Start disposable MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+
+      - name: Generate canonical tenant schema docs
+        run: php tools/database/generate_schema_docs.php --write
+
+      - name: Commit deterministic generated docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet -- docs/database; then
+            echo 'Schema docs already current.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add docs/database
+          git commit -m 'docs(database): regenerate tenant schema for migration 077'
+          git push origin HEAD:chatgpt/closing-documents-20260821
