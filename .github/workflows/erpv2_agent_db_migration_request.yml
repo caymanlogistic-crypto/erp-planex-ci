@@ -1,0 +1,169 @@
+name: ERPv2 Agent DB Migration Request
+
+on:
+  push:
+    branches:
+      - migrate/erpv2-agent
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: erpv2-agent-db-migration-request
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  REQUEST_BRANCH: migrate/erpv2-agent
+  MANIFEST_PATH: .github/agent_db_migration_request.json
+
+jobs:
+  authorize-and-dispatch:
+    if: ${{ github.actor == github.repository_owner }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout migration request SHA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate exact canonical HEAD
+        id: source
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test "$REF_NAME" = "$REQUEST_BRANCH"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin "+refs/heads/${CANONICAL_BRANCH}:refs/remotes/origin/${CANONICAL_BRANCH}"
+          canonical_sha="$(git rev-parse "refs/remotes/origin/${CANONICAL_BRANCH}")"
+          test "$SOURCE_SHA" = "$canonical_sha"
+          printf 'source_sha=%s\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Wait for exact canonical ERP PLANEX CI
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 72); do
+            runs_json="$(curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20")"
+            state="$(RUNS_JSON="$runs_json" SOURCE_SHA="$SOURCE_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+          import json, os
+          data = json.loads(os.environ['RUNS_JSON'])
+          source = os.environ['SOURCE_SHA']
+          branch = os.environ['CANONICAL_BRANCH']
+          matches = [r for r in data.get('workflow_runs', []) if r.get('head_sha') == source and r.get('head_branch') == branch and r.get('event') == 'push']
+          if not matches:
+              print('WAIT')
+          else:
+              run = max(matches, key=lambda r: r.get('run_number', 0))
+              if run.get('status') != 'completed': print('WAIT')
+              elif run.get('conclusion') == 'success': print(f"PASS:{run.get('id')}:{run.get('run_number')}")
+              else: print(f"FAIL:{run.get('id')}:{run.get('run_number')}:{run.get('conclusion')}")
+          PY
+            )"
+            case "$state" in
+              PASS:*) echo "ERP_PLANEX_CI_$state"; break ;;
+              FAIL:*) echo "Canonical CI failed: $state" >&2; exit 1 ;;
+              WAIT) sleep 10 ;;
+              *) echo "Unexpected CI state: $state" >&2; exit 1 ;;
+            esac
+            if [ "$attempt" -eq 72 ]; then echo 'Timed out waiting for exact canonical CI.' >&2; exit 1; fi
+          done
+
+      - name: Validate migration manifest and target workflow
+        id: request
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          python3 - "$MANIFEST_PATH" "$SOURCE_SHA" <<'PY' > /tmp/request.env
+          import json, pathlib, re, sys
+          manifest_path = pathlib.Path(sys.argv[1])
+          source_sha = sys.argv[2]
+          data = json.loads(manifest_path.read_text(encoding='utf-8'))
+          required = ['migration_id','workflow','source_sha_input','confirmation_input','confirmation_value']
+          for key in required:
+              if not isinstance(data.get(key), str) or not data[key]:
+                  raise SystemExit(f'invalid manifest field: {key}')
+          mid = data['migration_id']
+          if not re.fullmatch(r'\d{3}', mid): raise SystemExit('migration_id must be exactly 3 digits')
+          workflow = data['workflow']
+          if not re.fullmatch(r'[a-z0-9_]+_production_migration\.yml', workflow): raise SystemExit('target workflow not allowlisted by naming contract')
+          target = pathlib.Path('.github/workflows') / workflow
+          if not target.is_file(): raise SystemExit('target workflow missing')
+          text = target.read_text(encoding='utf-8')
+          if '\n  workflow_dispatch:' not in text: raise SystemExit('target migration workflow must be manual-only')
+          for token in ['\n  push:','\n  workflow_run:','\n  pull_request:','\n  schedule:']:
+              if token in text: raise SystemExit(f'target migration workflow has forbidden automatic trigger: {token.strip()}')
+          matches = list(pathlib.Path('database/migrations-local').glob(mid + '_*.sql'))
+          if len(matches) != 1: raise SystemExit(f'expected exactly one migration SQL for {mid}, found {len(matches)}')
+          for key in ['source_sha_input','confirmation_input']:
+              if not re.fullmatch(r'[A-Za-z_][A-Za-z0-9_]*', data[key]): raise SystemExit(f'invalid input name: {key}')
+          print(f"WORKFLOW={workflow}")
+          print(f"MIGRATION_ID={mid}")
+          print(f"SOURCE_INPUT={data['source_sha_input']}")
+          print(f"CONFIRM_INPUT={data['confirmation_input']}")
+          print(f"CONFIRM_VALUE={data['confirmation_value']}")
+          print(f"MIGRATION_SQL={matches[0].as_posix()}")
+          print(f"SOURCE_SHA={source_sha}")
+          PY
+          cat /tmp/request.env
+          while IFS='=' read -r k v; do printf '%s=%s\n' "${k,,}" "$v" >> "$GITHUB_OUTPUT"; done < /tmp/request.env
+
+      - name: Reconfirm canonical HEAD immediately before dispatch
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/${CANONICAL_BRANCH}:refs/remotes/origin/${CANONICAL_BRANCH}"
+          test "$SOURCE_SHA" = "$(git rev-parse "refs/remotes/origin/${CANONICAL_BRANCH}")"
+
+      - name: Dispatch approved task-specific migration workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          WORKFLOW: ${{ steps.request.outputs.workflow }}
+          SOURCE_INPUT: ${{ steps.request.outputs.source_input }}
+          CONFIRM_INPUT: ${{ steps.request.outputs.confirm_input }}
+          CONFIRM_VALUE: ${{ steps.request.outputs.confirm_value }}
+          MIGRATION_ID: ${{ steps.request.outputs.migration_id }}
+        run: |
+          set -euo pipefail
+          payload="$(SOURCE_SHA="$SOURCE_SHA" SOURCE_INPUT="$SOURCE_INPUT" CONFIRM_INPUT="$CONFIRM_INPUT" CONFIRM_VALUE="$CONFIRM_VALUE" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+          import json, os
+          print(json.dumps({
+            'ref': os.environ['CANONICAL_BRANCH'],
+            'inputs': {
+              os.environ['SOURCE_INPUT']: os.environ['SOURCE_SHA'],
+              os.environ['CONFIRM_INPUT']: os.environ['CONFIRM_VALUE'],
+            },
+          }))
+          PY
+          )"
+          code="$(curl -fsS -o /tmp/dispatch-response.txt -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_URL/repos/$REPOSITORY/actions/workflows/$WORKFLOW/dispatches" \
+            -d "$payload")"
+          test "$code" = 204
+          printf 'AGENT_DB_MIGRATION_DISPATCHED=YES\nMIGRATION_ID=%s\nSOURCE_SHA=%s\nTARGET_WORKFLOW=%s\n' "$MIGRATION_ID" "$SOURCE_SHA" "$WORKFLOW"
