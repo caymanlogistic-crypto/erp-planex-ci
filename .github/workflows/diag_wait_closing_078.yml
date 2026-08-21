@@ -1,0 +1,59 @@
+name: DIAG Wait Closing 078
+on:
+  pull_request:
+    branches: [chatgpt/production-stabilization-20260802]
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Upload read-only verifier
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/finance_closing_verify_078.php "$SSH_USER@$SSH_HOST:/tmp/diag_verify078_${GITHUB_RUN_ID}.php"
+      - name: Wait for migration 078 and verify read-only
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          for n in $(seq 1 60); do
+            out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT=/home/s/spugovxsim/planexp/public_html/erpv2 /usr/bin/php8.5 '/tmp/diag_verify078_${GITHUB_RUN_ID}.php'" 2>&1 || true)"
+            echo "$out"
+            snapshot="$(printf '%s\n' "$out" | sed -n 's/^FINANCE_CLOSING_078_SNAPSHOT=//p')"
+            if [ -n "$snapshot" ] && SNAP="$snapshot" python3 - <<'PY'
+          import json,os,sys
+          x=json.loads(os.environ['SNAP'])
+          sys.exit(0 if x.get('migration_078_applied')==1 and x.get('exceptions_table')==1 else 1)
+          PY
+            then
+              echo 'DIAG_CLOSING_078_APPLIED=PASS'
+              exit 0
+            fi
+            sleep 10
+          done
+          echo 'migration 078 not observed within wait window' >&2
+          exit 1
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/diag_verify078_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
