@@ -25,6 +25,7 @@ $logistsActive = str_starts_with($requestPath, '/company/logists');
 $responsibleAssignmentsActive = str_starts_with($requestPath, '/company/responsible-assignments');
 $financeActive = str_starts_with($requestPath, '/company/finance');
 $bankAccountsActive = str_starts_with($requestPath, '/company/finance/bank-accounts') || str_starts_with($requestPath, '/company/finance/settings/matching-rules');
+$closingDocumentsActive = str_starts_with($requestPath, '/company/finance/closing-documents');
 $cashActive = str_starts_with($requestPath, '/company/finance/cash');
 $ddsCategoriesActive = str_starts_with($requestPath, '/company/finance/settings/dds-categories');
 $matchingRulesActive = str_starts_with($requestPath, '/company/finance/settings/matching-rules');
@@ -37,7 +38,7 @@ $financeDashboardActive = str_starts_with($requestPath, '/company/finance/dashbo
 $operationsActive = str_starts_with($requestPath, '/company/finance/operations');
 $bankStatementSettingsActive = str_starts_with($requestPath, '/company/bank-statement-settings');
 
-$navigationCounters = ['bank_attention' => 0, 'cash_attention' => 0];
+$navigationCounters = ['bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0];
 if ($roleCode === 'company_owner' && (int)$companyId > 0) {
     $navigationCounters = \App\Service\NavigationCounterService::forCompany(
         $config,
@@ -48,6 +49,7 @@ if ($roleCode === 'company_owner' && (int)$companyId > 0) {
 }
 $bankAttentionCount = max(0, (int)($navigationCounters['bank_attention'] ?? 0));
 $cashAttentionCount = max(0, (int)($navigationCounters['cash_attention'] ?? 0));
+$closingDocumentsProblemCount = max(0, (int)($navigationCounters['closing_documents_problem'] ?? 0));
 $wideWorkspacePrefixes = [
     '/company/clients',
     '/company/trips/linear',
@@ -60,6 +62,7 @@ $wideWorkspacePrefixes = [
     '/company/finance/invoices',
     '/company/finance/cash',
     '/company/finance/bank-accounts',
+    '/company/finance/closing-documents',
     '/company/finance/dashboard',
 ];
 $wideWorkspaceActive = false;
@@ -269,6 +272,15 @@ if (empty($topbarCrumbs)) {
                     </svg>
                     <span class="nav-label">Выписки со счёта</span>
                     <?php if ($bankAttentionCount > 0): ?><span class="nav-count is-alert" title="Требуют разнесения"><?= $bankAttentionCount > 999 ? '999+' : $bankAttentionCount ?></span><?php endif; ?>
+                </a>
+                <a class="nav-item<?= $closingDocumentsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/finance/closing-documents') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
+                        <path d="M2.5 1.5H10.5L13.5 4.5V13.5C13.5 14.05 13.05 14.5 12.5 14.5H3.5C2.95 14.5 2.5 14.05 2.5 13.5V2.5C2.5 1.95 2.95 1.5 3.5 1.5" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M10.5 1.5V4.5H13.5" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M5 8H11M5 10.5H11" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="nav-label">Закрывающие документы</span>
+                    <?php if ($closingDocumentsProblemCount > 0): ?><span class="nav-count is-alert" title="Требуют закрывающих документов"><?= $closingDocumentsProblemCount > 999 ? '999+' : $closingDocumentsProblemCount ?></span><?php endif; ?>
                 </a>
                 <a class="nav-item<?= $cashActive ? ' is-active' : '' ?>" href="<?= app_url('/company/finance/cash') ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
