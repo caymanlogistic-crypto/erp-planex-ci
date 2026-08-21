@@ -105,9 +105,9 @@ jobs:
           mv "/tmp/${RUN_ID}_app_View_pages_company_finance_closing_document_exceptions.php" "$TMP/app/View/pages/company_finance_closing_document_exceptions.php"
           CANDIDATE_ROOT="$TMP" /usr/bin/php8.5 -d display_errors=1 -r '
             chdir(getenv("CANDIDATE_ROOT")); $config=require "bootstrap/app.php"; require "app/Support/entrypoint_dependencies.php"; require "app/Http/Controllers/Company/ClosingDocumentsController.php";
-            $_SESSION=["user_id"=>1,"role_code"=>"company_owner","company_id"=>25]; $_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["REQUEST_URI"]="/erpv2/company/finance/closing-documents"; $db=new \\App\\Core\\Database($config["database"]);
-            ob_start(); (new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController($config,$db))->index(); $a=ob_get_clean(); if(strpos($a,"Закрывающие документы")===false||strpos($a,"Исключения по документам")===false) exit(7);
-            ob_start(); (new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController($config,$db))->exceptions(); $b=ob_get_clean(); if(strpos($b,"Исключения по документам")===false) exit(8);
+            $_SESSION=["user_id"=>1,"role_code"=>"company_owner","company_id"=>25]; $_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["REQUEST_URI"]="/erpv2/company/finance/closing-documents"; $db=new \App\Core\Database($config["database"]);
+            ob_start(); (new \App\Http\Controllers\Company\ClosingDocumentsController($config,$db))->index(); $a=ob_get_clean(); if(strpos($a,"Закрывающие документы")===false||strpos($a,"Исключения по документам")===false) exit(7);
+            ob_start(); (new \App\Http\Controllers\Company\ClosingDocumentsController($config,$db))->exceptions(); $b=ob_get_clean(); if(strpos($b,"Исключения по документам")===false) exit(8);
             echo "CLOSING_DOCUMENTS_FULL_CANDIDATE_PRODUCTION_CONFIG_PREFLIGHT=PASS\n";'
           rm -rf "$TMP"
           REMOTE
