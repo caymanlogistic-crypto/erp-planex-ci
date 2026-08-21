@@ -19,6 +19,11 @@ final class ClosingDocumentsController
     public function index(): void
     {
         requireRole(['company_owner']);
+        // main.php is required from this method scope and explicitly expects
+        // local $config and $db variables. Keep them aligned with the runtime
+        // contract used by the rest of the ERP controllers.
+        $config = $this->config;
+        $db = $this->db;
         $pageTitle = 'Закрывающие документы';
         $pageContext = 'Финансы › Закрывающие документы';
         $company = null;
