@@ -11,8 +11,10 @@ on:
       - 'app/Http/Routes/company_bank_finance.php'
       - 'app/View/pages/company_finance_closing_documents.php'
       - 'app/View/layouts/main.php'
+      - 'app/Support/entrypoint_dependencies.php'
       - 'database/migrations-local/077_finance_closing_documents.sql'
       - 'tests/finance_closing_documents_contract_test.php'
+      - 'tests/closing_documents_runtime_dependency_test.php'
       - '.github/workflows/finance_closing_documents_regression.yml'
   workflow_dispatch:
 
@@ -34,7 +36,12 @@ jobs:
           php -l app/Http/Routes/company_bank_finance.php
           php -l app/View/pages/company_finance_closing_documents.php
           php -l app/View/layouts/main.php
+          php -l app/Support/entrypoint_dependencies.php
           php -l tests/finance_closing_documents_contract_test.php
+          php -l tests/closing_documents_runtime_dependency_test.php
+
+      - name: Runtime dependency contract
+        run: php tests/closing_documents_runtime_dependency_test.php
 
       - name: Start disposable MySQL
         shell: bash
