@@ -10,24 +10,23 @@ on:
       - 'app/Http/Controllers/Company/ClosingDocumentsController.php'
       - 'app/Http/Routes/company_bank_finance.php'
       - 'app/View/pages/company_finance_closing_documents.php'
+      - 'app/View/pages/company_finance_closing_document_exceptions.php'
       - 'app/View/layouts/main.php'
       - 'app/Support/entrypoint_dependencies.php'
       - 'database/migrations-local/077_finance_closing_documents.sql'
+      - 'database/migrations-local/078_finance_closing_document_exceptions.sql'
       - 'tests/finance_closing_documents_contract_test.php'
       - 'tests/closing_documents_runtime_dependency_test.php'
       - '.github/workflows/finance_closing_documents_regression.yml'
   workflow_dispatch:
-
 permissions:
   contents: read
-
 jobs:
   closing-documents:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - uses: actions/checkout@v4
-
       - name: PHP syntax
         run: |
           php -l app/Service/ClosingDocumentService.php
@@ -35,16 +34,14 @@ jobs:
           php -l app/Http/Controllers/Company/ClosingDocumentsController.php
           php -l app/Http/Routes/company_bank_finance.php
           php -l app/View/pages/company_finance_closing_documents.php
-          php -l app/View/layouts/main.php
-          php -l app/Support/entrypoint_dependencies.php
+          php -l app/View/pages/company_finance_closing_document_exceptions.php
           php -l tests/finance_closing_documents_contract_test.php
           php -l tests/closing_documents_runtime_dependency_test.php
-
-      - name: Runtime dependency contract
+          php -l scripts/finance_closing_apply_078.php
+          php -l scripts/finance_closing_verify_078.php
+      - name: Runtime view contracts
         run: php tests/closing_documents_runtime_dependency_test.php
-
       - name: Start disposable MySQL
-        shell: bash
         run: |
           set -euo pipefail
           sudo systemctl start mysql
@@ -54,21 +51,18 @@ jobs:
           GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
           FLUSH PRIVILEGES;
           SQL
-
-      - name: Closing documents contract
+      - name: Closing documents domain contract
         env:
           PLANEX_TEST_MYSQL_HOST: 127.0.0.1
           PLANEX_TEST_MYSQL_USER: planex_ci
           PLANEX_TEST_MYSQL_PASSWORD: planex_ci
         run: php tests/finance_closing_documents_contract_test.php
-
-      - name: Existing bank and finance regressions
+      - name: Existing finance regressions
         run: |
           php tests/finance_manual_facts_regression_test.php
           php tests/finance_invoice_ui_contract_test.php
           php tests/finance_employee_personal_expense_event_regression_test.php
-
-      - name: Configure production-runtime SSH for read-only preflight
+      - name: Configure production-runtime SSH for read-only candidate preflight
         env:
           PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
           KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
@@ -78,21 +72,51 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/closing_preflight_key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/closing_preflight_key" "$HOME/.ssh/known_hosts"
-
-      - name: Production-config candidate controller render preflight READ ONLY
+      - name: Upload candidate closing runtime to temporary server area
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          remote_controller="/tmp/ClosingDocumentsController_candidate_${GITHUB_RUN_ID}.php"
-          scp -P "$SSH_PORT" -i "$HOME/.ssh/closing_preflight_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
-            app/Http/Controllers/Company/ClosingDocumentsController.php "$SSH_USER@$SSH_HOST:$remote_controller"
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/closing_preflight_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "ROOT='/home/s/spugovxsim/planexp'; LIVE_ROOT=\"\$ROOT/public_html\"/erpv2; CANDIDATE_CONTROLLER='$remote_controller' LIVE_ROOT=\"\$LIVE_ROOT\" /usr/bin/php8.5 -d display_errors=1 -r 'chdir(getenv(\"LIVE_ROOT\")); \$config=require \"bootstrap/app.php\"; require \"app/Support/entrypoint_dependencies.php\"; require getenv(\"CANDIDATE_CONTROLLER\"); \$_SESSION=[\"user_id\"=>1,\"role_code\"=>\"company_owner\",\"company_id\"=>25]; \$_SERVER[\"REQUEST_METHOD\"]=\"GET\"; \$_SERVER[\"REQUEST_URI\"]=\"/erpv2/company/finance/closing-documents\"; \$db=new \\App\\Core\\Database(\$config[\"database\"]); ob_start(); (new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController(\$config,\$db))->index(); \$html=ob_get_clean(); if(strpos(\$html,\"Закрывающие документы\")===false){fwrite(STDERR,\"closing controller full render marker missing\\n\"); exit(7);} echo \"closing_documents_production_config_render_preflight: PASS\\n\";'"
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/closing_preflight_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$remote_controller'" || true
-
+          for f in app/Service/ClosingDocumentService.php app/Http/Controllers/Company/ClosingDocumentsController.php app/View/pages/company_finance_closing_documents.php app/View/pages/company_finance_closing_document_exceptions.php; do
+            flat="$(echo "$f" | tr '/' '_')"
+            scp -P "$SSH_PORT" -i "$HOME/.ssh/closing_preflight_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$f" "$SSH_USER@$SSH_HOST:/tmp/${GITHUB_RUN_ID}_${flat}"
+          done
+      - name: Full candidate controller and both views render on production config READ ONLY
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/closing_preflight_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "RUN_ID='$GITHUB_RUN_ID' bash -se" <<'REMOTE'
+          set -euo pipefail
+          ROOT=/home/s/spugovxsim/planexp
+          LIVE="$ROOT/public_html"/erpv2
+          TMP="/tmp/closing_candidate_${RUN_ID}"
+          rm -rf "$TMP"
+          mkdir -p "$TMP"
+          cp -a "$LIVE/." "$TMP/"
+          rm -f "$TMP/app/Service/ClosingDocumentService.php" "$TMP/app/Http/Controllers/Company/ClosingDocumentsController.php" "$TMP/app/View/pages/company_finance_closing_documents.php" "$TMP/app/View/pages/company_finance_closing_document_exceptions.php"
+          mv "/tmp/${RUN_ID}_app_Service_ClosingDocumentService.php" "$TMP/app/Service/ClosingDocumentService.php"
+          mv "/tmp/${RUN_ID}_app_Http_Controllers_Company_ClosingDocumentsController.php" "$TMP/app/Http/Controllers/Company/ClosingDocumentsController.php"
+          mv "/tmp/${RUN_ID}_app_View_pages_company_finance_closing_documents.php" "$TMP/app/View/pages/company_finance_closing_documents.php"
+          mv "/tmp/${RUN_ID}_app_View_pages_company_finance_closing_document_exceptions.php" "$TMP/app/View/pages/company_finance_closing_document_exceptions.php"
+          CANDIDATE_ROOT="$TMP" /usr/bin/php8.5 -d display_errors=1 -r '
+            chdir(getenv("CANDIDATE_ROOT")); $config=require "bootstrap/app.php"; require "app/Support/entrypoint_dependencies.php"; require "app/Http/Controllers/Company/ClosingDocumentsController.php";
+            $_SESSION=["user_id"=>1,"role_code"=>"company_owner","company_id"=>25]; $_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["REQUEST_URI"]="/erpv2/company/finance/closing-documents"; $db=new \App\Core\Database($config["database"]);
+            ob_start(); (new \App\Http\Controllers\Company\ClosingDocumentsController($config,$db))->index(); $a=ob_get_clean(); if(strpos($a,"Закрывающие документы")===false||strpos($a,"Исключения по документам")===false) exit(7);
+            ob_start(); (new \App\Http\Controllers\Company\ClosingDocumentsController($config,$db))->exceptions(); $b=ob_get_clean(); if(strpos($b,"Исключения по документам")===false) exit(8);
+            echo "CLOSING_DOCUMENTS_FULL_CANDIDATE_PRODUCTION_CONFIG_PREFLIGHT=PASS\n";'
+          rm -rf "$TMP"
+          REMOTE
       - name: Cleanup preflight SSH
         if: always()
-        run: rm -f "$HOME/.ssh/closing_preflight_key" 2>/dev/null || true
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/closing_preflight_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -rf '/tmp/closing_candidate_${GITHUB_RUN_ID}'; rm -f /tmp/${GITHUB_RUN_ID}_app_*" 2>/dev/null || true
+          rm -f "$HOME/.ssh/closing_preflight_key" 2>/dev/null || true

@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7d9108ee0188cd8a24782257374c006bd2d829a0a738e82f1b860a3400313ccd`
+**Schema fingerprint:** `7299653b569db5d58c8c4c76138dc6f09ec3661886c8ab9ccac1f25ca6783e53`
 
 ## `finance_cash_resolutions`
 
@@ -89,6 +89,31 @@
 ### Physical foreign keys
 
 - `fk_fcc_bank_transaction`: (`bank_transaction_id`) → `bank_transactions`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
+
+## `finance_closing_document_exceptions`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `inn` | `varchar(20)` | NO | NULL | — | `UNI` |
+| `comment` | `varchar(255)` | YES | NULL | — | — |
+| `active` | `tinyint(1)` | NO | `1` | — | `MUL` |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_fcde_active` (`active`)
+- **UNIQUE** `uk_fcde_inn` (`inn`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `finance_closing_document_links`
 

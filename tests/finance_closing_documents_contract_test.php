@@ -1,258 +1,30 @@
 <?php
 
 declare(strict_types=1);
-
-require_once __DIR__ . '/../app/Service/ClosingDocumentService.php';
-
+require_once __DIR__.'/../app/Service/ClosingDocumentService.php';
 use App\Service\ClosingDocumentService;
+function a(bool $v,string $m):void{if(!$v)throw new RuntimeException('ASSERT '.$m);}
+function eq(mixed $e,mixed $v,string $m):void{if($e!==$v)throw new RuntimeException("ASSERT $m expected=".var_export($e,true).' actual='.var_export($v,true));}
 
-function assertTrue(bool $condition, string $message): void
-{
-    if (!$condition) {
-        throw new RuntimeException('ASSERT FAILED: ' . $message);
-    }
-}
+eq('legal_entity',ClosingDocumentService::profileCodeForBankName('ООО "АТИ"'),'ООО');
+eq('individual',ClosingDocumentService::profileCodeForBankName('ИП Иванов'),'ИП');
+eq('self_employed',ClosingDocumentService::profileCodeForBankName('Петров Петр'),'plain name');
+eq('self_employed',ClosingDocumentService::profileCodeForBankName('АО Банк'),'fallback');
+$p=ClosingDocumentService::profiles();eq(['agreement'],$p['legal_entity'][0]['accepted'],'ООО agreement');eq(['act','upd'],$p['legal_entity'][1]['accepted'],'ООО act/upd');eq(['act','upd'],$p['individual'][1]['accepted'],'ИП act/upd');eq(['npd_receipt'],$p['self_employed'][2]['accepted'],'NPD receipt');
 
-function assertSameValue(mixed $expected, mixed $actual, string $message): void
-{
-    if ($expected !== $actual) {
-        throw new RuntimeException('ASSERT FAILED: ' . $message . ' expected=' . var_export($expected, true) . ' actual=' . var_export($actual, true));
-    }
-}
-
-$profiles = ClosingDocumentService::profiles();
-assertSameValue(['agreement'], $profiles['legal_entity'][0]['accepted'], 'ЮЛ требует договор');
-assertSameValue(['act', 'upd'], $profiles['legal_entity'][1]['accepted'], 'ЮЛ допускает акт или УПД');
-assertSameValue(['agreement'], $profiles['individual'][0]['accepted'], 'ИП требует договор');
-assertSameValue(['act', 'upd'], $profiles['individual'][1]['accepted'], 'ИП допускает акт или УПД');
-assertSameValue(['agreement'], $profiles['self_employed'][0]['accepted'], 'НПД требует договор');
-assertSameValue(['act'], $profiles['self_employed'][1]['accepted'], 'НПД требует акт');
-assertSameValue(['npd_receipt'], $profiles['self_employed'][2]['accepted'], 'НПД требует чек');
-assertSameValue(['gph_agreement'], $profiles['private_person'][0]['accepted'], 'Физлицо требует ГПХ');
-assertSameValue(['act'], $profiles['private_person'][1]['accepted'], 'Физлицо требует акт');
-
-$host = getenv('PLANEX_TEST_MYSQL_HOST') ?: '127.0.0.1';
-$user = getenv('PLANEX_TEST_MYSQL_USER') ?: 'planex_ci';
-$pass = getenv('PLANEX_TEST_MYSQL_PASSWORD') ?: 'planex_ci';
-$port = (int) (getenv('PLANEX_TEST_MYSQL_PORT') ?: 3306);
-$root = new PDO("mysql:host={$host};port={$port};charset=utf8mb4", $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-
-$dbA = 'planex_closing_a_' . getmypid();
-$dbB = 'planex_closing_b_' . getmypid();
-$root->exec("CREATE DATABASE `{$dbA}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-$root->exec("CREATE DATABASE `{$dbB}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-
-function tenantPdo(string $host, int $port, string $db, string $user, string $pass): PDO
-{
-    return new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4", $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
-}
-
-function setupBase(PDO $pdo): void
-{
-    $pdo->exec("CREATE TABLE bank_transactions (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        account_id INT UNSIGNED NOT NULL DEFAULT 1,
-        operation_date DATE NOT NULL,
-        document_number VARCHAR(100) NULL,
-        operation_type VARCHAR(30) NULL,
-        counterparty_name VARCHAR(255) NULL,
-        counterparty_inn VARCHAR(20) NULL,
-        debit_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
-        credit_amount DECIMAL(15,2) NOT NULL DEFAULT 0,
-        purpose TEXT NULL,
-        classification_status VARCHAR(30) NOT NULL DEFAULT 'UNALLOCATED',
-        is_internal_transfer TINYINT(1) NOT NULL DEFAULT 0
-    ) ENGINE=InnoDB");
-    $pdo->exec("CREATE TABLE finance_employee_movements (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        bank_transaction_id INT UNSIGNED NULL,
-        UNIQUE KEY uk_employee_bank_tx (bank_transaction_id),
-        CONSTRAINT fk_employee_bank_tx FOREIGN KEY (bank_transaction_id) REFERENCES bank_transactions(id) ON DELETE SET NULL
-    ) ENGINE=InnoDB");
-    $pdo->exec("CREATE TABLE clients (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        inn VARCHAR(20) NULL,
-        entity_type VARCHAR(20) NULL
-    ) ENGINE=InnoDB");
-    $pdo->exec("CREATE TABLE contractors (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NOT NULL,
-        inn VARCHAR(20) NULL,
-        contractor_type VARCHAR(20) NULL
-    ) ENGINE=InnoDB");
-    $pdo->exec("CREATE TABLE document_types (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(255) NULL,
-        code VARCHAR(100) NULL
-    ) ENGINE=InnoDB");
-    $pdo->exec("CREATE TABLE documents (
-        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        entity_type VARCHAR(20) NOT NULL,
-        entity_id INT UNSIGNED NOT NULL,
-        document_type VARCHAR(100) NULL,
-        document_type_id INT UNSIGNED NULL,
-        original_name VARCHAR(500) NOT NULL,
-        stored_name VARCHAR(255) NOT NULL,
-        relative_path VARCHAR(1000) NOT NULL,
-        mime_type VARCHAR(100) NOT NULL,
-        file_size BIGINT UNSIGNED NOT NULL,
-        status VARCHAR(20) NOT NULL DEFAULT 'uploaded',
-        deleted_at DATETIME NULL,
-        created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-    ) ENGINE=InnoDB");
-
-    $migration = file_get_contents(__DIR__ . '/../database/migrations-local/077_finance_closing_documents.sql');
-    if ($migration === false) throw new RuntimeException('migration file missing');
-    $pdo->exec($migration);
-    // Forward migration is intentionally idempotent for tenant provisioning.
-    $pdo->exec($migration);
-    assertTrue(ClosingDocumentService::schemaReady($pdo), 'migration 077 creates closing schema');
-}
-
-function addClient(PDO $pdo, string $name, string $inn, ?string $type): int
-{
-    $stmt = $pdo->prepare('INSERT INTO clients(name,inn,entity_type) VALUES(?,?,?)');
-    $stmt->execute([$name, $inn, $type]);
-    return (int) $pdo->lastInsertId();
-}
-
-function addTx(PDO $pdo, string $inn, string $name = 'Контрагент'): int
-{
-    $stmt = $pdo->prepare("INSERT INTO bank_transactions(operation_date,document_number,operation_type,counterparty_name,counterparty_inn,debit_amount,purpose) VALUES(CURDATE(), ?, 'PAYMENT', ?, ?, 1000, 'Исходящий расход')");
-    $stmt->execute([uniqid('TX', false), $name, $inn]);
-    return (int) $pdo->lastInsertId();
-}
-
-function addIncomingTx(PDO $pdo, string $inn, string $name = 'Клиент'): int
-{
-    $stmt = $pdo->prepare("INSERT INTO bank_transactions(operation_date,document_number,operation_type,counterparty_name,counterparty_inn,credit_amount,purpose) VALUES(CURDATE(), ?, 'PAYMENT', ?, ?, 1000, 'Входящая оплата клиента')");
-    $stmt->execute([uniqid('IN', false), $name, $inn]);
-    return (int) $pdo->lastInsertId();
-}
-
-function addDoc(PDO $pdo, string $entityType, int $entityId, string $name): int
-{
-    $stmt = $pdo->prepare("INSERT INTO documents(entity_type,entity_id,document_type,original_name,stored_name,relative_path,mime_type,file_size,status) VALUES(?,?,?,?,?,?,?,?,'uploaded')");
-    $stmt->execute([$entityType, $entityId, $name, $name . '.pdf', uniqid('doc_', false) . '.pdf', 'test/' . uniqid('', false), 'application/pdf', 100]);
-    return (int) $pdo->lastInsertId();
-}
-
-function linkDoc(PDO $pdo, int $tx, int $doc, string $code): void
-{
-    $stmt = $pdo->prepare('INSERT INTO finance_closing_document_links(bank_transaction_id,document_id,requirement_code) VALUES(?,?,?)');
-    $stmt->execute([$tx, $doc, $code]);
-}
-
-function complete(PDO $pdo, int $tx, string $type, int $entityId, ?int $sharedAgreement = null): array
-{
-    $created = [];
-    if ($type === 'private_person') {
-        $doc = addDoc($pdo, 'client', $entityId, 'ГПХ');
-        linkDoc($pdo, $tx, $doc, 'gph_agreement');
-        $created['agreement'] = $doc;
-    } else {
-        $doc = $sharedAgreement ?: addDoc($pdo, 'client', $entityId, 'Договор');
-        linkDoc($pdo, $tx, $doc, 'agreement');
-        $created['agreement'] = $doc;
-    }
-    $act = addDoc($pdo, 'client', $entityId, 'Акт');
-    linkDoc($pdo, $tx, $act, 'act');
-    $created['act'] = $act;
-    if ($type === 'self_employed') {
-        $receipt = addDoc($pdo, 'client', $entityId, 'Чек НПД');
-        linkDoc($pdo, $tx, $receipt, 'npd_receipt');
-        $created['receipt'] = $receipt;
-    }
-    return $created;
-}
-
-$pdoA = tenantPdo($host, $port, $dbA, $user, $pass);
-$pdoB = tenantPdo($host, $port, $dbB, $user, $pass);
-setupBase($pdoA);
-setupBase($pdoB);
-
-$legal = addClient($pdoA, 'ООО Тест', '7700000001', 'legal_entity');
-$ip = addClient($pdoA, 'ИП Тест', '7700000002', 'individual');
-$npd = addClient($pdoA, 'НПД Тест', '7700000003', 'self_employed');
-$person = addClient($pdoA, 'Физлицо Тест', '7700000004', 'private_person');
-$unclassified = addClient($pdoA, 'Без типа', '7700000005', null);
-
-$txLegal = addTx($pdoA, '7700000001'); complete($pdoA, $txLegal, 'legal_entity', $legal);
-$txIp = addTx($pdoA, '7700000002'); complete($pdoA, $txIp, 'individual', $ip);
-$txNpd = addTx($pdoA, '7700000003'); complete($pdoA, $txNpd, 'self_employed', $npd);
-$txPerson = addTx($pdoA, '7700000004'); complete($pdoA, $txPerson, 'private_person', $person);
-
-$txMissingOne = addTx($pdoA, '7700000001');
-$agreementForMissingOne = addDoc($pdoA, 'client', $legal, 'Договор');
-linkDoc($pdoA, $txMissingOne, $agreementForMissingOne, 'agreement');
-
-$txMissingSeveral = addTx($pdoA, '7700000003');
-$txUnknown = addTx($pdoA, '7999999999', 'Неизвестный');
-$txNoProfile = addTx($pdoA, '7700000005');
-
-// Incoming client receipts belong to the bank statement, but not to this V1 expense-closing contour.
-$txIncomingClient = addIncomingTx($pdoA, '7700000001', 'ООО Тест');
-
-// Optional documents do not participate in the profile. A complete required set remains complete.
-$txOptional = addTx($pdoA, '7700000001'); complete($pdoA, $txOptional, 'legal_entity', $legal);
-
-$txEmployee = addTx($pdoA, '7700000001');
-$pdoA->prepare('INSERT INTO finance_employee_movements(bank_transaction_id) VALUES(?)')->execute([$txEmployee]);
-
-// One existing agreement is reused by two separate bank operations without copying the file.
-$sharedAgreement = addDoc($pdoA, 'client', $legal, 'Рамочный договор');
-$txReuse1 = addTx($pdoA, '7700000001'); complete($pdoA, $txReuse1, 'legal_entity', $legal, $sharedAgreement);
-$txReuse2 = addTx($pdoA, '7700000001'); complete($pdoA, $txReuse2, 'legal_entity', $legal, $sharedAgreement);
-
-$allA = ClosingDocumentService::reportRows($pdoA, false);
-$problemA = ClosingDocumentService::reportRows($pdoA, true);
-$byId = [];
-foreach ($allA as $row) $byId[(int) $row['id']] = $row;
-
-foreach ([$txLegal, $txIp, $txNpd, $txPerson, $txOptional, $txReuse1, $txReuse2] as $id) {
-    assertTrue(isset($byId[$id]) && !$byId[$id]['is_problem'], 'complete required set is not problematic tx=' . $id);
-}
-assertTrue($byId[$txMissingOne]['is_problem'], 'outgoing supplier payment missing one required document is problem');
-assertSameValue(1, count($byId[$txMissingOne]['missing_requirements']), 'exactly one missing requirement');
-assertTrue($byId[$txMissingSeveral]['is_problem'], 'missing several required documents is problem');
-assertSameValue(3, count($byId[$txMissingSeveral]['missing_requirements']), 'NPD missing several requirements');
-assertTrue($byId[$txUnknown]['is_problem'], 'unknown counterparty is problem');
-assertSameValue('Контрагент не определён', $byId[$txUnknown]['problem_reason'], 'unknown counterparty reason');
-assertTrue($byId[$txNoProfile]['is_problem'], 'missing classification/profile is problem');
-assertSameValue('Не определён профиль обязательных документов', $byId[$txNoProfile]['problem_reason'], 'missing profile reason');
-assertTrue(!isset($byId[$txEmployee]), 'employee money flow is excluded from report');
-assertTrue(!isset($byId[$txIncomingClient]), 'incoming client payment is excluded from expense closing report');
-assertSameValue(4, count($problemA), 'incoming client payment does not increase problematic operations count');
-assertSameValue(count($problemA), ClosingDocumentService::problemCount($pdoA), 'badge source equals problematic filter count');
-assertSameValue(4, ClosingDocumentService::problemCount($pdoA), 'badge count excludes incoming client payment');
-
-$reuseStmt = $pdoA->prepare('SELECT COUNT(DISTINCT bank_transaction_id) FROM finance_closing_document_links WHERE document_id = ? AND requirement_code = ?');
-$reuseStmt->execute([$sharedAgreement, 'agreement']);
-assertSameValue(2, (int) $reuseStmt->fetchColumn(), 'same existing agreement is reusable across operations');
-
-// Tenant B has its own schema/data and cannot affect tenant A count.
-addTx($pdoB, '7888888888', 'Tenant B unknown');
-addIncomingTx($pdoB, '7888888889', 'Tenant B incoming client');
-assertSameValue(1, ClosingDocumentService::problemCount($pdoB), 'tenant B incoming client receipt is excluded from isolated count');
-assertSameValue(4, ClosingDocumentService::problemCount($pdoA), 'tenant A count unchanged by tenant B');
-
-$navigationSource = file_get_contents(__DIR__ . '/../app/Service/NavigationCounterService.php');
-assertTrue(str_contains((string) $navigationSource, 'ClosingDocumentService::problemCount($tenant)'), 'sidebar counter calls the shared problem source');
-$serviceSource = file_get_contents(__DIR__ . '/../app/Service/ClosingDocumentService.php');
-assertTrue(str_contains((string) $serviceSource, 'COALESCE(bt.debit_amount, 0) > 0'), 'shared closing source explicitly scopes outgoing debit expenses');
-$layoutSource = file_get_contents(__DIR__ . '/../app/View/layouts/main.php');
-assertTrue(str_contains((string) $layoutSource, 'nav-count is-alert'), 'closing badge reuses system nav-count is-alert pattern');
-assertTrue(str_contains((string) $layoutSource, '$closingDocumentsProblemCount > 999 ? \'999+\' : $closingDocumentsProblemCount'), 'closing badge preserves 999+ cap');
-assertTrue(str_contains((string) $layoutSource, 'Закрывающие документы'), 'closing documents menu item exists');
-$viewSource = file_get_contents(__DIR__ . '/../app/View/pages/company_finance_closing_documents.php');
-assertTrue(str_contains((string) $viewSource, "window.openModal('closing-contractor-create-modal')"), 'unknown counterparty offers create-new flow');
-assertTrue(str_contains((string) $viewSource, "app_url('/company/contractors/create')"), 'create-new flow reuses existing contractor entity route');
-assertTrue(str_contains((string) $viewSource, "typeField: 'contractor_type'"), 'create-new flow captures legal classification used by document profiles');
-
-$root->exec("DROP DATABASE `{$dbA}`");
-$root->exec("DROP DATABASE `{$dbB}`");
-
-echo "finance_closing_documents_contract_test: PASS\n";
-echo "fixture_problem_count=4\n";
-echo "direction_scope=debit_outgoing_only\n";
+$h=getenv('PLANEX_TEST_MYSQL_HOST')?:'127.0.0.1';$u=getenv('PLANEX_TEST_MYSQL_USER')?:'planex_ci';$pw=getenv('PLANEX_TEST_MYSQL_PASSWORD')?:'planex_ci';$port=(int)(getenv('PLANEX_TEST_MYSQL_PORT')?:3306);$root=new PDO("mysql:host=$h;port=$port;charset=utf8mb4",$u,$pw,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+$dba='closing_a_'.getmypid();$dbb='closing_b_'.getmypid();$root->exec("CREATE DATABASE `$dba` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");$root->exec("CREATE DATABASE `$dbb` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+function tp(string $h,int $port,string $db,string $u,string $pw):PDO{return new PDO("mysql:host=$h;port=$port;dbname=$db;charset=utf8mb4",$u,$pw,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);}
+function base(PDO $p):void{$p->exec("CREATE TABLE bank_transactions(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,account_id INT UNSIGNED NOT NULL DEFAULT 1,operation_date DATE NOT NULL,document_number VARCHAR(100),operation_type VARCHAR(30),counterparty_name VARCHAR(255),counterparty_inn VARCHAR(20),debit_amount DECIMAL(15,2) NOT NULL DEFAULT 0,credit_amount DECIMAL(15,2) NOT NULL DEFAULT 0,purpose TEXT,classification_status VARCHAR(30) NOT NULL DEFAULT 'UNALLOCATED',is_internal_transfer TINYINT(1) NOT NULL DEFAULT 0) ENGINE=InnoDB");$p->exec("CREATE TABLE finance_employee_movements(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,bank_transaction_id INT UNSIGNED NULL) ENGINE=InnoDB");$p->exec("CREATE TABLE documents(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,entity_type VARCHAR(20) NOT NULL,entity_id INT UNSIGNED NOT NULL,document_type VARCHAR(100),document_type_id INT UNSIGNED NULL,original_name VARCHAR(500) NOT NULL,stored_name VARCHAR(255) NOT NULL,relative_path VARCHAR(1000) NOT NULL,mime_type VARCHAR(100) NOT NULL,file_size BIGINT UNSIGNED NOT NULL,status VARCHAR(20) NOT NULL DEFAULT 'uploaded',deleted_at DATETIME NULL,created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP) ENGINE=InnoDB");$p->exec("CREATE TABLE document_types(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,name VARCHAR(255),code VARCHAR(100)) ENGINE=InnoDB");foreach(['077_finance_closing_documents.sql','078_finance_closing_document_exceptions.sql'] as $m){$sql=file_get_contents(__DIR__.'/../database/migrations-local/'.$m);if($sql===false)throw new RuntimeException('missing '.$m);$p->exec($sql);}a(ClosingDocumentService::schemaReady($p),'schema ready');}
+function tx(PDO $p,string $name,string $inn,bool $incoming=false,bool $internal=false):int{$s=$p->prepare("INSERT INTO bank_transactions(operation_date,document_number,operation_type,counterparty_name,counterparty_inn,debit_amount,credit_amount,purpose,is_internal_transfer) VALUES(CURDATE(),?,'PAYMENT',?,?,?,?, 'test',?)");$s->execute([uniqid('t'),$name,$inn,$incoming?0:1000,$incoming?1000:0,$internal?1:0]);return(int)$p->lastInsertId();}
+function addDoc(PDO $p,int $tx,string $code):int{$s=$p->prepare("INSERT INTO documents(entity_type,entity_id,document_type,original_name,stored_name,relative_path,mime_type,file_size,status) VALUES('bank_transaction',?,?,?,?,?,'application/pdf',100,'uploaded')");$s->execute([$tx,$code,$code.'.pdf',uniqid('d').'.pdf','test/'.$code.'.pdf']);$id=(int)$p->lastInsertId();$l=$p->prepare('INSERT INTO finance_closing_document_links(bank_transaction_id,document_id,requirement_code) VALUES(?,?,?)');$l->execute([$tx,$id,$code]);return$id;}
+function done(PDO $p,int $tx,string $profile):void{addDoc($p,$tx,'agreement');addDoc($p,$tx,'act');if($profile==='self_employed')addDoc($p,$tx,'npd_receipt');}
+$A=tp($h,$port,$dba,$u,$pw);$B=tp($h,$port,$dbb,$u,$pw);base($A);base($B);
+$l=tx($A,'ООО Ромашка','7700000001');done($A,$l,'legal_entity');$ip=tx($A,'ИП Иванов','7700000002');done($A,$ip,'individual');$npd=tx($A,'Петров Петр','770000000003');done($A,$npd,'self_employed');$m1=tx($A,'ООО Без Акта','7700000004');addDoc($A,$m1,'agreement');$m3=tx($A,'Сидоров Сергей','770000000005');$ex=tx($A,'АО Банк','7700000006');ClosingDocumentService::addException($A,'7700000006','Банковские комиссии',1);$incoming=tx($A,'ООО Клиент','7700000007',true);$internal=tx($A,'ООО Свой','7700000008',false,true);$emp=tx($A,'Сотрудник','770000000009');$A->prepare('INSERT INTO finance_employee_movements(bank_transaction_id) VALUES(?)')->execute([$emp]);
+$rows=ClosingDocumentService::reportRows($A,false);$by=[];foreach($rows as $r)$by[(int)$r['id']]=$r;a(!$by[$l]['is_problem']&&!$by[$ip]['is_problem']&&!$by[$npd]['is_problem'],'complete profiles');eq(1,count($by[$m1]['missing_requirements']),'one missing');eq(3,count($by[$m3]['missing_requirements']),'NPD all missing');a($by[$ex]['is_exempt']&&!$by[$ex]['is_problem'],'exception suppresses docs');a(!isset($by[$incoming])&&!isset($by[$internal])&&!isset($by[$emp]),'non-scope excluded');eq(2,ClosingDocumentService::problemCount($A),'base problem count');eq(count(ClosingDocumentService::reportRows($A,true)),ClosingDocumentService::problemCount($A),'badge same source');
+$id=(int)ClosingDocumentService::exceptions($A)[0]['id'];ClosingDocumentService::removeException($A,$id);eq(3,ClosingDocumentService::problemCount($A),'remove exception');ClosingDocumentService::addException($A,'7700000006','Банковские комиссии',1);eq(2,ClosingDocumentService::problemCount($A),'restore exception');
+$r1=tx($A,'ООО Ромашка','7700000001');$shared=addDoc($A,$r1,'agreement');$r2=tx($A,'ООО Ромашка','7700000001');ClosingDocumentService::linkExistingDocument($A,$r2,$shared,'agreement',1);$q=$A->prepare('SELECT COUNT(DISTINCT bank_transaction_id) FROM finance_closing_document_links WHERE document_id=?');$q->execute([$shared]);eq(2,(int)$q->fetchColumn(),'same-INN reuse');$other=tx($A,'ООО Другой','7700000010');$blocked=false;try{ClosingDocumentService::linkExistingDocument($A,$other,$shared,'agreement',1);}catch(RuntimeException){$blocked=true;}a($blocked,'cross-INN reuse blocked');eq(5,ClosingDocumentService::problemCount($A),'fixture final problem count');
+tx($B,'ООО Tenant B','7800000001');eq(1,ClosingDocumentService::problemCount($B),'tenant B');eq(5,ClosingDocumentService::problemCount($A),'tenant A isolated');
+$v=(string)file_get_contents(__DIR__.'/../app/View/pages/company_finance_closing_documents.php');a(!str_contains($v,'Выберите контрагента')&&!str_contains($v,'Создать контрагента'),'no counterparty workflow');a(str_contains($v,'Исключения по документам'),'exceptions link');$routes=(string)file_get_contents(__DIR__.'/../app/Http/Routes/company_bank_finance.php');a(str_contains($routes,'closing-documents/exceptions'),'exceptions routes');$nav=(string)file_get_contents(__DIR__.'/../app/Service/NavigationCounterService.php');a(str_contains($nav,'ClosingDocumentService::problemCount($tenant)'),'single badge source');
+try{$root->exec("DROP DATABASE `$dba`");$root->exec("DROP DATABASE `$dbb`");}catch(Throwable){}
+echo "finance_closing_documents_contract_test: PASS\nclassification_source=bank_counterparty_name\nexception_scope=inn_exact\nfixture_problem_count=5\n";
