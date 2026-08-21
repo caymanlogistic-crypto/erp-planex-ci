@@ -3,9 +3,10 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'cgi-fcgi') { fwrite(STDERR, "CLI/CGI onl
 function fc77_env_file(string $path): array { if (!is_file($path)) throw new RuntimeException('Missing .env file.'); $rows=file($path,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES); $out=[]; foreach($rows as $row){$row=trim($row); if($row===''||$row[0]==='#')continue; $pos=strpos($row,'='); if($pos===false)continue; $key=trim(substr($row,0,$pos)); $value=trim(substr($row,$pos+1)); if(strlen($value)>=2){$a=$value[0];$b=$value[strlen($value)-1];if(($a==='"'&&$b==='"')||($a==="'"&&$b==="'"))$value=substr($value,1,-1);} $out[$key]=$value;} return $out; }
 function fc77_tenant_cfg(array $env,string $dbName): array { $cfg=['host'=>$env['DB_HOST']??'127.0.0.1','port'=>$env['DB_PORT']??'3306','username'=>$env['DB_USERNAME']??'','password'=>$env['DB_PASSWORD']??'']; if(isset($env['COMPANY_DB_POOL_JSON'])&&trim($env['COMPANY_DB_POOL_JSON'])!==''){ $pool=json_decode($env['COMPANY_DB_POOL_JSON'],true); if(is_array($pool)){ foreach($pool as $entry){ if(!is_array($entry))continue; $db=$entry['database']??($entry['db']??''); if($db!==$dbName)continue; foreach(['host','port','username','password'] as $k){ if(isset($entry[$k])&&$entry[$k]!=='')$cfg[$k]=$entry[$k]; } break; } } } return $cfg; }
 $root=rtrim((string)(getenv('PLANEX_ROOT')?:($argv[1]??'')),'/');
-$migrationPath=(string)($argv[2]??'');
 if($root===''||!is_file($root.'/.env'))throw new RuntimeException('PLANEX_ROOT is invalid.');
-if($migrationPath===''||!is_file($migrationPath))throw new RuntimeException('Migration 077 path missing.');
+$migrationPath=(string)(getenv('PLANEX_MIGRATION_PATH')?:($argv[2]??''));
+if($migrationPath==='')$migrationPath=$root.'/database/migrations-local/077_finance_closing_documents.sql';
+if(!is_file($migrationPath))throw new RuntimeException('Migration 077 path missing: '.$migrationPath);
 $name='077_finance_closing_documents.sql';
 $sql=file_get_contents($migrationPath); if($sql===false||trim($sql)==='')throw new RuntimeException('Migration 077 empty.');
 $checksum=hash('sha256',$sql);
