@@ -111,6 +111,22 @@ document.addEventListener('DOMContentLoaded', function () {
     if (problemOnly) problemOnly.addEventListener('change', applyFilters);
     applyFilters();
 
+    function setRemoteHtml(body, html) {
+        body.innerHTML = html;
+        Array.from(body.querySelectorAll('script')).forEach(function (oldScript) {
+            var newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(function (attr) { newScript.setAttribute(attr.name, attr.value); });
+            newScript.textContent = oldScript.textContent;
+            oldScript.replaceWith(newScript);
+        });
+    }
+
+    function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, function (ch) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+        });
+    }
+
     rows.forEach(function (row) {
         row.addEventListener('dblclick', function () {
             var id = parseInt(row.dataset.closingTransactionId || '0', 10);
@@ -118,10 +134,14 @@ document.addEventListener('DOMContentLoaded', function () {
             var body = document.getElementById('closing-document-modal-body');
             body.innerHTML = '<div class="empty-state compact"><p>Загрузка...</p></div>';
             window.openModal('closing-document-modal');
-            fetch(window.getErpBasePath() + '/company/finance/closing-documents/' + id + '/modal-view')
+            fetch(window.getErpBasePath() + '/company/finance/closing-documents/' + id + '/modal-view', { credentials: 'same-origin' })
                 .then(function (response) { if (!response.ok) throw new Error('HTTP ' + response.status); return response.text(); })
-                .then(function (html) { window.planexSetHtmlAndRunScripts(body, html); })
-                .catch(function () { body.innerHTML = '<div class="form-alert alert-error">Не удалось загрузить данные платежа.</div>'; });
+                .then(function (html) { setRemoteHtml(body, html); })
+                .catch(function (error) {
+                    console.error('Closing payment modal load failed', error);
+                    var detail = error && error.message ? ' (' + escapeHtml(error.message) + ')' : '';
+                    body.innerHTML = '<div class="form-alert alert-error">Не удалось загрузить данные платежа' + detail + '.</div>';
+                });
         });
     });
 });
