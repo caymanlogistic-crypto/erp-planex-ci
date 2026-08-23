@@ -1,7 +1,7 @@
 {
-  "migration_id": "078",
-  "workflow": "finance_closing_078_production_migration.yml",
+  "migration_id": "079",
+  "workflow": "finance_closing_079_production_migration.yml",
   "source_sha_input": "source_sha",
   "confirmation_input": "confirm_migration",
-  "confirmation_value": "APPLY_FINANCE_078"
+  "confirmation_value": "APPLY_FINANCE_079"
 }
