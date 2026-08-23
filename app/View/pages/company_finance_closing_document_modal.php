@@ -17,8 +17,8 @@ $columns = \App\Service\ClosingDocumentService::requirementColumns();
 $renderStatus = static function (array $status, bool $isExempt): string {
     if ($isExempt || empty($status['applicable'])) return '<span class="text-muted">—</span>';
     return !empty($status['satisfied'])
-        ? '<span class="badge badge-success"><span class="dot"></span>Есть</span>'
-        : '<span class="badge badge-warning"><span class="dot"></span>Нет</span>';
+        ? '<span class="table-check table-check--yes closing-doc-status" title="Документ загружен" aria-label="Документ есть">✓</span>'
+        : '<span class="table-check table-check--no closing-doc-status" title="Документ не загружен" aria-label="Документа нет">×</span>';
 };
 $fileBadge = static function (string $name): array {
     $ext = strtoupper((string) pathinfo($name, PATHINFO_EXTENSION));
