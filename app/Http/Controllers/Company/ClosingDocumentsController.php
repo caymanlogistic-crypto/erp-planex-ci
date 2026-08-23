@@ -25,10 +25,8 @@ final class ClosingDocumentsController
         $pageContext = 'Финансы › Закрывающие документы';
         $company = null;
         $rows = [];
-        $documentsByInn = [];
         $schemaReady = false;
         $dbError = null;
-        $problemOnly = (string) ($_GET['problem'] ?? '') === '1';
         $successFlash = $_SESSION['closing_documents_success'] ?? null;
         $errorFlash = $_SESSION['closing_documents_error'] ?? null;
         unset($_SESSION['closing_documents_success'], $_SESSION['closing_documents_error']);
@@ -38,16 +36,7 @@ final class ClosingDocumentsController
             $pageContext .= ' › Компания: ' . e((string) $company['name']);
             $schemaReady = ClosingDocumentService::schemaReady($tenantPdo);
             if ($schemaReady) {
-                $rows = ClosingDocumentService::reportRows($tenantPdo, $problemOnly);
-                $seenInn = [];
-                foreach ($rows as $row) {
-                    $inn = (string) ($row['normalized_inn'] ?? '');
-                    if ($inn === '' || !empty($row['is_exempt']) || isset($seenInn[$inn])) {
-                        continue;
-                    }
-                    $seenInn[$inn] = true;
-                    $documentsByInn[$inn] = ClosingDocumentService::existingDocumentsForInn($tenantPdo, $inn);
-                }
+                $rows = ClosingDocumentService::reportRows($tenantPdo, false);
             }
         } catch (Throwable $e) {
             $dbError = 'Ошибка при загрузке данных: ' . $e->getMessage();
@@ -59,6 +48,45 @@ final class ClosingDocumentsController
         require base_path('app/View/layouts/main.php');
     }
 
+    public function modalView(string|int $id): void
+    {
+        requireRole(['company_owner']);
+        $transactionId = (int) $id;
+        if ($transactionId <= 0) {
+            http_response_code(404);
+            echo '<div class="form-alert alert-error">Платёж не найден.</div>';
+            return;
+        }
+
+        try {
+            [, $tenantPdo] = $this->tenant();
+            if (!ClosingDocumentService::schemaReady($tenantPdo)) {
+                throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
+            }
+            $row = null;
+            foreach (ClosingDocumentService::reportRows($tenantPdo, false) as $candidate) {
+                if ((int) ($candidate['id'] ?? 0) === $transactionId) {
+                    $row = $candidate;
+                    break;
+                }
+            }
+            if ($row === null) {
+                http_response_code(404);
+                echo '<div class="form-alert alert-error">Платёж не входит в контур закрывающих документов.</div>';
+                return;
+            }
+            $inn = (string) ($row['normalized_inn'] ?? '');
+            $availableDocuments = $inn !== '' && empty($row['is_exempt'])
+                ? ClosingDocumentService::existingDocumentsForInn($tenantPdo, $inn)
+                : [];
+            $requirementLabels = ClosingDocumentService::requirementLabels();
+            require base_path('app/View/pages/company_finance_closing_document_modal.php');
+        } catch (Throwable $e) {
+            http_response_code(500);
+            echo '<div class="form-alert alert-error">' . e($e->getMessage()) . '</div>';
+        }
+    }
+
     public function exceptions(): void
     {
         requireRole(['company_owner']);
@@ -68,6 +96,7 @@ final class ClosingDocumentsController
         $pageContext = 'Финансы › Закрывающие документы › Исключения';
         $company = null;
         $exceptions = [];
+        $recipientOptions = [];
         $schemaReady = false;
         $dbError = null;
         $successFlash = $_SESSION['closing_documents_success'] ?? null;
@@ -80,6 +109,7 @@ final class ClosingDocumentsController
             $schemaReady = ClosingDocumentService::schemaReady($tenantPdo);
             if ($schemaReady) {
                 $exceptions = ClosingDocumentService::exceptions($tenantPdo);
+                $recipientOptions = $this->bankRecipientOptions($tenantPdo);
             }
         } catch (Throwable $e) {
             $dbError = 'Ошибка при загрузке данных: ' . $e->getMessage();
@@ -102,7 +132,7 @@ final class ClosingDocumentsController
                 (string) ($_POST['comment'] ?? ''),
                 (int) ($_SESSION['user_id'] ?? 0)
             );
-            $_SESSION['closing_documents_success'] = 'ИНН добавлен в исключения';
+            $_SESSION['closing_documents_success'] = 'Получатель добавлен в исключения';
         } catch (Throwable $e) {
             $_SESSION['closing_documents_error'] = $e->getMessage();
         }
@@ -180,6 +210,40 @@ final class ClosingDocumentsController
         $this->back();
     }
 
+    private function bankRecipientOptions(PDO $pdo): array
+    {
+        $rows = $pdo->query(
+            "SELECT bt.counterparty_name, bt.counterparty_inn, MAX(bt.operation_date) AS last_operation_date, MAX(bt.id) AS last_id
+             FROM bank_transactions bt
+             WHERE COALESCE(bt.debit_amount, 0) > 0
+               AND COALESCE(bt.is_internal_transfer, 0) = 0
+               AND NOT EXISTS (
+                    SELECT 1 FROM finance_employee_movements fem
+                    WHERE fem.bank_transaction_id = bt.id
+               )
+               AND TRIM(COALESCE(bt.counterparty_name, '')) <> ''
+               AND TRIM(COALESCE(bt.counterparty_inn, '')) <> ''
+             GROUP BY bt.counterparty_name, bt.counterparty_inn
+             ORDER BY bt.counterparty_name ASC"
+        )->fetchAll(PDO::FETCH_ASSOC);
+        $result = [];
+        $seen = [];
+        foreach ($rows as $row) {
+            $inn = ClosingDocumentService::normalizeInn($row['counterparty_inn'] ?? '');
+            if (!in_array(strlen($inn), [10, 12], true)) {
+                continue;
+            }
+            $name = trim((string) ($row['counterparty_name'] ?? ''));
+            $key = mb_strtolower($name, 'UTF-8') . '|' . $inn;
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $result[] = ['name' => $name, 'inn' => $inn];
+        }
+        return $result;
+    }
+
     private function tenant(): array
     {
         $companyId = (int) (getSessionCompanyId() ?? 0);
@@ -199,8 +263,7 @@ final class ClosingDocumentsController
 
     private function back(): void
     {
-        $suffix = (string) ($_POST['problem_only'] ?? '') === '1' ? '?problem=1' : '';
-        header('Location: ' . app_url('/company/finance/closing-documents') . $suffix);
+        header('Location: ' . app_url('/company/finance/closing-documents'));
         exit;
     }
 
