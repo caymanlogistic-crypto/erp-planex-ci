@@ -1,0 +1,77 @@
+name: DIAG Closing No Scroll V2 Live
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - '.github/workflows/_diag_closing_no_scroll_v2_live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: 23686ac7ebb42b8e2aff48dc52bbe28542c73e8e
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Verify exact live marker and deployed view structure
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt")"
+          echo "live_marker=$marker"
+          test "$marker" = "$EXPECTED_SHA"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'set -euo pipefail
+            f=/home/s/spugovxsim/planexp/public_html/erpv2/app/View/pages/company_finance_closing_documents.php
+            grep -q "closing-documents-table-frame" "$f"
+            grep -q "table-layout:fixed" "$f"
+            grep -q "white-space:normal!important" "$f"
+            ! grep -q "class=\"table-scroll\"" "$f"
+            echo LIVE_CLOSING_V2_STRUCTURAL_NO_SCROLL=PASS'
+      - name: Full live controller render
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 -d display_errors=1 -r '
+            chdir(\"/home/s/spugovxsim/planexp/public_html/erpv2\");
+            \$config=require \"bootstrap/app.php\";
+            require \"app/Support/entrypoint_dependencies.php\";
+            require \"app/Http/Controllers/Company/ClosingDocumentsController.php\";
+            \$_SESSION=[\"user_id\"=>1,\"role_code\"=>\"company_owner\",\"company_id\"=>25];
+            \$_SERVER[\"REQUEST_METHOD\"]=\"GET\";
+            \$_SERVER[\"REQUEST_URI\"]=\"/erpv2/company/finance/closing-documents\";
+            \$db=new \\App\\Core\\Database(\$config[\"database\"]);
+            ob_start(); (new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController(\$config,\$db))->index(); \$html=ob_get_clean();
+            if(strpos(\$html,\"closing-documents-table-frame\")===false) exit(7);
+            if(strpos(\$html,\"class=\\\"table-scroll\\\"\")!==false) exit(8);
+            if(strpos(\$html,\"white-space:normal!important\")===false) exit(9);
+            echo \"LIVE_CLOSING_V2_FULL_RENDER=PASS\\n\";
+          '"
+      - name: HTTP login acceptance
+        run: |
+          set -euo pipefail
+          test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+          echo 'LIVE_HTTP_LOGIN=PASS'
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/key" 2>/dev/null || true
