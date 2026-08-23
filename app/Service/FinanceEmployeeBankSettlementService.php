@@ -79,7 +79,9 @@ final class FinanceEmployeeBankSettlementService
             $dds = $ddsCategoryId ?? (!empty($row['dds_category_id']) ? (int)$row['dds_category_id'] : null);
             $uid = (int)($user['id'] ?? $user['user_id'] ?? 0);
             $role = (string)($user['role'] ?? $user['role_code'] ?? ($ruleId !== null ? 'system' : 'company_owner'));
-            $classificationStatus = $ruleId !== null ? 'AUTO' : (string)($row['classification_status'] ?? 'UNALLOCATED');
+            $isManual = $ruleId === null;
+            $classificationStatus = $isManual ? 'MANUAL' : 'AUTO';
+            $classificationLocked = $isManual ? 1 : 0;
 
             $insertCounterpart = $pdo->prepare(
                 "INSERT INTO finance_operations
@@ -88,7 +90,7 @@ final class FinanceEmployeeBankSettlementService
                      classification_status,classification_rule_id,classification_locked,classification_updated_at,
                      created_by_user_id,created_by_role,posted_by_user_id,posted_by_role,posted_at)
                  VALUES
-                    ('TRANSFER','POSTED','TRANSFER',?,?,?,?,?,?,?, ?,?,?,?, ?,?, ?,0,NOW(), ?,?,?,?,NOW())"
+                    ('TRANSFER','POSTED','TRANSFER',?,?,?,?,?,?,?, ?,?,?,?, ?,?, ?,?,NOW(), ?,?,?,?,NOW())"
             );
             $insertCounterpart->execute([
                 $employeeAccountId,
@@ -105,6 +107,7 @@ final class FinanceEmployeeBankSettlementService
                 $dedupe,
                 $classificationStatus,
                 $ruleId,
+                $classificationLocked,
                 $uid > 0 ? $uid : 0,
                 $role,
                 $uid > 0 ? $uid : 0,
@@ -116,7 +119,7 @@ final class FinanceEmployeeBankSettlementService
                 "UPDATE finance_operations
                     SET operation_type='TRANSFER', source='TRANSFER', transfer_account_id=?, transfer_group_id=?, transfer_direction=?,
                         dds_category_id=?, cash_flow_center_id=?, classification_status=?, classification_rule_id=?,
-                        classification_locked=0, classification_updated_at=NOW()
+                        classification_locked=?, classification_updated_at=NOW()
                   WHERE id=? AND status='POSTED'"
             );
             $updateBankOperation->execute([
@@ -127,6 +130,7 @@ final class FinanceEmployeeBankSettlementService
                 $cfu,
                 $classificationStatus,
                 $ruleId,
+                $classificationLocked,
                 (int)$row['finance_operation_id'],
             ]);
             if ($updateBankOperation->rowCount() !== 1) {
@@ -136,7 +140,7 @@ final class FinanceEmployeeBankSettlementService
             $updateBank = $pdo->prepare(
                 "UPDATE bank_transactions
                     SET is_internal_transfer=1, linked_cash_transaction_id=?, dds_category_id=?, cash_flow_center_id=?,
-                        classification_status=?, classification_rule_id=?, classification_locked=0, classification_updated_at=NOW()
+                        classification_status=?, classification_rule_id=?, classification_locked=?, classification_updated_at=NOW()
                   WHERE id=?"
             );
             $updateBank->execute([
@@ -145,6 +149,7 @@ final class FinanceEmployeeBankSettlementService
                 $cfu,
                 $classificationStatus,
                 $ruleId,
+                $classificationLocked,
                 $bankTransactionId,
             ]);
 
@@ -186,6 +191,8 @@ final class FinanceEmployeeBankSettlementService
                     'bank_finance_operation_id' => (int)$row['finance_operation_id'],
                     'employee_finance_operation_id' => $employeeOperationId,
                     'rule_id' => $ruleId,
+                    'classification_status' => $classificationStatus,
+                    'classification_locked' => $classificationLocked,
                     'cash_account_used' => false,
                 ],
                 $uid,
@@ -196,6 +203,8 @@ final class FinanceEmployeeBankSettlementService
             return [
                 'handled' => true,
                 'rule_id' => $ruleId,
+                'status' => $classificationStatus,
+                'classification_locked' => $classificationLocked,
                 'employee_movement_id' => $movementId,
                 'employee_operation_id' => $employeeOperationId,
                 'bank_operation_id' => (int)$row['finance_operation_id'],
