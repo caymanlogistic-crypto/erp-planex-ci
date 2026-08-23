@@ -17,12 +17,13 @@ env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
   DEPLOY_REQUEST_BRANCH: deploy/erpv2-agent
   CONTROLLED_DEPLOY_WORKFLOW: erpv2_controlled_deploy.yml
+  CANONICAL_CI_WORKFLOW: ci.yml
 
 jobs:
   authorize-and-dispatch:
     if: ${{ github.actor == github.repository_owner }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 18
     steps:
       - name: Checkout deploy request SHA
         uses: actions/checkout@v4
@@ -45,7 +46,7 @@ jobs:
           printf 'source_sha=%s\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
           printf 'AGENT_DEPLOY_SOURCE_SHA=%s\nCANONICAL_HEAD_SHA=%s\n' "$SOURCE_SHA" "$canonical_sha"
 
-      - name: Wait for exact canonical ERP PLANEX CI
+      - name: Ensure exact canonical ERP PLANEX CI PASS
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,41 +55,89 @@ jobs:
           API_URL: ${{ github.api_url }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 72); do
+
+          read_state() {
+            local event="$1"
+            local runs_json
             runs_json="$(curl -fsSL \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20")"
-            state="$(RUNS_JSON="$runs_json" SOURCE_SHA="$SOURCE_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+              "$API_URL/repos/$REPOSITORY/actions/workflows/$CANONICAL_CI_WORKFLOW/runs?head_sha=$SOURCE_SHA&event=$event&per_page=20")"
+            RUNS_JSON="$runs_json" SOURCE_SHA="$SOURCE_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" EVENT="$event" python3 - <<'PY'
           import json, os
           data = json.loads(os.environ['RUNS_JSON'])
           source = os.environ['SOURCE_SHA']
           branch = os.environ['CANONICAL_BRANCH']
-          matches = [r for r in data.get('workflow_runs', []) if r.get('head_sha') == source and r.get('head_branch') == branch and r.get('event') == 'push']
+          event = os.environ['EVENT']
+          matches = [
+              r for r in data.get('workflow_runs', [])
+              if r.get('head_sha') == source
+              and r.get('head_branch') == branch
+              and r.get('event') == event
+          ]
           if not matches:
-              print('WAIT')
+              print('NONE')
           else:
               run = max(matches, key=lambda r: r.get('run_number', 0))
               if run.get('status') != 'completed':
-                  print('WAIT')
+                  print(f"WAIT:{run.get('id')}:{run.get('run_number')}:{event}")
               elif run.get('conclusion') == 'success':
-                  print(f"PASS:{run.get('id')}:{run.get('run_number')}")
+                  print(f"PASS:{run.get('id')}:{run.get('run_number')}:{event}")
               else:
-                  print(f"FAIL:{run.get('id')}:{run.get('run_number')}:{run.get('conclusion')}")
+                  print(f"FAIL:{run.get('id')}:{run.get('run_number')}:{event}:{run.get('conclusion')}")
           PY
-            )"
-            case "$state" in
-              PASS:*) echo "ERP_PLANEX_CI_$state"; break ;;
-              FAIL:*) echo "Canonical CI failed: $state" >&2; exit 1 ;;
-              WAIT) echo "Waiting for canonical CI ($attempt/72)..."; sleep 10 ;;
-              *) echo "Unexpected CI state: $state" >&2; exit 1 ;;
-            esac
-            if [ "$attempt" -eq 72 ]; then
-              echo 'Timed out waiting for exact canonical ERP PLANEX CI.' >&2
-              exit 1
-            fi
+          }
+
+          push_state="$(read_state push)"
+          case "$push_state" in
+            PASS:*) echo "ERP_PLANEX_CI_$push_state"; exit 0 ;;
+            FAIL:*) echo "Canonical push CI failed: $push_state" >&2; exit 1 ;;
+            WAIT:*) echo "Canonical push CI already running: $push_state" ;;
+            NONE) echo 'No exact canonical push CI run found; requesting exact canonical CI via workflow_dispatch.' ;;
+            *) echo "Unexpected push CI state: $push_state" >&2; exit 1 ;;
+          esac
+
+          dispatch_state="$(read_state workflow_dispatch)"
+          case "$dispatch_state" in
+            PASS:*) echo "ERP_PLANEX_CI_$dispatch_state"; exit 0 ;;
+            FAIL:*) echo "Canonical dispatched CI failed: $dispatch_state" >&2; exit 1 ;;
+            WAIT:*) echo "Canonical dispatched CI already running: $dispatch_state" ;;
+            NONE)
+              if [ "$push_state" = NONE ]; then
+                payload="$(CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+          import json, os
+          print(json.dumps({'ref': os.environ['CANONICAL_BRANCH']}))
+          PY
+                )"
+                code="$(curl -sS -o /tmp/ci-dispatch-response.txt -w '%{http_code}' \
+                  -X POST \
+                  -H "Authorization: Bearer $GH_TOKEN" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "$API_URL/repos/$REPOSITORY/actions/workflows/$CANONICAL_CI_WORKFLOW/dispatches" \
+                  -d "$payload")"
+                test "$code" = 204
+                echo 'AGENT_DEPLOY_CANONICAL_CI_DISPATCHED=YES'
+              fi
+              ;;
+            *) echo "Unexpected dispatched CI state: $dispatch_state" >&2; exit 1 ;;
+          esac
+
+          for attempt in $(seq 1 90); do
+            push_state="$(read_state push)"
+            dispatch_state="$(read_state workflow_dispatch)"
+            for state in "$push_state" "$dispatch_state"; do
+              case "$state" in
+                PASS:*) echo "ERP_PLANEX_CI_$state"; exit 0 ;;
+                FAIL:*) echo "Canonical CI failed: $state" >&2; exit 1 ;;
+              esac
+            done
+            echo "Waiting for exact canonical CI ($attempt/90): push=$push_state dispatch=$dispatch_state"
+            sleep 10
           done
+          echo 'Timed out waiting for exact canonical ERP PLANEX CI.' >&2
+          exit 1
 
       - name: Reconfirm canonical HEAD immediately before dispatch
         shell: bash

@@ -77,10 +77,13 @@ jobs:
               'github.actor == github.repository_owner',
               'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
               'DEPLOY_REQUEST_BRANCH: deploy/erpv2-agent',
+              'CANONICAL_CI_WORKFLOW: ci.yml',
               'test "$SOURCE_SHA" = "$canonical_sha"',
-              'Wait for exact canonical ERP PLANEX CI',
-              'for attempt in $(seq 1 72)',
-              'actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push',
+              'Ensure exact canonical ERP PLANEX CI PASS',
+              'read_state push',
+              'read_state workflow_dispatch',
+              'actions/workflows/$CANONICAL_CI_WORKFLOW/dispatches',
+              'AGENT_DEPLOY_CANONICAL_CI_DISPATCHED=YES',
               "run.get('conclusion') == 'success'",
               'Reconfirm canonical HEAD immediately before dispatch',
               'actions/workflows/$CONTROLLED_DEPLOY_WORKFLOW/dispatches',
@@ -88,6 +91,8 @@ jobs:
           ]
           for token in required:
               assert token in agent, f'missing safeguard: {token}'
+          for forbidden in ['ERPV2_SSH_PRIVATE_KEY', 'P07_' + 'deploy_erpv2.sh', 'public_html/' + 'erpv2', 'deploy_' + 'backups']:
+              assert forbidden not in agent, f'agent request must remain control-plane only: {forbidden}'
 
           fast_on = on_block(fast)
           fast_events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', fast_on, flags=re.M)
@@ -122,8 +127,6 @@ jobs:
           for forbidden in forbidden_fast:
               assert forbidden not in fast, f'FAST workflow must not own production secret/write engine: {forbidden}'
 
-          # STANDARD/CRITICAL main CI must stay incremental rather than repository-wide,
-          # while global safety guards and task-specific heavy workflows remain intact.
           for token in [
               'fetch-depth: 2',
               'Detect changed scope',
