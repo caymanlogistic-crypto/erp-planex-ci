@@ -35,7 +35,7 @@ $problemCount = count(array_filter($rows ?? [], static fn(array $row): bool => !
 <?php if (empty($schemaReady) && empty($dbError)): ?>
 <div class="notice warn"><b>Для раздела требуется актуальная tenant schema.</b></div>
 <?php elseif (!empty($schemaReady)): ?>
-<div class="table-card table-card--standard closing-documents-card" data-closing-grid>
+<div class="table-card table-card--standard closing-documents-card" data-closing-grid data-default-problems-only="1">
     <div class="table-toolbar">
         <div class="found-label">Найдено: <b data-closing-found><?= count($rows) ?></b> из <b><?= count($rows) ?></b> операций · проблемных <b><?= $problemCount ?></b></div>
         <div class="toolbar-right closing-toolbar-filters">
