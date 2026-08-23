@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - diag/closing-no-scroll-live-20260823
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - '.github/workflows/_diag_closing_no_scroll_live.yml'
 
 permissions:
   contents: read
