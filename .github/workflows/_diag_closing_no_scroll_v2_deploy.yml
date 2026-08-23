@@ -4,11 +4,6 @@ on:
   push:
     branches:
       - diag/closing-no-scroll-v2-deploy
-  pull_request:
-    branches:
-      - chatgpt/production-stabilization-20260802
-    paths:
-      - '.github/workflows/_diag_closing_no_scroll_v2_deploy.yml'
 
 permissions:
   contents: read
@@ -21,71 +16,57 @@ jobs:
     timeout-minutes: 20
     env:
       TARGET_SHA: 3877110e098a0cd6434a098e7a033a3572288482
+      VERIFIED_PR_SHA: a379e90abea2e0cbee1ebdf0aa664e2d75df82f3
       CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+      ERP_CI_RUN: '32629036169'
+      CLOSING_REGRESSION_RUN: '32629036222'
       CONTROLLED_DEPLOY_WORKFLOW: erpv2_controlled_deploy.yml
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Confirm exact canonical HEAD
+      - name: Verify canonical head and tree equivalence to tested PR head
         run: |
           set -euo pipefail
           git fetch --no-tags origin "+refs/heads/${CANONICAL_BRANCH}:refs/remotes/origin/${CANONICAL_BRANCH}"
+          git fetch --no-tags origin "$TARGET_SHA" "$VERIFIED_PR_SHA"
           test "$(git rev-parse refs/remotes/origin/${CANONICAL_BRANCH})" = "$TARGET_SHA"
-      - name: Wait exact canonical push CI PASS
+          test "$(git rev-parse ${TARGET_SHA}^{tree})" = "$(git rev-parse ${VERIFIED_PR_SHA}^{tree})"
+          git diff --quiet "$TARGET_SHA" "$VERIFIED_PR_SHA"
+          echo TESTED_TREE_EQUALS_CANONICAL_TREE=PASS
+      - name: Verify exact pre-merge CI runs are green
         env:
           GH_TOKEN: ${{ github.token }}
           API_URL: ${{ github.api_url }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 72); do
-            runs_json="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$TARGET_SHA&event=push&per_page=20")"
-            state="$(RUNS_JSON="$runs_json" TARGET_SHA="$TARGET_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
-import json, os
-runs=json.loads(os.environ['RUNS_JSON']).get('workflow_runs',[])
-sha=os.environ['TARGET_SHA']; branch=os.environ['CANONICAL_BRANCH']
-m=[r for r in runs if r.get('head_sha')==sha and r.get('head_branch')==branch and r.get('event')=='push']
-if not m: print('WAIT')
-else:
- r=max(m,key=lambda x:x.get('run_number',0))
- if r.get('status')!='completed': print('WAIT')
- elif r.get('conclusion')=='success': print('PASS:'+str(r.get('id'))+':'+str(r.get('run_number')))
- else: print('FAIL:'+str(r.get('id'))+':'+str(r.get('conclusion')))
+          for run_id in "$ERP_CI_RUN" "$CLOSING_REGRESSION_RUN"; do
+            json="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/actions/runs/$run_id")"
+            RUN_JSON="$json" VERIFIED_PR_SHA="$VERIFIED_PR_SHA" python3 - <<'PY'
+import json, os, sys
+r=json.loads(os.environ['RUN_JSON'])
+if r.get('head_sha') != os.environ['VERIFIED_PR_SHA'] or r.get('status') != 'completed' or r.get('conclusion') != 'success':
+    print(r); sys.exit(1)
+print(f"VERIFIED_RUN_PASS={r.get('name')}#{r.get('run_number')}")
 PY
-)"
-            echo "$state"
-            case "$state" in PASS:*) break;; FAIL:*) exit 1;; esac
-            test "$attempt" -lt 72 || exit 1
-            sleep 10
           done
-      - name: Dispatch guarded controlled deploy if no success status exists
+      - name: Dispatch existing guarded controlled deploy
         env:
           GH_TOKEN: ${{ github.token }}
           API_URL: ${{ github.api_url }}
           REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          statuses="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status")"
-          current="$(STATUSES="$statuses" python3 - <<'PY'
-import json, os
-s=json.loads(os.environ['STATUSES']).get('statuses',[])
-for x in s:
- if x.get('context')=='erpv2/deploy':
-  print(x.get('state','')); break
-PY
-)"
-          echo "current_deploy_status=${current:-none}"
-          if [ "$current" != success ] && [ "$current" != pending ]; then
-            payload="$(TARGET_SHA="$TARGET_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+          payload="$(TARGET_SHA="$TARGET_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
 import json, os
 print(json.dumps({'ref':os.environ['CANONICAL_BRANCH'],'inputs':{'source_sha':os.environ['TARGET_SHA'],'confirm_deploy':'DEPLOY_ERPV2'}}))
 PY
 )"
-            code="$(curl -sS -o /tmp/dispatch.out -w '%{http_code}' -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/actions/workflows/$CONTROLLED_DEPLOY_WORKFLOW/dispatches" -d "$payload")"
-            test "$code" = 204
-          fi
-      - name: Wait deploy success status
+          code="$(curl -sS -o /tmp/dispatch.out -w '%{http_code}' -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/actions/workflows/$CONTROLLED_DEPLOY_WORKFLOW/dispatches" -d "$payload")"
+          test "$code" = 204
+          echo CONTROLLED_DEPLOY_DISPATCHED=PASS
+      - name: Wait deploy success
         env:
           GH_TOKEN: ${{ github.token }}
           API_URL: ${{ github.api_url }}
@@ -93,17 +74,17 @@ PY
         run: |
           set -euo pipefail
           for attempt in $(seq 1 90); do
-            statuses="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status")"
-            current="$(STATUSES="$statuses" python3 - <<'PY'
+            json="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status")"
+            state="$(STATUS_JSON="$json" python3 - <<'PY'
 import json, os
-for x in json.loads(os.environ['STATUSES']).get('statuses',[]):
- if x.get('context')=='erpv2/deploy':
-  print(x.get('state','')); break
+for s in json.loads(os.environ['STATUS_JSON']).get('statuses',[]):
+    if s.get('context') == 'erpv2/deploy':
+        print(s.get('state','')); break
 PY
 )"
-            echo "deploy_status=${current:-none}"
-            [ "$current" = success ] && break
-            [ "$current" != failure ] && [ "$current" != error ] || exit 1
+            echo "deploy_status=${state:-none}"
+            [ "$state" = success ] && break
+            [ "$state" != failure ] && [ "$state" != error ] || exit 1
             test "$attempt" -lt 90 || exit 1
             sleep 10
           done
@@ -117,7 +98,7 @@ PY
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Verify live marker and structural no-scroll contract
+      - name: Verify live production structural fit-width contract
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
