@@ -2,6 +2,14 @@
 $problemCountOnPage = count(array_filter($rows ?? [], static fn(array $row): bool => !empty($row['is_problem'])));
 $requirementLabels = \App\Service\ClosingDocumentService::requirementLabels();
 ?>
+<style>
+.closing-documents-card .table-scroll{overflow-x:hidden}
+.closing-documents-table{width:100%!important;min-width:0!important;table-layout:fixed}
+.closing-documents-table th,.closing-documents-table td{min-width:0;overflow-wrap:anywhere;word-break:break-word;vertical-align:top}
+.closing-documents-table .field-select,.closing-documents-table .field-input{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.closing-documents-table details{max-width:100%}
+.closing-documents-table summary,.closing-documents-table .btn{max-width:100%;white-space:normal}
+</style>
 <?php if (!empty($successFlash)): ?><div class="notice success"><?= e($successFlash) ?></div><?php endif; ?>
 <?php if (!empty($errorFlash)): ?><div class="notice warn"><?= e($errorFlash) ?></div><?php endif; ?>
 <?php if (!empty($dbError)): ?><div class="notice warn"><?= e($dbError) ?></div><?php endif; ?>
@@ -17,9 +25,9 @@ $requirementLabels = \App\Service\ClosingDocumentService::requirementLabels();
 <?php if (empty($schemaReady) && empty($dbError)): ?>
 <div class="notice warn"><b>Для раздела требуется актуальная tenant schema.</b></div>
 <?php elseif (!empty($schemaReady)): ?>
-<div class="table-card table-card--standard bank-finance-card">
+<div class="table-card table-card--standard bank-finance-card closing-documents-card">
  <div class="table-toolbar"><div class="table-toolbar-left"><strong><?= !empty($problemOnly) ? 'Проблемные операции' : 'Исходящие банковские расходы' ?></strong><span class="field-note">Проблемных: <?= (int)$problemCountOnPage ?></span></div><div class="field-note">ООО → ЮЛ · ИП → ИП · без ООО/ИП → Самозанятый</div></div>
- <div class="table-scroll"><table class="table"><thead><tr><th>Дата / №</th><th>Платёж</th><th>Получатель</th><th>Тип</th><th>Комплект</th><th>Документы</th><th>Действия</th></tr></thead><tbody>
+ <div class="table-scroll"><table class="table closing-documents-table"><colgroup><col style="width:6%"><col style="width:29%"><col style="width:15%"><col style="width:10%"><col style="width:13%"><col style="width:14%"><col style="width:13%"></colgroup><thead><tr><th>Дата / №</th><th>Платёж</th><th>Получатель</th><th>Тип</th><th>Комплект</th><th>Документы</th><th>Действия</th></tr></thead><tbody>
  <?php if (empty($rows)): ?><tr><td colspan="7"><div class="ux-empty"><strong><?= !empty($problemOnly) ? 'Проблемных операций нет' : 'Нет операций для отображения' ?></strong></div></td></tr><?php endif; ?>
  <?php foreach ($rows as $row):
    $profile=$row['profile']??null;$inn=(string)($row['normalized_inn']??'');$availableDocuments=$documentsByInn[$inn]??[];$acceptedCodes=[];
