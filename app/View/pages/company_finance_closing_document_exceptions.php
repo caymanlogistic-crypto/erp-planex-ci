@@ -105,6 +105,12 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     }
 
+    function escapeHtml(value) {
+        return String(value || '').replace(/[&<>"']/g, function (ch) {
+            return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+        });
+    }
+
     function loadForm(modalId, bodyId, url) {
         var body = document.getElementById(bodyId);
         if (!body) return;
@@ -115,7 +121,8 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(function (html) { setRemoteHtml(body, html); })
             .catch(function (error) {
                 console.error('Closing exception form load failed', error);
-                body.innerHTML = '<div class="modal-body"><div class="form-alert alert-error">Не удалось загрузить форму.</div></div>';
+                var detail = error && error.message ? ' (' + escapeHtml(error.message) + ')' : '';
+                body.innerHTML = '<div class="modal-body"><div class="form-alert alert-error">Не удалось загрузить форму' + detail + '.</div></div>';
             });
     }
 
