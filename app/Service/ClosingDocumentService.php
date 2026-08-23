@@ -14,26 +14,48 @@ final class ClosingDocumentService
         'self_employed' => 'Самозанятый / НПД',
     ];
 
-    private const PROFILES = [
+    private const OUTGOING_PROFILES = [
         'legal_entity' => [
-            ['key' => 'agreement', 'label' => 'Договор', 'accepted' => ['agreement']],
+            ['key' => 'agreement_or_application', 'label' => 'Договор / Заявка', 'accepted' => ['agreement', 'application']],
             ['key' => 'act_or_upd', 'label' => 'Акт / УПД', 'accepted' => ['act', 'upd']],
         ],
         'individual' => [
-            ['key' => 'agreement', 'label' => 'Договор', 'accepted' => ['agreement']],
+            ['key' => 'agreement_or_application', 'label' => 'Договор / Заявка', 'accepted' => ['agreement', 'application']],
             ['key' => 'act_or_upd', 'label' => 'Акт / УПД', 'accepted' => ['act', 'upd']],
         ],
         'self_employed' => [
-            ['key' => 'agreement', 'label' => 'Договор', 'accepted' => ['agreement']],
-            ['key' => 'act', 'label' => 'Акт', 'accepted' => ['act']],
+            ['key' => 'agreement_or_application', 'label' => 'Договор / Заявка', 'accepted' => ['agreement', 'application']],
+            ['key' => 'act_or_upd', 'label' => 'Акт / УПД', 'accepted' => ['act']],
             ['key' => 'npd_receipt', 'label' => 'Чек НПД', 'accepted' => ['npd_receipt']],
+        ],
+    ];
+
+    private const INCOMING_PROFILES = [
+        'legal_entity' => [
+            ['key' => 'agreement_or_application', 'label' => 'Договор / Заявка', 'accepted' => ['agreement', 'application']],
+            ['key' => 'act_or_upd', 'label' => 'Акт / УПД', 'accepted' => ['act', 'upd']],
+        ],
+        'individual' => [
+            ['key' => 'agreement_or_application', 'label' => 'Договор / Заявка', 'accepted' => ['agreement', 'application']],
+            ['key' => 'act_or_upd', 'label' => 'Акт / УПД', 'accepted' => ['act', 'upd']],
+        ],
+        'self_employed' => [
+            ['key' => 'agreement_or_application', 'label' => 'Договор / Заявка', 'accepted' => ['agreement', 'application']],
+            ['key' => 'act_or_upd', 'label' => 'Акт / УПД', 'accepted' => ['act']],
         ],
     ];
 
     private const REQUIREMENT_LABELS = [
         'agreement' => 'Договор',
+        'application' => 'Заявка',
         'act' => 'Акт',
         'upd' => 'УПД',
+        'npd_receipt' => 'Чек НПД',
+    ];
+
+    private const REQUIREMENT_COLUMNS = [
+        'agreement_or_application' => 'Договор / Заявка',
+        'act_or_upd' => 'Акт / УПД',
         'npd_receipt' => 'Чек НПД',
     ];
 
@@ -48,27 +70,35 @@ final class ClosingDocumentService
         }
     }
 
+    /** Backward-compatible outgoing profile catalog. */
     public static function profiles(): array
     {
-        return self::PROFILES;
+        return self::OUTGOING_PROFILES;
     }
 
-    public static function profileFor(?string $legalType): ?array
+    public static function profileFor(?string $legalType, string $direction = 'outgoing'): ?array
     {
         $legalType = trim((string) $legalType);
-        if ($legalType === '' || !isset(self::PROFILES[$legalType])) {
+        $profiles = $direction === 'incoming' ? self::INCOMING_PROFILES : self::OUTGOING_PROFILES;
+        if ($legalType === '' || !isset($profiles[$legalType])) {
             return null;
         }
         return [
             'code' => $legalType,
             'label' => self::PROFILE_LABELS[$legalType],
-            'requirements' => self::PROFILES[$legalType],
+            'direction' => $direction === 'incoming' ? 'incoming' : 'outgoing',
+            'requirements' => $profiles[$legalType],
         ];
     }
 
     public static function requirementLabels(): array
     {
         return self::REQUIREMENT_LABELS;
+    }
+
+    public static function requirementColumns(): array
+    {
+        return self::REQUIREMENT_COLUMNS;
     }
 
     public static function normalizeInn(?string $inn): string
@@ -88,6 +118,11 @@ final class ClosingDocumentService
         return 'self_employed';
     }
 
+    public static function directionForAmounts(float $debitAmount, float $creditAmount): string
+    {
+        return $creditAmount > 0 && $debitAmount <= 0 ? 'incoming' : 'outgoing';
+    }
+
     /** SINGLE SOURCE OF TRUTH for report rows, problem filter and sidebar badge. */
     public static function reportRows(PDO $pdo, bool $problemOnly = false): array
     {
@@ -101,7 +136,7 @@ final class ClosingDocumentService
                     bt.debit_amount, bt.credit_amount, bt.purpose,
                     bt.classification_status, COALESCE(bt.is_internal_transfer, 0) AS is_internal_transfer
              FROM bank_transactions bt
-             WHERE COALESCE(bt.debit_amount, 0) > 0
+             WHERE (COALESCE(bt.debit_amount, 0) > 0 OR COALESCE(bt.credit_amount, 0) > 0)
                AND COALESCE(bt.is_internal_transfer, 0) = 0
                AND NOT EXISTS (
                     SELECT 1 FROM finance_employee_movements fem
@@ -116,8 +151,9 @@ final class ClosingDocumentService
 
         foreach ($rows as $row) {
             $inn = self::normalizeInn($row['counterparty_inn'] ?? '');
+            $direction = self::directionForAmounts((float) ($row['debit_amount'] ?? 0), (float) ($row['credit_amount'] ?? 0));
             $profileCode = self::profileCodeForBankName($row['counterparty_name'] ?? '');
-            $profile = self::profileFor($profileCode);
+            $profile = self::profileFor($profileCode, $direction);
             $links = $linksByTransaction[(int) $row['id']] ?? [];
             $exception = self::matchingException($exceptionsByInn[$inn] ?? [], (string) ($row['purpose'] ?? ''));
             $isExempt = $exception !== null;
@@ -126,6 +162,7 @@ final class ClosingDocumentService
                 : self::evaluateProblem($profile, $links);
 
             $row['normalized_inn'] = $inn;
+            $row['direction'] = $direction;
             $row['profile'] = $profile;
             $row['links'] = $links;
             $row['is_exempt'] = $isExempt;
@@ -133,6 +170,7 @@ final class ClosingDocumentService
             $row['exception_purpose_contains'] = $exception !== null ? (string) ($exception['purpose_contains'] ?? '') : '';
             $row['exception_comment'] = $exception !== null ? (string) ($exception['comment'] ?? '') : '';
             $row['missing_requirements'] = $evaluation['missing_requirements'];
+            $row['requirement_statuses'] = self::requirementStatuses($profile, $links);
             $row['is_problem'] = $evaluation['is_problem'];
             $row['problem_reason'] = $evaluation['problem_reason'];
 
@@ -146,6 +184,49 @@ final class ClosingDocumentService
     public static function problemCount(PDO $pdo): int
     {
         return count(self::reportRows($pdo, true));
+    }
+
+    public static function requirementStatuses(?array $profile, array $links): array
+    {
+        $presentCodes = [];
+        foreach ($links as $link) {
+            if (!empty($link['document_deleted_at'])) continue;
+            $code = trim((string) ($link['requirement_code'] ?? ''));
+            if ($code !== '') $presentCodes[$code] = true;
+        }
+
+        $statuses = [];
+        foreach (self::REQUIREMENT_COLUMNS as $key => $label) {
+            $statuses[$key] = [
+                'key' => $key,
+                'label' => $label,
+                'applicable' => false,
+                'satisfied' => false,
+                'accepted' => [],
+            ];
+        }
+        if ($profile === null) return $statuses;
+
+        foreach (($profile['requirements'] ?? []) as $requirement) {
+            $key = (string) ($requirement['key'] ?? '');
+            if ($key === '' || !isset($statuses[$key])) continue;
+            $accepted = array_values($requirement['accepted'] ?? []);
+            $satisfied = false;
+            foreach ($accepted as $acceptedCode) {
+                if (isset($presentCodes[$acceptedCode])) {
+                    $satisfied = true;
+                    break;
+                }
+            }
+            $statuses[$key] = [
+                'key' => $key,
+                'label' => (string) ($requirement['label'] ?? self::REQUIREMENT_COLUMNS[$key]),
+                'applicable' => true,
+                'satisfied' => $satisfied,
+                'accepted' => $accepted,
+            ];
+        }
+        return $statuses;
     }
 
     public static function evaluateProblem(?array $profile, array $links): array
@@ -407,7 +488,9 @@ final class ClosingDocumentService
         if ($transactionId <= 0) throw new RuntimeException('Некорректная операция');
         $stmt = $pdo->prepare(
             'SELECT 1 FROM bank_transactions bt
-             WHERE bt.id = ? AND COALESCE(bt.debit_amount, 0) > 0 AND COALESCE(bt.is_internal_transfer, 0) = 0
+             WHERE bt.id = ?
+               AND (COALESCE(bt.debit_amount, 0) > 0 OR COALESCE(bt.credit_amount, 0) > 0)
+               AND COALESCE(bt.is_internal_transfer, 0) = 0
                AND NOT EXISTS (SELECT 1 FROM finance_employee_movements fem WHERE fem.bank_transaction_id = bt.id)
              LIMIT 1'
         );
