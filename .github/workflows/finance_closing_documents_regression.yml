@@ -18,6 +18,7 @@ on:
       - 'database/migrations-local/078_finance_closing_document_exceptions.sql'
       - 'tests/finance_closing_documents_contract_test.php'
       - 'tests/closing_documents_runtime_dependency_test.php'
+      - 'tests/closing_documents_invoice_ux_contract_test.php'
       - '.github/workflows/finance_closing_documents_regression.yml'
   workflow_dispatch:
 permissions:
@@ -39,10 +40,13 @@ jobs:
           php -l app/View/pages/company_finance_closing_document_exceptions.php
           php -l tests/finance_closing_documents_contract_test.php
           php -l tests/closing_documents_runtime_dependency_test.php
+          php -l tests/closing_documents_invoice_ux_contract_test.php
           php -l scripts/finance_closing_apply_078.php
           php -l scripts/finance_closing_verify_078.php
       - name: Runtime view contracts
-        run: php tests/closing_documents_runtime_dependency_test.php
+        run: |
+          php tests/closing_documents_runtime_dependency_test.php
+          php tests/closing_documents_invoice_ux_contract_test.php
       - name: Start disposable MySQL
         run: |
           set -euo pipefail
@@ -114,10 +118,10 @@ jobs:
             chdir(getenv("CANDIDATE_ROOT")); $config=require "bootstrap/app.php"; require "app/Support/entrypoint_dependencies.php"; require "app/Http/Controllers/Company/ClosingDocumentsController.php";
             $_SESSION=["user_id"=>1,"role_code"=>"company_owner","company_id"=>25]; $_SERVER["REQUEST_METHOD"]="GET"; $_SERVER["REQUEST_URI"]="/erpv2/company/finance/closing-documents"; $db=new \App\Core\Database($config["database"]); $controller=new \App\Http\Controllers\Company\ClosingDocumentsController($config,$db);
             ob_start(); $controller->index(); $main=ob_get_clean();
-            foreach(["data-closing-search","data-closing-problem-only","dblclick","closing-document-modal"] as $token){if(strpos($main,$token)===false) exit(7);} if(strpos($main,"<th>Действия</th>")!==false) exit(8);
+            foreach(["table-toolbar","data-closing-search","data-closing-problem-only","dblclick","closing-document-modal"] as $token){if(strpos($main,$token)===false) exit(7);} if(strpos($main,"<th>Действия</th>")!==false) exit(8);
             ob_start(); $controller->exceptions(); $rules=ob_get_clean(); if(strpos($rules,"data-recipient-search")===false||strpos($rules,"data-exception-search")===false) exit(9);
             $companyId=25; $central=$db->connection(); $stmt=$central->prepare("SELECT * FROM companies WHERE id=? LIMIT 1"); $stmt->execute([$companyId]); $company=$stmt->fetch(PDO::FETCH_ASSOC); $tenant=(new \App\Core\Database(companyDatabaseConfig($config,$company)))->connection(); $report=\App\Service\ClosingDocumentService::reportRows($tenant,false);
-            if($report){$id=(int)$report[0]["id"]; ob_start(); $controller->modalView($id); $modal=ob_get_clean(); foreach(["Требуемый комплект","Загрузить новый документ"] as $token){if(strpos($modal,$token)===false) exit(10);}}
+            if($report){$id=(int)$report[0]["id"]; ob_start(); $controller->modalView($id); $modal=ob_get_clean(); foreach(["Требуемый комплект","Привязанные документы","Загрузить новый документ"] as $token){if(strpos($modal,$token)===false) exit(10);}}
             echo "CLOSING_DOCUMENTS_INVOICE_UX_PRODUCTION_CONFIG_PREFLIGHT=PASS\n";'
           rm -rf "$TMP"
           REMOTE
