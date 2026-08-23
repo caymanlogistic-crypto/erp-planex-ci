@@ -39,7 +39,7 @@ $problemCount = count(array_filter($rows ?? [], static fn(array $row): bool => !
     <div class="table-toolbar">
         <div class="found-label">Найдено: <b data-closing-found><?= count($rows) ?></b> из <b><?= count($rows) ?></b> операций · проблемных <b><?= $problemCount ?></b></div>
         <div class="toolbar-right closing-toolbar-filters">
-            <label class="closing-problem-filter"><input type="checkbox" data-closing-problem-only>Показывать только проблемные</label>
+            <label class="closing-problem-filter"><input type="checkbox" data-closing-problem-only checked>Показывать только проблемные</label>
             <input type="text" class="toolbar-search" data-closing-search placeholder="Поиск по таблице" autocomplete="off">
         </div>
     </div>
@@ -67,7 +67,7 @@ $problemCount = count(array_filter($rows ?? [], static fn(array $row): bool => !
                 <td class="col-tight"><strong><?= e(date('d.m.Y', strtotime((string)$row['operation_date']))) ?></strong><div class="field-note">№ <?= e((string)($row['document_number'] ?: $row['id'])) ?></div></td>
                 <td><strong><?= e($amount) ?></strong><div class="field-note"><?= e((string)($row['purpose'] ?? '')) ?></div></td>
                 <td><strong><?= e((string)($row['counterparty_name'] ?: 'Без наименования')) ?></strong><div class="field-note">ИНН <?= e($inn !== '' ? $inn : '—') ?></div></td>
-                <td><?php if(!empty($row['is_exempt'])):?><span class="badge badge-success"><span class="dot"></span>Исключение</span><?php else:?><strong><?= e((string)($profile['label'] ?? '—')) ?></strong><?php endif;?></td>
+                <td><?php if(!empty($row['is_exempt'])):?><span class="text-muted">—</span><?php else:?><strong><?= e((string)($profile['label'] ?? '—')) ?></strong><?php endif;?></td>
                 <td><?php if(!empty($row['is_exempt'])):?><span class="text-muted">Не требуется</span><?php elseif(empty($row['is_problem'])):?><span class="badge badge-success"><span class="dot"></span>Собран</span><?php else:?><span class="badge badge-warning"><span class="dot"></span>Требует действия</span><?php foreach(($row['missing_requirements'] ?? []) as $missing):?><div class="field-note">• <?= e((string)$missing['label']) ?></div><?php endforeach;?><?php endif;?></td>
                 <td><?php $visibleLinks = array_values(array_filter($row['links'] ?? [], static fn(array $link): bool => empty($link['document_deleted_at']))); ?><?php if($visibleLinks):?><strong><?= count($visibleLinks) ?></strong> привязано<?php else:?><span class="text-muted">—</span><?php endif;?></td>
             </tr>
