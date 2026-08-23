@@ -1,109 +1,105 @@
-# ERP PLANEX — правила работы агентов
+# ERP PLANEX — agent governance
 
-Актуально на 2026-08-20. Current code + latest OWNER decision имеют приоритет; исторические Pxx/E7 материалы — evidence, не инструкция.
+Current OWNER policy and current canonical executable implementation are different authority dimensions. Historical reports/handoffs are evidence, never current instructions.
 
 ## Default bootstrap
 
-**Notion обязателен** для каждой material ERP задачи.
+For every material ERP task:
 
-Default startup — один read: `ERP PLANEX — MASTER MEMORY` → `00 — START HERE`.
-
-`00` — компактный stable bootstrap: repository/branch boundaries, source precedence, FAST/STANDARD/CRITICAL selector, hard production locks и direct registry data-source IDs. Exact canonical HEAD всегда читать из GitHub; volatile SHA не является bootstrap datum.
-
-После `00` открыть только task-owned records. `01 — CURRENT STATE`, `11 — AGENT BOOTSTRAP PROTOCOL`, `22 — DEPLOY & NOTION LIMITS RUNBOOK`, `23 — CHANGE PLAYBOOKS`, handoffs и historical reports читать только когда конкретная задача реально требует их контекста.
-
-Не делать broad-memory scan. Если registry известен — scoped lookup внутри него; найденный page ID повторно не искать.
+1. Read Notion `ERP PLANEX — MASTER MEMORY` → `00 — START HERE` once.
+2. Read canonical GitHub HEAD once and cache it as `START_HEAD`.
+3. Determine MEMORY IMPACT from owning/changed paths and read only affected registry records.
+4. Reuse already resolved repository, branch, file/blob, Notion page/data-source and PR identifiers.
 
 Repository: `planexerp/erp-planex`.
 Canonical branch: `chatgpt/production-stabilization-20260802`.
-Old `caymanlogistic-crypto/erp-planex` = read-only insurance.
-Production: `/erpv2`. Legacy `/erp` — never touch.
+Production: `/erpv2`.
+Legacy `/erp`: never touch.
+Old `caymanlogistic-crypto/erp-planex`: read-only insurance.
 
-## CHANGE CLASS
+## Source precedence by dimension
 
-### FAST
-Только presentation/view/CSS/text/local UI. FAST недопустим при route/controller behavior, business/state, finance amount/debt/settlement semantics, DB/schema, security/access, integrations или control plane.
+1. Latest OWNER decision — business/product policy and authorization.
+2. Executable canonical GitHub code/workflow/schema — current implementation truth.
+3. Generated deterministic contracts — derived physical truth.
+4. Canonical active policy documentation.
+5. Notion semantic memory.
+6. Secondary documentation.
+7. Historical evidence.
 
-Production FAST использует guarded `ERPv2 FAST Release`: owner same-repo `fast/*` + `FAST:` PR → strict scope/size gate → changed-file syntax + cheap UI contracts → exact squash merge → existing `ERPv2 Controlled Deploy`.
+OWNER target and current implementation can legitimately differ when the record is explicitly TARGET or LEGACY_IMPLEMENTATION.
 
-FAST whitelist остаётся machine-enforced; агент не расширяет FAST на controller/service/DB/security/finance semantics.
+## Execution-state cache / anti-thrashing
 
-### STANDARD execution discipline
-Controller/service/business behavior без production DB/schema mutation и без critical finance/security semantics.
+Maintain one task state machine:
 
-- branch `standard/<slug>`;
-- owning Module/Screen → exact controller/service → Rule/State only if affected → owning Test Contract;
-- main CI incremental; path-owned workflows запускаются GitHub параллельно;
-- не дублировать автоматически запущенные regressions вручную;
-- aggregate required checks instead of serial polling;
-- после PASS → merge → exact canonical HEAD once → non-force `deploy/erpv2-agent` → final exact-SHA deploy status.
+`START_HEAD → WORK_BRANCH → FEATURE_HEAD → PR_NUMBER → CI_RESULT → MERGED_SHA → optional DEPLOY_RESULT`
 
-Target для небольшой локальной behavioral-задачи: примерно `2–4 min`, если runners свободны.
+Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes. A second canonical-HEAD read is allowed only when:
 
-### CRITICAL execution discipline
-Finance settlement/matching/debt, security/access, DB/schema, financial integrations, control plane, destructive operations.
+- branch/base setup genuinely needs a fresh base and no branch exists;
+- GitHub reports merge conflict/base drift;
+- after merge, once, to capture `MERGED_SHA` / current canonical HEAD;
+- at a deploy boundary only if the guarded mechanism does not already perform the exact check;
+- evidenced external repository drift affects the task.
 
-- branch `critical/<slug>`;
-- до edit определить impact set: authoritative service/data/rule/state/security/integration + owning test contracts;
-- `full relevant gates` = все required gates затронутых critical domains, а не весь исторический ERP inventory;
-- heavy owning workflows остаются path-triggered и параллельными;
-- runtime/browser acceptance только когда owning Test Contract/risk требует его;
-- incompatible code не deploy-ить до required production schema/data operation;
-- production migration/seed/reconciliation/backfill/destructive SQL требует отдельного task-specific OWNER approval.
+A successful lookup is cached. Repeat search/fetch is forbidden without ambiguity, drift or a state-changing event.
 
-Target focused code-only CRITICAL: примерно `4–7 min`; DB operation/OWNER approval не является speed KPI.
+## Change class
 
-## HARD WRITE SAFETY
+- **FAST** — presentation/view/CSS/text/local UI only; no controller/business/state/finance/DB/security/integration/control-plane semantics.
+- **STANDARD** — controller/service/business behavior without production DB/schema mutation and without critical finance/security semantics.
+- **CRITICAL** — settlement/matching/debt, security/access, DB/schema, financial integrations, control plane or destructive operations.
 
-Рабочий путь: `feature branch → PR → required gates → merge`.
+Classify upward when genuinely ambiguous.
 
-- **Никогда не вызывать `create_file`, `update_file`, `delete_file` или эквивалентную write-операцию с canonical branch.**
-- Перед mutation сначала создать/подтвердить feature branch; connector write явно target-ит её.
-- Placeholder/probe/temp files запрещены.
-- Empty/technical/release-checkpoint commit ради CI/deploy запрещён.
-- Temporary verification PR/workflow запрещён.
-- Одна локальная задача + owning contracts должны по возможности попасть в один содержательный commit.
+## Git / CI discipline
 
-## Tool / Actions discipline
+- Work on a feature branch; canonical changes only through PR merge.
+- No placeholder/probe/temp/dummy files, empty/checkpoint commits or temporary verification PRs.
+- Do not duplicate a regression already triggered by GitHub.
+- Observe parallel required checks as one aggregate gate. Poll aggregate state only while running; inspect individual jobs only after aggregate failure.
+- Do not perform Actions archaeology after a green aggregate result.
 
-- При рабочем GitHub/Notion connector не переходить к `gh`, `git ls-remote`, web/public HTTP или container fallback для той же операции.
-- Reuse discovered connector schemas и known Notion page IDs.
-- Successful lookup не повторять без drift/ambiguity.
-- Parallel Actions не ждать последовательно; один aggregated gate, затем разбор только failed job.
-- Не переаудировать green unrelated domains без нового evidence.
+## Production boundary
 
-## Production boundaries
+FAST uses the guarded FAST release when eligible. STANDARD/CRITICAL merged code/UI uses the guarded `deploy/erpv2-agent` request path.
 
-- FAST: guarded FAST release.
-- STANDARD/CRITICAL merged code/UI: existing guarded `deploy/erpv2-agent` flow.
-- `ERPv2 Controlled Deploy` остаётся единственным production write/SSH engine.
-- `erpv2/deploy=success` exact SHA = routine deploy PASS evidence.
-- Merge != deploy. Deploy != migration.
-- DB fingerprint, legacy `/erp` fingerprint, `.env`/runtime protection, backup и migrations=false contract не отключать ради скорости.
-- Production migrations/reconciliation/seeds/backfills/destructive SQL не наследуют standing code deploy authorization.
+The current standard request workflow itself validates the dedicated request ref, exact current canonical SHA, exact-SHA canonical `ERP PLANEX CI`, rechecks canonical HEAD immediately before dispatch, then dispatches exact-SHA `ERPv2 Controlled Deploy`. **Technical integration actor identity is not the current standard request gate.** Do not manually repeat machine guards three times.
 
-## Finance / security invariants
+Merge != deploy. Deploy != migration.
 
-Finance доступен только `company_owner`, пока OWNER не изменит policy. Tenant isolation, auditability, fail-closed reconciliation и decimal money обязательны. Production finance rows не менять ради тестов.
+Production migration/reconciliation/seed/backfill/destructive SQL requires separate task-specific OWNER authorization. Standing code deploy authorization does not grant DB authority.
 
-## Notion / Memory Gate
+## Semantic-memory integrity
 
-**Notion обязателен.** Ускорение любого класса не отменяет MEMORY PASS.
+Binding semantic-memory rules live in Notion `21 — MEMORY GOVERNANCE & INTEGRITY CONTRACT`; do not create a competing copy here.
 
-Default read = `00 — START HERE` + только affected registry records.
+Operational minimum:
 
-- FAST: affected Screen mandatory; cheap Test/Contract only if changed.
-- STANDARD: affected Module/Screen/Service/Rule/Test only.
-- CRITICAL: explicit affected Module/Data/Rule/State/Security/Integration/Test impact set.
-- `01 — CURRENT STATE` только при durable project/current-state change, не потому что HEAD продвинулся.
-- Handoff только при durable cross-agent continuation fact.
-- Broad Memory Health только если реально изменился health/coverage scope.
-- `Verified SHA` record = provenance его семантики, а не global current HEAD.
-- ordinary successful targeted update не требует readback, если response однозначный; critical DB/security/finance semantics желательно read back.
-- при невозможности exact verification → `NEEDS REVERIFY`, а не выдуманный VERIFIED.
+- semantic class and truth status are independent;
+- implementation `Verified SHA` is a real full 40-hex commit, never an OWNER ID;
+- `VERIFIED` requires direct current evidence, never memory/search snippet/handoff;
+- one volatile fact has one authoritative canonical home;
+- memory impact is derived from changed paths → owning records;
+- path-aware drift: old SHA remains valid when owning paths did not change; relevant owning-path diff requires reverify or `NEEDS_REVERIFY`;
+- closed migration ranges such as `042–076` are forbidden drift scopes; use future-proof ownership such as `database/migrations-local/**`;
+- FINANCE / DB / SECURITY / CONTROL PLANE semantic writes require direct readback;
+- body + provenance metadata are one atomic semantic update;
+- `01 — CURRENT SNAPSHOT` is current durable state, not release history;
+- stale critical `VERIFIED` is a P0 memory defect.
 
-**Definition of Done: `CODE PASS + CI PASS + MEMORY PASS`; production code/UI additionally requires `DEPLOY PASS`.**
+GitHub provides a small deterministic integrity contract, not a Notion mirror:
 
-## Source precedence
+```bash
+python3 tests/memory_integrity_checker_test.py
+python3 tools/memory_integrity_check.py docs/memory/critical_records.json --head HEAD
+```
 
-`latest OWNER decision → current GitHub code/schema/control plane → durable MASTER MEMORY → current governing docs → historical evidence`.
+## Definition of Done
+
+`CODE PASS + CI PASS + MEMORY PASS`.
+
+`MEMORY PASS` requires an impact set, affected record repair, stale current record reverify/supersession, critical readback, zero known stale critical VERIFIED in scope, and a passing integrity checker.
+
+Application deploy is required only when the task changes production runtime and current policy requires it. Docs/Notion/tooling-only governance work does not justify an application deploy by itself.
