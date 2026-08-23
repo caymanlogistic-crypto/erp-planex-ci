@@ -8,6 +8,7 @@ $yaml = (string) file_get_contents($path);
 $needles = [
     'deploy/erpv2-agent',
     'actions: write',
+    "github.ref_name == 'deploy/erpv2-agent'",
     'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
     'CONTROLLED_DEPLOY_WORKFLOW: erpv2_controlled_deploy.yml',
     'CANONICAL_CI_WORKFLOW: ci.yml',
@@ -26,6 +27,10 @@ foreach ($needles as $needle) {
     if (!str_contains($yaml, $needle)) {
         throw new RuntimeException('Missing agent deploy request contract marker: ' . $needle);
     }
+}
+
+if (str_contains($yaml, 'github.actor == github.repository_owner')) {
+    throw new RuntimeException('Agent deploy request must authorize the request ref/exact canonical SHA, not the technical integration actor.');
 }
 
 if (str_contains($yaml, 'public_html/erpv2') || str_contains($yaml, 'ERPV2_SSH_PRIVATE_KEY')) {
