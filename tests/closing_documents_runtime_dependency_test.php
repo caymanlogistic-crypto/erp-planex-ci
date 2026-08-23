@@ -11,7 +11,8 @@ if(!function_exists('app_url')){function app_url(string $p=''):string{return '/e
 $rows=[];$documentsByInn=[];$schemaReady=true;$dbError=null;$problemOnly=false;$successFlash=null;$errorFlash=null;
 ob_start();require __DIR__.'/../app/View/pages/company_finance_closing_documents.php';$html=(string)ob_get_clean();
 if(!str_contains($html,'Закрывающие документы')||!str_contains($html,'Исходящие банковские расходы')||!str_contains($html,'Исключения по документам'))throw new RuntimeException('closing documents view render smoke failed');
+if(!str_contains($html,'closing-documents-table')||!str_contains($html,'table-layout:fixed')||!str_contains($html,'min-width:0!important')||!str_contains($html,'overflow-x:hidden')||!str_contains($html,'<colgroup>'))throw new RuntimeException('closing documents no-horizontal-overflow contract failed');
 $exceptions=[];$schemaReady=true;$dbError=null;$successFlash=null;$errorFlash=null;
 ob_start();require __DIR__.'/../app/View/pages/company_finance_closing_document_exceptions.php';$rules=(string)ob_get_clean();
 if(!str_contains($rules,'Исключения по документам')||!str_contains($rules,'Добавить исключение'))throw new RuntimeException('exceptions view render smoke failed');
-echo "closing_documents_runtime_dependency_test: PASS\nclosing_documents_view_render_smoke: PASS\nclosing_document_exceptions_view_render_smoke: PASS\n";
+echo "closing_documents_runtime_dependency_test: PASS\nclosing_documents_view_render_smoke: PASS\nclosing_documents_no_horizontal_overflow_contract: PASS\nclosing_document_exceptions_view_render_smoke: PASS\n";
