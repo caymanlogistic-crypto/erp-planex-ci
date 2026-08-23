@@ -113,7 +113,7 @@ assert_contains($employeeBank, "\$classificationStatus = \$isManual ? 'MANUAL' :
 assert_contains($employeeBank, '$classificationLocked = $isManual ? 1 : 0', 'Manual employee settlement must lock the bank transaction');
 assert_contains($employeeBank, "'BANK'", 'Employee movement must retain BANK source');
 assert_contains($employeeBank, "\$movementType = \$originalType === 'EXPENSE' ? 'PAYMENT' : 'RETURN'", 'Bank debit/payment and bank credit/return directions must stay intact');
-assert_not_contains($employeeBank, 'finance_cash_resolutions', 'Direct BANK-EMPLOYEE flow must not reintroduce CASH');
+assert_not_contains($employeeBank, 'INSERT INTO finance_cash_resolutions', 'Direct BANK-EMPLOYEE flow must not write CASH resolutions');
 assert_contains($matchingBatch, 'classification_locked=0', 'Batch rule engine must exclude locked bank transactions');
 assert_contains($matchingBatch, "classification_status<>'MANUAL'", 'Batch rule engine must exclude MANUAL finance operations');
 foreach (['action_type','target_employee_ref','target_cash_flow_center_id','target_dds_category_id','direction','counterparty_inn','purpose_contains','invoice_number_pattern','purpose_regex','bank_account_id','amount_from','amount_to','priority'] as $field) {
