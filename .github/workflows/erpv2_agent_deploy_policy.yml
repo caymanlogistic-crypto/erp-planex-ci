@@ -98,7 +98,7 @@ jobs:
           fast_events = re.findall(r'^  ([A-Za-z_][A-Za-z0-9_-]*):', fast_on, flags=re.M)
           assert sorted(set(fast_events)) == ['pull_request_target'], fast_events
           fast_required = [
-              'github.actor == github.repository_owner',
+              'github.event.pull_request.user.login == github.repository_owner',
               'github.event.pull_request.head.repo.full_name == github.repository',
               "startsWith(github.event.pull_request.head.ref, 'fast/')",
               "startsWith(github.event.pull_request.title, 'FAST:')",
@@ -118,6 +118,7 @@ jobs:
           ]
           for token in fast_required:
               assert token in fast, f'missing FAST safeguard: {token}'
+          assert 'github.actor == github.repository_owner' not in fast, 'FAST must authorize repository-owner PR, not technical event actor'
           forbidden_fast = [
               'ERPV2_SSH_PRIVATE_KEY',
               'P07_' + 'deploy_erpv2.sh',
