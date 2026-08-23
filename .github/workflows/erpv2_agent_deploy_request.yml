@@ -21,7 +21,7 @@ env:
 
 jobs:
   authorize-and-dispatch:
-    if: ${{ github.actor == github.repository_owner }}
+    if: ${{ github.ref_name == 'deploy/erpv2-agent' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
