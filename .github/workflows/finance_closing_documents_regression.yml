@@ -21,6 +21,8 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+  actions: write
+  statuses: read
 jobs:
   closing-documents:
     runs-on: ubuntu-24.04
@@ -120,3 +122,110 @@ jobs:
         run: |
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/closing_preflight_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -rf '/tmp/closing_candidate_${GITHUB_RUN_ID}'; rm -f /tmp/${GITHUB_RUN_ID}_app_*" 2>/dev/null || true
           rm -f "$HOME/.ssh/closing_preflight_key" 2>/dev/null || true
+
+  diag-deploy-v2:
+    needs: closing-documents
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      TARGET_SHA: 3877110e098a0cd6434a098e7a033a3572288482
+      VERIFIED_PR_SHA: a379e90abea2e0cbee1ebdf0aa664e2d75df82f3
+      CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+      ERP_CI_RUN: '32629036169'
+      CLOSING_REGRESSION_RUN: '32629036222'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Confirm canonical tree equals tested PR tree
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/${CANONICAL_BRANCH}:refs/remotes/origin/${CANONICAL_BRANCH}"
+          git fetch --no-tags origin "$TARGET_SHA" "$VERIFIED_PR_SHA"
+          test "$(git rev-parse refs/remotes/origin/${CANONICAL_BRANCH})" = "$TARGET_SHA"
+          test "$(git rev-parse ${TARGET_SHA}^{tree})" = "$(git rev-parse ${VERIFIED_PR_SHA}^{tree})"
+          git diff --quiet "$TARGET_SHA" "$VERIFIED_PR_SHA"
+          echo TESTED_TREE_EQUALS_CANONICAL_TREE=PASS
+      - name: Confirm exact tested CI runs are green
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for run_id in "$ERP_CI_RUN" "$CLOSING_REGRESSION_RUN"; do
+            json="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/actions/runs/$run_id")"
+            RUN_JSON="$json" VERIFIED_PR_SHA="$VERIFIED_PR_SHA" python3 - <<'PY'
+import json, os, sys
+r=json.loads(os.environ['RUN_JSON'])
+if r.get('head_sha') != os.environ['VERIFIED_PR_SHA'] or r.get('status') != 'completed' or r.get('conclusion') != 'success': sys.exit(1)
+print(f"VERIFIED_RUN_PASS={r.get('name')}#{r.get('run_number')}")
+PY
+          done
+      - name: Dispatch canonical controlled deploy
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          payload="$(TARGET_SHA="$TARGET_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+import json, os
+print(json.dumps({'ref':os.environ['CANONICAL_BRANCH'],'inputs':{'source_sha':os.environ['TARGET_SHA'],'confirm_deploy':'DEPLOY_ERPV2'}}))
+PY
+)"
+          test "$(curl -sS -o /tmp/dispatch.out -w '%{http_code}' -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/actions/workflows/erpv2_controlled_deploy.yml/dispatches" -d "$payload")" = 204
+      - name: Wait deploy success
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            json="$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status")"
+            state="$(STATUS_JSON="$json" python3 - <<'PY'
+import json, os
+for s in json.loads(os.environ['STATUS_JSON']).get('statuses',[]):
+    if s.get('context')=='erpv2/deploy': print(s.get('state','')); break
+PY
+)"
+            echo "deploy_status=${state:-none}"
+            [ "$state" = success ] && break
+            [ "$state" != failure ] && [ "$state" != error ] || exit 1
+            test "$attempt" -lt 90 || exit 1
+            sleep 10
+          done
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Verify production no-scroll structure and live render
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt")"
+          test "$marker" = "$TARGET_SHA"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'set -euo pipefail
+            f=/home/s/spugovxsim/planexp/public_html/erpv2/app/View/pages/company_finance_closing_documents.php
+            grep -q "closing-documents-table-frame" "$f"
+            grep -q "white-space:normal!important" "$f"
+            ! grep -q "class=\"table-scroll\"" "$f"
+            echo LIVE_CLOSING_V2_STRUCTURAL_NO_SCROLL=PASS'
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 -d display_errors=1 -r '
+            chdir(\"/home/s/spugovxsim/planexp/public_html/erpv2\");
+            \$config=require \"bootstrap/app.php\"; require \"app/Support/entrypoint_dependencies.php\"; require \"app/Http/Controllers/Company/ClosingDocumentsController.php\";
+            \$_SESSION=[\"user_id\"=>1,\"role_code\"=>\"company_owner\",\"company_id\"=>25]; \$_SERVER[\"REQUEST_METHOD\"]=\"GET\"; \$_SERVER[\"REQUEST_URI\"]=\"/erpv2/company/finance/closing-documents\";
+            \$db=new \\App\\Core\\Database(\$config[\"database\"]); ob_start(); (new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController(\$config,\$db))->index(); \$html=ob_get_clean();
+            if(strpos(\$html,\"closing-documents-table-frame\")===false||strpos(\$html,\"class=\\\"table-scroll\\\"\")!==false) exit(9); echo \"LIVE_CLOSING_V2_RENDER=PASS\\n\";'"
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/key" 2>/dev/null || true
