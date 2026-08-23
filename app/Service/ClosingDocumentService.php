@@ -340,11 +340,24 @@ final class ClosingDocumentService
         return $map;
     }
 
+    private static function normalizeMatchText(string $value): string
+    {
+        $value = mb_strtolower($value, 'UTF-8');
+        $value = str_replace('ё', 'е', $value);
+        $value = preg_replace('/[^\p{L}\p{N}]+/u', ' ', $value) ?? $value;
+        return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+    }
+
     private static function matchingException(array $rules, string $purpose): ?array
     {
+        $normalizedPurpose = self::normalizeMatchText($purpose);
         foreach ($rules as $rule) {
             $needle = trim((string) ($rule['purpose_contains'] ?? ''));
-            if ($needle === '' || mb_stripos($purpose, $needle, 0, 'UTF-8') !== false) {
+            if ($needle === '') {
+                return $rule;
+            }
+            $normalizedNeedle = self::normalizeMatchText($needle);
+            if ($normalizedNeedle !== '' && mb_strpos($normalizedPurpose, $normalizedNeedle, 0, 'UTF-8') !== false) {
                 return $rule;
             }
         }
