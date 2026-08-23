@@ -1,0 +1,68 @@
+name: Memory Integrity
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'tools/memory_integrity_check.py'
+      - 'tests/memory_integrity_checker_test.py'
+      - 'docs/memory/**'
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/GITHUB_CONTROL_PLANE.md'
+      - 'docs/ai/AGENT_RULES.md'
+      - 'docs/ai/HANDOFF_FOR_NEW_AGENT.md'
+      - '.github/workflows/erpv2_agent_deploy_request.yml'
+      - 'tests/agent_deploy_request_contract_test.php'
+      - 'database/migrations-local/**'
+      - 'app/Service/LocalMigrationService.php'
+      - 'tools/database/generate_schema_docs.php'
+      - 'docs/database/TENANT_SCHEMA*.md'
+      - 'app/Service/FinanceMatchingRule*.php'
+      - 'app/Http/Controllers/Company/BankFinanceActions/**'
+      - 'tests/finance_*matching*'
+  push:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'tools/memory_integrity_check.py'
+      - 'tests/memory_integrity_checker_test.py'
+      - 'docs/memory/**'
+      - 'AGENTS.md'
+      - 'README.md'
+      - 'docs/GITHUB_CONTROL_PLANE.md'
+      - 'docs/ai/AGENT_RULES.md'
+      - 'docs/ai/HANDOFF_FOR_NEW_AGENT.md'
+      - '.github/workflows/erpv2_agent_deploy_request.yml'
+      - 'tests/agent_deploy_request_contract_test.php'
+      - 'database/migrations-local/**'
+      - 'app/Service/LocalMigrationService.php'
+      - 'tools/database/generate_schema_docs.php'
+      - 'docs/database/TENANT_SCHEMA*.md'
+      - 'app/Service/FinanceMatchingRule*.php'
+      - 'app/Http/Controllers/Company/BankFinanceActions/**'
+      - 'tests/finance_*matching*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: memory-integrity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integrity:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Checker regression contract
+        run: python3 tests/memory_integrity_checker_test.py
+
+      - name: Critical semantic-memory manifest
+        run: python3 tools/memory_integrity_check.py docs/memory/critical_records.json --head HEAD
