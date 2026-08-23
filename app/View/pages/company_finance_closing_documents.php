@@ -9,9 +9,9 @@ $renderRequirementStatus = static function (array $row, string $key): string {
         return '<span class="text-muted">—</span>';
     }
     if (!empty($status['satisfied'])) {
-        return '<span class="badge badge-success closing-doc-status"><span class="dot"></span>Есть</span>';
+        return '<span class="table-check table-check--yes closing-doc-status" title="Документ загружен" aria-label="Документ есть">✓</span>';
     }
-    return '<span class="badge badge-warning closing-doc-status"><span class="dot"></span>Нет</span>';
+    return '<span class="table-check table-check--no closing-doc-status" title="Документ не загружен" aria-label="Документа нет">×</span>';
 };
 ?>
 <style>
@@ -76,7 +76,7 @@ $renderRequirementStatus = static function (array $row, string $key): string {
     <div class="closing-documents-table-frame">
         <table class="table closing-documents-table">
             <colgroup><col style="width:8%"><col style="width:28%"><col style="width:20%"><col style="width:10%"><col style="width:13%"><col style="width:12%"><col style="width:9%"></colgroup>
-            <thead><tr><th>Дата / №</th><th>Платёж</th><th>Контрагент</th><th>Тип</th><th>Договор / Заявка</th><th>Акт / УПД</th><th>Чек НПД</th></tr></thead>
+            <thead><tr><th>Дата / №</th><th>Платёж</th><th>Контрагент</th><th>Тип</th><th class="col-check">Договор / Заявка</th><th class="col-check">Акт / УПД</th><th class="col-check">Чек НПД</th></tr></thead>
             <tbody>
             <?php if (empty($rows)): ?><tr data-closing-empty><td colspan="7"><div class="ux-empty"><strong>Нет операций для отображения</strong></div></td></tr><?php endif; ?>
             <?php foreach ($rows as $row):
@@ -102,9 +102,9 @@ $renderRequirementStatus = static function (array $row, string $key): string {
                 <td><strong><?= e($amount) ?></strong><div class="field-note"><?= e($directionLabel) ?> · <?= e((string)($row['purpose'] ?? '')) ?></div></td>
                 <td><strong><?= e((string)($row['counterparty_name'] ?: 'Без наименования')) ?></strong><div class="field-note">ИНН <?= e($inn !== '' ? $inn : '—') ?></div></td>
                 <td><?php if(!empty($row['is_exempt'])):?><span class="text-muted">—</span><?php else:?><strong><?= e((string)($profile['label'] ?? '—')) ?></strong><?php endif;?></td>
-                <td><?= $renderRequirementStatus($row, 'agreement_or_application') ?></td>
-                <td><?= $renderRequirementStatus($row, 'act_or_upd') ?></td>
-                <td><?= $renderRequirementStatus($row, 'npd_receipt') ?></td>
+                <td class="col-check"><?= $renderRequirementStatus($row, 'agreement_or_application') ?></td>
+                <td class="col-check"><?= $renderRequirementStatus($row, 'act_or_upd') ?></td>
+                <td class="col-check"><?= $renderRequirementStatus($row, 'npd_receipt') ?></td>
             </tr>
             <?php endforeach; ?>
             <tr data-closing-filter-empty hidden><td colspan="7"><div class="ux-empty"><strong>Ничего не найдено</strong>Измените поиск или фильтр проблемных операций.</div></td></tr>
