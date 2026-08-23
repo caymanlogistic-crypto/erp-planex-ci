@@ -17,7 +17,7 @@
     {
       "canonical_id": "data.schema.generated_contract",
       "semantic_class": "IMPLEMENTATION",
-      "truth_status": "NEEDS_REVERIFY",
+      "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
       "verified_sha": "7aa6d871e239ac338b42f58dc0f715f962e1453a",
       "evidence": "https://github.com/planexerp/erp-planex/blob/7aa6d871e239ac338b42f58dc0f715f962e1453a/docs/database/TENANT_SCHEMA.md",
