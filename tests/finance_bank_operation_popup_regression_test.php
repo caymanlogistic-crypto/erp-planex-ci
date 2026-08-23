@@ -14,7 +14,7 @@ $filters=file_get_contents($root.'/app/Http/Controllers/Company/BankFinanceActio
 $rulesForm=file_get_contents($root.'/app/View/partials/company_finance_matching_rule_form.php');
 
 // 1. Single operation is a persisted manual action, never a pseudo-rule.
-ok(str_contains($manual,"$mode!=='manual'")||str_contains($manual,"$mode!==\'manual\'"),'manual executor rejects non-manual mode');
+ok(str_contains($manual,"\$mode!=='manual'"),'manual executor rejects non-manual mode');
 ok(!str_contains($manual,'self::createRule('),'manual executor cannot create matching rule');
 ok(str_contains($manual,"classification_status='MANUAL'")&&str_contains($manual,'classification_locked=1'),'manual categorize persists MANUAL lock');
 ok(str_contains($manual,"'rule_id'=>null")&&str_contains($manual,"'status'=>'MANUAL'"),'manual result is explicitly rule-less');
@@ -22,18 +22,18 @@ ok(str_contains($manual,"'rule_id'=>null")&&str_contains($manual,"'status'=>'MAN
 // 2. Create-rule popup path uses the canonical rule model and engine.
 ok(str_contains($submit,'FinanceMatchingRuleService::createRule'),'popup rule mode creates canonical matching rule');
 ok(str_contains($submit,'FinanceMatchingRuleService::applyAutoMatchToOperation'),'new popup rule is executed by canonical engine');
-ok(str_contains($submit,"if($mode==='rule')")||str_contains($submit,"if(\$mode==='rule')"),'controller has explicit rule branch');
+ok(str_contains($submit,"if(\$mode==='rule')"),'controller has explicit rule branch');
 ok(str_contains($submit,'manualClassifyBankTransaction'),'controller has explicit manual branch');
 ok(str_contains($submit,'resolveActiveEmployee'),'employee resolution is shared with rules screen');
 
 // 3. Manual BANK <-> EMPLOYEE direct settlement persists manual protection and BANK provenance.
-ok(str_contains($manual,"$action==='employee_cash_settlement'")||str_contains($manual,"\$action==='employee_cash_settlement'"),'manual action exposes employee settlement');
+ok(str_contains($manual,"\$action==='employee_cash_settlement'"),'manual action exposes employee settlement');
 ok(str_contains($manual,'FinanceEmployeeBankSettlementService::settleBankTransaction'),'manual employee action delegates to shared bank settlement service');
-ok(str_contains($employee,"$isManual = $ruleId === null")||str_contains($employee,'$isManual = $ruleId === null'),'employee service derives manual mode from absent rule id');
-ok(str_contains($employee,"$classificationStatus = $isManual ? 'MANUAL' : 'AUTO'")||str_contains($employee,"\$classificationStatus = \$isManual ? 'MANUAL' : 'AUTO'"),'employee settlement distinguishes manual and auto source');
-ok(str_contains($employee,"$classificationLocked = $isManual ? 1 : 0")||str_contains($employee,"\$classificationLocked = \$isManual ? 1 : 0"),'manual employee settlement is locked');
+ok(str_contains($employee,'$isManual = $ruleId === null'),'employee service derives manual mode from absent rule id');
+ok(str_contains($employee,"\$classificationStatus = \$isManual ? 'MANUAL' : 'AUTO'"),'employee settlement distinguishes manual and auto source');
+ok(str_contains($employee,'$classificationLocked = $isManual ? 1 : 0'),'manual employee settlement is locked');
 ok(str_contains($employee,"'BANK'"),'employee movement source remains BANK');
-ok(str_contains($employee,"$movementType = $originalType === 'EXPENSE' ? 'PAYMENT' : 'RETURN'")||str_contains($employee,"\$movementType = \$originalType === 'EXPENSE' ? 'PAYMENT' : 'RETURN'"),'bank debit means payment to employee and bank credit means return');
+ok(str_contains($employee,"\$movementType = \$originalType === 'EXPENSE' ? 'PAYMENT' : 'RETURN'"),'bank debit means payment to employee and bank credit means return');
 ok(!str_contains($employee,'finance_cash_resolutions'),'BANK <-> EMPLOYEE does not reintroduce CASH');
 
 // 4. Batch engine cannot overwrite single-operation locks.
