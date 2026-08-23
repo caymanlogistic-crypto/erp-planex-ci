@@ -1,0 +1,21 @@
+name: Agent Deploy Request Contract
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - '.github/workflows/erpv2_agent_deploy_request.yml'
+      - '.github/workflows/agent_deploy_request_contract.yml'
+      - 'tests/agent_deploy_request_contract_test.php'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: php -l tests/agent_deploy_request_contract_test.php
+      - run: php tests/agent_deploy_request_contract_test.php
