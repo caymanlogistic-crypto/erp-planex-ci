@@ -62,3 +62,4 @@ $assert(strpos($migration, "ENUM('loading','unloading')") !== false, 'DB must su
 $assert(strpos($migration, 'UNIQUE') === false, 'DB must allow two operation rows with same route/sort/address for a dual point');
 
 fwrite(STDOUT, "PASS linear_route_point_dual_operation_test\n");
+require __DIR__ . '/linear_trip_multi_services_contract_test.php';
