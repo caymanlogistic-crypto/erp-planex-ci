@@ -7,6 +7,8 @@ $problemCount = count(array_filter($rows ?? [], static fn(array $row): bool => !
 .closing-documents-table{width:100%!important;max-width:100%!important;min-width:0!important;table-layout:fixed}
 .closing-documents-table th,.closing-documents-table td{min-width:0;max-width:0;white-space:normal!important;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;word-break:break-word;vertical-align:top}
 .closing-documents-table tbody tr[data-closing-transaction-id]{cursor:pointer}
+.closing-documents-table tbody tr.is-problem>td{background:#fff1f1}
+.closing-documents-table tbody tr.is-problem:hover>td{background:#fde7e7}
 .closing-toolbar-filters{display:flex;align-items:center;gap:8px;min-width:0}
 .closing-problem-filter{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--text-muted);font-size:11px;cursor:pointer;user-select:none}
 .closing-problem-filter input{margin:0;accent-color:var(--accent)}
@@ -61,7 +63,7 @@ $problemCount = count(array_filter($rows ?? [], static fn(array $row): bool => !
                     $amount,
                 ]), 'UTF-8');
             ?>
-            <tr data-closing-transaction-id="<?= (int)$row['id'] ?>" data-problem="<?= !empty($row['is_problem']) ? '1' : '0' ?>" data-search="<?= e($searchText) ?>"<?= !empty($row['is_problem']) ? ' class="is-attention"' : '' ?> title="Двойной клик — открыть документы">
+            <tr data-closing-transaction-id="<?= (int)$row['id'] ?>" data-problem="<?= !empty($row['is_problem']) ? '1' : '0' ?>" data-search="<?= e($searchText) ?>"<?= !empty($row['is_problem']) ? ' class="is-problem"' : '' ?> title="Двойной клик — открыть документы">
                 <td class="col-tight"><strong><?= e(date('d.m.Y', strtotime((string)$row['operation_date']))) ?></strong><div class="field-note">№ <?= e((string)($row['document_number'] ?: $row['id'])) ?></div></td>
                 <td><strong><?= e($amount) ?></strong><div class="field-note"><?= e((string)($row['purpose'] ?? '')) ?></div></td>
                 <td><strong><?= e((string)($row['counterparty_name'] ?: 'Без наименования')) ?></strong><div class="field-note">ИНН <?= e($inn !== '' ? $inn : '—') ?></div></td>
