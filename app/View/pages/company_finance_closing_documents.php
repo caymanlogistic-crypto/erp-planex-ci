@@ -19,13 +19,16 @@ $renderRequirementStatus = static function (array $row, string $key): string {
 .closing-documents-table-frame{display:block;width:100%;max-width:100%;min-width:0;overflow:visible}
 .closing-documents-table{width:100%!important;max-width:100%!important;min-width:0!important;table-layout:fixed}
 .closing-documents-table th,.closing-documents-table td{min-width:0;max-width:0;white-space:normal!important;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;word-break:break-word;vertical-align:top}
+.closing-documents-table th.col-check,.closing-documents-table td.col-check{text-align:center;vertical-align:middle!important;padding-left:2px;padding-right:2px}
 .closing-documents-table tbody tr[data-closing-transaction-id]{cursor:pointer}
 .closing-documents-table tbody tr.is-problem>td{background:#fff1f1}
 .closing-documents-table tbody tr.is-problem:hover>td{background:#fde7e7}
 .closing-toolbar-filters{display:flex;align-items:center;gap:8px;min-width:0}
 .closing-problem-filter{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--text-muted);font-size:11px;cursor:pointer;user-select:none}
 .closing-problem-filter input{margin:0;accent-color:var(--accent)}
-.closing-doc-status{white-space:nowrap}
+.closing-doc-status{display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;font-size:24px;font-weight:700;line-height:1;white-space:nowrap}
+.closing-doc-status.table-check--yes{color:#2f7d32!important}
+.closing-doc-status.table-check--no{color:#b3261e!important}
 .closing-document-modal-shell .modal-body{padding:0}
 .closing-document-layout{display:grid;grid-template-columns:minmax(0,1fr) 350px;min-height:360px}
 .closing-document-main{padding:16px 18px;min-width:0}
@@ -75,7 +78,7 @@ $renderRequirementStatus = static function (array $row, string $key): string {
     </div>
     <div class="closing-documents-table-frame">
         <table class="table closing-documents-table">
-            <colgroup><col style="width:8%"><col style="width:28%"><col style="width:20%"><col style="width:10%"><col style="width:13%"><col style="width:12%"><col style="width:9%"></colgroup>
+            <colgroup><col style="width:8%"><col style="width:42%"><col style="width:20%"><col style="width:10%"><col style="width:7%"><col style="width:7%"><col style="width:6%"></colgroup>
             <thead><tr><th>Дата / №</th><th>Платёж</th><th>Контрагент</th><th>Тип</th><th class="col-check">Договор / Заявка</th><th class="col-check">Акт / УПД</th><th class="col-check">Чек НПД</th></tr></thead>
             <tbody>
             <?php if (empty($rows)): ?><tr data-closing-empty><td colspan="7"><div class="ux-empty"><strong>Нет операций для отображения</strong></div></td></tr><?php endif; ?>
