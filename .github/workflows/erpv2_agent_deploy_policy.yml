@@ -147,16 +147,27 @@ jobs:
           assert "startsWith(github.event.pull_request.title, 'FAST:')" in ci
           assert "startsWith(github.event.head_commit.message, 'FAST:')" in ci
 
-          assert 'deploy/erpv2-agent' in docs
-          assert 'erpv2/deploy' in docs
-          assert 'ERPv2 FAST Release' in docs
-          assert 'Canonical changes only through PR merge' in docs
-          assert 'Production migrations must never run automatically' in docs
-          assert 'FAST' in agents and 'STANDARD' in agents and 'CRITICAL' in agents
-          assert 'Никогда не вызывать `create_file`, `update_file`, `delete_file`' in agents
-          assert 'FAST whitelist' in agents
-          assert 'Notion обязателен' in agents
-          assert 'STANDARD execution discipline' in agents
-          assert 'CRITICAL execution discipline' in agents
+          for token in [
+              'deploy/erpv2-agent',
+              'ERPv2 FAST Release',
+              'canonical changes enter through PR merge',
+              'Production migrations never run automatically',
+              'Technical integration actor identity is not the current standard request gate',
+          ]:
+              assert token in docs, f'missing current control-plane documentation contract: {token}'
+
+          for token in [
+              'FAST', 'STANDARD', 'CRITICAL',
+              'START_HEAD → WORK_BRANCH → FEATURE_HEAD → PR_NUMBER → CI_RESULT → MERGED_SHA → optional DEPLOY_RESULT',
+              'Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes',
+              'Repeat search/fetch is forbidden without ambiguity, drift or a state-changing event',
+              'No placeholder/probe/temp/dummy files, empty/checkpoint commits or temporary verification PRs',
+              'Do not duplicate a regression already triggered by GitHub',
+              'Observe parallel required checks as one aggregate gate',
+              '21 — MEMORY GOVERNANCE & INTEGRITY CONTRACT',
+              'Legacy `/erp`: never touch',
+          ]:
+              assert token in agents, f'missing current agent-governance contract: {token}'
+          assert 'Technical integration actor identity is not the current standard request gate' in agents
           print('ERPV2_AGENT_DEPLOY_POLICY=PASS')
           PY
