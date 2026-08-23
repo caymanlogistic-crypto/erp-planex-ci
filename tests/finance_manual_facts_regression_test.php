@@ -46,8 +46,14 @@ $page = file_get_contents($root . '/app/View/pages/company_finance_cash.php');
 $submit = file_get_contents($root . '/app/Http/Controllers/Company/FinanceCashActions/operation_create_submit.php');
 $ledger = file_get_contents($root . '/app/Service/FinanceCashLedgerService.php');
 $deletion = file_get_contents($root . '/app/Service/FinanceStructureDeletionService.php');
+$matchingManual = file_get_contents($root . '/app/Service/FinanceMatchingRuleManualTrait.php');
+$matchingSubmit = file_get_contents($root . '/app/Http/Controllers/Company/BankFinanceActions/classifySubmit.php');
+$matchingPopup = file_get_contents($root . '/app/View/partials/company_bank_transaction_classify_form.php');
+$employeeBank = file_get_contents($root . '/app/Service/FinanceEmployeeBankSettlementService.php');
+$matchingBatch = file_get_contents($root . '/app/Service/FinanceMatchingRuleBatchTrait.php');
+$bankFilters = file_get_contents($root . '/app/Http/Controllers/Company/BankFinanceActions/indexAutoFilters.php');
 
-foreach (compact('service','migration','form','page','submit','ledger','deletion') as $name => $value) {
+foreach (compact('service','migration','form','page','submit','ledger','deletion','matchingManual','matchingSubmit','matchingPopup','employeeBank','matchingBatch','bankFilters') as $name => $value) {
     if ($value === false) fail_test("Cannot read {$name}");
 }
 
@@ -92,5 +98,33 @@ assert_contains($submit, 'CLIENT_CASH_INVOICE', 'Cash submit must route client c
 assert_contains($submit, 'оформляется в разделе «Выплаты сотрудникам»', 'Stale cash personal-expense submissions must fail closed and point to Employee Payments');
 assert_contains($ledger, 'CASH_RESOLUTION_CLIENT_ROUTE', 'Cash ledger must preserve legacy route-assigned client cash visibility');
 assert_contains($deletion, 'finance_employee_personal_expenses', 'CFU/DDS deletion must protect recorded personal expenses');
+
+// Bank transaction popup: manual single-operation and persistent rule creation must remain separate architectures.
+assert_contains($matchingManual, "\$mode!=='manual'", 'Single-operation executor must reject rule mode');
+assert_not_contains($matchingManual, 'self::createRule(', 'Single-operation executor must never create a matching rule');
+assert_contains($matchingManual, "classification_status='MANUAL'", 'Single-operation categorization must persist MANUAL state');
+assert_contains($matchingManual, 'classification_locked=1', 'Single-operation categorization must persist manual lock');
+assert_contains($matchingSubmit, 'FinanceMatchingRuleService::createRule', 'Popup rule mode must use canonical matching-rule creation');
+assert_contains($matchingSubmit, 'FinanceMatchingRuleService::applyAutoMatchToOperation', 'Popup-created rule must execute through canonical rule engine');
+assert_contains($matchingSubmit, 'resolveActiveEmployee', 'Popup employee action must use canonical employee resolution');
+assert_contains($matchingManual, 'FinanceEmployeeBankSettlementService::settleBankTransaction', 'Manual employee action must delegate to shared BANK-EMPLOYEE service');
+assert_contains($employeeBank, '$isManual = $ruleId === null', 'Employee settlement must distinguish manual execution from rule execution');
+assert_contains($employeeBank, "\$classificationStatus = \$isManual ? 'MANUAL' : 'AUTO'", 'Manual employee settlement must persist MANUAL; rule execution must persist AUTO');
+assert_contains($employeeBank, '$classificationLocked = $isManual ? 1 : 0', 'Manual employee settlement must lock the bank transaction');
+assert_contains($employeeBank, "'BANK'", 'Employee movement must retain BANK source');
+assert_contains($employeeBank, "\$movementType = \$originalType === 'EXPENSE' ? 'PAYMENT' : 'RETURN'", 'Bank debit/payment and bank credit/return directions must stay intact');
+assert_not_contains($employeeBank, 'finance_cash_resolutions', 'Direct BANK-EMPLOYEE flow must not reintroduce CASH');
+assert_contains($matchingBatch, 'classification_locked=0', 'Batch rule engine must exclude locked bank transactions');
+assert_contains($matchingBatch, "classification_status<>'MANUAL'", 'Batch rule engine must exclude MANUAL finance operations');
+foreach (['action_type','target_employee_ref','target_cash_flow_center_id','target_dds_category_id','direction','counterparty_inn','purpose_contains','invoice_number_pattern','purpose_regex','bank_account_id','amount_from','amount_to','priority'] as $field) {
+    assert_contains($matchingPopup, 'name="'.$field.'"', 'Bank popup must expose rule field '.$field);
+}
+assert_contains($matchingPopup, 'value="categorize"', 'Bank popup must expose ordinary categorization');
+assert_contains($matchingPopup, 'value="employee_cash_settlement"', 'Bank popup must expose employee settlement');
+assert_contains($matchingPopup, 'tx-rule-settings', 'Rule-only conditions must remain visually scoped to Create rule mode');
+assert_contains($bankFilters, '.bank-row-manual>td', 'Manual row must keep whole-row green styling');
+assert_contains($bankFilters, '#eff8ed', 'Manual row must keep soft green background');
+assert_contains($bankFilters, '.bank-row-unallocated>td', 'Problem row must keep existing red styling');
+assert_contains($bankFilters, '#fff0ed', 'Problem row must keep red background');
 
 fwrite(STDOUT, "OK: manual finance facts regression passed\n");
