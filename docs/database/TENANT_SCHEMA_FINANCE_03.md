@@ -2,7 +2,37 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7299653b569db5d58c8c4c76138dc6f09ec3661886c8ab9ccac1f25ca6783e53`
+**Schema fingerprint:** `bd1fc59161646ee1cfca98392e922d017ffd14833b0a73769641f6b66fc18989`
+
+## `finance_employee_money_accounts`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `money_account_id` | `int unsigned` | NO | NULL | — | `UNI` |
+| `employee_identity_type` | `varchar(20)` | NO | NULL | — | `MUL` |
+| `employee_identity_id` | `int unsigned` | NO | NULL | — | — |
+| `employee_name_snapshot` | `varchar(255)` | NO | NULL | — | — |
+| `employee_role_snapshot` | `varchar(50)` | YES | NULL | — | — |
+| `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_finance_employee_money_accounts_active` (`is_active`)
+- **UNIQUE** `uq_finance_employee_money_accounts_account` (`money_account_id`)
+- **UNIQUE** `uq_finance_employee_money_accounts_identity` (`employee_identity_type`, `employee_identity_id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `finance_employee_movements`
 
@@ -200,4 +230,3 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
-

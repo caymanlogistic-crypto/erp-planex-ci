@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `7299653b569db5d58c8c4c76138dc6f09ec3661886c8ab9ccac1f25ca6783e53`
+**Schema fingerprint:** `bd1fc59161646ee1cfca98392e922d017ffd14833b0a73769641f6b66fc18989`
 
 ## Architecture overview
 
@@ -153,4 +153,3 @@ erDiagram
 ```
 
 Tables: `crew_drivers`, `crews`, `driver_phones`, `driver_vehicle_blocks`, `drivers`, `vehicle_sets`, `vehicle_units`
-
