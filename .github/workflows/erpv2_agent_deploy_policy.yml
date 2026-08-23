@@ -74,7 +74,7 @@ jobs:
 
           required = [
               'actions: write',
-              'github.actor == github.repository_owner',
+              "github.ref_name == 'deploy/erpv2-agent'",
               'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
               'DEPLOY_REQUEST_BRANCH: deploy/erpv2-agent',
               'CANONICAL_CI_WORKFLOW: ci.yml',
@@ -91,6 +91,7 @@ jobs:
           ]
           for token in required:
               assert token in agent, f'missing safeguard: {token}'
+          assert 'github.actor == github.repository_owner' not in agent, 'agent deploy request must not depend on technical event actor'
           for forbidden in ['ERPV2_SSH_PRIVATE_KEY', 'P07_' + 'deploy_erpv2.sh', 'public_html/' + 'erpv2', 'deploy_' + 'backups']:
               assert forbidden not in agent, f'agent request must remain control-plane only: {forbidden}'
 
