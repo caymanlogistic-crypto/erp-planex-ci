@@ -95,15 +95,28 @@ document.addEventListener('DOMContentLoaded', function () {
     };
     if (search) search.addEventListener('input', filter);
 
+    function setRemoteHtml(body, html) {
+        body.innerHTML = html;
+        Array.from(body.querySelectorAll('script')).forEach(function (oldScript) {
+            var newScript = document.createElement('script');
+            Array.from(oldScript.attributes).forEach(function (attr) { newScript.setAttribute(attr.name, attr.value); });
+            newScript.textContent = oldScript.textContent;
+            oldScript.replaceWith(newScript);
+        });
+    }
+
     function loadForm(modalId, bodyId, url) {
         var body = document.getElementById(bodyId);
         if (!body) return;
         body.innerHTML = '<div class="modal-body"><div class="empty-state compact"><p>Загрузка...</p></div></div>';
         window.openModal(modalId);
-        fetch(base() + url)
+        fetch(base() + url, { credentials: 'same-origin' })
             .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-            .then(function (html) { window.planexSetHtmlAndRunScripts(body, html); })
-            .catch(function () { body.innerHTML = '<div class="modal-body"><div class="form-alert alert-error">Не удалось загрузить форму.</div></div>'; });
+            .then(function (html) { setRemoteHtml(body, html); })
+            .catch(function (error) {
+                console.error('Closing exception form load failed', error);
+                body.innerHTML = '<div class="modal-body"><div class="form-alert alert-error">Не удалось загрузить форму.</div></div>';
+            });
     }
 
     var create = document.getElementById('closing-exception-create-btn');
