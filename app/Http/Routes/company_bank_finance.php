@@ -18,6 +18,7 @@ $router->post('/company/finance/bank-transactions/{id}/classification/delete',[$
 
 $closingDocumentsController = new \App\Http\Controllers\Company\ClosingDocumentsController($config, $db);
 $router->get('/company/finance/closing-documents', [$closingDocumentsController, 'index']);
+$router->get('/company/finance/closing-documents/{id}/modal-view', [$closingDocumentsController, 'modalView']);
 $router->get('/company/finance/closing-documents/exceptions', [$closingDocumentsController, 'exceptions']);
 $router->post('/company/finance/closing-documents/exceptions/add', [$closingDocumentsController, 'addException']);
 $router->post('/company/finance/closing-documents/exceptions/remove', [$closingDocumentsController, 'removeException']);
