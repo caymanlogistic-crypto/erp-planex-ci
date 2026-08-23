@@ -1,0 +1,78 @@
+name: DIAG Closing Invoice UX Live
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - '.github/workflows/_diag_closing_invoice_ux_live.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      EXPECTED_SHA: 7873a929511b0157aaba46f81f1a7610b6915473
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Verify exact live marker and source contracts
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt")"
+          echo "live_marker=$marker"
+          test "$marker" = "$EXPECTED_SHA"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'set -euo pipefail
+            root=/home/s/spugovxsim/planexp/public_html/erpv2
+            main="$root/app/View/pages/company_finance_closing_documents.php"
+            modal="$root/app/View/pages/company_finance_closing_document_modal.php"
+            rules="$root/app/View/pages/company_finance_closing_document_exceptions.php"
+            grep -q "data-closing-search" "$main"
+            grep -q "data-closing-problem-only" "$main"
+            grep -q "dblclick" "$main"
+            ! grep -q "<th>Действия</th>" "$main"
+            grep -q "Загрузить новый документ" "$modal"
+            grep -q "data-recipient-search" "$rules"
+            grep -q "data-exception-search" "$rules"
+            echo LIVE_CLOSING_INVOICE_UX_SOURCE=PASS'
+      - name: Full live controller main modal and exceptions render
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 -d display_errors=1 -r '
+            chdir(\"/home/s/spugovxsim/planexp/public_html/erpv2\");
+            \$config=require \"bootstrap/app.php\"; require \"app/Support/entrypoint_dependencies.php\"; require \"app/Http/Controllers/Company/ClosingDocumentsController.php\";
+            \$_SESSION=[\"user_id\"=>1,\"role_code\"=>\"company_owner\",\"company_id\"=>25]; \$_SERVER[\"REQUEST_METHOD\"]=\"GET\"; \$_SERVER[\"REQUEST_URI\"]=\"/erpv2/company/finance/closing-documents\";
+            \$db=new \\App\\Core\\Database(\$config[\"database\"]); \$controller=new \\App\\Http\\Controllers\\Company\\ClosingDocumentsController(\$config,\$db);
+            ob_start(); \$controller->index(); \$main=ob_get_clean(); foreach([\"data-closing-search\",\"data-closing-problem-only\",\"closing-document-modal\"] as \$t){if(strpos(\$main,\$t)===false) exit(7);} if(strpos(\$main,\"<th>Действия</th>\")!==false) exit(8);
+            ob_start(); \$controller->exceptions(); \$rules=ob_get_clean(); if(strpos(\$rules,\"data-recipient-search\")===false||strpos(\$rules,\"data-exception-search\")===false) exit(9);
+            \$central=\$db->connection(); \$stmt=\$central->prepare(\"SELECT * FROM companies WHERE id=? LIMIT 1\"); \$stmt->execute([25]); \$company=\$stmt->fetch(PDO::FETCH_ASSOC); \$tenant=(new \\App\\Core\\Database(companyDatabaseConfig(\$config,\$company)))->connection(); \$report=\\App\\Service\\ClosingDocumentService::reportRows(\$tenant,false); if(!\$report) exit(10); \$id=(int)\$report[0][\"id\"];
+            ob_start(); \$controller->modalView(\$id); \$modal=ob_get_clean(); foreach([\"Требуемый комплект\",\"Привязанные документы\",\"Загрузить новый документ\"] as \$t){if(strpos(\$modal,\$t)===false) exit(11);} echo \"LIVE_CLOSING_INVOICE_UX_FULL_RENDER=PASS\\n\";
+          '"
+      - name: HTTP login acceptance
+        run: |
+          set -euo pipefail
+          test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+          echo LIVE_HTTP_LOGIN=PASS
+      - name: Cleanup
+        if: always()
+        run: rm -f "$HOME/.ssh/key" 2>/dev/null || true
