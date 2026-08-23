@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7299653b569db5d58c8c4c76138dc6f09ec3661886c8ab9ccac1f25ca6783e53`
+**Schema fingerprint:** `bd1fc59161646ee1cfca98392e922d017ffd14833b0a73769641f6b66fc18989`
 
 ## `client_contacts`
 
@@ -233,4 +233,3 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
-

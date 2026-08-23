@@ -4,7 +4,7 @@
 
 **Physical source of truth:** `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7299653b569db5d58c8c4c76138dc6f09ec3661886c8ab9ccac1f25ca6783e53`
+**Schema fingerprint:** `bd1fc59161646ee1cfca98392e922d017ffd14833b0a73769641f6b66fc18989`
 
 Foreign keys below are **DB-enforced physical relations only**. Logical/application relations are intentionally not inferred: if the database has no FK, this catalog will not invent one. Use owning application code/Notion semantic records for logical relations.
 
@@ -28,8 +28,8 @@ Each linked file below is generated from the same disposable-MySQL `information_
 - [CRM](TENANT_SCHEMA_CRM.md): `client_contacts`, `clients`, `contractor_assignment_history`, `contractor_contacts`, `contractor_tax_history`, `contractors`, `responsible_assignment_history`
 - [Documents](TENANT_SCHEMA_DOCUMENTS.md): `document_types`, `documents`
 - [Finance — part 1](TENANT_SCHEMA_FINANCE_01.md): `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`
-- [Finance — part 2](TENANT_SCHEMA_FINANCE_02.md): `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_dds_categories`, `finance_employee_invoice_payments`, `finance_employee_money_accounts`
-- [Finance — part 3](TENANT_SCHEMA_FINANCE_03.md): `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`, `finance_invoices`, `finance_matching_results`
+- [Finance — part 2](TENANT_SCHEMA_FINANCE_02.md): `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_dds_categories`, `finance_employee_invoice_payments`
+- [Finance — part 3](TENANT_SCHEMA_FINANCE_03.md): `finance_employee_money_accounts`, `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`, `finance_invoices`, `finance_matching_results`
 - [Finance — part 4](TENANT_SCHEMA_FINANCE_04.md): `finance_matching_rules`, `finance_money_accounts`, `finance_obligations`, `finance_operation_allocations`
 - [Finance — part 5](TENANT_SCHEMA_FINANCE_05.md): `finance_operations`
 - [Operations / Routes — part 1](TENANT_SCHEMA_OPERATIONS_ROUTES_01.md): `cargo_types`, `linear_route_financial_terms`, `linear_route_payments`, `linear_route_points`, `linear_route_principals`, `linear_routes`

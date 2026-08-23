@@ -20,7 +20,9 @@ $closingDocumentsController = new \App\Http\Controllers\Company\ClosingDocuments
 $router->get('/company/finance/closing-documents', [$closingDocumentsController, 'index']);
 $router->get('/company/finance/closing-documents/{id}/modal-view', [$closingDocumentsController, 'modalView']);
 $router->get('/company/finance/closing-documents/exceptions', [$closingDocumentsController, 'exceptions']);
-$router->post('/company/finance/closing-documents/exceptions/add', [$closingDocumentsController, 'addException']);
+$router->get('/company/finance/closing-documents/exceptions/create', [$closingDocumentsController, 'exceptionCreateForm']);
+$router->get('/company/finance/closing-documents/exceptions/edit', [$closingDocumentsController, 'exceptionEditForm']);
+$router->post('/company/finance/closing-documents/exceptions/save', [$closingDocumentsController, 'saveException']);
 $router->post('/company/finance/closing-documents/exceptions/remove', [$closingDocumentsController, 'removeException']);
 $router->post('/company/finance/closing-documents/link-document', [$closingDocumentsController, 'linkDocument']);
 $router->post('/company/finance/closing-documents/upload-document', [$closingDocumentsController, 'uploadDocument']);

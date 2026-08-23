@@ -100,6 +100,9 @@ try {
     $catalog = TenantSchemaCatalog::capture($pdo);
     $files = $buildSchemaFiles($catalog);
     $files['TENANT_ERD.md'] = TenantSchemaCatalog::renderErd($catalog);
+    foreach ($files as $name => $content) {
+        $files[$name] = rtrim($content) . "\n";
+    }
     ksort($files, SORT_STRING);
 
     $repoDir = BASE_PATH . '/docs/database';
