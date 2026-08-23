@@ -10,11 +10,9 @@
       "criticality": "CRITICAL",
       "verified_sha": "f629c06b535803e28413faff6ed6ef44f2b4a519",
       "evidence": "https://github.com/planexerp/erp-planex/blob/f629c06b535803e28413faff6ed6ef44f2b4a519/.github/workflows/erpv2_agent_deploy_request.yml",
-      "owning_paths": [
-        ".github/workflows/erpv2_agent_deploy_request.yml",
-        "tests/agent_deploy_request_contract_test.php"
-      ],
-      "navigation": "active"
+      "owning_paths": [".github/workflows/erpv2_agent_deploy_request.yml", "tests/agent_deploy_request_contract_test.php"],
+      "navigation": "active",
+      "machine_ownership_id": "control.deploy"
     },
     {
       "canonical_id": "data.schema.generated_contract",
@@ -23,13 +21,9 @@
       "criticality": "CRITICAL",
       "verified_sha": "f629c06b535803e28413faff6ed6ef44f2b4a519",
       "evidence": "https://github.com/planexerp/erp-planex/blob/f629c06b535803e28413faff6ed6ef44f2b4a519/docs/database/TENANT_SCHEMA.md",
-      "owning_paths": [
-        "database/migrations-local/**",
-        "app/Service/LocalMigrationService.php",
-        "tools/database/generate_schema_docs.php",
-        "docs/database/TENANT_SCHEMA*.md"
-      ],
-      "navigation": "active"
+      "owning_paths": ["database/migrations-local/**", "app/Service/LocalMigrationService.php", "tools/database/generate_schema_docs.php", "docs/database/TENANT_SCHEMA*.md"],
+      "navigation": "active",
+      "machine_ownership_id": "data.tenant_schema"
     },
     {
       "canonical_id": "data.finance.matching_rules",
@@ -38,13 +32,9 @@
       "criticality": "CRITICAL",
       "verified_sha": "f629c06b535803e28413faff6ed6ef44f2b4a519",
       "evidence": "https://github.com/planexerp/erp-planex/blob/f629c06b535803e28413faff6ed6ef44f2b4a519/app/Service/FinanceMatchingRuleService.php",
-      "owning_paths": [
-        "app/Service/FinanceMatchingRule*.php",
-        "app/Http/Controllers/Company/BankFinanceActions/**",
-        "database/migrations-local/055_create_finance_matching_rules.sql",
-        "tests/finance_*matching*"
-      ],
-      "navigation": "active"
+      "owning_paths": ["app/Service/FinanceMatchingRule*.php", "app/Http/Controllers/Company/BankFinanceActions/**", "database/migrations-local/055_create_finance_matching_rules.sql", "tests/finance_*matching*"],
+      "navigation": "active",
+      "machine_ownership_id": "finance.matching"
     },
     {
       "canonical_id": "policy.deploy.standing_authorization",
@@ -55,14 +45,9 @@
       "evidence": "https://app.notion.com/p/3c5a64edce3281a5b127f18520d69e67?pvs=204",
       "owning_paths": [],
       "navigation": "active",
+      "machine_ownership_id": "policy.owner",
       "active_policy_key": "deploy.standing_authorization",
-      "decision": {
-        "id": "OWNER-2026-08-20-DEPLOY",
-        "date": "2026-08-20",
-        "source": "https://app.notion.com/p/3c5a64edce3281a5b127f18520d69e67?pvs=204",
-        "supersedes": "per-release OWNER click requirement from 2026-08-19 deploy policy only",
-        "implementation_status": "IMPLEMENTED"
-      }
+      "decision": {"id":"OWNER-2026-08-20-DEPLOY","date":"2026-08-20","source":"https://app.notion.com/p/3c5a64edce3281a5b127f18520d69e67?pvs=204","supersedes":"per-release OWNER click requirement from 2026-08-19 deploy policy only","implementation_status":"IMPLEMENTED"}
     }
   ]
 }

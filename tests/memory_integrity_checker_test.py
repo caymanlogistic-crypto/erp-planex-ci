@@ -21,6 +21,10 @@ def commit(repo: Path, message: str) -> str:
     return run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
 
 
+def ownership():
+    return {"owners":[{"id":"test.owner","owning_paths":["owned.txt"]}]}
+
+
 def manifest(sha: str, path: str = "owned.txt", **overrides):
     record = {
         "canonical_id":"test.record",
@@ -31,15 +35,18 @@ def manifest(sha: str, path: str = "owned.txt", **overrides):
         "evidence":"https://example.test/evidence",
         "owning_paths":[path],
         "navigation":"active",
+        "machine_ownership_id":"test.owner",
     }
     record.update(overrides)
     return {"schema_version":1, "records":[record]}
 
 
-def check(repo: Path, data: dict, expected: int):
+def check(repo: Path, data: dict, expected: int, owners=None):
     p = repo / "manifest.json"
+    o = repo / "ownership.json"
     p.write_text(json.dumps(data), encoding="utf-8")
-    proc = run(["python3", str(SCRIPT), str(p), "--head", "HEAD", "--json"], repo, check=False)
+    o.write_text(json.dumps(owners or ownership()), encoding="utf-8")
+    proc = run(["python3", str(SCRIPT), str(p), "--head", "HEAD", "--ownership-manifest", str(o), "--json"], repo, check=False)
     if proc.returncode != expected:
         raise AssertionError(f"expected rc={expected}, got {proc.returncode}\nstdout={proc.stdout}\nstderr={proc.stderr}")
     return json.loads(proc.stdout)
@@ -80,6 +87,18 @@ def main() -> int:
         result = check(repo, manifest(run(["git", "rev-parse", "HEAD"], repo).stdout.strip(), evidence=""), 1)
         assert "critical_missing_evidence" in {i["code"] for i in result["issues"]}
 
+        result = check(repo, manifest(run(["git", "rev-parse", "HEAD"], repo).stdout.strip(), machine_ownership_id=""), 1)
+        assert "missing_machine_ownership" in {i["code"] for i in result["issues"]}
+
+        result = check(repo, manifest(run(["git", "rev-parse", "HEAD"], repo).stdout.strip(), machine_ownership_id="unknown.owner"), 1)
+        assert "unknown_machine_ownership" in {i["code"] for i in result["issues"]}
+
+        result = check(repo, manifest(run(["git", "rev-parse", "HEAD"], repo).stdout.strip(), truth_status="NEEDS_REVERIFY"), 1)
+        assert "critical_needs_reverify" in {i["code"] for i in result["issues"]}
+
+        result = check(repo, manifest(run(["git", "rev-parse", "HEAD"], repo).stdout.strip(), semantic_class="LEGACY_IMPLEMENTATION"), 1)
+        assert "legacy_only_verified" in {i["code"] for i in result["issues"]}
+
         owner = {
             "schema_version":1,
             "records":[{
@@ -91,6 +110,7 @@ def main() -> int:
                 "evidence":"https://example.test/owner",
                 "owning_paths":[],
                 "navigation":"active",
+                "machine_ownership_id":"test.owner",
                 "active_policy_key":"test",
                 "decision":{"id":"", "date":"2026-08-23", "source":"https://example.test/owner", "implementation_status":"IMPLEMENTED"}
             }]

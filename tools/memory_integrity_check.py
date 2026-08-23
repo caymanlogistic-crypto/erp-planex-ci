@@ -44,11 +44,24 @@ def issue(issues: list[dict[str, str]], record_id: str, code: str, detail: str) 
     issues.append({"canonical_id": record_id, "code": code, "detail": detail})
 
 
-def validate_manifest(manifest: dict, head: str) -> tuple[list[dict[str, str]], dict[str, int]]:
+def ownership_ids(ownership_manifest: dict | None) -> set[str]:
+    if ownership_manifest is None:
+        return set()
+    owners = ownership_manifest.get("owners")
+    if not isinstance(owners, list):
+        raise ValueError("ownership manifest owners must be a list")
+    ids = [str(x.get("id", "")).strip() for x in owners]
+    if any(not x for x in ids) or len(ids) != len(set(ids)):
+        raise ValueError("ownership manifest ids must be unique and non-empty")
+    return set(ids)
+
+
+def validate_manifest(manifest: dict, head: str, ownership_manifest: dict | None = None) -> tuple[list[dict[str, str]], dict[str, int]]:
     issues: list[dict[str, str]] = []
     records = manifest.get("records")
     if not isinstance(records, list):
         return ([{"canonical_id": "<manifest>", "code": "invalid_manifest", "detail": "records must be a list"}], {})
+    known_owners = ownership_ids(ownership_manifest)
 
     ids = [str(r.get("canonical_id", "")).strip() for r in records]
     for cid, count in Counter(ids).items():
@@ -69,6 +82,7 @@ def validate_manifest(manifest: dict, head: str) -> tuple[list[dict[str, str]], 
         evidence = str(rec.get("evidence", "")).strip()
         paths = rec.get("owning_paths") or []
         navigation = str(rec.get("navigation", "")).strip().lower()
+        machine_owner = str(rec.get("machine_ownership_id", "")).strip()
 
         if semantic_class not in SEMANTIC_CLASSES:
             issue(issues, cid, "invalid_semantic_class", semantic_class or "missing")
@@ -79,6 +93,21 @@ def validate_manifest(manifest: dict, head: str) -> tuple[list[dict[str, str]], 
         if not isinstance(paths, list) or any(not isinstance(p, str) or not p.strip() for p in paths):
             issue(issues, cid, "invalid_owning_paths", "owning_paths must be an array of non-empty strings")
             paths = []
+
+        active = navigation == "active" and truth_status != "SUPERSEDED"
+        if active and not machine_owner:
+            issue(issues, cid, "missing_machine_ownership", "active record has no machine_ownership_id")
+            metrics["unresolved_machine_ownership"] += 1
+        elif active and known_owners and machine_owner not in known_owners:
+            issue(issues, cid, "unknown_machine_ownership", machine_owner)
+            metrics["unresolved_machine_ownership"] += 1
+
+        if criticality == "CRITICAL" and truth_status == "NEEDS_REVERIFY":
+            issue(issues, cid, "critical_needs_reverify", "critical record cannot remain NEEDS_REVERIFY at terminal state")
+            metrics["critical_needs_reverify"] += 1
+        if semantic_class == "LEGACY_IMPLEMENTATION" and truth_status == "VERIFIED":
+            issue(issues, cid, "legacy_only_verified", "legacy implementation must not be current VERIFIED truth")
+            metrics["legacy_only_verified"] += 1
 
         for path in paths:
             if FRAGILE_MIGRATION_RANGE_RE.search(path):
@@ -149,9 +178,9 @@ def validate_manifest(manifest: dict, head: str) -> tuple[list[dict[str, str]], 
             metrics["critical_conflicts"] += 1
 
     for name in (
-        "critical_conflicts", "critical_stale_verified", "invalid_verified_sha",
-        "critical_missing_evidence", "changed_owning_paths_after_verification",
-        "orphan_critical_records", "owner_decisions_missing_provenance",
+        "critical_conflicts", "critical_stale_verified", "critical_needs_reverify", "legacy_only_verified",
+        "invalid_verified_sha", "critical_missing_evidence", "changed_owning_paths_after_verification",
+        "orphan_critical_records", "owner_decisions_missing_provenance", "unresolved_machine_ownership",
         "superseded_leaks", "fragile_migration_scopes",
     ):
         metrics.setdefault(name, 0)
@@ -162,14 +191,16 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--head", default="HEAD", help="Git revision representing current canonical/feature state")
+    parser.add_argument("--ownership-manifest", type=Path)
     parser.add_argument("--json", action="store_true", dest="as_json")
     args = parser.parse_args()
 
     try:
         head = git("rev-parse", args.head).stdout.strip()
         manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
-        issues, metrics = validate_manifest(manifest, head)
-    except (OSError, json.JSONDecodeError, subprocess.CalledProcessError, RuntimeError) as exc:
+        ownership = json.loads(args.ownership_manifest.read_text(encoding="utf-8")) if args.ownership_manifest else None
+        issues, metrics = validate_manifest(manifest, head, ownership)
+    except (OSError, json.JSONDecodeError, subprocess.CalledProcessError, RuntimeError, ValueError) as exc:
         print(f"memory-integrity: ERROR: {exc}", file=sys.stderr)
         return 2
 
