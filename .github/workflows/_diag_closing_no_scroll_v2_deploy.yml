@@ -4,6 +4,11 @@ on:
   push:
     branches:
       - diag/closing-no-scroll-v2-deploy
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - '.github/workflows/_diag_closing_no_scroll_v2_deploy.yml'
 
 permissions:
   contents: read
