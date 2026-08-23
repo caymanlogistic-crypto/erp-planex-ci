@@ -30,8 +30,8 @@ ok(str_contains($employee,'$classificationLocked = $isManual ? 1 : 0'),'manual e
 ok(str_contains($employee,"'BANK'"),'employee movement source remains BANK');
 ok(str_contains($employee,"\$movementType = \$originalType === 'EXPENSE' ? 'PAYMENT' : 'RETURN'"),'bank debit means payment to employee and bank credit means return');
 ok(!str_contains($employee,'INSERT INTO finance_cash_resolutions'),'BANK <-> EMPLOYEE does not write CASH resolutions');
-ok(str_contains($batch,'classification_locked=0'),'batch selection excludes locked bank transactions');
-ok(str_contains($batch,"classification_status<>'MANUAL'")||str_contains($batch,"classification_status != 'MANUAL'")||str_contains($batch,"classification_status!='MANUAL'"),'batch selection excludes MANUAL finance operations');
+ok(str_contains($batch,'COALESCE(bt.classification_locked, 0) = 0'),'batch selection excludes locked bank transactions');
+ok(str_contains($batch,"UPPER(COALESCE(fo.classification_status, 'UNALLOCATED')) <> 'MANUAL'"),'batch selection excludes MANUAL finance operations');
 foreach(['action_type','target_employee_ref','target_cash_flow_center_id','target_dds_category_id','direction','counterparty_inn','purpose_contains','invoice_number_pattern','purpose_regex','bank_account_id','amount_from','amount_to','priority'] as $field){ok(str_contains($popup,'name="'.$field.'"'),'popup exposes rule field '.$field);}
 ok(str_contains($popup,'value="categorize"')&&str_contains($popup,'value="employee_cash_settlement"'),'popup exposes same active rule types as rules screen');
 ok(str_contains($rulesForm,'employee_cash_settlement')&&str_contains($rulesForm,'categorize'),'separate rules screen remains intact');
