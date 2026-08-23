@@ -35,9 +35,7 @@ final class ClosingDocumentsController
             [$company, $tenantPdo] = $this->tenant();
             $pageContext .= ' › Компания: ' . e((string) $company['name']);
             $schemaReady = ClosingDocumentService::schemaReady($tenantPdo);
-            if ($schemaReady) {
-                $rows = ClosingDocumentService::reportRows($tenantPdo, false);
-            }
+            if ($schemaReady) $rows = ClosingDocumentService::reportRows($tenantPdo, false);
         } catch (Throwable $e) {
             $dbError = 'Ошибка при загрузке данных: ' . $e->getMessage();
         }
@@ -57,18 +55,12 @@ final class ClosingDocumentsController
             echo '<div class="form-alert alert-error">Платёж не найден.</div>';
             return;
         }
-
         try {
             [, $tenantPdo] = $this->tenant();
-            if (!ClosingDocumentService::schemaReady($tenantPdo)) {
-                throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
-            }
+            if (!ClosingDocumentService::schemaReady($tenantPdo)) throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
             $row = null;
             foreach (ClosingDocumentService::reportRows($tenantPdo, false) as $candidate) {
-                if ((int) ($candidate['id'] ?? 0) === $transactionId) {
-                    $row = $candidate;
-                    break;
-                }
+                if ((int) ($candidate['id'] ?? 0) === $transactionId) { $row = $candidate; break; }
             }
             if ($row === null) {
                 http_response_code(404);
@@ -76,9 +68,7 @@ final class ClosingDocumentsController
                 return;
             }
             $inn = (string) ($row['normalized_inn'] ?? '');
-            $availableDocuments = $inn !== '' && empty($row['is_exempt'])
-                ? ClosingDocumentService::existingDocumentsForInn($tenantPdo, $inn)
-                : [];
+            $availableDocuments = $inn !== '' && empty($row['is_exempt']) ? ClosingDocumentService::existingDocumentsForInn($tenantPdo, $inn) : [];
             $requirementLabels = ClosingDocumentService::requirementLabels();
             require base_path('app/View/pages/company_finance_closing_document_modal.php');
         } catch (Throwable $e) {
@@ -96,7 +86,6 @@ final class ClosingDocumentsController
         $pageContext = 'Финансы › Закрывающие документы › Исключения';
         $company = null;
         $exceptions = [];
-        $recipientOptions = [];
         $schemaReady = false;
         $dbError = null;
         $successFlash = $_SESSION['closing_documents_success'] ?? null;
@@ -107,10 +96,7 @@ final class ClosingDocumentsController
             [$company, $tenantPdo] = $this->tenant();
             $pageContext .= ' › Компания: ' . e((string) $company['name']);
             $schemaReady = ClosingDocumentService::schemaReady($tenantPdo);
-            if ($schemaReady) {
-                $exceptions = ClosingDocumentService::exceptions($tenantPdo);
-                $recipientOptions = $this->bankRecipientOptions($tenantPdo);
-            }
+            if ($schemaReady) $exceptions = ClosingDocumentService::exceptions($tenantPdo);
         } catch (Throwable $e) {
             $dbError = 'Ошибка при загрузке данных: ' . $e->getMessage();
         }
@@ -121,18 +107,49 @@ final class ClosingDocumentsController
         require base_path('app/View/layouts/main.php');
     }
 
-    public function addException(): void
+    public function exceptionCreateForm(): void
+    {
+        requireRole(['company_owner']);
+        $rule = null;
+        require base_path('app/View/pages/company_finance_closing_document_exception_form.php');
+    }
+
+    public function exceptionEditForm(): void
     {
         requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
-            ClosingDocumentService::addException(
-                $tenantPdo,
-                (string) ($_POST['inn'] ?? ''),
-                (string) ($_POST['comment'] ?? ''),
-                (int) ($_SESSION['user_id'] ?? 0)
-            );
-            $_SESSION['closing_documents_success'] = 'Получатель добавлен в исключения';
+            if (!ClosingDocumentService::schemaReady($tenantPdo)) throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
+            $rule = ClosingDocumentService::exception($tenantPdo, (int) ($_GET['id'] ?? 0));
+            if ($rule === null) {
+                http_response_code(404);
+                echo '<div class="modal-body"><div class="form-alert alert-error">Правило не найдено.</div></div>';
+                return;
+            }
+            require base_path('app/View/pages/company_finance_closing_document_exception_form.php');
+        } catch (Throwable $e) {
+            http_response_code(500);
+            echo '<div class="modal-body"><div class="form-alert alert-error">' . e($e->getMessage()) . '</div></div>';
+        }
+    }
+
+    public function saveException(): void
+    {
+        requireRole(['company_owner']);
+        try {
+            [, $tenantPdo] = $this->tenant();
+            $id = (int) ($_POST['id'] ?? 0);
+            $inn = (string) ($_POST['inn'] ?? '');
+            $purposeContains = (string) ($_POST['purpose_contains'] ?? '');
+            $comment = (string) ($_POST['comment'] ?? '');
+            $userId = (int) ($_SESSION['user_id'] ?? 0);
+            if ($id > 0) {
+                ClosingDocumentService::updateException($tenantPdo, $id, $inn, $purposeContains, $comment, $userId);
+                $_SESSION['closing_documents_success'] = 'Правило исключения обновлено';
+            } else {
+                ClosingDocumentService::addException($tenantPdo, $inn, $purposeContains, $comment, $userId);
+                $_SESSION['closing_documents_success'] = 'Правило исключения добавлено';
+            }
         } catch (Throwable $e) {
             $_SESSION['closing_documents_error'] = $e->getMessage();
         }
@@ -145,7 +162,7 @@ final class ClosingDocumentsController
         try {
             [, $tenantPdo] = $this->tenant();
             ClosingDocumentService::removeException($tenantPdo, (int) ($_POST['id'] ?? 0));
-            $_SESSION['closing_documents_success'] = 'Исключение удалено';
+            $_SESSION['closing_documents_success'] = 'Правило исключения удалено';
         } catch (Throwable $e) {
             $_SESSION['closing_documents_error'] = $e->getMessage();
         }
@@ -157,13 +174,7 @@ final class ClosingDocumentsController
         requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
-            ClosingDocumentService::linkExistingDocument(
-                $tenantPdo,
-                (int) ($_POST['transaction_id'] ?? 0),
-                (int) ($_POST['document_id'] ?? 0),
-                trim((string) ($_POST['requirement_code'] ?? '')),
-                (int) ($_SESSION['user_id'] ?? 0)
-            );
+            ClosingDocumentService::linkExistingDocument($tenantPdo, (int) ($_POST['transaction_id'] ?? 0), (int) ($_POST['document_id'] ?? 0), trim((string) ($_POST['requirement_code'] ?? '')), (int) ($_SESSION['user_id'] ?? 0));
             $_SESSION['closing_documents_success'] = 'Существующий документ привязан';
         } catch (Throwable $e) {
             $_SESSION['closing_documents_error'] = $e->getMessage();
@@ -177,15 +188,7 @@ final class ClosingDocumentsController
         require_once base_path('app/Support/legal_entity_document_upload.php');
         try {
             [$company, $tenantPdo] = $this->tenant();
-            ClosingDocumentService::uploadAndLink(
-                $tenantPdo,
-                (int) $company['id'],
-                (int) ($_POST['transaction_id'] ?? 0),
-                trim((string) ($_POST['requirement_code'] ?? '')),
-                $_FILES['document_file'] ?? [],
-                (int) ($_SESSION['user_id'] ?? 0),
-                (string) ($_SESSION['role_code'] ?? 'company_owner')
-            );
+            ClosingDocumentService::uploadAndLink($tenantPdo, (int) $company['id'], (int) ($_POST['transaction_id'] ?? 0), trim((string) ($_POST['requirement_code'] ?? '')), $_FILES['document_file'] ?? [], (int) ($_SESSION['user_id'] ?? 0), (string) ($_SESSION['role_code'] ?? 'company_owner'));
             $_SESSION['closing_documents_success'] = 'Документ загружен и привязан';
         } catch (Throwable $e) {
             $_SESSION['closing_documents_error'] = $e->getMessage();
@@ -198,11 +201,7 @@ final class ClosingDocumentsController
         requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
-            ClosingDocumentService::unlinkDocument(
-                $tenantPdo,
-                (int) ($_POST['transaction_id'] ?? 0),
-                (int) ($_POST['link_id'] ?? 0)
-            );
+            ClosingDocumentService::unlinkDocument($tenantPdo, (int) ($_POST['transaction_id'] ?? 0), (int) ($_POST['link_id'] ?? 0));
             $_SESSION['closing_documents_success'] = 'Связь документа удалена';
         } catch (Throwable $e) {
             $_SESSION['closing_documents_error'] = $e->getMessage();
@@ -210,53 +209,15 @@ final class ClosingDocumentsController
         $this->back();
     }
 
-    private function bankRecipientOptions(PDO $pdo): array
-    {
-        $rows = $pdo->query(
-            "SELECT bt.counterparty_name, bt.counterparty_inn, MAX(bt.operation_date) AS last_operation_date, MAX(bt.id) AS last_id
-             FROM bank_transactions bt
-             WHERE COALESCE(bt.debit_amount, 0) > 0
-               AND COALESCE(bt.is_internal_transfer, 0) = 0
-               AND NOT EXISTS (
-                    SELECT 1 FROM finance_employee_movements fem
-                    WHERE fem.bank_transaction_id = bt.id
-               )
-               AND TRIM(COALESCE(bt.counterparty_name, '')) <> ''
-               AND TRIM(COALESCE(bt.counterparty_inn, '')) <> ''
-             GROUP BY bt.counterparty_name, bt.counterparty_inn
-             ORDER BY bt.counterparty_name ASC"
-        )->fetchAll(PDO::FETCH_ASSOC);
-        $result = [];
-        $seen = [];
-        foreach ($rows as $row) {
-            $inn = ClosingDocumentService::normalizeInn($row['counterparty_inn'] ?? '');
-            if (!in_array(strlen($inn), [10, 12], true)) {
-                continue;
-            }
-            $name = trim((string) ($row['counterparty_name'] ?? ''));
-            $key = mb_strtolower($name, 'UTF-8') . '|' . $inn;
-            if (isset($seen[$key])) {
-                continue;
-            }
-            $seen[$key] = true;
-            $result[] = ['name' => $name, 'inn' => $inn];
-        }
-        return $result;
-    }
-
     private function tenant(): array
     {
         $companyId = (int) (getSessionCompanyId() ?? 0);
-        if ($companyId <= 0) {
-            throw new RuntimeException('Компания не выбрана');
-        }
+        if ($companyId <= 0) throw new RuntimeException('Компания не выбрана');
         $centralPdo = $this->db->connection();
         $stmt = $centralPdo->prepare('SELECT * FROM companies WHERE id = ? LIMIT 1');
         $stmt->execute([$companyId]);
         $company = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$company || (string) ($company['status'] ?? '') !== 'active') {
-            throw new RuntimeException('Компания недоступна');
-        }
+        if (!$company || (string) ($company['status'] ?? '') !== 'active') throw new RuntimeException('Компания недоступна');
         $tenantDb = new Database(companyDatabaseConfig($this->config, $company));
         return [$company, $tenantDb->connection()];
     }
