@@ -24,6 +24,23 @@ Forbidden: placeholder/probe writes, empty/checkpoint commits, dummy files and t
 - **STANDARD:** controller/service/business behavior without production DB mutation.
 - **CRITICAL:** finance settlement/matching/debt, security/access, DB/schema, financial integrations, control plane or destructive operations.
 
+## Pre-push engineering gate
+
+`tools/ci_scope.py` is the reusable deterministic changed-path classifier used by local preflight and the main CI scope step. `tools/agent_preflight.py` calculates and executes the path-owned deterministic checks before the first feature-branch push.
+
+Stable lifecycle:
+
+`START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS|LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES → FEATURE_HEAD → PR → CI aggregate → MERGED_SHA → MEMORY PASS → optional deploy`.
+
+GitHub Actions remains an independent verification layer. Agents aggregate all required terminal results for one feature SHA before remediation; a failed aggregate is fixed as one local batch and must pass local preflight again before a corrective push. Normal remote push budget is one initial push, with at most one corrective push for STANDARD/CRITICAL before a `PREFLIGHT_COVERAGE_DEFECT` investigation is required.
+
+
+Capability-aware execution is fail-closed: every planned check is exactly `LOCAL_REQUIRED` or `REMOTE_REQUIRED`. `REMOTE_REQUIRED` is not optional and cannot be chosen ad hoc by an agent; the allowlist is executable code with regression coverage. Tenant schema provisioning/generated-schema equivalence is the only initial allowlisted integration gate and becomes remote-only solely when a working PDO MySQL + reachable MySQL capability is unavailable. PHP/JS/Python syntax, architecture guard, dynamic identifier safety, memory integrity, scope/parity tests and infrastructure-independent control-plane contracts remain local.
+
+`LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES` authorizes the same single initial push as a full local PASS, but the listed remote gates must execute through the existing path-triggered GitHub workflows for that exact feature SHA before merge.
+
+The privileged FAST `pull_request_target` boundary is intentionally **not** refactored to execute PR-head helper code before validation/checkout. Its exact-base, whitelist, size, deletion and UI-presence checks stay non-PR-controlled and are parity-tested against local FAST policy.
+
 ## Standard agent-driven production deploy
 
 Canonical implementation: `.github/workflows/erpv2_agent_deploy_request.yml` plus `tests/agent_deploy_request_contract_test.php`.
@@ -53,7 +70,7 @@ FAST/STANDARD code deploy authorization never authorizes production DB mutation.
 
 ## CI discipline
 
-Required checks should be observed as an aggregate gate; inspect individual jobs only after aggregate failure. Do not manually duplicate path-triggered regressions.
+Local preflight and GitHub CI use the same path classifier, but CI remains a separate recheck. Architecture guard, dynamic identifier safety and control-plane safety stay independent always-on checks in the main CI. Path-owned critical workflows remain separate where they already exist; this pre-push flow does not reduce them.
 
 `Memory Integrity` is a deterministic critical-memory contract: it runs focused checker tests and path-aware verification when critical owning paths or memory-governance tooling change.
 
