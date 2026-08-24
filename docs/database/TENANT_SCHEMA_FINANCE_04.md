@@ -2,7 +2,82 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `ff6c294f140a67e18ef0bd111c5527cf60c6e892c2e7863c7e7edda32667d681`
+**Schema fingerprint:** `d1408321e1a8d77ce73f1bb71cb1313ca5d6475371b11c9f2a002130e37ae4f8`
+
+## `finance_invoices`
+
+**Domain:** Finance  
+**Purpose:** Finance invoice records.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `direction` | `varchar(20)` | NO | NULL | — | `MUL` |
+| `number` | `varchar(100)` | NO | NULL | — | `MUL` |
+| `invoice_date` | `date` | NO | NULL | — | `MUL` |
+| `counterparty_entity_type` | `varchar(20)` | YES | NULL | — | `MUL` |
+| `counterparty_entity_id` | `int unsigned` | YES | NULL | — | — |
+| `counterparty_name` | `varchar(500)` | YES | NULL | — | — |
+| `counterparty_inn` | `varchar(20)` | YES | NULL | — | — |
+| `amount` | `decimal(12,2)` | NO | `0.00` | — | — |
+| `vat_rate` | `decimal(5,2)` | YES | NULL | — | — |
+| `basis` | `text` | YES | NULL | — | — |
+| `planned_payment_date` | `date` | YES | NULL | — | — |
+| `comment` | `text` | YES | NULL | — | — |
+| `status` | `varchar(30)` | NO | `issued` | — | `MUL` |
+| `paid_amount` | `decimal(12,2)` | NO | `0.00` | — | — |
+| `first_paid_at` | `date` | YES | NULL | — | — |
+| `fully_paid_at` | `date` | YES | NULL | — | — |
+| `cancelled_at` | `datetime` | YES | NULL | — | — |
+| `cancellation_reason` | `text` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_fi_counterparty` (`counterparty_entity_type`, `counterparty_entity_id`)
+- **INDEX** `idx_fi_date` (`invoice_date`)
+- **INDEX** `idx_fi_direction` (`direction`)
+- **INDEX** `idx_fi_number` (`number`)
+- **INDEX** `idx_fi_status` (`status`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `finance_matching_results`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `finance_operation_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `rule_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `reason` | `varchar(500)` | YES | NULL | — | — |
+| `confidence` | `varchar(20)` | YES | NULL | — | — |
+| `result` | `varchar(30)` | YES | NULL | — | `MUL` |
+| `applied_at` | `datetime` | YES | NULL | — | — |
+| `source` | `varchar(30)` | YES | `system` | — | — |
+| `created_at` | `datetime` | YES | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | `MUL` |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_fmr_created` (`created_at`)
+- **INDEX** `idx_fmr_operation` (`finance_operation_id`)
+- **INDEX** `idx_fmr_result` (`result`)
+- **INDEX** `idx_fmr_rule` (`rule_id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `finance_matching_rules`
 
@@ -141,51 +216,3 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
-
-## `finance_operation_allocations`
-
-**Domain:** Finance  
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `operation_id` | `int unsigned` | NO | NULL | — | `MUL` |
-| `invoice_id` | `int unsigned` | YES | NULL | — | `MUL` |
-| `obligation_id` | `int unsigned` | YES | NULL | — | `MUL` |
-| `linear_route_id` | `int unsigned` | YES | NULL | — | `MUL` |
-| `linear_route_payment_id` | `int unsigned` | YES | NULL | — | `MUL` |
-| `cash_flow_category_id` | `int unsigned` | YES | NULL | — | `MUL` |
-| `amount` | `decimal(12,2)` | NO | NULL | — | — |
-| `allocation_date` | `date` | NO | NULL | — | `MUL` |
-| `method` | `varchar(30)` | NO | `manual` | — | — |
-| `rule_code` | `varchar(100)` | YES | NULL | — | — |
-| `comment` | `text` | YES | NULL | — | — |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_by_role` | `varchar(50)` | YES | NULL | — | — |
-| `cancelled_at` | `datetime` | YES | NULL | — | `MUL` |
-| `cancelled_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `cancelled_by_role` | `varchar(50)` | YES | NULL | — | — |
-| `cancel_reason` | `text` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_foa_cancelled` (`cancelled_at`)
-- **INDEX** `idx_foa_cash_flow_category` (`cash_flow_category_id`)
-- **INDEX** `idx_foa_date` (`allocation_date`)
-- **INDEX** `idx_foa_invoice` (`invoice_id`)
-- **INDEX** `idx_foa_obligation` (`obligation_id`)
-- **INDEX** `idx_foa_operation` (`operation_id`)
-- **INDEX** `idx_foa_payment_cancelled` (`linear_route_payment_id`, `cancelled_at`)
-- **INDEX** `idx_foa_route` (`linear_route_id`)
-- **INDEX** `idx_foa_route_payment` (`linear_route_payment_id`)
-- **INDEX** `idx_foa_route_payment_id` (`linear_route_payment_id`)
-
-### Physical foreign keys
-
-- `fk_foa_invoice`: (`invoice_id`) → `finance_invoices`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-- `fk_foa_operation`: (`operation_id`) → `finance_operations`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-- `fk_foa_route_payment`: (`linear_route_payment_id`) → `linear_route_payments`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
