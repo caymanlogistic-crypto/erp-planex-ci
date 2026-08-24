@@ -8,6 +8,13 @@
     var endpoint = <?= json_encode(app_url('/company/trips/linear/service-lines'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
     var loaded = {};
 
+    function preserveRegistryLayout() {
+        var registry = document.querySelector('.linear-trip-registry');
+        if (registry) registry.dataset.servicesReady = '1';
+    }
+
+    preserveRegistryLayout();
+
     function routeIdFor(form) {
         var match = String(form.action || '').match(/\/linear\/(\d+)\/modal-edit/);
         return match ? match[1] : null;
@@ -129,6 +136,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        preserveRegistryLayout();
         scan(document);
         new MutationObserver(function (mutations) {
             mutations.forEach(function (mutation) {
