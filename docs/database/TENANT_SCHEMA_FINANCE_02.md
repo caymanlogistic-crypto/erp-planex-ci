@@ -10,7 +10,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|----|---|----|---|----|
+|---|---|---|---|---|---|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `source_finance_operation_id` | `int unsigned` | NO | NULL | — | `UNI` |
 | `resolution_type` | `varchar(32)` | NO | NULL | — | `MUL` |
@@ -73,7 +73,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|----|---|----|
+|---|---|---|---|---|---|
 | `bank_transaction_id` | `int unsigned` | NO | NULL | — | `PRI` |
 | `entity_type` | `varchar(20)` | NO | NULL | — | `MUL` |
 | `entity_id` | `int unsigned` | NO | NULL | — | — |
@@ -96,7 +96,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|----|---|----|---|----|
+|---|---|---|---|---|---|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `inn` | `varchar(20)` | NO | NULL | — | `MUL` |
 | `purpose_contains` | `varchar(255)` | NO | `` | — | — |
@@ -122,7 +122,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|----|---|----|
+|---|---|---|---|---|---|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `bank_transaction_id` | `int unsigned` | NO | NULL | — | `MUL` |
 | `document_id` | `int unsigned` | NO | NULL | — | `MUL` |
@@ -149,7 +149,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|----|---|----|
+|---|---|---|---|---|---|
 | `bank_transaction_id` | `int unsigned` | NO | NULL | — | `PRI` |
 | `requirement_key` | `varchar(64)` | NO | NULL | — | `PRI` |
 | `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
@@ -190,7 +190,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|----|---|----|---|----|
+|---|---|---|---|---|---|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `parent_id` | `int unsigned` | YES | NULL | — | `MUL` |
 | `code` | `varchar(64)` | NO | NULL | — | `UNI` |
