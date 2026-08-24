@@ -29,26 +29,7 @@
         return match ? (match[3] + '-' + match[2] + '-' + match[1]) : '';
     }
 
-    function syncLinearTripAttentionBadge(count) {
-        var link = document.querySelector('a.nav-sub-item[href$="/company/trips/linear"]');
-        if (!link) return;
-        var current = link.querySelector('[data-linear-trip-attention-badge]');
-        if (count <= 0) {
-            if (current) current.remove();
-            return;
-        }
-        if (!current) {
-            current = document.createElement('span');
-            current.className = 'nav-count is-alert';
-            current.setAttribute('data-linear-trip-attention-badge', '');
-            current.title = 'Требуется актуализировать дату выгрузки';
-            link.appendChild(current);
-        }
-        current.textContent = count > 999 ? '999+' : String(count);
-    }
-
     function applyPlannedUnloadingAttention() {
-        var problemRoutes = {};
         document.querySelectorAll('.linear-trip-registry tbody tr[data-linear-route-id]').forEach(function (row) {
             var dateCells = row.querySelectorAll('td.registry-date');
             if (dateCells.length < 2) return;
@@ -64,10 +45,8 @@
             cell.classList.add('registry-date-attention');
             value.classList.add('registry-date-attention-text');
             note.classList.add('registry-date-attention-text');
-            note.textContent = '(Проставьте дату выгрузки или отредактируйте плановую дату выгрузки)';
-            problemRoutes[String(row.getAttribute('data-linear-route-id') || '')] = true;
+            note.textContent = '(Проставьте дату выгрузки или замените плановую дату)';
         });
-        syncLinearTripAttentionBadge(Object.keys(problemRoutes).filter(Boolean).length);
     }
 
     function normalizeServiceUi(form) {
@@ -184,7 +163,7 @@
                     if (node.nodeType === 1) scan(node);
                 });
             });
-        }).observe(document.body, {childList: true, subtree: true});
+        }).observe(document.body, {childList:true,subtree:true});
     });
 })();
 </script>
