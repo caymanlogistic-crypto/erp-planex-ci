@@ -167,7 +167,7 @@ final class ClosingDocumentComplianceService
             foreach (array_keys($applicableKeys) as $key) {
                 if (!empty($manualSelected[$key])) {
                     $stmt = $pdo->prepare(
-                        'INSERT INTO finance_closing_document_manual_statuses (bank_transaction_id, requirement_key, updated_by_user_id) VALUES (?, ?, ?)\n'
+                        'INSERT INTO finance_closing_document_manual_statuses (bank_transaction_id, requirement_key, updated_by_user_id) VALUES (?, ?, ?) '
                         . 'ON DUPLICATE KEY UPDATE updated_by_user_id = VALUES(updated_by_user_id), updated_at = CURRENT_TIMESTAMP'
                     );
                     $stmt->execute([$transactionId, $key, $userId > 0 ? $userId : null]);
@@ -179,7 +179,7 @@ final class ClosingDocumentComplianceService
                 if ($inn !== '') {
                     if (!empty($innExemptSelected[$key])) {
                         $stmt = $pdo->prepare(
-                            'INSERT INTO finance_closing_document_requirement_exceptions (inn, requirement_key, created_by_user_id) VALUES (?, ?, ?)\n'
+                            'INSERT INTO finance_closing_document_requirement_exceptions (inn, requirement_key, created_by_user_id) VALUES (?, ?, ?) '
                             . 'ON DUPLICATE KEY UPDATE created_by_user_id = VALUES(created_by_user_id)'
                         );
                         $stmt->execute([$inn, $key, $userId > 0 ? $userId : null]);
@@ -238,7 +238,7 @@ final class ClosingDocumentComplianceService
         try {
             $pdo->beginTransaction();
             $insert = $pdo->prepare(
-                'INSERT INTO documents (entity_type, entity_id, document_type, original_name, stored_name, relative_path, mime_type, file_size, status, uploaded_by_user_id, uploaded_by_role, created_by_user_id, created_by_role)\n'
+                'INSERT INTO documents (entity_type, entity_id, document_type, original_name, stored_name, relative_path, mime_type, file_size, status, uploaded_by_user_id, uploaded_by_role, created_by_user_id, created_by_role) '
                 . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
             );
             $insert->execute([
