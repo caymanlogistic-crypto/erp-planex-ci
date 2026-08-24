@@ -198,22 +198,76 @@ final class ClosingDocumentComplianceService
 
     public static function uploadAndLink(PDO $pdo, int $companyId, int $transactionId, string $requirementCode, array $file, int $userId, string $roleCode, bool $isEdo): int
     {
-        $documentId = ClosingDocumentService::uploadAndLink(
-            $pdo,
-            $companyId,
-            $transactionId,
-            $requirementCode,
-            $file,
-            $userId,
-            $roleCode
-        );
-        if ($isEdo) {
-            $stmt = $pdo->prepare(
-                'UPDATE finance_closing_document_links SET is_edo = 1 WHERE bank_transaction_id = ? AND document_id = ? AND requirement_code = ?'
-            );
-            $stmt->execute([$transactionId, $documentId, $requirementCode]);
+        if ($transactionId <= 0) throw new RuntimeException('Некорректная операция');
+        $row = self::findRow($pdo, $transactionId);
+        if ($row === null) throw new RuntimeException('Операция не входит в контур закрывающих документов');
+        if (!empty($row['is_exempt'])) throw new RuntimeException('Для этой операции документы не требуются');
+
+        $requirementCode = trim($requirementCode);
+        $allowedCodes = [];
+        foreach (($row['profile']['requirements'] ?? []) as $requirement) {
+            foreach (($requirement['accepted'] ?? []) as $code) {
+                $allowedCodes[(string)$code] = true;
+            }
         }
-        return $documentId;
+        if ($requirementCode === '' || !isset($allowedCodes[$requirementCode])) {
+            throw new RuntimeException('Этот тип документа не входит в обязательный профиль операции');
+        }
+
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) throw new RuntimeException('Файл не загружен');
+        $maxSize = function_exists('legalEntityDocumentMaxFileSize') ? legalEntityDocumentMaxFileSize() : 20 * 1024 * 1024;
+        if ((int)($file['size'] ?? 0) <= 0 || (int)$file['size'] > $maxSize) throw new RuntimeException('Недопустимый размер файла');
+        $extension = strtolower(pathinfo((string)($file['name'] ?? ''), PATHINFO_EXTENSION));
+        $allowedExtensions = function_exists('legalEntityDocumentAllowedExtensions') ? legalEntityDocumentAllowedExtensions() : ['pdf','jpg','jpeg','png','webp','doc','docx','xls','xlsx'];
+        if (!in_array($extension, $allowedExtensions, true)) throw new RuntimeException('Недопустимый тип файла');
+
+        $requirementLabels = ClosingDocumentService::requirementLabels();
+        if (!isset($requirementLabels[$requirementCode])) throw new RuntimeException('Неизвестный тип документа');
+
+        $relativeDir = 'companies/' . $companyId . '/documents/bank_transaction/' . $transactionId;
+        $absoluteDir = storage_path($relativeDir);
+        if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0755, true) && !is_dir($absoluteDir)) {
+            throw new RuntimeException('Не удалось подготовить каталог документов');
+        }
+        $storedName = uniqid('doc_', true) . '.' . $extension;
+        $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $storedName;
+        if (!move_uploaded_file((string)($file['tmp_name'] ?? ''), $absolutePath)) {
+            throw new RuntimeException('Не удалось сохранить файл');
+        }
+
+        try {
+            $pdo->beginTransaction();
+            $insert = $pdo->prepare(
+                'INSERT INTO documents (entity_type, entity_id, document_type, original_name, stored_name, relative_path, mime_type, file_size, status, uploaded_by_user_id, uploaded_by_role, created_by_user_id, created_by_role)\n'
+                . 'VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+            );
+            $insert->execute([
+                'bank_transaction',
+                $transactionId,
+                $requirementLabels[$requirementCode],
+                (string)($file['name'] ?? ''),
+                $storedName,
+                $relativeDir . '/' . $storedName,
+                (string)($file['type'] ?? 'application/octet-stream'),
+                (int)$file['size'],
+                'uploaded',
+                $userId > 0 ? $userId : null,
+                $roleCode,
+                $userId > 0 ? $userId : null,
+                $roleCode,
+            ]);
+            $documentId = (int)$pdo->lastInsertId();
+            $link = $pdo->prepare(
+                'INSERT INTO finance_closing_document_links (bank_transaction_id, document_id, requirement_code, is_edo, created_by_user_id) VALUES (?, ?, ?, ?, ?)'
+            );
+            $link->execute([$transactionId, $documentId, $requirementCode, $isEdo ? 1 : 0, $userId > 0 ? $userId : null]);
+            $pdo->commit();
+            return $documentId;
+        } catch (Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            if (is_file($absolutePath)) @unlink($absolutePath);
+            throw $e;
+        }
     }
 
     private static function evaluateStatuses(array $statuses): array
