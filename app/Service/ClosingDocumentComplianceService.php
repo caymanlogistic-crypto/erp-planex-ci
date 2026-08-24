@@ -27,7 +27,10 @@ final class ClosingDocumentComplianceService
         if (preg_match('/(?:^|[^\p{L}\p{N}])(?:ООО|АО|ЗАО)(?:$|[^\p{L}\p{N}])/u', $upper)) {
             return 'legal_entity';
         }
-        if (preg_match('/(?:^|[^\p{L}\p{N}])ИП(?:$|[^\p{L}\p{N}])/u', $upper)) {
+        if (
+            preg_match('/(?:^|[^\p{L}\p{N}])ИП(?:$|[^\p{L}\p{N}])/u', $upper)
+            || preg_match('/(?:^|[^\p{L}\p{N}])ИНДИВИДУАЛЬНЫЙ\s+ПРЕДПРИНИМАТЕЛЬ(?:$|[^\p{L}\p{N}])/u', $upper)
+        ) {
             return 'individual';
         }
         return 'self_employed';
@@ -74,6 +77,7 @@ final class ClosingDocumentComplianceService
                 : self::evaluateStatuses($statuses);
 
             $row['normalized_inn'] = $inn;
+            $row['direction'] = $direction;
             $row['profile'] = $profile;
             $row['links'] = $links;
             $row['requirement_statuses'] = $statuses;
