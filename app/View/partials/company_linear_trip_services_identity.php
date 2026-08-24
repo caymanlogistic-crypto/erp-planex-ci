@@ -1,11 +1,12 @@
 <style>
-.linear-trip-services-section [data-trip-services-list] .linear-trip-service-card{border:0;border-radius:0;padding:0;margin:14px 0;background:transparent}.linear-trip-services-section [data-trip-services-list] .linear-trip-service-fields{grid-template-columns:minmax(180px,1fr) minmax(220px,1.3fr) auto}.linear-trip-service-remove-inline{display:flex;align-items:flex-end;padding-bottom:1px}.linear-trip-service-remove-inline .linear-trip-row-remove{flex:0 0 auto}.trip-services-view>.section-title{text-transform:uppercase}@media(max-width:900px){.linear-trip-services-section [data-trip-services-list] .linear-trip-service-fields{grid-template-columns:1fr}.linear-trip-service-remove-inline{justify-content:flex-end}}
+.linear-trip-services-section [data-trip-services-list] .linear-trip-service-card{border:0;border-radius:0;padding:0;margin:14px 0;background:transparent}.linear-trip-services-section [data-trip-services-list] .linear-trip-service-fields{grid-template-columns:minmax(180px,1fr) minmax(220px,1.3fr) auto}.linear-trip-service-remove-inline{display:flex;align-items:flex-end;padding-bottom:1px}.linear-trip-service-remove-inline .linear-trip-row-remove{flex:0 0 auto}.trip-services-view>.section-title{text-transform:uppercase}.registry-date-attention{white-space:normal!important}.registry-date-attention-text{display:block;color:var(--danger,#b42318)!important;font-weight:600;white-space:normal;line-height:1.25}.registry-date-attention .registry-date-note{margin-top:2px}@media(max-width:900px){.linear-trip-services-section [data-trip-services-list] .linear-trip-service-fields{grid-template-columns:1fr}.linear-trip-service-remove-inline{justify-content:flex-end}}
 </style>
 <script>
 (function () {
     'use strict';
 
     var endpoint = <?= json_encode(app_url('/company/trips/linear/service-lines'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>;
+    var serverToday = <?= json_encode(date('Y-m-d')) ?>;
     var loaded = {};
 
     function routeIdFor(form) {
@@ -21,6 +22,52 @@
         var named = row.querySelector('[name*="[payments]"]');
         if (!named) return '';
         return named.name.replace(/\[[^\]]+\]$/, '[' + key + ']');
+    }
+
+    function plannedDateIso(value) {
+        var match = String(value || '').trim().match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        return match ? (match[3] + '-' + match[2] + '-' + match[1]) : '';
+    }
+
+    function syncLinearTripAttentionBadge(count) {
+        var link = document.querySelector('a.nav-sub-item[href$="/company/trips/linear"]');
+        if (!link) return;
+        var current = link.querySelector('[data-linear-trip-attention-badge]');
+        if (count <= 0) {
+            if (current) current.remove();
+            return;
+        }
+        if (!current) {
+            current = document.createElement('span');
+            current.className = 'nav-count is-alert';
+            current.setAttribute('data-linear-trip-attention-badge', '');
+            current.title = 'Требуется актуализировать дату выгрузки';
+            link.appendChild(current);
+        }
+        current.textContent = count > 999 ? '999+' : String(count);
+    }
+
+    function applyPlannedUnloadingAttention() {
+        var problemRoutes = {};
+        document.querySelectorAll('.linear-trip-registry tbody tr[data-linear-route-id]').forEach(function (row) {
+            var dateCells = row.querySelectorAll('td.registry-date');
+            if (dateCells.length < 2) return;
+            var cell = dateCells[1];
+            var note = cell.querySelector('.registry-date-note');
+            var value = cell.querySelector('.registry-date-value');
+            if (!note || !value || note.textContent.trim() !== '(плановая)') return;
+
+            var plannedIso = plannedDateIso(value.textContent);
+            if (plannedIso === '' || plannedIso > serverToday) return;
+
+            cell.classList.remove('registry-date-planned');
+            cell.classList.add('registry-date-attention');
+            value.classList.add('registry-date-attention-text');
+            note.classList.add('registry-date-attention-text');
+            note.textContent = '(Проставьте дату выгрузки или отредактируйте плановую дату выгрузки)';
+            problemRoutes[String(row.getAttribute('data-linear-route-id') || '')] = true;
+        });
+        syncLinearTripAttentionBadge(Object.keys(problemRoutes).filter(Boolean).length);
     }
 
     function normalizeServiceUi(form) {
@@ -129,6 +176,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function () {
+        applyPlannedUnloadingAttention();
         scan(document);
         new MutationObserver(function (mutations) {
             mutations.forEach(function (mutation) {
