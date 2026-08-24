@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `ff6c294f140a67e18ef0bd111c5527cf60c6e892c2e7863c7e7edda32667d681`
+**Schema fingerprint:** `d1408321e1a8d77ce73f1bb71cb1313ca5d6475371b11c9f2a002130e37ae4f8`
 
 ## `bank_accounts`
 
@@ -90,7 +90,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
+|---|----|---|----|---|----|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `import_id` | `int unsigned` | NO | NULL | — | `MUL` |
 | `transaction_id` | `int unsigned` | NO | NULL | — | `MUL` |
@@ -113,7 +113,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
+|---|----|---|----|---|----|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `source` | `varchar(10)` | NO | `manual` | — | `MUL` |
 | `source_uid` | `varchar(255)` | YES | NULL | — | — |
@@ -147,7 +147,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
+|---|---|---|----|---|----|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `bank_code` | `varchar(20)` | NO | `vtb` | — | `MUL` |
 | `imap_host` | `varchar(255)` | NO | NULL | — | — |
@@ -177,7 +177,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
+|---|----|---|----|---|----|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `account_id` | `int unsigned` | NO | NULL | — | `MUL` |
 | `operation_date` | `date` | NO | NULL | — | `MUL` |
@@ -221,7 +221,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
+|---|----|---|----|---|----|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `entity_type` | `varchar(50)` | NO | NULL | — | `MUL` |
 | `entity_id` | `int unsigned` | NO | NULL | — | — |
@@ -273,7 +273,7 @@
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
+|---|----|---|----|---|----|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `name` | `varchar(255)` | NO | NULL | — | `MUL` |
 | `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
@@ -289,7 +289,7 @@
 
 - **PRIMARY** `PRIMARY` (`id`)
 - **INDEX** `idx_fcfc_active_sort` (`is_active`, `sort_order`)
-- **INDEX** `idx_fcfc_name` (`name(191)`)
+- **INDEX** `idx_fcfc_name` (name)
 
 ### Physical foreign keys
 
