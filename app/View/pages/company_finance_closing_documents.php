@@ -5,8 +5,21 @@ $renderRequirementStatus = static function (array $row, string $key): string {
         return '<span class="text-muted" title="Для операции действует исключение">—</span>';
     }
     $status = $row['requirement_statuses'][$key] ?? null;
-    if (!is_array($status) || empty($status['applicable'])) {
+    if (!is_array($status)) {
         return '<span class="text-muted">—</span>';
+    }
+    if (!empty($status['exempt_for_inn'])) {
+        return '<span class="text-muted" title="Документ не требуется для этого ИНН">—</span>';
+    }
+    if (empty($status['applicable'])) {
+        return '<span class="text-muted">—</span>';
+    }
+    $source = (string)($status['source'] ?? '');
+    if ($source === 'edo') {
+        return '<span class="closing-doc-edo" title="Документ получен по ЭДО" aria-label="ЭДО">ЭДО</span>';
+    }
+    if ($source === 'manual') {
+        return '<span class="table-check closing-doc-status closing-doc-status--manual" title="Документ отмечен как собранный вручную" aria-label="Собран вручную">✓</span>';
     }
     if (!empty($status['satisfied'])) {
         return '<span class="table-check table-check--yes closing-doc-status" title="Документ загружен" aria-label="Документ есть">✓</span>';
@@ -29,6 +42,8 @@ $renderRequirementStatus = static function (array $row, string $key): string {
 .closing-doc-status{display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;font-size:24px;font-weight:700;line-height:1;white-space:nowrap}
 .closing-doc-status.table-check--yes{color:#2f7d32!important}
 .closing-doc-status.table-check--no{color:#b3261e!important}
+.closing-doc-status--manual{color:#2f6fb0!important}
+.closing-doc-edo{display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;letter-spacing:.04em;color:#2f6fb0;white-space:nowrap}
 .closing-document-modal-shell .modal-body{padding:0}
 .closing-document-layout{display:grid;grid-template-columns:minmax(0,1fr) 350px;min-height:360px}
 .closing-document-main{padding:16px 18px;min-width:0}
@@ -40,6 +55,10 @@ $renderRequirementStatus = static function (array $row, string $key): string {
 .closing-status-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
 .closing-status-card{padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);min-width:0}
 .closing-status-card .field-note{margin-bottom:5px}
+.closing-status-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+.closing-status-option{display:flex;align-items:flex-start;gap:6px;font-size:11px;line-height:1.25;color:var(--text-main);cursor:pointer;margin-top:6px}
+.closing-status-option input{margin:1px 0 0;accent-color:var(--accent)}
+.closing-requirement-actions{display:flex;justify-content:flex-end;margin-top:8px}
 .closing-document-docs .section-title{margin-bottom:8px}
 .closing-document-docs .file-list{margin-bottom:12px}
 .closing-document-docs .file-item{min-width:0}
@@ -48,6 +67,7 @@ $renderRequirementStatus = static function (array $row, string $key): string {
 .closing-doc-form{display:grid;gap:7px;margin-top:11px;padding-top:11px;border-top:1px solid var(--line-soft)}
 .closing-doc-form .field-select,.closing-doc-form .field-input{width:100%;min-width:0}
 .closing-file-unlink{margin-left:auto;flex:0 0 auto}
+.closing-edo-option{margin:0}
 @media(max-width:980px){.closing-document-layout{grid-template-columns:1fr}.closing-document-docs{border-left:0;border-top:1px solid var(--line-soft)}.closing-status-grid{grid-template-columns:1fr}.closing-toolbar-filters{width:100%;flex-wrap:wrap}}
 @media(max-width:680px){.closing-payment-grid{grid-template-columns:1fr}}
 </style>

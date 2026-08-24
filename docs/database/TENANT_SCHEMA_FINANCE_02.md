@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `ff6c294f140a67e18ef0bd111c5527cf60c6e892c2e7863c7e7edda32667d681`
+**Schema fingerprint:** `d1408321e1a8d77ce73f1bb71cb1313ca5d6475371b11c9f2a002130e37ae4f8`
 
 ## `finance_cash_resolutions`
 
@@ -127,6 +127,7 @@
 | `bank_transaction_id` | `int unsigned` | NO | NULL | — | `MUL` |
 | `document_id` | `int unsigned` | NO | NULL | — | `MUL` |
 | `requirement_code` | `varchar(32)` | NO | NULL | — | — |
+| `is_edo` | `tinyint(1)` | NO | `0` | — | — |
 | `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
 | `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 
@@ -141,6 +142,47 @@
 
 - `fk_fcdl_bank_transaction`: (`bank_transaction_id`) → `bank_transactions`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
 - `fk_fcdl_document`: (`document_id`) → `documents`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+
+## `finance_closing_document_manual_statuses`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `bank_transaction_id` | `int unsigned` | NO | NULL | — | `PRI` |
+| `requirement_key` | `varchar(64)` | NO | NULL | — | `PRI` |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`bank_transaction_id`, `requirement_key`)
+
+### Physical foreign keys
+
+- `fk_fcdms_bank_transaction`: (`bank_transaction_id`) → `bank_transactions`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
+
+## `finance_closing_document_requirement_exceptions`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `inn` | `varchar(12)` | NO | NULL | — | `PRI` |
+| `requirement_key` | `varchar(64)` | NO | NULL | — | `PRI` |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`inn`, `requirement_key`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `finance_dds_categories`
 
@@ -176,54 +218,3 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
-
-## `finance_employee_invoice_payments`
-
-**Domain:** Finance  
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `event_group_id` | `varchar(64)` | NO | NULL | — | `UNI` |
-| `employee_identity_type` | `varchar(32)` | NO | NULL | — | `MUL` |
-| `employee_identity_id` | `int unsigned` | NO | NULL | — | — |
-| `employee_name_snapshot` | `varchar(255)` | NO | NULL | — | — |
-| `employee_role_snapshot` | `varchar(64)` | YES | NULL | — | — |
-| `invoice_id` | `int unsigned` | NO | NULL | — | `MUL` |
-| `invoice_number_snapshot` | `varchar(100)` | YES | NULL | — | — |
-| `counterparty_name_snapshot` | `varchar(255)` | YES | NULL | — | — |
-| `operation_date` | `date` | NO | NULL | — | — |
-| `amount` | `decimal(14,2)` | NO | NULL | — | — |
-| `currency` | `char(3)` | NO | `RUR` | — | — |
-| `employee_movement_id` | `int unsigned` | NO | NULL | — | `UNI` |
-| `receipt_finance_operation_id` | `int unsigned` | NO | NULL | — | `UNI` |
-| `expense_finance_operation_id` | `int unsigned` | NO | NULL | — | `UNI` |
-| `comment` | `text` | YES | NULL | — | — |
-| `status` | `varchar(20)` | NO | `POSTED` | — | `MUL` |
-| `cancelled_at` | `datetime` | YES | NULL | — | — |
-| `cancelled_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `cancelled_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `cancellation_reason` | `varchar(500)` | YES | NULL | — | — |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_feip_employee_date` (`employee_identity_type`, `employee_identity_id`, `operation_date`)
-- **INDEX** `idx_feip_invoice` (`invoice_id`, `status`)
-- **INDEX** `idx_feip_status_date` (`status`, `operation_date`)
-- **UNIQUE** `uk_feip_employee_movement` (`employee_movement_id`)
-- **UNIQUE** `uk_feip_event_group` (`event_group_id`)
-- **UNIQUE** `uk_feip_expense_operation` (`expense_finance_operation_id`)
-- **UNIQUE** `uk_feip_receipt_operation` (`receipt_finance_operation_id`)
-
-### Physical foreign keys
-
-- `fk_feip_employee_movement`: (`employee_movement_id`) → `finance_employee_movements`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
-- `fk_feip_expense_operation`: (`expense_finance_operation_id`) → `finance_operations`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
-- `fk_feip_invoice`: (`invoice_id`) → `finance_invoices`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
-- `fk_feip_receipt_operation`: (`receipt_finance_operation_id`) → `finance_operations`.`id` ON UPDATE CASCADE ON DELETE RESTRICT

@@ -1,7 +1,7 @@
 {
-  "migration_id": "120",
-  "workflow": "linear_services_120_production_migration.yml",
+  "migration_id": "121",
+  "workflow": "finance_closing_121_production_migration.yml",
   "source_sha_input": "source_sha",
   "confirmation_input": "confirm_migration",
-  "confirmation_value": "APPLY_LINEAR_SERVICES_120"
+  "confirmation_value": "APPLY_FINANCE_CLOSING_121"
 }

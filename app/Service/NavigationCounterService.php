@@ -67,12 +67,11 @@ final class NavigationCounterService
         }
 
         try {
-            // Deliberately call the report source itself instead of duplicating a
-            // SQL predicate here. This is the architectural contract:
-            // sidebar count === report rows under "Только проблемные".
-            $counters['closing_documents_problem'] = max(0, ClosingDocumentService::problemCount($tenant));
+            // Keep the sidebar badge on the same compliance-aware source as the
+            // report itself, including EDO, manual collected and per-INN exclusions.
+            $counters['closing_documents_problem'] = max(0, ClosingDocumentComplianceService::problemCount($tenant));
         } catch (Throwable) {
-            // During a staged rollout migration 077 may not yet exist. The new
+            // During a staged rollout migration 121 may not yet exist. The new
             // counter alone degrades to zero; bank/cash navigation remains intact.
             $counters['closing_documents_problem'] = 0;
         }

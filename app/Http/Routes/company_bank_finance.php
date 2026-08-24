@@ -24,6 +24,7 @@ $router->get('/company/finance/closing-documents/exceptions/create', [$closingDo
 $router->get('/company/finance/closing-documents/exceptions/edit', [$closingDocumentsController, 'exceptionEditForm']);
 $router->post('/company/finance/closing-documents/exceptions/save', [$closingDocumentsController, 'saveException']);
 $router->post('/company/finance/closing-documents/exceptions/remove', [$closingDocumentsController, 'removeException']);
+$router->post('/company/finance/closing-documents/requirement-overrides', [$closingDocumentsController, 'saveRequirementOverrides']);
 $router->post('/company/finance/closing-documents/link-document', [$closingDocumentsController, 'linkDocument']);
 $router->post('/company/finance/closing-documents/upload-document', [$closingDocumentsController, 'uploadDocument']);
 $router->post('/company/finance/closing-documents/unlink-document', [$closingDocumentsController, 'unlinkDocument']);

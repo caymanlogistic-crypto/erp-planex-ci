@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `ff6c294f140a67e18ef0bd111c5527cf60c6e892c2e7863c7e7edda32667d681`
+**Schema fingerprint:** `d1408321e1a8d77ce73f1bb71cb1313ca5d6475371b11c9f2a002130e37ae4f8`
 
 ## Architecture overview
 
@@ -89,6 +89,7 @@ erDiagram
   T_bank_transactions ||--o{ T_finance_closing_counterparties : "fk_fcc_bank_transaction"
   T_bank_transactions ||--o{ T_finance_closing_document_links : "fk_fcdl_bank_transaction"
   T_documents ||--o{ T_finance_closing_document_links : "fk_fcdl_document"
+  T_bank_transactions ||--o{ T_finance_closing_document_manual_statuses : "fk_fcdms_bank_transaction"
   T_finance_employee_movements ||--o{ T_finance_employee_invoice_payments : "fk_feip_employee_movement"
   T_finance_operations ||--o{ T_finance_employee_invoice_payments : "fk_feip_expense_operation"
   T_finance_invoices ||--o{ T_finance_employee_invoice_payments : "fk_feip_invoice"
@@ -102,7 +103,7 @@ erDiagram
   T_linear_route_payments ||--o{ T_finance_operation_allocations : "fk_foa_route_payment"
 ```
 
-Tables: `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`, `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_dds_categories`, `finance_employee_invoice_payments`, `finance_employee_money_accounts`, `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`, `finance_invoices`, `finance_matching_results`, `finance_matching_rules`, `finance_money_accounts`, `finance_obligations`, `finance_operation_allocations`, `finance_operations`
+Tables: `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`, `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_closing_document_manual_statuses`, `finance_closing_document_requirement_exceptions`, `finance_dds_categories`, `finance_employee_invoice_payments`, `finance_employee_money_accounts`, `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`, `finance_invoices`, `finance_matching_results`, `finance_matching_rules`, `finance_money_accounts`, `finance_obligations`, `finance_operation_allocations`, `finance_operations`
 
 ## Operations / Routes
 

@@ -12,13 +12,23 @@ $isIncoming = (string)($row['direction'] ?? 'outgoing') === 'incoming';
 $rawAmount = $isIncoming ? (float)($row['credit_amount'] ?? 0) : (float)($row['debit_amount'] ?? 0);
 $amount = ($isIncoming ? '+' : '-') . number_format($rawAmount, 2, ',', ' ') . ' ₽';
 $directionLabel = $isIncoming ? 'Входящий платёж' : 'Исходящий платёж';
-$statuses = $row['requirement_statuses'] ?? \App\Service\ClosingDocumentService::requirementStatuses($profile, $visibleLinks);
+$statuses = $row['requirement_statuses'] ?? [];
 $columns = \App\Service\ClosingDocumentService::requirementColumns();
 $renderStatus = static function (array $status, bool $isExempt): string {
-    if ($isExempt || empty($status['applicable'])) return '<span class="text-muted">—</span>';
-    return !empty($status['satisfied'])
-        ? '<span class="table-check table-check--yes closing-doc-status" title="Документ загружен" aria-label="Документ есть">✓</span>'
-        : '<span class="table-check table-check--no closing-doc-status" title="Документ не загружен" aria-label="Документа нет">×</span>';
+    if ($isExempt) return '<span class="text-muted">—</span>';
+    if (!empty($status['exempt_for_inn'])) return '<span class="text-muted" title="Этот документ не требуется для данного ИНН">—</span>';
+    if (empty($status['applicable'])) return '<span class="text-muted">—</span>';
+    $source = (string)($status['source'] ?? '');
+    if ($source === 'edo') {
+        return '<span class="closing-doc-edo" title="Документ получен по ЭДО" aria-label="ЭДО">ЭДО</span>';
+    }
+    if ($source === 'manual') {
+        return '<span class="table-check closing-doc-status closing-doc-status--manual" title="Документ отмечен как собранный вручную" aria-label="Собран вручную">✓</span>';
+    }
+    if (!empty($status['satisfied'])) {
+        return '<span class="table-check table-check--yes closing-doc-status" title="Документ загружен" aria-label="Документ есть">✓</span>';
+    }
+    return '<span class="table-check table-check--no closing-doc-status" title="Документ не загружен" aria-label="Документа нет">×</span>';
 };
 $fileBadge = static function (string $name): array {
     $ext = strtoupper((string) pathinfo($name, PATHINFO_EXTENSION));
@@ -54,14 +64,38 @@ $fileBadge = static function (string $name): array {
             <?php endif; ?>
 
             <div class="section-title">Статус документов</div>
-            <div class="closing-status-grid">
-                <?php foreach ($columns as $key => $label): $status = $statuses[$key] ?? ['applicable'=>false,'satisfied'=>false]; ?>
-                <div class="closing-status-card">
-                    <div class="field-note"><?= e($label) ?></div>
-                    <?= $renderStatus($status, !empty($row['is_exempt'])) ?>
+            <?php if(empty($row['is_exempt'])): ?>
+            <form method="post" action="<?= e(app_url('/company/finance/closing-documents/requirement-overrides')) ?>" class="closing-requirement-form">
+                <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
+                <div class="closing-status-grid">
+                    <?php foreach ($columns as $key => $label): $status = $statuses[$key] ?? ['applicable'=>false,'satisfied'=>false,'accepted'=>[]]; ?>
+                    <div class="closing-status-card">
+                        <div class="closing-status-card-head">
+                            <div class="field-note"><?= e($label) ?></div>
+                            <?= $renderStatus($status, false) ?>
+                        </div>
+                        <?php if(!empty($status['accepted'])): ?>
+                        <label class="closing-status-option">
+                            <input type="checkbox" name="manual_collected[<?= e($key) ?>]" value="1"<?= !empty($status['manual_collected']) ? ' checked' : '' ?>>
+                            <span>Считать собранным</span>
+                        </label>
+                        <label class="closing-status-option">
+                            <input type="checkbox" name="inn_exempt[<?= e($key) ?>]" value="1"<?= !empty($status['exempt_for_inn']) ? ' checked' : '' ?><?= $inn === '' ? ' disabled' : '' ?>>
+                            <span>Не требовать для этого ИНН</span>
+                        </label>
+                        <?php endif; ?>
+                    </div>
+                    <?php endforeach; ?>
                 </div>
-                <?php endforeach; ?>
-            </div>
+                <div class="closing-requirement-actions"><button class="btn btn-secondary btn-sm" type="submit">Сохранить статусы</button></div>
+            </form>
+            <?php else: ?>
+                <div class="closing-status-grid">
+                    <?php foreach ($columns as $key => $label): $status = $statuses[$key] ?? ['applicable'=>false,'satisfied'=>false]; ?>
+                    <div class="closing-status-card"><div class="field-note"><?= e($label) ?></div><?= $renderStatus($status, true) ?></div>
+                    <?php endforeach; ?>
+                </div>
+            <?php endif; ?>
         </div>
 
         <div class="entity-form-docs closing-document-docs">
@@ -78,7 +112,7 @@ $fileBadge = static function (string $name): array {
                         <div class="file-item document-file-row has-file has-existing-file">
                             <div class="<?= e($badgeClass) ?>"><?= e($badgeText) ?></div>
                             <div class="file-info">
-                                <div class="file-name"><?= e((string)($requirementLabels[$link['requirement_code']] ?? $link['requirement_code'])) ?></div>
+                                <div class="file-name"><?= e((string)($requirementLabels[$link['requirement_code']] ?? $link['requirement_code'])) ?><?= !empty($link['is_edo']) ? ' · ЭДО' : '' ?></div>
                                 <div class="file-meta" title="<?= e((string)$link['original_name']) ?>"><?= e((string)$link['original_name']) ?></div>
                             </div>
                             <form method="post" action="<?= e(app_url('/company/finance/closing-documents/unlink-document')) ?>" class="inline-form closing-file-unlink" onsubmit="return confirm('Отвязать документ от этого платежа?');">
@@ -90,21 +124,12 @@ $fileBadge = static function (string $name): array {
                     <?php endforeach; ?>
                 </div>
 
-                <?php if($inn !== '' && !empty($availableDocuments)): ?>
-                <form method="post" action="<?= e(app_url('/company/finance/closing-documents/link-document')) ?>" class="closing-doc-form">
-                    <div class="field-note">Привязать существующий</div>
-                    <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
-                    <select name="requirement_code" class="field-select" required><option value="">Тип документа</option><?php foreach($acceptedCodes as $code=>$label):?><option value="<?= e($code) ?>"><?= e($label) ?></option><?php endforeach;?></select>
-                    <select name="document_id" class="field-select" required><option value="">Файл этого ИНН</option><?php foreach($availableDocuments as $document):?><option value="<?= (int)$document['id'] ?>"><?= e((string)($document['type_name'] ?: $document['document_type'] ?: 'Документ')) ?> · <?= e((string)$document['original_name']) ?></option><?php endforeach;?></select>
-                    <button class="btn btn-secondary btn-sm" type="submit">Привязать</button>
-                </form>
-                <?php endif; ?>
-
                 <form method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/finance/closing-documents/upload-document')) ?>" class="closing-doc-form">
                     <div class="field-note">Загрузить новый файл</div>
                     <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
                     <select name="requirement_code" class="field-select" required><option value="">Тип документа</option><?php foreach($acceptedCodes as $code=>$label):?><option value="<?= e($code) ?>"><?= e($label) ?></option><?php endforeach;?></select>
                     <input type="file" name="document_file" class="field-input" required>
+                    <label class="closing-status-option closing-edo-option"><input type="checkbox" name="is_edo" value="1"><span>ЭДО</span></label>
                     <button class="btn btn-primary btn-sm" type="submit">Загрузить и привязать</button>
                 </form>
             <?php endif; ?>
