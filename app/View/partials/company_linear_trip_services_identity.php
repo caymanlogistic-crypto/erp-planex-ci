@@ -1,3 +1,6 @@
+<style>
+.linear-trip-services-section [data-trip-services-list] .linear-trip-service-card{border:0;border-radius:0;padding:0;margin:14px 0;background:transparent}.linear-trip-services-section [data-trip-services-list] .linear-trip-service-fields{grid-template-columns:minmax(180px,1fr) minmax(220px,1.3fr) auto}.linear-trip-service-remove-inline{display:flex;align-items:flex-end;padding-bottom:1px}.linear-trip-service-remove-inline .linear-trip-row-remove{flex:0 0 auto}.trip-services-view>.section-title{text-transform:uppercase}@media(max-width:900px){.linear-trip-services-section [data-trip-services-list] .linear-trip-service-fields{grid-template-columns:1fr}.linear-trip-service-remove-inline{justify-content:flex-end}}
+</style>
 <script>
 (function () {
     'use strict';
@@ -18,6 +21,43 @@
         var named = row.querySelector('[name*="[payments]"]');
         if (!named) return '';
         return named.name.replace(/\[[^\]]+\]$/, '[' + key + ']');
+    }
+
+    function normalizeServiceUi(form) {
+        if (!form || !form.querySelector) return;
+        var section = form.querySelector('.linear-trip-services-section');
+        if (!section) return;
+
+        var title = section.querySelector('.section-title');
+        if (title) title.textContent = 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ';
+
+        var primary = section.querySelector(':scope > .linear-trip-service-card:not([data-trip-service-card])');
+        if (primary) primary.remove();
+
+        Array.from(section.querySelectorAll('[data-trip-service-card]')).forEach(function (card) {
+            var head = card.querySelector('.linear-trip-service-card-head');
+            var remove = head ? head.querySelector('[data-remove-service]') : card.querySelector('[data-remove-service]');
+            var fields = card.querySelector('.linear-trip-service-fields');
+            if (head) head.remove();
+            if (!remove || !fields || remove.closest('.linear-trip-service-remove-inline')) return;
+
+            var holder = document.createElement('div');
+            holder.className = 'linear-trip-service-remove-inline';
+            holder.appendChild(remove);
+            var description = fields.querySelector('.service-description');
+            fields.insertBefore(holder, description || null);
+        });
+    }
+
+    function normalizeViewUi(root) {
+        if (!root || !root.querySelectorAll) return;
+        var views = [];
+        if (root.matches && root.matches('.trip-services-view')) views.push(root);
+        root.querySelectorAll('.trip-services-view').forEach(function (view) { views.push(view); });
+        views.forEach(function (view) {
+            var title = view.querySelector('.section-title');
+            if (title) title.textContent = 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ';
+        });
     }
 
     function bindExistingIds(form, services) {
@@ -48,6 +88,7 @@
     }
 
     function ensure(form) {
+        normalizeServiceUi(form);
         if (!form || form.dataset.servicePaymentIdentityReady === '1') return;
         var routeId = routeIdFor(form);
         if (!routeId) return;
@@ -70,8 +111,10 @@
 
         promise.then(function (services) {
             bindExistingIds(form, services);
+            normalizeServiceUi(form);
             new MutationObserver(function () {
                 bindExistingIds(form, services);
+                normalizeServiceUi(form);
             }).observe(form, {childList: true, subtree: true});
         });
     }
@@ -80,6 +123,9 @@
         if (!root || !root.querySelectorAll) return;
         root.querySelectorAll('[data-linear-trip-form]').forEach(ensure);
         if (root.matches && root.matches('[data-linear-trip-form]')) ensure(root);
+        var ownerForm = root.closest ? root.closest('[data-linear-trip-form]') : null;
+        if (ownerForm) normalizeServiceUi(ownerForm);
+        normalizeViewUi(root);
     }
 
     document.addEventListener('DOMContentLoaded', function () {
