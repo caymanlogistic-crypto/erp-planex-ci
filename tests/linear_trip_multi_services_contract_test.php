@@ -27,7 +27,7 @@ foreach (['LINEAR_ROUTE_SERVICE_PAYMENT', "direction='PAYABLE'", "party_role='se
 foreach (['LinearTripServiceLineService::normalizeSubmitted', 'LinearTripServiceLineService::replaceForRoute', 'P15_linear_trip_save_errors.log'] as $token) {
     if (!str_contains($edit, $token)) throw new RuntimeException('edit save missing ' . $token);
 }
-foreach (['+ Добавить услугу', 'Описание / детали', 'trip_services[', 'data-trip-service-card', 'rowSpan', 'hasAdditionalServices', "if(!hasAdditionalServices){table.dataset.servicesReady='1';return}", 'syncServiceDueFields', 'bindServicePaymentList', 'data-days-count-wrapper', 'data-days-kind-wrapper', 'data-specific-date-wrapper', "body.querySelector('.driver-modal-main')||body", 'list.dataset.serviceIndex'] as $token) {
+foreach (['+ Добавить услугу', 'Описание / детали', 'trip_services[', 'data-trip-service-card', 'rowSpan', 'hasAdditionalServices', "if(!hasAdditionalServices){table.dataset.servicesReady='1';return}", 'syncServiceDueFields', 'bindServicePaymentList', 'data-days-count-wrapper', 'data-days-kind-wrapper', 'data-specific-date-wrapper', "body.querySelector('.driver-modal-main')||body", 'list.dataset.serviceIndex', 'linear-trip-days-stepper', 'data-service-days-minus', 'data-service-days-plus', "daysInput.value='3'", 'Math.max(1,current()-1)', 'current()+1'] as $token) {
     if (!str_contains($ui, $token)) throw new RuntimeException('UI missing ' . $token);
 }
 foreach (['data-service-payment-id', "paymentName(row, 'id')", 'bindExistingIds', 'normalizeServiceUi', 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ', 'primary.remove()', 'head.remove()', 'linear-trip-service-remove-inline', 'grid-template-columns:minmax(180px,1fr) minmax(220px,1.3fr) auto', "title.textContent !== 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ'", 'serverToday', 'applyPlannedUnloadingAttention', 'plannedIso > serverToday', 'Проставьте дату выгрузки или замените плановую дату', 'registry-date-attention-text'] as $token) {
@@ -36,8 +36,11 @@ foreach (['data-service-payment-id', "paymentName(row, 'id')", 'bindExistingIds'
 if (str_contains($identityUi, 'syncLinearTripAttentionBadge') || str_contains($identityUi, 'data-linear-trip-attention-badge')) {
     throw new RuntimeException('linear trip menu counter must not be page-local');
 }
-foreach (['linear_trips_problem', 'departures_problem', 'planned_unloading_date', 'actual_unloading_date', 'CURRENT_DATE()', 'registerTripBadgeRenderer', 'Линейные', 'Отходы', 'Рейсы', 'nav-count is-alert', '$total = $linear + $departures'] as $token) {
+foreach (['linear_trips_problem', 'departures_problem', 'planned_unloading_date', 'actual_unloading_date', 'CURRENT_DATE()', 'registerTripBadgeScript', 'register_shutdown_function', 'data-trip-nav-count', '/company/trips/linear', '/company/trips/departures', 'nav-count is-alert', '$total = $linear + $departures'] as $token) {
     if (!str_contains($navigationCounters, $token)) throw new RuntimeException('global navigation counter missing ' . $token);
+}
+if (str_contains($navigationCounters, 'ob_start(')) {
+    throw new RuntimeException('trip navigation counter must not open a nested output buffer');
 }
 foreach (['CREATE TABLE IF NOT EXISTS linear_route_services', 'CREATE TABLE IF NOT EXISTS linear_route_service_payments', 'contractor_id', 'service_name', 'condition_type'] as $token) {
     if (!str_contains($migration, $token)) throw new RuntimeException('migration missing ' . $token);
@@ -59,9 +62,9 @@ if (str_contains($ui, 'delete list.dataset.servicePaymentUiReady')) {
 echo "linear_trip_multi_services_contract: PASS\n";
 echo "primary_transport=legacy_compatible\n";
 echo "additional_services=contractor_manual_description_payments\n";
-echo "additional_services_ui=left_column_no_observer_loop_dynamic_due_fields\n";
+echo "additional_services_ui=left_column_dynamic_due_fields_days_default_3_stepper\n";
 echo "planned_unloading_attention=current_or_past_plan_without_actual_is_red\n";
-echo "navigation_attention=global_child_counter_and_parent_sum\n";
+echo "navigation_attention=global_child_counter_parent_sum_no_nested_output_buffer\n";
 echo "service_payments=stable_identity_and_payable_obligations\n";
 echo "service_persistence=mysql_crud_regression_present\n";
 echo "registry=original_without_extras_service_grid_with_extras\n";
