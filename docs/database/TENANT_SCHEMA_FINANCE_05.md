@@ -2,7 +2,55 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `ff6c294f140a67e18ef0bd111c5527cf60c6e892c2e7863c7e7edda32667d681`
+**Schema fingerprint:** `d1408321e1a8d77ce73f1bb71cb1313ca5d6475371b11c9f2a002130e37ae4f8`
+
+## `finance_operation_allocations`
+
+**Domain:** Finance  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `operation_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `invoice_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `obligation_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `linear_route_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `linear_route_payment_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `cash_flow_category_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `amount` | `decimal(12,2)` | NO | NULL | — | — |
+| `allocation_date` | `date` | NO | NULL | — | `MUL` |
+| `method` | `varchar(30)` | NO | `manual` | — | — |
+| `rule_code` | `varchar(100)` | YES | NULL | — | — |
+| `comment` | `text` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(50)` | YES | NULL | — | — |
+| `cancelled_at` | `datetime` | YES | NULL | — | `MUL` |
+| `cancelled_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `cancelled_by_role` | `varchar(50)` | YES | NULL | — | — |
+| `cancel_reason` | `text` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_foa_cancelled` (`cancelled_at`)
+- **INDEX** `idx_foa_cash_flow_category` (`cash_flow_category_id`)
+- **INDEX** `idx_foa_date` (`allocation_date`)
+- **INDEX** `idx_foa_invoice` (`invoice_id`)
+- **INDEX** `idx_foa_obligation` (`obligation_id`)
+- **INDEX** `idx_foa_operation` (`operation_id`)
+- **INDEX** `idx_foa_payment_cancelled` (`linear_route_payment_id`, `cancelled_at`)
+- **INDEX** `idx_foa_route` (`linear_route_id`)
+- **INDEX** `idx_foa_route_payment` (`linear_route_payment_id`)
+- **INDEX** `idx_foa_route_payment_id` (`linear_route_payment_id`)
+
+### Physical foreign keys
+
+- `fk_foa_invoice`: (`invoice_id`) → `finance_invoices`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_foa_operation`: (`operation_id`) → `finance_operations`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_foa_route_payment`: (`linear_route_payment_id`) → `linear_route_payments`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `finance_operations`
 
