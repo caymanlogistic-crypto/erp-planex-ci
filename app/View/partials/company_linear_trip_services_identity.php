@@ -45,7 +45,9 @@
             cell.classList.add('registry-date-attention');
             value.classList.add('registry-date-attention-text');
             note.classList.add('registry-date-attention-text');
-            note.textContent = '(Проставьте дату выгрузки или замените плановую дату)';
+            if (note.textContent !== '(Проставьте дату выгрузки или замените плановую дату)') {
+                note.textContent = '(Проставьте дату выгрузки или замените плановую дату)';
+            }
         });
     }
 
@@ -55,7 +57,9 @@
         if (!section) return;
 
         var title = section.querySelector('.section-title');
-        if (title) title.textContent = 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ';
+        if (title && title.textContent !== 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ') {
+            title.textContent = 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ';
+        }
 
         var primary = section.querySelector(':scope > .linear-trip-service-card:not([data-trip-service-card])');
         if (primary) primary.remove();
@@ -82,7 +86,9 @@
         root.querySelectorAll('.trip-services-view').forEach(function (view) { views.push(view); });
         views.forEach(function (view) {
             var title = view.querySelector('.section-title');
-            if (title) title.textContent = 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ';
+            if (title && title.textContent !== 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ') {
+                title.textContent = 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ';
+            }
         });
     }
 
