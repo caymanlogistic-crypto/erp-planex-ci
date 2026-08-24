@@ -1,0 +1,118 @@
+name: Linear Services 120 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact canonical SHA containing migration 120 tooling'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_LINEAR_SERVICES_120 to authorize production migration 120'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+concurrency:
+  group: linear-services-120-production-migration
+  cancel-in-progress: false
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+jobs:
+  migrate-120:
+    if: ${{ inputs.confirm_migration == 'APPLY_LINEAR_SERVICES_120' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+      - name: Validate exact source and tooling
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          php -l scripts/linear_services_apply_120.php
+          php -l scripts/linear_services_verify_120.php
+          php -l app/Service/LinearTripServiceLineService.php
+          php -l app/Service/LinearTripServiceFinanceService.php
+          test -s database/migrations-local/120_create_linear_route_services.sql
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Upload isolated migration tooling
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/linear_services_verify_120.php "$SSH_USER@$SSH_HOST:/tmp/verify120_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/linear_services_apply_120.php "$SSH_USER@$SSH_HOST:/tmp/apply120_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes database/migrations-local/120_create_linear_route_services.sql "$SSH_USER@$SSH_HOST:/tmp/120_${GITHUB_RUN_ID}.sql"
+      - name: Snapshot before migration
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/verify120_${GITHUB_RUN_ID}.php'" | tee linear_services_120_before.txt
+          grep -q 'LINEAR_SERVICES_120_READ_ONLY_OK' linear_services_120_before.txt
+      - name: Apply only migration 120
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_MIGRATION_PATH='/tmp/120_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/apply120_${GITHUB_RUN_ID}.php'" | tee linear_services_120_migration.txt
+          grep -q 'LINEAR_SERVICES_120_OK' linear_services_120_migration.txt
+      - name: Snapshot after and verify invariants
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/verify120_${GITHUB_RUN_ID}.php'" | tee linear_services_120_after.txt
+          python3 - "$(sed -n 's/^LINEAR_SERVICES_120_SNAPSHOT=//p' linear_services_120_before.txt)" "$(sed -n 's/^LINEAR_SERVICES_120_SNAPSHOT=//p' linear_services_120_after.txt)" <<'PY'
+          import json,sys
+          b,a=map(json.loads,sys.argv[1:3])
+          for k in ('linear_routes','linear_route_payments','finance_obligations','documents'):
+              if b[k]!=a[k]: raise SystemExit(f'business invariant changed: {k}')
+          if a['service_table']!=1 or a['service_payment_table']!=1 or a['migration_120_applied']!=1:
+              raise SystemExit('120 schema missing')
+          if a['service_columns']<10 or a['payment_columns']<20 or a['service_indexes']<3 or a['payment_indexes']<2:
+              raise SystemExit('120 schema shape incomplete')
+          if b['service_table']==0 and (a['service_rows']!=0 or a['service_payment_rows']!=0):
+              raise SystemExit('migration 120 unexpectedly created business rows')
+          print('LINEAR_SERVICES_120_INVARIANTS_OK')
+          PY
+      - name: HTTP acceptance
+        run: test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linear_services_120_${{ inputs.source_sha }}
+          path: linear_services_120_*.txt
+          retention-days: 30
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/verify120_${GITHUB_RUN_ID}.php' '/tmp/apply120_${GITHUB_RUN_ID}.php' '/tmp/120_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
