@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  statuses: write
 concurrency:
   group: linear-services-120-production-migration
   cancel-in-progress: false
@@ -41,6 +42,20 @@ jobs:
           php -l app/Service/LinearTripServiceLineService.php
           php -l app/Service/LinearTripServiceFinanceService.php
           test -s database/migrations-local/120_create_linear_route_services.sql
+      - name: Publish migration pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" \
+            -d '{"state":"pending","context":"erpv2/migration120","description":"Linear services migration 120 in progress"}' >/dev/null
       - name: Configure SSH
         env:
           PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
@@ -108,6 +123,32 @@ jobs:
           name: linear_services_120_${{ inputs.source_sha }}
           path: linear_services_120_*.txt
           retention-days: 30
+      - name: Publish final migration status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          case "$JOB_STATUS" in
+            success) state=success; description='Linear services migration 120 verified' ;;
+            cancelled) state=error; description='Linear services migration 120 cancelled' ;;
+            *) state=failure; description='Linear services migration 120 failed' ;;
+          esac
+          payload="$(STATE="$state" DESCRIPTION="$description" python3 - <<'PY'
+          import json,os
+          print(json.dumps({'state':os.environ['STATE'],'context':'erpv2/migration120','description':os.environ['DESCRIPTION']}))
+          PY
+          )"
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" \
+            -d "$payload" >/dev/null
       - name: Cleanup
         if: always()
         env:
