@@ -25,10 +25,10 @@ foreach (['LINEAR_ROUTE_SERVICE_PAYMENT', "direction='PAYABLE'", "party_role='se
 foreach (['LinearTripServiceLineService::normalizeSubmitted', 'LinearTripServiceLineService::replaceForRoute', 'P15_linear_trip_save_errors.log'] as $token) {
     if (!str_contains($edit, $token)) throw new RuntimeException('edit save missing ' . $token);
 }
-foreach (['+ Добавить услугу', 'Описание / детали', 'trip_services[', 'data-trip-service-card', 'rowSpan'] as $token) {
+foreach (['+ Добавить услугу', 'Описание / детали', 'trip_services[', 'data-trip-service-card'] as $token) {
     if (!str_contains($ui, $token)) throw new RuntimeException('UI missing ' . $token);
 }
-foreach (['data-service-payment-id', "paymentName(row, 'id')", 'bindExistingIds', 'normalizeServiceUi', 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ', 'primary.remove()', 'head.remove()', 'linear-trip-service-remove-inline', 'grid-template-columns:minmax(180px,1fr) minmax(220px,1.3fr) auto'] as $token) {
+foreach (['data-service-payment-id', "paymentName(row, 'id')", 'bindExistingIds', 'normalizeServiceUi', 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ', 'primary.remove()', 'head.remove()', 'linear-trip-service-remove-inline', 'grid-template-columns:minmax(180px,1fr) minmax(220px,1.3fr) auto', 'preserveRegistryLayout', "registry.dataset.servicesReady = '1'"] as $token) {
     if (!str_contains($identityUi, $token)) throw new RuntimeException('identity/UI cleanup missing ' . $token);
 }
 foreach (['CREATE TABLE IF NOT EXISTS linear_route_services', 'CREATE TABLE IF NOT EXISTS linear_route_service_payments', 'contractor_id', 'service_name', 'condition_type'] as $token) {
@@ -47,5 +47,5 @@ echo "primary_transport=legacy_compatible\n";
 echo "additional_services=contractor_manual_description_payments\n";
 echo "additional_services_ui=compact_no_outer_box_inline_remove\n";
 echo "service_payments=stable_identity_and_payable_obligations\n";
-echo "registry=first_four_common_then_service_rows\n";
+echo "registry=preserve_original_linear_trip_layout\n";
 echo "migration=no_backfill\n";
