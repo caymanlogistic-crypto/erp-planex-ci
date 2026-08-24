@@ -39,6 +39,12 @@ $fileBadge = static function (string $name): array {
     return ['file-type-badge is-other', $ext !== '' ? $ext : 'FILE'];
 };
 ?>
+<style>
+[data-closing-modal-transaction] .closing-status-option{display:grid!important;grid-template-columns:14px minmax(0,1fr)!important;align-items:start!important;column-gap:7px!important;row-gap:0!important;margin-top:7px!important;cursor:pointer!important;line-height:1.25!important}
+[data-closing-modal-transaction] .closing-status-option input[type="checkbox"]{-webkit-appearance:checkbox!important;appearance:auto!important;width:14px!important;height:14px!important;min-width:14px!important;max-width:14px!important;min-height:14px!important;max-height:14px!important;padding:0!important;margin:1px 0 0!important;box-sizing:border-box!important;flex:0 0 14px!important;accent-color:var(--accent)}
+[data-closing-modal-transaction] .closing-status-option span{display:block;min-width:0}
+[data-closing-modal-transaction] .closing-edo-option{display:inline-grid!important;width:auto!important;grid-template-columns:14px auto!important;align-self:start!important;margin:0!important}
+</style>
 <div data-closing-modal-transaction="<?= (int)$row['id'] ?>">
     <div class="entity-form-layout closing-document-layout">
         <div class="entity-form-main closing-document-main">
