@@ -1,0 +1,47 @@
+name: Linear Trip Services Regression
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Service/LinearTripServiceLineService.php'
+      - 'app/View/partials/company_linear_trip_services_bootstrap.php'
+      - 'app/View/partials/company_linear_trip_services_identity.php'
+      - 'app/Http/Controllers/Company/LinearTripActions/modal_edit_submit_p13.php'
+      - 'tests/linear_trip_service_persistence_mysql_test.php'
+      - 'tests/linear_trip_multi_services_contract_test.php'
+      - 'database/migrations-local/120_create_linear_route_services.sql'
+      - '.github/workflows/linear_trip_services_regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  persistence:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: root
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -proot"
+          --health-interval=5s
+          --health-timeout=5s
+          --health-retries=20
+    steps:
+      - uses: actions/checkout@v4
+      - name: PHP syntax
+        run: php -l tests/linear_trip_service_persistence_mysql_test.php
+      - name: Additional service CRUD persistence
+        env:
+          PLANEX_TEST_MYSQL_HOST: 127.0.0.1
+          PLANEX_TEST_MYSQL_PORT: 3306
+          PLANEX_TEST_MYSQL_USER: root
+          PLANEX_TEST_MYSQL_PASSWORD: root
+        run: php tests/linear_trip_service_persistence_mysql_test.php
