@@ -10,7 +10,7 @@ final class NavigationCounterService
 {
     /** @var array<string,array<string,int>> */
     private static array $requestCache = [];
-    private static bool $tripBadgeRendererRegistered = false;
+    private static bool $tripBadgeScriptRegistered = false;
 
     /**
      * Return lightweight navigation counters for one tenant.
@@ -26,7 +26,7 @@ final class NavigationCounterService
 
         $cacheKey = (string)$companyId;
         if (isset(self::$requestCache[$cacheKey])) {
-            self::registerTripBadgeRenderer(self::$requestCache[$cacheKey]);
+            self::registerTripBadgeScript(self::$requestCache[$cacheKey]);
             return self::$requestCache[$cacheKey];
         }
 
@@ -99,59 +99,41 @@ final class NavigationCounterService
         $counters['departures_problem'] = 0;
 
         self::$requestCache[$cacheKey] = $counters;
-        self::registerTripBadgeRenderer($counters);
+        self::registerTripBadgeScript($counters);
         return $counters;
     }
 
     /**
-     * The current main layout already calls this service on every company-owner
-     * page, but it only has hard-coded markup for the older finance counters.
-     * Register one output-buffer pass so Trips child badges and their parent sum
-     * are rendered globally without page-local JavaScript.
+     * Render trip counters after the layout has finished instead of opening a
+     * nested output buffer. LinearTripController itself buffers the rendered page,
+     * so an ob_start callback here could be consumed by the controller and make
+     * the sidebar badges disappear. The small DOM upsert below is global for all
+     * company-owner pages because this service is already called by the main layout.
      *
      * @param array<string,int> $counters
      */
-    private static function registerTripBadgeRenderer(array $counters): void
+    private static function registerTripBadgeScript(array $counters): void
     {
-        if (self::$tripBadgeRendererRegistered) return;
-        self::$tripBadgeRendererRegistered = true;
+        if (self::$tripBadgeScriptRegistered) return;
+        self::$tripBadgeScriptRegistered = true;
 
         $linear = max(0, (int)($counters['linear_trips_problem'] ?? 0));
         $departures = max(0, (int)($counters['departures_problem'] ?? 0));
         $total = $linear + $departures;
+        if ($total <= 0) return;
 
-        ob_start(static function (string $html) use ($linear, $departures, $total): string {
-            $badge = static function (int $count, string $title): string {
-                if ($count <= 0) return '';
-                $label = $count > 999 ? '999+' : (string)$count;
-                return '<span class="nav-count is-alert" title="' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '">' . $label . '</span>';
-            };
+        register_shutdown_function(static function () use ($linear, $departures, $total): void {
+            $payload = json_encode(
+                ['linear' => $linear, 'departures' => $departures, 'total' => $total],
+                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+            );
+            if (!is_string($payload)) return;
 
-            if ($linear > 0) {
-                $html = preg_replace(
-                    '~(<a class="nav-sub-item[^"]*" href="[^"]*/company/trips/linear">\s*<span>Линейные</span>)(?!\s*<span class="nav-count)~u',
-                    '$1' . $badge($linear, 'Требуется актуализировать дату выгрузки'),
-                    $html
-                ) ?? $html;
-            }
-
-            if ($departures > 0) {
-                $html = preg_replace(
-                    '~(<a class="nav-sub-item[^"]*" href="[^"]*/company/trips/departures">\s*<span>Отходы</span>)(?!\s*<span class="nav-count)~u',
-                    '$1' . $badge($departures, 'Ошибки в рейсах отходов'),
-                    $html
-                ) ?? $html;
-            }
-
-            if ($total > 0) {
-                $html = preg_replace(
-                    '~(<span class="nav-label">Рейсы</span>)(?!\s*<span class="nav-count)~u',
-                    '$1' . $badge($total, 'Всего ошибок в рейсах'),
-                    $html
-                ) ?? $html;
-            }
-
-            return $html;
+            echo '<script>(function(){\'use strict\';var counts=' . $payload . ';'
+                . 'function label(n){return n>999?\'999+\':String(n)}'
+                . 'function upsert(host,count,title,before){if(!host)return;var badge=host.querySelector(\':scope > [data-trip-nav-count]\');if(count<=0){if(badge)badge.remove();return;}if(!badge){badge=document.createElement(\'span\');badge.className=\'nav-count is-alert\';badge.setAttribute(\'data-trip-nav-count\',\'\');if(before)host.insertBefore(badge,before);else host.appendChild(badge);}badge.textContent=label(count);badge.title=title;}'
+                . 'function run(){var linear=document.querySelector(\'a.nav-sub-item[href$="/company/trips/linear"]\');var departures=document.querySelector(\'a.nav-sub-item[href$="/company/trips/departures"]\');upsert(linear,counts.linear,\'Требуется актуализировать дату выгрузки\',null);upsert(departures,counts.departures,\'Ошибки в рейсах отходов\',null);var parent=linear&&linear.closest(\'.nav-sub\')?linear.closest(\'.nav-sub\').previousElementSibling:null;var chevron=parent?parent.querySelector(\'.nav-chevron\'):null;upsert(parent,counts.total,\'Всего ошибок в рейсах\',chevron);}'
+                . 'if(document.readyState===\'loading\')document.addEventListener(\'DOMContentLoaded\',run,{once:true});else run();})();</script>';
         });
     }
 
