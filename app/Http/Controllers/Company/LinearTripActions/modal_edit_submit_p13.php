@@ -4,6 +4,7 @@ use App\Service\LinearRouteService;
 use App\Service\LinearTripDocumentUploadException;
 use App\Service\LinearTripEditSaveService;
 use App\Service\LinearTripEditTokenService;
+use App\Service\LinearTripServiceLineService;
 
 requireRole(['company_owner', 'senior_logist', 'logist']);
 header('Content-Type: application/json; charset=utf-8');
@@ -72,6 +73,23 @@ try {
         ], 403);
     }
 
+    $includeFinance = $sessionUser['role_code'] === 'company_owner';
+    $serviceParse = LinearTripServiceLineService::normalizeSubmitted(
+        $localPdo,
+        (array) ($_POST['trip_services'] ?? []),
+        $sessionUser,
+        $includeFinance
+    );
+    if ($serviceParse['errors'] !== []) {
+        $respond([
+            'success' => false,
+            'message' => 'Проверьте дополнительные услуги.',
+            'errors' => $serviceParse['errors'],
+            'error_code' => 'validation_failed',
+            'retry_token' => LinearTripEditTokenService::issue($routeId),
+        ], 422);
+    }
+
     $result = LinearTripEditSaveService::save(
         $localPdo,
         $companyId,
@@ -92,6 +110,20 @@ try {
             'retry_token' => LinearTripEditTokenService::issue($routeId),
         ], 422);
     }
+
+    LinearTripServiceLineService::replaceForRoute(
+        $localPdo,
+        $routeId,
+        $serviceParse['services'],
+        $sessionUser,
+        [
+            'planned_loading_date' => LinearRouteService::normalizeDate($_POST['planned_loading_date'] ?? ''),
+            'planned_unloading_date' => LinearRouteService::normalizeDate($_POST['planned_unloading_date'] ?? ''),
+            'actual_loading_date' => LinearRouteService::normalizeDate($_POST['actual_loading_date'] ?? ''),
+            'actual_unloading_date' => LinearRouteService::normalizeDate($_POST['actual_unloading_date'] ?? ''),
+        ],
+        $includeFinance
+    );
 
     $respond(['success' => true, 'message' => $result['message'], 'route_id' => $routeId]);
 } catch (LinearTripDocumentUploadException $e) {
