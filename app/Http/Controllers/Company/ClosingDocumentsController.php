@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Service\ClosingDocumentComplianceService;
 use App\Service\ClosingDocumentService;
 use PDO;
 use RuntimeException;
@@ -34,8 +35,8 @@ final class ClosingDocumentsController
         try {
             [$company, $tenantPdo] = $this->tenant();
             $pageContext .= ' › Компания: ' . e((string) $company['name']);
-            $schemaReady = ClosingDocumentService::schemaReady($tenantPdo);
-            if ($schemaReady) $rows = ClosingDocumentService::reportRows($tenantPdo, false);
+            $schemaReady = ClosingDocumentComplianceService::schemaReady($tenantPdo);
+            if ($schemaReady) $rows = ClosingDocumentComplianceService::reportRows($tenantPdo, false);
         } catch (Throwable $e) {
             $dbError = 'Ошибка при загрузке данных: ' . $e->getMessage();
         }
@@ -57,9 +58,9 @@ final class ClosingDocumentsController
         }
         try {
             [, $tenantPdo] = $this->tenant();
-            if (!ClosingDocumentService::schemaReady($tenantPdo)) throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
+            if (!ClosingDocumentComplianceService::schemaReady($tenantPdo)) throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
             $row = null;
-            foreach (ClosingDocumentService::reportRows($tenantPdo, false) as $candidate) {
+            foreach (ClosingDocumentComplianceService::reportRows($tenantPdo, false) as $candidate) {
                 if ((int) ($candidate['id'] ?? 0) === $transactionId) { $row = $candidate; break; }
             }
             if ($row === null) {
@@ -67,8 +68,6 @@ final class ClosingDocumentsController
                 echo '<div class="form-alert alert-error">Платёж не входит в контур закрывающих документов.</div>';
                 return;
             }
-            $inn = (string) ($row['normalized_inn'] ?? '');
-            $availableDocuments = $inn !== '' && empty($row['is_exempt']) ? ClosingDocumentService::existingDocumentsForInn($tenantPdo, $inn) : [];
             $requirementLabels = ClosingDocumentService::requirementLabels();
             require base_path('app/View/pages/company_finance_closing_document_modal.php');
         } catch (Throwable $e) {
@@ -169,6 +168,25 @@ final class ClosingDocumentsController
         $this->backToExceptions();
     }
 
+    public function saveRequirementOverrides(): void
+    {
+        requireRole(['company_owner']);
+        try {
+            [, $tenantPdo] = $this->tenant();
+            ClosingDocumentComplianceService::saveRequirementOverrides(
+                $tenantPdo,
+                (int)($_POST['transaction_id'] ?? 0),
+                is_array($_POST['manual_collected'] ?? null) ? $_POST['manual_collected'] : [],
+                is_array($_POST['inn_exempt'] ?? null) ? $_POST['inn_exempt'] : [],
+                (int)($_SESSION['user_id'] ?? 0)
+            );
+            $_SESSION['closing_documents_success'] = 'Статусы документов обновлены';
+        } catch (Throwable $e) {
+            $_SESSION['closing_documents_error'] = $e->getMessage();
+        }
+        $this->back();
+    }
+
     public function linkDocument(): void
     {
         requireRole(['company_owner']);
@@ -188,8 +206,17 @@ final class ClosingDocumentsController
         require_once base_path('app/Support/legal_entity_document_upload.php');
         try {
             [$company, $tenantPdo] = $this->tenant();
-            ClosingDocumentService::uploadAndLink($tenantPdo, (int) $company['id'], (int) ($_POST['transaction_id'] ?? 0), trim((string) ($_POST['requirement_code'] ?? '')), $_FILES['document_file'] ?? [], (int) ($_SESSION['user_id'] ?? 0), (string) ($_SESSION['role_code'] ?? 'company_owner'));
-            $_SESSION['closing_documents_success'] = 'Документ загружен и привязан';
+            ClosingDocumentComplianceService::uploadAndLink(
+                $tenantPdo,
+                (int) $company['id'],
+                (int) ($_POST['transaction_id'] ?? 0),
+                trim((string) ($_POST['requirement_code'] ?? '')),
+                $_FILES['document_file'] ?? [],
+                (int) ($_SESSION['user_id'] ?? 0),
+                (string) ($_SESSION['role_code'] ?? 'company_owner'),
+                !empty($_POST['is_edo'])
+            );
+            $_SESSION['closing_documents_success'] = !empty($_POST['is_edo']) ? 'Документ ЭДО загружен и привязан' : 'Документ загружен и привязан';
         } catch (Throwable $e) {
             $_SESSION['closing_documents_error'] = $e->getMessage();
         }
