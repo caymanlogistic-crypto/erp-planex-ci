@@ -9,6 +9,35 @@ use Throwable;
 final class LinearTripRequestNormalizer
 {
     /**
+     * Repair stale/blank date mode controls from the canonical submitted dates.
+     * Explicit valid modes are preserved. This keeps create/edit compatible with
+     * cached clients and prevents a filled end date from being discarded.
+     *
+     * @param array<string,mixed> $post
+     * @return array<string,mixed>
+     */
+    public static function normalizeDateKinds(array $post): array
+    {
+        $startKind = trim((string) ($post['start_date_kind'] ?? ''));
+        if (!in_array($startKind, ['plan', 'fact'], true)) {
+            $post['start_date_kind'] = trim((string) ($post['actual_loading_date'] ?? '')) !== '' ? 'fact' : 'plan';
+        }
+
+        $endKind = trim((string) ($post['end_date_kind'] ?? ''));
+        if (!in_array($endKind, ['plan', 'fact'], true)) {
+            if (trim((string) ($post['actual_unloading_date'] ?? '')) !== '') {
+                $post['end_date_kind'] = 'fact';
+            } elseif (trim((string) ($post['planned_unloading_date'] ?? '')) !== '') {
+                $post['end_date_kind'] = 'plan';
+            } else {
+                $post['end_date_kind'] = '';
+            }
+        }
+
+        return $post;
+    }
+
+    /**
      * The carrier is part of the selected route executor (crew) and must not be
      * trusted as an independent user-entered value.
      *
@@ -23,6 +52,7 @@ final class LinearTripRequestNormalizer
         array $sessionUser,
         array $post
     ): array {
+        $post = self::normalizeDateKinds($post);
         $executorId = (int) ($post['route_executor_id'] ?? 0);
         if ($companyId <= 0 || $executorId <= 0) {
             $post['carrier_contractor_id'] = '';
