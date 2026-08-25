@@ -25,37 +25,68 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Read production diagnostics
+      - name: Build read-only render probe
+        run: |
+          cat > /tmp/feo_render_probe.php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root = '/home/s/spugovxsim/planexp/public_html/erpv2';
+          chdir($root);
+          $_SERVER['REQUEST_URI'] = '/erpv2/company/feo/requests';
+          $_SERVER['REQUEST_METHOD'] = 'GET';
+          $_SERVER['HTTPS'] = 'on';
+          $_SESSION = [
+              'user_id' => 999999999,
+              'role_code' => 'company_owner',
+              'user_name' => 'FEO Runtime Probe',
+          ];
+          $config = require $root . '/bootstrap/app.php';
+          require_once $root . '/app/Support/entrypoint_dependencies.php';
+          require_once $root . '/app/Service/FeoXlsxParser.php';
+          require_once $root . '/app/Service/FeoRequestService.php';
+          require_once $root . '/app/Http/Controllers/Company/FeoRequestsController.php';
+          $db = new \App\Core\Database($config['database']);
+          $company = $db->fetch("SELECT id,name,status,db_identifier FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id LIMIT 1");
+          if (!$company) { throw new RuntimeException('No active tenant company for probe'); }
+          $_SESSION['company_id'] = (int)$company['id'];
+          $_SESSION['company_name'] = (string)$company['name'];
+          echo 'PROBE_COMPANY_ID=' . (int)$company['id'] . PHP_EOL;
+          echo 'PROBE_COMPANY_NAME=' . (string)$company['name'] . PHP_EOL;
+          $controller = new \App\Http\Controllers\Company\FeoRequestsController($config, $db);
+          ob_start();
+          try {
+              $controller->index();
+              $html = ob_get_clean();
+              echo 'FEO_RENDER_OK=YES' . PHP_EOL;
+              echo 'FEO_RENDER_BYTES=' . strlen((string)$html) . PHP_EOL;
+              echo 'FEO_RENDER_HAS_TITLE=' . (str_contains((string)$html, 'Все заявки ФЭО') ? 'YES' : 'NO') . PHP_EOL;
+          } catch (Throwable $e) {
+              while (ob_get_level() > 0) { @ob_end_clean(); }
+              echo 'FEO_RENDER_OK=NO' . PHP_EOL;
+              echo 'ERROR_CLASS=' . get_class($e) . PHP_EOL;
+              echo 'ERROR_MESSAGE=' . $e->getMessage() . PHP_EOL;
+              echo 'ERROR_FILE=' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+              echo $e->getTraceAsString() . PHP_EOL;
+              exit(2);
+          }
+          PHP
+      - name: Run production diagnostics
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' > feo_diag.txt <<'REMOTE'
-          set -u
-          ROOT=/home/s/spugovxsim/planexp/public_html/erpv2
-          echo '=== marker ==='
-          cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt 2>&1 || true
-          echo '=== php ==='
-          /usr/bin/php8.5 -v 2>&1 | head -n 2 || true
-          /usr/bin/php8.5 -m 2>&1 | grep -Ei 'zip|simplexml|xml|pdo|mysql|mbstring' || true
-          echo '=== lint ==='
-          for f in app/Http/Controllers/Company/FeoRequestsController.php app/Http/Routes/company_feo_requests.php app/Service/FeoRequestService.php app/Service/FeoXlsxParser.php app/View/pages/company_feo_requests.php app/View/layouts/main.php; do
-            /usr/bin/php8.5 -l "$ROOT/$f" 2>&1 || true
-          done
-          echo '=== candidate logs ==='
-          find /home/s/spugovxsim -maxdepth 6 -type f \( -iname '*error*.log' -o -iname 'php*.log' -o -iname '*.error.log' \) -mmin -180 -print 2>/dev/null | head -n 30 || true
-          echo '=== recent FEO/fatal excerpts ==='
-          while IFS= read -r f; do
-            [ -f "$f" ] || continue
-            echo "--- $f ---"
-            tail -n 400 "$f" 2>/dev/null | grep -E -i 'feo|fatal|uncaught|company_feo_requests|FeoRequest|500' | tail -n 80 || true
-          done < <(find /home/s/spugovxsim -maxdepth 6 -type f \( -iname '*error*.log' -o -iname 'php*.log' -o -iname '*.error.log' \) -mmin -180 -print 2>/dev/null | head -n 30)
-          echo '=== deployed route excerpt ==='
-          sed -n '1,220p' "$ROOT/app/Http/Routes/company_feo_requests.php" 2>&1 || true
-          REMOTE
-          cat feo_diag.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes /tmp/feo_render_probe.php "$SSH_USER@$SSH_HOST:/tmp/feo_render_probe_${GITHUB_RUN_ID}.php"
+          {
+            echo '=== marker ==='
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt"
+            echo '=== php modules ==='
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 -m | grep -Ei 'zip|simplexml|xml|pdo|mysql|mbstring'"
+            echo '=== render probe ==='
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 '/tmp/feo_render_probe_${GITHUB_RUN_ID}.php'" || true
+          } | tee feo_diag.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/feo_render_probe_${GITHUB_RUN_ID}.php'" || true
       - name: Upload diagnostic
         uses: actions/upload-artifact@v4
         with:
@@ -73,7 +104,7 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         run: |
           state=success; [ "$JOB_STATUS" = success ] || state=failure
-          desc='FEO runtime diagnostic captured'
+          desc='FEO production render probe captured'
           curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
             "$API_URL/repos/$REPOSITORY/statuses/$SHA" \
             -d "{\"state\":\"$state\",\"context\":\"feo/runtime-diagnostic\",\"description\":\"$desc\",\"target_url\":\"https://github.com/$REPOSITORY/actions/runs/$RUN_ID\"}" >/dev/null
