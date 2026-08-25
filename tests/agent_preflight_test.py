@@ -151,4 +151,15 @@ assert "active_registry_coverage_checker_test.py" in source
 assert '"--head"' in source
 assert '"tools/active_registry_coverage_check.py","docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json"' in source
 
+# PREFLIGHT_COVERAGE_DEFECT regression: deploy policy must track centralized CI classifier and current lifecycle.
+policy = (ROOT / ".github/workflows/erpv2_agent_deploy_policy.yml").read_text(encoding="utf-8")
+assert "python3 tools/ci_scope.py" in policy
+assert '--github-output "$GITHUB_OUTPUT"' in policy
+assert "Control-plane preflight regression contracts" in policy
+assert "START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS|LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT" in policy
+assert "Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate" in policy
+assert "LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES" in policy
+assert "PREFLIGHT_COVERAGE_DEFECT" in policy
+assert "missing incremental CI safeguard: git diff --name-only --diff-filter=ACMR HEAD^1 HEAD" not in policy
+
 print("agent_preflight_test: PASS")
