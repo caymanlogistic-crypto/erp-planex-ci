@@ -1,0 +1,133 @@
+name: FEO Search Table Fix Temporary
+
+on:
+  push:
+    branches:
+      - chatgpt/feo-search-table-fix-20260825
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Apply exact FEO UI corrections
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          view = Path('app/View/pages/company_feo_requests.php')
+          text = view.read_text(encoding='utf-8')
+
+          def replace_once(old, new, label):
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 occurrence, found {count}')
+              text = text.replace(old, new, 1)
+
+          replace_once(
+              '.feo-search-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:7px 8px;border-bottom:1px solid var(--line-soft);background:var(--surface-form)}\n.feo-search-group{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:6px;min-width:0}\n.feo-search-group .toolbar-sort-label{white-space:nowrap}\n.feo-search-group .toolbar-search{width:100%;min-width:0}\n',
+              '.feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0}\n.feo-search-input{width:220px;min-width:180px}\n.feo-search-input--content{width:300px;min-width:220px}\n',
+              'search toolbar css'
+          )
+
+          replace_once(
+              '.feo-table-scroll{overflow-y:auto!important;overflow-x:hidden!important;min-width:0;max-width:100%;scrollbar-gutter:stable}',
+              '.feo-table-scroll{overflow-y:auto!important;overflow-x:hidden!important;min-width:0;max-width:100%;min-height:360px;scrollbar-gutter:stable}',
+              'table scroll css'
+          )
+
+          replace_once(
+              '@media(max-width:1180px){.feo-search-toolbar{grid-template-columns:1fr}.feo-filter-info{max-width:55vw}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}',
+              '@media(max-width:1180px){.feo-search-toolbar{flex-wrap:wrap}.feo-search-input,.feo-search-input--content{width:210px;min-width:180px}.feo-filter-info{max-width:55vw}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}',
+              'responsive toolbar css'
+          )
+
+          old_toolbar = '''    <div class="feo-search-toolbar">
+        <div class="feo-search-group">
+            <span class="toolbar-sort-label">Фильтр по заявкам:</span>
+            <input type="text" class="toolbar-search" data-feo-id-filter placeholder="Номера через пробел, запятую или ;" autocomplete="off">
+            <button type="button" class="btn btn-secondary btn--toolbar" data-feo-id-search>Найти</button>
+            <button type="button" class="btn btn-ghost btn--toolbar" data-feo-id-clear>Очистить</button>
+        </div>
+        <div class="feo-search-group">
+            <span class="toolbar-sort-label">Поиск по содержимому:</span>
+            <input type="text" class="toolbar-search" data-feo-content-filter placeholder="Регион, МО, отправитель, адрес, заказчик, ИНН…" autocomplete="off">
+            <button type="button" class="btn btn-secondary btn--toolbar" data-feo-content-search>Найти</button>
+            <button type="button" class="btn btn-ghost btn--toolbar" data-feo-content-clear>Очистить</button>
+        </div>
+    </div>
+    <div class="table-toolbar feo-result-toolbar">
+        <div class="found-label">Найдено: <b data-feo-total>0</b> заявок</div>
+        <div class="toolbar-right"><div class="feo-filter-info" data-feo-filter-info>Загрузка данных…</div></div>
+    </div>'''
+          new_toolbar = '''    <div class="table-toolbar feo-result-toolbar">
+        <div class="found-label">Найдено: <b data-feo-total>0</b> заявок <span class="feo-filter-info" data-feo-filter-info>· Загрузка данных…</span></div>
+        <div class="toolbar-right feo-search-toolbar">
+            <input type="text" class="toolbar-search feo-search-input" data-feo-id-filter placeholder="ID заявок: через пробел, запятую или ;" autocomplete="off">
+            <input type="text" class="toolbar-search feo-search-input feo-search-input--content" data-feo-content-filter placeholder="Поиск по таблице" autocomplete="off">
+        </div>
+    </div>'''
+          replace_once(old_toolbar, new_toolbar, 'invoice-style toolbar markup')
+
+          replace_once(
+              "    function resizeScroll(){var top=scroll.getBoundingClientRect().top;scroll.style.maxHeight=Math.max(240,window.innerHeight-top-8)+'px';}",
+              "    function resizeScroll(){var top=scroll.getBoundingClientRect().top,height=Math.max(360,window.innerHeight-top-8);scroll.style.height=height+'px';scroll.style.maxHeight=height+'px';}",
+              'scroll height function'
+          )
+
+          old_events = "    grid.querySelector('[data-feo-id-search]').addEventListener('click',resetLoad);grid.querySelector('[data-feo-content-search]').addEventListener('click',resetLoad);\n    grid.querySelector('[data-feo-id-clear]').addEventListener('click',function(){idInput.value='';resetLoad();});grid.querySelector('[data-feo-content-clear]').addEventListener('click',function(){textInput.value='';resetLoad();});\n    [idInput,textInput].forEach(function(input){input.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();resetLoad();}});});"
+          new_events = "    var filterTimer=0;\n    function scheduleFilter(){clearTimeout(filterTimer);filterTimer=window.setTimeout(function(){resetLoad();},280);}\n    [idInput,textInput].forEach(function(input){\n      input.addEventListener('input',scheduleFilter);\n      input.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();clearTimeout(filterTimer);resetLoad();}});\n    });"
+          replace_once(old_events, new_events, 'automatic filter events')
+
+          view.write_text(text, encoding='utf-8')
+
+          test = Path('tests/feo_requests_contract_test.php')
+          t = test.read_text(encoding='utf-8')
+          old_needles = "foreach (['Фильтр по заявкам:','Поиск по содержимому:','Не найдены заявки:','IntersectionObserver','data-feo-sentinel','Вернуть','История загрузок ФЭО','Требуется актуальная загрузка ФЭО'] as $needle) {"
+          new_needles = "foreach (['ID заявок: через пробел, запятую или ;','Поиск по таблице','Не найдены заявки:','IntersectionObserver','data-feo-sentinel','Вернуть','История загрузок ФЭО','Требуется актуальная загрузка ФЭО'] as $needle) {"
+          if t.count(old_needles) != 1:
+              raise SystemExit('test needles block mismatch')
+          t = t.replace(old_needles, new_needles, 1)
+
+          anchor = "$ok('search calls server endpoint', str_contains($view, \"app_url('/company/feo/requests/data')\"));\n"
+          addition = """$ok('FEO search uses invoices toolbar pattern', str_contains($view, 'table-toolbar feo-result-toolbar') && str_contains($view, 'toolbar-right feo-search-toolbar') && substr_count($view, 'toolbar-search feo-search-input') >= 2);
+$ok('search action buttons removed', !str_contains($view, 'data-feo-id-search') && !str_contains($view, 'data-feo-content-search') && !str_contains($view, 'data-feo-id-clear') && !str_contains($view, 'data-feo-content-clear'));
+$ok('filters auto-apply on input with debounce', str_contains($view, "input.addEventListener('input',scheduleFilter)") && str_contains($view, 'setTimeout(function(){resetLoad();},280)'));
+$ok('table scroll gets stable viewport height', str_contains($view, 'min-height:360px') && str_contains($view, "scroll.style.height=height+'px'"));
+"""
+          if t.count(anchor) != 1:
+              raise SystemExit('test anchor mismatch')
+          t = t.replace(anchor, anchor + addition, 1)
+          test.write_text(t, encoding='utf-8')
+
+          Path('.github/workflows/feo_search_table_fix_tmp.yml').unlink()
+          PY
+
+      - name: Validate FEO UI fix
+        run: |
+          set -euo pipefail
+          php -l app/View/pages/company_feo_requests.php
+          php tests/feo_requests_contract_test.php
+          git diff --check
+          test ! -e .github/workflows/feo_search_table_fix_tmp.yml
+          ! grep -q 'data-feo-id-search' app/View/pages/company_feo_requests.php
+          ! grep -q 'data-feo-content-search' app/View/pages/company_feo_requests.php
+          ! grep -q '>Очистить<' app/View/pages/company_feo_requests.php
+
+      - name: Commit exact UI fix
+        run: |
+          set -euo pipefail
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add app/View/pages/company_feo_requests.php tests/feo_requests_contract_test.php .github/workflows/feo_search_table_fix_tmp.yml
+          git commit -m 'STANDARD: align FEO filters with invoices and fix table height'
+          git push origin HEAD:chatgpt/feo-search-table-fix-20260825
