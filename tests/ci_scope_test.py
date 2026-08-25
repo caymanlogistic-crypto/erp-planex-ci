@@ -15,21 +15,29 @@ def yes(path, scope):
     assert m.classify([path])[scope], (path, scope)
 
 
-# 1-6 basic owning scopes.
+# Basic owning scopes.
 yes("app/View/pages/company_test.php", "php")
 yes("app/Service/Finance/Foo.php", "finance")
+yes("app/Service/BankFinanceService.php", "finance")
+yes("app/Service/AccessControlService.php", "security")
 yes("app/Service/Linear/Foo.php", "linear")
 yes("database/migrations-local/099_test.sql", "migrations")
 yes("database/migrations-local/099_test.sql", "tenant_schema")
 yes(".github/workflows/foo.yml", "control_plane")
 
-# Memory + new preflight tooling scope.
+# Memory + preflight tooling scope.
 yes("docs/memory/critical_records.json", "memory")
 yes("tools/agent_preflight.py", "control_plane")
 yes("tests/agent_preflight_test.py", "control_plane")
 
-# Fail-closed known critical families.
+# Fail-closed known CRITICAL families.
 for path in [
+    "app/Service/FinanceMatchingRuleService.php",
+    "app/Service/BankFinanceService.php",
+    "app/Service/BankStatementXlsxParser.php",
+    "app/Service/AccessControlService.php",
+    "app/Http/Controllers/Superadmin/CompaniesController.php",
+    "app/Service/CompanyDeletionService.php",
     "database/migrations-local/100_x.sql",
     ".github/workflows/ci.yml",
     "tools/database/generate_schema_docs.php",
@@ -42,8 +50,20 @@ for path in [
 ]:
     assert m.critical_path([path]), path
 
-# Memory governance is a first-class CRITICAL family: STANDARD must escalate before push.
-assert "memory" in m.CRITICAL_PATH_SCOPES
+# A normal non-finance/non-security service is not escalated by path alone.
+assert not m.critical_path(["app/Service/ClientService.php"])
+
+# Critical families are centralized as scopes so future members inherit fail-closed escalation.
+assert set(m.CRITICAL_PATH_SCOPES) == {
+    "finance",
+    "security",
+    "migrations",
+    "tenant_schema",
+    "memory",
+    "control_plane",
+}
+
+# Memory governance is a first-class CRITICAL family.
 for path in [
     "docs/memory/machine_ownership.json",
     "tools/active_registry_coverage_check.py",
@@ -52,12 +72,13 @@ for path in [
     assert m.classify([path])["memory"], path
     assert m.critical_path([path]), path
 
-# Exact preserved legacy classifier families + additive memory/control_plane.
+# Exact preserved legacy classifier families + additive security/memory/control_plane.
 expected = {
     "php",
     "js",
     "python",
     "finance",
+    "security",
     "linear",
     "migrations",
     "migration_normalization",
@@ -68,7 +89,7 @@ expected = {
 }
 assert set(m.SCOPE_PATTERNS) == expected
 
-# Critical regression: ci.yml must remain tenant_schema. Never weaken this to avoid local capability limits.
+# Critical regression: ci.yml must remain tenant_schema.
 assert m.classify([".github/workflows/ci.yml"])["tenant_schema"] is True
 
 # Deterministic same input -> same result.
