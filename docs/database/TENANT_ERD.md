@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `d1408321e1a8d77ce73f1bb71cb1313ca5d6475371b11c9f2a002130e37ae4f8`
+**Schema fingerprint:** `39969bcca02b28ec05795796dceb7b5aee80b59ed98d0192a166deeaa653bee1`
 
 ## Architecture overview
 
@@ -14,6 +14,7 @@ flowchart LR
   Tenant --> D687c8286["Documents"]
   Tenant --> D1b48d3f0["Finance"]
   Tenant --> D7d97bde8["Operations / Routes"]
+  Tenant --> Dd954359a["Other tenant domain"]
   Tenant --> D81d60e9a["System / Migration metadata"]
   Tenant --> Dc10d76c9["Transport"]
 ```
@@ -114,6 +115,16 @@ erDiagram
 ```
 
 Tables: `cargo_types`, `linear_route_financial_terms`, `linear_route_payments`, `linear_route_points`, `linear_route_principals`, `linear_route_service_payments`, `linear_route_services`, `linear_routes`, `production_calendar_days`, `production_calendar_years`
+
+## Other tenant domain
+
+```mermaid
+erDiagram
+  T_feo_imports ||--o{ T_feo_import_changes : "fk_feo_import_changes_import"
+  T_feo_imports ||--o{ T_feo_requests : "fk_feo_requests_current_import"
+```
+
+Tables: `feo_import_changes`, `feo_imports`, `feo_requests`
 
 ## System / Migration metadata
 

@@ -4,7 +4,7 @@
 
 **Physical source of truth:** `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `d1408321e1a8d77ce73f1bb71cb1313ca5d6475371b11c9f2a002130e37ae4f8`
+**Schema fingerprint:** `39969bcca02b28ec05795796dceb7b5aee80b59ed98d0192a166deeaa653bee1`
 
 Foreign keys below are **DB-enforced physical relations only**. Logical/application relations are intentionally not inferred: if the database has no FK, this catalog will not invent one. Use owning application code/Notion semantic records for logical relations.
 
@@ -17,6 +17,7 @@ Introducing migration is not inferred from final `information_schema`, because l
 - **Documents**: `document_types`, `documents`
 - **Finance**: `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`, `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_closing_document_manual_statuses`, `finance_closing_document_requirement_exceptions`, `finance_dds_categories`, `finance_employee_invoice_payments`, `finance_employee_money_accounts`, `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`, `finance_invoices`, `finance_matching_results`, `finance_matching_rules`, `finance_money_accounts`, `finance_obligations`, `finance_operation_allocations`, `finance_operations`
 - **Operations / Routes**: `cargo_types`, `linear_route_financial_terms`, `linear_route_payments`, `linear_route_points`, `linear_route_principals`, `linear_route_service_payments`, `linear_route_services`, `linear_routes`, `production_calendar_days`, `production_calendar_years`
+- **Other tenant domain**: `feo_import_changes`, `feo_imports`, `feo_requests`
 - **System / Migration metadata**: `schema_migrations`
 - **Transport**: `crew_drivers`, `crews`, `driver_phones`, `driver_vehicle_blocks`, `drivers`, `vehicle_sets`, `vehicle_units`
 
@@ -34,5 +35,6 @@ Each linked file below is generated from the same disposable-MySQL `information_
 - [Finance — part 5](TENANT_SCHEMA_FINANCE_05.md): `finance_operation_allocations`, `finance_operations`
 - [Operations / Routes — part 1](TENANT_SCHEMA_OPERATIONS_ROUTES_01.md): `cargo_types`, `linear_route_financial_terms`, `linear_route_payments`, `linear_route_points`, `linear_route_principals`, `linear_route_service_payments`
 - [Operations / Routes — part 2](TENANT_SCHEMA_OPERATIONS_ROUTES_02.md): `linear_route_services`, `linear_routes`, `production_calendar_days`, `production_calendar_years`
+- [Other tenant domain](TENANT_SCHEMA_OTHER_TENANT_DOMAIN.md): `feo_import_changes`, `feo_imports`, `feo_requests`
 - [System / Migration metadata](TENANT_SCHEMA_SYSTEM_MIGRATION_METADATA.md): `schema_migrations`
 - [Transport](TENANT_SCHEMA_TRANSPORT.md): `crew_drivers`, `crews`, `driver_phones`, `driver_vehicle_blocks`, `drivers`, `vehicle_sets`, `vehicle_units`
