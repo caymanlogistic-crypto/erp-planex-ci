@@ -1,86 +1,107 @@
 <?php
-$rows = $listing['rows'] ?? [];
-$total = (int)($listing['total'] ?? 0);
-$currentPage = (int)($listing['page'] ?? 1);
-$pages = (int)($listing['pages'] ?? 1);
-$fmtDate = static function ($value): string {
-    if (!$value) return '—';
-    $ts = strtotime((string)$value);
-    return $ts === false ? e((string)$value) : date('d.m.Y', $ts);
-};
+$roleCode = (string)($_SESSION['role_code'] ?? '');
+$canManageHistory = in_array($roleCode, ['company_owner','senior_logist'], true);
 $fmtDateTime = static function ($value): string {
     if (!$value) return '—';
     $ts = strtotime((string)$value);
     return $ts === false ? e((string)$value) : date('d.m.Y H:i', $ts);
 };
-$fmtMass = static function ($value): string {
-    if ($value === null || $value === '') return '—';
-    return rtrim(rtrim(number_format((float)$value, 4, ',', ' '), '0'), ',');
-};
-$pageUrl = static function (int $page) use ($search): string {
-    $query = ['page'=>$page];
-    if ($search !== '') $query['q'] = $search;
-    return app_url('/company/feo/requests') . '?' . http_build_query($query);
-};
 ?>
 <style>
-.feo-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:14px}.feo-actions{display:flex;gap:8px;flex-wrap:wrap}.feo-toolbar{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:10px 12px;border-bottom:1px solid var(--border,#e5e7eb)}.feo-search{display:flex;gap:8px;align-items:center;min-width:360px}.feo-search .input{min-width:300px}.feo-summary{font-size:13px;color:var(--muted,#6b7280)}.feo-table{table-layout:fixed;width:100%}.feo-table th,.feo-table td{vertical-align:top}.feo-table th:nth-child(1){width:8%}.feo-table th:nth-child(2){width:9%}.feo-table th:nth-child(3){width:15%}.feo-table th:nth-child(4){width:14%}.feo-table th:nth-child(5){width:9%}.feo-table th:nth-child(6){width:18%}.feo-table th:nth-child(7){width:11%}.feo-table th:nth-child(8){width:7%}.feo-table th:nth-child(9){width:9%}.feo-clip{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.feo-row{cursor:pointer}.feo-row:hover{background:var(--accent-soft,#f0fdfa)}.feo-pagination{display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-top:1px solid var(--border,#e5e7eb)}.feo-pages{display:flex;gap:6px}.feo-import-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px}.feo-stat{border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:10px}.feo-stat b{display:block;font-size:20px}.feo-stat span{font-size:12px;color:var(--muted,#6b7280)}.feo-history-table th,.feo-history-table td{white-space:nowrap}.feo-history-table .file{max-width:260px;white-space:normal}.feo-history-actions{display:flex;align-items:center;gap:6px}.feo-detail-grid{display:grid;grid-template-columns:minmax(200px,38%) 1fr;gap:0;border:1px solid var(--border,#e5e7eb);border-radius:8px;overflow:hidden}.feo-detail-label,.feo-detail-value{padding:8px 10px;border-bottom:1px solid var(--border,#e5e7eb)}.feo-detail-label{font-size:12px;font-weight:600;background:#f8fafc}.feo-detail-value{font-size:13px;word-break:break-word}.feo-detail-grid>:nth-last-child(-n+2){border-bottom:0}.feo-import-note{font-size:12px;color:var(--muted,#6b7280);margin-top:6px}.feo-error{color:#b91c1c;margin-top:10px}.feo-success{color:#166534;margin-top:10px}.feo-duplicate{padding:10px;border-radius:8px;background:#fff7ed;color:#9a3412;margin-top:10px}.is-hidden{display:none!important}@media(max-width:1100px){.feo-search{min-width:0}.feo-search .input{min-width:220px}.feo-table th:nth-child(4),.feo-table td:nth-child(4),.feo-table th:nth-child(7),.feo-table td:nth-child(7){display:none}}
+/* FEO is a dense operational workspace: use the available canvas, not decorative margins. */
+.content.content--wide-workspace{padding-left:0!important;padding-right:0!important;padding-bottom:0!important}
+.content--wide-workspace .workspace-shell-1690{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}
+.feo-page-head{padding:0 8px;margin-bottom:8px}
+.feo-table-card{border-left:0;border-right:0;border-radius:0;margin:0;min-width:0}
+.feo-search-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:7px 8px;border-bottom:1px solid var(--line-soft);background:var(--surface-form)}
+.feo-search-group{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:6px;min-width:0}
+.feo-search-group .toolbar-sort-label{white-space:nowrap}
+.feo-search-group .toolbar-search{width:100%;min-width:0}
+.feo-result-toolbar{min-height:30px;padding:4px 8px}
+.feo-result-toolbar .toolbar-right{min-width:0;overflow:hidden}
+.feo-filter-info{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
+.feo-filter-info.is-problem{color:var(--danger);font-weight:600}
+.feo-search-message{margin:0;border-left:0;border-right:0;border-top:0;border-radius:0}
+.feo-table-scroll{overflow-y:auto!important;overflow-x:hidden!important;min-width:0;max-width:100%;scrollbar-gutter:stable}
+.feo-table{width:100%;max-width:100%;min-width:0!important;table-layout:fixed}
+.feo-table col:nth-child(1){width:8%}.feo-table col:nth-child(2){width:8%}.feo-table col:nth-child(3){width:14%}.feo-table col:nth-child(4){width:14%}.feo-table col:nth-child(5){width:24%}.feo-table col:nth-child(6){width:32%}
+.feo-table th,.feo-table td{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.feo-table tbody tr[data-feo-id]{cursor:pointer}
+.feo-table tbody tr[data-feo-id]:hover{background:var(--accent-bg)}
+.feo-load-sentinel{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px;color:var(--text-muted);font-size:11px;border-top:1px solid var(--line-hair)}
+.feo-load-sentinel[hidden]{display:none}
+.feo-freshness{margin:0 8px 8px}
+.feo-history-modal .modal-body{padding:0!important;overflow:hidden}
+.feo-history-scroll{max-height:56vh;overflow-y:auto;overflow-x:hidden}
+.feo-history-table{width:100%;table-layout:fixed;margin:0}
+.feo-history-table th,.feo-history-table td{white-space:normal;overflow-wrap:anywhere;vertical-align:middle}
+.feo-history-table th:nth-child(1){width:14%}.feo-history-table th:nth-child(2){width:25%}.feo-history-table th:nth-child(3){width:8%}.feo-history-table th:nth-child(4){width:8%}.feo-history-table th:nth-child(5){width:9%}.feo-history-table th:nth-child(6){width:8%}.feo-history-table th:nth-child(7){width:10%}.feo-history-table th:nth-child(8){width:18%}
+.feo-history-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.feo-history-note{padding:8px 10px;border-top:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
+.feo-import-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px}
+.feo-stat{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px}.feo-stat b{display:block;font-size:18px}.feo-stat span{font-size:11px;color:var(--text-muted)}
+.feo-import-error{margin-top:10px}.feo-duplicate{margin-top:10px}.feo-detail-grid{display:grid;grid-template-columns:minmax(220px,38%) 1fr;border:1px solid var(--line-soft)}
+.feo-detail-label,.feo-detail-value{padding:7px 9px;border-bottom:1px solid var(--line-hair)}.feo-detail-label{background:var(--surface-form);font-size:11px;font-weight:700}.feo-detail-value{font-size:12px;overflow-wrap:anywhere;word-break:break-word}
+.feo-detail-grid>:nth-last-child(-n+2){border-bottom:0}
+.feo-confirm-copy{display:grid;gap:8px}.feo-confirm-warning{padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
+@media(max-width:1180px){.feo-search-toolbar{grid-template-columns:1fr}.feo-filter-info{max-width:55vw}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
 </style>
 
-<div class="feo-head">
-    <div>
+<?php if (!empty($successFlash)): ?><div class="notice success feo-freshness"><?= e((string)$successFlash) ?></div><?php endif; ?>
+<?php if (!empty($errorFlash)): ?><div class="notice warn feo-freshness"><?= e((string)$errorFlash) ?></div><?php endif; ?>
+<?php if (!empty($dbError)): ?><div class="notice warn feo-freshness"><?= e((string)$dbError) ?></div><?php endif; ?>
+
+<div class="page-head feo-page-head">
+    <div class="page-head-left">
         <h1 class="page-title">Все заявки ФЭО</h1>
-        <div class="page-summary"><span>Tenant-реестр заявок ФЭО. Данные хранятся только в базе текущей компании.</span></div>
+        <div class="page-summary"><span>Реестр заявок ФЭО текущей компании. Двойной клик по строке открывает все поля заявки.</span></div>
     </div>
-    <div class="feo-actions">
-        <button type="button" class="btn btn-secondary" onclick="window.openModal && window.openModal('feo-history-modal')">История загрузок</button>
-        <button type="button" class="btn btn-primary" onclick="window.openModal && window.openModal('feo-import-modal')">Загрузить XLSX</button>
+    <div class="page-head-actions">
+        <button type="button" class="btn btn-secondary" data-open-feo-history>История загрузок</button>
+        <button type="button" class="btn btn-primary" data-open-feo-import>Загрузить XLSX</button>
     </div>
 </div>
 
-<?php if ($dbError !== null): ?>
-<div class="notice warn"><?= e($dbError) ?></div>
-<?php else: ?>
-<div class="table-card table-card--standard">
-    <div class="feo-toolbar">
-        <div class="feo-summary">Заявок: <b><?= $total ?></b><?php if ($search !== ''): ?> · поиск «<?= e($search) ?>»<?php endif; ?></div>
-        <form method="get" action="<?= app_url('/company/feo/requests') ?>" class="feo-search">
-            <input class="input" type="search" name="q" value="<?= e($search) ?>" placeholder="ID, заказчик, организация, регион, адрес, ИНН">
-            <button class="btn btn-secondary" type="submit">Найти</button>
-            <?php if ($search !== ''): ?><a class="btn btn-ghost" href="<?= app_url('/company/feo/requests') ?>">Сброс</a><?php endif; ?>
-        </form>
-    </div>
-    <?php if ($rows): ?>
-    <table class="table feo-table">
-        <thead><tr>
-            <th>Заявка</th><th>Дата</th><th>Заказчик</th><th>Грузоотправитель</th><th>Регион</th><th>Адрес погрузки</th><th>Отход</th><th>Брутто, т</th><th>ЖДВ</th>
-        </tr></thead>
-        <tbody>
-        <?php foreach ($rows as $row): ?>
-            <tr class="feo-row" data-feo-id="<?= (int)$row['id'] ?>" title="Двойной клик — открыть все поля заявки">
-                <td class="col-mono"><b><?= e((string)$row['zayavka_id']) ?></b></td>
-                <td class="col-mono"><?= $fmtDate($row['data_zayavki'] ?? null) ?></td>
-                <td><span class="feo-clip" title="<?= e((string)($row['polnoe_naim_zakazchika'] ?? '')) ?>"><?= e((string)($row['polnoe_naim_zakazchika'] ?: '—')) ?></span></td>
-                <td><span class="feo-clip" title="<?= e((string)($row['naim_oo_gruzootpravitel'] ?? '')) ?>"><?= e((string)($row['naim_oo_gruzootpravitel'] ?: '—')) ?></span></td>
-                <td><span class="feo-clip"><?= e((string)($row['mno_region'] ?: '—')) ?></span></td>
-                <td><span class="feo-clip" title="<?= e((string)($row['mno_adres_pogruzki'] ?? '')) ?>"><?= e((string)($row['mno_adres_pogruzki'] ?: '—')) ?></span></td>
-                <td><span class="feo-clip" title="<?= e((string)($row['naim_otkhoda_fkko'] ?? '')) ?>"><?= e((string)($row['naim_otkhoda_fkko'] ?: '—')) ?></span></td>
-                <td class="col-mono"><?= $fmtMass($row['mass_brutto'] ?? null) ?></td>
-                <td class="col-mono"><?= $fmtDate($row['zayavka_zhdv_po'] ?? null) ?></td>
-            </tr>
-        <?php endforeach; ?>
-        </tbody>
-    </table>
-    <div class="feo-pagination">
-        <span class="feo-summary">Страница <?= $currentPage ?> из <?= $pages ?></span>
-        <div class="feo-pages">
-            <?php if ($currentPage > 1): ?><a class="btn btn-ghost btn-toolbar" href="<?= e($pageUrl($currentPage - 1)) ?>">Назад</a><?php endif; ?>
-            <?php if ($currentPage < $pages): ?><a class="btn btn-ghost btn-toolbar" href="<?= e($pageUrl($currentPage + 1)) ?>">Вперёд</a><?php endif; ?>
+<?php if (empty($dbError) && !empty($freshness['is_problem'])): ?>
+<div class="notice warn feo-freshness" data-feo-freshness-warning>
+    <b>Требуется актуальная загрузка ФЭО.</b>
+    <?php if (empty($freshness['has_active_import'])): ?>
+        Актуальный файл заявок ещё не загружен. Необходимо загрузить XLSX.
+    <?php else: ?>
+        Последняя активная загрузка была более 7 дней назад: <?= e($fmtDateTime($freshness['latest_at'] ?? null)) ?> · <?= e((string)($freshness['latest_filename'] ?? '')) ?>. Необходимо загрузить актуальный файл.
+    <?php endif; ?>
+</div>
+<?php endif; ?>
+
+<?php if (empty($dbError)): ?>
+<div class="table-card table-card--standard feo-table-card" data-feo-grid>
+    <div class="feo-search-toolbar">
+        <div class="feo-search-group">
+            <span class="toolbar-sort-label">Фильтр по заявкам:</span>
+            <input type="text" class="toolbar-search" data-feo-id-filter placeholder="Номера через пробел, запятую или ;" autocomplete="off">
+            <button type="button" class="btn btn-secondary btn--toolbar" data-feo-id-search>Найти</button>
+            <button type="button" class="btn btn-ghost btn--toolbar" data-feo-id-clear>Очистить</button>
+        </div>
+        <div class="feo-search-group">
+            <span class="toolbar-sort-label">Поиск по содержимому:</span>
+            <input type="text" class="toolbar-search" data-feo-content-filter placeholder="Регион, МО, отправитель, адрес, заказчик, ИНН…" autocomplete="off">
+            <button type="button" class="btn btn-secondary btn--toolbar" data-feo-content-search>Найти</button>
+            <button type="button" class="btn btn-ghost btn--toolbar" data-feo-content-clear>Очистить</button>
         </div>
     </div>
-    <?php else: ?>
-    <div class="empty-state compact"><p><?= $search !== '' ? 'По вашему запросу заявок не найдено.' : 'Заявки ФЭО ещё не загружены.' ?></p></div>
-    <?php endif; ?>
+    <div class="table-toolbar feo-result-toolbar">
+        <div class="found-label">Найдено: <b data-feo-total>0</b> заявок</div>
+        <div class="toolbar-right"><div class="feo-filter-info" data-feo-filter-info>Загрузка данных…</div></div>
+    </div>
+    <div class="notice warn feo-search-message is-hidden" data-feo-search-message></div>
+    <div class="feo-table-scroll" data-feo-scroll>
+        <table class="table feo-table">
+            <colgroup><col><col><col><col><col><col></colgroup>
+            <thead><tr><th>ID заявки</th><th>Масса, кг</th><th>МНО, Регион</th><th>МНО, МО</th><th>Грузоотправитель</th><th>Адрес погрузки</th></tr></thead>
+            <tbody data-feo-body></tbody>
+        </table>
+        <div class="feo-load-sentinel" data-feo-sentinel>Загрузка заявок…</div>
+    </div>
 </div>
 <?php endif; ?>
 
@@ -90,10 +111,10 @@ $pageUrl = static function (int $page) use ($search): string {
         <div class="modal-body">
             <form id="feo-analyze-form" action="<?= app_url('/company/feo/requests/import/analyze') ?>" method="post" enctype="multipart/form-data">
                 <?= csrfField() ?>
-                <div class="field"><label class="field-label">Файл XLSX</label><input class="input" type="file" name="feo_xlsx" accept=".xlsx" required><div class="feo-import-note">Сначала ERP анализирует файл и показывает разницу. Данные изменятся только после подтверждения.</div></div>
+                <div class="field"><label class="field-label">Файл XLSX</label><input class="field-input" type="file" name="feo_xlsx" accept=".xlsx" required><div class="field-note">ERP принимает только точную структуру ФЭО: техническая колонка «ПП» и 44 согласованных поля.</div></div>
                 <div class="mt-section"><button class="btn btn-secondary" type="submit" id="feo-analyze-btn">Анализировать</button></div>
             </form>
-            <div id="feo-analysis-error" class="feo-error is-hidden"></div>
+            <div id="feo-analysis-error" class="notice warn feo-import-error is-hidden"></div>
             <div id="feo-analysis-result" class="is-hidden">
                 <div class="feo-import-stats">
                     <div class="feo-stat"><b data-stat="unique_requests">0</b><span>в файле</span></div>
@@ -102,98 +123,134 @@ $pageUrl = static function (int $page) use ($search): string {
                     <div class="feo-stat"><b data-stat="unchanged_count">0</b><span>без изменений</span></div>
                     <div class="feo-stat"><b data-stat="missing_count">0</b><span>пропало из файла</span></div>
                 </div>
-                <div id="feo-duplicate-warning" class="feo-duplicate is-hidden">Этот файл уже применён. Повторный импорт заблокирован, пока предыдущая загрузка не откатана.</div>
+                <div id="feo-duplicate-warning" class="notice warn feo-duplicate is-hidden">Этот файл уже применён. Повторный импорт заблокирован, пока предыдущая загрузка не откатана.</div>
             </div>
         </div>
-        <div class="modal-foot">
+        <div class="modal-foot is-spaced">
             <button type="button" class="btn btn-ghost" data-close-modal="feo-import-modal">Отмена</button>
             <form method="post" action="<?= app_url('/company/feo/requests/import/commit') ?>" id="feo-commit-form" class="inline-form is-hidden">
-                <?= csrfField() ?><input type="hidden" name="preview_token" id="feo-preview-token"><button type="submit" class="btn btn-primary" id="feo-commit-btn">Применить загрузку</button>
+                <?= csrfField() ?><input type="hidden" name="preview_token" id="feo-preview-token"><button type="submit" class="btn btn-primary">Применить загрузку</button>
             </form>
         </div>
     </div>
 </div>
 
 <div id="feo-history-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
-    <div class="modal modal-lg">
+    <div class="modal modal-lg feo-history-modal">
         <div class="modal-head"><span class="modal-title">История загрузок ФЭО</span><button type="button" class="modal-close" data-close-modal="feo-history-modal">&times;</button></div>
         <div class="modal-body">
-            <?php if ($imports): ?>
-            <div class="table-scroll"><table class="table feo-history-table"><thead><tr><th>Дата</th><th>Файл</th><th>Всего</th><th>Новых</th><th>Обновлено</th><th>Пропало</th><th>Статус</th><th></th></tr></thead><tbody>
-                <?php foreach ($imports as $imp): ?>
+            <?php if (!empty($imports)): ?>
+            <div class="feo-history-scroll"><table class="table feo-history-table"><thead><tr><th>Дата</th><th>Файл</th><th>Всего</th><th>Новых</th><th>Обновлено</th><th>Пропало</th><th>Статус</th><th></th></tr></thead><tbody>
+            <?php foreach ($imports as $imp): ?>
                 <tr>
-                    <td class="col-mono"><?= $fmtDateTime($imp['created_at'] ?? null) ?></td>
-                    <td class="file" title="<?= e((string)$imp['filename']) ?>"><?= e((string)$imp['filename']) ?></td>
-                    <td><?= (int)$imp['unique_requests'] ?></td><td><?= (int)$imp['new_count'] ?></td><td><?= (int)$imp['updated_count'] ?></td><td><?= (int)$imp['missing_count'] ?></td>
+                    <td><?= e($fmtDateTime($imp['created_at'] ?? null)) ?></td>
+                    <td><?= e((string)($imp['filename'] ?? '')) ?></td>
+                    <td><?= (int)($imp['unique_requests'] ?? 0) ?></td><td><?= (int)($imp['new_count'] ?? 0) ?></td><td><?= (int)($imp['updated_count'] ?? 0) ?></td><td><?= (int)($imp['missing_count'] ?? 0) ?></td>
                     <td><?php if (($imp['status'] ?? '') === 'applied'): ?><span class="badge badge-ok"><span class="dot"></span>Применён</span><?php else: ?><span class="badge badge-neutral"><span class="dot"></span>Откатан</span><?php endif; ?></td>
-                    <td>
-                    <?php if (in_array((string)($_SESSION['role_code'] ?? ''), ['company_owner','senior_logist'], true)): ?>
-                        <div class="feo-history-actions">
-                        <?php if (!empty($imp['can_rollback'])): ?>
-                            <form method="post" action="<?= app_url('/company/feo/requests/import/rollback') ?>" onsubmit="return confirm('Откатить последнюю загрузку ФЭО? Новые заявки этой загрузки будут удалены, обновлённые — восстановлены.');">
-                                <?= csrfField() ?><input type="hidden" name="import_id" value="<?= (int)$imp['id'] ?>"><button class="btn btn-secondary btn-toolbar" type="submit">Откатить</button>
-                            </form>
-                        <?php endif; ?>
-                        <?php if (!empty($imp['can_delete'])): ?>
-                            <form method="post" action="<?= app_url('/company/feo/requests/import/delete') ?>" onsubmit="return confirm('Удалить эту загрузку ФЭО полностью? Если она активна, ERP сначала отменит все её изменения в заявках, затем удалит запись загрузки и журнал изменений. Действие необратимо.');">
-                                <?= csrfField() ?><input type="hidden" name="import_id" value="<?= (int)$imp['id'] ?>"><button class="btn btn-danger btn-toolbar" type="submit">Удалить</button>
-                            </form>
-                        <?php endif; ?>
-                        </div>
-                    <?php endif; ?>
-                    </td>
+                    <td><div class="feo-history-actions">
+                    <?php if ($canManageHistory && !empty($imp['can_rollback'])): ?><button type="button" class="btn btn-secondary btn--toolbar" data-feo-history-action="rollback" data-import-id="<?= (int)$imp['id'] ?>">Откатить</button><?php endif; ?>
+                    <?php if ($canManageHistory && !empty($imp['can_restore'])): ?><button type="button" class="btn btn-primary btn--toolbar" data-feo-history-action="restore" data-import-id="<?= (int)$imp['id'] ?>">Вернуть</button><?php endif; ?>
+                    <?php if ($canManageHistory && !empty($imp['can_delete'])): ?><button type="button" class="btn btn-danger btn--toolbar" data-feo-history-action="delete" data-import-id="<?= (int)$imp['id'] ?>">Удалить</button><?php endif; ?>
+                    </div></td>
                 </tr>
-                <?php endforeach; ?>
+            <?php endforeach; ?>
             </tbody></table></div>
             <?php else: ?><div class="empty-state compact"><p>Загрузок пока нет.</p></div><?php endif; ?>
-            <div class="feo-import-note">Откат доступен только для последней активной загрузки. Полное удаление выполняется строго с последней записи истории; если она активна, ERP атомарно откатывает её изменения и затем удаляет историю и журнал.</div>
+            <div class="feo-history-note">Откат и возврат выполняются строго последовательно. Полное удаление доступно только с конца истории и не может нарушить цепочку восстановления.</div>
         </div>
         <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close-modal="feo-history-modal">Закрыть</button></div>
+    </div>
+</div>
+
+<div id="feo-history-confirm-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
+    <div class="modal">
+        <div class="modal-head"><span class="modal-title" data-feo-confirm-title>Подтверждение</span><button type="button" class="modal-close" data-close-modal="feo-history-confirm-modal">&times;</button></div>
+        <div class="modal-body"><div class="feo-confirm-copy"><div data-feo-confirm-message></div><div class="feo-confirm-warning" data-feo-confirm-note></div></div></div>
+        <div class="modal-foot is-spaced">
+            <button type="button" class="btn btn-ghost" data-close-modal="feo-history-confirm-modal">Отмена</button>
+            <form method="post" action="" data-feo-confirm-form class="inline-form"><?= csrfField() ?><input type="hidden" name="import_id" data-feo-confirm-id><button type="submit" class="btn" data-feo-confirm-button>Подтвердить</button></form>
+        </div>
     </div>
 </div>
 
 <div id="feo-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
     <div class="modal modal-lg">
         <div class="modal-head"><span class="modal-title" id="feo-detail-title">Заявка ФЭО</span><button type="button" class="modal-close" data-close-modal="feo-detail-modal">&times;</button></div>
-        <div class="modal-body"><div id="feo-detail-loading">Загрузка…</div><div id="feo-detail-grid" class="feo-detail-grid is-hidden"></div><div id="feo-detail-error" class="feo-error is-hidden"></div></div>
+        <div class="modal-body"><div id="feo-detail-loading">Загрузка…</div><div id="feo-detail-grid" class="feo-detail-grid is-hidden"></div><div id="feo-detail-error" class="notice warn is-hidden"></div></div>
         <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close-modal="feo-detail-modal">Закрыть</button></div>
     </div>
 </div>
 
 <script>
 (function(){
-  var analyzeForm=document.getElementById('feo-analyze-form');
-  if(analyzeForm){
-    analyzeForm.addEventListener('submit',async function(ev){
-      ev.preventDefault();
-      var btn=document.getElementById('feo-analyze-btn'), error=document.getElementById('feo-analysis-error'), result=document.getElementById('feo-analysis-result'), commit=document.getElementById('feo-commit-form'), duplicate=document.getElementById('feo-duplicate-warning');
-      error.classList.add('is-hidden'); result.classList.add('is-hidden'); commit.classList.add('is-hidden'); duplicate.classList.add('is-hidden'); btn.disabled=true; btn.textContent='Анализируем…';
+  var openModalSafe=function(id){if(window.openModal)window.openModal(id);};
+  document.querySelector('[data-open-feo-history]')?.addEventListener('click',function(){openModalSafe('feo-history-modal');});
+  document.querySelector('[data-open-feo-import]')?.addEventListener('click',function(){openModalSafe('feo-import-modal');});
+
+  var grid=document.querySelector('[data-feo-grid]');
+  if(grid){
+    var body=grid.querySelector('[data-feo-body]'), scroll=grid.querySelector('[data-feo-scroll]'), sentinel=grid.querySelector('[data-feo-sentinel]');
+    var idInput=grid.querySelector('[data-feo-id-filter]'), textInput=grid.querySelector('[data-feo-content-filter]');
+    var totalEl=grid.querySelector('[data-feo-total]'), infoEl=grid.querySelector('[data-feo-filter-info]'), msgEl=grid.querySelector('[data-feo-search-message]');
+    var state={offset:0,limit:80,loading:false,hasMore:true,generation:0,controller:null};
+
+    function resizeScroll(){var top=scroll.getBoundingClientRect().top;scroll.style.maxHeight=Math.max(240,window.innerHeight-top-8)+'px';}
+    resizeScroll();window.addEventListener('resize',resizeScroll);
+    function clean(v){return v===null||v===undefined||v===''?'—':String(v);}
+    function td(text,title){var c=document.createElement('td');c.textContent=clean(text);if(title)c.title=String(title);return c;}
+    function addRow(row){
+      var tr=document.createElement('tr');tr.dataset.feoId=String(row.id);tr.title='Двойной клик — открыть все поля заявки';
+      tr.appendChild(td(row.zayavka_id));
+      var kg=row.mass_netto===null||row.mass_netto===''?'—':new Intl.NumberFormat('ru-RU',{maximumFractionDigits:0}).format(Number(row.mass_netto)*1000);tr.appendChild(td(kg));
+      tr.appendChild(td(row.mno_region,row.mno_region));tr.appendChild(td(row.mno_mo,row.mno_mo));tr.appendChild(td(row.naim_oo_gruzootpravitel,row.naim_oo_gruzootpravitel));tr.appendChild(td(row.mno_adres_pogruzki,row.mno_adres_pogruzki));
+      body.appendChild(tr);
+    }
+    function setMessage(text,problem){msgEl.textContent=text||'';msgEl.classList.toggle('is-hidden',!text);msgEl.classList.toggle('warn',!!problem);}
+    function setDiagnostics(data,reset){
+      if(!reset)return;
+      totalEl.textContent=String(data.total||0);
+      var requested=Number(data.requested_count||0), missing=Array.isArray(data.missing_ids)?data.missing_ids:[];
+      if(data.filter_error){infoEl.textContent=data.filter_error;infoEl.classList.add('is-problem');setMessage(data.filter_error,true);return;}
+      infoEl.classList.remove('is-problem');
+      if(requested>0){
+        var found=requested-missing.length;infoEl.textContent='По номерам найдено '+found+' из '+requested+'.';
+        if(missing.length){setMessage('Не найдены заявки: '+missing.join(', ')+'.',true);}else if(Number(data.total||0)===0 && textInput.value.trim()){setMessage('Указанные заявки есть в реестре, но поиск по содержимому не дал совпадений.',true);}else setMessage('',false);
+      }else if(textInput.value.trim() && Number(data.total||0)===0){infoEl.textContent='Поиск по содержимому: 0 результатов.';setMessage('Поиск по содержимому ничего не нашёл. Измените запрос.',true);}
+      else{infoEl.textContent='Всего по текущим условиям: '+String(data.total||0)+'.';setMessage('',false);}
+    }
+    async function load(reset){
+      if(state.loading&&!reset)return;
+      if(reset){state.generation++;state.offset=0;state.hasMore=true;body.innerHTML='';if(state.controller)state.controller.abort();}
+      if(!state.hasMore)return;
+      var generation=state.generation;state.loading=true;sentinel.hidden=false;sentinel.textContent='Загрузка заявок…';state.controller=new AbortController();
+      var p=new URLSearchParams({offset:String(state.offset),limit:String(state.limit),filter_zayavki:idInput.value.trim(),search_text:textInput.value.trim()});
       try{
-        var response=await fetch(analyzeForm.action,{method:'POST',body:new FormData(analyzeForm),credentials:'same-origin'});
-        var data=await response.json();
-        if(!response.ok||!data.success)throw new Error(data.message||'Ошибка анализа файла');
-        Object.keys(data.stats||{}).forEach(function(key){var el=result.querySelector('[data-stat="'+key+'"]');if(el)el.textContent=data.stats[key];});
-        document.getElementById('feo-preview-token').value=data.token||''; result.classList.remove('is-hidden');
-        if(data.stats&&data.stats.duplicate_file){duplicate.classList.remove('is-hidden');commit.classList.add('is-hidden');}else{commit.classList.remove('is-hidden');}
-      }catch(err){error.textContent=err.message||String(err);error.classList.remove('is-hidden');}
-      finally{btn.disabled=false;btn.textContent='Анализировать';}
+        var response=await fetch('<?= app_url('/company/feo/requests/data') ?>?'+p.toString(),{credentials:'same-origin',signal:state.controller.signal});
+        var data=await response.json();if(generation!==state.generation)return;if(!response.ok||!data.success)throw new Error(data.message||'Ошибка загрузки заявок');
+        setDiagnostics(data,reset);(data.rows||[]).forEach(addRow);state.offset+=Array.isArray(data.rows)?data.rows.length:0;state.hasMore=!!data.has_more;
+        if(!state.hasMore){sentinel.textContent=state.offset?'Все найденные заявки загружены':'Заявки не найдены';}
+      }catch(err){if(err.name==='AbortError')return;setMessage(err.message||String(err),true);sentinel.textContent='Не удалось загрузить заявки';state.hasMore=false;}
+      finally{if(generation===state.generation)state.loading=false;}
+    }
+    function resetLoad(){load(true);scroll.scrollTop=0;}
+    grid.querySelector('[data-feo-id-search]').addEventListener('click',resetLoad);grid.querySelector('[data-feo-content-search]').addEventListener('click',resetLoad);
+    grid.querySelector('[data-feo-id-clear]').addEventListener('click',function(){idInput.value='';resetLoad();});grid.querySelector('[data-feo-content-clear]').addEventListener('click',function(){textInput.value='';resetLoad();});
+    [idInput,textInput].forEach(function(input){input.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();resetLoad();}});});
+    var observer=new IntersectionObserver(function(entries){if(entries.some(function(e){return e.isIntersecting;})&&!state.loading&&state.hasMore)load(false);},{root:scroll,rootMargin:'300px 0px'});observer.observe(sentinel);load(true);
+
+    body.addEventListener('dblclick',async function(ev){var row=ev.target.closest('tr[data-feo-id]');if(!row)return;var detailGrid=document.getElementById('feo-detail-grid'),loading=document.getElementById('feo-detail-loading'),error=document.getElementById('feo-detail-error');detailGrid.innerHTML='';detailGrid.classList.add('is-hidden');error.classList.add('is-hidden');loading.classList.remove('is-hidden');openModalSafe('feo-detail-modal');
+      try{var r=await fetch('<?= app_url('/company/feo/requests') ?>/'+encodeURIComponent(row.dataset.feoId)+'/json',{credentials:'same-origin'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Не удалось открыть заявку');document.getElementById('feo-detail-title').textContent='Заявка ФЭО '+(d.zayavka_id||'');(d.fields||[]).forEach(function(item){var l=document.createElement('div'),v=document.createElement('div');l.className='feo-detail-label';v.className='feo-detail-value';l.textContent=item.label||item.field;v.textContent=clean(item.value);detailGrid.appendChild(l);detailGrid.appendChild(v);});detailGrid.classList.remove('is-hidden');}catch(err){error.textContent=err.message||String(err);error.classList.remove('is-hidden');}finally{loading.classList.add('is-hidden');}
     });
   }
 
-  document.querySelectorAll('[data-feo-id]').forEach(function(row){
-    row.addEventListener('dblclick',async function(){
-      var id=this.getAttribute('data-feo-id'), modal='feo-detail-modal', grid=document.getElementById('feo-detail-grid'), loading=document.getElementById('feo-detail-loading'), error=document.getElementById('feo-detail-error');
-      grid.innerHTML='';grid.classList.add('is-hidden');error.classList.add('is-hidden');loading.classList.remove('is-hidden');if(window.openModal)window.openModal(modal);
-      try{
-        var url='<?= app_url('/company/feo/requests') ?>/'+encodeURIComponent(id)+'/json';
-        var response=await fetch(url,{credentials:'same-origin'}), data=await response.json();
-        if(!response.ok||!data.success)throw new Error(data.message||'Не удалось открыть заявку');
-        document.getElementById('feo-detail-title').textContent='Заявка ФЭО '+(data.zayavka_id||'');
-        (data.fields||[]).forEach(function(item){var l=document.createElement('div'),v=document.createElement('div');l.className='feo-detail-label';v.className='feo-detail-value';l.textContent=item.label||item.field;v.textContent=(item.value===null||item.value==='')?'—':item.value;grid.appendChild(l);grid.appendChild(v);});
-        grid.classList.remove('is-hidden');
-      }catch(err){error.textContent=err.message||String(err);error.classList.remove('is-hidden');}
-      finally{loading.classList.add('is-hidden');}
-    });
-  });
+  var analyzeForm=document.getElementById('feo-analyze-form');
+  if(analyzeForm){analyzeForm.addEventListener('submit',async function(ev){ev.preventDefault();var btn=document.getElementById('feo-analyze-btn'),error=document.getElementById('feo-analysis-error'),result=document.getElementById('feo-analysis-result'),commit=document.getElementById('feo-commit-form'),duplicate=document.getElementById('feo-duplicate-warning');error.classList.add('is-hidden');result.classList.add('is-hidden');commit.classList.add('is-hidden');duplicate.classList.add('is-hidden');btn.disabled=true;btn.textContent='Анализируем…';try{var response=await fetch(analyzeForm.action,{method:'POST',body:new FormData(analyzeForm),credentials:'same-origin'}),data=await response.json();if(!response.ok||!data.success)throw new Error(data.message||'Ошибка анализа файла');Object.keys(data.stats||{}).forEach(function(key){var el=result.querySelector('[data-stat="'+key+'"]');if(el)el.textContent=data.stats[key];});document.getElementById('feo-preview-token').value=data.token||'';result.classList.remove('is-hidden');if(data.stats&&data.stats.duplicate_file){duplicate.classList.remove('is-hidden');}else commit.classList.remove('is-hidden');}catch(err){error.textContent=err.message||String(err);error.classList.remove('is-hidden');}finally{btn.disabled=false;btn.textContent='Анализировать';}});}
+
+  var actionConfig={
+    rollback:{title:'Откатить загрузку ФЭО',message:'Откатить эту загрузку?',note:'ERP удалит заявки, добавленные этой загрузкой, и восстановит предыдущие значения изменённых заявок. После отката загрузку можно вернуть.',button:'Откатить',url:'<?= app_url('/company/feo/requests/import/rollback') ?>',className:'btn btn-secondary'},
+    restore:{title:'Вернуть загрузку ФЭО',message:'Вернуть ранее откатанную загрузку?',note:'ERP повторно применит изменения из сохранённого журнала. Возврат выполняется только в безопасной LIFO-последовательности.',button:'Вернуть',url:'<?= app_url('/company/feo/requests/import/restore') ?>',className:'btn btn-primary'},
+    delete:{title:'Удалить загрузку ФЭО',message:'Полностью удалить эту загрузку из системы?',note:'Если загрузка активна, ERP сначала атомарно отменит её изменения, затем удалит историю и журнал. Действие необратимо.',button:'Удалить',url:'<?= app_url('/company/feo/requests/import/delete') ?>',className:'btn btn-danger'}
+  };
+  document.querySelectorAll('[data-feo-history-action]').forEach(function(button){button.addEventListener('click',function(){var cfg=actionConfig[this.dataset.feoHistoryAction];if(!cfg)return;document.querySelector('[data-feo-confirm-title]').textContent=cfg.title;document.querySelector('[data-feo-confirm-message]').textContent=cfg.message;document.querySelector('[data-feo-confirm-note]').textContent=cfg.note;var form=document.querySelector('[data-feo-confirm-form]'),confirmButton=document.querySelector('[data-feo-confirm-button]');form.action=cfg.url;form.querySelector('[data-feo-confirm-id]').value=this.dataset.importId;confirmButton.textContent=cfg.button;confirmButton.className=cfg.className;openModalSafe('feo-history-confirm-modal');});});
 }());
 </script>

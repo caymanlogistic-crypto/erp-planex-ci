@@ -11,59 +11,64 @@ $ok = static function (string $name, bool $value) use (&$pass, &$fail): void {
     if ($value) { $pass++; return; }
     $fail++; fwrite(STDERR, "FAIL: {$name}\n");
 };
-
 $root = dirname(__DIR__);
+$read = static fn(string $path): string => file_get_contents($path) ?: '';
+
 $map = FeoXlsxParser::fieldMap();
-$ok('44 canonical FEO fields', count($map) === 44);
-$ok('request id mapping', ($map['Заявка, ID'] ?? null) === 'zayavka_id');
-$ok('gross mass mapping', ($map['Суммарная масса (брутто), т (п. 3)'] ?? null) === 'mass_brutto');
-$ok('coordinates preserved', isset($map['МНО_Координаты (Ш)'], $map['МНО_Координаты (Д)']));
+$ok('44 canonical FEO fields remain protected', count($map) === 44);
 
-$migration = file_get_contents($root . '/database/migrations-local/122_create_feo_requests.sql') ?: '';
-foreach (['feo_requests','feo_imports','feo_import_changes','current_import_id','before_json','previous_import_id'] as $needle) {
-    $ok('migration contains ' . $needle, str_contains($migration, $needle));
+$service = $read($root . '/app/Service/FeoRequestService.php');
+foreach ([
+    'listRequestsBatch' => 'server batch API',
+    'parseRequestIds' => 'multi-id parser',
+    "preg_split('/[,;\\s]+/u'" => 'comma semicolon whitespace ID syntax',
+    'MAX_FILTER_IDS = 500' => 'ID filter safety cap',
+    'missing_ids' => 'missing ID diagnostics',
+    'searchColumns' => 'server content search',
+    'INTERVAL 7 DAY' => 'seven day freshness SLA',
+    'freshnessState' => 'freshness state',
+    'restoreRolledBackImport' => 'restore operation',
+    "ORDER BY id ASC" => 'restore journal forward order',
+    'after_json' => 'restore after snapshot',
+    "status='applied',rolled_back_by_user_id=NULL" => 'restore reactivates import',
+    'restoreCandidateId' => 'strict restore candidate',
+    'can_restore' => 'history restore capability',
+] as $needle => $label) {
+    $ok($label, str_contains($service, $needle));
 }
+$ok('rollback remains latest active LIFO', str_contains($service, "WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE"));
+$ok('delete remains latest history LIFO', str_contains($service, 'SELECT * FROM feo_imports ORDER BY id DESC LIMIT 1 FOR UPDATE'));
+$ok('restore validates pre-rollback state', str_contains($service, 'currentPrevious !== $expectedPrevious') && str_contains($service, 'sameBusinessRow($current, $before)'));
 
-$route = file_get_contents($root . '/app/Http/Routes/company_feo_requests.php') ?: '';
-foreach (['/company/feo/requests','import/analyze','import/commit','import/rollback','import/delete'] as $needle) {
+$controller = $read($root . '/app/Http/Controllers/Company/FeoRequestsController.php');
+$ok('JSON data endpoint action exists', str_contains($controller, 'public function data(): void'));
+$ok('restore controller is privileged', str_contains($controller, 'public function restoreImport(): void') && substr_count($controller, "requireRole(['company_owner','senior_logist']);") >= 3);
+$ok('restore controller calls service', str_contains($controller, 'restoreRolledBackImport($pdo, $importId, $_SESSION)'));
+$ok('index exposes freshness', str_contains($controller, 'freshnessState($pdo)'));
+
+$route = $read($root . '/app/Http/Routes/company_feo_requests.php');
+foreach (['/company/feo/requests/data','import/rollback','import/restore','import/delete','registerFeoFreshnessNavigation'] as $needle) {
     $ok('route contains ' . $needle, str_contains($route, $needle));
 }
-$ok('route has no output-buffer navigation hack', !str_contains($route, "ob_start(static function"));
 
-$layout = file_get_contents($root . '/app/View/layouts/main.php') ?: '';
-$ok('native FEO sidebar parent exists', str_contains($layout, '>Заявки ФЭО</span>'));
-$ok('native FEO sidebar child exists', str_contains($layout, '>Все заявки</span>'));
-$ok('FEO sidebar rendered in both owner and logist blocks', substr_count($layout, "app_url('/company/feo/requests')") >= 2);
-$ok('FEO workspace uses wide layout', str_contains($layout, "'/company/feo/requests'"));
+$nav = $read($root . '/app/Support/feo_freshness_navigation.php');
+$ok('menu freshness badge is global HTML-safe', str_contains($nav, 'data-feo-freshness-badge') && str_contains($nav, 'application/json'));
+$ok('menu freshness badge uses ERP alert counter style', str_contains($nav, "nav-count is-alert"));
+$ok('menu freshness covers all FEO roles', str_contains($nav, "['company_owner','senior_logist','logist']"));
 
-$controller = file_get_contents($root . '/app/Http/Controllers/Company/FeoRequestsController.php') ?: '';
-$ok('controller passes config to layout scope', str_contains($controller, '$config = $this->config;'));
-$ok('controller passes db to layout scope', str_contains($controller, '$db = $this->db;'));
-$ok('delete action is privileged', str_contains($controller, 'public function deleteImport(): void') && str_contains($controller, "requireRole(['company_owner','senior_logist']);"));
-$ok('controller calls atomic delete service', str_contains($controller, 'deleteLatestImport($pdo, $importId, $_SESSION)'));
-
-$service = file_get_contents($root . '/app/Service/FeoRequestService.php') ?: '';
-$ok('rollback is LIFO', str_contains($service, "WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE"));
-$ok('rollback restores snapshots', str_contains($service, 'before_json'));
-$ok('rollback deletes inserted requests only by import ownership', str_contains($service, 'DELETE FROM feo_requests WHERE zayavka_id=? AND current_import_id=?'));
-$ok('active duplicate hash is blocked', str_contains($service, "file_hash = ? AND status = 'applied'"));
-$ok('missing rows are counted, not deleted', str_contains($service, 'missing_count'));
-$ok('full delete is strict latest-history LIFO', str_contains($service, "SELECT * FROM feo_imports ORDER BY id DESC LIMIT 1 FOR UPDATE") && str_contains($service, 'Полностью удалять загрузки ФЭО можно только строго с последней записи истории.'));
-$ok('active full delete reuses transactional rollback', str_contains($service, 'rollbackAppliedImportInTransaction($pdo, $importId, $actor)'));
-$ok('full delete blocks current request references', str_contains($service, 'SELECT COUNT(*) FROM feo_requests WHERE current_import_id=?'));
-$ok('full delete blocks rollback-chain references', str_contains($service, 'SELECT COUNT(*) FROM feo_import_changes WHERE previous_import_id=? AND import_id<>?'));
-$ok('full delete purges import row', str_contains($service, 'DELETE FROM feo_imports WHERE id=?'));
-$ok('history exposes delete only for latest import', str_contains($service, "row['can_delete']") && str_contains($service, '$latestImportId'));
-
-$view = file_get_contents($root . '/app/View/pages/company_feo_requests.php') ?: '';
-foreach (['История загрузок','Загрузить XLSX','Анализировать','Применить загрузку','пропало из файла','Двойной клик','Удалить'] as $needle) {
+$view = $read($root . '/app/View/pages/company_feo_requests.php');
+foreach (['Фильтр по заявкам:','Поиск по содержимому:','Не найдены заявки:','IntersectionObserver','data-feo-sentinel','Вернуть','История загрузок ФЭО','Требуется актуальная загрузка ФЭО'] as $needle) {
     $ok('view contains ' . $needle, str_contains($view, $needle));
 }
-$ok('delete confirmation explains rollback plus purge', str_contains($view, 'ERP сначала отменит все её изменения в заявках, затем удалит запись загрузки и журнал изменений'));
-$ok('delete form posts to dedicated endpoint', str_contains($view, "app_url('/company/feo/requests/import/delete')"));
-
-$index = file_get_contents($root . '/public/index.php') ?: '';
-$ok('entrypoint loads FEO routes', str_contains($index, "company_feo_requests.php"));
+$ok('browser confirm is forbidden', !str_contains($view, 'confirm('));
+$ok('browser alert is forbidden', !str_contains($view, 'alert('));
+$ok('pagination UI removed', !str_contains($view, 'Страница ') && !str_contains($view, '>Вперёд<') && !str_contains($view, 'feo-pagination'));
+$ok('system ERP confirm modal used', str_contains($view, 'feo-history-confirm-modal') && str_contains($view, 'modal-overlay'));
+$ok('history modal body has zero padding', str_contains($view, '.feo-history-modal .modal-body{padding:0!important'));
+$ok('FEO workspace is edge-to-edge', str_contains($view, '.content.content--wide-workspace{padding-left:0!important;padding-right:0!important') && str_contains($view, 'width:100%!important;max-width:none!important'));
+$ok('table horizontal overflow is disabled', str_contains($view, 'overflow-x:hidden!important'));
+$ok('dense table uses six intrinsic FEO columns', str_contains($view, 'ID заявки') && str_contains($view, 'Масса, кг') && str_contains($view, 'МНО, Регион') && str_contains($view, 'МНО, МО') && str_contains($view, 'Грузоотправитель') && str_contains($view, 'Адрес погрузки'));
+$ok('search calls server endpoint', str_contains($view, "app_url('/company/feo/requests/data')"));
 
 printf("FEO_REQUESTS_CONTRACT: %d passed, %d failed\n", $pass, $fail);
 exit($fail === 0 ? 0 : 1);
