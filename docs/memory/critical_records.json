@@ -37,6 +37,17 @@
       "machine_ownership_id": "finance.matching"
     },
     {
+      "canonical_id": "test.control.erp_planex_ci",
+      "semantic_class": "IMPLEMENTATION",
+      "truth_status": "VERIFIED",
+      "criticality": "CRITICAL",
+      "verified_sha": "6a922464e326fa78cf28897e730c85c15d93fb74",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/6a922464e326fa78cf28897e730c85c15d93fb74/tools/agent_preflight.py",
+      "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py"],
+      "navigation": "active",
+      "machine_ownership_id": "control.ci"
+    },
+    {
       "canonical_id": "policy.deploy.standing_authorization",
       "semantic_class": "OWNER_DECISION",
       "truth_status": "VERIFIED",

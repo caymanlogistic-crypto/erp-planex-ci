@@ -67,39 +67,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          : > /tmp/changed_files
-          full_scan=false
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            full_scan=true
-            git ls-files > /tmp/changed_files
+            python3 tools/ci_scope.py --full-scan --github-output "$GITHUB_OUTPUT" --format json
           elif [ "${{ github.event_name }}" = "pull_request" ]; then
-            git diff --name-only --diff-filter=ACMR HEAD^1 HEAD > /tmp/changed_files
+            python3 tools/ci_scope.py --base HEAD^1 --head HEAD --github-output "$GITHUB_OUTPUT" --format json
           else
-            git diff --name-only --diff-filter=ACMR HEAD^ HEAD > /tmp/changed_files
+            python3 tools/ci_scope.py --base HEAD^ --head HEAD --github-output "$GITHUB_OUTPUT" --format json
           fi
-
-          has() {
-            local pattern="$1"
-            if [ "$full_scan" = true ] || grep -Eq "$pattern" /tmp/changed_files; then
-              printf 'true'
-            else
-              printf 'false'
-            fi
-          }
-
-          {
-            echo "full_scan=$full_scan"
-            echo "php=$(has '\.php$')"
-            echo "js=$(has '\.(js|mjs)$')"
-            echo "python=$(has '^tools/.*\.py$')"
-            echo "finance=$(has '^(app/(Service/Finance|Http/Controllers/Company/(Finance|BankFinance|Invoice)|Http/Routes/company_(finance|bank)|View/(pages|partials)/company_(finance|bank|invoice))|tests/finance_|database/migrations-local/0(6|7|8|9)[0-9]_.*|scripts/(p41_|p80_|p9[0-9]_|finance_direct))')"
-            echo "linear=$(has '^(app/(Service/Linear|Http/Controllers/Company/LinearTrip|Http/Routes/company_linear|View/(pages|partials)/company_linear)|tests/(linear_|p1[345]_linear|stage2_route)|database/migrations-local/058_|scripts/p39_)')"
-            echo "migrations=$(has '^(database/|scripts/.*migrat|scripts/p[0-9]+_apply_)')"
-            echo "migration_normalization=$(has '^(database/migrations-local/(057_create_crew_drivers|058_create_linear_route_points)\.sql|scripts/p40_reconcile_migration_names\.php)$')"
-            echo "tenant_schema=$(has '^(database/migrations-local/|app/Service/LocalMigrationService\.php$|app/Support/company_database\.php$|app/Http/Controllers/Superadmin/CompanyActions/create_submit\.php$|tools/database/|tests/tenant_schema_provisioning_contract_test\.php$|docs/database/|\.github/workflows/ci\.yml$)')"
-            echo "ui_lab=$(has '^(app/Http/Controllers/Superadmin/UiPatternLabController\.php$|app/Http/Routes/superadmin\.php$|app/View/pages/ui_pattern_lab\.php$|app/View/components/(button|input|page_header|status_badge|table)\.php$|public/assets/css/(ui-pattern-lab|erp-ui|app|app-base|workspace-benchmark)\.css$|tests/ui_pattern_lab_contract_test\.php$|\.github/ui-pattern-lab/ui_pattern_lab_visual\.js$)')"
-          } >> "$GITHUB_OUTPUT"
-
           echo 'Changed files:'
           cat /tmp/changed_files
 
@@ -153,6 +127,14 @@ jobs:
               python3 -m py_compile "$f"
             done
           fi
+
+      - name: Control-plane preflight regression contracts
+        if: steps.changes.outputs.control_plane == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/ci_scope_test.py
+          python3 tests/agent_preflight_test.py
 
       - name: Migration checks when relevant
         if: steps.changes.outputs.migrations == 'true'

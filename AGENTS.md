@@ -33,7 +33,13 @@ OWNER target and current implementation can legitimately differ when the record 
 
 Maintain one task state machine:
 
-`START_HEAD → WORK_BRANCH → FEATURE_HEAD → PR_NUMBER → CI_RESULT → MERGED_SHA → optional DEPLOY_RESULT`
+`START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS|LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT`
+
+For CRITICAL DB/schema work that impacts repository memory, finalize locally in two phases:
+
+`IMPLEMENTATION_SHA → REPOSITORY_MEMORY_SHA → LOCAL_PREFLIGHT_PASS|LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES → one initial push`.
+
+`IMPLEMENTATION_SHA` must be a real commit containing the finished implementation/generated artifacts. Repository-memory `Verified SHA` must reference that existing implementation commit, never a future PR/merge/latest/current SHA.
 
 Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes. A second canonical-HEAD read is allowed only when:
 
@@ -51,14 +57,47 @@ A successful lookup is cached. Repeat search/fetch is forbidden without ambiguit
 - **STANDARD** — controller/service/business behavior without production DB/schema mutation and without critical finance/security semantics.
 - **CRITICAL** — settlement/matching/debt, security/access, DB/schema, financial integrations, control plane or destructive operations.
 
-Classify upward when genuinely ambiguous.
+Classify upward when genuinely ambiguous. `tools/agent_preflight.py` also fails closed with `CLASS_ESCALATION_REQUIRED=CRITICAL` for known DB/schema/control-plane path families passed as STANDARD.
+
+## Local preflight / Git discipline
+
+GitHub Actions is an **independent final verification gate**, not the normal iterative debugging environment. A ready candidate must pass the executable local preflight before the first branch push:
+
+```bash
+python3 tools/agent_preflight.py --class FAST|STANDARD|CRITICAL --base "$START_HEAD" --head HEAD
+```
+
+Use `--plan` to inspect deterministic changed scope and the calculated check plan without executing checks.
+
+Rules:
+
+- Work locally/in a checkout and batch multi-file changes there. Local logical commits are allowed; do not create one remote commit/push per file.
+- Normal multi-file work is `local edit → local tests → local commit(s) → LOCAL_PREFLIGHT_PASS → one initial push`.
+- If local git is genuinely unavailable and Git Data API is required, create blobs/tree/commit chain first and update the feature branch ref once; sequential remote `update_file` commits are not the normal editing mechanism.
+- A required check may not be silently skipped. Each planned check is exactly `LOCAL_REQUIRED` or `REMOTE_REQUIRED`. `REMOTE_REQUIRED` is restricted to the executable allowlist in `tools/agent_preflight.py` and remains a mandatory GitHub gate after the one initial push.
+- `LOCAL_PREFLIGHT_PASS` means all required checks ran locally and passed with no remote-only integration gates. `LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES` means every `LOCAL_REQUIRED` check passed and only explicitly allowlisted infrastructure checks were deferred to mandatory existing GitHub gates.
+- Currently tenant schema provisioning/generated-schema equivalence may become `REMOTE_REQUIRED` only when PDO MySQL / reachable MySQL capability is absent. If those capabilities exist it is `LOCAL_REQUIRED` and runs before push. Missing non-allowlisted capability remains `LOCAL_PREFLIGHT_ENV_ERROR`.
+- GitHub CI remains required after local PASS; local preflight never replaces, disables or weakens repository CI/workflows.
+
+## GitHub CI aggregate / failure handling
+
+- Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate. While they are running, do not react to the first red job with a new push.
+- After all required checks for that SHA are terminal, if PASS continue to merge. If FAIL, enumerate **all** failed required workflows/jobs, read logs only for those failures, and build one remediation set.
+- Apply the complete remediation set locally, rerun the full relevant local preflight, and only after a successful local result (`LOCAL_PREFLIGHT_PASS` or `LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES`) make a corrective push; every remote-required gate must then pass on that corrective SHA as well.
+- The forbidden normal loop is `fix job A → push → fix job B → push → fix job C → push`.
+
+### Remote push budget (operational SLO)
+
+- FAST: normal = 1 push.
+- STANDARD: normal = 1 initial push; exception = +1 corrective push.
+- CRITICAL: normal = 1 initial push of the ready commit chain; exception = +1 corrective push.
+- Before a third STANDARD/CRITICAL remote push, declare `PREFLIGHT_COVERAGE_DEFECT` and explain why the previous local PASS missed a deterministic failure. If reproducible, repair the preflight coverage together with the candidate before another push. Safety emergencies remain fail-safe exceptions, not a reason to normalize thrashing.
 
 ## Git / CI discipline
 
 - Work on a feature branch; canonical changes only through PR merge.
 - No placeholder/probe/temp/dummy files, empty/checkpoint commits or temporary verification PRs.
 - Do not duplicate a regression already triggered by GitHub.
-- Observe parallel required checks as one aggregate gate. Poll aggregate state only while running; inspect individual jobs only after aggregate failure.
 - Do not perform Actions archaeology after a green aggregate result.
 
 ## Production boundary
