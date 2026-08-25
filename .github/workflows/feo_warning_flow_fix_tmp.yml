@@ -58,6 +58,6 @@ jobs:
           set -euo pipefail
           git config user.name planexerp
           git config user.email info@plan-ex.ru
-          git add app/View/pages/company_feo_requests.php tests/feo_requests_contract_test.php .github/workflows/feo_warning_flow_fix_tmp.yml
+          git add -A
           git commit -m 'STANDARD: keep FEO rows visible under missing-ID warning'
           git push origin HEAD:chatgpt/feo-warning-flow-fix-20260825
