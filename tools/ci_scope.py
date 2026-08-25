@@ -8,7 +8,8 @@ SCOPE_PATTERNS = {
     "php": r"\.php$",
     "js": r"\.(js|mjs)$",
     "python": r"^tools/.*\.py$",
-    "finance": r"^(app/(Service/Finance|Http/Controllers/Company/(Finance|BankFinance|Invoice)|Http/Routes/company_(finance|bank)|View/(pages|partials)/company_(finance|bank|invoice))|tests/finance_|database/migrations-local/0(6|7|8|9)[0-9]_.*|scripts/(p41_|p80_|p9[0-9]_|finance_direct))",
+    "finance": r"^(app/(Service/(?:Finance|BankFinanceService\.php$|BankStatement[^/]*\.php$|HardenedBankStatementImapImporter\.php$)|Http/Controllers/Company/(Finance|BankFinance|Invoice)|Http/Routes/company_(finance|bank)|View/(pages|partials)/company_(finance|bank|invoice))|tests/finance_|database/migrations-local/0(6|7|8|9)[0-9]_.*|scripts/(p41_|p80_|p9[0-9]_|finance_direct))",
+    "security": r"^(app/Service/(AccessControlService|UserSyncService|CompanyDeletionService)\.php$|app/Http/Controllers/AuthController\.php$|app/Http/Controllers/Superadmin/|app/Http/Routes/superadmin\.php$)",
     "linear": r"^(app/(Service/Linear|Http/Controllers/Company/LinearTrip|Http/Routes/company_linear|View/(pages|partials)/company_linear)|tests/(linear_|p1[345]_linear|stage2_route)|database/migrations-local/058_|scripts/p39_)",
     "migrations": r"^(database/|scripts/.*migrat|scripts/p[0-9]+_apply_)",
     "migration_normalization": r"^(database/migrations-local/(057_create_crew_drivers|058_create_linear_route_points)\.sql|scripts/p40_reconcile_migration_names\.php)$",
@@ -17,7 +18,7 @@ SCOPE_PATTERNS = {
     "memory": r"^(docs/memory/|tools/(memory_integrity_check|active_registry_coverage_check)\.py$|tests/(memory_integrity_checker|active_registry_coverage_checker)_test\.py$)",
     "control_plane": r"^(\.github/workflows/|AGENTS\.md$|docs/GITHUB_CONTROL_PLANE\.md$|\.github/pull_request_template\.md$|tools/(agent_preflight|ci_scope)\.py$|tests/(agent_preflight|ci_scope)_test\.py$)",
 }
-CRITICAL_PATH_SCOPES = ("migrations", "tenant_schema", "memory", "control_plane")
+CRITICAL_PATH_SCOPES = ("finance", "security", "migrations", "tenant_schema", "memory", "control_plane")
 KNOWN_CRITICAL_PATHS = (
     re.compile(r"^\.github/workflows/"),
     re.compile(r"^database/"),
@@ -50,7 +51,10 @@ def classify(paths: list[str], full_scan: bool=False) -> dict[str,bool]:
     return out
 
 def critical_path(paths: list[str]) -> bool:
-    return any(rx.search(p) for p in paths for rx in KNOWN_CRITICAL_PATHS)
+    scopes = classify(paths)
+    return any(scopes[name] for name in CRITICAL_PATH_SCOPES) or any(
+        rx.search(p) for p in paths for rx in KNOWN_CRITICAL_PATHS
+    )
 
 def main() -> int:
     ap=argparse.ArgumentParser()
