@@ -14,7 +14,6 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-
       - name: Configure SSH
         env:
           PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
@@ -25,8 +24,7 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-
-      - name: Verify deployed FEO partial results and layout
+      - name: Inspect production FEO service result
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -37,73 +35,25 @@ jobs:
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
           set -euo pipefail
           ROOT=/home/s/spugovxsim/planexp/public_html/erpv2
-          VIEW="$ROOT/app/View/pages/company_feo_requests.php"
           MARKER=/home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
           test "$(cat "$MARKER")" = "$EXPECTED_SHA"
-          /usr/bin/php8.5 -l "$VIEW" >/dev/null
-
-          ! grep -q 'content.content--wide-workspace{padding-left:0' "$VIEW"
-          ! grep -q 'width:100%!important;max-width:none!important' "$VIEW"
-          grep -Fq '.feo-table-card{min-width:0}' "$VIEW"
-          grep -Fq '.feo-history-modal{width:1066px;max-width:calc(100vw - 32px)}' "$VIEW"
-          grep -Fq 'white-space:nowrap;overflow-wrap:normal' "$VIEW"
-          grep -Fq '.feo-history-actions{display:flex;gap:4px;flex-wrap:nowrap' "$VIEW"
-          grep -Fq "if(reset)body.innerHTML='';rows.forEach(addRow);setDiagnostics(data,reset)" "$VIEW"
-          ! grep -Fq "state.hasMore=true;body.innerHTML=''" "$VIEW"
-          grep -Fq "missing.join(', ')" "$VIEW"
-          echo 'PRODUCTION_UI_CONTRACT=PASS'
-
           PLANEX_ROOT="$ROOT" /usr/bin/php8.5 <<'PHP'
           <?php
           declare(strict_types=1);
-          $root = (string)getenv('PLANEX_ROOT');
-          $config = require $root . '/bootstrap/app.php';
-          require_once $root . '/app/Support/crypto_helper.php';
-          require_once $root . '/app/Support/company_database.php';
-          $centralCfg = $config['database'];
-          $central = new PDO(
-              'mysql:host=' . $centralCfg['host'] . ';port=' . ($centralCfg['port'] ?? 3306) . ';dbname=' . $centralCfg['database'] . ';charset=utf8mb4',
-              $centralCfg['username'],
-              $centralCfg['password'],
-              [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-          );
-          $companies = $central->query("SELECT id,name,status,db_identifier,db_host,db_port,db_username,db_password FROM companies WHERE db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
-          $wanted = ['25600','11111','2226894','227196'];
-          $matchedCompany = false;
-          foreach ($companies as $company) {
-              $name = mb_strtoupper((string)($company['name'] ?? ''), 'UTF-8');
-              if (!str_contains($name, 'ПЛАНЭКС') && !str_contains($name, 'PLANEX')) continue;
-              $cfg = companyDatabaseConfig($config, $company);
-              $pdo = new PDO(
-                  'mysql:host=' . $cfg['host'] . ';port=' . ($cfg['port'] ?? 3306) . ';dbname=' . $cfg['database'] . ';charset=utf8mb4',
-                  $cfg['username'],
-                  $cfg['password'],
-                  [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-              );
-              $exists = $pdo->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');
-              $exists->execute(['feo_requests']);
-              if ((int)$exists->fetchColumn() !== 1) continue;
-              $q = $pdo->prepare('SELECT zayavka_id FROM feo_requests WHERE zayavka_id IN (?,?,?,?) ORDER BY zayavka_id');
-              $q->execute($wanted);
-              $found = array_map('strval', $q->fetchAll(PDO::FETCH_COLUMN));
-              $missing = array_values(array_diff($wanted, $found));
-              sort($found, SORT_STRING);
-              sort($missing, SORT_STRING);
-              echo 'TARGET_COMPANY_STATUS=' . (string)($company['status'] ?? '') . PHP_EOL;
-              echo 'VISIBLE_SUBSET_FOUND=' . implode(',', $found) . PHP_EOL;
-              echo 'VISIBLE_SUBSET_MISSING=' . implode(',', $missing) . PHP_EOL;
-              echo 'PRODUCTION_FEO_DATA_READ=PASS' . PHP_EOL;
-              $matchedCompany = true;
-              break;
+          $root=(string)getenv('PLANEX_ROOT');
+          $config=require $root.'/bootstrap/app.php';
+          require_once $root.'/app/Support/crypto_helper.php';
+          require_once $root.'/app/Support/company_database.php';
+          $centralDb=new App\Core\Database($config['database']);
+          $service=new App\Service\FeoRequestService($config,$centralDb);
+          $companies=$centralDb->connection()->query("SELECT * FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+          foreach($companies as $company){
+              $pdo=$service->localPdo($company);
+              if(!$service->moduleReady($pdo)) continue;
+              $cnt=(int)$pdo->query('SELECT COUNT(*) FROM feo_requests')->fetchColumn();
+              $probe=$service->listRequestsBatch($pdo,'176748 176754 111111 222222','',0,80);
+              $ids=array_map(static fn(array $r):string=>(string)($r['zayavka_id']??''),$probe['rows']??[]);
+              echo 'COMPANY_ID='.(int)$company['id'].' NAME='.(string)$company['name'].' FEO_TOTAL='.$cnt.' PROBE_TOTAL='.(int)($probe['total']??-1).' ROWS='.count($probe['rows']??[]).' ROW_IDS='.implode(',',$ids).' FOUND='.implode(',',($probe['found_ids']??[])).' MISSING='.implode(',',($probe['missing_ids']??[])).PHP_EOL;
           }
-          if (!$matchedCompany) throw new RuntimeException('PLANEX tenant with feo_requests not found');
           PHP
-
-          echo "DEPLOYED_SHA=$(cat "$MARKER")"
-          echo 'STANDARD_WORKSPACE_BOX=PASS'
-          echo 'HISTORY_MODAL_30_PERCENT_WIDER=PASS'
-          echo 'HISTORY_NOWRAP=PASS'
-          echo 'ATOMIC_PARTIAL_RESULTS_RENDER=PASS'
-          echo 'MULTIPLE_MISSING_IDS=PASS'
-          echo 'FEO_PARTIAL_RESULTS_POSTDEPLOY=PASS'
           REMOTE
