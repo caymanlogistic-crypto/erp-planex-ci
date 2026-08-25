@@ -90,6 +90,26 @@ try {
         ], 422);
     }
 
+    $serviceSchemaReady = LinearTripServiceLineService::schemaReady($localPdo);
+    $existingServices = $serviceSchemaReady
+        ? (LinearTripServiceLineService::fetchByRouteIds($localPdo, [$routeId], $includeFinance)[$routeId] ?? [])
+        : [];
+    $serviceMutationNeeded = $serviceParse['services'] !== [] || $existingServices !== [];
+
+    // A route without service rows must remain editable even if an older tenant
+    // has not received the optional service-line schema yet. Conversely, never
+    // accept submitted services if the schema is unavailable: fail before the
+    // main route save so we cannot report an error after partially committing it.
+    if ($serviceParse['services'] !== [] && !$serviceSchemaReady) {
+        $respond([
+            'success' => false,
+            'message' => 'Дополнительные услуги временно недоступны для этой компании. Основные данные рейса не изменены.',
+            'errors' => ['trip_services' => 'Схема дополнительных услуг рейса недоступна.'],
+            'error_code' => 'service_schema_unavailable',
+            'retry_token' => LinearTripEditTokenService::issue($routeId),
+        ], 503);
+    }
+
     $result = LinearTripEditSaveService::save(
         $localPdo,
         $companyId,
@@ -111,19 +131,21 @@ try {
         ], 422);
     }
 
-    LinearTripServiceLineService::replaceForRoute(
-        $localPdo,
-        $routeId,
-        $serviceParse['services'],
-        $sessionUser,
-        [
-            'planned_loading_date' => LinearRouteService::normalizeDate($_POST['planned_loading_date'] ?? ''),
-            'planned_unloading_date' => LinearRouteService::normalizeDate($_POST['planned_unloading_date'] ?? ''),
-            'actual_loading_date' => LinearRouteService::normalizeDate($_POST['actual_loading_date'] ?? ''),
-            'actual_unloading_date' => LinearRouteService::normalizeDate($_POST['actual_unloading_date'] ?? ''),
-        ],
-        $includeFinance
-    );
+    if ($serviceMutationNeeded) {
+        LinearTripServiceLineService::replaceForRoute(
+            $localPdo,
+            $routeId,
+            $serviceParse['services'],
+            $sessionUser,
+            [
+                'planned_loading_date' => LinearRouteService::normalizeDate($_POST['planned_loading_date'] ?? ''),
+                'planned_unloading_date' => LinearRouteService::normalizeDate($_POST['planned_unloading_date'] ?? ''),
+                'actual_loading_date' => LinearRouteService::normalizeDate($_POST['actual_loading_date'] ?? ''),
+                'actual_unloading_date' => LinearRouteService::normalizeDate($_POST['actual_unloading_date'] ?? ''),
+            ],
+            $includeFinance
+        );
+    }
 
     $respond(['success' => true, 'message' => $result['message'], 'route_id' => $routeId]);
 } catch (LinearTripDocumentUploadException $e) {
