@@ -304,17 +304,22 @@ final class FeoXlsxParser
         $root->registerXPathNamespace('m', self::MAIN_NS);
         $out = [];
         foreach ($root->xpath('//m:sheetData/m:row') ?: [] as $row) {
+            $row->registerXPathNamespace('m', self::MAIN_NS);
             $cells = [];
-            foreach ($row->children(self::MAIN_NS)->c as $cell) {
+            foreach ($row->xpath('./m:c') ?: [] as $cell) {
+                $cell->registerXPathNamespace('m', self::MAIN_NS);
                 $ref = (string)$cell['r'];
+                if ($ref === '') {
+                    throw new \RuntimeException('Повреждена структура ячейки XLSX: отсутствует адрес.');
+                }
                 $index = $this->columnIndex($ref);
                 $type = (string)$cell['t'];
-                $children = $cell->children(self::MAIN_NS);
                 if ($type === 'inlineStr') {
-                    $parts = $children->is->xpath('.//*[local-name()="t"]') ?: [];
+                    $parts = $cell->xpath('./m:is//m:t') ?: [];
                     $value = implode('', array_map(static fn($t): string => (string)$t, $parts));
                 } else {
-                    $raw = isset($children->v) ? (string)$children->v : '';
+                    $nodes = $cell->xpath('./m:v') ?: [];
+                    $raw = isset($nodes[0]) ? (string)$nodes[0] : '';
                     if ($type === 's') {
                         if ($raw === '' || !ctype_digit($raw) || !array_key_exists((int)$raw, $sharedStrings)) {
                             throw new \RuntimeException('Повреждена таблица строк XLSX.');
