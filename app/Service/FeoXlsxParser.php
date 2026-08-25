@@ -286,8 +286,8 @@ final class FeoXlsxParser
         if ($rid === '') throw new \RuntimeException('Не удалось определить первый лист XLSX.');
 
         $rels = $this->xml($relsRaw, 'workbook.xml.rels');
-        $relationships = $rels->children(self::PACKAGE_REL_NS);
-        foreach ($relationships->Relationship as $rel) {
+        $rels->registerXPathNamespace('p', self::PACKAGE_REL_NS);
+        foreach ($rels->xpath('//p:Relationship') ?: [] as $rel) {
             if ((string)$rel['Id'] !== $rid) continue;
             $target = ltrim((string)$rel['Target'], '/');
             if ($target === '' || str_contains($target, '..')) {
