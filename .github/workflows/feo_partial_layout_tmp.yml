@@ -1,0 +1,43 @@
+name: FEO Partial Results Layout Temporary
+
+on:
+  push:
+    branches:
+      - chatgpt/feo-partial-results-layout-20260825
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Apply exact FEO partial-results and layout corrections
+        run: python3 tools/tmp_feo_partial_layout_patch.py
+
+      - name: Remove temporary patch machinery
+        run: rm tools/tmp_feo_partial_layout_patch.py .github/workflows/feo_partial_layout_tmp.yml
+
+      - name: Validate FEO correction
+        run: |
+          set -euo pipefail
+          php -l app/View/pages/company_feo_requests.php
+          php tests/feo_requests_contract_test.php
+          git diff --check
+          ! grep -q 'content.content--wide-workspace{padding-left:0' app/View/pages/company_feo_requests.php
+          grep -Fq '.feo-history-modal{width:1066px;max-width:calc(100vw - 32px)}' app/View/pages/company_feo_requests.php
+          grep -Fq "if(reset)body.innerHTML='';rows.forEach(addRow);setDiagnostics(data,reset)" app/View/pages/company_feo_requests.php
+
+      - name: Commit exact FEO correction
+        run: |
+          set -euo pipefail
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add app/View/pages/company_feo_requests.php tests/feo_requests_contract_test.php tools/tmp_feo_partial_layout_patch.py .github/workflows/feo_partial_layout_tmp.yml
+          git commit -m 'STANDARD: keep partial FEO results visible and normalize layout'
+          git push origin HEAD:chatgpt/feo-partial-results-layout-20260825
