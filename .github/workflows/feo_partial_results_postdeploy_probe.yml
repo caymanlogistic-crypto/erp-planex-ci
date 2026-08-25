@@ -14,10 +14,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Inspect toolbar search handler
+      - name: Inspect FEO table layout CSS
         run: |
           set -euo pipefail
-          echo '=== toolbar-search refs ==='
-          grep -n -C 8 'toolbar-search' public/assets/js/app.js || true
-          echo '=== table row hide refs ==='
-          grep -n -C 6 "classList.*is-hidden\|is-hidden.*classList" public/assets/js/app.js | tail -n 160 || true
+          echo '=== table-card rules ==='
+          grep -R -n -C 5 'table-card--standard\|\.table-card[[:space:]]*{' public/assets/css app/View | head -n 260 || true
+          echo '=== table scroll/table rules ==='
+          grep -R -n -C 4 '\.table-scroll\|\.table tbody\|\.table td\|\.table tr' public/assets/css | head -n 320 || true
