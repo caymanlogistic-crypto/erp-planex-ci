@@ -1,0 +1,79 @@
+name: FEO Runtime Diagnostic Temporary
+
+on:
+  push:
+    branches:
+      - chatgpt/feo-runtime-hotfix-20260825
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Read production diagnostics
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' > feo_diag.txt <<'REMOTE'
+          set -u
+          ROOT=/home/s/spugovxsim/planexp/public_html/erpv2
+          echo '=== marker ==='
+          cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt 2>&1 || true
+          echo '=== php ==='
+          /usr/bin/php8.5 -v 2>&1 | head -n 2 || true
+          /usr/bin/php8.5 -m 2>&1 | grep -Ei 'zip|simplexml|xml|pdo|mysql|mbstring' || true
+          echo '=== lint ==='
+          for f in app/Http/Controllers/Company/FeoRequestsController.php app/Http/Routes/company_feo_requests.php app/Service/FeoRequestService.php app/Service/FeoXlsxParser.php app/View/pages/company_feo_requests.php app/View/layouts/main.php; do
+            /usr/bin/php8.5 -l "$ROOT/$f" 2>&1 || true
+          done
+          echo '=== candidate logs ==='
+          find /home/s/spugovxsim -maxdepth 6 -type f \( -iname '*error*.log' -o -iname 'php*.log' -o -iname '*.error.log' \) -mmin -180 -print 2>/dev/null | head -n 30 || true
+          echo '=== recent FEO/fatal excerpts ==='
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            echo "--- $f ---"
+            tail -n 400 "$f" 2>/dev/null | grep -E -i 'feo|fatal|uncaught|company_feo_requests|FeoRequest|500' | tail -n 80 || true
+          done < <(find /home/s/spugovxsim -maxdepth 6 -type f \( -iname '*error*.log' -o -iname 'php*.log' -o -iname '*.error.log' \) -mmin -180 -print 2>/dev/null | head -n 30)
+          echo '=== deployed route excerpt ==='
+          sed -n '1,220p' "$ROOT/app/Http/Routes/company_feo_requests.php" 2>&1 || true
+          REMOTE
+          cat feo_diag.txt
+      - name: Upload diagnostic
+        uses: actions/upload-artifact@v4
+        with:
+          name: feo-runtime-diagnostic
+          path: feo_diag.txt
+          retention-days: 1
+      - name: Publish diagnostic status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          SHA: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          state=success; [ "$JOB_STATUS" = success ] || state=failure
+          desc='FEO runtime diagnostic captured'
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SHA" \
+            -d "{\"state\":\"$state\",\"context\":\"feo/runtime-diagnostic\",\"description\":\"$desc\",\"target_url\":\"https://github.com/$REPOSITORY/actions/runs/$RUN_ID\"}" >/dev/null
