@@ -35,16 +35,8 @@ $requiresFill = static function (array $row): bool {
 };
 ?>
 <style>
-.closing-documents-card{min-width:0;max-width:100%;overflow:hidden}
-.closing-documents-table-frame{display:block;width:100%;max-width:100%;min-width:0;overflow:visible}
-.closing-documents-table{width:100%!important;max-width:100%!important;min-width:0!important;table-layout:fixed}
-.closing-documents-table th,.closing-documents-table td{min-width:0;max-width:0;white-space:normal!important;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;word-break:break-word;vertical-align:top}
 .closing-documents-table th.col-check,.closing-documents-table td.col-check{text-align:center;vertical-align:middle!important;padding-left:2px;padding-right:2px}
 .closing-documents-table tbody tr[data-closing-transaction-id]{cursor:pointer}
-.closing-documents-table tbody tr.is-problem>td{background:#fff1f1}
-.closing-documents-table tbody tr.is-problem:hover>td{background:#fde7e7}
-.closing-toolbar-filters{display:flex;align-items:center;gap:8px;min-width:0}
-.closing-mode-select{height:30px;min-width:190px;padding:0 26px 0 9px;border:1px solid var(--line-soft);border-radius:4px;background:var(--surface);color:var(--text-main);font-size:11px}
 .closing-download-btn{white-space:nowrap}
 .closing-doc-status{display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;font-size:24px;font-weight:700;line-height:1;white-space:nowrap}
 .closing-doc-status.table-check--yes{color:#2f7d32!important}
@@ -79,8 +71,8 @@ $requiresFill = static function (array $row): bool {
 .closing-archive-result{padding:10px;border:1px solid var(--line-soft);background:var(--surface-form)}
 .closing-archive-result[hidden]{display:none}
 .closing-archive-download-link{display:inline-flex;margin-top:7px}
-@media(max-width:980px){.closing-document-layout{grid-template-columns:1fr}.closing-document-docs{border-left:0;border-top:1px solid var(--line-soft)}.closing-status-grid{grid-template-columns:1fr}.closing-toolbar-filters{width:100%;flex-wrap:wrap}.closing-mode-select{min-width:180px}}
-@media(max-width:680px){.closing-payment-grid{grid-template-columns:1fr}.closing-mode-select,.closing-toolbar-filters .toolbar-search,.closing-download-btn{width:100%}}
+@media(max-width:980px){.closing-document-layout{grid-template-columns:1fr}.closing-document-docs{border-left:0;border-top:1px solid var(--line-soft)}.closing-status-grid{grid-template-columns:1fr}}
+@media(max-width:680px){.closing-payment-grid{grid-template-columns:1fr}}
 </style>
 <?php if (!empty($successFlash)): ?><div class="notice success"><?= e($successFlash) ?></div><?php endif; ?>
 <?php if (!empty($errorFlash)): ?><div class="notice warn"><?= e($errorFlash) ?></div><?php endif; ?>
@@ -99,20 +91,23 @@ $requiresFill = static function (array $row): bool {
 <?php if (empty($schemaReady) && empty($dbError)): ?>
 <div class="notice warn"><b>Для раздела требуется актуальная tenant schema.</b></div>
 <?php elseif (!empty($schemaReady)): ?>
-<div class="table-card table-card--standard closing-documents-card" data-closing-grid>
+<div class="table-card table-card--standard" data-closing-grid>
     <div class="table-toolbar">
-        <div class="found-label">Найдено: <b data-closing-found><?= count($rows) ?></b> из <b><?= count($rows) ?></b> операций · проблемных <b><?= $problemCount ?></b></div>
-        <div class="toolbar-right closing-toolbar-filters">
-            <select class="closing-mode-select" data-closing-mode data-closing-problem-only aria-label="Режим отображения закрывающих документов">
-                <option value="all">Показать все</option>
-                <option value="requires_fill" selected>Только требующие заполнения</option>
-                <option value="problems">Проблемные</option>
-            </select>
+        <div class="found-label">Найдено: <b data-closing-found><?= count($rows) ?></b> операций</div>
+        <div class="toolbar-right">
+            <div class="toolbar-sort">
+                <span class="toolbar-sort-label">Показывать:</span>
+                <select class="toolbar-select" data-closing-mode data-closing-problem-only aria-label="Режим отображения закрывающих документов">
+                    <option value="all">Показать все</option>
+                    <option value="requires_fill" selected>Только требующие заполнения</option>
+                    <option value="problems">Проблемные</option>
+                </select>
+            </div>
             <input type="text" class="toolbar-search" data-closing-search placeholder="Поиск по таблице" autocomplete="off">
-            <button type="button" class="btn btn-secondary btn-sm closing-download-btn" data-closing-download>Скачать документы</button>
+            <button type="button" class="btn btn-secondary btn--toolbar closing-download-btn" data-closing-download>Скачать документы</button>
         </div>
     </div>
-    <div class="closing-documents-table-frame">
+    <div class="table-scroll">
         <table class="table closing-documents-table">
             <colgroup><col style="width:8%"><col style="width:42%"><col style="width:20%"><col style="width:10%"><col style="width:7%"><col style="width:7%"><col style="width:6%"></colgroup>
             <thead><tr><th>Дата / №</th><th>Платёж</th><th>Контрагент</th><th>Тип</th><th class="col-check">Договор / Заявка</th><th class="col-check">Акт / УПД</th><th class="col-check">Чек НПД</th></tr></thead>
@@ -137,9 +132,9 @@ $requiresFill = static function (array $row): bool {
                 ]), 'UTF-8');
             ?>
             <tr data-closing-transaction-id="<?= (int)$row['id'] ?>" data-problem="<?= !empty($row['is_problem']) ? '1' : '0' ?>" data-requires-fill="<?= $requiresFill($row) ? '1' : '0' ?>" data-search="<?= e($searchText) ?>"<?= !empty($row['is_problem']) ? ' class="is-problem"' : '' ?> title="Двойной клик — открыть документы">
-                <td class="col-tight"><strong><?= e(date('d.m.Y', strtotime((string)$row['operation_date']))) ?></strong><div class="field-note">№ <?= e((string)($row['document_number'] ?: $row['id'])) ?></div></td>
-                <td><strong><?= e($amount) ?></strong><div class="field-note"><?= e($directionLabel) ?> · <?= e((string)($row['purpose'] ?? '')) ?></div></td>
-                <td><strong><?= e((string)($row['counterparty_name'] ?: 'Без наименования')) ?></strong><div class="field-note">ИНН <?= e($inn !== '' ? $inn : '—') ?></div></td>
+                <td class="cell-double"><span class="cell-main"><?= e(date('d.m.Y', strtotime((string)$row['operation_date']))) ?></span><span class="cell-sub">№ <?= e((string)($row['document_number'] ?: $row['id'])) ?></span></td>
+                <td class="cell-double"><span class="cell-main"><?= e($amount) ?></span><span class="cell-sub"><?= e($directionLabel) ?> · <?= e((string)($row['purpose'] ?? '')) ?></span></td>
+                <td class="cell-double"><span class="cell-main"><?= e((string)($row['counterparty_name'] ?: 'Без наименования')) ?></span><span class="cell-sub">ИНН <?= e($inn !== '' ? $inn : '—') ?></span></td>
                 <td><?php if(!empty($row['is_exempt'])):?><span class="text-muted">—</span><?php else:?><strong><?= e((string)($profile['label'] ?? '—')) ?></strong><?php endif;?></td>
                 <td class="col-check"><?= $renderRequirementStatus($row, 'agreement_or_application') ?></td>
                 <td class="col-check"><?= $renderRequirementStatus($row, 'act_or_upd') ?></td>
@@ -149,6 +144,9 @@ $requiresFill = static function (array $row): bool {
             <tr data-closing-filter-empty hidden><td colspan="7"><div class="ux-empty"><strong>Ничего не найдено</strong>Измените поиск или режим отображения.</div></td></tr>
             </tbody>
         </table>
+    </div>
+    <div class="table-footer">
+        <span class="footer-label">Показано <b class="footer-range" data-closing-footer-range>1–<?= count($rows) ?></b> из <b class="footer-total"><?= count($rows) ?></b></span>
     </div>
 </div>
 
@@ -186,6 +184,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var mode = grid.querySelector('[data-closing-mode]');
     var downloadButton = grid.querySelector('[data-closing-download]');
     var count = grid.querySelector('[data-closing-found]');
+    var footerRange = grid.querySelector('[data-closing-footer-range]');
     var rows = Array.from(grid.querySelectorAll('tbody tr[data-closing-transaction-id]'));
     var empty = grid.querySelector('[data-closing-filter-empty]');
     var archiveConfirm = document.querySelector('[data-closing-archive-confirm]');
@@ -208,6 +207,7 @@ document.addEventListener('DOMContentLoaded', function () {
             if (show) visible++;
         });
         if (count) count.textContent = String(visible);
+        if (footerRange) footerRange.textContent = visible === 0 ? '0' : '1–' + String(visible);
         if (empty) empty.hidden = visible !== 0;
     };
     if (search) search.addEventListener('input', applyFilters);
