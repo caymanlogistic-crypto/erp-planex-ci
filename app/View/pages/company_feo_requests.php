@@ -8,7 +8,7 @@ $fmtDateTime = static function ($value): string {
 };
 ?>
 <style>
-.feo-table-card{min-width:0}
+.feo-table-card{display:block;min-width:0}
 .feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0}
 .feo-search-input{width:220px;min-width:180px}
 .feo-search-input--content{width:300px;min-width:220px}
