@@ -1,4 +1,4 @@
-name: FEO Runtime Diagnostic Temporary
+name: FEO One-time Hotfix Patcher
 
 on:
   push:
@@ -6,105 +6,125 @@ on:
       - chatgpt/feo-runtime-hotfix-20260825
 
 permissions:
-  contents: read
-  statuses: write
+  contents: write
 
 jobs:
-  diagnose:
+  patch:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Configure SSH
-        env:
-          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
-          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
-        run: |
-          set -euo pipefail
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
-          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Build read-only render probe
-        run: |
-          cat > /tmp/feo_render_probe.php <<'PHP'
-          <?php
-          declare(strict_types=1);
-          $root = '/home/s/spugovxsim/planexp/public_html/erpv2';
-          chdir($root);
-          $_SERVER['REQUEST_URI'] = '/erpv2/company/feo/requests';
-          $_SERVER['REQUEST_METHOD'] = 'GET';
-          $_SERVER['HTTPS'] = 'on';
-          $_SESSION = [
-              'user_id' => 999999999,
-              'role_code' => 'company_owner',
-              'user_name' => 'FEO Runtime Probe',
-          ];
-          $config = require $root . '/bootstrap/app.php';
-          require_once $root . '/app/Support/entrypoint_dependencies.php';
-          require_once $root . '/app/Service/FeoXlsxParser.php';
-          require_once $root . '/app/Service/FeoRequestService.php';
-          require_once $root . '/app/Http/Controllers/Company/FeoRequestsController.php';
-          $db = new \App\Core\Database($config['database']);
-          $company = $db->fetch("SELECT id,name,status,db_identifier FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id LIMIT 1");
-          if (!$company) { throw new RuntimeException('No active tenant company for probe'); }
-          $_SESSION['company_id'] = (int)$company['id'];
-          $_SESSION['company_name'] = (string)$company['name'];
-          echo 'PROBE_COMPANY_ID=' . (int)$company['id'] . PHP_EOL;
-          echo 'PROBE_COMPANY_NAME=' . (string)$company['name'] . PHP_EOL;
-          $controller = new \App\Http\Controllers\Company\FeoRequestsController($config, $db);
-          ob_start();
-          try {
-              $controller->index();
-              $html = ob_get_clean();
-              echo 'FEO_RENDER_OK=YES' . PHP_EOL;
-              echo 'FEO_RENDER_BYTES=' . strlen((string)$html) . PHP_EOL;
-              echo 'FEO_RENDER_HAS_TITLE=' . (str_contains((string)$html, 'Все заявки ФЭО') ? 'YES' : 'NO') . PHP_EOL;
-          } catch (Throwable $e) {
-              while (ob_get_level() > 0) { @ob_end_clean(); }
-              echo 'FEO_RENDER_OK=NO' . PHP_EOL;
-              echo 'ERROR_CLASS=' . get_class($e) . PHP_EOL;
-              echo 'ERROR_MESSAGE=' . $e->getMessage() . PHP_EOL;
-              echo 'ERROR_FILE=' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
-              echo $e->getTraceAsString() . PHP_EOL;
-              exit(2);
-          }
-          PHP
-      - name: Run production diagnostics
-        env:
-          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
-          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
-          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
-        run: |
-          set -euo pipefail
-          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes /tmp/feo_render_probe.php "$SSH_USER@$SSH_HOST:/tmp/feo_render_probe_${GITHUB_RUN_ID}.php"
-          {
-            echo '=== marker ==='
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt"
-            echo '=== php modules ==='
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 -m | grep -Ei 'zip|simplexml|xml|pdo|mysql|mbstring'"
-            echo '=== render probe ==='
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 '/tmp/feo_render_probe_${GITHUB_RUN_ID}.php'" || true
-          } | tee feo_diag.txt
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/feo_render_probe_${GITHUB_RUN_ID}.php'" || true
-      - name: Upload diagnostic
-        uses: actions/upload-artifact@v4
         with:
-          name: feo-runtime-diagnostic
-          path: feo_diag.txt
-          retention-days: 1
-      - name: Publish diagnostic status
-        if: always()
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          API_URL: ${{ github.api_url }}
-          SHA: ${{ github.sha }}
-          RUN_ID: ${{ github.run_id }}
-          JOB_STATUS: ${{ job.status }}
+          fetch-depth: 2
+      - name: Apply exact FEO hotfix patch
         run: |
-          state=success; [ "$JOB_STATUS" = success ] || state=failure
-          desc='FEO production render probe captured'
-          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "$API_URL/repos/$REPOSITORY/statuses/$SHA" \
-            -d "{\"state\":\"$state\",\"context\":\"feo/runtime-diagnostic\",\"description\":\"$desc\",\"target_url\":\"https://github.com/$REPOSITORY/actions/runs/$RUN_ID\"}" >/dev/null
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path, old, new, count=None):
+              p = Path(path)
+              text = p.read_text(encoding='utf-8')
+              actual = text.count(old)
+              expected = count if count is not None else 1
+              if actual != expected:
+                  raise SystemExit(f'{path}: expected {expected} occurrences, found {actual}')
+              p.write_text(text.replace(old, new), encoding='utf-8')
+
+          # 1) Runtime 500: bridge controller properties into layout local scope.
+          replace_exact(
+              'app/Http/Controllers/Company/FeoRequestsController.php',
+              "        ob_start();\n        require base_path('app/View/pages/company_feo_requests.php');\n        $content = ob_get_clean();\n        require base_path('app/View/layouts/main.php');",
+              "        $config = $this->config;\n        $db = $this->db;\n\n        ob_start();\n        require base_path('app/View/pages/company_feo_requests.php');\n        $content = ob_get_clean();\n        require base_path('app/View/layouts/main.php');"
+          )
+
+          # 2) Routes must only register routes; remove output-buffer navigation hack.
+          p = Path('app/Http/Routes/company_feo_requests.php')
+          text = p.read_text(encoding='utf-8')
+          marker = "\nif (PHP_SAPI !== 'cli') {"
+          if text.count(marker) != 1:
+              raise SystemExit('company_feo_requests.php: navigation hack marker mismatch')
+          p.write_text(text.split(marker, 1)[0].rstrip() + "\n", encoding='utf-8')
+
+          # 3) Native sidebar state + wide workspace.
+          replace_exact(
+              'app/View/layouts/main.php',
+              "$bankStatementSettingsActive = str_starts_with($requestPath, '/company/bank-statement-settings');",
+              "$bankStatementSettingsActive = str_starts_with($requestPath, '/company/bank-statement-settings');\n$feoRequestsActive = str_starts_with($requestPath, '/company/feo/requests');"
+          )
+          replace_exact(
+              'app/View/layouts/main.php',
+              "    '/company/route-executors',\n",
+              "    '/company/route-executors',\n    '/company/feo/requests',\n"
+          )
+          replace_exact(
+              'app/View/layouts/main.php',
+              "$tripsOpen = ($roleCode !== 'superadmin') && $tripsActive;",
+              "$tripsOpen = ($roleCode !== 'superadmin') && $tripsActive;\n$feoRequestsOpen = ($roleCode !== 'superadmin') && $feoRequestsActive;"
+          )
+
+          marker = '''                <a class="nav-item<?= $routeExecutorsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/route-executors') ?>">'''
+          feo = '''                <div class="nav-item is-parent<?= $feoRequestsOpen ? ' is-open is-active' : '' ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 2.5H10L13 5.5V13.5H3V2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M10 2.5V5.5H13" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M5.5 8H10.5M5.5 10.5H10.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="nav-label">Заявки ФЭО</span>
+                    <svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="nav-sub<?= $feoRequestsOpen ? ' is-open' : '' ?>">
+                    <a class="nav-sub-item<?= $feoRequestsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/feo/requests') ?>">
+                        <span>Все заявки</span>
+                    </a>
+                </div>
+'''
+          p = Path('app/View/layouts/main.php')
+          text = p.read_text(encoding='utf-8')
+          if text.count(marker) != 2:
+              raise SystemExit(f'main.php: expected 2 route-executor insertion points, got {text.count(marker)}')
+          p.write_text(text.replace(marker, feo + marker), encoding='utf-8')
+
+          # 4) Native breadcrumbs.
+          breadcrumb_marker = "    // /company/finance/bank-accounts and its nested matching-rules workflow\n"
+          breadcrumb_block = """    // /company/feo/requests
+    if ($page === 'feo' && ($parts[2] ?? '') === 'requests') {
+        $crumbs[] = ['label' => 'Заявки ФЭО', 'url' => null];
+        $crumbs[] = ['label' => 'Все заявки', 'url' => app_url('/company/feo/requests')];
+        return $crumbs;
+    }
+
+"""
+          replace_exact('app/View/components/breadcrumbs.php', breadcrumb_marker, breadcrumb_block + breadcrumb_marker)
+
+          # 5) Harden the feature contract around the exact production regression.
+          test = Path('tests/feo_requests_contract_test.php')
+          t = test.read_text(encoding='utf-8')
+          old = "foreach (['/company/feo/requests','import/analyze','import/commit','import/rollback','ЗАЯВКИ ФЭО','Все заявки'] as $needle) {\n    $ok('route/menu contains ' . $needle, str_contains($route, $needle));\n}\n"
+          new = "foreach (['/company/feo/requests','import/analyze','import/commit','import/rollback'] as $needle) {\n    $ok('route contains ' . $needle, str_contains($route, $needle));\n}\n$ok('route has no output-buffer navigation hack', !str_contains($route, \"ob_start(static function\"));\n\n$layout = file_get_contents($root . '/app/View/layouts/main.php') ?: '';\n$ok('native FEO sidebar parent exists', str_contains($layout, '>Заявки ФЭО</span>'));\n$ok('native FEO sidebar child exists', str_contains($layout, '>Все заявки</span>'));\n$ok('FEO sidebar is rendered for owner and logist navigation blocks', substr_count($layout, \"app_url('/company/feo/requests')\") >= 2);\n$ok('FEO workspace participates in wide layout', str_contains($layout, \"'/company/feo/requests'\"));\n\n$controller = file_get_contents($root . '/app/Http/Controllers/Company/FeoRequestsController.php') ?: '';\n$ok('controller passes config to shared layout scope', str_contains($controller, '$config = $this->config;'));\n$ok('controller passes db to shared layout scope', str_contains($controller, '$db = $this->db;'));\n"
+          if t.count(old) != 1:
+              raise SystemExit('feo_requests_contract_test.php: expected route assertion block once')
+          test.write_text(t.replace(old, new), encoding='utf-8')
+
+          # Temporary diagnostic workflow must never enter the PR.
+          Path('.github/workflows/feo_runtime_diagnostic_tmp.yml').unlink()
+          PY
+
+      - name: Validate hotfix before commit
+        run: |
+          set -euo pipefail
+          php -l app/Http/Controllers/Company/FeoRequestsController.php
+          php -l app/Http/Routes/company_feo_requests.php
+          php -l app/View/layouts/main.php
+          php -l app/View/components/breadcrumbs.php
+          php tests/feo_requests_contract_test.php
+          git diff --check
+          test ! -e .github/workflows/feo_runtime_diagnostic_tmp.yml
+
+      - name: Commit one-time patch
+        run: |
+          set -euo pipefail
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add app/Http/Controllers/Company/FeoRequestsController.php app/Http/Routes/company_feo_requests.php app/View/layouts/main.php app/View/components/breadcrumbs.php tests/feo_requests_contract_test.php .github/workflows/feo_runtime_diagnostic_tmp.yml
+          git commit -m 'CRITICAL: fix FEO runtime render and native navigation'
+          git push origin HEAD:chatgpt/feo-runtime-hotfix-20260825
