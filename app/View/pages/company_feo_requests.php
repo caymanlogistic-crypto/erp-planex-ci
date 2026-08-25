@@ -8,11 +8,7 @@ $fmtDateTime = static function ($value): string {
 };
 ?>
 <style>
-/* FEO is a dense operational workspace: use the available canvas, not decorative margins. */
-.content.content--wide-workspace{padding-left:0!important;padding-right:0!important;padding-bottom:0!important}
-.content--wide-workspace .workspace-shell-1690{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}
-.feo-page-head{padding:0 8px;margin-bottom:8px}
-.feo-table-card{border-left:0;border-right:0;border-radius:0;margin:0;min-width:0}
+.feo-table-card{min-width:0}
 .feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0}
 .feo-search-input{width:220px;min-width:180px}
 .feo-search-input--content{width:300px;min-width:220px}
@@ -29,13 +25,14 @@ $fmtDateTime = static function ($value): string {
 .feo-table tbody tr[data-feo-id]:hover{background:var(--accent-bg)}
 .feo-load-sentinel{display:flex;align-items:center;justify-content:center;min-height:34px;padding:7px;color:var(--text-muted);font-size:11px;border-top:1px solid var(--line-hair)}
 .feo-load-sentinel[hidden]{display:none}
-.feo-freshness{margin:0 8px 8px}
+.feo-freshness{margin-bottom:8px}
+.feo-history-modal{width:1066px;max-width:calc(100vw - 32px)}
 .feo-history-modal .modal-body{padding:0!important;overflow:hidden}
 .feo-history-scroll{max-height:56vh;overflow-y:auto;overflow-x:hidden}
 .feo-history-table{width:100%;table-layout:fixed;margin:0}
-.feo-history-table th,.feo-history-table td{white-space:normal;overflow-wrap:anywhere;vertical-align:middle}
+.feo-history-table th,.feo-history-table td{white-space:nowrap;overflow-wrap:normal;overflow:hidden;text-overflow:ellipsis;vertical-align:middle}
 .feo-history-table th:nth-child(1){width:14%}.feo-history-table th:nth-child(2){width:25%}.feo-history-table th:nth-child(3){width:8%}.feo-history-table th:nth-child(4){width:8%}.feo-history-table th:nth-child(5){width:9%}.feo-history-table th:nth-child(6){width:8%}.feo-history-table th:nth-child(7){width:10%}.feo-history-table th:nth-child(8){width:18%}
-.feo-history-actions{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-end}
+.feo-history-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end}
 .feo-history-note{padding:8px 10px;border-top:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
 .feo-import-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px}
 .feo-stat{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px}.feo-stat b{display:block;font-size:18px}.feo-stat span{font-size:11px;color:var(--text-muted)}
@@ -208,14 +205,14 @@ $fmtDateTime = static function ($value): string {
     }
     async function load(reset){
       if(state.loading&&!reset)return;
-      if(reset){state.generation++;state.offset=0;state.hasMore=true;body.innerHTML='';if(state.controller)state.controller.abort();}
+      if(reset){state.generation++;state.offset=0;state.hasMore=true;if(state.controller)state.controller.abort();}
       if(!state.hasMore)return;
       var generation=state.generation;state.loading=true;sentinel.hidden=false;sentinel.textContent='Загрузка заявок…';state.controller=new AbortController();
       var p=new URLSearchParams({offset:String(state.offset),limit:String(state.limit),filter_zayavki:idInput.value.trim(),search_text:textInput.value.trim()});
       try{
         var response=await fetch('<?= app_url('/company/feo/requests/data') ?>?'+p.toString(),{credentials:'same-origin',signal:state.controller.signal});
         var data=await response.json();if(generation!==state.generation)return;if(!response.ok||!data.success)throw new Error(data.message||'Ошибка загрузки заявок');
-        setDiagnostics(data,reset);(data.rows||[]).forEach(addRow);state.offset+=Array.isArray(data.rows)?data.rows.length:0;state.hasMore=!!data.has_more;
+        var rows=Array.isArray(data.rows)?data.rows:[];if(reset)body.innerHTML='';rows.forEach(addRow);setDiagnostics(data,reset);state.offset+=rows.length;state.hasMore=!!data.has_more;
         if(!state.hasMore){sentinel.textContent=state.offset?'Все найденные заявки загружены':'Заявки не найдены';}
       }catch(err){if(err.name==='AbortError')return;setMessage(err.message||String(err),true);sentinel.textContent='Не удалось загрузить заявки';state.hasMore=false;}
       finally{if(generation===state.generation)state.loading=false;}
