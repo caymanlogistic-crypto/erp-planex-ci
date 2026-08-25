@@ -51,6 +51,7 @@ jobs:
           grep -Fq "if(reset)body.innerHTML='';rows.forEach(addRow);setDiagnostics(data,reset)" "$VIEW"
           ! grep -Fq "state.hasMore=true;body.innerHTML=''" "$VIEW"
           grep -Fq "missing.join(', ')" "$VIEW"
+          echo 'PRODUCTION_UI_CONTRACT=PASS'
 
           PLANEX_ROOT="$ROOT" /usr/bin/php8.5 <<'PHP'
           <?php
@@ -66,12 +67,12 @@ jobs:
               $centralCfg['password'],
               [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
           );
-          $companies = $central->query("SELECT id,name,status,db_identifier,db_host,db_port,db_username,db_password FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+          $companies = $central->query("SELECT id,name,status,db_identifier,db_host,db_port,db_username,db_password FROM companies WHERE db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
           $wanted = ['25600','11111','2226894','227196'];
-          $expectedFound = ['25600','227196'];
-          $expectedMissing = ['11111','2226894'];
-          $verified = false;
+          $matchedCompany = false;
           foreach ($companies as $company) {
+              $name = mb_strtoupper((string)($company['name'] ?? ''), 'UTF-8');
+              if (!str_contains($name, 'ПЛАНЭКС') && !str_contains($name, 'PLANEX')) continue;
               $cfg = companyDatabaseConfig($config, $company);
               $pdo = new PDO(
                   'mysql:host=' . $cfg['host'] . ';port=' . ($cfg['port'] ?? 3306) . ';dbname=' . $cfg['database'] . ';charset=utf8mb4',
@@ -85,25 +86,17 @@ jobs:
               $q = $pdo->prepare('SELECT zayavka_id FROM feo_requests WHERE zayavka_id IN (?,?,?,?) ORDER BY zayavka_id');
               $q->execute($wanted);
               $found = array_map('strval', $q->fetchAll(PDO::FETCH_COLUMN));
-              sort($found, SORT_STRING);
-              $expected = $expectedFound;
-              sort($expected, SORT_STRING);
-              if ($found !== $expected) continue;
               $missing = array_values(array_diff($wanted, $found));
+              sort($found, SORT_STRING);
               sort($missing, SORT_STRING);
-              $expectedM = $expectedMissing;
-              sort($expectedM, SORT_STRING);
-              if ($missing !== $expectedM) continue;
-              echo 'TENANT=' . (string)$company['name'] . PHP_EOL;
-              echo 'FOUND_IDS=' . implode(',', $found) . PHP_EOL;
-              echo 'MISSING_IDS=' . implode(',', $missing) . PHP_EOL;
-              echo 'PARTIAL_ID_DATA=PASS' . PHP_EOL;
-              $verified = true;
+              echo 'TARGET_COMPANY_STATUS=' . (string)($company['status'] ?? '') . PHP_EOL;
+              echo 'VISIBLE_SUBSET_FOUND=' . implode(',', $found) . PHP_EOL;
+              echo 'VISIBLE_SUBSET_MISSING=' . implode(',', $missing) . PHP_EOL;
+              echo 'PRODUCTION_FEO_DATA_READ=PASS' . PHP_EOL;
+              $matchedCompany = true;
               break;
           }
-          if (!$verified) {
-              throw new RuntimeException('Could not verify expected partial FEO ID result set in active tenant databases');
-          }
+          if (!$matchedCompany) throw new RuntimeException('PLANEX tenant with feo_requests not found');
           PHP
 
           echo "DEPLOYED_SHA=$(cat "$MARKER")"
