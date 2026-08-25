@@ -223,6 +223,142 @@ final class ClosingDocumentsController
         $this->back();
     }
 
+    public function updateDocumentEdo(): void
+    {
+        requireRole(['company_owner']);
+        try {
+            [, $tenantPdo] = $this->tenant();
+            if (!ClosingDocumentComplianceService::schemaReady($tenantPdo)) throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
+            $transactionId = (int)($_POST['transaction_id'] ?? 0);
+            $linkId = (int)($_POST['link_id'] ?? 0);
+            if ($transactionId <= 0 || $linkId <= 0) throw new RuntimeException('Некорректный документ');
+
+            $row = $this->closingReportRow($tenantPdo, $transactionId);
+            if ($row === null || !empty($row['is_exempt'])) throw new RuntimeException('Операция недоступна для редактирования документов');
+            $allowed = false;
+            foreach (($row['links'] ?? []) as $link) {
+                if ((int)($link['id'] ?? 0) === $linkId && empty($link['document_deleted_at'])) { $allowed = true; break; }
+            }
+            if (!$allowed) throw new RuntimeException('Документ не найден у этого платежа');
+
+            $stmt = $tenantPdo->prepare(
+                'UPDATE finance_closing_document_links SET is_edo = ? WHERE id = ? AND bank_transaction_id = ?'
+            );
+            $stmt->execute([!empty($_POST['is_edo']) ? 1 : 0, $linkId, $transactionId]);
+            $_SESSION['closing_documents_success'] = 'Признак ЭДО обновлён';
+        } catch (Throwable $e) {
+            $_SESSION['closing_documents_error'] = $e->getMessage();
+        }
+        $this->back();
+    }
+
+    public function downloadArchive(): void
+    {
+        requireRole(['company_owner']);
+        $tmpPath = null;
+        try {
+            if (!class_exists(\ZipArchive::class)) throw new RuntimeException('На сервере недоступно создание ZIP-архивов');
+            [$company, $tenantPdo] = $this->tenant();
+            if (!ClosingDocumentComplianceService::schemaReady($tenantPdo)) throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
+            $storagePrefix = 'companies/' . (int)$company['id'] . '/documents/';
+
+            $requested = $_POST['transaction_ids'] ?? [];
+            if (!is_array($requested)) $requested = [];
+            $requestedIds = [];
+            foreach ($requested as $value) {
+                $id = (int)$value;
+                if ($id > 0) $requestedIds[$id] = true;
+                if (count($requestedIds) > 500) throw new RuntimeException('Слишком много операций для одного архива');
+            }
+            if ($requestedIds === []) throw new RuntimeException('Нет отображаемых операций для выгрузки');
+
+            $rowsById = [];
+            $allowedLinkIds = [];
+            foreach (ClosingDocumentComplianceService::reportRows($tenantPdo, false) as $row) {
+                $transactionId = (int)($row['id'] ?? 0);
+                if (!isset($requestedIds[$transactionId])) continue;
+                $rowsById[$transactionId] = $row;
+                foreach (($row['links'] ?? []) as $link) {
+                    $linkId = (int)($link['id'] ?? 0);
+                    if ($linkId > 0 && empty($link['document_deleted_at'])) $allowedLinkIds[$linkId] = true;
+                }
+            }
+            if ($rowsById === []) throw new RuntimeException('Выбранные операции недоступны');
+            if ($allowedLinkIds === []) throw new RuntimeException('У отображаемых операций нет загруженных документов');
+
+            $linkIds = array_keys($allowedLinkIds);
+            $placeholders = implode(',', array_fill(0, count($linkIds), '?'));
+            $stmt = $tenantPdo->prepare(
+                "SELECT l.id, l.bank_transaction_id, l.requirement_code, d.original_name, d.stored_name, d.relative_path
+                 FROM finance_closing_document_links l
+                 INNER JOIN documents d ON d.id = l.document_id
+                 WHERE l.id IN ($placeholders) AND d.deleted_at IS NULL
+                 ORDER BY l.bank_transaction_id, l.id"
+            );
+            $stmt->execute($linkIds);
+            $documents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+            $tmpPath = tempnam(sys_get_temp_dir(), 'planex_closing_docs_');
+            if ($tmpPath === false) throw new RuntimeException('Не удалось подготовить временный архив');
+            $zip = new \ZipArchive();
+            if ($zip->open($tmpPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+                throw new RuntimeException('Не удалось создать ZIP-архив');
+            }
+
+            $usedPaths = [];
+            $added = 0;
+            foreach ($documents as $document) {
+                $transactionId = (int)($document['bank_transaction_id'] ?? 0);
+                $row = $rowsById[$transactionId] ?? null;
+                if (!is_array($row)) continue;
+                $relativePath = ltrim(str_replace('\\', '/', (string)($document['relative_path'] ?? '')), '/');
+                if ($relativePath === '' || !str_starts_with($relativePath, $storagePrefix) || str_contains($relativePath, '../') || str_contains($relativePath, "\0")) continue;
+                $absolutePath = storage_path($relativePath);
+                if (!is_file($absolutePath) || !is_readable($absolutePath)) continue;
+
+                $counterparty = $this->archiveSegment((string)($row['counterparty_name'] ?? ''), 'Без наименования');
+                $inn = $this->archiveSegment((string)($row['normalized_inn'] ?? ''), '');
+                $counterpartyFolder = $counterparty . ($inn !== '' ? ' — ИНН ' . $inn : '');
+                $date = !empty($row['operation_date']) ? date('d.m.Y', strtotime((string)$row['operation_date'])) : 'Без даты';
+                $number = $this->archiveSegment((string)($row['document_number'] ?: $transactionId), (string)$transactionId);
+                $paymentFolder = $this->archiveSegment($date . '_№' . $number, 'Платёж_' . $transactionId);
+                $typeName = $this->archiveRequirementName((string)($document['requirement_code'] ?? ''));
+                $originalName = $this->archiveSegment((string)($document['original_name'] ?? ''), 'документ');
+                $extension = strtolower((string)pathinfo($originalName, PATHINFO_EXTENSION));
+                if (!preg_match('/^[a-z0-9]{1,10}$/', $extension)) {
+                    $extension = strtolower((string)pathinfo((string)($document['stored_name'] ?? ''), PATHINFO_EXTENSION));
+                }
+                $originalBase = pathinfo($originalName, PATHINFO_FILENAME);
+                $originalBase = $this->archiveSegment($originalBase, 'документ');
+                $baseArchivePath = $counterpartyFolder . '/' . $paymentFolder . '/' . $typeName . '__' . $originalBase;
+                $archivePath = $baseArchivePath . ($extension !== '' ? '.' . $extension : '');
+                $suffix = 2;
+                while (isset($usedPaths[$archivePath])) {
+                    $archivePath = $baseArchivePath . '_' . $suffix . ($extension !== '' ? '.' . $extension : '');
+                    $suffix++;
+                }
+                $usedPaths[$archivePath] = true;
+                if ($zip->addFile($absolutePath, $archivePath)) $added++;
+            }
+            $zip->close();
+            if ($added === 0) throw new RuntimeException('Не найдено доступных файлов для архива');
+
+            $filename = 'closing-documents-' . date('Ymd-His') . '.zip';
+            header('Content-Type: application/zip');
+            header('Content-Length: ' . (string)filesize($tmpPath));
+            header('Content-Disposition: attachment; filename="' . $filename . '"');
+            header('X-Planex-Archive-Files: ' . (string)$added);
+            readfile($tmpPath);
+            @unlink($tmpPath);
+            exit;
+        } catch (Throwable $e) {
+            if (is_string($tmpPath) && $tmpPath !== '' && is_file($tmpPath)) @unlink($tmpPath);
+            http_response_code(422);
+            header('Content-Type: text/plain; charset=UTF-8');
+            echo $e->getMessage();
+        }
+    }
+
     public function unlinkDocument(): void
     {
         requireRole(['company_owner']);
@@ -234,6 +370,35 @@ final class ClosingDocumentsController
             $_SESSION['closing_documents_error'] = $e->getMessage();
         }
         $this->back();
+    }
+
+    private function closingReportRow(PDO $tenantPdo, int $transactionId): ?array
+    {
+        foreach (ClosingDocumentComplianceService::reportRows($tenantPdo, false) as $row) {
+            if ((int)($row['id'] ?? 0) === $transactionId) return $row;
+        }
+        return null;
+    }
+
+    private function archiveRequirementName(string $code): string
+    {
+        return match ($code) {
+            'agreement', 'application' => 'Договор_Заявка',
+            'act', 'upd' => 'Акт_УПД',
+            'npd_receipt' => 'Чек_НПД',
+            default => 'Документ',
+        };
+    }
+
+    private function archiveSegment(string $value, string $fallback): string
+    {
+        $value = trim($value);
+        $value = preg_replace('/[\\\\\/<>:"|?*\x00-\x1F]+/u', '_', $value) ?? $value;
+        $value = preg_replace('/\.{2,}/u', '.', $value) ?? $value;
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+        $value = trim($value, " ._-");
+        if ($value === '') return $fallback;
+        return mb_substr($value, 0, 120, 'UTF-8');
     }
 
     private function tenant(): array

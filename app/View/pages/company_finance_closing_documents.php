@@ -26,6 +26,13 @@ $renderRequirementStatus = static function (array $row, string $key): string {
     }
     return '<span class="table-check table-check--no closing-doc-status" title="Документ не загружен" aria-label="Документа нет">×</span>';
 };
+$requiresFill = static function (array $row): bool {
+    if (!empty($row['is_exempt'])) return false;
+    foreach (($row['requirement_statuses'] ?? []) as $status) {
+        if (is_array($status) && !empty($status['applicable'])) return true;
+    }
+    return false;
+};
 ?>
 <style>
 .closing-documents-card{min-width:0;max-width:100%;overflow:hidden}
@@ -37,8 +44,8 @@ $renderRequirementStatus = static function (array $row, string $key): string {
 .closing-documents-table tbody tr.is-problem>td{background:#fff1f1}
 .closing-documents-table tbody tr.is-problem:hover>td{background:#fde7e7}
 .closing-toolbar-filters{display:flex;align-items:center;gap:8px;min-width:0}
-.closing-problem-filter{display:inline-flex;align-items:center;gap:5px;white-space:nowrap;color:var(--text-muted);font-size:11px;cursor:pointer;user-select:none}
-.closing-problem-filter input{margin:0;accent-color:var(--accent)}
+.closing-mode-select{height:30px;min-width:190px;padding:0 26px 0 9px;border:1px solid var(--line-soft);border-radius:4px;background:var(--surface);color:var(--text-main);font-size:11px}
+.closing-download-btn{white-space:nowrap}
 .closing-doc-status{display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;font-size:24px;font-weight:700;line-height:1;white-space:nowrap}
 .closing-doc-status.table-check--yes{color:#2f7d32!important}
 .closing-doc-status.table-check--no{color:#b3261e!important}
@@ -68,8 +75,12 @@ $renderRequirementStatus = static function (array $row, string $key): string {
 .closing-doc-form .field-select,.closing-doc-form .field-input{width:100%;min-width:0}
 .closing-file-unlink{margin-left:auto;flex:0 0 auto}
 .closing-edo-option{margin:0}
-@media(max-width:980px){.closing-document-layout{grid-template-columns:1fr}.closing-document-docs{border-left:0;border-top:1px solid var(--line-soft)}.closing-status-grid{grid-template-columns:1fr}.closing-toolbar-filters{width:100%;flex-wrap:wrap}}
-@media(max-width:680px){.closing-payment-grid{grid-template-columns:1fr}}
+.closing-archive-modal .modal-body{display:grid;gap:12px}
+.closing-archive-result{padding:10px;border:1px solid var(--line-soft);background:var(--surface-form)}
+.closing-archive-result[hidden]{display:none}
+.closing-archive-download-link{display:inline-flex;margin-top:7px}
+@media(max-width:980px){.closing-document-layout{grid-template-columns:1fr}.closing-document-docs{border-left:0;border-top:1px solid var(--line-soft)}.closing-status-grid{grid-template-columns:1fr}.closing-toolbar-filters{width:100%;flex-wrap:wrap}.closing-mode-select{min-width:180px}}
+@media(max-width:680px){.closing-payment-grid{grid-template-columns:1fr}.closing-mode-select,.closing-toolbar-filters .toolbar-search,.closing-download-btn{width:100%}}
 </style>
 <?php if (!empty($successFlash)): ?><div class="notice success"><?= e($successFlash) ?></div><?php endif; ?>
 <?php if (!empty($errorFlash)): ?><div class="notice warn"><?= e($errorFlash) ?></div><?php endif; ?>
@@ -92,8 +103,13 @@ $renderRequirementStatus = static function (array $row, string $key): string {
     <div class="table-toolbar">
         <div class="found-label">Найдено: <b data-closing-found><?= count($rows) ?></b> из <b><?= count($rows) ?></b> операций · проблемных <b><?= $problemCount ?></b></div>
         <div class="toolbar-right closing-toolbar-filters">
-            <label class="closing-problem-filter"><input type="checkbox" data-closing-problem-only checked>Показывать только проблемные</label>
+            <select class="closing-mode-select" data-closing-mode data-closing-problem-only aria-label="Режим отображения закрывающих документов">
+                <option value="all">Показать все</option>
+                <option value="requires_fill" selected>Только требующие заполнения</option>
+                <option value="problems">Проблемные</option>
+            </select>
             <input type="text" class="toolbar-search" data-closing-search placeholder="Поиск по таблице" autocomplete="off">
+            <button type="button" class="btn btn-secondary btn-sm closing-download-btn" data-closing-download>Скачать документы</button>
         </div>
     </div>
     <div class="closing-documents-table-frame">
@@ -120,7 +136,7 @@ $renderRequirementStatus = static function (array $row, string $key): string {
                     $amount,
                 ]), 'UTF-8');
             ?>
-            <tr data-closing-transaction-id="<?= (int)$row['id'] ?>" data-problem="<?= !empty($row['is_problem']) ? '1' : '0' ?>" data-search="<?= e($searchText) ?>"<?= !empty($row['is_problem']) ? ' class="is-problem"' : '' ?> title="Двойной клик — открыть документы">
+            <tr data-closing-transaction-id="<?= (int)$row['id'] ?>" data-problem="<?= !empty($row['is_problem']) ? '1' : '0' ?>" data-requires-fill="<?= $requiresFill($row) ? '1' : '0' ?>" data-search="<?= e($searchText) ?>"<?= !empty($row['is_problem']) ? ' class="is-problem"' : '' ?> title="Двойной клик — открыть документы">
                 <td class="col-tight"><strong><?= e(date('d.m.Y', strtotime((string)$row['operation_date']))) ?></strong><div class="field-note">№ <?= e((string)($row['document_number'] ?: $row['id'])) ?></div></td>
                 <td><strong><?= e($amount) ?></strong><div class="field-note"><?= e($directionLabel) ?> · <?= e((string)($row['purpose'] ?? '')) ?></div></td>
                 <td><strong><?= e((string)($row['counterparty_name'] ?: 'Без наименования')) ?></strong><div class="field-note">ИНН <?= e($inn !== '' ? $inn : '—') ?></div></td>
@@ -130,7 +146,7 @@ $renderRequirementStatus = static function (array $row, string $key): string {
                 <td class="col-check"><?= $renderRequirementStatus($row, 'npd_receipt') ?></td>
             </tr>
             <?php endforeach; ?>
-            <tr data-closing-filter-empty hidden><td colspan="7"><div class="ux-empty"><strong>Ничего не найдено</strong>Измените поиск или фильтр проблемных операций.</div></td></tr>
+            <tr data-closing-filter-empty hidden><td colspan="7"><div class="ux-empty"><strong>Ничего не найдено</strong>Измените поиск или режим отображения.</div></td></tr>
             </tbody>
         </table>
     </div>
@@ -147,24 +163,47 @@ $renderRequirementStatus = static function (array $row, string $key): string {
     </div>
 </div>
 
+<div id="closing-archive-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
+    <div class="modal closing-archive-modal">
+        <div class="modal-head"><span class="modal-title">Скачать документы</span><button type="button" class="modal-close" data-close-modal="closing-archive-modal">&times;</button></div>
+        <div class="modal-body">
+            <div data-closing-archive-confirm-text>Будет подготовлен архив документов по отображаемым операциям.</div>
+            <div class="field-note">В архив попадут только уже загруженные файлы из строк, которые сейчас видны с учётом поиска и фильтра.</div>
+            <div class="closing-archive-result" data-closing-archive-result hidden></div>
+        </div>
+        <div class="modal-foot is-spaced">
+            <button type="button" class="btn btn-ghost" data-close-modal="closing-archive-modal">Отмена</button>
+            <button type="button" class="btn btn-primary" data-closing-archive-confirm>Подготовить архив</button>
+        </div>
+    </div>
+</div>
+
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var grid = document.querySelector('[data-closing-grid]');
     if (!grid) return;
     var search = grid.querySelector('[data-closing-search]');
-    var problemOnly = grid.querySelector('[data-closing-problem-only]');
+    var mode = grid.querySelector('[data-closing-mode]');
+    var downloadButton = grid.querySelector('[data-closing-download]');
     var count = grid.querySelector('[data-closing-found]');
     var rows = Array.from(grid.querySelectorAll('tbody tr[data-closing-transaction-id]'));
     var empty = grid.querySelector('[data-closing-filter-empty]');
+    var archiveConfirm = document.querySelector('[data-closing-archive-confirm]');
+    var archiveText = document.querySelector('[data-closing-archive-confirm-text]');
+    var archiveResult = document.querySelector('[data-closing-archive-result]');
+    var archiveObjectUrl = null;
     var normalize = function (value) { return String(value || '').toLocaleLowerCase('ru-RU').trim(); };
+    var visibleRows = function () { return rows.filter(function (row) { return !row.hidden; }); };
     var applyFilters = function () {
         var query = normalize(search ? search.value : '');
-        var onlyProblems = !!(problemOnly && problemOnly.checked);
+        var selectedMode = mode ? mode.value : 'requires_fill';
         var visible = 0;
         rows.forEach(function (row) {
             var matchesSearch = query === '' || normalize(row.dataset.search).includes(query);
-            var matchesProblem = !onlyProblems || row.dataset.problem === '1';
-            var show = matchesSearch && matchesProblem;
+            var matchesMode = selectedMode === 'all'
+                || (selectedMode === 'problems' && row.dataset.problem === '1')
+                || (selectedMode === 'requires_fill' && row.dataset.requiresFill === '1');
+            var show = matchesSearch && matchesMode;
             row.hidden = !show;
             if (show) visible++;
         });
@@ -172,7 +211,7 @@ document.addEventListener('DOMContentLoaded', function () {
         if (empty) empty.hidden = visible !== 0;
     };
     if (search) search.addEventListener('input', applyFilters);
-    if (problemOnly) problemOnly.addEventListener('change', applyFilters);
+    if (mode) mode.addEventListener('change', applyFilters);
     applyFilters();
 
     function setRemoteHtml(body, html) {
@@ -188,6 +227,54 @@ document.addEventListener('DOMContentLoaded', function () {
     function escapeHtml(value) {
         return String(value || '').replace(/[&<>"']/g, function (ch) {
             return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[ch];
+        });
+    }
+
+    if (downloadButton) {
+        downloadButton.addEventListener('click', function () {
+            var currentRows = visibleRows();
+            if (archiveObjectUrl) { URL.revokeObjectURL(archiveObjectUrl); archiveObjectUrl = null; }
+            if (archiveResult) { archiveResult.hidden = true; archiveResult.innerHTML = ''; }
+            if (archiveText) archiveText.textContent = 'Будет подготовлен архив документов по ' + currentRows.length + ' отображаемым операциям.';
+            if (archiveConfirm) archiveConfirm.disabled = currentRows.length === 0;
+            window.openModal('closing-archive-modal');
+        });
+    }
+
+    if (archiveConfirm) {
+        archiveConfirm.addEventListener('click', function () {
+            var currentRows = visibleRows();
+            if (currentRows.length === 0) return;
+            archiveConfirm.disabled = true;
+            archiveConfirm.textContent = 'Подготовка...';
+            if (archiveResult) { archiveResult.hidden = false; archiveResult.textContent = 'Собираем архив...'; }
+            var formData = new FormData();
+            currentRows.forEach(function (row) { formData.append('transaction_ids[]', row.dataset.closingTransactionId || ''); });
+            fetch(window.getErpBasePath() + '/company/finance/closing-documents/archive', {
+                method: 'POST', credentials: 'same-origin', body: formData
+            }).then(function (response) {
+                if (!response.ok) return response.text().then(function (text) { throw new Error(text || ('HTTP ' + response.status)); });
+                var files = response.headers.get('X-Planex-Archive-Files') || '';
+                return response.blob().then(function (blob) { return {blob: blob, files: files}; });
+            }).then(function (result) {
+                if (archiveObjectUrl) URL.revokeObjectURL(archiveObjectUrl);
+                archiveObjectUrl = URL.createObjectURL(result.blob);
+                var fileText = result.files ? 'Файлов в архиве: ' + escapeHtml(result.files) + '. ' : '';
+                if (archiveResult) {
+                    archiveResult.hidden = false;
+                    archiveResult.innerHTML = '<strong>Архив готов.</strong><div class="field-note">' + fileText + 'Структура разбита по контрагентам и платежам.</div><a class="btn btn-primary btn-sm closing-archive-download-link" data-closing-archive-link download="closing-documents.zip">Скачать архив</a>';
+                    var link = archiveResult.querySelector('[data-closing-archive-link]');
+                    if (link) link.href = archiveObjectUrl;
+                }
+            }).catch(function (error) {
+                if (archiveResult) {
+                    archiveResult.hidden = false;
+                    archiveResult.innerHTML = '<div class="form-alert alert-error">Не удалось подготовить архив: ' + escapeHtml(error && error.message ? error.message : 'неизвестная ошибка') + '</div>';
+                }
+            }).finally(function () {
+                archiveConfirm.disabled = false;
+                archiveConfirm.textContent = 'Подготовить архив';
+            });
         });
     }
 
