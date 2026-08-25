@@ -57,7 +57,7 @@ $ok('menu freshness badge uses ERP alert counter style', str_contains($nav, "nav
 $ok('menu freshness covers all FEO roles', str_contains($nav, "['company_owner','senior_logist','logist']"));
 
 $view = $read($root . '/app/View/pages/company_feo_requests.php');
-foreach (['Фильтр по заявкам:','Поиск по содержимому:','Не найдены заявки:','IntersectionObserver','data-feo-sentinel','Вернуть','История загрузок ФЭО','Требуется актуальная загрузка ФЭО'] as $needle) {
+foreach (['ID заявок: через пробел, запятую или ;','Поиск по таблице','Не найдены заявки:','IntersectionObserver','data-feo-sentinel','Вернуть','История загрузок ФЭО','Требуется актуальная загрузка ФЭО'] as $needle) {
     $ok('view contains ' . $needle, str_contains($view, $needle));
 }
 $ok('browser confirm is forbidden', !str_contains($view, 'confirm('));
@@ -69,6 +69,10 @@ $ok('FEO workspace is edge-to-edge', str_contains($view, '.content.content--wide
 $ok('table horizontal overflow is disabled', str_contains($view, 'overflow-x:hidden!important'));
 $ok('dense table uses six intrinsic FEO columns', str_contains($view, 'ID заявки') && str_contains($view, 'Масса, кг') && str_contains($view, 'МНО, Регион') && str_contains($view, 'МНО, МО') && str_contains($view, 'Грузоотправитель') && str_contains($view, 'Адрес погрузки'));
 $ok('search calls server endpoint', str_contains($view, "app_url('/company/feo/requests/data')"));
+$ok('FEO search uses invoices toolbar pattern', str_contains($view, 'table-toolbar feo-result-toolbar') && str_contains($view, 'toolbar-right feo-search-toolbar') && substr_count($view, 'toolbar-search feo-search-input') >= 2);
+$ok('search action buttons removed', !str_contains($view, 'data-feo-id-search') && !str_contains($view, 'data-feo-content-search') && !str_contains($view, 'data-feo-id-clear') && !str_contains($view, 'data-feo-content-clear'));
+$ok('filters auto-apply on input with debounce', str_contains($view, "input.addEventListener('input',scheduleFilter)") && str_contains($view, 'setTimeout(function(){resetLoad();},280)'));
+$ok('table scroll gets stable viewport height', str_contains($view, 'min-height:360px') && str_contains($view, "scroll.style.height=height+'px'"));
 
 printf("FEO_REQUESTS_CONTRACT: %d passed, %d failed\n", $pass, $fail);
 exit($fail === 0 ? 0 : 1);

@@ -13,16 +13,15 @@ $fmtDateTime = static function ($value): string {
 .content--wide-workspace .workspace-shell-1690{width:100%!important;max-width:none!important;margin:0!important;padding:0!important}
 .feo-page-head{padding:0 8px;margin-bottom:8px}
 .feo-table-card{border-left:0;border-right:0;border-radius:0;margin:0;min-width:0}
-.feo-search-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;padding:7px 8px;border-bottom:1px solid var(--line-soft);background:var(--surface-form)}
-.feo-search-group{display:grid;grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center;gap:6px;min-width:0}
-.feo-search-group .toolbar-sort-label{white-space:nowrap}
-.feo-search-group .toolbar-search{width:100%;min-width:0}
+.feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0}
+.feo-search-input{width:220px;min-width:180px}
+.feo-search-input--content{width:300px;min-width:220px}
 .feo-result-toolbar{min-height:30px;padding:4px 8px}
 .feo-result-toolbar .toolbar-right{min-width:0;overflow:hidden}
 .feo-filter-info{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
 .feo-filter-info.is-problem{color:var(--danger);font-weight:600}
 .feo-search-message{margin:0;border-left:0;border-right:0;border-top:0;border-radius:0}
-.feo-table-scroll{overflow-y:auto!important;overflow-x:hidden!important;min-width:0;max-width:100%;scrollbar-gutter:stable}
+.feo-table-scroll{overflow-y:auto!important;overflow-x:hidden!important;min-width:0;max-width:100%;min-height:360px;scrollbar-gutter:stable}
 .feo-table{width:100%;max-width:100%;min-width:0!important;table-layout:fixed}
 .feo-table col:nth-child(1){width:8%}.feo-table col:nth-child(2){width:8%}.feo-table col:nth-child(3){width:14%}.feo-table col:nth-child(4){width:14%}.feo-table col:nth-child(5){width:24%}.feo-table col:nth-child(6){width:32%}
 .feo-table th,.feo-table td{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -44,7 +43,7 @@ $fmtDateTime = static function ($value): string {
 .feo-detail-label,.feo-detail-value{padding:7px 9px;border-bottom:1px solid var(--line-hair)}.feo-detail-label{background:var(--surface-form);font-size:11px;font-weight:700}.feo-detail-value{font-size:12px;overflow-wrap:anywhere;word-break:break-word}
 .feo-detail-grid>:nth-last-child(-n+2){border-bottom:0}
 .feo-confirm-copy{display:grid;gap:8px}.feo-confirm-warning{padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
-@media(max-width:1180px){.feo-search-toolbar{grid-template-columns:1fr}.feo-filter-info{max-width:55vw}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
+@media(max-width:1180px){.feo-search-toolbar{flex-wrap:wrap}.feo-search-input,.feo-search-input--content{width:210px;min-width:180px}.feo-filter-info{max-width:55vw}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
 </style>
 
 <?php if (!empty($successFlash)): ?><div class="notice success feo-freshness"><?= e((string)$successFlash) ?></div><?php endif; ?>
@@ -75,23 +74,12 @@ $fmtDateTime = static function ($value): string {
 
 <?php if (empty($dbError)): ?>
 <div class="table-card table-card--standard feo-table-card" data-feo-grid>
-    <div class="feo-search-toolbar">
-        <div class="feo-search-group">
-            <span class="toolbar-sort-label">Фильтр по заявкам:</span>
-            <input type="text" class="toolbar-search" data-feo-id-filter placeholder="Номера через пробел, запятую или ;" autocomplete="off">
-            <button type="button" class="btn btn-secondary btn--toolbar" data-feo-id-search>Найти</button>
-            <button type="button" class="btn btn-ghost btn--toolbar" data-feo-id-clear>Очистить</button>
-        </div>
-        <div class="feo-search-group">
-            <span class="toolbar-sort-label">Поиск по содержимому:</span>
-            <input type="text" class="toolbar-search" data-feo-content-filter placeholder="Регион, МО, отправитель, адрес, заказчик, ИНН…" autocomplete="off">
-            <button type="button" class="btn btn-secondary btn--toolbar" data-feo-content-search>Найти</button>
-            <button type="button" class="btn btn-ghost btn--toolbar" data-feo-content-clear>Очистить</button>
-        </div>
-    </div>
     <div class="table-toolbar feo-result-toolbar">
-        <div class="found-label">Найдено: <b data-feo-total>0</b> заявок</div>
-        <div class="toolbar-right"><div class="feo-filter-info" data-feo-filter-info>Загрузка данных…</div></div>
+        <div class="found-label">Найдено: <b data-feo-total>0</b> заявок <span class="feo-filter-info" data-feo-filter-info>· Загрузка данных…</span></div>
+        <div class="toolbar-right feo-search-toolbar">
+            <input type="text" class="toolbar-search feo-search-input" data-feo-id-filter placeholder="ID заявок: через пробел, запятую или ;" autocomplete="off">
+            <input type="text" class="toolbar-search feo-search-input feo-search-input--content" data-feo-content-filter placeholder="Поиск по таблице" autocomplete="off">
+        </div>
     </div>
     <div class="notice warn feo-search-message is-hidden" data-feo-search-message></div>
     <div class="feo-table-scroll" data-feo-scroll>
@@ -194,7 +182,7 @@ $fmtDateTime = static function ($value): string {
     var totalEl=grid.querySelector('[data-feo-total]'), infoEl=grid.querySelector('[data-feo-filter-info]'), msgEl=grid.querySelector('[data-feo-search-message]');
     var state={offset:0,limit:80,loading:false,hasMore:true,generation:0,controller:null};
 
-    function resizeScroll(){var top=scroll.getBoundingClientRect().top;scroll.style.maxHeight=Math.max(240,window.innerHeight-top-8)+'px';}
+    function resizeScroll(){var top=scroll.getBoundingClientRect().top,height=Math.max(360,window.innerHeight-top-8);scroll.style.height=height+'px';scroll.style.maxHeight=height+'px';}
     resizeScroll();window.addEventListener('resize',resizeScroll);
     function clean(v){return v===null||v===undefined||v===''?'—':String(v);}
     function td(text,title){var c=document.createElement('td');c.textContent=clean(text);if(title)c.title=String(title);return c;}
@@ -233,9 +221,9 @@ $fmtDateTime = static function ($value): string {
       finally{if(generation===state.generation)state.loading=false;}
     }
     function resetLoad(){load(true);scroll.scrollTop=0;}
-    grid.querySelector('[data-feo-id-search]').addEventListener('click',resetLoad);grid.querySelector('[data-feo-content-search]').addEventListener('click',resetLoad);
-    grid.querySelector('[data-feo-id-clear]').addEventListener('click',function(){idInput.value='';resetLoad();});grid.querySelector('[data-feo-content-clear]').addEventListener('click',function(){textInput.value='';resetLoad();});
-    [idInput,textInput].forEach(function(input){input.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();resetLoad();}});});
+    var filterTimer=0;
+    function scheduleFilter(){clearTimeout(filterTimer);filterTimer=window.setTimeout(function(){resetLoad();},280);}
+    [idInput,textInput].forEach(function(input){input.addEventListener('input',scheduleFilter);input.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();clearTimeout(filterTimer);resetLoad();}});});
     var observer=new IntersectionObserver(function(entries){if(entries.some(function(e){return e.isIntersecting;})&&!state.loading&&state.hasMore)load(false);},{root:scroll,rootMargin:'300px 0px'});observer.observe(sentinel);load(true);
 
     body.addEventListener('dblclick',async function(ev){var row=ev.target.closest('tr[data-feo-id]');if(!row)return;var detailGrid=document.getElementById('feo-detail-grid'),loading=document.getElementById('feo-detail-loading'),error=document.getElementById('feo-detail-error');detailGrid.innerHTML='';detailGrid.classList.add('is-hidden');error.classList.add('is-hidden');loading.classList.remove('is-hidden');openModalSafe('feo-detail-modal');
