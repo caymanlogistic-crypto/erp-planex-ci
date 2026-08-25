@@ -1,0 +1,99 @@
+name: FEO Postdeploy Probe Temporary
+
+on:
+  push:
+    branches:
+      - diagnostic/feo-postdeploy-20260825
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Create read-only FEO render probe
+        run: |
+          cat > /tmp/feo_postdeploy_probe.php <<'PHP'
+          <?php
+          declare(strict_types=1);
+          $root = '/home/s/spugovxsim/planexp/public_html/erpv2';
+          chdir($root);
+          $_SERVER['REQUEST_URI'] = '/erpv2/company/feo/requests';
+          $_SERVER['REQUEST_METHOD'] = 'GET';
+          $_SERVER['HTTPS'] = 'on';
+          $_SESSION = [
+              'user_id' => 999999999,
+              'role_code' => 'company_owner',
+              'user_name' => 'FEO Postdeploy Probe',
+          ];
+          $config = require $root . '/bootstrap/app.php';
+          require_once $root . '/app/Support/entrypoint_dependencies.php';
+          require_once $root . '/app/Service/FeoXlsxParser.php';
+          require_once $root . '/app/Service/FeoRequestService.php';
+          require_once $root . '/app/Http/Controllers/Company/FeoRequestsController.php';
+          $db = new \App\Core\Database($config['database']);
+          $company = $db->fetch("SELECT id,name FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id LIMIT 1");
+          if (!$company) throw new RuntimeException('No active tenant company for probe');
+          $_SESSION['company_id'] = (int)$company['id'];
+          $_SESSION['company_name'] = (string)$company['name'];
+          $controller = new \App\Http\Controllers\Company\FeoRequestsController($config, $db);
+          ob_start();
+          try {
+              $controller->index();
+              $html = (string)ob_get_clean();
+          } catch (Throwable $e) {
+              while (ob_get_level() > 0) @ob_end_clean();
+              echo 'FEO_POSTDEPLOY_RENDER=FAIL' . PHP_EOL;
+              echo 'ERROR_CLASS=' . get_class($e) . PHP_EOL;
+              echo 'ERROR_MESSAGE=' . $e->getMessage() . PHP_EOL;
+              echo 'ERROR_FILE=' . $e->getFile() . ':' . $e->getLine() . PHP_EOL;
+              exit(2);
+          }
+          $checks = [
+              'PAGE_TITLE' => str_contains($html, 'Все заявки ФЭО'),
+              'NAV_PARENT' => str_contains($html, '>Заявки ФЭО</span>'),
+              'NAV_CHILD' => str_contains($html, '<span>Все заявки</span>'),
+              'NO_500_TEXT' => !str_contains($html, 'HTTP ERROR 500'),
+          ];
+          foreach ($checks as $name => $ok) echo $name . '=' . ($ok ? 'PASS' : 'FAIL') . PHP_EOL;
+          if (in_array(false, $checks, true)) {
+              echo 'FEO_POSTDEPLOY_RENDER=FAIL' . PHP_EOL;
+              exit(3);
+          }
+          echo 'FEO_RENDER_BYTES=' . strlen($html) . PHP_EOL;
+          echo 'FEO_POSTDEPLOY_RENDER=PASS' . PHP_EOL;
+          PHP
+      - name: Run production probe
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          EXPECTED_SHA: a915c607cc4b7fe29b7e5d1d2fb1a4b69daed216
+        run: |
+          set -euo pipefail
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes /tmp/feo_postdeploy_probe.php "$SSH_USER@$SSH_HOST:/tmp/feo_postdeploy_probe_${GITHUB_RUN_ID}.php"
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt')"
+          test "$marker" = "$EXPECTED_SHA"
+          echo "DEPLOYED_SHA=$marker" | tee feo_postdeploy_probe.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 '/tmp/feo_postdeploy_probe_${GITHUB_RUN_ID}.php'" | tee -a feo_postdeploy_probe.txt
+          grep -q '^FEO_POSTDEPLOY_RENDER=PASS$' feo_postdeploy_probe.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/feo_postdeploy_probe_${GITHUB_RUN_ID}.php'" || true
+      - name: Upload probe evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: feo-postdeploy-probe
+          path: feo_postdeploy_probe.txt
+          retention-days: 1
