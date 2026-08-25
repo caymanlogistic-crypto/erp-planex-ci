@@ -81,6 +81,7 @@ final class FeoRequestService
     {
         $stmt = $pdo->query('SELECT * FROM feo_imports ORDER BY id DESC LIMIT ' . max(1, min(100, $limit)));
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $latestImportId = isset($rows[0]['id']) ? (int)$rows[0]['id'] : null;
         $latestAppliedId = null;
         foreach ($rows as $row) {
             if (($row['status'] ?? '') === 'applied') {
@@ -90,6 +91,7 @@ final class FeoRequestService
         }
         foreach ($rows as &$row) {
             $row['can_rollback'] = ($row['status'] ?? '') === 'applied' && (int)$row['id'] === $latestAppliedId;
+            $row['can_delete'] = $latestImportId !== null && (int)$row['id'] === $latestImportId;
         }
         unset($row);
         return $rows;
@@ -129,10 +131,7 @@ final class FeoRequestService
     public function applyImport(PDO $pdo, array $rows, string $filename, string $fileHash, array $actor): array
     {
         if ($rows === []) throw new \RuntimeException('Нет заявок для импорта.');
-        $lockName = 'planex_feo_' . substr(hash('sha256', (string)$pdo->query('SELECT DATABASE()')->fetchColumn()), 0, 24);
-        $lock = $pdo->prepare('SELECT GET_LOCK(?, 10)');
-        $lock->execute([$lockName]);
-        if ((int)$lock->fetchColumn() !== 1) throw new \RuntimeException('Не удалось получить блокировку импорта ФЭО.');
+        $lockName = $this->acquireLock($pdo, 'импорта');
 
         try {
             $dup = $pdo->prepare("SELECT COUNT(*) FROM feo_imports WHERE file_hash = ? AND status = 'applied'");
@@ -207,18 +206,14 @@ final class FeoRequestService
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
         } finally {
-            $release = $pdo->prepare('SELECT RELEASE_LOCK(?)');
-            $release->execute([$lockName]);
+            $this->releaseLock($pdo, $lockName);
         }
     }
 
     public function rollbackLatest(PDO $pdo, int $importId, array $actor): array
     {
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
-        $lockName = 'planex_feo_' . substr(hash('sha256', (string)$pdo->query('SELECT DATABASE()')->fetchColumn()), 0, 24);
-        $lock = $pdo->prepare('SELECT GET_LOCK(?, 10)');
-        $lock->execute([$lockName]);
-        if ((int)$lock->fetchColumn() !== 1) throw new \RuntimeException('Не удалось получить блокировку отката ФЭО.');
+        $lockName = $this->acquireLock($pdo, 'отката');
 
         try {
             $pdo->beginTransaction();
@@ -227,46 +222,128 @@ final class FeoRequestService
                 throw new \RuntimeException('Откатывать можно только последнюю активную загрузку ФЭО.');
             }
 
-            $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id DESC');
-            $changesStmt->execute([$importId]);
-            $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
-            $fields = FeoXlsxParser::fields();
-            $restoreFields = array_values(array_filter($fields, static fn(string $f): bool => $f !== 'zayavka_id'));
-            $restoreSql = implode(',', array_map(static fn(string $f): string => '`' . $f . '`=?', $restoreFields));
-            $restore = $pdo->prepare("UPDATE feo_requests SET {$restoreSql}, current_import_id=? WHERE zayavka_id=? AND current_import_id=?");
-            $delete = $pdo->prepare('DELETE FROM feo_requests WHERE zayavka_id=? AND current_import_id=?');
-
-            $deleted = 0;
-            $restored = 0;
-            foreach ($changes as $change) {
-                $id = (string)$change['zayavka_id'];
-                if ($change['action'] === 'insert') {
-                    $delete->execute([$id, $importId]);
-                    $deleted += $delete->rowCount();
-                    continue;
-                }
-                $before = json_decode((string)$change['before_json'], true);
-                if (!is_array($before)) throw new \RuntimeException('Повреждён журнал отката ФЭО.');
-                $values = array_map(static fn(string $f) => $before[$f] ?? null, $restoreFields);
-                $restore->execute([...$values, $change['previous_import_id'] !== null ? (int)$change['previous_import_id'] : null, $id, $importId]);
-                if ($restore->rowCount() === 0) throw new \RuntimeException("Заявка {$id} была изменена после загрузки; безопасный откат остановлен.");
-                $restored++;
-            }
-
-            $userId = (int)($actor['user_id'] ?? 0) ?: null;
-            $role = (string)($actor['role_code'] ?? '');
-            $mark = $pdo->prepare("UPDATE feo_imports SET status='rolled_back',rolled_back_by_user_id=?,rolled_back_by_role=?,rolled_back_at=NOW() WHERE id=? AND status='applied'");
-            $mark->execute([$userId, $role !== '' ? $role : null, $importId]);
-            if ($mark->rowCount() !== 1) throw new \RuntimeException('Не удалось зафиксировать откат загрузки ФЭО.');
+            $result = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor);
             $pdo->commit();
-            return ['deleted' => $deleted, 'restored' => $restored, 'import_id' => $importId];
+            return $result;
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
         } finally {
-            $release = $pdo->prepare('SELECT RELEASE_LOCK(?)');
-            $release->execute([$lockName]);
+            $this->releaseLock($pdo, $lockName);
         }
+    }
+
+    public function deleteLatestImport(PDO $pdo, int $importId, array $actor): array
+    {
+        if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
+        $lockName = $this->acquireLock($pdo, 'удаления');
+
+        try {
+            $pdo->beginTransaction();
+            $latest = $pdo->query('SELECT * FROM feo_imports ORDER BY id DESC LIMIT 1 FOR UPDATE')->fetch(PDO::FETCH_ASSOC);
+            if (!$latest || (int)$latest['id'] !== $importId) {
+                throw new \RuntimeException('Полностью удалять загрузки ФЭО можно только строго с последней записи истории.');
+            }
+
+            $wasApplied = ($latest['status'] ?? '') === 'applied';
+            $rollback = ['deleted' => 0, 'restored' => 0, 'import_id' => $importId];
+            if ($wasApplied) {
+                $latestApplied = $pdo->query("SELECT id FROM feo_imports WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE")->fetchColumn();
+                if ((int)$latestApplied !== $importId) {
+                    throw new \RuntimeException('Активную загрузку можно удалить только после более новых активных загрузок.');
+                }
+                $rollback = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor);
+            }
+
+            $currentRefs = $pdo->prepare('SELECT COUNT(*) FROM feo_requests WHERE current_import_id=?');
+            $currentRefs->execute([$importId]);
+            if ((int)$currentRefs->fetchColumn() !== 0) {
+                throw new \RuntimeException('Удаление остановлено: на загрузку ещё ссылаются текущие заявки ФЭО.');
+            }
+
+            $historyRefs = $pdo->prepare('SELECT COUNT(*) FROM feo_import_changes WHERE previous_import_id=? AND import_id<>?');
+            $historyRefs->execute([$importId, $importId]);
+            if ((int)$historyRefs->fetchColumn() !== 0) {
+                throw new \RuntimeException('Удаление остановлено: загрузка ещё нужна для цепочки восстановления ФЭО.');
+            }
+
+            $delete = $pdo->prepare('DELETE FROM feo_imports WHERE id=?');
+            $delete->execute([$importId]);
+            if ($delete->rowCount() !== 1) {
+                throw new \RuntimeException('Не удалось удалить загрузку ФЭО.');
+            }
+
+            $pdo->commit();
+            return [
+                'import_id' => $importId,
+                'was_applied' => $wasApplied,
+                'deleted' => (int)$rollback['deleted'],
+                'restored' => (int)$rollback['restored'],
+            ];
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        } finally {
+            $this->releaseLock($pdo, $lockName);
+        }
+    }
+
+    private function rollbackAppliedImportInTransaction(PDO $pdo, int $importId, array $actor): array
+    {
+        if (!$pdo->inTransaction()) {
+            throw new \RuntimeException('Откат ФЭО должен выполняться внутри транзакции.');
+        }
+
+        $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id DESC');
+        $changesStmt->execute([$importId]);
+        $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
+        $fields = FeoXlsxParser::fields();
+        $restoreFields = array_values(array_filter($fields, static fn(string $f): bool => $f !== 'zayavka_id'));
+        $restoreSql = implode(',', array_map(static fn(string $f): string => '`' . $f . '`=?', $restoreFields));
+        $restore = $pdo->prepare("UPDATE feo_requests SET {$restoreSql}, current_import_id=? WHERE zayavka_id=? AND current_import_id=?");
+        $delete = $pdo->prepare('DELETE FROM feo_requests WHERE zayavka_id=? AND current_import_id=?');
+
+        $deleted = 0;
+        $restored = 0;
+        foreach ($changes as $change) {
+            $id = (string)$change['zayavka_id'];
+            if ($change['action'] === 'insert') {
+                $delete->execute([$id, $importId]);
+                $deleted += $delete->rowCount();
+                continue;
+            }
+            $before = json_decode((string)$change['before_json'], true);
+            if (!is_array($before)) throw new \RuntimeException('Повреждён журнал отката ФЭО.');
+            $values = array_map(static fn(string $f) => $before[$f] ?? null, $restoreFields);
+            $restore->execute([...$values, $change['previous_import_id'] !== null ? (int)$change['previous_import_id'] : null, $id, $importId]);
+            if ($restore->rowCount() === 0) throw new \RuntimeException("Заявка {$id} была изменена после загрузки; безопасный откат остановлен.");
+            $restored++;
+        }
+
+        $userId = (int)($actor['user_id'] ?? 0) ?: null;
+        $role = (string)($actor['role_code'] ?? '');
+        $mark = $pdo->prepare("UPDATE feo_imports SET status='rolled_back',rolled_back_by_user_id=?,rolled_back_by_role=?,rolled_back_at=NOW() WHERE id=? AND status='applied'");
+        $mark->execute([$userId, $role !== '' ? $role : null, $importId]);
+        if ($mark->rowCount() !== 1) throw new \RuntimeException('Не удалось зафиксировать откат загрузки ФЭО.');
+
+        return ['deleted' => $deleted, 'restored' => $restored, 'import_id' => $importId];
+    }
+
+    private function acquireLock(PDO $pdo, string $operation): string
+    {
+        $lockName = 'planex_feo_' . substr(hash('sha256', (string)$pdo->query('SELECT DATABASE()')->fetchColumn()), 0, 24);
+        $lock = $pdo->prepare('SELECT GET_LOCK(?, 10)');
+        $lock->execute([$lockName]);
+        if ((int)$lock->fetchColumn() !== 1) {
+            throw new \RuntimeException("Не удалось получить блокировку {$operation} ФЭО.");
+        }
+        return $lockName;
+    }
+
+    private function releaseLock(PDO $pdo, string $lockName): void
+    {
+        $release = $pdo->prepare('SELECT RELEASE_LOCK(?)');
+        $release->execute([$lockName]);
     }
 
     private function businessRow(array $row): array

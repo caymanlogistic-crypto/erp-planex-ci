@@ -163,6 +163,30 @@ final class FeoRequestsController
         redirect_to('/company/feo/requests');
     }
 
+    public function deleteImport(): void
+    {
+        requireRole(['company_owner','senior_logist']);
+        try {
+            [, $pdo] = $this->companyContext();
+            if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
+            $importId = (int)($_POST['import_id'] ?? 0);
+            $result = $this->service->deleteLatestImport($pdo, $importId, $_SESSION);
+            if (!empty($result['was_applied'])) {
+                $_SESSION['flash_success'] = sprintf(
+                    'Загрузка ФЭО #%d полностью удалена. Её изменения отменены: удалено новых заявок %d, восстановлено %d.',
+                    $importId,
+                    (int)$result['deleted'],
+                    (int)$result['restored']
+                );
+            } else {
+                $_SESSION['flash_success'] = sprintf('Откатанная загрузка ФЭО #%d полностью удалена из истории вместе с журналом изменений.', $importId);
+            }
+        } catch (\Throwable $e) {
+            $_SESSION['flash_error'] = 'Удаление загрузки ФЭО не выполнено: ' . $e->getMessage();
+        }
+        redirect_to('/company/feo/requests');
+    }
+
     private function companyContext(): array
     {
         $companyId = $this->service->getCompanyId();
