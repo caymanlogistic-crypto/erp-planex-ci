@@ -14,48 +14,10 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-      - name: Configure SSH
-        env:
-          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
-          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+      - name: Inspect toolbar search handler
         run: |
           set -euo pipefail
-          install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
-          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Inspect production FEO service result
-        env:
-          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
-          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
-          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
-          EXPECTED_SHA: bb2e0d9ddc3b94c82a6cb8ca4fa9d3a7c98e129f
-        run: |
-          set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
-          set -euo pipefail
-          ROOT=/home/s/spugovxsim/planexp/public_html/erpv2
-          MARKER=/home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
-          test "$(cat "$MARKER")" = "$EXPECTED_SHA"
-          PLANEX_ROOT="$ROOT" /usr/bin/php8.5 <<'PHP'
-          <?php
-          declare(strict_types=1);
-          $root=(string)getenv('PLANEX_ROOT');
-          $config=require $root.'/bootstrap/app.php';
-          require_once $root.'/app/Core/Database.php';
-          require_once $root.'/app/Support/crypto_helper.php';
-          require_once $root.'/app/Support/company_database.php';
-          require_once $root.'/app/Service/FeoRequestService.php';
-          $centralDb=new App\Core\Database($config['database']);
-          $service=new App\Service\FeoRequestService($config,$centralDb);
-          $companies=$centralDb->connection()->query("SELECT * FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
-          foreach($companies as $company){
-              $pdo=$service->localPdo($company);
-              if(!$service->moduleReady($pdo)) continue;
-              $cnt=(int)$pdo->query('SELECT COUNT(*) FROM feo_requests')->fetchColumn();
-              $probe=$service->listRequestsBatch($pdo,'176748 176754 111111 222222','',0,80);
-              $ids=array_map(static fn(array $r):string=>(string)($r['zayavka_id']??''),$probe['rows']??[]);
-              echo 'COMPANY_ID='.(int)$company['id'].' NAME='.(string)$company['name'].' FEO_TOTAL='.$cnt.' PROBE_TOTAL='.(int)($probe['total']??-1).' ROWS='.count($probe['rows']??[]).' ROW_IDS='.implode(',',$ids).' FOUND='.implode(',',($probe['found_ids']??[])).' MISSING='.implode(',',($probe['missing_ids']??[])).PHP_EOL;
-          }
-          PHP
-          REMOTE
+          echo '=== toolbar-search refs ==='
+          grep -n -C 8 'toolbar-search' public/assets/js/app.js || true
+          echo '=== table row hide refs ==='
+          grep -n -C 6 "classList.*is-hidden\|is-hidden.*classList" public/assets/js/app.js | tail -n 160 || true
