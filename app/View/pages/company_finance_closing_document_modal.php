@@ -30,14 +30,6 @@ $renderStatus = static function (array $status, bool $isExempt): string {
     }
     return '<span class="table-check table-check--no closing-doc-status" title="Документ не загружен" aria-label="Документа нет">×</span>';
 };
-$fileBadge = static function (string $name): array {
-    $ext = strtoupper((string) pathinfo($name, PATHINFO_EXTENSION));
-    if ($ext === 'PDF') return ['file-type-badge is-pdf', 'PDF'];
-    if (in_array($ext, ['DOC','DOCX','RTF','ODT'], true)) return ['file-type-badge is-doc', 'DOC'];
-    if (in_array($ext, ['XLS','XLSX','CSV','ODS'], true)) return ['file-type-badge is-xls', 'XLS'];
-    if (in_array($ext, ['JPG','JPEG','PNG','WEBP','GIF','BMP','TIF','TIFF','HEIC','HEIF'], true)) return ['file-type-badge is-img', 'IMG'];
-    return ['file-type-badge is-other', $ext !== '' ? $ext : 'FILE'];
-};
 ?>
 <style>
 [data-closing-modal-transaction] .closing-status-option{display:grid!important;grid-template-columns:14px minmax(0,1fr)!important;align-items:start!important;column-gap:7px!important;row-gap:0!important;margin-top:7px!important;cursor:pointer!important;line-height:1.25!important}
@@ -46,7 +38,7 @@ $fileBadge = static function (string $name): array {
 [data-closing-modal-transaction] .closing-edo-option{display:inline-grid!important;width:auto!important;grid-template-columns:14px auto!important;align-self:start!important;margin:0!important}
 [data-closing-modal-transaction] .closing-files-hint{margin:-2px 0 10px;font-size:10px;line-height:1.35;color:var(--text-muted)}
 [data-closing-modal-transaction] .closing-file-list{display:grid;gap:7px;margin-bottom:0!important}
-[data-closing-modal-transaction] .closing-file-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border:1px solid var(--line-soft);background:var(--surface);min-width:0}
+[data-closing-modal-transaction] .closing-file-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border:1px solid var(--line-soft);background:var(--surface);min-width:0}
 [data-closing-modal-transaction] .closing-file-row .file-info{min-width:0}
 [data-closing-modal-transaction] .closing-file-row .file-name{font-size:11px;font-weight:700;line-height:1.25}
 [data-closing-modal-transaction] .closing-file-row .file-meta{font-size:10px;line-height:1.3}
@@ -129,9 +121,8 @@ $fileBadge = static function (string $name): array {
                     <?php if(empty($visibleLinks)): ?>
                         <div class="field-msg">Привязанных файлов пока нет.</div>
                     <?php endif; ?>
-                    <?php foreach($visibleLinks as $link): [$badgeClass, $badgeText] = $fileBadge((string)$link['original_name']); ?>
+                    <?php foreach($visibleLinks as $link): ?>
                         <div class="file-item closing-file-row document-file-row has-file has-existing-file">
-                            <div class="<?= e($badgeClass) ?>"><?= e($badgeText) ?></div>
                             <div class="file-info">
                                 <div class="file-name"><?= e((string)($requirementLabels[$link['requirement_code']] ?? $link['requirement_code'])) ?></div>
                                 <div class="file-meta" title="<?= e((string)$link['original_name']) ?>"><?= e((string)$link['original_name']) ?><?= !empty($link['is_edo']) ? ' · ЭДО' : '' ?></div>
