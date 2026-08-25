@@ -44,6 +44,20 @@ $fileBadge = static function (string $name): array {
 [data-closing-modal-transaction] .closing-status-option input[type="checkbox"]{-webkit-appearance:checkbox!important;appearance:auto!important;width:14px!important;height:14px!important;min-width:14px!important;max-width:14px!important;min-height:14px!important;max-height:14px!important;padding:0!important;margin:1px 0 0!important;box-sizing:border-box!important;flex:0 0 14px!important;accent-color:var(--accent)}
 [data-closing-modal-transaction] .closing-status-option span{display:block;min-width:0}
 [data-closing-modal-transaction] .closing-edo-option{display:inline-grid!important;width:auto!important;grid-template-columns:14px auto!important;align-self:start!important;margin:0!important}
+[data-closing-modal-transaction] .closing-files-hint{margin:-2px 0 10px;font-size:10px;line-height:1.35;color:var(--text-muted)}
+[data-closing-modal-transaction] .closing-file-list{display:grid;gap:7px;margin-bottom:0!important}
+[data-closing-modal-transaction] .closing-file-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:8px;align-items:center;padding:8px;border:1px solid var(--line-soft);background:var(--surface);min-width:0}
+[data-closing-modal-transaction] .closing-file-row .file-info{min-width:0}
+[data-closing-modal-transaction] .closing-file-row .file-name{font-size:11px;font-weight:700;line-height:1.25}
+[data-closing-modal-transaction] .closing-file-row .file-meta{font-size:10px;line-height:1.3}
+[data-closing-modal-transaction] .closing-file-actions{display:flex;align-items:center;gap:5px;white-space:nowrap}
+[data-closing-modal-transaction] .closing-existing-edo-form{display:flex;align-items:center;gap:5px;margin:0}
+[data-closing-modal-transaction] .closing-existing-edo-form label{display:flex;align-items:center;gap:4px;margin:0;font-size:10px;color:var(--text-muted);cursor:pointer}
+[data-closing-modal-transaction] .closing-existing-edo-form input[type="checkbox"]{-webkit-appearance:checkbox!important;appearance:auto!important;width:14px!important;height:14px!important;margin:0!important;accent-color:var(--accent)}
+[data-closing-modal-transaction] .closing-file-unlink{margin:0!important}
+[data-closing-modal-transaction] .closing-add-doc{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}
+[data-closing-modal-transaction] .closing-add-doc-title{font-size:11px;font-weight:700;margin-bottom:2px}
+[data-closing-modal-transaction] .closing-doc-form{margin-top:8px!important;padding-top:0!important;border-top:0!important}
 </style>
 <div data-closing-modal-transaction="<?= (int)$row['id'] ?>">
     <div class="entity-form-layout closing-document-layout">
@@ -105,39 +119,51 @@ $fileBadge = static function (string $name): array {
         </div>
 
         <div class="entity-form-docs closing-document-docs">
-            <div class="section-title">Файлы</div>
+            <div class="section-title">Документы</div>
             <?php if(!empty($row['is_exempt'])): ?>
                 <div class="field-msg">Для операции действует исключение. Загрузка файлов не требуется.</div>
                 <div style="margin-top:10px"><a class="btn btn-secondary btn-sm" href="<?= e(app_url('/company/finance/closing-documents/exceptions')) ?>">Открыть исключения</a></div>
             <?php else: ?>
-                <div class="file-list">
+                <div class="closing-files-hint">Можно обновить признак ЭДО, удалить существующий файл или добавить недостающий документ.</div>
+                <div class="file-list closing-file-list">
                     <?php if(empty($visibleLinks)): ?>
                         <div class="field-msg">Привязанных файлов пока нет.</div>
                     <?php endif; ?>
                     <?php foreach($visibleLinks as $link): [$badgeClass, $badgeText] = $fileBadge((string)$link['original_name']); ?>
-                        <div class="file-item document-file-row has-file has-existing-file">
+                        <div class="file-item closing-file-row document-file-row has-file has-existing-file">
                             <div class="<?= e($badgeClass) ?>"><?= e($badgeText) ?></div>
                             <div class="file-info">
-                                <div class="file-name"><?= e((string)($requirementLabels[$link['requirement_code']] ?? $link['requirement_code'])) ?><?= !empty($link['is_edo']) ? ' · ЭДО' : '' ?></div>
-                                <div class="file-meta" title="<?= e((string)$link['original_name']) ?>"><?= e((string)$link['original_name']) ?></div>
+                                <div class="file-name"><?= e((string)($requirementLabels[$link['requirement_code']] ?? $link['requirement_code'])) ?></div>
+                                <div class="file-meta" title="<?= e((string)$link['original_name']) ?>"><?= e((string)$link['original_name']) ?><?= !empty($link['is_edo']) ? ' · ЭДО' : '' ?></div>
                             </div>
-                            <form method="post" action="<?= e(app_url('/company/finance/closing-documents/unlink-document')) ?>" class="inline-form closing-file-unlink" onsubmit="return confirm('Отвязать документ от этого платежа?');">
-                                <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
-                                <input type="hidden" name="link_id" value="<?= (int)$link['id'] ?>">
-                                <button type="submit" class="btn btn-ghost btn-sm" title="Отвязать файл">×</button>
-                            </form>
+                            <div class="closing-file-actions">
+                                <form method="post" action="<?= e(app_url('/company/finance/closing-documents/document-edo')) ?>" class="closing-existing-edo-form">
+                                    <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
+                                    <input type="hidden" name="link_id" value="<?= (int)$link['id'] ?>">
+                                    <label><input type="checkbox" name="is_edo" value="1"<?= !empty($link['is_edo']) ? ' checked' : '' ?>><span>ЭДО</span></label>
+                                    <button type="submit" class="btn btn-secondary btn-sm">Сохранить</button>
+                                </form>
+                                <form method="post" action="<?= e(app_url('/company/finance/closing-documents/unlink-document')) ?>" class="inline-form closing-file-unlink" onsubmit="return confirm('Отвязать документ от этого платежа?');">
+                                    <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
+                                    <input type="hidden" name="link_id" value="<?= (int)$link['id'] ?>">
+                                    <button type="submit" class="btn btn-ghost btn-sm" title="Отвязать файл">×</button>
+                                </form>
+                            </div>
                         </div>
                     <?php endforeach; ?>
                 </div>
 
-                <form method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/finance/closing-documents/upload-document')) ?>" class="closing-doc-form">
-                    <div class="field-note">Загрузить новый файл</div>
-                    <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
-                    <select name="requirement_code" class="field-select" required><option value="">Тип документа</option><?php foreach($acceptedCodes as $code=>$label):?><option value="<?= e($code) ?>"><?= e($label) ?></option><?php endforeach;?></select>
-                    <input type="file" name="document_file" class="field-input" required>
-                    <label class="closing-status-option closing-edo-option"><input type="checkbox" name="is_edo" value="1"><span>ЭДО</span></label>
-                    <button class="btn btn-primary btn-sm" type="submit">Загрузить и привязать</button>
-                </form>
+                <div class="closing-add-doc">
+                    <div class="closing-add-doc-title">Добавить документ</div>
+                    <div class="closing-files-hint">Выберите тип документа, файл и при необходимости отметьте получение по ЭДО.</div>
+                    <form method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/finance/closing-documents/upload-document')) ?>" class="closing-doc-form">
+                        <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
+                        <select name="requirement_code" class="field-select" required><option value="">Тип документа</option><?php foreach($acceptedCodes as $code=>$label):?><option value="<?= e($code) ?>"><?= e($label) ?></option><?php endforeach;?></select>
+                        <input type="file" name="document_file" class="field-input" required>
+                        <label class="closing-status-option closing-edo-option"><input type="checkbox" name="is_edo" value="1"><span>ЭДО</span></label>
+                        <button class="btn btn-primary btn-sm" type="submit">Загрузить и привязать</button>
+                    </form>
+                </div>
             <?php endif; ?>
         </div>
     </div>

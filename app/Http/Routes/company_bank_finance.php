@@ -27,4 +27,6 @@ $router->post('/company/finance/closing-documents/exceptions/remove', [$closingD
 $router->post('/company/finance/closing-documents/requirement-overrides', [$closingDocumentsController, 'saveRequirementOverrides']);
 $router->post('/company/finance/closing-documents/link-document', [$closingDocumentsController, 'linkDocument']);
 $router->post('/company/finance/closing-documents/upload-document', [$closingDocumentsController, 'uploadDocument']);
+$router->post('/company/finance/closing-documents/document-edo', [$closingDocumentsController, 'updateDocumentEdo']);
+$router->post('/company/finance/closing-documents/archive', [$closingDocumentsController, 'downloadArchive']);
 $router->post('/company/finance/closing-documents/unlink-document', [$closingDocumentsController, 'unlinkDocument']);
