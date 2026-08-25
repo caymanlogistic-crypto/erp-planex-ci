@@ -5,9 +5,11 @@ $controller = (string) file_get_contents($root . '/app/Http/Controllers/Company/
 $routes = (string) file_get_contents($root . '/app/Http/Routes/company_linear_trips.php');
 $service = (string) file_get_contents($root . '/app/Service/LinearTripServiceLineService.php');
 $serviceFinance = (string) file_get_contents($root . '/app/Service/LinearTripServiceFinanceService.php');
+$requestNormalizer = (string) file_get_contents($root . '/app/Service/LinearTripRequestNormalizer.php');
 $edit = (string) file_get_contents($root . '/app/Http/Controllers/Company/LinearTripActions/modal_edit_submit_p13.php');
 $ui = (string) file_get_contents($root . '/app/View/partials/company_linear_trip_services_bootstrap.php');
 $identityUi = (string) file_get_contents($root . '/app/View/partials/company_linear_trip_services_identity.php');
+$dateUi = (string) file_get_contents($root . '/public/assets/js/linear-trip-date-mode.js');
 $navigationCounters = (string) file_get_contents($root . '/app/Service/NavigationCounterService.php');
 $migration = (string) file_get_contents($root . '/database/migrations-local/120_create_linear_route_services.sql');
 $persistenceTest = (string) file_get_contents($root . '/tests/linear_trip_service_persistence_mysql_test.php');
@@ -21,8 +23,14 @@ foreach (['/company/trips/linear/service-lines'] as $token) {
 foreach (['linear_route_services', 'linear_route_service_payments', 'normalizeSubmitted', 'replaceForRoute', 'fetchByRouteIds', "'id' => $paymentId", 'LinearTripServiceFinanceService::syncRoute'] as $token) {
     if (!str_contains($service, $token)) throw new RuntimeException('service missing ' . $token);
 }
-foreach (['LINEAR_ROUTE_SERVICE_PAYMENT', "direction='PAYABLE'", "party_role='service'", 'finance_obligations', 'finance_operation_allocations'] as $token) {
+foreach (['LINEAR_ROUTE_SERVICE_PAYMENT', "direction='PAYABLE'", "party_role='service'", 'finance_obligations', 'finance_operation_allocations', 'finance_operations', 'SAVEPOINT', 'ROLLBACK TO SAVEPOINT', 'derived finance sync skipped'] as $token) {
     if (!str_contains($serviceFinance, $token)) throw new RuntimeException('service finance missing ' . $token);
+}
+foreach (['normalizeDateKinds', 'actual_unloading_date', 'planned_unloading_date', 'end_date_kind'] as $token) {
+    if (!str_contains($requestNormalizer, $token)) throw new RuntimeException('request normalizer missing ' . $token);
+}
+foreach (['data-trip-date-control="end"', 'endVisible', 'if (value(endVisible))', "setActive(endControl, value(factEnd) ? 'fact' : 'plan')"] as $token) {
+    if (!str_contains($dateUi, $token)) throw new RuntimeException('date UI missing ' . $token);
 }
 foreach (['LinearTripServiceLineService::normalizeSubmitted', 'LinearTripServiceLineService::replaceForRoute', 'P15_linear_trip_save_errors.log'] as $token) {
     if (!str_contains($edit, $token)) throw new RuntimeException('edit save missing ' . $token);
@@ -49,6 +57,17 @@ foreach (['replaceForRoute($pdo, 42, $create', 'replaceForRoute($pdo, 42, $edit'
     if (!str_contains($persistenceTest, $token)) throw new RuntimeException('persistence regression missing ' . $token);
 }
 
+require_once $root . '/app/Service/LinearTripRequestNormalizer.php';
+$normalizeDates = static fn (array $post): array => \App\Service\LinearTripRequestNormalizer::normalizeDateKinds($post);
+$plannedEnd = $normalizeDates(['end_date_kind' => '', 'planned_unloading_date' => '2026-08-25', 'actual_unloading_date' => '']);
+if (($plannedEnd['end_date_kind'] ?? '') !== 'plan') throw new RuntimeException('filled planned end date must infer plan mode');
+$actualEnd = $normalizeDates(['end_date_kind' => '', 'planned_unloading_date' => '', 'actual_unloading_date' => '2026-08-25']);
+if (($actualEnd['end_date_kind'] ?? '') !== 'fact') throw new RuntimeException('filled actual end date must infer fact mode');
+$emptyEnd = $normalizeDates(['end_date_kind' => '', 'planned_unloading_date' => '', 'actual_unloading_date' => '']);
+if (($emptyEnd['end_date_kind'] ?? 'x') !== '') throw new RuntimeException('empty end date must stay optional');
+$explicitEnd = $normalizeDates(['end_date_kind' => 'fact', 'planned_unloading_date' => '2026-08-25', 'actual_unloading_date' => '']);
+if (($explicitEnd['end_date_kind'] ?? '') !== 'fact') throw new RuntimeException('explicit valid end mode must be preserved for validation');
+
 if (str_contains($migration, 'UPDATE linear_routes') || str_contains($migration, 'INSERT INTO linear_route_services SELECT')) {
     throw new RuntimeException('migration must not backfill or mutate existing trip rows');
 }
@@ -62,6 +81,8 @@ if (str_contains($ui, 'delete list.dataset.servicePaymentUiReady')) {
 echo "linear_trip_multi_services_contract: PASS\n";
 echo "primary_transport=legacy_compatible\n";
 echo "additional_services=contractor_manual_description_payments\n";
+echo "additional_services_finance_sync=isolated_best_effort\n";
+echo "end_date_mode=filled_date_infers_mode_without_data_loss\n";
 echo "additional_services_ui=left_column_dynamic_due_fields_days_default_3_stepper\n";
 echo "planned_unloading_attention=current_or_past_plan_without_actual_is_red\n";
 echo "navigation_attention=global_child_counter_parent_sum_no_nested_output_buffer\n";

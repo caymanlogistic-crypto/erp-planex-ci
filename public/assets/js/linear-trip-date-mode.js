@@ -185,8 +185,14 @@
     }
 
     form.addEventListener('submit', function () {
-      form.querySelectorAll('[data-trip-date-control]').forEach(syncVisibleToBacking);
       var endControl = form.querySelector('[data-trip-date-control="end"]');
+      if (endControl && !selectedKind(endControl)) {
+        var endVisible = endControl.querySelector('[data-trip-date-visible]');
+        if (value(endVisible)) {
+          setActive(endControl, value(factEnd) ? 'fact' : 'plan');
+        }
+      }
+      form.querySelectorAll('[data-trip-date-control]').forEach(syncVisibleToBacking);
       if (endControl && !selectedKind(endControl)) {
         planEnd.value = '';
         factEnd.value = '';

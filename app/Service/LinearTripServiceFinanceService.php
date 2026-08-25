@@ -8,6 +8,7 @@ use Throwable;
 final class LinearTripServiceFinanceService
 {
     private const SOURCE_TYPE = 'LINEAR_ROUTE_SERVICE_PAYMENT';
+    private const SAVEPOINT = 'linear_trip_service_finance_sync';
 
     public static function syncRoute(PDO $pdo, int $routeId): int
     {
@@ -15,121 +16,158 @@ final class LinearTripServiceFinanceService
             return 0;
         }
 
-        $stmt = $pdo->prepare(
-            "SELECT sp.*, s.linear_route_id, s.contractor_id, s.service_name,
-                    c.name AS contractor_name, c.inn AS contractor_inn
-               FROM linear_route_service_payments sp
-               JOIN linear_route_services s
-                 ON s.id=sp.linear_route_service_id AND s.deleted_at IS NULL
-               JOIN contractors c ON c.id=s.contractor_id
-              WHERE s.linear_route_id=? AND sp.deleted_at IS NULL
-              ORDER BY s.sort_order,s.id,sp.sort_order,sp.id"
-        );
-        $stmt->execute([$routeId]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $ownsTransaction = !$pdo->inTransaction();
+        $savepointActive = false;
 
-        $activeKeys = [];
-        foreach ($rows as $row) {
-            $paymentId = (int) ($row['id'] ?? 0);
-            if ($paymentId <= 0) {
-                continue;
-            }
-
-            $sourceKey = self::sourceKey($paymentId);
-            $activeKeys[] = $sourceKey;
-            $amount = self::money((string) ($row['amount'] ?? '0'));
-            $dueDate = self::validDateOrNull($row['calculated_due_date'] ?? null);
-            $paidAmount = self::paidAmount($pdo, $sourceKey);
-            $status = self::status($amount, $paidAmount, $dueDate, (string) ($row['condition_type'] ?? ''));
-
-            $existing = self::findBySourceKey($pdo, $sourceKey);
-            if ($existing !== null) {
-                $update = $pdo->prepare(
-                    "UPDATE finance_obligations
-                        SET source_id=?,source_parent_id=?,direction='PAYABLE',party_role='service',
-                            counterparty_entity_type='contractor',counterparty_entity_id=?,counterparty_name=?,counterparty_inn=?,
-                            amount=?,condition_type=?,days_count=?,days_kind=?,specific_due_date=?,
-                            event_date=NULL,forecast_due_date=?,due_date=?,paid_amount=?,status=?,cancelled_at=NULL,
-                            updated_by_user_id=?,updated_by_role=?,updated_at=NOW()
-                      WHERE id=?"
-                );
-                $update->execute([
-                    $paymentId,
-                    $routeId,
-                    (int) $row['contractor_id'],
-                    (string) ($row['contractor_name'] ?? ''),
-                    (string) ($row['contractor_inn'] ?? ''),
-                    $amount,
-                    self::nullableString($row['condition_type'] ?? null),
-                    $row['days_count'] !== null ? (int) $row['days_count'] : null,
-                    self::nullableString($row['days_kind'] ?? null),
-                    self::validDateOrNull($row['specific_due_date'] ?? null),
-                    $dueDate,
-                    $dueDate,
-                    $paidAmount,
-                    $status,
-                    (int) ($row['updated_by_user_id'] ?? 0) ?: null,
-                    (string) ($row['updated_by_role'] ?? '') ?: 'system',
-                    (int) $existing['id'],
-                ]);
+        try {
+            if ($ownsTransaction) {
+                $pdo->beginTransaction();
             } else {
-                $insert = $pdo->prepare(
-                    "INSERT INTO finance_obligations
-                        (source_type,source_key,source_id,source_parent_type,source_parent_id,direction,party_role,
-                         counterparty_entity_type,counterparty_entity_id,counterparty_name,counterparty_inn,
-                         amount,condition_type,days_count,days_kind,specific_due_date,event_date,forecast_due_date,due_date,
-                         paid_amount,status,created_by_user_id,created_by_role,updated_by_user_id,updated_by_role)
-                     VALUES
-                        (?,?,?,'LINEAR_ROUTE',?,'PAYABLE','service','contractor',?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?)"
-                );
-                $insert->execute([
-                    self::SOURCE_TYPE,
-                    $sourceKey,
-                    $paymentId,
-                    $routeId,
-                    (int) $row['contractor_id'],
-                    (string) ($row['contractor_name'] ?? ''),
-                    (string) ($row['contractor_inn'] ?? ''),
-                    $amount,
-                    self::nullableString($row['condition_type'] ?? null),
-                    $row['days_count'] !== null ? (int) $row['days_count'] : null,
-                    self::nullableString($row['days_kind'] ?? null),
-                    self::validDateOrNull($row['specific_due_date'] ?? null),
-                    $dueDate,
-                    $dueDate,
-                    $paidAmount,
-                    $status,
-                    (int) ($row['created_by_user_id'] ?? 0) ?: null,
-                    (string) ($row['created_by_role'] ?? '') ?: 'system',
-                    (int) ($row['updated_by_user_id'] ?? 0) ?: null,
-                    (string) ($row['updated_by_role'] ?? '') ?: 'system',
-                ]);
+                $pdo->exec('SAVEPOINT ' . self::SAVEPOINT);
+                $savepointActive = true;
             }
 
-            $pdo->prepare('UPDATE linear_route_service_payments SET paid_amount=?,status=?,updated_at=NOW() WHERE id=?')
-                ->execute([$paidAmount, $status, $paymentId]);
-        }
+            $stmt = $pdo->prepare(
+                "SELECT sp.*, s.linear_route_id, s.contractor_id, s.service_name,
+                        c.name AS contractor_name, c.inn AS contractor_inn
+                   FROM linear_route_service_payments sp
+                   JOIN linear_route_services s
+                     ON s.id=sp.linear_route_service_id AND s.deleted_at IS NULL
+                   JOIN contractors c ON c.id=s.contractor_id
+                  WHERE s.linear_route_id=? AND sp.deleted_at IS NULL
+                  ORDER BY s.sort_order,s.id,sp.sort_order,sp.id"
+            );
+            $stmt->execute([$routeId]);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $stale = $pdo->prepare(
-            "SELECT id,source_key
-               FROM finance_obligations
-              WHERE source_type=? AND source_parent_type='LINEAR_ROUTE' AND source_parent_id=? AND cancelled_at IS NULL"
-        );
-        $stale->execute([self::SOURCE_TYPE, $routeId]);
-        foreach ($stale->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            if (!in_array((string) $row['source_key'], $activeKeys, true)) {
-                $pdo->prepare("UPDATE finance_obligations SET status='cancelled',cancelled_at=NOW(),updated_at=NOW() WHERE id=?")
-                    ->execute([(int) $row['id']]);
+            $activeKeys = [];
+            foreach ($rows as $row) {
+                $paymentId = (int) ($row['id'] ?? 0);
+                if ($paymentId <= 0) {
+                    continue;
+                }
+
+                $sourceKey = self::sourceKey($paymentId);
+                $activeKeys[] = $sourceKey;
+                $amount = self::money((string) ($row['amount'] ?? '0'));
+                $dueDate = self::validDateOrNull($row['calculated_due_date'] ?? null);
+                $paidAmount = self::paidAmount($pdo, $sourceKey);
+                $status = self::status($amount, $paidAmount, $dueDate, (string) ($row['condition_type'] ?? ''));
+
+                $existing = self::findBySourceKey($pdo, $sourceKey);
+                if ($existing !== null) {
+                    $update = $pdo->prepare(
+                        "UPDATE finance_obligations
+                            SET source_id=?,source_parent_id=?,direction='PAYABLE',party_role='service',
+                                counterparty_entity_type='contractor',counterparty_entity_id=?,counterparty_name=?,counterparty_inn=?,
+                                amount=?,condition_type=?,days_count=?,days_kind=?,specific_due_date=?,
+                                event_date=NULL,forecast_due_date=?,due_date=?,paid_amount=?,status=?,cancelled_at=NULL,
+                                updated_by_user_id=?,updated_by_role=?,updated_at=NOW()
+                          WHERE id=?"
+                    );
+                    $update->execute([
+                        $paymentId,
+                        $routeId,
+                        (int) $row['contractor_id'],
+                        (string) ($row['contractor_name'] ?? ''),
+                        (string) ($row['contractor_inn'] ?? ''),
+                        $amount,
+                        self::nullableString($row['condition_type'] ?? null),
+                        $row['days_count'] !== null ? (int) $row['days_count'] : null,
+                        self::nullableString($row['days_kind'] ?? null),
+                        self::validDateOrNull($row['specific_due_date'] ?? null),
+                        $dueDate,
+                        $dueDate,
+                        $paidAmount,
+                        $status,
+                        (int) ($row['updated_by_user_id'] ?? 0) ?: null,
+                        (string) ($row['updated_by_role'] ?? '') ?: 'system',
+                        (int) $existing['id'],
+                    ]);
+                } else {
+                    $insert = $pdo->prepare(
+                        "INSERT INTO finance_obligations
+                            (source_type,source_key,source_id,source_parent_type,source_parent_id,direction,party_role,
+                             counterparty_entity_type,counterparty_entity_id,counterparty_name,counterparty_inn,
+                             amount,condition_type,days_count,days_kind,specific_due_date,event_date,forecast_due_date,due_date,
+                             paid_amount,status,created_by_user_id,created_by_role,updated_by_user_id,updated_by_role)
+                         VALUES
+                            (?,?,?,'LINEAR_ROUTE',?,'PAYABLE','service','contractor',?,?,?,?,?,?,?,?,NULL,?,?,?,?,?,?,?,?)"
+                    );
+                    $insert->execute([
+                        self::SOURCE_TYPE,
+                        $sourceKey,
+                        $paymentId,
+                        $routeId,
+                        (int) $row['contractor_id'],
+                        (string) ($row['contractor_name'] ?? ''),
+                        (string) ($row['contractor_inn'] ?? ''),
+                        $amount,
+                        self::nullableString($row['condition_type'] ?? null),
+                        $row['days_count'] !== null ? (int) $row['days_count'] : null,
+                        self::nullableString($row['days_kind'] ?? null),
+                        self::validDateOrNull($row['specific_due_date'] ?? null),
+                        $dueDate,
+                        $dueDate,
+                        $paidAmount,
+                        $status,
+                        (int) ($row['created_by_user_id'] ?? 0) ?: null,
+                        (string) ($row['created_by_role'] ?? '') ?: 'system',
+                        (int) ($row['updated_by_user_id'] ?? 0) ?: null,
+                        (string) ($row['updated_by_role'] ?? '') ?: 'system',
+                    ]);
+                }
+
+                $pdo->prepare('UPDATE linear_route_service_payments SET paid_amount=?,status=?,updated_at=NOW() WHERE id=?')
+                    ->execute([$paidAmount, $status, $paymentId]);
             }
-        }
 
-        return count($activeKeys);
+            $stale = $pdo->prepare(
+                "SELECT id,source_key
+                   FROM finance_obligations
+                  WHERE source_type=? AND source_parent_type='LINEAR_ROUTE' AND source_parent_id=? AND cancelled_at IS NULL"
+            );
+            $stale->execute([self::SOURCE_TYPE, $routeId]);
+            foreach ($stale->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                if (!in_array((string) $row['source_key'], $activeKeys, true)) {
+                    $pdo->prepare("UPDATE finance_obligations SET status='cancelled',cancelled_at=NOW(),updated_at=NOW() WHERE id=?")
+                        ->execute([(int) $row['id']]);
+                }
+            }
+
+            if ($ownsTransaction) {
+                $pdo->commit();
+            } elseif ($savepointActive) {
+                $pdo->exec('RELEASE SAVEPOINT ' . self::SAVEPOINT);
+            }
+
+            return count($activeKeys);
+        } catch (Throwable $e) {
+            try {
+                if ($ownsTransaction && $pdo->inTransaction()) {
+                    $pdo->rollBack();
+                } elseif ($savepointActive && $pdo->inTransaction()) {
+                    $pdo->exec('ROLLBACK TO SAVEPOINT ' . self::SAVEPOINT);
+                    $pdo->exec('RELEASE SAVEPOINT ' . self::SAVEPOINT);
+                }
+            } catch (Throwable $rollbackError) {
+                error_log('[linear-trip-services] finance sync rollback failed: ' . $rollbackError->getMessage());
+            }
+
+            error_log(sprintf(
+                '[linear-trip-services] derived finance sync skipped route=%d: %s',
+                $routeId,
+                $e->getMessage()
+            ));
+            return 0;
+        }
     }
 
     private static function schemaReady(PDO $pdo): bool
     {
         return self::tableExists($pdo, 'finance_obligations')
-            && self::tableExists($pdo, 'finance_operation_allocations');
+            && self::tableExists($pdo, 'finance_operation_allocations')
+            && self::tableExists($pdo, 'finance_operations');
     }
 
     private static function sourceKey(int $paymentId): string
