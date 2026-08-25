@@ -1,7 +1,7 @@
 {
-  "migration_id": "121",
-  "workflow": "finance_closing_121_production_migration.yml",
+  "migration_id": "122",
+  "workflow": "feo_122_production_migration.yml",
   "source_sha_input": "source_sha",
   "confirmation_input": "confirm_migration",
-  "confirmation_value": "APPLY_FINANCE_CLOSING_121"
+  "confirmation_value": "APPLY_FEO_122"
 }
