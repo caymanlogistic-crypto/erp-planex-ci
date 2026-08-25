@@ -7,6 +7,13 @@ use ZipArchive;
 final class FeoXlsxParser
 {
     private const MAX_FILE_BYTES = 20 * 1024 * 1024;
+    private const MAX_ARCHIVE_ENTRIES = 2000;
+    private const MAX_EXPANDED_BYTES = 100 * 1024 * 1024;
+    private const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+    private const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+    private const PACKAGE_REL_NS = 'http://schemas.openxmlformats.org/package/2006/relationships';
+    private const XLSX_WORKBOOK_CONTENT_TYPE = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml';
+    private const AUXILIARY_HEADERS = ['ПП'];
 
     public static function fieldMap(): array
     {
@@ -80,15 +87,16 @@ final class FeoXlsxParser
 
         $zip = new ZipArchive();
         if ($zip->open($filePath) !== true) {
-            throw new \RuntimeException('Не удалось открыть XLSX-файл.');
+            throw new \RuntimeException('Файл не является корректным XLSX-документом.');
         }
 
         try {
+            $this->validatePackage($zip);
             $sharedStrings = $this->sharedStrings($zip);
             $sheetPath = $this->firstSheetPath($zip);
             $sheetXml = $zip->getFromName($sheetPath);
             if ($sheetXml === false) {
-                throw new \RuntimeException('Не найден первый лист XLSX.');
+                throw new \RuntimeException('Файл не является корректным XLSX: не найден первый рабочий лист.');
             }
             $rows = $this->readRows($sheetXml, $sharedStrings);
         } finally {
@@ -100,21 +108,7 @@ final class FeoXlsxParser
         }
 
         $headers = array_shift($rows);
-        $normalizedMap = [];
-        foreach (self::fieldMap() as $header => $field) {
-            $normalizedMap[$this->normalizeHeader($header)] = $field;
-        }
-
-        $columnMap = [];
-        foreach ($headers as $index => $header) {
-            $normalized = $this->normalizeHeader((string)$header);
-            if (isset($normalizedMap[$normalized])) {
-                $columnMap[$index] = $normalizedMap[$normalized];
-            }
-        }
-        if (!in_array('zayavka_id', $columnMap, true)) {
-            throw new \RuntimeException('В XLSX отсутствует обязательная колонка «Заявка, ID».');
-        }
+        $columnMap = $this->validateHeaderSchema($headers);
 
         $dateFields = ['data_zayavki','data_dogovora','data_sozdaniya_porucheniya','zakaz_s_ot_data_vygruzki','zayavka_zhdv_po'];
         $decimalFields = ['mass_netto','mass_brutto','dlina_mesta','shirina_mesta','vysota_mesta','summarnyy_obem','zakaz_s_op_stoimost'];
@@ -144,7 +138,7 @@ final class FeoXlsxParser
                 if ($this->rowIsEmpty($row)) {
                     continue;
                 }
-                throw new \RuntimeException("Строка {$sourceRow}: пустое значение «Заявка, ID». ");
+                throw new \RuntimeException("Строка {$sourceRow}: пустое значение «Заявка, ID».");
             }
             if (isset($seen[$id])) {
                 throw new \RuntimeException("Строка {$sourceRow}: заявка {$id} повторяется в файле.");
@@ -161,14 +155,113 @@ final class FeoXlsxParser
         return $result;
     }
 
+    private function validatePackage(ZipArchive $zip): void
+    {
+        if ($zip->numFiles <= 0 || $zip->numFiles > self::MAX_ARCHIVE_ENTRIES) {
+            throw new \RuntimeException('Файл не соответствует допустимой структуре XLSX.');
+        }
+        $expanded = 0;
+        for ($i = 0; $i < $zip->numFiles; $i++) {
+            $stat = $zip->statIndex($i);
+            if (!is_array($stat)) continue;
+            $expanded += (int)($stat['size'] ?? 0);
+            if ($expanded > self::MAX_EXPANDED_BYTES) {
+                throw new \RuntimeException('XLSX-файл превышает допустимый размер после распаковки.');
+            }
+        }
+
+        foreach (['[Content_Types].xml', 'xl/workbook.xml', 'xl/_rels/workbook.xml.rels'] as $required) {
+            if ($zip->locateName($required, ZipArchive::FL_NOCASE) === false) {
+                throw new \RuntimeException('Файл не является корректным XLSX-документом.');
+            }
+        }
+
+        $contentTypes = $zip->getFromName('[Content_Types].xml');
+        if ($contentTypes === false || !str_contains($contentTypes, self::XLSX_WORKBOOK_CONTENT_TYPE)) {
+            throw new \RuntimeException('Допустим только обычный XLSX-файл без макросов и другого формата книги.');
+        }
+    }
+
+    private function validateHeaderSchema(array $headers): array
+    {
+        $expected = [];
+        foreach (self::fieldMap() as $header => $field) {
+            $expected[$this->normalizeHeader($header)] = ['label' => $header, 'field' => $field];
+        }
+        $auxiliary = [];
+        foreach (self::AUXILIARY_HEADERS as $header) {
+            $auxiliary[$this->normalizeHeader($header)] = $header;
+        }
+
+        $seen = [];
+        $columnMap = [];
+        $unknown = [];
+        $duplicates = [];
+        $emptyColumns = [];
+
+        foreach ($headers as $index => $header) {
+            $raw = trim((string)($header ?? ''));
+            $normalized = $this->normalizeHeader($raw);
+            if ($normalized === '') {
+                $emptyColumns[] = (string)($index + 1);
+                continue;
+            }
+            if (isset($seen[$normalized])) {
+                $duplicates[] = $raw;
+                continue;
+            }
+            $seen[$normalized] = true;
+            if (isset($expected[$normalized])) {
+                $columnMap[$index] = $expected[$normalized]['field'];
+                continue;
+            }
+            if (isset($auxiliary[$normalized])) {
+                continue;
+            }
+            $unknown[] = $raw;
+        }
+
+        $missing = [];
+        foreach ($expected as $normalized => $meta) {
+            if (!isset($seen[$normalized])) $missing[] = $meta['label'];
+        }
+        foreach ($auxiliary as $normalized => $label) {
+            if (!isset($seen[$normalized])) $missing[] = $label;
+        }
+
+        $expectedCount = count(self::fieldMap()) + count(self::AUXILIARY_HEADERS);
+        if ($missing !== [] || $unknown !== [] || $duplicates !== [] || $emptyColumns !== [] || count($headers) !== $expectedCount) {
+            $parts = ["Формат XLSX не соответствует шаблону заявок ФЭО. Ожидаются {$expectedCount} колонок: «ПП» и 44 поля ФЭО."];
+            if ($missing !== []) $parts[] = 'Отсутствуют: ' . $this->formatHeaderList($missing) . '.';
+            if ($unknown !== []) $parts[] = 'Неизвестные или переименованные: ' . $this->formatHeaderList($unknown) . '.';
+            if ($duplicates !== []) $parts[] = 'Дублируются: ' . $this->formatHeaderList($duplicates) . '.';
+            if ($emptyColumns !== []) $parts[] = 'Пустые заголовки в колонках: ' . implode(', ', $emptyColumns) . '.';
+            if (count($headers) !== $expectedCount) $parts[] = 'Фактически колонок: ' . count($headers) . '.';
+            throw new \RuntimeException(implode(' ', $parts));
+        }
+
+        return $columnMap;
+    }
+
+    private function formatHeaderList(array $headers): string
+    {
+        $headers = array_values(array_unique(array_map(static fn($v): string => trim((string)$v), $headers)));
+        $limit = 12;
+        $shown = array_slice($headers, 0, $limit);
+        $text = implode(', ', array_map(static fn(string $h): string => '«' . $h . '»', $shown));
+        if (count($headers) > $limit) $text .= ' и ещё ' . (count($headers) - $limit);
+        return $text;
+    }
+
     private function sharedStrings(ZipArchive $zip): array
     {
         $xml = $zip->getFromName('xl/sharedStrings.xml');
         if ($xml === false) return [];
         $root = $this->xml($xml, 'sharedStrings.xml');
-        $root->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+        $root->registerXPathNamespace('m', self::MAIN_NS);
         $out = [];
         foreach ($root->xpath('//m:si') ?: [] as $si) {
+            $si->registerXPathNamespace('m', self::MAIN_NS);
             $parts = $si->xpath('.//m:t') ?: [];
             $out[] = implode('', array_map(static fn($t): string => (string)$t, $parts));
         }
@@ -179,45 +272,57 @@ final class FeoXlsxParser
     {
         $workbookRaw = $zip->getFromName('xl/workbook.xml');
         $relsRaw = $zip->getFromName('xl/_rels/workbook.xml.rels');
-        if ($workbookRaw === false || $relsRaw === false) return 'xl/worksheets/sheet1.xml';
+        if ($workbookRaw === false || $relsRaw === false) {
+            throw new \RuntimeException('Файл не является корректным XLSX: отсутствует описание книги.');
+        }
 
         $workbook = $this->xml($workbookRaw, 'workbook.xml');
-        $workbook->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
-        $workbook->registerXPathNamespace('r', 'http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+        $workbook->registerXPathNamespace('m', self::MAIN_NS);
+        $workbook->registerXPathNamespace('r', self::REL_NS);
         $sheets = $workbook->xpath('//m:sheets/m:sheet') ?: [];
-        if ($sheets === []) return 'xl/worksheets/sheet1.xml';
-        $attrs = $sheets[0]->attributes('http://schemas.openxmlformats.org/officeDocument/2006/relationships');
+        if ($sheets === []) throw new \RuntimeException('XLSX-файл не содержит рабочих листов.');
+        $attrs = $sheets[0]->attributes(self::REL_NS);
         $rid = (string)($attrs['id'] ?? '');
-        if ($rid === '') return 'xl/worksheets/sheet1.xml';
+        if ($rid === '') throw new \RuntimeException('Не удалось определить первый лист XLSX.');
 
         $rels = $this->xml($relsRaw, 'workbook.xml.rels');
-        foreach ($rels->Relationship as $rel) {
+        $relationships = $rels->children(self::PACKAGE_REL_NS);
+        foreach ($relationships->Relationship as $rel) {
             if ((string)$rel['Id'] !== $rid) continue;
             $target = ltrim((string)$rel['Target'], '/');
-            if (str_starts_with($target, 'xl/')) return $target;
-            return 'xl/' . $target;
+            if ($target === '' || str_contains($target, '..')) {
+                throw new \RuntimeException('Некорректная ссылка на рабочий лист XLSX.');
+            }
+            return str_starts_with($target, 'xl/') ? $target : 'xl/' . $target;
         }
-        return 'xl/worksheets/sheet1.xml';
+        throw new \RuntimeException('Не удалось найти первый рабочий лист XLSX.');
     }
 
     private function readRows(string $sheetXml, array $sharedStrings): array
     {
         $root = $this->xml($sheetXml, 'worksheet');
-        $root->registerXPathNamespace('m', 'http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+        $root->registerXPathNamespace('m', self::MAIN_NS);
         $out = [];
         foreach ($root->xpath('//m:sheetData/m:row') ?: [] as $row) {
             $cells = [];
-            foreach ($row->children('http://schemas.openxmlformats.org/spreadsheetml/2006/main')->c as $cell) {
+            foreach ($row->children(self::MAIN_NS)->c as $cell) {
                 $ref = (string)$cell['r'];
                 $index = $this->columnIndex($ref);
                 $type = (string)$cell['t'];
-                $children = $cell->children('http://schemas.openxmlformats.org/spreadsheetml/2006/main');
+                $children = $cell->children(self::MAIN_NS);
                 if ($type === 'inlineStr') {
                     $parts = $children->is->xpath('.//*[local-name()="t"]') ?: [];
                     $value = implode('', array_map(static fn($t): string => (string)$t, $parts));
                 } else {
                     $raw = isset($children->v) ? (string)$children->v : '';
-                    $value = $type === 's' ? ($sharedStrings[(int)$raw] ?? '') : $raw;
+                    if ($type === 's') {
+                        if ($raw === '' || !ctype_digit($raw) || !array_key_exists((int)$raw, $sharedStrings)) {
+                            throw new \RuntimeException('Повреждена таблица строк XLSX.');
+                        }
+                        $value = $sharedStrings[(int)$raw];
+                    } else {
+                        $value = $raw;
+                    }
                 }
                 $cells[$index] = $value;
             }
@@ -254,7 +359,8 @@ final class FeoXlsxParser
 
     private function normalizeHeader(string $value): string
     {
-        return trim(preg_replace('/\s+/u', ' ', $value) ?? $value);
+        $value = str_replace("\xc2\xa0", ' ', $value);
+        return trim(preg_replace('/[\p{Z}\s]+/u', ' ', $value) ?? $value);
     }
 
     private function normalizeText(mixed $value): ?string

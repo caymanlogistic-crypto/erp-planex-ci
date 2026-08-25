@@ -1,0 +1,56 @@
+name: FEO XLSX Contract
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Service/FeoXlsxParser.php'
+      - 'app/Http/Controllers/Company/FeoRequestsController.php'
+      - 'tests/feo_requests_contract_test.php'
+      - 'tests/feo_xlsx_parser_format_test.php'
+      - '.github/workflows/feo_xlsx_contract.yml'
+  push:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Service/FeoXlsxParser.php'
+      - 'app/Http/Controllers/Company/FeoRequestsController.php'
+      - 'tests/feo_requests_contract_test.php'
+      - 'tests/feo_xlsx_parser_format_test.php'
+      - '.github/workflows/feo_xlsx_contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feo-xlsx-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  parser-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify required PHP XLSX extensions
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -r "exit(class_exists('ZipArchive') && function_exists('simplexml_load_string') ? 0 : 1);"
+
+      - name: Syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l app/Service/FeoXlsxParser.php
+          php -l tests/feo_requests_contract_test.php
+          php -l tests/feo_xlsx_parser_format_test.php
+
+      - name: FEO requests contract
+        run: php tests/feo_requests_contract_test.php
+
+      - name: XLSX schema and sharedStrings regression
+        run: php tests/feo_xlsx_parser_format_test.php
