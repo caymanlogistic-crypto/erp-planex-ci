@@ -25,7 +25,7 @@ foreach (['feo_requests','feo_imports','feo_import_changes','current_import_id',
 }
 
 $route = file_get_contents($root . '/app/Http/Routes/company_feo_requests.php') ?: '';
-foreach (['/company/feo/requests','import/analyze','import/commit','import/rollback'] as $needle) {
+foreach (['/company/feo/requests','import/analyze','import/commit','import/rollback','import/delete'] as $needle) {
     $ok('route contains ' . $needle, str_contains($route, $needle));
 }
 $ok('route has no output-buffer navigation hack', !str_contains($route, "ob_start(static function"));
@@ -39,6 +39,8 @@ $ok('FEO workspace uses wide layout', str_contains($layout, "'/company/feo/reque
 $controller = file_get_contents($root . '/app/Http/Controllers/Company/FeoRequestsController.php') ?: '';
 $ok('controller passes config to layout scope', str_contains($controller, '$config = $this->config;'));
 $ok('controller passes db to layout scope', str_contains($controller, '$db = $this->db;'));
+$ok('delete action is privileged', str_contains($controller, 'public function deleteImport(): void') && str_contains($controller, "requireRole(['company_owner','senior_logist']);"));
+$ok('controller calls atomic delete service', str_contains($controller, 'deleteLatestImport($pdo, $importId, $_SESSION)'));
 
 $service = file_get_contents($root . '/app/Service/FeoRequestService.php') ?: '';
 $ok('rollback is LIFO', str_contains($service, "WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE"));
@@ -46,11 +48,19 @@ $ok('rollback restores snapshots', str_contains($service, 'before_json'));
 $ok('rollback deletes inserted requests only by import ownership', str_contains($service, 'DELETE FROM feo_requests WHERE zayavka_id=? AND current_import_id=?'));
 $ok('active duplicate hash is blocked', str_contains($service, "file_hash = ? AND status = 'applied'"));
 $ok('missing rows are counted, not deleted', str_contains($service, 'missing_count'));
+$ok('full delete is strict latest-history LIFO', str_contains($service, "SELECT * FROM feo_imports ORDER BY id DESC LIMIT 1 FOR UPDATE") && str_contains($service, 'Полностью удалять загрузки ФЭО можно только строго с последней записи истории.'));
+$ok('active full delete reuses transactional rollback', str_contains($service, 'rollbackAppliedImportInTransaction($pdo, $importId, $actor)'));
+$ok('full delete blocks current request references', str_contains($service, 'SELECT COUNT(*) FROM feo_requests WHERE current_import_id=?'));
+$ok('full delete blocks rollback-chain references', str_contains($service, 'SELECT COUNT(*) FROM feo_import_changes WHERE previous_import_id=? AND import_id<>?'));
+$ok('full delete purges import row', str_contains($service, 'DELETE FROM feo_imports WHERE id=?'));
+$ok('history exposes delete only for latest import', str_contains($service, "row['can_delete']") && str_contains($service, '$latestImportId'));
 
 $view = file_get_contents($root . '/app/View/pages/company_feo_requests.php') ?: '';
-foreach (['История загрузок','Загрузить XLSX','Анализировать','Применить загрузку','пропало из файла','Двойной клик'] as $needle) {
+foreach (['История загрузок','Загрузить XLSX','Анализировать','Применить загрузку','пропало из файла','Двойной клик','Удалить'] as $needle) {
     $ok('view contains ' . $needle, str_contains($view, $needle));
 }
+$ok('delete confirmation explains rollback plus purge', str_contains($view, 'ERP сначала отменит все её изменения в заявках, затем удалит запись загрузки и журнал изменений'));
+$ok('delete form posts to dedicated endpoint', str_contains($view, "app_url('/company/feo/requests/import/delete')"));
 
 $index = file_get_contents($root . '/public/index.php') ?: '';
 $ok('entrypoint loads FEO routes', str_contains($index, "company_feo_requests.php"));

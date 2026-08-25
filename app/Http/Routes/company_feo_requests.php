@@ -10,3 +10,4 @@ $router->get('/company/feo/requests/{id}/json', [$feoController, 'detail']);
 $router->post('/company/feo/requests/import/analyze', [$feoController, 'analyzeImport']);
 $router->post('/company/feo/requests/import/commit', [$feoController, 'commitImport']);
 $router->post('/company/feo/requests/import/rollback', [$feoController, 'rollbackImport']);
+$router->post('/company/feo/requests/import/delete', [$feoController, 'deleteImport']);
