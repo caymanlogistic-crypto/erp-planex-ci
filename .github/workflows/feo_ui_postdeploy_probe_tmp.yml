@@ -1,0 +1,63 @@
+name: FEO UI Postdeploy Probe Temporary
+
+on:
+  push:
+    branches:
+      - diagnostic/feo-ui-postdeploy-20260825
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Verify deployed FEO UI contract
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          EXPECTED_SHA: 2cc6a58be5698439d31296edb8a0a7b78c62b06d
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "EXPECTED_SHA='$EXPECTED_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          ROOT=/home/s/spugovxsim/planexp/public_html/erpv2
+          VIEW="$ROOT/app/View/pages/company_feo_requests.php"
+          MARKER=/home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+          test "$(cat "$MARKER")" = "$EXPECTED_SHA"
+          /usr/bin/php8.5 -l "$VIEW" >/dev/null
+          test "$(grep -o 'data-feo-id-filter' "$VIEW" | wc -l)" -ge 1
+          test "$(grep -o 'data-feo-content-filter' "$VIEW" | wc -l)" -ge 1
+          ! grep -q 'data-feo-id-search' "$VIEW"
+          ! grep -q 'data-feo-content-search' "$VIEW"
+          ! grep -q 'data-feo-id-clear' "$VIEW"
+          ! grep -q 'data-feo-content-clear' "$VIEW"
+          grep -Fq 'class="toolbar-right feo-search-toolbar"' "$VIEW"
+          grep -Fq 'class="toolbar-search feo-search-input"' "$VIEW"
+          grep -Fq 'class="toolbar-search feo-search-input feo-search-input--content"' "$VIEW"
+          grep -Fq 'min-height:360px' "$VIEW"
+          grep -Fq "scroll.style.height=height+'px'" "$VIEW"
+          grep -Fq "input.addEventListener('input',scheduleFilter)" "$VIEW"
+          grep -Fq 'setTimeout(function(){resetLoad();},280)' "$VIEW"
+          echo "DEPLOYED_SHA=$(cat "$MARKER")"
+          echo 'INVOICE_TOOLBAR_PATTERN=PASS'
+          echo 'NO_SEARCH_CLEAR_BUTTONS=PASS'
+          echo 'AUTO_FILTER_INPUT=PASS'
+          echo 'TABLE_VIEWPORT_HEIGHT=PASS'
+          echo 'FEO_UI_POSTDEPLOY=PASS'
+          REMOTE
