@@ -275,6 +275,13 @@ function company_breadcrumbs(array $route, string $companyName, ?array $company 
         return $crumbs;
     }
 
+    // /company/feo/requests
+    if ($page === 'feo' && ($parts[2] ?? '') === 'requests') {
+        $crumbs[] = ['label' => 'Заявки ФЭО', 'url' => null];
+        $crumbs[] = ['label' => 'Все заявки', 'url' => app_url('/company/feo/requests')];
+        return $crumbs;
+    }
+
     // /company/finance/bank-accounts and its nested matching-rules workflow
     if ($page === 'finance' && ($parts[2] ?? '') === 'bank-accounts') {
         $crumbs[] = ['label' => 'Финансы', 'url' => null];

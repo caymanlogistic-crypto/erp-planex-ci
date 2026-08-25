@@ -37,6 +37,7 @@ $matchingRulesActive = str_starts_with($requestPath, '/company/finance/settings/
 $financeDashboardActive = str_starts_with($requestPath, '/company/finance/dashboard');
 $operationsActive = str_starts_with($requestPath, '/company/finance/operations');
 $bankStatementSettingsActive = str_starts_with($requestPath, '/company/bank-statement-settings');
+$feoRequestsActive = str_starts_with($requestPath, '/company/feo/requests');
 
 $navigationCounters = ['bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0];
 if ($roleCode === 'company_owner' && (int)$companyId > 0) {
@@ -55,6 +56,7 @@ $wideWorkspacePrefixes = [
     '/company/trips/linear',
     '/company/trips/departures',
     '/company/route-executors',
+    '/company/feo/requests',
     '/company/contractors',
     '/company/drivers',
     '/company/vehicle-sets',
@@ -80,6 +82,7 @@ $directoriesOpen = ($roleCode !== 'superadmin') && (
     || $vehicleSetsActive
 );
 $tripsOpen = ($roleCode !== 'superadmin') && $tripsActive;
+$feoRequestsOpen = ($roleCode !== 'superadmin') && $feoRequestsActive;
 
 $userName = $_SESSION['user_name'] ?? '';
 $roleLabel = match($roleCode) {
@@ -222,6 +225,20 @@ if (empty($topbarCrumbs)) {
                     </a>
                     <a class="nav-sub-item<?= $departuresActive ? ' is-active' : '' ?>" href="<?= app_url('/company/trips/departures') ?>">
                         <span>Отходы</span>
+                    </a>
+                </div>
+                <div class="nav-item is-parent<?= $feoRequestsOpen ? ' is-open is-active' : '' ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 2.5H10L13 5.5V13.5H3V2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M10 2.5V5.5H13" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M5.5 8H10.5M5.5 10.5H10.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="nav-label">Заявки ФЭО</span>
+                    <svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="nav-sub<?= $feoRequestsOpen ? ' is-open' : '' ?>">
+                    <a class="nav-sub-item<?= $feoRequestsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/feo/requests') ?>">
+                        <span>Все заявки</span>
                     </a>
                 </div>
                 <a class="nav-item<?= $routeExecutorsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/route-executors') ?>">
@@ -410,6 +427,20 @@ if (empty($topbarCrumbs)) {
                     </a>
                     <a class="nav-sub-item<?= $departuresActive ? ' is-active' : '' ?>" href="<?= app_url('/company/trips/departures') ?>">
                         <span>Отходы</span>
+                    </a>
+                </div>
+                <div class="nav-item is-parent<?= $feoRequestsOpen ? ' is-open is-active' : '' ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 2.5H10L13 5.5V13.5H3V2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M10 2.5V5.5H13" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M5.5 8H10.5M5.5 10.5H10.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="nav-label">Заявки ФЭО</span>
+                    <svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="nav-sub<?= $feoRequestsOpen ? ' is-open' : '' ?>">
+                    <a class="nav-sub-item<?= $feoRequestsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/feo/requests') ?>">
+                        <span>Все заявки</span>
                     </a>
                 </div>
                 <a class="nav-item<?= $routeExecutorsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/route-executors') ?>">

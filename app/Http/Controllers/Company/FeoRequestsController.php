@@ -41,6 +41,9 @@ final class FeoRequestsController
             $dbError = $e->getMessage();
         }
 
+        $config = $this->config;
+        $db = $this->db;
+
         ob_start();
         require base_path('app/View/pages/company_feo_requests.php');
         $content = ob_get_clean();

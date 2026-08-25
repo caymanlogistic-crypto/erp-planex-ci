@@ -25,9 +25,20 @@ foreach (['feo_requests','feo_imports','feo_import_changes','current_import_id',
 }
 
 $route = file_get_contents($root . '/app/Http/Routes/company_feo_requests.php') ?: '';
-foreach (['/company/feo/requests','import/analyze','import/commit','import/rollback','ЗАЯВКИ ФЭО','Все заявки'] as $needle) {
-    $ok('route/menu contains ' . $needle, str_contains($route, $needle));
+foreach (['/company/feo/requests','import/analyze','import/commit','import/rollback'] as $needle) {
+    $ok('route contains ' . $needle, str_contains($route, $needle));
 }
+$ok('route has no output-buffer navigation hack', !str_contains($route, "ob_start(static function"));
+
+$layout = file_get_contents($root . '/app/View/layouts/main.php') ?: '';
+$ok('native FEO sidebar parent exists', str_contains($layout, '>Заявки ФЭО</span>'));
+$ok('native FEO sidebar child exists', str_contains($layout, '>Все заявки</span>'));
+$ok('FEO sidebar rendered in both owner and logist blocks', substr_count($layout, "app_url('/company/feo/requests')") >= 2);
+$ok('FEO workspace uses wide layout', str_contains($layout, "'/company/feo/requests'"));
+
+$controller = file_get_contents($root . '/app/Http/Controllers/Company/FeoRequestsController.php') ?: '';
+$ok('controller passes config to layout scope', str_contains($controller, '$config = $this->config;'));
+$ok('controller passes db to layout scope', str_contains($controller, '$db = $this->db;'));
 
 $service = file_get_contents($root . '/app/Service/FeoRequestService.php') ?: '';
 $ok('rollback is LIFO', str_contains($service, "WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE"));
