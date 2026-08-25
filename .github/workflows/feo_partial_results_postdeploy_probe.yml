@@ -42,8 +42,10 @@ jobs:
           declare(strict_types=1);
           $root=(string)getenv('PLANEX_ROOT');
           $config=require $root.'/bootstrap/app.php';
+          require_once $root.'/app/Core/Database.php';
           require_once $root.'/app/Support/crypto_helper.php';
           require_once $root.'/app/Support/company_database.php';
+          require_once $root.'/app/Service/FeoRequestService.php';
           $centralDb=new App\Core\Database($config['database']);
           $service=new App\Service\FeoRequestService($config,$centralDb);
           $companies=$centralDb->connection()->query("SELECT * FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>'' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
