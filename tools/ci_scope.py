@@ -17,7 +17,7 @@ SCOPE_PATTERNS = {
     "memory": r"^(docs/memory/|tools/(memory_integrity_check|active_registry_coverage_check)\.py$|tests/(memory_integrity_checker|active_registry_coverage_checker)_test\.py$)",
     "control_plane": r"^(\.github/workflows/|AGENTS\.md$|docs/GITHUB_CONTROL_PLANE\.md$|\.github/pull_request_template\.md$|tools/(agent_preflight|ci_scope)\.py$|tests/(agent_preflight|ci_scope)_test\.py$)",
 }
-CRITICAL_PATH_SCOPES = ("migrations", "tenant_schema", "control_plane")
+CRITICAL_PATH_SCOPES = ("migrations", "tenant_schema", "memory", "control_plane")
 KNOWN_CRITICAL_PATHS = (
     re.compile(r"^\.github/workflows/"),
     re.compile(r"^database/"),
@@ -30,6 +30,9 @@ KNOWN_CRITICAL_PATHS = (
     re.compile(r"^\.github/pull_request_template\.md$"),
     re.compile(r"^tools/(agent_preflight|ci_scope)\.py$"),
     re.compile(r"^tests/(agent_preflight|ci_scope)_test\.py$"),
+    re.compile(r"^docs/memory/"),
+    re.compile(r"^tools/(memory_integrity_check|active_registry_coverage_check)\.py$"),
+    re.compile(r"^tests/(memory_integrity_checker|active_registry_coverage_checker)_test\.py$"),
 )
 
 def git_changed_files(base: str, head: str) -> list[str]:

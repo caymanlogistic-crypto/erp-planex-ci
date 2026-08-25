@@ -36,7 +36,20 @@ for path in [
     "tools/agent_preflight.py",
     "AGENTS.md",
     "docs/GITHUB_CONTROL_PLANE.md",
+    "docs/memory/critical_records.json",
+    "tools/memory_integrity_check.py",
+    "tests/active_registry_coverage_checker_test.py",
 ]:
+    assert m.critical_path([path]), path
+
+# Memory governance is a first-class CRITICAL family: STANDARD must escalate before push.
+assert "memory" in m.CRITICAL_PATH_SCOPES
+for path in [
+    "docs/memory/machine_ownership.json",
+    "tools/active_registry_coverage_check.py",
+    "tests/memory_integrity_checker_test.py",
+]:
+    assert m.classify([path])["memory"], path
     assert m.critical_path([path]), path
 
 # Exact preserved legacy classifier families + additive memory/control_plane.
