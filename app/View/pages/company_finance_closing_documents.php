@@ -33,10 +33,20 @@ $requiresFill = static function (array $row): bool {
     }
     return false;
 };
+$displayCounterpartyName = static function (?string $name): string {
+    $name = trim((string)$name);
+    if ($name === 'Индивидуальный предприниматель Цыганов Сергей Сергеевич') {
+        return 'ИП Цыганов Сергей Сергеевич';
+    }
+    return $name !== '' ? $name : 'Без наименования';
+};
 ?>
 <style>
 .closing-documents-table th.col-check,.closing-documents-table td.col-check{text-align:center;vertical-align:middle!important;padding-left:2px;padding-right:2px}
 .closing-documents-table tbody tr[data-closing-transaction-id]{cursor:pointer}
+.closing-documents-table td.col-payment{min-width:0}
+.closing-documents-table td.col-payment .cell-main{white-space:nowrap}
+.closing-documents-table td.col-payment .cell-sub{white-space:normal;overflow-wrap:anywhere;word-break:break-word}
 .closing-download-btn{white-space:nowrap}
 .closing-doc-status{display:inline-flex;align-items:center;justify-content:center;width:1em;height:1em;font-size:24px;font-weight:700;line-height:1;white-space:nowrap}
 .closing-doc-status.table-check--yes{color:#2f7d32!important}
@@ -120,6 +130,7 @@ $requiresFill = static function (array $row): bool {
                 $rawAmount = $isIncoming ? (float)($row['credit_amount'] ?? 0) : (float)($row['debit_amount'] ?? 0);
                 $amount = ($isIncoming ? '+' : '-') . number_format($rawAmount, 2, ',', ' ') . ' ₽';
                 $directionLabel = $isIncoming ? 'Входящий' : 'Исходящий';
+                $counterpartyDisplayName = $displayCounterpartyName((string)($row['counterparty_name'] ?? ''));
                 $searchText = mb_strtolower(implode(' ', [
                     (string)($row['operation_date'] ?? ''),
                     (string)($row['document_number'] ?? ''),
@@ -133,8 +144,8 @@ $requiresFill = static function (array $row): bool {
             ?>
             <tr data-closing-transaction-id="<?= (int)$row['id'] ?>" data-problem="<?= !empty($row['is_problem']) ? '1' : '0' ?>" data-requires-fill="<?= $requiresFill($row) ? '1' : '0' ?>" data-search="<?= e($searchText) ?>"<?= !empty($row['is_problem']) ? ' class="is-problem"' : '' ?> title="Двойной клик — открыть документы">
                 <td class="cell-double"><span class="cell-main"><?= e(date('d.m.Y', strtotime((string)$row['operation_date']))) ?></span><span class="cell-sub">№ <?= e((string)($row['document_number'] ?: $row['id'])) ?></span></td>
-                <td class="cell-double"><span class="cell-main"><?= e($amount) ?></span><span class="cell-sub"><?= e($directionLabel) ?> · <?= e((string)($row['purpose'] ?? '')) ?></span></td>
-                <td class="cell-double"><span class="cell-main"><?= e((string)($row['counterparty_name'] ?: 'Без наименования')) ?></span><span class="cell-sub">ИНН <?= e($inn !== '' ? $inn : '—') ?></span></td>
+                <td class="cell-double col-payment"><span class="cell-main"><?= e($amount) ?></span><span class="cell-sub"><?= e($directionLabel) ?> · <?= e((string)($row['purpose'] ?? '')) ?></span></td>
+                <td class="cell-double"><span class="cell-main"><?= e($counterpartyDisplayName) ?></span><span class="cell-sub">ИНН <?= e($inn !== '' ? $inn : '—') ?></span></td>
                 <td><?php if(!empty($row['is_exempt'])):?><span class="text-muted">—</span><?php else:?><strong><?= e((string)($profile['label'] ?? '—')) ?></strong><?php endif;?></td>
                 <td class="col-check"><?= $renderRequirementStatus($row, 'agreement_or_application') ?></td>
                 <td class="col-check"><?= $renderRequirementStatus($row, 'act_or_upd') ?></td>
