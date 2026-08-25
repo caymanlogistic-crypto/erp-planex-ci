@@ -7,6 +7,9 @@ use PDO;
 
 final class FeoRequestService
 {
+    private const MAX_FILTER_IDS = 500;
+    private const DEFAULT_BATCH_SIZE = 80;
+
     public function __construct(
         private readonly array $config,
         private readonly Database $centralDb
@@ -38,35 +41,130 @@ final class FeoRequestService
         return (int)$stmt->fetchColumn() === 3;
     }
 
-    public function listRequests(PDO $pdo, string $search, int $page, int $perPage = 50): array
+    public function listRequestsBatch(PDO $pdo, string $idFilter, string $contentSearch, int $offset, int $limit = self::DEFAULT_BATCH_SIZE): array
     {
-        $page = max(1, $page);
-        $perPage = max(20, min(100, $perPage));
-        $params = [];
-        $where = '';
-        if ($search !== '') {
-            $needle = '%' . $search . '%';
-            $where = " WHERE zayavka_id LIKE ? OR polnoe_naim_zakazchika LIKE ? OR naim_oo_gruzootpravitel LIKE ? OR mno_region LIKE ? OR mno_mo LIKE ? OR mno_adres_pogruzki LIKE ? OR naim_otkhoda_fkko LIKE ? OR inn_zakazchika LIKE ? OR inn_oo_gruzootpravitel LIKE ? ";
-            $params = array_fill(0, 9, $needle);
+        $offset = max(0, $offset);
+        $limit = max(20, min(100, $limit));
+        $contentSearch = trim($contentSearch);
+        $requestedIds = $this->parseRequestIds($idFilter);
+        $hasRawIdFilter = trim($idFilter) !== '';
+
+        if ($hasRawIdFilter && $requestedIds === []) {
+            return [
+                'rows' => [],
+                'total' => 0,
+                'offset' => $offset,
+                'limit' => $limit,
+                'has_more' => false,
+                'requested_count' => 0,
+                'found_ids' => [],
+                'missing_ids' => [],
+                'filter_error' => 'Не найдено корректных номеров заявок. Введите номера заявок через пробел, запятую или точку с запятой.',
+            ];
         }
 
-        $count = $pdo->prepare('SELECT COUNT(*) FROM feo_requests' . $where);
+        $where = [];
+        $params = [];
+        if ($requestedIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($requestedIds), '?'));
+            $where[] = "zayavka_id IN ({$placeholders})";
+            array_push($params, ...$requestedIds);
+        }
+
+        if ($contentSearch !== '') {
+            $searchColumns = [
+                'zayavka_id',
+                'polnoe_naim_zakazchika', 'ur_adres_zakazchika', 'inn_zakazchika', 'nomer_dogovora',
+                'gruzopoluchatel', 'inn_op_gruzopoluchatelya', 'adres_dostavki_otkhodov', 'ur_adres_op_gruzopoluchatelya',
+                'inn_oo_gruzootpravitel', 'naim_oo_gruzootpravitel', 'ur_adres_oo_gruzootpravitelya',
+                'mno_region', 'mno_mo', 'mno_adres_pogruzki', 'naim_otkhoda_fkko', 'vid_tary', 'nomer_opasnogo_gr',
+                'adres_vygruzki_otkhodov', 'naim_ot_gruzoperevozchik', 'inn_ot', 'ur_adres_ot',
+                'zakaz_s_ot_status', 'nalichie_transport_nakl', 'zakaz_s_op_status', 'id_zakaza_s_op',
+                'kontakt_tel', 'tel_dopolnitelnyy', 'kontakt_email', 'mno_sh', 'mno_d',
+            ];
+            $needle = '%' . $contentSearch . '%';
+            $parts = [];
+            foreach ($searchColumns as $column) {
+                $parts[] = '`' . $column . '` LIKE ?';
+                $params[] = $needle;
+            }
+            $where[] = '(' . implode(' OR ', $parts) . ')';
+        }
+
+        $whereSql = $where === [] ? '' : ' WHERE ' . implode(' AND ', $where);
+        $count = $pdo->prepare('SELECT COUNT(*) FROM feo_requests' . $whereSql);
         $count->execute($params);
         $total = (int)$count->fetchColumn();
-        $pages = max(1, (int)ceil($total / $perPage));
-        if ($page > $pages) $page = $pages;
-        $offset = ($page - 1) * $perPage;
 
-        $sql = 'SELECT id,zayavka_id,data_zayavki,polnoe_naim_zakazchika,naim_oo_gruzootpravitel,mno_region,mno_mo,mno_adres_pogruzki,naim_otkhoda_fkko,mass_brutto,zayavka_zhdv_po,zakaz_s_ot_status,zakaz_s_op_status,updated_at FROM feo_requests' . $where . ' ORDER BY id DESC LIMIT ' . (int)$perPage . ' OFFSET ' . (int)$offset;
-        $stmt = $pdo->prepare($sql);
+        $stmt = $pdo->prepare(
+            'SELECT id,zayavka_id,mass_netto,mno_region,mno_mo,naim_oo_gruzootpravitel,mno_adres_pogruzki '
+            . 'FROM feo_requests' . $whereSql . ' ORDER BY id DESC LIMIT ' . (int)$limit . ' OFFSET ' . (int)$offset
+        );
         $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $foundIds = [];
+        $missingIds = [];
+        if ($requestedIds !== []) {
+            $placeholders = implode(',', array_fill(0, count($requestedIds), '?'));
+            $found = $pdo->prepare("SELECT zayavka_id FROM feo_requests WHERE zayavka_id IN ({$placeholders})");
+            $found->execute($requestedIds);
+            $foundIds = array_map('strval', $found->fetchAll(PDO::FETCH_COLUMN));
+            $foundLookup = array_fill_keys($foundIds, true);
+            foreach ($requestedIds as $id) {
+                if (!isset($foundLookup[$id])) $missingIds[] = $id;
+            }
+        }
 
         return [
-            'rows' => $stmt->fetchAll(PDO::FETCH_ASSOC),
+            'rows' => $rows,
             'total' => $total,
-            'page' => $page,
-            'pages' => $pages,
-            'per_page' => $perPage,
+            'offset' => $offset,
+            'limit' => $limit,
+            'has_more' => ($offset + count($rows)) < $total,
+            'requested_count' => count($requestedIds),
+            'found_ids' => $foundIds,
+            'missing_ids' => $missingIds,
+            'filter_error' => null,
+        ];
+    }
+
+    public function parseRequestIds(string $raw): array
+    {
+        $raw = trim($raw);
+        if ($raw === '') return [];
+        $parts = preg_split('/[,;\s]+/u', $raw) ?: [];
+        $ids = [];
+        $seen = [];
+        foreach ($parts as $part) {
+            $id = preg_replace('/\D+/u', '', trim((string)$part)) ?? '';
+            if ($id === '' || isset($seen[$id])) continue;
+            $seen[$id] = true;
+            $ids[] = $id;
+            if (count($ids) > self::MAX_FILTER_IDS) {
+                throw new \RuntimeException('За один поиск можно проверить не более 500 номеров заявок.');
+            }
+        }
+        return $ids;
+    }
+
+    public function freshnessState(PDO $pdo): array
+    {
+        $stmt = $pdo->query(
+            "SELECT filename,created_at,TIMESTAMPDIFF(DAY,created_at,NOW()) AS age_days,"
+            . "CASE WHEN created_at < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END AS is_stale "
+            . "FROM feo_imports WHERE status='applied' ORDER BY id DESC LIMIT 1"
+        );
+        $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if (!$row) {
+            return ['is_problem'=>true,'has_active_import'=>false,'latest_at'=>null,'latest_filename'=>null,'age_days'=>null];
+        }
+        return [
+            'is_problem' => (int)($row['is_stale'] ?? 0) === 1,
+            'has_active_import' => true,
+            'latest_at' => (string)$row['created_at'],
+            'latest_filename' => (string)$row['filename'],
+            'age_days' => (int)($row['age_days'] ?? 0),
         ];
     }
 
@@ -89,8 +187,10 @@ final class FeoRequestService
                 break;
             }
         }
+        $restoreCandidateId = $this->restoreCandidateId($pdo);
         foreach ($rows as &$row) {
             $row['can_rollback'] = ($row['status'] ?? '') === 'applied' && (int)$row['id'] === $latestAppliedId;
+            $row['can_restore'] = ($row['status'] ?? '') === 'rolled_back' && $restoreCandidateId !== null && (int)$row['id'] === $restoreCandidateId;
             $row['can_delete'] = $latestImportId !== null && (int)$row['id'] === $latestImportId;
         }
         unset($row);
@@ -214,17 +314,84 @@ final class FeoRequestService
     {
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
         $lockName = $this->acquireLock($pdo, 'отката');
-
         try {
             $pdo->beginTransaction();
             $latest = $pdo->query("SELECT * FROM feo_imports WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE")->fetch(PDO::FETCH_ASSOC);
             if (!$latest || (int)$latest['id'] !== $importId) {
                 throw new \RuntimeException('Откатывать можно только последнюю активную загрузку ФЭО.');
             }
-
             $result = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor);
             $pdo->commit();
             return $result;
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        } finally {
+            $this->releaseLock($pdo, $lockName);
+        }
+    }
+
+    public function restoreRolledBackImport(PDO $pdo, int $importId, array $actor): array
+    {
+        if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
+        $lockName = $this->acquireLock($pdo, 'возврата');
+        try {
+            $pdo->beginTransaction();
+            $candidateId = $this->restoreCandidateId($pdo, true);
+            if ($candidateId === null || $candidateId !== $importId) {
+                throw new \RuntimeException('Вернуть можно только следующую откатанную загрузку в строгой последовательности ФЭО.');
+            }
+            $import = $pdo->prepare("SELECT * FROM feo_imports WHERE id=? AND status='rolled_back' FOR UPDATE");
+            $import->execute([$importId]);
+            if (!$import->fetch(PDO::FETCH_ASSOC)) throw new \RuntimeException('Откатанная загрузка ФЭО не найдена.');
+
+            $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id ASC');
+            $changesStmt->execute([$importId]);
+            $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
+            $fields = FeoXlsxParser::fields();
+            $insertCols = implode(',', array_map(static fn(string $f): string => '`' . $f . '`', $fields));
+            $insertPlaceholders = implode(',', array_fill(0, count($fields), '?'));
+            $insert = $pdo->prepare("INSERT INTO feo_requests ({$insertCols},current_import_id) VALUES ({$insertPlaceholders},?)");
+            $updateFields = array_values(array_filter($fields, static fn(string $f): bool => $f !== 'zayavka_id'));
+            $updateSql = implode(',', array_map(static fn(string $f): string => '`' . $f . '`=?', $updateFields));
+            $update = $pdo->prepare("UPDATE feo_requests SET {$updateSql},current_import_id=? WHERE zayavka_id=?");
+            $find = $pdo->prepare('SELECT * FROM feo_requests WHERE zayavka_id=? FOR UPDATE');
+
+            $inserted = 0;
+            $updated = 0;
+            foreach ($changes as $change) {
+                $id = (string)$change['zayavka_id'];
+                $after = json_decode((string)$change['after_json'], true);
+                if (!is_array($after)) throw new \RuntimeException('Повреждён журнал возврата ФЭО.');
+                $find->execute([$id]);
+                $current = $find->fetch(PDO::FETCH_ASSOC) ?: null;
+
+                if (($change['action'] ?? '') === 'insert') {
+                    if ($current !== null) throw new \RuntimeException("Заявка {$id} уже существует; безопасный возврат остановлен.");
+                    $values = array_map(static fn(string $f) => $after[$f] ?? null, $fields);
+                    $insert->execute([...$values, $importId]);
+                    $inserted++;
+                    continue;
+                }
+
+                if ($current === null) throw new \RuntimeException("Заявка {$id} отсутствует; безопасный возврат остановлен.");
+                $before = json_decode((string)$change['before_json'], true);
+                if (!is_array($before)) throw new \RuntimeException('Повреждён журнал возврата ФЭО.');
+                $expectedPrevious = $change['previous_import_id'] !== null ? (int)$change['previous_import_id'] : null;
+                $currentPrevious = $current['current_import_id'] !== null ? (int)$current['current_import_id'] : null;
+                if ($currentPrevious !== $expectedPrevious || !$this->sameBusinessRow($current, $before)) {
+                    throw new \RuntimeException("Заявка {$id} изменилась после отката; безопасный возврат остановлен.");
+                }
+                $values = array_map(static fn(string $f) => $after[$f] ?? null, $updateFields);
+                $update->execute([...$values, $importId, $id]);
+                $updated++;
+            }
+
+            $mark = $pdo->prepare("UPDATE feo_imports SET status='applied',rolled_back_by_user_id=NULL,rolled_back_by_role=NULL,rolled_back_at=NULL WHERE id=? AND status='rolled_back'");
+            $mark->execute([$importId]);
+            if ($mark->rowCount() !== 1) throw new \RuntimeException('Не удалось вернуть загрузку ФЭО.');
+            $pdo->commit();
+            return ['import_id'=>$importId,'inserted'=>$inserted,'updated'=>$updated];
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
@@ -237,49 +404,30 @@ final class FeoRequestService
     {
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
         $lockName = $this->acquireLock($pdo, 'удаления');
-
         try {
             $pdo->beginTransaction();
             $latest = $pdo->query('SELECT * FROM feo_imports ORDER BY id DESC LIMIT 1 FOR UPDATE')->fetch(PDO::FETCH_ASSOC);
             if (!$latest || (int)$latest['id'] !== $importId) {
                 throw new \RuntimeException('Полностью удалять загрузки ФЭО можно только строго с последней записи истории.');
             }
-
             $wasApplied = ($latest['status'] ?? '') === 'applied';
-            $rollback = ['deleted' => 0, 'restored' => 0, 'import_id' => $importId];
+            $rollback = ['deleted'=>0,'restored'=>0,'import_id'=>$importId];
             if ($wasApplied) {
                 $latestApplied = $pdo->query("SELECT id FROM feo_imports WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE")->fetchColumn();
-                if ((int)$latestApplied !== $importId) {
-                    throw new \RuntimeException('Активную загрузку можно удалить только после более новых активных загрузок.');
-                }
+                if ((int)$latestApplied !== $importId) throw new \RuntimeException('Активную загрузку можно удалить только после более новых активных загрузок.');
                 $rollback = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor);
             }
-
             $currentRefs = $pdo->prepare('SELECT COUNT(*) FROM feo_requests WHERE current_import_id=?');
             $currentRefs->execute([$importId]);
-            if ((int)$currentRefs->fetchColumn() !== 0) {
-                throw new \RuntimeException('Удаление остановлено: на загрузку ещё ссылаются текущие заявки ФЭО.');
-            }
-
+            if ((int)$currentRefs->fetchColumn() !== 0) throw new \RuntimeException('Удаление остановлено: на загрузку ещё ссылаются текущие заявки ФЭО.');
             $historyRefs = $pdo->prepare('SELECT COUNT(*) FROM feo_import_changes WHERE previous_import_id=? AND import_id<>?');
-            $historyRefs->execute([$importId, $importId]);
-            if ((int)$historyRefs->fetchColumn() !== 0) {
-                throw new \RuntimeException('Удаление остановлено: загрузка ещё нужна для цепочки восстановления ФЭО.');
-            }
-
+            $historyRefs->execute([$importId,$importId]);
+            if ((int)$historyRefs->fetchColumn() !== 0) throw new \RuntimeException('Удаление остановлено: загрузка ещё нужна для цепочки восстановления ФЭО.');
             $delete = $pdo->prepare('DELETE FROM feo_imports WHERE id=?');
             $delete->execute([$importId]);
-            if ($delete->rowCount() !== 1) {
-                throw new \RuntimeException('Не удалось удалить загрузку ФЭО.');
-            }
-
+            if ($delete->rowCount() !== 1) throw new \RuntimeException('Не удалось удалить загрузку ФЭО.');
             $pdo->commit();
-            return [
-                'import_id' => $importId,
-                'was_applied' => $wasApplied,
-                'deleted' => (int)$rollback['deleted'],
-                'restored' => (int)$rollback['restored'],
-            ];
+            return ['import_id'=>$importId,'was_applied'=>$wasApplied,'deleted'=>(int)$rollback['deleted'],'restored'=>(int)$rollback['restored']];
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
@@ -288,45 +436,60 @@ final class FeoRequestService
         }
     }
 
+    private function restoreCandidateId(PDO $pdo, bool $forUpdate = false): ?int
+    {
+        $sql = 'SELECT id,status FROM feo_imports ORDER BY id ASC' . ($forUpdate ? ' FOR UPDATE' : '');
+        $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $latestAppliedId = 0;
+        foreach ($rows as $row) {
+            if (($row['status'] ?? '') === 'applied') $latestAppliedId = max($latestAppliedId, (int)$row['id']);
+        }
+        foreach ($rows as $row) {
+            if (($row['status'] ?? '') === 'rolled_back' && (int)$row['id'] > $latestAppliedId) return (int)$row['id'];
+        }
+        return null;
+    }
+
     private function rollbackAppliedImportInTransaction(PDO $pdo, int $importId, array $actor): array
     {
-        if (!$pdo->inTransaction()) {
-            throw new \RuntimeException('Откат ФЭО должен выполняться внутри транзакции.');
-        }
-
+        if (!$pdo->inTransaction()) throw new \RuntimeException('Откат ФЭО должен выполняться внутри транзакции.');
         $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id DESC');
         $changesStmt->execute([$importId]);
         $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
         $fields = FeoXlsxParser::fields();
         $restoreFields = array_values(array_filter($fields, static fn(string $f): bool => $f !== 'zayavka_id'));
         $restoreSql = implode(',', array_map(static fn(string $f): string => '`' . $f . '`=?', $restoreFields));
-        $restore = $pdo->prepare("UPDATE feo_requests SET {$restoreSql}, current_import_id=? WHERE zayavka_id=? AND current_import_id=?");
+        $restoreWithImport = $pdo->prepare("UPDATE feo_requests SET {$restoreSql},current_import_id=? WHERE zayavka_id=? AND current_import_id=?");
+        $restoreWithoutImport = $pdo->prepare("UPDATE feo_requests SET {$restoreSql},current_import_id=NULL WHERE zayavka_id=? AND current_import_id=?");
         $delete = $pdo->prepare('DELETE FROM feo_requests WHERE zayavka_id=? AND current_import_id=?');
-
-        $deleted = 0;
-        $restored = 0;
+        $deleted = 0; $restored = 0;
         foreach ($changes as $change) {
             $id = (string)$change['zayavka_id'];
-            if ($change['action'] === 'insert') {
-                $delete->execute([$id, $importId]);
-                $deleted += $delete->rowCount();
+            if (($change['action'] ?? '') === 'insert') {
+                $delete->execute([$id,$importId]);
+                if ($delete->rowCount() !== 1) throw new \RuntimeException("Заявка {$id} была изменена после загрузки; безопасный откат остановлен.");
+                $deleted++;
                 continue;
             }
             $before = json_decode((string)$change['before_json'], true);
             if (!is_array($before)) throw new \RuntimeException('Повреждён журнал отката ФЭО.');
             $values = array_map(static fn(string $f) => $before[$f] ?? null, $restoreFields);
-            $restore->execute([...$values, $change['previous_import_id'] !== null ? (int)$change['previous_import_id'] : null, $id, $importId]);
-            if ($restore->rowCount() === 0) throw new \RuntimeException("Заявка {$id} была изменена после загрузки; безопасный откат остановлен.");
+            if ($change['previous_import_id'] !== null) {
+                $restoreWithImport->execute([...$values,(int)$change['previous_import_id'],$id,$importId]);
+                $affected = $restoreWithImport->rowCount();
+            } else {
+                $restoreWithoutImport->execute([...$values,$id,$importId]);
+                $affected = $restoreWithoutImport->rowCount();
+            }
+            if ($affected === 0) throw new \RuntimeException("Заявка {$id} была изменена после загрузки; безопасный откат остановлен.");
             $restored++;
         }
-
         $userId = (int)($actor['user_id'] ?? 0) ?: null;
         $role = (string)($actor['role_code'] ?? '');
         $mark = $pdo->prepare("UPDATE feo_imports SET status='rolled_back',rolled_back_by_user_id=?,rolled_back_by_role=?,rolled_back_at=NOW() WHERE id=? AND status='applied'");
-        $mark->execute([$userId, $role !== '' ? $role : null, $importId]);
+        $mark->execute([$userId,$role !== '' ? $role : null,$importId]);
         if ($mark->rowCount() !== 1) throw new \RuntimeException('Не удалось зафиксировать откат загрузки ФЭО.');
-
-        return ['deleted' => $deleted, 'restored' => $restored, 'import_id' => $importId];
+        return ['deleted'=>$deleted,'restored'=>$restored,'import_id'=>$importId];
     }
 
     private function acquireLock(PDO $pdo, string $operation): string
@@ -334,9 +497,7 @@ final class FeoRequestService
         $lockName = 'planex_feo_' . substr(hash('sha256', (string)$pdo->query('SELECT DATABASE()')->fetchColumn()), 0, 24);
         $lock = $pdo->prepare('SELECT GET_LOCK(?, 10)');
         $lock->execute([$lockName]);
-        if ((int)$lock->fetchColumn() !== 1) {
-            throw new \RuntimeException("Не удалось получить блокировку {$operation} ФЭО.");
-        }
+        if ((int)$lock->fetchColumn() !== 1) throw new \RuntimeException("Не удалось получить блокировку {$operation} ФЭО.");
         return $lockName;
     }
 
