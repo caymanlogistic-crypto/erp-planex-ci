@@ -2,6 +2,7 @@
 
 $root = dirname(__DIR__);
 $bootstrap = (string) file_get_contents($root . '/app/View/partials/company_linear_trip_services_bootstrap.php');
+$registryHover = (string) file_get_contents($root . '/public/assets/js/linear-trip-document-delete.js');
 
 $assert = static function (bool $condition, string $message): void {
     if (!$condition) {
@@ -24,5 +25,16 @@ foreach ([
 }
 $assert(str_contains($bootstrap, ".linear-trip-registry.is-service-grid td{vertical-align:top}"), 'service rows may align body cells without changing canonical header alignment');
 $assert(!str_contains($bootstrap, ".linear-trip-registry.is-service-grid th,.linear-trip-registry.is-service-grid td"), 'service mode must not override canonical header alignment');
+foreach ([
+    "is-route-hover",
+    "var(--table-row-hover)",
+    "data-linear-route-id",
+    "routeHoverReady",
+    "body.addEventListener('mouseover'",
+    "body.addEventListener('mouseout'",
+    "row.dataset.linearRouteId === routeId",
+] as $token) {
+    $assert(str_contains($registryHover, $token), 'registry route-group hover contract missing: ' . $token);
+}
 
 fwrite(STDOUT, "linear_trip_registry_service_layout_contract: PASS\n");

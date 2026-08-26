@@ -69,3 +69,64 @@
     });
   }).observe(document.body, {childList: true, subtree: true});
 }());
+
+(function () {
+  'use strict';
+
+  function ensureHoverStyle() {
+    if (document.getElementById('linear-trip-route-hover-style')) return;
+    var style = document.createElement('style');
+    style.id = 'linear-trip-route-hover-style';
+    style.textContent = '.linear-trip-registry tbody tr.is-route-hover td{background:var(--table-row-hover);}';
+    document.head.appendChild(style);
+  }
+
+  function routeRow(node, body) {
+    if (!node || !node.closest) return null;
+    var row = node.closest('.linear-trip-registry tbody tr[data-linear-route-id]');
+    return row && row.parentNode === body ? row : null;
+  }
+
+  function setRouteHover(body, routeId, active) {
+    if (!routeId) return;
+    body.querySelectorAll('tr[data-linear-route-id]').forEach(function (row) {
+      if (row.dataset.linearRouteId === routeId) row.classList.toggle('is-route-hover', active);
+    });
+  }
+
+  function bindRegistry(table) {
+    if (!table || table.dataset.routeHoverReady === '1') return;
+    var body = table.tBodies && table.tBodies[0];
+    if (!body) return;
+    table.dataset.routeHoverReady = '1';
+    ensureHoverStyle();
+
+    body.addEventListener('mouseover', function (event) {
+      var row = routeRow(event.target, body);
+      if (!row) return;
+      var from = routeRow(event.relatedTarget, body);
+      if (from && from.dataset.linearRouteId === row.dataset.linearRouteId) return;
+      setRouteHover(body, row.dataset.linearRouteId, true);
+    });
+
+    body.addEventListener('mouseout', function (event) {
+      var row = routeRow(event.target, body);
+      if (!row) return;
+      var to = routeRow(event.relatedTarget, body);
+      if (to && to.dataset.linearRouteId === row.dataset.linearRouteId) return;
+      setRouteHover(body, row.dataset.linearRouteId, false);
+    });
+  }
+
+  function scanRegistries(root) {
+    if (!root || !root.querySelectorAll) return;
+    if (root.matches && root.matches('.linear-trip-registry')) bindRegistry(root);
+    root.querySelectorAll('.linear-trip-registry').forEach(bindRegistry);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', function () { scanRegistries(document); }, {once: true});
+  } else {
+    scanRegistries(document);
+  }
+}());
