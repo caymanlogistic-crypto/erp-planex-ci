@@ -196,6 +196,13 @@
     if (!modal) return;
     var totals = modal.querySelector('.trip-view-totals');
     if (!totals || totals.dataset.additionalServicesMarginReady === '1') return;
+    var serverAdditionalCard = totalCardByLabel(totals, 'Доп. услуги');
+    if (serverAdditionalCard) {
+      totals.dataset.additionalServicesMarginReady = '1';
+      totals.classList.add('has-additional-services');
+      ensureMarginStyle();
+      return;
+    }
     var routeId = routeIdFromModal(modal);
     if (!routeId) return;
     var customerCard = totalCardByLabel(totals, 'Заказчик');
