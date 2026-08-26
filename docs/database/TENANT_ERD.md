@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `39969bcca02b28ec05795796dceb7b5aee80b59ed98d0192a166deeaa653bee1`
+**Schema fingerprint:** `0e3936545d16bf1ec00caeef76dbbaea4a74ca9c18d1b8b33a46096b5f883531`
 
 ## Architecture overview
 
@@ -121,10 +121,12 @@ Tables: `cargo_types`, `linear_route_financial_terms`, `linear_route_payments`, 
 ```mermaid
 erDiagram
   T_feo_imports ||--o{ T_feo_import_changes : "fk_feo_import_changes_import"
+  T_feo_placement_blocks ||--o{ T_feo_placement_block_requests : "fk_feo_placement_block_requests_block"
+  T_feo_placement_blocks ||--o{ T_feo_placement_current : "fk_feo_placement_current_source_block"
   T_feo_imports ||--o{ T_feo_requests : "fk_feo_requests_current_import"
 ```
 
-Tables: `feo_import_changes`, `feo_imports`, `feo_requests`
+Tables: `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_requests`
 
 ## System / Migration metadata
 

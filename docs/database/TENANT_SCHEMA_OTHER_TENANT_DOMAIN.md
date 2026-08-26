@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `39969bcca02b28ec05795796dceb7b5aee80b59ed98d0192a166deeaa653bee1`
+**Schema fingerprint:** `0e3936545d16bf1ec00caeef76dbbaea4a74ca9c18d1b8b33a46096b5f883531`
 
 ## `feo_import_changes`
 
@@ -63,6 +63,78 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
+
+## `feo_placement_block_requests`
+
+**Domain:** Other tenant domain  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `block_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `zayavka_id` | `varchar(64)` | NO | NULL | — | `MUL` |
+| `position_no` | `int unsigned` | NO | `0` | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_feo_placement_request_id` (`zayavka_id`)
+- **UNIQUE** `uk_feo_placement_block_request` (`block_id`, `zayavka_id`)
+
+### Physical foreign keys
+
+- `fk_feo_placement_block_requests_block`: (`block_id`) → `feo_placement_blocks`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
+
+## `feo_placement_blocks`
+
+**Domain:** Other tenant domain  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `name` | `varchar(255)` | YES | NULL | — | — |
+| `block_type` | `enum('addition','exclusion')` | NO | NULL | — | `MUL` |
+| `status` | `enum('applied','disabled')` | NO | `applied` | — | `MUL` |
+| `source_type` | `enum('manual','xls','xlsx')` | NO | `manual` | — | — |
+| `source_filename` | `varchar(255)` | YES | NULL | — | — |
+| `source_file_key` | `varchar(128)` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_feo_placement_blocks_status_id` (`status`, `id`)
+- **INDEX** `idx_feo_placement_blocks_type_id` (`block_type`, `id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `feo_placement_current`
+
+**Domain:** Other tenant domain  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `zayavka_id` | `varchar(64)` | NO | NULL | — | `PRI` |
+| `source_block_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`zayavka_id`)
+- **INDEX** `idx_feo_placement_current_source_block` (`source_block_id`)
+
+### Physical foreign keys
+
+- `fk_feo_placement_current_source_block`: (`source_block_id`) → `feo_placement_blocks`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `feo_requests`
 
