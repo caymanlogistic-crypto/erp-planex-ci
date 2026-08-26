@@ -1,0 +1,149 @@
+name: FEO Map Placement 123 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact canonical SHA containing migration 123 tooling'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_FEO_123 to authorize production migration 123'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: feo-123-production-migration
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+
+jobs:
+  migrate-123:
+    if: ${{ inputs.confirm_migration == 'APPLY_FEO_123' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+
+      - name: Validate exact source and tooling
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          php -l scripts/feo_apply_123.php
+          php -l scripts/feo_verify_123.php
+          test -s database/migrations-local/123_create_feo_map_placement.sql
+
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" \
+            -d '{"state":"pending","context":"erpv2/migration123","description":"FEO placement tenant migration 123 in progress"}' >/dev/null
+
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Upload isolated migration tooling
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/feo_verify_123.php "$SSH_USER@$SSH_HOST:/tmp/feo_verify123_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/feo_apply_123.php "$SSH_USER@$SSH_HOST:/tmp/feo_apply123_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes database/migrations-local/123_create_feo_map_placement.sql "$SSH_USER@$SSH_HOST:/tmp/feo_123_${GITHUB_RUN_ID}.sql"
+
+      - name: Snapshot before
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/feo_verify123_${GITHUB_RUN_ID}.php'" | tee feo123_before.txt
+          grep -q 'FEO_123_READ_ONLY_OK' feo123_before.txt
+
+      - name: Apply migration 123 to active tenant databases
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_MIGRATION_PATH='/tmp/feo_123_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/feo_apply123_${GITHUB_RUN_ID}.php'" | tee feo123_migration.txt
+          grep -q 'FEO_123_OK' feo123_migration.txt
+
+      - name: Snapshot after and verify invariants
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/feo_verify123_${GITHUB_RUN_ID}.php'" | tee feo123_after.txt
+          python3 - "$(sed -n 's/^FEO_123_SNAPSHOT=//p' feo123_before.txt)" "$(sed -n 's/^FEO_123_SNAPSHOT=//p' feo123_after.txt)" <<'PY'
+          import json,sys
+          before,after=map(json.loads,sys.argv[1:3])
+          b={x['company_id']:x for x in before}; a={x['company_id']:x for x in after}
+          if set(b)!=set(a): raise SystemExit('active tenant set changed during migration')
+          for cid,row in a.items():
+              if row['base_feo_tables']!=3 or row['placement_tables']!=3 or row['migration_123']!=1:
+                  raise SystemExit(f'company {cid}: migration 123 incomplete')
+              for key in ('feo_requests','feo_imports','feo_changes','placement_blocks','placement_members','placement_current'):
+                  if row[key]!=b[cid][key]: raise SystemExit(f'company {cid}: business rows changed for {key}')
+          print('FEO_123_INVARIANTS_OK')
+          PY
+
+      - name: HTTP acceptance
+        run: test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+
+      - name: Publish final migration status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          if [ "$JOB_STATUS" = success ]; then state=success; desc='FEO placement migration 123 verified'; else state=failure; desc='FEO placement migration 123 failed'; fi
+          python3 - "$state" "$desc" > /tmp/payload.json <<'PY'
+          import json,sys
+          print(json.dumps({'state':sys.argv[1],'context':'erpv2/migration123','description':sys.argv[2]}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "rm -f '/tmp/feo_verify123_${GITHUB_RUN_ID}.php' '/tmp/feo_apply123_${GITHUB_RUN_ID}.php' '/tmp/feo_123_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true

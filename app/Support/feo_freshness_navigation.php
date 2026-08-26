@@ -13,38 +13,61 @@ if (!function_exists('registerFeoFreshnessNavigation')) {
         $companyId = (int)(getSessionCompanyId() ?? 0);
         if ($companyId <= 0) return;
 
+        $freshnessProblem = false;
         try {
             $service = new FeoRequestService($config, $centralDb);
             $company = $service->loadCompany($companyId);
-            if (!$company || ($company['status'] ?? '') !== 'active') return;
-            $pdo = $service->localPdo($company);
-            if (!$service->moduleReady($pdo)) return;
-            $freshness = $service->freshnessState($pdo);
-            if (empty($freshness['is_problem'])) return;
+            if ($company && ($company['status'] ?? '') === 'active') {
+                $pdo = $service->localPdo($company);
+                if ($service->moduleReady($pdo)) {
+                    $freshness = $service->freshnessState($pdo);
+                    $freshnessProblem = !empty($freshness['is_problem']);
+                }
+            }
         } catch (\Throwable) {
-            return;
+            $freshnessProblem = false;
         }
 
         $registered = true;
-        register_shutdown_function(static function (): void {
+        register_shutdown_function(static function () use ($freshnessProblem): void {
             foreach (headers_list() as $header) {
                 if (stripos($header, 'Content-Type:') === 0 && stripos($header, 'application/json') !== false) return;
             }
-            echo <<<'HTML'
+            $problem = $freshnessProblem ? 'true' : 'false';
+            echo <<<HTML
 <script>
 (function(){
-  var links=document.querySelectorAll('a.nav-sub-item[href*="/company/feo/requests"]');
-  links.forEach(function(link){
-    var sub=link.closest('.nav-sub');
+  var allLinks=document.querySelectorAll('a.nav-sub-item[href$="/company/feo/requests"]');
+  allLinks.forEach(function(allLink){
+    var sub=allLink.closest('.nav-sub');
     var parent=sub ? sub.previousElementSibling : null;
-    if(!parent || parent.querySelector('[data-feo-freshness-badge]')) return;
-    var badge=document.createElement('span');
-    badge.className='nav-count is-alert';
-    badge.setAttribute('data-feo-freshness-badge','1');
-    badge.title='Требуется обновить заявки ФЭО: последняя активная загрузка старше 7 дней или отсутствует.';
-    badge.textContent='1';
-    var chevron=parent.querySelector('.nav-chevron');
-    if(chevron) parent.insertBefore(badge,chevron); else parent.appendChild(badge);
+    if(!sub || !parent) return;
+    if(!sub.querySelector('[data-feo-placement-nav]')){
+      var meta=document.querySelector('meta[name="erp-base-path"]');
+      var base=meta ? (meta.getAttribute('content')||'') : '';
+      var link=document.createElement('a');
+      link.className='nav-sub-item';
+      link.setAttribute('data-feo-placement-nav','1');
+      link.href=base+'/company/feo/requests/map-placement';
+      link.innerHTML='<span>Размещение на карте</span>';
+      sub.appendChild(link);
+    }
+    var placement=sub.querySelector('[data-feo-placement-nav]');
+    if(placement && /\/company\/feo\/requests\/map-placement\/?$/.test(location.pathname)){
+      allLink.classList.remove('is-active');
+      placement.classList.add('is-active');
+      sub.classList.add('is-open');
+      parent.classList.add('is-open','is-active');
+    }
+    if({$problem} && !parent.querySelector('[data-feo-freshness-badge]')){
+      var badge=document.createElement('span');
+      badge.className='nav-count is-alert';
+      badge.setAttribute('data-feo-freshness-badge','1');
+      badge.title='Требуется обновить заявки ФЭО: последняя активная загрузка старше 7 дней или отсутствует.';
+      badge.textContent='1';
+      var chevron=parent.querySelector('.nav-chevron');
+      if(chevron) parent.insertBefore(badge,chevron); else parent.appendChild(badge);
+    }
   });
 }());
 </script>
