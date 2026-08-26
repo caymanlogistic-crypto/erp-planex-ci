@@ -10,7 +10,54 @@ $fmtMass = static function ($value): string {
 };
 ?>
 <style>
-.feo-placement-head{margin-bottom:10px}.feo-placement-summary{display:flex;gap:10px;flex-wrap:wrap;align-items:center}.feo-placement-kpi{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px 11px;min-width:180px}.feo-placement-kpi b{font-size:18px}.feo-placement-kpi span{display:block;font-size:11px;color:var(--text-muted);margin-top:2px}.feo-placement-table-card{display:block;min-width:0}.feo-placement-toolbar{min-height:42px;height:auto;padding:6px 8px;gap:8px;flex-wrap:wrap}.feo-placement-table{width:100%;table-layout:fixed}.feo-placement-table th,.feo-placement-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.feo-placement-table tbody tr[data-placement-block-id]{cursor:pointer}.feo-placement-table tbody tr[data-placement-block-id]:hover{background:var(--accent-bg)}.feo-placement-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.feo-placement-wide{grid-column:1/-1}.feo-placement-radio-row{display:flex;gap:12px;flex-wrap:wrap}.feo-placement-radio{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--line-soft);background:var(--surface-form);cursor:pointer}.feo-placement-textarea{min-height:180px;resize:vertical}.feo-placement-source-file{display:none}.feo-placement-source-file.is-active{display:block}.feo-placement-manual.is-hidden{display:none}.feo-placement-analysis{margin-top:10px}.feo-placement-analysis-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.feo-placement-stat{border:1px solid var(--line-soft);background:var(--surface-form);padding:8px 10px}.feo-placement-stat b{display:block;font-size:17px}.feo-placement-stat span{font-size:11px;color:var(--text-muted)}.feo-placement-list{max-height:54vh;overflow:auto}.feo-placement-list table{width:100%;table-layout:fixed}.feo-placement-list th,.feo-placement-list td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.feo-placement-confirm-copy{display:grid;gap:7px}.feo-placement-confirm-effect{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px 10px}.feo-placement-danger{color:var(--danger,#b42318)}.feo-placement-detail-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}.feo-placement-detail-meta>div{border:1px solid var(--line-soft);background:var(--surface-form);padding:8px 10px}.feo-placement-detail-meta span{display:block;color:var(--text-muted);font-size:11px;margin-bottom:2px}@media(max-width:900px){.feo-placement-form-grid{grid-template-columns:1fr}.feo-placement-analysis-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.feo-placement-wide{grid-column:auto}}
+.feo-placement-head{margin-bottom:10px}
+.feo-placement-summary{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.feo-placement-kpi{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px 11px;min-width:180px}
+.feo-placement-kpi b{font-size:18px}
+.feo-placement-kpi span{display:block;font-size:11px;color:var(--text-muted);margin-top:2px}
+.feo-placement-table-card{display:block;min-width:0;border:0!important;box-shadow:none!important;background:transparent!important}
+.feo-placement-toolbar{min-height:42px;height:auto;padding:6px 8px;gap:8px;flex-wrap:wrap}
+.feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.feo-placement-block-search-input{width:460px;min-width:320px;max-width:min(460px,80vw)}
+.feo-placement-block-search-results{padding:8px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
+.feo-placement-block-search-results.is-hidden{display:none}
+.feo-placement-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px}
+.feo-placement-search-table{width:100%;table-layout:fixed}
+.feo-placement-search-table th,.feo-placement-search-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feo-placement-search-table tbody tr[data-placement-search-block-id]{cursor:pointer}
+.feo-placement-search-table tbody tr[data-placement-search-block-id]:hover{background:var(--accent-bg)}
+.feo-placement-table{width:100%;table-layout:fixed}
+.feo-placement-table th,.feo-placement-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feo-placement-table tbody tr[data-placement-block-id]{cursor:pointer}
+.feo-placement-table tbody tr[data-placement-block-id]:hover{background:var(--accent-bg)}
+.feo-placement-status{font-weight:700}
+.feo-placement-status--applied{color:var(--success,#2f7d32)}
+.feo-placement-status--disabled{color:var(--danger,#b42318)}
+.feo-placement-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.feo-placement-wide{grid-column:1/-1}
+.feo-placement-radio-row{display:flex;gap:12px;flex-wrap:wrap}
+.feo-placement-radio{display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid var(--line-soft);background:var(--surface-form);cursor:pointer}
+.feo-placement-textarea{min-height:180px;resize:vertical}
+.feo-placement-source-file{display:none}
+.feo-placement-source-file.is-active{display:block}
+.feo-placement-manual.is-hidden{display:none}
+.feo-placement-live-validation{margin-top:7px}
+.feo-placement-live-validation.success{color:var(--success,#2f7d32)}
+.feo-placement-live-validation.warn{color:var(--danger,#b42318)}
+.feo-placement-confirm-copy{display:grid;gap:7px}
+.feo-placement-confirm-effect{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px 10px}
+.feo-placement-danger{color:var(--danger,#b42318)}
+.feo-placement-detail-meta{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:10px}
+.feo-placement-detail-meta>div{border:1px solid var(--line-soft);background:var(--surface-form);padding:8px 10px}
+.feo-placement-detail-meta span{display:block;color:var(--text-muted);font-size:11px;margin-bottom:2px}
+.feo-placement-list{max-height:54vh;overflow:auto}
+.feo-placement-list table{width:100%;table-layout:fixed}
+.feo-placement-list th,.feo-placement-list td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(max-width:900px){
+  .feo-placement-form-grid{grid-template-columns:1fr}
+  .feo-placement-wide{grid-column:auto}
+  .feo-placement-block-search-input{width:min(100%,86vw);min-width:240px}
+}
 </style>
 
 <?php if (!empty($successFlash)): ?><div class="notice success"><?= e((string)$successFlash) ?></div><?php endif; ?>
@@ -43,13 +90,18 @@ $fmtMass = static function ($value): string {
 <div class="table-card table-card--standard feo-placement-table-card">
   <div class="table-toolbar feo-placement-toolbar">
     <div class="found-label">Блоки размещения: <b><?= count($blocks) ?></b></div>
-    <div class="toolbar-right"><button type="button" class="btn btn-secondary btn--toolbar" data-placement-open-current>Актуальные заявки</button></div>
+    <div class="toolbar-right feo-placement-toolbar-actions">
+      <input type="text" class="toolbar-search feo-placement-block-search-input" data-placement-block-search placeholder="Найти заявку в блоках" autocomplete="off">
+      <button type="button" class="btn btn-secondary btn--toolbar" data-placement-open-current>Актуальные заявки</button>
+    </div>
   </div>
+  <div class="feo-placement-block-search-results is-hidden" data-placement-block-search-results></div>
   <div class="table-scroll">
     <table class="table feo-placement-table">
       <thead><tr><th style="width:8%">ID</th><th style="width:23%">Название</th><th style="width:13%">Тип</th><th style="width:12%">Заявок</th><th style="width:14%">Масса, кг</th><th style="width:14%">Источник</th><th style="width:16%">Дата / статус</th></tr></thead>
       <tbody>
       <?php foreach ($blocks as $block): ?>
+        <?php $statusApplied = ($block['status'] ?? '') === 'applied'; ?>
         <tr data-placement-block-id="<?= (int)$block['id'] ?>">
           <td>#<?= (int)$block['id'] ?></td>
           <td><?= e((string)($block['name'] ?: '—')) ?></td>
@@ -57,7 +109,7 @@ $fmtMass = static function ($value): string {
           <td><?= (int)($block['request_count'] ?? 0) ?></td>
           <td><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></td>
           <td><?= ($block['source_type'] ?? '') === 'manual' ? 'Ручной ввод' : strtoupper((string)$block['source_type']) ?></td>
-          <td><?= e($fmtDateTime($block['created_at'] ?? null)) ?> · <?= ($block['status'] ?? '') === 'applied' ? 'Применяется' : 'Отключён' ?></td>
+          <td><?= e($fmtDateTime($block['created_at'] ?? null)) ?> · <span class="feo-placement-status <?= $statusApplied ? 'feo-placement-status--applied' : 'feo-placement-status--disabled' ?>"><?= $statusApplied ? 'Применяется' : 'Отключён' ?></span></td>
         </tr>
       <?php endforeach; ?>
       <?php if (!$blocks): ?><tr><td colspan="7" class="text-muted">Блоки ещё не созданы.</td></tr><?php endif; ?>
@@ -77,21 +129,16 @@ $fmtMass = static function ($value): string {
           <div class="field"><label class="field-label">Название, необязательно</label><input class="field-input" type="text" name="name" maxlength="255"></div>
           <div class="field"><label class="field-label">Тип блока</label><div class="feo-placement-radio-row"><label class="feo-placement-radio"><input type="radio" name="block_type" value="addition" checked> Добавление</label><label class="feo-placement-radio"><input type="radio" name="block_type" value="exclusion"> Исключение</label></div></div>
           <div class="field feo-placement-wide"><label class="field-label">Источник</label><div class="feo-placement-radio-row"><label class="feo-placement-radio"><input type="radio" name="source_mode" value="manual" checked> Ручной ввод</label><label class="feo-placement-radio"><input type="radio" name="source_mode" value="file"> XLS / XLSX</label></div></div>
-          <div class="field feo-placement-wide feo-placement-manual" data-placement-manual><label class="field-label">Заявки</label><textarea class="field-input feo-placement-textarea" name="request_ids" data-placement-ids placeholder="Вставьте любой текст с шестизначными ID. Для Excel/markdown-таблицы используется только первый столбец."></textarea><div class="field-hint">Можно вставить сразу несколько заявок, после вставки список можно вручную дополнять и редактировать.</div></div>
+          <div class="field feo-placement-wide feo-placement-manual" data-placement-manual>
+            <label class="field-label">Заявки</label>
+            <textarea class="field-input feo-placement-textarea" name="request_ids" data-placement-ids placeholder="Вставьте любой текст с шестизначными ID. Для Excel/markdown-таблицы используется только первый столбец."></textarea>
+            <div class="field-hint">Можно вставить сразу несколько заявок, после вставки список можно вручную дополнять и редактировать.</div>
+            <div class="notice is-hidden feo-placement-live-validation" data-placement-live-validation></div>
+          </div>
           <div class="field feo-placement-wide feo-placement-source-file" data-placement-file><label class="field-label">Файл XLS / XLSX</label><input class="field-input" type="file" name="source_file" accept=".xls,.xlsx"><div class="field-hint">Система читает только первый столбец и отбирает самостоятельные последовательности ровно из 6 цифр.</div></div>
         </div>
       </form>
       <div class="notice warn is-hidden" data-placement-create-error></div>
-      <div class="feo-placement-analysis is-hidden" data-placement-analysis>
-        <div class="feo-placement-analysis-grid">
-          <div class="feo-placement-stat"><b data-placement-stat="selected_count">0</b><span>заявок в блоке</span></div>
-          <div class="feo-placement-stat"><b data-placement-stat="selected_mass_kg">0</b><span>масса выбранных, кг</span></div>
-          <div class="feo-placement-stat"><b data-placement-stat="effect_count">0</b><span>изменится в актуальном составе</span></div>
-          <div class="feo-placement-stat"><b data-placement-stat="effect_mass">0</b><span>масса изменения, кг</span></div>
-        </div>
-        <div class="notice warn is-hidden" data-placement-duplicates></div>
-        <div class="notice warn is-hidden" data-placement-repeat></div>
-      </div>
     </div>
     <div class="modal-foot is-spaced"><button type="button" class="btn btn-ghost" data-close-modal="feo-placement-create-modal">Отмена</button><button type="button" class="btn btn-primary" data-placement-analyze>Проверить</button></div>
   </div>

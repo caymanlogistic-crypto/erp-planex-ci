@@ -78,11 +78,23 @@ foreach (['feo_placement_blocks','feo_placement_block_requests','feo_placement_c
 $ok('placement tables do not physically FK to mutable feo_requests rows', !str_contains($migration, 'REFERENCES `feo_requests`'));
 
 $route = $read($root . '/app/Http/Routes/company_feo_requests.php');
-foreach (['FeoPlacementInputParser.php','FeoPlacementService.php','FeoPlacementController.php','/company/feo/requests/map-placement','preview-status','reconcile/preview'] as $needle) {
+foreach ([
+    'FeoPlacementInputParser.php',
+    'FeoPlacementService.php',
+    'FeoPlacementController.php',
+    '/company/feo/requests/map-placement',
+    '/company/feo/requests/map-placement/validate-manual',
+    '/company/feo/requests/map-placement/search-blocks',
+    'preview-status',
+    'reconcile/preview',
+] as $needle) {
     $ok('route contains ' . $needle, str_contains($route, $needle));
 }
 $ok('analyze rejects duplicate ids inside one placement block', str_contains($route, 'Заявки повторяются внутри блока:') && str_contains($route, "!empty(\$parsed['duplicates'])"));
 $ok('analyze rejects repeated add or exclusion against current placement state', str_contains($route, 'Повторная операция запрещена:') && str_contains($route, "!empty(\$preview['repeat_ids'])"));
+$ok('repeat diagnostics include active block ids and names', str_contains($route, "'name'=>(string)(\$row['name'] ?? '')") && str_contains($route, 'активные блоки:'));
+$ok('manual live validation checks FEO registry and materialized current set', str_contains($route, 'SELECT zayavka_id FROM feo_requests') && str_contains($route, 'SELECT zayavka_id,source_block_id FROM feo_placement_current'));
+$ok('block membership search returns all placement blocks', str_contains($route, 'JOIN feo_placement_blocks b ON b.id=br.block_id') && str_contains($route, "'blocks'=>\$memberships[\$id] ?? []"));
 
 $nav = $read($root . '/app/Support/feo_freshness_navigation.php');
 $ok('FEO submenu contains map placement navigation', str_contains($nav, 'Размещение на карте') && str_contains($nav, 'data-feo-placement-nav'));
@@ -92,16 +104,24 @@ $view = $read($root . '/app/View/pages/company_feo_map_placement.php');
 foreach ([
     'Актуальный состав:', 'Создать блок', 'Добавление', 'Исключение', 'Применяется', 'Отключён',
     'Ручной ввод', 'XLS / XLSX', 'только первый столбец', 'feo-placement-confirm-modal',
-    'selected_count', 'selected_mass_kg', 'Пересчитать состав', 'Актуальные заявки',
+    'Пересчитать состав', 'Актуальные заявки', 'Найти заявку в блоках',
+    'data-placement-block-search', 'data-placement-live-validation',
 ] as $needle) $ok('view contains ' . $needle, str_contains($view, $needle));
+$ok('placement table card outer border is removed', str_contains($view, '.feo-placement-table-card{display:block;min-width:0;border:0!important;box-shadow:none!important;background:transparent!important}'));
+$ok('applied and disabled statuses use system green/red variables', str_contains($view, 'feo-placement-status--applied{color:var(--success') && str_contains($view, 'feo-placement-status--disabled{color:var(--danger'));
 
 $js = $read($root . '/public/assets/js/feo-map-placement.js');
 foreach ([
-    'repeat_ids' => 'client renders repeated operation diagnostics',
     "confirmOperation('create'" => 'create uses ERP confirmation flow',
     "confirmOperation('status'" => 'status mutation uses ERP confirmation flow',
     "confirmOperation('reconcile'" => 'reconcile uses ERP confirmation flow',
     "addEventListener('dblclick'" => 'block detail opens on double click',
+    "base+'/validate-manual'" => 'manual validation calls read-only validation endpoint',
+    "base+'/search-blocks?'" => 'block search calls search endpoint',
+    'extractClientRequestIds' => 'client reuses six-digit mapping semantics',
+    "raw.indexOf('\\t')" => 'client recognizes tabular paste',
+    "line.indexOf('|')" => 'client recognizes markdown table paste',
+    "/(?<!\\d)\\d{6}(?!\\d)/g" => 'client mapping keeps standalone six-digit ids',
 ] as $needle => $label) $ok($label, str_contains($js, $needle));
 
 $ok('browser confirm is forbidden', !str_contains($view, 'confirm(') && !str_contains($js, 'confirm('));
@@ -109,13 +129,20 @@ $ok('browser alert is forbidden', !str_contains($view, 'alert(') && !str_contain
 $ok(
     'create form submit is intercepted before browser navigation',
     str_contains($js, "createForm?.addEventListener('submit',analyzeCreate)") &&
-    str_contains($js, 'async function analyzeCreate(e){e?.preventDefault()')
+    str_contains($js, 'async function analyzeCreate(e)') &&
+    str_contains($js, 'e?.preventDefault()')
 );
 $ok(
     'analyze button routes through the protected submit handler',
     str_contains($js, "q('[data-placement-analyze]')?.addEventListener('click'") &&
     str_contains($js, 'createForm.requestSubmit()')
 );
+$ok('create confirmation does not duplicate effect in gray box', str_contains($js, "if(kind==='create'){") && str_contains($js, "}else{\n      if(kind==='status')") && !str_contains($js, "if(kind==='create')html+=`<div class=\"feo-placement-confirm-effect\""));
+$ok('repeat operation prefix is rendered bold', str_contains($js, "const prefix='Повторная операция запрещена:'") && str_contains($js, 'strong.textContent=prefix'));
+$ok('manual field validates on every edit with debounce', str_contains($js, "manualInput?.addEventListener('input',()=>scheduleManualValidation())") && str_contains($js, 'window.setTimeout(validateManual,immediate?0:280)'));
+$ok('block type change reruns manual validation', str_contains($js, "typeRadios.forEach(r=>r.addEventListener('change',()=>scheduleManualValidation(true)))"));
+$ok('search paste normalizes using the same FEO mapping', str_contains($js, "blockSearchInput?.addEventListener('paste'") && str_contains($js, "blockSearchInput.value=ids.join(' ')"));
+$ok('block search result exposes block status and opens block detail', str_contains($js, 'statusHtml(block.status)') && str_contains($js, 'data-placement-search-block-id'));
 $ok('block table has no actions column', !str_contains($view, '<th>Действия</th>'));
 
 $manifest = json_decode($read($root . '/.github/agent_db_migration_request.json'), true);
