@@ -11,11 +11,14 @@ $fmtDateTime = static function ($value): string {
 .feo-table-card{display:block;min-width:0}
 .feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0}
 .feo-search-input{width:220px;min-width:180px}
+.feo-search-input--ids{width:660px;min-width:360px;max-width:min(660px,60vw)}
 .feo-search-input--content{width:300px;min-width:220px}
 .feo-result-toolbar{min-height:30px;padding:4px 8px}
 .feo-result-toolbar .toolbar-right{min-width:0;overflow:hidden}
+.feo-result-summary{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
 .feo-filter-info{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
 .feo-filter-info.is-problem{color:var(--danger);font-weight:600}
+.feo-total-mass{font-size:11px;color:var(--text-muted);white-space:nowrap}
 .feo-search-message{margin:0;border-left:0;border-right:0;border-top:0;border-radius:0}
 .feo-table-scroll{overflow-y:auto!important;overflow-x:hidden!important;min-width:0;max-width:100%;min-height:360px;scrollbar-gutter:stable}
 .feo-table{width:100%;max-width:100%;min-width:0!important;table-layout:fixed}
@@ -34,13 +37,19 @@ $fmtDateTime = static function ($value): string {
 .feo-history-table th:nth-child(1){width:14%}.feo-history-table th:nth-child(2){width:25%}.feo-history-table th:nth-child(3){width:8%}.feo-history-table th:nth-child(4){width:8%}.feo-history-table th:nth-child(5){width:9%}.feo-history-table th:nth-child(6){width:8%}.feo-history-table th:nth-child(7){width:10%}.feo-history-table th:nth-child(8){width:18%}
 .feo-history-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end}
 .feo-history-note{padding:8px 10px;border-top:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
-.feo-import-stats{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:12px}
+.feo-import-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:12px}
 .feo-stat{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px}.feo-stat b{display:block;font-size:18px}.feo-stat span{font-size:11px;color:var(--text-muted)}
-.feo-import-error{margin-top:10px}.feo-duplicate{margin-top:10px}.feo-detail-grid{display:grid;grid-template-columns:minmax(220px,38%) 1fr;border:1px solid var(--line-soft)}
-.feo-detail-label,.feo-detail-value{padding:7px 9px;border-bottom:1px solid var(--line-hair)}.feo-detail-label{background:var(--surface-form);font-size:11px;font-weight:700}.feo-detail-value{font-size:12px;overflow-wrap:anywhere;word-break:break-word}
-.feo-detail-grid>:nth-last-child(-n+2){border-bottom:0}
+.feo-import-error{margin-top:10px}.feo-duplicate{margin-top:10px}
+.feo-overwrite-option{display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:12px;cursor:pointer}
+.feo-overwrite-option input{margin-top:2px}.feo-overwrite-option small{display:block;color:var(--text-muted);margin-top:2px}
+.feo-detail-modal .modal-body{padding:0!important;overflow:auto;max-height:68vh}
+.feo-detail-form{margin:0}.feo-detail-grid{display:grid;grid-template-columns:minmax(260px,38%) 1fr;border:0}
+.feo-detail-label,.feo-detail-value{padding:7px 9px;border-bottom:1px solid var(--line-hair)}
+.feo-detail-label{background:var(--surface-form);font-size:11px;font-weight:700}.feo-detail-value{font-size:12px;overflow-wrap:anywhere;word-break:break-word}
+.feo-detail-input{width:100%;min-width:0;margin:0}.feo-detail-grid>:nth-last-child(-n+2){border-bottom:0}
+.feo-detail-save-error{margin:8px}.feo-detail-save-success{margin:8px}
 .feo-confirm-copy{display:grid;gap:8px}.feo-confirm-warning{padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
-@media(max-width:1180px){.feo-search-toolbar{flex-wrap:wrap}.feo-search-input,.feo-search-input--content{width:210px;min-width:180px}.feo-filter-info{max-width:55vw}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
+@media(max-width:1180px){.feo-search-toolbar{flex-wrap:wrap}.feo-search-input--ids{width:min(660px,86vw);min-width:280px;max-width:86vw}.feo-search-input--content{width:250px;min-width:200px}.feo-filter-info{max-width:55vw}.feo-import-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
 </style>
 
 <?php if (!empty($successFlash)): ?><div class="notice success feo-freshness"><?= e((string)$successFlash) ?></div><?php endif; ?>
@@ -72,9 +81,13 @@ $fmtDateTime = static function ($value): string {
 <?php if (empty($dbError)): ?>
 <div class="table-card table-card--standard feo-table-card" data-feo-grid>
     <div class="table-toolbar feo-result-toolbar">
-        <div class="found-label">Найдено: <b data-feo-total>0</b> заявок <span class="feo-filter-info" data-feo-filter-info>· Загрузка данных…</span></div>
+        <div class="feo-result-summary">
+            <div class="found-label">Найдено: <b data-feo-total>0</b> заявок</div>
+            <div class="feo-total-mass">Общий вес: <b data-feo-total-mass>0</b> кг</div>
+            <span class="feo-filter-info" data-feo-filter-info>· Загрузка данных…</span>
+        </div>
         <div class="toolbar-right feo-search-toolbar">
-            <input type="text" class="toolbar-search feo-search-input" data-feo-id-filter placeholder="ID заявок: через пробел, запятую или ;" autocomplete="off">
+            <input type="text" class="toolbar-search feo-search-input feo-search-input--ids" data-feo-id-filter placeholder="Вставьте текст с 6-значными ID заявок" autocomplete="off">
             <input type="text" class="toolbar-search feo-search-input feo-search-input--content" data-feo-content-filter placeholder="Поиск по таблице" autocomplete="off">
         </div>
     </div>
@@ -97,6 +110,7 @@ $fmtDateTime = static function ($value): string {
             <form id="feo-analyze-form" action="<?= app_url('/company/feo/requests/import/analyze') ?>" method="post" enctype="multipart/form-data">
                 <?= csrfField() ?>
                 <div class="field"><label class="field-label">Файл XLSX</label><input class="field-input" type="file" name="feo_xlsx" accept=".xlsx" required><div class="field-note">ERP принимает только точную структуру ФЭО: техническая колонка «ПП» и 44 согласованных поля.</div></div>
+                <label class="feo-overwrite-option"><input type="checkbox" name="overwrite_existing" value="1"><span><b>Перезаписывать данные существующих заявок</b><small>По умолчанию выключено. Если не включать, импорт добавит новые заявки, но не изменит уже существующие.</small></span></label>
                 <div class="mt-section"><button class="btn btn-secondary" type="submit" id="feo-analyze-btn">Анализировать</button></div>
             </form>
             <div id="feo-analysis-error" class="notice warn feo-import-error is-hidden"></div>
@@ -105,6 +119,7 @@ $fmtDateTime = static function ($value): string {
                     <div class="feo-stat"><b data-stat="unique_requests">0</b><span>в файле</span></div>
                     <div class="feo-stat"><b data-stat="new_count">0</b><span>новых</span></div>
                     <div class="feo-stat"><b data-stat="updated_count">0</b><span>обновится</span></div>
+                    <div class="feo-stat"><b data-stat="skipped_existing_count">0</b><span>не перезапишется</span></div>
                     <div class="feo-stat"><b data-stat="unchanged_count">0</b><span>без изменений</span></div>
                     <div class="feo-stat"><b data-stat="missing_count">0</b><span>пропало из файла</span></div>
                 </div>
@@ -159,10 +174,18 @@ $fmtDateTime = static function ($value): string {
 </div>
 
 <div id="feo-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
-    <div class="modal modal-lg">
+    <div class="modal modal-lg feo-detail-modal">
         <div class="modal-head"><span class="modal-title" id="feo-detail-title">Заявка ФЭО</span><button type="button" class="modal-close" data-close-modal="feo-detail-modal">&times;</button></div>
-        <div class="modal-body"><div id="feo-detail-loading">Загрузка…</div><div id="feo-detail-grid" class="feo-detail-grid is-hidden"></div><div id="feo-detail-error" class="notice warn is-hidden"></div></div>
-        <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close-modal="feo-detail-modal">Закрыть</button></div>
+        <div class="modal-body">
+            <div id="feo-detail-loading">Загрузка…</div>
+            <form id="feo-detail-form" class="feo-detail-form is-hidden"><?= csrfField() ?><div id="feo-detail-grid" class="feo-detail-grid"></div></form>
+            <div id="feo-detail-error" class="notice warn feo-detail-save-error is-hidden"></div>
+            <div id="feo-detail-success" class="notice success feo-detail-save-success is-hidden"></div>
+        </div>
+        <div class="modal-foot is-spaced">
+            <div><button type="button" class="btn btn-secondary" data-feo-detail-edit>Редактировать</button></div>
+            <div class="feo-history-actions"><button type="button" class="btn btn-ghost is-hidden" data-feo-detail-cancel>Отмена</button><button type="submit" form="feo-detail-form" class="btn btn-primary is-hidden" data-feo-detail-save>Сохранить</button><button type="button" class="btn btn-ghost" data-close-modal="feo-detail-modal">Закрыть</button></div>
+        </div>
     </div>
 </div>
 
@@ -174,15 +197,16 @@ $fmtDateTime = static function ($value): string {
 
   var grid=document.querySelector('[data-feo-grid]');
   if(grid){
-    var body=grid.querySelector('[data-feo-body]'), scroll=grid.querySelector('[data-feo-scroll]'), sentinel=grid.querySelector('[data-feo-sentinel]');
-    var idInput=grid.querySelector('[data-feo-id-filter]'), textInput=grid.querySelector('[data-feo-content-filter]');
-    var totalEl=grid.querySelector('[data-feo-total]'), infoEl=grid.querySelector('[data-feo-filter-info]'), msgEl=grid.querySelector('[data-feo-search-message]');
+    var body=grid.querySelector('[data-feo-body]'),scroll=grid.querySelector('[data-feo-scroll]'),sentinel=grid.querySelector('[data-feo-sentinel]');
+    var idInput=grid.querySelector('[data-feo-id-filter]'),textInput=grid.querySelector('[data-feo-content-filter]');
+    var totalEl=grid.querySelector('[data-feo-total]'),massEl=grid.querySelector('[data-feo-total-mass]'),infoEl=grid.querySelector('[data-feo-filter-info]'),msgEl=grid.querySelector('[data-feo-search-message]');
     var state={offset:0,limit:80,loading:false,hasMore:true,generation:0,controller:null};
 
     function resizeScroll(){var top=scroll.getBoundingClientRect().top,height=Math.max(360,window.innerHeight-top-8);scroll.style.height=height+'px';scroll.style.maxHeight=height+'px';}
     resizeScroll();window.addEventListener('resize',resizeScroll);
     function clean(v){return v===null||v===undefined||v===''?'—':String(v);}
     function td(text,title){var c=document.createElement('td');c.textContent=clean(text);if(title)c.title=String(title);return c;}
+    function formatKg(value){var n=Number(value||0);return Number.isFinite(n)?new Intl.NumberFormat('ru-RU',{maximumFractionDigits:3}).format(n):'0';}
     function addRow(row){
       var tr=document.createElement('tr');tr.dataset.feoId=String(row.id);tr.title='Двойной клик — открыть все поля заявки';
       tr.appendChild(td(row.zayavka_id));
@@ -193,14 +217,14 @@ $fmtDateTime = static function ($value): string {
     function setMessage(text,problem){msgEl.textContent=text||'';msgEl.classList.toggle('is-hidden',!text);msgEl.classList.toggle('warn',!!problem);}
     function setDiagnostics(data,reset){
       if(!reset)return;
-      totalEl.textContent=String(data.total||0);
-      var requested=Number(data.requested_count||0), missing=Array.isArray(data.missing_ids)?data.missing_ids:[];
+      totalEl.textContent=String(data.total||0);massEl.textContent=formatKg(data.total_mass_kg);
+      var requested=Number(data.requested_count||0),missing=Array.isArray(data.missing_ids)?data.missing_ids:[];
       if(data.filter_error){infoEl.textContent=data.filter_error;infoEl.classList.add('is-problem');setMessage(data.filter_error,true);return;}
       infoEl.classList.remove('is-problem');
       if(requested>0){
         var found=requested-missing.length;infoEl.textContent='По номерам найдено '+found+' из '+requested+'.';
-        if(missing.length){setMessage('Не найдены заявки: '+missing.join(', ')+'.',true);}else if(Number(data.total||0)===0 && textInput.value.trim()){setMessage('Указанные заявки есть в реестре, но поиск по содержимому не дал совпадений.',true);}else setMessage('',false);
-      }else if(textInput.value.trim() && Number(data.total||0)===0){infoEl.textContent='Поиск по содержимому: 0 результатов.';setMessage('Поиск по содержимому ничего не нашёл. Измените запрос.',true);}
+        if(missing.length){setMessage('Не найдены заявки: '+missing.join(', ')+'.',true);}else if(Number(data.total||0)===0&&textInput.value.trim()){setMessage('Указанные заявки есть в реестре, но поиск по содержимому не дал совпадений.',true);}else setMessage('',false);
+      }else if(textInput.value.trim()&&Number(data.total||0)===0){infoEl.textContent='Поиск по содержимому: 0 результатов.';setMessage('Поиск по содержимому ничего не нашёл. Измените запрос.',true);}
       else{infoEl.textContent='Всего по текущим условиям: '+String(data.total||0)+'.';setMessage('',false);}
     }
     async function load(reset){
@@ -208,7 +232,7 @@ $fmtDateTime = static function ($value): string {
       if(reset){state.generation++;state.offset=0;state.hasMore=true;if(state.controller)state.controller.abort();}
       if(!state.hasMore)return;
       var generation=state.generation;state.loading=true;sentinel.hidden=false;sentinel.textContent='Загрузка заявок…';state.controller=new AbortController();
-      var p=new URLSearchParams({offset:String(state.offset),limit:String(state.limit),filter_zayavki:idInput.value.trim(),search_text:textInput.value.trim()});
+      var p=new URLSearchParams({offset:String(state.offset),limit:String(state.limit),filter_zayavki:idInput.value,search_text:textInput.value.trim()});
       try{
         var response=await fetch('<?= app_url('/company/feo/requests/data') ?>?'+p.toString(),{credentials:'same-origin',signal:state.controller.signal});
         var data=await response.json();if(generation!==state.generation)return;if(!response.ok||!data.success)throw new Error(data.message||'Ошибка загрузки заявок');
@@ -223,9 +247,27 @@ $fmtDateTime = static function ($value): string {
     [idInput,textInput].forEach(function(input){input.addEventListener('input',scheduleFilter);input.addEventListener('keydown',function(ev){if(ev.key==='Enter'){ev.preventDefault();clearTimeout(filterTimer);resetLoad();}});});
     var observer=new IntersectionObserver(function(entries){if(entries.some(function(e){return e.isIntersecting;})&&!state.loading&&state.hasMore)load(false);},{root:scroll,rootMargin:'300px 0px'});observer.observe(sentinel);load(true);
 
-    body.addEventListener('dblclick',async function(ev){var row=ev.target.closest('tr[data-feo-id]');if(!row)return;var detailGrid=document.getElementById('feo-detail-grid'),loading=document.getElementById('feo-detail-loading'),error=document.getElementById('feo-detail-error');detailGrid.innerHTML='';detailGrid.classList.add('is-hidden');error.classList.add('is-hidden');loading.classList.remove('is-hidden');openModalSafe('feo-detail-modal');
-      try{var r=await fetch('<?= app_url('/company/feo/requests') ?>/'+encodeURIComponent(row.dataset.feoId)+'/json',{credentials:'same-origin'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Не удалось открыть заявку');document.getElementById('feo-detail-title').textContent='Заявка ФЭО '+(d.zayavka_id||'');(d.fields||[]).forEach(function(item){var l=document.createElement('div'),v=document.createElement('div');l.className='feo-detail-label';v.className='feo-detail-value';l.textContent=item.label||item.field;v.textContent=clean(item.value);detailGrid.appendChild(l);detailGrid.appendChild(v);});detailGrid.classList.remove('is-hidden');}catch(err){error.textContent=err.message||String(err);error.classList.remove('is-hidden');}finally{loading.classList.add('is-hidden');}
-    });
+    var detailForm=document.getElementById('feo-detail-form'),detailGrid=document.getElementById('feo-detail-grid'),detailLoading=document.getElementById('feo-detail-loading'),detailError=document.getElementById('feo-detail-error'),detailSuccess=document.getElementById('feo-detail-success');
+    var editButton=document.querySelector('[data-feo-detail-edit]'),cancelButton=document.querySelector('[data-feo-detail-cancel]'),saveButton=document.querySelector('[data-feo-detail-save]');
+    var detailState={id:0,data:null,editing:false};
+    var dateFields=['data_zayavki','data_dogovora','data_sozdaniya_porucheniya','zakaz_s_ot_data_vygruzki','zayavka_zhdv_po'];
+    var decimalFields=['mass_netto','mass_brutto','dlina_mesta','shirina_mesta','vysota_mesta','summarnyy_obem','zakaz_s_op_stoimost'];
+    function renderDetail(editing){
+      detailState.editing=editing;detailGrid.innerHTML='';detailError.classList.add('is-hidden');detailSuccess.classList.add('is-hidden');
+      (detailState.data?.fields||[]).forEach(function(item){var l=document.createElement('div'),v=document.createElement('div');l.className='feo-detail-label';v.className='feo-detail-value';l.textContent=item.label||item.field;
+        if(editing&&item.editable){var input=document.createElement('input');input.className='field-input feo-detail-input';input.name=item.field;input.value=item.value===null||item.value===undefined?'':String(item.value);if(dateFields.includes(item.field))input.type='date';else{input.type='text';if(decimalFields.includes(item.field))input.inputMode='decimal';}v.appendChild(input);}else v.textContent=clean(item.value);
+        detailGrid.appendChild(l);detailGrid.appendChild(v);
+      });
+      detailForm.classList.remove('is-hidden');editButton.classList.toggle('is-hidden',editing);cancelButton.classList.toggle('is-hidden',!editing);saveButton.classList.toggle('is-hidden',!editing);
+    }
+    async function openDetail(id){detailState.id=Number(id)||0;detailState.data=null;detailState.editing=false;detailGrid.innerHTML='';detailForm.classList.add('is-hidden');detailError.classList.add('is-hidden');detailSuccess.classList.add('is-hidden');editButton.classList.add('is-hidden');cancelButton.classList.add('is-hidden');saveButton.classList.add('is-hidden');detailLoading.classList.remove('is-hidden');openModalSafe('feo-detail-modal');
+      try{var r=await fetch('<?= app_url('/company/feo/requests') ?>/'+encodeURIComponent(detailState.id)+'/json',{credentials:'same-origin'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Не удалось открыть заявку');detailState.data=d;document.getElementById('feo-detail-title').textContent='Заявка ФЭО '+(d.zayavka_id||'');renderDetail(false);}catch(err){detailError.textContent=err.message||String(err);detailError.classList.remove('is-hidden');}finally{detailLoading.classList.add('is-hidden');}}
+    body.addEventListener('dblclick',function(ev){var row=ev.target.closest('tr[data-feo-id]');if(row)openDetail(row.dataset.feoId);});
+    editButton.addEventListener('click',function(){if(detailState.data)renderDetail(true);});
+    cancelButton.addEventListener('click',function(){if(detailState.data)renderDetail(false);});
+    detailForm.addEventListener('submit',async function(ev){ev.preventDefault();if(!detailState.id||!detailState.editing)return;saveButton.disabled=true;detailError.classList.add('is-hidden');detailSuccess.classList.add('is-hidden');
+      try{var r=await fetch('<?= app_url('/company/feo/requests') ?>/'+encodeURIComponent(detailState.id)+'/update',{method:'POST',body:new FormData(detailForm),credentials:'same-origin'}),d=await r.json();if(!r.ok||!d.success)throw new Error(d.message||'Не удалось сохранить заявку');detailState.data=d;document.getElementById('feo-detail-title').textContent='Заявка ФЭО '+(d.zayavka_id||'');renderDetail(false);detailSuccess.textContent=d.message||'Заявка ФЭО сохранена.';detailSuccess.classList.remove('is-hidden');resetLoad();}catch(err){detailError.textContent=err.message||String(err);detailError.classList.remove('is-hidden');}finally{saveButton.disabled=false;}}
+    );
   }
 
   var analyzeForm=document.getElementById('feo-analyze-form');

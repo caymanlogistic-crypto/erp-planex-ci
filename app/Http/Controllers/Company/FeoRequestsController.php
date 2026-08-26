@@ -3,17 +3,20 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Service\FeoRequestInteractionService;
 use App\Service\FeoRequestService;
 use App\Service\FeoXlsxParser;
 
 final class FeoRequestsController
 {
     private FeoRequestService $service;
+    private FeoRequestInteractionService $interaction;
     private FeoXlsxParser $parser;
 
     public function __construct(private readonly array $config, private readonly Database $db)
     {
         $this->service = new FeoRequestService($config, $db);
+        $this->interaction = new FeoRequestInteractionService();
         $this->parser = new FeoXlsxParser();
     }
 
@@ -53,13 +56,33 @@ final class FeoRequestsController
         try {
             [, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
+            $rawIdFilter = (string)($_GET['filter_zayavki'] ?? '');
+            $requestIds = $this->interaction->extractRequestIds($rawIdFilter);
+            if (trim($rawIdFilter) !== '' && $requestIds === []) {
+                jsonResponse([
+                    'success'=>true,
+                    'rows'=>[],
+                    'total'=>0,
+                    'total_mass_kg'=>0,
+                    'offset'=>max(0, (int)($_GET['offset'] ?? 0)),
+                    'limit'=>max(20, min(100, (int)($_GET['limit'] ?? 80))),
+                    'has_more'=>false,
+                    'requested_count'=>0,
+                    'found_ids'=>[],
+                    'missing_ids'=>[],
+                    'filter_error'=>'Во введённом тексте не найдено шестизначных номеров заявок.',
+                ]);
+                return;
+            }
+            $contentSearch = (string)($_GET['search_text'] ?? '');
             $result = $this->service->listRequestsBatch(
                 $pdo,
-                (string)($_GET['filter_zayavki'] ?? ''),
-                (string)($_GET['search_text'] ?? ''),
+                implode(' ', $requestIds),
+                $contentSearch,
                 (int)($_GET['offset'] ?? 0),
                 (int)($_GET['limit'] ?? 80)
             );
+            $result['total_mass_kg'] = $this->interaction->filteredMassKg($pdo, $requestIds, $contentSearch);
             jsonResponse(['success'=>true] + $result);
         } catch (\Throwable $e) {
             jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
@@ -74,13 +97,24 @@ final class FeoRequestsController
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
             $row = $this->service->request($pdo, (int)$id);
             if (!$row) { jsonResponse(['success'=>false,'message'=>'Заявка ФЭО не найдена.'], 404); return; }
-            $values = [];
-            foreach (FeoXlsxParser::fieldLabels() as $field => $label) {
-                $values[] = ['field'=>$field,'label'=>$label,'value'=>$row[$field] ?? null];
-            }
-            jsonResponse(['success'=>true,'id'=>(int)$row['id'],'zayavka_id'=>$row['zayavka_id'],'fields'=>$values]);
+            jsonResponse(['success'=>true] + $this->detailPayload($row));
         } catch (\Throwable $e) {
             jsonResponse(['success'=>false,'message'=>$e->getMessage()], 500);
+        }
+    }
+
+    public function update(string $id): void
+    {
+        requireRole(['company_owner','senior_logist','logist']);
+        try {
+            [, $pdo] = $this->companyContext();
+            if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
+            $row = $this->interaction->updateRequest($pdo, (int)$id, $_POST);
+            jsonResponse(['success'=>true,'message'=>'Заявка ФЭО сохранена.'] + $this->detailPayload($row));
+        } catch (\RuntimeException $e) {
+            jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
+        } catch (\Throwable $e) {
+            jsonResponse(['success'=>false,'message'=>'Не удалось сохранить заявку ФЭО.'], 500);
         }
     }
 
@@ -100,10 +134,14 @@ final class FeoRequestsController
             if (!is_uploaded_file($tmp) || $size <= 0 || $size > ERP_MAX_FILE_SIZE) throw new \RuntimeException('Файл не прошёл проверку или превышает 20 МБ.');
             if (strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'xlsx') throw new \RuntimeException('Допустим только формат XLSX.');
 
+            $overwriteExisting = !empty($_POST['overwrite_existing']);
             $rows = $this->parser->parse($tmp);
             $hash = hash_file('sha256', $tmp);
             if (!is_string($hash) || $hash === '') throw new \RuntimeException('Не удалось вычислить контрольную сумму файла.');
-            $stats = $this->service->analyze($pdo, $rows, $hash);
+            $prepared = $this->interaction->prepareImportRows($pdo, $rows, $overwriteExisting);
+            $stats = $this->service->analyze($pdo, $prepared['rows'], $hash);
+            $stats['skipped_existing_count'] = (int)$prepared['skipped_existing_count'];
+            $stats['unchanged_count'] = max(0, (int)$stats['unchanged_count'] - $stats['skipped_existing_count']);
 
             $companyId = (int)$company['id'];
             $dir = $this->previewDir($companyId);
@@ -112,8 +150,15 @@ final class FeoRequestsController
             $target = $dir . DIRECTORY_SEPARATOR . $token . '.xlsx';
             if (!move_uploaded_file($tmp, $target)) throw new \RuntimeException('Не удалось сохранить временную копию файла для подтверждения.');
             @chmod($target, 0600);
-            $_SESSION['feo_import_previews'][$token] = ['company_id'=>$companyId,'path'=>$target,'filename'=>$name,'hash'=>$hash,'created_at'=>time()];
-            jsonResponse(['success'=>true,'token'=>$token,'filename'=>$name,'stats'=>$stats]);
+            $_SESSION['feo_import_previews'][$token] = [
+                'company_id'=>$companyId,
+                'path'=>$target,
+                'filename'=>$name,
+                'hash'=>$hash,
+                'created_at'=>time(),
+                'overwrite_existing'=>$overwriteExisting,
+            ];
+            jsonResponse(['success'=>true,'token'=>$token,'filename'=>$name,'overwrite_existing'=>$overwriteExisting,'stats'=>$stats]);
         } catch (\Throwable $e) {
             jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
         }
@@ -134,11 +179,23 @@ final class FeoRequestsController
             $hash = hash_file('sha256', $path);
             if (!is_string($hash) || !hash_equals((string)$preview['hash'], $hash)) throw new \RuntimeException('Контрольная сумма файла изменилась.');
 
+            $overwriteExisting = !empty($preview['overwrite_existing']);
             $rows = $this->parser->parse($path);
-            $result = $this->service->applyImport($pdo, $rows, (string)$preview['filename'], $hash, $_SESSION);
+            $prepared = $this->interaction->prepareImportRows($pdo, $rows, $overwriteExisting);
+            $result = $this->service->applyImport($pdo, $prepared['rows'], (string)$preview['filename'], $hash, $_SESSION);
+            $result['skipped_existing_count'] = (int)$prepared['skipped_existing_count'];
+            $result['unchanged_count'] = max(0, (int)$result['unchanged_count'] - $result['skipped_existing_count']);
             @unlink($path);
             unset($_SESSION['feo_import_previews'][$token]);
-            $_SESSION['flash_success'] = sprintf('ФЭО: загрузка #%d применена. Новых: %d, обновлено: %d, без изменений: %d, пропало относительно файла: %d.', (int)$result['import_id'], (int)$result['new_count'], (int)$result['updated_count'], (int)$result['unchanged_count'], (int)$result['missing_count']);
+            $_SESSION['flash_success'] = sprintf(
+                'ФЭО: загрузка #%d применена. Новых: %d, обновлено: %d, не перезаписано существующих: %d, без изменений: %d, пропало относительно файла: %d.',
+                (int)$result['import_id'],
+                (int)$result['new_count'],
+                (int)$result['updated_count'],
+                (int)$result['skipped_existing_count'],
+                (int)$result['unchanged_count'],
+                (int)$result['missing_count']
+            );
         } catch (\Throwable $e) {
             $_SESSION['flash_error'] = 'Импорт ФЭО не выполнен: ' . $e->getMessage();
         }
@@ -190,6 +247,20 @@ final class FeoRequestsController
             $_SESSION['flash_error'] = 'Удаление загрузки ФЭО не выполнено: ' . $e->getMessage();
         }
         redirect_to('/company/feo/requests');
+    }
+
+    private function detailPayload(array $row): array
+    {
+        $values = [];
+        foreach (FeoXlsxParser::fieldLabels() as $field => $label) {
+            $values[] = [
+                'field'=>$field,
+                'label'=>$label,
+                'value'=>$row[$field] ?? null,
+                'editable'=>$field !== 'zayavka_id',
+            ];
+        }
+        return ['id'=>(int)$row['id'],'zayavka_id'=>$row['zayavka_id'],'fields'=>$values];
     }
 
     private function companyContext(): array
