@@ -46,6 +46,7 @@ $interaction = $read($root . '/app/Service/FeoRequestInteractionService.php');
 foreach ([
     'final class FeoRequestInteractionService' => 'interaction service exists',
     "preg_match_all('/(?<!\\d)\\d{6}(?!\\d)/u'" => 'strict six consecutive digit extraction',
+    'firstStructuredCell' => 'structured paste uses first-column parsing',
     'MAX_FILTER_IDS = 500' => 'interaction ID safety cap',
     'filteredMassKg' => 'filtered mass summary',
     'SUM(mass_netto)' => 'mass summary uses full filtered dataset',
@@ -59,6 +60,8 @@ foreach ([
 }
 $interactionService = new FeoRequestInteractionService();
 $ok('arbitrary text extracts request IDs', $interactionService->extractRequestIds('Текст 308710, заявка № 299726; потом 307409.') === ['308710','299726','307409']);
+$ok('markdown table extracts IDs only from first column', $interactionService->extractRequestIds("| ID заявки | Адрес |\n| --- | --- |\n| 308710 | 305000, Курск |\n| 299726 | 123456, Москва |") === ['308710','299726']);
+$ok('tabular paste ignores six-digit address values', $interactionService->extractRequestIds("308710\t305000, Курск\n299726\t123456, Москва") === ['308710','299726']);
 $ok('seven digit number is not treated as request ID', $interactionService->extractRequestIds('1234567') === []);
 $ok('separated digit groups are not glued together', $interactionService->extractRequestIds('123-456') === []);
 $ok('letters around six digits do not break extraction', $interactionService->extractRequestIds('abc308710xyz') === ['308710']);
@@ -115,6 +118,8 @@ $ok('search calls server endpoint', str_contains($view, "app_url('/company/feo/r
 $ok('request ID selector outranks global toolbar-search width and cannot shrink', str_contains($view, '.feo-result-toolbar .toolbar-right .feo-search-input--ids{width:660px;min-width:660px;max-width:660px;flex:0 0 660px}'));
 $ok('search toolbar can wrap without clipping wide ID input', str_contains($view, '.feo-result-toolbar{min-height:36px;height:auto;padding:4px 8px;flex-wrap:wrap;gap:6px 12px}') && str_contains($view, '.feo-result-toolbar .toolbar-right{min-width:0;max-width:100%;overflow:visible;flex:0 0 auto}'));
 $ok('filters auto-apply live with debounce', str_contains($view, "input.addEventListener('input',scheduleFilter)") && str_contains($view, 'setTimeout(function(){resetLoad();},280)'));
+$ok('full table paste is compacted client-side before GET', str_contains($view, "idInput.addEventListener('paste'") && str_contains($view, 'normalizedClientIdFilter') && str_contains($view, 'safeIdFilter'));
+$ok('client structured paste reads first column only', str_contains($view, "split('\\t',1)") && str_contains($view, "split('|',1)"));
 $ok('table scroll gets stable viewport height', str_contains($view, 'min-height:360px') && str_contains($view, "scroll.style.height=height+'px'"));
 $ok('partial ID results are replaced only after successful response', !str_contains($view, "state.hasMore=true;body.innerHTML=''") && str_contains($view, "if(reset)body.innerHTML='';rows.forEach(addRow);setDiagnostics(data,reset)"));
 $ok('multiple missing IDs stay visible as one diagnostic list', str_contains($view, "missing.join(', ')"));
@@ -122,9 +127,11 @@ $ok('summary is exactly count plus filtered total weight without legacy duplicat
 $ok('summary shows filtered count and total weight', str_contains($view, 'data-feo-total') && str_contains($view, 'data-feo-total-mass') && str_contains($view, 'total_mass_kg'));
 $ok('detail modal removes white body padding', str_contains($view, '.feo-detail-modal .modal-body{padding:0!important'));
 $ok('detail view supports edit save and cancel', str_contains($view, 'data-feo-detail-edit') && str_contains($view, 'data-feo-detail-save') && str_contains($view, 'data-feo-detail-cancel'));
+$ok('detail footer uses standard ERP modal actions without individual delete', str_contains($view, 'modal-foot-actions') && str_contains($view, 'data-feo-detail-close') && !str_contains($view, 'data-feo-detail-delete'));
 $ok('detail save posts to update endpoint', str_contains($view, "/update',{method:'POST'"));
 $ok('overwrite checkbox is opt-in and unchecked by default', str_contains($view, 'name="overwrite_existing" value="1"') && !str_contains($view, 'name="overwrite_existing" value="1" checked'));
 $ok('import analysis shows protected existing rows', str_contains($view, 'data-stat="skipped_existing_count"') && str_contains($view, 'не перезапишется'));
+$ok('import popup auto-analyzes selected file and has no extra analyze button', str_contains($view, "fileInput.addEventListener('change',analyzeSelectedFile)") && !str_contains($view, 'feo-analyze-btn'));
 $ok('history modal is thirty percent wider than modal-lg', str_contains($view, '.feo-history-modal{width:1066px;max-width:calc(100vw - 32px)}'));
 $ok('history rows and actions do not wrap', str_contains($view, 'white-space:nowrap;overflow-wrap:normal') && str_contains($view, '.feo-history-actions{display:flex;gap:4px;flex-wrap:nowrap'));
 
