@@ -92,13 +92,31 @@ $view = $read($root . '/app/View/pages/company_feo_map_placement.php');
 foreach ([
     'Актуальный состав:', 'Создать блок', 'Добавление', 'Исключение', 'Применяется', 'Отключён',
     'Ручной ввод', 'XLS / XLSX', 'только первый столбец', 'feo-placement-confirm-modal',
-    'selected_count', 'selected_mass_kg', 'repeat_ids', 'Пересчитать состав', 'Посмотреть состав',
+    'selected_count', 'selected_mass_kg', 'Пересчитать состав', 'Актуальные заявки',
 ] as $needle) $ok('view contains ' . $needle, str_contains($view, $needle));
-$ok('browser confirm is forbidden', !str_contains($view, 'confirm('));
-$ok('browser alert is forbidden', !str_contains($view, 'alert('));
-$ok('every mutation shares ERP confirmation flow', str_contains($view, "confirmOperation('create'") && str_contains($view, "confirmOperation('status'") && str_contains($view, "confirmOperation('reconcile'"));
+
+$js = $read($root . '/public/assets/js/feo-map-placement.js');
+foreach ([
+    'repeat_ids' => 'client renders repeated operation diagnostics',
+    "confirmOperation('create'" => 'create uses ERP confirmation flow',
+    "confirmOperation('status'" => 'status mutation uses ERP confirmation flow',
+    "confirmOperation('reconcile'" => 'reconcile uses ERP confirmation flow',
+    "addEventListener('dblclick'" => 'block detail opens on double click',
+] as $needle => $label) $ok($label, str_contains($js, $needle));
+
+$ok('browser confirm is forbidden', !str_contains($view, 'confirm(') && !str_contains($js, 'confirm('));
+$ok('browser alert is forbidden', !str_contains($view, 'alert(') && !str_contains($js, 'alert('));
+$ok(
+    'create form submit is intercepted before browser navigation',
+    str_contains($js, "createForm?.addEventListener('submit',analyzeCreate)") &&
+    str_contains($js, 'async function analyzeCreate(e){e?.preventDefault()')
+);
+$ok(
+    'analyze button routes through the protected submit handler',
+    str_contains($js, "q('[data-placement-analyze]')?.addEventListener('click'") &&
+    str_contains($js, 'createForm.requestSubmit()')
+);
 $ok('block table has no actions column', !str_contains($view, '<th>Действия</th>'));
-$ok('block detail opens on double click', str_contains($view, "addEventListener('dblclick'"));
 
 $manifest = json_decode($read($root . '/.github/agent_db_migration_request.json'), true);
 $workflow = $read($root . '/.github/workflows/feo_123_production_migration.yml');
