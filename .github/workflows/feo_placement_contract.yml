@@ -1,0 +1,88 @@
+name: FEO Placement Contract
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Http/Controllers/Company/FeoPlacementController.php'
+      - 'app/Http/Routes/company_feo_requests.php'
+      - 'app/Service/FeoPlacementInputParser.php'
+      - 'app/Service/FeoPlacementService.php'
+      - 'app/Support/feo_freshness_navigation.php'
+      - 'app/View/pages/company_feo_map_placement.php'
+      - 'public/assets/js/feo-map-placement.js'
+      - 'database/migrations-local/123_create_feo_map_placement.sql'
+      - 'scripts/feo_apply_123.php'
+      - 'scripts/feo_verify_123.php'
+      - 'tests/feo_placement_contract_test.php'
+      - '.github/agent_db_migration_request.json'
+      - '.github/workflows/feo_123_production_migration.yml'
+      - '.github/workflows/feo_placement_contract.yml'
+  push:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Http/Controllers/Company/FeoPlacementController.php'
+      - 'app/Http/Routes/company_feo_requests.php'
+      - 'app/Service/FeoPlacementInputParser.php'
+      - 'app/Service/FeoPlacementService.php'
+      - 'app/Support/feo_freshness_navigation.php'
+      - 'app/View/pages/company_feo_map_placement.php'
+      - 'public/assets/js/feo-map-placement.js'
+      - 'database/migrations-local/123_create_feo_map_placement.sql'
+      - 'scripts/feo_apply_123.php'
+      - 'scripts/feo_verify_123.php'
+      - 'tests/feo_placement_contract_test.php'
+      - '.github/agent_db_migration_request.json'
+      - '.github/workflows/feo_123_production_migration.yml'
+      - '.github/workflows/feo_placement_contract.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: feo-placement-contract-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  placement-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify PHP extensions
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -r "exit(class_exists('ZipArchive') && function_exists('simplexml_load_string') ? 0 : 1);"
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l app/Http/Controllers/Company/FeoPlacementController.php
+          php -l app/Service/FeoPlacementInputParser.php
+          php -l app/Service/FeoPlacementService.php
+          php -l app/View/pages/company_feo_map_placement.php
+          php -l scripts/feo_apply_123.php
+          php -l scripts/feo_verify_123.php
+          php -l tests/feo_placement_contract_test.php
+
+      - name: JavaScript syntax
+        run: node --check public/assets/js/feo-map-placement.js
+
+      - name: Placement regression contract
+        run: php tests/feo_placement_contract_test.php
+
+      - name: Migration 123 static contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s database/migrations-local/123_create_feo_map_placement.sql
+          grep -q 'feo_placement_blocks' database/migrations-local/123_create_feo_map_placement.sql
+          grep -q 'feo_placement_block_requests' database/migrations-local/123_create_feo_map_placement.sql
+          grep -q 'feo_placement_current' database/migrations-local/123_create_feo_map_placement.sql
+          test "$(find database/migrations-local -maxdepth 1 -type f -name '123_*.sql' | wc -l)" -eq 1
