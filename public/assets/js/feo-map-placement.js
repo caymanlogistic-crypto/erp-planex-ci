@@ -19,7 +19,11 @@ async function json(url,opts={}){
   const res=await fetch(url,{credentials:'same-origin',...opts});
   let data={};
   try{data=await res.json();}catch(_){data={success:false,message:'Сервер вернул некорректный ответ.'};}
-  if(!res.ok||data.success===false)throw new Error(data.message||'Операция не выполнена.');
+  if(!res.ok||data.success===false){
+    const error=new Error(data.message||'Операция не выполнена.');
+    error.payload=data;
+    throw error;
+  }
   return data;
 }
 function formDataWithCsrf(form){const fd=new FormData(form);if(!fd.has('_csrf'))fd.append('_csrf',csrf);return fd;}
@@ -67,6 +71,46 @@ function renderMessage(el,message){
   }
 }
 
+function appendRepeatPanel(el,data){
+  if(!el)return;
+  const ids=Array.isArray(data?.repeat_ids)?data.repeat_ids:[];
+  if(!ids.length)return;
+  const title=document.createElement('div');
+  title.className='feo-placement-repeat-title';
+  title.textContent='Повторная операция запрещена:';
+  el.appendChild(title);
+  const list=document.createElement('div');
+  list.className='feo-placement-repeat-list';
+  ids.forEach(id=>{
+    const item=document.createElement('div');
+    item.className='feo-placement-repeat-item';
+    const idEl=document.createElement('div');
+    idEl.className='feo-placement-repeat-id';
+    idEl.textContent='Заявка '+id;
+    const blocksEl=document.createElement('div');
+    blocksEl.className='feo-placement-repeat-blocks';
+    const blocks=Array.isArray(data?.repeat_blocks?.[id])?data.repeat_blocks[id]:[];
+    if(blocks.length){
+      blocks.forEach(block=>{
+        const row=document.createElement('div');
+        row.className='feo-placement-repeat-block';
+        const type=block.block_type==='addition'?'Добавление':'Исключение';
+        row.textContent=`Активный блок #${block.id}${block.name?' «'+block.name+'»':''} · ${type}`;
+        blocksEl.appendChild(row);
+      });
+    }else{
+      const row=document.createElement('div');
+      row.className='feo-placement-repeat-block';
+      row.textContent=data?.block_type==='exclusion'?'Заявка отсутствует в актуальном составе.':'Заявка уже находится в актуальном составе.';
+      blocksEl.appendChild(row);
+    }
+    item.appendChild(idEl);
+    item.appendChild(blocksEl);
+    list.appendChild(item);
+  });
+  el.appendChild(list);
+}
+
 const createForm=q('[data-placement-create-form]');
 const sourceRadios=qa('input[name="source_mode"]',createForm||document);
 const typeRadios=qa('input[name="block_type"]',createForm||document);
@@ -103,36 +147,32 @@ function syncSource(){
 sourceRadios.forEach(r=>r.addEventListener('change',syncSource));
 typeRadios.forEach(r=>r.addEventListener('change',()=>scheduleManualValidation(true)));
 
-function describeRepeat(id,blocks){
-  if(!Array.isArray(blocks)||!blocks.length)return `заявка ${id} конфликтует с актуальным составом`;
-  const labels=blocks.map(b=>`#${b.id}${b.name?' «'+b.name+'»':''} (${b.block_type==='addition'?'Добавление':'Исключение'})`);
-  return `заявка ${id} — активные блоки: ${labels.join(', ')}`;
-}
 function renderManualValidation(data){
   clearLiveValidation();
   if(!liveValidation)return;
-  const problems=[];
-  if(Array.isArray(data.duplicates)&&data.duplicates.length)problems.push(`Повторы внутри вводимого блока: ${data.duplicates.join(', ')}.`);
-  if(Array.isArray(data.missing_ids)&&data.missing_ids.length)problems.push(`Не найдены заявки ФЭО: ${data.missing_ids.join(', ')}.`);
-  if(Array.isArray(data.repeat_ids)&&data.repeat_ids.length){
-    const details=data.repeat_ids.map(id=>describeRepeat(id,data.repeat_blocks?.[id]||[])).join('; ');
-    problems.push(`Повторная операция запрещена: ${details}.`);
-  }
+  const duplicates=Array.isArray(data.duplicates)?data.duplicates:[];
+  const missing=Array.isArray(data.missing_ids)?data.missing_ids:[];
+  const repeats=Array.isArray(data.repeat_ids)?data.repeat_ids:[];
   liveValidation.classList.remove('is-hidden');
-  if(problems.length){
+  if(duplicates.length||missing.length||repeats.length){
     liveValidation.classList.add('warn');
-    problems.forEach((message,index)=>{
-      if(index)liveValidation.appendChild(document.createElement('br'));
-      if(message.startsWith('Повторная операция запрещена:')){
-        const prefix='Повторная операция запрещена:';
-        const strong=document.createElement('b');
-        strong.textContent=prefix;
-        liveValidation.appendChild(strong);
-        liveValidation.appendChild(document.createTextNode(message.slice(prefix.length)));
-      }else{
-        liveValidation.appendChild(document.createTextNode(message));
-      }
-    });
+    if(duplicates.length){
+      const row=document.createElement('div');
+      const strong=document.createElement('b');
+      strong.textContent='Повторы внутри вводимого блока: ';
+      row.appendChild(strong);
+      row.appendChild(document.createTextNode(duplicates.join(', ')+'.'));
+      liveValidation.appendChild(row);
+    }
+    if(missing.length){
+      const row=document.createElement('div');
+      const strong=document.createElement('b');
+      strong.textContent='Не найдены заявки ФЭО: ';
+      row.appendChild(strong);
+      row.appendChild(document.createTextNode(missing.join(', ')+'.'));
+      liveValidation.appendChild(row);
+    }
+    if(repeats.length)appendRepeatPanel(liveValidation,data);
   }else{
     liveValidation.classList.add('success');
     liveValidation.textContent=`Проверка пройдена: ${Array.isArray(data.ids)?data.ids.length:0} заявок найдены в реестре ФЭО и не конфликтуют с активными блоками.`;
@@ -219,12 +259,20 @@ function confirmOperation(kind,token,preview,meta={}){
   const title=q('[data-placement-confirm-title]');
   const copy=q('[data-placement-confirm-copy]');
   const err=q('[data-placement-confirm-error]');
+  const submit=q('[data-placement-confirm-submit]');
   if(err)err.classList.add('is-hidden');
-  if(title)title.textContent=kind==='create'?'Применить блок?':kind==='status'?'Изменить статус блока?':'Пересчитать актуальный состав?';
+  if(submit)submit.className=kind==='delete'?'btn btn-danger':'btn btn-primary';
+  if(title){
+    title.textContent=kind==='create'?'Применить блок?':kind==='status'?'Изменить статус блока?':kind==='delete'?'Удалить отключённый блок?':'Пересчитать актуальный состав?';
+  }
   if(copy){
     let html='';
     if(kind==='create'){
       html+=`<div><b>${preview.block_type==='addition'?'Добавление':'Исключение'}:</b> ${preview.selected_count} заявок общей массой <b>${fmt(preview.selected_mass_kg)} кг</b>.</div>`;
+    }else if(kind==='delete'){
+      html+=`<div><b>Блок #${preview.block_id}${preview.name?' · '+esc(preview.name):''}</b> будет удалён без возможности восстановления.</div>`;
+      html+=`<div>Состав блока: <b>${preview.request_count} заявок · ${fmt(preview.total_mass_kg)} кг</b>. Актуальный состав не изменится.</div>`;
+      if(preview.source_filename)html+=`<div>Исходный файл <b>${esc(preview.source_filename)}</b> также будет удалён из хранилища.</div>`;
     }else{
       if(kind==='status')html+=`<div>Блок #${preview.block_id}: ${preview.target_status==='applied'?'включить в расчёт':'отключить из расчёта'}.</div>`;
       html+=`<div class="feo-placement-confirm-effect"><b>После операции:</b> ${esc(effectText(preview.effect))}.</div>`;
@@ -232,6 +280,7 @@ function confirmOperation(kind,token,preview,meta={}){
     copy.innerHTML=html;
   }
   closeModal('feo-placement-create-modal');
+  closeModal('feo-placement-detail-modal');
   openModal('feo-placement-confirm-modal');
 }
 
@@ -247,7 +296,9 @@ async function analyzeCreate(e){
     confirmOperation('create',data.token,data.preview||{},{});
   }catch(e){
     if(err){
-      renderMessage(err,e.message);
+      err.replaceChildren();
+      if(e.payload?.code==='repeat_operation')appendRepeatPanel(err,e.payload);
+      else renderMessage(err,e.message);
       err.classList.remove('is-hidden');
     }
   }finally{
@@ -274,7 +325,7 @@ q('[data-placement-confirm-submit]')?.addEventListener('click',async()=>{
     const fd=new FormData();
     fd.append('_csrf',csrf);
     fd.append('preview_token',pending.token);
-    const url=pending.kind==='create'?base+'/commit':pending.kind==='status'?base+'/status/commit':base+'/reconcile/commit';
+    const url=pending.kind==='create'?base+'/commit':pending.kind==='status'?base+'/status/commit':pending.kind==='delete'?base+'/delete/commit':base+'/reconcile/commit';
     await json(url,{method:'POST',body:fd});
     location.reload();
   }catch(e){
@@ -298,12 +349,19 @@ async function openBlock(id){
     const data=await json(base+'/blocks/'+encodeURIComponent(id)+'/json');
     const b=data.block;
     const reqs=b.requests||[];
+    const sourceText=b.source_type==='manual'
+      ? (reqs.map(r=>String(r.zayavka_id)).join(', ')||'—')
+      : (b.source_filename||String(b.source_type||'').toUpperCase()||'—');
     q('[data-placement-detail-title]').textContent=`Блок #${b.id}${b.name?' · '+b.name:''}`;
-    if(body)body.innerHTML=`<div class="feo-placement-detail-meta"><div><span>Тип</span><b>${b.block_type==='addition'?'Добавление':'Исключение'}</b></div><div><span>Статус</span><b>${statusHtml(b.status)}</b></div><div><span>Состав</span><b>${b.request_count} заявок · ${fmt(b.total_mass_kg)} кг</b></div><div><span>Источник</span><b>${b.source_type==='manual'?'Ручной ввод':String(b.source_type).toUpperCase()}${b.source_filename?' · '+esc(b.source_filename):''}</b></div></div><div class="feo-placement-list"><table class="table"><thead><tr><th>ID заявки</th><th>Масса, кг</th><th>Состояние</th></tr></thead><tbody>${reqs.map(r=>`<tr><td>${esc(r.zayavka_id)}</td><td>${fmt(r.mass_kg)}</td><td>${r.missing?'Не найдена в основном реестре':'OK'}</td></tr>`).join('')}</tbody></table></div>`;
+    if(body)body.innerHTML=`<div class="feo-placement-detail-meta"><div><span>Тип</span><b>${b.block_type==='addition'?'Добавление':'Исключение'}</b></div><div><span>Статус</span><b>${statusHtml(b.status)}</b></div><div><span>Состав</span><b>${b.request_count} заявок · ${fmt(b.total_mass_kg)} кг</b></div><div><span>Источник</span><b>${esc(sourceText)}</b></div></div><div class="feo-placement-list"><table class="table"><thead><tr><th style="width:34%">ID заявки</th><th style="width:28%">Масса, кг</th><th style="width:38%">Состояние</th></tr></thead><tbody>${reqs.map(r=>`<tr><td>${esc(r.zayavka_id)}</td><td>${fmt(r.mass_kg)}</td><td>${r.missing?'Не найдена в основном реестре':'OK'}</td></tr>`).join('')}</tbody></table></div>`;
     if(actions){
-      const target=b.status==='applied'?'disabled':'applied';
-      actions.innerHTML=`${b.source_file_key?`<a class="btn btn-secondary" href="${base}/blocks/${b.id}/download">Скачать исходный файл</a>`:''}<button type="button" class="btn btn-primary" data-placement-toggle>${target==='applied'?'Включить блок':'Отключить блок'}</button>`;
-      q('[data-placement-toggle]',actions)?.addEventListener('click',()=>previewStatus(b.id,target));
+      let html='';
+      if(b.source_file_key)html+=`<a class="btn btn-secondary" href="${base}/blocks/${b.id}/download">Скачать исходный файл</a>`;
+      if(b.status==='applied')html+=`<button type="button" class="btn btn-primary" data-placement-toggle>Отключить блок</button>`;
+      else html+=`<button type="button" class="btn btn-primary" data-placement-toggle>Включить блок</button><button type="button" class="btn btn-danger" data-placement-delete>Удалить блок</button>`;
+      actions.innerHTML=html;
+      q('[data-placement-toggle]',actions)?.addEventListener('click',()=>previewStatus(b.id,b.status==='applied'?'disabled':'applied'));
+      q('[data-placement-delete]',actions)?.addEventListener('click',()=>previewDelete(b.id));
     }
   }catch(e){
     if(err){renderMessage(err,e.message);err.classList.remove('is-hidden');}
@@ -319,6 +377,19 @@ async function previewStatus(id,target){
     const data=await json(base+'/blocks/'+id+'/preview-status',{method:'POST',body:fd});
     closeModal('feo-placement-detail-modal');
     confirmOperation('status',data.token,data.preview,{});
+  }catch(e){
+    if(err){renderMessage(err,e.message);err.classList.remove('is-hidden');}
+  }
+}
+
+async function previewDelete(id){
+  const err=q('[data-placement-detail-error]');
+  try{
+    const fd=new FormData();
+    fd.append('_csrf',csrf);
+    const data=await json(base+'/blocks/'+id+'/preview-delete',{method:'POST',body:fd});
+    closeModal('feo-placement-detail-modal');
+    confirmOperation('delete',data.token,data.preview,{});
   }catch(e){
     if(err){renderMessage(err,e.message);err.classList.remove('is-hidden');}
   }
