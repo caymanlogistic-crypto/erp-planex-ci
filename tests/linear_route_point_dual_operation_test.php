@@ -73,3 +73,4 @@ $assert($financeServicePos < $lineServicePos, 'finance service must load before 
 
 fwrite(STDOUT, "PASS linear_route_point_dual_operation_test\n");
 require __DIR__ . '/linear_trip_multi_services_contract_test.php';
+require __DIR__ . '/linear_trip_registry_service_layout_contract_test.php';
