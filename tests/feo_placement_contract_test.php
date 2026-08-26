@@ -43,6 +43,11 @@ foreach ([
     "['applied','disabled']" => 'only applied/disabled statuses accepted',
     'repeat_ids' => 'repeated operation diagnostics are returned',
     'missing_request_count' => 'orphan diagnostics are exposed',
+    'request_ids_text' => 'block list exposes manual request ids for source column',
+    'public function previewDelete' => 'disabled block deletion is previewed',
+    'public function deleteDisabledBlock' => 'disabled block deletion commit exists',
+    "DELETE FROM feo_placement_blocks WHERE id=? AND status='disabled'" => 'delete mutation is restricted to disabled blocks',
+    'SELECT COUNT(*) FROM feo_placement_current WHERE source_block_id=?' => 'delete refuses blocks still referenced by current state',
 ] as $needle => $label) $ok($label, str_contains($service, $needle));
 
 $controller = $read($root . '/app/Http/Controllers/Company/FeoPlacementController.php');
@@ -86,15 +91,19 @@ foreach ([
     '/company/feo/requests/map-placement/validate-manual',
     '/company/feo/requests/map-placement/search-blocks',
     'preview-status',
+    'preview-delete',
+    'delete/commit',
     'reconcile/preview',
 ] as $needle) {
     $ok('route contains ' . $needle, str_contains($route, $needle));
 }
 $ok('analyze rejects duplicate ids inside one placement block', str_contains($route, 'Заявки повторяются внутри блока:') && str_contains($route, "!empty(\$parsed['duplicates'])"));
-$ok('analyze rejects repeated add or exclusion against current placement state', str_contains($route, 'Повторная операция запрещена:') && str_contains($route, "!empty(\$preview['repeat_ids'])"));
-$ok('repeat diagnostics include active block ids and names', str_contains($route, "'name'=>(string)(\$row['name'] ?? '')") && str_contains($route, 'активные блоки:'));
+$ok('analyze rejects repeated add or exclusion with structured payload', str_contains($route, "'code'=>'repeat_operation'") && str_contains($route, "'message'=>'Повторная операция запрещена.'") && str_contains($route, "'repeat_blocks'=>\$memberships"));
+$ok('repeat diagnostics include active block ids and names', str_contains($route, "'name'=>(string)(\$row['name'] ?? '')") && str_contains($route, "'id'=>(int)\$row['block_id']"));
 $ok('manual live validation checks FEO registry and materialized current set', str_contains($route, 'SELECT zayavka_id FROM feo_requests') && str_contains($route, 'SELECT zayavka_id,source_block_id FROM feo_placement_current'));
 $ok('block membership search returns all placement blocks', str_contains($route, 'JOIN feo_placement_blocks b ON b.id=br.block_id') && str_contains($route, "'blocks'=>\$memberships[\$id] ?? []"));
+$ok('delete preview and commit use ERP preview token state', str_contains($route, "'kind'=>'delete'") && str_contains($route, "\$feoPlacementPreviewRecord(\$token, (int)\$company['id'], 'delete')"));
+$ok('delete commit removes saved source file from company storage', str_contains($route, "company_storage_path(\$company['storage_path'] ?? null") && str_contains($route, "!@unlink(\$path)"));
 
 $nav = $read($root . '/app/Support/feo_freshness_navigation.php');
 $ok('FEO submenu contains map placement navigation', str_contains($nav, 'Размещение на карте') && str_contains($nav, 'data-feo-placement-nav'));
@@ -109,11 +118,17 @@ foreach ([
 ] as $needle) $ok('view contains ' . $needle, str_contains($view, $needle));
 $ok('placement table card outer border is removed', str_contains($view, '.feo-placement-table-card{display:block;min-width:0;border:0!important;box-shadow:none!important;background:transparent!important}'));
 $ok('applied and disabled statuses use system green/red variables', str_contains($view, 'feo-placement-status--applied{color:var(--success') && str_contains($view, 'feo-placement-status--disabled{color:var(--danger'));
+$ok('KPI boxes are removed and summary moved into toolbar', !str_contains($view, 'feo-placement-kpi') && !str_contains($view, 'feo-placement-summary') && str_contains($view, 'feo-placement-toolbar-summary') && str_contains($view, 'Масса: <b>'));
+$ok('source column shows filename or manual request list', str_contains($view, "\$block['request_ids_text']") && str_contains($view, "\$block['source_filename']") && str_contains($view, 'title="<?= e($sourceText) ?>"'));
+$ok('block detail modal has no outer body padding or horizontal overflow', str_contains($view, '.feo-placement-detail-modal-body{padding:0!important;overflow:hidden!important}') && str_contains($view, 'overflow-y:auto;overflow-x:hidden'));
+$ok('page placement table suppresses horizontal scrolling', str_contains($view, '.feo-placement-table-card .table-scroll{overflow-x:hidden}') && str_contains($view, 'min-width:0!important'));
+$ok('repeat warning has structured rows', str_contains($view, '.feo-placement-repeat-item{display:grid') && str_contains($view, '.feo-placement-repeat-blocks{display:grid'));
 
 $js = $read($root . '/public/assets/js/feo-map-placement.js');
 foreach ([
     "confirmOperation('create'" => 'create uses ERP confirmation flow',
     "confirmOperation('status'" => 'status mutation uses ERP confirmation flow',
+    "confirmOperation('delete'" => 'delete mutation uses ERP confirmation flow',
     "confirmOperation('reconcile'" => 'reconcile uses ERP confirmation flow',
     "addEventListener('dblclick'" => 'block detail opens on double click',
     "base+'/validate-manual'" => 'manual validation calls read-only validation endpoint',
@@ -122,6 +137,10 @@ foreach ([
     "raw.indexOf('\\t')" => 'client recognizes tabular paste',
     "line.indexOf('|')" => 'client recognizes markdown table paste',
     "/(?<!\\d)\\d{6}(?!\\d)/g" => 'client mapping keeps standalone six-digit ids',
+    'appendRepeatPanel' => 'repeat diagnostics are rendered structurally',
+    "error.payload=data" => 'structured server error payload is preserved',
+    "data-placement-delete" => 'disabled block detail exposes delete action',
+    "base+'/blocks/'+id+'/preview-delete'" => 'delete action previews before confirmation',
 ] as $needle => $label) $ok($label, str_contains($js, $needle));
 
 $ok('browser confirm is forbidden', !str_contains($view, 'confirm(') && !str_contains($js, 'confirm('));
@@ -137,12 +156,13 @@ $ok(
     str_contains($js, "q('[data-placement-analyze]')?.addEventListener('click'") &&
     str_contains($js, 'createForm.requestSubmit()')
 );
-$ok('create confirmation does not duplicate effect in gray box', str_contains($js, "if(kind==='create'){") && str_contains($js, "}else{\n      if(kind==='status')") && !str_contains($js, "if(kind==='create')html+=`<div class=\"feo-placement-confirm-effect\""));
-$ok('repeat operation prefix is rendered bold', str_contains($js, "const prefix='Повторная операция запрещена:'") && str_contains($js, 'strong.textContent=prefix'));
+$ok('create confirmation does not duplicate effect in gray box', str_contains($js, "if(kind==='create'){") && !str_contains($js, "if(kind==='create')html+=`<div class=\"feo-placement-confirm-effect\""));
+$ok('repeat operation prefix remains bold', str_contains($js, "title.textContent='Повторная операция запрещена:'") && str_contains($view, '.feo-placement-repeat-title{font-weight:700'));
 $ok('manual field validates on every edit with debounce', str_contains($js, "manualInput?.addEventListener('input',()=>scheduleManualValidation())") && str_contains($js, 'window.setTimeout(validateManual,immediate?0:280)'));
 $ok('block type change reruns manual validation', str_contains($js, "typeRadios.forEach(r=>r.addEventListener('change',()=>scheduleManualValidation(true)))"));
 $ok('search paste normalizes using the same FEO mapping', str_contains($js, "blockSearchInput?.addEventListener('paste'") && str_contains($js, "blockSearchInput.value=ids.join(' ')"));
 $ok('block search result exposes block status and opens block detail', str_contains($js, 'statusHtml(block.status)') && str_contains($js, 'data-placement-search-block-id'));
+$ok('disabled block delete uses danger styling and active blocks have no delete action', str_contains($js, "else html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Включить блок</button><button type=\"button\" class=\"btn btn-danger\" data-placement-delete>Удалить блок</button>`") && str_contains($js, "if(b.status==='applied')html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Отключить блок</button>`"));
 $ok('block table has no actions column', !str_contains($view, '<th>Действия</th>'));
 
 $manifest = json_decode($read($root . '/.github/agent_db_migration_request.json'), true);

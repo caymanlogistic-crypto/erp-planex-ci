@@ -37,10 +37,18 @@ final class FeoPlacementService
               GROUP BY b.id
               ORDER BY b.id DESC";
         $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $requestIds = [];
+        if ($rows !== []) {
+            foreach ($pdo->query('SELECT block_id,zayavka_id FROM feo_placement_block_requests ORDER BY block_id,position_no,id')->fetchAll(PDO::FETCH_ASSOC) as $requestRow) {
+                $requestIds[(int)$requestRow['block_id']][] = (string)$requestRow['zayavka_id'];
+            }
+        }
         foreach ($rows as &$row) {
             $row['request_count'] = (int)$row['request_count'];
             $row['total_mass_kg'] = round((float)$row['total_mass_kg'], 3);
             $row['missing_request_count'] = (int)$row['missing_request_count'];
+            $row['request_ids'] = $requestIds[(int)$row['id']] ?? [];
+            $row['request_ids_text'] = implode(', ', $row['request_ids']);
         }
         unset($row);
         return $rows;
@@ -197,6 +205,54 @@ final class FeoPlacementService
             $current = $this->currentSummary($pdo);
             $pdo->commit();
             return ['preview' => $preview, 'current' => $current];
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        } finally {
+            $this->releaseLock($pdo, $lock);
+        }
+    }
+
+    public function previewDelete(PDO $pdo, int $blockId): array
+    {
+        $block = $this->block($pdo, $blockId);
+        if (!$block) throw new \RuntimeException('Блок не найден.');
+        if (($block['status'] ?? '') !== 'disabled') throw new \RuntimeException('Удалить можно только отключённый блок.');
+        $q = $pdo->prepare('SELECT COUNT(*) FROM feo_placement_current WHERE source_block_id=?');
+        $q->execute([$blockId]);
+        if ((int)$q->fetchColumn() > 0) throw new \RuntimeException('Отключённый блок всё ещё связан с актуальным составом. Сначала пересчитайте состав.');
+        return [
+            'block_id' => $blockId,
+            'name' => (string)($block['name'] ?? ''),
+            'request_count' => (int)$block['request_count'],
+            'total_mass_kg' => (float)$block['total_mass_kg'],
+            'source_filename' => $block['source_filename'] ?? null,
+            'source_file_key' => $block['source_file_key'] ?? null,
+            'state_hash' => $this->stateHash($pdo),
+        ];
+    }
+
+    public function deleteDisabledBlock(PDO $pdo, int $blockId, string $expectedStateHash): array
+    {
+        $lock = $this->acquireLock($pdo);
+        try {
+            $pdo->beginTransaction();
+            if (!hash_equals($expectedStateHash, $this->stateHash($pdo))) throw new \RuntimeException('Состав изменился после подтверждения. Повторите удаление.');
+            $q = $pdo->prepare('SELECT id,status FROM feo_placement_blocks WHERE id=? FOR UPDATE');
+            $q->execute([$blockId]);
+            $row = $q->fetch(PDO::FETCH_ASSOC) ?: null;
+            if (!$row) throw new \RuntimeException('Блок не найден.');
+            if (($row['status'] ?? '') !== 'disabled') throw new \RuntimeException('Удалить можно только отключённый блок.');
+            $q = $pdo->prepare('SELECT COUNT(*) FROM feo_placement_current WHERE source_block_id=?');
+            $q->execute([$blockId]);
+            if ((int)$q->fetchColumn() > 0) throw new \RuntimeException('Отключённый блок всё ещё связан с актуальным составом. Сначала пересчитайте состав.');
+            $preview = $this->previewDelete($pdo, $blockId);
+            $q = $pdo->prepare("DELETE FROM feo_placement_blocks WHERE id=? AND status='disabled'");
+            $q->execute([$blockId]);
+            if ($q->rowCount() !== 1) throw new \RuntimeException('Не удалось удалить отключённый блок.');
+            $current = $this->currentSummary($pdo);
+            $pdo->commit();
+            return ['deleted_block' => $preview, 'current' => $current];
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;

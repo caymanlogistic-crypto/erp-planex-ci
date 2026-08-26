@@ -80,25 +80,15 @@ $feoPlacementMemberships = static function (\PDO $pdo, array $ids, bool $activeO
     return $out;
 };
 
-$feoPlacementRepeatMessage = static function (array $repeatIds, array $memberships, string $blockType): string {
-    $parts = [];
-    foreach ($repeatIds as $requestId) {
-        $blocks = $memberships[$requestId] ?? [];
-        if ($blocks !== []) {
-            $blockLabels = [];
-            foreach ($blocks as $block) {
-                $name = trim((string)($block['name'] ?? ''));
-                $type = ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение';
-                $blockLabels[] = '#' . (int)$block['id'] . ($name !== '' ? ' «' . $name . '»' : '') . ' (' . $type . ')';
-            }
-            $parts[] = 'заявка ' . $requestId . ' — активные блоки: ' . implode(', ', $blockLabels);
-        } else {
-            $parts[] = 'заявка ' . $requestId . ($blockType === 'addition'
-                ? ' уже находится в актуальном составе'
-                : ' отсутствует в актуальном составе');
-        }
+$feoPlacementPreviewRecord = static function (string $token, int $companyId, string $kind): array {
+    $record = $_SESSION['feo_placement_previews'][$token] ?? null;
+    if (!is_array($record) || ($record['kind'] ?? '') !== $kind || (int)($record['company_id'] ?? 0) !== $companyId) {
+        throw new \RuntimeException('Подтверждение устарело. Выполните операцию ещё раз.');
     }
-    return 'Повторная операция запрещена: ' . implode('; ', $parts) . '.';
+    if ((int)($record['created_at'] ?? 0) < time() - 7200) {
+        throw new \RuntimeException('Подтверждение устарело. Выполните операцию ещё раз.');
+    }
+    return $record;
 };
 
 $feoPlacementController = new \App\Http\Controllers\Company\FeoPlacementController($config, $db);
@@ -133,6 +123,7 @@ $router->post('/company/feo/requests/map-placement/validate-manual', static func
             'missing_ids'=>$missing,
             'repeat_ids'=>$repeat,
             'repeat_blocks'=>$memberships,
+            'block_type'=>$blockType,
         ]);
     } catch (\Throwable $e) {
         jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
@@ -170,8 +161,7 @@ $router->get('/company/feo/requests/map-placement/search-blocks', static functio
 $router->post('/company/feo/requests/map-placement/analyze', static function () use (
     $feoPlacementController,
     $feoPlacementCompanyContext,
-    $feoPlacementMemberships,
-    $feoPlacementRepeatMessage
+    $feoPlacementMemberships
 ): void {
     requireRole(['company_owner','senior_logist','logist']);
     try {
@@ -203,7 +193,15 @@ $router->post('/company/feo/requests/map-placement/analyze', static function () 
         $preview = $placement->previewCreate($pdo, $parsed['ids'], $blockType);
         if (!empty($preview['repeat_ids'])) {
             $memberships = $feoPlacementMemberships($pdo, $preview['repeat_ids'], true);
-            throw new \RuntimeException($feoPlacementRepeatMessage($preview['repeat_ids'], $memberships, $blockType));
+            jsonResponse([
+                'success'=>false,
+                'code'=>'repeat_operation',
+                'message'=>'Повторная операция запрещена.',
+                'repeat_ids'=>$preview['repeat_ids'],
+                'repeat_blocks'=>$memberships,
+                'block_type'=>$blockType,
+            ], 422);
+            return;
         }
     } catch (\Throwable $e) {
         jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
@@ -217,5 +215,63 @@ $router->get('/company/feo/requests/map-placement/blocks/{id}/json', [$feoPlacem
 $router->get('/company/feo/requests/map-placement/blocks/{id}/download', [$feoPlacementController, 'download']);
 $router->post('/company/feo/requests/map-placement/blocks/{id}/preview-status', [$feoPlacementController, 'previewStatus']);
 $router->post('/company/feo/requests/map-placement/status/commit', [$feoPlacementController, 'commitStatus']);
+
+$router->post('/company/feo/requests/map-placement/blocks/{id}/preview-delete', static function (string $id) use ($feoPlacementCompanyContext): void {
+    requireRole(['company_owner','senior_logist','logist']);
+    try {
+        [$company, $pdo, $placement] = $feoPlacementCompanyContext();
+        $preview = $placement->previewDelete($pdo, (int)$id);
+        $token = bin2hex(random_bytes(24));
+        $_SESSION['feo_placement_previews'][$token] = [
+            'kind'=>'delete',
+            'company_id'=>(int)$company['id'],
+            'created_at'=>time(),
+            'block_id'=>(int)$id,
+            'state_hash'=>(string)$preview['state_hash'],
+        ];
+        jsonResponse(['success'=>true,'token'=>$token,'preview'=>$preview]);
+    } catch (\Throwable $e) {
+        jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
+    }
+});
+
+$router->post('/company/feo/requests/map-placement/delete/commit', static function () use (
+    $feoPlacementCompanyContext,
+    $feoPlacementPreviewRecord
+): void {
+    requireRole(['company_owner','senior_logist','logist']);
+    try {
+        [$company, $pdo, $placement] = $feoPlacementCompanyContext();
+        $token = trim((string)($_POST['preview_token'] ?? ''));
+        $record = $feoPlacementPreviewRecord($token, (int)$company['id'], 'delete');
+        $result = $placement->deleteDisabledBlock($pdo, (int)$record['block_id'], (string)$record['state_hash']);
+        unset($_SESSION['feo_placement_previews'][$token]);
+
+        $deleted = $result['deleted_block'] ?? [];
+        $fileWarning = null;
+        $fileKey = trim((string)($deleted['source_file_key'] ?? ''));
+        if ($fileKey !== '') {
+            if ($fileKey !== basename($fileKey)) {
+                $fileWarning = 'Блок удалён, но путь исходного файла оказался некорректным.';
+            } else {
+                $dir = company_storage_path($company['storage_path'] ?? null, (int)$company['id']) . DIRECTORY_SEPARATOR . 'feo-placement';
+                $path = $dir . DIRECTORY_SEPARATOR . $fileKey;
+                if (is_file($path) && !@unlink($path)) $fileWarning = 'Блок удалён, но исходный файл не удалось удалить из хранилища.';
+            }
+        }
+
+        $_SESSION['flash_success'] = sprintf(
+            'Отключённый блок #%d удалён. Актуальный состав: %d заявок, %s кг.',
+            (int)($deleted['block_id'] ?? 0),
+            (int)($result['current']['request_count'] ?? 0),
+            rtrim(rtrim(number_format((float)($result['current']['total_mass_kg'] ?? 0), 3, '.', ''), '0'), '.')
+        );
+        if ($fileWarning !== null) $_SESSION['flash_error'] = $fileWarning;
+        jsonResponse(['success'=>true,'file_warning'=>$fileWarning] + $result);
+    } catch (\Throwable $e) {
+        jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
+    }
+});
+
 $router->post('/company/feo/requests/map-placement/reconcile/preview', [$feoPlacementController, 'previewReconcile']);
 $router->post('/company/feo/requests/map-placement/reconcile/commit', [$feoPlacementController, 'commitReconcile']);
