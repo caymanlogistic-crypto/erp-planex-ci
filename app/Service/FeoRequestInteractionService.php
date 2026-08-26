@@ -28,11 +28,24 @@ final class FeoRequestInteractionService
     public function extractRequestIds(string $raw): array
     {
         if (trim($raw) === '') return [];
-        preg_match_all('/(?<!\d)\d{6}(?!\d)/u', $raw, $matches);
+
+        $structured = str_contains($raw, "\t") || str_contains($raw, '|');
+        $matches = [];
+        if ($structured) {
+            foreach (preg_split('/\R/u', $raw) ?: [] as $line) {
+                $cell = $this->firstStructuredCell((string)$line);
+                if ($cell === '') continue;
+                preg_match_all('/(?<!\d)\d{6}(?!\d)/u', $cell, $cellMatches);
+                foreach ($cellMatches[0] ?? [] as $id) $matches[] = (string)$id;
+            }
+        } else {
+            preg_match_all('/(?<!\d)\d{6}(?!\d)/u', $raw, $rawMatches);
+            $matches = array_map('strval', $rawMatches[0] ?? []);
+        }
+
         $ids = [];
         $seen = [];
-        foreach ($matches[0] ?? [] as $id) {
-            $id = (string)$id;
+        foreach ($matches as $id) {
             if (isset($seen[$id])) continue;
             $seen[$id] = true;
             $ids[] = $id;
@@ -129,6 +142,19 @@ final class FeoRequestInteractionService
         } finally {
             $this->releaseLock($pdo, $lockName);
         }
+    }
+
+    private function firstStructuredCell(string $line): string
+    {
+        if (str_contains($line, "\t")) {
+            return trim((string)(explode("\t", $line, 2)[0] ?? ''));
+        }
+        if (str_contains($line, '|')) {
+            $trimmed = trim($line);
+            $trimmed = trim($trimmed, '|');
+            return trim((string)(explode('|', $trimmed, 2)[0] ?? ''));
+        }
+        return '';
     }
 
     private function buildFilter(array $requestIds, string $contentSearch): array
