@@ -7,9 +7,12 @@ $service = (string) file_get_contents($root . '/app/Service/LinearTripServiceLin
 $serviceFinance = (string) file_get_contents($root . '/app/Service/LinearTripServiceFinanceService.php');
 $requestNormalizer = (string) file_get_contents($root . '/app/Service/LinearTripRequestNormalizer.php');
 $edit = (string) file_get_contents($root . '/app/Http/Controllers/Company/LinearTripActions/modal_edit_submit_p13.php');
+$modalViewAction = (string) file_get_contents($root . '/app/Http/Controllers/Company/LinearTripActions/modal_view.php');
+$modalView = (string) file_get_contents($root . '/app/View/partials/company_linear_trip_modal_view.php');
 $ui = (string) file_get_contents($root . '/app/View/partials/company_linear_trip_services_bootstrap.php');
 $identityUi = (string) file_get_contents($root . '/app/View/partials/company_linear_trip_services_identity.php');
 $dateUi = (string) file_get_contents($root . '/public/assets/js/linear-trip-date-mode.js');
+$marginFallbackJs = (string) file_get_contents($root . '/public/assets/js/linear-trip-document-delete.js');
 $navigationCounters = (string) file_get_contents($root . '/app/Service/NavigationCounterService.php');
 $migration = (string) file_get_contents($root . '/database/migrations-local/120_create_linear_route_services.sql');
 $persistenceTest = (string) file_get_contents($root . '/tests/linear_trip_service_persistence_mysql_test.php');
@@ -35,6 +38,15 @@ foreach (['data-trip-date-control="end"', 'endVisible', 'if (value(endVisible))'
 foreach (['LinearTripServiceLineService::normalizeSubmitted', 'LinearTripServiceLineService::replaceForRoute', 'P15_linear_trip_save_errors.log'] as $token) {
     if (!str_contains($edit, $token)) throw new RuntimeException('edit save missing ' . $token);
 }
+foreach (['use App\\Service\\LinearTripServiceLineService;', 'LinearTripServiceLineService::fetchByRouteIds', '[(int) $id], true', '$routeAdditionalServices'] as $token) {
+    if (!str_contains($modalViewAction, $token)) throw new RuntimeException('modal view action missing server-side service finance load: ' . $token);
+}
+foreach (['$additionalServicesTotal = 0.0;', '$margin = $customerTotal - $carrierTotal - $additionalServicesTotal;', 'Доп. услуги', 'has-additional-services', 'data-margin-includes-additional-services="1"'] as $token) {
+    if (!str_contains($modalView, $token)) throw new RuntimeException('modal view missing server-side additional-service margin contract: ' . $token);
+}
+foreach (['serverAdditionalCard', "totalCardByLabel(totals, 'Доп. услуги')", "totals.dataset.additionalServicesMarginReady = '1'", 'return;'] as $token) {
+    if (!str_contains($marginFallbackJs, $token)) throw new RuntimeException('JS fallback must not duplicate server-rendered additional-service total: ' . $token);
+}
 foreach (['+ Добавить услугу', 'trip_services[', 'data-trip-service-card', 'rowSpan', 'hasAdditionalServices', "if(!hasAdditionalServices){table.dataset.servicesReady='1';return}", 'syncServiceDueFields', 'bindServicePaymentList', 'data-days-count-wrapper', 'data-days-kind-wrapper', 'data-specific-date-wrapper', "body.querySelector('.driver-modal-main')||body", 'list.dataset.serviceIndex', 'linear-trip-days-stepper', 'data-service-days-minus', 'data-service-days-plus', "daysInput.value='3'", 'Math.max(1,current()-1)', 'current()+1'] as $token) {
     if (!str_contains($ui, $token)) throw new RuntimeException('UI missing ' . $token);
 }
@@ -55,6 +67,11 @@ foreach (['CREATE TABLE IF NOT EXISTS linear_route_services', 'CREATE TABLE IF N
 }
 foreach (['replaceForRoute($pdo, 42, $create', 'replaceForRoute($pdo, 42, $edit', 'fetchByRouteIds($pdo, [42], true)', 'edited payment identity must remain stable', 'removed payment must be soft-deleted', 'removing service must leave no active service payments'] as $token) {
     if (!str_contains($persistenceTest, $token)) throw new RuntimeException('persistence regression missing ' . $token);
+}
+
+$exampleMargin = 75000.0 - 40000.0 - (15000.0 + 6800.0);
+if ($exampleMargin !== 13200.0) {
+    throw new RuntimeException('server-rendered margin must subtract all additional-service payments');
 }
 
 require_once $root . '/app/Service/LinearTripRequestNormalizer.php';
@@ -82,6 +99,7 @@ echo "linear_trip_multi_services_contract: PASS\n";
 echo "primary_transport=legacy_compatible\n";
 echo "additional_services=contractor_manual_description_payments\n";
 echo "additional_services_finance_sync=isolated_best_effort\n";
+echo "additional_services_margin=server_rendered_customer_minus_carrier_minus_service_payments\n";
 echo "end_date_mode=filled_date_infers_mode_without_data_loss\n";
 echo "additional_services_ui=left_column_dynamic_due_fields_days_default_3_stepper\n";
 echo "planned_unloading_attention=current_or_past_plan_without_actual_is_red\n";

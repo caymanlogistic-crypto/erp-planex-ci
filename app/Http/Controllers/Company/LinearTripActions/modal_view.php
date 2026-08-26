@@ -1,6 +1,7 @@
 <?php
 
 use App\Service\LinearRouteService;
+use App\Service\LinearTripServiceLineService;
 
 requireRole(['company_owner', 'senior_logist', 'logist']);
 
@@ -43,6 +44,14 @@ try {
         http_response_code(403);
         echo '<div class="notice warn">У вас нет доступа к этой записи.</div>';
         exit;
+    }
+
+    $routeAdditionalServices = [];
+    if ($isFinanceRealm) {
+        $servicesByRoute = LinearTripServiceLineService::fetchByRouteIds($localPdo, [(int) $id], true);
+        $routeAdditionalServices = is_array($servicesByRoute[(int) $id] ?? null)
+            ? $servicesByRoute[(int) $id]
+            : [];
     }
 
     $termsByRole = LinearRouteService::fetchRouteTerms($localPdo, (int) $id);

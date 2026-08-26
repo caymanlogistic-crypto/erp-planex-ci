@@ -16,6 +16,7 @@ if ($executorPlates !== '') {
 $routePoints = (array) ($route['route_points'] ?? ['loading' => [], 'unloading' => []]);
 $customerPayments = (array) ($route['payments']['customer'] ?? []);
 $carrierPayments = (array) ($route['payments']['carrier'] ?? []);
+$routeAdditionalServices = is_array($routeAdditionalServices ?? null) ? $routeAdditionalServices : [];
 $documentTitles = [
     'customer_document' => 'Договор/заявка с заказчиком',
     'carrier_document' => 'Договор/заявка с перевозчиком',
@@ -32,7 +33,13 @@ $sumPayments = static function (array $payments): float {
 };
 $customerTotal = $sumPayments($customerPayments);
 $carrierTotal = $sumPayments($carrierPayments);
-$margin = $customerTotal - $carrierTotal;
+$additionalServicesTotal = 0.0;
+foreach ($routeAdditionalServices as $service) {
+    $additionalServicesTotal += $sumPayments(
+        is_array($service['payments'] ?? null) ? $service['payments'] : []
+    );
+}
+$margin = $customerTotal - $carrierTotal - $additionalServicesTotal;
 $plannedLoading = trim((string) ($route['planned_loading_date'] ?? ''));
 $actualLoading = trim((string) ($route['actual_loading_date'] ?? ''));
 $displayLoading = $actualLoading !== '' ? $actualLoading : $plannedLoading;
@@ -97,6 +104,14 @@ $paymentDueLabel = static function (array $payment): string {
     overflow:visible!important;
     text-overflow:clip!important;
     overflow-wrap:anywhere!important;
+  }
+  #linear-trip-view-modal .trip-view-totals.has-additional-services{
+    display:grid!important;
+    grid-template-columns:repeat(4,minmax(0,1fr))!important;
+  }
+  #linear-trip-view-modal .trip-view-totals.has-additional-services .trip-view-total{min-width:0}
+  @media(max-width:900px){
+    #linear-trip-view-modal .trip-view-totals.has-additional-services{grid-template-columns:repeat(2,minmax(0,1fr))!important}
   }
   </style>
   <div class="driver-modal-layout">
@@ -170,10 +185,13 @@ $paymentDueLabel = static function (array $payment): string {
                 <?php if ($carrierPayments === []): ?><tr><td colspan="5" class="is-na">—</td></tr><?php endif; ?>
                 </tbody>
               </table>
-              <div class="trip-view-totals">
+              <div class="trip-view-totals<?= $routeAdditionalServices !== [] ? ' has-additional-services' : '' ?>">
                 <div class="trip-view-total"><div class="trip-view-total-label">Заказчик</div><div class="trip-view-total-value"><?= e(LinearRouteService::formatAmount((string) $customerTotal, 0)) ?> ₽</div></div>
                 <div class="trip-view-total"><div class="trip-view-total-label">Перевозчик</div><div class="trip-view-total-value"><?= e(LinearRouteService::formatAmount((string) $carrierTotal, 0)) ?> ₽</div></div>
-                <div class="trip-view-total is-margin"><div class="trip-view-total-label">Маржа</div><div class="trip-view-total-value"><?= e(LinearRouteService::formatAmount((string) max(0, $margin), 0)) ?> ₽</div></div>
+                <?php if ($routeAdditionalServices !== []): ?>
+                <div class="trip-view-total is-additional-services"><div class="trip-view-total-label">Доп. услуги</div><div class="trip-view-total-value"><?= e(LinearRouteService::formatAmount((string) $additionalServicesTotal, 0)) ?> ₽</div></div>
+                <?php endif; ?>
+                <div class="trip-view-total is-margin" title="Маржа = заказчик − перевозчик − доп. услуги" data-margin-includes-additional-services="1"><div class="trip-view-total-label">Маржа</div><div class="trip-view-total-value"><?= e(LinearRouteService::formatAmount((string) max(0, $margin), 0)) ?> ₽</div></div>
               </div>
             </td>
           </tr>
