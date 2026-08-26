@@ -9,14 +9,13 @@ $fmtDateTime = static function ($value): string {
 ?>
 <style>
 .feo-table-card{display:block;min-width:0}
-.feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto}
-.feo-search-input{width:220px;min-width:180px;flex:0 0 auto}
-.feo-search-input--ids{width:660px;min-width:660px;max-width:660px;flex-basis:660px}
-.feo-search-input--content{width:300px;min-width:300px;flex-basis:300px}
-.feo-result-toolbar{min-height:30px;padding:4px 8px}
-.feo-result-toolbar .toolbar-right{min-width:0;overflow:visible;flex:0 0 auto}
-.feo-result-summary{display:flex;align-items:center;min-width:0;flex:1 1 auto}
+.feo-result-toolbar{min-height:36px;height:auto;padding:4px 8px;flex-wrap:wrap;gap:6px 12px}
+.feo-result-summary{display:flex;align-items:center;min-width:240px;flex:1 1 260px}
 .feo-result-summary .found-label{white-space:nowrap}
+.feo-result-toolbar .toolbar-right{min-width:0;max-width:100%;overflow:visible;flex:0 0 auto}
+.feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:nowrap}
+.feo-result-toolbar .toolbar-right .feo-search-input--ids{width:660px;min-width:660px;max-width:660px;flex:0 0 660px}
+.feo-result-toolbar .toolbar-right .feo-search-input--content{width:200px;min-width:200px;max-width:200px;flex:0 0 200px}
 .feo-search-message{margin:0;border-left:0;border-right:0;border-top:0;border-radius:0}
 .feo-table-scroll{overflow-y:auto!important;overflow-x:hidden!important;min-width:0;max-width:100%;min-height:360px;scrollbar-gutter:stable}
 .feo-table{width:100%;max-width:100%;min-width:0!important;table-layout:fixed}
@@ -47,7 +46,7 @@ $fmtDateTime = static function ($value): string {
 .feo-detail-input{width:100%;min-width:0;margin:0}.feo-detail-grid>:nth-last-child(-n+2){border-bottom:0}
 .feo-detail-save-error{margin:8px}.feo-detail-save-success{margin:8px}
 .feo-confirm-copy{display:grid;gap:8px}.feo-confirm-warning{padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
-@media(max-width:1180px){.feo-result-toolbar{flex-wrap:wrap}.feo-search-toolbar{flex:1 1 100%;flex-wrap:wrap}.feo-result-toolbar .toolbar-right{flex:1 1 100%}.feo-search-input--ids{width:min(660px,86vw);min-width:280px;max-width:86vw;flex:1 1 min(660px,86vw)}.feo-search-input--content{width:250px;min-width:200px;flex:1 1 250px}.feo-import-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
+@media(max-width:1180px){.feo-result-toolbar{flex-wrap:wrap}.feo-result-summary{flex:1 1 100%}.feo-result-toolbar .toolbar-right{flex:1 1 100%}.feo-search-toolbar{flex-wrap:wrap}.feo-result-toolbar .toolbar-right .feo-search-input--ids{width:min(660px,86vw);min-width:280px;max-width:86vw;flex:1 1 min(660px,86vw)}.feo-result-toolbar .toolbar-right .feo-search-input--content{width:250px;min-width:200px;max-width:100%;flex:1 1 250px}.feo-import-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
 </style>
 
 <?php if (!empty($successFlash)): ?><div class="notice success feo-freshness"><?= e((string)$successFlash) ?></div><?php endif; ?>
