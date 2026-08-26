@@ -42,7 +42,8 @@ $fmtMass = static function ($value): string {
 .feo-placement-manual.is-hidden{display:none}
 .feo-placement-live-validation{margin-top:7px}
 .feo-placement-live-validation.success{color:var(--success,#2f7d32)}
-.feo-placement-live-validation.warn{color:var(--danger,#b42318)}
+.feo-placement-live-validation.warn{display:block!important;width:100%;color:var(--danger,#b42318)}
+[data-placement-create-error]:not(.is-hidden){display:block!important;width:100%}
 .feo-placement-confirm-copy{display:grid;gap:7px}
 .feo-placement-confirm-effect{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px 10px}
 .feo-placement-danger{color:var(--danger,#b42318)}
