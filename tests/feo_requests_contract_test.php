@@ -112,7 +112,8 @@ $ok('FEO optional warning cannot consume the table grid row', str_contains($view
 $ok('table horizontal overflow is disabled', str_contains($view, 'overflow-x:hidden!important'));
 $ok('dense table uses six intrinsic FEO columns', str_contains($view, 'ID заявки') && str_contains($view, 'Масса, кг') && str_contains($view, 'МНО, Регион') && str_contains($view, 'МНО, МО') && str_contains($view, 'Грузоотправитель') && str_contains($view, 'Адрес погрузки'));
 $ok('search calls server endpoint', str_contains($view, "app_url('/company/feo/requests/data')"));
-$ok('request search field is fixed at threefold desktop width without flex shrink', str_contains($view, '.feo-search-input--ids{width:660px;min-width:660px;max-width:660px;flex-basis:660px}') && str_contains($view, '.feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto}'));
+$ok('request ID selector outranks global toolbar-search width and cannot shrink', str_contains($view, '.feo-result-toolbar .toolbar-right .feo-search-input--ids{width:660px;min-width:660px;max-width:660px;flex:0 0 660px}'));
+$ok('search toolbar can wrap without clipping wide ID input', str_contains($view, '.feo-result-toolbar{min-height:36px;height:auto;padding:4px 8px;flex-wrap:wrap;gap:6px 12px}') && str_contains($view, '.feo-result-toolbar .toolbar-right{min-width:0;max-width:100%;overflow:visible;flex:0 0 auto}'));
 $ok('filters auto-apply live with debounce', str_contains($view, "input.addEventListener('input',scheduleFilter)") && str_contains($view, 'setTimeout(function(){resetLoad();},280)'));
 $ok('table scroll gets stable viewport height', str_contains($view, 'min-height:360px') && str_contains($view, "scroll.style.height=height+'px'"));
 $ok('partial ID results are replaced only after successful response', !str_contains($view, "state.hasMore=true;body.innerHTML=''") && str_contains($view, "if(reset)body.innerHTML='';rows.forEach(addRow);setDiagnostics(data,reset)"));
