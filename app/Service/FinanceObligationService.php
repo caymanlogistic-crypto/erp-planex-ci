@@ -38,7 +38,9 @@ final class FinanceObligationService
             ->fetchAll(PDO::FETCH_COLUMN);
         $count = 0;
         foreach ($routeIds as $routeId) {
-            $count += self::syncLinearRoute($pdo, (int)$routeId);
+            $routeId = (int)$routeId;
+            $count += self::syncLinearRoute($pdo, $routeId);
+            $count += LinearTripServiceFinanceService::syncRoute($pdo, $routeId);
         }
         self::backfillLegacyReferences($pdo);
         return ['routes' => count($routeIds), 'obligations' => $count];
@@ -167,7 +169,10 @@ final class FinanceObligationService
 
         $staleStmt = $pdo->prepare(
             "SELECT id,source_key FROM finance_obligations
-              WHERE source_parent_type='LINEAR_ROUTE' AND source_parent_id=? AND cancelled_at IS NULL"
+              WHERE source_type='LINEAR_ROUTE_PAYMENT'
+                AND source_parent_type='LINEAR_ROUTE'
+                AND source_parent_id=?
+                AND cancelled_at IS NULL"
         );
         $staleStmt->execute([$routeId]);
         foreach ($staleStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
