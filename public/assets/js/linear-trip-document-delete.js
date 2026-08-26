@@ -130,3 +130,117 @@
     scanRegistries(document);
   }
 }());
+
+(function () {
+  'use strict';
+
+  function ensureMarginStyle() {
+    if (document.getElementById('linear-trip-additional-margin-style')) return;
+    var style = document.createElement('style');
+    style.id = 'linear-trip-additional-margin-style';
+    style.textContent = '#linear-trip-view-modal .trip-view-totals.has-additional-services{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr))!important;}#linear-trip-view-modal .trip-view-totals.has-additional-services .trip-view-total{min-width:0;}@media(max-width:900px){#linear-trip-view-modal .trip-view-totals.has-additional-services{grid-template-columns:repeat(2,minmax(0,1fr))!important;}}';
+    document.head.appendChild(style);
+  }
+
+  function parseAmount(value) {
+    var normalized = String(value == null ? '' : value)
+      .replace(/[\s\u00a0\u202f]/g, '')
+      .replace(',', '.')
+      .replace(/[^0-9.-]/g, '');
+    var amount = Number(normalized || 0);
+    return Number.isFinite(amount) ? amount : 0;
+  }
+
+  function formatAmount(value) {
+    return new Intl.NumberFormat('ru-RU', {maximumFractionDigits: 2}).format(value) + ' ₽';
+  }
+
+  function totalCardByLabel(totals, label) {
+    return Array.from(totals.querySelectorAll('.trip-view-total')).find(function (card) {
+      var node = card.querySelector('.trip-view-total-label');
+      return node && node.textContent.trim() === label;
+    }) || null;
+  }
+
+  function totalValue(card) {
+    var node = card && card.querySelector('.trip-view-total-value');
+    return node ? parseAmount(node.textContent) : 0;
+  }
+
+  function routeIdFromModal(modal) {
+    var marker = modal.querySelector('[data-trip-view-title]');
+    var title = marker ? String(marker.getAttribute('data-trip-view-title') || '') : '';
+    var match = title.match(/#(\d+)/);
+    return match ? match[1] : '';
+  }
+
+  function servicePaymentsTotal(services) {
+    return (services || []).reduce(function (serviceTotal, service) {
+      return serviceTotal + (service.payments || []).reduce(function (paymentTotal, payment) {
+        return paymentTotal + parseAmount(payment.amount);
+      }, 0);
+    }, 0);
+  }
+
+  function addAdditionalServicesCard(totals, marginCard, amount) {
+    var card = document.createElement('div');
+    card.className = 'trip-view-total is-additional-services';
+    card.innerHTML = '<div class="trip-view-total-label">Доп. услуги</div><div class="trip-view-total-value"></div>';
+    card.querySelector('.trip-view-total-value').textContent = formatAmount(amount);
+    totals.insertBefore(card, marginCard);
+    totals.classList.add('has-additional-services');
+    ensureMarginStyle();
+  }
+
+  function enhanceMargin(modal) {
+    if (!modal) return;
+    var totals = modal.querySelector('.trip-view-totals');
+    if (!totals || totals.dataset.additionalServicesMarginReady === '1') return;
+    var routeId = routeIdFromModal(modal);
+    if (!routeId) return;
+    var customerCard = totalCardByLabel(totals, 'Заказчик');
+    var carrierCard = totalCardByLabel(totals, 'Перевозчик');
+    var marginCard = totalCardByLabel(totals, 'Маржа');
+    if (!customerCard || !carrierCard || !marginCard) return;
+
+    totals.dataset.additionalServicesMarginReady = '1';
+    var endpoint = (window.getErpBasePath ? window.getErpBasePath() : '') + '/company/trips/linear/service-lines?route_ids=' + encodeURIComponent(routeId);
+    window.fetch(endpoint, {credentials: 'same-origin', headers: {Accept: 'application/json'}})
+      .then(function (response) {
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        return response.json();
+      })
+      .then(function (payload) {
+        if (!payload || !payload.success) return;
+        var servicesByRoute = payload.services_by_route || {};
+        var services = servicesByRoute[routeId] || [];
+        if (!services.length) return;
+        var additionalServicesTotal = servicePaymentsTotal(services);
+        var customerTotal = totalValue(customerCard);
+        var carrierTotal = totalValue(carrierCard);
+        var margin = Math.max(0, customerTotal - carrierTotal - additionalServicesTotal);
+        addAdditionalServicesCard(totals, marginCard, additionalServicesTotal);
+        marginCard.querySelector('.trip-view-total-value').textContent = formatAmount(margin);
+        marginCard.title = 'Маржа = заказчик − перевозчик − доп. услуги';
+        marginCard.dataset.marginIncludesAdditionalServices = '1';
+      })
+      .catch(function () {
+        delete totals.dataset.additionalServicesMarginReady;
+      });
+  }
+
+  function scanMargins(root) {
+    if (!root || !root.querySelectorAll) return;
+    if (root.matches && root.matches('#linear-trip-view-modal')) enhanceMargin(root);
+    root.querySelectorAll('#linear-trip-view-modal').forEach(enhanceMargin);
+  }
+
+  scanMargins(document);
+  new MutationObserver(function (records) {
+    records.forEach(function (record) {
+      record.addedNodes.forEach(function (node) {
+        if (node.nodeType === 1) scanMargins(node);
+      });
+    });
+  }).observe(document.body, {childList: true, subtree: true});
+}());

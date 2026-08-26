@@ -36,5 +36,23 @@ foreach ([
 ] as $token) {
     $assert(str_contains($registryHover, $token), 'registry route-group hover contract missing: ' . $token);
 }
+foreach ([
+    "additionalServicesMarginReady",
+    "/company/trips/linear/service-lines?route_ids=",
+    "payload.services_by_route",
+    "service.payments",
+    "Доп. услуги",
+    "customerTotal - carrierTotal - additionalServicesTotal",
+    "has-additional-services",
+    "marginIncludesAdditionalServices",
+    "Маржа = заказчик − перевозчик − доп. услуги",
+] as $token) {
+    $assert(str_contains($registryHover, $token), 'linear trip additional-service margin contract missing: ' . $token);
+}
+
+$customerTotal = 75000.0;
+$carrierTotal = 40000.0;
+$additionalServicesTotal = 15000.0 + 6800.0;
+$assert($customerTotal - $carrierTotal - $additionalServicesTotal === 13200.0, 'margin must subtract all additional service payments');
 
 fwrite(STDOUT, "linear_trip_registry_service_layout_contract: PASS\n");
