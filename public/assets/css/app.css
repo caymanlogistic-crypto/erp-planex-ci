@@ -57,3 +57,116 @@ select:not([multiple]) {
 .closing-documents-table tbody tr.is-problem > td {
     background: var(--danger-bg) !important;
 }
+
+/* FEO map placement: keep the create dialog aligned with compact ERP forms.
+   The page-specific view owns semantics; these rules only normalize density. */
+#feo-placement-create-modal .modal.modal-lg {
+    width: min(640px, calc(100vw - 32px));
+    max-width: 640px;
+}
+#feo-placement-create-modal .modal-body {
+    padding: 14px 16px 12px;
+}
+#feo-placement-create-modal .feo-placement-form-grid {
+    grid-template-columns: minmax(0, 1fr) 210px;
+    column-gap: 14px;
+    row-gap: 9px;
+    align-items: start;
+}
+#feo-placement-create-modal .field {
+    margin: 0;
+}
+#feo-placement-create-modal .feo-placement-wide {
+    grid-column: 1 / -1;
+}
+#feo-placement-create-modal .field-label {
+    margin-bottom: 4px;
+}
+#feo-placement-create-modal .feo-placement-radio-row {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    min-height: 28px;
+    padding: 0;
+}
+#feo-placement-create-modal .feo-placement-radio {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    font-size: 12px;
+    line-height: 1.2;
+    white-space: nowrap;
+    cursor: pointer;
+}
+#feo-placement-create-modal .feo-placement-radio input[type="radio"] {
+    -webkit-appearance: radio !important;
+    appearance: auto !important;
+    width: 14px !important;
+    height: 14px !important;
+    min-width: 14px !important;
+    min-height: 14px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    accent-color: var(--accent, #7c4718);
+}
+#feo-placement-create-modal .feo-placement-textarea {
+    min-height: 112px;
+    max-height: 190px;
+    padding: 7px 8px;
+    line-height: 1.35;
+    resize: vertical;
+}
+#feo-placement-create-modal .field-hint {
+    margin-top: 4px;
+    font-size: 10px;
+    line-height: 1.35;
+    color: var(--text-muted);
+}
+#feo-placement-create-modal .feo-placement-source-file .field-input[type="file"] {
+    min-height: 30px;
+    padding: 4px 6px;
+}
+#feo-placement-create-modal .feo-placement-analysis {
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--line-soft);
+}
+#feo-placement-create-modal .feo-placement-analysis-grid {
+    gap: 6px;
+}
+#feo-placement-create-modal .feo-placement-stat {
+    padding: 6px 8px;
+    background: var(--surface);
+}
+#feo-placement-create-modal .feo-placement-stat b {
+    font-size: 14px;
+    line-height: 1.2;
+}
+#feo-placement-create-modal .feo-placement-stat span {
+    font-size: 10px;
+    line-height: 1.25;
+}
+#feo-placement-create-modal .notice {
+    margin-top: 8px;
+}
+#feo-placement-create-modal .modal-foot {
+    min-height: 42px;
+    padding: 7px 12px;
+}
+@media (max-width: 700px) {
+    #feo-placement-create-modal .modal.modal-lg {
+        width: min(94vw, 640px);
+    }
+    #feo-placement-create-modal .feo-placement-form-grid {
+        grid-template-columns: 1fr;
+    }
+    #feo-placement-create-modal .feo-placement-wide {
+        grid-column: auto;
+    }
+    #feo-placement-create-modal .feo-placement-analysis-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
