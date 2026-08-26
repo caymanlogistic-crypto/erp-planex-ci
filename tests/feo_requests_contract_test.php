@@ -112,11 +112,12 @@ $ok('FEO optional warning cannot consume the table grid row', str_contains($view
 $ok('table horizontal overflow is disabled', str_contains($view, 'overflow-x:hidden!important'));
 $ok('dense table uses six intrinsic FEO columns', str_contains($view, 'ID заявки') && str_contains($view, 'Масса, кг') && str_contains($view, 'МНО, Регион') && str_contains($view, 'МНО, МО') && str_contains($view, 'Грузоотправитель') && str_contains($view, 'Адрес погрузки'));
 $ok('search calls server endpoint', str_contains($view, "app_url('/company/feo/requests/data')"));
-$ok('request search field is expanded threefold', str_contains($view, '.feo-search-input--ids{width:660px'));
+$ok('request search field is fixed at threefold desktop width without flex shrink', str_contains($view, '.feo-search-input--ids{width:660px;min-width:660px;max-width:660px;flex-basis:660px}') && str_contains($view, '.feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto}'));
 $ok('filters auto-apply live with debounce', str_contains($view, "input.addEventListener('input',scheduleFilter)") && str_contains($view, 'setTimeout(function(){resetLoad();},280)'));
 $ok('table scroll gets stable viewport height', str_contains($view, 'min-height:360px') && str_contains($view, "scroll.style.height=height+'px'"));
 $ok('partial ID results are replaced only after successful response', !str_contains($view, "state.hasMore=true;body.innerHTML=''") && str_contains($view, "if(reset)body.innerHTML='';rows.forEach(addRow);setDiagnostics(data,reset)"));
 $ok('multiple missing IDs stay visible as one diagnostic list', str_contains($view, "missing.join(', ')"));
+$ok('summary is exactly count plus filtered total weight without legacy duplicate text', str_contains($view, 'заявок общим весом <b data-feo-total-mass>0</b> кг.') && !str_contains($view, 'Всего по текущим условиям:') && !str_contains($view, 'data-feo-filter-info'));
 $ok('summary shows filtered count and total weight', str_contains($view, 'data-feo-total') && str_contains($view, 'data-feo-total-mass') && str_contains($view, 'total_mass_kg'));
 $ok('detail modal removes white body padding', str_contains($view, '.feo-detail-modal .modal-body{padding:0!important'));
 $ok('detail view supports edit save and cancel', str_contains($view, 'data-feo-detail-edit') && str_contains($view, 'data-feo-detail-save') && str_contains($view, 'data-feo-detail-cancel'));

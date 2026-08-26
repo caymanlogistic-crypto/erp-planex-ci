@@ -9,16 +9,14 @@ $fmtDateTime = static function ($value): string {
 ?>
 <style>
 .feo-table-card{display:block;min-width:0}
-.feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0}
-.feo-search-input{width:220px;min-width:180px}
-.feo-search-input--ids{width:660px;min-width:360px;max-width:min(660px,60vw)}
-.feo-search-input--content{width:300px;min-width:220px}
+.feo-search-toolbar{display:flex;align-items:center;gap:8px;min-width:0;flex:0 0 auto}
+.feo-search-input{width:220px;min-width:180px;flex:0 0 auto}
+.feo-search-input--ids{width:660px;min-width:660px;max-width:660px;flex-basis:660px}
+.feo-search-input--content{width:300px;min-width:300px;flex-basis:300px}
 .feo-result-toolbar{min-height:30px;padding:4px 8px}
-.feo-result-toolbar .toolbar-right{min-width:0;overflow:hidden}
-.feo-result-summary{display:flex;align-items:center;gap:10px;min-width:0;flex-wrap:wrap}
-.feo-filter-info{font-size:11px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:70vw}
-.feo-filter-info.is-problem{color:var(--danger);font-weight:600}
-.feo-total-mass{font-size:11px;color:var(--text-muted);white-space:nowrap}
+.feo-result-toolbar .toolbar-right{min-width:0;overflow:visible;flex:0 0 auto}
+.feo-result-summary{display:flex;align-items:center;min-width:0;flex:1 1 auto}
+.feo-result-summary .found-label{white-space:nowrap}
 .feo-search-message{margin:0;border-left:0;border-right:0;border-top:0;border-radius:0}
 .feo-table-scroll{overflow-y:auto!important;overflow-x:hidden!important;min-width:0;max-width:100%;min-height:360px;scrollbar-gutter:stable}
 .feo-table{width:100%;max-width:100%;min-width:0!important;table-layout:fixed}
@@ -49,7 +47,7 @@ $fmtDateTime = static function ($value): string {
 .feo-detail-input{width:100%;min-width:0;margin:0}.feo-detail-grid>:nth-last-child(-n+2){border-bottom:0}
 .feo-detail-save-error{margin:8px}.feo-detail-save-success{margin:8px}
 .feo-confirm-copy{display:grid;gap:8px}.feo-confirm-warning{padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
-@media(max-width:1180px){.feo-search-toolbar{flex-wrap:wrap}.feo-search-input--ids{width:min(660px,86vw);min-width:280px;max-width:86vw}.feo-search-input--content{width:250px;min-width:200px}.feo-filter-info{max-width:55vw}.feo-import-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
+@media(max-width:1180px){.feo-result-toolbar{flex-wrap:wrap}.feo-search-toolbar{flex:1 1 100%;flex-wrap:wrap}.feo-result-toolbar .toolbar-right{flex:1 1 100%}.feo-search-input--ids{width:min(660px,86vw);min-width:280px;max-width:86vw;flex:1 1 min(660px,86vw)}.feo-search-input--content{width:250px;min-width:200px;flex:1 1 250px}.feo-import-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
 </style>
 
 <?php if (!empty($successFlash)): ?><div class="notice success feo-freshness"><?= e((string)$successFlash) ?></div><?php endif; ?>
@@ -82,9 +80,7 @@ $fmtDateTime = static function ($value): string {
 <div class="table-card table-card--standard feo-table-card" data-feo-grid>
     <div class="table-toolbar feo-result-toolbar">
         <div class="feo-result-summary">
-            <div class="found-label">Найдено: <b data-feo-total>0</b> заявок</div>
-            <div class="feo-total-mass">Общий вес: <b data-feo-total-mass>0</b> кг</div>
-            <span class="feo-filter-info" data-feo-filter-info>· Загрузка данных…</span>
+            <div class="found-label">Найдено: <b data-feo-total>0</b> заявок общим весом <b data-feo-total-mass>0</b> кг.</div>
         </div>
         <div class="toolbar-right feo-search-toolbar">
             <input type="text" class="toolbar-search feo-search-input feo-search-input--ids" data-feo-id-filter placeholder="Вставьте текст с 6-значными ID заявок" autocomplete="off">
@@ -199,7 +195,7 @@ $fmtDateTime = static function ($value): string {
   if(grid){
     var body=grid.querySelector('[data-feo-body]'),scroll=grid.querySelector('[data-feo-scroll]'),sentinel=grid.querySelector('[data-feo-sentinel]');
     var idInput=grid.querySelector('[data-feo-id-filter]'),textInput=grid.querySelector('[data-feo-content-filter]');
-    var totalEl=grid.querySelector('[data-feo-total]'),massEl=grid.querySelector('[data-feo-total-mass]'),infoEl=grid.querySelector('[data-feo-filter-info]'),msgEl=grid.querySelector('[data-feo-search-message]');
+    var totalEl=grid.querySelector('[data-feo-total]'),massEl=grid.querySelector('[data-feo-total-mass]'),msgEl=grid.querySelector('[data-feo-search-message]');
     var state={offset:0,limit:80,loading:false,hasMore:true,generation:0,controller:null};
 
     function resizeScroll(){var top=scroll.getBoundingClientRect().top,height=Math.max(360,window.innerHeight-top-8);scroll.style.height=height+'px';scroll.style.maxHeight=height+'px';}
@@ -219,13 +215,11 @@ $fmtDateTime = static function ($value): string {
       if(!reset)return;
       totalEl.textContent=String(data.total||0);massEl.textContent=formatKg(data.total_mass_kg);
       var requested=Number(data.requested_count||0),missing=Array.isArray(data.missing_ids)?data.missing_ids:[];
-      if(data.filter_error){infoEl.textContent=data.filter_error;infoEl.classList.add('is-problem');setMessage(data.filter_error,true);return;}
-      infoEl.classList.remove('is-problem');
+      if(data.filter_error){setMessage(data.filter_error,true);return;}
       if(requested>0){
-        var found=requested-missing.length;infoEl.textContent='По номерам найдено '+found+' из '+requested+'.';
         if(missing.length){setMessage('Не найдены заявки: '+missing.join(', ')+'.',true);}else if(Number(data.total||0)===0&&textInput.value.trim()){setMessage('Указанные заявки есть в реестре, но поиск по содержимому не дал совпадений.',true);}else setMessage('',false);
-      }else if(textInput.value.trim()&&Number(data.total||0)===0){infoEl.textContent='Поиск по содержимому: 0 результатов.';setMessage('Поиск по содержимому ничего не нашёл. Измените запрос.',true);}
-      else{infoEl.textContent='Всего по текущим условиям: '+String(data.total||0)+'.';setMessage('',false);}
+      }else if(textInput.value.trim()&&Number(data.total||0)===0){setMessage('Поиск по содержимому ничего не нашёл. Измените запрос.',true);}
+      else{setMessage('',false);}
     }
     async function load(reset){
       if(state.loading&&!reset)return;
