@@ -13,6 +13,15 @@ $controller=fcp_read('app/Http/Controllers/Company/FinanceInvoiceController.php'
 $action=fcp_read('app/Http/Controllers/Company/InvoiceActions/payables.php');
 $dateAction=fcp_read('app/Http/Controllers/Company/InvoiceActions/settlement_date_submit.php');
 $report=fcp_read('app/Service/FinancePayablesReportService.php');
+$calendar=fcp_read('app/Service/FinancePaymentCalendarService.php');
+$obligations=fcp_read('app/Service/FinanceObligationService.php');
+$uninvoiced=fcp_read('app/Service/FinanceUninvoicedObligationService.php');
+$planFact=fcp_read('app/Service/FinancePaymentPlanFactService.php');
+$managementBalance=fcp_read('app/Service/FinanceManagementBalanceService.php');
+$dashboard=fcp_read('app/Service/FinanceDashboardService.php');
+$cascade=fcp_read('app/Service/FinanceSettlementCascadeService.php');
+$serviceFinance=fcp_read('app/Service/LinearTripServiceFinanceService.php');
+$entrypointDependencies=fcp_read('app/Support/entrypoint_dependencies.php');
 $history=fcp_read('app/Service/FinanceInvoiceSettlementHistoryService.php');
 $dateService=fcp_read('app/Service/FinanceInvoiceSettlementDateService.php');
 $view=fcp_read('app/View/pages/company_finance_payables.php');
@@ -32,6 +41,34 @@ fcp_has($report,"o.direction='PAYABLE'",'AP register must be driven by PAYABLE o
 fcp_has($report,"fo.status='POSTED'",'AP paid facts must only use posted money operations');
 fcp_has($report,'a.cancelled_at IS NULL','Cancelled allocations must not count as paid');
 fcp_has($report,'finance_invoice_links','AP must preserve invoice-obligation links');
+
+// Additional services are first-class PAYABLE obligations and must survive every
+// Finance V2 read/sync path instead of being cancelled by the legacy route-payment projection.
+fcp_has($serviceFinance,"LINEAR_ROUTE_SERVICE_PAYMENT",'Additional-service payments must have a dedicated obligation source type');
+fcp_has($serviceFinance,"direction='PAYABLE'",'Additional-service obligations must remain PAYABLE');
+fcp_has($serviceFinance,"party_role='service'",'Additional-service obligations must retain the service role');
+fcp_has($obligations,'LinearTripServiceFinanceService::syncRoute($pdo, $routeId)','Global route obligation sync must also refresh additional services');
+fcp_has($obligations,"source_type='LINEAR_ROUTE_PAYMENT'",'Legacy stale cleanup must be scoped to legacy route-payment obligations only');
+fcp_has($report,'FinanceObligationService::syncAllLinearRoutes','Payables must refresh all obligation families before reading');
+fcp_has($calendar,'FinanceObligationService::syncAllLinearRoutes','Payment calendar must refresh all obligation families before reading');
+
+// Reports that combine invoices with uninvoiced plan data must consume the same
+// universal projection, otherwise additional-service costs disappear until an invoice exists.
+fcp_has($entrypointDependencies,'FinanceUninvoicedObligationService.php','Universal uninvoiced projection must be loaded at runtime');
+fcp_has($uninvoiced,'finance_obligations','Universal uninvoiced projection must be obligation-based');
+fcp_has($uninvoiced,'linked_invoice_amount','Projection must subtract the part already represented by active invoices');
+fcp_has($uninvoiced,'direct_paid_amount','Projection must preserve direct obligation settlements');
+fcp_has($planFact,'FinanceUninvoicedObligationService::fetchOpen','Payment plan/fact must include uninvoiced additional-service obligations');
+fcp_has($managementBalance,'FinanceUninvoicedObligationService::fetchOpen','Management balance must include uninvoiced additional-service obligations');
+fcp_has($dashboard,'FinanceUninvoicedObligationService::fetchOpen','Finance dashboard forecast must include uninvoiced additional-service obligations');
+fcp_has($planFact,'Доп. услуга · Рейс #','Payment plan/fact must visibly identify additional-service rows');
+fcp_has($managementBalance,'Дополнительная услуга рейса','Management balance must identify additional-service liabilities');
+fcp_has($dashboard,'DIRECTION_PAYABLE','Dashboard outflow must use universal PAYABLE obligations');
+
+// Settlement cascade must update the source service-payment row immediately on
+// payment create/cancel, without waiting for a later trip edit or report refresh.
+fcp_has($cascade,'LINEAR_ROUTE_SERVICE_PAYMENT','Settlement cascade must detect additional-service obligations');
+fcp_has($cascade,'LinearTripServiceFinanceService::syncRoute','Settlement cascade must refresh additional-service paid amount/status');
 
 foreach (['Кредиторская задолженность','Всего к оплате','Просрочено','Перевозчик','Рейс / событие','Входящие счета','Оплачено','Остаток','Источник оплаты'] as $needle) fcp_has($view,$needle,'Payables UI must expose '.$needle);
 foreach (['Расчётный счёт','Сотрудник'] as $channel) {
