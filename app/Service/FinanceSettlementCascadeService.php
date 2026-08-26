@@ -175,17 +175,41 @@ final class FinanceSettlementCascadeService
                 $roleCode = 'system';
             }
 
+            $obligation = self::allocationObligation($pdo, $allocation);
+            $isAdditionalService = $obligation !== null
+                && (string)($obligation['source_type'] ?? '') === 'LINEAR_ROUTE_SERVICE_PAYMENT'
+                && (string)($obligation['source_parent_type'] ?? '') === 'LINEAR_ROUTE'
+                && (int)($obligation['source_parent_id'] ?? 0) > 0;
+
             if (($allocation['invoice_id'] ?? null) !== null) {
                 self::recalculateInvoice($pdo, (int)$allocation['invoice_id'], $userId, $roleCode);
             }
             if (($allocation['linear_route_payment_id'] ?? null) !== null) {
                 self::recalculateRoutePayment($pdo, (int)$allocation['linear_route_payment_id'], $userId, $roleCode);
+            } elseif ($isAdditionalService) {
+                LinearTripServiceFinanceService::syncRoute($pdo, (int)$obligation['source_parent_id']);
             } elseif (($allocation['linear_route_id'] ?? null) !== null) {
                 foreach (self::getRoutePaymentsForRoute($pdo, (int)$allocation['linear_route_id']) as $payment) {
                     self::recalculateRoutePayment($pdo, (int)$payment['id'], $userId, $roleCode);
                 }
             }
         });
+    }
+
+    private static function allocationObligation(PDO $pdo, array $allocation): ?array
+    {
+        $obligationId = (int)($allocation['obligation_id'] ?? 0);
+        if ($obligationId <= 0) {
+            return null;
+        }
+        $stmt = $pdo->prepare(
+            'SELECT id,source_type,source_parent_type,source_parent_id
+               FROM finance_obligations
+              WHERE id=?
+              LIMIT 1'
+        );
+        $stmt->execute([$obligationId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
     public static function getInvoicePaidAmount(PDO $pdo, int $invoiceId): string
@@ -279,7 +303,6 @@ final class FinanceSettlementCascadeService
         $stmt->execute([$routeId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
 
     private static function invoiceBaseStatus(array $invoice, string $oldStatus): string
     {

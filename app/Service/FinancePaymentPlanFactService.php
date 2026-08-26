@@ -15,17 +15,15 @@ final class FinancePaymentPlanFactService
     {
         $rows = [];
 
-        $invoiceRows = self::fetchInvoiceRows($localPdo, $filters);
-        foreach ($invoiceRows as $r) {
-            $rows[] = self::computeRow($r);
+        foreach (self::fetchInvoiceRows($localPdo, $filters) as $row) {
+            $rows[] = self::computeRow($row);
         }
 
-        $routePaymentRows = self::fetchRoutePaymentRows($localPdo, $filters);
-        foreach ($routePaymentRows as $r) {
-            $rows[] = self::computeRow($r);
+        foreach (self::fetchUninvoicedObligationRows($localPdo, $filters) as $row) {
+            $rows[] = self::computeRow($row);
         }
 
-        usort($rows, function ($a, $b) {
+        usort($rows, static function (array $a, array $b): int {
             if ($a['planned_date'] === null && $b['planned_date'] === null) {
                 return 0;
             }
@@ -35,7 +33,7 @@ final class FinancePaymentPlanFactService
             if ($b['planned_date'] === null) {
                 return -1;
             }
-            return strcmp((string) $a['planned_date'], (string) $b['planned_date']);
+            return strcmp((string)$a['planned_date'], (string)$b['planned_date']);
         });
 
         return $rows;
@@ -55,11 +53,11 @@ final class FinancePaymentPlanFactService
         $overdueExpense = '0.00';
 
         foreach ($rows as $row) {
-            $side = $row['side'];
-            $planned = $row['planned_amount'];
-            $paid = $row['paid_amount'];
-            $remaining = $row['remaining'];
-            $overdueDays = $row['overdue_days'];
+            $side = (string)$row['side'];
+            $planned = (string)$row['planned_amount'];
+            $paid = (string)$row['paid_amount'];
+            $remaining = (string)$row['remaining'];
+            $overdueDays = (int)$row['overdue_days'];
 
             if ($side === 'INCOME') {
                 $expectedIncome = self::stringAdd($expectedIncome, $planned);
@@ -78,10 +76,6 @@ final class FinancePaymentPlanFactService
             }
         }
 
-        $netPlan = self::stringSub($expectedIncome, $expectedExpense);
-        $netFact = self::stringSub($receivedIncome, $paidExpense);
-        $netRemaining = self::stringSub($remainingIncome, $remainingExpense);
-
         return [
             'expected_income' => $expectedIncome,
             'received_income' => $receivedIncome,
@@ -91,19 +85,19 @@ final class FinancePaymentPlanFactService
             'remaining_expense' => $remainingExpense,
             'overdue_income' => $overdueIncome,
             'overdue_expense' => $overdueExpense,
-            'net_plan' => $netPlan,
-            'net_fact' => $netFact,
-            'net_remaining' => $netRemaining,
+            'net_plan' => self::stringSub($expectedIncome, $expectedExpense),
+            'net_fact' => self::stringSub($receivedIncome, $paidExpense),
+            'net_remaining' => self::stringSub($remainingIncome, $remainingExpense),
         ];
     }
 
     private static function computeRow(array $source): array
     {
         $today = date('Y-m-d');
-        $plannedAmount = (string) $source['planned_amount'];
-        $paidAmount = (string) ($source['paid_amount'] ?? '0.00');
+        $plannedAmount = self::money((string)($source['planned_amount'] ?? '0.00'));
+        $paidAmount = self::money((string)($source['paid_amount'] ?? '0.00'));
         $remaining = self::stringSubPositive($plannedAmount, $paidAmount);
-        $plannedDate = $source['planned_date'];
+        $plannedDate = self::validDate($source['planned_date'] ?? null);
 
         $status = 'planned';
         if (!self::isPositiveAmount($remaining)) {
@@ -117,15 +111,13 @@ final class FinancePaymentPlanFactService
 
         $overdueDays = 0;
         if ($remaining !== '0.00' && self::isPositiveAmount($remaining) && $plannedDate !== null && $plannedDate < $today) {
-            $overdueDays = (int) ((strtotime($today) - strtotime($plannedDate)) / 86400);
+            $overdueDays = (int)((strtotime($today) - strtotime($plannedDate)) / 86400);
         }
 
         $actualClosedDate = null;
         if ($remaining === '0.00') {
-            $actualClosedDate = $source['max_allocation_date'] ?? null;
-            if ($actualClosedDate === null) {
-                $actualClosedDate = $source['paid_at'] ?? null;
-            }
+            $actualClosedDate = self::validDate($source['max_allocation_date'] ?? null)
+                ?? self::validDate($source['paid_at'] ?? null);
         }
 
         return [
@@ -170,9 +162,8 @@ final class FinancePaymentPlanFactService
                 WHERE fi.status NOT IN ('cancelled')";
 
         $params = [];
-
-        $dateFrom = $filters['date_from'] ?? '';
-        $dateTo = $filters['date_to'] ?? '';
+        $dateFrom = (string)($filters['date_from'] ?? '');
+        $dateTo = (string)($filters['date_to'] ?? '');
         if ($dateFrom !== '') {
             $sql .= " AND COALESCE(fi.planned_payment_date, fi.invoice_date) >= ?";
             $params[] = $dateFrom;
@@ -184,94 +175,66 @@ final class FinancePaymentPlanFactService
 
         $stmt = $localPdo->prepare($sql);
         $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        return self::filterRows($rows, $filters);
+        return self::filterRows($stmt->fetchAll(PDO::FETCH_ASSOC), $filters);
     }
 
-    private static function fetchRoutePaymentRows(PDO $localPdo, array $filters): array
+    private static function fetchUninvoicedObligationRows(PDO $localPdo, array $filters): array
     {
-        $sql = "SELECT
-                    lrp.id AS source_id,
-                    'route_payment' AS source_type,
-                    CASE lrp.party_role
-                        WHEN 'customer' THEN 'INCOME'
-                        WHEN 'carrier' THEN 'EXPENSE'
-                        WHEN 'principal' THEN 'EXPENSE'
-                    END AS side,
-                    CONCAT('Рейс #', lr.id) AS source_label,
-                    CASE lrp.party_role
-                        WHEN 'customer' THEN ct.name
-                        WHEN 'carrier' THEN carrier.name
-                        WHEN 'principal' THEN COALESCE(principal_client.name, principal_contractor.name, 'Принципал')
-                    END AS counterparty,
-                    CONCAT('Рейс #', lr.id) AS route_label,
-                    lrp.amount AS planned_amount,
-                    lrp.calculated_due_date AS planned_date,
-                    CASE
-                        WHEN (SELECT COUNT(*) FROM finance_operation_allocations foa2 WHERE foa2.linear_route_payment_id = lrp.id AND foa2.cancelled_at IS NULL) > 0
-                        THEN (SELECT SUM(foa3.amount) FROM finance_operation_allocations foa3 WHERE foa3.linear_route_payment_id = lrp.id AND foa3.cancelled_at IS NULL)
-                        ELSE COALESCE(lrp.paid_amount, 0)
-                    END AS paid_amount,
-                    (SELECT MAX(foa4.allocation_date) FROM finance_operation_allocations foa4 WHERE foa4.linear_route_payment_id = lrp.id AND foa4.cancelled_at IS NULL) AS max_allocation_date,
-                    lrp.paid_at
-                FROM linear_route_payments lrp
-                JOIN linear_routes lr ON lr.id = lrp.linear_route_id AND lr.deleted_at IS NULL
-                LEFT JOIN clients ct ON ct.id = lr.client_id
-                LEFT JOIN contractors carrier ON carrier.id = lr.carrier_contractor_id
-                LEFT JOIN linear_route_principals lrp_principal
-                    ON lrp_principal.id = lrp.linear_route_principal_id
-                    AND lrp_principal.deleted_at IS NULL
-                LEFT JOIN clients principal_client
-                    ON lrp_principal.principal_type = 'client'
-                    AND lrp_principal.principal_id = principal_client.id
-                LEFT JOIN contractors principal_contractor
-                    ON lrp_principal.principal_type = 'contractor'
-                    AND lrp_principal.principal_id = principal_contractor.id
-                WHERE lrp.deleted_at IS NULL
-                  AND NOT EXISTS (
-                      SELECT 1
-                        FROM finance_invoice_links fil
-                       WHERE fil.linear_route_payment_id = lrp.id
-                  )";
+        $result = [];
+        $dateFrom = (string)($filters['date_from'] ?? '');
+        $dateTo = (string)($filters['date_to'] ?? '');
 
-        $params = [];
+        foreach (FinanceUninvoicedObligationService::fetchOpen($localPdo) as $obligation) {
+            $plannedDate = $obligation['effective_due_date'] ?? null;
+            if ($dateFrom !== '' && ($plannedDate === null || $plannedDate < $dateFrom)) {
+                continue;
+            }
+            if ($dateTo !== '' && ($plannedDate === null || $plannedDate > $dateTo)) {
+                continue;
+            }
 
-        $dateFrom = $filters['date_from'] ?? '';
-        $dateTo = $filters['date_to'] ?? '';
-        if ($dateFrom !== '') {
-            $sql .= " AND lrp.calculated_due_date >= ?";
-            $params[] = $dateFrom;
-        }
-        if ($dateTo !== '') {
-            $sql .= " AND lrp.calculated_due_date <= ?";
-            $params[] = $dateTo;
+            $routeId = (string)($obligation['source_parent_type'] ?? '') === 'LINEAR_ROUTE'
+                ? (int)($obligation['source_parent_id'] ?? 0)
+                : 0;
+            $isService = (string)($obligation['source_type'] ?? '') === 'LINEAR_ROUTE_SERVICE_PAYMENT';
+            $sourceLabel = $routeId > 0
+                ? ($isService ? 'Доп. услуга · Рейс #' . $routeId : 'Рейс #' . $routeId)
+                : 'Платёжное обязательство';
+
+            $result[] = [
+                'source_id' => (int)$obligation['id'],
+                'source_type' => 'obligation',
+                'side' => (string)$obligation['direction'] === FinanceObligationService::DIRECTION_RECEIVABLE ? 'INCOME' : 'EXPENSE',
+                'source_label' => $sourceLabel,
+                'counterparty' => (string)($obligation['counterparty_name'] ?? '—'),
+                'route_label' => $routeId > 0 ? 'Рейс #' . $routeId : null,
+                'planned_amount' => (string)$obligation['uninvoiced_amount'],
+                'planned_date' => $plannedDate,
+                'paid_amount' => (string)$obligation['uninvoiced_paid_amount'],
+                'max_allocation_date' => $obligation['max_direct_paid_date'] ?? null,
+                'paid_at' => null,
+            ];
         }
 
-        $stmt = $localPdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-
-        return self::filterRows($rows, $filters);
+        return self::filterRows($result, $filters);
     }
 
     private static function filterRows(array $rows, array $filters): array
     {
-        $directionFilter = $filters['direction'] ?? '';
-        $statusFilter = $filters['status'] ?? '';
-        $searchQuery = $filters['search'] ?? '';
+        $directionFilter = (string)($filters['direction'] ?? '');
+        $statusFilter = (string)($filters['status'] ?? '');
+        $searchQuery = mb_strtolower(trim((string)($filters['search'] ?? '')), 'UTF-8');
+        $today = date('Y-m-d');
 
         $result = [];
-        foreach ($rows as $r) {
-            $today = date('Y-m-d');
-            $plannedAmount = (string) $r['planned_amount'];
-            $paidAmount = (string) ($r['paid_amount'] ?? '0.00');
+        foreach ($rows as $row) {
+            $plannedAmount = self::money((string)($row['planned_amount'] ?? '0.00'));
+            $paidAmount = self::money((string)($row['paid_amount'] ?? '0.00'));
             $remaining = self::stringSubPositive($plannedAmount, $paidAmount);
-            $plannedDate = $r['planned_date'];
+            $plannedDate = self::validDate($row['planned_date'] ?? null);
 
             $status = 'planned';
             if (!self::isPositiveAmount($remaining)) {
-                $remaining = '0.00';
                 $status = 'paid';
             } elseif ($plannedDate !== null && $plannedDate < $today) {
                 $status = 'overdue';
@@ -279,27 +242,16 @@ final class FinancePaymentPlanFactService
                 $status = 'partial';
             }
 
-            $r['_status'] = $status;
-            $r['_remaining'] = $remaining;
-
-            if ($directionFilter !== '' && $directionFilter !== 'all') {
-                if ($r['side'] !== $directionFilter) {
-                    continue;
-                }
+            if ($directionFilter !== '' && $directionFilter !== 'all' && ($row['side'] ?? '') !== $directionFilter) {
+                continue;
             }
-
-            if ($statusFilter !== '' && $statusFilter !== 'all') {
-                if ($status !== $statusFilter) {
-                    continue;
-                }
+            if ($statusFilter !== '' && $statusFilter !== 'all' && $status !== $statusFilter) {
+                continue;
             }
-
             if ($searchQuery !== '') {
-                $searchQuery = mb_strtolower($searchQuery, 'UTF-8');
                 $found = false;
                 foreach (['counterparty', 'source_label', 'route_label'] as $field) {
-                    $val = mb_strtolower((string) ($r[$field] ?? ''), 'UTF-8');
-                    if (str_contains($val, $searchQuery)) {
+                    if (str_contains(mb_strtolower((string)($row[$field] ?? ''), 'UTF-8'), $searchQuery)) {
                         $found = true;
                         break;
                     }
@@ -309,74 +261,78 @@ final class FinancePaymentPlanFactService
                 }
             }
 
-            $result[] = $r;
+            $result[] = $row;
         }
 
         return $result;
     }
 
-    private static function stringAdd(string $a, string $b): string
+    private static function validDate(mixed $value): ?string
     {
-        $partsA = explode('.', $a);
-        $partsB = explode('.', $b);
-        $intA = ltrim($partsA[0] ?? '0', '0') ?: '0';
-        $intB = ltrim($partsB[0] ?? '0', '0') ?: '0';
-        $decA = str_pad(substr(($partsA[1] ?? '') . '00', 0, 2), 2, '0');
-        $decB = str_pad(substr(($partsB[1] ?? '') . '00', 0, 2), 2, '0');
-
-        $decSum = (int) $decA + (int) $decB;
-        $carry = 0;
-        if ($decSum >= 100) {
-            $decSum -= 100;
-            $carry = 1;
+        $value = trim((string)$value);
+        if ($value === '') {
+            return null;
         }
-        $decStr = str_pad((string) $decSum, 2, '0', STR_PAD_LEFT);
-
-        $intSum = (int) $intA + (int) $intB + $carry;
-
-        return $intSum . '.' . $decStr;
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        return $date && $date->format('Y-m-d') === $value ? $value : null;
     }
 
-    private static function stringSub(string $a, string $b): string
+    private static function money(string $value): string
     {
-        $partsA = explode('.', $a);
-        $partsB = explode('.', $b);
-        $intA = (int) (ltrim($partsA[0] ?? '0', '0') ?: '0');
-        $intB = (int) (ltrim($partsB[0] ?? '0', '0') ?: '0');
-        $decA = (int) str_pad(substr(($partsA[1] ?? '') . '00', 0, 2), 2, '0');
-        $decB = (int) str_pad(substr(($partsB[1] ?? '') . '00', 0, 2), 2, '0');
-
-        $totalCentsA = $intA * 100 + $decA;
-        $totalCentsB = $intB * 100 + $decB;
-        $resultCents = $totalCentsA - $totalCentsB;
-
-        $sign = '';
-        if ($resultCents < 0) {
-            $sign = '-';
-            $resultCents = abs($resultCents);
-        }
-
-        $intResult = intdiv($resultCents, 100);
-        $decResult = $resultCents % 100;
-
-        return $sign . $intResult . '.' . str_pad((string) $decResult, 2, '0', STR_PAD_LEFT);
-    }
-
-    private static function stringSubPositive(string $a, string $b): string
-    {
-        $result = self::stringSub($a, $b);
-        if (str_starts_with($result, '-')) {
+        $value = trim(str_replace(',', '.', $value));
+        if (!preg_match('/^-?\d+(?:\.\d+)?$/D', $value)) {
             return '0.00';
         }
-        return $result;
+        $negative = str_starts_with($value, '-');
+        if ($negative) {
+            $value = substr($value, 1);
+        }
+        [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
+        $whole = ltrim($whole, '0');
+        if ($whole === '') {
+            $whole = '0';
+        }
+        $fraction = str_pad(substr($fraction, 0, 2), 2, '0');
+        return ($negative ? '-' : '') . $whole . '.' . $fraction;
     }
 
-    private static function isPositiveAmount(string $amount): bool
+    private static function parseCents(string $value): int
     {
-        $parts = explode('.', $amount);
-        $intPart = ltrim($parts[0] ?? '0', '0') ?: '0';
-        $decPart = $parts[1] ?? '00';
-        $decPart = str_pad(substr($decPart . '00', 0, 2), 2, '0');
-        return $intPart !== '0' || $decPart !== '00';
+        $value = self::money($value);
+        $negative = str_starts_with($value, '-');
+        if ($negative) {
+            $value = substr($value, 1);
+        }
+        [$whole, $fraction] = explode('.', $value, 2);
+        $cents = ((int)$whole * 100) + (int)$fraction;
+        return $negative ? -$cents : $cents;
+    }
+
+    private static function formatCents(int $cents): string
+    {
+        $sign = $cents < 0 ? '-' : '';
+        $cents = abs($cents);
+        return $sign . intdiv($cents, 100) . '.' . str_pad((string)($cents % 100), 2, '0', STR_PAD_LEFT);
+    }
+
+    private static function stringAdd(string $left, string $right): string
+    {
+        return self::formatCents(self::parseCents($left) + self::parseCents($right));
+    }
+
+    private static function stringSub(string $left, string $right): string
+    {
+        return self::formatCents(self::parseCents($left) - self::parseCents($right));
+    }
+
+    private static function stringSubPositive(string $left, string $right): string
+    {
+        $value = self::parseCents($left) - self::parseCents($right);
+        return self::formatCents(max(0, $value));
+    }
+
+    private static function isPositiveAmount(string $value): bool
+    {
+        return self::parseCents($value) > 0;
     }
 }

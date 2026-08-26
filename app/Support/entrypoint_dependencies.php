@@ -40,6 +40,7 @@ require_once base_path('app/Service/CompanyDeletionService.php');
 require_once base_path('app/Service/FinanceAllocationService.php');
 require_once base_path('app/Service/FinanceInvoiceService.php');
 require_once base_path('app/Service/FinanceObligationService.php');
+require_once base_path('app/Service/FinanceUninvoicedObligationService.php');
 require_once base_path('app/Service/FinanceBankInvoiceSettlementService.php');
 require_once base_path('app/Service/FinanceSettlementStateService.php');
 require_once base_path('app/Service/FinanceInvoicePaymentTimelineService.php');
