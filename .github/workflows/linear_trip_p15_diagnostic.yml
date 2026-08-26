@@ -1,0 +1,52 @@
+name: Linear Trip P15 Diagnostic
+
+on:
+  push:
+    branches:
+      - chatgpt/linear-trip-p15-diagnostic-20260826
+
+permissions:
+  contents: read
+
+jobs:
+  read-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          test -n "$PRIVATE_KEY"
+          test -n "$KNOWN_HOSTS"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Read recent route 10 P15 failures only
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          LIVE_ROOT=/home/s/spugovxsim/planexp/public_html/erpv2
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "LOG='$LIVE_ROOT/storage/logs/P15_linear_trip_save_errors.log'; if [ ! -f \"\$LOG\" ]; then echo P15_LOG_MISSING; exit 2; fi; grep '\"route_id\":10' \"\$LOG\" | tail -n 12" \
+            | tee p15_route10.txt
+          test -s p15_route10.txt
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: linear_trip_p15_route10_${{ github.sha }}
+          path: p15_route10.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Cleanup local SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/key" "$HOME/.ssh/known_hosts" 2>/dev/null || true
