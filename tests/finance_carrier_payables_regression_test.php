@@ -49,6 +49,7 @@ fcp_has($serviceFinance,"direction='PAYABLE'",'Additional-service obligations mu
 fcp_has($serviceFinance,"party_role='service'",'Additional-service obligations must retain the service role');
 fcp_has($obligations,'LinearTripServiceFinanceService::syncRoute($pdo, $routeId)','Global route obligation sync must also refresh additional services');
 fcp_has($obligations,"source_type='LINEAR_ROUTE_PAYMENT'",'Legacy stale cleanup must be scoped to legacy route-payment obligations only');
+fcp_has($obligations,"WHERE source_type='LINEAR_ROUTE_PAYMENT'\n                AND source_parent_type='LINEAR_ROUTE'",'Legacy stale cleanup query must explicitly exclude additional-service obligations');
 fcp_has($report,'FinanceObligationService::syncAllLinearRoutes','Payables must refresh all obligation families before reading');
 fcp_has($calendar,'FinanceObligationService::syncAllLinearRoutes','Payment calendar must refresh all obligation families before reading');
 
