@@ -3,6 +3,9 @@ name: ERPv2 Agent CI Request
 on:
   issue_comment:
     types: [created]
+  workflow_run:
+    workflows: ["FEO XLSX Contract"]
+    types: [completed]
 
 permissions:
   contents: read
@@ -15,34 +18,23 @@ concurrency:
 env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
   TARGET_WORKFLOW: ci.yml
+  BOOTSTRAP_RUN_ID: '32979801695'
 
 jobs:
   authorize-and-dispatch:
     if: >-
-      github.event.issue.pull_request != null &&
-      github.actor == github.repository_owner &&
-      startsWith(github.event.comment.body, '/agent-ci ')
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       github.actor == github.repository_owner &&
+       startsWith(github.event.comment.body, '/agent-ci ')) ||
+      (github.event_name == 'workflow_run' &&
+       github.event.workflow_run.id == 32979801695 &&
+       github.event.workflow_run.run_attempt > 1 &&
+       github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.triggering_actor.login == github.repository_owner)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Parse exact request
-        id: request
-        shell: bash
-        env:
-          COMMENT_BODY: ${{ github.event.comment.body }}
-        run: |
-          set -euo pipefail
-          requested_sha="$(COMMENT_BODY="$COMMENT_BODY" python3 - <<'PY'
-          import os,re
-          text=os.environ['COMMENT_BODY'].strip()
-          m=re.fullmatch(r'/agent-ci ([0-9a-f]{40})', text)
-          if not m:
-              raise SystemExit('Expected exact /agent-ci <40-char lowercase SHA>')
-          print(m.group(1))
-          PY
-          )"
-          printf 'requested_sha=%s\n' "$requested_sha" >> "$GITHUB_OUTPUT"
-
       - name: Checkout canonical
         uses: actions/checkout@v4
         with:
@@ -51,6 +43,29 @@ jobs:
 
       - name: Validate request bridge contract
         run: php tests/agent_ci_request_contract_test.php
+
+      - name: Resolve exact requested SHA
+        id: request
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = issue_comment ]; then
+            requested_sha="$(COMMENT_BODY="$COMMENT_BODY" python3 - <<'PY'
+          import os,re
+          text=os.environ['COMMENT_BODY'].strip()
+          m=re.fullmatch(r'/agent-ci ([0-9a-f]{40})', text)
+          if not m:
+              raise SystemExit('Expected exact /agent-ci <40-char lowercase SHA>')
+          print(m.group(1))
+          PY
+            )"
+          else
+            requested_sha="$(git rev-parse HEAD)"
+          fi
+          printf 'requested_sha=%s\n' "$requested_sha" >> "$GITHUB_OUTPUT"
 
       - name: Validate exact canonical HEAD
         env:
