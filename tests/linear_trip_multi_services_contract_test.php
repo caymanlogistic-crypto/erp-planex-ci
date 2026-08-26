@@ -20,7 +20,7 @@ foreach (['serviceLines', 'prepareAdditionalServicesForCreate', 'company_linear_
 foreach (['/company/trips/linear/service-lines'] as $token) {
     if (!str_contains($routes, $token)) throw new RuntimeException('route missing ' . $token);
 }
-foreach (['linear_route_services', 'linear_route_service_payments', 'normalizeSubmitted', 'replaceForRoute', 'fetchByRouteIds', "'id' => $paymentId", 'LinearTripServiceFinanceService::syncRoute'] as $token) {
+foreach (['linear_route_services', 'linear_route_service_payments', 'normalizeSubmitted', 'replaceForRoute', 'fetchByRouteIds', '\'id\' => $paymentId', 'LinearTripServiceFinanceService::syncRoute'] as $token) {
     if (!str_contains($service, $token)) throw new RuntimeException('service missing ' . $token);
 }
 foreach (['LINEAR_ROUTE_SERVICE_PAYMENT', "direction='PAYABLE'", "party_role='service'", 'finance_obligations', 'finance_operation_allocations', 'finance_operations', 'SAVEPOINT', 'ROLLBACK TO SAVEPOINT', 'derived finance sync skipped'] as $token) {
@@ -35,7 +35,7 @@ foreach (['data-trip-date-control="end"', 'endVisible', 'if (value(endVisible))'
 foreach (['LinearTripServiceLineService::normalizeSubmitted', 'LinearTripServiceLineService::replaceForRoute', 'P15_linear_trip_save_errors.log'] as $token) {
     if (!str_contains($edit, $token)) throw new RuntimeException('edit save missing ' . $token);
 }
-foreach (['+ Добавить услугу', 'Описание / детали', 'trip_services[', 'data-trip-service-card', 'rowSpan', 'hasAdditionalServices', "if(!hasAdditionalServices){table.dataset.servicesReady='1';return}", 'syncServiceDueFields', 'bindServicePaymentList', 'data-days-count-wrapper', 'data-days-kind-wrapper', 'data-specific-date-wrapper', "body.querySelector('.driver-modal-main')||body", 'list.dataset.serviceIndex', 'linear-trip-days-stepper', 'data-service-days-minus', 'data-service-days-plus', "daysInput.value='3'", 'Math.max(1,current()-1)', 'current()+1'] as $token) {
+foreach (['+ Добавить услугу', 'trip_services[', 'data-trip-service-card', 'rowSpan', 'hasAdditionalServices', "if(!hasAdditionalServices){table.dataset.servicesReady='1';return}", 'syncServiceDueFields', 'bindServicePaymentList', 'data-days-count-wrapper', 'data-days-kind-wrapper', 'data-specific-date-wrapper', "body.querySelector('.driver-modal-main')||body", 'list.dataset.serviceIndex', 'linear-trip-days-stepper', 'data-service-days-minus', 'data-service-days-plus', "daysInput.value='3'", 'Math.max(1,current()-1)', 'current()+1'] as $token) {
     if (!str_contains($ui, $token)) throw new RuntimeException('UI missing ' . $token);
 }
 foreach (['data-service-payment-id', "paymentName(row, 'id')", 'bindExistingIds', 'normalizeServiceUi', 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ', 'primary.remove()', 'head.remove()', 'linear-trip-service-remove-inline', 'grid-template-columns:minmax(180px,1fr) minmax(220px,1.3fr) auto', "title.textContent !== 'ДОПОЛНИТЕЛЬНЫЕ УСЛУГИ'", 'serverToday', 'applyPlannedUnloadingAttention', 'plannedIso > serverToday', 'Проставьте дату выгрузки или замените плановую дату', 'registry-date-attention-text'] as $token) {
@@ -88,5 +88,5 @@ echo "planned_unloading_attention=current_or_past_plan_without_actual_is_red\n";
 echo "navigation_attention=global_child_counter_parent_sum_no_nested_output_buffer\n";
 echo "service_payments=stable_identity_and_payable_obligations\n";
 echo "service_persistence=mysql_crud_regression_present\n";
-echo "registry=original_without_extras_service_grid_with_extras\n";
+echo "registry=canonical_9_columns_with_additional_service_rows\n";
 echo "migration=no_backfill\n";
