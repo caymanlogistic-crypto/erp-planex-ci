@@ -13,16 +13,18 @@ final class FinanceDashboardService
 
     public static function computeDashboard(PDO $localPdo): array
     {
+        FinanceObligationService::syncAllLinearRoutes($localPdo);
+        $uninvoicedObligations = FinanceUninvoicedObligationService::fetchOpen($localPdo, false);
+
         $bankAccounts = self::fetchBankAccountBalances($localPdo);
         $cashAccounts = self::fetchCashAccountBalances($localPdo);
-        $totalCash = self::add('0.00', $bankAccounts['total']);
-        $totalCash = self::add($totalCash, $cashAccounts['total']);
-        $expectedInflow = self::fetchExpectedInflow($localPdo);
-        $expectedOutflow = self::fetchExpectedOutflow($localPdo);
-        $overdueReceivables = self::fetchOverdueReceivables($localPdo);
-        $overduePayables = self::fetchOverduePayables($localPdo);
+        $totalCash = self::add($bankAccounts['total'], $cashAccounts['total']);
+        $expectedInflow = self::fetchExpectedFlow($localPdo, 'OUTGOING', FinanceObligationService::DIRECTION_RECEIVABLE, $uninvoicedObligations);
+        $expectedOutflow = self::fetchExpectedFlow($localPdo, 'INCOMING', FinanceObligationService::DIRECTION_PAYABLE, $uninvoicedObligations);
+        $overdueReceivables = self::fetchOverdueFlow($localPdo, 'OUTGOING', FinanceObligationService::DIRECTION_RECEIVABLE, $uninvoicedObligations);
+        $overduePayables = self::fetchOverdueFlow($localPdo, 'INCOMING', FinanceObligationService::DIRECTION_PAYABLE, $uninvoicedObligations);
         $unallocatedCount = self::fetchUnallocatedOperationCount($localPdo);
-        $cashGap = self::fetchNearestCashGap($localPdo, $totalCash, $expectedInflow, $expectedOutflow);
+        $cashGap = self::fetchNearestCashGap($localPdo, $totalCash, $uninvoicedObligations);
 
         return [
             'bank_accounts' => $bankAccounts['accounts'],
@@ -42,274 +44,164 @@ final class FinanceDashboardService
 
     private static function fetchBankAccountBalances(PDO $localPdo): array
     {
-        $allBalances = FinanceBalanceService::allBalances($localPdo);
         $accounts = [];
         $total = '0.00';
-        foreach ($allBalances as $a) {
-            if ($a['type'] !== 'BANK') {
+        foreach (FinanceBalanceService::allBalances($localPdo) as $account) {
+            if (($account['type'] ?? '') !== 'BANK') {
                 continue;
             }
             $accounts[] = [
-                'id' => $a['id'],
-                'name' => $a['name'],
-                'balance' => $a['balance'],
+                'id' => $account['id'],
+                'name' => $account['name'],
+                'balance' => $account['balance'],
             ];
-            $total = self::add($total, $a['balance']);
+            $total = self::add($total, (string)$account['balance']);
         }
         return ['accounts' => $accounts, 'total' => $total];
     }
 
     private static function fetchCashAccountBalances(PDO $localPdo): array
     {
-        $allBalances = FinanceBalanceService::allBalances($localPdo);
         $accounts = [];
         $total = '0.00';
-        foreach ($allBalances as $a) {
-            if ($a['type'] !== 'CASH') {
+        foreach (FinanceBalanceService::allBalances($localPdo) as $account) {
+            if (($account['type'] ?? '') !== 'CASH') {
                 continue;
             }
             $accounts[] = [
-                'id' => $a['id'],
-                'name' => $a['name'],
-                'balance' => $a['balance'],
+                'id' => $account['id'],
+                'name' => $account['name'],
+                'balance' => $account['balance'],
             ];
-            $total = self::add($total, $a['balance']);
+            $total = self::add($total, (string)$account['balance']);
         }
         return ['accounts' => $accounts, 'total' => $total];
     }
 
-    private static function fetchExpectedInflow(PDO $localPdo): string
+    private static function fetchExpectedFlow(PDO $localPdo, string $invoiceDirection, string $obligationDirection, array $obligations): string
     {
-        $stmt = $localPdo->query("
-            SELECT COALESCE(SUM(fi.amount - COALESCE(
-                (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                 WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-            )), 0) AS total
-            FROM finance_invoices fi
-            WHERE fi.direction = 'OUTGOING'
-              AND fi.status NOT IN ('cancelled', 'paid')
-              AND (fi.amount - COALESCE(
-                (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                 WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-              )) > 0
-        ");
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $total = self::normalizeAmount($row['total'] ?? '0.00');
-
-        $rpStmt = $localPdo->query("
-            SELECT COALESCE(SUM(lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)), 0) AS total
-            FROM linear_route_payments lrp
-            JOIN linear_routes lr ON lr.id = lrp.linear_route_id AND lr.deleted_at IS NULL
-            WHERE lrp.party_role = 'customer'
-              AND lrp.deleted_at IS NULL
-              AND (lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)) > 0
-              AND NOT EXISTS (
-                  SELECT 1 FROM finance_invoice_links fil WHERE fil.linear_route_payment_id = lrp.id
-              )
-        ");
-        $rpRow = $rpStmt->fetch(PDO::FETCH_ASSOC);
-        $total = self::add($total, self::normalizeAmount($rpRow['total'] ?? '0.00'));
-
+        $total = self::fetchOpenInvoiceTotal($localPdo, $invoiceDirection, null);
+        foreach ($obligations as $obligation) {
+            if ((string)($obligation['direction'] ?? '') === $obligationDirection) {
+                $total = self::add($total, (string)$obligation['uninvoiced_remaining_amount']);
+            }
+        }
         return $total;
     }
 
-    private static function fetchExpectedOutflow(PDO $localPdo): string
-    {
-        $stmt = $localPdo->query("
-            SELECT COALESCE(SUM(fi.amount - COALESCE(
-                (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                 WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-            )), 0) AS total
-            FROM finance_invoices fi
-            WHERE fi.direction = 'INCOMING'
-              AND fi.status NOT IN ('cancelled', 'paid')
-              AND (fi.amount - COALESCE(
-                (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                 WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-              )) > 0
-        ");
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $total = self::normalizeAmount($row['total'] ?? '0.00');
-
-        $rpStmt = $localPdo->query("
-            SELECT COALESCE(SUM(lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)), 0) AS total
-            FROM linear_route_payments lrp
-            JOIN linear_routes lr ON lr.id = lrp.linear_route_id AND lr.deleted_at IS NULL
-            WHERE lrp.party_role IN ('carrier', 'principal')
-              AND lrp.deleted_at IS NULL
-              AND (lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)) > 0
-              AND NOT EXISTS (
-                  SELECT 1 FROM finance_invoice_links fil WHERE fil.linear_route_payment_id = lrp.id
-              )
-        ");
-        $rpRow = $rpStmt->fetch(PDO::FETCH_ASSOC);
-        $total = self::add($total, self::normalizeAmount($rpRow['total'] ?? '0.00'));
-
-        return $total;
-    }
-
-    private static function fetchOverdueReceivables(PDO $localPdo): string
+    private static function fetchOverdueFlow(PDO $localPdo, string $invoiceDirection, string $obligationDirection, array $obligations): string
     {
         $today = date('Y-m-d');
-        $stmt = $localPdo->prepare("
-            SELECT COALESCE(SUM(fi.amount - COALESCE(
-                (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                 WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-            )), 0) AS total
-            FROM finance_invoices fi
-            WHERE fi.direction = 'OUTGOING'
-              AND fi.status NOT IN ('cancelled', 'paid')
-              AND (fi.amount - COALESCE(
-                (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                 WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-              )) > 0
-              AND COALESCE(fi.planned_payment_date, fi.invoice_date) < ?
-        ");
-        $stmt->execute([$today]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $total = self::normalizeAmount($row['total'] ?? '0.00');
-
-        $rpStmt = $localPdo->prepare("
-            SELECT COALESCE(SUM(lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)), 0) AS total
-            FROM linear_route_payments lrp
-            JOIN linear_routes lr ON lr.id = lrp.linear_route_id AND lr.deleted_at IS NULL
-            WHERE lrp.party_role = 'customer'
-              AND lrp.deleted_at IS NULL
-              AND (lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)) > 0
-              AND lrp.calculated_due_date IS NOT NULL
-              AND lrp.calculated_due_date < ?
-              AND NOT EXISTS (
-                  SELECT 1 FROM finance_invoice_links fil WHERE fil.linear_route_payment_id = lrp.id
-              )
-        ");
-        $rpStmt->execute([$today]);
-        $rpRow = $rpStmt->fetch(PDO::FETCH_ASSOC);
-        $total = self::add($total, self::normalizeAmount($rpRow['total'] ?? '0.00'));
-
+        $total = self::fetchOpenInvoiceTotal($localPdo, $invoiceDirection, $today);
+        foreach ($obligations as $obligation) {
+            if ((string)($obligation['direction'] ?? '') !== $obligationDirection) {
+                continue;
+            }
+            $dueDate = trim((string)($obligation['effective_due_date'] ?? ''));
+            if ($dueDate !== '' && $dueDate < $today) {
+                $total = self::add($total, (string)$obligation['uninvoiced_remaining_amount']);
+            }
+        }
         return $total;
     }
 
-    private static function fetchOverduePayables(PDO $localPdo): string
+    private static function fetchOpenInvoiceTotal(PDO $localPdo, string $direction, ?string $overdueBefore): string
     {
-        $today = date('Y-m-d');
-        $stmt = $localPdo->prepare("
-            SELECT COALESCE(SUM(fi.amount - COALESCE(
-                (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                 WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-            )), 0) AS total
-            FROM finance_invoices fi
-            WHERE fi.direction = 'INCOMING'
-              AND fi.status NOT IN ('cancelled', 'paid')
-              AND (fi.amount - COALESCE(
-                (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                 WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-              )) > 0
-              AND COALESCE(fi.planned_payment_date, fi.invoice_date) < ?
-        ");
-        $stmt->execute([$today]);
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        $total = self::normalizeAmount($row['total'] ?? '0.00');
-
-        $rpStmt = $localPdo->prepare("
-            SELECT COALESCE(SUM(lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)), 0) AS total
-            FROM linear_route_payments lrp
-            JOIN linear_routes lr ON lr.id = lrp.linear_route_id AND lr.deleted_at IS NULL
-            WHERE lrp.party_role IN ('carrier', 'principal')
-              AND lrp.deleted_at IS NULL
-              AND (lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)) > 0
-              AND lrp.calculated_due_date IS NOT NULL
-              AND lrp.calculated_due_date < ?
-              AND NOT EXISTS (
-                  SELECT 1 FROM finance_invoice_links fil WHERE fil.linear_route_payment_id = lrp.id
-              )
-        ");
-        $rpStmt->execute([$today]);
-        $rpRow = $rpStmt->fetch(PDO::FETCH_ASSOC);
-        $total = self::add($total, self::normalizeAmount($rpRow['total'] ?? '0.00'));
-
-        return $total;
+        $sql = "SELECT COALESCE(SUM(fi.amount-COALESCE((
+                            SELECT SUM(foa.amount)
+                              FROM finance_operation_allocations foa
+                             WHERE foa.invoice_id=fi.id
+                               AND foa.cancelled_at IS NULL
+                        ),0)),0) AS total
+                  FROM finance_invoices fi
+                 WHERE fi.direction=?
+                   AND fi.status NOT IN ('cancelled','paid')
+                   AND (fi.amount-COALESCE((
+                        SELECT SUM(foa.amount)
+                          FROM finance_operation_allocations foa
+                         WHERE foa.invoice_id=fi.id
+                           AND foa.cancelled_at IS NULL
+                   ),0))>0";
+        $params = [$direction];
+        if ($overdueBefore !== null) {
+            $sql .= ' AND COALESCE(fi.planned_payment_date,fi.invoice_date)<?';
+            $params[] = $overdueBefore;
+        }
+        $stmt = $localPdo->prepare($sql);
+        $stmt->execute($params);
+        return self::normalizeAmount($stmt->fetchColumn() ?: '0.00');
     }
 
     private static function fetchUnallocatedOperationCount(PDO $localPdo): int
     {
-        $stmt = $localPdo->query("
-            SELECT COUNT(*) AS cnt
-            FROM finance_operations fo
-            WHERE fo.status = 'POSTED'
-              AND (SELECT COALESCE(SUM(foa.amount), 0)
-                   FROM finance_operation_allocations foa
-                   WHERE foa.operation_id = fo.id AND foa.cancelled_at IS NULL) = 0
-              AND fo.operation_type IN ('INCOME', 'EXPENSE')
-        ");
-        $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        return (int) ($row['cnt'] ?? 0);
+        $stmt = $localPdo->query(
+            "SELECT COUNT(*) AS cnt
+               FROM finance_operations fo
+              WHERE fo.status='POSTED'
+                AND (SELECT COALESCE(SUM(foa.amount),0)
+                       FROM finance_operation_allocations foa
+                      WHERE foa.operation_id=fo.id
+                        AND foa.cancelled_at IS NULL)=0
+                AND fo.operation_type IN ('INCOME','EXPENSE')"
+        );
+        return (int)($stmt->fetch(PDO::FETCH_ASSOC)['cnt'] ?? 0);
     }
 
-    private static function fetchNearestCashGap(PDO $localPdo, string $currentCash, string $expectedInflow, string $expectedOutflow): array
+    private static function fetchNearestCashGap(PDO $localPdo, string $currentCash, array $obligations): array
     {
         if (!self::isPositiveOrZero($currentCash)) {
             return ['date' => date('Y-m-d'), 'amount' => self::abs($currentCash)];
         }
 
         $rows = [];
-
-        $invStmt = $localPdo->query("
-            SELECT fi.id, 'invoice' AS source,
-                   COALESCE(fi.planned_payment_date, fi.invoice_date) AS due_date,
-                   CASE WHEN fi.direction = 'OUTGOING' THEN 'INFLOW' ELSE 'OUTFLOW' END AS flow,
-                   (fi.amount - COALESCE(
-                       (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                        WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-                   )) AS remaining
-            FROM finance_invoices fi
-            WHERE fi.status NOT IN ('cancelled', 'paid')
-              AND (fi.amount - COALESCE(
-                  (SELECT SUM(foa.amount) FROM finance_operation_allocations foa
-                   WHERE foa.invoice_id = fi.id AND foa.cancelled_at IS NULL), 0
-              )) > 0
-              AND COALESCE(fi.planned_payment_date, fi.invoice_date) IS NOT NULL
-            ORDER BY due_date ASC
-        ");
-        $invRows = $invStmt->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($invRows as $r) {
-            $rows[] = $r;
+        $stmt = $localPdo->query(
+            "SELECT fi.id,
+                    COALESCE(fi.planned_payment_date,fi.invoice_date) AS due_date,
+                    CASE WHEN fi.direction='OUTGOING' THEN 'INFLOW' ELSE 'OUTFLOW' END AS flow,
+                    (fi.amount-COALESCE((
+                        SELECT SUM(foa.amount)
+                          FROM finance_operation_allocations foa
+                         WHERE foa.invoice_id=fi.id
+                           AND foa.cancelled_at IS NULL
+                    ),0)) AS remaining
+               FROM finance_invoices fi
+              WHERE fi.status NOT IN ('cancelled','paid')
+                AND (fi.amount-COALESCE((
+                    SELECT SUM(foa.amount)
+                      FROM finance_operation_allocations foa
+                     WHERE foa.invoice_id=fi.id
+                       AND foa.cancelled_at IS NULL
+                ),0))>0
+                AND COALESCE(fi.planned_payment_date,fi.invoice_date) IS NOT NULL"
+        );
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $rows[] = $row;
         }
 
-        $rpStmt = $localPdo->query("
-            SELECT lrp.id, 'route_payment' AS source,
-                   lrp.calculated_due_date AS due_date,
-                   CASE WHEN lrp.party_role = 'customer' THEN 'INFLOW' ELSE 'OUTFLOW' END AS flow,
-                   (lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)) AS remaining
-            FROM linear_route_payments lrp
-            JOIN linear_routes lr ON lr.id = lrp.linear_route_id AND lr.deleted_at IS NULL
-            WHERE lrp.deleted_at IS NULL
-              AND lrp.calculated_due_date IS NOT NULL
-              AND (lrp.amount - COALESCE((SELECT SUM(foa.amount) FROM finance_operation_allocations foa WHERE foa.linear_route_payment_id = lrp.id AND foa.cancelled_at IS NULL), 0)) > 0
-              AND NOT EXISTS (
-                  SELECT 1 FROM finance_invoice_links fil WHERE fil.linear_route_payment_id = lrp.id
-              )
-            ORDER BY lrp.calculated_due_date ASC
-        ");
-        $rpRows = $rpStmt->fetchAll(PDO::FETCH_ASSOC);
-        foreach ($rpRows as $r) {
-            $rows[] = $r;
+        foreach ($obligations as $obligation) {
+            $dueDate = trim((string)($obligation['effective_due_date'] ?? ''));
+            if ($dueDate === '') {
+                continue;
+            }
+            $rows[] = [
+                'id' => (int)$obligation['id'],
+                'due_date' => $dueDate,
+                'flow' => (string)$obligation['direction'] === FinanceObligationService::DIRECTION_RECEIVABLE ? 'INFLOW' : 'OUTFLOW',
+                'remaining' => (string)$obligation['uninvoiced_remaining_amount'],
+            ];
         }
 
-        usort($rows, function ($a, $b) {
-            return strcmp((string) $a['due_date'], (string) $b['due_date']);
-        });
+        usort($rows, static fn(array $left, array $right): int => strcmp((string)$left['due_date'], (string)$right['due_date']));
 
         $runningBalance = $currentCash;
-        foreach ($rows as $r) {
-            $amount = self::normalizeAmount($r['remaining']);
-            if ($r['flow'] === 'INFLOW') {
-                $runningBalance = self::add($runningBalance, $amount);
-            } else {
-                $runningBalance = self::sub($runningBalance, $amount);
-            }
+        foreach ($rows as $row) {
+            $amount = self::normalizeAmount($row['remaining'] ?? '0.00');
+            $runningBalance = ($row['flow'] ?? '') === 'INFLOW'
+                ? self::add($runningBalance, $amount)
+                : self::sub($runningBalance, $amount);
             if (!self::isPositiveOrZero($runningBalance)) {
                 return [
-                    'date' => $r['due_date'],
+                    'date' => $row['due_date'],
                     'amount' => self::abs($runningBalance),
                 ];
             }
@@ -320,66 +212,56 @@ final class FinanceDashboardService
 
     private static function normalizeAmount(mixed $value): string
     {
-        if ($value === null || $value === '' || $value === false) {
+        $value = str_replace(',', '.', trim((string)$value));
+        if (!preg_match('/^-?\d+(?:\.\d+)?$/D', $value)) {
             return '0.00';
         }
-        $v = str_replace(',', '.', (string) $value);
-        if (!preg_match('/^-?\d+(\.\d+)?$/', $v)) {
-            return '0.00';
+        $negative = str_starts_with($value, '-');
+        if ($negative) {
+            $value = substr($value, 1);
         }
-        return $v;
+        [$whole, $fraction] = array_pad(explode('.', $value, 2), 2, '');
+        $whole = ltrim($whole, '0') ?: '0';
+        $fraction = str_pad(substr($fraction, 0, 2), 2, '0');
+        return ($negative ? '-' : '') . $whole . '.' . $fraction;
     }
 
     private static function parseCents(string $value): int
     {
-        $value = trim($value);
-        if ($value === '' || $value === '0' || $value === '0.00') {
-            return 0;
-        }
-        $neg = false;
-        if ($value[0] === '-') {
-            $neg = true;
+        $value = self::normalizeAmount($value);
+        $negative = str_starts_with($value, '-');
+        if ($negative) {
             $value = substr($value, 1);
         }
-        $parts = explode('.', $value, 2);
-        $intPart = $parts[0] === '' ? '0' : $parts[0];
-        $intPart = ltrim($intPart, '0');
-        if ($intPart === '') {
-            $intPart = '0';
-        }
-        $decPart = isset($parts[1]) ? str_pad(substr($parts[1] . '00', 0, 2), 2, '0') : '00';
-        $cents = (int) $intPart * 100 + (int) $decPart;
-        return $neg ? -$cents : $cents;
+        [$whole, $fraction] = explode('.', $value, 2);
+        $cents = ((int)$whole * 100) + (int)$fraction;
+        return $negative ? -$cents : $cents;
     }
 
     private static function formatCents(int $cents): string
     {
-        if ($cents < 0) {
-            return '-' . self::formatCents(-$cents);
-        }
-        $intResult = intdiv($cents, 100);
-        $decResult = $cents % 100;
-        return $intResult . '.' . str_pad((string) $decResult, 2, '0', STR_PAD_LEFT);
+        $sign = $cents < 0 ? '-' : '';
+        $cents = abs($cents);
+        return $sign . intdiv($cents, 100) . '.' . str_pad((string)($cents % 100), 2, '0', STR_PAD_LEFT);
     }
 
-    private static function add(string $a, string $b): string
+    private static function add(string $left, string $right): string
     {
-        return self::formatCents(self::parseCents($a) + self::parseCents($b));
+        return self::formatCents(self::parseCents($left) + self::parseCents($right));
     }
 
-    private static function sub(string $a, string $b): string
+    private static function sub(string $left, string $right): string
     {
-        return self::formatCents(self::parseCents($a) - self::parseCents($b));
+        return self::formatCents(self::parseCents($left) - self::parseCents($right));
     }
 
-    private static function isPositiveOrZero(string $amount): bool
+    private static function isPositiveOrZero(string $value): bool
     {
-        return self::parseCents($amount) >= 0;
+        return self::parseCents($value) >= 0;
     }
 
-    private static function abs(string $amount): string
+    private static function abs(string $value): string
     {
-        $cents = self::parseCents($amount);
-        return self::formatCents($cents < 0 ? -$cents : $cents);
+        return self::formatCents(abs(self::parseCents($value)));
     }
 }
