@@ -81,6 +81,8 @@ $route = $read($root . '/app/Http/Routes/company_feo_requests.php');
 foreach (['FeoPlacementInputParser.php','FeoPlacementService.php','FeoPlacementController.php','/company/feo/requests/map-placement','preview-status','reconcile/preview'] as $needle) {
     $ok('route contains ' . $needle, str_contains($route, $needle));
 }
+$ok('analyze rejects duplicate ids inside one placement block', str_contains($route, 'Заявки повторяются внутри блока:') && str_contains($route, "!empty(\$parsed['duplicates'])"));
+$ok('analyze rejects repeated add or exclusion against current placement state', str_contains($route, 'Повторная операция запрещена:') && str_contains($route, "!empty(\$preview['repeat_ids'])"));
 
 $nav = $read($root . '/app/Support/feo_freshness_navigation.php');
 $ok('FEO submenu contains map placement navigation', str_contains($nav, 'Размещение на карте') && str_contains($nav, 'data-feo-placement-nav'));
