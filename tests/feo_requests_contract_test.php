@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../app/Service/FeoXlsxParser.php';
+require_once __DIR__ . '/../app/Service/FeoRequestInteractionService.php';
 
+use App\Service\FeoRequestInteractionService;
 use App\Service\FeoXlsxParser;
 
 $pass = 0; $fail = 0;
@@ -20,8 +22,8 @@ $ok('44 canonical FEO fields remain protected', count($map) === 44);
 $service = $read($root . '/app/Service/FeoRequestService.php');
 foreach ([
     'listRequestsBatch' => 'server batch API',
-    'parseRequestIds' => 'multi-id parser',
-    "preg_split('/[,;\\s]+/u'" => 'comma semicolon whitespace ID syntax',
+    'parseRequestIds' => 'legacy normalized multi-id parser remains available',
+    "preg_split('/[,;\\s]+/u'" => 'legacy normalized ID syntax remains stable',
     'MAX_FILTER_IDS = 500' => 'ID filter safety cap',
     'missing_ids' => 'missing ID diagnostics',
     'searchColumns' => 'server content search',
@@ -40,14 +42,46 @@ $ok('rollback remains latest active LIFO', str_contains($service, "WHERE status=
 $ok('delete remains latest history LIFO', str_contains($service, 'SELECT * FROM feo_imports ORDER BY id DESC LIMIT 1 FOR UPDATE'));
 $ok('restore validates pre-rollback state', str_contains($service, 'currentPrevious !== $expectedPrevious') && str_contains($service, 'sameBusinessRow($current, $before)'));
 
+$interaction = $read($root . '/app/Service/FeoRequestInteractionService.php');
+foreach ([
+    'final class FeoRequestInteractionService' => 'interaction service exists',
+    "preg_match_all('/(?<!\\d)\\d{6}(?!\\d)/u'" => 'strict six consecutive digit extraction',
+    'MAX_FILTER_IDS = 500' => 'interaction ID safety cap',
+    'filteredMassKg' => 'filtered mass summary',
+    'SUM(mass_netto)' => 'mass summary uses full filtered dataset',
+    'prepareImportRows' => 'safe import preparation',
+    'overwriteExisting' => 'explicit overwrite switch',
+    'skipped_existing_count' => 'skipped existing diagnostics',
+    'updateRequest' => 'manual request editing',
+    'current_import_id=NULL' => 'manual edit detaches request from rollback ownership',
+] as $needle => $label) {
+    $ok($label, str_contains($interaction, $needle));
+}
+$interactionService = new FeoRequestInteractionService();
+$ok('arbitrary text extracts request IDs', $interactionService->extractRequestIds('Текст 308710, заявка № 299726; потом 307409.') === ['308710','299726','307409']);
+$ok('seven digit number is not treated as request ID', $interactionService->extractRequestIds('1234567') === []);
+$ok('separated digit groups are not glued together', $interactionService->extractRequestIds('123-456') === []);
+$ok('letters around six digits do not break extraction', $interactionService->extractRequestIds('abc308710xyz') === ['308710']);
+$ok('duplicate request IDs collapse in first-seen order', $interactionService->extractRequestIds('308710 299726 308710') === ['308710','299726']);
+$ok('normalized ID filter is space-separated', $interactionService->normalizedIdFilter('308710, text 299726') === '308710 299726');
+
 $controller = $read($root . '/app/Http/Controllers/Company/FeoRequestsController.php');
 $ok('JSON data endpoint action exists', str_contains($controller, 'public function data(): void'));
+$ok('controller extracts six-digit IDs before legacy batch service', str_contains($controller, 'extractRequestIds($rawIdFilter)'));
+$ok('controller returns full filtered mass summary', str_contains($controller, "['total_mass_kg'] = \$this->interaction->filteredMassKg"));
+$ok('detail endpoint uses common editable payload', str_contains($controller, 'detailPayload($row)'));
+$ok('manual update endpoint exists', str_contains($controller, 'public function update(string $id): void'));
+$ok('manual update uses interaction service', str_contains($controller, 'updateRequest($pdo, (int)$id, $_POST)'));
+$ok('import analysis reads explicit overwrite checkbox', str_contains($controller, "!empty(\$_POST['overwrite_existing'])"));
+$ok('analyze protects existing rows when overwrite is off', str_contains($controller, 'prepareImportRows($pdo, $rows, $overwriteExisting)'));
+$ok('commit re-applies protected import semantics from preview', substr_count($controller, 'prepareImportRows($pdo, $rows, $overwriteExisting)') >= 2);
+$ok('preview persists overwrite choice', str_contains($controller, "'overwrite_existing'=>\$overwriteExisting"));
 $ok('restore controller is privileged', str_contains($controller, 'public function restoreImport(): void') && substr_count($controller, "requireRole(['company_owner','senior_logist']);") >= 3);
 $ok('restore controller calls service', str_contains($controller, 'restoreRolledBackImport($pdo, $importId, $_SESSION)'));
 $ok('index exposes freshness', str_contains($controller, 'freshnessState($pdo)'));
 
 $route = $read($root . '/app/Http/Routes/company_feo_requests.php');
-foreach (['/company/feo/requests/data','import/rollback','import/restore','import/delete','registerFeoFreshnessNavigation'] as $needle) {
+foreach (['FeoRequestInteractionService.php','/company/feo/requests/data','/{id}/update','import/rollback','import/restore','import/delete','registerFeoFreshnessNavigation'] as $needle) {
     $ok('route contains ' . $needle, str_contains($route, $needle));
 }
 
@@ -57,7 +91,15 @@ $ok('menu freshness badge uses ERP alert counter style', str_contains($nav, "nav
 $ok('menu freshness covers all FEO roles', str_contains($nav, "['company_owner','senior_logist','logist']"));
 
 $view = $read($root . '/app/View/pages/company_feo_requests.php');
-foreach (['ID заявок: через пробел, запятую или ;','Поиск по таблице','Не найдены заявки:','IntersectionObserver','data-feo-sentinel','Вернуть','История загрузок ФЭО','Требуется актуальная загрузка ФЭО'] as $needle) {
+foreach ([
+    'Вставьте текст с 6-значными ID заявок',
+    'Поиск по таблице',
+    'Не найдены заявки:',
+    'IntersectionObserver',
+    'data-feo-sentinel',
+    'История загрузок ФЭО',
+    'Требуется актуальная загрузка ФЭО',
+] as $needle) {
     $ok('view contains ' . $needle, str_contains($view, $needle));
 }
 $ok('browser confirm is forbidden', !str_contains($view, 'confirm('));
@@ -70,12 +112,17 @@ $ok('FEO optional warning cannot consume the table grid row', str_contains($view
 $ok('table horizontal overflow is disabled', str_contains($view, 'overflow-x:hidden!important'));
 $ok('dense table uses six intrinsic FEO columns', str_contains($view, 'ID заявки') && str_contains($view, 'Масса, кг') && str_contains($view, 'МНО, Регион') && str_contains($view, 'МНО, МО') && str_contains($view, 'Грузоотправитель') && str_contains($view, 'Адрес погрузки'));
 $ok('search calls server endpoint', str_contains($view, "app_url('/company/feo/requests/data')"));
-$ok('FEO search uses invoices toolbar pattern', str_contains($view, 'table-toolbar feo-result-toolbar') && str_contains($view, 'toolbar-right feo-search-toolbar') && substr_count($view, 'toolbar-search feo-search-input') >= 2);
-$ok('search action buttons removed', !str_contains($view, 'data-feo-id-search') && !str_contains($view, 'data-feo-content-search') && !str_contains($view, 'data-feo-id-clear') && !str_contains($view, 'data-feo-content-clear'));
-$ok('filters auto-apply on input with debounce', str_contains($view, "input.addEventListener('input',scheduleFilter)") && str_contains($view, 'setTimeout(function(){resetLoad();},280)'));
+$ok('request search field is expanded threefold', str_contains($view, '.feo-search-input--ids{width:660px'));
+$ok('filters auto-apply live with debounce', str_contains($view, "input.addEventListener('input',scheduleFilter)") && str_contains($view, 'setTimeout(function(){resetLoad();},280)'));
 $ok('table scroll gets stable viewport height', str_contains($view, 'min-height:360px') && str_contains($view, "scroll.style.height=height+'px'"));
 $ok('partial ID results are replaced only after successful response', !str_contains($view, "state.hasMore=true;body.innerHTML=''") && str_contains($view, "if(reset)body.innerHTML='';rows.forEach(addRow);setDiagnostics(data,reset)"));
 $ok('multiple missing IDs stay visible as one diagnostic list', str_contains($view, "missing.join(', ')"));
+$ok('summary shows filtered count and total weight', str_contains($view, 'data-feo-total') && str_contains($view, 'data-feo-total-mass') && str_contains($view, 'total_mass_kg'));
+$ok('detail modal removes white body padding', str_contains($view, '.feo-detail-modal .modal-body{padding:0!important'));
+$ok('detail view supports edit save and cancel', str_contains($view, 'data-feo-detail-edit') && str_contains($view, 'data-feo-detail-save') && str_contains($view, 'data-feo-detail-cancel'));
+$ok('detail save posts to update endpoint', str_contains($view, "/update',{method:'POST'"));
+$ok('overwrite checkbox is opt-in and unchecked by default', str_contains($view, 'name="overwrite_existing" value="1"') && !str_contains($view, 'name="overwrite_existing" value="1" checked'));
+$ok('import analysis shows protected existing rows', str_contains($view, 'data-stat="skipped_existing_count"') && str_contains($view, 'не перезапишется'));
 $ok('history modal is thirty percent wider than modal-lg', str_contains($view, '.feo-history-modal{width:1066px;max-width:calc(100vw - 32px)}'));
 $ok('history rows and actions do not wrap', str_contains($view, 'white-space:nowrap;overflow-wrap:normal') && str_contains($view, '.feo-history-actions{display:flex;gap:4px;flex-wrap:nowrap'));
 
