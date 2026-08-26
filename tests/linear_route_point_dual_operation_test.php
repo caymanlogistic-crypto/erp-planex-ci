@@ -61,5 +61,15 @@ $assert($migration !== false, 'route point migration must exist');
 $assert(strpos($migration, "ENUM('loading','unloading')") !== false, 'DB must support both physical operation row types');
 $assert(strpos($migration, 'UNIQUE') === false, 'DB must allow two operation rows with same route/sort/address for a dual point');
 
+$entrypointDependencies = file_get_contents(__DIR__ . '/../app/Support/entrypoint_dependencies.php');
+$assert($entrypointDependencies !== false, 'public entrypoint dependency manifest must exist');
+$financeServiceRequire = "require_once base_path('app/Service/LinearTripServiceFinanceService.php');";
+$lineServiceRequire = "require_once base_path('app/Service/LinearTripServiceLineService.php');";
+$financeServicePos = strpos($entrypointDependencies, $financeServiceRequire);
+$lineServicePos = strpos($entrypointDependencies, $lineServiceRequire);
+$assert($financeServicePos !== false, 'entrypoint must load LinearTripServiceFinanceService');
+$assert($lineServicePos !== false, 'entrypoint must load LinearTripServiceLineService');
+$assert($financeServicePos < $lineServicePos, 'finance service must load before line service');
+
 fwrite(STDOUT, "PASS linear_route_point_dual_operation_test\n");
 require __DIR__ . '/linear_trip_multi_services_contract_test.php';
