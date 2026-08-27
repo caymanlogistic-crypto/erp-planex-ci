@@ -37,7 +37,8 @@ $matchingRulesActive = str_starts_with($requestPath, '/company/finance/settings/
 $financeDashboardActive = str_starts_with($requestPath, '/company/finance/dashboard');
 $operationsActive = str_starts_with($requestPath, '/company/finance/operations');
 $bankStatementSettingsActive = str_starts_with($requestPath, '/company/bank-statement-settings');
-$feoRequestsActive = str_starts_with($requestPath, '/company/feo/requests');
+$feoRequestCostsActive = str_starts_with($requestPath, '/company/feo/requests/costs');
+$feoRequestsActive = str_starts_with($requestPath, '/company/feo/requests') && !$feoRequestCostsActive;
 
 $navigationCounters = ['bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0];
 if ($roleCode === 'company_owner' && (int)$companyId > 0) {
@@ -82,7 +83,7 @@ $directoriesOpen = ($roleCode !== 'superadmin') && (
     || $vehicleSetsActive
 );
 $tripsOpen = ($roleCode !== 'superadmin') && $tripsActive;
-$feoRequestsOpen = ($roleCode !== 'superadmin') && $feoRequestsActive;
+$feoRequestsOpen = ($roleCode !== 'superadmin') && ($feoRequestsActive || $feoRequestCostsActive);
 
 $userName = $_SESSION['user_name'] ?? '';
 $roleLabel = match($roleCode) {
@@ -239,6 +240,9 @@ if (empty($topbarCrumbs)) {
                 <div class="nav-sub<?= $feoRequestsOpen ? ' is-open' : '' ?>">
                     <a class="nav-sub-item<?= $feoRequestsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/feo/requests') ?>">
                         <span>Все заявки</span>
+                    </a>
+                    <a class="nav-sub-item<?= $feoRequestCostsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/feo/requests/costs') ?>">
+                        <span>Стоимость заявок</span>
                     </a>
                 </div>
                 <a class="nav-item<?= $routeExecutorsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/route-executors') ?>">
@@ -441,6 +445,9 @@ if (empty($topbarCrumbs)) {
                 <div class="nav-sub<?= $feoRequestsOpen ? ' is-open' : '' ?>">
                     <a class="nav-sub-item<?= $feoRequestsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/feo/requests') ?>">
                         <span>Все заявки</span>
+                    </a>
+                    <a class="nav-sub-item<?= $feoRequestCostsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/feo/requests/costs') ?>">
+                        <span>Стоимость заявок</span>
                     </a>
                 </div>
                 <a class="nav-item<?= $routeExecutorsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/route-executors') ?>">
