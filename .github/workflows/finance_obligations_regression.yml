@@ -18,6 +18,7 @@ on:
       - 'app/Http/Routes/company_bank_finance.php'
       - 'app/View/partials/company_invoice_create_form.php'
       - 'app/View/partials/company_invoice_modal_view.php'
+      - 'app/View/partials/company_bank_invoice_settlement_form.php'
       - 'database/migrations-local/071_*'
       - 'database/migrations-local/072_*'
       - 'scripts/p91_*'
