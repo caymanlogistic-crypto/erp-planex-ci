@@ -203,6 +203,19 @@ final class FinanceAllocationService
 
     public static function createAllocation(PDO $pdo, int $operationId, array $data, array $user): int
     {
+        $invoiceId = self::nullablePositiveInt($data['invoice_id'] ?? null);
+        $obligationId = self::nullablePositiveInt($data['obligation_id'] ?? null);
+        $legacyPaymentId = self::nullablePositiveInt($data['linear_route_payment_id'] ?? null);
+
+        // Backward-compatible settlement class: a true standalone invoice has no invoice links at all.
+        // Any linked invoice remains obligation-backed and MUST use the canonical obligation-aware writer.
+        if ($invoiceId !== null && $obligationId === null && $legacyPaymentId === null && !self::invoiceHasAnyLinks($pdo, $invoiceId)) {
+            $standaloneAllocationId = self::tryCreateStandaloneInvoiceAllocation($pdo, $operationId, $invoiceId, $data, $user);
+            if ($standaloneAllocationId !== null) {
+                return $standaloneAllocationId;
+            }
+        }
+
         return FinanceManualAllocationService::createAllocation($pdo, $operationId, $data, $user);
     }
 
@@ -243,6 +256,158 @@ final class FinanceAllocationService
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
         }
+    }
+
+    private static function invoiceHasAnyLinks(PDO $pdo, int $invoiceId): bool
+    {
+        $stmt = $pdo->prepare('SELECT 1 FROM finance_invoice_links WHERE invoice_id=? LIMIT 1');
+        $stmt->execute([$invoiceId]);
+        return (bool)$stmt->fetchColumn();
+    }
+
+    /**
+     * Creates the legacy-compatible invoice-only allocation only while the invoice is still truly standalone.
+     * Returns null when invoice links appeared before the transactional invoice lock was acquired; caller then
+     * falls back to the obligation-aware writer, which preserves the PR #117 invariant.
+     */
+    private static function tryCreateStandaloneInvoiceAllocation(PDO $pdo, int $operationId, int $invoiceId, array $data, array $user): ?int
+    {
+        $pdo->beginTransaction();
+        try {
+            $stmt = $pdo->prepare('SELECT * FROM finance_operations WHERE id=? FOR UPDATE');
+            $stmt->execute([$operationId]);
+            $operation = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$operation) {
+                throw new \RuntimeException('Операция не найдена.');
+            }
+            if ((string)($operation['status'] ?? '') !== 'POSTED' || ($operation['cancelled_at'] ?? null) !== null) {
+                throw new \RuntimeException('Распределять можно только действующие проведённые операции.');
+            }
+            $operationType = (string)($operation['operation_type'] ?? '');
+            if (!in_array($operationType, ['INCOME','EXPENSE'], true)) {
+                throw new \RuntimeException('Эту финансовую операцию нельзя распределять по счёту.');
+            }
+
+            $amount = self::normalizeMoneyInput((string)($data['amount'] ?? ''));
+            if ($amount === null) {
+                throw new \RuntimeException('Сумма распределения должна быть больше нуля.');
+            }
+            $operationRemaining = self::getOperationRemainingAmount($pdo, $operationId, (string)$operation['amount']);
+            if (self::stringCompare($amount, $operationRemaining) > 0) {
+                throw new \RuntimeException('Сумма распределения превышает остаток операции.');
+            }
+
+            $stmt = $pdo->prepare('SELECT * FROM finance_invoices WHERE id=? FOR UPDATE');
+            $stmt->execute([$invoiceId]);
+            $invoice = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$invoice) {
+                throw new \RuntimeException('Счёт не найден.');
+            }
+            if ((string)($invoice['status'] ?? '') === 'cancelled' || ($invoice['cancelled_at'] ?? null) !== null) {
+                throw new \RuntimeException('Нельзя распределить на аннулированный счёт.');
+            }
+            $expectedDirection = $operationType === 'INCOME' ? 'OUTGOING' : 'INCOMING';
+            if ((string)($invoice['direction'] ?? '') !== $expectedDirection) {
+                throw new \RuntimeException('Направление финансовой операции не соответствует направлению счёта.');
+            }
+            if (!self::counterpartyMatches($operation, $invoice)) {
+                throw new \RuntimeException('Контрагент финансовой операции не совпадает с контрагентом счёта.');
+            }
+            $invoiceRemaining = self::getInvoiceRemainingAmount($pdo, $invoiceId, (string)$invoice['amount']);
+            if (self::stringCompare($invoiceRemaining, '0.00') <= 0) {
+                throw new \RuntimeException('Счёт уже оплачен.');
+            }
+            if (self::stringCompare($amount, $invoiceRemaining) > 0) {
+                throw new \RuntimeException('Сумма распределения превышает остаток счёта.');
+            }
+
+            // replaceInvoiceLinks() locks the same invoice row before changing links. Rechecking while holding
+            // the invoice lock closes the race between the initial standalone classification and this write.
+            $linkStmt = $pdo->prepare('SELECT id FROM finance_invoice_links WHERE invoice_id=? ORDER BY id FOR UPDATE');
+            $linkStmt->execute([$invoiceId]);
+            if ($linkStmt->fetchColumn() !== false) {
+                $pdo->rollBack();
+                return null;
+            }
+
+            $allocationDate = trim((string)($data['allocation_date'] ?? date('Y-m-d')));
+            $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $allocationDate);
+            if (!$date || $date->format('Y-m-d') !== $allocationDate) {
+                throw new \RuntimeException('Некорректная дата распределения.');
+            }
+            $comment = trim((string)($data['comment'] ?? ''));
+            $comment = $comment !== '' ? $comment : null;
+            $userId = (int)($user['user_id'] ?? 0);
+            $roleCode = (string)($user['role_code'] ?? '');
+
+            $insert = $pdo->prepare(
+                "INSERT INTO finance_operation_allocations
+                    (operation_id,invoice_id,obligation_id,linear_route_id,linear_route_payment_id,
+                     amount,allocation_date,method,comment,created_by_user_id,created_by_role)
+                 VALUES (?,?,NULL,NULL,NULL, ?,?,'manual',?,?,?)"
+            );
+            $insert->execute([
+                $operationId,
+                $invoiceId,
+                $amount,
+                $allocationDate,
+                $comment,
+                $userId,
+                $roleCode,
+            ]);
+            $allocationId = (int)$pdo->lastInsertId();
+
+            FinanceAuditLogService::log($pdo, 'finance_allocation', $allocationId, 'allocation_create', null, [
+                'amount' => $amount,
+                'operation_id' => $operationId,
+                'invoice_id' => $invoiceId,
+                'obligation_id' => null,
+                'linear_route_id' => null,
+                'linear_route_payment_id' => null,
+                'settlement_class' => 'STANDALONE_INVOICE',
+            ], $userId, $roleCode);
+            FinanceSettlementCascadeService::cascadeAfterAllocationCreate($pdo, $allocationId);
+
+            $pdo->commit();
+            return $allocationId;
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
+    private static function counterpartyMatches(array $left, array $right): bool
+    {
+        $leftType = strtolower(trim((string)($left['counterparty_entity_type'] ?? '')));
+        $rightType = strtolower(trim((string)($right['counterparty_entity_type'] ?? '')));
+        $leftId = (int)($left['counterparty_entity_id'] ?? 0);
+        $rightId = (int)($right['counterparty_entity_id'] ?? 0);
+        if ($leftType !== '' && $rightType !== '' && $leftId > 0 && $rightId > 0) {
+            return $leftType === $rightType && $leftId === $rightId;
+        }
+        $leftInn = preg_replace('/\D+/', '', (string)($left['counterparty_inn'] ?? '')) ?? '';
+        $rightInn = preg_replace('/\D+/', '', (string)($right['counterparty_inn'] ?? '')) ?? '';
+        if ($leftInn !== '' && $rightInn !== '') {
+            return hash_equals($leftInn, $rightInn);
+        }
+        $leftName = self::normalizeName((string)($left['counterparty_name'] ?? ''));
+        $rightName = self::normalizeName((string)($right['counterparty_name'] ?? ''));
+        return $leftName !== '' && $rightName !== '' && $leftName === $rightName;
+    }
+
+    private static function normalizeName(string $value): string
+    {
+        $value = mb_strtolower(trim($value), 'UTF-8');
+        return preg_replace('/[^\p{L}\p{N}]+/u', '', $value) ?? '';
+    }
+
+    private static function nullablePositiveInt(mixed $value): ?int
+    {
+        if ($value === null || $value === '') return null;
+        $value = (int)$value;
+        return $value > 0 ? $value : null;
     }
 
     private static function stringSub(string $left, string $right): string
