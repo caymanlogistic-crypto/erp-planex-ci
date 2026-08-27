@@ -114,6 +114,19 @@ jobs:
         if: steps.changes.outputs.ui_lab == 'true'
         run: php tests/ui_pattern_lab_contract_test.php
 
+      - name: FEO request costs behavioral regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+          php tests/feo_request_costs_regression_test.php
+
       - name: Changed Python syntax
         if: steps.changes.outputs.python == 'true'
         shell: bash

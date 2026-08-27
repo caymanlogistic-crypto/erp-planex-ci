@@ -52,16 +52,14 @@ final class FeoPlacementInputParser
     {
         if (trim($raw) === '') throw new \RuntimeException('Введите номера заявок.');
         $matches = [];
-        $structured = $structuredFirstColumn && (str_contains($raw, "\t") || str_contains($raw, '|'));
-        if ($structured) {
+        if ($structuredFirstColumn) {
             foreach (preg_split('/\R/u', $raw) ?: [] as $line) {
                 $line = (string)$line;
+                $cell = trim($line);
                 if (str_contains($line, "\t")) {
                     $cell = trim((string)(explode("\t", $line, 2)[0] ?? ''));
                 } elseif (str_contains($line, '|')) {
                     $cell = trim((string)(explode('|', trim($line, " \t\n\r\0\x0B|"), 2)[0] ?? ''));
-                } else {
-                    $cell = '';
                 }
                 if ($cell === '') continue;
                 preg_match_all('/(?<!\d)\d{6}(?!\d)/u', $cell, $m);

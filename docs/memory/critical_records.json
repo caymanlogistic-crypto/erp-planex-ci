@@ -41,8 +41,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "e8c0590f57be1617d8f9734dbffb9c270037457b",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/e8c0590f57be1617d8f9734dbffb9c270037457b/tools/ci_scope.py",
+      "verified_sha": "e652ca65106bd7ceadfdc1c146096032dd4b4150",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/e652ca65106bd7ceadfdc1c146096032dd4b4150/.github/workflows/ci.yml",
       "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py"],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
