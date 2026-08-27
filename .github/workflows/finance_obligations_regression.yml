@@ -91,5 +91,7 @@ jobs:
         run: php tests/finance_invoice_prepayment_behavioral_test.php
       - name: Standalone invoice manual allocation regression
         run: php tests/finance_standalone_invoice_allocation_behavioral_test.php
+      - name: Invoice-link settlement concurrency regression
+        run: php tests/finance_obligations_invoice_link_concurrency_test.php
       - name: Manual allocation uses universal obligations end-to-end
         run: php tests/finance_manual_allocation_obligations_behavioral_test.php
