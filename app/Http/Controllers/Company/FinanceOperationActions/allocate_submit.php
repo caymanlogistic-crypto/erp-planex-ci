@@ -39,7 +39,9 @@ try {
     FinanceAllocationService::createAllocation($localPdo, $operationId, [
         'amount' => $_POST['amount'] ?? '',
         'invoice_id' => $_POST['invoice_id'] ?? null,
+        'obligation_id' => $_POST['obligation_id'] ?? null,
         'linear_route_id' => $_POST['linear_route_id'] ?? null,
+        // Backward compatibility for a stale already-opened form; the service resolves it to obligation_id.
         'linear_route_payment_id' => $_POST['linear_route_payment_id'] ?? null,
         'allocation_date' => $_POST['allocation_date'] ?? date('Y-m-d'),
         'comment' => $_POST['comment'] ?? null,
