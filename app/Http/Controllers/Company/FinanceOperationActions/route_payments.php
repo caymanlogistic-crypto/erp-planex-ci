@@ -14,32 +14,35 @@ try {
     }
 
     $routeId = (int) ($_GET['route_id'] ?? 0);
-    if ($routeId <= 0) {
+    $operationId = (int) ($_GET['operation_id'] ?? 0);
+    if ($routeId <= 0 || $operationId <= 0) {
         echo '[]';
         exit;
     }
 
+    $user = [
+        'user_id' => (int) ($_SESSION['user_id'] ?? ($_SESSION['user']['id'] ?? 0)),
+        'role_code' => (string) ($_SESSION['role_code'] ?? ($_SESSION['user']['role_code'] ?? '')),
+    ];
     $localDb = new Database(companyDatabaseConfig($config, $company));
-    $payments = FinanceAllocationService::fetchRoutePaymentsForAllocation(
+    $obligations = FinanceAllocationService::fetchObligationsForAllocation(
         $localDb->connection(),
+        $operationId,
         $routeId,
-        (string) ($_GET['operation_type'] ?? 'EXPENSE')
+        $user
     );
 
-    $result = array_map(static function (array $p): array {
-        $partyLabel = match ($p['party_role'] ?? '') {
-            'customer' => 'Заказчик',
-            'carrier' => 'Перевозчик',
-            'principal' => 'Принципал',
-            default => (string) ($p['party_role'] ?? ''),
-        };
-        return [
-            'id' => (int) $p['id'],
-            'label' => $partyLabel . ' · ' . FinanceAllocationService::formatAmount($p['amount'] ?? null),
-        ];
-    }, $payments);
+    $result = array_map(static fn(array $o): array => [
+        'id' => (int) $o['id'],
+        'label' => (string) ($o['allocation_label'] ?? ('Обязательство #' . (int) $o['id'])),
+        'source_type' => (string) ($o['source_type'] ?? ''),
+        'remaining_amount' => (string) ($o['remaining_amount'] ?? '0.00'),
+    ], $obligations);
     echo json_encode($result, JSON_UNESCAPED_UNICODE);
 } catch (\Throwable $e) {
-    http_response_code(500);
-    echo json_encode(['error' => 'Не удалось загрузить платёжные строки.'], JSON_UNESCAPED_UNICODE);
+    http_response_code(422);
+    $message = $e instanceof \RuntimeException && !($e instanceof \PDOException)
+        ? $e->getMessage()
+        : 'Не удалось загрузить платёжные обязательства.';
+    echo json_encode(['error' => $message], JSON_UNESCAPED_UNICODE);
 }
