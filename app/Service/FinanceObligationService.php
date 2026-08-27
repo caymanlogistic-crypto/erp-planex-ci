@@ -236,81 +236,151 @@ final class FinanceObligationService
         }
         self::syncAllLinearRoutes($pdo);
 
-        $stmt = $pdo->prepare('SELECT * FROM finance_invoices WHERE id=? FOR UPDATE');
-        $stmt->execute([$invoiceId]);
-        $invoice = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$invoice) {
-            throw new RuntimeException('Счёт не найден.');
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) {
+            $pdo->beginTransaction();
         }
 
-        $expectedDirection = strtoupper((string)$invoice['direction']) === FinanceInvoiceService::DIRECTION_INCOMING
-            ? self::DIRECTION_PAYABLE
-            : self::DIRECTION_RECEIVABLE;
-        $cleanRows = [];
-        $total = '0.00';
-        foreach ($rows as $row) {
-            $obligationId = (int)($row['obligation_id'] ?? 0);
-            $amount = self::normalizePositiveMoney((string)($row['amount'] ?? ''));
-            if ($obligationId <= 0 || $amount === null) {
-                continue;
+        try {
+            $stmt = $pdo->prepare('SELECT * FROM finance_invoices WHERE id=? FOR UPDATE');
+            $stmt->execute([$invoiceId]);
+            $invoice = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$invoice) {
+                throw new RuntimeException('Счёт не найден.');
             }
-            if (isset($cleanRows[$obligationId])) {
-                throw new RuntimeException('Одно обязательство нельзя добавить в счёт дважды.');
+
+            $requestedRows = [];
+            $requestedLinkMap = [];
+            foreach ($rows as $row) {
+                $obligationId = (int)($row['obligation_id'] ?? 0);
+                $amount = self::normalizePositiveMoney((string)($row['amount'] ?? ''));
+                if ($obligationId <= 0 || $amount === null) {
+                    continue;
+                }
+                if (isset($requestedLinkMap[$obligationId])) {
+                    throw new RuntimeException('Одно обязательство нельзя добавить в счёт дважды.');
+                }
+                $requestedRows[] = ['obligation_id' => $obligationId, 'amount' => $amount];
+                $requestedLinkMap[$obligationId] = $amount;
             }
-            $obStmt = $pdo->prepare('SELECT * FROM finance_obligations WHERE id=? AND cancelled_at IS NULL FOR UPDATE');
-            $obStmt->execute([$obligationId]);
-            $ob = $obStmt->fetch(PDO::FETCH_ASSOC);
-            if (!$ob) {
-                throw new RuntimeException('Платёжное обязательство не найдено.');
-            }
-            if ((string)$ob['direction'] !== $expectedDirection) {
-                throw new RuntimeException('Направление обязательства не соответствует направлению счёта.');
-            }
-            if (($invoice['counterparty_entity_type'] ?? null) !== null && ($invoice['counterparty_entity_id'] ?? null) !== null) {
-                if ((string)$ob['counterparty_entity_type'] !== (string)$invoice['counterparty_entity_type']
-                    || (int)$ob['counterparty_entity_id'] !== (int)$invoice['counterparty_entity_id']) {
-                    throw new RuntimeException('Все обязательства счёта должны относиться к выбранному контрагенту.');
+            ksort($requestedLinkMap, SORT_NUMERIC);
+
+            $paidStmt = $pdo->prepare(
+                "SELECT COALESCE(SUM(a.amount),0)
+                   FROM finance_operation_allocations a
+                   JOIN finance_operations op ON op.id=a.operation_id
+                  WHERE a.invoice_id=?
+                    AND a.cancelled_at IS NULL
+                    AND op.status='POSTED'"
+            );
+            $paidStmt->execute([$invoiceId]);
+            $actualPaid = self::money((string)$paidStmt->fetchColumn());
+
+            $currentStmt = $pdo->prepare(
+                'SELECT obligation_id,amount
+                   FROM finance_invoice_links
+                  WHERE invoice_id=? AND obligation_id IS NOT NULL
+                  ORDER BY obligation_id,id
+                  FOR UPDATE'
+            );
+            $currentStmt->execute([$invoiceId]);
+            $currentLinkMap = [];
+            foreach ($currentStmt->fetchAll(PDO::FETCH_ASSOC) as $currentLink) {
+                $obligationId = (int)($currentLink['obligation_id'] ?? 0);
+                if ($obligationId <= 0) {
+                    continue;
+                }
+                $amount = self::normalizePositiveMoney((string)($currentLink['amount'] ?? ''));
+                if ($amount === null) {
+                    $currentLinkMap[$obligationId] = null;
+                    continue;
+                }
+                if (array_key_exists($obligationId, $currentLinkMap)) {
+                    if ($currentLinkMap[$obligationId] !== null) {
+                        $currentLinkMap[$obligationId] = self::addMoney((string)$currentLinkMap[$obligationId], $amount);
+                    }
+                } else {
+                    $currentLinkMap[$obligationId] = $amount;
                 }
             }
-            $capStmt = $pdo->prepare(
-                "SELECT COALESCE(SUM(l.amount),0)
-                   FROM finance_invoice_links l
-                   JOIN finance_invoices i ON i.id=l.invoice_id
-                  WHERE l.obligation_id=? AND l.invoice_id<>? AND i.status<>'cancelled'"
-            );
-            $capStmt->execute([$obligationId, $invoiceId]);
-            $already = (string)$capStmt->fetchColumn();
-            $capacity = self::subMoney((string)$ob['amount'], $already);
-            if (self::compareMoney($amount, $capacity) > 0) {
-                throw new RuntimeException('Сумма связи превышает свободный остаток обязательства «' . ($ob['counterparty_name'] ?? '') . '».');
+            ksort($currentLinkMap, SORT_NUMERIC);
+
+            if (self::compareMoney($actualPaid, '0.00') > 0 && $currentLinkMap !== $requestedLinkMap) {
+                throw new RuntimeException('После поступления оплаты нельзя менять привязки счёта к платёжным обязательствам.');
             }
-            $cleanRows[$obligationId] = ['obligation' => $ob, 'amount' => $amount];
-            $total = self::addMoney($total, $amount);
-        }
 
-        if ($cleanRows !== [] && self::compareMoney($total, (string)$invoice['amount']) !== 0) {
-            throw new RuntimeException('Сумма связей с обязательствами должна быть равна сумме счёта.');
-        }
+            $expectedDirection = strtoupper((string)$invoice['direction']) === FinanceInvoiceService::DIRECTION_INCOMING
+                ? self::DIRECTION_PAYABLE
+                : self::DIRECTION_RECEIVABLE;
+            $cleanRows = [];
+            $total = '0.00';
+            foreach ($requestedRows as $row) {
+                $obligationId = (int)$row['obligation_id'];
+                $amount = (string)$row['amount'];
+                $obStmt = $pdo->prepare('SELECT * FROM finance_obligations WHERE id=? AND cancelled_at IS NULL FOR UPDATE');
+                $obStmt->execute([$obligationId]);
+                $ob = $obStmt->fetch(PDO::FETCH_ASSOC);
+                if (!$ob) {
+                    throw new RuntimeException('Платёжное обязательство не найдено.');
+                }
+                if ((string)$ob['direction'] !== $expectedDirection) {
+                    throw new RuntimeException('Направление обязательства не соответствует направлению счёта.');
+                }
+                if (($invoice['counterparty_entity_type'] ?? null) !== null && ($invoice['counterparty_entity_id'] ?? null) !== null) {
+                    if ((string)$ob['counterparty_entity_type'] !== (string)$invoice['counterparty_entity_type']
+                        || (int)$ob['counterparty_entity_id'] !== (int)$invoice['counterparty_entity_id']) {
+                        throw new RuntimeException('Все обязательства счёта должны относиться к выбранному контрагенту.');
+                    }
+                }
+                $capStmt = $pdo->prepare(
+                    "SELECT COALESCE(SUM(l.amount),0)
+                       FROM finance_invoice_links l
+                       JOIN finance_invoices i ON i.id=l.invoice_id
+                      WHERE l.obligation_id=? AND l.invoice_id<>? AND i.status<>'cancelled'"
+                );
+                $capStmt->execute([$obligationId, $invoiceId]);
+                $already = (string)$capStmt->fetchColumn();
+                $capacity = self::subMoney((string)$ob['amount'], $already);
+                if (self::compareMoney($amount, $capacity) > 0) {
+                    throw new RuntimeException('Сумма связи превышает свободный остаток обязательства «' . ($ob['counterparty_name'] ?? '') . '».');
+                }
+                $cleanRows[$obligationId] = ['obligation' => $ob, 'amount' => $amount];
+                $total = self::addMoney($total, $amount);
+            }
 
-        $pdo->prepare('DELETE FROM finance_invoice_links WHERE invoice_id=?')->execute([$invoiceId]);
-        $insert = $pdo->prepare(
-            "INSERT INTO finance_invoice_links
-                (invoice_id,obligation_id,linear_route_id,linear_route_payment_id,amount,side,created_by_user_id,created_by_role)
-             VALUES (?,?,?,?,?,?,?,?)"
-        );
-        foreach ($cleanRows as $item) {
-            $ob = $item['obligation'];
-            $side = (string)$ob['direction'] === self::DIRECTION_RECEIVABLE ? 'customer' : 'carrier';
-            $insert->execute([
-                $invoiceId,
-                (int)$ob['id'],
-                (string)$ob['source_parent_type'] === 'LINEAR_ROUTE' ? (int)$ob['source_parent_id'] : null,
-                (string)$ob['source_type'] === 'LINEAR_ROUTE_PAYMENT' ? (int)$ob['source_id'] : null,
-                $item['amount'],
-                $side,
-                (int)($user['user_id'] ?? 0) ?: null,
-                (string)($user['role_code'] ?? '') ?: 'company_owner',
-            ]);
+            if ($cleanRows !== [] && self::compareMoney($total, (string)$invoice['amount']) !== 0) {
+                throw new RuntimeException('Сумма связей с обязательствами должна быть равна сумме счёта.');
+            }
+
+            $pdo->prepare('DELETE FROM finance_invoice_links WHERE invoice_id=?')->execute([$invoiceId]);
+            $insert = $pdo->prepare(
+                "INSERT INTO finance_invoice_links
+                    (invoice_id,obligation_id,linear_route_id,linear_route_payment_id,amount,side,created_by_user_id,created_by_role)
+                 VALUES (?,?,?,?,?,?,?,?)"
+            );
+            foreach ($cleanRows as $item) {
+                $ob = $item['obligation'];
+                $side = (string)$ob['direction'] === self::DIRECTION_RECEIVABLE ? 'customer' : 'carrier';
+                $insert->execute([
+                    $invoiceId,
+                    (int)$ob['id'],
+                    (string)$ob['source_parent_type'] === 'LINEAR_ROUTE' ? (int)$ob['source_parent_id'] : null,
+                    (string)$ob['source_type'] === 'LINEAR_ROUTE_PAYMENT' ? (int)$ob['source_id'] : null,
+                    $item['amount'],
+                    $side,
+                    (int)($user['user_id'] ?? 0) ?: null,
+                    (string)($user['role_code'] ?? '') ?: 'company_owner',
+                ]);
+            }
+
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+        } catch (Throwable $e) {
+            if ($ownsTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
         }
     }
 
