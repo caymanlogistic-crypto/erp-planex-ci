@@ -31,6 +31,42 @@
     ].join('\n');
     document.head.appendChild(selectStyle);
 
+    function extractFeoRequestIds(raw) {
+        var found = [];
+        String(raw || '').replace(/\r/g, '').split('\n').forEach(function (line) {
+            var cell = line.trim();
+            if (line.indexOf('\t') !== -1) {
+                cell = (line.split('\t', 1)[0] || '').trim();
+            } else if (line.indexOf('|') !== -1) {
+                var normalized = line.trim().replace(/^\|+|\|+$/g, '');
+                cell = (normalized.split('|', 1)[0] || '').trim();
+            }
+            var matches = cell.match(/(?<!\d)\d{6}(?!\d)/g) || [];
+            matches.forEach(function (id) { found.push(id); });
+        });
+        var seen = Object.create(null);
+        return found.filter(function (id) {
+            if (seen[id]) return false;
+            seen[id] = true;
+            return true;
+        });
+    }
+
+    document.addEventListener('paste', function (event) {
+        var target = event.target;
+        if (!target || typeof target.matches !== 'function') return;
+        if (!target.matches('[data-placement-ids], [data-placement-block-search], [data-cost-ids], [data-cost-search]')) return;
+        var clipboard = event.clipboardData || window.clipboardData;
+        var text = clipboard && typeof clipboard.getData === 'function' ? clipboard.getData('text') : '';
+        if (!String(text || '').trim()) return;
+        var ids = extractFeoRequestIds(text);
+        if (!ids.length) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        target.value = ids.join('\n');
+        target.dispatchEvent(new Event('input', { bubbles: true }));
+    }, true);
+
     var meta = document.querySelector('meta[name="csrf-token"]');
     var token = meta ? meta.getAttribute('content') : '';
     if (!token || typeof window.fetch !== 'function') {
