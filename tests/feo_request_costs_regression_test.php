@@ -57,8 +57,8 @@ try {
         \PDO::ATTR_ERRMODE => \PDO::ERRMODE_EXCEPTION,
         \PDO::ATTR_EMULATE_PREPARES => false,
     ]);
-    $pdo->exec("CREATE TABLE feo_requests (zayavka_id VARCHAR(64) NOT NULL PRIMARY KEY, mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
-    $pdo->exec("CREATE TABLE feo_placement_current (zayavka_id VARCHAR(64) NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
+    $pdo->exec("CREATE TABLE feo_requests (zayavka_id VARCHAR(64) NOT NULL PRIMARY KEY, mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE feo_placement_current (zayavka_id VARCHAR(64) NOT NULL PRIMARY KEY) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     $migration = (string)file_get_contents($root . '/database/migrations-local/124_create_feo_request_costs.sql');
     foreach (preg_split('/;\s*(?:\R|$)/', $migration) ?: [] as $statement) {
