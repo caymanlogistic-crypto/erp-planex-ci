@@ -50,6 +50,7 @@ final class FeoRequestCostController
             $parsed=$this->parser->parseManual((string)($_POST['request_ids']??''));
             [, $pdo]=$this->readyContext();
             $result=$this->costs->validateSelection($pdo,$parsed['ids']);
+            $result['already_priced_ids']=array_map('strval',(array)($result['already_priced_ids']??[]));
             $result['duplicates']=$parsed['duplicates'];
             $result['valid']=$result['valid'] && $parsed['duplicates']===[];
             jsonResponse(['success'=>true]+$result);

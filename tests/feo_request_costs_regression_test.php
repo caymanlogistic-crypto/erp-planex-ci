@@ -99,7 +99,7 @@ try {
 
     $validation = $service->validateSelection($pdo, ['123456','654321']);
     $must(!$validation['valid'], 'already priced selection must be invalid');
-    $same($validation['already_priced_ids'], ['123456','654321'], 'already priced ids');
+    $same(array_map('strval', $validation['already_priced_ids']), ['123456','654321'], 'already priced ids');
 
     $insertBlock = $pdo->prepare("INSERT INTO feo_request_cost_blocks(pricing_type,rate_per_kg,snapshot_request_count,snapshot_total_mass_kg,total_cost) VALUES('agreement',NULL,1,250.000,10000.00)");
     $insertBlock->execute();
