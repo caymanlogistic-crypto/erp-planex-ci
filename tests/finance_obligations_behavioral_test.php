@@ -8,6 +8,8 @@ require_once __DIR__.'/../app/Service/RoutePaymentStatusService.php';
 require_once __DIR__.'/../app/Service/FinanceAuditLogService.php';
 require_once __DIR__.'/../app/Service/FinanceInvoiceService.php';
 require_once __DIR__.'/../app/Service/FinanceSettlementCascadeService.php';
+require_once __DIR__.'/../app/Service/LinearTripServiceLineService.php';
+require_once __DIR__.'/../app/Service/LinearTripServiceFinanceService.php';
 require_once __DIR__.'/../app/Service/FinanceObligationService.php';
 
 use App\Service\FinanceObligationService;
