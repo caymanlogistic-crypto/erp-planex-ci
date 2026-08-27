@@ -1,9 +1,9 @@
 <?php
 
 use App\Core\Database;
+use App\Service\FinanceInvoicePrepaymentService;
 use App\Service\FinanceInvoiceService;
 use App\Service\FinanceObligationService;
-use App\Service\FinanceSettlementCascadeService;
 
 requireRole(['company_owner']);
 verifyCsrfRequest();
@@ -163,7 +163,7 @@ try {
                 'status' => $systemStatus,
             ], $userId, $roleCode);
             FinanceObligationService::replaceInvoiceLinks($localPdo, $invoiceId, $obligationRows, $user);
-            FinanceSettlementCascadeService::recalculateInvoice($localPdo, $invoiceId, $userId, $roleCode);
+            FinanceInvoicePrepaymentService::reconcileInvoice($localPdo, $invoiceId, $user);
             $localPdo->commit();
         } catch (Throwable $e) {
             if ($localPdo->inTransaction()) {

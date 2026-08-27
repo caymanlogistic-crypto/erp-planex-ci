@@ -1,6 +1,7 @@
 <?php
 
 use App\Core\Database;
+use App\Service\FinanceInvoicePrepaymentService;
 use App\Service\FinanceInvoiceService;
 use App\Service\FinanceObligationService;
 
@@ -167,6 +168,7 @@ try {
             ], $userId, $roleCode);
             if ($obligationRows !== []) {
                 FinanceObligationService::replaceInvoiceLinks($localPdo, $invoiceId, $obligationRows, $user);
+                FinanceInvoicePrepaymentService::reconcileInvoice($localPdo, $invoiceId, $user);
             }
             $localPdo->commit();
         } catch (Throwable $e) {

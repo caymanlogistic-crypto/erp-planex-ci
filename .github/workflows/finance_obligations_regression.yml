@@ -23,6 +23,7 @@ on:
       - 'database/migrations-local/072_*'
       - 'scripts/p91_*'
       - 'tests/finance_obligations*'
+      - 'tests/finance_invoice_prepayment_behavioral_test.php'
       - 'tests/finance_invoice_form_policy_test.php'
       - 'tests/finance_bank_invoice_settlement_*'
       - 'tests/finance_invoice_payment_timeline_behavioral_test.php'
@@ -79,3 +80,5 @@ jobs:
         run: php tests/finance_bank_invoice_settlement_behavioral_test.php
       - name: Invoice payment timeline behavioral regression
         run: php tests/finance_invoice_payment_timeline_behavioral_test.php
+      - name: Late invoice inherits direct prepayment behavioral regression
+        run: php tests/finance_invoice_prepayment_behavioral_test.php
