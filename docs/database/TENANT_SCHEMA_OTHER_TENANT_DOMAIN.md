@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `0e3936545d16bf1ec00caeef76dbbaea4a74ca9c18d1b8b33a46096b5f883531`
+**Schema fingerprint:** `f4fbb2f472f72ebca03350aed76f7b173455408fc7157a229e8fc67df13c63b6`
 
 ## `feo_import_changes`
 
@@ -135,6 +135,60 @@
 ### Physical foreign keys
 
 - `fk_feo_placement_current_source_block`: (`source_block_id`) → `feo_placement_blocks`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+
+## `feo_request_cost_block_requests`
+
+**Domain:** Other tenant domain  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `block_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `zayavka_id` | `varchar(64)` | NO | NULL | — | `UNI` |
+| `snapshot_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
+| `position_no` | `int unsigned` | NO | `0` | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_feo_request_cost_block_position` (`block_id`, `position_no`, `id`)
+- **UNIQUE** `uk_feo_request_cost_block_request` (`block_id`, `zayavka_id`)
+- **UNIQUE** `uk_feo_request_cost_one_price_per_request` (`zayavka_id`)
+
+### Physical foreign keys
+
+- `fk_feo_request_cost_block_requests_block`: (`block_id`) → `feo_request_cost_blocks`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
+
+## `feo_request_cost_blocks`
+
+**Domain:** Other tenant domain  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `pricing_type` | `enum('rate_34_5','rate_38','agreement')` | NO | NULL | — | `MUL` |
+| `rate_per_kg` | `decimal(10,2)` | YES | NULL | — | — |
+| `snapshot_request_count` | `int unsigned` | NO | NULL | — | — |
+| `snapshot_total_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
+| `total_cost` | `decimal(18,2)` | NO | NULL | — | — |
+| `comment` | `text` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | `MUL` |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_feo_request_cost_blocks_created` (`created_at`, `id`)
+- **INDEX** `idx_feo_request_cost_blocks_type` (`pricing_type`, `id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `feo_requests`
 
