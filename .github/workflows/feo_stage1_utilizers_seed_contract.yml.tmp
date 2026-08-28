@@ -1,0 +1,35 @@
+name: FEO Stage 1 Utilizer Seed Contract
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/feo_stage1_utilizers_seed_contract.yml'
+      - '.github/workflows/feo_stage1_utilizers_agent_request.yml'
+      - '.github/workflows/feo_stage1_utilizers_production_seed.yml'
+      - 'scripts/feo_stage1_utilizer_seed_data.php'
+      - 'scripts/feo_seed_stage1_utilizers.php'
+      - 'scripts/feo_smoke_stage1_map.php'
+      - 'tests/feo_stage1_utilizer_seed_contract_test.php'
+      - 'tests/feo_map_current_schema_contract_test.php'
+      - 'database/migrations-local/123_create_feo_map_placement.sql'
+      - 'app/Service/FeoMapService.php'
+      - 'tests/feo_map_stage1_contract_test.php'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: php -l scripts/feo_stage1_utilizer_seed_data.php
+      - run: php -l scripts/feo_seed_stage1_utilizers.php
+      - run: php -l scripts/feo_smoke_stage1_map.php
+      - run: php -l tests/feo_stage1_utilizer_seed_contract_test.php
+      - run: php tests/feo_stage1_utilizer_seed_contract_test.php
+      - run: php -l app/Service/FeoMapService.php
+      - run: php -l tests/feo_map_stage1_contract_test.php
+      - run: php tests/feo_map_stage1_contract_test.php
+      - run: php -l tests/feo_map_current_schema_contract_test.php
+      - run: php tests/feo_map_current_schema_contract_test.php
