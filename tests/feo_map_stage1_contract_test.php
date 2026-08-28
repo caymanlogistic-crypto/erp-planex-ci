@@ -18,10 +18,10 @@ $read = static fn(string $path): string => file_get_contents($path) ?: '';
 $rows = [
     ['zayavka_id'=>'100001','source_block_id'=>7,'mass_netto'=>'1.5','mno_sh'=>'55.75','mno_d'=>'37.61','naim_oo_gruzootpravitel'=>'A','mno_adres_pogruzki'=>'A1','nomer_opasnogo_gr'=>''],
     ['zayavka_id'=>'100002','source_block_id'=>7,'mass_netto'=>'0.5','mno_sh'=>'55.75','mno_d'=>'37.61','naim_oo_gruzootpravitel'=>'B','mno_adres_pogruzki'=>'B1','nomer_opasnogo_gr'=>'3'],
-    ['zayavka_id'=>'100003','source_block_id'=>9,'mass_netto'=>'2','mno_sh'=>'55.75','mno_d'=>'37.61','naim_oo_gruzootpravitel'=>'C','mno_adres_pogruzki'=>'C1','nomer_opasnogo_gr'=>''],
+    ['zayavka_id'=>'100003','source_block_id'=>9,'mass_netto'=>'2','mno_sh'=>'55.75','mno_d'=>'37.61','naim_oo_gruzootpravitel'=>'C','mno_adres_pogruzki'=>'C1','nomer_opasnogo_gr'=>'3'],
     ['zayavka_id'=>'100004','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'','mno_d'=>''],
     ['zayavka_id'=>'100005','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'999','mno_d'=>'37'],
-    ['zayavka_id'=>'100006','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'56','mno_d'=>'38'],
+    ['zayavka_id'=>'100006','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'56','mno_d'=>'38','nomer_opasnogo_gr'=>'3'],
     ['zayavka_id'=>'100007','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'57','mno_d'=>'39'],
 ];
 $u1 = ['id'=>1,'full_name'=>'U1 full','short_name'=>'U1','address'=>'','adr'=>1,'color_hex'=>'#112233','is_active'=>1,'sort_order'=>10];
@@ -42,10 +42,14 @@ $u1Groups = array_values(array_filter($payload['markers'], static fn(array $m): 
 $ok('same utilizer group has two requests', count($u1Groups) === 1 && $u1Groups[0]['request_count'] === 2);
 $ok('group mass is kg', abs((float)$u1Groups[0]['total_mass_kg'] - 2000.0) < 0.001);
 $ok('ADR inherits from utilizer', $u1Groups[0]['adr'] === true);
+$u2Groups = array_values(array_filter($payload['markers'], static fn(array $m): bool => ($m['utilizer_id'] ?? null) === 2));
+$ok('request hazardous field cannot elevate matched utilizer ADR', count($u2Groups) === 1 && $u2Groups[0]['adr'] === false);
+$unmatchedGroups = array_values(array_filter($payload['markers'], static fn(array $m): bool => $m['classification_status'] === 'unmatched'));
+$ok('unmatched request does not invent request-level ADR in Stage 1', count($unmatchedGroups) === 1 && $unmatchedGroups[0]['adr'] === false);
 $overlaps = array_values(array_filter($payload['markers'], static fn(array $m): bool => abs((float)$m['canonical_lat'] - 55.75) < 0.000001 && abs((float)$m['canonical_lng'] - 37.61) < 0.000001));
 $ok('different utilizer at same coordinate remains separate', count($overlaps) === 2);
 $ok('overlap metadata is present', $overlaps[0]['overlap_count'] === 2 && $overlaps[1]['overlap_count'] === 2);
-$ok('unmatched utilizer remains drawable', count(array_filter($payload['markers'], static fn(array $m): bool => $m['classification_status'] === 'unmatched')) === 1);
+$ok('unmatched utilizer remains drawable', count($unmatchedGroups) === 1);
 $ok('inactive utilizer remains diagnostic', count(array_filter($payload['markers'], static fn(array $m): bool => $m['classification_status'] === 'inactive')) === 1);
 $ok('missing coordinate is diagnosed', $payload['diagnostics']['missing_coordinates'] === ['100004']);
 $ok('invalid coordinate is diagnosed', $payload['diagnostics']['invalid_coordinates'] === ['100005']);
@@ -60,6 +64,7 @@ $ok('available pool starts from placement current', str_contains($service, 'FROM
 $ok('available pool joins canonical requests', str_contains($service, 'INNER JOIN feo_requests r ON r.zayavka_id=c.zayavka_id'));
 $ok('no legacy flights domain', !str_contains(strtolower($service), 'flights'));
 $ok('group key includes coordinates state utilizer', str_contains($service, '$coordKey . \'|\' . $state . \'|\' . $utilizerKey'));
+$ok('Stage 1 map has no request-level ADR helper', !str_contains($service, 'requestAdr('));
 
 $route = $read($root . '/app/Http/Routes/company_feo_map.php');
 $ok('map route is separate', str_contains($route, '/company/feo/requests/map'));
