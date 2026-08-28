@@ -1,0 +1,103 @@
+name: FEO Request Costs Production Visual QA
+
+on:
+  push:
+    branches:
+      - qa/feo-request-costs-production-20260828
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  SOURCE_SHA: b9dcb690a9130f8f84c37b6a7ca5e3c33fdae180
+
+jobs:
+  production-visual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify exact canonical and successful deploy status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          git fetch origin chatgpt/production-stabilization-20260802 --depth=1
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/commits/$SOURCE_SHA/status" > /tmp/status.json
+          python3 - /tmp/status.json <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('exact source SHA does not have erpv2/deploy success')
+          print('EXACT_DEPLOY_STATUS=PASS')
+          PY
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Create temporary read-only QA session
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/feo_cost_qa_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-request-costs/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' create")
+          JSON=${OUT#QA_SESSION=}
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          sid=obj['sid']; cookie=obj['cookie']
+          print(f'::add-mask::{sid}')
+          with open(sys.argv[2],'a') as f:
+              f.write(f'QA_SESSION_ID={sid}\nQA_COOKIE_NAME={cookie}\n')
+          PY
+      - name: Browser QA on real production page
+        run: node .github/feo-request-costs/production_visual.js
+      - name: Upload real production screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feo-request-costs-production-visual-${{ env.SOURCE_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
+      - name: Cleanup temporary QA session and SSH material
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set +e
+          REMOTE="/tmp/feo_cost_qa_session_${GITHUB_RUN_ID}.php"
+          if [ -n "${QA_SESSION_ID:-}" ] && [ -f "$HOME/.ssh/key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$QA_SESSION_ID'" >/dev/null 2>&1
+          fi
+          if [ -f "$HOME/.ssh/key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE'" >/dev/null 2>&1
+          fi
+          rm -f "$HOME/.ssh/key"

@@ -1,0 +1,74 @@
+const fs=require('fs');
+const {chromium}=require('playwright');
+const assert=(cond,msg)=>{if(!cond)throw new Error(msg)};
+const url='https://plan-ex.ru/erpv2/company/feo/requests/costs';
+const cookieName=process.env.QA_COOKIE_NAME, sid=process.env.QA_SESSION_ID;
+if(!cookieName||!sid)throw new Error('QA session env missing');
+(async()=>{
+  fs.mkdirSync('artifacts',{recursive:true});
+  const browser=await chromium.launch({headless:true});
+  const context=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
+  await context.addCookies([{name:cookieName,value:sid,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
+  const page=await context.newPage();
+  const consoleErrors=[],pageErrors=[],assets={};
+  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
+  page.on('pageerror',e=>pageErrors.push(String(e)));
+  page.on('response',r=>{const u=r.url();if(u.includes('/assets/css/app.css'))assets.appCss=r.status();if(u.includes('/assets/css/erp-ui.css'))assets.erpCss=r.status();if(u.includes('/assets/js/feo-request-costs.js'))assets.costJs=r.status();});
+
+  await page.route('**/company/feo/requests/costs/validate',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,valid:true,selected_count:3,selected_mass_kg:42560,duplicates:[],missing_request_ids:[],missing_placement_ids:[],already_priced_ids:[],already_priced_blocks:{}})}));
+  await page.route('**/company/feo/requests/costs/analyze',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,token:'qa-create-token',preview:{selected_count:3,selected_mass_kg:42560,pricing_type:'rate_34_5',rate_per_kg:34.5,total_cost:1468320}})}));
+  await page.route('**/company/feo/requests/costs/search?*',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,results:[{zayavka_id:'302112',block:{block_id:999999,pricing_type:'rate_34_5',snapshot_total_mass_kg:42560,total_cost:1468320,created_at:'2026-08-28 10:00:00'}}]})}));
+  await page.route('**/company/feo/requests/costs/blocks/999999/json',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,block:{id:999999,pricing_type:'rate_34_5',rate_per_kg:34.5,snapshot_request_count:3,snapshot_total_mass_kg:42560,total_cost:1468320,comment:'Visual QA — без записи в production',created_at:'2026-08-28 10:00:00',has_integrity_issue:false,requests:[{zayavka_id:'302112',snapshot_mass_kg:1250,current_mass_kg:1250,mass_changed:false,in_current_placement:true,missing_request:false,mismatch:false},{zayavka_id:'306645',snapshot_mass_kg:21000,current_mass_kg:21000,mass_changed:false,in_current_placement:true,missing_request:false,mismatch:false},{zayavka_id:'308710',snapshot_mass_kg:20310,current_mass_kg:20310,mass_changed:false,in_current_placement:true,missing_request:false,mismatch:false}]}})}));
+  await page.route('**/company/feo/requests/costs/blocks/999999/edit/analyze',async route=>route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,token:'qa-edit-token',preview:{block_id:999999,pricing_type:'rate_38',rate_per_kg:38,total_cost:1617280,snapshot_total_mass_kg:42560,snapshot_request_count:3,comment:'Visual QA'}})}));
+
+  const response=await page.goto(url,{waitUntil:'networkidle',timeout:60000});
+  assert(response&&response.status()===200,'production cost page HTTP != 200');
+  assert(page.url().includes('/company/feo/requests/costs'),'redirected away from cost page');
+  await page.waitForSelector('[data-cost-page-ready]',{state:'attached'});
+  assert(await page.locator('.app').count()===1,'ERP .app shell missing');
+  assert(await page.locator('.topbar').count()===1,'ERP topbar missing');
+  assert(await page.locator('.sidebar').count()===1,'ERP sidebar missing');
+  assert((await page.locator('body').innerText()).indexOf('Fatal error')===-1,'PHP fatal visible');
+  const computed=await page.evaluate(()=>({appDisplay:getComputedStyle(document.querySelector('.app')).display,font:getComputedStyle(document.body).fontFamily,bodyWidth:document.body.scrollWidth,viewport:window.innerWidth,modals:Array.from(document.querySelectorAll('.modal-overlay')).map(m=>({id:m.id,opacity:getComputedStyle(m).opacity,pointer:getComputedStyle(m).pointerEvents,open:m.classList.contains('is-open'),hidden:m.getAttribute('aria-hidden')}))}));
+  assert(computed.appDisplay==='grid','ERP app layout CSS not applied');
+  assert(/IBM Plex Sans/i.test(computed.font),'ERP font CSS not applied: '+computed.font);
+  assert(assets.appCss===200,'app.css not loaded 200');assert(assets.erpCss===200,'erp-ui.css not loaded 200');assert(assets.costJs===200,'feo-request-costs.js not loaded 200');
+  assert(computed.modals.length>=3,'cost modals missing');
+  computed.modals.forEach(m=>{assert(!m.open,`${m.id} unexpectedly open`);assert(m.hidden==='true',`${m.id} aria-hidden must be true`);assert(m.opacity==='0',`${m.id} CSS opacity must be 0`);assert(m.pointer==='none',`${m.id} pointer-events must be none`);});
+  assert(await page.getByRole('columnheader',{name:'Действия'}).count()===1,'Actions column missing');
+  await page.screenshot({path:'artifacts/feo-request-costs-production.png',fullPage:true});
+
+  await page.locator('[data-cost-open-create]').click();
+  await page.waitForSelector('#feo-cost-create-modal.is-open');
+  const mixed='Нужно забрать заявку 302112\n306645\tООО Ромашка\t1250\nТакже добавить 308710';
+  await page.locator('[data-cost-ids]').evaluate((el,text)=>{const dt=new DataTransfer();dt.setData('text/plain',text);el.dispatchEvent(new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true}));},mixed);
+  await page.waitForFunction(()=>document.querySelector('[data-cost-count]')?.textContent==='3');
+  const normalized=await page.locator('[data-cost-ids]').inputValue();
+  ['302112','306645','308710'].forEach(id=>assert(normalized.includes(id),'mixed paste lost '+id));
+  await page.locator('[data-cost-type-choice="rate_34_5"]').click();
+  assert((await page.locator('[data-cost-calc-rate]').innerText()).includes('34,50'),'34.5 rate UI failed');
+  assert((await page.locator('[data-cost-calc-total]').innerText()).replace(/\s/g,'').includes('1468320'),'34.5 total UI failed');
+  await page.locator('[data-cost-analyze]').click();
+  await page.waitForSelector('#feo-cost-confirm-modal.is-open');
+  assert((await page.locator('[data-cost-confirm-title]').innerText()).includes('Создание стоимости'),'create confirmation missing');
+  await page.screenshot({path:'artifacts/feo-request-costs-create-confirm.png',fullPage:true});
+  await page.locator('#feo-cost-confirm-modal [data-close-modal="feo-cost-confirm-modal"]').click();
+
+  const search=page.locator('[data-cost-search]');await search.fill('302112');await search.press('Enter');
+  await page.waitForSelector('[data-cost-search-block-id="999999"]');await page.locator('[data-cost-search-block-id="999999"]').click();
+  await page.waitForSelector('#feo-cost-detail-modal.is-open');
+  assert((await page.locator('[data-cost-detail-title]').innerText()).includes('#999999'),'detail modal failed');
+  await page.screenshot({path:'artifacts/feo-request-costs-detail.png',fullPage:true});
+  await page.locator('[data-cost-edit-type-choice="rate_38"]').click();
+  await page.locator('[data-cost-edit-analyze]').click();
+  await page.waitForSelector('#feo-cost-confirm-modal.is-open');
+  assert((await page.locator('[data-cost-confirm-title]').innerText()).includes('Изменение стоимости'),'edit confirmation missing');
+  await page.screenshot({path:'artifacts/feo-request-costs-edit-confirm.png',fullPage:true});
+
+  assert(consoleErrors.length===0,'console errors: '+consoleErrors.join(' | '));
+  assert(pageErrors.length===0,'page errors: '+pageErrors.join(' | '));
+  const summary={url,assets,computed:{appDisplay:computed.appDisplay,font:computed.font,bodyWidth:computed.bodyWidth,viewport:computed.viewport},modalsInitiallyHidden:true,mixedPaste:['302112','306645','308710'],createModal:true,createConfirmation:true,detailModal:true,editConfirmation:true,consoleErrors,pageErrors,note:'UI AJAX flows were intercepted in-browser to avoid production business-data writes; real backend mutations are covered by ERP PLANEX CI MySQL regression.'};
+  fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));
+  console.log('FEO_REQUEST_COSTS_PRODUCTION_VISUAL=PASS');
+  await browser.close();
+})().catch(async e=>{console.error(e&&e.stack||e);process.exit(1);});
