@@ -5,7 +5,12 @@ on:
     paths:
       - '.github/workflows/erpv2_agent_db_migration_request.yml'
       - '.github/agent_db_migration_request.json'
+      - '.github/workflows/feo_124_production_migration.yml'
+      - 'scripts/feo_apply_124.php'
+      - 'scripts/feo_verify_124.php'
       - 'tests/agent_db_migration_request_contract_test.php'
+      - 'tests/feo_124_production_migration_contract_test.php'
+      - 'database/migrations-local/124_create_feo_request_costs.sql'
 
 permissions:
   contents: read
@@ -17,3 +22,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: php -l tests/agent_db_migration_request_contract_test.php
       - run: php tests/agent_db_migration_request_contract_test.php
+      - run: php -l scripts/feo_apply_124.php
+      - run: php -l scripts/feo_verify_124.php
+      - run: php -l tests/feo_124_production_migration_contract_test.php
+      - run: php tests/feo_124_production_migration_contract_test.php
