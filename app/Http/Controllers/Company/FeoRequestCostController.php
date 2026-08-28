@@ -136,6 +136,12 @@ final class FeoRequestCostController
                 'kind'=>'edit','company_id'=>(int)$company['id'],'created_at'=>time(),'block_id'=>(int)$id,'ids'=>$parsed['ids'],
                 'pricing_type'=>$preview['pricing_type'],'manual_total'=>$preview['pricing_type']==='agreement'?(string)($_POST['total_cost']??''):null,
                 'comment'=>$preview['comment'],'edit_fingerprint'=>$preview['edit_fingerprint'],
+                'preview_contract'=>[
+                    'added_snapshot_fingerprint'=>$preview['added_snapshot_fingerprint'],
+                    'selected_count'=>(int)$preview['selected_count'],
+                    'selected_mass_kg'=>(float)$preview['selected_mass_kg'],
+                    'total_cost'=>(float)$preview['total_cost'],
+                ],
             ];
             jsonResponse(['success'=>true,'token'=>$token,'preview'=>$preview]);
         } catch (\Throwable $e) { jsonResponse(['success'=>false,'message'=>$e->getMessage()],422); }
@@ -148,7 +154,7 @@ final class FeoRequestCostController
             [$company,$pdo]=$this->readyContext(); $token=trim((string)($_POST['preview_token']??'')); $record=$this->previewRecord($token,(int)$company['id'],'edit');
             $result=$this->editCosts->editBlock($pdo,(int)$record['block_id'],[
                 'ids'=>$record['ids'],'pricing_type'=>$record['pricing_type'],'manual_total'=>$record['manual_total'],'comment'=>$record['comment'],
-            ],(string)$record['edit_fingerprint']);
+            ],(string)$record['edit_fingerprint'],(array)($record['preview_contract']??[]));
             unset($_SESSION['feo_request_cost_previews'][$token]);
             $_SESSION['flash_success']=sprintf('Блок стоимости #%d обновлён: %d заявок, %s кг, %s ₽.',(int)$record['block_id'],(int)$result['request_count'],$this->number((float)$result['snapshot_total_mass_kg'],3),$this->number((float)$result['total_cost'],2));
             jsonResponse(['success'=>true]+$result);

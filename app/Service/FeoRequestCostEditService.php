@@ -35,6 +35,7 @@ final class FeoRequestCostEditService
             'already_priced_blocks'=>$priced,
             'selected_count'=>count($ids),
             'selected_mass_kg'=>$this->massForIds($rows, $ids),
+            'added_snapshot_fingerprint'=>$this->addedSnapshotFingerprint($addedRows, $added),
         ];
     }
 
@@ -66,14 +67,16 @@ final class FeoRequestCostEditService
             'old_total_mass_kg'=>round((float)$state['block']['snapshot_total_mass_kg'],3),
             'old_total_cost'=>round((float)$state['block']['total_cost'],2),
             'edit_fingerprint'=>$this->fingerprint($state),
+            'added_snapshot_fingerprint'=>$validation['added_snapshot_fingerprint'],
         ];
     }
 
-    public function editBlock(PDO $pdo, int $blockId, array $payload, string $expectedFingerprint): array
+    public function editBlock(PDO $pdo, int $blockId, array $payload, string $expectedFingerprint, array $expectedPreview): array
     {
         $ids = $this->normalizeIds((array)($payload['ids'] ?? []));
         $comment = trim((string)($payload['comment'] ?? ''));
         if (mb_strlen($comment) > 4000) throw new \RuntimeException('Комментарий слишком длинный.');
+        $this->assertExpectedPreviewShape($expectedPreview);
         $pdo->beginTransaction();
         try {
             $state = $this->state($pdo, $blockId, true);
@@ -86,12 +89,17 @@ final class FeoRequestCostEditService
             $addedRows = $this->currentRows($pdo, $added, true);
             $missing = array_values(array_diff($added, array_keys($addedRows)));
             if ($missing !== []) throw new \RuntimeException('Состав размещения изменился. Добавляемые заявки отсутствуют: ' . $this->idList($missing) . '. Выполните проверку ещё раз.');
+            $actualAddedFingerprint = $this->addedSnapshotFingerprint($addedRows, $added);
+            if (!hash_equals((string)$expectedPreview['added_snapshot_fingerprint'], $actualAddedFingerprint)) {
+                throw new \RuntimeException('Данные добавляемых заявок изменились после предпросмотра. Выполните проверку ещё раз.');
+            }
             $priced = $this->pricedByOtherBlocks($pdo, $added, $blockId, true);
             if ($priced !== []) throw new \RuntimeException('Одна из добавленных заявок уже получила стоимость в другом блоке: ' . $this->pricedList($priced) . '.');
             foreach ($addedRows as $id=>$row) $rows[$id]=$row;
             foreach ($removed as $id) unset($rows[$id]);
             $mass = $this->massForIds($rows, $ids);
             $price = $this->price((string)($payload['pricing_type'] ?? ''), $mass, $payload['manual_total'] ?? null);
+            $this->assertPreviewMatchesCommit($expectedPreview, count($ids), $mass, (float)$price['total_cost']);
             $q = $pdo->prepare('UPDATE feo_request_cost_blocks SET pricing_type=?,rate_per_kg=?,snapshot_request_count=?,snapshot_total_mass_kg=?,total_cost=?,comment=?,updated_at=CURRENT_TIMESTAMP WHERE id=?');
             $q->execute([$price['pricing_type'],$price['rate_per_kg'],count($ids),$mass,$price['total_cost'],$comment !== '' ? $comment : null,$blockId]);
             if ($changed) {
@@ -220,6 +228,36 @@ final class FeoRequestCostEditService
             'members'=>array_map(static fn(array $r):array=>[(string)$r['zayavka_id'],(string)$r['snapshot_mass_kg'],(int)$r['position_no']],$state['members']),
         ];
         return hash('sha256',json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION));
+    }
+
+    private function addedSnapshotFingerprint(array $rows, array $ids): string
+    {
+        $data=[];
+        foreach ($ids as $id) {
+            $row=$rows[$id]??null;
+            $data[]=[(string)$id,$row===null?null:number_format((float)$row['mass_kg'],3,'.','')];
+        }
+        return hash('sha256',json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES));
+    }
+
+    private function assertExpectedPreviewShape(array $expectedPreview): void
+    {
+        foreach (['added_snapshot_fingerprint','selected_count','selected_mass_kg','total_cost'] as $key) {
+            if (!array_key_exists($key,$expectedPreview)) throw new \RuntimeException('Подтверждение устарело. Выполните операцию ещё раз.');
+        }
+        if (!is_string($expectedPreview['added_snapshot_fingerprint']) || !preg_match('/^[0-9a-f]{64}$/D',$expectedPreview['added_snapshot_fingerprint'])) {
+            throw new \RuntimeException('Подтверждение устарело. Выполните операцию ещё раз.');
+        }
+    }
+
+    private function assertPreviewMatchesCommit(array $expectedPreview, int $count, float $mass, float $totalCost): void
+    {
+        $expectedCount=(int)$expectedPreview['selected_count'];
+        $expectedMass=round((float)$expectedPreview['selected_mass_kg'],3);
+        $expectedCost=round((float)$expectedPreview['total_cost'],2);
+        if ($count!==$expectedCount || number_format($mass,3,'.','')!==number_format($expectedMass,3,'.','') || number_format($totalCost,2,'.','')!==number_format($expectedCost,2,'.','')) {
+            throw new \RuntimeException('Данные предпросмотра изменились до подтверждения. Выполните проверку ещё раз.');
+        }
     }
 
     private function idList(array $ids): string
