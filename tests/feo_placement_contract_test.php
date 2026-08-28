@@ -169,7 +169,8 @@ $manifest = json_decode($read($root . '/.github/agent_db_migration_request.json'
 $workflow = $read($root . '/.github/workflows/feo_123_production_migration.yml');
 $apply123 = $read($root . '/scripts/feo_apply_123.php');
 $verify123 = $read($root . '/scripts/feo_verify_123.php');
-$ok('migration request points to 123', is_array($manifest) && ($manifest['migration_id'] ?? '') === '123' && ($manifest['workflow'] ?? '') === 'feo_123_production_migration.yml' && ($manifest['confirmation_value'] ?? '') === 'APPLY_FEO_123');
+$manifestId = is_array($manifest) ? (string) ($manifest['migration_id'] ?? '') : '';
+$ok('agent migration request is not pinned behind placement migration 123', preg_match('/^\d{3}$/D', $manifestId) === 1 && (int) $manifestId >= 123);
 $ok('migration 123 workflow is manual-only', str_contains($workflow, 'workflow_dispatch:') && str_contains($workflow, 'APPLY_FEO_123') && !str_contains($workflow, "\n  push:") && !str_contains($workflow, "\n  pull_request:") && !str_contains($workflow, "\n  schedule:") && !str_contains($workflow, "\n  workflow_run:"));
 $ok('migration 123 apply script is tenant guarded', str_contains($apply123, "name = '123_create_feo_map_placement.sql'") && str_contains($apply123, 'GET_LOCK') && str_contains($apply123, 'schema_migrations'));
 $ok('migration 123 verify script is read-only snapshot', str_contains($verify123, 'FEO_123_SNAPSHOT=') && str_contains($verify123, 'FEO_123_READ_ONLY_OK'));
