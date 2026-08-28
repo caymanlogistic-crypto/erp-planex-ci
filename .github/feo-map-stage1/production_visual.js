@@ -7,6 +7,15 @@ const cookieName=process.env.QA_COOKIE_NAME;
 const logistSid=process.env.QA_LOGIST_SESSION_ID, ownerSid=process.env.QA_OWNER_SESSION_ID, csrf=process.env.QA_LOGIST_CSRF_TOKEN;
 if(!cookieName||!logistSid||!ownerSid||!csrf)throw new Error('QA session env missing');
 
+async function waitForPositiveText(locator,message,{attempts=60,delayMs=250}={}){
+  for(let attempt=0;attempt<attempts;attempt++){
+    const value=Number((await locator.innerText()).trim());
+    if(value>0)return value;
+    if(attempt<attempts-1)await locator.page().waitForTimeout(delayMs);
+  }
+  throw new Error(message);
+}
+
 async function verifyMap(page,{abortTiles=false}={}){
   if(abortTiles) await page.route('https://*.tile.openstreetmap.org/**',route=>route.abort());
   const consoleErrors=[],pageErrors=[],assets={};
@@ -22,7 +31,7 @@ async function verifyMap(page,{abortTiles=false}={}){
   const response=await page.goto(mapUrl,{waitUntil:'domcontentloaded',timeout:60000});
   assert(response&&response.status()===200,'map page HTTP != 200');
   assert(page.url().includes('/company/feo/requests/map'),'redirected away from map page');
-  await page.waitForFunction(()=>document.querySelector('#feo-map-page')?.dataset.mapReady==='1',{timeout:60000});
+  await page.locator('#feo-map-page[data-map-ready="1"]').waitFor({state:'attached',timeout:60000});
   assert(await page.locator('.leaflet-container').count()===1,'Leaflet container missing');
   assert(assets.mapCss===200,'feo-map.css not loaded 200');
   assert(assets.mapJs===200,'feo-map.js not loaded 200');
@@ -55,9 +64,9 @@ async function verifyMap(page,{abortTiles=false}={}){
   assert(refresh.status()===200,'map refresh endpoint HTTP != 200');
   const refreshJson=await refresh.json();
   assert(refreshJson.success===true,'map refresh success != true');
-  await page.waitForFunction(()=>Number(document.querySelector('#feo-map-marker-count')?.textContent||0)>0);
+  await waitForPositiveText(page.locator('#feo-map-marker-count'),'marker count did not recover after refresh');
   if(abortTiles){
-    await page.waitForFunction(()=>!document.querySelector('#feo-map-runtime-warning')?.hidden,{timeout:15000});
+    await page.locator('#feo-map-runtime-warning:not([hidden])').waitFor({state:'visible',timeout:15000});
     assert(await page.locator('.feo-marker').count()>0,'markers disappeared when background tiles failed');
   }
   const bodyText=await page.locator('body').innerText();
@@ -82,7 +91,7 @@ async function verifyOwnerAdmin(browser){
   page.on('pageerror',e=>pageErrors.push(String(e)));
   const response=await page.goto(utilizerUrl,{waitUntil:'networkidle',timeout:60000});
   assert(response&&response.status()===200,'owner utilizer page HTTP != 200');
-  await page.waitForSelector('[data-feo-utilizer-page-ready]');
+  await page.locator('[data-feo-utilizer-page-ready]').waitFor({state:'attached',timeout:60000});
   const body=(await page.locator('body').innerText()).trim();
   ['Master-data','Override имеет','rules/aliases'].forEach(term=>assert(!body.includes(term),'developer term remains visible: '+term));
   const active=await page.locator('.feo-domain-tabs a.is-active').innerText();
