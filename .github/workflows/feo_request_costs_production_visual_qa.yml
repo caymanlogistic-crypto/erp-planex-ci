@@ -74,6 +74,18 @@ jobs:
           with open(sys.argv[2],'a') as f:
               f.write(f'QA_SESSION_ID={sid}\nQA_COOKIE_NAME={cookie}\n')
           PY
+      - name: Prepare QA script for system modal controls
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          printf 'QA started for %s\n' "$SOURCE_SHA" > artifacts/qa-started.txt
+          python3 - <<'PY'
+          p='.github/feo-request-costs/production_visual.js'
+          s=open(p,encoding='utf-8').read()
+          s=s.replace("page.locator('#feo-cost-detail-modal [data-close-modal=\"feo-cost-detail-modal\"]').click();", "page.locator('#feo-cost-detail-modal [data-close-modal=\"feo-cost-detail-modal\"]').first().click();")
+          s=s.replace("page.locator('#feo-cost-confirm-modal [data-close-modal=\"feo-cost-confirm-modal\"]').click();", "page.locator('#feo-cost-confirm-modal [data-close-modal=\"feo-cost-confirm-modal\"]').first().click();")
+          open(p,'w',encoding='utf-8').write(s)
+          PY
       - name: Browser QA on real production page
         run: node .github/feo-request-costs/production_visual.js
       - name: Upload real production screenshots
