@@ -1,8 +1,8 @@
-# ERP PLANEX — Tenant Physical Schema — Other tenant domain
+# ERP PLANEX — Tenant Physical Schema — Other tenant domain — Part 1
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `f4fbb2f472f72ebca03350aed76f7b173455408fc7157a229e8fc67df13c63b6`
+**Schema fingerprint:** `982cd5b271689072a1aafde06dc00478d3757ac672c74c3e70db47071bd7bc57`
 
 ## `feo_import_changes`
 
@@ -190,71 +190,26 @@
 
 - None enforced by MySQL.
 
-## `feo_requests`
+## `feo_request_utilizer_overrides`
 
 **Domain:** Other tenant domain  
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
 |---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `zayavka_id` | `varchar(64)` | NO | NULL | — | `UNI` |
-| `data_zayavki` | `date` | YES | NULL | — | `MUL` |
-| `polnoe_naim_zakazchika` | `text` | YES | NULL | — | — |
-| `ur_adres_zakazchika` | `text` | YES | NULL | — | — |
-| `inn_zakazchika` | `varchar(32)` | YES | NULL | — | — |
-| `nomer_dogovora` | `varchar(100)` | YES | NULL | — | — |
-| `data_dogovora` | `date` | YES | NULL | — | — |
-| `gruzopoluchatel` | `text` | YES | NULL | — | — |
-| `inn_op_gruzopoluchatelya` | `varchar(32)` | YES | NULL | — | — |
-| `adres_dostavki_otkhodov` | `text` | YES | NULL | — | — |
-| `ur_adres_op_gruzopoluchatelya` | `text` | YES | NULL | — | — |
-| `inn_oo_gruzootpravitel` | `varchar(32)` | YES | NULL | — | — |
-| `naim_oo_gruzootpravitel` | `text` | YES | NULL | — | — |
-| `ur_adres_oo_gruzootpravitelya` | `text` | YES | NULL | — | — |
-| `mno_region` | `varchar(255)` | YES | NULL | — | `MUL` |
-| `mno_mo` | `varchar(255)` | YES | NULL | — | — |
-| `mno_adres_pogruzki` | `text` | YES | NULL | — | — |
-| `naim_otkhoda_fkko` | `text` | YES | NULL | — | — |
-| `kol_vo_mest` | `int` | YES | NULL | — | — |
-| `vid_tary` | `varchar(255)` | YES | NULL | — | — |
-| `mass_netto` | `decimal(14,4)` | YES | NULL | — | — |
-| `mass_brutto` | `decimal(14,4)` | YES | NULL | — | — |
-| `dlina_mesta` | `decimal(14,4)` | YES | NULL | — | — |
-| `shirina_mesta` | `decimal(14,4)` | YES | NULL | — | — |
-| `vysota_mesta` | `decimal(14,4)` | YES | NULL | — | — |
-| `summarnyy_obem` | `decimal(14,4)` | YES | NULL | — | — |
-| `nomer_opasnogo_gr` | `varchar(64)` | YES | NULL | — | — |
-| `adres_vygruzki_otkhodov` | `text` | YES | NULL | — | — |
-| `naim_ot_gruzoperevozchik` | `text` | YES | NULL | — | — |
-| `inn_ot` | `varchar(32)` | YES | NULL | — | — |
-| `ur_adres_ot` | `text` | YES | NULL | — | — |
-| `data_sozdaniya_porucheniya` | `date` | YES | NULL | — | — |
-| `zakaz_s_ot_status` | `varchar(255)` | YES | NULL | — | — |
-| `nalichie_transport_nakl` | `varchar(64)` | YES | NULL | — | — |
-| `zakaz_s_op_status` | `varchar(255)` | YES | NULL | — | — |
-| `id_zakaza_s_op` | `varchar(64)` | YES | NULL | — | — |
-| `zakaz_s_ot_data_vygruzki` | `date` | YES | NULL | — | — |
-| `zayavka_zhdv_po` | `date` | YES | NULL | — | `MUL` |
-| `kontakt_tel` | `varchar(255)` | YES | NULL | — | — |
-| `tel_dopolnitelnyy` | `varchar(255)` | YES | NULL | — | — |
-| `kontakt_email` | `varchar(255)` | YES | NULL | — | — |
-| `mno_sh` | `varchar(64)` | YES | NULL | — | — |
-| `mno_d` | `varchar(64)` | YES | NULL | — | — |
-| `zakaz_s_op_stoimost` | `decimal(14,2)` | YES | NULL | — | — |
-| `current_import_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
+| `zayavka_id` | `varchar(64)` | NO | NULL | — | `PRI` |
+| `utilizer_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
 | `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 | `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 
 ### Indexes / constraints
 
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_feo_requests_current_import` (`current_import_id`)
-- **INDEX** `idx_feo_requests_date` (`data_zayavki`)
-- **INDEX** `idx_feo_requests_region` (`mno_region`)
-- **INDEX** `idx_feo_requests_zhdv` (`zayavka_zhdv_po`)
-- **UNIQUE** `uk_feo_requests_zayavka_id` (`zayavka_id`)
+- **PRIMARY** `PRIMARY` (`zayavka_id`)
+- **INDEX** `idx_feo_request_utilizer_override_utilizer` (`utilizer_id`, `zayavka_id`)
 
 ### Physical foreign keys
 
-- `fk_feo_requests_current_import`: (`current_import_id`) → `feo_imports`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
+- `fk_feo_request_utilizer_override_request`: (`zayavka_id`) → `feo_requests`.`zayavka_id` ON UPDATE NO ACTION ON DELETE CASCADE
+- `fk_feo_request_utilizer_override_utilizer`: (`utilizer_id`) → `feo_utilizers`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT

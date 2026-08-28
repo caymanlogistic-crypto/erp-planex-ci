@@ -90,6 +90,7 @@ require_once base_path('app/Http/Routes/company_responsible_assignments.php');
 require_once base_path('app/Http/Routes/company_linear_trips.php');
 require_once base_path('app/Http/Routes/company_feo_requests.php');
 require_once base_path('app/Http/Routes/company_feo_request_costs.php');
+require_once base_path('app/Http/Routes/company_feo_map.php');
 require_once base_path('app/Http/Routes/superadmin_management.php');
 require_once base_path('app/Http/Routes/superadmin_company_delete.php');
 require_once base_path('app/Http/Routes/superadmin_db_usage.php');
