@@ -13,6 +13,7 @@ $read = static function (string $rel) use ($root,$fail): string {
 
 $view = $read('app/View/pages/company_feo_map.php');
 $js = $read('public/assets/js/feo-map.js');
+$qa = $read('.github/feo-map-stage1/production_visual.js');
 
 $must(str_contains($view, 'cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'), 'pinned Leaflet primary source missing');
 $must(str_contains($view, 'unpkg.com/leaflet@1.9.4/dist/leaflet.js'), 'pinned Leaflet fallback source missing');
@@ -30,6 +31,12 @@ $must(str_contains($js, "page.dataset.mapReady = '1'"), 'map success readiness s
 $must(str_contains($js, "tiles.on('tileerror'"), 'tile outage handling missing');
 $must(str_contains($js, 'Маркеры заявок продолжают отображаться'), 'tile outage must explain that markers remain usable');
 $must(str_contains($js, "document.dispatchEvent(new CustomEvent('feo-map-ready'"), 'browser readiness event missing');
+
+// Production CSP does not allow unsafe-eval. Browser acceptance must stay CSP-safe.
+$must(!str_contains($qa, 'waitForFunction('), 'production Playwright QA must not use waitForFunction under CSP');
+$must(str_contains($qa, '#feo-map-page[data-map-ready="1"]'), 'CSP-safe map readiness locator missing');
+$must(str_contains($qa, '#feo-map-runtime-warning:not([hidden])'), 'CSP-safe tile warning locator missing');
+$must(str_contains($qa, 'waitForPositiveText'), 'CSP-safe refresh marker polling missing');
 
 // Marker presentation is LOCKED. These assertions protect the accepted marker contract.
 $must(str_contains($js, "classes = ['feo-marker']"), 'locked marker class changed');
