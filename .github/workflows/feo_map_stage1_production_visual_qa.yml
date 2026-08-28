@@ -55,7 +55,7 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Create temporary read-only QA session
+      - name: Create temporary read-only QA sessions
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -64,20 +64,28 @@ jobs:
           set -euo pipefail
           REMOTE="/tmp/feo_map_stage1_qa_session_${GITHUB_RUN_ID}.php"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
-          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT=\"\$HOME/planexp/\$LIVE_DIR/erpv2\" /usr/bin/php8.5 '$REMOTE' create")
-          JSON=${OUT#QA_SESSION=}
-          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          OUT_LOGIST=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' create logist")
+          OUT_OWNER=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' create company_owner")
+          JSON_LOGIST=${OUT_LOGIST#QA_SESSION=}
+          JSON_OWNER=${OUT_OWNER#QA_SESSION=}
+          python3 - "$JSON_LOGIST" "$JSON_OWNER" "$GITHUB_ENV" <<'PY'
           import json,sys
-          obj=json.loads(sys.argv[1])
-          for key in ('sid','cookie','csrf'):
-              print(f'::add-mask::{obj[key]}')
-          with open(sys.argv[2],'a') as f:
-              f.write(f"QA_SESSION_ID={obj['sid']}\nQA_COOKIE_NAME={obj['cookie']}\nQA_CSRF_TOKEN={obj['csrf']}\n")
+          logist=json.loads(sys.argv[1]); owner=json.loads(sys.argv[2])
+          if logist['cookie'] != owner['cookie']:
+              raise SystemExit('QA cookie names differ')
+          for obj in (logist,owner):
+              for key in ('sid','csrf'):
+                  print(f'::add-mask::{obj[key]}')
+          with open(sys.argv[3],'a') as f:
+              f.write(f"QA_COOKIE_NAME={logist['cookie']}\n")
+              f.write(f"QA_LOGIST_SESSION_ID={logist['sid']}\nQA_LOGIST_CSRF_TOKEN={logist['csrf']}\n")
+              f.write(f"QA_OWNER_SESSION_ID={owner['sid']}\n")
           PY
-      - name: Browser QA on real production map
+      - name: Browser QA on real production Stage 1
         run: node .github/feo-map-stage1/production_visual.js
-      - name: Cleanup temporary QA session and prove old SID is unusable
+      - name: Cleanup temporary QA sessions and prove old SIDs are unusable
         if: always()
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -88,28 +96,30 @@ jobs:
           mkdir -p artifacts
           REMOTE="/tmp/feo_map_stage1_qa_session_${GITHUB_RUN_ID}.php"
           STATUS=0
-          if [ -z "${QA_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ]; then
+          if [ -z "${QA_LOGIST_SESSION_ID:-}" ] || [ -z "${QA_OWNER_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ]; then
             echo 'QA_SESSION_CLEANUP_FAIL=session env missing' | tee artifacts/qa-session-cleanup.txt
             STATUS=1
           else
-            if OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-              "PLANEX_ROOT=\"\$HOME/planexp/\$LIVE_DIR/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$QA_SESSION_ID'"); then
-              printf '%s\n' "$OUT" | tee artifacts/qa-session-cleanup.txt
-              [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
-            else
-              STATUS=1
-            fi
-            HTTP=$(curl -sS -D artifacts/qa-session-old-sid-headers.txt -o /dev/null -w '%{http_code}' \
-              -H "Cookie: ${QA_COOKIE_NAME}=${QA_SESSION_ID}" \
-              'https://plan-ex.ru/erpv2/company/feo/requests/map' || true)
-            printf 'QA_SESSION_OLD_SID_HTTP=%s\n' "$HTTP" | tee -a artifacts/qa-session-cleanup.txt
-            if [ "$HTTP" = '200' ]; then STATUS=1; fi
+            for ENTRY in "logist|${QA_LOGIST_SESSION_ID}|/company/feo/requests/map" "owner|${QA_OWNER_SESSION_ID}|/company/feo/utilizers"; do
+              IFS='|' read -r ROLE SID PATH_PART <<< "$ENTRY"
+              if OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+                "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$SID'"); then
+                printf '%s=%s\n' "$ROLE" "$OUT" | tee -a artifacts/qa-session-cleanup.txt
+                [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+              else
+                STATUS=1
+              fi
+              HTTP=$(curl -sS -D "artifacts/qa-${ROLE}-old-sid-headers.txt" -o /dev/null -w '%{http_code}' \
+                -H "Cookie: ${QA_COOKIE_NAME}=${SID}" "https://plan-ex.ru/erpv2${PATH_PART}" || true)
+              printf 'QA_%s_OLD_SID_HTTP=%s\n' "$ROLE" "$HTTP" | tee -a artifacts/qa-session-cleanup.txt
+              if [ "$HTTP" = '200' ]; then STATUS=1; fi
+            done
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE' && test ! -e '$REMOTE'" || STATUS=1
           fi
           rm -f "$HOME/.ssh/key"
           [ "$STATUS" -eq 0 ] && echo 'QA_SESSION_CLEANUP=PASS' | tee -a artifacts/qa-session-cleanup.txt
           exit "$STATUS"
-      - name: Upload real production map evidence
+      - name: Upload real production Stage 1 evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:

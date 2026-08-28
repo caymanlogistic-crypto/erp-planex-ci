@@ -17,20 +17,22 @@ ini_set('session.use_only_cookies', '1');
 
 $mode = $argv[1] ?? 'create';
 if ($mode === 'create') {
+    $role = (string)($argv[2] ?? 'logist');
+    if (!in_array($role, ['logist','company_owner'], true)) { fwrite(STDERR, "invalid role\n"); exit(1); }
     $sid = bin2hex(random_bytes(24));
     $csrf = bin2hex(random_bytes(32));
     session_id($sid);
     session_start();
     $_SESSION = [
-        'user_id' => 999999997,
-        'user_name' => 'FEO Map Production QA',
-        'user_email' => 'feo-map-qa@localhost',
-        'role_code' => 'logist',
+        'user_id' => $role === 'company_owner' ? 999999996 : 999999997,
+        'user_name' => $role === 'company_owner' ? 'FEO Stage 1 Owner QA' : 'FEO Map Production QA',
+        'user_email' => $role === 'company_owner' ? 'feo-owner-qa@localhost' : 'feo-map-qa@localhost',
+        'role_code' => $role,
         'company_id' => 25,
         '_csrf_token' => $csrf,
     ];
     session_write_close();
-    echo 'QA_SESSION=' . json_encode(['cookie'=>session_name(),'sid'=>$sid,'csrf'=>$csrf], JSON_UNESCAPED_SLASHES) . PHP_EOL;
+    echo 'QA_SESSION=' . json_encode(['cookie'=>session_name(),'sid'=>$sid,'csrf'=>$csrf,'role'=>$role], JSON_UNESCAPED_SLASHES) . PHP_EOL;
     exit(0);
 }
 if ($mode === 'delete') {
