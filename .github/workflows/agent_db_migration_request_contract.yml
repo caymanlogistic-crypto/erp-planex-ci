@@ -8,9 +8,14 @@ on:
       - '.github/workflows/feo_124_production_migration.yml'
       - 'scripts/feo_apply_124.php'
       - 'scripts/feo_verify_124.php'
-      - 'tests/agent_db_migration_request_contract_test.php'
       - 'tests/feo_124_production_migration_contract_test.php'
       - 'database/migrations-local/124_create_feo_request_costs.sql'
+      - '.github/workflows/feo_125_production_migration.yml'
+      - 'scripts/feo_apply_125.php'
+      - 'scripts/feo_verify_125.php'
+      - 'tests/feo_125_production_migration_contract_test.php'
+      - 'database/migrations-local/125_create_feo_map_utilizers.sql'
+      - 'tests/agent_db_migration_request_contract_test.php'
 
 permissions:
   contents: read
@@ -26,3 +31,7 @@ jobs:
       - run: php -l scripts/feo_verify_124.php
       - run: php -l tests/feo_124_production_migration_contract_test.php
       - run: php tests/feo_124_production_migration_contract_test.php
+      - run: php -l scripts/feo_apply_125.php
+      - run: php -l scripts/feo_verify_125.php
+      - run: php -l tests/feo_125_production_migration_contract_test.php
+      - run: php tests/feo_125_production_migration_contract_test.php
