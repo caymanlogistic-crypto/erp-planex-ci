@@ -94,7 +94,8 @@ final class FeoMapService
                     ] : null,
                     'request_count'=>0,
                     'total_mass_kg'=>0.0,
-                    'adr'=>$utilizer ? ((int)($utilizer['adr'] ?? 0) === 1) : self::requestAdr($row),
+                    // Stage 1 ADR semantics are master-data only. Request-level ADR is intentionally deferred.
+                    'adr'=>$utilizer ? ((int)($utilizer['adr'] ?? 0) === 1) : false,
                     'requests'=>[],
                     'overlap_index'=>0,
                     'overlap_count'=>1,
@@ -104,7 +105,6 @@ final class FeoMapService
             $massKg = self::massKg($row['mass_netto'] ?? null);
             $groups[$key]['request_count']++;
             $groups[$key]['total_mass_kg'] += $massKg;
-            $groups[$key]['adr'] = (bool)$groups[$key]['adr'] || self::requestAdr($row);
             $groups[$key]['requests'][] = [
                 'zayavka_id'=>$id,
                 'mass_kg'=>$massKg,
@@ -218,13 +218,5 @@ final class FeoMapService
         $raw = str_replace(',', '.', trim((string)($massNetto ?? '')));
         if ($raw === '' || !is_numeric($raw)) return 0.0;
         return round(max(0.0, (float)$raw * 1000.0), 3);
-    }
-
-    private static function requestAdr(array $row): bool
-    {
-        $value = trim((string)($row['nomer_opasnogo_gr'] ?? ''));
-        if ($value === '' || $value === '-') return false;
-        $normalized = FeoUtilizerService::normalizeText($value);
-        return $normalized !== '' && !in_array($normalized, ['нет','no','0'], true);
     }
 }
