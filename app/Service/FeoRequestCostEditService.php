@@ -125,7 +125,8 @@ final class FeoRequestCostEditService
     private function state(PDO $pdo, int $blockId, bool $forUpdate): ?array
     {
         if ($blockId <= 0) return null;
-        $q = $pdo->prepare('SELECT * FROM feo_request_cost_blocks WHERE id=?' . ($forUpdate ? ' FOR UPDATE' : '') . ' LIMIT 1');
+        $sql = 'SELECT * FROM feo_request_cost_blocks WHERE id=? LIMIT 1' . ($forUpdate ? ' FOR UPDATE' : '');
+        $q = $pdo->prepare($sql);
         $q->execute([$blockId]);
         $block = $q->fetch(PDO::FETCH_ASSOC) ?: null;
         if (!$block) return null;
