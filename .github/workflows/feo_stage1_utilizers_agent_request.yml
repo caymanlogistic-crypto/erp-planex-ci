@@ -1,0 +1,146 @@
+name: FEO Stage 1 Utilizers Agent Request
+
+on:
+  push:
+    branches:
+      - seed/feo-stage1-agent
+
+permissions:
+  contents: read
+  actions: write
+
+concurrency:
+  group: feo-stage1-utilizers-agent-request
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  REQUEST_BRANCH: seed/feo-stage1-agent
+  TARGET_WORKFLOW: feo_stage1_utilizers_production_seed.yml
+  CANONICAL_CI_WORKFLOW: ci.yml
+
+jobs:
+  authorize-and-dispatch:
+    if: ${{ github.ref_name == 'seed/feo-stage1-agent' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - name: Checkout seed request SHA
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate exact canonical HEAD
+        id: source
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          test "$REF_NAME" = "$REQUEST_BRANCH"
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch --no-tags origin "+refs/heads/${CANONICAL_BRANCH}:refs/remotes/origin/${CANONICAL_BRANCH}"
+          canonical_sha="$(git rev-parse "refs/remotes/origin/${CANONICAL_BRANCH}")"
+          test "$SOURCE_SHA" = "$canonical_sha"
+          printf 'source_sha=%s\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          printf 'FEO_STAGE1_SEED_REQUEST_SOURCE_SHA=%s\nCANONICAL_HEAD_SHA=%s\n' "$SOURCE_SHA" "$canonical_sha"
+
+      - name: Ensure exact canonical ERP PLANEX CI PASS
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          read_state() {
+            local event="$1"
+            local runs_json
+            runs_json="$(curl -fsSL \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$API_URL/repos/$REPOSITORY/actions/workflows/$CANONICAL_CI_WORKFLOW/runs?head_sha=$SOURCE_SHA&event=$event&per_page=20")"
+            RUNS_JSON="$runs_json" SOURCE_SHA="$SOURCE_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" EVENT="$event" python3 - <<'PY'
+          import json, os
+          data=json.loads(os.environ['RUNS_JSON'])
+          matches=[r for r in data.get('workflow_runs', [])
+                   if r.get('head_sha') == os.environ['SOURCE_SHA']
+                   and r.get('head_branch') == os.environ['CANONICAL_BRANCH']
+                   and r.get('event') == os.environ['EVENT']]
+          if not matches:
+              print('NONE')
+          else:
+              run=max(matches, key=lambda r:r.get('run_number',0))
+              if run.get('status') != 'completed': print(f"WAIT:{run.get('id')}:{run.get('run_number')}")
+              elif run.get('conclusion') == 'success': print(f"PASS:{run.get('id')}:{run.get('run_number')}")
+              else: print(f"FAIL:{run.get('id')}:{run.get('run_number')}:{run.get('conclusion')}")
+          PY
+          }
+          for event in push workflow_dispatch; do
+            state="$(read_state "$event")"
+            case "$state" in
+              PASS:*) echo "ERP_PLANEX_CI_$state:$event"; exit 0 ;;
+              FAIL:*) echo "Canonical CI failed: $state:$event" >&2; exit 1 ;;
+            esac
+          done
+          echo 'No completed successful exact canonical CI run found.' >&2
+          exit 1
+
+      - name: Validate target workflow is manual-only and exact contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          target=".github/workflows/$TARGET_WORKFLOW"
+          test -s "$target"
+          grep -q '^  workflow_dispatch:' "$target"
+          ! grep -q '^  push:' "$target"
+          ! grep -q '^  pull_request:' "$target"
+          ! grep -q '^  workflow_run:' "$target"
+          ! grep -q '^  schedule:' "$target"
+          grep -q 'source_sha:' "$target"
+          grep -q 'confirm_seed:' "$target"
+          grep -q 'APPLY_FEO_STAGE1_UTILIZERS' "$target"
+          grep -q "TARGET_COMPANY_ID: '25'" "$target"
+          grep -q 'TARGET_DB_IDENTIFIER: spugovxsim_1' "$target"
+
+      - name: Reconfirm canonical HEAD immediately before dispatch
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/${CANONICAL_BRANCH}:refs/remotes/origin/${CANONICAL_BRANCH}"
+          test "$SOURCE_SHA" = "$(git rev-parse "refs/remotes/origin/${CANONICAL_BRANCH}")"
+
+      - name: Dispatch approved Stage 1 utilizer seed workflow
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          payload="$(SOURCE_SHA="$SOURCE_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+          import json, os
+          print(json.dumps({
+              'ref': os.environ['CANONICAL_BRANCH'],
+              'inputs': {
+                  'source_sha': os.environ['SOURCE_SHA'],
+                  'confirm_seed': 'APPLY_FEO_STAGE1_UTILIZERS',
+              },
+          }))
+          PY
+          )"
+          code="$(curl -sS -o /tmp/seed-dispatch-response.txt -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$API_URL/repos/$REPOSITORY/actions/workflows/$TARGET_WORKFLOW/dispatches" \
+            -d "$payload")"
+          test "$code" = 204
+          printf 'FEO_STAGE1_SEED_REQUEST_DISPATCHED=YES\nSOURCE_SHA=%s\nTARGET_COMPANY_ID=25\nTARGET_DB=spugovxsim_1\n' "$SOURCE_SHA"

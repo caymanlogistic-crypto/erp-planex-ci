@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - '.github/workflows/feo_stage1_utilizers_seed_contract.yml'
+      - '.github/workflows/feo_stage1_utilizers_agent_request.yml'
       - '.github/workflows/feo_stage1_utilizers_production_seed.yml'
       - 'scripts/feo_stage1_utilizer_seed_data.php'
       - 'scripts/feo_seed_stage1_utilizers.php'

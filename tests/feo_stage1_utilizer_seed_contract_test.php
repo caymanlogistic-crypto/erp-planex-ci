@@ -44,6 +44,7 @@ $writer = $read($root . '/scripts/feo_seed_stage1_utilizers.php');
 $smoke = $read($root . '/scripts/feo_smoke_stage1_map.php');
 $workflow = $read($root . '/.github/workflows/feo_stage1_utilizers_production_seed.yml');
 $contractWorkflow = $read($root . '/.github/workflows/feo_stage1_utilizers_seed_contract.yml');
+$requestWorkflow = $read($root . '/.github/workflows/feo_stage1_utilizers_agent_request.yml');
 
 $ok('writer hard-targets PLANEX company 25', str_contains($writer, '$targetCompanyId !== 25') && str_contains($writer, "'spugovxsim_1'"));
 $ok('writer requires migration 125 journal', str_contains($writer, '125_create_feo_map_utilizers.sql'));
@@ -57,7 +58,11 @@ $ok('production seed workflow is manual-only', str_contains($workflow, "\n  work
 $ok('production seed workflow has explicit confirmation token', str_contains($workflow, 'APPLY_FEO_STAGE1_UTILIZERS'));
 $ok('production workflow snapshots before and after', str_contains($workflow, 'Snapshot before') && str_contains($workflow, 'Seed PLANEX utilizer master-data and rules') && str_contains($workflow, 'Smoke after and verify invariants'));
 $ok('production workflow emits evidence and HTTP acceptance', str_contains($workflow, 'Upload seed evidence') && str_contains($workflow, 'HTTP acceptance'));
-$ok('contract workflow covers writer smoke data and workflow', str_contains($contractWorkflow, 'feo_stage1_utilizer_seed_contract_test.php') && str_contains($contractWorkflow, 'feo_stage1_utilizers_production_seed.yml'));
+$ok('contract workflow covers writer smoke data target and request workflows', str_contains($contractWorkflow, 'feo_stage1_utilizer_seed_contract_test.php') && str_contains($contractWorkflow, 'feo_stage1_utilizers_production_seed.yml') && str_contains($contractWorkflow, 'feo_stage1_utilizers_agent_request.yml'));
+$ok('agent request is dedicated push trigger only', str_contains($requestWorkflow, "\n  push:") && str_contains($requestWorkflow, 'seed/feo-stage1-agent') && !str_contains($requestWorkflow, "\n  workflow_dispatch:") && !str_contains($requestWorkflow, "\n  pull_request:") && !str_contains($requestWorkflow, "\n  schedule:"));
+$ok('agent request has actions write and exact canonical guards', str_contains($requestWorkflow, 'actions: write') && str_contains($requestWorkflow, 'Validate exact canonical HEAD') && str_contains($requestWorkflow, 'Ensure exact canonical ERP PLANEX CI PASS') && str_contains($requestWorkflow, 'Reconfirm canonical HEAD immediately before dispatch'));
+$ok('agent request validates target manual-only contract', str_contains($requestWorkflow, 'Validate target workflow is manual-only and exact contract') && str_contains($requestWorkflow, "! grep -q '^  push:'") && str_contains($requestWorkflow, 'APPLY_FEO_STAGE1_UTILIZERS'));
+$ok('agent request dispatches exact target and PLANEX scope', str_contains($requestWorkflow, 'feo_stage1_utilizers_production_seed.yml') && str_contains($requestWorkflow, "'source_sha': os.environ['SOURCE_SHA']") && str_contains($requestWorkflow, "'confirm_seed': 'APPLY_FEO_STAGE1_UTILIZERS'") && str_contains($requestWorkflow, 'TARGET_COMPANY_ID=25') && str_contains($requestWorkflow, 'TARGET_DB=spugovxsim_1'));
 
 printf("PASS=%d FAIL=%d\n", $pass, $fail);
 exit($fail === 0 ? 0 : 1);
