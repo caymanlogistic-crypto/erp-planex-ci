@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
 use App\Service\FeoPlacementInputParser;
+use App\Service\FeoRequestCostEditService;
 use App\Service\FeoRequestCostService;
 use App\Service\FeoRequestService;
 
@@ -11,12 +12,14 @@ final class FeoRequestCostController
 {
     private FeoPlacementInputParser $parser;
     private FeoRequestCostService $costs;
+    private FeoRequestCostEditService $editCosts;
     private FeoRequestService $requests;
 
     public function __construct(private readonly array $config, private readonly Database $db)
     {
         $this->parser=new FeoPlacementInputParser();
         $this->costs=new FeoRequestCostService();
+        $this->editCosts=new FeoRequestCostEditService();
         $this->requests=new FeoRequestService($config,$db);
     }
 
@@ -107,15 +110,30 @@ final class FeoRequestCostController
         catch (\Throwable $e) { jsonResponse(['success'=>false,'message'=>$e->getMessage()],422); }
     }
 
+    public function validateEdit(string $id): void
+    {
+        requireRole(['company_owner','senior_logist','logist']);
+        try {
+            $parsed=$this->parser->parseManual((string)($_POST['request_ids']??''));
+            [, $pdo]=$this->readyContext();
+            $result=$this->editCosts->validateSelection($pdo,(int)$id,$parsed['ids']);
+            $result['duplicates']=$parsed['duplicates'];
+            $result['valid']=$result['valid'] && $parsed['duplicates']===[];
+            jsonResponse(['success'=>true]+$result);
+        } catch (\Throwable $e) { jsonResponse(['success'=>false,'message'=>$e->getMessage()],422); }
+    }
+
     public function analyzeEdit(string $id): void
     {
         requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo]=$this->readyContext(); $this->cleanupPreviews((int)$company['id']);
-            $preview=$this->costs->previewEdit($pdo,(int)$id,(string)($_POST['pricing_type']??'agreement'),(string)($_POST['total_cost']??''),(string)($_POST['comment']??''));
+            $parsed=$this->parser->parseManual((string)($_POST['request_ids']??''));
+            if ($parsed['duplicates']!==[]) throw new \RuntimeException('Уберите повторяющиеся заявки: '.implode(', ',$parsed['duplicates']).'.');
+            $preview=$this->editCosts->previewEdit($pdo,(int)$id,$parsed['ids'],(string)($_POST['pricing_type']??'agreement'),(string)($_POST['total_cost']??''),(string)($_POST['comment']??''));
             $token=bin2hex(random_bytes(24));
             $_SESSION['feo_request_cost_previews'][$token]=[
-                'kind'=>'edit','company_id'=>(int)$company['id'],'created_at'=>time(),'block_id'=>(int)$id,
+                'kind'=>'edit','company_id'=>(int)$company['id'],'created_at'=>time(),'block_id'=>(int)$id,'ids'=>$parsed['ids'],
                 'pricing_type'=>$preview['pricing_type'],'manual_total'=>$preview['pricing_type']==='agreement'?(string)($_POST['total_cost']??''):null,
                 'comment'=>$preview['comment'],'edit_fingerprint'=>$preview['edit_fingerprint'],
             ];
@@ -128,8 +146,11 @@ final class FeoRequestCostController
         requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo]=$this->readyContext(); $token=trim((string)($_POST['preview_token']??'')); $record=$this->previewRecord($token,(int)$company['id'],'edit');
-            $result=$this->costs->editBlock($pdo,(int)$record['block_id'],['pricing_type'=>$record['pricing_type'],'manual_total'=>$record['manual_total'],'comment'=>$record['comment']],(string)$record['edit_fingerprint']);
-            unset($_SESSION['feo_request_cost_previews'][$token]); $_SESSION['flash_success']='Блок стоимости #'.(int)$record['block_id'].' обновлён.';
+            $result=$this->editCosts->editBlock($pdo,(int)$record['block_id'],[
+                'ids'=>$record['ids'],'pricing_type'=>$record['pricing_type'],'manual_total'=>$record['manual_total'],'comment'=>$record['comment'],
+            ],(string)$record['edit_fingerprint']);
+            unset($_SESSION['feo_request_cost_previews'][$token]);
+            $_SESSION['flash_success']=sprintf('Блок стоимости #%d обновлён: %d заявок, %s кг, %s ₽.',(int)$record['block_id'],(int)$result['request_count'],$this->number((float)$result['snapshot_total_mass_kg'],3),$this->number((float)$result['total_cost'],2));
             jsonResponse(['success'=>true]+$result);
         } catch (\Throwable $e) { jsonResponse(['success'=>false,'message'=>$e->getMessage()],422); }
     }

@@ -177,60 +177,30 @@ final class FeoRequestCostService
         return $block;
     }
 
-    public function previewEdit(PDO $pdo, int $blockId, string $pricingType, mixed $manualTotal, string $comment): array
-    {
-        $block = $this->block($pdo,$blockId);
-        if (!$block) throw new \RuntimeException('Блок стоимости не найден.');
-        $comment=trim($comment);
-        if (mb_strlen($comment)>4000) throw new \RuntimeException('Комментарий слишком длинный.');
-        $price=$this->price($pricingType,(float)$block['snapshot_total_mass_kg'],$manualTotal);
-        return [
-            'block_id'=>$blockId,'pricing_type'=>$price['pricing_type'],'rate_per_kg'=>$price['rate_per_kg'],'total_cost'=>$price['total_cost'],
-            'snapshot_total_mass_kg'=>$block['snapshot_total_mass_kg'],'snapshot_request_count'=>$block['snapshot_request_count'],'comment'=>$comment,
-            'edit_fingerprint'=>$this->editFingerprint($block),
-        ];
-    }
-
-    public function editBlock(PDO $pdo, int $blockId, array $payload, string $expectedFingerprint): array
-    {
-        $comment=trim((string)($payload['comment'] ?? ''));
-        if (mb_strlen($comment)>4000) throw new \RuntimeException('Комментарий слишком длинный.');
-        $pdo->beginTransaction();
-        try {
-            $q=$pdo->prepare('SELECT * FROM feo_request_cost_blocks WHERE id=? FOR UPDATE');
-            $q->execute([$blockId]);
-            $block=$q->fetch(PDO::FETCH_ASSOC) ?: null;
-            if (!$block) throw new \RuntimeException('Блок стоимости не найден.');
-            $block['snapshot_request_count']=(int)$block['snapshot_request_count'];
-            $block['snapshot_total_mass_kg']=round((float)$block['snapshot_total_mass_kg'],3);
-            $block['total_cost']=round((float)$block['total_cost'],2);
-            $block['rate_per_kg']=$block['rate_per_kg']===null?null:round((float)$block['rate_per_kg'],2);
-            if (!hash_equals($expectedFingerprint,$this->editFingerprint($block))) throw new \RuntimeException('Блок был изменён после открытия. Откройте его заново.');
-            $price=$this->price((string)($payload['pricing_type'] ?? ''),(float)$block['snapshot_total_mass_kg'],$payload['manual_total'] ?? null);
-            $q=$pdo->prepare('UPDATE feo_request_cost_blocks SET pricing_type=?,rate_per_kg=?,total_cost=?,comment=?,updated_at=CURRENT_TIMESTAMP WHERE id=?');
-            $q->execute([$price['pricing_type'],$price['rate_per_kg'],$price['total_cost'],$comment!==''?$comment:null,$blockId]);
-            $pdo->commit();
-            return ['block_id'=>$blockId,'pricing_type'=>$price['pricing_type'],'total_cost'=>$price['total_cost']];
-        } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            throw $e;
-        }
-    }
-
     public function searchBlocks(PDO $pdo, array $ids): array
     {
         $ids=$this->normalizeIds($ids);
-        $found=[];
+        $found=[];$exists=[];$current=[];
         foreach (array_chunk($ids,self::CHUNK) as $chunk) {
+            if ($chunk===[]) continue;
             $marks=implode(',',array_fill(0,count($chunk),'?'));
-            $q=$pdo->prepare("SELECT br.zayavka_id,b.id block_id,b.pricing_type,b.snapshot_total_mass_kg,b.total_cost,b.created_at
+            $q=$pdo->prepare("SELECT zayavka_id FROM feo_requests WHERE zayavka_id IN ({$marks})");
+            $q->execute($chunk); foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $id) $exists[(string)$id]=true;
+            $q=$pdo->prepare("SELECT zayavka_id FROM feo_placement_current WHERE zayavka_id IN ({$marks})");
+            $q->execute($chunk); foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $id) $current[(string)$id]=true;
+            $q=$pdo->prepare("SELECT br.zayavka_id,b.id block_id,b.pricing_type,b.snapshot_request_count,b.snapshot_total_mass_kg,b.total_cost,b.comment,b.created_at
                                 FROM feo_request_cost_block_requests br JOIN feo_request_cost_blocks b ON b.id=br.block_id
                                WHERE br.zayavka_id IN ({$marks}) ORDER BY b.id DESC");
             $q->execute($chunk);
             foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $row) $found[(string)$row['zayavka_id']]=$row;
         }
         $out=[];
-        foreach ($ids as $id) $out[]=['zayavka_id'=>$id,'block'=>$found[$id]??null];
+        foreach ($ids as $id) $out[]=[
+            'zayavka_id'=>$id,
+            'exists_in_feo'=>isset($exists[$id]),
+            'is_current'=>isset($current[$id]),
+            'block'=>$found[$id]??null,
+        ];
         return $out;
     }
 
@@ -304,11 +274,6 @@ final class FeoRequestCostService
     private function selectionFingerprint(array $rows, array $ids): string
     {
         $parts=[]; foreach ($ids as $id) $parts[]=$id.':'.number_format((float)($rows[$id]['mass_kg']??0),3,'.',''); return hash('sha256',implode('|',$parts));
-    }
-
-    private function editFingerprint(array $block): string
-    {
-        return hash('sha256',implode('|',[(int)$block['id'],(string)$block['pricing_type'],(string)($block['rate_per_kg']??''),number_format((float)$block['snapshot_total_mass_kg'],3,'.',''),number_format((float)$block['total_cost'],2,'.',''),(string)($block['comment']??''),(string)($block['updated_at']??'')]));
     }
 
     private function idList(array $ids): string
