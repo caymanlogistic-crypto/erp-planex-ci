@@ -29,11 +29,12 @@ if (!function_exists('registerFeoFreshnessNavigation')) {
         }
 
         $registered = true;
-        register_shutdown_function(static function () use ($freshnessProblem): void {
+        register_shutdown_function(static function () use ($freshnessProblem, $role): void {
             foreach (headers_list() as $header) {
                 if (stripos($header, 'Content-Type:') === 0 && stripos($header, 'application/json') !== false) return;
             }
             $problem = $freshnessProblem ? 'true' : 'false';
+            $owner = $role === 'company_owner' ? 'true' : 'false';
             echo <<<HTML
 <script>
 (function(){
@@ -42,20 +43,31 @@ if (!function_exists('registerFeoFreshnessNavigation')) {
     var sub=allLink.closest('.nav-sub');
     var parent=sub ? sub.previousElementSibling : null;
     if(!sub || !parent) return;
-    if(!sub.querySelector('[data-feo-placement-nav]')){
-      var meta=document.querySelector('meta[name="erp-base-path"]');
-      var base=meta ? (meta.getAttribute('content')||'') : '';
+    var meta=document.querySelector('meta[name="erp-base-path"]');
+    var base=meta ? (meta.getAttribute('content')||'') : '';
+    var costs=sub.querySelector('a.nav-sub-item[href$="/company/feo/requests/costs"]');
+    function ensureLink(attr,path,label){
+      var existing=sub.querySelector('['+attr+']');
+      if(existing) return existing;
       var link=document.createElement('a');
       link.className='nav-sub-item';
-      link.setAttribute('data-feo-placement-nav','1');
-      link.href=base+'/company/feo/requests/map-placement';
-      link.innerHTML='<span>Размещение на карте</span>';
-      sub.appendChild(link);
+      link.setAttribute(attr,'1');
+      link.href=base+path;
+      link.innerHTML='<span>'+label+'</span>';
+      if(costs) sub.insertBefore(link,costs); else sub.appendChild(link);
+      return link;
     }
-    var placement=sub.querySelector('[data-feo-placement-nav]');
-    if(placement && /\/company\/feo\/requests\/map-placement\/?$/.test(location.pathname)){
-      allLink.classList.remove('is-active');
-      placement.classList.add('is-active');
+    var placement=ensureLink('data-feo-placement-nav','/company/feo/requests/map-placement','Размещение на карте');
+    var mapLink=ensureLink('data-feo-map-nav','/company/feo/requests/map','Карта');
+    var utilizerLink={$owner} ? ensureLink('data-feo-utilizers-nav','/company/feo/utilizers','Утилизаторы') : null;
+    var path=location.pathname.replace(/\/+$/,'');
+    var target=null;
+    if(path.endsWith('/company/feo/requests/map-placement')) target=placement;
+    else if(path.endsWith('/company/feo/requests/map')) target=mapLink;
+    else if({$owner} && path.endsWith('/company/feo/utilizers')) target=utilizerLink;
+    if(target){
+      sub.querySelectorAll('.nav-sub-item.is-active').forEach(function(link){link.classList.remove('is-active');});
+      target.classList.add('is-active');
       sub.classList.add('is-open');
       parent.classList.add('is-open','is-active');
     }
