@@ -1,0 +1,94 @@
+const fs=require('fs');
+const {chromium}=require('playwright');
+const assert=(cond,msg)=>{if(!cond)throw new Error(msg)};
+const url='https://plan-ex.ru/erpv2/company/feo/requests/map';
+const cookieName=process.env.QA_COOKIE_NAME, sid=process.env.QA_SESSION_ID, csrf=process.env.QA_CSRF_TOKEN;
+if(!cookieName||!sid||!csrf)throw new Error('QA session env missing');
+
+async function verifyMap(page,{abortTiles=false}={}){
+  if(abortTiles) await page.route('https://*.tile.openstreetmap.org/**',route=>route.abort());
+  const consoleErrors=[],pageErrors=[],assets={};
+  page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
+  page.on('pageerror',e=>pageErrors.push(String(e)));
+  page.on('response',r=>{
+    const u=r.url();
+    if(u.includes('/assets/css/feo-map.css')) assets.mapCss=r.status();
+    if(u.includes('/assets/js/feo-map.js')) assets.mapJs=r.status();
+    if(u.includes('leaflet@1.9.4')&&u.includes('leaflet.js')) assets.leafletJs=r.status();
+    if(u.includes('leaflet@1.9.4')&&u.includes('leaflet.css')) assets.leafletCss=r.status();
+  });
+  const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+  assert(response&&response.status()===200,'map page HTTP != 200');
+  assert(page.url().includes('/company/feo/requests/map'),'redirected away from map page');
+  await page.waitForFunction(()=>document.querySelector('#feo-map-page')?.dataset.mapReady==='1',{timeout:60000});
+  assert(await page.locator('.leaflet-container').count()===1,'Leaflet container missing');
+  assert(assets.mapCss===200,'feo-map.css not loaded 200');
+  assert(assets.mapJs===200,'feo-map.js not loaded 200');
+  assert(assets.leafletJs===200,'Leaflet JS not loaded 200');
+  assert(assets.leafletCss===200,'Leaflet CSS not loaded 200');
+  const requests=Number((await page.locator('#feo-map-request-count').innerText()).trim());
+  const markers=Number((await page.locator('#feo-map-marker-count').innerText()).trim());
+  assert(requests>0,'production map has zero request count');
+  assert(markers>0,'production map has zero logical markers');
+  const domMarkers=await page.locator('.feo-marker').count();
+  assert(domMarkers===markers,`DOM marker count ${domMarkers} != summary ${markers}`);
+  assert(await page.locator('#feo-layer-list .feo-layer-row').count()>0,'map layers missing');
+  assert(await page.locator('a[href$="/company/feo/utilizers"]').count()===0,'logist must not see Utilizers action');
+  await page.locator('.feo-marker').first().click();
+  await page.locator('.leaflet-popup').waitFor({state:'visible'});
+  const popup=(await page.locator('.leaflet-popup').innerText()).trim();
+  assert(/Вес/.test(popup)&&/Утилизатор/.test(popup)&&/Состояние/.test(popup),'marker popup lacks required fields');
+  const nonMaster=page.locator('#feo-layer-list input[type=checkbox]').nth(1);
+  if(await nonMaster.count()){
+    const before=await page.locator('.feo-marker').count();
+    await nonMaster.uncheck();
+    const afterOff=await page.locator('.feo-marker').count();
+    assert(afterOff<before,'utilizer layer toggle did not hide markers');
+    await nonMaster.check();
+    assert(await page.locator('.feo-marker').count()===before,'utilizer layer toggle did not restore markers');
+  }
+  const refreshPromise=page.waitForResponse(r=>r.url().includes('/company/feo/requests/map/data')&&r.request().method()==='GET');
+  await page.locator('#feo-map-refresh').click();
+  const refresh=await refreshPromise;
+  assert(refresh.status()===200,'map refresh endpoint HTTP != 200');
+  const refreshJson=await refresh.json();
+  assert(refreshJson.success===true,'map refresh success != true');
+  await page.waitForFunction(()=>Number(document.querySelector('#feo-map-marker-count')?.textContent||0)>0);
+  if(abortTiles){
+    await page.waitForFunction(()=>!document.querySelector('#feo-map-runtime-warning')?.hidden,{timeout:15000});
+    assert(await page.locator('.feo-marker').count()>0,'markers disappeared when background tiles failed');
+  }
+  const bodyText=await page.locator('body').innerText();
+  assert(!bodyText.includes('Fatal error'),'PHP fatal visible');
+  const roleResponse=await page.request.post('https://plan-ex.ru/erpv2/company/feo/utilizers',{
+    headers:{'X-CSRF-TOKEN':csrf},
+    form:{full_name:'QA MUST NOT WRITE',short_name:'QA-NO-WRITE',color_hex:'#000000'}
+  });
+  assert(roleResponse.status()===403,'logist mutation route must return 403');
+  assert(pageErrors.length===0,'page errors: '+pageErrors.join(' | '));
+  const relevantConsole=consoleErrors.filter(x=>!(abortTiles&&/tile\.openstreetmap\.org|ERR_FAILED/i.test(x)));
+  assert(relevantConsole.length===0,'console errors: '+relevantConsole.join(' | '));
+  return {requests,markers,domMarkers,assets,consoleErrors,pageErrors,abortTiles,popup};
+}
+
+(async()=>{
+  fs.mkdirSync('artifacts',{recursive:true});
+  const browser=await chromium.launch({headless:true});
+  const context=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
+  await context.addCookies([{name:cookieName,value:sid,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
+  const page=await context.newPage();
+  const live=await verifyMap(page);
+  fs.writeFileSync('artifacts/production-dom.html',await page.content());
+  await page.screenshot({path:'artifacts/feo-map-stage1-production.png',fullPage:true});
+  await page.close();
+
+  const resiliencePage=await context.newPage();
+  const resilience=await verifyMap(resiliencePage,{abortTiles:true});
+  await resiliencePage.screenshot({path:'artifacts/feo-map-stage1-no-tiles.png',fullPage:true});
+  await resiliencePage.close();
+
+  const summary={url,sourceSha:process.env.SOURCE_SHA,live,resilience,note:'Real authenticated production map. No business-data mutation; logist write route is asserted 403. Second pass blocks OSM tiles and proves FEO markers remain rendered.'};
+  fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));
+  console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers}`);
+  await browser.close();
+})().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});

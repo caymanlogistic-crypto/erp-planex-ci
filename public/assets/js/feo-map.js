@@ -4,24 +4,49 @@
     const page = document.getElementById('feo-map-page');
     const mapNode = document.getElementById('feo-map');
     const dataNode = document.getElementById('feo-map-data');
-    if (!page || !mapNode || !dataNode || typeof window.L === 'undefined') return;
+    if (!page || !mapNode || !dataNode) return;
+    if (typeof window.L === 'undefined') {
+        showRuntimeError('Не удалось загрузить компонент карты. Обновите страницу или обратитесь к администратору.');
+        page.dataset.mapReady = 'error';
+        return;
+    }
 
     const state = {
         payload: parsePayload(dataNode.textContent),
         map: null,
         markerRecords: [],
         visibility: new Map(),
+        tileErrors: 0,
     };
 
-    state.map = L.map(mapNode, {zoomControl: true, preferCanvas: false}).setView([55.75, 37.62], 5);
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        maxZoom: 19,
-        attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(state.map);
+    try {
+        state.map = L.map(mapNode, {zoomControl: true, preferCanvas: false}).setView([55.75, 37.62], 5);
+        const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '&copy; OpenStreetMap contributors',
+        });
+        tiles.on('tileerror', () => {
+            state.tileErrors += 1;
+            if (state.tileErrors >= 3) {
+                showRuntimeWarning('Фоновая карта временно недоступна. Маркеры заявок продолжают отображаться.');
+            }
+        });
+        tiles.on('load', () => {
+            state.tileErrors = 0;
+            showRuntimeWarning('');
+        });
+        tiles.addTo(state.map);
 
-    initPayload(state.payload, true);
-    state.map.on('zoomend', updateOverlapPositions);
-    document.getElementById('feo-map-refresh')?.addEventListener('click', refreshData);
+        initPayload(state.payload, true);
+        state.map.on('zoomend', updateOverlapPositions);
+        document.getElementById('feo-map-refresh')?.addEventListener('click', refreshData);
+        page.dataset.mapReady = '1';
+        document.dispatchEvent(new CustomEvent('feo-map-ready', {detail: {markers: state.markerRecords.length}}));
+    } catch (error) {
+        console.error('FEO map initialization failed', error);
+        showRuntimeError('Карта не смогла инициализироваться. Обновите страницу или обратитесь к администратору.');
+        page.dataset.mapReady = 'error';
+    }
 
     function parsePayload(raw) {
         try {
@@ -250,6 +275,14 @@
 
     function showRuntimeError(message) {
         const node = document.getElementById('feo-map-runtime-error');
+        if (!node) return;
+        const text = String(message || '').trim();
+        node.textContent = text;
+        node.hidden = text === '';
+    }
+
+    function showRuntimeWarning(message) {
+        const node = document.getElementById('feo-map-runtime-warning');
         if (!node) return;
         const text = String(message || '').trim();
         node.textContent = text;
