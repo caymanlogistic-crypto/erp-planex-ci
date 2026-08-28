@@ -74,7 +74,7 @@ jobs:
           with open(sys.argv[2],'a') as f:
               f.write(f'QA_SESSION_ID={sid}\nQA_COOKIE_NAME={cookie}\n')
           PY
-      - name: Prepare QA script for system controls and locale whitespace
+      - name: Prepare QA script for async system UI
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -85,6 +85,9 @@ jobs:
           s=s.replace("page.locator('#feo-cost-detail-modal [data-close-modal=\"feo-cost-detail-modal\"]').click();", "page.locator('#feo-cost-detail-modal [data-close-modal=\"feo-cost-detail-modal\"]').first().click();")
           s=s.replace("page.locator('#feo-cost-confirm-modal [data-close-modal=\"feo-cost-confirm-modal\"]').click();", "page.locator('#feo-cost-confirm-modal [data-close-modal=\"feo-cost-confirm-modal\"]').first().click();")
           s=s.replace("assert(confirmText.includes('42 560')&&confirmText.includes('30 000'),'confirmation must show old/new weight');", "const confirmCompact=confirmText.replace(/\\s/g,'');assert(confirmCompact.includes('42560')&&confirmCompact.includes('30000'),'confirmation must show old/new weight');")
+          old="await page.waitForSelector('#feo-cost-detail-modal.is-open');\n  assert((await page.locator('[data-cost-detail-title]').innerText()).includes('#999999'),'detail modal failed from search double-click');"
+          new="await page.waitForSelector('#feo-cost-detail-modal.is-open');\n  await page.locator('[data-cost-detail-title]').filter({hasText:'#999999'}).waitFor({state:'visible'});"
+          s=s.replace(old,new)
           open(p,'w',encoding='utf-8').write(s)
           PY
       - name: Browser QA on real production page
