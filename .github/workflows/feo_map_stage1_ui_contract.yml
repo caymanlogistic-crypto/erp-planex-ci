@@ -1,0 +1,27 @@
+name: FEO Map Stage 1 UI Contract
+
+on:
+  pull_request:
+    paths:
+      - 'app/View/pages/company_feo_map.php'
+      - 'public/assets/js/feo-map.js'
+      - 'public/assets/css/feo-map.css'
+      - 'tests/feo_map_stage1_ui_resilience_contract_test.php'
+      - '.github/feo-map-stage1/**'
+      - '.github/workflows/feo_map_stage1_ui_contract.yml'
+      - '.github/workflows/feo_map_stage1_production_visual_qa.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - run: php -l app/View/pages/company_feo_map.php
+      - run: node --check public/assets/js/feo-map.js
+      - run: php -l tests/feo_map_stage1_ui_resilience_contract_test.php
+      - run: php tests/feo_map_stage1_ui_resilience_contract_test.php
+      - run: php -l .github/feo-map-stage1/qa_session.php
+      - run: node --check .github/feo-map-stage1/production_visual.js
