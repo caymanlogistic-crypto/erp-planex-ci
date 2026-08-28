@@ -6,7 +6,10 @@ on:
       - 'app/View/pages/company_feo_map.php'
       - 'public/assets/js/feo-map.js'
       - 'public/assets/css/feo-map.css'
+      - 'app/View/pages/company_feo_utilizers.php'
+      - 'app/Http/Controllers/Company/FeoUtilizerController.php'
       - 'tests/feo_map_stage1_ui_resilience_contract_test.php'
+      - 'tests/feo_utilizer_admin_ux_contract_test.php'
       - '.github/feo-map-stage1/**'
       - '.github/workflows/feo_map_stage1_ui_contract.yml'
       - '.github/workflows/feo_map_stage1_production_visual_qa.yml'
@@ -23,5 +26,9 @@ jobs:
       - run: node --check public/assets/js/feo-map.js
       - run: php -l tests/feo_map_stage1_ui_resilience_contract_test.php
       - run: php tests/feo_map_stage1_ui_resilience_contract_test.php
+      - run: php -l app/View/pages/company_feo_utilizers.php
+      - run: php -l app/Http/Controllers/Company/FeoUtilizerController.php
+      - run: php -l tests/feo_utilizer_admin_ux_contract_test.php
+      - run: php tests/feo_utilizer_admin_ux_contract_test.php
       - run: php -l .github/feo-map-stage1/qa_session.php
       - run: node --check .github/feo-map-stage1/production_visual.js

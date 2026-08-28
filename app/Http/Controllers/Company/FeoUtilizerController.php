@@ -59,6 +59,7 @@ final class FeoUtilizerController
     public function create(): void
     {
         $this->mutate(function (\PDO $pdo): string {
+            self::validateCoordinatePair($_POST);
             $id = $this->utilizers->createUtilizer($pdo, $_POST, $this->userId());
             return "Утилизатор #{$id} создан.";
         });
@@ -67,6 +68,7 @@ final class FeoUtilizerController
     public function update(string $id): void
     {
         $this->mutate(function (\PDO $pdo) use ($id): string {
+            self::validateCoordinatePair($_POST);
             $this->utilizers->updateUtilizer($pdo, (int)$id, $_POST, $this->userId());
             return 'Утилизатор обновлён.';
         });
@@ -137,6 +139,28 @@ final class FeoUtilizerController
     private function userId(): int
     {
         return max(0, (int)($_SESSION['user_id'] ?? 0));
+    }
+
+    private static function validateCoordinatePair(array $input): void
+    {
+        $latRaw = trim((string)($input['latitude'] ?? ''));
+        $lngRaw = trim((string)($input['longitude'] ?? ''));
+        if ($latRaw === '' && $lngRaw === '') return;
+
+        $latNumeric = str_replace(',', '.', $latRaw);
+        $lngNumeric = str_replace(',', '.', $lngRaw);
+        if ($latRaw === '' || $lngRaw === '' || !is_numeric($latNumeric) || !is_numeric($lngNumeric)) {
+            throw new \RuntimeException('Координаты утилизатора должны быть заполнены парой чисел.');
+        }
+
+        $lat = (float)$latNumeric;
+        $lng = (float)$lngNumeric;
+        if ($lat < -90 || $lat > 90 || $lng < -180 || $lng > 180) {
+            throw new \RuntimeException('Координаты утилизатора выходят за допустимый диапазон.');
+        }
+        if (abs($lat) < 0.0000001 && abs($lng) < 0.0000001) {
+            throw new \RuntimeException('Координаты 0,0 недопустимы. Укажите фактическое местоположение или оставьте оба поля пустыми.');
+        }
     }
 
     private function publicDatabaseError(\Throwable $e): string
