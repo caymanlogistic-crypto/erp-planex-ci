@@ -10,7 +10,7 @@ permissions:
   statuses: read
 
 env:
-  SOURCE_SHA: b9dcb690a9130f8f84c37b6a7ca5e3c33fdae180
+  SOURCE_SHA: 544c1db382df5b9e1e5ca23d1a6a09a82550eb4a
 
 jobs:
   production-visual:
