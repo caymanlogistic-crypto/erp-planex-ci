@@ -10,7 +10,7 @@ permissions:
   statuses: read
 
 env:
-  SOURCE_SHA: 544c1db382df5b9e1e5ca23d1a6a09a82550eb4a
+  SOURCE_SHA: d5afd3a76e410eee9707e3b593102396822cd694
 
 jobs:
   production-visual:
@@ -85,6 +85,11 @@ jobs:
           s=s.replace("page.locator('#feo-cost-detail-modal [data-close-modal=\"feo-cost-detail-modal\"]').click();", "page.locator('#feo-cost-detail-modal [data-close-modal=\"feo-cost-detail-modal\"]').first().click();")
           s=s.replace("page.locator('#feo-cost-confirm-modal [data-close-modal=\"feo-cost-confirm-modal\"]').click();", "page.locator('#feo-cost-confirm-modal [data-close-modal=\"feo-cost-confirm-modal\"]').first().click();")
           s=s.replace("assert(confirmText.includes('42 560')&&confirmText.includes('30 000'),'confirmation must show old/new weight');", "const confirmCompact=confirmText.replace(/\\s/g,'');assert(confirmCompact.includes('42560')&&confirmCompact.includes('30000'),'confirmation must show old/new weight');")
+          s=s.replace("old_total_mass_kg:42560,old_total_cost:1468320,composition_changed:true", "old_request_count:3,old_total_mass_kg:42560,old_total_cost:1468320,composition_changed:true")
+          needle="assert(confirmText.includes('111111'),'confirmation must show added request');"
+          replacement="assert(/Заявок:\\s*3\\s*→\\s*3/.test(confirmText),'confirmation must show request count old→new');\n  "+needle
+          s=s.replace(needle,replacement)
+          s=s.replace("sourceSha:'544c1db382df5b9e1e5ca23d1a6a09a82550eb4a'", "sourceSha:process.env.SOURCE_SHA")
           old="await page.waitForSelector('#feo-cost-detail-modal.is-open');\n  assert((await page.locator('[data-cost-detail-title]').innerText()).includes('#999999'),'detail modal failed from search double-click');"
           new="await page.waitForSelector('#feo-cost-detail-modal.is-open');\n  await page.locator('[data-cost-detail-title]').filter({hasText:'#999999'}).waitFor({state:'visible'});"
           s=s.replace(old,new)
@@ -92,7 +97,73 @@ jobs:
           PY
       - name: Browser QA on real production page
         run: node .github/feo-request-costs/production_visual.js
-      - name: Upload real production screenshots
+      - name: Cleanup temporary QA session and prove old SID is unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          REMOTE="/tmp/feo_cost_qa_session_${GITHUB_RUN_ID}.php"
+          STATUS=0
+          if [ -z "${QA_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ]; then
+            echo 'QA_SESSION_CLEANUP_FAIL=session env missing' | tee artifacts/qa-session-cleanup.txt
+            STATUS=1
+          elif [ ! -f "$HOME/.ssh/key" ]; then
+            echo 'QA_SESSION_CLEANUP_FAIL=ssh key missing' | tee artifacts/qa-session-cleanup.txt
+            STATUS=1
+          else
+            if OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$QA_SESSION_ID'"); then
+              printf '%s\n' "$OUT" | tee artifacts/qa-session-cleanup.txt
+              [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            else
+              echo 'QA_SESSION_CLEANUP_FAIL=delete command failed' | tee artifacts/qa-session-cleanup.txt
+              STATUS=1
+            fi
+
+            HTTP=$(curl -sS -D artifacts/qa-session-old-sid-headers.txt -o /dev/null -w '%{http_code}' \
+              -H "Cookie: ${QA_COOKIE_NAME}=${QA_SESSION_ID}" \
+              'https://plan-ex.ru/erpv2/company/feo/requests/costs' || true)
+            printf 'QA_SESSION_OLD_SID_HTTP=%s\n' "$HTTP" | tee -a artifacts/qa-session-cleanup.txt
+            if [ "$HTTP" = '200' ]; then
+              echo 'QA_SESSION_CLEANUP_FAIL=old SID still authenticated' | tee -a artifacts/qa-session-cleanup.txt
+              STATUS=1
+            elif grep -Eqi '^location: .*\/erpv2\/login' artifacts/qa-session-old-sid-headers.txt; then
+              echo 'QA_SESSION_OLD_SID_REJECTED' | tee -a artifacts/qa-session-cleanup.txt
+            else
+              echo 'QA_SESSION_CLEANUP_FAIL=old SID did not redirect to login' | tee -a artifacts/qa-session-cleanup.txt
+              STATUS=1
+            fi
+
+            if OUT2=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$QA_SESSION_ID'"); then
+              [ "$OUT2" = 'QA_SESSION_DELETED' ] || STATUS=1
+              echo 'QA_SESSION_DELETED_FINAL' | tee -a artifacts/qa-session-cleanup.txt
+            else
+              echo 'QA_SESSION_CLEANUP_FAIL=final delete failed' | tee -a artifacts/qa-session-cleanup.txt
+              STATUS=1
+            fi
+
+            if ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE' && test ! -e '$REMOTE'"; then
+              echo 'QA_SESSION_HELPER_REMOVED' | tee -a artifacts/qa-session-cleanup.txt
+            else
+              echo 'QA_SESSION_CLEANUP_FAIL=remote helper removal failed' | tee -a artifacts/qa-session-cleanup.txt
+              STATUS=1
+            fi
+          fi
+          rm -f "$HOME/.ssh/key"
+          if [ -e "$HOME/.ssh/key" ]; then
+            echo 'QA_SESSION_CLEANUP_FAIL=local key remains' | tee -a artifacts/qa-session-cleanup.txt
+            STATUS=1
+          fi
+          if [ "$STATUS" -eq 0 ]; then
+            echo 'QA_SESSION_CLEANUP=PASS' | tee -a artifacts/qa-session-cleanup.txt
+          fi
+          exit "$STATUS"
+      - name: Upload real production screenshots and cleanup evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -100,20 +171,3 @@ jobs:
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
-      - name: Cleanup temporary QA session and SSH material
-        if: always()
-        env:
-          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
-          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
-          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
-        run: |
-          set +e
-          REMOTE="/tmp/feo_cost_qa_session_${GITHUB_RUN_ID}.php"
-          if [ -n "${QA_SESSION_ID:-}" ] && [ -f "$HOME/.ssh/key" ]; then
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-              "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$QA_SESSION_ID'" >/dev/null 2>&1
-          fi
-          if [ -f "$HOME/.ssh/key" ]; then
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE'" >/dev/null 2>&1
-          fi
-          rm -f "$HOME/.ssh/key"
