@@ -67,7 +67,7 @@ function confirmOperation(kind,token,preview){
     let html=`<div class="feo-cost-confirm-grid"><div><span>Заявок</span><br><b>${esc(preview.selected_count)}</b></div><div><span>Общий вес</span><br><b>${fmt(preview.selected_mass_kg)} кг</b></div><div><span>Тип</span><br><b>${esc(typeLabel(preview.pricing_type))}</b></div><div><span>Итоговая стоимость</span><br><b>${money(preview.total_cost)} ₽</b></div></div>`;
     if(kind==='edit'){
       const added=preview.added_ids||[],removed=preview.removed_ids||[];
-      html+=`<div class="feo-cost-confirm-diff"><div><b>Состав:</b> ${preview.composition_changed?'изменится':'без изменений'}</div><div>Добавлено: <b>${added.length?esc(added.join(', ')):'—'}</b></div><div>Удалено: <b>${removed.length?esc(removed.join(', ')):'—'}</b></div><div>Вес: <b>${fmt(preview.old_total_mass_kg)} → ${fmt(preview.selected_mass_kg)} кг</b></div><div>Стоимость: <b>${money(preview.old_total_cost)} → ${money(preview.total_cost)} ₽</b></div></div>`;
+      html+=`<div class="feo-cost-confirm-diff"><div><b>Состав:</b> ${preview.composition_changed?'изменится':'без изменений'}</div><div>Добавлено: <b>${added.length?esc(added.join(', ')):'—'}</b></div><div>Удалено: <b>${removed.length?esc(removed.join(', ')):'—'}</b></div><div>Заявок: <b>${esc(preview.old_request_count)} → ${esc(preview.selected_count)}</b></div><div>Вес: <b>${fmt(preview.old_total_mass_kg)} → ${fmt(preview.selected_mass_kg)} кг</b></div><div>Стоимость: <b>${money(preview.old_total_cost)} → ${money(preview.total_cost)} ₽</b></div></div>`;
     }
     copy.innerHTML=html;
   }
