@@ -21,9 +21,10 @@ foreach (["\n  push:","\n  workflow_run:","\n  pull_request:","\n  schedule:"] a
 $applyNeedles = [
     "124_create_feo_request_costs.sql", "122_create_feo_requests.sql", "123_create_feo_map_placement.sql",
     "Unjournaled FEO request-cost schema", "Newer tenant migration exists", "GET_LOCK", "checksum",
-    "uk_feo_request_cost_one_price_per_request", "fk_feo_request_cost_block_requests_block", "FEO_124_OK"
+    "uk_feo_request_cost_one_price_per_request", "fk_feo_request_cost_block_requests_block", "INDEX_NAME=?", "FEO_124_OK"
 ];
 foreach ($applyNeedles as $needle) if (strpos($apply,$needle)===false) { fwrite(STDERR,"apply missing: $needle\n"); exit(1); }
+if (strpos($apply,'INDEQ_NAME')!==false) { fwrite(STDERR,"apply contains invalid information_schema column INDEQ_NAME\n"); exit(1); }
 $verifyNeedles = ['FEO_124_SNAPSHOT=','FEO_124_READ_ONLY_OK','migration_122','migration_123','migration_124','cost_blocks','cost_members'];
 foreach ($verifyNeedles as $needle) if (strpos($verify,$needle)===false) { fwrite(STDERR,"verify missing: $needle\n"); exit(1); }
 foreach (['CREATE TABLE IF NOT EXISTS `feo_request_cost_blocks`','CREATE TABLE IF NOT EXISTS `feo_request_cost_block_requests`','uk_feo_request_cost_one_price_per_request','ON DELETE CASCADE'] as $needle) if (strpos($migration,$needle)===false) { fwrite(STDERR,"migration missing: $needle\n"); exit(1); }

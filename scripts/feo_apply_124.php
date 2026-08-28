@@ -58,7 +58,7 @@ $tableCount = static function (PDO $pdo, array $tables): int {
 
 $indexExists = static function (PDO $pdo, string $table, string $index): bool {
     $stmt = $pdo->prepare(
-        'SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEQ_NAME=?'
+        'SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=? AND INDEX_NAME=?'
     );
     $stmt->execute([$table, $index]);
     return (int) $stmt->fetchColumn() > 0;
