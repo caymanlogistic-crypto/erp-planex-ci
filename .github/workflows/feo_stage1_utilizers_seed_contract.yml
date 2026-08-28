@@ -10,6 +10,8 @@ on:
       - 'scripts/feo_seed_stage1_utilizers.php'
       - 'scripts/feo_smoke_stage1_map.php'
       - 'tests/feo_stage1_utilizer_seed_contract_test.php'
+      - 'tests/feo_map_current_schema_contract_test.php'
+      - 'database/migrations-local/123_create_feo_map_placement.sql'
       - 'app/Service/FeoMapService.php'
       - 'tests/feo_map_stage1_contract_test.php'
 
@@ -29,3 +31,5 @@ jobs:
       - run: php -l app/Service/FeoMapService.php
       - run: php -l tests/feo_map_stage1_contract_test.php
       - run: php tests/feo_map_stage1_contract_test.php
+      - run: php -l tests/feo_map_current_schema_contract_test.php
+      - run: php tests/feo_map_current_schema_contract_test.php

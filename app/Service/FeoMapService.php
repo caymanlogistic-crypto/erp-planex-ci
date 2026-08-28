@@ -20,7 +20,7 @@ final class FeoMapService
         $sql = "SELECT
                     c.zayavka_id,
                     c.source_block_id,
-                    c.applied_at,
+                    c.created_at AS applied_at,
                     r.mass_netto,
                     r.naim_oo_gruzootpravitel,
                     r.mno_adres_pogruzki,
@@ -31,7 +31,7 @@ final class FeoMapService
                     r.mno_d
                 FROM feo_placement_current c
                 INNER JOIN feo_requests r ON r.zayavka_id=c.zayavka_id
-                ORDER BY c.applied_at DESC,c.zayavka_id ASC";
+                ORDER BY c.created_at DESC,c.zayavka_id ASC";
         return $pdo->query($sql)->fetchAll(\PDO::FETCH_ASSOC) ?: [];
     }
 
