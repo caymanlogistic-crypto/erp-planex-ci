@@ -29,6 +29,9 @@ $js = $read('public/assets/js/feo-utilizers.js');
 $css = $read('public/assets/css/feo-utilizers.css');
 $modalView = $read('app/View/partials/company_feo_utilizer_modal_view.php');
 $modalEdit = $read('app/View/partials/company_feo_utilizer_modal_edit.php');
+$mapView = $read('app/View/pages/company_feo_map.php');
+$mapCss = $read('public/assets/css/feo-map.css');
+$productionQa = $read('.github/feo-map-stage1/production_visual.js');
 
 // Main owner screen is a canonical ERP registry, not a wall of edit cards/forms.
 $must(str_contains($view, 'data-feo-utilizer-page-ready'), 'browser-ready marker missing');
@@ -40,7 +43,20 @@ $must(!str_contains($view, 'feo-util-item'), 'legacy utilizer cards must be remo
 $must(!str_contains($view, '/update'), 'inline per-row edit forms must be removed');
 $must(!str_contains($view, '<style>'), 'page-specific inline style block must be removed');
 $must(str_contains($view, '/assets/css/feo-utilizers.css'), 'small utilizer-specific styles must live in an asset');
-$must(str_contains($view, "app_url('/company/feo/utilizers') ?>\" aria-current=\"page\">Утилизаторы"), 'Utilizers tab must stay active');
+$must(str_contains($view, 'class="workspace-shell-1690 feo-utilizer-page"'), 'utilizers must reuse canonical ERP workspace-shell-1690');
+$must(!str_contains($view, 'feo-domain-tabs') && !str_contains($view, 'Разделы заявок ФЭО'), 'redundant FEO body navigation must be absent from utilizers');
+$must(!str_contains($mapView, 'feo-domain-tabs') && !str_contains($mapView, 'Разделы заявок ФЭО'), 'redundant FEO body navigation must be absent from map');
+$must(!str_contains($css, '.feo-domain-tabs') && !str_contains($mapCss, '.feo-domain-tabs'), 'dead FEO body-navigation CSS must be removed');
+$must(!str_contains($view, 'feo-content-container') && !str_contains($css, '.feo-content-container'), 'page-specific FEO content container must not be introduced');
+$must(str_contains($css, '.feo-utilizer-page{display:flex;flex-direction:column;gap:14px;min-width:0;max-width:100%}'), 'utilizer root must remain shrink-safe inside canonical workspace shell');
+$must(str_contains($css, '.feo-utilizer-page .table-card{width:100%;min-width:0;max-width:100%;margin:0}'), 'utilizer table cards must stay inside canonical workspace width');
+$must(str_contains($css, '.feo-utilizer-page .table-scroll{min-width:0;max-width:100%;overflow-x:auto}'), 'wide utilizer tables must scroll inside table-card');
+$must(!str_contains($css, '100vw'), 'utilizer page-specific CSS must not force viewport-wide layout');
+$must(str_contains($productionQa, "const requestsUrl='https://plan-ex.ru/erpv2/company/feo/requests';") && str_contains($productionQa, "const placementUrl='https://plan-ex.ru/erpv2/company/feo/requests/map-placement';"), 'production QA must cover requests and map-placement pages');
+$must(str_contains($productionQa, "[requestsUrl,'all requests'],[placementUrl,'map placement'],[mapUrl,'map']"), 'production QA must execute FEO shell checks on all non-utilizer pages');
+$must(str_contains($productionQa, "page.locator('.feo-domain-tabs').count()===0"), 'production QA must reject redundant FEO body navigation');
+$must(str_contains($productionQa, "'.workspace-shell-1690.feo-utilizer-page'"), 'production QA must verify canonical utilizer workspace shell');
+$must(str_contains($productionQa, "overflowX==='auto'||overflowX==='scroll'"), 'production QA must protect internal utilizer table scrolling');
 
 foreach (['ID','Утилизатор','Адрес','ФККО / классификация','ADR','Цвет','Координаты','Статус','Порядок'] as $label) {
     $must(str_contains($view, $label), "main registry column missing: {$label}");

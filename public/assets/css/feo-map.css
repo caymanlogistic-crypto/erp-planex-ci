@@ -1,9 +1,6 @@
 .feo-map-page{display:flex;flex-direction:column;gap:12px;min-height:calc(100vh - 122px)}
 .feo-map-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px}
 .feo-map-head .page-title{margin:0 0 3px}.feo-map-head-actions{display:flex;gap:8px;flex-wrap:wrap}
-.feo-domain-tabs{display:flex;align-items:center;gap:4px;border-bottom:1px solid var(--border-color,#e2e8f0);padding:0 2px}
-.feo-domain-tabs a{display:inline-flex;padding:8px 11px;color:var(--text-muted,#64748b);text-decoration:none;border-bottom:2px solid transparent;font-size:13px;font-weight:600}
-.feo-domain-tabs a:hover{color:var(--text-color,#0f172a)}.feo-domain-tabs a.is-active{color:var(--primary,#0f766e);border-bottom-color:currentColor}
 .feo-map-summary{display:flex;gap:18px;flex-wrap:wrap;padding:9px 12px;border:1px solid var(--border-color,#e2e8f0);border-radius:10px;background:var(--surface,#fff);font-size:13px;color:#475569}
 .feo-map-summary b{color:#0f172a}.feo-map-summary .is-warning,.feo-map-summary .is-warning b{color:#b45309}
 .feo-map-workspace{display:grid;grid-template-columns:248px minmax(0,1fr);min-height:620px;flex:1;border:1px solid var(--border-color,#dfe4ea);border-radius:12px;overflow:hidden;background:#fff}

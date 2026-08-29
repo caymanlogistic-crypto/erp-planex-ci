@@ -1,6 +1,8 @@
 const fs=require('fs');
 const {chromium}=require('playwright');
 const assert=(cond,msg)=>{if(!cond)throw new Error(msg)};
+const requestsUrl='https://plan-ex.ru/erpv2/company/feo/requests';
+const placementUrl='https://plan-ex.ru/erpv2/company/feo/requests/map-placement';
 const mapUrl='https://plan-ex.ru/erpv2/company/feo/requests/map';
 const utilizerUrl='https://plan-ex.ru/erpv2/company/feo/utilizers';
 const cookieName=process.env.QA_COOKIE_NAME;
@@ -16,6 +18,24 @@ async function waitForPositiveText(locator,message,{attempts=60,delayMs=250}={})
     if(attempt<attempts-1)await locator.page().waitForTimeout(delayMs);
   }
   throw new Error(message);
+}
+
+
+async function verifyFeoBodyNavigation(context,url,label){
+  const page=await context.newPage();
+  try{
+    const response=await page.goto(url,{waitUntil:'domcontentloaded',timeout:60000});
+    assert(response&&response.status()===200,`${label} page HTTP != 200`);
+    assert(await page.locator('.feo-domain-tabs').count()===0,`${label} still renders redundant .feo-domain-tabs`);
+    assert(await page.locator('nav[aria-label="Разделы заявок ФЭО"]').count()===0,`${label} still renders redundant FEO body navigation`);
+    const crumbs=page.locator('.topbar-crumbs');
+    assert(await crumbs.count()===1,`${label} breadcrumbs missing`);
+    assert(((await crumbs.innerText())||'').includes('Заявки ФЭО'),`${label} breadcrumbs lost FEO context`);
+    const feoNav=page.locator('.sidebar .nav-item.is-parent').filter({hasText:'Заявки ФЭО'});
+    assert(await feoNav.count()===1,`${label} left FEO navigation missing`);
+  } finally {
+    await page.close();
+  }
 }
 
 async function verifyMap(page,{abortTiles=false}={}){
@@ -40,6 +60,7 @@ async function verifyMap(page,{abortTiles=false}={}){
   const response=await page.goto(mapUrl,{waitUntil:'domcontentloaded',timeout:60000});
   assert(response&&response.status()===200,'map page HTTP != 200');
   assert(page.url().includes('/company/feo/requests/map'),'redirected away from map page');
+  assert(await page.locator('.feo-domain-tabs').count()===0,'map still renders redundant FEO body navigation');
   await page.locator('#feo-map-page[data-map-ready="1"]').waitFor({state:'attached',timeout:60000});
   assert(await page.locator('.leaflet-container').count()===1,'Leaflet container missing');
   assert(assets.mapCss===200,'feo-map.css not loaded 200');
@@ -102,6 +123,7 @@ async function verifyMap(page,{abortTiles=false}={}){
 async function verifyOwnerAdmin(browser){
   const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
   await context.addCookies([{name:cookieName,value:ownerSid,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
+  for(const [url,label] of [[requestsUrl,'all requests'],[placementUrl,'map placement'],[mapUrl,'map']]) await verifyFeoBodyNavigation(context,url,label);
   const page=await context.newPage();
   const consoleErrors=[],pageErrors=[],assets={};
   page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
@@ -118,12 +140,29 @@ async function verifyOwnerAdmin(browser){
   assert(assets.utilizerJs===200,'feo-utilizers.js not loaded 200');
   const body=(await page.locator('body').innerText()).trim();
   ['Master-data','Override имеет','rules/aliases'].forEach(term=>assert(!body.includes(term),'developer term remains visible: '+term));
-  const active=await page.locator('.feo-domain-tabs a.is-active').innerText();
-  assert(active.trim()==='Утилизаторы','Utilizers tab is not active');
+  assert(await page.locator('.feo-domain-tabs').count()===0,'utilizers still renders redundant .feo-domain-tabs');
+  assert(await page.locator('nav[aria-label="Разделы заявок ФЭО"]').count()===0,'utilizers still renders redundant FEO body navigation');
+  const shell=page.locator('.workspace-shell-1690.feo-utilizer-page');
+  assert(await shell.count()===1,'utilizers must reuse canonical workspace-shell-1690');
+  const contentBox=await page.locator('main.content').boundingBox();
+  const shellBox=await shell.boundingBox();
+  assert(contentBox&&shellBox,'utilizer canonical shell geometry unavailable');
+  assert(shellBox.width<=1690.5,'utilizer canonical shell exceeds 1690px contract');
+  assert(shellBox.width<=contentBox.width-8,'utilizer canonical shell does not preserve outer ERP gutters');
+  const leftGap=shellBox.x-contentBox.x, rightGap=(contentBox.x+contentBox.width)-(shellBox.x+shellBox.width);
+  assert(Math.abs(leftGap-rightGap)<=2,'utilizer canonical shell is not centered in ERP content');
+  assert(await shell.locator('.page-head .page-head-actions').getByRole('button',{name:'Добавить утилизатора'}).count()===1,'Add utilizer action is not aligned inside standard page header');
   assert(await page.locator('[data-feo-utilizer-grid].table-card--standard').count()===1,'standard utilizer registry missing');
   assert(await page.locator('.feo-util-item').count()===0,'legacy utilizer cards remain visible');
   const rows=page.locator('[data-feo-utilizer-grid] tbody tr[data-feo-utilizer-id]');
   assert(await rows.count()===8,'expected 8 seeded utilizer rows');
+  for(const grid of ['[data-feo-utilizer-grid]','[data-feo-utilizer-rules]','[data-feo-utilizer-overrides]']){
+    const box=await page.locator(grid).boundingBox();
+    assert(box&&box.x>=shellBox.x-1&&box.x+box.width<=shellBox.x+shellBox.width+1,`${grid} escapes canonical utilizer content shell`);
+  }
+  const tableScroll=page.locator('[data-feo-utilizer-grid] .table-scroll');
+  const overflowX=await tableScroll.evaluate(el=>getComputedStyle(el).overflowX);
+  assert(overflowX==='auto'||overflowX==='scroll','utilizer table horizontal overflow is not owned by .table-scroll');
 
   const search=page.locator('[data-feo-utilizer-grid] .toolbar-search');
   const firstName=(await rows.first().locator('.cell-main').innerText()).trim();
@@ -185,13 +224,14 @@ async function verifyOwnerAdmin(browser){
 
   await page.screenshot({path:'artifacts/feo-utilizers-owner-production.png',fullPage:true});
   await page.setViewportSize({width:800,height:1000});
+  const narrowShellBox=await shell.boundingBox();
   const scrollBox=await page.locator('[data-feo-utilizer-grid] .table-scroll').boundingBox();
-  assert(scrollBox&&scrollBox.width<=800,'responsive utilizer registry overflows viewport shell');
+  assert(narrowShellBox&&scrollBox&&scrollBox.x>=narrowShellBox.x-1&&scrollBox.x+scrollBox.width<=narrowShellBox.x+narrowShellBox.width+1,'utilizer table scroll escapes canonical content shell');
   await page.screenshot({path:'artifacts/feo-utilizers-owner-800px.png',fullPage:true});
   assert(pageErrors.length===0,'owner admin page errors: '+pageErrors.join(' | '));
   assert(consoleErrors.length===0,'owner admin console errors: '+consoleErrors.join(' | '));
   await context.close();
-  return {utilizerRows:8,activeTab:active.trim(),search:true,doubleClick:true,viewEdit:true,createModal:true,rules:true,overrides:true,typedDeleteConfirm:true,assets,consoleErrors,pageErrors};
+  return {utilizerRows:8,redundantBodyNavigation:false,canonicalWorkspaceShell:true,internalTableScroll:true,search:true,doubleClick:true,viewEdit:true,createModal:true,rules:true,overrides:true,typedDeleteConfirm:true,assets,consoleErrors,pageErrors};
 }
 
 (async()=>{
@@ -217,7 +257,7 @@ async function verifyOwnerAdmin(browser){
   await resilienceContext.close();
 
   const ownerAdmin=await verifyOwnerAdmin(browser);
-  const summary={mapUrl,utilizerUrl,sourceSha:process.env.SOURCE_SHA,live,resilience,ownerAdmin,note:'Real authenticated production Stage 1 QA. Map runtime remains read-only and unchanged by the utilizer UX refactor. Logist map access and owner-only utilizer RBAC are checked; owner utilizer registry/modal/search/rules/overrides are exercised without submitting business-data mutations.'};
+  const summary={requestsUrl,placementUrl,mapUrl,utilizerUrl,sourceSha:process.env.SOURCE_SHA,live,resilience,ownerAdmin,note:'Real authenticated production Stage 1 QA. All four FEO body pages are checked for redundant navigation removal and preserved breadcrumbs/left navigation. Map runtime remains read-only. Owner utilizer canonical workspace geometry, internal table scroll, registry/modal/search/rules/overrides are exercised without submitting business-data mutations.'};
   fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));
   console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} utilizers=${ownerAdmin.utilizerRows}`);
   await browser.close();
