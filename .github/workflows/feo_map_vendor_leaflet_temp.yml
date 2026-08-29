@@ -1,0 +1,48 @@
+name: Temporary FEO Leaflet Vendor Import
+
+on:
+  push:
+    branches:
+      - chatgpt/feo-map-local-leaflet
+
+permissions:
+  contents: write
+
+jobs:
+  vendor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Download official Leaflet 1.9.4 release
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error \
+            https://github.com/Leaflet/Leaflet/releases/download/v1.9.4/leaflet.zip \
+            -o /tmp/leaflet.zip
+          rm -rf /tmp/leaflet-dist
+          mkdir -p /tmp/leaflet-dist
+          unzip -q /tmp/leaflet.zip -d /tmp/leaflet-dist
+          test -f /tmp/leaflet-dist/dist/leaflet.js
+          test -f /tmp/leaflet-dist/dist/leaflet.css
+
+      - name: Verify official dist bytes
+        run: |
+          set -euo pipefail
+          echo 'db49d009c841f5ca34a888c96511ae936fd9f5533e90d8b2c4d57596f4e5641a  /tmp/leaflet-dist/dist/leaflet.js' | sha256sum -c -
+          echo 'a7837102824184820dfa198d1ebcd109ff6d0ff9a2672a074b9a1b4d147d04c6  /tmp/leaflet-dist/dist/leaflet.css' | sha256sum -c -
+
+      - name: Vendor Leaflet locally and remove temporary workflow
+        run: |
+          set -euo pipefail
+          mkdir -p public/assets/vendor/leaflet/1.9.4
+          cp /tmp/leaflet-dist/dist/leaflet.js public/assets/vendor/leaflet/1.9.4/leaflet.js
+          cp /tmp/leaflet-dist/dist/leaflet.css public/assets/vendor/leaflet/1.9.4/leaflet.css
+          git rm .github/workflows/feo_map_vendor_leaflet_temp.yml
+          git add public/assets/vendor/leaflet/1.9.4/leaflet.js public/assets/vendor/leaflet/1.9.4/leaflet.css
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Vendor Leaflet 1.9.4 for FEO map CSP compatibility'
+          git push origin HEAD:${GITHUB_REF_NAME}
