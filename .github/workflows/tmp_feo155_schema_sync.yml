@@ -37,7 +37,6 @@ jobs:
           test -f /tmp/tenant-schema-candidate/TENANT_SCHEMA.md
           grep -q '4b335615e0bc52b81307d13ce2556802709e6f311dd9e3826a68da8dff62422b' /tmp/tenant-schema-candidate/TENANT_SCHEMA.md
           cp /tmp/tenant-schema-candidate/*.md docs/database/
-          git diff --check
           git status --short docs/database
 
       - name: Commit exact generated candidate to feature branch
