@@ -213,6 +213,8 @@ final class FeoMapTileService
                 'method'=>'GET',
                 'timeout'=>10,
                 'ignore_errors'=>true,
+                'follow_location'=>0,
+                'max_redirects'=>0,
                 'header'=>$headerText,
             ]]);
             $body = @file_get_contents($url, false, $context);
