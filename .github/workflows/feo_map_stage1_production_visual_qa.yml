@@ -119,6 +119,9 @@ jobs:
           rm -f "$HOME/.ssh/key"
           [ "$STATUS" -eq 0 ] && echo 'QA_SESSION_CLEANUP=PASS' | tee -a artifacts/qa-session-cleanup.txt
           exit "$STATUS"
+      - name: Sanitize production evidence
+        if: always()
+        run: node .github/feo-map-stage1/sanitize_artifacts.js artifacts
       - name: Upload real production Stage 1 evidence
         if: always()
         uses: actions/upload-artifact@v4
