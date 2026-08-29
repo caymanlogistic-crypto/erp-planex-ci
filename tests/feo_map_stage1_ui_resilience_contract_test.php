@@ -15,8 +15,9 @@ $view = $read('app/View/pages/company_feo_map.php');
 $js = $read('public/assets/js/feo-map.js');
 $qa = $read('.github/feo-map-stage1/production_visual.js');
 
-$must(str_contains($view, "/assets/vendor/leaflet/1.9.4/leaflet.js"), 'same-origin Leaflet JS source missing');
-$must(str_contains($view, "/assets/vendor/leaflet/1.9.4/leaflet.css"), 'same-origin Leaflet CSS source missing');
+$must(str_contains($view, "/assets/third-party/leaflet/1.9.4/leaflet.js"), 'same-origin Leaflet JS source missing');
+$must(str_contains($view, "/assets/third-party/leaflet/1.9.4/leaflet.css"), 'same-origin Leaflet CSS source missing');
+$must(!str_contains($view, '/assets/vendor/'), 'deploy-blocked vendor asset path must not return');
 $must(!str_contains($view, 'cdn.jsdelivr.net'), 'Stage 1 map must not depend on jsDelivr under production CSP');
 $must(!str_contains($view, 'unpkg.com'), 'Stage 1 map must not depend on unpkg under production CSP');
 $must(!str_contains($view, 'loadLeaflet('), 'obsolete CDN Leaflet fallback loader must be removed');
