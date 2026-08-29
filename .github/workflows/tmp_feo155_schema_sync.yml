@@ -1,0 +1,56 @@
+name: TEMP FEO155 Schema Sync
+
+on:
+  push:
+    branches:
+      - ops/feo155-schema-sync-20260829
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Checkout target feature branch
+        uses: actions/checkout@v4
+        with:
+          ref: critical/feo-utilizer-alias-simplification-20260829
+          fetch-depth: 1
+
+      - name: Download exact schema candidate artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: tenant-schema-docs-candidate
+          path: /tmp/tenant-schema-candidate
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 33272591725
+
+      - name: Verify and sync generated schema docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find /tmp/tenant-schema-candidate -maxdepth 1 -type f -name '*.md' | wc -l)" -eq 16
+          test -f /tmp/tenant-schema-candidate/TENANT_SCHEMA.md
+          grep -q '4b335615e0bc52b81307d13ce2556802709e6f311dd9e3826a68da8dff62422b' /tmp/tenant-schema-candidate/TENANT_SCHEMA.md
+          cp /tmp/tenant-schema-candidate/*.md docs/database/
+          git diff --check
+          git status --short docs/database
+
+      - name: Commit exact generated candidate to feature branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add docs/database/*.md
+          if git diff --cached --quiet; then
+            echo 'SCHEMA_SYNC_NO_CHANGES=YES'
+            exit 0
+          fi
+          git commit -m 'Sync tenant schema docs for migration 126'
+          git push origin HEAD:critical/feo-utilizer-alias-simplification-20260829
+          echo 'SCHEMA_SYNC_PUSH=PASS'
