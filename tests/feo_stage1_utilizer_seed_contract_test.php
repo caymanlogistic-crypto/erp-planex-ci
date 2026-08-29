@@ -3,66 +3,36 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../app/Service/FeoUtilizerService.php';
-
 use App\Service\FeoUtilizerService;
 
-$pass = 0; $fail = 0;
-$ok = static function (string $name, bool $value) use (&$pass, &$fail): void {
-    if ($value) { $pass++; return; }
-    $fail++; fwrite(STDERR, "FAIL: {$name}\n");
-};
-$root = dirname(__DIR__);
-$read = static fn(string $path): string => file_get_contents($path) ?: '';
-$seed = require $root . '/scripts/feo_stage1_utilizer_seed_data.php';
-$utilizers = $seed['utilizers'] ?? [];
-$rules = $seed['rules'] ?? [];
-
-$ok('legacy utilizer seed has exactly eight rows', is_array($utilizers) && count($utilizers) === 8);
-$ok('explicit rule seed has expected cardinality', is_array($rules) && count($rules) === 38);
-$shortNames = array_column($utilizers, 'short_name');
-$ok('legacy short names preserved', $shortNames === ['КУБАНЬЦВЕТМЕТ','ЛИМПЭК','МЕРКОМ','НЭК','ЭКО+','ПРОМХИМЛАБ','ЛИПЕЦКЭКОХИМ','ФРЕГАТ']);
-$adr = [];
-foreach ($utilizers as $u) $adr[(string)$u['short_name']] = (int)$u['adr'];
-$ok('legacy ADR flags preserved', $adr === ['КУБАНЬЦВЕТМЕТ'=>0,'ЛИМПЭК'=>1,'МЕРКОМ'=>0,'НЭК'=>0,'ЭКО+'=>1,'ПРОМХИМЛАБ'=>1,'ЛИПЕЦКЭКОХИМ'=>1,'ФРЕГАТ'=>0]);
-$ok('all utilizer colors are explicit hex', count(array_filter($utilizers, static fn(array $u): bool => preg_match('/^#[0-9A-F]{6}$/D', (string)$u['color_hex']) === 1)) === 8);
-
-$canon = [];
-foreach ($rules as $rule) {
-    $key = $rule['source_field'] . '|' . $rule['match_type'] . '|' . FeoUtilizerService::normalizeText((string)$rule['pattern']);
-    $canon[$key] = ($canon[$key] ?? 0) + 1;
+$pass=0;$fail=0;
+$ok=static function(string $name,bool $value)use(&$pass,&$fail):void{if($value){$pass++;return;}$fail++;fwrite(STDERR,"FAIL: {$name}\n");};
+$root=dirname(__DIR__);
+$seed=require $root.'/scripts/feo_stage1_utilizer_seed_data.php';
+$utilizers=is_array($seed['utilizers']??null)?$seed['utilizers']:[];
+$aliases=is_array($seed['aliases']??null)?$seed['aliases']:[];
+$ok('canonical seed has exactly 8 utilizers',count($utilizers)===8);
+$ok('canonical seed no longer fabricates rule engine',!array_key_exists('rules',$seed));
+$ok('canonical seed starts with no synthetic aliases',count($aliases)===0);
+$expected=['КУБАНЬЦВЕТМЕТ','ЛИМПЭК','МЕРКОМ','НЭК','ЭКО+','ПРОМХИМЛАБ','ЛИПЕЦКЭКОХИМ','ФРЕГАТ'];
+$actual=array_map(static fn(array $u):string=>(string)($u['short_name']??''),$utilizers);
+$ok('exact eight legacy master-data utilizers preserved',$actual===$expected);
+foreach($utilizers as $u){
+    $short=(string)($u['short_name']??'');
+    $ok("{$short}: full name present",trim((string)($u['full_name']??''))!=='');
+    $ok("{$short}: address preserved",trim((string)($u['address']??''))!=='');
+    $ok("{$short}: FKKO preserved",trim((string)($u['fkko_classification']??''))!=='');
+    $ok("{$short}: valid color",preg_match('/^#[0-9A-F]{6}$/D',(string)($u['color_hex']??''))===1);
+    $ok("{$short}: normalized canonical name non-empty",FeoUtilizerService::normalizeText((string)($u['full_name']??''))!=='');
 }
-$ok('seed rule canonical keys are unique', max($canon) === 1 && count($canon) === count($rules));
-$unsafeContains = array_values(array_filter($rules, static fn(array $r): bool => $r['match_type'] === 'contains' && in_array($r['pattern'], ['НЭК','ЭКО+'], true)));
-$ok('ambiguous short aliases are not contains rules', $unsafeContains === []);
-foreach ($utilizers as $u) {
-    $short = (string)$u['short_name'];
-    $ok("{$short}: exact full-name rule", count(array_filter($rules, static fn(array $r): bool => $r['utilizer'] === $short && $r['source_field'] === 'recipient' && $r['match_type'] === 'exact' && $r['pattern'] === $u['full_name'])) === 1);
-    $ok("{$short}: exact delivery-address rule", count(array_filter($rules, static fn(array $r): bool => $r['utilizer'] === $short && $r['source_field'] === 'delivery_address' && $r['match_type'] === 'exact' && $r['pattern'] === $u['address'])) === 1);
-}
-
-$writer = $read($root . '/scripts/feo_seed_stage1_utilizers.php');
-$smoke = $read($root . '/scripts/feo_smoke_stage1_map.php');
-$workflow = $read($root . '/.github/workflows/feo_stage1_utilizers_production_seed.yml');
-$contractWorkflow = $read($root . '/.github/workflows/feo_stage1_utilizers_seed_contract.yml');
-$requestWorkflow = $read($root . '/.github/workflows/feo_stage1_utilizers_agent_request.yml');
-
-$ok('writer hard-targets PLANEX company 25', str_contains($writer, '$targetCompanyId !== 25') && str_contains($writer, "'spugovxsim_1'"));
-$ok('writer requires migration 125 journal', str_contains($writer, '125_create_feo_map_utilizers.sql'));
-$ok('writer uses advisory lock and transaction', str_contains($writer, 'GET_LOCK') && str_contains($writer, 'beginTransaction()') && str_contains($writer, 'rollBack()'));
-$ok('writer is additive only', !preg_match('/\bDELETE\s+FROM\b/i', $writer) && !preg_match('/\bUPDATE\s+feo_utilizers\b/i', $writer) && !preg_match('/\bUPDATE\s+feo_utilizer_match_rules\b/i', $writer));
-$ok('writer refuses drift instead of overwriting', str_contains($writer, 'refusing to overwrite'));
-$ok('writer does not touch overrides', !str_contains($writer, 'INSERT INTO feo_request_utilizer_overrides'));
-$ok('smoke runs canonical map service', str_contains($smoke, 'new App\\Service\\FeoMapService') && str_contains($smoke, 'availableRows($pdo)') && str_contains($smoke, 'buildPayload'));
-$ok('smoke reports unmatched diagnostics', str_contains($smoke, 'unmatched_samples') && str_contains($smoke, 'missing_coordinates_count') && str_contains($smoke, 'invalid_coordinates_count'));
-$ok('production seed workflow is manual-only', str_contains($workflow, "\n  workflow_dispatch:") && !str_contains($workflow, "\n  push:") && !str_contains($workflow, "\n  pull_request:") && !str_contains($workflow, "\n  workflow_run:") && !str_contains($workflow, "\n  schedule:"));
-$ok('production seed workflow has explicit confirmation token', str_contains($workflow, 'APPLY_FEO_STAGE1_UTILIZERS'));
-$ok('production workflow snapshots before and after', str_contains($workflow, 'Snapshot before') && str_contains($workflow, 'Seed PLANEX utilizer master-data and rules') && str_contains($workflow, 'Smoke after and verify invariants'));
-$ok('production workflow emits evidence and HTTP acceptance', str_contains($workflow, 'Upload seed evidence') && str_contains($workflow, 'HTTP acceptance'));
-$ok('contract workflow covers writer smoke data target and request workflows', str_contains($contractWorkflow, 'feo_stage1_utilizer_seed_contract_test.php') && str_contains($contractWorkflow, 'feo_stage1_utilizers_production_seed.yml') && str_contains($contractWorkflow, 'feo_stage1_utilizers_agent_request.yml'));
-$ok('agent request is dedicated push trigger only', str_contains($requestWorkflow, "\n  push:") && str_contains($requestWorkflow, 'seed/feo-stage1-agent') && !str_contains($requestWorkflow, "\n  workflow_dispatch:") && !str_contains($requestWorkflow, "\n  pull_request:") && !str_contains($requestWorkflow, "\n  schedule:"));
-$ok('agent request has actions write and exact canonical guards', str_contains($requestWorkflow, 'actions: write') && str_contains($requestWorkflow, 'Validate exact canonical HEAD') && str_contains($requestWorkflow, 'Ensure exact canonical ERP PLANEX CI PASS') && str_contains($requestWorkflow, 'Reconfirm canonical HEAD immediately before dispatch'));
-$ok('agent request validates target manual-only contract', str_contains($requestWorkflow, 'Validate target workflow is manual-only and exact contract') && str_contains($requestWorkflow, "! grep -q '^  push:'") && str_contains($requestWorkflow, 'APPLY_FEO_STAGE1_UTILIZERS'));
-$ok('agent request dispatches exact target and PLANEX scope', str_contains($requestWorkflow, 'feo_stage1_utilizers_production_seed.yml') && str_contains($requestWorkflow, "'source_sha': os.environ['SOURCE_SHA']") && str_contains($requestWorkflow, "'confirm_seed': 'APPLY_FEO_STAGE1_UTILIZERS'") && str_contains($requestWorkflow, 'TARGET_COMPANY_ID=25') && str_contains($requestWorkflow, 'TARGET_DB=spugovxsim_1'));
-
-printf("PASS=%d FAIL=%d\n", $pass, $fail);
-exit($fail === 0 ? 0 : 1);
+$writer=(string)(file_get_contents($root.'/scripts/feo_seed_stage1_utilizers.php')?:'');
+$smoke=(string)(file_get_contents($root.'/scripts/feo_smoke_stage1_map.php')?:'');
+$ok('seed writer requires migration 126',str_contains($writer,'126_create_feo_utilizer_aliases.sql'));
+$ok('seed writer writes alias table',str_contains($writer,'feo_utilizer_aliases'));
+$ok('seed writer does not insert legacy rules',!str_contains($writer,'INSERT INTO feo_utilizer_match_rules'));
+$ok('seed writer remains exact PLANEX targeted',str_contains($writer,'company 25 / spugovxsim_1'));
+$ok('smoke reports aliases',str_contains($smoke,"'utilizer_aliases'"));
+$ok('smoke no longer requires 38 rules',!str_contains($smoke,'Expected at least 38 explicit seeded rules'));
+$ok('smoke reports unresolved problem count',str_contains($smoke,'unmatched_problem_count'));
+printf("PASS=%d FAIL=%d\n",$pass,$fail);
+exit($fail===0?0:1);

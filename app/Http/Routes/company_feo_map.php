@@ -1,9 +1,8 @@
 <?php
 
-require_once base_path('app/Service/FeoUtilizerService.php');
 require_once base_path('app/Service/FeoMapService.php');
 require_once base_path('app/Service/FeoMapTileService.php');
-require_once base_path('app/Service/FeoRequestService.php');
+require_once base_path('app/Service/FeoUtilizerService.php');
 require_once base_path('app/Http/Controllers/Company/FeoMapController.php');
 require_once base_path('app/Http/Controllers/Company/FeoUtilizerController.php');
 
@@ -19,9 +18,3 @@ $router->get('/company/feo/utilizers/{id}/modal-view', [$feoUtilizerController, 
 $router->get('/company/feo/utilizers/{id}/modal-edit', [$feoUtilizerController, 'modalEditForm']);
 $router->post('/company/feo/utilizers/{id}/modal-edit', [$feoUtilizerController, 'modalEditSubmit']);
 $router->post('/company/feo/utilizers/{id}/modal-delete', [$feoUtilizerController, 'modalDelete']);
-$router->post('/company/feo/utilizers/{id}/update', [$feoUtilizerController, 'update']);
-$router->post('/company/feo/utilizers/{id}/delete', [$feoUtilizerController, 'delete']);
-$router->post('/company/feo/utilizers/rules', [$feoUtilizerController, 'createRule']);
-$router->post('/company/feo/utilizers/rules/{id}/delete', [$feoUtilizerController, 'deleteRule']);
-$router->post('/company/feo/utilizers/overrides', [$feoUtilizerController, 'setOverride']);
-$router->post('/company/feo/utilizers/overrides/{id}/delete', [$feoUtilizerController, 'deleteOverride']);

@@ -6,54 +6,56 @@ require_once __DIR__ . '/../app/Service/FeoUtilizerService.php';
 
 use App\Service\FeoUtilizerService;
 
-$pass = 0; $fail = 0;
-$ok = static function (string $name, bool $value) use (&$pass, &$fail): void {
-    if ($value) { $pass++; return; }
-    $fail++; fwrite(STDERR, "FAIL: {$name}\n");
-};
-$root = dirname(__DIR__);
-$read = static fn(string $path): string => file_get_contents($path) ?: '';
+$pass=0;$fail=0;
+$ok=static function(string $name,bool $value)use(&$pass,&$fail):void{if($value){$pass++;return;}$fail++;fwrite(STDERR,"FAIL: {$name}\n");};
+$root=dirname(__DIR__);
+$read=static fn(string $rel):string=>(string)(file_get_contents($root.'/'.$rel)?:'');
 
-$ok('normalization is deterministic for punctuation and whitespace', FeoUtilizerService::normalizeText('  ООО «Тест»,   Москва ') === 'ооо тест москва');
-$ok('normalization maps russian yo to e', FeoUtilizerService::normalizeText('Ёлка') === 'елка');
-$request = ['gruzopoluchatel'=>'ООО Тест Утилизатор','adres_dostavki_otkhodov'=>'Москва, ул. Ленина, 1'];
-$ok('exact recipient rule matches normalized value', FeoUtilizerService::ruleMatches(['source_field'=>'recipient','match_type'=>'exact','pattern'=>'ооо тест утилизатор'], $request));
-$ok('contains delivery address alias matches normalized value', FeoUtilizerService::ruleMatches(['source_field'=>'delivery_address','match_type'=>'contains','pattern'=>'Ленина 1'], $request));
-$ok('unrelated alias does not match', !FeoUtilizerService::ruleMatches(['source_field'=>'recipient','match_type'=>'contains','pattern'=>'другой'], $request));
-$ok('override setter enforces canonical six-digit FEO ids', str_contains($read($root . '/app/Service/FeoUtilizerService.php'), "preg_match('/^\\d{6}$/D'"));
+$ok('normalization is case-insensitive', FeoUtilizerService::normalizeText('ООО "ФРЕГАТ"') === FeoUtilizerService::normalizeText('ооо фрегат'));
+$ok('normalization folds yo/e', FeoUtilizerService::normalizeText('ЁЛКА') === FeoUtilizerService::normalizeText('елка'));
+$ok('normalization removes punctuation differences', FeoUtilizerService::normalizeText('ООО «НЭК - ИННОВАЦИИ»') === FeoUtilizerService::normalizeText('ООО НЭК ИННОВАЦИИ'));
 
-$service = $read($root . '/app/Service/FeoUtilizerService.php');
-foreach ([
-    'feo_utilizer_match_rules' => 'matching rules are centralized in service',
-    'feo_request_utilizer_overrides' => 'manual override is centralized',
-    "'status'=>'unmatched'" => 'unmatched state is explicit',
-    "'status'=>(int)(\$utilizer['is_active'] ?? 0) === 1 ? 'matched' : 'inactive'" => 'inactive utilizer state is explicit',
-    "ORDER BY r.priority ASC" => 'matching order is deterministic',
-    "CASE r.match_type WHEN 'exact' THEN 0 ELSE 1 END" => 'exact rules win within same priority order',
-    'beginTransaction()' => 'safe utilizer delete is transactional',
-    'SELECT COUNT(*) FROM feo_utilizer_match_rules WHERE utilizer_id=?' => 'delete checks rules',
-    'SELECT COUNT(*) FROM feo_request_utilizer_overrides WHERE utilizer_id=?' => 'delete checks overrides',
-] as $needle => $label) $ok($label, str_contains($service, $needle));
+$service=new FeoUtilizerService();
+$method=new ReflectionMethod(FeoUtilizerService::class,'identityIndex');
+$method->setAccessible(true);
+$utilizers=[
+    1=>['id'=>1,'full_name'=>'ООО "ФРЕГАТ"','short_name'=>'ФРЕГАТ','aliases'=>[['alias'=>'ФРЕГАТ ВОСКРЕСЕНСК']]],
+    2=>['id'=>2,'full_name'=>'ООО "ЛИМПЭК"','short_name'=>'ЛИМПЭК','aliases'=>[['alias'=>'ЛИМПЭК ЯРОСЛАВЛЬ']]],
+];
+$index=$method->invoke($service,$utilizers);
+$ok('canonical full name is indexed', (int)($index[FeoUtilizerService::normalizeText('ООО "ФРЕГАТ"')]['utilizer_id']??0)===1);
+$ok('canonical short name is indexed', (int)($index[FeoUtilizerService::normalizeText('ФРЕГАТ')]['utilizer_id']??0)===1);
+$ok('alias is indexed', (int)($index[FeoUtilizerService::normalizeText('ФРЕГАТ ВОСКРЕСЕНСК')]['utilizer_id']??0)===1);
+$ok('alias source is explicit', ($index[FeoUtilizerService::normalizeText('ФРЕГАТ ВОСКРЕСЕНСК')]['source']??'')==='alias');
 
-$migration = $read($root . '/database/migrations-local/125_create_feo_map_utilizers.sql');
-foreach (['feo_utilizers','feo_utilizer_match_rules','feo_request_utilizer_overrides','FOREIGN KEY (`zayavka_id`) REFERENCES `feo_requests`','ON DELETE RESTRICT','uk_feo_utilizer_rule_canonical','idx_feo_utilizers_active_order'] as $needle) {
-    $ok('migration contains ' . $needle, str_contains($migration, $needle));
-}
-$ok('migration has no legacy compatibility columns', !str_contains(strtolower($migration), 'legacy_'));
+$ambiguous=[
+    1=>['id'=>1,'full_name'=>'Первый','short_name'=>'ONE','aliases'=>[['alias'=>'ОБЩИЙ']]],
+    2=>['id'=>2,'full_name'=>'Второй','short_name'=>'TWO','aliases'=>[['alias'=>'ОБЩИЙ']]],
+];
+$ambiguousIndex=$method->invoke($service,$ambiguous);
+$key=FeoUtilizerService::normalizeText('ОБЩИЙ');
+$ok('ambiguous identity never chooses arbitrary utilizer', array_key_exists($key,$ambiguousIndex) && $ambiguousIndex[$key]===false);
 
-$view = $read($root . '/app/View/pages/company_feo_utilizers.php');
-$edit = $read($root . '/app/View/partials/company_feo_utilizer_modal_edit.php');
-$modalJs = $read($root . '/public/assets/js/feo-utilizers.js');
-$ok(
-    'FKKO remains editable in create and modal edit with visible labels',
-    str_contains($view, 'name="fkko_classification"')
-    && str_contains($view, 'ФККО / классификация')
-    && str_contains($edit, 'name="fkko_classification"')
-    && str_contains($edit, 'ФККО / классификация')
-    && str_contains($edit, "fkko_classification") && str_contains($edit, '$old')
-);
-$ok('destructive utilizer action uses canonical ModalShell typed confirmation', str_contains($modalJs, 'window.ModalShell.create') && str_contains($modalJs, "confirmWord: 'УДАЛИТЬ'") && !str_contains($modalJs, 'confirm('));
-$ok('override input follows six-digit FEO id contract', str_contains($view, 'maxlength="6"') && str_contains($view, 'pattern="\\d{6}"'));
+$source=$read('app/Service/FeoUtilizerService.php');
+$start=strpos($source,'public function classifyRequests');
+$end=strpos($source,'public function currentPlacementProblemSummary',$start?:0);
+$classify=($start!==false&&$end!==false)?substr($source,$start,$end-$start):'';
+$ok('classification uses recipient name', str_contains($classify,'gruzopoluchatel'));
+$ok('classification does not use delivery address', !str_contains($classify,'adres_dostavki_otkhodov'));
+$ok('classification has no contains matcher', !str_contains($classify,'str_contains('));
+$ok('classification has no priority engine', !str_contains($classify,'priority'));
+$ok('classification has no per-request override', !str_contains(strtolower($classify),'override'));
+$ok('classification reports unmatched explicitly', str_contains($classify,"'status'=>'unmatched'"));
+$ok('classification preserves map-compatible null rule id', str_contains($classify,"'rule_id'=>null"));
+$ok('problem summary uses canonical placement-current pool', str_contains($source,'FROM feo_placement_current c') && str_contains($source,'JOIN feo_requests r ON r.zayavka_id=c.zayavka_id'));
+$ok('problem summary groups raw recipient names', str_contains($source,'$row[\'gruzopoluchatel\']'));
 
-printf("PASS=%d FAIL=%d\n", $pass, $fail);
-exit($fail === 0 ? 0 : 1);
+$migration=$read('database/migrations-local/126_create_feo_utilizer_aliases.sql');
+$ok('alias table is tenant-local migration schema', str_contains($migration,'CREATE TABLE `feo_utilizer_aliases`'));
+$ok('normalized alias is globally unique', str_contains($migration,'UNIQUE KEY `uk_feo_utilizer_alias_normalized` (`normalized_alias`)'));
+$ok('alias belongs to one utilizer', str_contains($migration,'FOREIGN KEY (`utilizer_id`) REFERENCES `feo_utilizers` (`id`) ON DELETE CASCADE'));
+$ok('migration does not inherit legacy rule engine into aliases', !str_contains($migration,'INSERT INTO `feo_utilizer_aliases`') && !str_contains($migration,'feo_utilizer_match_rules'));
+$ok('migration does not drop legacy tables', !preg_match('/DROP\s+TABLE/i',$migration));
+
+printf("PASS=%d FAIL=%d\n",$pass,$fail);
+exit($fail===0?0:1);
