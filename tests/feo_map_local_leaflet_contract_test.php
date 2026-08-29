@@ -4,9 +4,9 @@ declare(strict_types=1);
 
 $root = dirname(__DIR__);
 $viewPath = $root . '/app/View/pages/company_feo_map.php';
-$jsPath = $root . '/public/assets/vendor/leaflet/1.9.4/leaflet.js';
-$cssPath = $root . '/public/assets/vendor/leaflet/1.9.4/leaflet.css';
-$sourcePath = $root . '/public/assets/vendor/leaflet/1.9.4/SOURCE.txt';
+$jsPath = $root . '/public/assets/third-party/leaflet/1.9.4/leaflet.js';
+$cssPath = $root . '/public/assets/third-party/leaflet/1.9.4/leaflet.css';
+$sourcePath = $root . '/public/assets/third-party/leaflet/1.9.4/SOURCE.txt';
 
 function assertTrue(bool $condition, string $message): void
 {
@@ -28,8 +28,9 @@ assertTrue(is_string($view), 'cannot read map view');
 assertTrue(is_string($source), 'cannot read Leaflet source manifest');
 assertTrue(is_string($leafletJs), 'cannot read vendored Leaflet JS');
 
-assertTrue(str_contains($view, '/assets/vendor/leaflet/1.9.4/leaflet.css'), 'map must load local Leaflet CSS');
-assertTrue(str_contains($view, '/assets/vendor/leaflet/1.9.4/leaflet.js'), 'map must load local Leaflet JS');
+assertTrue(str_contains($view, '/assets/third-party/leaflet/1.9.4/leaflet.css'), 'map must load local Leaflet CSS');
+assertTrue(str_contains($view, '/assets/third-party/leaflet/1.9.4/leaflet.js'), 'map must load local Leaflet JS');
+assertTrue(!str_contains($view, '/assets/vendor/'), 'deploy-blocked vendor asset path must not return');
 assertTrue(!str_contains($view, 'cdn.jsdelivr.net'), 'map must not depend on jsDelivr');
 assertTrue(!str_contains($view, 'unpkg.com'), 'map must not depend on unpkg');
 assertTrue(!str_contains($view, 'data-fallback-href'), 'obsolete CDN fallback loader must be removed');
@@ -40,4 +41,4 @@ assertTrue(str_contains($source, 'Leaflet 1.9.4'), 'source manifest must pin Lea
 assertTrue(str_contains($source, 'https://github.com/Leaflet/Leaflet/releases/download/v1.9.4/leaflet.zip'), 'source manifest must identify official Leaflet release');
 assertTrue(str_contains($leafletJs, 'Leaflet 1.9.4'), 'vendored JS must identify Leaflet 1.9.4');
 
-echo "PASS: FEO map uses pinned same-origin Leaflet 1.9.4 assets.\n";
+echo "PASS: FEO map uses pinned same-origin Leaflet 1.9.4 assets from a deploy-safe path.\n";
