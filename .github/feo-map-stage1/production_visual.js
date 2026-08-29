@@ -140,6 +140,7 @@ async function verifyOwnerAdmin(browser){
   await rows.first().dblclick();
   const viewModal=page.locator('#feo-utilizer-view-modal.is-open');
   await viewModal.waitFor({state:'visible',timeout:15000});
+  await viewModal.locator('[data-feo-utilizer-edit-btn]').waitFor({state:'visible',timeout:15000});
   const viewText=(await viewModal.innerText()).trim();
   ['Полное название','Адрес','Координаты','ФККО / классификация','ADR','Цвет','Статус','Порядок','ID'].forEach(label=>assert(viewText.includes(label),'view modal missing field '+label));
   await viewModal.locator('[data-feo-utilizer-edit-btn]').click();
