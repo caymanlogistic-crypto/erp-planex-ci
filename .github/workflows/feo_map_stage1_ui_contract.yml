@@ -6,7 +6,7 @@ on:
       - 'app/View/pages/company_feo_map.php'
       - 'public/assets/js/feo-map.js'
       - 'public/assets/css/feo-map.css'
-      - 'public/assets/vendor/leaflet/1.9.4/**'
+      - 'public/assets/third-party/leaflet/1.9.4/**'
       - 'app/View/pages/company_feo_utilizers.php'
       - 'app/Http/Controllers/Company/FeoUtilizerController.php'
       - 'tests/feo_map_stage1_ui_resilience_contract_test.php'
