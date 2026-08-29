@@ -162,6 +162,17 @@ final class FeoRequestCostEditService
         $rows=[];
         foreach (array_chunk($ids,self::CHUNK) as $chunk) {
             if ($chunk===[]) continue;
+            if ($forUpdate) {
+                $lockIds=$chunk;
+                sort($lockIds,SORT_STRING);
+                $marks=implode(',',array_fill(0,count($lockIds),'?'));
+                $q=$pdo->prepare("SELECT zayavka_id FROM feo_requests WHERE zayavka_id IN ({$marks}) ORDER BY zayavka_id FOR UPDATE");
+                $q->execute($lockIds);
+                $q->fetchAll(PDO::FETCH_ASSOC);
+                $q=$pdo->prepare("SELECT zayavka_id FROM feo_placement_current WHERE zayavka_id IN ({$marks}) ORDER BY zayavka_id FOR UPDATE");
+                $q->execute($lockIds);
+                $q->fetchAll(PDO::FETCH_ASSOC);
+            }
             $marks=implode(',',array_fill(0,count($chunk),'?'));
             $sql="SELECT c.zayavka_id,ROUND(COALESCE(r.mass_netto,0)*1000,3) mass_kg FROM feo_placement_current c JOIN feo_requests r ON r.zayavka_id=c.zayavka_id WHERE c.zayavka_id IN ({$marks})" . ($forUpdate ? ' FOR UPDATE' : '');
             $q=$pdo->prepare($sql);$q->execute($chunk);
