@@ -42,7 +42,12 @@ foreach (['feo_utilizers','feo_utilizer_match_rules','feo_request_utilizer_overr
 $ok('migration has no legacy compatibility columns', !str_contains(strtolower($migration), 'legacy_'));
 
 $view = $read($root . '/app/View/pages/company_feo_utilizers.php');
-$ok('FKKO is editable during utilizer update', substr_count($view, 'name="fkko_classification"') >= 2 && str_contains($view, 'title="ФККО / классификация"'));
+$ok(
+    'FKKO is editable in create and update with a permanent visible label and preserved edit value',
+    substr_count($view, 'name="fkko_classification"') >= 2
+    && substr_count($view, '<span>ФККО / классификация</span>') >= 2
+    && str_contains($view, '($u[\'fkko_classification\'] ?? \'\')')
+);
 $ok('destructive utilizer actions use ERP modal confirmation metadata', str_contains($view, 'id="feo-utilizer-confirm-modal"') && str_contains($view, 'data-utilizer-confirm') && !str_contains($view, 'confirm('));
 $ok('override input follows six-digit FEO id contract', str_contains($view, 'maxlength="6"') && str_contains($view, 'pattern="[0-9]{6}"'));
 
