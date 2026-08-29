@@ -70,6 +70,12 @@ $must(!str_contains($qa, 'leaflet@1.9.4'), 'production QA must not recognize obs
 $must(str_contains($qa, "**/company/feo/requests/map/tiles/**"), 'tile outage QA must block same-origin proxy path');
 $must(str_contains($qa, 'externalTileRequests.length===0'), 'production QA must forbid direct browser OSM traffic');
 $must(str_contains($qa, 'same-origin map tile HTTP != 200'), 'production QA must require a successful proxied tile');
+$must(str_contains($qa, 'blockedTileRequests>=3'), 'resilience QA must prove that same-origin tile requests were actually intercepted');
+$must(str_contains($qa, 'const liveContext=await browser.newContext'), 'normal production pass needs an isolated browser context');
+$must(str_contains($qa, 'const resilienceContext=await browser.newContext'), 'resilience pass needs a fresh browser context');
+$liveClose = strpos($qa, 'await liveContext.close();');
+$resilienceContext = strpos($qa, 'const resilienceContext=await browser.newContext');
+$must($liveClose !== false && $resilienceContext !== false && $liveClose < $resilienceContext, 'resilience context must be created only after the live context/cache is closed');
 
 // Marker presentation is LOCKED. These assertions protect the accepted marker contract.
 $must(str_contains($js, "classes = ['feo-marker']"), 'locked marker class changed');
