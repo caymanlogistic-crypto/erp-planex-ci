@@ -6,10 +6,10 @@ $missingCount = (int)($diag['missing_coordinates_count'] ?? 0);
 $invalidCount = (int)($diag['invalid_coordinates_count'] ?? 0);
 $unmatchedCount = (int)($diag['unmatched_utilizer_count'] ?? 0);
 $inactiveCount = (int)($diag['inactive_utilizer_count'] ?? 0);
-$leafletCssPath = 'public/assets/vendor/leaflet/1.9.4/leaflet.css';
-$leafletJsPath = 'public/assets/vendor/leaflet/1.9.4/leaflet.js';
-$leafletCssUrl = app_url('/assets/vendor/leaflet/1.9.4/leaflet.css') . '?v=' . filemtime(base_path($leafletCssPath));
-$leafletJsUrl = app_url('/assets/vendor/leaflet/1.9.4/leaflet.js') . '?v=' . filemtime(base_path($leafletJsPath));
+$leafletCssPath = 'public/assets/third-party/leaflet/1.9.4/leaflet.css';
+$leafletJsPath = 'public/assets/third-party/leaflet/1.9.4/leaflet.js';
+$leafletCssUrl = app_url('/assets/third-party/leaflet/1.9.4/leaflet.css') . '?v=' . filemtime(base_path($leafletCssPath));
+$leafletJsUrl = app_url('/assets/third-party/leaflet/1.9.4/leaflet.js') . '?v=' . filemtime(base_path($leafletJsPath));
 $mapJsUrl = app_url('/assets/js/feo-map.js') . '?v=' . filemtime(base_path('public/assets/js/feo-map.js'));
 ?>
 <link rel="stylesheet" href="<?= e($leafletCssUrl) ?>">
