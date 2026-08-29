@@ -30,8 +30,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "f629c06b535803e28413faff6ed6ef44f2b4a519",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/f629c06b535803e28413faff6ed6ef44f2b4a519/app/Service/FinanceMatchingRuleService.php",
+      "verified_sha": "44f5c61e720572d36958f5e710d324e4fd7558ea",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/44f5c61e720572d36958f5e710d324e4fd7558ea/app/Service/FinanceMatchingRuleService.php",
       "owning_paths": ["app/Service/FinanceMatchingRule*.php", "app/Http/Controllers/Company/BankFinanceActions/**", "database/migrations-local/055_create_finance_matching_rules.sql", "tests/finance_*matching*"],
       "navigation": "active",
       "machine_ownership_id": "finance.matching"
