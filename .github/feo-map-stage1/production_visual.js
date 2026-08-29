@@ -86,6 +86,8 @@ async function verifyMap(page,{abortTiles=false}={}){
   }
   const bodyText=await page.locator('body').innerText();
   assert(!bodyText.includes('Fatal error'),'PHP fatal visible');
+  const ownerOnlyPage=await page.request.get(utilizerUrl);
+  assert(ownerOnlyPage.status()===403,'logist utilizer registry must return 403');
   const roleResponse=await page.request.post('https://plan-ex.ru/erpv2/company/feo/utilizers',{
     headers:{'X-CSRF-TOKEN':csrf},
     form:{full_name:'QA MUST NOT WRITE',short_name:'QA-NO-WRITE',color_hex:'#000000'}
@@ -101,30 +103,91 @@ async function verifyOwnerAdmin(browser){
   const context=await browser.newContext({viewport:{width:1440,height:1000},deviceScaleFactor:1});
   await context.addCookies([{name:cookieName,value:ownerSid,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
   const page=await context.newPage();
-  const consoleErrors=[],pageErrors=[];
+  const consoleErrors=[],pageErrors=[],assets={};
   page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
   page.on('pageerror',e=>pageErrors.push(String(e)));
+  page.on('response',r=>{
+    const u=r.url();
+    if(u.includes('/assets/css/feo-utilizers.css'))assets.utilizerCss=r.status();
+    if(u.includes('/assets/js/feo-utilizers.js'))assets.utilizerJs=r.status();
+  });
   const response=await page.goto(utilizerUrl,{waitUntil:'networkidle',timeout:60000});
   assert(response&&response.status()===200,'owner utilizer page HTTP != 200');
   await page.locator('[data-feo-utilizer-page-ready]').waitFor({state:'attached',timeout:60000});
+  assert(assets.utilizerCss===200,'feo-utilizers.css not loaded 200');
+  assert(assets.utilizerJs===200,'feo-utilizers.js not loaded 200');
   const body=(await page.locator('body').innerText()).trim();
   ['Master-data','Override имеет','rules/aliases'].forEach(term=>assert(!body.includes(term),'developer term remains visible: '+term));
   const active=await page.locator('.feo-domain-tabs a.is-active').innerText();
   assert(active.trim()==='Утилизаторы','Utilizers tab is not active');
-  assert(await page.locator('input[type="color"][name="color_hex"]').count()>0,'color picker missing');
-  assert(await page.locator('.feo-util-item .feo-field > span').count()>=8,'visible edit labels missing');
-  assert(await page.locator('.feo-util-item').count()===8,'expected 8 seeded utilizer cards');
+  assert(await page.locator('[data-feo-utilizer-grid].table-card--standard').count()===1,'standard utilizer registry missing');
+  assert(await page.locator('.feo-util-item').count()===0,'legacy utilizer cards remain visible');
+  const rows=page.locator('[data-feo-utilizer-grid] tbody tr[data-feo-utilizer-id]');
+  assert(await rows.count()===8,'expected 8 seeded utilizer rows');
+
+  const search=page.locator('[data-feo-utilizer-grid] .toolbar-search');
+  const firstId=(await rows.first().locator('td').first().innerText()).trim();
+  await search.fill(firstId);
+  await page.waitForTimeout(100);
+  assert(await page.locator('[data-feo-utilizer-grid] tbody tr[data-feo-utilizer-id]:visible').count()===1,'utilizer registry search did not narrow to one row');
+  await search.fill('');
+  await page.waitForTimeout(100);
+  assert(await page.locator('[data-feo-utilizer-grid] tbody tr[data-feo-utilizer-id]:visible').count()===8,'utilizer registry search did not restore all rows');
+
+  await rows.first().dblclick();
+  const viewModal=page.locator('#feo-utilizer-view-modal.is-open');
+  await viewModal.waitFor({state:'visible',timeout:15000});
+  const viewText=(await viewModal.innerText()).trim();
+  ['Полное название','Адрес','Координаты','ФККО / классификация','ADR','Цвет','Статус','Порядок','ID'].forEach(label=>assert(viewText.includes(label),'view modal missing field '+label));
+  await viewModal.locator('[data-feo-utilizer-edit-btn]').click();
+  const editForm=viewModal.locator('[data-feo-utilizer-edit-form]');
+  await editForm.waitFor({state:'visible',timeout:15000});
+  for(const name of ['full_name','short_name','address','latitude','longitude','fkko_classification','color_hex','adr','is_active','sort_order']){
+    assert(await editForm.locator(`[name="${name}"]`).count()===1,'edit modal missing '+name);
+  }
+  await viewModal.locator('[data-feo-utilizer-cancel-edit-btn]').click();
+  await viewModal.locator('[data-feo-utilizer-edit-btn]').waitFor({state:'visible',timeout:15000});
+  await viewModal.locator('[data-feo-utilizer-delete-btn]').click();
+  const deleteConfirm=page.locator('#feo-utilizer-delete-confirm-modal.is-open');
+  await deleteConfirm.waitFor({state:'visible',timeout:5000});
+  assert(await deleteConfirm.locator('[data-confirm-input]').count()===1,'typed delete confirmation input missing');
+  assert(await deleteConfirm.locator('[data-confirm-action]').isDisabled(),'delete action must stay disabled before typed confirmation');
+  await deleteConfirm.locator('[data-confirm-cancel]').click();
+  assert(await page.locator('#feo-utilizer-delete-confirm-modal.is-open').count()===0,'delete confirmation did not close without mutation');
+  await viewModal.locator('[data-feo-utilizer-close-btn]').click();
+
+  await page.getByRole('button',{name:'Добавить утилизатора'}).click();
+  const createModal=page.locator('#feo-utilizer-create-modal.is-open');
+  await createModal.waitFor({state:'visible'});
+  for(const name of ['full_name','short_name','address','latitude','longitude','fkko_classification','color_hex','adr','is_active','sort_order']){
+    assert(await createModal.locator(`[name="${name}"]`).count()===1,'create modal missing '+name);
+  }
+  await createModal.locator('.modal-close').click();
+
+  assert(await page.locator('[data-feo-utilizer-rules].table-card--standard').count()===1,'rules standard registry missing');
+  await page.getByRole('button',{name:'Добавить правило'}).click();
+  const ruleModal=page.locator('#feo-utilizer-rule-modal.is-open');
+  await ruleModal.waitFor({state:'visible'});
+  for(const name of ['utilizer_id','source_field','match_type','pattern','priority','is_active'])assert(await ruleModal.locator(`[name="${name}"]`).count()===1,'rule modal missing '+name);
+  await ruleModal.locator('.modal-close').click();
+
+  assert(await page.locator('[data-feo-utilizer-overrides].table-card--standard').count()===1,'overrides standard registry missing');
+  await page.getByRole('button',{name:'Добавить назначение'}).click();
+  const overrideModal=page.locator('#feo-utilizer-override-modal.is-open');
+  await overrideModal.waitFor({state:'visible'});
+  assert(await overrideModal.locator('[name="zayavka_id"]').count()===1,'override request field missing');
+  assert(await overrideModal.locator('[name="utilizer_id"]').count()===1,'override utilizer field missing');
+  await overrideModal.locator('.modal-close').click();
+
   await page.screenshot({path:'artifacts/feo-utilizers-owner-production.png',fullPage:true});
   await page.setViewportSize({width:800,height:1000});
-  const firstLabel=page.locator('.feo-util-item .feo-field > span').first();
-  assert(await firstLabel.isVisible(),'responsive edit label not visible');
-  const itemBox=await page.locator('.feo-util-item').first().boundingBox();
-  assert(itemBox&&itemBox.width<=800,'responsive utilizer card overflows viewport');
+  const scrollBox=await page.locator('[data-feo-utilizer-grid] .table-scroll').boundingBox();
+  assert(scrollBox&&scrollBox.width<=800,'responsive utilizer registry overflows viewport shell');
   await page.screenshot({path:'artifacts/feo-utilizers-owner-800px.png',fullPage:true});
   assert(pageErrors.length===0,'owner admin page errors: '+pageErrors.join(' | '));
   assert(consoleErrors.length===0,'owner admin console errors: '+consoleErrors.join(' | '));
   await context.close();
-  return {utilizerCards:8,activeTab:active.trim(),responsiveLabel:true,colorPicker:true,consoleErrors,pageErrors};
+  return {utilizerRows:8,activeTab:active.trim(),search:true,doubleClick:true,viewEdit:true,createModal:true,rules:true,overrides:true,typedDeleteConfirm:true,assets,consoleErrors,pageErrors};
 }
 
 (async()=>{
@@ -150,8 +213,8 @@ async function verifyOwnerAdmin(browser){
   await resilienceContext.close();
 
   const ownerAdmin=await verifyOwnerAdmin(browser);
-  const summary={mapUrl,utilizerUrl,sourceSha:process.env.SOURCE_SHA,live,resilience,ownerAdmin,note:'Real authenticated production Stage 1 QA. Browser basemap traffic is same-origin through the guarded tile proxy; logist map is read-only and mutation route is asserted 403; a cache-isolated browser context blocks same-origin map tiles in the resilience pass; owner utilizer admin is visually checked at desktop and 800px without mutations.'};
+  const summary={mapUrl,utilizerUrl,sourceSha:process.env.SOURCE_SHA,live,resilience,ownerAdmin,note:'Real authenticated production Stage 1 QA. Map runtime remains read-only and unchanged by the utilizer UX refactor. Logist map access and owner-only utilizer RBAC are checked; owner utilizer registry/modal/search/rules/overrides are exercised without submitting business-data mutations.'};
   fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));
-  console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} utilizers=${ownerAdmin.utilizerCards}`);
+  console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} utilizers=${ownerAdmin.utilizerRows}`);
   await browser.close();
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});

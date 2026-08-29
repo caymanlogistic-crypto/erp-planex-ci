@@ -82,6 +82,71 @@ final class FeoUtilizerController
         });
     }
 
+    public function modalView(string $id): void
+    {
+        requireRole(['company_owner']);
+        $utilizer = null;
+        $modalError = null;
+        try {
+            [, $pdo] = $this->companyContext();
+            $utilizer = $this->findUtilizer($pdo, (int)$id);
+            if (!$utilizer) throw new \RuntimeException('Утилизатор не найден.');
+        } catch (\Throwable $e) {
+            $modalError = $this->publicDatabaseError($e);
+        }
+        require base_path('app/View/partials/company_feo_utilizer_modal_view.php');
+    }
+
+    public function modalEditForm(string $id): void
+    {
+        requireRole(['company_owner']);
+        try {
+            [, $pdo] = $this->companyContext();
+            $utilizer = $this->findUtilizer($pdo, (int)$id);
+            if (!$utilizer) throw new \RuntimeException('Утилизатор не найден.');
+            $old = $utilizer;
+            $formError = null;
+        } catch (\Throwable $e) {
+            $old = ['id'=>(int)$id];
+            $formError = $this->publicDatabaseError($e);
+        }
+        require base_path('app/View/partials/company_feo_utilizer_modal_edit.php');
+    }
+
+    public function modalEditSubmit(string $id): void
+    {
+        requireRole(['company_owner']);
+        $utilizerId = (int)$id;
+        try {
+            [, $pdo] = $this->companyContext();
+            self::validateCoordinatePair($_POST);
+            $this->utilizers->updateUtilizer($pdo, $utilizerId, $_POST, $this->userId());
+            $utilizer = $this->findUtilizer($pdo, $utilizerId);
+            if (!$utilizer) throw new \RuntimeException('Утилизатор не найден после сохранения.');
+            $modalError = null;
+            require base_path('app/View/partials/company_feo_utilizer_modal_view.php');
+        } catch (\Throwable $e) {
+            $old = $_POST;
+            $old['id'] = $utilizerId;
+            $old['adr'] = isset($_POST['adr']) ? 1 : 0;
+            $old['is_active'] = isset($_POST['is_active']) ? 1 : 0;
+            $formError = $this->publicDatabaseError($e);
+            require base_path('app/View/partials/company_feo_utilizer_modal_edit.php');
+        }
+    }
+
+    public function modalDelete(string $id): void
+    {
+        requireRole(['company_owner']);
+        try {
+            [, $pdo] = $this->companyContext();
+            $this->utilizers->deleteUtilizer($pdo, (int)$id);
+            $this->json(['success'=>true]);
+        } catch (\Throwable $e) {
+            $this->json(['success'=>false,'error'=>$this->publicDatabaseError($e)]);
+        }
+    }
+
     public function createRule(): void
     {
         $this->mutate(function (\PDO $pdo): string {
@@ -136,6 +201,15 @@ final class FeoUtilizerController
         return [$company,$this->requests->localPdo($company)];
     }
 
+    private function findUtilizer(\PDO $pdo, int $id): ?array
+    {
+        if ($id <= 0) return null;
+        foreach ($this->utilizers->listUtilizers($pdo, true) as $row) {
+            if ((int)($row['id'] ?? 0) === $id) return $row;
+        }
+        return null;
+    }
+
     private function userId(): int
     {
         return max(0, (int)($_SESSION['user_id'] ?? 0));
@@ -161,6 +235,12 @@ final class FeoUtilizerController
         if (abs($lat) < 0.0000001 && abs($lng) < 0.0000001) {
             throw new \RuntimeException('Координаты 0,0 недопустимы. Укажите фактическое местоположение или оставьте оба поля пустыми.');
         }
+    }
+
+    private function json(array $payload): void
+    {
+        header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
     }
 
     private function publicDatabaseError(\Throwable $e): string

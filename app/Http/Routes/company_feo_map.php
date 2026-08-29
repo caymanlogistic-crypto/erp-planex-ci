@@ -15,6 +15,10 @@ $router->get('/company/feo/requests/map/tiles/{z}/{x}/{y}', [$feoMapController, 
 $feoUtilizerController = new \App\Http\Controllers\Company\FeoUtilizerController($config, $db);
 $router->get('/company/feo/utilizers', [$feoUtilizerController, 'index']);
 $router->post('/company/feo/utilizers', [$feoUtilizerController, 'create']);
+$router->get('/company/feo/utilizers/{id}/modal-view', [$feoUtilizerController, 'modalView']);
+$router->get('/company/feo/utilizers/{id}/modal-edit', [$feoUtilizerController, 'modalEditForm']);
+$router->post('/company/feo/utilizers/{id}/modal-edit', [$feoUtilizerController, 'modalEditSubmit']);
+$router->post('/company/feo/utilizers/{id}/modal-delete', [$feoUtilizerController, 'modalDelete']);
 $router->post('/company/feo/utilizers/{id}/update', [$feoUtilizerController, 'update']);
 $router->post('/company/feo/utilizers/{id}/delete', [$feoUtilizerController, 'delete']);
 $router->post('/company/feo/utilizers/rules', [$feoUtilizerController, 'createRule']);

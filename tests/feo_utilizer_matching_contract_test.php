@@ -42,14 +42,18 @@ foreach (['feo_utilizers','feo_utilizer_match_rules','feo_request_utilizer_overr
 $ok('migration has no legacy compatibility columns', !str_contains(strtolower($migration), 'legacy_'));
 
 $view = $read($root . '/app/View/pages/company_feo_utilizers.php');
+$edit = $read($root . '/app/View/partials/company_feo_utilizer_modal_edit.php');
+$modalJs = $read($root . '/public/assets/js/feo-utilizers.js');
 $ok(
-    'FKKO is editable in create and update with a permanent visible label and preserved edit value',
-    substr_count($view, 'name="fkko_classification"') >= 2
-    && substr_count($view, '<span>ФККО / классификация</span>') >= 2
-    && str_contains($view, '($u[\'fkko_classification\'] ?? \'\')')
+    'FKKO remains editable in create and modal edit with visible labels',
+    str_contains($view, 'name="fkko_classification"')
+    && str_contains($view, 'ФККО / классификация')
+    && str_contains($edit, 'name="fkko_classification"')
+    && str_contains($edit, 'ФККО / классификация')
+    && str_contains($edit, "fkko_classification") && str_contains($edit, '$old')
 );
-$ok('destructive utilizer actions use ERP modal confirmation metadata', str_contains($view, 'id="feo-utilizer-confirm-modal"') && str_contains($view, 'data-utilizer-confirm') && !str_contains($view, 'confirm('));
-$ok('override input follows six-digit FEO id contract', str_contains($view, 'maxlength="6"') && str_contains($view, 'pattern="[0-9]{6}"'));
+$ok('destructive utilizer action uses canonical ModalShell typed confirmation', str_contains($modalJs, 'window.ModalShell.create') && str_contains($modalJs, "confirmWord: 'УДАЛИТЬ'") && !str_contains($modalJs, 'confirm('));
+$ok('override input follows six-digit FEO id contract', str_contains($view, 'maxlength="6"') && str_contains($view, 'pattern="\\d{6}"'));
 
 printf("PASS=%d FAIL=%d\n", $pass, $fail);
 exit($fail === 0 ? 0 : 1);
