@@ -126,10 +126,13 @@ async function verifyOwnerAdmin(browser){
   assert(await rows.count()===8,'expected 8 seeded utilizer rows');
 
   const search=page.locator('[data-feo-utilizer-grid] .toolbar-search');
-  const firstId=(await rows.first().locator('td').first().innerText()).trim();
-  await search.fill(firstId);
+  const firstName=(await rows.first().locator('.cell-main').innerText()).trim();
+  assert(firstName.length>0,'first utilizer short name missing');
+  await search.fill(firstName);
   await page.waitForTimeout(100);
-  assert(await page.locator('[data-feo-utilizer-grid] tbody tr[data-feo-utilizer-id]:visible').count()===1,'utilizer registry search did not narrow to one row');
+  const filteredRows=page.locator('[data-feo-utilizer-grid] tbody tr[data-feo-utilizer-id]:visible');
+  assert(await filteredRows.count()===1,'utilizer registry search did not narrow by unique short name');
+  assert((await filteredRows.first().locator('.cell-main').innerText()).trim()===firstName,'utilizer registry search returned a different row');
   await search.fill('');
   await page.waitForTimeout(100);
   assert(await page.locator('[data-feo-utilizer-grid] tbody tr[data-feo-utilizer-id]:visible').count()===8,'utilizer registry search did not restore all rows');
