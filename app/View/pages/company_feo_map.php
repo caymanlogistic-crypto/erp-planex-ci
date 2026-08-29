@@ -6,15 +6,13 @@ $missingCount = (int)($diag['missing_coordinates_count'] ?? 0);
 $invalidCount = (int)($diag['invalid_coordinates_count'] ?? 0);
 $unmatchedCount = (int)($diag['unmatched_utilizer_count'] ?? 0);
 $inactiveCount = (int)($diag['inactive_utilizer_count'] ?? 0);
-$leafletCssPrimary = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css';
-$leafletCssFallback = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-$leafletJsPrimary = 'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js';
-$leafletJsFallback = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-$leafletCssIntegrity = 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=';
-$leafletJsIntegrity = 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=';
+$leafletCssPath = 'public/assets/vendor/leaflet/1.9.4/leaflet.css';
+$leafletJsPath = 'public/assets/vendor/leaflet/1.9.4/leaflet.js';
+$leafletCssUrl = app_url('/assets/vendor/leaflet/1.9.4/leaflet.css') . '?v=' . filemtime(base_path($leafletCssPath));
+$leafletJsUrl = app_url('/assets/vendor/leaflet/1.9.4/leaflet.js') . '?v=' . filemtime(base_path($leafletJsPath));
 $mapJsUrl = app_url('/assets/js/feo-map.js') . '?v=' . filemtime(base_path('public/assets/js/feo-map.js'));
 ?>
-<link id="feo-leaflet-css" rel="stylesheet" href="<?= e($leafletCssPrimary) ?>" integrity="<?= e($leafletCssIntegrity) ?>" crossorigin="anonymous" data-fallback-href="<?= e($leafletCssFallback) ?>">
+<link rel="stylesheet" href="<?= e($leafletCssUrl) ?>">
 <link rel="stylesheet" href="<?= app_url('/assets/css/feo-map.css') ?>?v=<?= filemtime(base_path('public/assets/css/feo-map.css')) ?>">
 
 <div class="feo-map-page" id="feo-map-page" data-refresh-url="<?= e(app_url('/company/feo/requests/map/data')) ?>" data-map-ready="0">
@@ -69,63 +67,5 @@ $mapJsUrl = app_url('/assets/js/feo-map.js') . '?v=' . filemtime(base_path('publ
 </div>
 
 <script id="feo-map-data" type="application/json"><?= $mapPayloadJson ?></script>
-<script>
-(() => {
-    'use strict';
-
-    const css = document.getElementById('feo-leaflet-css');
-    if (css) {
-        css.addEventListener('error', () => {
-            const fallback = css.dataset.fallbackHref || '';
-            if (!fallback || css.href === fallback) return;
-            css.href = fallback;
-        }, {once: true});
-    }
-
-    const page = document.getElementById('feo-map-page');
-    const errorNode = document.getElementById('feo-map-runtime-error');
-    const sources = [
-        <?= json_encode($leafletJsPrimary, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-        <?= json_encode($leafletJsFallback, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>,
-    ];
-    const integrity = <?= json_encode($leafletJsIntegrity, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-    const mapScriptUrl = <?= json_encode($mapJsUrl, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) ?>;
-
-    function fail(message) {
-        if (page) page.dataset.mapReady = 'error';
-        if (errorNode) {
-            errorNode.textContent = message;
-            errorNode.hidden = false;
-        }
-    }
-
-    function loadMapScript() {
-        const script = document.createElement('script');
-        script.src = mapScriptUrl;
-        script.async = false;
-        script.addEventListener('error', () => fail('Не удалось загрузить код карты. Обновите страницу или обратитесь к администратору.'));
-        document.body.appendChild(script);
-    }
-
-    function loadLeaflet(index) {
-        if (window.L) {
-            loadMapScript();
-            return;
-        }
-        if (index >= sources.length) {
-            fail('Не удалось загрузить компонент карты. Проверьте соединение и обновите страницу.');
-            return;
-        }
-        const script = document.createElement('script');
-        script.src = sources[index];
-        script.integrity = integrity;
-        script.crossOrigin = 'anonymous';
-        script.async = false;
-        script.addEventListener('load', () => window.L ? loadMapScript() : loadLeaflet(index + 1));
-        script.addEventListener('error', () => loadLeaflet(index + 1));
-        document.body.appendChild(script);
-    }
-
-    loadLeaflet(0);
-})();
-</script>
+<script src="<?= e($leafletJsUrl) ?>"></script>
+<script src="<?= e($mapJsUrl) ?>"></script>

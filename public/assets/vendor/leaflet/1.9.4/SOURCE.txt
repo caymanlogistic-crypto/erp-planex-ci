@@ -1,0 +1,7 @@
+Leaflet 1.9.4
+Source: https://github.com/Leaflet/Leaflet/releases/download/v1.9.4/leaflet.zip
+Imported by guarded GitHub Actions workflow from the official Leaflet release.
+
+aaec1d5c3239a613a53e996087629aca1483cb2f0438b11b8a335c6cede4c16b  /tmp/leaflet.zip
+85d455b4522415f6badc42a0e7d17c919d100347d6b8958bd0dc738fdecd6d50  /tmp/leaflet-dist/dist/leaflet.js
+a7837102824184820dfa198d1ebcd109ff6d0ff9a2672a074b9a1b4d147d04c6  /tmp/leaflet-dist/dist/leaflet.css

@@ -15,17 +15,17 @@ $view = $read('app/View/pages/company_feo_map.php');
 $js = $read('public/assets/js/feo-map.js');
 $qa = $read('.github/feo-map-stage1/production_visual.js');
 
-$must(str_contains($view, 'cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js'), 'pinned Leaflet primary source missing');
-$must(str_contains($view, 'unpkg.com/leaflet@1.9.4/dist/leaflet.js'), 'pinned Leaflet fallback source missing');
-$must(str_contains($view, 'sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo='), 'official Leaflet JS SRI missing');
-$must(str_contains($view, 'sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY='), 'official Leaflet CSS SRI missing');
+$must(str_contains($view, "/assets/vendor/leaflet/1.9.4/leaflet.js"), 'same-origin Leaflet JS source missing');
+$must(str_contains($view, "/assets/vendor/leaflet/1.9.4/leaflet.css"), 'same-origin Leaflet CSS source missing');
+$must(!str_contains($view, 'cdn.jsdelivr.net'), 'Stage 1 map must not depend on jsDelivr under production CSP');
+$must(!str_contains($view, 'unpkg.com'), 'Stage 1 map must not depend on unpkg under production CSP');
+$must(!str_contains($view, 'loadLeaflet('), 'obsolete CDN Leaflet fallback loader must be removed');
 $must(str_contains($view, 'data-map-ready="0"'), 'map readiness state missing');
-$must(str_contains($view, 'Не удалось загрузить компонент карты'), 'Leaflet loading must fail visibly');
-$must(str_contains($view, 'loadLeaflet(index + 1)'), 'Leaflet JS fallback chain missing');
 $must(str_contains($view, "app_url('/assets/js/feo-map.js')"), 'map runtime must stay app-local');
 
 $must(!str_contains($js, "typeof window.L === 'undefined') return"), 'silent Leaflet failure must not return without feedback');
 $must(str_contains($js, "typeof window.L === 'undefined'"), 'Leaflet absence guard missing');
+$must(str_contains($js, 'Не удалось загрузить компонент карты'), 'Leaflet loading failure must stay visible');
 $must(str_contains($js, "page.dataset.mapReady = 'error'"), 'map failure readiness state missing');
 $must(str_contains($js, "page.dataset.mapReady = '1'"), 'map success readiness state missing');
 $must(str_contains($js, "tiles.on('tileerror'"), 'tile outage handling missing');
