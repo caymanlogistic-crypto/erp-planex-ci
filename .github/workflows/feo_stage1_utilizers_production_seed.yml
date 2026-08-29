@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: 'Exact canonical SHA containing Stage 1 seed tooling'
+        description: 'Exact canonical SHA containing utilizer master-data/alias tooling'
         required: true
         type: string
       confirm_seed:
@@ -36,7 +36,6 @@ jobs:
         with:
           ref: ${{ inputs.source_sha }}
           fetch-depth: 1
-
       - name: Validate exact canonical source and tooling
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
@@ -47,15 +46,15 @@ jobs:
           set -euo pipefail
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
-          canonical_sha="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$API_URL/repos/$REPOSITORY/branches/$CANONICAL_BRANCH" | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])')"
+          canonical_sha="$(curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/branches/$CANONICAL_BRANCH" | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])')"
           test "$canonical_sha" = "$SOURCE_SHA"
           php -l scripts/feo_stage1_utilizer_seed_data.php
           php -l scripts/feo_seed_stage1_utilizers.php
           php -l scripts/feo_smoke_stage1_map.php
           php tests/feo_stage1_utilizer_seed_contract_test.php
+          php tests/feo_utilizer_matching_contract_test.php
+          php tests/feo_utilizer_alias_migration_contract_test.php
           php tests/feo_map_stage1_contract_test.php
-
       - name: Publish pending status
         env:
           GH_TOKEN: ${{ github.token }}
@@ -66,11 +65,9 @@ jobs:
           set -euo pipefail
           python3 - > /tmp/payload.json <<'PY'
           import json
-          print(json.dumps({'state':'pending','context':'erpv2/feo-stage1-utilizer-seed','description':'FEO Stage 1 PLANEX utilizer seed in progress'}))
+          print(json.dumps({'state':'pending','context':'erpv2/feo-stage1-utilizer-seed','description':'FEO PLANEX utilizer master-data/alias seed in progress'}))
           PY
-          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
-
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
       - name: Configure SSH
         env:
           PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
@@ -81,7 +78,6 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-
       - name: Upload isolated seed and smoke tooling
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -92,7 +88,6 @@ jobs:
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/feo_stage1_utilizer_seed_data.php "$SSH_USER@$SSH_HOST:/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/feo_seed_stage1_utilizers.php "$SSH_USER@$SSH_HOST:/tmp/feo_stage1_seed_${GITHUB_RUN_ID}.php"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/feo_smoke_stage1_map.php "$SSH_USER@$SSH_HOST:/tmp/feo_stage1_smoke_${GITHUB_RUN_ID}.php"
-
       - name: Snapshot before
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -100,29 +95,23 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_FEO_STAGE1_SEED_PATH='/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php' PLANEX_TARGET_COMPANY_ID='$TARGET_COMPANY_ID' PLANEX_TARGET_DB_IDENTIFIER='$TARGET_DB_IDENTIFIER' PLANEX_SMOKE_REQUIRE_SEED=0 /usr/bin/php8.5 '/tmp/feo_stage1_smoke_${GITHUB_RUN_ID}.php'" | tee feo_stage1_before.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_FEO_STAGE1_SEED_PATH='/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php' PLANEX_TARGET_COMPANY_ID='$TARGET_COMPANY_ID' PLANEX_TARGET_DB_IDENTIFIER='$TARGET_DB_IDENTIFIER' PLANEX_SMOKE_REQUIRE_SEED=0 /usr/bin/php8.5 '/tmp/feo_stage1_smoke_${GITHUB_RUN_ID}.php'" | tee feo_stage1_before.txt
           grep -q 'FEO_STAGE1_SMOKE_OK' feo_stage1_before.txt
           python3 - "$(sed -n 's/^FEO_STAGE1_SMOKE=//p' feo_stage1_before.txt)" <<'PY'
-          import json, sys
-          row=json.loads(sys.argv[1])
-          c=row['counts']
+          import json,sys
+          row=json.loads(sys.argv[1]); c=row['counts']
           if row['company_id'] != 25 or row['db'] != 'spugovxsim_1': raise SystemExit('unexpected target')
-          if c['utilizers'] != 0 or c['utilizer_rules'] != 0 or c['utilizer_overrides'] != 0:
-              raise SystemExit('Stage 1 master-data changed since migration 125; refusing automatic seed')
+          if c['utilizers'] not in (0,8): raise SystemExit('unexpected utilizer cardinality before seed')
           PY
-
-      - name: Seed PLANEX utilizer master-data and rules
+      - name: Seed PLANEX utilizer master-data and canonical aliases
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_FEO_STAGE1_SEED_PATH='/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php' PLANEX_TARGET_COMPANY_ID='$TARGET_COMPANY_ID' PLANEX_TARGET_DB_IDENTIFIER='$TARGET_DB_IDENTIFIER' /usr/bin/php8.5 '/tmp/feo_stage1_seed_${GITHUB_RUN_ID}.php'" | tee feo_stage1_seed.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_FEO_STAGE1_SEED_PATH='/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php' PLANEX_TARGET_COMPANY_ID='$TARGET_COMPANY_ID' PLANEX_TARGET_DB_IDENTIFIER='$TARGET_DB_IDENTIFIER' /usr/bin/php8.5 '/tmp/feo_stage1_seed_${GITHUB_RUN_ID}.php'" | tee feo_stage1_seed.txt
           grep -q 'FEO_STAGE1_SEED_OK' feo_stage1_seed.txt
-
       - name: Smoke after and verify invariants
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -130,27 +119,20 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_FEO_STAGE1_SEED_PATH='/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php' PLANEX_TARGET_COMPANY_ID='$TARGET_COMPANY_ID' PLANEX_TARGET_DB_IDENTIFIER='$TARGET_DB_IDENTIFIER' PLANEX_SMOKE_REQUIRE_SEED=1 /usr/bin/php8.5 '/tmp/feo_stage1_smoke_${GITHUB_RUN_ID}.php'" | tee feo_stage1_after.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_FEO_STAGE1_SEED_PATH='/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php' PLANEX_TARGET_COMPANY_ID='$TARGET_COMPANY_ID' PLANEX_TARGET_DB_IDENTIFIER='$TARGET_DB_IDENTIFIER' PLANEX_SMOKE_REQUIRE_SEED=1 /usr/bin/php8.5 '/tmp/feo_stage1_smoke_${GITHUB_RUN_ID}.php'" | tee feo_stage1_after.txt
           grep -q 'FEO_STAGE1_SMOKE_OK' feo_stage1_after.txt
           python3 - "$(sed -n 's/^FEO_STAGE1_SMOKE=//p' feo_stage1_before.txt)" "$(sed -n 's/^FEO_STAGE1_SMOKE=//p' feo_stage1_after.txt)" <<'PY'
           import json,sys
-          before,after=map(json.loads,sys.argv[1:3])
-          b,a=before['counts'],after['counts']
-          for key in ('feo_requests','placement_current','cost_blocks','cost_members'):
-              if a[key] != b[key]: raise SystemExit(f'existing business rows changed for {key}')
-          if a['utilizers'] != 8 or a['utilizer_rules'] != 38 or a['utilizer_overrides'] != 0:
-              raise SystemExit('unexpected Stage 1 master-data cardinality after seed')
-          if after['missing_seed_utilizers']:
-              raise SystemExit('seeded utilizer missing after write')
-          if after['map_diagnostics']['available_request_count'] != a['placement_current']:
-              raise SystemExit('map source-of-truth count mismatch')
+          before,after=map(json.loads,sys.argv[1:3]); b,a=before['counts'],after['counts']
+          for key in ('feo_requests','placement_current','cost_blocks','cost_members','legacy_utilizer_rules','legacy_utilizer_overrides','utilizer_aliases'):
+              if a[key] != b[key]: raise SystemExit(f'existing rows changed for {key}')
+          if a['utilizers'] != 8: raise SystemExit('unexpected utilizer cardinality after seed')
+          if after['missing_seed_utilizers']: raise SystemExit('seeded utilizer missing after write')
+          if after['map_diagnostics']['available_request_count'] != a['placement_current']: raise SystemExit('map source-of-truth count mismatch')
           print('FEO_STAGE1_SEED_INVARIANTS_OK')
           PY
-
       - name: HTTP acceptance
         run: test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
-
       - name: Upload seed evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -162,7 +144,6 @@ jobs:
             feo_stage1_after.txt
           if-no-files-found: warn
           retention-days: 30
-
       - name: Publish final seed status
         if: always()
         env:
@@ -173,14 +154,12 @@ jobs:
           JOB_STATUS: ${{ job.status }}
         run: |
           set -euo pipefail
-          if [ "$JOB_STATUS" = success ]; then state=success; desc='FEO Stage 1 PLANEX utilizer seed verified'; else state=failure; desc='FEO Stage 1 PLANEX utilizer seed failed'; fi
+          if [ "$JOB_STATUS" = success ]; then state=success; desc='FEO PLANEX utilizer master-data/alias seed verified'; else state=failure; desc='FEO PLANEX utilizer master-data/alias seed failed'; fi
           python3 - "$state" "$desc" > /tmp/payload.json <<'PY'
           import json,sys
           print(json.dumps({'state':sys.argv[1],'context':'erpv2/feo-stage1-utilizer-seed','description':sys.argv[2]}))
           PY
-          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
-
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
       - name: Cleanup
         if: always()
         env:
@@ -189,7 +168,6 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           if [ -f "$HOME/.ssh/key" ]; then
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-              "rm -f '/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php' '/tmp/feo_stage1_seed_${GITHUB_RUN_ID}.php' '/tmp/feo_stage1_smoke_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/feo_stage1_seed_data_${GITHUB_RUN_ID}.php' '/tmp/feo_stage1_seed_${GITHUB_RUN_ID}.php' '/tmp/feo_stage1_smoke_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
           fi
           rm -f "$HOME/.ssh/key"

@@ -2,6 +2,7 @@
 
 use App\Core\Database;
 use App\Service\FeoRequestService;
+use App\Service\FeoUtilizerService;
 
 if (!function_exists('registerFeoFreshnessNavigation')) {
     function registerFeoFreshnessNavigation(array $config, Database $centralDb): void
@@ -13,7 +14,12 @@ if (!function_exists('registerFeoFreshnessNavigation')) {
         $companyId = (int)(getSessionCompanyId() ?? 0);
         if ($companyId <= 0) return;
 
+        if (!class_exists(FeoUtilizerService::class)) {
+            require_once base_path('app/Service/FeoUtilizerService.php');
+        }
+
         $freshnessProblem = false;
+        $utilizerProblems = 0;
         try {
             $service = new FeoRequestService($config, $centralDb);
             $company = $service->loadCompany($companyId);
@@ -22,18 +28,28 @@ if (!function_exists('registerFeoFreshnessNavigation')) {
                 if ($service->moduleReady($pdo)) {
                     $freshness = $service->freshnessState($pdo);
                     $freshnessProblem = !empty($freshness['is_problem']);
+                    if ($role === 'company_owner') {
+                        try {
+                            $utilizerProblems = max(0, (int)((new FeoUtilizerService())->currentPlacementProblemSummary($pdo)['count'] ?? 0));
+                        } catch (\Throwable) {
+                            // During guarded rollout migration 126 may not exist yet. Keep navigation usable.
+                            $utilizerProblems = 0;
+                        }
+                    }
                 }
             }
         } catch (\Throwable) {
             $freshnessProblem = false;
+            $utilizerProblems = 0;
         }
 
         $registered = true;
-        register_shutdown_function(static function () use ($freshnessProblem, $role): void {
+        register_shutdown_function(static function () use ($freshnessProblem, $utilizerProblems, $role): void {
             foreach (headers_list() as $header) {
                 if (stripos($header, 'Content-Type:') === 0 && stripos($header, 'application/json') !== false) return;
             }
-            $problem = $freshnessProblem ? 'true' : 'false';
+            $freshnessCount = $freshnessProblem ? 1 : 0;
+            $parentCount = $freshnessCount + $utilizerProblems;
             $owner = $role === 'company_owner' ? 'true' : 'false';
             echo <<<HTML
 <script>
@@ -71,12 +87,33 @@ if (!function_exists('registerFeoFreshnessNavigation')) {
       sub.classList.add('is-open');
       parent.classList.add('is-open','is-active');
     }
-    if({$problem} && !parent.querySelector('[data-feo-freshness-badge]')){
+
+    var utilizerProblems={$utilizerProblems};
+    if(utilizerLink){
+      var oldUtilizerBadge=utilizerLink.querySelector('[data-feo-utilizer-badge]');
+      if(oldUtilizerBadge) oldUtilizerBadge.remove();
+      if(utilizerProblems>0){
+        var utilizerBadge=document.createElement('span');
+        utilizerBadge.className='nav-count is-alert';
+        utilizerBadge.setAttribute('data-feo-utilizer-badge','1');
+        utilizerBadge.title='Не определён утилизатор у '+utilizerProblems+' заявок.';
+        utilizerBadge.textContent=utilizerProblems>999?'999+':String(utilizerProblems);
+        utilizerLink.appendChild(utilizerBadge);
+      }
+    }
+
+    var oldParentBadge=parent.querySelector('[data-feo-freshness-badge]');
+    if(oldParentBadge) oldParentBadge.remove();
+    var parentCount={$parentCount};
+    if(parentCount>0){
       var badge=document.createElement('span');
       badge.className='nav-count is-alert';
       badge.setAttribute('data-feo-freshness-badge','1');
-      badge.title='Требуется обновить заявки ФЭО: последняя активная загрузка старше 7 дней или отсутствует.';
-      badge.textContent='1';
+      var parts=[];
+      if({$freshnessCount}) parts.push('Требуется обновить заявки ФЭО');
+      if(utilizerProblems>0) parts.push('не определён утилизатор у '+utilizerProblems+' заявок');
+      badge.title=parts.join('; ')+'.';
+      badge.textContent=parentCount>999?'999+':String(parentCount);
       var chevron=parent.querySelector('.nav-chevron');
       if(chevron) parent.insertBefore(badge,chevron); else parent.appendChild(badge);
     }

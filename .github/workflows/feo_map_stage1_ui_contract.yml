@@ -4,32 +4,42 @@ on:
   pull_request:
     branches:
       - chatgpt/production-stabilization-20260802
-    paths:
+    paths: &feo_stage1_paths
       - 'app/Service/FeoMapService.php'
       - 'app/Service/FeoMapTileService.php'
       - 'app/Service/FeoUtilizerService.php'
       - 'app/View/pages/company_feo_map.php'
       - 'app/View/pages/company_feo_utilizers.php'
+      - 'app/View/partials/company_feo_utilizer_modal_view.php'
+      - 'app/View/partials/company_feo_utilizer_modal_edit.php'
       - 'app/Http/Controllers/Company/FeoMapController.php'
       - 'app/Http/Controllers/Company/FeoUtilizerController.php'
       - 'app/Http/Routes/company_feo_map.php'
       - 'app/Support/feo_freshness_navigation.php'
       - 'database/migrations-local/123_create_feo_map_placement.sql'
       - 'database/migrations-local/125_create_feo_map_utilizers.sql'
+      - 'database/migrations-local/126_create_feo_utilizer_aliases.sql'
       - 'public/assets/js/feo-map.js'
+      - 'public/assets/js/feo-utilizers.js'
       - 'public/assets/css/feo-map.css'
+      - 'public/assets/css/feo-utilizers.css'
       - 'public/assets/third-party/leaflet/1.9.4/**'
       - 'scripts/feo_stage1_utilizer_seed_data.php'
       - 'scripts/feo_seed_stage1_utilizers.php'
       - 'scripts/feo_smoke_stage1_map.php'
+      - 'scripts/feo_apply_126.php'
+      - 'scripts/feo_verify_126.php'
       - 'tests/feo_map_stage1_contract_test.php'
       - 'tests/feo_utilizer_matching_contract_test.php'
       - 'tests/feo_stage1_utilizer_seed_contract_test.php'
+      - 'tests/feo_utilizer_alias_migration_contract_test.php'
       - 'tests/feo_map_current_schema_contract_test.php'
       - 'tests/feo_map_stage1_ui_resilience_contract_test.php'
       - 'tests/feo_map_local_leaflet_contract_test.php'
       - 'tests/feo_utilizer_admin_ux_contract_test.php'
+      - '.github/agent_db_migration_request.json'
       - '.github/feo-map-stage1/**'
+      - '.github/workflows/feo_126_production_migration.yml'
       - '.github/workflows/feo_map_stage1_production_visual_qa.yml'
       - '.github/workflows/feo_stage1_utilizers_seed_contract.yml'
       - '.github/workflows/feo_stage1_utilizers_agent_request.yml'
@@ -39,38 +49,7 @@ on:
   push:
     branches:
       - chatgpt/production-stabilization-20260802
-    paths:
-      - 'app/Service/FeoMapService.php'
-      - 'app/Service/FeoMapTileService.php'
-      - 'app/Service/FeoUtilizerService.php'
-      - 'app/View/pages/company_feo_map.php'
-      - 'app/View/pages/company_feo_utilizers.php'
-      - 'app/Http/Controllers/Company/FeoMapController.php'
-      - 'app/Http/Controllers/Company/FeoUtilizerController.php'
-      - 'app/Http/Routes/company_feo_map.php'
-      - 'app/Support/feo_freshness_navigation.php'
-      - 'database/migrations-local/123_create_feo_map_placement.sql'
-      - 'database/migrations-local/125_create_feo_map_utilizers.sql'
-      - 'public/assets/js/feo-map.js'
-      - 'public/assets/css/feo-map.css'
-      - 'public/assets/third-party/leaflet/1.9.4/**'
-      - 'scripts/feo_stage1_utilizer_seed_data.php'
-      - 'scripts/feo_seed_stage1_utilizers.php'
-      - 'scripts/feo_smoke_stage1_map.php'
-      - 'tests/feo_map_stage1_contract_test.php'
-      - 'tests/feo_utilizer_matching_contract_test.php'
-      - 'tests/feo_stage1_utilizer_seed_contract_test.php'
-      - 'tests/feo_map_current_schema_contract_test.php'
-      - 'tests/feo_map_stage1_ui_resilience_contract_test.php'
-      - 'tests/feo_map_local_leaflet_contract_test.php'
-      - 'tests/feo_utilizer_admin_ux_contract_test.php'
-      - '.github/feo-map-stage1/**'
-      - '.github/workflows/feo_map_stage1_production_visual_qa.yml'
-      - '.github/workflows/feo_stage1_utilizers_seed_contract.yml'
-      - '.github/workflows/feo_stage1_utilizers_agent_request.yml'
-      - '.github/workflows/feo_stage1_utilizers_production_seed.yml'
-      - '.github/workflows/feo_map_stage1_ui_contract.yml'
-      - 'tools/architecture_guard.php'
+    paths: *feo_stage1_paths
   workflow_dispatch:
 
 permissions:
@@ -88,14 +67,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 1
-
       - name: Verify exact checked-out SHA
         shell: bash
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           echo "FEO_MAP_STAGE1_ACCEPTANCE_SHA=$GITHUB_SHA"
-
       - name: Relevant PHP syntax
         shell: bash
         run: |
@@ -110,12 +87,17 @@ jobs:
             app/Support/feo_freshness_navigation.php
             app/View/pages/company_feo_map.php
             app/View/pages/company_feo_utilizers.php
+            app/View/partials/company_feo_utilizer_modal_view.php
+            app/View/partials/company_feo_utilizer_modal_edit.php
             scripts/feo_stage1_utilizer_seed_data.php
             scripts/feo_seed_stage1_utilizers.php
             scripts/feo_smoke_stage1_map.php
+            scripts/feo_apply_126.php
+            scripts/feo_verify_126.php
             tests/feo_map_stage1_contract_test.php
             tests/feo_utilizer_matching_contract_test.php
             tests/feo_stage1_utilizer_seed_contract_test.php
+            tests/feo_utilizer_alias_migration_contract_test.php
             tests/feo_map_current_schema_contract_test.php
             tests/feo_map_stage1_ui_resilience_contract_test.php
             tests/feo_map_local_leaflet_contract_test.php
@@ -123,18 +105,16 @@ jobs:
             .github/feo-map-stage1/qa_session.php
           )
           for file in "${files[@]}"; do php -l "$file"; done
-
       - name: Relevant JavaScript syntax
         shell: bash
         run: |
           set -euo pipefail
           node --check public/assets/js/feo-map.js
+          node --check public/assets/js/feo-utilizers.js
           node --check .github/feo-map-stage1/production_visual.js
           node --check .github/feo-map-stage1/sanitize_artifacts.js
-
       - name: Architecture guard
         run: php tools/architecture_guard.php
-
       - name: Full declared Stage 1 contract suite
         shell: bash
         run: |
@@ -143,6 +123,7 @@ jobs:
             tests/feo_map_stage1_contract_test.php
             tests/feo_utilizer_matching_contract_test.php
             tests/feo_stage1_utilizer_seed_contract_test.php
+            tests/feo_utilizer_alias_migration_contract_test.php
             tests/feo_map_current_schema_contract_test.php
             tests/feo_map_stage1_ui_resilience_contract_test.php
             tests/feo_map_local_leaflet_contract_test.php

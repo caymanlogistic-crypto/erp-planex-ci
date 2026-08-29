@@ -25,8 +25,7 @@ final class FeoUtilizerController
         $company = null;
         $dbError = null;
         $utilizers = [];
-        $rules = [];
-        $overrides = [];
+        $problemSummary = ['count'=>0,'groups'=>[]];
         $successFlash = $_SESSION['flash_success'] ?? null;
         $errorFlash = $_SESSION['flash_error'] ?? null;
         unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -34,8 +33,7 @@ final class FeoUtilizerController
         try {
             [$company,$pdo] = $this->companyContext();
             $utilizers = $this->utilizers->listUtilizers($pdo, true);
-            $rules = $this->utilizers->listRules($pdo);
-            $overrides = $this->utilizers->listOverrides($pdo);
+            $problemSummary = $this->utilizers->currentPlacementProblemSummary($pdo);
         } catch (\Throwable $e) {
             $dbError = $this->publicDatabaseError($e);
         }
@@ -65,23 +63,6 @@ final class FeoUtilizerController
         });
     }
 
-    public function update(string $id): void
-    {
-        $this->mutate(function (\PDO $pdo) use ($id): string {
-            self::validateCoordinatePair($_POST);
-            $this->utilizers->updateUtilizer($pdo, (int)$id, $_POST, $this->userId());
-            return 'Утилизатор обновлён.';
-        });
-    }
-
-    public function delete(string $id): void
-    {
-        $this->mutate(function (\PDO $pdo) use ($id): string {
-            $this->utilizers->deleteUtilizer($pdo, (int)$id);
-            return 'Утилизатор удалён.';
-        });
-    }
-
     public function modalView(string $id): void
     {
         requireRole(['company_owner']);
@@ -105,9 +86,10 @@ final class FeoUtilizerController
             $utilizer = $this->findUtilizer($pdo, (int)$id);
             if (!$utilizer) throw new \RuntimeException('Утилизатор не найден.');
             $old = $utilizer;
+            $old['aliases'] = $this->aliasesText($utilizer['aliases'] ?? []);
             $formError = null;
         } catch (\Throwable $e) {
-            $old = ['id'=>(int)$id];
+            $old = ['id'=>(int)$id,'aliases'=>''];
             $formError = $this->publicDatabaseError($e);
         }
         require base_path('app/View/partials/company_feo_utilizer_modal_edit.php');
@@ -147,39 +129,6 @@ final class FeoUtilizerController
         }
     }
 
-    public function createRule(): void
-    {
-        $this->mutate(function (\PDO $pdo): string {
-            $id = $this->utilizers->createRule($pdo, $_POST, $this->userId());
-            return "Правило #{$id} создано.";
-        });
-    }
-
-    public function deleteRule(string $id): void
-    {
-        $this->mutate(function (\PDO $pdo) use ($id): string {
-            $this->utilizers->deleteRule($pdo, (int)$id);
-            return 'Правило удалено.';
-        });
-    }
-
-    public function setOverride(): void
-    {
-        $this->mutate(function (\PDO $pdo): string {
-            $requestId = trim((string)($_POST['zayavka_id'] ?? ''));
-            $this->utilizers->setOverride($pdo, $requestId, (int)($_POST['utilizer_id'] ?? 0), $this->userId());
-            return "Для заявки {$requestId} сохранено ручное назначение.";
-        });
-    }
-
-    public function deleteOverride(string $id): void
-    {
-        $this->mutate(function (\PDO $pdo) use ($id): string {
-            $this->utilizers->deleteOverride($pdo, $id);
-            return "Ручное назначение заявки {$id} удалено.";
-        });
-    }
-
     private function mutate(callable $callback): void
     {
         requireRole(['company_owner']);
@@ -208,6 +157,14 @@ final class FeoUtilizerController
             if ((int)($row['id'] ?? 0) === $id) return $row;
         }
         return null;
+    }
+
+    private function aliasesText(array $aliases): string
+    {
+        return implode("\n", array_values(array_filter(array_map(
+            static fn(array $row): string => trim((string)($row['alias'] ?? '')),
+            $aliases
+        ))));
     }
 
     private function userId(): int
@@ -246,7 +203,7 @@ final class FeoUtilizerController
     private function publicDatabaseError(\Throwable $e): string
     {
         if ($e instanceof \PDOException && in_array((string)$e->getCode(), ['42S02','42S22'], true)) {
-            return 'Справочник утилизаторов ещё не инициализирован в базе компании. Требуется штатная локальная migration 125.';
+            return 'Справочник синонимов утилизаторов ещё не инициализирован в базе компании. Требуется штатная локальная migration 126.';
         }
         return $e->getMessage();
     }
