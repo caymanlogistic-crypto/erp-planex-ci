@@ -7,6 +7,8 @@ const cookieName=process.env.QA_COOKIE_NAME;
 const logistSid=process.env.QA_LOGIST_SESSION_ID, ownerSid=process.env.QA_OWNER_SESSION_ID, csrf=process.env.QA_LOGIST_CSRF_TOKEN;
 if(!cookieName||!logistSid||!ownerSid||!csrf)throw new Error('QA session env missing');
 
+const logistCookie={name:cookieName,value:logistSid,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'};
+
 async function waitForPositiveText(locator,message,{attempts=60,delayMs=250}={}){
   for(let attempt=0;attempt<attempts;attempt++){
     const value=Number((await locator.innerText()).trim());
@@ -17,7 +19,11 @@ async function waitForPositiveText(locator,message,{attempts=60,delayMs=250}={})
 }
 
 async function verifyMap(page,{abortTiles=false}={}){
-  if(abortTiles) await page.route('**/company/feo/requests/map/tiles/**',route=>route.abort());
+  let blockedTileRequests=0;
+  if(abortTiles) await page.route('**/company/feo/requests/map/tiles/**',route=>{
+    blockedTileRequests+=1;
+    return route.abort();
+  });
   const consoleErrors=[],pageErrors=[],assets={tileStatuses:[]},externalTileRequests=[];
   page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
   page.on('pageerror',e=>pageErrors.push(String(e)));
@@ -74,6 +80,7 @@ async function verifyMap(page,{abortTiles=false}={}){
   assert(refreshJson.success===true,'map refresh success != true');
   await waitForPositiveText(page.locator('#feo-map-marker-count'),'marker count did not recover after refresh');
   if(abortTiles){
+    assert(blockedTileRequests>=3,`resilience QA blocked only ${blockedTileRequests} same-origin tile requests`);
     await page.locator('#feo-map-runtime-warning:not([hidden])').waitFor({state:'visible',timeout:15000});
     assert(await page.locator('.feo-marker').count()>0,'markers disappeared when background tiles failed');
   }
@@ -87,7 +94,7 @@ async function verifyMap(page,{abortTiles=false}={}){
   assert(pageErrors.length===0,'page errors: '+pageErrors.join(' | '));
   const relevantConsole=consoleErrors.filter(x=>!(abortTiles&&/requests\/map\/tiles\/|ERR_FAILED/i.test(x)));
   assert(relevantConsole.length===0,'console errors: '+relevantConsole.join(' | '));
-  return {requests,markers,domMarkers,assets,externalTileRequests,consoleErrors,pageErrors,abortTiles,popup};
+  return {requests,markers,domMarkers,assets,externalTileRequests,blockedTileRequests,consoleErrors,pageErrors,abortTiles,popup};
 }
 
 async function verifyOwnerAdmin(browser){
@@ -123,22 +130,27 @@ async function verifyOwnerAdmin(browser){
 (async()=>{
   fs.mkdirSync('artifacts',{recursive:true});
   const browser=await chromium.launch({headless:true});
-  const context=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
-  await context.addCookies([{name:cookieName,value:logistSid,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
-  const page=await context.newPage();
+
+  const liveContext=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
+  await liveContext.addCookies([logistCookie]);
+  const page=await liveContext.newPage();
   const live=await verifyMap(page);
   fs.writeFileSync('artifacts/production-dom.html',await page.content());
   await page.screenshot({path:'artifacts/feo-map-stage1-production.png',fullPage:true});
-  await page.close();
+  await liveContext.close();
 
-  const resiliencePage=await context.newPage();
+  // Use a fresh browser context so the resilience pass cannot reuse successful
+  // basemap responses from Chromium's HTTP cache. Every tile must hit the route
+  // interceptor and exercise the real Leaflet tileerror path.
+  const resilienceContext=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
+  await resilienceContext.addCookies([logistCookie]);
+  const resiliencePage=await resilienceContext.newPage();
   const resilience=await verifyMap(resiliencePage,{abortTiles:true});
   await resiliencePage.screenshot({path:'artifacts/feo-map-stage1-no-tiles.png',fullPage:true});
-  await resiliencePage.close();
-  await context.close();
+  await resilienceContext.close();
 
   const ownerAdmin=await verifyOwnerAdmin(browser);
-  const summary={mapUrl,utilizerUrl,sourceSha:process.env.SOURCE_SHA,live,resilience,ownerAdmin,note:'Real authenticated production Stage 1 QA. Browser basemap traffic is same-origin through the guarded tile proxy; logist map is read-only and mutation route is asserted 403; same-origin map tiles are blocked in resilience pass; owner utilizer admin is visually checked at desktop and 800px without mutations.'};
+  const summary={mapUrl,utilizerUrl,sourceSha:process.env.SOURCE_SHA,live,resilience,ownerAdmin,note:'Real authenticated production Stage 1 QA. Browser basemap traffic is same-origin through the guarded tile proxy; logist map is read-only and mutation route is asserted 403; a cache-isolated browser context blocks same-origin map tiles in the resilience pass; owner utilizer admin is visually checked at desktop and 800px without mutations.'};
   fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));
   console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} utilizers=${ownerAdmin.utilizerCards}`);
   await browser.close();
