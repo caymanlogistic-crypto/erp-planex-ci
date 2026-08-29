@@ -1,5 +1,5 @@
 <link rel="stylesheet" href="<?= app_url('/assets/css/feo-utilizers.css') ?>?v=<?= filemtime(base_path('public/assets/css/feo-utilizers.css')) ?>">
-<div class="feo-utilizer-page" data-feo-utilizer-page-ready>
+<div class="workspace-shell-1690 feo-utilizer-page" data-feo-utilizer-page-ready>
     <div class="page-head">
         <div class="page-head-left">
             <h1 class="page-title">Утилизаторы</h1>
@@ -10,12 +10,6 @@
         </div>
     </div>
 
-    <nav class="feo-domain-tabs" aria-label="Разделы заявок ФЭО">
-        <a href="<?= app_url('/company/feo/requests') ?>">Все заявки</a>
-        <a href="<?= app_url('/company/feo/requests/map-placement') ?>">Размещение на карте</a>
-        <a href="<?= app_url('/company/feo/requests/map') ?>">Карта</a>
-        <a class="is-active" href="<?= app_url('/company/feo/utilizers') ?>" aria-current="page">Утилизаторы</a>
-    </nav>
 
     <?php if ($successFlash): ?><div class="notice success"><?= e((string)$successFlash) ?></div><?php endif; ?>
     <?php if ($errorFlash): ?><div class="notice warn"><?= e((string)$errorFlash) ?></div><?php endif; ?>

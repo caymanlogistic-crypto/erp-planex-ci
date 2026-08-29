@@ -23,18 +23,9 @@ $tileUrlTemplate = app_url('/company/feo/requests/map/tiles/{z}/{x}/{y}');
             <div class="text-muted">Свободные заявки только из актуального «Размещения на карте».</div>
         </div>
         <div class="feo-map-head-actions">
-            <?php if (($_SESSION['role_code'] ?? '') === 'company_owner'): ?>
-            <a class="btn btn-secondary" href="<?= app_url('/company/feo/utilizers') ?>">Утилизаторы</a>
-            <?php endif; ?>
             <button class="btn btn-secondary" type="button" id="feo-map-refresh">Обновить</button>
         </div>
     </div>
-
-    <nav class="feo-domain-tabs" aria-label="Разделы заявок ФЭО">
-        <a href="<?= app_url('/company/feo/requests') ?>">Все заявки</a>
-        <a href="<?= app_url('/company/feo/requests/map-placement') ?>">Размещение на карте</a>
-        <a class="is-active" href="<?= app_url('/company/feo/requests/map') ?>" aria-current="page">Карта</a>
-    </nav>
 
     <?php if ($dbError): ?>
     <div class="alert alert-error" role="alert"><?= e($dbError) ?></div>
