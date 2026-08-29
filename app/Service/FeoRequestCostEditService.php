@@ -10,6 +10,7 @@ final class FeoRequestCostEditService
     private const CHUNK = 800;
     private const RATE_34_5 = 34.50;
     private const RATE_38 = 38.00;
+    private const DEADLOCK_RETRIES = 2;
 
     public function validateSelection(PDO $pdo, int $blockId, array $ids): array
     {
@@ -77,56 +78,66 @@ final class FeoRequestCostEditService
         $comment = trim((string)($payload['comment'] ?? ''));
         if (mb_strlen($comment) > 4000) throw new \RuntimeException('Комментарий слишком длинный.');
         $this->assertExpectedPreviewShape($expectedPreview);
-        $pdo->beginTransaction();
-        try {
-            $state = $this->state($pdo, $blockId, true);
-            if (!$state) throw new \RuntimeException('Блок стоимости не найден.');
-            if (!hash_equals($expectedFingerprint, $this->fingerprint($state))) throw new \RuntimeException('Блок был изменён после открытия. Откройте его заново.');
-            $oldIds = array_column($state['members'], 'zayavka_id');
-            [$added, $removed] = $this->diff($oldIds, $ids);
-            $changed = $added !== [] || $removed !== [];
-            $rows = $this->snapshotRows($state['members']);
-            $addedRows = $this->currentRows($pdo, $added, true);
-            $missing = array_values(array_diff($added, array_keys($addedRows)));
-            if ($missing !== []) throw new \RuntimeException('Состав размещения изменился. Добавляемые заявки отсутствуют: ' . $this->idList($missing) . '. Выполните проверку ещё раз.');
-            $actualAddedFingerprint = $this->addedSnapshotFingerprint($addedRows, $added);
-            if (!hash_equals((string)$expectedPreview['added_snapshot_fingerprint'], $actualAddedFingerprint)) {
-                throw new \RuntimeException('Данные добавляемых заявок изменились после предпросмотра. Выполните проверку ещё раз.');
+        $deadlockAttempts = 0;
+
+        while (true) {
+            $pdo->beginTransaction();
+            try {
+                $state = $this->state($pdo, $blockId, true);
+                if (!$state) throw new \RuntimeException('Блок стоимости не найден.');
+                if (!hash_equals($expectedFingerprint, $this->fingerprint($state))) throw new \RuntimeException('Блок был изменён после открытия. Откройте его заново.');
+                $oldIds = array_column($state['members'], 'zayavka_id');
+                [$added, $removed] = $this->diff($oldIds, $ids);
+                $changed = $added !== [] || $removed !== [];
+                $rows = $this->snapshotRows($state['members']);
+                $addedRows = $this->currentRows($pdo, $added, true);
+                $missing = array_values(array_diff($added, array_keys($addedRows)));
+                if ($missing !== []) throw new \RuntimeException('Состав размещения изменился. Добавляемые заявки отсутствуют: ' . $this->idList($missing) . '. Выполните проверку ещё раз.');
+                $actualAddedFingerprint = $this->addedSnapshotFingerprint($addedRows, $added);
+                if (!hash_equals((string)$expectedPreview['added_snapshot_fingerprint'], $actualAddedFingerprint)) {
+                    throw new \RuntimeException('Данные добавляемых заявок изменились после предпросмотра. Выполните проверку ещё раз.');
+                }
+                $priced = $this->pricedByOtherBlocks($pdo, $added, $blockId, true);
+                if ($priced !== []) throw new \RuntimeException('Одна из добавленных заявок уже получила стоимость в другом блоке: ' . $this->pricedList($priced) . '.');
+                foreach ($addedRows as $id=>$row) $rows[$id]=$row;
+                foreach ($removed as $id) unset($rows[$id]);
+                $mass = $this->massForIds($rows, $ids);
+                $price = $this->price((string)($payload['pricing_type'] ?? ''), $mass, $payload['manual_total'] ?? null);
+                $this->assertPreviewMatchesCommit($expectedPreview, count($ids), $mass, (float)$price['total_cost']);
+                $q = $pdo->prepare('UPDATE feo_request_cost_blocks SET pricing_type=?,rate_per_kg=?,snapshot_request_count=?,snapshot_total_mass_kg=?,total_cost=?,comment=?,updated_at=CURRENT_TIMESTAMP WHERE id=?');
+                $q->execute([$price['pricing_type'],$price['rate_per_kg'],count($ids),$mass,$price['total_cost'],$comment !== '' ? $comment : null,$blockId]);
+                if ($changed) {
+                    $q = $pdo->prepare('DELETE FROM feo_request_cost_block_requests WHERE block_id=?');
+                    $q->execute([$blockId]);
+                    $ins = $pdo->prepare('INSERT INTO feo_request_cost_block_requests(block_id,zayavka_id,snapshot_mass_kg,position_no) VALUES(?,?,?,?)');
+                    foreach ($ids as $i=>$id) $ins->execute([$blockId,$id,$rows[$id]['mass_kg'],$i+1]);
+                }
+                $pdo->commit();
+                return [
+                    'block_id'=>$blockId,
+                    'request_count'=>count($ids),
+                    'snapshot_total_mass_kg'=>$mass,
+                    'pricing_type'=>$price['pricing_type'],
+                    'rate_per_kg'=>$price['rate_per_kg'],
+                    'total_cost'=>$price['total_cost'],
+                    'composition_changed'=>$changed,
+                    'added_ids'=>$added,
+                    'removed_ids'=>$removed,
+                ];
+            } catch (PDOException $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                $driverCode = (int)($e->errorInfo[1] ?? 0);
+                if ($driverCode === 1213 && $deadlockAttempts < self::DEADLOCK_RETRIES) {
+                    $deadlockAttempts++;
+                    usleep(10000 * $deadlockAttempts);
+                    continue;
+                }
+                if ($driverCode === 1062) throw new \RuntimeException('Одна из добавленных заявок уже получила стоимость в другом блоке. Обновите блок и повторите проверку.');
+                throw $e;
+            } catch (\Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
             }
-            $priced = $this->pricedByOtherBlocks($pdo, $added, $blockId, true);
-            if ($priced !== []) throw new \RuntimeException('Одна из добавленных заявок уже получила стоимость в другом блоке: ' . $this->pricedList($priced) . '.');
-            foreach ($addedRows as $id=>$row) $rows[$id]=$row;
-            foreach ($removed as $id) unset($rows[$id]);
-            $mass = $this->massForIds($rows, $ids);
-            $price = $this->price((string)($payload['pricing_type'] ?? ''), $mass, $payload['manual_total'] ?? null);
-            $this->assertPreviewMatchesCommit($expectedPreview, count($ids), $mass, (float)$price['total_cost']);
-            $q = $pdo->prepare('UPDATE feo_request_cost_blocks SET pricing_type=?,rate_per_kg=?,snapshot_request_count=?,snapshot_total_mass_kg=?,total_cost=?,comment=?,updated_at=CURRENT_TIMESTAMP WHERE id=?');
-            $q->execute([$price['pricing_type'],$price['rate_per_kg'],count($ids),$mass,$price['total_cost'],$comment !== '' ? $comment : null,$blockId]);
-            if ($changed) {
-                $q = $pdo->prepare('DELETE FROM feo_request_cost_block_requests WHERE block_id=?');
-                $q->execute([$blockId]);
-                $ins = $pdo->prepare('INSERT INTO feo_request_cost_block_requests(block_id,zayavka_id,snapshot_mass_kg,position_no) VALUES(?,?,?,?)');
-                foreach ($ids as $i=>$id) $ins->execute([$blockId,$id,$rows[$id]['mass_kg'],$i+1]);
-            }
-            $pdo->commit();
-            return [
-                'block_id'=>$blockId,
-                'request_count'=>count($ids),
-                'snapshot_total_mass_kg'=>$mass,
-                'pricing_type'=>$price['pricing_type'],
-                'rate_per_kg'=>$price['rate_per_kg'],
-                'total_cost'=>$price['total_cost'],
-                'composition_changed'=>$changed,
-                'added_ids'=>$added,
-                'removed_ids'=>$removed,
-            ];
-        } catch (PDOException $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            if (($e->errorInfo[1] ?? null) === 1062) throw new \RuntimeException('Одна из добавленных заявок уже получила стоимость в другом блоке. Обновите блок и повторите проверку.');
-            throw $e;
-        } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            throw $e;
         }
     }
 
