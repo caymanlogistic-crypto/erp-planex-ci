@@ -25,8 +25,8 @@ async function verifyMap(page,{abortTiles=false}={}){
     const u=r.url();
     if(u.includes('/assets/css/feo-map.css')) assets.mapCss=r.status();
     if(u.includes('/assets/js/feo-map.js')) assets.mapJs=r.status();
-    if(u.includes('leaflet@1.9.4')&&u.includes('leaflet.js')) assets.leafletJs=r.status();
-    if(u.includes('leaflet@1.9.4')&&u.includes('leaflet.css')) assets.leafletCss=r.status();
+    if(u.includes('/assets/third-party/leaflet/1.9.4/leaflet.js')) assets.leafletJs=r.status();
+    if(u.includes('/assets/third-party/leaflet/1.9.4/leaflet.css')) assets.leafletCss=r.status();
   });
   const response=await page.goto(mapUrl,{waitUntil:'domcontentloaded',timeout:60000});
   assert(response&&response.status()===200,'map page HTTP != 200');
