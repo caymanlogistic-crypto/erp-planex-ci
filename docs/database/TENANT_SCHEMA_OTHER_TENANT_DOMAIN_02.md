@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `982cd5b271689072a1aafde06dc00478d3757ac672c74c3e70db47071bd7bc57`
+**Schema fingerprint:** `4b335615e0bc52b81307d13ce2556802709e6f311dd9e3826a68da8dff62422b`
 
 ## `feo_requests`
 
@@ -72,6 +72,32 @@
 ### Physical foreign keys
 
 - `fk_feo_requests_current_import`: (`current_import_id`) → `feo_imports`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
+
+## `feo_utilizer_aliases`
+
+**Domain:** Other tenant domain  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `utilizer_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `alias` | `varchar(500)` | NO | NULL | — | — |
+| `normalized_alias` | `varchar(500)` | NO | NULL | — | `UNI` |
+| `created_by_user_id` | `bigint unsigned` | YES | NULL | — | — |
+| `updated_by_user_id` | `bigint unsigned` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_feo_utilizer_alias_utilizer` (`utilizer_id`)
+- **UNIQUE** `uk_feo_utilizer_alias_normalized` (`normalized_alias`)
+
+### Physical foreign keys
+
+- `fk_feo_utilizer_alias_utilizer`: (`utilizer_id`) → `feo_utilizers`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
 
 ## `feo_utilizer_match_rules`
 

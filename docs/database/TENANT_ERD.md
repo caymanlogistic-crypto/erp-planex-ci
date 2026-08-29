@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `982cd5b271689072a1aafde06dc00478d3757ac672c74c3e70db47071bd7bc57`
+**Schema fingerprint:** `4b335615e0bc52b81307d13ce2556802709e6f311dd9e3826a68da8dff62422b`
 
 ## Architecture overview
 
@@ -127,10 +127,11 @@ erDiagram
   T_feo_requests ||--o{ T_feo_request_utilizer_overrides : "fk_feo_request_utilizer_override_request"
   T_feo_utilizers ||--o{ T_feo_request_utilizer_overrides : "fk_feo_request_utilizer_override_utilizer"
   T_feo_imports ||--o{ T_feo_requests : "fk_feo_requests_current_import"
+  T_feo_utilizers ||--o{ T_feo_utilizer_aliases : "fk_feo_utilizer_alias_utilizer"
   T_feo_utilizers ||--o{ T_feo_utilizer_match_rules : "fk_feo_utilizer_rule_utilizer"
 ```
 
-Tables: `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_match_rules`, `feo_utilizers`
+Tables: `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`
 
 ## System / Migration metadata
 
