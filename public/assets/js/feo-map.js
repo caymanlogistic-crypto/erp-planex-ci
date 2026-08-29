@@ -21,7 +21,9 @@
 
     try {
         state.map = L.map(mapNode, {zoomControl: true, preferCanvas: false}).setView([55.75, 37.62], 5);
-        const tiles = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        const tileUrlTemplate = String(page.dataset.tileUrlTemplate || '').trim();
+        if (!tileUrlTemplate) throw new Error('FEO map tile URL template is missing');
+        const tiles = L.tileLayer(tileUrlTemplate, {
             maxZoom: 19,
             attribution: '&copy; OpenStreetMap contributors',
         });

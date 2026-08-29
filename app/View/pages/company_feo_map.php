@@ -11,11 +11,12 @@ $leafletJsPath = 'public/assets/third-party/leaflet/1.9.4/leaflet.js';
 $leafletCssUrl = app_url('/assets/third-party/leaflet/1.9.4/leaflet.css') . '?v=' . filemtime(base_path($leafletCssPath));
 $leafletJsUrl = app_url('/assets/third-party/leaflet/1.9.4/leaflet.js') . '?v=' . filemtime(base_path($leafletJsPath));
 $mapJsUrl = app_url('/assets/js/feo-map.js') . '?v=' . filemtime(base_path('public/assets/js/feo-map.js'));
+$tileUrlTemplate = app_url('/company/feo/requests/map/tiles/{z}/{x}/{y}');
 ?>
 <link rel="stylesheet" href="<?= e($leafletCssUrl) ?>">
 <link rel="stylesheet" href="<?= app_url('/assets/css/feo-map.css') ?>?v=<?= filemtime(base_path('public/assets/css/feo-map.css')) ?>">
 
-<div class="feo-map-page" id="feo-map-page" data-refresh-url="<?= e(app_url('/company/feo/requests/map/data')) ?>" data-map-ready="0">
+<div class="feo-map-page" id="feo-map-page" data-refresh-url="<?= e(app_url('/company/feo/requests/map/data')) ?>" data-tile-url-template="<?= e($tileUrlTemplate) ?>" data-map-ready="0">
     <div class="feo-map-head">
         <div>
             <h1 class="page-title">Карта</h1>

@@ -17,17 +17,20 @@ async function waitForPositiveText(locator,message,{attempts=60,delayMs=250}={})
 }
 
 async function verifyMap(page,{abortTiles=false}={}){
-  if(abortTiles) await page.route('https://*.tile.openstreetmap.org/**',route=>route.abort());
-  const consoleErrors=[],pageErrors=[],assets={};
+  if(abortTiles) await page.route('**/company/feo/requests/map/tiles/**',route=>route.abort());
+  const consoleErrors=[],pageErrors=[],assets={tileStatuses:[]},externalTileRequests=[];
   page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
   page.on('pageerror',e=>pageErrors.push(String(e)));
+  page.on('request',r=>{if(/https:\/\/[^/]*tile\.openstreetmap\.org\//i.test(r.url()))externalTileRequests.push(r.url());});
   page.on('response',r=>{
     const u=r.url();
     if(u.includes('/assets/css/feo-map.css')) assets.mapCss=r.status();
     if(u.includes('/assets/js/feo-map.js')) assets.mapJs=r.status();
     if(u.includes('/assets/third-party/leaflet/1.9.4/leaflet.js')) assets.leafletJs=r.status();
     if(u.includes('/assets/third-party/leaflet/1.9.4/leaflet.css')) assets.leafletCss=r.status();
+    if(u.includes('/company/feo/requests/map/tiles/')) assets.tileStatuses.push(r.status());
   });
+  const firstTilePromise=abortTiles?null:page.waitForResponse(r=>r.url().includes('/company/feo/requests/map/tiles/'),{timeout:60000});
   const response=await page.goto(mapUrl,{waitUntil:'domcontentloaded',timeout:60000});
   assert(response&&response.status()===200,'map page HTTP != 200');
   assert(page.url().includes('/company/feo/requests/map'),'redirected away from map page');
@@ -37,6 +40,11 @@ async function verifyMap(page,{abortTiles=false}={}){
   assert(assets.mapJs===200,'feo-map.js not loaded 200');
   assert(assets.leafletJs===200,'Leaflet JS not loaded 200');
   assert(assets.leafletCss===200,'Leaflet CSS not loaded 200');
+  assert(externalTileRequests.length===0,'browser must not request OpenStreetMap tiles directly under production CSP');
+  if(firstTilePromise){
+    const firstTile=await firstTilePromise;
+    assert(firstTile.status()===200,'same-origin map tile HTTP != 200');
+  }
   const requests=Number((await page.locator('#feo-map-request-count').innerText()).trim());
   const markers=Number((await page.locator('#feo-map-marker-count').innerText()).trim());
   assert(requests>0,'production map has zero request count');
@@ -77,9 +85,9 @@ async function verifyMap(page,{abortTiles=false}={}){
   });
   assert(roleResponse.status()===403,'logist mutation route must return 403');
   assert(pageErrors.length===0,'page errors: '+pageErrors.join(' | '));
-  const relevantConsole=consoleErrors.filter(x=>!(abortTiles&&/tile\.openstreetmap\.org|ERR_FAILED/i.test(x)));
+  const relevantConsole=consoleErrors.filter(x=>!(abortTiles&&/requests\/map\/tiles\/|ERR_FAILED/i.test(x)));
   assert(relevantConsole.length===0,'console errors: '+relevantConsole.join(' | '));
-  return {requests,markers,domMarkers,assets,consoleErrors,pageErrors,abortTiles,popup};
+  return {requests,markers,domMarkers,assets,externalTileRequests,consoleErrors,pageErrors,abortTiles,popup};
 }
 
 async function verifyOwnerAdmin(browser){
@@ -130,7 +138,7 @@ async function verifyOwnerAdmin(browser){
   await context.close();
 
   const ownerAdmin=await verifyOwnerAdmin(browser);
-  const summary={mapUrl,utilizerUrl,sourceSha:process.env.SOURCE_SHA,live,resilience,ownerAdmin,note:'Real authenticated production Stage 1 QA. Logist map is read-only and mutation route is asserted 403; OSM tiles are blocked in resilience pass; owner utilizer admin is visually checked at desktop and 800px without mutations.'};
+  const summary={mapUrl,utilizerUrl,sourceSha:process.env.SOURCE_SHA,live,resilience,ownerAdmin,note:'Real authenticated production Stage 1 QA. Browser basemap traffic is same-origin through the guarded tile proxy; logist map is read-only and mutation route is asserted 403; same-origin map tiles are blocked in resilience pass; owner utilizer admin is visually checked at desktop and 800px without mutations.'};
   fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));
   console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} utilizers=${ownerAdmin.utilizerCards}`);
   await browser.close();
