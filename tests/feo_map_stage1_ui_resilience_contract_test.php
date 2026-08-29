@@ -36,7 +36,12 @@ $must(str_contains($js, "page.dataset.mapReady = 'error'"), 'map failure readine
 $must(str_contains($js, "page.dataset.mapReady = '1'"), 'map success readiness state missing');
 $must(str_contains($js, "page.dataset.tileUrlTemplate"), 'map must read the same-origin tile template');
 $must(!str_contains($js, 'tile.openstreetmap.org'), 'browser runtime must not request OSM tiles directly under production CSP');
+$must(str_contains($js, "tiles.on('loading'"), 'tile load-cycle reset hook missing');
 $must(str_contains($js, "tiles.on('tileerror'"), 'tile outage handling missing');
+$must(str_contains($js, "tiles.on('load'"), 'tile load completion hook missing');
+$must(str_contains($js, "tiles.on('loading', () => {\n            state.tileErrors = 0;"), 'tile error counter must reset at the start of a new load cycle');
+$must(str_contains($js, "if (state.tileErrors === 0) showRuntimeWarning('');"), 'tile warning must clear only after a clean load cycle');
+$must(!str_contains($js, "tiles.on('load', () => {\n            state.tileErrors = 0;\n            showRuntimeWarning('');"), 'load must not erase tile errors and hide an outage warning unconditionally');
 $must(str_contains($js, 'Маркеры заявок продолжают отображаться'), 'tile outage must explain that markers remain usable');
 $must(str_contains($js, "document.dispatchEvent(new CustomEvent('feo-map-ready'"), 'browser readiness event missing');
 
