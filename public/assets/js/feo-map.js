@@ -27,6 +27,9 @@
             maxZoom: 19,
             attribution: '&copy; OpenStreetMap contributors',
         });
+        tiles.on('loading', () => {
+            state.tileErrors = 0;
+        });
         tiles.on('tileerror', () => {
             state.tileErrors += 1;
             if (state.tileErrors >= 3) {
@@ -34,8 +37,7 @@
             }
         });
         tiles.on('load', () => {
-            state.tileErrors = 0;
-            showRuntimeWarning('');
+            if (state.tileErrors === 0) showRuntimeWarning('');
         });
         tiles.addTo(state.map);
 
