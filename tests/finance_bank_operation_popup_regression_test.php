@@ -7,6 +7,7 @@ function ok(bool $value,string $message):void{if(!$value)throw new RuntimeExcept
 $root=dirname(__DIR__);
 $manual=file_get_contents($root.'/app/Service/FinanceMatchingRuleManualTrait.php');
 $submit=file_get_contents($root.'/app/Http/Controllers/Company/BankFinanceActions/classifySubmit.php');
+$classifyForm=file_get_contents($root.'/app/Http/Controllers/Company/BankFinanceActions/classifyForm.php');
 $popup=file_get_contents($root.'/app/View/partials/company_bank_transaction_classify_form.php');
 $employee=file_get_contents($root.'/app/Service/FinanceEmployeeBankSettlementService.php');
 $batch=file_get_contents($root.'/app/Service/FinanceMatchingRuleBatchTrait.php');
@@ -36,6 +37,10 @@ foreach(['action_type','target_employee_ref','target_cash_flow_center_id','targe
 ok(str_contains($popup,'value="categorize"')&&str_contains($popup,'value="employee_cash_settlement"'),'popup exposes same active rule types as rules screen');
 ok(str_contains($rulesForm,'employee_cash_settlement')&&str_contains($rulesForm,'categorize'),'separate rules screen remains intact');
 ok(str_contains($popup,'tx-rule-settings')&&str_contains($popup,'distribution_mode'),'rule-only conditions are gated by selected mode');
+ok(str_contains($classifyForm,'classification_rule_id')&&str_contains($classifyForm,'FinanceMatchingRuleService::findRule'),'operation details fetch the persisted matching rule read-only');
+ok(str_contains($popup,'Сработало правило #')&&str_contains($popup,'Название:')&&str_contains($popup,'Условия:')&&str_contains($popup,'Действие:')&&str_contains($popup,'Приоритет:')&&str_contains($popup,'Статус правила:'),'blue operation trace exposes complete applied rule summary');
+foreach(['counterparty_inn','counterparty_id','counterparty_type','purpose_contains','invoice_number_pattern','purpose_regex','amount_from','amount_to','bank_account_id','target_employee_name_snapshot','target_cash_flow_center_id','target_dds_category_id','target_counterparty_id','target_counterparty_type'] as $field){ok(str_contains($popup,"classificationRule['".$field."']"),'rule trace includes persisted field '.$field);}
+ok(str_contains($popup,'правило не найдено в текущем реестре'),'rule trace fails informatively when historical rule is unavailable');
 ok(str_contains($filters,'.bank-row-manual>td')&&str_contains($filters,'#eff8ed'),'manual rows have soft green whole-row background');
 ok(str_contains($filters,'.bank-row-unallocated>td')&&str_contains($filters,'#fff0ed'),'problem rows preserve red background');
 ok(str_contains($filters,"status==='MANUAL'")&&str_contains($filters,"status==='AUTO'"),'row class derives from persisted classification status after refresh');
