@@ -14,6 +14,8 @@ $read = static function (string $rel) use ($root,$fail): string {
 $view = $read('app/View/pages/company_feo_map.php');
 $js = $read('public/assets/js/feo-map.js');
 $qa = $read('.github/feo-map-stage1/production_visual.js');
+$qaWorkflow = $read('.github/workflows/feo_map_stage1_production_visual_qa.yml');
+$sanitizer = $read('.github/feo-map-stage1/sanitize_artifacts.js');
 $tileService = $read('app/Service/FeoMapTileService.php');
 $controller = $read('app/Http/Controllers/Company/FeoMapController.php');
 $routes = $read('app/Http/Routes/company_feo_map.php');
@@ -40,6 +42,7 @@ $must(str_contains($js, "tiles.on('loading'"), 'tile load-cycle reset hook missi
 $must(str_contains($js, "tiles.on('tileerror'"), 'tile outage handling missing');
 $must(str_contains($js, "tiles.on('load'"), 'tile load completion hook missing');
 $must(str_contains($js, "tiles.on('loading', () => {\n            state.tileErrors = 0;"), 'tile error counter must reset at the start of a new load cycle');
+$must(str_contains($js, "if (state.tileErrors >= 3)"), 'tile outage warning threshold contract changed');
 $must(str_contains($js, "if (state.tileErrors === 0) showRuntimeWarning('');"), 'tile warning must clear only after a clean load cycle');
 $must(!str_contains($js, "tiles.on('load', () => {\n            state.tileErrors = 0;\n            showRuntimeWarning('');"), 'load must not erase tile errors and hide an outage warning unconditionally');
 $must(str_contains($js, 'Маркеры заявок продолжают отображаться'), 'tile outage must explain that markers remain usable');
@@ -55,7 +58,9 @@ $must(str_contains($tileService, 'PLANEX-ERP-FEO-Map/1.0'), 'identifiable tile U
 $must(str_contains($tileService, "'If-None-Match: '"), 'conditional ETag revalidation missing');
 $must(str_contains($tileService, "'If-Modified-Since: '"), 'conditional Last-Modified revalidation missing');
 $must(str_contains($tileService, 'cache/feo-map-tiles'), 'local tile cache path missing');
-$must(str_contains($tileService, "CURLOPT_FOLLOWLOCATION => false"), 'tile proxy must not follow redirects to arbitrary hosts');
+$must(str_contains($tileService, "CURLOPT_FOLLOWLOCATION => false"), 'cURL tile transport must not follow redirects');
+$must(str_contains($tileService, "'follow_location'=>0"), 'PHP stream tile transport must not follow redirects');
+$must(str_contains($tileService, "'max_redirects'=>0"), 'PHP stream tile transport must reject redirect chains');
 
 require_once $root . '/app/Service/FeoMapTileService.php';
 $must(\App\Service\FeoMapTileService::normalizeCoordinates('0', '0', '0') === [0,0,0], 'valid z0 tile rejected');
@@ -75,12 +80,23 @@ $must(!str_contains($qa, 'leaflet@1.9.4'), 'production QA must not recognize obs
 $must(str_contains($qa, "**/company/feo/requests/map/tiles/**"), 'tile outage QA must block same-origin proxy path');
 $must(str_contains($qa, 'externalTileRequests.length===0'), 'production QA must forbid direct browser OSM traffic');
 $must(str_contains($qa, 'same-origin map tile HTTP != 200'), 'production QA must require a successful proxied tile');
-$must(str_contains($qa, 'blockedTileRequests>=3'), 'resilience QA must prove that same-origin tile requests were actually intercepted');
+$must(str_contains($qa, 'blockedTileRequests>=3'), 'resilience QA must prove that the outage threshold is actually exercised');
 $must(str_contains($qa, 'const liveContext=await browser.newContext'), 'normal production pass needs an isolated browser context');
 $must(str_contains($qa, 'const resilienceContext=await browser.newContext'), 'resilience pass needs a fresh browser context');
 $liveClose = strpos($qa, 'await liveContext.close();');
 $resilienceContext = strpos($qa, 'const resilienceContext=await browser.newContext');
 $must($liveClose !== false && $resilienceContext !== false && $liveClose < $resilienceContext, 'resilience context must be created only after the live context/cache is closed');
+
+// Evidence artifacts must never retain temporary authenticated session IDs, CSRF values, or anonymous Set-Cookie session IDs.
+$must(str_contains($qaWorkflow, 'Sanitize production evidence'), 'production evidence sanitization step missing');
+$must(str_contains($qaWorkflow, 'node .github/feo-map-stage1/sanitize_artifacts.js artifacts'), 'production evidence sanitizer is not executed before upload');
+$must(str_contains($sanitizer, 'QA_LOGIST_SESSION_ID'), 'sanitizer must scrub the logist QA session id');
+$must(str_contains($sanitizer, 'QA_OWNER_SESSION_ID'), 'sanitizer must scrub the owner QA session id');
+$must(str_contains($sanitizer, 'QA_LOGIST_CSRF_TOKEN'), 'sanitizer must scrub the QA CSRF token');
+$must(str_contains($sanitizer, 'ERPV2SESSID='), 'sanitizer must scrub session cookies emitted during old-SID proof');
+$must(str_contains($sanitizer, 'csrf-token'), 'sanitizer must scrub CSRF meta values from DOM evidence');
+$must(str_contains($sanitizer, '_csrf_token'), 'sanitizer must scrub hidden CSRF form values from DOM evidence');
+$must(str_contains($sanitizer, 'FEO_MAP_STAGE1_ARTIFACT_SANITIZE=PASS'), 'sanitizer must emit an auditable PASS marker');
 
 // Marker presentation is LOCKED. These assertions protect the accepted marker contract.
 $must(str_contains($js, "classes = ['feo-marker']"), 'locked marker class changed');
