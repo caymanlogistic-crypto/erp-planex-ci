@@ -51,6 +51,9 @@ $must(!str_contains($view, 'feo-content-container') && !str_contains($css, '.feo
 $must(str_contains($css, '.feo-utilizer-page{display:flex;flex-direction:column;gap:14px;min-width:0;max-width:100%}'), 'utilizer root must remain shrink-safe inside canonical workspace shell');
 $must(str_contains($css, '.feo-utilizer-page .table-card{width:100%;min-width:0;max-width:100%;margin:0}'), 'utilizer table cards must stay inside canonical workspace width');
 $must(str_contains($css, '.feo-utilizer-page .table-scroll{min-width:0;max-width:100%;overflow-x:auto}'), 'wide utilizer tables must scroll inside table-card');
+$must(str_contains($css, '.feo-utilizer-page [data-feo-utilizer-grid] .table{width:100%;max-width:100%;min-width:0;table-layout:fixed}'), 'main utilizer table must fit the canonical content width');
+$must(str_contains($css, 'td:nth-child(3)') && str_contains($css, 'td:nth-child(4)') && str_contains($css, 'white-space:normal') && str_contains($css, 'overflow-wrap:anywhere'), 'address and FKKO columns must wrap instead of forcing horizontal overflow');
+$must(str_contains($css, '#feo-utilizer-view-modal .modal-body{padding:16px}'), 'utilizer view/edit modal must keep the canonical body inset');
 $must(!str_contains($css, '100vw'), 'utilizer page-specific CSS must not force viewport-wide layout');
 $must(str_contains($productionQa, "const requestsUrl='https://plan-ex.ru/erpv2/company/feo/requests';") && str_contains($productionQa, "const placementUrl='https://plan-ex.ru/erpv2/company/feo/requests/map-placement';"), 'production QA must cover requests and map-placement pages');
 $must(str_contains($productionQa, "[requestsUrl,'all requests'],[placementUrl,'map placement'],[mapUrl,'map']"), 'production QA must execute FEO shell checks on all non-utilizer pages');
