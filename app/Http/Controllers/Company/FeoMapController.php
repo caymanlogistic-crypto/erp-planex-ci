@@ -4,17 +4,20 @@ namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
 use App\Service\FeoMapService;
+use App\Service\FeoMapTileService;
 use App\Service\FeoRequestService;
 
 final class FeoMapController
 {
     private FeoRequestService $requests;
     private FeoMapService $map;
+    private FeoMapTileService $tiles;
 
     public function __construct(private readonly array $config, private readonly Database $db)
     {
         $this->requests = new FeoRequestService($config, $db);
         $this->map = new FeoMapService();
+        $this->tiles = new FeoMapTileService();
     }
 
     public function index(): void
@@ -58,6 +61,12 @@ final class FeoMapController
         } catch (\Throwable $e) {
             jsonResponse(['success'=>false,'message'=>$this->publicDatabaseError($e)], 422);
         }
+    }
+
+    public function tile(string $z, string $x, string $y): void
+    {
+        requireRole(['company_owner','senior_logist','logist']);
+        $this->tiles->serve($z, $x, $y);
     }
 
     private function companyContext(): array
