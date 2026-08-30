@@ -11,15 +11,6 @@ const logistSid=process.env.QA_LOGIST_SESSION_ID,ownerSid=process.env.QA_OWNER_S
 if(!cookieName||!logistSid||!ownerSid||!csrf)throw new Error('QA session env missing');
 const cookie=sid=>({name:cookieName,value:sid,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'});
 
-async function waitForPositiveText(locator,message,{attempts=60,delayMs=250}={}){
-  for(let i=0;i<attempts;i++){
-    const n=Number((await locator.innerText()).trim());
-    if(n>0)return n;
-    if(i<attempts-1)await locator.page().waitForTimeout(delayMs);
-  }
-  throw new Error(message);
-}
-
 async function shellCheck(context,url,label){
   const p=await context.newPage();
   try{
@@ -34,14 +25,21 @@ async function mapSnapshot(page){
   return page.evaluate(()=>window.__FEO_MAP_STAGE1__&&window.__FEO_MAP_STAGE1__.snapshot());
 }
 
-async function assertCanvasFillsWorkspace(page,message){
-  const metrics=await page.locator('#feo-map-workspace').evaluate(el=>{
-    const r=el.getBoundingClientRect();
-    return {innerX:r.x+el.clientLeft,innerY:r.y+el.clientTop,clientWidth:el.clientWidth,clientHeight:el.clientHeight};
+async function assertMapFillsContent(page,message){
+  const metrics=await page.evaluate(()=>{
+    const content=document.querySelector('main.content');
+    const shell=content&&content.querySelector(':scope > .workspace-shell-1690');
+    const workspace=document.getElementById('feo-map-workspace');
+    const canvas=document.getElementById('feo-map');
+    if(!content||!shell||!workspace||!canvas)return null;
+    const box=el=>{const r=el.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height}};
+    const wsStyle=getComputedStyle(workspace),canvasStyle=getComputedStyle(canvas);
+    return{content:box(content),shell:box(shell),workspace:box(workspace),canvas:box(canvas),workspaceRadius:wsStyle.borderRadius,canvasRadius:canvasStyle.borderRadius};
   });
-  const canvas=await page.locator('#feo-map').boundingBox();
-  assert(canvas,'map canvas box missing');
-  assert(Math.abs(metrics.clientWidth-canvas.width)<=1&&Math.abs(metrics.clientHeight-canvas.height)<=1&&Math.abs(metrics.innerX-canvas.x)<=1&&Math.abs(metrics.innerY-canvas.y)<=1,message);
+  assert(metrics,'map fullscreen metrics missing');
+  const same=(a,b)=>Math.abs(a.x-b.x)<=1&&Math.abs(a.y-b.y)<=1&&Math.abs(a.width-b.width)<=1&&Math.abs(a.height-b.height)<=1;
+  assert(same(metrics.content,metrics.shell)&&same(metrics.shell,metrics.workspace)&&same(metrics.workspace,metrics.canvas),message+': '+JSON.stringify(metrics));
+  assert(parseFloat(metrics.workspaceRadius||'0')===0&&parseFloat(metrics.canvasRadius||'0')===0,'map corners are not square');
 }
 
 function legacyMarkerOverlays(page){
@@ -76,9 +74,11 @@ async function verifyMap(page){
   assert(assets.yandexApiStatuses.some(x=>x===200),'Yandex Maps API 2.1 not loaded 200');
   assert(forbidden.length===0,'Leaflet/OSM runtime request detected: '+forbidden.join(' | '));
   assert(await page.locator('#feo-map [class*="ymaps-2-1-"]').count()>0,'Yandex map DOM missing');
+  assert(await page.locator('.feo-map-head,.feo-map-summary,#feo-map-refresh').count()===0,'removed map header/summary/refresh UI returned');
 
-  const requests=Number((await page.locator('#feo-map-request-count').innerText()).trim());
-  const markers=Number((await page.locator('#feo-map-marker-count').innerText()).trim());
+  const payload=JSON.parse((await page.locator('#feo-map-data').textContent())||'{}');
+  const requests=Number(payload.diagnostics&&payload.diagnostics.marker_request_count||0);
+  const markers=Number(payload.diagnostics&&payload.diagnostics.marker_count||0);
   assert(requests>0,'zero map requests');assert(markers>0,'zero map markers');
   let snap=await mapSnapshot(page);assert(snap&&snap.engine==='yandex','diagnostic snapshot engine != yandex');
   assert(snap.markerRenderer==='legacy-request-marker-v2','legacy marker renderer not active');
@@ -108,7 +108,13 @@ async function verifyMap(page){
   }
   for(const item of stacked){assert(item.hideTriangle===true,'upper stack marker kept tail');assert(Array.isArray(item.offset)&&item.offset[0]===-33&&item.offset[1]===-47-item.shiftY,'stack offset drifted');}
 
-  await assertCanvasFillsWorkspace(page,'map canvas does not fill workspace inner box');
+  await assertMapFillsContent(page,'map does not fill the full ERP content viewport');
+  const panelMetrics=await page.locator('#feo-map-layer-panel').evaluate(el=>{
+    const head=el.querySelector('.feo-map-layer-head'),row=el.querySelector('.feo-layer-row');
+    const s=getComputedStyle(el);
+    return{width:el.getBoundingClientRect().width,headHeight:head?head.getBoundingClientRect().height:999,rowHeight:row?row.getBoundingClientRect().height:999,radius:s.borderRadius};
+  });
+  assert(panelMetrics.width<=220&&panelMetrics.headHeight<=30&&panelMetrics.rowHeight<=24&&parseFloat(panelMetrics.radius||'0')<=2.1,'layer panel is not ERP-compact: '+JSON.stringify(panelMetrics));
 
   assert(await page.locator('#feo-layer-list .feo-layer-row').count()>0,'map layers missing');
   assert(await page.locator('#feo-layer-list [data-layer-group="utilizers"] .feo-layer-row').count()>0,'utilizer layer group missing');
@@ -134,13 +140,12 @@ async function verifyMap(page){
   await page.locator('#feo-map-layer-toggle').click();assert(await page.locator('#feo-map-layer-panel').evaluate(el=>el.classList.contains('is-collapsed')),'layer panel did not collapse');
   await page.locator('#feo-map-layer-toggle').click();assert(!(await page.locator('#feo-map-layer-panel').evaluate(el=>el.classList.contains('is-collapsed'))),'layer panel did not expand');
 
-  const refreshPromise=page.waitForResponse(x=>x.url().includes('/company/feo/requests/map/data')&&x.request().method()==='GET');
-  await page.locator('#feo-map-refresh').click();const refresh=await refreshPromise;assert(refresh.status()===200,'map refresh HTTP != 200');
-  const refreshJson=await refresh.json();assert(refreshJson.success===true,'map refresh success != true');
-  await waitForPositiveText(page.locator('#feo-map-marker-count'),'marker count did not recover after refresh');
+  const dataResponse=await page.request.get(base+'/company/feo/requests/map/data',{headers:{Accept:'application/json'}});
+  assert(dataResponse.status()===200,'map data GET HTTP != 200');
+  const dataJson=await dataResponse.json();assert(dataJson.success===true,'map data GET success != true');
 
   await page.setViewportSize({width:1440,height:900});await page.waitForTimeout(120);
-  await assertCanvasFillsWorkspace(page,'Yandex map resize drifted from workspace inner box');
+  await assertMapFillsContent(page,'Yandex map resize drifted from full ERP content viewport');
 
   assert(await page.locator('a[href$="/company/feo/utilizers"]').count()===0,'logist sees owner utilizer link');
   const ownerPage=await page.request.get(utilizerUrl);assert(ownerPage.status()===403,'logist utilizer page must be 403');
@@ -149,7 +154,7 @@ async function verifyMap(page){
   assert(pageErrors.length===0,'map page errors: '+pageErrors.join(' | '));
   const relevantConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*404/i.test(x));
   assert(relevantConsole.length===0,'map console errors: '+relevantConsole.join(' | '));
-  return{requests,markers,adr:liveAdr.length,stacked:stacked.length,adrEvidence,stackEvidence,assets};
+  return{requests,markers,adr:liveAdr.length,stacked:stacked.length,adrEvidence,stackEvidence,assets,panelMetrics};
 }
 
 async function verifyYandexFailure(context){
@@ -185,5 +190,5 @@ async function ownerCheck(browser){
   fs.mkdirSync('artifacts',{recursive:true});const browser=await chromium.launch({headless:true});
   const liveContext=await browser.newContext({viewport:{width:1920,height:1080}});await liveContext.addCookies([cookie(logistSid)]);const livePage=await liveContext.newPage();const live=await verifyMap(livePage);fs.writeFileSync('artifacts/production-dom.html',await livePage.content());await livePage.screenshot({path:'artifacts/feo-map-stage1-production.png',fullPage:true});await liveContext.close();
   const failureContext=await browser.newContext({viewport:{width:1920,height:1080}});await failureContext.addCookies([cookie(logistSid)]);const yandexFailure=await verifyYandexFailure(failureContext);await failureContext.close();
-  const owner=await ownerCheck(browser);const summary={sourceSha:process.env.SOURCE_SHA,live,yandexFailure,owner,note:'Authenticated read-only production QA for Yandex Maps + legacy request marker/vertical stack. No business mutation submitted.'};fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} stacks=${live.stacked} utilizers=${owner.utilizerRows} unresolved=${owner.unresolved}`);await browser.close();
+  const owner=await ownerCheck(browser);const summary={sourceSha:process.env.SOURCE_SHA,live,yandexFailure,owner,note:'Authenticated read-only production QA for full-viewport Yandex Maps + legacy request marker/vertical stack. No business mutation submitted.'};fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} stacks=${live.stacked} utilizers=${owner.utilizerRows} unresolved=${owner.unresolved}`);await browser.close();
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});
