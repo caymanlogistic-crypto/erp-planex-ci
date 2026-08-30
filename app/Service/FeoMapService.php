@@ -51,7 +51,8 @@ final class FeoMapService
         foreach ($rows as $row) {
             $id = trim((string)($row['zayavka_id'] ?? ''));
             if ($id === '') continue;
-            $coords = self::coordinates($row['mno_sh'] ?? null, $row['mno_d'] ?? null);
+            // Historical FEO storage is inverted: mno_d contains latitude, mno_sh contains longitude.
+            $coords = self::coordinates($row['mno_d'] ?? null, $row['mno_sh'] ?? null);
             if ($coords['status'] === 'missing') {
                 $diagnostics['missing_coordinates'][] = $id;
                 continue;
