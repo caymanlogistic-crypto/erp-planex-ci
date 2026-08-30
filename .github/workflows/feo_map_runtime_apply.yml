@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     env:
-      CIPHERTEXT_B64: zJQkZbBDlo6dn2nqifC8WTmnzjS2of5sLcLC+VCHIqXR0bdg4pL4jvPMRJg/6jGPklo3/hfJsu7utG0kI4ogsXnUzovdd5ihwUDj+aoMjQAx9JLqE70naPjXz6Mi/V2AIWo+GOh/dRgb0YB+gyMB7Frs14Ip/0NUGAJgfD9Jb4sWjx/8OLe3tqaZw6hhu3ecL7yr0iHHgp2LsyxGhOTMh8XYDFVgq9euQjByuHOCfCLCd5X/7oVkrb/h3DFZ2uU9ipTlray6gXUeP/W9IKA+mc8yjjjEOS8HOrEoeU616naYkI4RLLcF14gKofpWpIkd0qXi34a3S17NT0jtVMX0b43UKnjv5u1ReATbIdvCGsgpBptUxKVlvxar9wP5Oynnu9QTqEjN4BQyS3HqEXer53s2ssq5A8cpbjmTDKvdjF6zNn3PpttU4G0PplkH0TTF2WbewqIhxoWKyX4XZBw0lgShL0FBIoZXBMfZhV6XZNIRxlaTBlbZ7hWQ7AePZnqr
+      CIPHERTEXT_B64: c28Im56cKRIqp5q0FoCzXyX+LVNySfpPO7uhAYaq9424lt7HeUyqAcRnEV3Fte7aXgre2jy9cjnn6v6e6qYR+hyj5/+DUjoFkDJHNKPCyvNb/WTcsHrgMqDbVaZRi5/pSfiOtHhzB1+SL5QP+EvL6aEqhj27B4NHZ+N+LqvPoM6FzGjx2s6dngG5sInx7PCKZjxyOyxbNOJnvzVGWOczny97kQN8drkUipbzDnYZmDfjQg11t1SyyFQ0mp0pbSMLyyHypvn5ewNHoDF/Esdq3+tqfKEghXtX3KxZMS7T8ncWQu2nSh92nk5bJneWTzxSVzCoGxkW/KNDjE09o1OYApeI4aw8ds2NAw/euAGfb9vHtbsWVJZ+Q5X+68qS5SNodHqR4PL4wNtztNbjsbdNi/h/rM6ygkAhXcmDx6PyulG9hkpTdkOauxeLgN+a/2RGMjycxMWaI8BD38trDvuOrDVwwH1Bap0tuuq59nCG6U2POsd25RKcfEclYbgeI28b
     steps:
       - uses: actions/checkout@v4
       - name: Configure isolated SSH credentials
