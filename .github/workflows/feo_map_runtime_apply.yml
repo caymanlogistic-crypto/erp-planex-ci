@@ -1,0 +1,100 @@
+name: FEO Map Runtime Apply
+
+on:
+  push:
+    branches:
+      - agent/feo-map-runtime-diagnostic-20260830
+    paths:
+      - .github/workflows/feo_map_runtime_apply.yml
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-apply:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      CIPHERTEXT_B64: zJQkZbBDlo6dn2nqifC8WTmnzjS2of5sLcLC+VCHIqXR0bdg4pL4jvPMRJg/6jGPklo3/hfJsu7utG0kI4ogsXnUzovdd5ihwUDj+aoMjQAx9JLqE70naPjXz6Mi/V2AIWo+GOh/dRgb0YB+gyMB7Frs14Ip/0NUGAJgfD9Jb4sWjx/8OLe3tqaZw6hhu3ecL7yr0iHHgp2LsyxGhOTMh8XYDFVgq9euQjByuHOCfCLCd5X/7oVkrb/h3DFZ2uU9ipTlray6gXUeP/W9IKA+mc8yjjjEOS8HOrEoeU616naYkI4RLLcF14gKofpWpIkd0qXi34a3S17NT0jtVMX0b43UKnjv5u1ReATbIdvCGsgpBptUxKVlvxar9wP5Oynnu9QTqEjN4BQyS3HqEXer53s2ssq5A8cpbjmTDKvdjF6zNn3PpttU4G0PplkH0TTF2WbewqIhxoWKyX4XZBw0lgShL0FBIoZXBMfZhV6XZNIRxlaTBlbZ7hWQ7AePZnqr
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Apply runtime key and Yandex CSP
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          printf '%s' "$CIPHERTEXT_B64" | ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          ROOT="$HOME/planexp/public_html"
+          ERP="$ROOT/erpv2"
+          ENV_FILE="$ERP/.env"
+          HTACCESS="$ROOT/.htaccess"
+          RSA_KEY=/tmp/feo_yandex_runtime_exchange.pem
+          TMP_CIPHER=$(mktemp)
+          TMP_PLAIN=$(mktemp)
+          trap 'rm -f "$TMP_CIPHER" "$TMP_PLAIN" "$RSA_KEY" "${RSA_KEY}.pub.pem"' EXIT
+          cat > "$TMP_CIPHER.b64"
+          base64 -d "$TMP_CIPHER.b64" > "$TMP_CIPHER"
+          rm -f "$TMP_CIPHER.b64"
+          test -s "$RSA_KEY"
+          openssl pkeyutl -decrypt -inkey "$RSA_KEY" -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in "$TMP_CIPHER" -out "$TMP_PLAIN"
+          test -s "$TMP_PLAIN"
+          key_value=$(cat "$TMP_PLAIN")
+          test ${#key_value} -ge 20
+
+          ts=$(date -u +%Y%m%dT%H%M%SZ)
+          cp -p "$ENV_FILE" "$ENV_FILE.feo-yandex-backup-$ts"
+          cp -p "$HTACCESS" "$HTACCESS.feo-yandex-backup-$ts"
+
+          env_tmp=$(mktemp)
+          grep -v '^YANDEX_MAPS_API_KEY=' "$ENV_FILE" > "$env_tmp" || true
+          printf '\nYANDEX_MAPS_API_KEY=%s\n' "$key_value" >> "$env_tmp"
+          chmod --reference="$ENV_FILE" "$env_tmp"
+          mv "$env_tmp" "$ENV_FILE"
+
+          python3 - "$HTACCESS" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1])
+          text=p.read_text()
+          old=[line for line in text.splitlines() if 'Header always set Content-Security-Policy ' in line]
+          if len(old)!=1:
+              raise SystemExit(f'expected exactly one root CSP line, got {len(old)}')
+          csp="default-src 'self'; img-src 'self' data: https://*.maps.yandex.net https://*.api-maps.yandex.ru https://api-maps.yandex.ru https://yandex.ru; style-src 'self' 'unsafe-inline' blob:; script-src 'self' 'unsafe-inline' https://api-maps.yandex.ru https://*.api-maps.yandex.ru https://suggest-maps.yandex.ru https://*.maps.yandex.net https://yandex.ru https://yastatic.net; connect-src 'self' https://api-maps.yandex.ru https://*.api-maps.yandex.ru https://suggest-maps.yandex.ru https://*.maps.yandex.net https://yandex.ru https://*.taxi.yandex.net; frame-src 'self' https://api-maps.yandex.ru; child-src 'self' https://api-maps.yandex.ru; form-action 'self'; base-uri 'self'; frame-ancestors 'self';"
+          new=f'  Header always set Content-Security-Policy "{csp}"'
+          text=text.replace(old[0],new)
+          p.write_text(text)
+          PY
+
+          grep -Eq '^YANDEX_MAPS_API_KEY=.+$' "$ENV_FILE"
+          grep -q 'api-maps.yandex.ru' "$HTACCESS"
+          grep -q 'style-src.*blob:' "$HTACCESS"
+          if grep -q "script-src.*unsafe-eval" "$HTACCESS"; then
+            echo 'unexpected unsafe-eval in CSP' >&2
+            exit 1
+          fi
+          echo PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=1
+          echo PRODUCTION_YANDEX_CSP_CONFIGURED=1
+          REMOTE
+      - name: Verify public security header remains active
+        run: |
+          set -euo pipefail
+          headers=$(curl -sSI https://plan-ex.ru/erpv2/ | tr -d '\r')
+          printf '%s\n' "$headers" | grep -i '^content-security-policy:' | grep -q 'api-maps.yandex.ru'
+          printf '%s\n' "$headers" | grep -i '^content-security-policy:' | grep -q 'style-src.*blob:'
+          if printf '%s\n' "$headers" | grep -i '^content-security-policy:' | grep -q 'unsafe-eval'; then exit 1; fi
+          echo PUBLIC_YANDEX_CSP=PASS
+      - name: Cleanup local SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/key"
