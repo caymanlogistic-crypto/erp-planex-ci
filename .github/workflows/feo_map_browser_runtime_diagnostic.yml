@@ -52,7 +52,7 @@ jobs:
           with open(sys.argv[2],'a') as f:
               f.write(f"QA_COOKIE_NAME={obj['cookie']}\nQA_SESSION_ID={obj['sid']}\n")
           PY
-      - name: Measure production map workspace box model
+      - name: Inspect production marker overlay DOM
         run: |
           node <<'NODE'
           const {chromium}=require('playwright');
@@ -64,24 +64,34 @@ jobs:
             const res=await p.goto('https://plan-ex.ru/erpv2/company/feo/requests/map',{waitUntil:'domcontentloaded',timeout:60000});
             if(!res||res.status()!==200) throw new Error('map HTTP != 200');
             await p.locator('#feo-map-page[data-map-ready="1"][data-map-engine="yandex"]').waitFor({state:'attached',timeout:60000});
-            const m=await p.evaluate(()=>{
-              const w=document.getElementById('feo-map-workspace');
-              const c=document.getElementById('feo-map');
-              const wr=w.getBoundingClientRect(), cr=c.getBoundingClientRect();
-              const ws=getComputedStyle(w), cs=getComputedStyle(c);
+            await p.waitForTimeout(500);
+            const out=await p.evaluate(()=>{
+              const root=document.getElementById('feo-map');
+              const all=[...root.querySelectorAll('*')];
+              const svgLike=all.filter(el=>{
+                const s=(el.getAttribute('style')||'')+' '+(el.getAttribute('src')||'')+' '+(el.getAttribute('href')||'');
+                const cs=getComputedStyle(el);
+                return /data:image\/svg\+xml/i.test(s)||/data:image\/svg\+xml/i.test(cs.backgroundImage||'');
+              });
+              const markerish=all.filter(el=>{
+                const cls=String(el.className||'');
+                const s=(el.getAttribute('style')||'')+' '+(getComputedStyle(el).backgroundImage||'');
+                return /placemark|image-with-content|overlay|icon/i.test(cls)||/data:image\/svg\+xml/i.test(s);
+              });
+              const sample=markerish.slice(0,25).map(el=>({tag:el.tagName,cls:String(el.className||''),src:(el.getAttribute('src')||'').slice(0,180),style:(el.getAttribute('style')||'').slice(0,260),bg:(getComputedStyle(el).backgroundImage||'').slice(0,260),html:el.outerHTML.slice(0,420)}));
+              const snap=window.__FEO_MAP_STAGE1__?.snapshot?.();
               return {
-                workspaceRect:{x:wr.x,y:wr.y,width:wr.width,height:wr.height},
-                canvasRect:{x:cr.x,y:cr.y,width:cr.width,height:cr.height},
-                delta:{x:cr.x-wr.x,y:cr.y-wr.y,width:wr.width-cr.width,height:wr.height-cr.height},
-                workspaceClient:{width:w.clientWidth,height:w.clientHeight},
-                workspaceOffset:{width:w.offsetWidth,height:w.offsetHeight},
-                canvasClient:{width:c.clientWidth,height:c.clientHeight},
-                canvasOffset:{width:c.offsetWidth,height:c.offsetHeight},
-                workspaceStyle:{boxSizing:ws.boxSizing,borderTop:ws.borderTopWidth,borderRight:ws.borderRightWidth,borderBottom:ws.borderBottomWidth,borderLeft:ws.borderLeftWidth,paddingTop:ws.paddingTop,paddingRight:ws.paddingRight,paddingBottom:ws.paddingBottom,paddingLeft:ws.paddingLeft,overflow:ws.overflow,position:ws.position},
-                canvasStyle:{boxSizing:cs.boxSizing,top:cs.top,right:cs.right,bottom:cs.bottom,left:cs.left,width:cs.width,height:cs.height,position:cs.position},
+                imgDataSvg:root.querySelectorAll('img[src^="data:image/svg+xml"]').length,
+                imgAll:root.querySelectorAll('img').length,
+                inlineSvg:root.querySelectorAll('svg').length,
+                svgLike:svgLike.length,
+                markerish:markerish.length,
+                snapMarkers:snap?.markers?.length||0,
+                visible:snap?.markers?.filter(x=>x.visible).length||0,
+                sample
               };
             });
-            console.log('BOX_MODEL='+JSON.stringify(m));
+            console.log('MARKER_DOM='+JSON.stringify(out));
             await b.close();
           })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
           NODE
