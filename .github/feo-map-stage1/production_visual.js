@@ -46,7 +46,7 @@ async function verifyMap(page){
     const u=r.url();
     if(u.includes('/assets/css/feo-map.css'))assets.mapCss=r.status();
     if(u.includes('/assets/js/feo-map.js'))assets.mapJs=r.status();
-    if(u.startsWith('https://api-maps.yandex.ru/2.1/'))assets.yandexApiStatuses.push(r.status());
+    if(u.startsWith('https://api-maps.yandex.ru/2.1.77/'))assets.yandexApiStatuses.push(r.status());
   });
 
   const r=await page.goto(mapUrl,{waitUntil:'domcontentloaded',timeout:60000});assert(r&&r.status()===200,'map HTTP != 200');
