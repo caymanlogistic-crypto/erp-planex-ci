@@ -347,7 +347,7 @@ final class FeoXlsxParser
         $xml = simplexml_load_string($raw, \SimpleXMLElement::class, LIBXML_NONET | LIBXML_NOCDATA);
         libxml_clear_errors();
         libxml_use_internal_errors($prev);
-        if (!$xml) throw new \RuntimeException("Повреждён XML внутри XLSX: {$name}.");
+        if ($xml === false) throw new \RuntimeException("Повреждён XML внутри XLSX: {$name}.");
         return $xml;
     }
 
