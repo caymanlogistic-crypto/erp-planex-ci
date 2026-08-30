@@ -52,26 +52,36 @@ jobs:
           with open(sys.argv[2],'a') as f:
               f.write(f"QA_COOKIE_NAME={obj['cookie']}\nQA_SESSION_ID={obj['sid']}\n")
           PY
-      - name: Inspect production marker-state availability
+      - name: Measure production map workspace box model
         run: |
           node <<'NODE'
           const {chromium}=require('playwright');
           (async()=>{
             const b=await chromium.launch({headless:true});
-            const c=await b.newContext({viewport:{width:1440,height:900}});
+            const c=await b.newContext({viewport:{width:1920,height:1080}});
             await c.addCookies([{name:process.env.QA_COOKIE_NAME,value:process.env.QA_SESSION_ID,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
             const p=await c.newPage();
             const res=await p.goto('https://plan-ex.ru/erpv2/company/feo/requests/map',{waitUntil:'domcontentloaded',timeout:60000});
             if(!res||res.status()!==200) throw new Error('map HTTP != 200');
             await p.locator('#feo-map-page[data-map-ready="1"][data-map-engine="yandex"]').waitFor({state:'attached',timeout:60000});
-            const snap=await p.evaluate(()=>window.__FEO_MAP_STAGE1__?.snapshot());
-            if(!snap) throw new Error('snapshot missing');
-            const visible=snap.markers.filter(x=>x.visible);
-            console.log('PRODUCTION_MARKER_COUNT='+snap.markers.length);
-            console.log('PRODUCTION_VISIBLE_MARKER_COUNT='+visible.length);
-            console.log('PRODUCTION_ADR_MARKER_COUNT='+visible.filter(x=>x.adr).length);
-            console.log('PRODUCTION_STACKED_MARKER_COUNT='+visible.filter(x=>x.shiftY>0).length);
-            console.log('PRODUCTION_MAX_SHIFT_Y='+Math.max(0,...visible.map(x=>Number(x.shiftY||0))));
+            const m=await p.evaluate(()=>{
+              const w=document.getElementById('feo-map-workspace');
+              const c=document.getElementById('feo-map');
+              const wr=w.getBoundingClientRect(), cr=c.getBoundingClientRect();
+              const ws=getComputedStyle(w), cs=getComputedStyle(c);
+              return {
+                workspaceRect:{x:wr.x,y:wr.y,width:wr.width,height:wr.height},
+                canvasRect:{x:cr.x,y:cr.y,width:cr.width,height:cr.height},
+                delta:{x:cr.x-wr.x,y:cr.y-wr.y,width:wr.width-cr.width,height:wr.height-cr.height},
+                workspaceClient:{width:w.clientWidth,height:w.clientHeight},
+                workspaceOffset:{width:w.offsetWidth,height:w.offsetHeight},
+                canvasClient:{width:c.clientWidth,height:c.clientHeight},
+                canvasOffset:{width:c.offsetWidth,height:c.offsetHeight},
+                workspaceStyle:{boxSizing:ws.boxSizing,borderTop:ws.borderTopWidth,borderRight:ws.borderRightWidth,borderBottom:ws.borderBottomWidth,borderLeft:ws.borderLeftWidth,paddingTop:ws.paddingTop,paddingRight:ws.paddingRight,paddingBottom:ws.paddingBottom,paddingLeft:ws.paddingLeft,overflow:ws.overflow,position:ws.position},
+                canvasStyle:{boxSizing:cs.boxSizing,top:cs.top,right:cs.right,bottom:cs.bottom,left:cs.left,width:cs.width,height:cs.height,position:cs.position},
+              };
+            });
+            console.log('BOX_MODEL='+JSON.stringify(m));
             await b.close();
           })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
           NODE
