@@ -44,6 +44,17 @@ async function assertCanvasFillsWorkspace(page,message){
   assert(Math.abs(metrics.clientWidth-canvas.width)<=1&&Math.abs(metrics.clientHeight-canvas.height)<=1&&Math.abs(metrics.innerX-canvas.x)<=1&&Math.abs(metrics.innerY-canvas.y)<=1,message);
 }
 
+function legacyMarkerOverlays(page){
+  return page.locator('#feo-map ymaps[style*="request-marker-v2-clip"]');
+}
+
+async function markerBackgroundSources(locator){
+  return locator.evaluateAll(nodes=>nodes.map(node=>{
+    const bg=getComputedStyle(node).backgroundImage||'';
+    try{return decodeURIComponent(bg);}catch{return bg;}
+  }));
+}
+
 async function verifyMap(page){
   const consoleErrors=[],pageErrors=[],assets={yandexApiStatuses:[],mapCss:null,mapJs:null},forbidden=[];
   page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
@@ -84,7 +95,7 @@ async function verifyMap(page){
   const stackEvidence=stacked.length>0?'live-production-stack':'deployed-runtime-contract';
   if(liveAdr.length===0){
     assert(deployedJs.includes('if (markerData.adr)'),'deployed runtime lost ADR rendering branch');
-    assert(deployedJs.includes('x=\"34.5\" y=\"-5\" width=\"14.5\" height=\"8\"'),'deployed runtime ADR badge geometry drifted');
+    assert(deployedJs.includes('x="34.5" y="-5" width="14.5" height="8"'),'deployed runtime ADR badge geometry drifted');
     assert(deployedJs.includes('>ADR</text>'),'deployed runtime ADR label missing');
   }
   if(stacked.length===0){
@@ -107,16 +118,16 @@ async function verifyMap(page){
   snap=await mapSnapshot(page);assert(snap.markers.filter(x=>x.visible).length<beforeVisible,'utilizer layer hide did not affect visibility');
   await utilizerToggle.check();await page.waitForTimeout(120);
 
-  const markerImages=page.locator('#feo-map img[src^="data:image/svg+xml"]');
-  assert(await markerImages.count()>0,'legacy SVG marker image missing from Yandex overlay');
-  const firstMarker=markerImages.first();
+  const markerOverlays=legacyMarkerOverlays(page);
+  assert(await markerOverlays.count()>0,'legacy SVG marker overlay missing from Yandex DOM');
+  const firstMarker=markerOverlays.first();
   await firstMarker.click({force:true});await page.waitForTimeout(100);
   snap=await mapSnapshot(page);assert(snap.markers.some(x=>x.selected),'marker click did not activate selected state');
-  const selectedSources=await markerImages.evaluateAll(nodes=>nodes.map(n=>decodeURIComponent(n.getAttribute('src')||'')));
+  const selectedSources=await markerBackgroundSources(markerOverlays);
   assert(selectedSources.some(src=>src.includes('#1976ff')&&src.includes('stroke-width="8.5"')),'selected blue glow not rendered');
   await page.locator('.feo-yandex-balloon').waitFor({state:'visible',timeout:15000});
   const balloon=await page.locator('.feo-yandex-balloon').innerText();assert(/Вес|Общий вес/.test(balloon)&&/Утилизатор/.test(balloon),'Yandex balloon fields missing');
-  const markerSources=await markerImages.evaluateAll(nodes=>nodes.map(n=>decodeURIComponent(n.getAttribute('src')||'')));
+  const markerSources=await markerBackgroundSources(markerOverlays);
   if(liveAdr.length>0)assert(markerSources.some(src=>src.includes('>ADR<')),'ADR badge not rendered in live legacy SVG marker');
 
   await page.screenshot({path:'artifacts/feo-map-stage1-selected-balloon.png',fullPage:true});
