@@ -1,0 +1,70 @@
+name: FEO Map Runtime Diagnostic
+
+on:
+  push:
+    branches:
+      - agent/feo-map-runtime-diagnostic-20260830
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/key" > /tmp/deploy-key.pub
+          echo "DEPLOY_PUBLIC_KEY=$(cat /tmp/deploy-key.pub)"
+          ssh-keygen -lf /tmp/deploy-key.pub | sed 's/^/DEPLOY_KEY_FINGERPRINT=/'
+      - name: Check runtime map configuration without exposing values
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          ACTIONS_YANDEX_KEY: ${{ secrets.YANDEX_MAPS_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -n "$ACTIONS_YANDEX_KEY" ]; then
+            echo 'ACTIONS_YANDEX_MAPS_API_KEY_PRESENT=1'
+          else
+            echo 'ACTIONS_YANDEX_MAPS_API_KEY_PRESENT=0'
+          fi
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
+          set -euo pipefail
+          ROOT="$HOME/planexp/public_html/erpv2"
+          ENV_FILE="$ROOT/.env"
+          if [ -f "$ENV_FILE" ] && grep -Eq '^YANDEX_MAPS_API_KEY=.+$' "$ENV_FILE"; then
+            echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=1'
+          else
+            echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=0'
+          fi
+          echo 'RUNTIME_HEADER_FILES_BEGIN'
+          find "$HOME/planexp" -maxdepth 5 -type f \( -name '.htaccess' -o -name '*.conf' -o -name '*.ini' \) -readable -print 2>/dev/null | sort
+          echo 'RUNTIME_HEADER_FILES_END'
+          echo 'CSP_SOURCES_BEGIN'
+          while IFS= read -r file; do
+            if grep -qi 'Content-Security-Policy' "$file" 2>/dev/null; then
+              echo "FILE=$file"
+              grep -ni 'Content-Security-Policy' "$file" | sed -E 's/[[:space:]]+/ /g'
+            fi
+          done < <(find "$HOME/planexp" -maxdepth 5 -type f \( -name '.htaccess' -o -name '*.conf' -o -name '*.ini' \) -readable -print 2>/dev/null)
+          echo 'CSP_SOURCES_END'
+          REMOTE
+      - name: Observe public ERP response CSP
+        run: |
+          set -euo pipefail
+          curl -fsSI https://plan-ex.ru/erpv2/login | tr -d '\r' | grep -iE '^(content-security-policy|x-frame-options|permissions-policy):' || true
+      - name: Cleanup local SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/key" /tmp/deploy-key.pub
