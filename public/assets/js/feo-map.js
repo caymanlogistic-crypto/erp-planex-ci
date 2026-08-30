@@ -83,8 +83,9 @@
     function initPayload(payload, fit) {
         clearMarkers();
         state.payload = payload;
-        syncVisibility(payload.layers);
-        renderLayers(payload.layers);
+        const layers = payload.layers.filter(isMapLayerAllowed);
+        syncVisibility(layers);
+        renderLayers(layers);
         renderDiagnostics(payload.diagnostics);
         renderSummary(payload.diagnostics);
 
@@ -118,6 +119,14 @@
         updateStackPositions();
         updateEmptyState();
         if (fit) fitMarkers();
+    }
+
+    function isMapLayerAllowed(layer) {
+        const key = String(layer?.key || '');
+        const kind = String(layer?.kind || '');
+        const label = String(layer?.label || '').trim().toLocaleLowerCase('ru-RU');
+        if (label === 'производственный календарь') return false;
+        return key === 'available' || kind === 'utilizer' || kind === 'diagnostic';
     }
 
     function syncVisibility(layers) {
