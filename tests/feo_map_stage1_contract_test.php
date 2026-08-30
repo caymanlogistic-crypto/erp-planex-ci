@@ -72,7 +72,7 @@ $service = $read($root . '/app/Service/FeoMapService.php');
 $ok('available pool starts from placement current', str_contains($service, 'FROM feo_placement_current c'));
 $ok('available pool joins canonical requests', str_contains($service, 'INNER JOIN feo_requests r ON r.zayavka_id=c.zayavka_id'));
 $ok('no legacy flights domain', !str_contains(strtolower($service), 'flights'));
-$ok('FEO storage coordinate inversion is explicit', str_contains($service, "self::coordinates($row['mno_d'] ?? null, $row['mno_sh'] ?? null)"));
+$ok('FEO storage coordinate inversion is explicit', str_contains($service, 'self::coordinates($row[\'mno_d\'] ?? null, $row[\'mno_sh\'] ?? null)'));
 $ok('group key includes coordinates state utilizer', str_contains($service, '$coordKey . \'|\' . $state . \'|\' . $utilizerKey'));
 $ok('Stage 1 map has no request-level ADR helper', !str_contains($service, 'requestAdr('));
 
