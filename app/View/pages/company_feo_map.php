@@ -7,7 +7,7 @@ $invalidCount = (int)($diag['invalid_coordinates_count'] ?? 0);
 $unmatchedCount = (int)($diag['unmatched_utilizer_count'] ?? 0);
 $inactiveCount = (int)($diag['inactive_utilizer_count'] ?? 0);
 $mapJsUrl = app_url('/assets/js/feo-map.js') . '?v=' . filemtime(base_path('public/assets/js/feo-map.js'));
-$yandexMapsApiKey = trim((string)($config['yandex_maps_api_key'] ?? ''));
+$yandexMapsApiKey = trim((string)($config['app']['yandex_maps_api_key'] ?? ''));
 $yandexMapsUrl = $yandexMapsApiKey !== ''
     ? 'https://api-maps.yandex.ru/2.1.77/?apikey=' . rawurlencode($yandexMapsApiKey) . '&lang=ru_RU&csp=true'
     : '';

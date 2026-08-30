@@ -22,7 +22,7 @@ $envExample = $read('.env.example');
 
 $must(str_contains($view, 'https://api-maps.yandex.ru/2.1.77/'), 'Yandex Maps JavaScript API 2.1.77 source missing');
 $must(str_contains($view, '&csp=true'), 'Yandex Maps JavaScript API 2.1 CSP mode missing');
-$must(str_contains($view, "['yandex_maps_api_key']"), 'view must receive canonical config key');
+$must(str_contains($view, "['app']['yandex_maps_api_key']"), 'view must receive canonical nested app config key');
 $must(str_contains($config, "env('YANDEX_MAPS_API_KEY', '')"), 'Yandex key must come from runtime env');
 $must(str_contains($envExample, 'YANDEX_MAPS_API_KEY='), 'Yandex key env contract missing from .env.example');
 $must(!preg_match("/YANDEX_MAPS_API_KEY=\\S+/", $envExample), '.env.example must never contain a real Yandex key');
