@@ -32,6 +32,21 @@ $must(str_contains($view, 'data-map-ready="0"'), 'map readiness state missing');
 $must(str_contains($view, 'data-yandex-configured='), 'Yandex configuration readiness state missing');
 $must(str_contains($view, "app_url('/assets/js/feo-map.js')"), 'map runtime must stay app-local');
 
+// Full-viewport map UI: no interior header/summary/refresh card, no rounded map container.
+$must(!str_contains($view, 'class="feo-map-head"'), 'map interior header must stay removed');
+$must(!str_contains($view, 'class="feo-map-summary"'), 'map interior summary must stay removed');
+$must(!str_contains($view, 'id="feo-map-refresh"'), 'map interior refresh button must stay removed');
+$must(str_contains($view, 'class="feo-map-alert-stack"'), 'runtime alerts must overlay the map instead of consuming layout height');
+$must(str_contains($css, '.content--wide-workspace:has(#feo-map-page){padding-top:0;overflow:hidden}'), 'map page must remove wide-workspace top padding');
+$must(str_contains($css, '.content--wide-workspace:has(#feo-map-page)>.workspace-shell-1690{width:100%;max-width:none;height:100%;margin:0;padding:0}'), 'map page must break out of the generic 1690px workspace shell');
+$must(str_contains($css, '.feo-map-page{position:relative;width:100%;height:100%'), 'map page must fill the content viewport');
+$must(str_contains($css, '.feo-map-workspace{position:relative;width:100%;height:100%'), 'map workspace must fill the map page');
+$must(str_contains($css, 'border:0;border-radius:0;background:#eef2f7'), 'map workspace must have square borderless edges');
+$must(str_contains($css, '.feo-map-canvas{position:absolute;inset:0;width:100%;height:100%') && str_contains($css, 'border:0;border-radius:0'), 'map canvas must fill workspace with square edges');
+$must(str_contains($css, '.feo-map-layer-panel{position:absolute;top:8px;right:8px') && str_contains($css, 'width:216px'), 'layer controls must be compact overlay');
+$must(str_contains($css, '.feo-layer-row{display:grid;grid-template-columns:13px minmax(0,1fr) auto 8px') && str_contains($css, 'min-height:22px'), 'layer rows must stay super-compact');
+$must(str_contains($css, 'accent-color:var(--accent,#7c4718)'), 'layer checkboxes must use ERP accent');
+
 $must(str_contains($js, "typeof window.ymaps === 'undefined'"), 'Yandex API absence guard missing');
 $must(str_contains($js, 'Не удалось загрузить Яндекс.Карты'), 'Yandex loading failure must stay visible');
 $must(str_contains($js, "page.dataset.mapReady = 'error'"), 'map failure readiness state missing');
@@ -60,8 +75,7 @@ $must(str_contains($js, 'record.hideTriangle = position > 0'), 'upper stack mark
 $must(!str_contains($js, 'Math.cos(') && !str_contains($js, 'Math.sin('), 'circular spiderfy must not return');
 $must(str_contains($js, 'window.__FEO_MAP_STAGE1__ = Object.freeze'), 'read-only production diagnostics snapshot missing');
 
-// Production browser QA must prove the Yandex engine, visual marker contract, layers, balloon, refresh and resize.
-// ADR/stack visual checks run against real production records when those states exist; otherwise the exact deployed JS runtime contract is verified without mutating business data.
+// Production browser QA must prove Yandex engine, full-viewport layout, compact layer panel and marker behavior.
 $must(!str_contains($qa, 'waitForFunction('), 'production Playwright QA must remain CSP-safe');
 $must(str_contains($qa, '#feo-map-page[data-map-ready="1"][data-map-engine="yandex"]'), 'Yandex readiness locator missing');
 $must(str_contains($qa, 'api-maps.yandex.ru/2.1.77/'), 'production QA must observe the Yandex API response');
@@ -77,8 +91,10 @@ $must(!str_contains($qa, 'production data has no ADR marker for visual QA') && !
 $must(str_contains($qa, '#feo-map ymaps[style*="request-marker-v2-clip"]') && str_contains($qa, 'backgroundImage'), 'production QA must inspect legacy SVG markers through the real Yandex overlay background-image DOM');
 $must(str_contains($qa, '.feo-yandex-balloon'), 'production QA must verify Yandex balloon content');
 $must(str_contains($qa, '#feo-map-layer-toggle'), 'production QA must verify layer panel collapse/expand');
-$must(str_contains($qa, "x.url().includes('/company/feo/requests/map/data')&&x.request().method()==='GET'"), 'production QA must verify read-only refresh');
-$must(str_contains($qa, 'assertCanvasFillsWorkspace') && str_contains($qa, 'clientWidth') && str_contains($qa, 'clientHeight') && str_contains($qa, 'map canvas does not fill workspace inner box') && str_contains($qa, 'Yandex map resize drifted from workspace inner box'), 'production QA must verify the map fills the workspace inner box and survives resize');
+$must(str_contains($qa, "page.locator('.feo-map-head,.feo-map-summary,#feo-map-refresh').count()===0"), 'production QA must prove removed interior UI stays absent');
+$must(str_contains($qa, 'assertMapFillsContent') && str_contains($qa, 'full ERP content viewport'), 'production QA must verify map fills the whole ERP content area');
+$must(str_contains($qa, 'panelMetrics.width<=220') && str_contains($qa, 'panelMetrics.rowHeight<=24'), 'production QA must verify compact layer panel dimensions');
+$must(str_contains($qa, "page.request.get(base+'/company/feo/requests/map/data'"), 'production QA must keep a read-only map data GET probe');
 $must(str_contains($qa, "page.route('https://api-maps.yandex.ru/**'"), 'Yandex API outage resilience QA missing');
 $must(str_contains($qa, 'missing visible Yandex load failure'), 'Yandex outage must surface a visible error');
 
