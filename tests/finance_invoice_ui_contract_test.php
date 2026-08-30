@@ -14,6 +14,7 @@ function uiMustNotContain(string $path,string $needle,string $message):void{
 
 $view='app/View/pages/company_finance_invoices.php';
 $css='public/assets/css/app.css';
+$service='app/Service/FinanceInvoiceService.php';
 uiMustContain($view,'$stageCards','invoice timeline is projected into stage cards');
 uiMustContain($view,'Этапы оплаты','payment stages are the primary payment column');
 uiMustNotContain($view,'Статус счёта','separate invoice status column remains removed');
@@ -51,5 +52,7 @@ uiMustContain($view,'Ожидается событие','event-driven stage wait
 uiMustContain($view,'Остаток:','partial stage keeps remainder');
 uiMustNotContain($view,'План / факт оплаты','old split plan/fact column remains removed');
 uiMustNotContain($view,'Соблюдение сроков','old compliance block remains removed');
+uiMustContain($service,'$baseWhere = "WHERE fi.cancelled_at IS NULL AND fi.status <> \'cancelled\'";','active invoice page query excludes cancelled invoices');
+uiMustContain($service,'$countWhere = "WHERE fi.cancelled_at IS NULL AND fi.status <> \'cancelled\'";','active invoice count excludes cancelled invoices');
 
 echo "FINANCE_INVOICE_UI_CONTRACT_OK\n";
