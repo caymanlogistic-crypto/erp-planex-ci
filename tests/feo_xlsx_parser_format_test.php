@@ -68,6 +68,16 @@ $headers[array_search('Юридический адрес заказчика (п.
 $headers[array_search('ИНН заказчика (п.1а)', $headers, true)] = "ИНН заказчика\u{00A0} (п.1а)";
 
 $parser = new FeoXlsxParser();
+$emptySharedXml = '<?xml version="1.0" encoding="utf-8"?><x:sst xmlns:x="http://schemas.openxmlformats.org/spreadsheetml/2006/main" />';
+$xmlMethod = new ReflectionMethod(FeoXlsxParser::class, 'xml');
+$xmlMethod->setAccessible(true);
+try {
+    $emptyShared = $xmlMethod->invoke($parser, $emptySharedXml, 'sharedStrings.xml');
+    $ok('empty sharedStrings XML accepted', $emptyShared instanceof SimpleXMLElement);
+} catch (Throwable $e) {
+    $ok('empty sharedStrings XML accepted', false);
+}
+
 $valid = $build($headers);
 try {
     $rows = $parser->parse($valid);
