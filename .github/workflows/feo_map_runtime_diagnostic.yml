@@ -24,47 +24,40 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-          ssh-keygen -y -f "$HOME/.ssh/key" > /tmp/deploy-key.pub
-          echo "DEPLOY_PUBLIC_KEY=$(cat /tmp/deploy-key.pub)"
-          ssh-keygen -lf /tmp/deploy-key.pub | sed 's/^/DEPLOY_KEY_FINGERPRINT=/'
-      - name: Check runtime map configuration without exposing values
+      - name: Check runtime map and env-link configuration without exposing values
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
-          ACTIONS_YANDEX_KEY: ${{ secrets.YANDEX_MAPS_API_KEY }}
         run: |
           set -euo pipefail
-          if [ -n "$ACTIONS_YANDEX_KEY" ]; then
-            echo 'ACTIONS_YANDEX_MAPS_API_KEY_PRESENT=1'
-          else
-            echo 'ACTIONS_YANDEX_MAPS_API_KEY_PRESENT=0'
-          fi
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -s' <<'REMOTE'
           set -euo pipefail
-          ROOT="$HOME/planexp/public_html/erpv2"
-          ENV_FILE="$ROOT/.env"
+          ROOT="$HOME/planexp"
+          ERP="$ROOT/public_html/erpv2"
+          ENV_FILE="$ERP/.env"
+          DEPLOY="$ROOT/deploy"
+          if [ -L "$ENV_FILE" ]; then
+            echo 'ERPV2_ENV_IS_SYMLINK=1'
+            printf 'ERPV2_ENV_LINK_TARGET=%s\n' "$(readlink "$ENV_FILE")"
+          else
+            echo 'ERPV2_ENV_IS_SYMLINK=0'
+          fi
           if [ -f "$ENV_FILE" ] && grep -Eq '^YANDEX_MAPS_API_KEY=.+$' "$ENV_FILE"; then
             echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=1'
           else
             echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=0'
           fi
-          echo 'RUNTIME_HEADER_FILES_BEGIN'
-          find "$HOME/planexp" -maxdepth 5 -type f \( -name '.htaccess' -o -name '*.conf' -o -name '*.ini' \) -readable -print 2>/dev/null | sort
-          echo 'RUNTIME_HEADER_FILES_END'
-          echo 'CSP_SOURCES_BEGIN'
-          while IFS= read -r file; do
-            if grep -qi 'Content-Security-Policy' "$file" 2>/dev/null; then
-              echo "FILE=$file"
-              grep -ni 'Content-Security-Policy' "$file" | sed -E 's/[[:space:]]+/ /g'
-            fi
-          done < <(find "$HOME/planexp" -maxdepth 5 -type f \( -name '.htaccess' -o -name '*.conf' -o -name '*.ini' \) -readable -print 2>/dev/null)
-          echo 'CSP_SOURCES_END'
+          printf 'DEPLOY_MARKER=%s\n' "$(cat "$DEPLOY/P07_erpv2_deployed_commit.txt" 2>/dev/null || true)"
+          echo 'RECENT_ENV_BACKUPS_BEGIN'
+          find "$ERP" -maxdepth 1 -type f -name '.env.feo-yandex-backup-*' -printf '%f\n' 2>/dev/null | sort | tail -5
+          echo 'RECENT_ENV_BACKUPS_END'
+          echo 'P07_ENV_CONTRACT_BEGIN'
+          grep -nE '\.env|runtime|symlink' "$DEPLOY/P07_deploy_erpv2.sh" 2>/dev/null | sed -E 's/[[:space:]]+/ /g' | head -80
+          echo 'P07_ENV_CONTRACT_END'
+          HTACCESS="$ROOT/public_html/.htaccess"
+          if grep -q 'api-maps.yandex.ru' "$HTACCESS"; then echo 'PRODUCTION_YANDEX_CSP_CONFIGURED=1'; else echo 'PRODUCTION_YANDEX_CSP_CONFIGURED=0'; fi
           REMOTE
-      - name: Observe public ERP response CSP
-        run: |
-          set -euo pipefail
-          curl -fsSI https://plan-ex.ru/erpv2/login | tr -d '\r' | grep -iE '^(content-security-policy|x-frame-options|permissions-policy):' || true
       - name: Cleanup local SSH material
         if: always()
-        run: rm -f "$HOME/.ssh/key" /tmp/deploy-key.pub
+        run: rm -f "$HOME/.ssh/key"
