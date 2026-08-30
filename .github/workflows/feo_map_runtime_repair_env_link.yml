@@ -1,0 +1,81 @@
+name: FEO Map Runtime Env Symlink Repair
+
+on:
+  push:
+    branches:
+      - agent/feo-map-runtime-diagnostic-20260830
+    paths:
+      - .github/workflows/feo_map_runtime_repair_env_link.yml
+
+permissions:
+  contents: read
+
+jobs:
+  repair-env-link:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Restore canonical env target and symlink
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          ROOT="$HOME/planexp"
+          LIVE="$ROOT/public_html/erpv2"
+          LIVE_ENV="$LIVE/.env"
+          TARGET="$ROOT/private-config/erpv2.env"
+          BACKUPS="$ROOT/deploy_backups"
+          test -f "$LIVE_ENV"
+          test ! -L "$LIVE_ENV"
+          test -f "$TARGET"
+          grep -Eq '^YANDEX_MAPS_API_KEY=.+$' "$LIVE_ENV"
+
+          live_norm=$(mktemp)
+          target_norm=$(mktemp)
+          trap 'rm -f "$live_norm" "$target_norm"' EXIT
+          grep -v '^YANDEX_MAPS_API_KEY=' "$LIVE_ENV" | sed '/^[[:space:]]*$/d' > "$live_norm"
+          grep -v '^YANDEX_MAPS_API_KEY=' "$TARGET" | sed '/^[[:space:]]*$/d' > "$target_norm"
+          cmp -s "$live_norm" "$target_norm" || { echo 'ENV_BASELINE_MISMATCH=1' >&2; exit 1; }
+          echo 'ENV_BASELINE_MATCH=1'
+
+          ts=$(date -u +%Y%m%dT%H%M%SZ)
+          backup="$BACKUPS/FEO_ENV_LINK_REPAIR_${ts}"
+          mkdir -p "$backup"
+          chmod 700 "$backup"
+          cp -p "$TARGET" "$backup/erpv2.env.before"
+          cp -p "$LIVE_ENV" "$backup/erpv2.env.with-yandex"
+
+          target_tmp=$(mktemp "$ROOT/private-config/erpv2.env.tmp.XXXXXX")
+          cp "$LIVE_ENV" "$target_tmp"
+          chmod --reference="$TARGET" "$target_tmp"
+          chown --reference="$TARGET" "$target_tmp" 2>/dev/null || true
+          mv "$target_tmp" "$TARGET"
+
+          mv "$LIVE_ENV" "$backup/live-env-regular-before-link"
+          ln -s "$TARGET" "$LIVE_ENV"
+
+          test -L "$LIVE_ENV"
+          test "$(readlink "$LIVE_ENV")" = "$TARGET"
+          grep -Eq '^YANDEX_MAPS_API_KEY=.+$' "$LIVE_ENV"
+          echo 'ERPV2_ENV_IS_SYMLINK=1'
+          echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=1'
+          echo 'ENV_LINK_REPAIR=PASS'
+          REMOTE
+      - name: Cleanup local SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/key"
