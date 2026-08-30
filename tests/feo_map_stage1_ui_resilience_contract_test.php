@@ -60,7 +60,8 @@ $must(str_contains($js, 'record.hideTriangle = position > 0'), 'upper stack mark
 $must(!str_contains($js, 'Math.cos(') && !str_contains($js, 'Math.sin('), 'circular spiderfy must not return');
 $must(str_contains($js, 'window.__FEO_MAP_STAGE1__ = Object.freeze'), 'read-only production diagnostics snapshot missing');
 
-// Production browser QA must prove the Yandex engine, visual marker contract, vertical stack, layers, balloon, refresh and resize.
+// Production browser QA must prove the Yandex engine, visual marker contract, layers, balloon, refresh and resize.
+// ADR/stack visual checks run against real production records when those states exist; otherwise the exact deployed JS runtime contract is verified without mutating business data.
 $must(!str_contains($qa, 'waitForFunction('), 'production Playwright QA must remain CSP-safe');
 $must(str_contains($qa, '#feo-map-page[data-map-ready="1"][data-map-engine="yandex"]'), 'Yandex readiness locator missing');
 $must(str_contains($qa, 'api-maps.yandex.ru/2.1.77/'), 'production QA must observe the Yandex API response');
@@ -68,8 +69,11 @@ $must(str_contains($qa, 'Leaflet/OSM runtime request detected'), 'production QA 
 $must(str_contains($qa, "markerRenderer==='legacy-request-marker-v2'"), 'production QA must verify legacy marker renderer');
 $must(str_contains($qa, "JSON.stringify(snap.markerBody)==='[50,40]'"), 'production QA must verify marker body geometry');
 $must(str_contains($qa, "JSON.stringify(snap.markerImage)==='[66,56]'"), 'production QA must verify marker image geometry');
-$must(str_contains($qa, 'production data has no coincident-coordinate vertical stack'), 'production QA must require a real vertical stack');
-$must(str_contains($qa, 'production data has no ADR marker for visual QA'), 'production QA must require a real ADR marker');
+$must(str_contains($qa, "stackEvidence=stacked.length>0?'live-production-stack':'deployed-runtime-contract'"), 'production QA must distinguish live stack evidence from deployed runtime contract evidence');
+$must(str_contains($qa, "adrEvidence=liveAdr.length>0?'live-production-marker':'deployed-runtime-contract'"), 'production QA must distinguish live ADR evidence from deployed runtime contract evidence');
+$must(str_contains($qa, "deployedJs.includes('if (markerData.adr)')"), 'production QA must verify deployed ADR renderer when live ADR data is absent');
+$must(str_contains($qa, "deployedJs.includes('REQUEST_MARKER_STACK_STEP = 36')"), 'production QA must verify deployed stack contract when live overlap data is absent');
+$must(!str_contains($qa, 'production data has no ADR marker for visual QA') && !str_contains($qa, 'production data has no coincident-coordinate vertical stack'), 'production QA must not fail only because current production lacks optional visual states');
 $must(str_contains($qa, '#feo-map img[src^="data:image/svg+xml"]'), 'production QA must inspect real Yandex marker images');
 $must(str_contains($qa, '.feo-yandex-balloon'), 'production QA must verify Yandex balloon content');
 $must(str_contains($qa, '#feo-map-layer-toggle'), 'production QA must verify layer panel collapse/expand');
