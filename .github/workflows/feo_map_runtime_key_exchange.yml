@@ -1,0 +1,51 @@
+name: FEO Map Runtime Key Exchange
+
+on:
+  push:
+    branches:
+      - agent/feo-map-runtime-diagnostic-20260830
+    paths:
+      - .github/workflows/feo_map_runtime_key_exchange.yml
+
+permissions:
+  contents: read
+
+jobs:
+  key-exchange:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Create ephemeral server RSA transport key
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          set -euo pipefail
+          KEY=/tmp/feo_yandex_runtime_exchange.pem
+          PUB=${KEY}.pub.pem
+          rm -f "$KEY" "$PUB"
+          umask 077
+          openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:3072 -out "$KEY" >/dev/null 2>&1
+          openssl pkey -in "$KEY" -pubout -out "$PUB"
+          chmod 600 "$KEY" "$PUB"
+          echo FEO_YANDEX_RSA_PUBLIC_BEGIN
+          cat "$PUB"
+          echo FEO_YANDEX_RSA_PUBLIC_END
+          REMOTE
+      - name: Cleanup local SSH material
+        if: always()
+        run: rm -f "$HOME/.ssh/key"
