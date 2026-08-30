@@ -52,29 +52,28 @@ jobs:
           with open(sys.argv[2],'a') as f:
               f.write(f"QA_COOKIE_NAME={obj['cookie']}\nQA_SESSION_ID={obj['sid']}\n")
           PY
-      - name: Trace production map without exposing API key
+      - name: Inspect production marker-state availability
         run: |
           node <<'NODE'
           const {chromium}=require('playwright');
-          const redact=s=>String(s).replace(/([?&]apikey=)[^&\s"']+/gi,'$1[REDACTED]').replace(/ERPV2SESSID=[^;\s]+/gi,'ERPV2SESSID=[REDACTED]');
           (async()=>{
             const b=await chromium.launch({headless:true});
             const c=await b.newContext({viewport:{width:1440,height:900}});
             await c.addCookies([{name:process.env.QA_COOKIE_NAME,value:process.env.QA_SESSION_ID,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
             const p=await c.newPage();
-            const rows=[];
-            p.on('console',m=>rows.push(`CONSOLE_${m.type().toUpperCase()}=${redact(m.text())}`));
-            p.on('pageerror',e=>rows.push(`PAGEERROR=${redact(e.message||e)}`));
-            p.on('requestfailed',r=>{const u=new URL(r.url());rows.push(`REQUEST_FAILED=${u.origin}${u.pathname} :: ${redact(r.failure()?.errorText||'')}`)});
-            p.on('response',r=>{if(/yandex|feo-map/.test(r.url())){const u=new URL(r.url());rows.push(`RESPONSE=${r.status()} ${u.origin}${u.pathname}`)}});
             const res=await p.goto('https://plan-ex.ru/erpv2/company/feo/requests/map',{waitUntil:'domcontentloaded',timeout:60000});
-            console.log(`HTTP=${res&&res.status()}`);
-            await p.waitForTimeout(12000);
-            const state=await p.locator('#feo-map-page').evaluate(el=>({ready:el.dataset.mapReady||'',engine:el.dataset.mapEngine||'',configured:el.dataset.yandexConfigured||'',runtimeError:(document.querySelector('#feo-map-runtime-error')?.textContent||'').trim(),runtimeErrorHidden:document.querySelector('#feo-map-runtime-error')?.hidden,ymaps:typeof window.ymaps,scriptCount:[...document.scripts].filter(s=>s.src.includes('api-maps.yandex.ru')).length,mapChildren:document.querySelector('#feo-map')?.childElementCount||0}));
-            console.log('STATE='+JSON.stringify(state));
-            for(const row of [...new Set(rows)]) console.log(redact(row));
+            if(!res||res.status()!==200) throw new Error('map HTTP != 200');
+            await p.locator('#feo-map-page[data-map-ready="1"][data-map-engine="yandex"]').waitFor({state:'attached',timeout:60000});
+            const snap=await p.evaluate(()=>window.__FEO_MAP_STAGE1__?.snapshot());
+            if(!snap) throw new Error('snapshot missing');
+            const visible=snap.markers.filter(x=>x.visible);
+            console.log('PRODUCTION_MARKER_COUNT='+snap.markers.length);
+            console.log('PRODUCTION_VISIBLE_MARKER_COUNT='+visible.length);
+            console.log('PRODUCTION_ADR_MARKER_COUNT='+visible.filter(x=>x.adr).length);
+            console.log('PRODUCTION_STACKED_MARKER_COUNT='+visible.filter(x=>x.shiftY>0).length);
+            console.log('PRODUCTION_MAX_SHIFT_Y='+Math.max(0,...visible.map(x=>Number(x.shiftY||0))));
             await b.close();
-          })().catch(e=>{console.error(redact(e.stack||e));process.exit(1)});
+          })().catch(e=>{console.error(e&&e.stack||e);process.exit(1)});
           NODE
       - name: Cleanup temporary QA session and SSH material
         if: always()
