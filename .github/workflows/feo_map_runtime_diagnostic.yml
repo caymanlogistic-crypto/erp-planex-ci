@@ -24,7 +24,7 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Check runtime map and env-link configuration without exposing values
+      - name: Inspect P07 runtime path contract without exposing env values
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -43,20 +43,15 @@ jobs:
           else
             echo 'ERPV2_ENV_IS_SYMLINK=0'
           fi
-          if [ -f "$ENV_FILE" ] && grep -Eq '^YANDEX_MAPS_API_KEY=.+$' "$ENV_FILE"; then
-            echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=1'
-          else
-            echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=0'
-          fi
+          if [ -f "$ENV_FILE" ] && grep -Eq '^YANDEX_MAPS_API_KEY=.+$' "$ENV_FILE"; then echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=1'; else echo 'PRODUCTION_YANDEX_MAPS_API_KEY_PRESENT=0'; fi
           printf 'DEPLOY_MARKER=%s\n' "$(cat "$DEPLOY/P07_erpv2_deployed_commit.txt" 2>/dev/null || true)"
-          echo 'RECENT_ENV_BACKUPS_BEGIN'
-          find "$ERP" -maxdepth 1 -type f -name '.env.feo-yandex-backup-*' -printf '%f\n' 2>/dev/null | sort | tail -5
-          echo 'RECENT_ENV_BACKUPS_END'
-          echo 'P07_ENV_CONTRACT_BEGIN'
-          grep -nE '\.env|runtime|symlink' "$DEPLOY/P07_deploy_erpv2.sh" 2>/dev/null | sed -E 's/[[:space:]]+/ /g' | head -80
-          echo 'P07_ENV_CONTRACT_END'
-          HTACCESS="$ROOT/public_html/.htaccess"
-          if grep -q 'api-maps.yandex.ru' "$HTACCESS"; then echo 'PRODUCTION_YANDEX_CSP_CONFIGURED=1'; else echo 'PRODUCTION_YANDEX_CSP_CONFIGURED=0'; fi
+          echo 'P07_SCRIPT_BEGIN'
+          sed -n '1,145p' "$DEPLOY/P07_deploy_erpv2.sh"
+          echo 'P07_SCRIPT_END'
+          echo 'RUNTIME_CANDIDATES_BEGIN'
+          find "$ROOT" -maxdepth 3 -type f -name '.env' -printf '%p\n' 2>/dev/null | sort
+          find "$ROOT" -maxdepth 3 -type l -name '.env' -printf '%p -> %l\n' 2>/dev/null | sort
+          echo 'RUNTIME_CANDIDATES_END'
           REMOTE
       - name: Cleanup local SSH material
         if: always()
