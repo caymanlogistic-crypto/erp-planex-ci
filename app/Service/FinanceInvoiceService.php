@@ -186,8 +186,8 @@ final class FinanceInvoiceService
         $perPage = max(1, min(500, $perPage));
         $offset = ($page - 1) * $perPage;
 
-        $baseWhere = "WHERE 1=1";
-        $countWhere = "WHERE 1=1";
+        $baseWhere = "WHERE fi.cancelled_at IS NULL AND fi.status <> 'cancelled'";
+        $countWhere = "WHERE fi.cancelled_at IS NULL AND fi.status <> 'cancelled'";
         $params = [];
         $countParams = [];
 
