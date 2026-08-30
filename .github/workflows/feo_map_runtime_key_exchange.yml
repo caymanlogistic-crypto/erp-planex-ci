@@ -49,3 +49,5 @@ jobs:
       - name: Cleanup local SSH material
         if: always()
         run: rm -f "$HOME/.ssh/key"
+
+# Rotated after fail-closed cleanup; private key remains only on production /tmp until apply.
