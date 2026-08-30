@@ -16,13 +16,13 @@ $root = dirname(__DIR__);
 $read = static fn(string $path): string => file_get_contents($path) ?: '';
 
 $rows = [
-    ['zayavka_id'=>'100001','source_block_id'=>7,'mass_netto'=>'1.5','mno_sh'=>'55.75','mno_d'=>'37.61','naim_oo_gruzootpravitel'=>'A','mno_adres_pogruzki'=>'A1','nomer_opasnogo_gr'=>''],
-    ['zayavka_id'=>'100002','source_block_id'=>7,'mass_netto'=>'0.5','mno_sh'=>'55.75','mno_d'=>'37.61','naim_oo_gruzootpravitel'=>'B','mno_adres_pogruzki'=>'B1','nomer_opasnogo_gr'=>'3'],
-    ['zayavka_id'=>'100003','source_block_id'=>9,'mass_netto'=>'2','mno_sh'=>'55.75','mno_d'=>'37.61','naim_oo_gruzootpravitel'=>'C','mno_adres_pogruzki'=>'C1','nomer_opasnogo_gr'=>'3'],
+    ['zayavka_id'=>'100001','source_block_id'=>7,'mass_netto'=>'1.5','mno_sh'=>'37.61','mno_d'=>'55.75','naim_oo_gruzootpravitel'=>'A','mno_adres_pogruzki'=>'A1','nomer_opasnogo_gr'=>''],
+    ['zayavka_id'=>'100002','source_block_id'=>7,'mass_netto'=>'0.5','mno_sh'=>'37.61','mno_d'=>'55.75','naim_oo_gruzootpravitel'=>'B','mno_adres_pogruzki'=>'B1','nomer_opasnogo_gr'=>'3'],
+    ['zayavka_id'=>'100003','source_block_id'=>9,'mass_netto'=>'2','mno_sh'=>'37.61','mno_d'=>'55.75','naim_oo_gruzootpravitel'=>'C','mno_adres_pogruzki'=>'C1','nomer_opasnogo_gr'=>'3'],
     ['zayavka_id'=>'100004','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'','mno_d'=>''],
-    ['zayavka_id'=>'100005','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'999','mno_d'=>'37'],
-    ['zayavka_id'=>'100006','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'56','mno_d'=>'38','nomer_opasnogo_gr'=>'3'],
-    ['zayavka_id'=>'100007','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'57','mno_d'=>'39'],
+    ['zayavka_id'=>'100005','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'37','mno_d'=>'999'],
+    ['zayavka_id'=>'100006','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'38','mno_d'=>'56','nomer_opasnogo_gr'=>'3'],
+    ['zayavka_id'=>'100007','source_block_id'=>9,'mass_netto'=>'1','mno_sh'=>'39','mno_d'=>'57'],
 ];
 $u1 = ['id'=>1,'full_name'=>'U1 full','short_name'=>'U1','address'=>'','adr'=>1,'color_hex'=>'#112233','is_active'=>1,'sort_order'=>10];
 $u2 = ['id'=>2,'full_name'=>'U2 full','short_name'=>'U2','address'=>'','adr'=>0,'color_hex'=>'#445566','is_active'=>1,'sort_order'=>20];
@@ -59,10 +59,20 @@ $ok('available master layer exists', in_array('available', $layerKeys, true));
 $ok('utilizer layers are independent', in_array('utilizer:1', $layerKeys, true) && in_array('utilizer:2', $layerKeys, true));
 $ok('diagnostic layers are independent', in_array('unmatched', $layerKeys, true) && in_array('inactive:3', $layerKeys, true));
 
+$swapPayload = FeoMapService::buildPayload([
+    ['zayavka_id'=>'200001','source_block_id'=>10,'mass_netto'=>'1','mno_sh'=>'129.73','mno_d'=>'62.03'],
+], [
+    '200001'=>['status'=>'unmatched','source'=>'none','utilizer_id'=>null,'utilizer'=>null,'rule_id'=>null],
+]);
+$swapMarker = $swapPayload['markers'][0] ?? null;
+$ok('historically swapped FEO fields map mno_d to latitude and mno_sh to longitude', is_array($swapMarker) && abs((float)$swapMarker['canonical_lat'] - 62.03) < 0.000001 && abs((float)$swapMarker['canonical_lng'] - 129.73) < 0.000001);
+$ok('east longitude above 90 remains drawable after storage swap', $swapPayload['diagnostics']['marker_request_count'] === 1 && $swapPayload['diagnostics']['invalid_coordinates_count'] === 0);
+
 $service = $read($root . '/app/Service/FeoMapService.php');
 $ok('available pool starts from placement current', str_contains($service, 'FROM feo_placement_current c'));
 $ok('available pool joins canonical requests', str_contains($service, 'INNER JOIN feo_requests r ON r.zayavka_id=c.zayavka_id'));
 $ok('no legacy flights domain', !str_contains(strtolower($service), 'flights'));
+$ok('FEO storage coordinate inversion is explicit', str_contains($service, 'self::coordinates($row[\'mno_d\'] ?? null, $row[\'mno_sh\'] ?? null)'));
 $ok('group key includes coordinates state utilizer', str_contains($service, '$coordKey . \'|\' . $state . \'|\' . $utilizerKey'));
 $ok('Stage 1 map has no request-level ADR helper', !str_contains($service, 'requestAdr('));
 
