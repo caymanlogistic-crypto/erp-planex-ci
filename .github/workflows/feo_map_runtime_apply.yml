@@ -35,7 +35,7 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          printf '%s' "$CIPHERTEXT_B64" | ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -se' <<'REMOTE'
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "CIPHERTEXT_B64='$CIPHERTEXT_B64' bash -se" <<'REMOTE'
           set -euo pipefail
           ROOT="$HOME/planexp/public_html"
           ERP="$ROOT/erpv2"
@@ -45,9 +45,7 @@ jobs:
           TMP_CIPHER=$(mktemp)
           TMP_PLAIN=$(mktemp)
           trap 'rm -f "$TMP_CIPHER" "$TMP_PLAIN" "$RSA_KEY" "${RSA_KEY}.pub.pem"' EXIT
-          cat > "$TMP_CIPHER.b64"
-          base64 -d "$TMP_CIPHER.b64" > "$TMP_CIPHER"
-          rm -f "$TMP_CIPHER.b64"
+          printf '%s' "$CIPHERTEXT_B64" | base64 -d > "$TMP_CIPHER"
           test -s "$RSA_KEY"
           openssl pkeyutl -decrypt -inkey "$RSA_KEY" -pkeyopt rsa_padding_mode:oaep -pkeyopt rsa_oaep_md:sha256 -in "$TMP_CIPHER" -out "$TMP_PLAIN"
           test -s "$TMP_PLAIN"
