@@ -74,7 +74,7 @@ $must(str_contains($qa, "adrEvidence=liveAdr.length>0?'live-production-marker':'
 $must(str_contains($qa, "deployedJs.includes('if (markerData.adr)')"), 'production QA must verify deployed ADR renderer when live ADR data is absent');
 $must(str_contains($qa, "deployedJs.includes('REQUEST_MARKER_STACK_STEP = 36')"), 'production QA must verify deployed stack contract when live overlap data is absent');
 $must(!str_contains($qa, 'production data has no ADR marker for visual QA') && !str_contains($qa, 'production data has no coincident-coordinate vertical stack'), 'production QA must not fail only because current production lacks optional visual states');
-$must(str_contains($qa, '#feo-map img[src^="data:image/svg+xml"]'), 'production QA must inspect real Yandex marker images');
+$must(str_contains($qa, '#feo-map ymaps[style*="request-marker-v2-clip"]') && str_contains($qa, 'backgroundImage'), 'production QA must inspect legacy SVG markers through the real Yandex overlay background-image DOM');
 $must(str_contains($qa, '.feo-yandex-balloon'), 'production QA must verify Yandex balloon content');
 $must(str_contains($qa, '#feo-map-layer-toggle'), 'production QA must verify layer panel collapse/expand');
 $must(str_contains($qa, "x.url().includes('/company/feo/requests/map/data')&&x.request().method()==='GET'"), 'production QA must verify read-only refresh');
