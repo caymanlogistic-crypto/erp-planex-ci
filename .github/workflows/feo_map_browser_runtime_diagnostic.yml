@@ -1,0 +1,92 @@
+name: FEO Map Browser Runtime Diagnostic
+
+on:
+  push:
+    branches:
+      - agent/feo-map-runtime-diagnostic-20260830
+    paths:
+      - .github/workflows/feo_map_browser_runtime_diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  browser-diagnostic:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Create temporary logist QA session
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/feo_map_browser_diag_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' create logist")
+          JSON=${OUT#QA_SESSION=}
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          for key in ('sid','csrf'):
+              print(f'::add-mask::{obj[key]}')
+          with open(sys.argv[2],'a') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\nQA_SESSION_ID={obj['sid']}\n")
+          PY
+      - name: Trace production map without exposing API key
+        run: |
+          node <<'NODE'
+          const {chromium}=require('playwright');
+          const redact=s=>String(s).replace(/([?&]apikey=)[^&\s"']+/gi,'$1[REDACTED]').replace(/ERPV2SESSID=[^;\s]+/gi,'ERPV2SESSID=[REDACTED]');
+          (async()=>{
+            const b=await chromium.launch({headless:true});
+            const c=await b.newContext({viewport:{width:1440,height:900}});
+            await c.addCookies([{name:process.env.QA_COOKIE_NAME,value:process.env.QA_SESSION_ID,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
+            const p=await c.newPage();
+            const rows=[];
+            p.on('console',m=>rows.push(`CONSOLE_${m.type().toUpperCase()}=${redact(m.text())}`));
+            p.on('pageerror',e=>rows.push(`PAGEERROR=${redact(e.message||e)}`));
+            p.on('requestfailed',r=>{const u=new URL(r.url());rows.push(`REQUEST_FAILED=${u.origin}${u.pathname} :: ${redact(r.failure()?.errorText||'')}`)});
+            p.on('response',r=>{if(/yandex|feo-map/.test(r.url())){const u=new URL(r.url());rows.push(`RESPONSE=${r.status()} ${u.origin}${u.pathname}`)}});
+            const res=await p.goto('https://plan-ex.ru/erpv2/company/feo/requests/map',{waitUntil:'domcontentloaded',timeout:60000});
+            console.log(`HTTP=${res&&res.status()}`);
+            await p.waitForTimeout(12000);
+            const state=await p.locator('#feo-map-page').evaluate(el=>({ready:el.dataset.mapReady||'',engine:el.dataset.mapEngine||'',configured:el.dataset.yandexConfigured||'',runtimeError:(document.querySelector('#feo-map-runtime-error')?.textContent||'').trim(),runtimeErrorHidden:document.querySelector('#feo-map-runtime-error')?.hidden,ymaps:typeof window.ymaps,scriptCount:[...document.scripts].filter(s=>s.src.includes('api-maps.yandex.ru')).length,mapChildren:document.querySelector('#feo-map')?.childElementCount||0}));
+            console.log('STATE='+JSON.stringify(state));
+            for(const row of [...new Set(rows)]) console.log(redact(row));
+            await b.close();
+          })().catch(e=>{console.error(redact(e.stack||e));process.exit(1)});
+          NODE
+      - name: Cleanup temporary QA session and SSH material
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -u
+          REMOTE="/tmp/feo_map_browser_diag_${GITHUB_RUN_ID}.php"
+          if [ -n "${QA_SESSION_ID:-}" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$QA_SESSION_ID'" || true
+          fi
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE'" || true
+          rm -f "$HOME/.ssh/key"
