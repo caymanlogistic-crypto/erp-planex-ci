@@ -13,7 +13,8 @@ $ok = static function (string $name, bool $value) use (&$pass, &$fail): void {
     $fail++; fwrite(STDERR, "FAIL: {$name}\n");
 };
 
-$ok('view loads Yandex Maps 2.1', str_contains($view, 'https://api-maps.yandex.ru/2.1/'));
+$ok('view loads Yandex Maps 2.1', str_contains($view, 'https://api-maps.yandex.ru/2.1.77/'));
+$ok('view enables Yandex CSP mode', str_contains($view, '&csp=true'));
 $ok('view uses runtime Yandex key', str_contains($view, "['yandex_maps_api_key']") && str_contains($view, 'YANDEX_MAPS_API_KEY'));
 $ok('view has no Leaflet runtime', !str_contains($view, 'leaflet') && !str_contains($view, 'tile-url-template'));
 $ok('view has overlay layer panel', str_contains($view, 'feo-map-layer-panel') && str_contains($view, 'feo-map-workspace'));
