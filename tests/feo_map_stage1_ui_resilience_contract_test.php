@@ -46,6 +46,8 @@ $must(str_contains($css, '.feo-map-canvas{position:absolute;inset:0;width:100%;h
 $must(str_contains($css, '.feo-map-layer-panel{position:absolute;top:8px;right:8px') && str_contains($css, 'width:216px'), 'layer controls must be compact overlay');
 $must(str_contains($css, '.feo-layer-row{display:grid;grid-template-columns:13px minmax(0,1fr) auto 8px') && str_contains($css, 'min-height:22px'), 'layer rows must stay super-compact');
 $must(str_contains($css, 'accent-color:var(--accent,#7c4718)'), 'layer checkboxes must use ERP accent');
+$must(str_contains($css, '.feo-map-layer-panel.is-collapsed{box-sizing:border-box;width:28px;height:28px;min-height:28px;max-height:28px;overflow:hidden}'), 'collapsed layer panel must be an exact compact square');
+$must(str_contains($css, '.feo-map-layer-panel.is-collapsed .feo-map-layer-content') && str_contains($css, 'display:none!important'), 'collapsed layer panel content must be fully hidden');
 
 $must(str_contains($js, "typeof window.ymaps === 'undefined'"), 'Yandex API absence guard missing');
 $must(str_contains($js, 'Не удалось загрузить Яндекс.Карты'), 'Yandex loading failure must stay visible');
@@ -60,6 +62,7 @@ $must(str_contains($js, "document.dispatchEvent(new CustomEvent('feo-map-ready'"
 $must(str_contains($js, 'ResizeObserver') && str_contains($js, 'state.map.container.fitToViewport()'), 'Yandex resize contract missing');
 $must(str_contains($css, '.feo-map-canvas{position:absolute;inset:0;width:100%;height:100%'), 'map canvas must fill workspace');
 $must(str_contains($css, '.feo-map-layer-panel{position:absolute;'), 'layer controls must overlay map canvas');
+$must(str_contains($js, 'function isMapLayerAllowed(layer)') && str_contains($js, "label === 'производственный календарь'"), 'FEO layer renderer must reject the noncanonical production calendar layer');
 
 // Marker presentation source of truth: КАРТА.zip / request_markers_v2.js.
 $must(str_contains($js, 'REQUEST_MARKER_BODY_WIDTH = 50'), 'legacy marker body width changed');
@@ -91,6 +94,9 @@ $must(!str_contains($qa, 'production data has no ADR marker for visual QA') && !
 $must(str_contains($qa, '#feo-map ymaps[style*="request-marker-v2-clip"]') && str_contains($qa, 'backgroundImage'), 'production QA must inspect legacy SVG markers through the real Yandex overlay background-image DOM');
 $must(str_contains($qa, '.feo-yandex-balloon'), 'production QA must verify Yandex balloon content');
 $must(str_contains($qa, '#feo-map-layer-toggle'), 'production QA must verify layer panel collapse/expand');
+$must(str_contains($qa, "panelText.includes('производственный календарь')"), 'production QA must forbid production calendar text in FEO layers');
+$must(str_contains($qa, 'Math.abs(collapsedMetrics.width-28)<=1') && str_contains($qa, 'Math.abs(collapsedMetrics.height-28)<=1'), 'production QA must verify exact collapsed layer footprint');
+$must(str_contains($qa, "collapsedMetrics.contentDisplay==='none'"), 'production QA must prove collapsed layer content is hidden');
 $must(str_contains($qa, "page.locator('.feo-map-head,.feo-map-summary,#feo-map-refresh').count()===0"), 'production QA must prove removed interior UI stays absent');
 $must(str_contains($qa, 'assertMapFillsContent') && str_contains($qa, 'full ERP content viewport'), 'production QA must verify map fills the whole ERP content area');
 $must(str_contains($qa, 'panelMetrics.width<=220') && str_contains($qa, 'panelMetrics.rowHeight<=24'), 'production QA must verify compact layer panel dimensions');
