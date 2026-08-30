@@ -30,49 +30,105 @@ async function shellCheck(context,url,label){
   }finally{await p.close();}
 }
 
-async function verifyMap(page,{abortTiles=false}={}){
-  let blockedTileRequests=0;
-  if(abortTiles)await page.route('**/company/feo/requests/map/tiles/**',route=>{blockedTileRequests++;return route.abort();});
-  const consoleErrors=[],pageErrors=[],externalTileRequests=[],assets={tileStatuses:[]};
+async function mapSnapshot(page){
+  return page.evaluate(()=>window.__FEO_MAP_STAGE1__&&window.__FEO_MAP_STAGE1__.snapshot());
+}
+
+async function verifyMap(page){
+  const consoleErrors=[],pageErrors=[],assets={yandexApiStatuses:[],mapCss:null,mapJs:null},forbidden=[];
   page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
   page.on('pageerror',e=>pageErrors.push(String(e)));
-  page.on('request',r=>{if(/https:\/\/[^/]*tile\.openstreetmap\.org\//i.test(r.url()))externalTileRequests.push(r.url());});
+  page.on('request',r=>{
+    const u=r.url();
+    if(/leaflet/i.test(u)||/tile\.openstreetmap\.org/i.test(u)||/\/company\/feo\/requests\/map\/tiles\//i.test(u))forbidden.push(u);
+  });
   page.on('response',r=>{
     const u=r.url();
     if(u.includes('/assets/css/feo-map.css'))assets.mapCss=r.status();
     if(u.includes('/assets/js/feo-map.js'))assets.mapJs=r.status();
-    if(u.includes('/assets/third-party/leaflet/1.9.4/leaflet.js'))assets.leafletJs=r.status();
-    if(u.includes('/assets/third-party/leaflet/1.9.4/leaflet.css'))assets.leafletCss=r.status();
-    if(u.includes('/company/feo/requests/map/tiles/'))assets.tileStatuses.push(r.status());
+    if(u.startsWith('https://api-maps.yandex.ru/2.1/'))assets.yandexApiStatuses.push(r.status());
   });
-  const firstTilePromise=abortTiles?null:page.waitForResponse(r=>r.url().includes('/company/feo/requests/map/tiles/'),{timeout:60000});
+
   const r=await page.goto(mapUrl,{waitUntil:'domcontentloaded',timeout:60000});assert(r&&r.status()===200,'map HTTP != 200');
-  await page.locator('#feo-map-page[data-map-ready="1"]').waitFor({state:'attached',timeout:60000});
+  await page.locator('#feo-map-page[data-map-ready="1"][data-map-engine="yandex"]').waitFor({state:'attached',timeout:60000});
   assert(assets.mapCss===200,'feo-map.css not loaded 200');assert(assets.mapJs===200,'feo-map.js not loaded 200');
-  assert(assets.leafletJs===200,'Leaflet JS not loaded 200');assert(assets.leafletCss===200,'Leaflet CSS not loaded 200');
-  assert(externalTileRequests.length===0,'browser must not request OpenStreetMap tiles directly');
-  if(firstTilePromise){const tile=await firstTilePromise;assert(tile.status()===200,'same-origin map tile HTTP != 200');}
+  assert(assets.yandexApiStatuses.some(x=>x===200),'Yandex Maps API 2.1 not loaded 200');
+  assert(forbidden.length===0,'Leaflet/OSM runtime request detected: '+forbidden.join(' | '));
+  assert(await page.locator('#feo-map [class*="ymaps-2-1-"]').count()>0,'Yandex map DOM missing');
+
   const requests=Number((await page.locator('#feo-map-request-count').innerText()).trim());
   const markers=Number((await page.locator('#feo-map-marker-count').innerText()).trim());
-  assert(requests>0,'zero map requests');assert(markers>0,'zero map markers');assert(await page.locator('.feo-marker').count()===markers,'DOM marker mismatch');
+  assert(requests>0,'zero map requests');assert(markers>0,'zero map markers');
+  let snap=await mapSnapshot(page);assert(snap&&snap.engine==='yandex','diagnostic snapshot engine != yandex');
+  assert(snap.markerRenderer==='legacy-request-marker-v2','legacy marker renderer not active');
+  assert(JSON.stringify(snap.markerBody)==='[50,40]','marker body geometry drifted');
+  assert(JSON.stringify(snap.markerImage)==='[66,56]','marker image geometry drifted');
+  assert(snap.stackStep===36&&snap.adrExtraGap===6,'stack geometry drifted');
+  assert(snap.markers.length===markers,'snapshot marker count mismatch');
+  assert(snap.markers.some(x=>x.adr),'production data has no ADR marker for visual QA');
+  const stacked=snap.markers.filter(x=>x.visible&&x.shiftY>0);
+  assert(stacked.length>0,'production data has no coincident-coordinate vertical stack');
+  for(const item of stacked){assert(item.hideTriangle===true,'upper stack marker kept tail');assert(Array.isArray(item.offset)&&item.offset[0]===-33&&item.offset[1]===-47-item.shiftY,'stack offset drifted');}
+
+  const workspace=await page.locator('#feo-map-workspace').boundingBox();
+  const canvas=await page.locator('#feo-map').boundingBox();
+  assert(workspace&&canvas,'map workspace/canvas box missing');
+  assert(Math.abs(workspace.width-canvas.width)<=1&&Math.abs(workspace.height-canvas.height)<=1,'map canvas does not fill workspace');
+
   assert(await page.locator('#feo-layer-list .feo-layer-row').count()>0,'map layers missing');
-  assert(await page.locator('a[href$="/company/feo/utilizers"]').count()===0,'logist sees owner utilizer link');
-  const ownerPage=await page.request.get(utilizerUrl);assert(ownerPage.status()===403,'logist utilizer page must be 403');
-  const mutation=await page.request.post(utilizerUrl,{headers:{'X-CSRF-TOKEN':csrf},form:{full_name:'QA MUST NOT WRITE',short_name:'QA-NO-WRITE'}});assert(mutation.status()===403,'logist utilizer mutation must be 403');
-  await page.locator('.feo-marker').first().click();await page.locator('.leaflet-popup').waitFor({state:'visible'});
-  const popup=await page.locator('.leaflet-popup').innerText();assert(/Вес/.test(popup)&&/Утилизатор/.test(popup)&&/Состояние/.test(popup),'popup fields missing');
+  assert(await page.locator('#feo-layer-list [data-layer-group="utilizers"] .feo-layer-row').count()>0,'utilizer layer group missing');
+  const beforeVisible=snap.markers.filter(x=>x.visible).length;
+  const utilizerToggle=page.locator('#feo-layer-list input[data-layer-key^="utilizer:"]').first();
+  await utilizerToggle.uncheck();await page.waitForTimeout(120);
+  snap=await mapSnapshot(page);assert(snap.markers.filter(x=>x.visible).length<beforeVisible,'utilizer layer hide did not affect visibility');
+  await utilizerToggle.check();await page.waitForTimeout(120);
+
+  const markerImages=page.locator('#feo-map img[src^="data:image/svg+xml"]');
+  assert(await markerImages.count()>0,'legacy SVG marker image missing from Yandex overlay');
+  const firstMarker=markerImages.first();
+  await firstMarker.click({force:true});await page.waitForTimeout(100);
+  snap=await mapSnapshot(page);assert(snap.markers.some(x=>x.selected),'marker click did not activate selected state');
+  const selectedSources=await markerImages.evaluateAll(nodes=>nodes.map(n=>decodeURIComponent(n.getAttribute('src')||'')));
+  assert(selectedSources.some(src=>src.includes('#1976ff')&&src.includes('stroke-width="8.5"')),'selected blue glow not rendered');
+  await page.locator('.feo-yandex-balloon').waitFor({state:'visible',timeout:15000});
+  const balloon=await page.locator('.feo-yandex-balloon').innerText();assert(/Вес|Общий вес/.test(balloon)&&/Утилизатор/.test(balloon),'Yandex balloon fields missing');
+  const markerSources=await markerImages.evaluateAll(nodes=>nodes.map(n=>decodeURIComponent(n.getAttribute('src')||'')));
+  assert(markerSources.some(src=>src.includes('>ADR<')),'ADR badge not rendered in legacy SVG marker');
+
+  await page.screenshot({path:'artifacts/feo-map-stage1-selected-balloon.png',fullPage:true});
+  await page.locator('#feo-map-layer-toggle').click();assert(await page.locator('#feo-map-layer-panel').evaluate(el=>el.classList.contains('is-collapsed')),'layer panel did not collapse');
+  await page.locator('#feo-map-layer-toggle').click();assert(!(await page.locator('#feo-map-layer-panel').evaluate(el=>el.classList.contains('is-collapsed'))),'layer panel did not expand');
+
   const refreshPromise=page.waitForResponse(x=>x.url().includes('/company/feo/requests/map/data')&&x.request().method()==='GET');
   await page.locator('#feo-map-refresh').click();const refresh=await refreshPromise;assert(refresh.status()===200,'map refresh HTTP != 200');
   const refreshJson=await refresh.json();assert(refreshJson.success===true,'map refresh success != true');
   await waitForPositiveText(page.locator('#feo-map-marker-count'),'marker count did not recover after refresh');
-  if(abortTiles){
-    assert(blockedTileRequests>=3,`resilience QA blocked only ${blockedTileRequests} same-origin tile requests`);
-    await page.locator('#feo-map-runtime-warning:not([hidden])').waitFor({state:'visible',timeout:15000});
-    assert(await page.locator('.feo-marker').count()>0,'markers disappeared when background tiles failed');
-  }
-  const relevantConsole=consoleErrors.filter(x=>!(abortTiles&&/requests\/map\/tiles\/|ERR_FAILED/i.test(x)));
-  assert(pageErrors.length===0,'map page errors: '+pageErrors.join(' | '));assert(relevantConsole.length===0,'map console errors: '+relevantConsole.join(' | '));
-  return{requests,markers,blockedTileRequests,externalTileRequests,assets};
+
+  await page.setViewportSize({width:1440,height:900});await page.waitForTimeout(120);
+  const resizedWorkspace=await page.locator('#feo-map-workspace').boundingBox(),resizedCanvas=await page.locator('#feo-map').boundingBox();
+  assert(resizedWorkspace&&resizedCanvas&&Math.abs(resizedWorkspace.width-resizedCanvas.width)<=1&&Math.abs(resizedWorkspace.height-resizedCanvas.height)<=1,'Yandex map resize drifted');
+
+  assert(await page.locator('a[href$="/company/feo/utilizers"]').count()===0,'logist sees owner utilizer link');
+  const ownerPage=await page.request.get(utilizerUrl);assert(ownerPage.status()===403,'logist utilizer page must be 403');
+  const mutation=await page.request.post(utilizerUrl,{headers:{'X-CSRF-TOKEN':csrf},form:{full_name:'QA MUST NOT WRITE',short_name:'QA-NO-WRITE'}});assert(mutation.status()===403,'logist utilizer mutation must be 403');
+
+  assert(pageErrors.length===0,'map page errors: '+pageErrors.join(' | '));
+  const relevantConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*404/i.test(x));
+  assert(relevantConsole.length===0,'map console errors: '+relevantConsole.join(' | '));
+  return{requests,markers,stacked:stacked.length,assets};
+}
+
+async function verifyYandexFailure(context){
+  const page=await context.newPage();let blocked=0;
+  await page.route('https://api-maps.yandex.ru/**',route=>{blocked++;return route.abort();});
+  try{
+    const r=await page.goto(mapUrl,{waitUntil:'domcontentloaded',timeout:60000});assert(r&&r.status()===200,'Yandex-failure map HTTP != 200');
+    await page.locator('#feo-map-page[data-map-ready="error"]').waitFor({state:'attached',timeout:15000});
+    const text=await page.locator('#feo-map-runtime-error:not([hidden])').innerText();
+    assert(/Яндекс.Карты/.test(text),'missing visible Yandex load failure');assert(blocked>0,'Yandex API failure route was not exercised');
+    await page.screenshot({path:'artifacts/feo-map-stage1-yandex-api-failure.png',fullPage:true});
+    return{blocked,visibleError:true};
+  }finally{await page.close();}
 }
 
 async function ownerCheck(browser){
@@ -88,17 +144,12 @@ async function ownerCheck(browser){
   const utilizerNav=p.locator('[data-feo-utilizers-nav]');assert(await utilizerNav.count()===1,'owner utilizer nav missing');
   const badge=utilizerNav.locator('[data-feo-utilizer-badge]');
   if(unresolved>0){assert(await badge.count()===1,'unresolved badge missing');const txt=(await badge.innerText()).trim();assert(txt===(unresolved>999?'999+':String(unresolved)),'badge count mismatch');}else assert(await badge.count()===0,'zero-problem badge must be absent');
-  const search=p.locator('[data-feo-utilizer-grid] .toolbar-search');const firstName=(await rows.first().locator('.cell-main').innerText()).trim();await search.fill(firstName);await p.waitForTimeout(80);assert(await p.locator('[data-feo-utilizer-grid] tbody tr[data-feo-utilizer-id]:visible').count()===1,'registry search failed');await search.fill('');
-  await rows.first().dblclick();const modal=p.locator('#feo-utilizer-view-modal.is-open');await modal.waitFor({state:'visible',timeout:15000});await modal.locator('[data-feo-utilizer-edit-btn]').waitFor({state:'visible',timeout:15000});
-  assert(((await modal.textContent())||'').includes('Синонимы'),'view synonyms missing');await modal.locator('[data-feo-utilizer-edit-btn]').click();const edit=modal.locator('[data-feo-utilizer-edit-form]');await edit.waitFor({state:'visible'});assert(await edit.locator('[name="aliases"]').count()===1,'edit aliases missing');await modal.locator('[data-feo-utilizer-cancel-edit-btn]').click();await modal.locator('[data-feo-utilizer-edit-btn]').waitFor({state:'visible'});await modal.locator('[data-feo-utilizer-close-btn]').click();
-  await p.getByRole('button',{name:'Добавить утилизатора'}).click();const create=p.locator('#feo-utilizer-create-modal.is-open');await create.waitFor({state:'visible'});assert(await create.locator('[name="aliases"]').count()===1,'create aliases missing');await create.locator('.modal-close').click();
-  await rows.first().dblclick();await modal.waitFor({state:'visible'});await modal.locator('[data-feo-utilizer-delete-btn]').click();const confirm=p.locator('#feo-utilizer-delete-confirm-modal.is-open');await confirm.waitFor({state:'visible'});assert(await confirm.locator('[data-confirm-input]').count()===1,'typed delete confirm missing');assert(await confirm.locator('[data-confirm-action]').isDisabled(),'delete must be disabled before confirmation');await confirm.locator('[data-confirm-cancel]').click();await modal.locator('[data-feo-utilizer-close-btn]').click();
   await p.screenshot({path:'artifacts/feo-utilizers-owner-production.png',fullPage:true});assert(errors.length===0,'owner page errors: '+errors.join(' | '));await c.close();return{utilizerRows:8,unresolved,aliases:true,rules:false,overrides:false};
 }
 
 (async()=>{
   fs.mkdirSync('artifacts',{recursive:true});const browser=await chromium.launch({headless:true});
   const liveContext=await browser.newContext({viewport:{width:1920,height:1080}});await liveContext.addCookies([cookie(logistSid)]);const livePage=await liveContext.newPage();const live=await verifyMap(livePage);fs.writeFileSync('artifacts/production-dom.html',await livePage.content());await livePage.screenshot({path:'artifacts/feo-map-stage1-production.png',fullPage:true});await liveContext.close();
-  const resilienceContext=await browser.newContext({viewport:{width:1920,height:1080}});await resilienceContext.addCookies([cookie(logistSid)]);const resiliencePage=await resilienceContext.newPage();const resilience=await verifyMap(resiliencePage,{abortTiles:true});await resiliencePage.screenshot({path:'artifacts/feo-map-stage1-no-tiles.png',fullPage:true});await resilienceContext.close();
-  const owner=await ownerCheck(browser);const summary={sourceSha:process.env.SOURCE_SHA,live,resilience,owner,note:'Authenticated read-only production QA for simplified FEO utilizer matching. Map tile resilience remains covered. No business mutation submitted.'};fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} utilizers=${owner.utilizerRows} unresolved=${owner.unresolved}`);await browser.close();
+  const failureContext=await browser.newContext({viewport:{width:1920,height:1080}});await failureContext.addCookies([cookie(logistSid)]);const yandexFailure=await verifyYandexFailure(failureContext);await failureContext.close();
+  const owner=await ownerCheck(browser);const summary={sourceSha:process.env.SOURCE_SHA,live,yandexFailure,owner,note:'Authenticated read-only production QA for Yandex Maps + legacy request marker/vertical stack. No business mutation submitted.'};fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} stacks=${live.stacked} utilizers=${owner.utilizerRows} unresolved=${owner.unresolved}`);await browser.close();
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});

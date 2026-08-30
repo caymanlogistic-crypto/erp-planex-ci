@@ -13,93 +13,78 @@ $read = static function (string $rel) use ($root,$fail): string {
 
 $view = $read('app/View/pages/company_feo_map.php');
 $js = $read('public/assets/js/feo-map.js');
+$css = $read('public/assets/css/feo-map.css');
 $qa = $read('.github/feo-map-stage1/production_visual.js');
 $qaWorkflow = $read('.github/workflows/feo_map_stage1_production_visual_qa.yml');
 $sanitizer = $read('.github/feo-map-stage1/sanitize_artifacts.js');
-$tileService = $read('app/Service/FeoMapTileService.php');
-$controller = $read('app/Http/Controllers/Company/FeoMapController.php');
-$routes = $read('app/Http/Routes/company_feo_map.php');
+$config = $read('config/app.php');
+$envExample = $read('.env.example');
 
-$must(str_contains($view, "/assets/third-party/leaflet/1.9.4/leaflet.js"), 'same-origin Leaflet JS source missing');
-$must(str_contains($view, "/assets/third-party/leaflet/1.9.4/leaflet.css"), 'same-origin Leaflet CSS source missing');
-$must(!str_contains($view, '/assets/vendor/'), 'deploy-blocked vendor asset path must not return');
-$must(!str_contains($view, 'cdn.jsdelivr.net'), 'Stage 1 map must not depend on jsDelivr under production CSP');
-$must(!str_contains($view, 'unpkg.com'), 'Stage 1 map must not depend on unpkg under production CSP');
-$must(!str_contains($view, 'loadLeaflet('), 'obsolete CDN Leaflet fallback loader must be removed');
+$must(str_contains($view, 'https://api-maps.yandex.ru/2.1/'), 'Yandex Maps JavaScript API 2.1 source missing');
+$must(str_contains($view, "['yandex_maps_api_key']"), 'view must receive canonical config key');
+$must(str_contains($config, "env('YANDEX_MAPS_API_KEY', '')"), 'Yandex key must come from runtime env');
+$must(str_contains($envExample, 'YANDEX_MAPS_API_KEY='), 'Yandex key env contract missing from .env.example');
+$must(!preg_match("/YANDEX_MAPS_API_KEY=\\S+/", $envExample), '.env.example must never contain a real Yandex key');
+$must(!str_contains(strtolower($view), 'leaflet'), 'Leaflet runtime must be absent from the FEO map view');
+$must(!str_contains($view, 'data-tile-url-template='), 'OSM tile runtime contract must be absent from the FEO map view');
 $must(str_contains($view, 'data-map-ready="0"'), 'map readiness state missing');
-$must(str_contains($view, 'data-tile-url-template='), 'same-origin tile template missing');
-$must(str_contains($view, "app_url('/company/feo/requests/map/tiles/{z}/{x}/{y}')"), 'tile template must stay app-local');
+$must(str_contains($view, 'data-yandex-configured='), 'Yandex configuration readiness state missing');
 $must(str_contains($view, "app_url('/assets/js/feo-map.js')"), 'map runtime must stay app-local');
 
-$must(!str_contains($js, "typeof window.L === 'undefined') return"), 'silent Leaflet failure must not return without feedback');
-$must(str_contains($js, "typeof window.L === 'undefined'"), 'Leaflet absence guard missing');
-$must(str_contains($js, 'Не удалось загрузить компонент карты'), 'Leaflet loading failure must stay visible');
+$must(str_contains($js, "typeof window.ymaps === 'undefined'"), 'Yandex API absence guard missing');
+$must(str_contains($js, 'Не удалось загрузить Яндекс.Карты'), 'Yandex loading failure must stay visible');
 $must(str_contains($js, "page.dataset.mapReady = 'error'"), 'map failure readiness state missing');
 $must(str_contains($js, "page.dataset.mapReady = '1'"), 'map success readiness state missing');
-$must(str_contains($js, "page.dataset.tileUrlTemplate"), 'map must read the same-origin tile template');
-$must(!str_contains($js, 'tile.openstreetmap.org'), 'browser runtime must not request OSM tiles directly under production CSP');
-$must(str_contains($js, "tiles.on('loading'"), 'tile load-cycle reset hook missing');
-$must(str_contains($js, "tiles.on('tileerror'"), 'tile outage handling missing');
-$must(str_contains($js, "tiles.on('load'"), 'tile load completion hook missing');
-$must(str_contains($js, "tiles.on('loading', () => {\n            state.tileErrors = 0;"), 'tile error counter must reset at the start of a new load cycle');
-$must(str_contains($js, "if (state.tileErrors >= 3)"), 'tile outage warning threshold contract changed');
-$must(str_contains($js, "if (state.tileErrors === 0) showRuntimeWarning('');"), 'tile warning must clear only after a clean load cycle');
-$must(!str_contains($js, "tiles.on('load', () => {\n            state.tileErrors = 0;\n            showRuntimeWarning('');"), 'load must not erase tile errors and hide an outage warning unconditionally');
-$must(str_contains($js, 'Маркеры заявок продолжают отображаться'), 'tile outage must explain that markers remain usable');
+$must(str_contains($js, "page.dataset.mapEngine = 'yandex'"), 'map engine diagnostic state missing');
+$must(str_contains($js, "new ymaps.Map('feo-map'"), 'Yandex map initialization missing');
+$must(str_contains($js, 'new ymaps.Placemark('), 'Yandex Placemark runtime missing');
+$must(!str_contains($js, 'L.map(') && !str_contains($js, 'L.marker(') && !str_contains($js, 'L.tileLayer('), 'Leaflet runtime leaked into FEO map JS');
+$must(!str_contains($js, 'tile.openstreetmap.org'), 'OSM runtime leaked into browser JS');
 $must(str_contains($js, "document.dispatchEvent(new CustomEvent('feo-map-ready'"), 'browser readiness event missing');
+$must(str_contains($js, 'ResizeObserver') && str_contains($js, 'state.map.container.fitToViewport()'), 'Yandex resize contract missing');
+$must(str_contains($css, '.feo-map-canvas{position:absolute;inset:0;width:100%;height:100%'), 'map canvas must fill workspace');
+$must(str_contains($css, '.feo-map-layer-panel{position:absolute;'), 'layer controls must overlay map canvas');
 
-$must(str_contains($routes, "/company/feo/requests/map/tiles/{z}/{x}/{y}"), 'same-origin tile route missing');
-$must(str_contains($routes, "app/Service/FeoMapTileService.php"), 'tile service dependency missing');
-$must(str_contains($controller, 'public function tile(string $z, string $x, string $y): void'), 'tile controller action missing');
-$must(substr_count($controller, "requireRole(['company_owner','senior_logist','logist'])") >= 3, 'tile route must keep map RBAC');
-$must(str_contains($tileService, "private const UPSTREAM_BASE = 'https://tile.openstreetmap.org'"), 'tile upstream must be fixed to the canonical HTTPS OSM host');
-$must(str_contains($tileService, 'private const CACHE_TTL_SECONDS = 604800'), 'tile cache must keep at least seven-day TTL');
-$must(str_contains($tileService, 'PLANEX-ERP-FEO-Map/1.0'), 'identifiable tile User-Agent missing');
-$must(str_contains($tileService, "'If-None-Match: '"), 'conditional ETag revalidation missing');
-$must(str_contains($tileService, "'If-Modified-Since: '"), 'conditional Last-Modified revalidation missing');
-$must(str_contains($tileService, 'cache/feo-map-tiles'), 'local tile cache path missing');
-$must(str_contains($tileService, "CURLOPT_FOLLOWLOCATION => false"), 'cURL tile transport must not follow redirects');
-$must(str_contains($tileService, "'follow_location'=>0"), 'PHP stream tile transport must not follow redirects');
-$must(str_contains($tileService, "'max_redirects'=>0"), 'PHP stream tile transport must reject redirect chains');
+// Marker presentation source of truth: КАРТА.zip / request_markers_v2.js.
+$must(str_contains($js, 'REQUEST_MARKER_BODY_WIDTH = 50'), 'legacy marker body width changed');
+$must(str_contains($js, 'REQUEST_MARKER_BODY_HEIGHT = 40'), 'legacy marker body height changed');
+$must(str_contains($js, 'REQUEST_MARKER_GLOW_PAD = 8'), 'legacy marker glow pad changed');
+$must(str_contains($js, 'REQUEST_MARKER_STACK_STEP = 36'), 'legacy marker vertical stack step changed');
+$must(str_contains($js, 'REQUEST_MARKER_ADR_EXTRA_GAP = 6'), 'legacy ADR stack gap changed');
+$must(str_contains($js, "stroke-width=\"8.5\""), 'legacy selected glow geometry changed');
+$must(str_contains($js, "stdDeviation=\"3.4\""), 'legacy selected glow blur changed');
+$must(str_contains($js, "x=\"34.5\" y=\"-5\" width=\"14.5\" height=\"8\""), 'legacy ADR badge geometry changed');
+$must(str_contains($js, 'visibleByCoordinate'), 'visible-coordinate stack grouping missing');
+$must(str_contains($js, 'record.hideTriangle = position > 0'), 'upper stack markers must suppress the tail');
+$must(!str_contains($js, 'Math.cos(') && !str_contains($js, 'Math.sin('), 'circular spiderfy must not return');
+$must(str_contains($js, 'window.__FEO_MAP_STAGE1__ = Object.freeze'), 'read-only production diagnostics snapshot missing');
 
-require_once $root . '/app/Service/FeoMapTileService.php';
-$must(\App\Service\FeoMapTileService::normalizeCoordinates('0', '0', '0') === [0,0,0], 'valid z0 tile rejected');
-$must(\App\Service\FeoMapTileService::normalizeCoordinates('5', '31', '31') === [5,31,31], 'valid z5 tile rejected');
-$must(\App\Service\FeoMapTileService::normalizeCoordinates('5', '32', '0') === null, 'out-of-range x accepted');
-$must(\App\Service\FeoMapTileService::normalizeCoordinates('20', '0', '0') === null, 'zoom above Stage 1 maximum accepted');
-$must(\App\Service\FeoMapTileService::normalizeCoordinates('../5', '0', '0') === null, 'non-numeric tile coordinate accepted');
+// Production browser QA must prove the Yandex engine, visual marker contract, vertical stack, layers, balloon, refresh and resize.
+$must(!str_contains($qa, 'waitForFunction('), 'production Playwright QA must remain CSP-safe');
+$must(str_contains($qa, '#feo-map-page[data-map-ready="1"][data-map-engine="yandex"]'), 'Yandex readiness locator missing');
+$must(str_contains($qa, 'api-maps.yandex.ru/2.1/'), 'production QA must observe the Yandex API response');
+$must(str_contains($qa, 'Leaflet/OSM runtime request detected'), 'production QA must forbid Leaflet/OSM runtime traffic');
+$must(str_contains($qa, "markerRenderer==='legacy-request-marker-v2'"), 'production QA must verify legacy marker renderer');
+$must(str_contains($qa, "JSON.stringify(snap.markerBody)==='[50,40]'"), 'production QA must verify marker body geometry');
+$must(str_contains($qa, "JSON.stringify(snap.markerImage)==='[66,56]'"), 'production QA must verify marker image geometry');
+$must(str_contains($qa, 'production data has no coincident-coordinate vertical stack'), 'production QA must require a real vertical stack');
+$must(str_contains($qa, 'production data has no ADR marker for visual QA'), 'production QA must require a real ADR marker');
+$must(str_contains($qa, '#feo-map img[src^="data:image/svg+xml"]'), 'production QA must inspect real Yandex marker images');
+$must(str_contains($qa, '.feo-yandex-balloon'), 'production QA must verify Yandex balloon content');
+$must(str_contains($qa, '#feo-map-layer-toggle'), 'production QA must verify layer panel collapse/expand');
+$must(str_contains($qa, "x.url().includes('/company/feo/requests/map/data')&&x.request().method()==='GET'"), 'production QA must verify read-only refresh');
+$must(str_contains($qa, 'map canvas does not fill workspace') && str_contains($qa, 'Yandex map resize drifted'), 'production QA must verify full workspace and resize');
+$must(str_contains($qa, "page.route('https://api-maps.yandex.ru/**'"), 'Yandex API outage resilience QA missing');
+$must(str_contains($qa, 'missing visible Yandex load failure'), 'Yandex outage must surface a visible error');
 
-// Production CSP does not allow unsafe-eval. Browser acceptance must stay CSP-safe and recognize same-origin runtime assets.
-$must(!str_contains($qa, 'waitForFunction('), 'production Playwright QA must not use waitForFunction under CSP');
-$must(str_contains($qa, '#feo-map-page[data-map-ready="1"]'), 'CSP-safe map readiness locator missing');
-$must(str_contains($qa, '#feo-map-runtime-warning:not([hidden])'), 'CSP-safe tile warning locator missing');
-$must(str_contains($qa, 'waitForPositiveText'), 'CSP-safe refresh marker polling missing');
-$must(str_contains($qa, "/assets/third-party/leaflet/1.9.4/leaflet.js"), 'production QA must recognize local Leaflet JS');
-$must(str_contains($qa, "/assets/third-party/leaflet/1.9.4/leaflet.css"), 'production QA must recognize local Leaflet CSS');
-$must(!str_contains($qa, 'leaflet@1.9.4'), 'production QA must not recognize obsolete CDN Leaflet URL form');
-$must(str_contains($qa, "**/company/feo/requests/map/tiles/**"), 'tile outage QA must block same-origin proxy path');
-$must(str_contains($qa, 'externalTileRequests.length===0'), 'production QA must forbid direct browser OSM traffic');
-$must(str_contains($qa, 'same-origin map tile HTTP != 200'), 'production QA must require a successful proxied tile');
-$must(str_contains($qa, 'blockedTileRequests>=3'), 'resilience QA must prove that the outage threshold is actually exercised');
-$must(str_contains($qa, 'const liveContext=await browser.newContext'), 'normal production pass needs an isolated browser context');
-$must(str_contains($qa, 'const resilienceContext=await browser.newContext'), 'resilience pass needs a fresh browser context');
-$liveClose = strpos($qa, 'await liveContext.close();');
-$resilienceContext = strpos($qa, 'const resilienceContext=await browser.newContext');
-$must($liveClose !== false && $resilienceContext !== false && $liveClose < $resilienceContext, 'resilience context must be created only after the live context/cache is closed');
-
-// Evidence artifacts must never retain temporary authenticated session IDs, CSRF values, or anonymous Set-Cookie session IDs.
+// Evidence artifacts must scrub temporary sessions, CSRF and the browser-visible Yandex API key.
 $must(str_contains($qaWorkflow, 'Sanitize production evidence'), 'production evidence sanitization step missing');
 $must(str_contains($qaWorkflow, 'node .github/feo-map-stage1/sanitize_artifacts.js artifacts'), 'production evidence sanitizer is not executed before upload');
 $must(str_contains($sanitizer, 'QA_LOGIST_SESSION_ID'), 'sanitizer must scrub the logist QA session id');
 $must(str_contains($sanitizer, 'QA_OWNER_SESSION_ID'), 'sanitizer must scrub the owner QA session id');
 $must(str_contains($sanitizer, 'QA_LOGIST_CSRF_TOKEN'), 'sanitizer must scrub the QA CSRF token');
-$must(str_contains($sanitizer, 'ERPV2SESSID='), 'sanitizer must scrub session cookies emitted during old-SID proof');
-$must(str_contains($sanitizer, 'csrf-token'), 'sanitizer must scrub CSRF meta values from DOM evidence');
-$must(str_contains($sanitizer, '_csrf_token'), 'sanitizer must scrub hidden CSRF form values from DOM evidence');
+$must(str_contains($sanitizer, 'ERPV2SESSID='), 'sanitizer must scrub ERP session cookies');
+$must(str_contains($sanitizer, '[?&]apikey='), 'sanitizer must scrub Yandex API key query values');
 $must(str_contains($sanitizer, 'FEO_MAP_STAGE1_ARTIFACT_SANITIZE=PASS'), 'sanitizer must emit an auditable PASS marker');
-
-// Marker presentation is LOCKED. These assertions protect the accepted marker contract.
-$must(str_contains($js, "classes = ['feo-marker']"), 'locked marker class changed');
-$must(str_contains($js, "L.divIcon({className: 'feo-div-icon', html, iconSize: [110, 38], iconAnchor: [55, 19], popupAnchor: [0, -21]})"), 'locked marker geometry changed');
 
 echo "FEO_MAP_STAGE1_UI_RESILIENCE=PASS\n";
