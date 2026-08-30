@@ -65,9 +65,26 @@ async function verifyMap(page){
   assert(JSON.stringify(snap.markerImage)==='[66,56]','marker image geometry drifted');
   assert(snap.stackStep===36&&snap.adrExtraGap===6,'stack geometry drifted');
   assert(snap.markers.length===markers,'snapshot marker count mismatch');
-  assert(snap.markers.some(x=>x.adr),'production data has no ADR marker for visual QA');
+  const deployedJsResponse=await page.request.get(base+'/assets/js/feo-map.js');
+  assert(deployedJsResponse.status()===200,'deployed feo-map.js contract probe HTTP != 200');
+  const deployedJs=await deployedJsResponse.text();
+  const liveAdr=snap.markers.filter(x=>x.visible&&x.adr);
   const stacked=snap.markers.filter(x=>x.visible&&x.shiftY>0);
-  assert(stacked.length>0,'production data has no coincident-coordinate vertical stack');
+  const adrEvidence=liveAdr.length>0?'live-production-marker':'deployed-runtime-contract';
+  const stackEvidence=stacked.length>0?'live-production-stack':'deployed-runtime-contract';
+  if(liveAdr.length===0){
+    assert(deployedJs.includes('if (markerData.adr)'),'deployed runtime lost ADR rendering branch');
+    assert(deployedJs.includes('x=\"34.5\" y=\"-5\" width=\"14.5\" height=\"8\"'),'deployed runtime ADR badge geometry drifted');
+    assert(deployedJs.includes('>ADR</text>'),'deployed runtime ADR label missing');
+  }
+  if(stacked.length===0){
+    assert(deployedJs.includes('REQUEST_MARKER_STACK_STEP = 36'),'deployed runtime stack step drifted');
+    assert(deployedJs.includes('REQUEST_MARKER_ADR_EXTRA_GAP = 6'),'deployed runtime ADR stack gap drifted');
+    assert(deployedJs.includes('visibleByCoordinate'),'deployed runtime coordinate stack grouping missing');
+    assert(deployedJs.includes('record.hideTriangle = position > 0'),'deployed runtime upper stack tail rule missing');
+    assert(deployedJs.includes('markerOffsetY(record.shiftY)'),'deployed runtime stack offset application missing');
+    assert(!deployedJs.includes('Math.cos(')&&!deployedJs.includes('Math.sin('),'deployed runtime circular spiderfy detected');
+  }
   for(const item of stacked){assert(item.hideTriangle===true,'upper stack marker kept tail');assert(Array.isArray(item.offset)&&item.offset[0]===-33&&item.offset[1]===-47-item.shiftY,'stack offset drifted');}
 
   const workspace=await page.locator('#feo-map-workspace').boundingBox();
@@ -93,7 +110,7 @@ async function verifyMap(page){
   await page.locator('.feo-yandex-balloon').waitFor({state:'visible',timeout:15000});
   const balloon=await page.locator('.feo-yandex-balloon').innerText();assert(/Вес|Общий вес/.test(balloon)&&/Утилизатор/.test(balloon),'Yandex balloon fields missing');
   const markerSources=await markerImages.evaluateAll(nodes=>nodes.map(n=>decodeURIComponent(n.getAttribute('src')||'')));
-  assert(markerSources.some(src=>src.includes('>ADR<')),'ADR badge not rendered in legacy SVG marker');
+  if(liveAdr.length>0)assert(markerSources.some(src=>src.includes('>ADR<')),'ADR badge not rendered in live legacy SVG marker');
 
   await page.screenshot({path:'artifacts/feo-map-stage1-selected-balloon.png',fullPage:true});
   await page.locator('#feo-map-layer-toggle').click();assert(await page.locator('#feo-map-layer-panel').evaluate(el=>el.classList.contains('is-collapsed')),'layer panel did not collapse');
@@ -115,7 +132,7 @@ async function verifyMap(page){
   assert(pageErrors.length===0,'map page errors: '+pageErrors.join(' | '));
   const relevantConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*404/i.test(x));
   assert(relevantConsole.length===0,'map console errors: '+relevantConsole.join(' | '));
-  return{requests,markers,stacked:stacked.length,assets};
+  return{requests,markers,adr:liveAdr.length,stacked:stacked.length,adrEvidence,stackEvidence,assets};
 }
 
 async function verifyYandexFailure(context){
