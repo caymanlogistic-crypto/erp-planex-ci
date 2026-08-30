@@ -20,7 +20,8 @@ $sanitizer = $read('.github/feo-map-stage1/sanitize_artifacts.js');
 $config = $read('config/app.php');
 $envExample = $read('.env.example');
 
-$must(str_contains($view, 'https://api-maps.yandex.ru/2.1/'), 'Yandex Maps JavaScript API 2.1 source missing');
+$must(str_contains($view, 'https://api-maps.yandex.ru/2.1.77/'), 'Yandex Maps JavaScript API 2.1.77 source missing');
+$must(str_contains($view, '&csp=true'), 'Yandex Maps JavaScript API 2.1 CSP mode missing');
 $must(str_contains($view, "['yandex_maps_api_key']"), 'view must receive canonical config key');
 $must(str_contains($config, "env('YANDEX_MAPS_API_KEY', '')"), 'Yandex key must come from runtime env');
 $must(str_contains($envExample, 'YANDEX_MAPS_API_KEY='), 'Yandex key env contract missing from .env.example');
@@ -62,7 +63,7 @@ $must(str_contains($js, 'window.__FEO_MAP_STAGE1__ = Object.freeze'), 'read-only
 // Production browser QA must prove the Yandex engine, visual marker contract, vertical stack, layers, balloon, refresh and resize.
 $must(!str_contains($qa, 'waitForFunction('), 'production Playwright QA must remain CSP-safe');
 $must(str_contains($qa, '#feo-map-page[data-map-ready="1"][data-map-engine="yandex"]'), 'Yandex readiness locator missing');
-$must(str_contains($qa, 'api-maps.yandex.ru/2.1/'), 'production QA must observe the Yandex API response');
+$must(str_contains($qa, 'api-maps.yandex.ru/2.1.77/'), 'production QA must observe the Yandex API response');
 $must(str_contains($qa, 'Leaflet/OSM runtime request detected'), 'production QA must forbid Leaflet/OSM runtime traffic');
 $must(str_contains($qa, "markerRenderer==='legacy-request-marker-v2'"), 'production QA must verify legacy marker renderer');
 $must(str_contains($qa, "JSON.stringify(snap.markerBody)==='[50,40]'"), 'production QA must verify marker body geometry');
