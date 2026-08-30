@@ -115,6 +115,8 @@ async function verifyMap(page){
     return{width:el.getBoundingClientRect().width,headHeight:head?head.getBoundingClientRect().height:999,rowHeight:row?row.getBoundingClientRect().height:999,radius:s.borderRadius};
   });
   assert(panelMetrics.width<=220&&panelMetrics.headHeight<=30&&panelMetrics.rowHeight<=24&&parseFloat(panelMetrics.radius||'0')<=2.1,'layer panel is not ERP-compact: '+JSON.stringify(panelMetrics));
+  const panelText=((await page.locator('#feo-map-layer-panel').innerText())||'').toLocaleLowerCase('ru-RU');
+  assert(!panelText.includes('производственный календарь'),'production calendar leaked into FEO layers');
 
   assert(await page.locator('#feo-layer-list .feo-layer-row').count()>0,'map layers missing');
   assert(await page.locator('#feo-layer-list [data-layer-group="utilizers"] .feo-layer-row').count()>0,'utilizer layer group missing');
@@ -137,7 +139,14 @@ async function verifyMap(page){
   if(liveAdr.length>0)assert(markerSources.some(src=>src.includes('>ADR<')),'ADR badge not rendered in live legacy SVG marker');
 
   await page.screenshot({path:'artifacts/feo-map-stage1-selected-balloon.png',fullPage:true});
-  await page.locator('#feo-map-layer-toggle').click();assert(await page.locator('#feo-map-layer-panel').evaluate(el=>el.classList.contains('is-collapsed')),'layer panel did not collapse');
+  await page.locator('#feo-map-layer-toggle').click();
+  assert(await page.locator('#feo-map-layer-panel').evaluate(el=>el.classList.contains('is-collapsed')),'layer panel did not collapse');
+  const collapsedMetrics=await page.locator('#feo-map-layer-panel').evaluate(el=>{
+    const r=el.getBoundingClientRect(),content=el.querySelector('.feo-map-layer-content');
+    return{width:r.width,height:r.height,contentDisplay:content?getComputedStyle(content).display:''};
+  });
+  assert(Math.abs(collapsedMetrics.width-28)<=1&&Math.abs(collapsedMetrics.height-28)<=1&&collapsedMetrics.contentDisplay==='none','layer panel collapsed footprint drifted: '+JSON.stringify(collapsedMetrics));
+  await page.screenshot({path:'artifacts/feo-map-stage1-layers-collapsed.png',fullPage:true});
   await page.locator('#feo-map-layer-toggle').click();assert(!(await page.locator('#feo-map-layer-panel').evaluate(el=>el.classList.contains('is-collapsed'))),'layer panel did not expand');
 
   const dataResponse=await page.request.get(base+'/company/feo/requests/map/data',{headers:{Accept:'application/json'}});
@@ -154,7 +163,7 @@ async function verifyMap(page){
   assert(pageErrors.length===0,'map page errors: '+pageErrors.join(' | '));
   const relevantConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*404/i.test(x));
   assert(relevantConsole.length===0,'map console errors: '+relevantConsole.join(' | '));
-  return{requests,markers,adr:liveAdr.length,stacked:stacked.length,adrEvidence,stackEvidence,assets,panelMetrics};
+  return{requests,markers,adr:liveAdr.length,stacked:stacked.length,adrEvidence,stackEvidence,assets,panelMetrics,collapsedMetrics};
 }
 
 async function verifyYandexFailure(context){
@@ -190,5 +199,5 @@ async function ownerCheck(browser){
   fs.mkdirSync('artifacts',{recursive:true});const browser=await chromium.launch({headless:true});
   const liveContext=await browser.newContext({viewport:{width:1920,height:1080}});await liveContext.addCookies([cookie(logistSid)]);const livePage=await liveContext.newPage();const live=await verifyMap(livePage);fs.writeFileSync('artifacts/production-dom.html',await livePage.content());await livePage.screenshot({path:'artifacts/feo-map-stage1-production.png',fullPage:true});await liveContext.close();
   const failureContext=await browser.newContext({viewport:{width:1920,height:1080}});await failureContext.addCookies([cookie(logistSid)]);const yandexFailure=await verifyYandexFailure(failureContext);await failureContext.close();
-  const owner=await ownerCheck(browser);const summary={sourceSha:process.env.SOURCE_SHA,live,yandexFailure,owner,note:'Authenticated read-only production QA for full-viewport Yandex Maps + legacy request marker/vertical stack. No business mutation submitted.'};fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} stacks=${live.stacked} utilizers=${owner.utilizerRows} unresolved=${owner.unresolved}`);await browser.close();
+  const owner=await ownerCheck(browser);const summary={sourceSha:process.env.SOURCE_SHA,live,yandexFailure,owner,note:'Authenticated read-only production QA for full-viewport Yandex Maps + legacy request marker/vertical stack and compact canonical FEO layers. No business mutation submitted.'};fs.writeFileSync('artifacts/qa_summary.json',JSON.stringify(summary,null,2));console.log(`FEO_MAP_STAGE1_PRODUCTION_VISUAL=PASS requests=${live.requests} markers=${live.markers} stacks=${live.stacked} utilizers=${owner.utilizerRows} unresolved=${owner.unresolved}`);await browser.close();
 })().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});
