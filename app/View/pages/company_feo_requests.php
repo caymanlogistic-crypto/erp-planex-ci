@@ -34,12 +34,21 @@ $fmtDateTime = static function ($value): string {
 .feo-history-table th:nth-child(1){width:14%}.feo-history-table th:nth-child(2){width:25%}.feo-history-table th:nth-child(3){width:8%}.feo-history-table th:nth-child(4){width:8%}.feo-history-table th:nth-child(5){width:9%}.feo-history-table th:nth-child(6){width:8%}.feo-history-table th:nth-child(7){width:10%}.feo-history-table th:nth-child(8){width:18%}
 .feo-history-actions{display:flex;gap:4px;flex-wrap:nowrap;justify-content:flex-end}
 .feo-history-note{padding:8px 10px;border-top:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
-.feo-import-stats{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px;margin-top:12px}
-.feo-stat{border:1px solid var(--line-soft);background:var(--surface-form);padding:9px}.feo-stat b{display:block;font-size:18px}.feo-stat span{font-size:11px;color:var(--text-muted)}
+.feo-import-modal{width:820px;max-width:calc(100vw - 32px)}
+.feo-import-modal .modal-body{padding:18px 20px 16px}
+.feo-import-form{display:grid;gap:12px}
+.feo-import-file{margin:0}.feo-import-file .field-label{margin-bottom:6px}.feo-import-file .field-input{width:100%;margin:0}
+.feo-import-help{margin-top:5px;color:var(--text-muted);font-size:11px;line-height:1.4}
+.feo-overwrite-option{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:start;gap:10px;margin:0;padding:11px 12px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:12px;line-height:1.35;cursor:pointer}
+.feo-overwrite-option input{width:18px;height:18px;margin:1px 0 0;justify-self:start}
+.feo-overwrite-option b{display:block}.feo-overwrite-option small{display:block;color:var(--text-muted);margin-top:3px;line-height:1.35}
+.feo-import-state{margin:0;padding:9px 11px;border:1px solid var(--line-soft);background:var(--surface-form);color:var(--text-muted);font-size:11px;line-height:1.35}
+.feo-import-state.is-checking{font-weight:700;color:var(--text)}
+.feo-import-state.is-ok{border-color:var(--success-line,var(--line-soft));color:var(--success-text,var(--text))}
+.feo-import-state.is-error{border-color:var(--warning-line,var(--line-soft));color:var(--warning-text,var(--text))}
+.feo-import-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:12px}
+.feo-stat{border:1px solid var(--line-soft);background:var(--surface-form);padding:10px 11px;min-width:0}.feo-stat b{display:block;font-size:18px;line-height:1.15}.feo-stat span{display:block;margin-top:2px;font-size:11px;color:var(--text-muted);white-space:normal}
 .feo-import-error{margin-top:10px}.feo-duplicate{margin-top:10px}
-.feo-import-state{margin-top:8px;color:var(--text-muted);font-size:11px}
-.feo-overwrite-option{display:flex;align-items:flex-start;gap:8px;margin-top:10px;padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:12px;cursor:pointer}
-.feo-overwrite-option input{margin-top:2px}.feo-overwrite-option small{display:block;color:var(--text-muted);margin-top:2px}
 .feo-detail-modal .modal-body{padding:0!important;overflow:auto;max-height:68vh}
 .feo-detail-form{margin:0}.feo-detail-grid{display:grid;grid-template-columns:minmax(260px,38%) 1fr;border:0}
 .feo-detail-label,.feo-detail-value{padding:7px 9px;border-bottom:1px solid var(--line-hair)}
@@ -48,6 +57,7 @@ $fmtDateTime = static function ($value): string {
 .feo-detail-save-error{margin:8px}.feo-detail-save-success{margin:8px}
 .feo-confirm-copy{display:grid;gap:8px}.feo-confirm-warning{padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:11px;color:var(--text-muted)}
 @media(max-width:1180px){.feo-result-toolbar{flex-wrap:wrap}.feo-result-summary{flex:1 1 100%}.feo-result-toolbar .toolbar-right{flex:1 1 100%}.feo-search-toolbar{flex-wrap:wrap}.feo-result-toolbar .toolbar-right .feo-search-input--ids{width:min(660px,86vw);min-width:280px;max-width:86vw;flex:1 1 min(660px,86vw)}.feo-result-toolbar .toolbar-right .feo-search-input--content{width:250px;min-width:200px;max-width:100%;flex:1 1 250px}.feo-import-stats{grid-template-columns:repeat(3,minmax(0,1fr))}.feo-table col:nth-child(3){width:17%}.feo-table col:nth-child(4){width:0}.feo-table th:nth-child(4),.feo-table td:nth-child(4){display:none}.feo-table col:nth-child(5){width:27%}.feo-table col:nth-child(6){width:40%}}
+@media(max-width:640px){.feo-import-modal{max-width:calc(100vw - 16px)}.feo-import-modal .modal-body{padding:14px}.feo-import-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
 </style>
 
 <?php if (!empty($successFlash)): ?><div class="notice success feo-freshness"><?= e((string)$successFlash) ?></div><?php endif; ?>
@@ -100,14 +110,14 @@ $fmtDateTime = static function ($value): string {
 <?php endif; ?>
 
 <div id="feo-import-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
-    <div class="modal modal-lg">
+    <div class="modal modal-lg feo-import-modal">
         <div class="modal-head"><span class="modal-title">Загрузка заявок ФЭО</span><button type="button" class="modal-close" data-close-modal="feo-import-modal">&times;</button></div>
         <div class="modal-body">
-            <form id="feo-analyze-form" action="<?= app_url('/company/feo/requests/import/analyze') ?>" method="post" enctype="multipart/form-data">
+            <form id="feo-analyze-form" class="feo-import-form" action="<?= app_url('/company/feo/requests/import/analyze') ?>" method="post" enctype="multipart/form-data">
                 <?= csrfField() ?>
-                <div class="field"><label class="field-label">Файл XLSX</label><input class="field-input" type="file" name="feo_xlsx" accept=".xlsx" required></div>
-                <label class="feo-overwrite-option"><input type="checkbox" name="overwrite_existing" value="1"><span><b>Перезаписывать существующие заявки</b><small>По умолчанию выключено: существующие заявки останутся без изменений.</small></span></label>
-                <div class="feo-import-state" data-feo-import-state>Выберите файл. ERP проверит его автоматически.</div>
+                <div class="field feo-import-file"><label class="field-label">Файл XLSX</label><input class="field-input" type="file" name="feo_xlsx" accept=".xlsx" required><div class="feo-import-help">После выбора ERP автоматически проверит формат и покажет, сколько заявок будет добавлено или изменено.</div></div>
+                <label class="feo-overwrite-option"><input type="checkbox" name="overwrite_existing" value="1"><span><b>Перезаписывать существующие заявки</b><small>Оставьте выключенным, если нужно только добавить отсутствующие заявки. Существующие записи останутся без изменений.</small></span></label>
+                <div class="feo-import-state" data-feo-import-state>Файл не выбран.</div>
             </form>
             <div id="feo-analysis-error" class="notice warn feo-import-error is-hidden"></div>
             <div id="feo-analysis-result" class="is-hidden">
@@ -292,12 +302,14 @@ $fmtDateTime = static function ($value): string {
   if(analyzeForm){
     var fileInput=analyzeForm.querySelector('input[name="feo_xlsx"]'),overwriteInput=analyzeForm.querySelector('input[name="overwrite_existing"]'),importState=document.querySelector('[data-feo-import-state]');
     var analysisGeneration=0;
+    function setImportState(text,state){importState.textContent=text;importState.classList.remove('is-checking','is-ok','is-error');if(state)importState.classList.add(state);}
     async function analyzeSelectedFile(){
       var error=document.getElementById('feo-analysis-error'),result=document.getElementById('feo-analysis-result'),commit=document.getElementById('feo-commit-form'),duplicate=document.getElementById('feo-duplicate-warning');
       analysisGeneration++;var generation=analysisGeneration;error.classList.add('is-hidden');result.classList.add('is-hidden');commit.classList.add('is-hidden');duplicate.classList.add('is-hidden');document.getElementById('feo-preview-token').value='';
-      if(!fileInput.files||!fileInput.files.length){importState.textContent='Выберите файл. ERP проверит его автоматически.';return;}
-      importState.textContent='Проверяем файл…';fileInput.disabled=true;overwriteInput.disabled=true;
-      try{var response=await fetch(analyzeForm.action,{method:'POST',body:new FormData(analyzeForm),credentials:'same-origin'}),data=await response.json();if(generation!==analysisGeneration)return;if(!response.ok||!data.success)throw new Error(data.message||'Ошибка анализа файла');Object.keys(data.stats||{}).forEach(function(key){var el=result.querySelector('[data-stat="'+key+'"]');if(el)el.textContent=data.stats[key];});document.getElementById('feo-preview-token').value=data.token||'';result.classList.remove('is-hidden');if(data.stats&&data.stats.duplicate_file){duplicate.classList.remove('is-hidden');importState.textContent='Файл уже был применён.';}else{commit.classList.remove('is-hidden');importState.textContent='Файл проверен. Можно загрузить.';}}catch(err){if(generation!==analysisGeneration)return;error.textContent=err.message||String(err);error.classList.remove('is-hidden');importState.textContent='Проверка не пройдена.';}finally{if(generation===analysisGeneration){fileInput.disabled=false;overwriteInput.disabled=false;}}
+      if(!fileInput.files||!fileInput.files.length){setImportState('Файл не выбран.','');return;}
+      var payload=new FormData(analyzeForm);
+      setImportState('Проверяем файл…','is-checking');fileInput.disabled=true;overwriteInput.disabled=true;
+      try{var response=await fetch(analyzeForm.action,{method:'POST',body:payload,credentials:'same-origin'}),data=await response.json();if(generation!==analysisGeneration)return;if(!response.ok||!data.success)throw new Error(data.message||'Ошибка анализа файла');Object.keys(data.stats||{}).forEach(function(key){var el=result.querySelector('[data-stat="'+key+'"]');if(el)el.textContent=data.stats[key];});document.getElementById('feo-preview-token').value=data.token||'';result.classList.remove('is-hidden');if(data.stats&&data.stats.duplicate_file){duplicate.classList.remove('is-hidden');setImportState('Файл уже был применён.','is-error');}else{commit.classList.remove('is-hidden');setImportState('Файл проверен. Можно загрузить.','is-ok');}}catch(err){if(generation!==analysisGeneration)return;error.textContent=err.message||String(err);error.classList.remove('is-hidden');setImportState('Проверка не пройдена.','is-error');}finally{if(generation===analysisGeneration){fileInput.disabled=false;overwriteInput.disabled=false;}}
     }
     fileInput.addEventListener('change',analyzeSelectedFile);overwriteInput.addEventListener('change',analyzeSelectedFile);
   }
