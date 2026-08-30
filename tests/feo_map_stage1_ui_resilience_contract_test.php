@@ -78,7 +78,7 @@ $must(str_contains($qa, '#feo-map img[src^="data:image/svg+xml"]'), 'production 
 $must(str_contains($qa, '.feo-yandex-balloon'), 'production QA must verify Yandex balloon content');
 $must(str_contains($qa, '#feo-map-layer-toggle'), 'production QA must verify layer panel collapse/expand');
 $must(str_contains($qa, "x.url().includes('/company/feo/requests/map/data')&&x.request().method()==='GET'"), 'production QA must verify read-only refresh');
-$must(str_contains($qa, 'map canvas does not fill workspace') && str_contains($qa, 'Yandex map resize drifted'), 'production QA must verify full workspace and resize');
+$must(str_contains($qa, 'assertCanvasFillsWorkspace') && str_contains($qa, 'clientWidth') && str_contains($qa, 'clientHeight') && str_contains($qa, 'map canvas does not fill workspace inner box') && str_contains($qa, 'Yandex map resize drifted from workspace inner box'), 'production QA must verify the map fills the workspace inner box and survives resize');
 $must(str_contains($qa, "page.route('https://api-maps.yandex.ru/**'"), 'Yandex API outage resilience QA missing');
 $must(str_contains($qa, 'missing visible Yandex load failure'), 'Yandex outage must surface a visible error');
 

@@ -34,6 +34,16 @@ async function mapSnapshot(page){
   return page.evaluate(()=>window.__FEO_MAP_STAGE1__&&window.__FEO_MAP_STAGE1__.snapshot());
 }
 
+async function assertCanvasFillsWorkspace(page,message){
+  const metrics=await page.locator('#feo-map-workspace').evaluate(el=>{
+    const r=el.getBoundingClientRect();
+    return {innerX:r.x+el.clientLeft,innerY:r.y+el.clientTop,clientWidth:el.clientWidth,clientHeight:el.clientHeight};
+  });
+  const canvas=await page.locator('#feo-map').boundingBox();
+  assert(canvas,'map canvas box missing');
+  assert(Math.abs(metrics.clientWidth-canvas.width)<=1&&Math.abs(metrics.clientHeight-canvas.height)<=1&&Math.abs(metrics.innerX-canvas.x)<=1&&Math.abs(metrics.innerY-canvas.y)<=1,message);
+}
+
 async function verifyMap(page){
   const consoleErrors=[],pageErrors=[],assets={yandexApiStatuses:[],mapCss:null,mapJs:null},forbidden=[];
   page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
@@ -87,10 +97,7 @@ async function verifyMap(page){
   }
   for(const item of stacked){assert(item.hideTriangle===true,'upper stack marker kept tail');assert(Array.isArray(item.offset)&&item.offset[0]===-33&&item.offset[1]===-47-item.shiftY,'stack offset drifted');}
 
-  const workspace=await page.locator('#feo-map-workspace').boundingBox();
-  const canvas=await page.locator('#feo-map').boundingBox();
-  assert(workspace&&canvas,'map workspace/canvas box missing');
-  assert(Math.abs(workspace.width-canvas.width)<=1&&Math.abs(workspace.height-canvas.height)<=1,'map canvas does not fill workspace');
+  await assertCanvasFillsWorkspace(page,'map canvas does not fill workspace inner box');
 
   assert(await page.locator('#feo-layer-list .feo-layer-row').count()>0,'map layers missing');
   assert(await page.locator('#feo-layer-list [data-layer-group="utilizers"] .feo-layer-row').count()>0,'utilizer layer group missing');
@@ -122,8 +129,7 @@ async function verifyMap(page){
   await waitForPositiveText(page.locator('#feo-map-marker-count'),'marker count did not recover after refresh');
 
   await page.setViewportSize({width:1440,height:900});await page.waitForTimeout(120);
-  const resizedWorkspace=await page.locator('#feo-map-workspace').boundingBox(),resizedCanvas=await page.locator('#feo-map').boundingBox();
-  assert(resizedWorkspace&&resizedCanvas&&Math.abs(resizedWorkspace.width-resizedCanvas.width)<=1&&Math.abs(resizedWorkspace.height-resizedCanvas.height)<=1,'Yandex map resize drifted');
+  await assertCanvasFillsWorkspace(page,'Yandex map resize drifted from workspace inner box');
 
   assert(await page.locator('a[href$="/company/feo/utilizers"]').count()===0,'logist sees owner utilizer link');
   const ownerPage=await page.request.get(utilizerUrl);assert(ownerPage.status()===403,'logist utilizer page must be 403');
