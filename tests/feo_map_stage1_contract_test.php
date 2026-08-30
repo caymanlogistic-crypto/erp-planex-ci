@@ -87,7 +87,7 @@ $view = $read($root . '/app/View/pages/company_feo_map.php');
 $js = $read($root . '/public/assets/js/feo-map.js');
 $ok('map view has compact layer workspace', str_contains($view, 'feo-map-workspace') && str_contains($view, 'feo-layer-list'));
 $ok('map view has runtime error surface', str_contains($view, 'feo-map-runtime-error'));
-$ok('overlap separation does not mutate canonical coordinates', str_contains($js, 'state.map.project(canonical') && str_contains($js, 'overlap_index'));
+$ok('overlap stack does not mutate canonical coordinates', str_contains($js, 'canonicalCoordinates(markerData)') && str_contains($js, 'overlap_index') && str_contains($js, 'iconImageOffset') && !str_contains($js, 'Math.cos(') && !str_contains($js, 'Math.sin('));
 $ok('refresh is read-only GET', str_contains($js, "fetch(url, {headers: {'Accept': 'application/json'}") && !str_contains($js, "method: 'POST'"));
 $ok('no native browser alert/confirm', !str_contains($js, 'alert(') && !str_contains($js, 'confirm(') && str_contains($js, 'showRuntimeError'));
 

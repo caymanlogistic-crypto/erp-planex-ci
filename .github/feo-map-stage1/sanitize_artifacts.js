@@ -12,12 +12,11 @@ const textExt = new Set(['.html', '.htm', '.txt', '.json', '.log']);
 
 function redact(text) {
   let out = text;
-  for (const secret of explicitSecrets) {
-    out = out.split(secret).join('[REDACTED]');
-  }
+  for (const secret of explicitSecrets) out = out.split(secret).join('[REDACTED]');
   out = out.replace(/(ERPV2SESSID=)(?!\[REDACTED\])[^;\s"'<]+/gi, '$1[REDACTED]');
   out = out.replace(/(<meta\b[^>]*\bname=["']csrf-token["'][^>]*\bcontent=["'])[^"']*/gi, '$1[REDACTED]');
   out = out.replace(/(<input\b[^>]*\bname=["']_csrf_token["'][^>]*\bvalue=["'])[^"']*/gi, '$1[REDACTED]');
+  out = out.replace(/([?&]apikey=)(?!\[REDACTED\])[^&"'\s<]+/gi, '$1[REDACTED]');
   return out;
 }
 
@@ -42,12 +41,9 @@ for (const file of files) {
 
 for (const file of files) {
   const text = fs.readFileSync(file, 'utf8');
-  for (const secret of explicitSecrets) {
-    if (text.includes(secret)) throw new Error(`sensitive QA value remains in ${file}`);
-  }
-  if (/(ERPV2SESSID=)(?!\[REDACTED\])[^;\s"'<]+/i.test(text)) {
-    throw new Error(`raw ERP session cookie remains in ${file}`);
-  }
+  for (const secret of explicitSecrets) if (text.includes(secret)) throw new Error(`sensitive QA value remains in ${file}`);
+  if (/(ERPV2SESSID=)(?!\[REDACTED\])[^;\s"'<]+/i.test(text)) throw new Error(`raw ERP session cookie remains in ${file}`);
+  if (/([?&]apikey=)(?!\[REDACTED\])[^&"'\s<]+/i.test(text)) throw new Error(`raw Yandex API key remains in ${file}`);
 }
 
 console.log(`FEO_MAP_STAGE1_ARTIFACT_SANITIZE=PASS files=${files.length}`);
