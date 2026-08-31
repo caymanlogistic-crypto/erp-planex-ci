@@ -27,6 +27,7 @@ $fmtMass = static function ($value): string {
 .feo-placement-search-table tbody tr[data-placement-search-block-id]:hover{background:var(--accent-bg)}
 .feo-placement-table{width:100%;table-layout:fixed;min-width:0!important}
 .feo-placement-table th,.feo-placement-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feo-placement-source-cell{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-overflow:clip!important}
 .feo-placement-table tbody tr[data-placement-block-id]{cursor:pointer}
 .feo-placement-table tbody tr[data-placement-block-id]:hover{background:var(--accent-bg)}
 .feo-placement-status{font-weight:700}
@@ -123,6 +124,9 @@ $fmtMass = static function ($value): string {
           $sourceText = $sourceType === 'manual'
               ? trim((string)($block['request_ids_text'] ?? ''))
               : trim((string)($block['source_filename'] ?? ''));
+          if ($sourceType === 'manual' && $sourceText !== '') {
+              $sourceText = preg_replace('/\s*,\s*/u', ', ', $sourceText) ?? $sourceText;
+          }
           if ($sourceText === '') $sourceText = $sourceType === 'manual' ? '—' : strtoupper($sourceType);
         ?>
         <tr data-placement-block-id="<?= (int)$block['id'] ?>">
@@ -131,7 +135,7 @@ $fmtMass = static function ($value): string {
           <td><?= ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение' ?></td>
           <td><?= (int)($block['request_count'] ?? 0) ?></td>
           <td><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></td>
-          <td title="<?= e($sourceText) ?>"><?= e($sourceText) ?></td>
+          <td<?= $sourceType === 'manual' ? ' class="feo-placement-source-cell"' : '' ?> title="<?= e($sourceText) ?>"><?= e($sourceText) ?></td>
           <td><?= e($fmtDateTime($block['created_at'] ?? null)) ?> · <span class="feo-placement-status <?= $statusApplied ? 'feo-placement-status--applied' : 'feo-placement-status--disabled' ?>"><?= $statusApplied ? 'Применяется' : 'Отключён' ?></span></td>
         </tr>
       <?php endforeach; ?>
