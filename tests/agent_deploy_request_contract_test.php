@@ -21,6 +21,11 @@ $needles = [
     'Reconfirm canonical HEAD immediately before dispatch',
     'actions/workflows/$CONTROLLED_DEPLOY_WORKFLOW/dispatches',
     "'confirm_deploy': 'DEPLOY_ERPV2'",
+    "elif run.get('conclusion') == 'skipped':",
+    'print(f"SKIP:{run.get(\'id\')}:{run.get(\'run_number\')}:{event}")',
+    'SKIP:*) echo "Canonical push CI intentionally skipped:',
+    'if [ "$push_state" = NONE ] || [[ "$push_state" == SKIP:* ]]; then',
+    'SKIP:*) : ;;',
 ];
 
 foreach ($needles as $needle) {
@@ -43,6 +48,10 @@ if (!str_contains($yaml, 'test "$SOURCE_SHA" = "$canonical_sha"')) {
 
 if (!str_contains($yaml, 'test "$SOURCE_SHA" = "$(git rev-parse "refs/remotes/origin/${CANONICAL_BRANCH}")"')) {
     throw new RuntimeException('Immediate pre-dispatch canonical HEAD reconfirmation is missing.');
+}
+
+if (str_contains($yaml, 'FAIL:*) echo "Canonical push CI failed: $push_state"') && !str_contains($yaml, 'SKIP:*) echo "Canonical push CI intentionally skipped:')) {
+    throw new RuntimeException('Skipped canonical push CI must not be treated as a hard failure before dispatched CI is checked.');
 }
 
 echo "agent_deploy_request_contract_test: PASS\n";
