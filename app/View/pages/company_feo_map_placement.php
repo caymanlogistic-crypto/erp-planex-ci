@@ -17,6 +17,9 @@ $fmtMass = static function ($value): string {
 .feo-placement-toolbar-summary{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .feo-placement-toolbar-summary .sep{color:var(--text-muted);font-weight:400}
 .feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.feo-placement-hide-disabled{display:flex;align-items:center;gap:6px;min-height:30px;white-space:nowrap;font-size:11px;color:var(--text);cursor:pointer}
+.feo-placement-hide-disabled input{margin:0}
+.feo-placement-table-card:has([data-placement-hide-disabled]:checked) .feo-placement-table tbody tr[data-placement-block-status="disabled"]{display:none}
 .feo-placement-block-search-input{width:460px;min-width:320px;max-width:min(460px,80vw)}
 .feo-placement-block-search-results{padding:8px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-placement-block-search-results.is-hidden{display:none}
@@ -108,6 +111,7 @@ $fmtMass = static function ($value): string {
       <span>Масса: <b><?= e($fmtMass($current['total_mass_kg'] ?? 0)) ?> кг</b></span>
     </div>
     <div class="toolbar-right feo-placement-toolbar-actions">
+      <label class="feo-placement-hide-disabled"><input type="checkbox" data-placement-hide-disabled checked> Не показывать отключённые</label>
       <input type="text" class="toolbar-search feo-placement-block-search-input" data-placement-block-search placeholder="Найти заявку в блоках" autocomplete="off">
       <button type="button" class="btn btn-secondary btn--toolbar" data-placement-open-current>Актуальные заявки</button>
     </div>
@@ -129,7 +133,7 @@ $fmtMass = static function ($value): string {
           }
           if ($sourceText === '') $sourceText = $sourceType === 'manual' ? '—' : strtoupper($sourceType);
         ?>
-        <tr data-placement-block-id="<?= (int)$block['id'] ?>">
+        <tr data-placement-block-id="<?= (int)$block['id'] ?>" data-placement-block-status="<?= $statusApplied ? 'applied' : 'disabled' ?>">
           <td>#<?= (int)$block['id'] ?></td>
           <td><?= e((string)($block['name'] ?: '—')) ?></td>
           <td><?= ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение' ?></td>
