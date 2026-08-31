@@ -18,7 +18,7 @@ $fmtMass = static function ($value): string {
 .feo-placement-toolbar-summary .sep{color:var(--text-muted);font-weight:400}
 .feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .feo-placement-hide-disabled{display:flex;align-items:center;gap:6px;min-height:30px;white-space:nowrap;font-size:11px;color:var(--text);cursor:pointer}
-.feo-placement-hide-disabled input{margin:0}
+.feo-placement-hide-disabled input[type="checkbox"]{width:15px;height:15px;margin:0;accent-color:var(--accent)}
 .feo-placement-table-card:has([data-placement-hide-disabled]:checked) .feo-placement-table tbody tr[data-placement-block-status="disabled"]{display:none}
 .feo-placement-block-search-input{width:460px;min-width:320px;max-width:min(460px,80vw)}
 .feo-placement-block-search-results{padding:8px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
@@ -33,6 +33,7 @@ $fmtMass = static function ($value): string {
 .feo-placement-source-cell{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-overflow:clip!important}
 .feo-placement-table tbody tr[data-placement-block-id]{cursor:pointer}
 .feo-placement-table tbody tr[data-placement-block-id]:hover{background:var(--accent-bg)}
+.feo-placement-table tbody tr[data-placement-block-type="exclusion"],.feo-placement-table tbody tr[data-placement-block-type="exclusion"]:hover{background:var(--danger-bg)}
 .feo-placement-status{font-weight:700}
 .feo-placement-status--applied{color:var(--success,#2f7d32)}
 .feo-placement-status--disabled{color:var(--danger,#b42318)}
@@ -133,7 +134,7 @@ $fmtMass = static function ($value): string {
           }
           if ($sourceText === '') $sourceText = $sourceType === 'manual' ? '—' : strtoupper($sourceType);
         ?>
-        <tr data-placement-block-id="<?= (int)$block['id'] ?>" data-placement-block-status="<?= $statusApplied ? 'applied' : 'disabled' ?>">
+        <tr data-placement-block-id="<?= (int)$block['id'] ?>" data-placement-block-status="<?= $statusApplied ? 'applied' : 'disabled' ?>" data-placement-block-type="<?= e((string)($block['block_type'] ?? '')) ?>">
           <td>#<?= (int)$block['id'] ?></td>
           <td><?= e((string)($block['name'] ?: '—')) ?></td>
           <td><?= ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение' ?></td>
