@@ -2,7 +2,65 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `4b335615e0bc52b81307d13ce2556802709e6f311dd9e3826a68da8dff62422b`
+**Schema fingerprint:** `eb0ddc18af5f01040cd8fcfd49f067cef0d53e90730049600e4f72d69686b462`
+
+## `document_template_versions`
+
+**Domain:** Documents  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `template_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `version_no` | `int unsigned` | NO | NULL | — | — |
+| `original_name` | `varchar(255)` | NO | NULL | — | — |
+| `stored_path` | `varchar(1000)` | NO | NULL | — | — |
+| `file_size` | `bigint unsigned` | NO | NULL | — | — |
+| `sha256` | `char(64)` | NO | NULL | — | — |
+| `placeholders_json` | `longtext` | NO | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(32)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_document_template_versions_template` (`template_id`, `id`)
+- **UNIQUE** `uk_document_template_versions` (`template_id`, `version_no`)
+
+### Physical foreign keys
+
+- `fk_document_template_versions_template`: (`template_id`) → `document_templates`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+
+## `document_templates`
+
+**Domain:** Documents  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `name` | `varchar(255)` | NO | NULL | — | — |
+| `document_type` | `varchar(64)` | NO | NULL | — | `MUL` |
+| `status` | `enum('active','inactive')` | NO | `active` | — | — |
+| `active_version_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(32)` | YES | NULL | — | — |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `updated_by_role` | `varchar(32)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_document_templates_active_version` (`active_version_id`)
+- **INDEX** `idx_document_templates_type_status` (`document_type`, `status`)
+
+### Physical foreign keys
+
+- `fk_document_templates_active_version`: (`active_version_id`) → `document_template_versions`.`id` ON UPDATE CASCADE ON DELETE SET NULL
 
 ## `document_types`
 
@@ -84,3 +142,68 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
+
+## `generated_document_requests`
+
+**Domain:** Documents  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `generated_document_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `request_id` | `varchar(64)` | NO | NULL | — | `MUL` |
+| `position` | `int unsigned` | NO | NULL | — | — |
+| `snapshot_json` | `longtext` | NO | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_generated_document_requests_request` (`request_id`, `generated_document_id`)
+- **UNIQUE** `uk_generated_document_request_position` (`generated_document_id`, `position`)
+
+### Physical foreign keys
+
+- `fk_generated_document_requests_document`: (`generated_document_id`) → `generated_documents`.`id` ON UPDATE CASCADE ON DELETE CASCADE
+
+## `generated_documents`
+
+**Domain:** Documents  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `document_type` | `varchar(64)` | NO | NULL | — | `MUL` |
+| `document_number` | `varchar(255)` | YES | NULL | — | — |
+| `document_date` | `date` | YES | NULL | — | — |
+| `template_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `template_version_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `route_executor_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `request_ids_json` | `longtext` | NO | NULL | — | — |
+| `total_mass_kg` | `decimal(16,3)` | NO | `0.000` | — | — |
+| `unload_address` | `text` | YES | NULL | — | — |
+| `parameters_json` | `longtext` | NO | NULL | — | — |
+| `snapshot_json` | `longtext` | NO | NULL | — | — |
+| `stored_path` | `varchar(1000)` | NO | NULL | — | — |
+| `original_name` | `varchar(255)` | NO | NULL | — | — |
+| `sha256` | `char(64)` | NO | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(32)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | `MUL` |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `fk_generated_documents_template` (`template_id`)
+- **INDEX** `idx_generated_documents_created` (`created_at`, `id`)
+- **INDEX** `idx_generated_documents_executor` (`route_executor_id`, `id`)
+- **INDEX** `idx_generated_documents_template_version` (`template_version_id`, `id`)
+- **INDEX** `idx_generated_documents_type_date` (`document_type`, `document_date`)
+
+### Physical foreign keys
+
+- `fk_generated_documents_route_executor`: (`route_executor_id`) → `crews`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+- `fk_generated_documents_template`: (`template_id`) → `document_templates`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+- `fk_generated_documents_template_version`: (`template_version_id`) → `document_template_versions`.`id` ON UPDATE CASCADE ON DELETE RESTRICT

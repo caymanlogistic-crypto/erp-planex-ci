@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `4b335615e0bc52b81307d13ce2556802709e6f311dd9e3826a68da8dff62422b`
+**Schema fingerprint:** `eb0ddc18af5f01040cd8fcfd49f067cef0d53e90730049600e4f72d69686b462`
 
 ## Architecture overview
 
@@ -68,15 +68,15 @@ Tables: `client_contacts`, `clients`, `contractor_assignment_history`, `contract
 
 ```mermaid
 erDiagram
-  T_document_types {
-    int _schema_catalog_anchor
-  }
-  T_documents {
-    int _schema_catalog_anchor
-  }
+  T_document_templates ||--o{ T_document_template_versions : "fk_document_template_versions_template"
+  T_document_template_versions ||--o{ T_document_templates : "fk_document_templates_active_version"
+  T_generated_documents ||--o{ T_generated_document_requests : "fk_generated_document_requests_document"
+  T_crews ||--o{ T_generated_documents : "fk_generated_documents_route_executor"
+  T_document_templates ||--o{ T_generated_documents : "fk_generated_documents_template"
+  T_document_template_versions ||--o{ T_generated_documents : "fk_generated_documents_template_version"
 ```
 
-Tables: `document_types`, `documents`
+Tables: `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`
 
 ## Finance
 
