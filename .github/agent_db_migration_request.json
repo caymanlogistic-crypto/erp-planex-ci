@@ -1,7 +1,7 @@
 {
-  "migration_id": "126",
-  "workflow": "feo_126_production_migration.yml",
+  "migration_id": "127",
+  "workflow": "document_generator_127_production_migration.yml",
   "source_sha_input": "source_sha",
   "confirmation_input": "confirm_migration",
-  "confirmation_value": "APPLY_FEO_126"
+  "confirmation_value": "APPLY_DOCUMENT_GENERATOR_127"
 }
