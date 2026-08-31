@@ -84,6 +84,8 @@ jobs:
                   print(f"WAIT:{run.get('id')}:{run.get('run_number')}:{event}")
               elif run.get('conclusion') == 'success':
                   print(f"PASS:{run.get('id')}:{run.get('run_number')}:{event}")
+              elif run.get('conclusion') == 'skipped':
+                  print(f"SKIP:{run.get('id')}:{run.get('run_number')}:{event}")
               else:
                   print(f"FAIL:{run.get('id')}:{run.get('run_number')}:{event}:{run.get('conclusion')}")
           PY
@@ -94,6 +96,7 @@ jobs:
             PASS:*) echo "ERP_PLANEX_CI_$push_state"; exit 0 ;;
             FAIL:*) echo "Canonical push CI failed: $push_state" >&2; exit 1 ;;
             WAIT:*) echo "Canonical push CI already running: $push_state" ;;
+            SKIP:*) echo "Canonical push CI intentionally skipped: $push_state; checking workflow_dispatch." ;;
             NONE) echo 'No exact canonical push CI run found; requesting exact canonical CI via workflow_dispatch.' ;;
             *) echo "Unexpected push CI state: $push_state" >&2; exit 1 ;;
           esac
@@ -104,7 +107,7 @@ jobs:
             FAIL:*) echo "Canonical dispatched CI failed: $dispatch_state" >&2; exit 1 ;;
             WAIT:*) echo "Canonical dispatched CI already running: $dispatch_state" ;;
             NONE)
-              if [ "$push_state" = NONE ]; then
+              if [ "$push_state" = NONE ] || [[ "$push_state" == SKIP:* ]]; then
                 payload="$(CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
           import json, os
           print(json.dumps({'ref': os.environ['CANONICAL_BRANCH']}))
@@ -131,6 +134,7 @@ jobs:
               case "$state" in
                 PASS:*) echo "ERP_PLANEX_CI_$state"; exit 0 ;;
                 FAIL:*) echo "Canonical CI failed: $state" >&2; exit 1 ;;
+                SKIP:*) : ;;
               esac
             done
             echo "Waiting for exact canonical CI ($attempt/90): push=$push_state dispatch=$dispatch_state"
