@@ -17,3 +17,5 @@ $router->post('/company/document-types/create', [$c, 'docTypesCreateSubmit']);
 $router->get('/company/document-types/{id}/edit', [$c, 'docTypesEditForm']);
 $router->post('/company/document-types/{id}/edit', [$c, 'docTypesEditSubmit']);
 $router->post('/company/document-types/{id}/delete', [$c, 'docTypesDelete']);
+
+require_once base_path('app/Http/Routes/company_document_generator.php');
