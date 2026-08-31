@@ -68,7 +68,7 @@ $must(str_contains($view,'id="feo-cost-detail-modal" class="modal-overlay"'),'de
 $must(str_contains($view,'id="feo-cost-confirm-modal" class="modal-overlay"'),'confirmation UI must use system modal overlay');
 $must(substr_count($view,'aria-hidden="true"')>=3,'all cost modals must be closed by default');
 $must(!str_contains($view,'>Действия<')&&!str_contains($view,'data-cost-edit-block-id'),'main table must not expose actions column/button');
-$must(str_contains($js,"qa('[data-cost-block-id]').forEach(row=>row.addEventListener('dblclick'"),'main table rows must open edit on double click');
+$must(str_contains($js,"qa('[data-cost-block-id]').forEach(row=>bindCostBlockRow(row,'costBlockId'))"),'main table rows must open edit on double click through the isolated row handler');
 $must(!str_contains($js,"qa('[data-cost-block-id]').forEach(row=>row.addEventListener('click'"),'main table rows must not open on single click');
 $must(str_contains($view,'$fmtMassTable = static fn($v): string => number_format((float)$v, 0')&&str_contains($view,'$fmtMassTable($block['),'main table mass must render to whole kilograms');
 $must(str_contains($view,'Стоимость заявок ещё не добавлена.'),'empty state must be explicit');
