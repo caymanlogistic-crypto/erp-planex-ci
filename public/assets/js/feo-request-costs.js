@@ -108,7 +108,8 @@ function scheduleEdit(immediate=false){editState.valid=false;syncEditSummary();c
 editIds?.addEventListener('input',()=>scheduleEdit());
 editIds?.addEventListener('paste',e=>{const ids=extractClientRequestIds(e.clipboardData?.getData('text/plain')||'');if(ids.length){e.preventDefault();editIds.value=ids.join('\n');editIds.dispatchEvent(new Event('input',{bubbles:true}));}});
 
-qa('[data-cost-block-id]').forEach(row=>row.addEventListener('dblclick',e=>{if(e.target.closest('a,input,textarea,select,button'))return;openBlock(row.dataset.costBlockId);}));
+qa('[data-cost-block-id]').forEach(row=>{row.addEventListener('click',e=>{if(e.target.closest('a,input,textarea,select,button,label'))return;e.stopPropagation();});});
+qa('[data-cost-block-id]').forEach(row=>row.addEventListener('dblclick',e=>{if(e.target.closest('a,input,textarea,select,button,label'))return;e.stopPropagation();openBlock(row.dataset.costBlockId);}));
 async function openBlock(id){
   const body=q('[data-cost-detail-body]'),err=q('[data-cost-detail-error]');if(body)body.textContent='Загрузка…';err?.classList.add('is-hidden');openModal('feo-cost-detail-modal');
   try{const data=await json(base+'/blocks/'+encodeURIComponent(id)+'/json');const b=data.block;detailBlock=b;setText(q('[data-cost-detail-title]'),`Блок стоимости #${b.id}`);
