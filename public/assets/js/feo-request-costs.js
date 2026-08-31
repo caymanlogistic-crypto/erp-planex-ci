@@ -108,7 +108,12 @@ function scheduleEdit(immediate=false){editState.valid=false;syncEditSummary();c
 editIds?.addEventListener('input',()=>scheduleEdit());
 editIds?.addEventListener('paste',e=>{const ids=extractClientRequestIds(e.clipboardData?.getData('text/plain')||'');if(ids.length){e.preventDefault();editIds.value=ids.join('\n');editIds.dispatchEvent(new Event('input',{bubbles:true}));}});
 
-qa('[data-cost-block-id]').forEach(row=>row.addEventListener('dblclick',e=>{if(e.target.closest('a,input,textarea,select,button'))return;openBlock(row.dataset.costBlockId);}));
+function bindCostBlockRow(row,idKey){
+  const interactive=e=>e.target.closest('a,input,textarea,select,button');
+  row.addEventListener('click',e=>{if(interactive(e))return;e.stopPropagation();});
+  row.addEventListener('dblclick',e=>{if(interactive(e))return;e.preventDefault();e.stopPropagation();openBlock(row.dataset[idKey]);});
+}
+qa('[data-cost-block-id]').forEach(row=>bindCostBlockRow(row,'costBlockId'));
 async function openBlock(id){
   const body=q('[data-cost-detail-body]'),err=q('[data-cost-detail-error]');if(body)body.textContent='Загрузка…';err?.classList.add('is-hidden');openModal('feo-cost-detail-modal');
   try{const data=await json(base+'/blocks/'+encodeURIComponent(id)+'/json');const b=data.block;detailBlock=b;setText(q('[data-cost-detail-title]'),`Блок стоимости #${b.id}`);
@@ -130,7 +135,7 @@ function renderSearch(data){
   });
   const duplicateNote=Array.isArray(data.duplicates)&&data.duplicates.length?` Повторы во вводе удалены: ${esc(data.duplicates.join(', '))}.`:'';
   searchResults.innerHTML=`<div class="feo-cost-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной щелчок по найденному блоку откроет редактирование.</div><table class="table feo-cost-search-table"><thead><tr><th>Заявка</th><th>Реестр ФЭО</th><th>Размещение</th><th>Блок</th><th>Тип</th><th>Состав блока</th><th>Стоимость</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
-  searchResults.classList.remove('is-hidden');qa('[data-cost-search-block-id]',searchResults).forEach(r=>r.addEventListener('dblclick',()=>openBlock(r.dataset.costSearchBlockId)));
+  searchResults.classList.remove('is-hidden');qa('[data-cost-search-block-id]',searchResults).forEach(row=>bindCostBlockRow(row,'costSearchBlockId'));
 }
 async function runSearch(){if(!searchInput)return;const raw=searchInput.value;if(!raw.trim()){clearSearch();return;}const generation=++search.generation;search.controller?.abort();search.controller=new AbortController();try{const data=await json(base+'/search?'+new URLSearchParams({request_ids:raw}).toString(),{signal:search.controller.signal});if(generation!==search.generation)return;renderSearch(data);}catch(e){if(e.name==='AbortError'||generation!==search.generation)return;if(searchResults){searchResults.innerHTML=`<div class="notice warn">${esc(e.message)}</div>`;searchResults.classList.remove('is-hidden');}}}
 function scheduleSearch(immediate=false){clearTimeout(search.timer);search.timer=setTimeout(runSearch,immediate?0:280);}
