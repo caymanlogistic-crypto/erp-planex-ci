@@ -97,5 +97,113 @@ $fmtMass = static function ($value): string {
 <?php if (empty($consistency['is_consistent'])): ?>
 <div class="notice warn" data-placement-consistency-warning>
   <b>–ê–∫—Ç—É–∞–ª—å–Ω—ã–π —Å–æ—Å—Ç–∞–≤ –Ω–µ —Å–æ–≥–ª–∞—Å–æ–≤–∞–Ω —Å –ø—Ä–∏–º–µ–Ω—è–µ–º—ã–º–∏ –±–ª–æ–∫–∞–º–∏.</b>
-  –í —Ä–∞–±–æ—á–µ–º –Ω–∞–±–æ—Ä–µ <?= (int)($consiste≤»="25ï·–§Ä¸¸ÄëÕΩ’…çïQï·–Ï(ÄÄÄÄÄÄÄÄÄÅÙ(ÄÄÄÄÄÄÄÄÄÅ•òÄ†ëÕΩ’…çïQï·–ÄÙÙÙÄúú§ÄëÕΩ’…çïQï·–ÄÙÄëÕΩ’…çïQÂ¡îÄÙÙÙÄùµÖπ’Ö∞úÄ¸ÄüäPúÄËÅÕ—…—Ω’¡¡ï»†ëÕΩ’…çïQÂ¡î§Ï(ÄÄÄÄÄÄÄÄ¸¯(ÄÄÄÄÄÄÄÄÒ—»ÅëÖ—Ñµ¡±Öçïµïπ–µâ±Ωç¨µ•êÙà¸ÙÄ°•π–§ëâ±Ωç≠lù•êùtÄ¸¯àÅëÖ—Ñµ¡±Öçïµïπ–µâ±Ωç¨µÕ—Ö—’ÃÙà¸ÙÄëÕ—Ö—’Õ¡¡±•ïêÄ¸ÄùÖ¡¡±•ïêúÄËÄùë•ÕÖâ±ïêúÄ¸¯àÅëÖ—Ñµ¡±Öçïµïπ–µâ±Ωç¨µ—Â¡îÙà¸ÙÅî†°Õ—…•πú§†ëâ±Ωç≠lùâ±Ωç≠}—Â¡îùtÄ¸¸Äúú§§Ä¸¯à¯(ÄÄÄÄÄÄÄÄÄÄÒ—ê¯å¸ÙÄ°•π–§ëâ±Ωç≠lù•êùtÄ¸¯Ω—ê¯(ÄÄÄÄÄÄÄÄÄÄÒ—ê¯¸ÙÅî†°Õ—…•πú§†ëâ±Ωç≠lùπÖµîùtÄ¸ËÄüäPú§§Ä¸¯Ω—ê¯(ÄÄÄÄÄÄÄÄÄÄÒ—ê¯¸ÙÄ†ëâ±Ωç≠lùâ±Ωç≠}—Â¡îùtÄ¸¸Äúú§ÄÙÙÙÄùÖëë•—•Ω∏úÄ¸ÄüBSB˚B«B√BÀBÔB◊B˜B„B‘úÄËÄüBcFBÎBÔF;FB◊B˜B„B‘úÄ¸¯Ω—ê¯(ÄÄÄÄÄÄÄÄÄÄÒ—ê¯¸ÙÄ°•π–§†ëâ±Ωç≠lù…ï≈’ïÕ—}çΩ’π–ùtÄ¸¸Ä¿§Ä¸¯Ω—ê¯(ÄÄÄÄÄÄÄÄÄÄÒ—ê¯¸ÙÅî†ëôµ—5ÖÕÃ†ëâ±Ωç≠lù—Ω—Ö±}µÖÕÕ}≠úùtÄ¸¸Ä¿§§Ä¸¯Ω—ê¯(ÄÄÄÄÄÄÄÄÄÄÒ—ê¸ÙÄëÕΩ’…çïQÂ¡îÄÙÙÙÄùµÖπ’Ö∞úÄ¸ÄúÅç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µÕΩ’…çîµçï±∞àúÄËÄúúÄ¸¯Å—•—±îÙà¸ÙÅî†ëÕΩ’…çïQï·–§Ä¸¯à¯¸ÙÅî†ëÕΩ’…çïQï·–§Ä¸¯Ω—ê¯(ÄÄÄÄÄÄÄÄÄÄÒ—ê¯¸ÙÅî†ëôµ—Ö—ïQ•µî†ëâ±Ωç≠lùç…ïÖ—ïë}Ö–ùtÄ¸¸Åπ’±∞§§Ä¸¯É
-‹ÄÒÕ¡Ö∏Åç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µÕ—Ö—’ÃÄ¸ÙÄëÕ—Ö—’Õ¡¡±•ïêÄ¸Äùôïºµ¡±Öçïµïπ–µÕ—Ö—’Ã¥µÖ¡¡±•ïêúÄËÄùôïºµ¡±Öçïµïπ–µÕ—Ö—’Ã¥µë•ÕÖâ±ïêúÄ¸¯à¯¸ÙÄëÕ—Ö—’Õ¡¡±•ïêÄ¸ÄüBFB„BÛB◊B˜F?B◊FFF<úÄËÄüB{FBÎBÔF;FFGBÙúÄ¸¯ΩÕ¡Ö∏¯Ω—ê¯(ÄÄÄÄÄÄÄÄΩ—»¯(ÄÄÄÄÄÄ˝¡°¿ÅïπëôΩ…ïÖç†ÏÄ¸¯(ÄÄÄÄÄÄ˝¡°¿Å•òÄ†Ñëâ±Ωç≠Ã§ËÄ¸¯Ò—»¯Ò—êÅçΩ±Õ¡Ö∏Ùà‹àÅç±ÖÕÃÙâ—ï·–µµ’—ïêà˚BGBÔB˚BÎB‡ÉB◊F'FDÉB˜B‘ÉFB˚BﬂB”B√B˜F,∏Ω—ê¯Ω—»¯˝¡°¿Åïπë•òÏÄ¸¯(ÄÄÄÄÄÄΩ—âΩë‰¯(ÄÄÄÄΩ—Öâ±î¯(ÄÄΩë•ÿ¯(Ωë•ÿ¯(˝¡°¿Åïπë•òÏÄ¸¯((Òë•ÿÅ•êÙâôïºµ¡±Öçïµïπ–µç…ïÖ—îµµΩëÖ∞àÅç±ÖÕÃÙâµΩëÖ∞µΩŸï…±Ö‰àÅ…Ω±îÙâë•Ö±ΩúàÅÖ…•ÑµµΩëÖ∞Ùâ—…’îàÅëÖ—Ñµç±ΩÕîµΩ∏µΩŸï…±Ö‰ÙàƒàÅëÖ—Ñµç±ΩÕîµΩ∏µïÕçÖ¡îÙàƒà¯(ÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞ÅµΩëÖ∞µ±úà¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µ°ïÖêà¯ÒÕ¡Ö∏Åç±ÖÕÃÙâµΩëÖ∞µ—•—±îà˚BwB˚BÀF/B‰ÉB«BÔB˚BËÉFB√BﬂBÛB◊F'B◊B˜B„F<ΩÕ¡Ö∏¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙâµΩëÖ∞µç±ΩÕîàÅëÖ—Ñµç±ΩÕîµµΩëÖ∞Ùâôïºµ¡±Öçïµïπ–µç…ïÖ—îµµΩëÖ∞à¯ô—•µïÃÏΩâ’——Ω∏¯Ωë•ÿ¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µâΩë‰à¯(ÄÄÄÄÄÄÒôΩ…¥ÅëÖ—Ñµ¡±Öçïµïπ–µç…ïÖ—îµôΩ…¥ÅÖç—•Ω∏Ùà¸ÙÅÖ¡¡}’…∞†úΩçΩµ¡Öπ‰ΩôïºΩ…ï≈’ïÕ—ÃΩµÖ¿µ¡±Öçïµïπ–ΩÖπÖ±ÂÈîú§Ä¸¯àÅµï—°ΩêÙâ¡ΩÕ–àÅïπç—Â¡îÙâµ’±—•¡Ö…–ΩôΩ…¥µëÖ—Ñà¯(ÄÄÄÄÄÄÄÄ¸ÙÅçÕ…ô•ï±ê†§Ä¸¯(ÄÄÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µôΩ…¥µù…•êà¯(ÄÄÄÄÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâô•ï±êà¯Ò±Öâï∞Åç±ÖÕÃÙâô•ï±êµ±Öâï∞à˚BwB√BﬂBÀB√B˜B„B‘∞ÉB˜B◊B˚B«F?BﬂB√FB◊BÔF3B˜B¯Ω±Öâï∞¯Ò•π¡’–Åç±ÖÕÃÙâô•ï±êµ•π¡’–àÅ—Â¡îÙâ—ï·–àÅπÖµîÙâπÖµîàÅµÖ·±ïπù—†Ùà»‘‘à¯Ωë•ÿ¯(ÄÄÄÄÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâô•ï±êà¯Ò±Öâï∞Åç±ÖÕÃÙâô•ï±êµ±Öâï∞à˚BãB„B¸ÉB«BÔB˚BÎB¿Ω±Öâï∞¯Òë•ÿÅç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µ…Öë•ºµ…Ω‹à¯Ò±Öâï∞Åç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µ…Öë•ºà¯Ò•π¡’–Å—Â¡îÙâ…Öë•ºàÅπÖµîÙââ±Ωç≠}—Â¡îàÅŸÖ±’îÙâÖëë•—•Ω∏àÅç°ïç≠ïê¯ÉBSB˚B«B√BÀBÔB◊B˜B„B‘Ω±Öâï∞¯Ò±Öâï∞Åç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µ…Öë•ºà¯Ò•π¡’–Å—Â¡îÙâ…Öë•ºàÅπÖµîÙââ±Ωç≠}—Â¡îàÅŸÖ±’îÙâï·ç±’Õ•Ω∏à¯ÉBcFBÎBÔF;FB◊B˜B„B‘Ω±Öâï∞¯Ωë•ÿ¯Ωë•ÿ¯(ÄÄÄÄÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâô•ï±êÅôïºµ¡±Öçïµïπ–µ›•ëîà¯Ò±Öâï∞Åç±ÖÕÃÙâô•ï±êµ±Öâï∞à˚BcFFB˚FB˜B„BËΩ±Öâï∞¯Òë•ÿÅç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µ…Öë•ºµ…Ω‹à¯Ò±Öâï∞Åç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µ…Öë•ºà¯Ò•π¡’–Å—Â¡îÙâ…Öë•ºàÅπÖµîÙâÕΩ’…çï}µΩëîàÅŸÖ±’îÙâµÖπ’Ö∞àÅç°ïç≠ïê¯ÉBÉFFB˜B˚B‰ÉBÀBÀB˚B–Ω±Öâï∞¯Ò±Öâï∞Åç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µ…Öë•ºà¯Ò•π¡’–Å—Â¡îÙâ…Öë•ºàÅπÖµîÙâÕΩ’…çï}µΩëîàÅŸÖ±’îÙâô•±îà¯Åa1LÄºÅa1M`Ω±Öâï∞¯Ωë•ÿ¯Ωë•ÿ¯(ÄÄÄÄÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâô•ï±êÅôïºµ¡±Öçïµïπ–µ›•ëîÅôïºµ¡±Öçïµïπ–µµÖπ’Ö∞àÅëÖ—Ñµ¡±Öçïµïπ–µµÖπ’Ö∞¯(ÄÄÄÄÄÄÄÄÄÄÄÄÒ±Öâï∞Åç±ÖÕÃÙâô•ï±êµ±Öâï∞à˚B_B√F?BÀBÎB‡Ω±Öâï∞¯(ÄÄÄÄÄÄÄÄÄÄÄÄÒ—ï·—Ö…ïÑÅç±ÖÕÃÙâô•ï±êµ•π¡’–Åôïºµ¡±Öçïµïπ–µ—ï·—Ö…ïÑàÅπÖµîÙâ…ï≈’ïÕ—}•ëÃàÅëÖ—Ñµ¡±Öçïµïπ–µ•ëÃÅ¡±Öçï°Ω±ëï»ÙãBKFFB√BÀF3FB‘ÉBÔF;B«B˚B‰ÉFB◊BÎFFÉFÉF#B◊FFB„BﬂB˜B√FB˜F/BÛB‡Å%∏ÉBSBÔF<Å·çï∞ΩµÖ…≠ëΩ›∏∑FB√B«BÔB„FF,ÉB„FBˇB˚BÔF3BﬂFB◊FFF<ÉFB˚BÔF3BÎB¯ÉBˇB◊FBÀF/B‰ÉFFB˚BÔB«B◊F∏à¯Ω—ï·—Ö…ïÑ¯(ÄÄÄÄÄÄÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâô•ï±êµ°•π–à˚BsB˚B€B˜B¯ÉBÀFFB√BÀB„FF0ÉFFB√BﬂFÉB˜B◊FBÎB˚BÔF3BÎB¯ÉBﬂB√F?BÀB˚BË∞ÉBˇB˚FBÔB‘ÉBÀFFB√BÀBÎB‡ÉFBˇB„FB˚BËÉBÛB˚B€B˜B¯ÉBÀFFFB˜FF8ÉB”B˚BˇB˚BÔB˜F?FF0ÉB‡ÉFB◊B”B√BÎFB„FB˚BÀB√FF0∏Ωë•ÿ¯(ÄÄÄÄÄÄÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâπΩ—•çîÅ•Ãµ°•ëëï∏Åôïºµ¡±Öçïµïπ–µ±•ŸîµŸÖ±•ëÖ—•Ω∏àÅëÖ—Ñµ¡±Öçïµïπ–µ±•ŸîµŸÖ±•ëÖ—•Ω∏¯Ωë•ÿ¯(ÄÄÄÄÄÄÄÄÄÄΩë•ÿ¯(ÄÄÄÄÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâô•ï±êÅôïºµ¡±Öçïµïπ–µ›•ëîÅôïºµ¡±Öçïµïπ–µÕΩ’…çîµô•±îàÅëÖ—Ñµ¡±Öçïµïπ–µô•±î¯Ò±Öâï∞Åç±ÖÕÃÙâô•ï±êµ±Öâï∞à˚BìB√BÁBÏÅa1LÄºÅa1M`Ω±Öâï∞¯Ò•π¡’–Åç±ÖÕÃÙâô•ï±êµ•π¡’–àÅ—Â¡îÙâô•±îàÅπÖµîÙâÕΩ’…çï}ô•±îàÅÖççï¡–Ùàπ·±Ã∞π·±Õ‡à¯Òë•ÿÅç±ÖÕÃÙâô•ï±êµ°•π–à˚BáB„FFB◊BÛB¿ÉFB„FB√B◊FÉFB˚BÔF3BÎB¯ÉBˇB◊FBÀF/B‰ÉFFB˚BÔB«B◊FÉB‡ÉB˚FB«B„FB√B◊FÉFB√BÛB˚FFB˚F?FB◊BÔF3B˜F/B‘ÉBˇB˚FBÔB◊B”B˚BÀB√FB◊BÔF3B˜B˚FFB‡ÉFB˚BÀB˜B¯ÉB„B‹ÄÿÉFB„FF ∏Ωë•ÿ¯Ωë•ÿ¯(ÄÄÄÄÄÄÄÄΩë•ÿ¯(ÄÄÄÄÄÄΩôΩ…¥¯(ÄÄÄÄÄÄÒë•ÿÅç±ÖÕÃÙâπΩ—•çîÅ›Ö…∏Å•Ãµ°•ëëï∏àÅëÖ—Ñµ¡±Öçïµïπ–µç…ïÖ—îµï……Ω»¯Ωë•ÿ¯(ÄÄÄÄΩë•ÿ¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µôΩΩ–Å•ÃµÕ¡Öçïêà¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙââ—∏Åâ—∏µù°ΩÕ–àÅëÖ—Ñµç±ΩÕîµµΩëÖ∞Ùâôïºµ¡±Öçïµïπ–µç…ïÖ—îµµΩëÖ∞à˚B{FBÛB◊B˜B¿Ωâ’——Ω∏¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙââ—∏Åâ—∏µ¡…•µÖ…‰àÅëÖ—Ñµ¡±Öçïµïπ–µÖπÖ±ÂÈî˚BFB˚BÀB◊FB„FF0Ωâ’——Ω∏¯Ωë•ÿ¯(ÄÄΩë•ÿ¯(Ωë•ÿ¯((Òë•ÿÅ•êÙâôïºµ¡±Öçïµïπ–µçΩπô•…¥µµΩëÖ∞àÅç±ÖÕÃÙâµΩëÖ∞µΩŸï…±Ö‰àÅ…Ω±îÙâë•Ö±ΩúàÅÖ…•ÑµµΩëÖ∞Ùâ—…’îàÅëÖ—Ñµç±ΩÕîµΩ∏µΩŸï…±Ö‰Ùà¿àÅëÖ—Ñµç±ΩÕîµΩ∏µïÕçÖ¡îÙàƒà¯(ÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞à¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µ°ïÖêà¯ÒÕ¡Ö∏Åç±ÖÕÃÙâµΩëÖ∞µ—•—±îàÅëÖ—Ñµ¡±Öçïµïπ–µçΩπô•…¥µ—•—±î˚BB˚B”FBÀB◊FB€B”B◊B˜B„B‘ΩÕ¡Ö∏¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙâµΩëÖ∞µç±ΩÕîàÅëÖ—Ñµç±ΩÕîµµΩëÖ∞Ùâôïºµ¡±Öçïµïπ–µçΩπô•…¥µµΩëÖ∞à¯ô—•µïÃÏΩâ’——Ω∏¯Ωë•ÿ¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µâΩë‰à¯Òë•ÿÅç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µçΩπô•…¥µçΩ¡‰àÅëÖ—Ñµ¡±Öçïµïπ–µçΩπô•…¥µçΩ¡‰¯Ωë•ÿ¯Òë•ÿÅç±ÖÕÃÙâπΩ—•çîÅ›Ö…∏Å•Ãµ°•ëëï∏àÅëÖ—Ñµ¡±Öçïµïπ–µçΩπô•…¥µï……Ω»¯Ωë•ÿ¯Ωë•ÿ¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µôΩΩ–Å•ÃµÕ¡Öçïêà¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙââ—∏Åâ—∏µù°ΩÕ–àÅëÖ—Ñµç±ΩÕîµµΩëÖ∞Ùâôïºµ¡±Öçïµïπ–µçΩπô•…¥µµΩëÖ∞à˚B{FBÛB◊B˜B¿Ωâ’——Ω∏¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙââ—∏Åâ—∏µ¡…•µÖ…‰àÅëÖ—Ñµ¡±Öçïµïπ–µçΩπô•…¥µÕ’âµ•–˚BB˚B”FBÀB◊FB”B„FF0Ωâ’——Ω∏¯Ωë•ÿ¯(ÄÄΩë•ÿ¯(Ωë•ÿ¯((Òë•ÿÅ•êÙâôïºµ¡±Öçïµïπ–µëï—Ö•∞µµΩëÖ∞àÅç±ÖÕÃÙâµΩëÖ∞µΩŸï…±Ö‰àÅ…Ω±îÙâë•Ö±ΩúàÅÖ…•ÑµµΩëÖ∞Ùâ—…’îàÅëÖ—Ñµç±ΩÕîµΩ∏µΩŸï…±Ö‰ÙàƒàÅëÖ—Ñµç±ΩÕîµΩ∏µïÕçÖ¡îÙàƒà¯(ÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞ÅµΩëÖ∞µ±úÅôïºµ¡±Öçïµïπ–µëï—Ö•∞µµΩëÖ∞à¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µ°ïÖêà¯ÒÕ¡Ö∏Åç±ÖÕÃÙâµΩëÖ∞µ—•—±îàÅëÖ—Ñµ¡±Öçïµïπ–µëï—Ö•∞µ—•—±î˚BGBÔB˚BËÉFB√BﬂBÛB◊F'B◊B˜B„F<ΩÕ¡Ö∏¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙâµΩëÖ∞µç±ΩÕîàÅëÖ—Ñµç±ΩÕîµµΩëÖ∞Ùâôïºµ¡±Öçïµïπ–µëï—Ö•∞µµΩëÖ∞à¯ô—•µïÃÏΩâ’——Ω∏¯Ωë•ÿ¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µâΩë‰Åôïºµ¡±Öçïµïπ–µëï—Ö•∞µµΩëÖ∞µâΩë‰à¯Òë•ÿÅç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µëï—Ö•∞µâΩë‰àÅëÖ—Ñµ¡±Öçïµïπ–µëï—Ö•∞µâΩë‰¯Ωë•ÿ¯Òë•ÿÅç±ÖÕÃÙâπΩ—•çîÅ›Ö…∏Å•Ãµ°•ëëï∏àÅëÖ—Ñµ¡±Öçïµïπ–µëï—Ö•∞µï……Ω»¯Ωë•ÿ¯Ωë•ÿ¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µôΩΩ–Å•ÃµÕ¡Öçïêà¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙââ—∏Åâ—∏µù°ΩÕ–àÅëÖ—Ñµç±ΩÕîµµΩëÖ∞Ùâôïºµ¡±Öçïµïπ–µëï—Ö•∞µµΩëÖ∞à˚B_B√BÎFF/FF0Ωâ’——Ω∏¯Òë•ÿÅç±ÖÕÃÙâµΩëÖ∞µôΩΩ–µÖç—•ΩπÃàÅëÖ—Ñµ¡±Öçïµïπ–µëï—Ö•∞µÖç—•ΩπÃ¯Ωë•ÿ¯Ωë•ÿ¯(ÄÄΩë•ÿ¯(Ωë•ÿ¯((Òë•ÿÅ•êÙâôïºµ¡±Öçïµïπ–µç’……ïπ–µµΩëÖ∞àÅç±ÖÕÃÙâµΩëÖ∞µΩŸï…±Ö‰àÅ…Ω±îÙâë•Ö±ΩúàÅÖ…•ÑµµΩëÖ∞Ùâ—…’îàÅëÖ—Ñµç±ΩÕîµΩ∏µΩŸï…±Ö‰ÙàƒàÅëÖ—Ñµç±ΩÕîµΩ∏µïÕçÖ¡îÙàƒà¯(ÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞ÅµΩëÖ∞µ±úà¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µ°ïÖêà¯ÒÕ¡Ö∏Åç±ÖÕÃÙâµΩëÖ∞µ—•—±îà˚BCBÎFFB√BÔF3B˜F/B‘ÉBﬂB√F?BÀBÎB‡ÉB”BÔF<ÉBÎB√FFF,ΩÕ¡Ö∏¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙâµΩëÖ∞µç±ΩÕîàÅëÖ—Ñµç±ΩÕîµµΩëÖ∞Ùâôïºµ¡±Öçïµïπ–µç’……ïπ–µµΩëÖ∞à¯ô—•µïÃÏΩâ’——Ω∏¯Ωë•ÿ¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µâΩë‰à¯Òë•ÿÅç±ÖÕÃÙâôïºµ¡±Öçïµïπ–µ±•Õ–àÅëÖ—Ñµ¡±Öçïµïπ–µç’……ïπ–µâΩë‰¯Ωë•ÿ¯Òë•ÿÅç±ÖÕÃÙâπΩ—•çîÅ›Ö…∏Å•Ãµ°•ëëï∏àÅëÖ—Ñµ¡±Öçïµïπ–µç’……ïπ–µï……Ω»¯Ωë•ÿ¯Ωë•ÿ¯(ÄÄÄÄÒë•ÿÅç±ÖÕÃÙâµΩëÖ∞µôΩΩ–à¯Òâ’——Ω∏Å—Â¡îÙââ’——Ω∏àÅç±ÖÕÃÙââ—∏Åâ—∏µù°ΩÕ–àÅëÖ—Ñµç±ΩÕîµµΩëÖ∞Ùâôïºµ¡±Öçïµïπ–µç’……ïπ–µµΩëÖ∞à˚B_B√BÎFF/FF0Ωâ’——Ω∏¯Ωë•ÿ¯(ÄÄΩë•ÿ¯(Ωë•ÿ¯((ÒÕç…•¡–¯)›•πëΩ‹π=}A159Q}=9%ÄÙÅÏ(ÄÅâÖÕîËÄ¸ÙÅ©ÕΩπ}ïπçΩëî°Ö¡¡}’…∞†úΩçΩµ¡Öπ‰ΩôïºΩ…ï≈’ïÕ—ÃΩµÖ¿µ¡±Öçïµïπ–ú§∞Å)M=9}U9MA}U9%=ÅÅ)M=9}U9MA}M1M!L§Ä¸¯∞(ÄÅçÕ…òËÄ¸ÙÅ©ÕΩπ}ïπçΩëî°çÕ…ôQΩ≠ï∏†§∞Å)M=9}U9MA}U9%=ÅÅ)M=9}U9MA}M1M!L§Ä¸¯)ÙÏ(ΩÕç…•¡–¯(ÒÕç…•¡–ÅÕ…åÙà¸ÙÅÖ¡¡}’…∞†úΩÖÕÕï—ÃΩ©ÃΩôïºµµÖ¿µ¡±Öçïµïπ–π©Ãú§Ä¸¯˝ÿÙ¸ÙÅô•±ïµ—•µî°âÖÕï}¡Ö—††ù¡’â±•åΩÖÕÕï—ÃΩ©ÃΩôïºµµÖ¿µ¡±Öçïµïπ–π©Ãú§§Ä¸¯à¯ΩÕç…•¡–¯(
+  –í —Ä–∞–±–æ—á–µ–º –Ω–∞–±–æ—Ä–µ <?= (int)($consistency['actual_count'] ?? 0) ?> –∑–∞—è–≤–æ–∫, —Ä–∞—Å—á—ë—Ç –ø–æ –±–ª–æ–∫–∞–º –¥–∞—ë—Ç <?= (int)($consistency['expected_count'] ?? 0) ?>.
+  <button type="button" class="btn btn-secondary btn--toolbar" data-placement-reconcile>–ü–µ—Ä–µ—Å—á–∏—Ç–∞—Ç—å —Å–æ—Å—Ç–∞–≤</button>
+</div>
+<?php endif; ?>
+
+<div class="table-card table-card--standard feo-placement-table-card">
+  <div class="table-toolbar feo-placement-toolbar">
+    <div class="found-label feo-placement-toolbar-summary">
+      <span>–ë–ª–æ–∫–∏ —Ä–∞–∑–º–µ—â–µ–Ω–∏—è: <b><?= count($blocks) ?></b></span>
+      <span class="sep">¬∑</span>
+      <span>–ê–∫—Ç—É–∞–ª—å–Ω—ã–π —Å–æ—Å—Ç–∞–≤: <b><?= (int)($current['request_count'] ?? 0) ?></b> –∑–∞—è–≤–æ–∫</span>
+      <span class="sep">¬∑</span>
+      <span>–ú–∞—Å—Å–∞: <b><?= e($fmtMass($current['total_mass_kg'] ?? 0)) ?> –∫–≥</b></span>
+    </div>
+    <div class="toolbar-right feo-placement-toolbar-actions">
+      <label class="feo-placement-hide-disabled"><input type="checkbox" data-placement-hide-disabled checked> –ù–µ –ø–æ–∫–∞–∑—ã–≤–∞—Ç—å –æ—Ç–∫–ª—é—á—ë–Ω–Ω—ã–µ</label>
+      <input type="text" class="toolbar-search feo-placement-block-search-input" data-placement-block-search placeholder="–ù–∞–π—Ç–∏ –∑–∞—è–≤–∫—É –≤ –±–ª–æ–∫–∞—Ö" autocomplete="off">
+      <button type="button" class="btn btn-secondary btn--toolbar" data-placement-open-current>–ê–∫—Ç—É–∞–ª—å–Ω—ã–µ –∑–∞—è–≤–∫–∏</button>
+    </div>
+  </div>
+  <div class="feo-placement-block-search-results is-hidden" data-placement-block-search-results></div>
+  <div class="table-scroll">
+    <table class="table feo-placement-table">
+      <thead><tr><th style="width:7%">ID</th><th style="width:18%">–ù–∞–∑–≤–∞–Ω–∏–µ</th><th style="width:10%">–¢–∏–ø</th><th style="width:8%">–ó–∞—è–≤–æ–∫</th><th style="width:10%">–ú–∞—Å—Å–∞, –∫–≥</th><th style="width:29%">–ò—Å—Ç–æ—á–Ω–∏–∫</th><th style="width:18%">–î–∞—Ç–∞ / —Å—Ç–∞—Ç—É—Å</th></tr></thead>
+      <tbody>
+      <?php foreach ($blocks as $block): ?>
+        <?php
+          $statusApplied = ($block['status'] ?? '') === 'applied';
+          $sourceType = (string)($block['source_type'] ?? 'manual');
+          $sourceText = $sourceType === 'manual'
+              ? trim((string)($block['request_ids_text'] ?? ''))
+              : trim((string)($block['source_filename'] ?? ''));
+          if ($sourceType === 'manual' && $sourceText !== '') {
+              $sourceText = preg_replace('/\s*,\s*/u', ', ', $sourceText) ?? $sourceText;
+          }
+          if ($sourceText === '') $sourceText = $sourceType === 'manual' ? '‚Äî' : strtoupper($sourceType);
+        ?>
+        <tr data-placement-block-id="<?= (int)$block['id'] ?>" data-placement-block-status="<?= $statusApplied ? 'applied' : 'disabled' ?>" data-placement-block-type="<?= e((string)($block['block_type'] ?? '')) ?>">
+          <td>#<?= (int)$block['id'] ?></td>
+          <td><?= e((string)($block['name'] ?: '‚Äî')) ?></td>
+          <td><?= ($block['block_type'] ?? '') === 'addition' ? '–î–æ–±–∞–≤–ª–µ–Ω–∏–µ' : '–ò—Å–∫–ª—é—á–µ–Ω–∏–µ' ?></td>
+          <td><?= (int)($block['request_count'] ?? 0) ?></td>
+          <td><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></td>
+          <td<?= $sourceType === 'manual' ? ' class="feo-placement-source-cell"' : '' ?> title="<?= e($sourceText) ?>"><?= e($sourceText) ?></td>
+          <td><?= e($fmtDateTime($block['created_at'] ?? null)) ?> ¬∑ <span class="feo-placement-status <?= $statusApplied ? 'feo-placement-status--applied' : 'feo-placement-status--disabled' ?>"><?= $statusApplied ? '–ü—Ä–∏–º–µ–Ω—è–µ—Ç—Å—è' : '–û—Ç–∫–ª—é—á—ë–Ω' ?></span></td>
+        </tr>
+      <?php endforeach; ?>
+      <?php if (!$blocks): ?><tr><td colspan="7" class="text-muted">–ë–ª–æ–∫–∏ –µ—â—ë –Ω–µ —Å–æ–∑–¥–∞–Ω—ã.</td></tr><?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+<?php endif; ?>
+
+<div id="feo-placement-create-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
+  <div class="modal modal-lg">
+    <div class="modal-head"><span class="modal-title">–ù–æ–≤—ã–π –±–ª–æ–∫ —Ä–∞–∑–º–µ—â–µ–Ω–∏—è</span><button type="button" class="modal-close" data-close-modal="feo-placement-create-modal">&times;</button></div>
+    <div class="modal-body">
+      <form data-placement-create-form action="<?= app_url('/company/feo/requests/map-placement/analyze') ?>" method="post" enctype="multipart/form-data">
+        <?= csrfField() ?>
+        <div class="feo-placement-form-grid">
+          <div class="field"><label class="field-label">–ù–∞–∑–≤–∞–Ω–∏–µ, –Ω–µ–æ–±—è–∑–∞—Ç–µ–ª—å–Ω–æ</label><input class="field-input" type="text" name="name" maxlength="255"></div>
+          <div class="field"><label class="field-label">–¢–∏–ø –±–ª–æ–∫–∞</label><div class="feo-placement-radio-row"><label class="feo-placement-radio"><input type="radio" name="block_type" value="addition" checked> –î–æ–±–∞–≤–ª–µ–Ω–∏–µ</label><label class="feo-placement-radio"><input type="radio" name="block_type" value="exclusion"> –ò—Å–∫–ª—é—á–µ–Ω–∏–µ</label></div></div>
+          <div class="field feo-placement-wide"><label class="field-label">–ò—Å—Ç–æ—á–Ω–∏–∫</label><div class="feo-placement-radio-row"><label class="feo-placement-radio"><input type="radio" name="source_mode" value="manual" checked> –†—É—á–Ω–æ–π –≤–≤–æ–¥</label><label class="feo-placement-radio"><input type="radio" name="source_mode" value="file"> XLS / XLSX</label></div></div>
+          <div class="field feo-placement-wide feo-placement-manual" data-placement-manual>
+            <label class="field-label">–ó–∞—è–≤–∫–∏</label>
+            <textarea class="field-input feo-placement-textarea" name="request_ids" data-placement-ids placeholder="–í—Å—Ç–∞–≤—å—Ç–µ –ª—é–±–æ–π —Ç–µ–∫—Å—Ç —Å —à–µ—Å—Ç–∏–∑–Ω–∞—á–Ω—ã–º–∏ ID. –î–ª—è Excel/markdown-—Ç–∞–±–ª–∏—Ü—ã –∏—Å–ø–æ–ª—å–∑—É–µ—Ç—Å—è —Ç–æ–ª—å–∫–æ –ø–µ—Ä–≤—ã–π —Å—Ç–æ–ª–±–µ—Ü."></textarea>
+            <div class="field-hint">–ú–æ–∂–Ω–æ –≤—Å—Ç–∞–≤–∏—Ç—å —Å—Ä–∞–∑—É –Ω–µ—Å–∫–æ–ª—å–∫–æ –∑–∞—è–≤–æ–∫, –ø–æ—Å–ª–µ –≤—Å—Ç–∞–≤–∫–∏ —Å–ø–∏—Å–æ–∫ –º–æ–∂–Ω–æ –≤—Ä—É—á–Ω—É—é –¥–æ–ø–æ–ª–Ω—è—Ç—å –∏ —Ä–µ–¥–∞–∫—Ç–∏—Ä–æ–≤–∞—Ç—å.</div>
+            <div class="notice is-hidden feo-placement-live-validation" data-placement-live-validation></div>
+          </div>
+          <div class="field feo-placement-wide feo-placement-source-file" data-placement-file><label class="field-label">–§–∞–π–ª XLS / XLSX</label><input class="field-input" type="file" name="source_file" accept=".xls,.xlsx"><div class="field-hint">–°–∏—Å—Ç–µ–º–∞ —á–∏—Ç–∞–µ—Ç —Ç–æ–ª—å–∫–æ –ø–µ—Ä–≤—ã–π —Å—Ç–æ–ª–±–µ—Ü –∏ –æ—Ç–±–∏—Ä–∞–µ—Ç —Å–∞–º–æ—Å—Ç–æ—è—Ç–µ–ª—å–Ω—ã–µ –ø–æ—Å–ª–µ–¥–æ–≤–∞—Ç–µ–ª—å–Ω–æ—Å—Ç–∏ —Ä–æ–≤–Ω–æ –∏–∑ 6 —Ü–∏—Ñ—Ä.</div></div>
+        </div>
+      </form>
+      <div class="notice warn is-hidden" data-placement-create-error></div>
+    </div>
+    <div class="modal-foot is-spaced"><button type="button" class="btn btn-ghost" data-close-modal="feo-placement-create-modal">–û—Ç–º–µ–Ω–∞</button><button type="button" class="btn btn-primary" data-placement-analyze>–ü—Ä–æ–≤–µ—Ä–∏—Ç—å</button></div>
+  </div>
+</div>
+
+<div id="feo-placement-confirm-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="0" data-close-on-escape="1">
+  <div class="modal">
+    <div class="modal-head"><span class="modal-title" data-placement-confirm-title>–ü–æ–¥—Ç–≤–µ—Ä–∂–¥–µ–Ω–∏–µ</span><button type="button" class="modal-close" data-close-modal="feo-placement-confirm-modal">&times;</button></div>
+    <div class="modal-body"><div class="feo-placement-confirm-copy" data-placement-confirm-copy></div><div class="notice warn is-hidden" data-placement-confirm-error></div></div>
+    <div class="modal-foot is-spaced"><button type="button" class="btn btn-ghost" data-close-modal="feo-placement-confirm-modal">–û—Ç–º–µ–Ω–∞</button><button type="button" class="btn btn-primary" data-placement-confirm-submit>–ü–æ–¥—Ç–≤–µ—Ä–¥–∏—Ç—å</button></div>
+  </div>
+</div>
+
+<div id="feo-placement-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
+  <div class="modal modal-lg feo-placement-detail-modal">
+    <div class="modal-head"><span class="modal-title" data-placement-detail-title>–ë–ª–æ–∫ —Ä–∞–∑–º–µ—â–µ–Ω–∏—è</span><button type="button" class="modal-close" data-close-modal="feo-placement-detail-modal">&times;</button></div>
+    <div class="modal-body feo-placement-detail-modal-body"><div class="feo-placement-detail-body" data-placement-detail-body></div><div class="notice warn is-hidden" data-placement-detail-error></div></div>
+    <div class="modal-foot is-spaced"><button type="button" class="btn btn-ghost" data-close-modal="feo-placement-detail-modal">–ó–∞–∫—Ä—ã—Ç—å</button><div class="modal-foot-actions" data-placement-detail-actions></div></div>
+  </div>
+</div>
+
+<div id="feo-placement-current-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
+  <div class="modal modal-lg">
+    <div class="modal-head"><span class="modal-title">–ê–∫—Ç—É–∞–ª—å–Ω—ã–µ –∑–∞—è–≤–∫–∏ –¥–ª—è –∫–∞—Ä—Ç—ã</span><button type="button" class="modal-close" data-close-modal="feo-placement-current-modal">&times;</button></div>
+    <div class="modal-body"><div class="feo-placement-list" data-placement-current-body></div><div class="notice warn is-hidden" data-placement-current-error></div></div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close-modal="feo-placement-current-modal">–ó–∞–∫—Ä—ã—Ç—å</button></div>
+  </div>
+</div>
+
+<script>
+window.FEO_PLACEMENT_CONFIG = {
+  base: <?= json_encode(app_url('/company/feo/requests/map-placement'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+  csrf: <?= json_encode(csrfToken(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+};
+</script>
+<script src="<?= app_url('/assets/js/feo-map-placement.js') ?>?v=<?= filemtime(base_path('public/assets/js/feo-map-placement.js')) ?>"></script>
