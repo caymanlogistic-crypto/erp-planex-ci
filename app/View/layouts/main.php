@@ -18,6 +18,7 @@ $tripsActive = str_starts_with($requestPath, '/company/trips');
 $linearTripsActive = str_starts_with($requestPath, '/company/trips/linear');
 $departuresActive = str_starts_with($requestPath, '/company/trips/departures');
 $routeExecutorsActive = str_starts_with($requestPath, '/company/route-executors');
+$documentGeneratorActive = str_starts_with($requestPath, '/company/document-generator');
 $contractorsActive = str_starts_with($requestPath, '/company/contractors');
 $driversActive = str_starts_with($requestPath, '/company/drivers');
 $vehicleSetsActive = str_starts_with($requestPath, '/company/vehicle-sets');
@@ -252,6 +253,14 @@ if (empty($topbarCrumbs)) {
                     </svg>
                     <span class="nav-label">Исполнители рейса</span>
                 </a>
+                <a class="nav-item<?= $documentGeneratorActive ? ' is-active' : '' ?>" href="<?= app_url('/company/document-generator') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 1.5H10L13 4.5V14.5H3V1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M10 1.5V4.5H13" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M5.5 8H10.5M5.5 10.5H9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="nav-label">Генератор договоров</span>
+                </a>
                 <div class="nav-item is-parent<?= $directoriesOpen ? ' is-open' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
                         <rect x="1.5" y="5" width="13" height="9.5" rx="1" stroke="currentColor" stroke-width="1.4"/>
@@ -456,6 +465,14 @@ if (empty($topbarCrumbs)) {
                         <path d="M8 8.5L10 9.5V11L8 10L6 11V9.5L8 8.5Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/>
                     </svg>
                     <span class="nav-label">Исполнители рейса</span>
+                </a>
+                <a class="nav-item<?= $documentGeneratorActive ? ' is-active' : '' ?>" href="<?= app_url('/company/document-generator') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
+                        <path d="M3 1.5H10L13 4.5V14.5H3V1.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M10 1.5V4.5H13" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
+                        <path d="M5.5 8H10.5M5.5 10.5H9.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+                    </svg>
+                    <span class="nav-label">Генератор договоров</span>
                 </a>
                 <div class="nav-item is-parent<?= $directoriesOpen ? ' is-open' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
