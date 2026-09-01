@@ -64,7 +64,7 @@ trait DocumentGeneratorTemplateTrait
     {
         $expected = [
             'contract_vehicle_lease_crew_v1.docx' => '0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc',
-            'waybill_driver_assignment_v1.docx' => '642e38737380446a6aa89d9314fc9ceafb3c4f2b48197e1f8b7d7f42ba34325c',
+            'waybill_driver_assignment_v1.docx' => '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
         ];
         if (!isset($expected[$filename])) {
             throw new RuntimeException('Неизвестный встроенный DOCX-шаблон: ' . $filename);
@@ -74,15 +74,19 @@ trait DocumentGeneratorTemplateTrait
         if ($parts === []) {
             throw new RuntimeException('Не найдены части встроенного DOCX-шаблона: ' . $filename);
         }
-        $encoded = '';
+        $bytes = '';
         foreach ($parts as $part) {
             $chunk = file_get_contents($part);
             if ($chunk === false) throw new RuntimeException('Не удалось прочитать часть встроенного DOCX-шаблона.');
-            $encoded .= preg_replace('/\s+/', '', $chunk) ?? '';
+            $encoded = preg_replace('/\s+/', '', $chunk) ?? '';
+            $decoded = base64_decode($encoded, true);
+            if (!is_string($decoded) || $decoded === '') {
+                throw new RuntimeException('Встроенный DOCX-шаблон повреждён: base64 part decode failed.');
+            }
+            $bytes .= $decoded;
         }
-        $bytes = base64_decode($encoded, true);
-        if (!is_string($bytes) || $bytes === '') {
-            throw new RuntimeException('Встроенный DOCX-шаблон повреждён: base64 decode failed.');
+        if ($bytes === '') {
+            throw new RuntimeException('Встроенный DOCX-шаблон повреждён: empty materialized content.');
         }
         $actual = hash('sha256', $bytes);
         if (!hash_equals($expected[$filename], $actual)) {
@@ -114,7 +118,7 @@ trait DocumentGeneratorTemplateTrait
         $stmt = $pdo->prepare(
             'SELECT v.*,t.name template_name,t.document_type,t.status template_status,t.active_version_id
                FROM document_template_versions v
-               JOIN document_templates t ON t.id=v.template_id
+               JOIN document_templates t ON v.template_id=t.id
               WHERE v.template_id=?
               ORDER BY v.version_no DESC,v.id DESC'
         );
