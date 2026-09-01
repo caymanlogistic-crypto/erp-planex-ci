@@ -3,8 +3,10 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../app/Service/FeoPlacementInputParser.php';
+require_once __DIR__ . '/../app/Service/FeoRequestInteractionService.php';
 
 use App\Service\FeoPlacementInputParser;
+use App\Service\FeoRequestInteractionService;
 
 $pass = 0; $fail = 0;
 $ok = static function (string $name, bool $value) use (&$pass, &$fail): void {
@@ -27,6 +29,30 @@ $ok('seven-digit values are rejected', $strict);
 $fromCells = $parser->extractFromCells(['308710','abc 299726 xyz','1234567','308710']);
 $ok('file cell parser keeps standalone six digits only', $fromCells['ids'] === ['308710','299726']);
 $ok('file cell parser reports duplicate ids', $fromCells['duplicates'] === ['308710']);
+
+
+$searchParser = new FeoRequestInteractionService();
+$ok('map-placement search contract accepts one request id', $searchParser->extractRequestIds('302545') === ['302545']);
+$ok('map-placement search contract accepts space-separated ids', $searchParser->extractRequestIds('302545 285664 281861') === ['302545','285664','281861']);
+$ok('map-placement search contract accepts comma-separated ids', $searchParser->extractRequestIds('302545, 285664, 281861') === ['302545','285664','281861']);
+$ok('map-placement search contract accepts multiline ids', $searchParser->extractRequestIds("302545\n285664\n281861") === ['302545','285664','281861']);
+$ok(
+    'map-placement search TSV uses first column only',
+    $searchParser->extractRequestIds("302545\t123456\t777777\n285664\t654321\t888888") === ['302545','285664']
+);
+$ok(
+    'map-placement search markdown table uses first column only',
+    $searchParser->extractRequestIds("| request | other |\n| --- | --- |\n| 302545 | 123456 |\n| 285664 | 654321 |") === ['302545','285664']
+);
+$ok(
+    'map-placement search extracts standalone ids from arbitrary text',
+    $searchParser->extractRequestIds('Найти 302545, затем 285664 и 281861; число 1234567 не заявка.') === ['302545','285664','281861']
+);
+$ok(
+    'map-placement search deduplicates repeated ids preserving first occurrence',
+    $searchParser->extractRequestIds('302545 285664 302545 281861 285664') === ['302545','285664','281861']
+);
+$ok('map-placement search invalid input produces no ids', $searchParser->extractRequestIds('нет заявок 12345 1234567') === []);
 
 $service = $read($root . '/app/Service/FeoPlacementService.php');
 foreach ([
@@ -102,6 +128,33 @@ $ok('analyze rejects repeated add or exclusion with structured payload', str_con
 $ok('repeat diagnostics include active block ids and names', str_contains($route, "'name'=>(string)(\$row['name'] ?? '')") && str_contains($route, "'id'=>(int)\$row['block_id']"));
 $ok('manual live validation checks FEO registry and materialized current set', str_contains($route, 'SELECT zayavka_id FROM feo_requests') && str_contains($route, 'SELECT zayavka_id,source_block_id FROM feo_placement_current'));
 $ok('block membership search returns all placement blocks', str_contains($route, 'JOIN feo_placement_blocks b ON b.id=br.block_id') && str_contains($route, "'blocks'=>\$memberships[\$id] ?? []"));
+$ok(
+    'block search backend reuses canonical FEO request parser',
+    str_contains($route, 'new \\App\\Service\\FeoRequestInteractionService()') &&
+    str_contains($route, '$ids = $parser->extractRequestIds')
+);
+$ok(
+    'block search rejects input without canonical request ids',
+    str_contains($route, "if (\$ids === []) throw new \\RuntimeException('Не найдено самостоятельных шестизначных номеров заявок.')")
+);
+$ok(
+    'block search history is newest first without changing default membership order',
+    str_contains($route, 'bool $newestFirst = false') &&
+    str_contains($route, "\$sql .= \$newestFirst ? ' ORDER BY b.id DESC' : ' ORDER BY b.id ASC';") &&
+    str_contains($route, '$memberships = $feoPlacementMemberships($pdo, $ids, false, true);')
+);
+$ok(
+    'block search exposes registry/current state for every requested id',
+    str_contains($route, "'exists_in_feo'=>isset(\$state['exists'][\$id])") &&
+    str_contains($route, "'is_current'=>isset(\$state['current'][\$id])") &&
+    str_contains($route, "'current_source_block_id'=>\$state['current'][\$id] ?? null")
+);
+$ok(
+    'block search returns one result envelope for every normalized request id',
+    str_contains($route, 'foreach ($ids as $id)') &&
+    str_contains($route, "'zayavka_id'=>\$id") &&
+    str_contains($route, "'blocks'=>\$memberships[\$id] ?? []")
+);
 $ok('delete preview and commit use ERP preview token state', str_contains($route, "'kind'=>'delete'") && str_contains($route, "\$feoPlacementPreviewRecord(\$token, (int)\$company['id'], 'delete')"));
 $ok('delete commit removes saved source file from company storage', str_contains($route, "company_storage_path(\$company['storage_path'] ?? null") && str_contains($route, "!@unlink(\$path)"));
 
@@ -162,6 +215,27 @@ $ok('manual field validates on every edit with debounce', str_contains($js, "man
 $ok('block type change reruns manual validation', str_contains($js, "typeRadios.forEach(r=>r.addEventListener('change',()=>scheduleManualValidation(true)))"));
 $ok('search paste normalizes using the same FEO mapping', str_contains($js, "blockSearchInput?.addEventListener('paste'") && str_contains($js, "blockSearchInput.value=ids.join(' ')"));
 $ok('block search result exposes block status and opens block detail', str_contains($js, 'statusHtml(block.status)') && str_contains($js, 'data-placement-search-block-id'));
+$ok(
+    'block search normalizes every request before GET using canonical client mapping',
+    str_contains($js, 'const ids=extractClientRequestIds(raw);') &&
+    str_contains($js, "const normalized=ids.join(' ');") &&
+    str_contains($js, 'new URLSearchParams({request_ids:normalized})')
+);
+$ok(
+    'block search invalid input is rejected client-side without false matches',
+    str_contains($js, "notice.textContent='Не найдено самостоятельных шестизначных номеров заявок.'")
+);
+$ok(
+    'block search repeats request id in every history row',
+    str_contains($js, '<td><b>${esc(item.zayavka_id)}</b></td>') &&
+    !str_contains($js, "index===0?`<b>${esc(item.zayavka_id)}</b>`:''")
+);
+$ok(
+    'block search explicitly shows FEO registry and current-state absence',
+    str_contains($js, "? 'Нет в реестре ФЭО'") &&
+    str_contains($js, ": 'Не в актуальном составе';") &&
+    str_contains($js, 'Не входит ни в один блок')
+);
 $ok('disabled block delete uses danger styling and active blocks have no delete action', str_contains($js, "else html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Включить блок</button><button type=\"button\" class=\"btn btn-danger\" data-placement-delete>Удалить блок</button>`") && str_contains($js, "if(b.status==='applied')html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Отключить блок</button>`"));
 $ok('block table has no actions column', !str_contains($view, '<th>Действия</th>'));
 
