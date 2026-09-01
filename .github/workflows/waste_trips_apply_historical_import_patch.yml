@@ -10,7 +10,6 @@ permissions:
 
 jobs:
   patch:
-    if: github.event.head_commit.message == 'chore: bootstrap Waste Trips historical import patch'
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
