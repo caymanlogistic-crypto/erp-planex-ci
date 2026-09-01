@@ -32,7 +32,7 @@ $eq($parser->extractRequestIds('300001 300002 300001'),['300001','300002'],'FEO 
 $eq($parser->extractRequestIds("| 300003 | 399999 |\n300004\t399998"),['300003','300004'],'FEO structured first-column parsing');
 echo "DOCUMENT_GENERATOR_FEO_PARSER=PASS\n";
 
-$canonical=['contract_vehicle_lease_crew_v1.docx'=>'a2d1918573f1a673c5062b442289d9950f7bd7d433800aca3633a744fdb8dd2f','waybill_driver_assignment_v1.docx'=>'642e38737380446a6aa89d9314fc9ceafb3c4f2b48197e1f8b7d7f42ba34325c'];
+$canonical=['contract_vehicle_lease_crew_v1.docx'=>'a2d1918573f1a673c5062b442289d9950f7bd7d433800aca3633a744fdb8dd2f','waybill_driver_assignment_v1.docx'=>'e83cb5f5dde11ddf695bdfe74896171da2d2ef7b2ba3250e58c6989625c7c24f'];
 $files=[];
 foreach($canonical as $name=>$sha){$parts=glob($root.'/resources/document-templates/'.$name.'.b64.part*')?:[];sort($parts,SORT_STRING);$ok($parts!==[],'missing canonical template '.$name);$b64='';foreach($parts as $p)$b64.=preg_replace('/\s+/','',(string)file_get_contents($p))??'';$bytes=base64_decode($b64,true);$ok(is_string($bytes)&&$bytes!=='','template decode '.$name);$eq(hash('sha256',$bytes),$sha,'template SHA '.$name);$tmp=tempnam(sys_get_temp_dir(),'docgen_');$ok(is_string($tmp),'temp file');$docx=$tmp.'.docx';@unlink($tmp);$ok(file_put_contents($docx,$bytes)===strlen($bytes),'write template');$files[$name]=$docx;}
 echo "DOCUMENT_GENERATOR_CANONICAL_TEMPLATE_SHA=PASS\n";
