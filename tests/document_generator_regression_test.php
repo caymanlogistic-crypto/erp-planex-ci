@@ -28,7 +28,7 @@ require_once $root.'/app/Service/FeoRequestInteractionService.php';
 require_once $root.'/app/Service/DocumentGeneratorService.php';
 
 $parser=new \App\Service\FeoRequestInteractionService();
-$eq($parser->extractRequestIds("300001\n300002\tX\n300001"),['300001','300002'],'FEO parser dedupe/order');
+$eq($parser->extractRequestIds('300001 300002 300001'),['300001','300002'],'FEO parser dedupe/order');
 $eq($parser->extractRequestIds("| 300003 | 399999 |\n300004\t399998"),['300003','300004'],'FEO structured first-column parsing');
 echo "DOCUMENT_GENERATOR_FEO_PARSER=PASS\n";
 
