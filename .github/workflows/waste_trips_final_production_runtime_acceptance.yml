@@ -1,0 +1,249 @@
+name: Waste Trips Final Production Runtime Acceptance
+
+on:
+  push:
+    branches:
+      - chatgpt/waste-trips-runtime-final-20260901
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waste-trips-final-production-runtime-acceptance
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: 0e7fcf05b47cdbd124445dd4c15e8d33037942e0
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  runtime-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout acceptance tooling
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate exact canonical and probe syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l tests/waste_trip_production_runtime_probe.php
+          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+          echo "WASTE_TRIPS_RUNTIME_CANONICAL_SHA=PASS sha=$EXPECTED_SHA"
+
+      - name: Validate public authentication guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in \
+            /company/trips/departures \
+            /company/trips/departures/import \
+            /company/trips/departures/2147483647/modal-view \
+            /company/trips/departures/2147483647/modal-edit
+          do
+            safe="$(printf '%s' "$path" | tr '/{}' '___')"
+            code="$(curl -sS -o "/tmp/${safe}.html" -D "/tmp/${safe}.headers" -w '%{http_code}' --max-time 30 "https://plan-ex.ru/erpv2${path}")"
+            test "$code" = 302
+            grep -Eqi '^location: .*/erpv2/login([?[:space:]]|$)' "/tmp/${safe}.headers"
+          done
+          echo 'WASTE_TRIPS_PUBLIC_AUTH_GUARD=PASS'
+
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Upload and run read-only production probe
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          remote_probe="/tmp/waste_runtime_probe_${GITHUB_RUN_ID}.php"
+          remote_html="/tmp/waste_runtime_ui_${GITHUB_RUN_ID}.html"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            tests/waste_trip_production_runtime_probe.php "$SSH_USER@$SSH_HOST:$remote_probe"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' LIVE_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' UI_SNAPSHOT_PATH='$remote_html' /usr/bin/php8.5 '$remote_probe'" | tee runtime_probe.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST:$remote_html" runtime_ui.html
+          for marker in \
+            'WASTE_TRIPS_RUNTIME_ROUTES_RBAC=PASS' \
+            'WASTE_TRIPS_MODAL_PARTIALS_SINGLE_SHELL=PASS' \
+            'WASTE_TRIPS_RUNTIME_ROLE_COMPANY_OWNER=PASS' \
+            'WASTE_TRIPS_RUNTIME_ROLE_SENIOR_LOGIST=PASS' \
+            'WASTE_TRIPS_RUNTIME_ROLE_LOGIST=PASS' \
+            'WASTE_TRIPS_RUNTIME_IMPORT_MANUAL_DESTINATION=PASS' \
+            'WASTE_TRIPS_RUNTIME_FINANCE_VISIBILITY=PASS' \
+            'WASTE_TRIPS_RUNTIME_FULL_LAYOUT=PASS' \
+            'WASTE_TRIPS_RUNTIME_READ_ONLY=PASS' \
+            'WASTE_TRIPS_RUNTIME_ACCEPTANCE_SERVER=PASS'
+          do
+            grep -Fqx "$marker" runtime_probe.txt || {
+              echo "Required runtime marker missing: $marker" >&2
+              exit 1
+            }
+          done
+          grep -Eq '^WASTE_TRIPS_RUNTIME_PREVIEW=(PASS|SKIP_NO_CURRENT_PLACEMENT)$' runtime_probe.txt
+          grep -Eq '^WASTE_TRIPS_RUNTIME_LEGACY_PREVIEW=(PASS candidates=[0-9]+|SKIP_ENV_NOT_CONFIGURED)$' runtime_probe.txt
+
+      - name: Headless browser viewport and modal acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('runtime_ui.html')
+          html = p.read_text(encoding='utf-8')
+          html = html.replace('href="/erpv2/', 'href="https://plan-ex.ru/erpv2/')
+          html = html.replace('src="/erpv2/', 'src="https://plan-ex.ru/erpv2/')
+          probe = r'''
+          <script>
+          window.addEventListener('load', function () {
+            setTimeout(function () {
+              var params = new URLSearchParams(window.location.search);
+              var target = params.get('target') || 'unknown';
+              var errors = [];
+              function visible(el) {
+                var s = window.getComputedStyle(el);
+                return el.classList.contains('is-open') && s.display !== 'none' && s.visibility !== 'hidden';
+              }
+              var overlays = Array.from(document.querySelectorAll('.modal-overlay'));
+              if (document.querySelectorAll('.modal-overlay .modal-overlay').length !== 0) errors.push('nested-overlay');
+              if (overlays.filter(visible).length !== 0) errors.push('initial-open-modal');
+              if (document.documentElement.scrollWidth > window.innerWidth + 2) errors.push('page-horizontal-overflow-before');
+              if (typeof window.openModal !== 'function') {
+                errors.push('openModal-missing');
+              } else {
+                window.openModal('waste-trip-create-modal');
+              }
+              var openOverlays = overlays.filter(visible);
+              if (openOverlays.length !== 1 || openOverlays[0].id !== 'waste-trip-create-modal') errors.push('modal-stack-count');
+              var modal = document.querySelector('#waste-trip-create-modal .modal');
+              if (!modal) {
+                errors.push('create-modal-missing');
+              } else {
+                var r = modal.getBoundingClientRect();
+                if (r.left < -1 || r.right > window.innerWidth + 1) errors.push('modal-horizontal-clipping');
+                if (r.top < -1 || r.bottom > window.innerHeight + 1) errors.push('modal-vertical-clipping');
+              }
+              if (document.documentElement.scrollWidth > window.innerWidth + 2) errors.push('page-horizontal-overflow-after');
+              var createSubmit = document.querySelector('[data-waste-create-submit]');
+              if (!createSubmit || createSubmit.disabled !== true) errors.push('preview-gate-disabled-state');
+              var title = document.querySelector('.page-title');
+              if (!title || title.textContent.indexOf('Перевозка отходов') === -1) errors.push('page-title');
+              var marker = document.createElement('pre');
+              marker.id = 'waste-runtime-browser-marker';
+              marker.textContent = errors.length === 0
+                ? 'WASTE_TRIPS_BROWSER=PASS target=' + target + ' width=' + window.innerWidth + ' height=' + window.innerHeight
+                : 'WASTE_TRIPS_BROWSER=FAIL target=' + target + ' errors=' + errors.join(',');
+              document.body.appendChild(marker);
+            }, 800);
+          });
+          </script>
+          '''
+          if '</body>' not in html:
+              raise SystemExit('runtime snapshot has no body')
+          p.write_text(html.replace('</body>', probe + '</body>'), encoding='utf-8')
+          PY
+
+          chrome="$(command -v google-chrome || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome"
+          python3 -m http.server 8765 --bind 127.0.0.1 >/tmp/waste-runtime-http.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          sleep 1
+
+          "$chrome" --headless --no-sandbox --disable-gpu --force-device-scale-factor=1 \
+            --window-size=1366,900 --virtual-time-budget=3000 --dump-dom \
+            'http://127.0.0.1:8765/runtime_ui.html?target=1366' > runtime_dom_1366.html
+          grep -q 'WASTE_TRIPS_BROWSER=PASS target=1366' runtime_dom_1366.html
+          "$chrome" --headless --no-sandbox --disable-gpu --force-device-scale-factor=1 \
+            --window-size=1366,900 --virtual-time-budget=3000 \
+            --screenshot=runtime_1366.png 'http://127.0.0.1:8765/runtime_ui.html?target=1366' >/dev/null 2>&1
+
+          "$chrome" --headless --no-sandbox --disable-gpu --force-device-scale-factor=1 \
+            --window-size=1920,1080 --virtual-time-budget=3000 --dump-dom \
+            'http://127.0.0.1:8765/runtime_ui.html?target=1920' > runtime_dom_1920.html
+          grep -q 'WASTE_TRIPS_BROWSER=PASS target=1920' runtime_dom_1920.html
+          "$chrome" --headless --no-sandbox --disable-gpu --force-device-scale-factor=1 \
+            --window-size=1920,1080 --virtual-time-budget=3000 \
+            --screenshot=runtime_1920.png 'http://127.0.0.1:8765/runtime_ui.html?target=1920' >/dev/null 2>&1
+
+          echo 'WASTE_TRIPS_BROWSER_1366=PASS'
+          echo 'WASTE_TRIPS_BROWSER_1920=PASS'
+          echo 'WASTE_TRIPS_POPUP_STACK=PASS'
+
+      - name: Verify probe did not create production business rows
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' LIVE_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5" <<'PHP' | tee post_probe.txt
+          <?php
+          $root = rtrim((string) getenv('LIVE_ROOT'), '/');
+          if (trim((string) file_get_contents((string) getenv('DEPLOY_MARKER'))) !== (string) getenv('EXPECTED_SHA')) {
+              throw new RuntimeException('deploy marker changed');
+          }
+          $config = require $root . '/bootstrap/app.php';
+          require_once $root . '/app/Support/crypto_helper.php';
+          require_once $root . '/app/Support/company_database.php';
+          $c = $config['database'];
+          $central = new PDO('mysql:host='.$c['host'].';port='.($c['port']??3306).';dbname='.$c['database'].';charset=utf8mb4',$c['username'],$c['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+          $row = $central->query("SELECT * FROM companies WHERE id=25 AND status='active' LIMIT 1")->fetch(PDO::FETCH_ASSOC);
+          if (!$row) throw new RuntimeException('company unavailable');
+          $t = companyDatabaseConfig($config, $row);
+          $pdo = new PDO('mysql:host='.$t['host'].';port='.($t['port']??3306).';dbname='.$t['database'].';charset=utf8mb4',$t['username'],$t['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
+          $counts=[];
+          foreach(['waste_trips','waste_trip_requests','waste_trip_legacy_import_audits','waste_trip_audit_log'] as $table){$counts[$table]=(int)$pdo->query('SELECT COUNT(*) FROM `'.$table.'`')->fetchColumn();}
+          if (array_sum($counts)!==0) throw new RuntimeException('runtime acceptance created production business rows');
+          echo 'WASTE_TRIPS_POST_PROBE_ZERO_ROWS=PASS '.json_encode($counts,JSON_UNESCAPED_SLASHES).PHP_EOL;
+          PHP
+          grep -q '^WASTE_TRIPS_POST_PROBE_ZERO_ROWS=PASS ' post_probe.txt
+
+      - name: Upload runtime acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste_trips_final_runtime_acceptance_${{ env.EXPECTED_SHA }}
+          path: |
+            runtime_probe.txt
+            post_probe.txt
+            runtime_dom_1366.html
+            runtime_dom_1920.html
+            runtime_1366.png
+            runtime_1920.png
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Cleanup temporary SSH material
+        if: always()
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          if [ -f "$HOME/.ssh/key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '/tmp/waste_runtime_probe_${GITHUB_RUN_ID}.php' '/tmp/waste_runtime_ui_${GITHUB_RUN_ID}.html'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/key"
