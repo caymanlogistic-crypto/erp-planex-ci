@@ -195,7 +195,7 @@ trait DocumentGeneratorTemplateTrait
                 $templateId = (int)$pdo->lastInsertId();
             }
 
-            $v = $pdo->prepare('SELECT COALESCE(MAX(version_no,0)+1 FROM document_template_versions WHERE template_id=?');
+            $v = $pdo->prepare('SELECT COALESCE(MAX(version_no),0)+1 FROM document_template_versions WHERE template_id=?');
             $v->execute([$templateId]);
             $versionNo = (int)$v->fetchColumn();
             $safeOriginal = DocumentService::safeDownloadName($originalName);
