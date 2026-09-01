@@ -65,7 +65,7 @@ final class DocumentGeneratorController
     public function history(): void
     {
         $pageTitle = 'История документов';
-        $pageContext = 'Генератор документов';
+        $pageContext = 'Генератор договоров';
         $history = [];
         $formError = null;
         $flash = $_SESSION['document_generator_flash'] ?? null;
@@ -121,7 +121,7 @@ final class DocumentGeneratorController
     {
         requireRole(['company_owner']);
         $pageTitle = 'Шаблоны документов';
-        $pageContext = 'Генератор документов';
+        $pageContext = 'Генератор договоров';
         $templates = [];
         $versionsByTemplate = [];
         $formError = null;
@@ -227,7 +227,7 @@ final class DocumentGeneratorController
     private function renderGenerator(bool $doPreview, ?string $forcedError = null): void
     {
         $pageTitle = 'Создать документ';
-        $pageContext = 'Генератор документов';
+        $pageContext = 'Генератор договоров';
         $templates = [];
         $executors = [];
         $preview = null;
@@ -294,7 +294,7 @@ final class DocumentGeneratorController
         $stmt->execute([$companyId]);
         $company = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
         if (!$company) throw new RuntimeException('Компания не найдена.');
-        if (($company['status'] ?? '') !== 'active') throw new RuntimeException('Генератор документов недоступен для неактивной компании.');
+        if (($company['status'] ?? '') !== 'active') throw new RuntimeException('Генератор договоров недоступен для неактивной компании.');
         $localDb = new Database(companyDatabaseConfig($this->config, $company));
         $localPdo = $localDb->connection();
         return [$company, $localPdo, $companyId, (int)($_SESSION['user_id'] ?? 0), (string)($_SESSION['role_code'] ?? '')];
@@ -303,7 +303,7 @@ final class DocumentGeneratorController
     private function requireSchema(PDO $pdo): void
     {
         if (!DocumentGeneratorService::schemaReady($pdo)) {
-            throw new RuntimeException('Схема генератора документов ещё не установлена. Требуется штатная tenant migration.');
+            throw new RuntimeException('Схема генератора договоров ещё не установлена. Требуется штатная tenant migration.');
         }
     }
 
