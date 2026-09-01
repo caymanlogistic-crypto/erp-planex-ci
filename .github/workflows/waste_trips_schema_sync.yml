@@ -1,0 +1,107 @@
+name: Waste Trips Schema Sync Temporary
+
+on:
+  push:
+    branches:
+      - chatgpt/waste-trips-20260901
+    paths:
+      - '.github/workflows/waste_trips_schema_sync.yml'
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: waste-trips-schema-sync-temporary
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    if: github.repository == 'planexerp/erp-planex'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+
+      - name: Download exact generated schema artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_ID: '9803758229'
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/artifacts/${ARTIFACT_ID}/zip" \
+            -o /tmp/schema.zip
+          rm -rf /tmp/schema && mkdir -p /tmp/schema
+          unzip -q /tmp/schema.zip -d /tmp/schema
+          find /tmp/schema -maxdepth 2 -type f -printf '%P\n' | sort
+
+      - name: Verify artifact bytes
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import hashlib
+          expected = {
+            'TENANT_ERD.md':'6fa79387ef24e21025383eb9b878108702b45d2c',
+            'TENANT_SCHEMA.md':'76e65724056116a983fdda906650dfd2dd78b1bd',
+            'TENANT_SCHEMA_ACCESS_SECURITY.md':'e48c4dc3301ab8446043ccf45510ec26a5e00d15',
+            'TENANT_SCHEMA_CRM.md':'add3f8540f019bc926735be4cca0116efd45ce58',
+            'TENANT_SCHEMA_DOCUMENTS.md':'deb6e422ae537d412756a471a8ae3001819c158a',
+            'TENANT_SCHEMA_FINANCE_01.md':'6f7dbdc846372944246ab50cccb20e56a39f5c5c',
+            'TENANT_SCHEMA_FINANCE_02.md':'70cb2a42807beaf1091825be1866670cf6fd2712',
+            'TENANT_SCHEMA_FINANCE_03.md':'63b57d05540bff5618efd206078b5f27c806b528',
+            'TENANT_SCHEMA_FINANCE_04.md':'335f44ab566d603e96f3b0a64a707f37eb1da38d',
+            'TENANT_SCHEMA_FINANCE_05.md':'c98d1e3b638db89139a12b1d019cd32f134c59fc',
+            'TENANT_SCHEMA_OPERATIONS_ROUTES_01.md':'d13ecdd404029feaf29b6472845abcbe31bed3a3',
+            'TENANT_SCHEMA_OPERATIONS_ROUTES_02.md':'1129e1565cd99d16e0bcbbc6ff9760c9dba8b8c2',
+            'TENANT_SCHEMA_OTHER_TENANT_DOMAIN_01.md':'af8b97f949a5c50437b1f32f373571e87501773a',
+            'TENANT_SCHEMA_OTHER_TENANT_DOMAIN_02.md':'05dfa7fda8ccc6d6527ac4a7ab4d40c4f7410c69',
+            'TENANT_SCHEMA_OTHER_TENANT_DOMAIN_03.md':'7c3d5ab00f2484eb89e0b0afcae57bbf3fb5cd00',
+            'TENANT_SCHEMA_SYSTEM_MIGRATION_METADATA.md':'8c6489f34fc89248b32e77c36b8751c54018248c',
+            'TENANT_SCHEMA_TRANSPORT.md':'79b6a7a9632c159f06a761362f5f275be8053308',
+          }
+          root=Path('/tmp/schema')
+          files={p.name:p for p in root.rglob('*.md')}
+          if set(files) != set(expected):
+              raise SystemExit(f'artifact file set mismatch: {sorted(files)}')
+          for name,want in expected.items():
+              b=files[name].read_bytes()
+              got=hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
+              print(name, got)
+              if got != want:
+                  raise SystemExit(f'blob mismatch {name}: {got} != {want}')
+          print('SCHEMA_ARTIFACT_BYTES=PASS')
+          PY
+
+      - name: Replace generated docs and self-clean
+        run: |
+          set -euo pipefail
+          for f in /tmp/schema/*.md; do
+            test -f "$f" || continue
+            cp "$f" "docs/database/$(basename "$f")"
+          done
+          rm -f docs/database/.schema-sync-marker.tmp \
+                docs/database/TENANT_SCHEMA_DOCUMENTS.md.tmp \
+                docs/database/TENANT_SCHEMA_DOCUMENTS.md.tmp2
+          rm -f .github/workflows/waste_trips_schema_sync.yml
+          git status --short
+          test "$(grep -h -c 'a839e09922efd5a37e40b38d2298d46e3f87110e962be10e151acec54a552477' docs/database/TENANT_SCHEMA*.md docs/database/TENANT_ERD.md | awk '{s+=$1} END{print s+0}')" -ge 17
+
+      - name: Commit exact schema sync
+        env:
+          TARGET_BRANCH: chatgpt/waste-trips-20260901
+        run: |
+          set -euo pipefail
+          git config user.name 'planexerp-schema-bot'
+          git config user.email 'info@plan-ex.ru'
+          git add docs/database .github/workflows/waste_trips_schema_sync.yml
+          git diff --cached --quiet && { echo 'Nothing to commit'; exit 1; }
+          git commit -m 'chore: sync tenant schema docs for migration 128'
+          git push origin "HEAD:${TARGET_BRANCH}"
