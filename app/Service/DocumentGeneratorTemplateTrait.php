@@ -63,7 +63,7 @@ trait DocumentGeneratorTemplateTrait
     private static function materializeBuiltInTemplate(string $filename): string
     {
         $expected = [
-            'contract_vehicle_lease_crew_v1.docx' => '0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc',
+            'contract_vehicle_lease_crew_v1.docx' => 'a2d1918573f1a673c5062b442289d9950f7bd7d433800aca3633a744fdb8dd2f',
             'waybill_driver_assignment_v1.docx' => '642e38737380446a6aa89d9314fc9ceafb3c4f2b48197e1f8b7d7f42ba34325c',
         ];
         if (!isset($expected[$filename])) {
