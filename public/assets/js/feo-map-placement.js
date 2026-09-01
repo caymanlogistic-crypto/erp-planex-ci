@@ -437,8 +437,13 @@ function renderBlockSearch(data){
   results.forEach(item=>{
     const blocks=Array.isArray(item.blocks)?item.blocks:[];
     if(blocks.length){
-      blocks.forEach((block,index)=>{
-        rows.push(`<tr data-placement-search-block-id="${block.id}"><td>${index===0?`<b>${esc(item.zayavka_id)}</b>`:''}</td><td>#${block.id}${block.name?' · '+esc(block.name):''}</td><td>${block.block_type==='addition'?'Добавление':'Исключение'}</td><td>${statusHtml(block.status)}</td><td>${item.is_current?'<span class="feo-placement-status feo-placement-status--applied">В актуальном составе</span>':'—'}</td></tr>`);
+      const currentState=!item.exists_in_feo
+        ? 'Нет в реестре ФЭО'
+        : item.is_current
+          ? '<span class="feo-placement-status feo-placement-status--applied">В актуальном составе</span>'
+          : 'Не в актуальном составе';
+      blocks.forEach(block=>{
+        rows.push(`<tr data-placement-search-block-id="${block.id}"><td><b>${esc(item.zayavka_id)}</b></td><td>#${block.id}${block.name?' · '+esc(block.name):''}</td><td>${block.block_type==='addition'?'Добавление':'Исключение'}</td><td>${statusHtml(block.status)}</td><td>${currentState}</td></tr>`);
       });
     }else{
       rows.push(`<tr><td><b>${esc(item.zayavka_id)}</b></td><td>Не входит ни в один блок</td><td>—</td><td>—</td><td>${item.exists_in_feo?(item.is_current?'В актуальном составе':'Не в актуальном составе'):'Нет в реестре ФЭО'}</td></tr>`);
@@ -453,11 +458,25 @@ async function runBlockSearch(){
   if(!blockSearchInput)return;
   const raw=blockSearchInput.value;
   if(!raw.trim()){clearBlockSearch();return;}
+  const ids=extractClientRequestIds(raw);
+  if(!ids.length){
+    if(blockSearch.controller)blockSearch.controller.abort();
+    if(blockSearchResults){
+      blockSearchResults.classList.remove('is-hidden');
+      blockSearchResults.innerHTML='';
+      const notice=document.createElement('div');
+      notice.className='notice warn';
+      notice.textContent='Не найдено самостоятельных шестизначных номеров заявок.';
+      blockSearchResults.appendChild(notice);
+    }
+    return;
+  }
+  const normalized=ids.join(' ');
   const generation=++blockSearch.generation;
   if(blockSearch.controller)blockSearch.controller.abort();
   blockSearch.controller=new AbortController();
   try{
-    const data=await json(base+'/search-blocks?'+new URLSearchParams({request_ids:raw}).toString(),{signal:blockSearch.controller.signal});
+    const data=await json(base+'/search-blocks?'+new URLSearchParams({request_ids:normalized}).toString(),{signal:blockSearch.controller.signal});
     if(generation!==blockSearch.generation)return;
     renderBlockSearch(data);
   }catch(e){

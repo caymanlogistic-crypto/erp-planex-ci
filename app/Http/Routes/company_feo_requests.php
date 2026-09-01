@@ -52,7 +52,7 @@ $feoPlacementRegistryState = static function (\PDO $pdo, array $ids): array {
     return ['exists'=>$exists, 'current'=>$current];
 };
 
-$feoPlacementMemberships = static function (\PDO $pdo, array $ids, bool $activeOnly): array {
+$feoPlacementMemberships = static function (\PDO $pdo, array $ids, bool $activeOnly, bool $newestFirst = false): array {
     $ids = array_values(array_unique(array_map('strval', $ids)));
     $out = [];
     foreach ($ids as $id) $out[$id] = [];
@@ -64,7 +64,7 @@ $feoPlacementMemberships = static function (\PDO $pdo, array $ids, bool $activeO
                   JOIN feo_placement_blocks b ON b.id=br.block_id
                  WHERE br.zayavka_id IN ({$marks})";
         if ($activeOnly) $sql .= " AND b.status='applied'";
-        $sql .= ' ORDER BY b.id ASC';
+        $sql .= $newestFirst ? ' ORDER BY b.id DESC' : ' ORDER BY b.id ASC';
         $q = $pdo->prepare($sql);
         $q->execute($chunk);
         foreach ($q->fetchAll(\PDO::FETCH_ASSOC) as $row) {
@@ -137,13 +137,14 @@ $router->get('/company/feo/requests/map-placement/search-blocks', static functio
 ): void {
     requireRole(['company_owner','senior_logist','logist']);
     try {
-        $parser = new \App\Service\FeoPlacementInputParser();
-        $parsed = $parser->parseManual((string)($_GET['request_ids'] ?? ''));
+        $parser = new \App\Service\FeoRequestInteractionService();
+        $ids = $parser->extractRequestIds((string)($_GET['request_ids'] ?? ''));
+        if ($ids === []) throw new \RuntimeException('Не найдено самостоятельных шестизначных номеров заявок.');
         [, $pdo] = $feoPlacementCompanyContext();
-        $state = $feoPlacementRegistryState($pdo, $parsed['ids']);
-        $memberships = $feoPlacementMemberships($pdo, $parsed['ids'], false);
+        $state = $feoPlacementRegistryState($pdo, $ids);
+        $memberships = $feoPlacementMemberships($pdo, $ids, false, true);
         $results = [];
-        foreach ($parsed['ids'] as $id) {
+        foreach ($ids as $id) {
             $results[] = [
                 'zayavka_id'=>$id,
                 'exists_in_feo'=>isset($state['exists'][$id]),
@@ -152,7 +153,7 @@ $router->get('/company/feo/requests/map-placement/search-blocks', static functio
                 'blocks'=>$memberships[$id] ?? [],
             ];
         }
-        jsonResponse(['success'=>true,'duplicates'=>$parsed['duplicates'],'results'=>$results]);
+        jsonResponse(['success'=>true,'duplicates'=>[],'results'=>$results]);
     } catch (\Throwable $e) {
         jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
     }
