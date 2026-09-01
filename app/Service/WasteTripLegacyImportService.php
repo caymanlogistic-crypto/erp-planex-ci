@@ -4,7 +4,6 @@ namespace App\Service;
 
 use PDO;
 use RuntimeException;
-use Throwable;
 
 final class WasteTripLegacyImportService
 {
@@ -32,8 +31,6 @@ final class WasteTripLegacyImportService
                 PDO::ATTR_EMULATE_PREPARES => false,
             ]
         );
-        // Defense in depth: production credentials must still be SELECT-only, but the
-        // session itself is also marked read-only before any legacy query is issued.
         $pdo->exec('SET SESSION TRANSACTION READ ONLY');
         return $pdo;
     }
@@ -81,10 +78,7 @@ final class WasteTripLegacyImportService
                 $customerName = trim((string) ($resolved['polnoe_naim_zakazchika'] ?? ''));
                 $customerInn = trim((string) ($resolved['inn_zakazchika'] ?? ''));
                 if ($customerName !== '' || $customerInn !== '') {
-                    $customerHints[$customerName . '|' . $customerInn] = [
-                        'name' => $customerName,
-                        'inn' => $customerInn,
-                    ];
+                    $customerHints[$customerName . '|' . $customerInn] = ['name' => $customerName, 'inn' => $customerInn];
                 }
                 $requestId = (int) $resolved['id'];
                 if (isset($claimMap[$requestId])) {
@@ -109,13 +103,8 @@ final class WasteTripLegacyImportService
         return $result;
     }
 
-    public static function import(
-        PDO $legacyPdo,
-        PDO $tenantPdo,
-        int $legacyFlightId,
-        array $mapping,
-        array $sessionUser
-    ): int {
+    public static function import(PDO $legacyPdo, PDO $tenantPdo, int $legacyFlightId, array $mapping, array $sessionUser): int
+    {
         if ($legacyFlightId <= 0) {
             throw new RuntimeException('Некорректный legacy ID рейса.');
         }
@@ -132,7 +121,7 @@ final class WasteTripLegacyImportService
             throw new RuntimeException('В legacy-рейсе нет заявок ФЭО.');
         }
 
-        $destination = self::mapDestination((string) ($legacy['unload_type'] ?? ''), $mapping);
+        $destination = self::resolveDestinationMapping((string) ($legacy['unload_type'] ?? ''), $mapping);
         $executorId = (int) ($mapping['route_executor_id'] ?? 0) ?: null;
         if (in_array($status, [WasteTripService::STATUS_ASSIGNED, WasteTripService::STATUS_IN_PROGRESS, WasteTripService::STATUS_COMPLETED], true) && $executorId === null) {
             throw new RuntimeException('Для этого legacy-статуса требуется вручную выбрать ERP-исполнителя.');
@@ -160,8 +149,6 @@ final class WasteTripLegacyImportService
             'cancellation_reason' => null,
         ];
 
-        // Historical data occasionally lacks actual dates despite terminal legacy status.
-        // Import must not silently invent them: the validation error is surfaced to the operator.
         $evidence = [
             'source_system' => self::SOURCE_SYSTEM,
             'legacy_flight_id' => $legacyFlightId,
@@ -201,19 +188,27 @@ final class WasteTripLegacyImportService
         return $ids;
     }
 
-    private static function mapDestination(string $legacyUnloadType, array $mapping): array
+    public static function resolveDestinationMapping(string $legacyUnloadType, array $mapping): array
     {
-        return match (trim($legacyUnloadType)) {
-            'OO' => [
-                'destination_type' => 'utilizer',
-                'utilizer_id' => (int) ($mapping['utilizer_id'] ?? 0) ?: null,
-            ],
-            'SKLAD' => [
-                'destination_type' => 'warehouse',
-                'utilizer_id' => null,
-            ],
-            default => throw new RuntimeException('Неизвестный legacy-тип выгрузки. Импорт заблокирован.'),
-        };
+        $legacyUnloadType = trim($legacyUnloadType);
+        if (!in_array($legacyUnloadType, ['OO', 'SKLAD'], true)) {
+            throw new RuntimeException('Неизвестный legacy-тип выгрузки. Импорт заблокирован.');
+        }
+
+        $destinationType = trim((string) ($mapping['destination_type'] ?? ''));
+        if (!in_array($destinationType, ['utilizer', 'warehouse'], true)) {
+            throw new RuntimeException('Legacy-тип выгрузки «' . $legacyUnloadType . '» не маппится автоматически. Выберите ERP назначение вручную.');
+        }
+
+        $utilizerId = (int) ($mapping['utilizer_id'] ?? 0) ?: null;
+        if ($destinationType === 'utilizer' && $utilizerId === null) {
+            throw new RuntimeException('Для назначения «утилизатор» выберите ERP утилизатора вручную.');
+        }
+        if ($destinationType === 'warehouse' && $utilizerId !== null) {
+            throw new RuntimeException('Для назначения «склад» ERP утилизатор не указывается.');
+        }
+
+        return ['destination_type' => $destinationType, 'utilizer_id' => $utilizerId];
     }
 
     private static function fetchLegacyFlight(PDO $legacyPdo, int $legacyFlightId): ?array
@@ -248,10 +243,7 @@ final class WasteTripLegacyImportService
         }
         $placeholders = implode(',', array_fill(0, count($legacyIds), '?'));
         $params = array_merge([self::SOURCE_SYSTEM], $legacyIds);
-        $stmt = $tenantPdo->prepare(
-            "SELECT legacy_flight_id, id FROM waste_trips
-              WHERE source_system=? AND legacy_flight_id IN ({$placeholders})"
-        );
+        $stmt = $tenantPdo->prepare("SELECT legacy_flight_id, id FROM waste_trips WHERE source_system=? AND legacy_flight_id IN ({$placeholders})");
         $stmt->execute($params);
         $map = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -266,10 +258,7 @@ final class WasteTripLegacyImportService
             return [];
         }
         $placeholders = implode(',', array_fill(0, count($businessIds), '?'));
-        $stmt = $tenantPdo->prepare(
-            "SELECT id, zayavka_id, mass_netto, polnoe_naim_zakazchika, inn_zakazchika, naim_oo_gruzootpravitel, mno_adres_pogruzki
-               FROM feo_requests WHERE zayavka_id IN ({$placeholders})"
-        );
+        $stmt = $tenantPdo->prepare("SELECT id, zayavka_id, mass_netto, polnoe_naim_zakazchika, inn_zakazchika, naim_oo_gruzootpravitel, mno_adres_pogruzki FROM feo_requests WHERE zayavka_id IN ({$placeholders})");
         $stmt->execute($businessIds);
         $map = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
@@ -285,12 +274,7 @@ final class WasteTripLegacyImportService
             return [];
         }
         $placeholders = implode(',', array_fill(0, count($requestIds), '?'));
-        $stmt = $tenantPdo->prepare(
-            "SELECT wtr.feo_request_id, wt.id AS waste_trip_id
-               FROM waste_trip_requests wtr
-               JOIN waste_trips wt ON wt.id=wtr.waste_trip_id
-              WHERE wtr.feo_request_id IN ({$placeholders}) AND wt.status <> 'cancelled'"
-        );
+        $stmt = $tenantPdo->prepare("SELECT wtr.feo_request_id, wt.id AS waste_trip_id FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id WHERE wtr.feo_request_id IN ({$placeholders}) AND wt.status <> 'cancelled'");
         $stmt->execute($requestIds);
         $map = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
