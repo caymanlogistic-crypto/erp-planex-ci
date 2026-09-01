@@ -1,0 +1,49 @@
+name: Waste Trip Service Patch TMP
+
+on:
+  push:
+    branches:
+      - chatgpt/waste-trips-audit-fix-20260901
+    paths:
+      - '.github/workflows/waste_trip_service_patch_tmp.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/waste-trips-audit-fix-20260901
+          fetch-depth: 1
+      - name: Apply exact placeholder patch and self-delete
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('app/Service/WasteTripService.php')
+          s=p.read_text()
+          old_sql=':comment, :cancellation_reason, :source_system, :legacy_flight_id,\n                  :user_id, :role_code, :user_id, :role_code)'
+          new_sql=':comment, :cancellation_reason, :source_system, :legacy_flight_id,\n                  :created_user_id, :created_role_code, :updated_user_id, :updated_role_code)'
+          old_params="                ':user_id' => (int) ($sessionUser['user_id'] ?? 0) ?: null,\n                ':role_code' => (string) ($sessionUser['role_code'] ?? ''),"
+          new_params="                ':created_user_id' => (int) ($sessionUser['user_id'] ?? 0) ?: null,\n                ':created_role_code' => (string) ($sessionUser['role_code'] ?? ''),\n                ':updated_user_id' => (int) ($sessionUser['user_id'] ?? 0) ?: null,\n                ':updated_role_code' => (string) ($sessionUser['role_code'] ?? ''),"
+          if s.count(old_sql) != 1:
+              raise SystemExit(f'expected exactly one SQL placeholder target, found {s.count(old_sql)}')
+          if s.count(old_params) != 1:
+              raise SystemExit(f'expected exactly one execute target, found {s.count(old_params)}')
+          s=s.replace(old_sql,new_sql).replace(old_params,new_params)
+          p.write_text(s)
+          PY
+          php -l app/Service/WasteTripService.php
+          grep -Fq ':created_user_id, :created_role_code, :updated_user_id, :updated_role_code)' app/Service/WasteTripService.php
+          ! grep -Fq ':user_id, :role_code, :user_id, :role_code)' app/Service/WasteTripService.php
+          git rm .github/workflows/waste_trip_service_patch_tmp.yml
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add app/Service/WasteTripService.php
+          git diff --cached --check
+          git commit -m 'Fix Waste Trips native PDO create placeholders'
+          git push origin HEAD:chatgpt/waste-trips-audit-fix-20260901
