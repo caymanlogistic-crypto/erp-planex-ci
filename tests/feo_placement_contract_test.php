@@ -64,8 +64,8 @@ $ok(
 $ok(
     'search result preserves each normalized requested id',
     str_contains($route, 'foreach ($ids as $id)')
-    && str_contains($route, "'zayavka_id'=>$id")
-    && str_contains($route, "'blocks'=>$memberships[$id] ?? []")
+    && str_contains($route, "'zayavka_id'=>\$id")
+    && str_contains($route, "'blocks'=>\$memberships[\$id] ?? []")
 );
 $ok(
     'search result exposes registry and current-state flags',
