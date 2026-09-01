@@ -63,6 +63,8 @@ final class WasteTripController
         ob_start();
         require base_path('app/View/pages/company_waste_trips.php');
         $content = (string) ob_get_clean();
+        $config = $this->config;
+        $db = $this->db;
         require base_path('app/View/layouts/main.php');
     }
 
@@ -233,6 +235,8 @@ final class WasteTripController
         ob_start();
         require base_path('app/View/pages/company_waste_trip_import.php');
         $content = (string) ob_get_clean();
+        $config = $this->config;
+        $db = $this->db;
         require base_path('app/View/layouts/main.php');
     }
 
