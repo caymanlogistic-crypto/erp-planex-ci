@@ -15,7 +15,7 @@ $contractor=$src('app/Service/ContractorService.php');
 foreach([
  ['new FeoRequestInteractionService()','canonical FEO parser'],['extractRequestIds($requestInput)','canonical request-id extraction'],['$missing !== []','missing requests fail closed'],['count($groups) > 1','mixed unload fail closed'],['* 1000','tons-to-kg conversion'],['generated_document_requests','per-request snapshots'],['copySeedFromGenerated','repeat from snapshot seed'],["hash_file('sha256'",'SHA-256 integrity']
 ] as [$n,$m])$has($workflow,$n,$m);
-foreach([["str_starts_with($entry, '/')",'archive path guard'],['DOCTYPE|ENTITY','XXE/DTD guard'],['Неизвестная переменная','placeholder whitelist'],['expandRequestRows','repeat-row expansion'],['htmlspecialchars($node[\'text\'], ENT_QUOTES | ENT_XML1, \'UTF-8\')','XML escaping']] as [$n,$m])$has($template,$n,$m);
+foreach([['str_starts_with($entry, \'/\')','archive path guard'],['DOCTYPE|ENTITY','XXE/DTD guard'],['Неизвестная переменная','placeholder whitelist'],['expandRequestRows','repeat-row expansion'],['htmlspecialchars($node[\'text\'], ENT_QUOTES | ENT_XML1, \'UTF-8\')','XML escaping']] as [$n,$m])$has($template,$n,$m);
 $has($view,'Ручной параметр: отдельного canonical поля банка в ERP сейчас нет.','manual bank-INN help');
 $ok(!str_contains($contractor,'bank_inn'),'canonical contractor model unexpectedly contains bank_inn');
 echo "DOCUMENT_GENERATOR_CANONICAL_WIRING=PASS\n";
