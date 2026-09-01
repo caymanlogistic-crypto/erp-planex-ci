@@ -64,6 +64,30 @@ jobs:
           FLUSH PRIVILEGES;
           SQL
 
+      - name: Preserve canonical template inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/document-generator
+          php -r '
+            foreach (["contract_vehicle_lease_crew_v1.docx", "waybill_driver_assignment_v1.docx"] as $name) {
+              $parts = glob("resources/document-templates/{$name}.b64.part*") ?: [];
+              sort($parts, SORT_STRING);
+              if ($parts === []) { fwrite(STDERR, "missing parts: {$name}\n"); exit(1); }
+              $encoded = "";
+              foreach ($parts as $part) $encoded .= preg_replace("/\\s+/", "", (string) file_get_contents($part)) ?? "";
+              $bytes = base64_decode($encoded, true);
+              if (!is_string($bytes) || $bytes === "") { fwrite(STDERR, "decode failed: {$name}\n"); exit(1); }
+              $target = "artifacts/document-generator/input_{$name}";
+              file_put_contents($target, $bytes);
+              printf("CANONICAL_INPUT=%s encoded=%d bytes=%d sha256=%s\n", $name, strlen($encoded), strlen($bytes), hash("sha256", $bytes));
+            }
+          '
+          for f in artifacts/document-generator/input_*.docx; do
+            echo "ZIP_DIAGNOSTIC=$f"
+            unzip -t "$f" || true
+          done
+
       - name: Run document generator behavioral regression
         env:
           PLANEX_DOCGEN_REQUIRE_RUNTIME: '1'
