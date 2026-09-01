@@ -1,0 +1,150 @@
+name: Waste Trips Controlled Legacy Import V2
+
+on:
+  push:
+    branches:
+      - ops/waste-trips-legacy-import-20260901
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waste-trips-controlled-legacy-import-v2
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: 3adf4e01d7280a655835dc46ddc4026e8ba136b6
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
+  LEGACY_DB_NAME_HINT: spugovxsim_frega
+  LEGACY_DB_USER_HINT: spugovxsim_frega
+
+jobs:
+  import-v2:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate exact canonical and corrected wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-controlled-import.php
+          php -l .github/waste-trips-controlled-import-v2.php
+          grep -Fq 'numeric INN guard patch target mismatch' .github/waste-trips-controlled-import-v2.php
+          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+          echo "WASTE_IMPORT_V2_CANONICAL=PASS sha=$EXPECTED_SHA"
+
+      - name: Configure SSH
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Verify marker and discover legacy config
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          actual="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$actual" = "$EXPECTED_SHA"
+          remote_list="/tmp/waste_import_v2_candidates_${GITHUB_RUN_ID}.txt"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "HOME_ROOT='/home/s/$SSH_USER' DB_HINT='$LEGACY_DB_NAME_HINT' USER_HINT='$LEGACY_DB_USER_HINT' OUT='$remote_list' /bin/bash -s" <<'REMOTE'
+          set -euo pipefail
+          tmp="${OUT}.all"; : > "$tmp"; : > "$OUT"
+          find "$HOME_ROOT" -maxdepth 12 -type f \( -name 'config.php' -o -name 'database.php' -o -name 'db.php' -o -name '.env' -o -name 'flights.php' \) -size -512k -print 2>/dev/null > "$tmp"
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if [ "$(basename "$f")" = 'flights.php' ]; then d=$(dirname "$f"); for c in "$d/config.php" "$d/db.php" "$d/database.php" "$d/.env"; do [ -f "$c" ] && printf '%s\n' "$c" >> "$OUT"; done; fi
+            if grep -aFq "$DB_HINT" "$f" 2>/dev/null || grep -aFq "$USER_HINT" "$f" 2>/dev/null; then printf '%s\n' "$f" >> "$OUT"; fi
+          done < "$tmp"
+          sort -u -o "$OUT" "$OUT"; rm -f "$tmp"; test "$(wc -l < "$OUT")" -gt 0
+          REMOTE
+          echo "WASTE_IMPORT_V2_PREWRITE=PASS sha=$EXPECTED_SHA"
+
+      - name: Execute corrected atomic import
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          remote_dir="/tmp/waste_import_v2_${GITHUB_RUN_ID}"
+          remote_list="/tmp/waste_import_v2_candidates_${GITHUB_RUN_ID}.txt"
+          remote_json="/tmp/waste_import_v2_${GITHUB_RUN_ID}.json"
+          remote_csv="/tmp/waste_import_v2_${GITHUB_RUN_ID}.csv"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "mkdir -p '$remote_dir'"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-controlled-import.php "$SSH_USER@$SSH_HOST:$remote_dir/waste-trips-controlled-import.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-controlled-import-v2.php "$SSH_USER@$SSH_HOST:$remote_dir/waste-trips-controlled-import-v2.php"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' EXPECTED_SHA='$EXPECTED_SHA' DEPLOY_MARKER='$DEPLOY_MARKER' CANDIDATE_LIST='$remote_list' CONFIRM_IMPORT='IMPORT_75_WASTE_TRIPS' OUT_JSON='$remote_json' OUT_CSV='$remote_csv' /usr/bin/php8.5 '$remote_dir/waste-trips-controlled-import-v2.php'" | tee artifacts/import-summary.txt
+          grep -Eq '^WASTE_IMPORT_DRY_RUN=PASS flights=75 unique_feo=802 links=945 repeated_feo=143 max_abs_mass_delta_kg=[0-9]+\.[0-9]{3}$' artifacts/import-summary.txt
+          grep -Eq '^WASTE_IMPORT_MAPPING=PASS client_id=[1-9][0-9]* client_created=(0|1) utilizer_id=8 responsible_user_id=1$' artifacts/import-summary.txt
+          grep -Fqx 'WASTE_IMPORT_ATOMIC_COMMIT=PASS trips=75 links=945 audits=75' artifacts/import-summary.txt
+          grep -Eq '^WASTE_IMPORT_MULTILEG=PASS request=.+ historical_trip_count=[2-9][0-9]*$' artifacts/import-summary.txt
+          grep -Fqx 'WASTE_IMPORT_OPERATIONAL_CLAIM_ISOLATION=PASS' artifacts/import-summary.txt
+          grep -Fqx 'WASTE_IMPORT_PENDING=PASS pending=0 all=75' artifacts/import-summary.txt
+          grep -Fqx 'WASTE_IMPORT_CONTROLLED=PASS' artifacts/import-summary.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$remote_json" artifacts/import-evidence.json
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$remote_csv" artifacts/import-evidence.csv
+
+      - name: Validate evidence and HTTP
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,csv
+          r=json.load(open('artifacts/import-evidence.json',encoding='utf-8'))
+          assert r['expected_sha']=='3adf4e01d7280a655835dc46ddc4026e8ba136b6'
+          assert r['counts']=={'waste_trips':75,'waste_trip_requests':945,'waste_trip_legacy_import_audits':75,'waste_trip_audit_log':75}
+          assert r['unique_feo_requests']==802 and r['trip_request_links']==945 and r['repeated_feo_requests']==143
+          assert r['route_type_counts']=={'generator_to_utilizer':65,'generator_to_warehouse':7,'warehouse_to_utilizer':3}
+          assert r['destination_counts']=={'utilizer':68,'warehouse':7}
+          assert r['utilizer_id']==8 and r['responsible_user_id']==1 and len(r['rows'])==75
+          rows=list(csv.DictReader(open('artifacts/import-evidence.csv',encoding='utf-8')))
+          assert len(rows)==75 and len({x['legacy_flight_id'] for x in rows})==75 and len({x['waste_trip_id'] for x in rows})==75
+          print('WASTE_IMPORT_V2_EVIDENCE=PASS')
+          PY
+          test "$(curl -sS -o /tmp/login.html -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+          echo 'WASTE_IMPORT_V2_HTTP=PASS login=200'
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-controlled-import-v2-${{ env.EXPECTED_SHA }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          if [ -f "$HOME/.ssh/key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -rf '/tmp/waste_import_v2_${GITHUB_RUN_ID}'; rm -f '/tmp/waste_import_v2_candidates_${GITHUB_RUN_ID}.txt' '/tmp/waste_import_v2_${GITHUB_RUN_ID}.json' '/tmp/waste_import_v2_${GITHUB_RUN_ID}.csv'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/key"
