@@ -1,0 +1,95 @@
+name: Waste Trips Mapping Options
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-mapping-options-20260901
+
+permissions:
+  contents: read
+
+env:
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+
+jobs:
+  probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate read-only probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-mapping-options.php
+          grep -Fq 'SET SESSION TRANSACTION READ ONLY' .github/waste-trips-mapping-options.php
+          grep -Fq 'START TRANSACTION READ ONLY' .github/waste-trips-mapping-options.php
+          echo 'WASTE_MAPPING_OPTIONS_STATIC=PASS'
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Read production mapping options
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          REMOTE_SCRIPT="/tmp/waste_mapping_options_${GITHUB_RUN_ID}.php"
+          REMOTE_JSON="/tmp/waste_mapping_options_${GITHUB_RUN_ID}.json"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-mapping-options.php "$SSH_USER@$SSH_HOST:$REMOTE_SCRIPT"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' OUT_JSON='$REMOTE_JSON' /usr/bin/php8.5 '$REMOTE_SCRIPT'" | tee artifacts/summary.txt
+          grep -Fqx 'WASTE_MAPPING_OPTIONS=PASS' artifacts/summary.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST:$REMOTE_JSON" artifacts/mapping-options.json
+
+      - name: Validate option counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          r=json.load(open('artifacts/mapping-options.json',encoding='utf-8'))
+          assert r['company_id']==25
+          assert r['counts']['clients']==5
+          assert r['counts']['users']==1
+          assert r['counts']['utilizers']==8
+          assert r['counts']['route_executors']==7
+          print('WASTE_MAPPING_OPTIONS_EVIDENCE=PASS')
+          PY
+
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "rm -f '/tmp/waste_mapping_options_${GITHUB_RUN_ID}.php' '/tmp/waste_mapping_options_${GITHUB_RUN_ID}.json'" || true
+          rm -f "$HOME/.ssh/key"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-mapping-options
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
