@@ -210,7 +210,10 @@ final class WasteTripService
             $resolved = $legacyEvidence === null
                 ? self::resolveCurrentRequestsForClaim($pdo, $requestBusinessIds)
                 : self::resolveRequestsForClaim($pdo, $requestBusinessIds, false);
-            self::assertNoActiveClaims($pdo, array_column($resolved, 'id'));
+            $historicalClaimExempt = $legacyEvidence !== null && !empty($legacyEvidence['historical_claim_exempt']);
+            if (!$historicalClaimExempt) {
+                self::assertNoActiveClaims($pdo, array_column($resolved, 'id'));
+            }
 
             $insert = $pdo->prepare(
                 "INSERT INTO waste_trips
@@ -329,8 +332,13 @@ final class WasteTripService
                 static fn(string $id): bool => !isset($existingByBusinessId[$id])
             ));
             if ($newBusinessIds !== []) {
-                $resolvedNew = self::resolveCurrentRequestsForClaim($pdo, $newBusinessIds);
-                self::assertNoActiveClaims($pdo, array_column($resolvedNew, 'id'), $tripId);
+                $isHistoricalLegacy = ($trip['source_system'] ?? null) === 'legacy_flights';
+                $resolvedNew = $isHistoricalLegacy
+                    ? self::resolveRequestsForClaim($pdo, $newBusinessIds, false)
+                    : self::resolveCurrentRequestsForClaim($pdo, $newBusinessIds);
+                if (!$isHistoricalLegacy) {
+                    self::assertNoActiveClaims($pdo, array_column($resolvedNew, 'id'), $tripId);
+                }
                 self::insertRequestLinks($pdo, $tripId, $resolvedNew, count($existingLinks));
             }
 
@@ -502,7 +510,9 @@ final class WasteTripService
                    FROM waste_trip_requests wtr
                    JOIN waste_trips wt ON wt.id=wtr.waste_trip_id
                    JOIN feo_requests fr ON fr.id=wtr.feo_request_id
-                  WHERE wtr.feo_request_id IN ({$claimPlaceholders}) AND wt.status <> 'cancelled'"
+                  WHERE wtr.feo_request_id IN ({$claimPlaceholders})
+                    AND wt.status <> 'cancelled'
+                    AND COALESCE(wt.source_system,'') <> 'legacy_flights'"
             );
             $claimStmt->execute($requestIds);
             foreach ($claimStmt->fetchAll(PDO::FETCH_ASSOC) as $claim) {
@@ -743,7 +753,8 @@ final class WasteTripService
                   JOIN waste_trips wt ON wt.id=wtr.waste_trip_id
                   JOIN feo_requests fr ON fr.id=wtr.feo_request_id
                  WHERE wtr.feo_request_id IN ({$placeholders})
-                   AND wt.status <> 'cancelled'";
+                   AND wt.status <> 'cancelled'
+                   AND COALESCE(wt.source_system,'') <> 'legacy_flights'";
         $params = $requestIds;
         if ($ignoreTripId !== null) {
             $sql .= ' AND wt.id <> ?';

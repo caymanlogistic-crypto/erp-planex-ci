@@ -158,6 +158,7 @@ final class WasteTripLegacyImportService
             'legacy_payment_terms' => (string) ($legacy['payment_terms'] ?? ''),
             'payload' => self::sanitizeLegacyPayload($legacy),
             'allow_unmapped_historical_executor' => $allowHistoricalUnmappedExecutor,
+            'historical_claim_exempt' => true,
         ];
 
         return WasteTripService::create($tenantPdo, $input, $requestIds, $sessionUser, $evidence);
@@ -277,7 +278,7 @@ final class WasteTripLegacyImportService
             return [];
         }
         $placeholders = implode(',', array_fill(0, count($requestIds), '?'));
-        $stmt = $tenantPdo->prepare("SELECT wtr.feo_request_id, wt.id AS waste_trip_id FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id WHERE wtr.feo_request_id IN ({$placeholders}) AND wt.status <> 'cancelled'");
+        $stmt = $tenantPdo->prepare("SELECT wtr.feo_request_id, wt.id AS waste_trip_id FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id WHERE wtr.feo_request_id IN ({$placeholders}) AND wt.status <> 'cancelled' AND COALESCE(wt.source_system,'') <> 'legacy_flights'");
         $stmt->execute($requestIds);
         $map = [];
         foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {

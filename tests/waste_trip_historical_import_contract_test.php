@@ -27,6 +27,7 @@ foreach ([
     'allow_unmapped_historical_executor',
     'historical_executor_unmapped',
     'historical_executor_label',
+    'historical_claim_exempt',
 ] as $needle) {
     if (!str_contains($service, $needle) && !str_contains($legacy, $needle)) {
         $fail('missing historical import contract token: ' . $needle);
@@ -55,6 +56,10 @@ if (!in_array('Для выбранного статуса требуется и�
 $legacyErrors = WasteTripService::validateInput($regular, true, true);
 if (in_array('Для выбранного статуса требуется исполнитель рейса.', $legacyErrors, true)) {
     $fail('historical legacy trip must allow an unmapped executor');
+}
+
+if (!str_contains($service, "COALESCE(wt.source_system,'') <> 'legacy_flights'")) {
+    $fail('operational claim queries must ignore immutable legacy historical links');
 }
 
 echo "WASTE_TRIP_HISTORICAL_IMPORT=PASS\n";
