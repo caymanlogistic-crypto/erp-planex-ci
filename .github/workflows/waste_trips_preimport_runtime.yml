@@ -16,6 +16,8 @@ env:
   EXPECTED_SHA: 3adf4e01d7280a655835dc46ddc4026e8ba136b6
   LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
   DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  LEGACY_DB_NAME_HINT: spugovxsim_frega
+  LEGACY_DB_USER_HINT: spugovxsim_frega
 
 jobs:
   preimport:
@@ -31,6 +33,8 @@ jobs:
         run: |
           set -euo pipefail
           php -l .github/waste-trips-preimport-runtime.php
+          php -l .github/waste-trips-legacy-date-facts.php
+          grep -Fq 'SET SESSION TRANSACTION READ ONLY' .github/waste-trips-legacy-date-facts.php
           git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
           test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
           echo "WASTE_PREIMPORT_CANONICAL=PASS sha=$EXPECTED_SHA"
@@ -80,12 +84,52 @@ jobs:
           grep -Fqx 'WASTE_PREIMPORT_HISTORICAL_CONTRACT=PASS' preimport-runtime.txt
           grep -Fqx 'WASTE_PREIMPORT_RUNTIME=PASS' preimport-runtime.txt
 
+      - name: Discover legacy config without logging secrets
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          remote_list="/tmp/waste_date_candidates_${GITHUB_RUN_ID}.txt"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "HOME_ROOT='/home/s/$SSH_USER' DB_HINT='$LEGACY_DB_NAME_HINT' USER_HINT='$LEGACY_DB_USER_HINT' OUT='$remote_list' /bin/bash -s" <<'REMOTE'
+          set -euo pipefail
+          tmp="${OUT}.all"; : > "$tmp"; : > "$OUT"
+          find "$HOME_ROOT" -maxdepth 12 -type f \( -name 'config.php' -o -name 'database.php' -o -name 'db.php' -o -name '.env' -o -name 'flights.php' \) -size -512k -print 2>/dev/null > "$tmp"
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if [ "$(basename "$f")" = 'flights.php' ]; then d=$(dirname "$f"); for c in "$d/config.php" "$d/db.php" "$d/database.php" "$d/.env"; do [ -f "$c" ] && printf '%s\n' "$c" >> "$OUT"; done; fi
+            if grep -aFq "$DB_HINT" "$f" 2>/dev/null || grep -aFq "$USER_HINT" "$f" 2>/dev/null; then printf '%s\n' "$f" >> "$OUT"; fi
+          done < "$tmp"
+          sort -u -o "$OUT" "$OUT"; rm -f "$tmp"; test "$(wc -l < "$OUT")" -gt 0
+          REMOTE
+
+      - name: Read legacy date facts
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          remote_script="/tmp/waste_date_facts_${GITHUB_RUN_ID}.php"
+          remote_list="/tmp/waste_date_candidates_${GITHUB_RUN_ID}.txt"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-legacy-date-facts.php "$SSH_USER@$SSH_HOST:$remote_script"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "CANDIDATE_LIST='$remote_list' /usr/bin/php8.5 '$remote_script'" | tee legacy-date-facts.txt
+          grep -Fqx 'WASTE_LEGACY_DATE_FACTS=PASS' legacy-date-facts.txt
+
       - name: Upload evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: waste-trips-preimport-runtime-${{ env.EXPECTED_SHA }}
-          path: preimport-runtime.txt
+          path: |
+            preimport-runtime.txt
+            legacy-date-facts.txt
           if-no-files-found: warn
           retention-days: 30
 
@@ -99,6 +143,6 @@ jobs:
         run: |
           if [ -f "$HOME/.ssh/key" ]; then
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-              "rm -f '/tmp/waste_preimport_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+              "rm -f '/tmp/waste_preimport_${GITHUB_RUN_ID}.php' '/tmp/waste_date_candidates_${GITHUB_RUN_ID}.txt' '/tmp/waste_date_facts_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
           fi
           rm -f "$HOME/.ssh/key"
