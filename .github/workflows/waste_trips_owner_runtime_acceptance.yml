@@ -1,0 +1,230 @@
+name: Waste Trips Owner Runtime Acceptance
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-owner-runtime-acceptance-20260901
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_SHA: 5fef24d617ca5f5a82b3614ba22fac3a6f2bc1ac
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate probe and canonical ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-acceptance/qa_session.php
+          php -l .github/waste-trips-acceptance/server_probe.php
+          node --check .github/waste-trips-acceptance/production_probe.js
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('.github/waste-trips-acceptance/server_probe.php').read_text(encoding='utf-8').lower()
+          for banned in ['insert into','update ','delete from','drop table','alter table','create table','replace into','truncate ']:
+              if banned in s:
+                  raise SystemExit('read-only server probe contains banned SQL: '+banned)
+          print('WASTE_OWNER_ACCEPTANCE_PROBE_STATIC=PASS')
+          PY
+          git fetch --no-tags origin \
+            +refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical \
+            +${EXPECTED_SHA}:refs/remotes/origin/expected
+          git merge-base --is-ancestor refs/remotes/origin/expected refs/remotes/origin/canonical
+          DRIFT="$(git diff --name-only refs/remotes/origin/expected..refs/remotes/origin/canonical || true)"
+          if printf '%s\n' "$DRIFT" | grep -E '^(app/(Http/Controllers/Company/WasteTripController.php|Http/Routes/company_linear_trips.php|Service/WasteTrip|View/(pages|partials)/company_waste_trip)|database/migrations-local/128_create_waste_trips.sql|tests/waste_trip|\.github/workflows/waste_trips_regression.yml|docs/memory/(critical_records|machine_ownership)\.json)' >/dev/null; then
+            echo 'Waste Trips owning-path drift after deployed SHA; acceptance must be regenerated.' >&2
+            printf '%s\n' "$DRIFT" >&2
+            exit 1
+          fi
+          echo "WASTE_OWNER_ACCEPTANCE_SOURCE=PASS sha=$EXPECTED_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Read-only production snapshot before browser flow
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          REMOTE="/tmp/waste_owner_server_probe_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-acceptance/server_probe.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' PLANEX_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5 '$REMOTE'" | tee artifacts/server-before.json
+          python3 - <<'PY'
+          import json
+          r=json.load(open('artifacts/server-before.json',encoding='utf-8'))
+          assert r['expected_sha'] == '5fef24d617ca5f5a82b3614ba22fac3a6f2bc1ac'
+          assert r['planex']['migration_128'] == 1
+          assert r['planex']['reference_counts']['feo_requests'] > 0
+          for table,count in r['planex']['counts'].items():
+              assert count == 0, f'unexpected production rows before acceptance: {table}={count}'
+          print('WASTE_OWNER_ACCEPTANCE_DB_BEFORE=PASS')
+          PY
+
+      - name: Create temporary authenticated production sessions
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/waste_owner_qa_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-acceptance/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          for ROLE in company_owner senior_logist logist; do
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' create '$ROLE'")
+            JSON=${OUT#QA_SESSION=}
+            python3 - "$ROLE" "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          role,obj,path=sys.argv[1],json.loads(sys.argv[2]),sys.argv[3]
+          for key in ('sid','csrf'):
+              print(f'::add-mask::{obj[key]}')
+          prefix={'company_owner':'OWNER','senior_logist':'SENIOR','logist':'LOGIST'}[role]
+          with open(path,'a',encoding='utf-8') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
+              f.write(f"QA_{prefix}_SESSION_ID={obj['sid']}\n")
+          PY
+          done
+          echo 'WASTE_OWNER_ACCEPTANCE_SESSIONS=PASS'
+
+      - name: Real authenticated production browser flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/waste-trips-acceptance/production_probe.js | tee artifacts/browser-summary.txt
+
+      - name: Enforce real HTTP DOM modal and role acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          target='https://plan-ex.ru/erpv2/company/trips/departures'
+          import_url=target+'/import'
+          rows=json.load(open('artifacts/browser-results.json',encoding='utf-8'))
+          assert len(rows)==6, len(rows)
+          expected={(role,width) for role in ('company_owner','senior_logist','logist') for width in (1366,1920)}
+          seen=set()
+          for r in rows:
+              key=(r['role'],r['viewport']['width']); seen.add(key)
+              assert r['status']==200, f'{key} registry HTTP {r["status"]}'
+              assert r['finalUrl'].rstrip('/')==target, f'{key} registry final URL {r["finalUrl"]}'
+              d=r['dom']
+              assert d['mainVisible'] is True, f'{key} main invisible'
+              assert d['titleVisible'] is True and 'Перевозка отходов' in d['titleText'], f'{key} title {d}'
+              assert d['createVisible'] is True, f'{key} create button invisible'
+              assert d['importVisible'] is True, f'{key} import button invisible'
+              assert d['nestedOverlays']==0, f'{key} nested overlays={d["nestedOverlays"]}'
+              for name in ('consoleErrors','pageErrors','requestFailures','badResponses'):
+                  assert not r[name], f'{key} {name}={r[name]}'
+              m=r['modal']
+              assert m['openCount']==1, f'{key} modal openCount={m["openCount"]}'
+              assert 'waste-trip-create-modal' in m['openIds'], f'{key} modal ids={m["openIds"]}'
+              assert m['clipped'] is False, f'{key} modal clipped={m["clipped"]}'
+              assert m['horizontalOverflow'] is False, f'{key} horizontal overflow'
+              imp=r['import']
+              assert imp['status']==200, f'{key} import HTTP {imp["status"]}'
+              assert imp['finalUrl'].rstrip('/')==import_url, f'{key} import final URL {imp["finalUrl"]}'
+              assert imp['state']['mainVisible'] is True, f'{key} import main invisible'
+              assert imp['state']['titleVisible'] is True and 'Импорт старых рейсов' in imp['state']['title'], f'{key} import title={imp["state"]}'
+              for name in ('consoleErrors','pageErrors','requestFailures','badResponses'):
+                  assert not imp[name], f'{key} import {name}={imp[name]}'
+          assert seen==expected, (seen,expected)
+          print('WASTE_OWNER_REAL_HTTP=PASS')
+          print('WASTE_OWNER_ROLE_MATRIX=PASS')
+          print('WASTE_OWNER_BROWSER_1366=PASS')
+          print('WASTE_OWNER_BROWSER_1920=PASS')
+          print('WASTE_OWNER_POPUP_STACK=PASS')
+          PY
+
+      - name: Verify production DB unchanged after browser flow
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/waste_owner_server_probe_${GITHUB_RUN_ID}.php"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' PLANEX_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5 '$REMOTE'" | tee artifacts/server-after.json
+          python3 - <<'PY'
+          import json
+          b=json.load(open('artifacts/server-before.json',encoding='utf-8'))
+          a=json.load(open('artifacts/server-after.json',encoding='utf-8'))
+          assert b['active_tenants']==a['active_tenants'], 'tenant DB counts changed during browser acceptance'
+          assert b['planex']==a['planex'], 'PLANEX counts changed during browser acceptance'
+          for table,count in a['planex']['counts'].items():
+              assert count == 0, f'unexpected production rows after acceptance: {table}={count}'
+          print('WASTE_OWNER_ACCEPTANCE_DB_READ_ONLY=PASS')
+          PY
+
+      - name: Cleanup temporary QA sessions and probes
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          REMOTE_SESSION="/tmp/waste_owner_qa_session_${GITHUB_RUN_ID}.php"
+          STATUS=0
+          for ENTRY in "owner|${QA_OWNER_SESSION_ID:-}" "senior|${QA_SENIOR_SESSION_ID:-}" "logist|${QA_LOGIST_SESSION_ID:-}"; do
+            IFS='|' read -r ROLE SID <<< "$ENTRY"
+            if [ -z "$SID" ]; then STATUS=1; continue; fi
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE_SESSION' delete '$SID'" 2>/dev/null || true)
+            echo "$ROLE=$OUT" >> artifacts/session-cleanup.txt
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME:-x}=${SID}" "$target" 2>/dev/null || true)
+            echo "${ROLE}_old_sid_http=$HTTP" >> artifacts/session-cleanup.txt
+            [ "$HTTP" != '200' ] || STATUS=1
+          done
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "rm -f '/tmp/waste_owner_qa_session_${GITHUB_RUN_ID}.php' '/tmp/waste_owner_server_probe_${GITHUB_RUN_ID}.php'" || STATUS=1
+          rm -f "$HOME/.ssh/key"
+          [ "$STATUS" -eq 0 ] && echo 'WASTE_OWNER_ACCEPTANCE_QA_CLEANUP=PASS' | tee -a artifacts/session-cleanup.txt
+          exit "$STATUS"
+        env:
+          target: https://plan-ex.ru/erpv2/company/trips/departures
+
+      - name: Upload production acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-owner-runtime-acceptance-${{ env.EXPECTED_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
