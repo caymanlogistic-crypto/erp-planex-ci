@@ -105,7 +105,7 @@ final class WasteTripService
         ];
     }
 
-    public static function validateInput(array $data, bool $allowUnspecifiedPlan = false): array
+    public static function validateInput(array $data, bool $allowUnspecifiedPlan = false, bool $allowHistoricalUnmappedExecutor = false): array
     {
         $errors = [];
         if ((int) ($data['client_id'] ?? 0) <= 0) {
@@ -120,7 +120,7 @@ final class WasteTripService
             $errors[] = 'Недопустимый статус рейса.';
         }
         $executorId = (int) ($data['route_executor_id'] ?? 0);
-        if (in_array($status, [self::STATUS_ASSIGNED, self::STATUS_IN_PROGRESS, self::STATUS_COMPLETED], true) && $executorId <= 0) {
+        if (in_array($status, [self::STATUS_ASSIGNED, self::STATUS_IN_PROGRESS, self::STATUS_COMPLETED], true) && $executorId <= 0 && !$allowHistoricalUnmappedExecutor) {
             $errors[] = 'Для выбранного статуса требуется исполнитель рейса.';
         }
 
@@ -191,7 +191,8 @@ final class WasteTripService
     public static function create(PDO $pdo, array $input, array $requestBusinessIds, array $sessionUser, ?array $legacyEvidence = null): int
     {
         $data = self::normalizeInput($input);
-        $errors = self::validateInput($data, $legacyEvidence !== null);
+        $allowHistoricalUnmappedExecutor = $legacyEvidence !== null && !empty($legacyEvidence['allow_unmapped_historical_executor']);
+        $errors = self::validateInput($data, $legacyEvidence !== null, $allowHistoricalUnmappedExecutor);
         if ($requestBusinessIds === []) {
             $errors[] = 'Добавьте хотя бы одну заявку ФЭО.';
         }
@@ -294,7 +295,8 @@ final class WasteTripService
 
             $data = self::normalizeInput($input);
             $allowUnspecifiedPlan = ($trip['source_system'] ?? null) !== null && ($trip['planned_start_mode'] ?? '') === 'unspecified';
-            $errors = self::validateInput($data, $allowUnspecifiedPlan);
+            $allowHistoricalUnmappedExecutor = ($trip['source_system'] ?? null) === 'legacy_flights' && empty($trip['route_executor_id']);
+            $errors = self::validateInput($data, $allowUnspecifiedPlan, $allowHistoricalUnmappedExecutor);
             if ($errors !== []) {
                 throw new RuntimeException(implode(' ', $errors));
             }
@@ -601,6 +603,7 @@ final class WasteTripService
         $stmt->execute($params);
         $trips = $stmt->fetchAll(PDO::FETCH_ASSOC);
         self::enrichExecutorDisplay($pdo, $trips);
+        self::enrichHistoricalExecutorDisplay($pdo, $trips);
         return $trips;
     }
 
@@ -628,12 +631,17 @@ final class WasteTripService
         $trip = $rows[0];
         $trip['requests'] = self::fetchRequestLinks($pdo, $tripId, false);
         $audit = $pdo->prepare(
-            'SELECT source_system, legacy_flight_id, mapping_json, snapshot_request_count, snapshot_total_mass_kg,
+            'SELECT source_system, legacy_flight_id, legacy_payload_json, mapping_json, snapshot_request_count, snapshot_total_mass_kg,
                     mass_delta_kg, warnings_json, legacy_total_mass_kg, legacy_cost, legacy_payment_terms, created_at
                FROM waste_trip_legacy_import_audits WHERE waste_trip_id=? LIMIT 1'
         );
         $audit->execute([$tripId]);
         $trip['legacy_audit'] = $audit->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($trip['legacy_audit'] !== null) {
+            $payload = json_decode((string) ($trip['legacy_audit']['legacy_payload_json'] ?? ''), true);
+            $trip['legacy_payload'] = is_array($payload) ? $payload : [];
+            $trip['historical_executor_label'] = self::historicalExecutorLabel($trip['legacy_payload']);
+        }
         return $trip;
     }
 
@@ -785,6 +793,9 @@ final class WasteTripService
         $legacyMass = isset($evidence['legacy_total_mass_kg']) ? (float) $evidence['legacy_total_mass_kg'] : null;
         $delta = $legacyMass !== null ? round($snapshotMass - $legacyMass, 3) : null;
         $warnings = [];
+        if (!empty($evidence['allow_unmapped_historical_executor']) && empty($data['route_executor_id'])) {
+            $warnings[] = 'historical_executor_unmapped';
+        }
         if ($delta !== null && abs($delta) >= 0.001) {
             $warnings[] = 'legacy_mass_delta_kg=' . number_format($delta, 3, '.', '');
         }
@@ -929,6 +940,42 @@ final class WasteTripService
             $trip['executor_vehicle_label'] = $vehicleMap[$crewId] ?? '';
         }
         unset($trip);
+    }
+
+    private static function enrichHistoricalExecutorDisplay(PDO $pdo, array &$trips): void
+    {
+        $tripIds = [];
+        foreach ($trips as $trip) {
+            if (($trip['source_system'] ?? null) === 'legacy_flights' && empty($trip['route_executor_id'])) {
+                $tripIds[] = (int) ($trip['id'] ?? 0);
+            }
+        }
+        $tripIds = array_values(array_unique(array_filter($tripIds)));
+        if ($tripIds === []) {
+            return;
+        }
+        $placeholders = implode(',', array_fill(0, count($tripIds), '?'));
+        $stmt = $pdo->prepare("SELECT waste_trip_id, legacy_payload_json FROM waste_trip_legacy_import_audits WHERE waste_trip_id IN ({$placeholders})");
+        $stmt->execute($tripIds);
+        $labels = [];
+        foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $payload = json_decode((string) ($row['legacy_payload_json'] ?? ''), true);
+            $labels[(int) $row['waste_trip_id']] = self::historicalExecutorLabel(is_array($payload) ? $payload : []);
+        }
+        foreach ($trips as &$trip) {
+            $trip['historical_executor_label'] = $labels[(int) ($trip['id'] ?? 0)] ?? '';
+        }
+        unset($trip);
+    }
+
+    private static function historicalExecutorLabel(array $payload): string
+    {
+        $parts = array_values(array_filter([
+            trim((string) ($payload['legacy_contractor_name'] ?? '')),
+            trim((string) ($payload['legacy_driver_name'] ?? '')),
+            trim((string) ($payload['legacy_vehicle_make_plate'] ?? '')),
+        ], static fn(string $value): bool => $value !== ''));
+        return implode(' · ', $parts);
     }
 
     private static function normalizeDate(mixed $value): ?string

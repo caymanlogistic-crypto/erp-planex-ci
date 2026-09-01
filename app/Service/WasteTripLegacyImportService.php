@@ -123,8 +123,9 @@ final class WasteTripLegacyImportService
 
         $destination = self::resolveDestinationMapping((string) ($legacy['unload_type'] ?? ''), $mapping);
         $executorId = (int) ($mapping['route_executor_id'] ?? 0) ?: null;
-        if (in_array($status, [WasteTripService::STATUS_ASSIGNED, WasteTripService::STATUS_IN_PROGRESS, WasteTripService::STATUS_COMPLETED], true) && $executorId === null) {
-            throw new RuntimeException('Для этого legacy-статуса требуется вручную выбрать ERP-исполнителя.');
+        $allowHistoricalUnmappedExecutor = !empty($mapping['allow_unmapped_historical_executor']);
+        if (in_array($status, [WasteTripService::STATUS_ASSIGNED, WasteTripService::STATUS_IN_PROGRESS, WasteTripService::STATUS_COMPLETED], true) && $executorId === null && !$allowHistoricalUnmappedExecutor) {
+            throw new RuntimeException('Для этого legacy-статуса требуется вручную выбрать ERP-исполнителя либо явно разрешить сохранение исторического исполнителя без canonical crew.');
         }
 
         $plannedExact = self::legacyDate($legacy['planned_start_date'] ?? null);
@@ -156,6 +157,7 @@ final class WasteTripLegacyImportService
             'legacy_cost' => self::nullableMoney($legacy['cost'] ?? null),
             'legacy_payment_terms' => (string) ($legacy['payment_terms'] ?? ''),
             'payload' => self::sanitizeLegacyPayload($legacy),
+            'allow_unmapped_historical_executor' => $allowHistoricalUnmappedExecutor,
         ];
 
         return WasteTripService::create($tenantPdo, $input, $requestIds, $sessionUser, $evidence);
@@ -168,6 +170,7 @@ final class WasteTripLegacyImportService
             'found' => WasteTripService::STATUS_ASSIGNED,
             'started' => WasteTripService::STATUS_IN_PROGRESS,
             'completed' => WasteTripService::STATUS_COMPLETED,
+            'planned_route' => WasteTripService::STATUS_SEARCHING,
             default => null,
         };
     }
@@ -310,8 +313,8 @@ final class WasteTripLegacyImportService
             'id', 'block_date', 'zayavki_ids', 'zayavki_count', 'total_mass_tonn', 'unload_type', 'status',
             'contractor_id', 'driver_id', 'cost', 'payment_terms', 'comment', 'planned_start_date',
             'planned_start_date_from', 'planned_start_date_to', 'actual_start_date', 'actual_end_date',
-            'assigned_manager_id', 'legacy_contractor_name', 'legacy_driver_name', 'legacy_vehicle_make_plate',
-            'legacy_manager_name',
+            'assigned_manager_id', 'route_type', 'source_warehouse_id', 'destination_warehouse_id',
+            'legacy_contractor_name', 'legacy_driver_name', 'legacy_vehicle_make_plate', 'legacy_manager_name',
         ];
         $payload = [];
         foreach ($allowed as $key) {
