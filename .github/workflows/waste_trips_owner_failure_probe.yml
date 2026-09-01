@@ -9,8 +9,9 @@ permissions:
   contents: read
 
 env:
-  EXPECTED_SHA: 0e7fcf05b47cdbd124445dd4c15e8d33037942e0
+  START_HEAD: 0e7fcf05b47cdbd124445dd4c15e8d33037942e0
   LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
 
 jobs:
   owner-failure:
@@ -18,12 +19,15 @@ jobs:
     timeout-minutes: 8
     steps:
       - uses: actions/checkout@v4
-      - name: Validate exact canonical and syntax
+      - name: Validate syntax and record canonical drift
         run: |
           set -euo pipefail
           php -l .github/waste-trips-recovery/owner_failure_probe.php
           git fetch --no-tags origin +refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical
-          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+          CURRENT_CANONICAL="$(git rev-parse refs/remotes/origin/canonical)"
+          echo "WASTE_OWNER_PROBE_START_HEAD=$START_HEAD"
+          echo "WASTE_OWNER_PROBE_CURRENT_CANONICAL=$CURRENT_CANONICAL"
+          git merge-base --is-ancestor "$START_HEAD" "$CURRENT_CANONICAL"
       - name: Configure SSH
         env:
           PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
@@ -34,7 +38,7 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Execute read-only owner failure probe on production runtime
+      - name: Execute read-only owner failure probe on actual production runtime
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -42,6 +46,9 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p artifacts
+          DEPLOYED="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "${#DEPLOYED}" -eq 40
+          echo "WASTE_OWNER_PROBE_DEPLOYED_SHA=$DEPLOYED" | tee artifacts/deployed.txt
           REMOTE="/tmp/waste_owner_failure_${GITHUB_RUN_ID}.php"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             .github/waste-trips-recovery/owner_failure_probe.php "$SSH_USER@$SSH_HOST:$REMOTE"
@@ -52,6 +59,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: waste-trips-owner-failure-${{ env.EXPECTED_SHA }}
+          name: waste-trips-owner-failure-${{ github.sha }}
           path: artifacts/
           retention-days: 30
