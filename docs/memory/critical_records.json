@@ -41,8 +41,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c56b2184fcd6f642f34cab90423025c229ce05cd",
-      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33536759516",
+      "verified_sha": "51071f41cc89d5feda1c4e5db8d64b1d14b2be84",
+      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33537044382",
       "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "tests/waste_trip_regression_test.php", ".github/workflows/waste_trips_regression.yml"],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
