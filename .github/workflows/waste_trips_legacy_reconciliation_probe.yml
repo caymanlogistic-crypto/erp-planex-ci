@@ -11,7 +11,7 @@ permissions:
 env:
   START_HEAD: 0e7fcf05b47cdbd124445dd4c15e8d33037942e0
   LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
-  LEGACY_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erp
+  LEGACY_SEARCH_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erp
   DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
 
 jobs:
@@ -67,13 +67,18 @@ jobs:
           mkdir -p artifacts
           DEPLOYED="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
           echo "WASTE_LEGACY_DEPLOYED_SHA=$DEPLOYED" | tee artifacts/deployed.txt
+          LEGACY_ROOTS="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "find '$LEGACY_SEARCH_ROOT' -maxdepth 6 -type f -name 'flights.php' -print 2>/dev/null | while IFS= read -r f; do grep -q 'zayavki_ids' \"\$f\" || continue; d=\$(dirname \"\$f\"); [ -f \"\$d/config.php\" ] && printf '%s\\n' \"\$d\"; done | sort -u")"
+          ROOT_COUNT="$(printf '%s\n' "$LEGACY_ROOTS" | sed '/^$/d' | wc -l | tr -d ' ')"
+          echo "WASTE_LEGACY_APP_ROOT_CANDIDATES=$ROOT_COUNT" | tee artifacts/legacy-root-discovery.txt
+          test "$ROOT_COUNT" = "1"
+          DISCOVERED_LEGACY_ROOT="$(printf '%s\n' "$LEGACY_ROOTS" | sed '/^$/d')"
           REMOTE="/tmp/waste_legacy_reconcile_${GITHUB_RUN_ID}.php"
           REMOTE_JSON="/tmp/waste_legacy_reconcile_${GITHUB_RUN_ID}.json"
           REMOTE_CSV="/tmp/waste_legacy_reconcile_${GITHUB_RUN_ID}.csv"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             .github/waste-trips-recovery/legacy_reconcile.php "$SSH_USER@$SSH_HOST:$REMOTE"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' LEGACY_ROOT='$LEGACY_ROOT' OUT_JSON='$REMOTE_JSON' OUT_CSV='$REMOTE_CSV' /usr/bin/php8.5 '$REMOTE'" | tee artifacts/summary.txt
+            "PLANEX_ROOT='$LIVE_ROOT' LEGACY_ROOT='$DISCOVERED_LEGACY_ROOT' OUT_JSON='$REMOTE_JSON' OUT_CSV='$REMOTE_CSV' /usr/bin/php8.5 '$REMOTE'" | tee artifacts/summary.txt
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$REMOTE_JSON" artifacts/reconciliation.json
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$REMOTE_CSV" artifacts/reconciliation.csv
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE' '$REMOTE_JSON' '$REMOTE_CSV'"
