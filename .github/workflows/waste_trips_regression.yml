@@ -51,7 +51,7 @@ jobs:
           echo "SOURCE_SHA=${SOURCE_SHA}"
           test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
 
-      - name: Reject non-executable or wrapped regression test
+      - name: Reject false-positive test and native PDO placeholder regressions
         shell: bash
         run: |
           set -euo pipefail
@@ -63,7 +63,14 @@ jobs:
               raise SystemExit('waste_trip_regression_test.php must start with <?php')
           if data.startswith(b'PD9waHA') or b"base64_decode(file_get_contents(__FILE__))" in data[:512]:
               raise SystemExit('base64/wrapper regression test is forbidden')
+          service = Path('app/Service/WasteTripService.php').read_text()
+          if ':user_id, :role_code, :user_id, :role_code)' in service:
+              raise SystemExit('duplicate named placeholders are forbidden with native PDO prepares')
+          required = ':created_user_id, :created_role_code, :updated_user_id, :updated_role_code)'
+          if required not in service:
+              raise SystemExit('expected unique WasteTrip create actor placeholders not found')
           print('WASTE_TRIP_TEST_EXECUTABLE_PREAMBLE=PASS')
+          print('WASTE_TRIP_NATIVE_PDO_PLACEHOLDERS=PASS')
           PY
 
       - name: PHP syntax
