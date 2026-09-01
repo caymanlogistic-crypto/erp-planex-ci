@@ -1,0 +1,153 @@
+name: Waste Trips Production Recovery Probe
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-production-recovery-20260901
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  EXPECTED_SHA: 0e7fcf05b47cdbd124445dd4c15e8d33037942e0
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  recovery-probe:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate probe syntax and exact canonical
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-recovery/qa_session.php
+          php -l .github/waste-trips-recovery/server_probe.php
+          node --check .github/waste-trips-recovery/production_probe.js
+          git fetch --no-tags origin +refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+          echo "WASTE_RECOVERY_CANONICAL=PASS sha=$EXPECTED_SHA"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Read-only production DB and legacy discovery snapshot
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          REMOTE="/tmp/waste_server_probe_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-recovery/server_probe.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' PLANEX_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5 '$REMOTE'" | tee artifacts/server-before.json
+      - name: Create temporary authenticated production sessions
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/waste_qa_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-recovery/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          for ROLE in company_owner senior_logist logist; do
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' create '$ROLE'")
+            JSON=${OUT#QA_SESSION=}
+            python3 - "$ROLE" "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          role,obj,path=sys.argv[1],json.loads(sys.argv[2]),sys.argv[3]
+          for key in ('sid','csrf'): print(f'::add-mask::{obj[key]}')
+          prefix={'company_owner':'OWNER','senior_logist':'SENIOR','logist':'LOGIST'}[role]
+          with open(path,'a') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
+              f.write(f"QA_{prefix}_SESSION_ID={obj['sid']}\n")
+          PY
+          done
+      - name: Real authenticated browser flow
+        run: node .github/waste-trips-recovery/production_probe.js | tee artifacts/browser-summary.txt
+      - name: Capture production log evidence after real requests
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "ROOT='$LIVE_ROOT' /usr/bin/php8.5 -r '\$dirs=[getenv(\"ROOT\").\"/storage/logs\",getenv(\"ROOT\").\"/logs\"]; foreach(\$dirs as \$d){foreach(glob(\$d.\"/*\")?:[] as \$f){if(is_file(\$f)){echo basename(\$f),\" size=\",filesize(\$f),\" mtime=\",filemtime(\$f),PHP_EOL;}}}'" \
+            | tee artifacts/log-files.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "ROOT='$LIVE_ROOT' /usr/bin/php8.5 -r '\$dirs=[getenv(\"ROOT\").\"/storage/logs\",getenv(\"ROOT\").\"/logs\"]; foreach(\$dirs as \$d){foreach(glob(\$d.\"/*\")?:[] as \$f){if(!is_file(\$f)||filesize(\$f)>50*1024*1024)continue; \$lines=@file(\$f,FILE_IGNORE_NEW_LINES); if(!is_array(\$lines))continue; foreach(array_slice(\$lines,-500) as \$line){if(preg_match(\"/(waste|departures|fatal|uncaught|exception)/i\",\$line))echo basename(\$f),\": \",\$line,PHP_EOL;}}}'" \
+            | tee artifacts/relevant-log-lines.txt
+      - name: Verify production DB unchanged after probe
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/waste_server_probe_${GITHUB_RUN_ID}.php"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' PLANEX_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5 '$REMOTE'" | tee artifacts/server-after.json
+          python3 - <<'PY'
+          import json
+          b=json.load(open('artifacts/server-before.json')); a=json.load(open('artifacts/server-after.json'))
+          assert b['active_tenants']==a['active_tenants'], 'tenant DB counts changed during read-only probe'
+          assert b['planex']['counts']==a['planex']['counts'], 'PLANEX Waste Trips counts changed during read-only probe'
+          print('WASTE_RECOVERY_DB_READ_ONLY=PASS')
+          PY
+      - name: Cleanup temporary QA sessions and probes
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          REMOTE_SESSION="/tmp/waste_qa_session_${GITHUB_RUN_ID}.php"
+          STATUS=0
+          for ENTRY in "owner|${QA_OWNER_SESSION_ID:-}" "senior|${QA_SENIOR_SESSION_ID:-}" "logist|${QA_LOGIST_SESSION_ID:-}"; do
+            IFS='|' read -r ROLE SID <<< "$ENTRY"
+            if [ -z "$SID" ]; then STATUS=1; continue; fi
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE_SESSION' delete '$SID'" 2>/dev/null || true)
+            echo "$ROLE=$OUT" >> artifacts/session-cleanup.txt
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME:-x}=${SID}" \
+              'https://plan-ex.ru/erpv2/company/trips/departures' || true)
+            echo "${ROLE}_old_sid_http=$HTTP" >> artifacts/session-cleanup.txt
+            [ "$HTTP" != '200' ] || STATUS=1
+          done
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "rm -f '/tmp/waste_qa_session_${GITHUB_RUN_ID}.php' '/tmp/waste_server_probe_${GITHUB_RUN_ID}.php'" || STATUS=1
+          rm -f "$HOME/.ssh/key"
+          [ "$STATUS" -eq 0 ] && echo 'WASTE_RECOVERY_QA_CLEANUP=PASS' | tee -a artifacts/session-cleanup.txt
+          exit "$STATUS"
+      - name: Upload production recovery evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-production-recovery-${{ env.EXPECTED_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
