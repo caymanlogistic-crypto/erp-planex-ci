@@ -14,6 +14,23 @@ on:
       - 'database/migrations-local/128_create_waste_trips.sql'
       - 'tests/waste_trip_regression_test.php'
       - '.github/workflows/waste_trips_regression.yml'
+      - 'docs/memory/critical_records.json'
+      - 'docs/memory/machine_ownership.json'
+  push:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Http/Controllers/Company/WasteTripController.php'
+      - 'app/Http/Routes/company_linear_trips.php'
+      - 'app/Service/WasteTripService.php'
+      - 'app/Service/WasteTripLegacyImportService.php'
+      - 'app/View/pages/company_waste_trip*.php'
+      - 'app/View/partials/company_waste_trip*.php'
+      - 'database/migrations-local/128_create_waste_trips.sql'
+      - 'tests/waste_trip_regression_test.php'
+      - '.github/workflows/waste_trips_regression.yml'
+      - 'docs/memory/critical_records.json'
+      - 'docs/memory/machine_ownership.json'
   workflow_dispatch:
 
 permissions:
@@ -37,6 +54,28 @@ jobs:
           set -euo pipefail
           echo "SOURCE_SHA=${SOURCE_SHA}"
           test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+
+      - name: Reject false-positive test and native PDO placeholder regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('tests/waste_trip_regression_test.php')
+          data = p.read_bytes()
+          if not data.startswith(b'<?php'):
+              raise SystemExit('waste_trip_regression_test.php must start with <?php')
+          if data.startswith(b'PD9waHA') or b"base64_decode(file_get_contents(__FILE__))" in data[:512]:
+              raise SystemExit('base64/wrapper regression test is forbidden')
+          service = Path('app/Service/WasteTripService.php').read_text()
+          if ':user_id, :role_code, :user_id, :role_code)' in service:
+              raise SystemExit('duplicate named placeholders are forbidden with native PDO prepares')
+          required = ':created_user_id, :created_role_code, :updated_user_id, :updated_role_code)'
+          if required not in service:
+              raise SystemExit('expected unique WasteTrip create actor placeholders not found')
+          print('WASTE_TRIP_TEST_EXECUTABLE_PREAMBLE=PASS')
+          print('WASTE_TRIP_NATIVE_PDO_PLACEHOLDERS=PASS')
+          PY
 
       - name: PHP syntax
         shell: bash
@@ -67,4 +106,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          php tests/waste_trip_regression_test.php
+          php tests/waste_trip_regression_test.php | tee /tmp/waste-trip-regression.out
+          for marker in \
+            'WASTE_TRIP_DOMAIN=PASS' \
+            'WASTE_TRIP_STATIC_SECURITY=PASS' \
+            'WASTE_TRIP_MYSQL=PASS' \
+            'WASTE_TRIP_CONCURRENCY=PASS'
+          do
+            grep -Fqx "$marker" /tmp/waste-trip-regression.out || {
+              echo "Required marker missing: $marker" >&2
+              exit 1
+            }
+          done

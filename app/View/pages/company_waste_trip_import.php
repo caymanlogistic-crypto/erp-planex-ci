@@ -36,7 +36,7 @@ $fmtDate = static fn($date): string => trim((string) $date) !== '' ? ui_date((st
       <div class="legacy-trip-head">
         <div>
           <h3 style="margin:0 0 6px">Legacy #<?= $legacyId ?> <?php if (!empty($candidate['is_imported'])): ?><span class="badge badge-ok">ERP #<?= (int) $candidate['erp_waste_trip_id'] ?></span><?php endif; ?></h3>
-          <div class="legacy-trip-meta"><span>Создан: <?= e($fmtDate($candidate['block_date'] ?? null)) ?></span><span>Статус: <?= e((string) ($candidate['status'] ?? '—')) ?><?= $mappedStatus ? ' → ' . e(WasteTripService::statusLabel((string) $mappedStatus)) : '' ?></span><span>Выгрузка: <?= e((string) ($candidate['unload_type'] ?? '—')) ?></span></div>
+          <div class="legacy-trip-meta"><span>Создан: <?= e($fmtDate($candidate['block_date'] ?? null)) ?></span><span>Статус: <?= e((string) ($candidate['status'] ?? '—')) ?><?= $mappedStatus ? ' → ' . e(WasteTripService::statusLabel((string) $mappedStatus)) : '' ?></span><span>Legacy выгрузка: <?= e((string) ($candidate['unload_type'] ?? '—')) ?></span></div>
         </div>
         <div><b><?= count($requestIds) ?></b> заявок · <?= e($fmtMass($candidate['legacy_mass_kg'] ?? 0)) ?></div>
       </div>
@@ -62,12 +62,14 @@ $fmtDate = static fn($date): string => trim((string) $date) !== '' ? ui_date((st
       <?php if ($mappedStatus === null): ?><div class="notice warn legacy-warning">BLOCKED: неизвестный legacy status «<?= e((string) ($candidate['status'] ?? '')) ?>».</div><?php endif; ?>
 
       <?php if (empty($candidate['is_imported']) && !empty($candidate['ready_for_mapping'])): ?>
+      <div class="notice warn legacy-warning">Legacy `OO/SKLAD` сохраняется как evidence и <b>не определяет ERP назначение автоматически</b>. Выберите назначение вручную.</div>
       <form method="post" action="<?= app_url('/company/trips/departures/import/' . $legacyId) ?>">
         <div class="legacy-map-grid">
           <div><label>ERP заказчик *</label><select name="client_id" required><option value="">— Выберите вручную —</option><?php foreach ($clients as $item): ?><option value="<?= (int) $item['id'] ?>"><?= e((string) $item['name']) ?></option><?php endforeach; ?></select></div>
           <div><label>ERP исполнитель<?= in_array($mappedStatus, [WasteTripService::STATUS_ASSIGNED, WasteTripService::STATUS_IN_PROGRESS, WasteTripService::STATUS_COMPLETED], true) ? ' *' : '' ?></label><select name="route_executor_id" <?= in_array($mappedStatus, [WasteTripService::STATUS_ASSIGNED, WasteTripService::STATUS_IN_PROGRESS, WasteTripService::STATUS_COMPLETED], true) ? 'required' : '' ?>><option value="">— Не назначен —</option><?php foreach ($routeExecutors as $item): ?><option value="<?= (int) $item['id'] ?>"><?= e(trim((string) ($item['contractor_name'] ?? '')) . ' · ' . trim((string) ($item['driver_name'] ?? ''))) ?></option><?php endforeach; ?></select></div>
           <div><label>ERP ответственный *</label><select name="responsible_user_id" required><option value="">— Выберите вручную —</option><?php foreach ($responsibleUsers as $item): ?><option value="<?= (int) $item['id'] ?>"><?= e((string) $item['full_name']) ?></option><?php endforeach; ?></select></div>
-          <?php if (($candidate['unload_type'] ?? '') === 'OO'): ?><div><label>ERP утилизатор *</label><select name="utilizer_id" required><option value="">— Выберите вручную —</option><?php foreach ($utilizers as $item): ?><option value="<?= (int) $item['id'] ?>"><?= e((string) ($item['short_name'] ?: $item['full_name'])) ?></option><?php endforeach; ?></select></div><?php else: ?><div><label>Назначение</label><input value="Склад (без создания warehouse ledger)" readonly></div><?php endif; ?>
+          <div><label>ERP назначение *</label><select name="destination_type" class="legacy-destination-select" required><option value="">— Выберите вручную —</option><option value="utilizer">Объект / утилизатор</option><option value="warehouse">Склад</option></select></div>
+          <div><label>ERP утилизатор</label><select name="utilizer_id" class="legacy-utilizer-select"><option value="">— Выберите, если назначение «утилизатор» —</option><?php foreach ($utilizers as $item): ?><option value="<?= (int) $item['id'] ?>"><?= e((string) ($item['short_name'] ?: $item['full_name'])) ?></option><?php endforeach; ?></select></div>
         </div>
         <div style="display:flex;justify-content:flex-end;margin-top:14px"><button type="submit" class="btn btn-primary" onclick="return confirm('Импортировать legacy рейс #<?= $legacyId ?>? Операция создаст immutable source identity.');">Импортировать</button></div>
       </form>
@@ -75,3 +77,9 @@ $fmtDate = static fn($date): string => trim((string) $date) !== '' ? ui_date((st
     </div>
   </div>
 <?php endforeach; ?>
+<script>
+document.querySelectorAll('.legacy-destination-select').forEach(function(select){
+  var sync=function(){var form=select.closest('form');if(!form)return;var utilizer=form.querySelector('.legacy-utilizer-select');if(!utilizer)return;var required=select.value==='utilizer';utilizer.required=required;if(select.value==='warehouse'){utilizer.value='';}};
+  select.addEventListener('change',sync);sync();
+});
+</script>

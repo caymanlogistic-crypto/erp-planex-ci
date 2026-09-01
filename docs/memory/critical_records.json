@@ -37,6 +37,17 @@
       "machine_ownership_id": "finance.matching"
     },
     {
+      "canonical_id": "operations.waste_trips",
+      "semantic_class": "IMPLEMENTATION",
+      "truth_status": "VERIFIED",
+      "criticality": "CRITICAL",
+      "verified_sha": "51071f41cc89d5feda1c4e5db8d64b1d14b2be84",
+      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33537044382",
+      "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "tests/waste_trip_regression_test.php", ".github/workflows/waste_trips_regression.yml"],
+      "navigation": "active",
+      "machine_ownership_id": "operations.waste_trips"
+    },
+    {
       "canonical_id": "test.control.erp_planex_ci",
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
