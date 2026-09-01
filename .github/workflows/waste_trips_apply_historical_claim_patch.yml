@@ -1,0 +1,41 @@
+name: Waste Trips Apply Historical Claim Patch
+
+on:
+  push:
+    branches:
+      - fix/waste-trips-historical-import-20260901
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'historical-claim-bootstrap'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/waste-trips-historical-import-20260901
+          fetch-depth: 0
+      - name: Apply guarded claim patch and preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/waste-trips-historical-import/apply_claim_patch.py
+          php -l app/Service/WasteTripService.php
+          php -l app/Service/WasteTripLegacyImportService.php
+          php -l tests/waste_trip_historical_import_contract_test.php
+          php -l tests/waste_trip_regression_test.php
+          php tests/waste_trip_historical_import_contract_test.php | tee /tmp/historical-claim.out
+          grep -Fqx 'WASTE_TRIP_HISTORICAL_IMPORT=PASS' /tmp/historical-claim.out
+          echo 'WASTE_HISTORICAL_CLAIM_PREFLIGHT=PASS'
+      - name: Commit claim isolation code
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/waste-trips-historical-import/apply_claim_patch.py
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add app/Service/WasteTripService.php app/Service/WasteTripLegacyImportService.php tests/waste_trip_historical_import_contract_test.php tests/waste_trip_regression_test.php
+          git commit -m 'fix(waste-trips): isolate historical claims from operations'
+          git push origin HEAD:fix/waste-trips-historical-import-20260901
