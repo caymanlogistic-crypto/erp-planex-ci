@@ -11,7 +11,7 @@ permissions:
 env:
   START_HEAD: 0e7fcf05b47cdbd124445dd4c15e8d33037942e0
   LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
-  LEGACY_SEARCH_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erp
+  LEGACY_SEARCH_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html
   DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
 
 jobs:
@@ -67,7 +67,7 @@ jobs:
           mkdir -p artifacts
           DEPLOYED="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
           echo "WASTE_LEGACY_DEPLOYED_SHA=$DEPLOYED" | tee artifacts/deployed.txt
-          LEGACY_ROOTS="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "find '$LEGACY_SEARCH_ROOT' -maxdepth 6 -type f -name 'flights.php' -print 2>/dev/null | while IFS= read -r f; do grep -q 'zayavki_ids' \"\$f\" || continue; d=\$(dirname \"\$f\"); [ -f \"\$d/config.php\" ] && printf '%s\\n' \"\$d\"; done | sort -u")"
+          LEGACY_ROOTS="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "find '$LEGACY_SEARCH_ROOT' -maxdepth 8 -type f -name 'flights.php' -print 2>/dev/null | while IFS= read -r f; do grep -q 'zayavki_ids' \"\$f\" || continue; grep -q 'Управление рейсами' \"\$f\" || continue; d=\$(dirname \"\$f\"); [ -f \"\$d/config.php\" ] && printf '%s\\n' \"\$d\"; done | sort -u")"
           ROOT_COUNT="$(printf '%s\n' "$LEGACY_ROOTS" | sed '/^$/d' | wc -l | tr -d ' ')"
           echo "WASTE_LEGACY_APP_ROOT_CANDIDATES=$ROOT_COUNT" | tee artifacts/legacy-root-discovery.txt
           test "$ROOT_COUNT" = "1"
