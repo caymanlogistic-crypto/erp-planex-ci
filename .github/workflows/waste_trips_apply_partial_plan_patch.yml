@@ -1,0 +1,39 @@
+name: Waste Trips Apply Partial Plan Patch
+
+on:
+  push:
+    branches:
+      - fix/waste-trips-partial-plan-normalization-20260901
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ github.event.head_commit.message == 'chore: bootstrap partial plan normalization' }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/waste-trips-partial-plan-normalization-20260901
+          fetch-depth: 0
+      - name: Apply guarded patch and preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 .github/waste-trips-partial-plan/apply_patch.py
+          php -l app/Service/WasteTripLegacyImportService.php
+          php -l tests/waste_trip_historical_import_contract_test.php
+          php -l tests/waste_trip_regression_test.php
+          php tests/waste_trip_historical_import_contract_test.php | tee /tmp/partial-contract.out
+          grep -Fqx 'WASTE_TRIP_HISTORICAL_IMPORT=PASS' /tmp/partial-contract.out
+          echo 'WASTE_PARTIAL_PLAN_BRANCH_PREFLIGHT=PASS'
+      - name: Commit implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add app/Service/WasteTripLegacyImportService.php tests/waste_trip_historical_import_contract_test.php tests/waste_trip_regression_test.php
+          git commit -m 'fix(waste-trips): normalize one-sided legacy plans safely'
+          git push origin HEAD:fix/waste-trips-partial-plan-normalization-20260901
