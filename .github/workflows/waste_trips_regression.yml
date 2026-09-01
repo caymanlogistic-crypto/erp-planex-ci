@@ -13,6 +13,7 @@ on:
       - 'app/View/partials/company_waste_trip*.php'
       - 'database/migrations-local/128_create_waste_trips.sql'
       - 'tests/waste_trip_regression_test.php'
+      - 'tests/waste_trip_historical_import_contract_test.php'
       - 'tests/waste_trip_owner_layout_contract_test.php'
       - '.github/workflows/waste_trips_regression.yml'
       - 'docs/memory/critical_records.json'
@@ -29,6 +30,7 @@ on:
       - 'app/View/partials/company_waste_trip*.php'
       - 'database/migrations-local/128_create_waste_trips.sql'
       - 'tests/waste_trip_regression_test.php'
+      - 'tests/waste_trip_historical_import_contract_test.php'
       - 'tests/waste_trip_owner_layout_contract_test.php'
       - '.github/workflows/waste_trips_regression.yml'
       - 'docs/memory/critical_records.json'
@@ -91,7 +93,15 @@ jobs:
           php -l app/View/partials/company_waste_trip_modal_view.php
           php -l app/View/partials/company_waste_trip_modal_edit.php
           php -l tests/waste_trip_regression_test.php
+          php -l tests/waste_trip_historical_import_contract_test.php
           php -l tests/waste_trip_owner_layout_contract_test.php
+
+      - name: Historical import contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/waste_trip_historical_import_contract_test.php | tee /tmp/waste-trip-historical-import.out
+          grep -Fqx 'WASTE_TRIP_HISTORICAL_IMPORT=PASS' /tmp/waste-trip-historical-import.out
 
       - name: Owner layout dependency contract
         shell: bash

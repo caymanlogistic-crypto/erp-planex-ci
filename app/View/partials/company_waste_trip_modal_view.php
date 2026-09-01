@@ -11,6 +11,9 @@ $executorParts = array_values(array_filter([
     trim((string) ($trip['executor_driver_names'] ?? '')),
     trim((string) ($trip['executor_vehicle_label'] ?? '')),
 ], static fn(string $v): bool => $v !== ''));
+$historicalExecutor = trim((string) ($trip['historical_executor_label'] ?? ''));
+$executorDisplay = $executorParts !== [] ? implode(' · ', $executorParts) : ($historicalExecutor !== '' ? 'Исторический: ' . $historicalExecutor : '—');
+$legacyPayload = is_array($trip['legacy_payload'] ?? null) ? $trip['legacy_payload'] : [];
 $destination = ($trip['destination_type'] ?? '') === 'warehouse'
     ? 'Склад'
     : trim((string) ($trip['utilizer_short_name'] ?? $trip['utilizer_full_name'] ?? 'Утилизатор'));
@@ -32,7 +35,7 @@ foreach (($trip['requests'] ?? []) as $request) {
       <tr><td>Статус</td><td><span class="<?= e(WasteTripService::statusBadgeClass((string) $trip['status'])) ?>"><?= e(WasteTripService::statusLabel((string) $trip['status'])) ?></span></td></tr>
       <tr><td>Заказчик</td><td><strong><?= e((string) ($trip['client_name'] ?? '—')) ?></strong></td></tr>
       <tr><td>Ответственный</td><td><?= e((string) ($trip['responsible_name'] ?? '—')) ?></td></tr>
-      <tr><td>Исполнитель</td><td><?= e($executorParts !== [] ? implode(' · ', $executorParts) : '—') ?></td></tr>
+      <tr><td>Исполнитель</td><td><?= e($executorDisplay) ?></td></tr>
       <tr><td>Назначение</td><td><?= e($destination !== '' ? $destination : '—') ?></td></tr>
       <tr><td>Плановая дата</td><td><?= e($planned) ?></td></tr>
       <tr><td>Фактическое начало</td><td><?= e($fmtDate($trip['actual_start_date'] ?? null)) ?></td></tr>
@@ -45,6 +48,7 @@ foreach (($trip['requests'] ?? []) as $request) {
         <tr><td>Legacy масса</td><td><?= e($fmtMass($trip['legacy_audit']['legacy_total_mass_kg'] ?? 0)) ?></td></tr>
         <tr><td>ERP snapshot при импорте</td><td><?= e($fmtMass($trip['legacy_audit']['snapshot_total_mass_kg'] ?? 0)) ?> · заявок <?= (int) ($trip['legacy_audit']['snapshot_request_count'] ?? 0) ?></td></tr>
         <tr><td>Расхождение массы</td><td><?= e(number_format((float) ($trip['legacy_audit']['mass_delta_kg'] ?? 0), 3, ',', ' ') . ' кг') ?></td></tr>
+        <?php if (trim((string) ($legacyPayload['route_type'] ?? '')) !== ''): ?><tr><td>Legacy маршрут</td><td><?= e((string) $legacyPayload['route_type']) ?><?php if (!empty($legacyPayload['source_warehouse_id'])): ?> · склад-источник #<?= (int) $legacyPayload['source_warehouse_id'] ?><?php endif; ?><?php if (!empty($legacyPayload['destination_warehouse_id'])): ?> · склад-назначение #<?= (int) $legacyPayload['destination_warehouse_id'] ?><?php endif; ?></td></tr><?php endif; ?>
         <?php if ($isFinanceRealm): ?>
           <tr><td>Legacy стоимость</td><td><?= $trip['legacy_audit']['legacy_cost'] !== null ? e(number_format((float) $trip['legacy_audit']['legacy_cost'], 2, ',', ' ') . ' ₽') : '—' ?></td></tr>
           <tr><td>Legacy условия оплаты</td><td><?= e((string) ($trip['legacy_audit']['legacy_payment_terms'] ?? '—')) ?></td></tr>

@@ -14,7 +14,11 @@ $executorLabel = static function (array $row): string {
         trim((string) ($row['executor_driver_names'] ?? '')),
         trim((string) ($row['executor_vehicle_label'] ?? '')),
     ], static fn(string $v): bool => $v !== ''));
-    return $parts !== [] ? implode(' · ', $parts) : '—';
+    if ($parts !== []) {
+        return implode(' · ', $parts);
+    }
+    $historical = trim((string) ($row['historical_executor_label'] ?? ''));
+    return $historical !== '' ? 'Исторический: ' . $historical : '—';
 };
 ?>
 

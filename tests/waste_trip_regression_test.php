@@ -294,6 +294,7 @@ namespace {
     sameValue(WasteTripLegacyImportService::mapLegacyStatus('found'), WasteTripService::STATUS_ASSIGNED, 'legacy found mapping');
     sameValue(WasteTripLegacyImportService::mapLegacyStatus('started'), WasteTripService::STATUS_IN_PROGRESS, 'legacy started mapping');
     sameValue(WasteTripLegacyImportService::mapLegacyStatus('completed'), WasteTripService::STATUS_COMPLETED, 'legacy completed mapping');
+    sameValue(WasteTripLegacyImportService::mapLegacyStatus('planned_route'), WasteTripService::STATUS_SEARCHING, 'legacy planned route mapping');
     sameValue(WasteTripLegacyImportService::mapLegacyStatus('mystery'), null, 'unknown legacy status blocks');
 
     $manualWarehouse = WasteTripLegacyImportService::resolveDestinationMapping('OO', ['destination_type' => 'warehouse']);
@@ -405,6 +406,29 @@ namespace {
         }, 'duplicate legacy identity must fail');
         sameValue((int) $pdo->query("SELECT COUNT(*) FROM waste_trips WHERE source_system='legacy_flights' AND legacy_flight_id=7002")->fetchColumn(), 1, 'legacy identity must remain unique');
         sameValue((int) $pdo->query("SELECT COUNT(*) FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE fr.zayavka_id='R104'")->fetchColumn(), 0, 'failed duplicate legacy create must not claim second request');
+
+        $historicalA = [
+            'source_system' => WasteTripLegacyImportService::SOURCE_SYSTEM,
+            'legacy_flight_id' => 7101,
+            'legacy_total_mass_kg' => 1000.0,
+            'legacy_cost' => null,
+            'legacy_payment_terms' => '',
+            'payload' => ['route_type' => 'generator_to_warehouse'],
+            'historical_claim_exempt' => true,
+        ];
+        $historicalB = $historicalA;
+        $historicalB['legacy_flight_id'] = 7102;
+        $historicalB['payload'] = ['route_type' => 'warehouse_to_utilizer'];
+        $historicalTripA = WasteTripService::create($pdo, baseInput(), ['R109'], ownerUser(), $historicalA);
+        $historicalTripB = WasteTripService::create($pdo, baseInput(), ['R109'], ownerUser(), $historicalB);
+        must($historicalTripB > $historicalTripA, 'same FEO request must be preservable across historical transport legs');
+        sameValue((int) $pdo->query("SELECT COUNT(*) FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE fr.zayavka_id='R109'")->fetchColumn(), 2, 'two historical links must be preserved');
+        $operationalAfterHistory = WasteTripService::create($pdo, baseInput(), ['R109'], ownerUser());
+        must($operationalAfterHistory > $historicalTripB, 'historical links must not reserve the operational claim');
+        mustThrow(static function () use ($pdo): void {
+            WasteTripService::create($pdo, baseInput(), ['R109'], ownerUser());
+        }, 'second operational claim must still fail after historical links');
+        sameValue((int) $pdo->query("SELECT COUNT(*) FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE fr.zayavka_id='R109' AND wt.status<>'cancelled' AND COALESCE(wt.source_system,'')<>'legacy_flights'")->fetchColumn(), 1, 'only one operational active claim allowed with historical duplicates');
 
         $tripCancel = WasteTripService::create($pdo, baseInput(), ['R108'], ownerUser());
         WasteTripService::cancel($pdo, $tripCancel, 1, 'test cancel', ownerUser());
