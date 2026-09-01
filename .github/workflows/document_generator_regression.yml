@@ -1,0 +1,83 @@
+name: Document Generator Behavioral Regression
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Service/DocumentGenerator*.php'
+      - 'app/Service/DocumentTemplateService.php'
+      - 'app/Service/FeoRequestInteractionService.php'
+      - 'app/Http/Controllers/Company/DocumentGeneratorController.php'
+      - 'app/View/pages/company_document_generator.php'
+      - 'resources/document-templates/**'
+      - 'tests/document_generator_regression_test.php'
+      - '.github/workflows/document_generator_regression.yml'
+  push:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Service/DocumentGenerator*.php'
+      - 'app/Service/DocumentTemplateService.php'
+      - 'app/Service/FeoRequestInteractionService.php'
+      - 'app/Http/Controllers/Company/DocumentGeneratorController.php'
+      - 'app/View/pages/company_document_generator.php'
+      - 'resources/document-templates/**'
+      - 'tests/document_generator_regression_test.php'
+      - '.github/workflows/document_generator_regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: document-generator-regression-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  behavioral-regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure PHP DOCX runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! php -r 'exit(class_exists("ZipArchive") ? 0 : 1);'; then
+            sudo apt-get update
+            sudo apt-get install -y php-zip
+          fi
+          php -r 'exit(class_exists("ZipArchive") ? 0 : 1);'
+          php -r 'exit(extension_loaded("pdo_mysql") ? 0 : 1);'
+
+      - name: Start isolated MySQL test runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+
+      - name: Run document generator behavioral regression
+        env:
+          PLANEX_DOCGEN_REQUIRE_RUNTIME: '1'
+          PLANEX_DOCGEN_ARTIFACT_DIR: artifacts/document-generator
+        run: |
+          set -euo pipefail
+          php -l tests/document_generator_regression_test.php
+          php tests/document_generator_regression_test.php
+
+      - name: Upload generated DOCX acceptance artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-generator-regression-${{ github.sha }}
+          path: artifacts/document-generator/
+          if-no-files-found: error
+          retention-days: 14
