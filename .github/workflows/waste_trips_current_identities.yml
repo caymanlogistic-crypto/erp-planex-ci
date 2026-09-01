@@ -1,0 +1,70 @@
+name: Waste Trips Current Identities
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-legacy-enrichment-20260901
+
+permissions:
+  contents: read
+
+env:
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+
+jobs:
+  inventory:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate read-only probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-current-identities.php
+          grep -Fq 'SET SESSION TRANSACTION READ ONLY' .github/waste-trips-current-identities.php
+          grep -Fq 'START TRANSACTION READ ONLY' .github/waste-trips-current-identities.php
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Inventory production identities
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          rs="/tmp/waste_current_id_${GITHUB_RUN_ID}.php"; rj="/tmp/waste_current_id_${GITHUB_RUN_ID}.json"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/waste-trips-current-identities.php "$SSH_USER@$SSH_HOST:$rs"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' OUT_JSON='$rj' /usr/bin/php8.5 '$rs'" | tee artifacts/summary.txt
+          grep -Fqx 'WASTE_CURRENT_IDENTITIES=PASS' artifacts/summary.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$rj" artifacts/current-identities.json
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/waste_current_id_${GITHUB_RUN_ID}.php' '/tmp/waste_current_id_${GITHUB_RUN_ID}.json'" || true
+          rm -f "$HOME/.ssh/key"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-current-identities
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
