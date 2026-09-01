@@ -1,0 +1,44 @@
+name: Waste Trips Patch Import INN Guard
+
+on:
+  push:
+    branches:
+      - ops/waste-trips-legacy-import-20260901
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.event.head_commit.message == 'ops: patch controlled import INN guard'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/waste-trips-legacy-import-20260901
+          fetch-depth: 0
+      - name: Patch strict numeric-string key comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('.github/waste-trips-controlled-import.php')
+          s=p.read_text()
+          old="if(array_keys($customerInns)!==['4714004270']) failImport('unexpected customer INN set '.json_encode(array_keys($customerInns),JSON_UNESCAPED_UNICODE));"
+          new="$customerInnList=array_map('strval',array_keys($customerInns)); sort($customerInnList,SORT_STRING); if($customerInnList!==['4714004270']) failImport('unexpected customer INN set '.json_encode($customerInnList,JSON_UNESCAPED_UNICODE));"
+          if s.count(old)!=1:
+              raise SystemExit(f'guard target count={s.count(old)}')
+          p.write_text(s.replace(old,new),encoding='utf-8')
+          PY
+          php -l .github/waste-trips-controlled-import.php
+          grep -Fq "customerInnList" .github/waste-trips-controlled-import.php
+      - name: Commit corrected harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add .github/waste-trips-controlled-import.php
+          git commit -m 'ops: correct controlled import numeric INN comparison'
+          git push origin HEAD:ops/waste-trips-legacy-import-20260901
