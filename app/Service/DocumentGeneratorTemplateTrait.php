@@ -118,7 +118,7 @@ trait DocumentGeneratorTemplateTrait
         $stmt = $pdo->prepare(
             'SELECT v.*,t.name template_name,t.document_type,t.status template_status,t.active_version_id
                FROM document_template_versions v
-               JOIN document_templates t ON v.template_id=t.id
+               JOIN document_templates t ON t.id=v.template_id
               WHERE v.template_id=?
               ORDER BY v.version_no DESC,v.id DESC'
         );
@@ -195,7 +195,7 @@ trait DocumentGeneratorTemplateTrait
                 $templateId = (int)$pdo->lastInsertId();
             }
 
-            $v = $pdo->prepare('SELECT COALESCE(MAX(version_no),0)+1 FROM document_template_versions WHERE template_id=?');
+            $v = $pdo->prepare('SELECT COALESCE(MAX(version_no,0)+1 FROM document_template_versions WHERE template_id=?');
             $v->execute([$templateId]);
             $versionNo = (int)$v->fetchColumn();
             $safeOriginal = DocumentService::safeDownloadName($originalName);
