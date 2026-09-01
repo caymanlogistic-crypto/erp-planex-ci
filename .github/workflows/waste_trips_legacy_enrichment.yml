@@ -1,0 +1,115 @@
+name: Waste Trips Legacy Enrichment
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-legacy-enrichment-20260901
+
+permissions:
+  contents: read
+
+env:
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  LEGACY_DB_NAME_HINT: spugovxsim_frega
+  LEGACY_DB_USER_HINT: spugovxsim_frega
+
+jobs:
+  enrich:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate read-only enrichment
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-legacy-enrichment.php
+          grep -Fq 'SET SESSION TRANSACTION READ ONLY' .github/waste-trips-legacy-enrichment.php
+          grep -Fq 'START TRANSACTION READ ONLY' .github/waste-trips-legacy-enrichment.php
+          echo 'WASTE_LEGACY_ENRICHMENT_STATIC=PASS'
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Find legacy config candidates
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_LIST="/tmp/waste_enrich_candidates_${GITHUB_RUN_ID}.txt"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "HOME_ROOT='/home/s/$SSH_USER' DB_HINT='$LEGACY_DB_NAME_HINT' USER_HINT='$LEGACY_DB_USER_HINT' OUT='$REMOTE_LIST' /bin/bash -s" <<'REMOTE'
+          set -euo pipefail
+          tmp="${OUT}.all"; : > "$tmp"; : > "$OUT"
+          find "$HOME_ROOT" -maxdepth 12 -type f \( -name 'config.php' -o -name 'database.php' -o -name 'db.php' -o -name '.env' -o -name 'flights.php' \) -size -512k -print 2>/dev/null > "$tmp"
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if [ "$(basename "$f")" = 'flights.php' ]; then d=$(dirname "$f"); for c in "$d/config.php" "$d/db.php" "$d/database.php" "$d/.env"; do [ -f "$c" ] && printf '%s\n' "$c" >> "$OUT"; done; fi
+            if grep -aFq "$DB_HINT" "$f" 2>/dev/null || grep -aFq "$USER_HINT" "$f" 2>/dev/null; then printf '%s\n' "$f" >> "$OUT"; fi
+          done < "$tmp"
+          sort -u -o "$OUT" "$OUT"; rm -f "$tmp"; test "$(wc -l < "$OUT")" -gt 0
+          REMOTE
+
+      - name: Run enrichment
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          REMOTE_SCRIPT="/tmp/waste_legacy_enrich_${GITHUB_RUN_ID}.php"
+          REMOTE_LIST="/tmp/waste_enrich_candidates_${GITHUB_RUN_ID}.txt"
+          REMOTE_JSON="/tmp/waste_legacy_enrich_${GITHUB_RUN_ID}.json"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/waste-trips-legacy-enrichment.php "$SSH_USER@$SSH_HOST:$REMOTE_SCRIPT"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' CANDIDATE_LIST='$REMOTE_LIST' OUT_JSON='$REMOTE_JSON' /usr/bin/php8.5 '$REMOTE_SCRIPT'" | tee artifacts/summary.txt
+          grep -Fqx 'WASTE_LEGACY_ENRICHMENT=PASS' artifacts/summary.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$REMOTE_JSON" artifacts/enrichment.json
+
+      - name: Validate evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          r=json.load(open('artifacts/enrichment.json',encoding='utf-8'))
+          assert len(r['legacy']['flights'])==75
+          assert len(r['legacy']['flight_columns'])>=2
+          print('WASTE_LEGACY_ENRICHMENT_EVIDENCE=PASS')
+          PY
+
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "rm -f '/tmp/waste_enrich_candidates_${GITHUB_RUN_ID}.txt' '/tmp/waste_legacy_enrich_${GITHUB_RUN_ID}.php' '/tmp/waste_legacy_enrich_${GITHUB_RUN_ID}.json'" || true
+          rm -f "$HOME/.ssh/key"
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-legacy-enrichment
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
