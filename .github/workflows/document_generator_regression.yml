@@ -12,6 +12,7 @@ on:
       - 'app/View/pages/company_document_generator.php'
       - 'resources/document-templates/**'
       - 'tests/document_generator_regression_test.php'
+      - 'tests/document_generator_regression_v2_test.php'
       - '.github/workflows/document_generator_regression.yml'
   push:
     branches:
@@ -24,6 +25,7 @@ on:
       - 'app/View/pages/company_document_generator.php'
       - 'resources/document-templates/**'
       - 'tests/document_generator_regression_test.php'
+      - 'tests/document_generator_regression_v2_test.php'
       - '.github/workflows/document_generator_regression.yml'
   workflow_dispatch:
 
@@ -89,6 +91,8 @@ jobs:
               printf("CANONICAL_INPUT=%s encoded=%d bytes=%d sha256=%s\n", $name, $encodedBytes, strlen($bytes), hash("sha256", $bytes));
             }
           '
+          test "$(sha256sum artifacts/document-generator/input_contract_vehicle_lease_crew_v1.docx | awk '{print $1}')" = "0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc"
+          test "$(sha256sum artifacts/document-generator/input_waybill_driver_assignment_v1.docx | awk '{print $1}')" = "5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab"
           for f in artifacts/document-generator/input_*.docx; do
             echo "ZIP_DIAGNOSTIC=$f"
             unzip -t "$f"
@@ -98,10 +102,26 @@ jobs:
         env:
           PLANEX_DOCGEN_REQUIRE_RUNTIME: '1'
           PLANEX_DOCGEN_ARTIFACT_DIR: artifacts/document-generator
+        shell: bash
         run: |
           set -euo pipefail
           php -l tests/document_generator_regression_test.php
-          php tests/document_generator_regression_test.php
+          php -l tests/document_generator_regression_v2_test.php
+          php tests/document_generator_regression_test.php | tee /tmp/document-generator-regression.log
+          for marker in \
+            DOCUMENT_GENERATOR_CANONICAL_WIRING=PASS \
+            DOCUMENT_GENERATOR_FEO_PARSER=PASS \
+            DOCUMENT_GENERATOR_CANONICAL_TEMPLATE_SHA=PASS \
+            DOCUMENT_GENERATOR_DOCX_SECURITY=PASS \
+            DOCUMENT_GENERATOR_ACCESS_ISOLATION=PASS \
+            DOCUMENT_GENERATOR_DATA_VALIDATION=PASS \
+            DOCUMENT_GENERATOR_CONTRACT_DOCX=PASS \
+            DOCUMENT_GENERATOR_WAYBILL_DOCX=PASS \
+            DOCUMENT_GENERATOR_HISTORY_SNAPSHOT=PASS \
+            DOCUMENT_GENERATOR_REGRESSION=PASS
+          do
+            grep -Fqx "$marker" /tmp/document-generator-regression.log
+          done
 
       - name: Upload generated DOCX acceptance artifacts
         if: always()
