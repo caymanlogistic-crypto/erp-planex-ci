@@ -161,7 +161,7 @@ jobs:
           ob_start();
           require $root . '/app/View/pages/company_waste_trips.php';
           $html = (string) ob_get_clean();
-          if (!str_contains($html, 'Перевозка отходов') || !str_contains($html, 'Новый рейс')) {
+          if (!str_contains($html, 'Перевозка отходов') || !str_contains($html, 'Создать рейс')) {
               throw new RuntimeException('Waste Trips production view render contract failed');
           }
 
