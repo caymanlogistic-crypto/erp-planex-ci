@@ -74,18 +74,24 @@ jobs:
               $parts = glob("resources/document-templates/{$name}.b64.part*") ?: [];
               sort($parts, SORT_STRING);
               if ($parts === []) { fwrite(STDERR, "missing parts: {$name}\n"); exit(1); }
-              $encoded = "";
-              foreach ($parts as $part) $encoded .= preg_replace("/\\s+/", "", (string) file_get_contents($part)) ?? "";
-              $bytes = base64_decode($encoded, true);
-              if (!is_string($bytes) || $bytes === "") { fwrite(STDERR, "decode failed: {$name}\n"); exit(1); }
+              $bytes = "";
+              $encodedBytes = 0;
+              foreach ($parts as $part) {
+                $encoded = preg_replace("/\\s+/", "", (string) file_get_contents($part)) ?? "";
+                $encodedBytes += strlen($encoded);
+                $decoded = base64_decode($encoded, true);
+                if (!is_string($decoded) || $decoded === "") { fwrite(STDERR, "part decode failed: {$part}\n"); exit(1); }
+                $bytes .= $decoded;
+              }
+              if ($bytes === "") { fwrite(STDERR, "empty materialization: {$name}\n"); exit(1); }
               $target = "artifacts/document-generator/input_{$name}";
               file_put_contents($target, $bytes);
-              printf("CANONICAL_INPUT=%s encoded=%d bytes=%d sha256=%s\n", $name, strlen($encoded), strlen($bytes), hash("sha256", $bytes));
+              printf("CANONICAL_INPUT=%s encoded=%d bytes=%d sha256=%s\n", $name, $encodedBytes, strlen($bytes), hash("sha256", $bytes));
             }
           '
           for f in artifacts/document-generator/input_*.docx; do
             echo "ZIP_DIAGNOSTIC=$f"
-            unzip -t "$f" || true
+            unzip -t "$f"
           done
 
       - name: Run document generator behavioral regression
