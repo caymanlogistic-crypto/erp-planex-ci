@@ -1,0 +1,70 @@
+name: Waste Trips Regression
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Http/Controllers/Company/WasteTripController.php'
+      - 'app/Http/Routes/company_linear_trips.php'
+      - 'app/Service/WasteTripService.php'
+      - 'app/Service/WasteTripLegacyImportService.php'
+      - 'app/View/pages/company_waste_trip*.php'
+      - 'app/View/partials/company_waste_trip*.php'
+      - 'database/migrations-local/128_create_waste_trips.sql'
+      - 'tests/waste_trip_regression_test.php'
+      - '.github/workflows/waste_trips_regression.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  waste-trips:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+
+      - name: Verify exact checked-out SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "SOURCE_SHA=${SOURCE_SHA}"
+          test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
+
+      - name: PHP syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l app/Http/Controllers/Company/WasteTripController.php
+          php -l app/Service/WasteTripService.php
+          php -l app/Service/WasteTripLegacyImportService.php
+          php -l app/View/pages/company_waste_trips.php
+          php -l app/View/pages/company_waste_trip_import.php
+          php -l app/View/partials/company_waste_trip_modal_view.php
+          php -l app/View/partials/company_waste_trip_modal_edit.php
+          php -l tests/waste_trip_regression_test.php
+
+      - name: Start isolated MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+
+      - name: Waste trip MySQL and concurrency regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/waste_trip_regression_test.php
