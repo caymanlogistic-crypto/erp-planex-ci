@@ -24,6 +24,7 @@ $config = require $root . '/bootstrap/app.php';
 require_once $root . '/app/Support/crypto_helper.php';
 require_once $root . '/app/Support/company_database.php';
 require_once $root . '/app/Support/http_runtime.php';
+require_once $root . '/app/View/components/view_formatters.php';
 require_once $root . '/app/Service/AccessControlService.php';
 require_once $root . '/app/Service/LinearRouteService.php';
 require_once $root . '/app/Service/WasteTripService.php';
