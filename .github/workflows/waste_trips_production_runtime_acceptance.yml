@@ -1,0 +1,179 @@
+name: Waste Trips Production Runtime Acceptance
+
+on:
+  push:
+    branches:
+      - chatgpt/waste-trips-runtime-acceptance-20260901
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waste-trips-production-runtime-acceptance
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: f03caf9850ddeb22c4f6b6e48ec7df62dded2cfc
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  runtime-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - name: Checkout probe branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate canonical and public auth guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+          code="$(curl -sS -o /tmp/departures_public.html -D /tmp/departures_headers.txt -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/company/trips/departures)"
+          test "$code" = 302
+          grep -Eqi '^location: .*/erpv2/login([?[:space:]]|$)' /tmp/departures_headers.txt
+          echo "WASTE_TRIPS_PUBLIC_AUTH_GUARD=PASS http=$code"
+
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Run read-only production runtime probe
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' LIVE_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5" <<'PHP' | tee runtime_probe.txt
+          <?php
+          declare(strict_types=1);
+
+          $root = rtrim((string) getenv('LIVE_ROOT'), '/');
+          $expectedSha = (string) getenv('EXPECTED_SHA');
+          $markerPath = (string) getenv('DEPLOY_MARKER');
+          if ($root === '' || !is_file($root . '/bootstrap/app.php') || !is_file($root . '/app/Service/WasteTripService.php')) {
+              throw new RuntimeException('production root or WasteTripService missing');
+          }
+          if (trim((string) file_get_contents($markerPath)) !== $expectedSha) {
+              throw new RuntimeException('deployed marker mismatch');
+          }
+
+          $config = require $root . '/bootstrap/app.php';
+          require_once $root . '/app/Support/crypto_helper.php';
+          require_once $root . '/app/Support/company_database.php';
+          require_once $root . '/app/Support/http_runtime.php';
+          require_once $root . '/app/Service/AccessControlService.php';
+          require_once $root . '/app/Service/LinearRouteService.php';
+          require_once $root . '/app/Service/WasteTripService.php';
+
+          $centralCfg = $config['database'];
+          $central = new PDO(
+              'mysql:host=' . $centralCfg['host'] . ';port=' . ($centralCfg['port'] ?? 3306) . ';dbname=' . $centralCfg['database'] . ';charset=utf8mb4',
+              $centralCfg['username'],
+              $centralCfg['password'],
+              [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false]
+          );
+
+          $stmt = $central->query("SELECT * FROM companies WHERE id=25 AND status='active' LIMIT 1");
+          $company = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+          if ($company === null) {
+              throw new RuntimeException('company 25 unavailable');
+          }
+          $tenantCfg = companyDatabaseConfig($config, $company);
+          $pdo = new PDO(
+              'mysql:host=' . $tenantCfg['host'] . ';port=' . ($tenantCfg['port'] ?? 3306) . ';dbname=' . $tenantCfg['database'] . ';charset=utf8mb4',
+              $tenantCfg['username'],
+              $tenantCfg['password'],
+              [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false]
+          );
+
+          if (!\App\Service\WasteTripService::schemaReady($pdo)) {
+              throw new RuntimeException('Waste Trips schemaReady=false');
+          }
+          $migration = $pdo->prepare('SELECT COUNT(*) FROM schema_migrations WHERE migration=?');
+          $migration->execute(['128_create_waste_trips.sql']);
+          if ((int) $migration->fetchColumn() !== 1) {
+              throw new RuntimeException('migration 128 journal missing');
+          }
+
+          $trips = \App\Service\WasteTripService::fetchTrips($pdo, []);
+          if (!is_array($trips)) {
+              throw new RuntimeException('fetchTrips did not return array');
+          }
+
+          $counts = [];
+          foreach (['clients','users','crews','feo_requests','feo_utilizers','waste_trips','waste_trip_requests','waste_trip_legacy_import_audits','waste_trip_audit_log'] as $table) {
+              $counts[$table] = (int) $pdo->query('SELECT COUNT(*) FROM `' . $table . '`')->fetchColumn();
+          }
+          foreach (['clients','users','crews','feo_requests','feo_utilizers'] as $required) {
+              if ($counts[$required] <= 0) {
+                  throw new RuntimeException($required . ' unexpectedly empty for company 25');
+              }
+          }
+          if ($counts['waste_trip_legacy_import_audits'] !== 0) {
+              throw new RuntimeException('legacy import audit rows already exist unexpectedly');
+          }
+
+          $placement = $pdo->query("SELECT zayavka_id FROM feo_placement_current WHERE zayavka_id IS NOT NULL AND zayavka_id<>'' ORDER BY zayavka_id LIMIT 1")->fetchColumn();
+          $previewState = 'SKIP_NO_CURRENT_PLACEMENT';
+          if (is_string($placement) && $placement !== '') {
+              $preview = \App\Service\WasteTripService::previewSelection($pdo, [$placement]);
+              if (!is_array($preview) || (int) ($preview['found_count'] ?? 0) !== 1 || ($preview['missing'] ?? []) !== []) {
+                  throw new RuntimeException('previewSelection failed on canonical current FEO request');
+              }
+              $previewState = 'PASS';
+          }
+
+          $_SESSION = [
+              'user_id' => (int) $pdo->query('SELECT id FROM users ORDER BY id LIMIT 1')->fetchColumn(),
+              'role_code' => 'company_owner',
+              'company_id' => 25,
+          ];
+          $_SERVER['REQUEST_METHOD'] = 'GET';
+          $_SERVER['REQUEST_URI'] = '/erpv2/company/trips/departures';
+          $_GET = [];
+
+          $pageTitle = 'Перевозка отходов';
+          $pageContext = 'Рейсы › Перевозка отходов';
+          $dbError = null;
+          $clients = [];
+          $routeExecutors = [];
+          $responsibleUsers = [];
+          $utilizers = [];
+          $formError = null;
+          $formSuccess = null;
+          $old = [];
+          ob_start();
+          require $root . '/app/View/pages/company_waste_trips.php';
+          $html = (string) ob_get_clean();
+          if (!str_contains($html, 'Перевозка отходов') || !str_contains($html, 'Новый рейс')) {
+              throw new RuntimeException('Waste Trips production view render contract failed');
+          }
+
+          echo 'WASTE_TRIPS_RUNTIME_SERVICE=PASS' . PHP_EOL;
+          echo 'WASTE_TRIPS_RUNTIME_VIEW=PASS' . PHP_EOL;
+          echo 'WASTE_TRIPS_RUNTIME_PREVIEW=' . $previewState . PHP_EOL;
+          echo 'WASTE_TRIPS_RUNTIME_COUNTS=' . json_encode($counts, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) . PHP_EOL;
+          echo 'WASTE_TRIPS_RUNTIME_ACCEPTANCE=PASS' . PHP_EOL;
+          PHP
+          grep -q '^WASTE_TRIPS_RUNTIME_ACCEPTANCE=PASS$' runtime_probe.txt
+
+      - name: Cleanup SSH key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/key"
