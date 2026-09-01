@@ -221,7 +221,7 @@ final class WasteTripService
                  (:client_id, :route_executor_id, :responsible_user_id, :destination_type, :utilizer_id, :status, :planned_start_mode,
                   :planned_start_date, :planned_start_date_from, :planned_start_date_to, :actual_start_date, :actual_end_date,
                   :comment, :cancellation_reason, :source_system, :legacy_flight_id,
-                  :user_id, :role_code, :user_id, :role_code)"
+                  :created_user_id, :created_role_code, :updated_user_id, :updated_role_code)"
             );
             $insert->execute([
                 ':client_id' => $data['client_id'],
@@ -240,8 +240,10 @@ final class WasteTripService
                 ':cancellation_reason' => $data['cancellation_reason'],
                 ':source_system' => $legacyEvidence['source_system'] ?? null,
                 ':legacy_flight_id' => $legacyEvidence['legacy_flight_id'] ?? null,
-                ':user_id' => (int) ($sessionUser['user_id'] ?? 0) ?: null,
-                ':role_code' => (string) ($sessionUser['role_code'] ?? ''),
+                ':created_user_id' => (int) ($sessionUser['user_id'] ?? 0) ?: null,
+                ':created_role_code' => (string) ($sessionUser['role_code'] ?? ''),
+                ':updated_user_id' => (int) ($sessionUser['user_id'] ?? 0) ?: null,
+                ':updated_role_code' => (string) ($sessionUser['role_code'] ?? ''),
             ]);
             $tripId = (int) $pdo->lastInsertId();
 
