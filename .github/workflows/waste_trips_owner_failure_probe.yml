@@ -1,0 +1,57 @@
+name: Waste Trips Owner Failure Probe
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-production-recovery-20260901
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_SHA: 0e7fcf05b47cdbd124445dd4c15e8d33037942e0
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+
+jobs:
+  owner-failure:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate exact canonical and syntax
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-recovery/owner_failure_probe.php
+          git fetch --no-tags origin +refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Execute read-only owner failure probe on production runtime
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          REMOTE="/tmp/waste_owner_failure_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-recovery/owner_failure_probe.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE'" | tee artifacts/owner-failure.json
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE'"
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-owner-failure-${{ env.EXPECTED_SHA }}
+          path: artifacts/
+          retention-days: 30
