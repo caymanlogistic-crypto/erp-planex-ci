@@ -1,0 +1,144 @@
+name: Waste Trips Legacy Reconciliation Final
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-legacy-reconciliation-final-20260901
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_DEPLOYED_SHA: 5fef24d617ca5f5a82b3614ba22fac3a6f2bc1ac
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
+  LEGACY_DB_NAME_HINT: spugovxsim_frega
+  LEGACY_DB_USER_HINT: spugovxsim_frega
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate reconciliation harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-legacy-final/legacy_reconcile.php
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('.github/waste-trips-legacy-final/legacy_reconcile.php').read_text(encoding='utf-8').lower()
+          forbidden=['insert into','update waste_','delete from','drop table','alter table','create table','replace into','truncate ']
+          for token in forbidden:
+              if token in s:
+                  raise SystemExit('reconciliation harness contains forbidden mutation token: '+token)
+          if 'set session transaction read only' not in s or 'start transaction read only' not in s:
+              raise SystemExit('read-only transaction guard missing')
+          print('WASTE_LEGACY_HARNESS_STATIC=PASS')
+          PY
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Locate server-side legacy DB config without reading secrets into logs
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          REMOTE_LIST="/tmp/waste_legacy_candidates_${GITHUB_RUN_ID}.txt"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "HOME_ROOT='/home/s/$SSH_USER' DB_HINT='$LEGACY_DB_NAME_HINT' USER_HINT='$LEGACY_DB_USER_HINT' OUT='$REMOTE_LIST' /bin/bash -s" <<'REMOTE'
+          set -euo pipefail
+          : > "$OUT"
+          find "$HOME_ROOT" -maxdepth 10 -type f \( -name '*.php' -o -name '*.inc' -o -name '*.env' -o -name '.env' \) -size -512k -print0 2>/dev/null \
+            | while IFS= read -r -d '' f; do
+                if grep -aFq "$DB_HINT" "$f" 2>/dev/null || grep -aFq "$USER_HINT" "$f" 2>/dev/null; then
+                  printf '%s\n' "$f" >> "$OUT"
+                fi
+              done
+          sort -u -o "$OUT" "$OUT"
+          count=$(wc -l < "$OUT" | tr -d ' ')
+          echo "WASTE_LEGACY_CONFIG_CANDIDATES=$count"
+          test "$count" -gt 0
+          REMOTE
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "wc -l < '$REMOTE_LIST' | tr -d ' '" | tee artifacts/candidate-count.txt
+
+      - name: Run full read-only legacy reconciliation
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_SCRIPT="/tmp/waste_legacy_reconcile_${GITHUB_RUN_ID}.php"
+          REMOTE_LIST="/tmp/waste_legacy_candidates_${GITHUB_RUN_ID}.txt"
+          REMOTE_JSON="/tmp/waste_legacy_reconciliation_${GITHUB_RUN_ID}.json"
+          REMOTE_CSV="/tmp/waste_legacy_reconciliation_${GITHUB_RUN_ID}.csv"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-legacy-final/legacy_reconcile.php "$SSH_USER@$SSH_HOST:$REMOTE_SCRIPT"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' CANDIDATE_LIST='$REMOTE_LIST' OUT_JSON='$REMOTE_JSON' OUT_CSV='$REMOTE_CSV' /usr/bin/php8.5 '$REMOTE_SCRIPT'" \
+            | tee artifacts/reconciliation-summary.txt
+          grep -Fqx 'WASTE_LEGACY_RECONCILIATION=PASS' artifacts/reconciliation-summary.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST:$REMOTE_JSON" artifacts/legacy-reconciliation.json
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST:$REMOTE_CSV" artifacts/legacy-reconciliation.csv
+
+      - name: Validate evidence and production read-only invariant
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          r=json.load(open('artifacts/legacy-reconciliation.json',encoding='utf-8'))
+          s=r['summary']
+          assert r['legacy']['database'] == 'spugovxsim_frega', r['legacy']['database']
+          assert r['legacy']['matching_unique_connections'] == 1
+          assert s['legacy_flights_total'] == s['already_imported'] + s['missing_in_erp']
+          for table,count in r['erp']['waste_counts'].items():
+              assert count == 0, f'production Waste Trips changed unexpectedly: {table}={count}'
+          assert len(r['flights']) == s['legacy_flights_total']
+          print('WASTE_LEGACY_EVIDENCE_CONSISTENCY=PASS')
+          print('WASTE_LEGACY_PRODUCTION_UNCHANGED=PASS')
+          print('WASTE_LEGACY_SUMMARY='+json.dumps(s,ensure_ascii=False,sort_keys=True))
+          PY
+
+      - name: Cleanup remote temporary reconciliation files
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "rm -f '/tmp/waste_legacy_candidates_${GITHUB_RUN_ID}.txt' '/tmp/waste_legacy_reconcile_${GITHUB_RUN_ID}.php' '/tmp/waste_legacy_reconciliation_${GITHUB_RUN_ID}.json' '/tmp/waste_legacy_reconciliation_${GITHUB_RUN_ID}.csv'" || true
+          rm -f "$HOME/.ssh/key"
+
+      - name: Upload reconciliation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-legacy-reconciliation-final
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
