@@ -1,0 +1,90 @@
+name: Waste Trips Legacy Reconciliation Probe
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-production-recovery-20260901
+
+permissions:
+  contents: read
+
+env:
+  START_HEAD: 0e7fcf05b47cdbd124445dd4c15e8d33037942e0
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  LEGACY_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erp
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  reconcile:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate reconciliation probe
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-recovery/legacy_reconcile.php
+          python3 - <<'PY'
+          s=open('.github/waste-trips-recovery/legacy_reconcile.php',encoding='utf-8').read().lower()
+          for banned in ['insert into','update ','delete from','drop table','alter table','create table','replace into','truncate ']:
+              assert banned not in s, banned
+          print('WASTE_LEGACY_READ_ONLY_STATIC=PASS')
+          PY
+          git fetch --no-tags origin +refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical
+          CURRENT_CANONICAL="$(git rev-parse refs/remotes/origin/canonical)"
+          git merge-base --is-ancestor "$START_HEAD" "$CURRENT_CANONICAL"
+          echo "WASTE_LEGACY_CURRENT_CANONICAL=$CURRENT_CANONICAL"
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Execute real legacy read-only reconciliation
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          DEPLOYED="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          echo "WASTE_LEGACY_DEPLOYED_SHA=$DEPLOYED" | tee artifacts/deployed.txt
+          REMOTE="/tmp/waste_legacy_reconcile_${GITHUB_RUN_ID}.php"
+          REMOTE_JSON="/tmp/waste_legacy_reconcile_${GITHUB_RUN_ID}.json"
+          REMOTE_CSV="/tmp/waste_legacy_reconcile_${GITHUB_RUN_ID}.csv"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-recovery/legacy_reconcile.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' LEGACY_ROOT='$LEGACY_ROOT' OUT_JSON='$REMOTE_JSON' OUT_CSV='$REMOTE_CSV' /usr/bin/php8.5 '$REMOTE'" | tee artifacts/summary.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$REMOTE_JSON" artifacts/reconciliation.json
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$REMOTE_CSV" artifacts/reconciliation.csv
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE' '$REMOTE_JSON' '$REMOTE_CSV'"
+      - name: Verify immutable identity and no production import happened
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          r=json.load(open('artifacts/reconciliation.json',encoding='utf-8'))
+          assert r['source_system']=='legacy_flights'
+          counts=r['erp']['waste_counts']
+          assert counts['waste_trips']==0
+          assert counts['waste_trip_requests']==0
+          assert counts['waste_trip_legacy_import_audits']==0
+          assert counts['waste_trip_audit_log']==0
+          assert r['summary']['already_imported']==0
+          assert r['summary']['missing_in_erp']==r['summary']['legacy_flights_total']
+          print('WASTE_LEGACY_NO_IMPORT=PASS')
+          PY
+      - name: Upload reconciliation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-legacy-reconciliation-${{ github.sha }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
