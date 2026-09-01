@@ -1,0 +1,58 @@
+# ERP PLANEX — Tenant Physical Schema — Other tenant domain — Part 3
+
+> GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
+
+**Schema fingerprint:** `a839e09922efd5a37e40b38d2298d46e3f87110e962be10e151acec54a552477`
+
+## `waste_trips`
+
+**Domain:** Other tenant domain  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `client_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `route_executor_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `responsible_user_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `destination_type` | `enum('utilizer','warehouse')` | NO | NULL | — | — |
+| `utilizer_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
+| `status` | `enum('searching_executor','executor_assigned','in_progress','completed','cancelled')` | NO | `searching_executor` | — | `MUL` |
+| `planned_start_mode` | `enum('exact','range','unspecified')` | NO | `unspecified` | — | — |
+| `planned_start_date` | `date` | YES | NULL | — | `MUL` |
+| `planned_start_date_from` | `date` | YES | NULL | — | — |
+| `planned_start_date_to` | `date` | YES | NULL | — | — |
+| `actual_start_date` | `date` | YES | NULL | — | — |
+| `actual_end_date` | `date` | YES | NULL | — | — |
+| `comment` | `varchar(500)` | YES | NULL | — | — |
+| `cancellation_reason` | `varchar(500)` | YES | NULL | — | — |
+| `cancelled_at` | `datetime` | YES | NULL | — | — |
+| `cancelled_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `cancelled_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `source_system` | `varchar(50)` | YES | NULL | — | `MUL` |
+| `legacy_flight_id` | `bigint unsigned` | YES | NULL | — | — |
+| `lock_version` | `int unsigned` | NO | `1` | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_waste_trips_client` (`client_id`, `id`)
+- **INDEX** `idx_waste_trips_dates` (`planned_start_date`, `planned_start_date_from`, `planned_start_date_to`)
+- **INDEX** `idx_waste_trips_executor` (`route_executor_id`, `id`)
+- **INDEX** `idx_waste_trips_responsible` (`responsible_user_id`, `id`)
+- **INDEX** `idx_waste_trips_status` (`status`, `id`)
+- **INDEX** `idx_waste_trips_utilizer` (`utilizer_id`, `id`)
+- **UNIQUE** `uk_waste_trip_legacy_identity` (`source_system`, `legacy_flight_id`)
+
+### Physical foreign keys
+
+- `fk_waste_trips_client`: (`client_id`) → `clients`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_waste_trips_executor`: (`route_executor_id`) → `crews`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_waste_trips_responsible`: (`responsible_user_id`) → `users`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_waste_trips_utilizer`: (`utilizer_id`) → `feo_utilizers`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT

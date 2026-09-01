@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `eb0ddc18af5f01040cd8fcfd49f067cef0d53e90730049600e4f72d69686b462`
+**Schema fingerprint:** `a839e09922efd5a37e40b38d2298d46e3f87110e962be10e151acec54a552477`
 
 ## Architecture overview
 
@@ -129,9 +129,17 @@ erDiagram
   T_feo_imports ||--o{ T_feo_requests : "fk_feo_requests_current_import"
   T_feo_utilizers ||--o{ T_feo_utilizer_aliases : "fk_feo_utilizer_alias_utilizer"
   T_feo_utilizers ||--o{ T_feo_utilizer_match_rules : "fk_feo_utilizer_rule_utilizer"
+  T_waste_trips ||--o{ T_waste_trip_audit_log : "fk_waste_trip_audit_trip"
+  T_waste_trips ||--o{ T_waste_trip_legacy_import_audits : "fk_waste_trip_legacy_audit_trip"
+  T_feo_requests ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_feo"
+  T_waste_trips ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_trip"
+  T_clients ||--o{ T_waste_trips : "fk_waste_trips_client"
+  T_crews ||--o{ T_waste_trips : "fk_waste_trips_executor"
+  T_users ||--o{ T_waste_trips : "fk_waste_trips_responsible"
+  T_feo_utilizers ||--o{ T_waste_trips : "fk_waste_trips_utilizer"
 ```
 
-Tables: `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`
+Tables: `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `waste_trip_audit_log`, `waste_trip_legacy_import_audits`, `waste_trip_requests`, `waste_trips`
 
 ## System / Migration metadata
 
