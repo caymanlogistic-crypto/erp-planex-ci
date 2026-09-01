@@ -14,6 +14,8 @@ on:
       - 'database/migrations-local/128_create_waste_trips.sql'
       - 'tests/waste_trip_regression_test.php'
       - '.github/workflows/waste_trips_regression.yml'
+      - 'docs/memory/critical_records.json'
+      - 'docs/memory/machine_ownership.json'
   push:
     branches:
       - chatgpt/production-stabilization-20260802
@@ -27,6 +29,8 @@ on:
       - 'database/migrations-local/128_create_waste_trips.sql'
       - 'tests/waste_trip_regression_test.php'
       - '.github/workflows/waste_trips_regression.yml'
+      - 'docs/memory/critical_records.json'
+      - 'docs/memory/machine_ownership.json'
   workflow_dispatch:
 
 permissions:
