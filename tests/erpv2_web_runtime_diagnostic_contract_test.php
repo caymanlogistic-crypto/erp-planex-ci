@@ -8,10 +8,12 @@ $yaml = (string) file_get_contents($path);
 foreach ([
     'qa/erpv2-web-runtime-diagnostic-20260902',
     'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
+    'SERVER_ROOT: /home/s/spugovxsim/planexp',
     'test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"',
     'ERPV2_SSH_PRIVATE_KEY',
     'ERPV2_SSH_KNOWN_HOSTS',
     'PROBE_NAME="_p07_runtime_${GITHUB_RUN_ID}.php"',
+    'REMOTE_PROBE="$SERVER_ROOT/${LIVE_DIR}/erpv2/public/$PROBE_NAME"',
     'PHP_VERSION=',
     'PHP_SAPI=',
     'OPCACHE_VALIDATE_TIMESTAMPS=',
@@ -28,6 +30,9 @@ foreach ([
     }
 }
 
+if (str_contains($yaml, 'REMOTE_PROBE="$HOME/planexp/')) {
+    throw new RuntimeException('Remote probe path must never be derived from GitHub runner $HOME.');
+}
 if (str_contains($yaml, 'mysql ') || str_contains($yaml, 'UPDATE ') || str_contains($yaml, 'INSERT ') || str_contains($yaml, 'DELETE FROM ')) {
     throw new RuntimeException('Web runtime diagnostic must not perform production business/DB writes.');
 }
