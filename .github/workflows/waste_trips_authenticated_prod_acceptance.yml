@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  EXPECTED_SHA: 0a72245c22164d0cfd88d5be45a5ff2327ee5d49
+  EXPECTED_SHA: 0559dd6ff2e165dc9aaf783945dfcd514e7aab5f
   LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
   DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
 
