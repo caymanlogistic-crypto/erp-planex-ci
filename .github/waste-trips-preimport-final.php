@@ -51,7 +51,8 @@ $users=$tenant->query("SELECT id,full_name,role_code FROM users WHERE status='ac
 if(count($users)!==1 || (int)$users[0]['id']!==1) throw new RuntimeException('responsible mapping mismatch');
 
 $partial=WasteTripLegacyImportService::resolveLegacyPlanning(['planned_start_date'=>null,'planned_start_date_from'=>'2026-05-26','planned_start_date_to'=>null]);
-if(($partial['mode']??null)!=='unspecified' || ($partial['exact']??'x')!==null || ($partial['from']??'x')!==null || ($partial['to']??'x')!==null || empty($partial['partial_range']) || ($partial['source_from']??null)!=='2026-05-26' || ($partial['source_to']??'x')!==null) throw new RuntimeException('deployed partial planning contract mismatch');
+foreach(['mode','exact','from','to','partial_range','source_from','source_to'] as $key){if(!array_key_exists($key,$partial))throw new RuntimeException('deployed partial planning missing key '.$key);}
+if($partial['mode']!=='unspecified' || $partial['exact']!==null || $partial['from']!==null || $partial['to']!==null || $partial['partial_range']!==true || $partial['source_from']!=='2026-05-26' || $partial['source_to']!==null) throw new RuntimeException('deployed partial planning contract mismatch');
 
 $service=(string)file_get_contents($root.'/app/Service/WasteTripService.php'); $legacy=(string)file_get_contents($root.'/app/Service/WasteTripLegacyImportService.php');
 foreach(["COALESCE(wt.source_system,'') <> 'legacy_flights'",'historical_claim_exempt','historical_executor_label','legacy_planning_normalization'] as $token){if(!str_contains($service.$legacy,$token))throw new RuntimeException('deployed historical contract missing: '.$token);}
