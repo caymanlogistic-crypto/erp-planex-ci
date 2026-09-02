@@ -17,6 +17,24 @@ if (WasteTripLegacyImportService::mapLegacyStatus('planned_route') !== WasteTrip
     $fail('planned_route must map to searching_executor for historical migration');
 }
 
+$partialPlan = WasteTripLegacyImportService::resolveLegacyPlanning([
+    'planned_start_date_from' => '2026-05-26',
+    'planned_start_date_to' => null,
+]);
+if ($partialPlan['mode'] !== 'unspecified' || $partialPlan['from'] !== null || $partialPlan['to'] !== null || !$partialPlan['partial_range']) {
+    $fail('one-sided legacy planned range must normalize to unspecified without inventing a boundary');
+}
+if ($partialPlan['source_from'] !== '2026-05-26' || $partialPlan['source_to'] !== null) {
+    $fail('one-sided legacy planned range source truth must remain available for immutable audit');
+}
+$completeRange = WasteTripLegacyImportService::resolveLegacyPlanning([
+    'planned_start_date_from' => '2026-05-26',
+    'planned_start_date_to' => '2026-05-28',
+]);
+if ($completeRange['mode'] !== 'range' || $completeRange['from'] !== '2026-05-26' || $completeRange['to'] !== '2026-05-28' || $completeRange['partial_range']) {
+    $fail('complete legacy planned range must remain a range');
+}
+
 $service = file_get_contents(__DIR__ . '/../app/Service/WasteTripService.php');
 $legacy = file_get_contents(__DIR__ . '/../app/Service/WasteTripLegacyImportService.php');
 if (!is_string($service) || !is_string($legacy)) {
@@ -28,6 +46,7 @@ foreach ([
     'historical_executor_unmapped',
     'historical_executor_label',
     'historical_claim_exempt',
+    'legacy_planning_normalization',
 ] as $needle) {
     if (!str_contains($service, $needle) && !str_contains($legacy, $needle)) {
         $fail('missing historical import contract token: ' . $needle);
