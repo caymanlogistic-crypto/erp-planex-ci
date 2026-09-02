@@ -8,33 +8,91 @@ permissions:
   contents: write
 
 jobs:
-  patch-feature-test:
+  patch-production-qa:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: chatgpt/feo-search-width-specificity-20260902
+          ref: qa/feo-search-canonical-ui-20260902
           fetch-depth: 0
-      - name: Patch exact costs width assertions only
+      - name: Patch final target and effective-width assertions
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('tests/feo_request_costs_regression_test.php')
+          p=Path('.github/workflows/feo_search_canonical_ui_production_qa_20260902.yml')
           s=p.read_text()
-          old1="$must(str_contains($view,'.feo-cost-search{width:1380px;min-width:320px;max-width:100%;resize:none;overflow:hidden}'),'cost search textarea desktop width must be tripled while remaining container-bounded');"
-          new1="$must(str_contains($view,'.feo-cost-toolbar .feo-cost-search{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden}'),'cost search textarea must override generic 200px toolbar width with effective 3x desktop width');"
-          old2="$must(str_contains($view,'.feo-cost-search{width:100%;min-width:0;max-width:100%}'),'cost search textarea must remain responsive without horizontal overflow');"
-          new2="$must(str_contains($view,'.feo-cost-toolbar .feo-cost-search{width:100%;min-width:0;max-width:100%}'),'cost search textarea must remain responsive without horizontal overflow');"
-          if s.count(old1)!=1 or s.count(old2)!=1:
-              raise SystemExit('expected width assertions not found exactly once')
-          p.write_text(s.replace(old1,new1).replace(old2,new2))
+          old_sha='TARGET_SHA: f6b980425ff1813051f758913149899b1675811f'
+          new_sha='TARGET_SHA: 93a054ab24d0ccdda0806c990a6f8eb5ffae32ed'
+          old_width="assert(m.width>=1200&&m.width<=1381,`${label}: desktop search width ${m.width} is not near 1380px`);"
+          new_width="assert(m.width>=590&&m.width<=610,`${label}: desktop search width ${m.width} is not near effective 600px`);"
+          old_metrics='''            async function metrics(selector){
+              return await page.locator(selector).evaluate(el=>({
+                tag:el.tagName,
+                rows:el.getAttribute('rows'),
+                width:el.getBoundingClientRect().width,
+                right:el.getBoundingClientRect().right,
+                viewport:document.documentElement.clientWidth,
+                scrollWidth:document.documentElement.scrollWidth,
+                value:el.value
+              }));
+            }'''
+          new_metrics='''            async function metrics(selector){
+              return await page.locator(selector).evaluate(el=>{
+                const rect=el.getBoundingClientRect();
+                const parent=el.parentElement?.getBoundingClientRect();
+                const card=el.closest('.table-card')?.getBoundingClientRect();
+                const app=document.querySelector('.app');
+                const appRect=app?.getBoundingClientRect();
+                return {
+                  tag:el.tagName,
+                  rows:el.getAttribute('rows'),
+                  width:rect.width,
+                  right:rect.right,
+                  parentWidth:parent?.width||0,
+                  cardRight:card?.right||0,
+                  viewport:document.documentElement.clientWidth,
+                  scrollWidth:document.documentElement.scrollWidth,
+                  appWidth:appRect?.width||0,
+                  appScrollWidth:app?.scrollWidth||0,
+                  value:el.value
+                };
+              });
+            }'''
+          old_narrow='''            async function assertNarrowNoOverflow(selector,label){
+              await page.setViewportSize({width:800,height:1000});
+              await page.waitForTimeout(150);
+              const m=await metrics(selector);
+              assert(m.width<=m.viewport+1,`${label}: narrow search width exceeds viewport`);
+              assert(m.right<=m.viewport+1,`${label}: narrow search right edge exceeds viewport`);
+              assert(m.scrollWidth<=m.viewport+1,`${label}: narrow horizontal page overflow ${m.scrollWidth}>${m.viewport}`);
+              await page.setViewportSize({width:1920,height:1080});
+              await page.waitForTimeout(150);
+              return m;
+            }'''
+          new_narrow='''            async function assertNarrowNoOverflow(selector,label){
+              await page.setViewportSize({width:800,height:1000});
+              await page.waitForTimeout(150);
+              const m=await metrics(selector);
+              assert(m.width<=m.parentWidth+1,`${label}: responsive search exceeds owning toolbar width ${m.width}>${m.parentWidth}`);
+              assert(m.right<=m.cardRight+1,`${label}: responsive search extends beyond owning table card`);
+              const shellWidth=Math.max(m.appWidth,m.appScrollWidth);
+              assert(m.scrollWidth<=shellWidth+1,`${label}: search adds horizontal overflow beyond ERP shell ${m.scrollWidth}>${shellWidth}`);
+              await page.setViewportSize({width:1920,height:1080});
+              await page.waitForTimeout(150);
+              return m;
+            }'''
+          for old,new,label in [(old_sha,new_sha,'target SHA'),(old_width,new_width,'desktop width'),(old_metrics,new_metrics,'metrics'),(old_narrow,new_narrow,'narrow overflow')]:
+              if s.count(old)!=1:
+                  raise SystemExit(f'{label} replacement count={s.count(old)}')
+              s=s.replace(old,new)
+          p.write_text(s)
           PY
           git diff --check
-          test "$(git diff --name-only)" = "tests/feo_request_costs_regression_test.php"
+          test "$(git diff --name-only)" = ".github/workflows/feo_search_canonical_ui_production_qa_20260902.yml"
           git config user.name planexerp
           git config user.email info@plan-ex.ru
-          git add tests/feo_request_costs_regression_test.php
-          git commit -m 'Protect effective FEO costs search width'
-          git push origin HEAD:chatgpt/feo-search-width-specificity-20260902
+          git add .github/workflows/feo_search_canonical_ui_production_qa_20260902.yml
+          git commit -m 'qa(feo): verify final canonical search UI on production'
+          git push origin HEAD:qa/feo-search-canonical-ui-20260902
