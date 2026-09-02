@@ -76,6 +76,18 @@ foreach ($controlledNeedles as $needle) {
         throw new RuntimeException('Missing controlled deploy artifact contract marker: ' . $needle);
     }
 }
+$quoteSafeRemoteSha = <<<'YAML'
+"sha256sum '$remote_engine'" | awk '{print $1}'
+YAML;
+if (!str_contains($controlled, $quoteSafeRemoteSha)) {
+    throw new RuntimeException('Remote P07 SHA must be parsed locally so bash -u cannot expand awk positional $1.');
+}
+$nestedRemoteAwk = <<<'YAML'
+"sha256sum '$remote_engine' | awk
+YAML;
+if (str_contains($controlled, $nestedRemoteAwk)) {
+    throw new RuntimeException('Remote P07 SHA command must not embed awk inside the quoted SSH command.');
+}
 if (str_contains($controlled, '$SERVER_ROOT/deploy/P07_deploy_erpv2.sh')) {
     throw new RuntimeException('Controlled deploy must execute the exact-SHA canonical P07 helper, not a persistent server copy.');
 }
