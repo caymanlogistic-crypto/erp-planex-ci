@@ -24,53 +24,34 @@ if [ ! -f "$artifact" ]; then
 fi
 
 ROOT=/home/s/spugovxsim/planexp
+PHP_BIN=/usr/bin/php8.5
 if [ "${PLANEX_P07_TEST_MODE:-0}" = '1' ]; then
   test_root="${PLANEX_P07_ROOT_OVERRIDE:-}"
   case "$test_root" in
     /tmp/*) ROOT="$test_root" ;;
     *) echo 'Test root override must be under /tmp.' >&2; exit 65 ;;
   esac
+  if [ -n "${PLANEX_P07_PHP_BIN:-}" ]; then
+    PHP_BIN="$PLANEX_P07_PHP_BIN"
+  fi
 elif [ -n "${PLANEX_P07_ROOT_OVERRIDE:-}" ] || [ -n "${PLANEX_P07_PHP_BIN:-}" ]; then
   echo 'P07 overrides are forbidden outside test mode.' >&2
   exit 65
 fi
 
-resolve_php_bin() {
-  local candidate resolved
-  local candidates=()
-  if [ "${PLANEX_P07_TEST_MODE:-0}" = '1' ] && [ -n "${PLANEX_P07_PHP_BIN:-}" ]; then
-    candidates=("$PLANEX_P07_PHP_BIN")
-  else
-    candidates=(
-      /opt/php/8.1/bin/php
-      /opt/php/8.2/bin/php
-      /opt/php/8.3/bin/php
-      /opt/php/8.4/bin/php
-      /opt/php/8.5/bin/php
-      php8.1 php8.2 php8.3 php8.4 php8.5 php
-    )
-  fi
-  for candidate in "${candidates[@]}"; do
-    if [[ "$candidate" == /* ]]; then
-      [ -x "$candidate" ] || continue
-      resolved="$candidate"
-    else
-      resolved="$(command -v "$candidate" 2>/dev/null || true)"
-      [ -n "$resolved" ] || continue
-    fi
-    if "$resolved" -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);' >/dev/null 2>&1; then
-      printf '%s\n' "$resolved"
-      return 0
-    fi
-  done
-  return 1
-}
-
-PHP_BIN="$(resolve_php_bin)" || {
-  echo 'No PHP CLI >= 8.1 available for P07 preflight.' >&2
+if [ ! -x "$PHP_BIN" ]; then
+  echo "Required ERPv2 PHP runtime missing or not executable: $PHP_BIN" >&2
+  exit 69
+fi
+php_version="$("$PHP_BIN" -r 'echo PHP_VERSION;' 2>/dev/null)" || {
+  echo "Unable to execute ERPv2 PHP runtime: $PHP_BIN" >&2
   exit 69
 }
-printf 'P07_PHP_BIN=%s version=%s\n' "$PHP_BIN" "$("$PHP_BIN" -r 'echo PHP_VERSION;')"
+case "$php_version" in
+  8.5.*) ;;
+  *) echo "Required ERPv2 PHP 8.5 runtime, got: $php_version ($PHP_BIN)" >&2; exit 69 ;;
+esac
+printf 'P07_PHP_BIN=%s version=%s\n' "$PHP_BIN" "$php_version"
 
 LIVE="$ROOT/public_html/erpv2"
 DEPLOY="$ROOT/deploy"
