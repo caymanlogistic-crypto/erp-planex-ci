@@ -128,10 +128,16 @@ final class WasteTripLegacyImportService
             throw new RuntimeException('Для этого legacy-статуса требуется вручную выбрать ERP-исполнителя либо явно разрешить сохранение исторического исполнителя без canonical crew.');
         }
 
-        $plannedExact = self::legacyDate($legacy['planned_start_date'] ?? null);
-        $plannedFrom = self::legacyDate($legacy['planned_start_date_from'] ?? null);
-        $plannedTo = self::legacyDate($legacy['planned_start_date_to'] ?? null);
-        $plannedMode = $plannedExact !== null ? 'exact' : (($plannedFrom !== null && $plannedTo !== null) ? 'range' : 'unspecified');
+        $planning = self::resolveLegacyPlanning($legacy);
+        $legacyPayload = self::sanitizeLegacyPayload($legacy);
+        if ($planning['partial_range']) {
+            $legacyPayload['legacy_planning_normalization'] = [
+                'reason' => 'partial_range_not_representable',
+                'erp_mode' => 'unspecified',
+                'source_from' => $planning['source_from'],
+                'source_to' => $planning['source_to'],
+            ];
+        }
 
         $input = [
             'client_id' => (int) ($mapping['client_id'] ?? 0),
@@ -140,10 +146,10 @@ final class WasteTripLegacyImportService
             'destination_type' => $destination['destination_type'],
             'utilizer_id' => $destination['utilizer_id'],
             'status' => $status,
-            'planned_start_mode' => $plannedMode,
-            'planned_start_date' => $plannedExact,
-            'planned_start_date_from' => $plannedFrom,
-            'planned_start_date_to' => $plannedTo,
+            'planned_start_mode' => $planning['mode'],
+            'planned_start_date' => $planning['exact'],
+            'planned_start_date_from' => $planning['from'],
+            'planned_start_date_to' => $planning['to'],
             'actual_start_date' => self::legacyDate($legacy['actual_start_date'] ?? null),
             'actual_end_date' => self::legacyDate($legacy['actual_end_date'] ?? null),
             'comment' => (string) ($legacy['comment'] ?? ''),
@@ -156,12 +162,52 @@ final class WasteTripLegacyImportService
             'legacy_total_mass_kg' => self::legacyMassKg($legacy['total_mass_tonn'] ?? null),
             'legacy_cost' => self::nullableMoney($legacy['cost'] ?? null),
             'legacy_payment_terms' => (string) ($legacy['payment_terms'] ?? ''),
-            'payload' => self::sanitizeLegacyPayload($legacy),
+            'payload' => $legacyPayload,
             'allow_unmapped_historical_executor' => $allowHistoricalUnmappedExecutor,
             'historical_claim_exempt' => true,
         ];
 
         return WasteTripService::create($tenantPdo, $input, $requestIds, $sessionUser, $evidence);
+    }
+
+    public static function resolveLegacyPlanning(array $legacy): array
+    {
+        $exact = self::legacyDate($legacy['planned_start_date'] ?? null);
+        $from = self::legacyDate($legacy['planned_start_date_from'] ?? null);
+        $to = self::legacyDate($legacy['planned_start_date_to'] ?? null);
+
+        if ($exact !== null) {
+            return [
+                'mode' => 'exact',
+                'exact' => $exact,
+                'from' => null,
+                'to' => null,
+                'partial_range' => false,
+                'source_from' => $from,
+                'source_to' => $to,
+            ];
+        }
+        if ($from !== null && $to !== null) {
+            return [
+                'mode' => 'range',
+                'exact' => null,
+                'from' => $from,
+                'to' => $to,
+                'partial_range' => false,
+                'source_from' => $from,
+                'source_to' => $to,
+            ];
+        }
+
+        return [
+            'mode' => 'unspecified',
+            'exact' => null,
+            'from' => null,
+            'to' => null,
+            'partial_range' => ($from !== null || $to !== null),
+            'source_from' => $from,
+            'source_to' => $to,
+        ];
     }
 
     public static function mapLegacyStatus(string $status): ?string

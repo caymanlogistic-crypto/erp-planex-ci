@@ -296,6 +296,12 @@ namespace {
     sameValue(WasteTripLegacyImportService::mapLegacyStatus('completed'), WasteTripService::STATUS_COMPLETED, 'legacy completed mapping');
     sameValue(WasteTripLegacyImportService::mapLegacyStatus('planned_route'), WasteTripService::STATUS_SEARCHING, 'legacy planned route mapping');
     sameValue(WasteTripLegacyImportService::mapLegacyStatus('mystery'), null, 'unknown legacy status blocks');
+    $partialPlan = WasteTripLegacyImportService::resolveLegacyPlanning(['planned_start_date_from' => '2026-05-26']);
+    sameValue($partialPlan['mode'], 'unspecified', 'partial legacy planned range must normalize to unspecified');
+    sameValue($partialPlan['from'], null, 'partial legacy planned range must not leak an ERP lower bound');
+    sameValue($partialPlan['to'], null, 'partial legacy planned range must not invent an ERP upper bound');
+    sameValue($partialPlan['source_from'], '2026-05-26', 'partial legacy source lower bound must remain available for audit');
+    sameValue($partialPlan['partial_range'], true, 'partial legacy planned range must be marked');
 
     $manualWarehouse = WasteTripLegacyImportService::resolveDestinationMapping('OO', ['destination_type' => 'warehouse']);
     sameValue($manualWarehouse, ['destination_type' => 'warehouse', 'utilizer_id' => null], 'OO must allow explicit warehouse mapping');
@@ -348,6 +354,25 @@ namespace {
         $legacyPdoB = connectDb($cfg, $legacyB);
         createLegacyFixture($legacyPdoA, 'R106');
         createLegacyFixture($legacyPdoB, 'R107');
+        $legacyPdoA->exec("INSERT INTO flights (id,block_date,zayavki_ids,zayavki_count,total_mass_tonn,unload_type,status,planned_start_date_from,actual_start_date,actual_end_date,comment) VALUES (9002,NOW(),'R102',1,1.000,'OO','completed','2026-05-26','2026-05-26','2026-05-28','partial plan')");
+        $partialLegacyTrip = WasteTripLegacyImportService::import($legacyPdoA, $pdo, 9002, [
+            'client_id' => 1,
+            'route_executor_id' => null,
+            'responsible_user_id' => 1,
+            'destination_type' => 'warehouse',
+            'utilizer_id' => null,
+            'allow_unmapped_historical_executor' => true,
+        ], ownerUser());
+        $partialTripRow = $pdo->query("SELECT planned_start_mode,planned_start_date,planned_start_date_from,planned_start_date_to FROM waste_trips WHERE id={$partialLegacyTrip}")->fetch();
+        sameValue((string) $partialTripRow['planned_start_mode'], 'unspecified', 'partial legacy planned range must persist as unspecified');
+        sameValue($partialTripRow['planned_start_date'], null, 'partial legacy planned exact must be null');
+        sameValue($partialTripRow['planned_start_date_from'], null, 'partial legacy ERP from must be null');
+        sameValue($partialTripRow['planned_start_date_to'], null, 'partial legacy ERP to must be null');
+        $partialAudit = $pdo->query("SELECT legacy_payload_json FROM waste_trip_legacy_import_audits WHERE waste_trip_id={$partialLegacyTrip}")->fetch();
+        $partialPayload = json_decode((string) $partialAudit['legacy_payload_json'], true, 512, JSON_THROW_ON_ERROR);
+        sameValue((string) ($partialPayload['planned_start_date_from'] ?? ''), '2026-05-26', 'partial legacy source from must remain in audit payload');
+        sameValue((string) ($partialPayload['legacy_planning_normalization']['reason'] ?? ''), 'partial_range_not_representable', 'partial legacy normalization reason must be audited');
+        sameValue((string) ($partialPayload['legacy_planning_normalization']['erp_mode'] ?? ''), 'unspecified', 'partial legacy normalization ERP mode must be audited');
 
         $tripSnapshot = WasteTripService::create($pdo, baseInput(), ['R100'], ownerUser());
         $snapshot = (float) $pdo->query("SELECT snapshot_mass_kg FROM waste_trip_requests WHERE waste_trip_id={$tripSnapshot}")->fetchColumn();
