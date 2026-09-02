@@ -73,9 +73,12 @@ jobs:
           echo 'OPCACHE_REVALIDATE_FREQ=', ini_get('opcache.revalidate_freq'), PHP_EOL;
           echo 'OPCACHE_RESET=', (function_exists('opcache_reset') && opcache_reset() ? '1' : '0'), PHP_EOL;
           PHP
+          chmod 0644 "$LOCAL_PROBE"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$LOCAL_PROBE" "$SSH_USER@$SSH_HOST:$REMOTE_PROBE"
           rm -f "$LOCAL_PROBE"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "chmod 0644 '$REMOTE_PROBE' && stat -c 'PROBE_MODE=%a PROBE_OWNER=%U:%G PROBE_PATH=%n' '$REMOTE_PROBE'"
 
           PROBE_BODY="$(mktemp)"
           PROBE_HTTP="$(curl -sS -o "$PROBE_BODY" -w '%{http_code}' --max-time 30 "https://plan-ex.ru/erpv2/${PROBE_NAME}?token=${TOKEN}" || printf '000')"
@@ -85,13 +88,34 @@ jobs:
           WEB_SAPI="$(sed -n 's/^PHP_SAPI=//p' "$PROBE_BODY" | head -n1)"
           OPCACHE_RESET="$(sed -n 's/^OPCACHE_RESET=//p' "$PROBE_BODY" | head -n1)"
           rm -f "$PROBE_BODY"
-          cleanup
-          trap - EXIT
 
           LOGIN_HTTP="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login || printf '000')"
           echo "LOGIN_HTTP_AFTER_WEB_OPCACHE_RESET=$LOGIN_HTTP"
+
+          if [ "$PROBE_HTTP" != 200 ] || [ "$LOGIN_HTTP" != 200 ]; then
+            echo '::group::ERPv2 bounded web-server diagnostic'
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "SERVER_ROOT='$SERVER_ROOT' LIVE_DIR='$LIVE_DIR' PROBE_NAME='$PROBE_NAME' bash -se" <<'REMOTE'
+          set +e
+          LIVE="$SERVER_ROOT/$LIVE_DIR/erpv2"
+          echo 'ERPV2_WEB_SERVER_DIAGNOSTIC_BEGIN'
+          stat -c 'PATH_MODE=%a PATH_OWNER=%U:%G PATH=%n' \
+            "$SERVER_ROOT/$LIVE_DIR" "$LIVE" "$LIVE/public" "$LIVE/public/index.php" "$LIVE/public/$PROBE_NAME" 2>/dev/null || true
+          for htaccess in "$SERVER_ROOT/$LIVE_DIR/.htaccess" "$LIVE/.htaccess" "$LIVE/public/.htaccess"; do
+            if [ -r "$htaccess" ]; then
+              printf 'HTACCESS=%s\n' "$htaccess"
+              grep -Ein 'php|handler|cgi|fcgi|rewrite|error|index|options|require|allow|deny' "$htaccess" 2>/dev/null | head -n 80 || true
+            fi
+          done
+          echo 'ERPV2_WEB_SERVER_DIAGNOSTIC_END'
+          REMOTE
+            echo '::endgroup::'
+          fi
+
           printf 'probe_http=%s\nweb_version=%s\nweb_sapi=%s\nopcache_reset=%s\nlogin_http=%s\n' \
             "$PROBE_HTTP" "$WEB_VERSION" "$WEB_SAPI" "$OPCACHE_RESET" "$LOGIN_HTTP" >> "$GITHUB_OUTPUT"
+          cleanup
+          trap - EXIT
 
           test "$PROBE_HTTP" = 200
           case "$WEB_VERSION" in 8.5.*) ;; *) echo "ERPv2 web runtime is not PHP 8.5: $WEB_VERSION" >&2; exit 1 ;; esac
