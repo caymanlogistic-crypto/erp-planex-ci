@@ -61,10 +61,12 @@ async function registryDom(page) {
     const table = document.querySelector('table.waste-trip-table');
     const found = document.querySelector('.found-label');
     const main = document.querySelector('main.content');
+    const emptyStates = [...document.querySelectorAll('.empty-state')];
     return {
       titleText: (title?.textContent || '').trim(),
       titleVisible: visible(title),
-      emptyStateCount: document.querySelectorAll('.empty-state').length,
+      emptyStateCount: emptyStates.filter(visible).length,
+      emptyStateTotalCount: emptyStates.length,
       tableVisible: visible(table),
       rowCount: table ? table.querySelectorAll('tbody tr').length : 0,
       foundText: (found?.textContent || '').replace(/\s+/g, ' ').trim(),
@@ -202,7 +204,7 @@ async function runScenario(browser, role, sid, viewport) {
     const dom = await registryDom(page);
     result.registry = dom;
     ensure(dom.titleVisible && dom.titleText === 'Перевозка отходов', `title not visible/correct: ${dom.titleText}`);
-    ensure(dom.emptyStateCount === 0, `empty-state present: count=${dom.emptyStateCount}`);
+    ensure(dom.emptyStateCount === 0, `visible empty-state present: count=${dom.emptyStateCount} totalHiddenOrVisible=${dom.emptyStateTotalCount}`);
     ensure(dom.tableVisible, 'Waste Trips registry table not visible');
     ensure(dom.rowCount === 75, `registry row count must be 75, got ${dom.rowCount}`);
     ensure(/^Найдено:\s*75\s+рейсов$/u.test(dom.foundText), `found label mismatch: ${dom.foundText}`);
@@ -220,6 +222,7 @@ async function runScenario(browser, role, sid, viewport) {
     const finalDom = await registryDom(page);
     ensure(finalDom.rowCount === 75, `registry changed during modal checks: ${finalDom.rowCount}`);
     ensure(/^Найдено:\s*75\s+рейсов$/u.test(finalDom.foundText), `found label changed: ${finalDom.foundText}`);
+    ensure(finalDom.emptyStateCount === 0, `visible empty-state appeared after modal checks: ${finalDom.emptyStateCount}`);
     ensure(finalDom.horizontalOverflow === false, 'horizontal overflow after modal checks');
     ensure(finalDom.openOverlayCount === 0, `popup remained open after checks: ${finalDom.openOverlayCount}`);
 
@@ -272,7 +275,7 @@ async function runScenario(browser, role, sid, viewport) {
   fs.writeFileSync('artifacts/browser-results.json', JSON.stringify(summary, null, 2), 'utf8');
 
   for (const r of results) {
-    console.log(`WASTE_AUTH_BROWSER role=${r.role} viewport=${r.viewport.width}x${r.viewport.height} pass=${r.passed} http=${r.httpStatus} rows=${r.registry?.rowCount ?? 'NA'} found=${JSON.stringify(r.registry?.foundText ?? '')} consoleErrors=${r.consoleErrors.length} pageErrors=${r.pageErrors.length} requestFailures=${r.requestFailures.length} badResponses=${r.badResponses.length} nonReadRequests=${r.nonReadRequests.length} overflow=${r.registry?.horizontalOverflow ?? 'NA'}`);
+    console.log(`WASTE_AUTH_BROWSER role=${r.role} viewport=${r.viewport.width}x${r.viewport.height} pass=${r.passed} http=${r.httpStatus} rows=${r.registry?.rowCount ?? 'NA'} found=${JSON.stringify(r.registry?.foundText ?? '')} visibleEmpty=${r.registry?.emptyStateCount ?? 'NA'} consoleErrors=${r.consoleErrors.length} pageErrors=${r.pageErrors.length} requestFailures=${r.requestFailures.length} badResponses=${r.badResponses.length} nonReadRequests=${r.nonReadRequests.length} overflow=${r.registry?.horizontalOverflow ?? 'NA'}`);
     for (const t of r.importedTrips) {
       console.log(`WASTE_AUTH_MODAL role=${r.role} viewport=${r.viewport.width} legacy=${t.legacyFlightId} current=${t.currentTripId} http=${t.httpStatus} popupStack=${t.snapshot.openCount} source=${JSON.stringify(t.snapshot.fields['Источник'] || '')} executor=${JSON.stringify(t.snapshot.fields['Исполнитель'] || '')}`);
     }
