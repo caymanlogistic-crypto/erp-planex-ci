@@ -36,14 +36,14 @@ $ok(
     && preg_match('/<input\b[^>]*\bdata-placement-block-search\b[^>]*>/i', $view) === 0
 );
 $ok(
-    'map-placement search desktop width is tripled and container bounded',
+    'map-placement search desktop width overrides generic 200px toolbar search and is tripled',
     str_contains($view, '.feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0}')
-    && str_contains($view, '.feo-placement-block-search-input{width:1380px;min-width:320px;max-width:100%;resize:none;overflow:hidden}')
+    && str_contains($view, '.feo-placement-toolbar .feo-placement-block-search-input{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden}')
 );
 $ok(
     'map-placement search remains responsive without page overflow',
     str_contains($view, '.feo-placement-toolbar-actions{width:100%}')
-    && str_contains($view, '.feo-placement-block-search-input{width:100%;min-width:0;max-width:100%}')
+    && str_contains($view, '.feo-placement-toolbar .feo-placement-block-search-input{width:100%;min-width:0;max-width:100%}')
 );
 $ok(
     'map-placement page owns the placement script instead of loading it globally',

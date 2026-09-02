@@ -88,8 +88,8 @@ $must(str_contains($view,'data-cost-page-ready'),'cost screen ready marker must 
 $must(str_contains($view,'<textarea rows="1" class="toolbar-search feo-cost-search" data-cost-search'),'cost search control must be multiline-safe textarea rendered as one row');
 $must(!str_contains($view,'<input type="text" class="toolbar-search feo-cost-search" data-cost-search'),'cost search must no longer use single-line input control');
 $must(str_contains($view,'.feo-cost-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0}'),'cost toolbar actions must remain bounded by the page container');
-$must(str_contains($view,'.feo-cost-search{width:1380px;min-width:320px;max-width:100%;resize:none;overflow:hidden}'),'cost search textarea desktop width must be tripled while remaining container-bounded');
-$must(str_contains($view,'.feo-cost-search{width:100%;min-width:0;max-width:100%}'),'cost search textarea must remain responsive without horizontal overflow');
+$must(str_contains($view,'.feo-cost-toolbar .feo-cost-search{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden}'),'cost search textarea must override generic 200px toolbar width with effective 3x desktop width');
+$must(str_contains($view,'.feo-cost-toolbar .feo-cost-search{width:100%;min-width:0;max-width:100%}'),'cost search textarea must remain responsive without horizontal overflow');
 $must(str_contains($view,'id="feo-cost-create-modal" class="modal-overlay"'),'create UI must use system modal overlay');
 $must(str_contains($view,'id="feo-cost-detail-modal" class="modal-overlay"'),'detail/edit UI must use system modal overlay');
 $must(str_contains($view,'id="feo-cost-confirm-modal" class="modal-overlay"'),'confirmation UI must use system modal overlay');

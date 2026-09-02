@@ -17,7 +17,7 @@ $typeLabel = static fn(string $type): string => match ($type) {
 .feo-cost-card{display:block;min-width:0;border:0!important;box-shadow:none!important;background:transparent!important}
 .feo-cost-toolbar{min-height:42px;height:auto;padding:6px 8px;gap:8px;flex-wrap:wrap}
 .feo-cost-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0}
-.feo-cost-search{width:1380px;min-width:320px;max-width:100%;resize:none;overflow:hidden}
+.feo-cost-toolbar .feo-cost-search{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden}
 .feo-cost-search-results{padding:8px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-cost-search-results.is-hidden{display:none}
 .feo-cost-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px}
@@ -65,7 +65,7 @@ $typeLabel = static fn(string $type): string => match ($type) {
 .feo-cost-confirm-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px 12px;padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-cost-confirm-grid span{color:var(--text-muted)}
 .feo-cost-confirm-diff{padding:9px 10px;border:1px solid var(--line-soft);background:var(--surface-strong);display:grid;gap:4px}
-@media(max-width:900px){.feo-cost-grid{grid-template-columns:1fr}.feo-cost-wide{grid-column:auto}.feo-cost-toolbar-actions{width:100%}.feo-cost-search{width:100%;min-width:0;max-width:100%}.feo-cost-rate-picker,.feo-cost-calc,.feo-cost-detail-meta{grid-template-columns:1fr}.feo-cost-calc>div,.feo-cost-detail-meta>div{border-right:0;border-bottom:1px solid var(--line-soft)}.feo-cost-calc>div:last-child,.feo-cost-detail-meta>div:last-child{border-bottom:0}}
+@media(max-width:900px){.feo-cost-grid{grid-template-columns:1fr}.feo-cost-wide{grid-column:auto}.feo-cost-toolbar-actions{width:100%}.feo-cost-toolbar .feo-cost-search{width:100%;min-width:0;max-width:100%}.feo-cost-rate-picker,.feo-cost-calc,.feo-cost-detail-meta{grid-template-columns:1fr}.feo-cost-calc>div,.feo-cost-detail-meta>div{border-right:0;border-bottom:1px solid var(--line-soft)}.feo-cost-calc>div:last-child,.feo-cost-detail-meta>div:last-child{border-bottom:0}}
 </style>
 
 <div data-cost-page-ready></div>
