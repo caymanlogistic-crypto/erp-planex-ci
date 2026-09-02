@@ -74,6 +74,12 @@ $controlledNeedles = [
     '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
     'contract_template_sha256',
     'waybill_template_sha256',
+    'login_body="/tmp/erpv2_login_verify_body_${GITHUB_RUN_ID}.html"',
+    'http="$(curl -sSL -o "$login_body" -w',
+    'if [ "$http" != 200 ]; then',
+    'P07_HTTP_DIAGNOSTIC_BEGIN',
+    '/usr/bin/php8.5 -d display_errors=1 -d log_errors=0 public/index.php',
+    'P07_HTTP_DIAGNOSTIC_END',
 ];
 foreach ($controlledNeedles as $needle) {
     if (!str_contains($controlled, $needle)) {
@@ -100,6 +106,12 @@ if (str_contains($controlled, '$SERVER_ROOT/deploy/P07_deploy_erpv2.sh')) {
 }
 if (preg_match('~git archive[^\n]*--[^\n]*(?:storage|uploads|logs|vendor|\.env)~', $controlled)) {
     throw new RuntimeException('Controlled deploy artifact roots must not include runtime/secret directories.');
+}
+if (preg_match('~curl\s+-f[^\n]*https://plan-ex\.ru/erpv2/login~', $controlled)) {
+    throw new RuntimeException('Login verification must capture the HTTP status/evidence before failing closed; curl -f would discard that evidence.');
+}
+if (!str_contains($controlled, 'printf \'marker=%s\\noldfp=%s\\ndbfp=%s\\nenvfp=%s\\nhttp=%s')) {
+    throw new RuntimeException('Controlled deploy must persist marker/fingerprint/HTTP outputs before fail-closed login diagnostics.');
 }
 
 $p07 = (string) file_get_contents(__DIR__ . '/../.github/p07/P07_deploy_erpv2.sh');
