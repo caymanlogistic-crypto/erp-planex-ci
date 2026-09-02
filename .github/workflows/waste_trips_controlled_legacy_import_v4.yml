@@ -15,15 +15,17 @@ concurrency:
   group: waste-trips-controlled-import-v4
   cancel-in-progress: false
 
+env:
+  EXPECTED_SHA: 0a72245c22164d0cfd88d5be45a5ff2327ee5d49
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
+  LEGACY_DB_NAME_HINT: spugovxsim_frega
+  LEGACY_DB_USER_HINT: spugovxsim_frega
+
 jobs:
   import-v4:
-    runs-on: ubuntu-latest
-    env:
-      EXPECTED_SHA: 0a72245c22164d0cfd88d5be45a5ff2327ee5d49
-      LIVE_ROOT: ${{ secrets.P07_LIVE_ROOT }}
-      DEPLOY_MARKER: ${{ secrets.P07_DEPLOY_MARKER }}
-      LEGACY_DB_NAME_HINT: ${{ secrets.LEGACY_DB_NAME_HINT }}
-      LEGACY_DB_USER_HINT: ${{ secrets.LEGACY_DB_USER_HINT }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
         with:
@@ -46,8 +48,8 @@ jobs:
       - name: Configure isolated SSH credentials
         shell: bash
         env:
-          PRIVATE_KEY: ${{ secrets.P07_SSH_PRIVATE_KEY }}
-          KNOWN_HOSTS: ${{ secrets.P07_SSH_KNOWN_HOSTS }}
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
           install -d -m 700 "$HOME/.ssh"
@@ -58,9 +60,9 @@ jobs:
       - name: Verify exact deployed marker before write
         shell: bash
         env:
-          SSH_HOST: ${{ secrets.P07_SSH_HOST }}
-          SSH_PORT: ${{ secrets.P07_SSH_PORT }}
-          SSH_USER: ${{ secrets.P07_SSH_USER }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
           actual="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
@@ -70,9 +72,9 @@ jobs:
       - name: Discover legacy config without logging credentials
         shell: bash
         env:
-          SSH_HOST: ${{ secrets.P07_SSH_HOST }}
-          SSH_PORT: ${{ secrets.P07_SSH_PORT }}
-          SSH_USER: ${{ secrets.P07_SSH_USER }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
           remote_list="/tmp/waste_import_v4_candidates_${GITHUB_RUN_ID}.txt"
@@ -96,9 +98,9 @@ jobs:
       - name: Execute fail-closed snapshot import v4
         shell: bash
         env:
-          SSH_HOST: ${{ secrets.P07_SSH_HOST }}
-          SSH_PORT: ${{ secrets.P07_SSH_PORT }}
-          SSH_USER: ${{ secrets.P07_SSH_USER }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
           mkdir -p artifacts
@@ -121,10 +123,26 @@ jobs:
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$remote_json" artifacts/import-evidence.json
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$remote_csv" artifacts/import-evidence.csv
 
-      - name: Validate public runtime
+      - name: Validate committed evidence and public runtime
         shell: bash
         run: |
           set -euo pipefail
+          python3 - <<'PY'
+          import json
+          r=json.load(open('artifacts/import-evidence.json',encoding='utf-8'))
+          assert r['expected_sha'] == '0a72245c22164d0cfd88d5be45a5ff2327ee5d49'
+          assert r['counts']['waste_trips'] == 75
+          assert r['counts']['waste_trip_requests'] == r['trip_request_links']
+          assert r['counts']['waste_trip_legacy_import_audits'] == 75
+          assert r['counts']['waste_trip_audit_log'] == 75
+          assert r['partial_planning_count'] == 15
+          assert r['complete_range_count'] == 6
+          assert r['destination_counts'] == {'utilizer':68,'warehouse':7}
+          assert len(r['rows']) == 75
+          assert sum(1 for x in r['rows'] if x['partial_range']) == 15
+          assert sum(1 for x in r['rows'] if x['planning_mode']=='range') == 6
+          print('WASTE_IMPORT_V4_EVIDENCE=PASS')
+          PY
           for path in /company/trips/departures /company/trips/departures/import; do
             safe="$(printf '%s' "$path" | tr '/' '_')"
             code="$(curl -sS -o "/tmp/${safe}.html" -D "/tmp/${safe}.headers" -w '%{http_code}' --max-time 30 "https://plan-ex.ru/erpv2${path}")"
@@ -146,9 +164,9 @@ jobs:
         if: always()
         shell: bash
         env:
-          SSH_HOST: ${{ secrets.P07_SSH_HOST }}
-          SSH_PORT: ${{ secrets.P07_SSH_PORT }}
-          SSH_USER: ${{ secrets.P07_SSH_USER }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           if [ -f "$HOME/.ssh/key" ]; then
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
