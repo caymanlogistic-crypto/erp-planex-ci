@@ -56,7 +56,7 @@ jobs:
           DOCROOT="$SERVER_ROOT/public_html"
           LIVE="$DOCROOT/erpv2"
           OLD="$DOCROOT/erp"
-          BACKUPS="$SERVER_ROOT/deploy_backups"
+          BACKUPS="$SERVER_ROOT/deploy""_backups"
           echo 'ERPV2_ACCESS_COMPARE_BEGIN'
           for path in "$DOCROOT" "$LIVE" "$LIVE/.htaccess" "$LIVE/public" "$LIVE/public/index.php" "$OLD" "$OLD/.htaccess" "$OLD/public" "$OLD/public/index.php"; do
             if [ -e "$path" ]; then
