@@ -24,6 +24,23 @@ function extractClientRequestIds(raw){
   });
   const seen=new Set();return found.filter(id=>{if(seen.has(id))return false;seen.add(id);return true;});
 }
+function extractSearchRequestIds(raw){
+  raw=String(raw||'');
+  if(!raw.trim())return [];
+  const structured=raw.indexOf('\t')!==-1||raw.indexOf('|')!==-1;
+  const found=[];
+  if(structured){
+    raw.replace(/\r/g,'').split('\n').forEach(line=>{
+      let cell='';
+      if(line.indexOf('\t')!==-1)cell=(line.split('\t',1)[0]||'').trim();
+      else if(line.indexOf('|')!==-1){const normalized=line.trim().replace(/^\|+|\|+$/g,'');cell=(normalized.split('|',1)[0]||'').trim();}
+      (cell.match(/(?<!\d)\d{6}(?!\d)/g)||[]).forEach(id=>found.push(id));
+    });
+  }else{
+    (raw.match(/(?<!\d)\d{6}(?!\d)/g)||[]).forEach(id=>found.push(id));
+  }
+  const seen=new Set();return found.filter(id=>{if(seen.has(id))return false;seen.add(id);return true;});
+}
 function setText(el,t){if(el)el.textContent=String(t??'');}
 function parseAmount(value){return Number(String(value||'').replace(/\s/g,'').replace(',','.'));}
 function setActiveChoice(selector,type){qa(selector).forEach(b=>b.classList.toggle('is-active',b.dataset.costTypeChoice===type||b.dataset.costEditTypeChoice===type));}
@@ -127,6 +144,8 @@ editSave?.addEventListener('click',async()=>{if(!detailBlock||!editForm||!editSt
 
 const searchInput=q('[data-cost-search]'),searchResults=q('[data-cost-search-results]');let search={timer:0,generation:0,controller:null};
 function clearSearch(){searchResults?.classList.add('is-hidden');if(searchResults)searchResults.innerHTML='';}
+function renderInvalidSearch(){if(!searchResults)return;searchResults.innerHTML='<div class="notice warn">Не найдено самостоятельных шестизначных номеров заявок.</div>';searchResults.classList.remove('is-hidden');}
+function cancelSearchRequest(){search.generation++;search.controller?.abort();search.controller=null;}
 function renderSearch(data){
   if(!searchResults)return;const results=Array.isArray(data.results)?data.results:[];const rows=[];
   results.forEach(item=>{
@@ -138,10 +157,32 @@ function renderSearch(data){
   searchResults.innerHTML=`<div class="feo-cost-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной щелчок по найденному блоку откроет редактирование.</div><table class="table feo-cost-search-table"><thead><tr><th>Заявка</th><th>Реестр ФЭО</th><th>Размещение</th><th>Блок</th><th>Тип</th><th>Состав блока</th><th>Стоимость</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
   searchResults.classList.remove('is-hidden');qa('[data-cost-search-block-id]',searchResults).forEach(row=>bindCostBlockRow(row,'costSearchBlockId'));
 }
-async function runSearch(){if(!searchInput)return;const raw=searchInput.value;if(!raw.trim()){clearSearch();return;}const generation=++search.generation;search.controller?.abort();search.controller=new AbortController();try{const data=await json(base+'/search?'+new URLSearchParams({request_ids:raw}).toString(),{signal:search.controller.signal});if(generation!==search.generation)return;renderSearch(data);}catch(e){if(e.name==='AbortError'||generation!==search.generation)return;if(searchResults){searchResults.innerHTML=`<div class="notice warn">${esc(e.message)}</div>`;searchResults.classList.remove('is-hidden');}}}
-function scheduleSearch(immediate=false){clearTimeout(search.timer);search.timer=setTimeout(runSearch,immediate?0:280);}
+async function runSearch(){
+  if(!searchInput)return;
+  const raw=searchInput.value;
+  if(!raw.trim()){cancelSearchRequest();clearSearch();return;}
+  const ids=extractSearchRequestIds(raw);
+  if(!ids.length){cancelSearchRequest();renderInvalidSearch();return;}
+  const normalized=ids.join(' ');
+  const generation=++search.generation;
+  search.controller?.abort();
+  const controller=new AbortController();
+  search.controller=controller;
+  try{const data=await json(base+'/search?'+new URLSearchParams({request_ids:normalized}).toString(),{signal:controller.signal});if(generation!==search.generation)return;renderSearch(data);}
+  catch(e){if(e.name==='AbortError'||generation!==search.generation)return;if(searchResults){searchResults.innerHTML=`<div class="notice warn">${esc(e.message)}</div>`;searchResults.classList.remove('is-hidden');}}
+  finally{if(generation===search.generation&&search.controller===controller)search.controller=null;}
+}
+function scheduleSearch(immediate=false){
+  clearTimeout(search.timer);
+  cancelSearchRequest();
+  if(!searchInput)return;
+  const raw=searchInput.value;
+  if(!raw.trim()){clearSearch();return;}
+  if(!extractSearchRequestIds(raw).length){renderInvalidSearch();return;}
+  search.timer=setTimeout(runSearch,immediate?0:280);
+}
 searchInput?.addEventListener('input',()=>scheduleSearch());
-searchInput?.addEventListener('paste',e=>{const ids=extractClientRequestIds(e.clipboardData?.getData('text/plain')||'');if(ids.length){e.preventDefault();searchInput.value=ids.join(' ');searchInput.dispatchEvent(new Event('input',{bubbles:true}));}});
+searchInput?.addEventListener('paste',e=>{const ids=extractSearchRequestIds(e.clipboardData?.getData('text/plain')||'');if(ids.length){e.preventDefault();searchInput.value=ids.join('\n');searchInput.dispatchEvent(new Event('input',{bubbles:true}));}});
 searchInput?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();scheduleSearch(true);}});
 syncSummary();syncEditSummary();
 })();

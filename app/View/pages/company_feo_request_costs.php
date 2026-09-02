@@ -17,7 +17,7 @@ $typeLabel = static fn(string $type): string => match ($type) {
 .feo-cost-card{display:block;min-width:0;border:0!important;box-shadow:none!important;background:transparent!important}
 .feo-cost-toolbar{min-height:42px;height:auto;padding:6px 8px;gap:8px;flex-wrap:wrap}
 .feo-cost-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
-.feo-cost-search{width:460px;min-width:320px;max-width:min(460px,80vw)}
+.feo-cost-search{width:460px;min-width:320px;max-width:min(460px,80vw);resize:none;overflow:hidden}
 .feo-cost-search-results{padding:8px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-cost-search-results.is-hidden{display:none}
 .feo-cost-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px}
@@ -88,7 +88,7 @@ $typeLabel = static fn(string $type): string => match ($type) {
 <div class="table-card table-card--standard feo-cost-card">
   <div class="table-toolbar feo-cost-toolbar">
     <div class="found-label">Блоков стоимости: <b><?= count($blocks) ?></b><?php if (!empty($integrity['has_issues'])): ?> · <span class="feo-cost-warning">с расхождениями: <?= (int)$integrity['block_count'] ?></span><?php endif; ?> · <span class="text-muted">двойной щелчок по строке — редактирование</span></div>
-    <div class="toolbar-right feo-cost-toolbar-actions"><input type="text" class="toolbar-search feo-cost-search" data-cost-search placeholder="Найти одну или несколько заявок" autocomplete="off"></div>
+    <div class="toolbar-right feo-cost-toolbar-actions"><textarea rows="1" class="toolbar-search feo-cost-search" data-cost-search placeholder="Найти одну или несколько заявок" autocomplete="off"></textarea></div>
   </div>
   <div class="feo-cost-search-results is-hidden" data-cost-search-results></div>
   <div class="table-scroll">

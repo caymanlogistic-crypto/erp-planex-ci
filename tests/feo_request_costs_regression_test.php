@@ -10,6 +10,7 @@ $read = static function (string $relative) use ($root,$fail): string { $path=$ro
 require_once $root . '/app/Service/FeoPlacementInputParser.php';
 require_once $root . '/app/Service/FeoRequestCostService.php';
 require_once $root . '/app/Service/FeoRequestCostEditService.php';
+require_once $root . '/app/Service/FeoRequestInteractionService.php';
 
 if (($argv[1] ?? '') === 'race-worker') {
     $cfg=json_decode(base64_decode((string)($argv[2]??''),true)?:'',true);
@@ -45,6 +46,21 @@ $firstColumn=$parser->parseManual("| 123456 | embedded 999999 |\n654321\t888888"
 $same($firstColumn['ids'],['123456','654321'],'structured lines must use first column only');
 echo "FEO_REQUEST_ID_MIXED_PARSER=PASS\n";
 
+$interactions = new \App\Service\FeoRequestInteractionService();
+$same($interactions->extractRequestIds('257419'),['257419'],'canonical search parser single ID');
+$same($interactions->extractRequestIds('257419 281469 257551'),['257419','281469','257551'],'canonical search parser spaces');
+$same($interactions->extractRequestIds('257419, 281469, 257551'),['257419','281469','257551'],'canonical search parser commas');
+$same($interactions->extractRequestIds("257419\n281469\n257551"),['257419','281469','257551'],'canonical search parser multiline');
+$exactMultiline="257419\n\n281469\n257551";
+$same($interactions->extractRequestIds($exactMultiline),['257419','281469','257551'],'exact multiline search IDs must remain independent');
+$same($interactions->normalizedIdFilter($exactMultiline),'257419 281469 257551','exact multiline normalized request');
+$same($interactions->extractRequestIds('Заявки: 257419, затем 281469 и отдельно 257551.'),['257419','281469','257551'],'canonical search parser arbitrary text');
+$same($interactions->extractRequestIds("257419\t999999\n281469\t888888\n257551\t777777"),['257419','281469','257551'],'canonical search parser TSV first column only');
+$same($interactions->extractRequestIds("| 257419 | 999999 |\n| 281469 | 888888 |\n| 257551 | 777777 |"),['257419','281469','257551'],'canonical search parser Markdown first column only');
+$same($interactions->extractRequestIds('257419 257419 281469 257551 281469'),['257419','281469','257551'],'canonical search parser deduplicates');
+$same($interactions->extractRequestIds('нет валидных номеров 12345 и 1234567'),[],'canonical search parser invalid input');
+echo "FEO_REQUEST_COSTS_CANONICAL_SEARCH_PARSER=PASS\n";
+
 $controller=$read('app/Http/Controllers/Company/FeoRequestCostController.php');
 $view=$read('app/View/pages/company_feo_request_costs.php');
 $layout=$read('app/View/layouts/main.php');
@@ -57,12 +73,21 @@ $must(str_contains($controller,"require base_path('app/View/layouts/main.php')")
 $must(substr_count($controller,"requireRole(['company_owner','senior_logist','logist'])")>=9,'all cost endpoints must keep role gate');
 $must(str_contains($controller,'moduleReady($pdo)')&&str_contains($controller,'ещё не инициализирован'),'cost controller must fail closed when schema is absent');
 $must(str_contains($controller,"'preview_contract'=>[")&&str_contains($controller,"'added_snapshot_fingerprint'"),'edit preview token must retain added live snapshot contract');
+$must(str_contains($controller,'use App\\Service\\FeoRequestInteractionService;'),'interactive search must import canonical FEO interaction parser');
+$must(str_contains($controller,'$this->interactions->extractRequestIds'),'interactive search must use canonical extractRequestIds');
+$must(substr_count($controller,'$this->interactions->extractRequestIds')===1,'canonical interaction parser must be limited to interactive cost search');
+$must(substr_count($controller,'$this->parser->parseManual')===4,'validate/create/edit business flows must keep FeoPlacementInputParser semantics');
 $must(str_contains($layout,'assets/css/app.css')&&str_contains($layout,'assets/css/erp-ui.css'),'main layout must load standard ERP styles');
 $must(str_contains($layout,'modal-shell.js')&&str_contains($layout,'csrf-fetch.js'),'main layout must load standard runtime assets');
 $must(str_contains($entry,'verifyCsrfRequest();'),'entrypoint CSRF verification must remain enabled');
 $must(str_contains($view,"app_url('/assets/js/feo-request-costs.js')"),'cost page JS must use standard app_url base-path helper');
 $must(!str_contains($view,'asset_url('),'cost page must not call undefined asset_url helper');
+$must(str_contains($view,"filemtime(base_path('public/assets/js/feo-request-costs.js'))"),'cost page JS must keep cache busting');
+$must(str_contains($view,'window.FEO_REQUEST_COST_CONFIG={base:'),'cost page must keep page-specific config before JS');
 $must(str_contains($view,'data-cost-page-ready'),'cost screen ready marker must exist');
+$must(str_contains($view,'<textarea rows="1" class="toolbar-search feo-cost-search" data-cost-search'),'cost search control must be multiline-safe textarea rendered as one row');
+$must(!str_contains($view,'<input type="text" class="toolbar-search feo-cost-search" data-cost-search'),'cost search must no longer use single-line input control');
+$must(str_contains($view,'.feo-cost-search{width:460px;min-width:320px;max-width:min(460px,80vw);resize:none;overflow:hidden}'),'cost search textarea must preserve toolbar geometry and hide resize/overflow');
 $must(str_contains($view,'id="feo-cost-create-modal" class="modal-overlay"'),'create UI must use system modal overlay');
 $must(str_contains($view,'id="feo-cost-detail-modal" class="modal-overlay"'),'detail/edit UI must use system modal overlay');
 $must(str_contains($view,'id="feo-cost-confirm-modal" class="modal-overlay"'),'confirmation UI must use system modal overlay');
@@ -77,9 +102,10 @@ $must(str_contains($view,'snapshot-масса оставшихся заявок 
 $must(str_contains($view,'data-cost-edit-type-choice="rate_34_5"')&&str_contains($view,'data-cost-edit-type-choice="rate_38"')&&str_contains($view,'data-cost-edit-type-choice="agreement"'),'edit modal must expose rate 34.5, rate 38 and agreement');
 $must(str_contains($view,'data-cost-confirm-copy')&&str_contains($view,'data-cost-confirm-submit'),'create/edit must use confirmation modal');
 $must(str_contains($view,'csrfField()'),'cost forms must contain CSRF field');
-$must(!str_contains($js,'const structured='),'client parser must not switch whole paste into one structured mode');
-$must(str_contains($js,".split('\\n').forEach"),'client parser must inspect input line by line');
-$must(str_contains($js,"line.indexOf('\\t')")&&str_contains($js,"line.indexOf('|')"),'client parser must apply first-column semantics per structured line');
+$must(str_contains($js,'function extractSearchRequestIds(raw)')&&str_contains($js,"const structured=raw.indexOf('\\t')!==-1||raw.indexOf('|')!==-1"),'interactive search client parser must mirror canonical structured-input contract');
+$must(str_contains($js,"const normalized=ids.join(' ')")&&str_contains($js,"new URLSearchParams({request_ids:normalized})"),'runSearch must send normalized IDs only');
+$must(str_contains($js,'function cancelSearchRequest(){search.generation++;search.controller?.abort();search.controller=null;}'),'input changes must invalidate and abort stale search requests');
+$must(str_contains($js,"if(!extractSearchRequestIds(raw).length){renderInvalidSearch();return;}"),'invalid input must stop before network scheduling');
 $must(str_contains($js,'added_ids')&&str_contains($js,'removed_ids')&&str_contains($js,'old_total_cost'),'edit confirmation must show composition and price diff');
 $must(str_contains($js,'Заявок: <b>${esc(preview.old_request_count)} → ${esc(preview.selected_count)}</b>'),'edit confirmation must show old to new request count');
 $must(str_contains($js,'Найдено по ${results.length} заявкам')&&str_contains($js,'exists_in_feo')&&str_contains($js,'is_current'),'search UI must support per-request multi-search information like map placement');
@@ -102,6 +128,13 @@ foreach ([
     "'/company/feo/requests/costs/edit/commit'",
 ] as $needle) $must(str_contains($routes,$needle),'missing route '.$needle);
 echo "FEO_REQUEST_COSTS_UI_LAYOUT_CONTRACT=PASS\n";
+
+$uiPipes=[];
+$uiProc=proc_open(['node',$root.'/tests/feo_request_costs_search_ui_contract_test.mjs'],[1=>['pipe','w'],2=>['pipe','w']],$uiPipes);
+$must(is_resource($uiProc),'failed to start executable cost search UI contract');
+$uiStdout=stream_get_contents($uiPipes[1]);$uiStderr=stream_get_contents($uiPipes[2]);fclose($uiPipes[1]);fclose($uiPipes[2]);$uiCode=proc_close($uiProc);
+$must($uiCode===0,'cost search UI contract failed: '.$uiStderr.$uiStdout);
+echo $uiStdout;
 
 if (!in_array('mysql',\PDO::getAvailableDrivers(),true)) {
     echo "FEO_REQUEST_COSTS_MYSQL=REMOTE_REQUIRED\n";
@@ -165,14 +198,18 @@ try {
     try{$q=$pdo->prepare('INSERT INTO feo_request_cost_block_requests(block_id,zayavka_id,snapshot_mass_kg,position_no) VALUES(?,?,?,?)');$q->execute([$secondBlockId,'123456',1250.000,2]);}catch(\PDOException $e){$duplicateBlocked=(($e->errorInfo[1]??null)===1062);}
     $must($duplicateBlocked,'DB UNIQUE must reject duplicate pricing membership');
 
-    $search=$service->searchBlocks($pdo,['123456','111111','333333','999999']);
-    $same(count($search),4,'multi-search must return one row per requested id');
+    $search=$service->searchBlocks($pdo,['123456','222222','111111','333333','999999']);
+    $same(count($search),5,'multi-search must return one row per requested id');
     $same((string)$search[0]['zayavka_id'],'123456','search first id');
-    $same((int)$search[0]['block']['block_id'],$blockId,'search must return assigned block');
+    $same((int)$search[0]['block']['block_id'],$blockId,'search must return assigned block for first request');
+    $near((float)$search[0]['block']['total_cost'],60375.00,0.005,'search first request must map to correct cost');
+    $same((string)$search[1]['zayavka_id'],'222222','search second costed id');
+    $same((int)$search[1]['block']['block_id'],$secondBlockId,'search must return assigned block for second request');
+    $near((float)$search[1]['block']['total_cost'],10000.00,0.005,'search second request must map to correct cost');
     $must($search[0]['exists_in_feo']===true&&$search[0]['is_current']===true,'assigned request search state');
-    $must($search[1]['block']===null&&$search[1]['exists_in_feo']===true&&$search[1]['is_current']===true,'current unpriced request search state');
-    $must($search[2]['block']===null&&$search[2]['exists_in_feo']===true&&$search[2]['is_current']===false,'non-current unpriced request search state');
-    $must($search[3]['block']===null&&$search[3]['exists_in_feo']===true&&$search[3]['is_current']===false,'extra unpriced request search state');
+    $must($search[2]['block']===null&&$search[2]['exists_in_feo']===true&&$search[2]['is_current']===true,'current unpriced request search state');
+    $must($search[3]['block']===null&&$search[3]['exists_in_feo']===true&&$search[3]['is_current']===false,'non-current unpriced request search state');
+    $must($search[4]['block']===null&&$search[4]['exists_in_feo']===true&&$search[4]['is_current']===false,'extra unpriced request search state');
 
     $commitEdit=static function(int $id,array $ids,string $type,mixed $manual,string $comment,array $preview) use($edit,$pdo):array {
         return $edit->editBlock($pdo,$id,['ids'=>$ids,'pricing_type'=>$type,'manual_total'=>$manual,'comment'=>$comment],(string)$preview['edit_fingerprint'],$preview);
