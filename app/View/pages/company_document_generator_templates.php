@@ -1,6 +1,14 @@
+<?php
+$pageTitle = 'Шаблоны договоров';
+$pageContext = 'Генератор договоров';
+$topbarCrumbs = [
+    ['label' => 'Генератор договоров', 'url' => app_url('/company/document-generator')],
+    ['label' => 'Шаблоны договоров', 'url' => null],
+];
+?>
 <div class="page-head">
     <div class="page-head-left">
-        <h1 class="page-title">Шаблоны документов</h1>
+        <h1 class="page-title">Шаблоны договоров</h1>
         <div class="page-summary"><span>DOCX → новая версия. Старые версии сохраняются и не изменяют уже сформированные документы.</span></div>
     </div>
     <div class="page-head-actions">
@@ -13,7 +21,7 @@
 <?php if ($formError): ?><div class="notice warn"><?= e($formError) ?></div><?php endif; ?>
 
 <div class="panel mb-4">
-    <div class="panel-head"><strong>Добавить шаблон / загрузить новую версию</strong></div>
+    <div class="panel-head"><strong>Загрузить шаблон договора / новую версию</strong></div>
     <div class="panel-body">
         <form method="post" enctype="multipart/form-data" action="<?= app_url('/company/document-generator/templates/upload') ?>">
             <input type="hidden" name="_csrf" value="<?= e($csrfToken) ?>">

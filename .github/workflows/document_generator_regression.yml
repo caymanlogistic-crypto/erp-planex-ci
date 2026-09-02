@@ -9,8 +9,11 @@ on:
       - 'app/Service/DocumentTemplateService.php'
       - 'app/Service/FeoRequestInteractionService.php'
       - 'app/Http/Controllers/Company/DocumentGeneratorController.php'
+      - 'app/View/layouts/main.php'
       - 'app/View/pages/company_document_generator.php'
+      - 'app/View/pages/company_document_generator_templates.php'
       - 'resources/document-templates/**'
+      - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
       - 'tests/document_generator_regression_v2_test.php'
       - '.github/workflows/document_generator_regression.yml'
@@ -22,8 +25,11 @@ on:
       - 'app/Service/DocumentTemplateService.php'
       - 'app/Service/FeoRequestInteractionService.php'
       - 'app/Http/Controllers/Company/DocumentGeneratorController.php'
+      - 'app/View/layouts/main.php'
       - 'app/View/pages/company_document_generator.php'
+      - 'app/View/pages/company_document_generator_templates.php'
       - 'resources/document-templates/**'
+      - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
       - 'tests/document_generator_regression_v2_test.php'
       - '.github/workflows/document_generator_regression.yml'
@@ -105,8 +111,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          php -l tests/document_generator_navigation_test.php
           php -l tests/document_generator_regression_test.php
           php -l tests/document_generator_regression_v2_test.php
+          php tests/document_generator_navigation_test.php
           php tests/document_generator_regression_test.php | tee /tmp/document-generator-regression.log
           for marker in \
             DOCUMENT_GENERATOR_CANONICAL_WIRING=PASS \
