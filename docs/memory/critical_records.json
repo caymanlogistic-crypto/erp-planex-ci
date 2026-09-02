@@ -8,8 +8,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "e481290033912545d653b7b0415371c0eec31f7e",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/e481290033912545d653b7b0415371c0eec31f7e/.github/workflows/erpv2_controlled_deploy.yml",
+      "verified_sha": "084a947ae768886af0f194bc2bd8a864145b379f",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/084a947ae768886af0f194bc2bd8a864145b379f/.github/workflows/erpv2_controlled_deploy.yml",
       "owning_paths": [".github/workflows/erpv2_agent_deploy_request.yml", ".github/workflows/erpv2_controlled_deploy.yml", ".github/workflows/agent_deploy_request_contract.yml", ".github/p07/P07_deploy_erpv2.sh", "tests/agent_deploy_request_contract_test.php", "tests/p07_deploy_engine_contract_test.php"],
       "navigation": "active",
       "machine_ownership_id": "control.deploy"
