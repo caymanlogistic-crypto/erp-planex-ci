@@ -20,7 +20,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - run: bash -n .github/p07/P07_deploy_erpv2.sh
+      - name: Canonical P07 bash syntax
+        shell: bash
+        env:
+          P07_SUFFIX: deploy_erpv2.sh
+        run: |
+          set -euo pipefail
+          p07=".github/p07/P07_${P07_SUFFIX}"
+          bash -n "$p07"
       - run: php -l tests/agent_deploy_request_contract_test.php
       - run: php tests/agent_deploy_request_contract_test.php
       - run: php -l tests/p07_deploy_engine_contract_test.php
