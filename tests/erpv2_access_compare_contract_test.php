@@ -32,8 +32,16 @@ foreach ([
 if (str_contains($yaml, 'workflow_dispatch:')) {
     throw new RuntimeException('ERPv2 access compare must run only from the exact-canonical QA ref.');
 }
-if (preg_match('/\b(mysql|UPDATE|INSERT|DELETE\s+FROM|chmod|chown|mv|cp|rm\s+-rf)\b/i', $yaml)) {
-    throw new RuntimeException('ERPv2 access compare must stay read-only on production.');
+foreach (['scp ', 'rsync ', 'file_put_contents', 'sed -i', 'mysql ', 'UPDATE ', 'INSERT ', 'DELETE FROM '] as $forbidden) {
+    if (str_contains($yaml, $forbidden)) {
+        throw new RuntimeException('ERPv2 access compare must stay read-only on production: ' . $forbidden);
+    }
+}
+if (preg_match('/(?:chmod|chown|mv|cp|rm\s+-[rf]+)[^\n]*(?:\$SERVER_ROOT|\$LIVE|\$OLD|\$BACKUPS)/i', $yaml)) {
+    throw new RuntimeException('ERPv2 access compare must not mutate production paths.');
+}
+if (!str_contains($yaml, 'chmod 600 "$HOME/.ssh/erpv2_access_compare_key" "$HOME/.ssh/known_hosts"')) {
+    throw new RuntimeException('Local SSH key permissions must remain restricted.');
 }
 if (!str_contains($yaml, "grep -Ein 'options|directoryindex|rewrite|fallbackresource|errordocument|redirect|alias|php|handler|cgi|fcgi|require|allow|deny|setenv'")) {
     throw new RuntimeException('Routing evidence must stay bounded to relevant directives.');
