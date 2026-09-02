@@ -8,7 +8,7 @@ on:
       - '.github/workflows/erpv2_agent_deploy_request.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
       - '.github/workflows/agent_deploy_request_contract.yml'
-      - '.github/p07/P07_deploy_erpv2.sh'
+      - '.github/p07/**'
       - 'tests/agent_deploy_request_contract_test.php'
       - 'tests/p07_deploy_engine_contract_test.php'
 
