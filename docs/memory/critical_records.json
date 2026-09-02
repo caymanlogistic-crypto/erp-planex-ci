@@ -8,7 +8,7 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "6242df8e786163f4914b30a05715f7b94c7acff6",
+      "verified_sha": "b0f8d22832e8e93ea567d10e06ee70f327e80a02",
       "evidence": "https://github.com/planexerp/erp-planex/blob/da9908b0c9ea92028a8f9350846b36152fb3dc0c/.github/workflows/erpv2_access_compare.yml",
       "owning_paths": [".github/workflows/erpv2_agent_deploy_request.yml", ".github/workflows/erpv2_controlled_deploy.yml", ".github/workflows/erpv2_web_runtime_diagnostic.yml", ".github/workflows/erpv2_access_compare.yml", ".github/workflows/agent_deploy_request_contract.yml", ".github/p07/P07_deploy_erpv2.sh", "tests/agent_deploy_request_contract_test.php", "tests/p07_deploy_engine_contract_test.php", "tests/erpv2_web_runtime_diagnostic_contract_test.php", "tests/erpv2_access_compare_contract_test.php"],
       "navigation": "active",
