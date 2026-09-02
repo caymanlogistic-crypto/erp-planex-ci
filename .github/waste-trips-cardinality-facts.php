@@ -16,7 +16,7 @@ $rows=$pdo->query('SELECT id,zayavki_ids,status,route_type,planned_start_date,pl
 $links=0;$unique=[];$occ=[];$empty=[];$route=[];$status=[];$latest=[];
 foreach($rows as $r){$ids=idsCard((string)($r['zayavki_ids']??''));if($ids===[])$empty[]=(int)$r['id'];$links+=count($ids);foreach($ids as $id){$key='id:'.$id;$unique[$key]=true;$occ[$key]=($occ[$key]??0)+1;}$route[(string)$r['route_type']]=($route[(string)$r['route_type']]??0)+1;$status[(string)$r['status']]=($status[(string)$r['status']]??0)+1;}
 $repeated=count(array_filter($occ,static fn(int $n):bool=>$n>1));ksort($route);ksort($status);
-$last=array_slice($rows,-10);foreach($last as $r)$latest[]=['id'=>(int)$r['id'],'links'=>count(idsCard((string)$r['zayavki_ids']),'block_date'=>$r['block_date']??null];
-$out=['flights'=>count($rows),'links'=>$links,'unique_feo'=>count($unique),'repeated_feo'=>$repeated,'empty_flights'=>$empty,'min_flight_id'=>$rows? (int)$rows[0]['id']:null,'max_flight_id'=>$rows? (int)$rows[count($rows)-1]['id']:null,'max_block_date'=>$rows?max(array_map(static fn(array $r):string=>(string)($r['block_date']??''),$rows)):null,'route_counts'=>$route,'status_counts'=>$status,'latest'=>$latest];
+$last=array_slice($rows,-10);foreach($last as $r){$latest[]=['id'=>(int)$r['id'],'links'=>count(idsCard((string)$r['zayavki_ids'])),'block_date'=>$r['block_date']??null];}
+$out=['flights'=>count($rows),'links'=>$links,'unique_feo'=>count($unique),'repeated_feo'=>$repeated,'empty_flights'=>$empty,'min_flight_id'=>$rows?(int)$rows[0]['id']:null,'max_flight_id'=>$rows?(int)$rows[count($rows)-1]['id']:null,'max_block_date'=>$rows?max(array_map(static fn(array $r):string=>(string)($r['block_date']??''),$rows)):null,'route_counts'=>$route,'status_counts'=>$status,'latest'=>$latest];
 echo 'WASTE_CARDINALITY_FACTS='.json_encode($out,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL;
 echo 'WASTE_CARDINALITY_FACTS=PASS'.PHP_EOL;
