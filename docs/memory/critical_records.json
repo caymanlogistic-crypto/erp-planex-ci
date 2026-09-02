@@ -8,9 +8,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "0591f801cb06f794058321c3b1bcf0627ccef7f5",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/0591f801cb06f794058321c3b1bcf0627ccef7f5/.github/workflows/erpv2_agent_deploy_request.yml",
-      "owning_paths": [".github/workflows/erpv2_agent_deploy_request.yml", "tests/agent_deploy_request_contract_test.php"],
+      "verified_sha": "9e07efc93cedb866f61949c617cbd6f72d480ba0",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/9e07efc93cedb866f61949c617cbd6f72d480ba0/.github/p07/P07_deploy_erpv2.sh",
+      "owning_paths": [".github/workflows/erpv2_agent_deploy_request.yml", ".github/workflows/erpv2_controlled_deploy.yml", ".github/workflows/agent_deploy_request_contract.yml", ".github/p07/P07_deploy_erpv2.sh", "tests/agent_deploy_request_contract_test.php", "tests/p07_deploy_engine_contract_test.php"],
       "navigation": "active",
       "machine_ownership_id": "control.deploy"
     },
@@ -52,8 +52,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "e652ca65106bd7ceadfdc1c146096032dd4b4150",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/e652ca65106bd7ceadfdc1c146096032dd4b4150/.github/workflows/ci.yml",
+      "verified_sha": "9e07efc93cedb866f61949c617cbd6f72d480ba0",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/9e07efc93cedb866f61949c617cbd6f72d480ba0/.github/workflows/ci.yml",
       "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py"],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
