@@ -8,9 +8,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "5695b4ce339b3f51e318daa3dae90a2f847218de",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/4b26122d4e0fc4708bdf15d4508eb2c4851283b4/.github/workflows/erpv2_web_runtime_diagnostic.yml",
-      "owning_paths": [".github/workflows/erpv2_agent_deploy_request.yml", ".github/workflows/erpv2_controlled_deploy.yml", ".github/workflows/erpv2_web_runtime_diagnostic.yml", ".github/workflows/agent_deploy_request_contract.yml", ".github/p07/P07_deploy_erpv2.sh", "tests/agent_deploy_request_contract_test.php", "tests/p07_deploy_engine_contract_test.php", "tests/erpv2_web_runtime_diagnostic_contract_test.php"],
+      "verified_sha": "17c21e45eaa791fa94e158ecc6251f44dd4f86bf",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/da9908b0c9ea92028a8f9350846b36152fb3dc0c/.github/workflows/erpv2_access_compare.yml",
+      "owning_paths": [".github/workflows/erpv2_agent_deploy_request.yml", ".github/workflows/erpv2_controlled_deploy.yml", ".github/workflows/erpv2_web_runtime_diagnostic.yml", ".github/workflows/erpv2_access_compare.yml", ".github/workflows/agent_deploy_request_contract.yml", ".github/p07/P07_deploy_erpv2.sh", "tests/agent_deploy_request_contract_test.php", "tests/p07_deploy_engine_contract_test.php", "tests/erpv2_web_runtime_diagnostic_contract_test.php", "tests/erpv2_access_compare_contract_test.php"],
       "navigation": "active",
       "machine_ownership_id": "control.deploy"
     },
