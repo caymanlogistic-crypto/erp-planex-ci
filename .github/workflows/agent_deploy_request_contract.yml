@@ -7,10 +7,12 @@ on:
     paths:
       - '.github/workflows/erpv2_agent_deploy_request.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
+      - '.github/workflows/erpv2_web_runtime_diagnostic.yml'
       - '.github/workflows/agent_deploy_request_contract.yml'
       - '.github/p07/**'
       - 'tests/agent_deploy_request_contract_test.php'
       - 'tests/p07_deploy_engine_contract_test.php'
+      - 'tests/erpv2_web_runtime_diagnostic_contract_test.php'
 
 permissions:
   contents: read
@@ -32,3 +34,5 @@ jobs:
       - run: php tests/agent_deploy_request_contract_test.php
       - run: php -l tests/p07_deploy_engine_contract_test.php
       - run: php tests/p07_deploy_engine_contract_test.php
+      - run: php -l tests/erpv2_web_runtime_diagnostic_contract_test.php
+      - run: php tests/erpv2_web_runtime_diagnostic_contract_test.php
