@@ -163,7 +163,8 @@ async function runSearch(){
   if(!raw.trim()){cancelSearchRequest();clearSearch();return;}
   const ids=extractSearchRequestIds(raw);
   if(!ids.length){cancelSearchRequest();renderInvalidSearch();return;}
-  const normalized=ids.join(' ');
+  const normalized=ids.join(', ');
+  searchInput.value=normalized;
   const generation=++search.generation;
   search.controller?.abort();
   const controller=new AbortController();
@@ -182,7 +183,7 @@ function scheduleSearch(immediate=false){
   search.timer=setTimeout(runSearch,immediate?0:280);
 }
 searchInput?.addEventListener('input',()=>scheduleSearch());
-searchInput?.addEventListener('paste',e=>{const ids=extractSearchRequestIds(e.clipboardData?.getData('text/plain')||'');if(ids.length){e.preventDefault();searchInput.value=ids.join('\n');searchInput.dispatchEvent(new Event('input',{bubbles:true}));}});
+searchInput?.addEventListener('paste',e=>{const ids=extractSearchRequestIds(e.clipboardData?.getData('text/plain')||'');if(ids.length){e.preventDefault();searchInput.value=ids.join(', ');searchInput.dispatchEvent(new Event('input',{bubbles:true}));}});
 searchInput?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();scheduleSearch(true);}});
 syncSummary();syncEditSummary();
 })();
