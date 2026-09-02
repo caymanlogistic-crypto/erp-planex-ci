@@ -1,0 +1,245 @@
+name: Waste Trips Authenticated Production Acceptance
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-authenticated-prod-acceptance-20260902
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_SHA: 0a72245c22164d0cfd88d5be45a5ff2327ee5d49
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  authenticated-production-acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate exact canonical and read-only harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-auth-prod/qa_session.php
+          php -l .github/waste-trips-auth-prod/db_readonly_probe.php
+          node --check .github/waste-trips-auth-prod/acceptance.js
+          grep -Fq 'SET SESSION TRANSACTION READ ONLY' .github/waste-trips-auth-prod/db_readonly_probe.php
+          grep -Fq 'START TRANSACTION READ ONLY' .github/waste-trips-auth-prod/db_readonly_probe.php
+          grep -Fq "['GET', 'HEAD', 'OPTIONS']" .github/waste-trips-auth-prod/acceptance.js
+          if grep -Eq "request\([^)]*method:[[:space:]]*['\"](POST|PUT|PATCH|DELETE)['\"]" .github/waste-trips-auth-prod/acceptance.js; then
+            echo 'unsafe browser write method found' >&2
+            exit 1
+          fi
+          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+          echo "WASTE_AUTH_CANONICAL=PASS sha=$EXPECTED_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Read-only production snapshot before browser
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/screenshots artifacts/dom
+          REMOTE_DB="/tmp/waste_auth_db_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-auth-prod/db_readonly_probe.php "$SSH_USER@$SSH_HOST:$REMOTE_DB"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' PLANEX_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5 '$REMOTE_DB'" \
+            | tee artifacts/db-before.json
+          python3 - <<'PY'
+          import json, os
+          p=json.load(open('artifacts/db-before.json', encoding='utf-8'))
+          assert p['counts']=={
+            'waste_trips':75,
+            'waste_trip_requests':961,
+            'waste_trip_legacy_import_audits':75,
+            'waste_trip_audit_log':75,
+          }, p['counts']
+          m=p['legacy_to_trip_id']
+          with open(os.environ['GITHUB_ENV'],'a',encoding='utf-8') as f:
+            f.write(f"QA_LEGACY_1_TRIP_ID={m['1']}\n")
+            f.write(f"QA_LEGACY_257_TRIP_ID={m['257']}\n")
+            f.write(f"QA_LEGACY_258_TRIP_ID={m['258']}\n")
+          print(f"WASTE_AUTH_DB_BEFORE=PASS 75/961/75/75 legacy1={m['1']} legacy257={m['257']} legacy258={m['258']}")
+          PY
+
+      - name: Create temporary authenticated production sessions
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_SESSION="/tmp/waste_auth_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/waste-trips-auth-prod/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE_SESSION"
+          for ROLE in company_owner senior_logist logist; do
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE_SESSION' create '$ROLE'")
+            JSON=${OUT#QA_SESSION=}
+            python3 - "$ROLE" "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          role,obj,path=sys.argv[1],json.loads(sys.argv[2]),sys.argv[3]
+          for key in ('sid','csrf'): print(f'::add-mask::{obj[key]}')
+          prefix={'company_owner':'OWNER','senior_logist':'SENIOR','logist':'LOGIST'}[role]
+          with open(path,'a',encoding='utf-8') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
+              f.write(f"QA_{prefix}_SESSION_ID={obj['sid']}\n")
+          PY
+          done
+          echo 'WASTE_AUTH_SESSIONS=PASS roles=company_owner,senior_logist,logist'
+
+      - name: Real authenticated Playwright production acceptance
+        shell: bash
+        run: |
+          set +e
+          node .github/waste-trips-auth-prod/acceptance.js 2>&1 | tee artifacts/browser-summary.txt
+          STATUS=${PIPESTATUS[0]}
+          echo "WASTE_AUTH_BROWSER_EXIT=$STATUS" >> "$GITHUB_ENV"
+          exit 0
+
+      - name: Read-only production snapshot after browser
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE_DB="/tmp/waste_auth_db_${GITHUB_RUN_ID}.php"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "EXPECTED_SHA='$EXPECTED_SHA' PLANEX_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5 '$REMOTE_DB'" \
+            | tee artifacts/db-after.json
+          python3 - <<'PY'
+          import json
+          b=json.load(open('artifacts/db-before.json',encoding='utf-8'))
+          a=json.load(open('artifacts/db-after.json',encoding='utf-8'))
+          expected={
+            'waste_trips':75,
+            'waste_trip_requests':961,
+            'waste_trip_legacy_import_audits':75,
+            'waste_trip_audit_log':75,
+          }
+          assert b['counts']==expected, b['counts']
+          assert a['counts']==expected, a['counts']
+          assert b['fingerprints']==a['fingerprints'], 'Waste Trips table fingerprints changed during browser acceptance'
+          assert b['deployed_marker']==a['deployed_marker']==b['expected_sha']==a['expected_sha']
+          print('WASTE_AUTH_DB_COUNTS=PASS 75/961/75/75')
+          print('WASTE_AUTH_DB_UNCHANGED=PASS')
+          PY
+
+      - name: Cleanup temporary authenticated sessions and remote probes
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          STATUS=0
+          REMOTE_SESSION="/tmp/waste_auth_session_${GITHUB_RUN_ID}.php"
+          for ENTRY in "company_owner|${QA_OWNER_SESSION_ID:-}" "senior_logist|${QA_SENIOR_SESSION_ID:-}" "logist|${QA_LOGIST_SESSION_ID:-}"; do
+            IFS='|' read -r ROLE SID <<< "$ENTRY"
+            if [ -z "$SID" ]; then
+              echo "$ROLE=missing_sid" >> artifacts/session-cleanup.txt
+              STATUS=1
+              continue
+            fi
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE_SESSION' delete '$SID'" 2>/dev/null || true)
+            echo "$ROLE=$OUT" >> artifacts/session-cleanup.txt
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME:-x}=${SID}" \
+              'https://plan-ex.ru/erpv2/company/trips/departures' || true)
+            echo "${ROLE}_old_sid_http=$HTTP" >> artifacts/session-cleanup.txt
+            [ "$HTTP" != '200' ] || STATUS=1
+          done
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "rm -f '/tmp/waste_auth_session_${GITHUB_RUN_ID}.php' '/tmp/waste_auth_db_${GITHUB_RUN_ID}.php'" || STATUS=1
+          rm -f "$HOME/.ssh/key"
+          if [ "$STATUS" -eq 0 ]; then
+            echo 'WASTE_AUTH_QA_CLEANUP=PASS' | tee -a artifacts/session-cleanup.txt
+          fi
+          exit "$STATUS"
+
+      - name: Final acceptance gate
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${WASTE_AUTH_BROWSER_EXIT:-999}" = '0'
+          grep -Fqx 'WASTE_AUTHENTICATED_PLAYWRIGHT_PRODUCTION=PASS' artifacts/browser-summary.txt
+          grep -Fqx 'WASTE_AUTH_DB_COUNTS=PASS 75/961/75/75' <(python3 - <<'PY'
+          import json
+          a=json.load(open('artifacts/db-after.json',encoding='utf-8'))
+          c=a['counts']
+          if c=={'waste_trips':75,'waste_trip_requests':961,'waste_trip_legacy_import_audits':75,'waste_trip_audit_log':75}:
+              print('WASTE_AUTH_DB_COUNTS=PASS 75/961/75/75')
+          PY
+          )
+          grep -Fqx 'WASTE_AUTH_QA_CLEANUP=PASS' artifacts/session-cleanup.txt
+          python3 - <<'PY'
+          import json
+          r=json.load(open('artifacts/browser-results.json',encoding='utf-8'))
+          assert r['scenarioCount']==6
+          assert r['passedScenarioCount']==6
+          for s in r['results']:
+              assert s['passed'] is True
+              assert s['httpStatus']==200
+              assert s['registry']['rowCount']==75
+              assert s['registry']['foundText']=='Найдено: 75 рейсов'
+              assert s['registry']['emptyStateCount']==0
+              assert s['registry']['horizontalOverflow'] is False
+              assert len(s['consoleErrors'])==0
+              assert len(s['pageErrors'])==0
+              assert len(s['requestFailures'])==0
+              assert len(s['badResponses'])==0
+              assert len(s['nonReadRequests'])==0
+              ids={x['legacyFlightId'] for x in s['importedTrips']}
+              assert ids=={1,257,258}
+              for x in s['importedTrips']:
+                  assert x['httpStatus']==200
+                  assert x['snapshot']['openCount']==1
+                  assert x['snapshot']['nestedOverlayCount']==0
+          print('WASTE_AUTH_FINAL_GATE=PASS')
+          PY
+
+      - name: Upload authenticated production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-authenticated-production-${{ env.EXPECTED_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 90
