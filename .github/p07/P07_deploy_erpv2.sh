@@ -25,7 +25,10 @@ fi
 
 ROOT=/home/s/spugovxsim/planexp
 PHP_BIN=/usr/bin/php8.5
+TEST_MODE=0
+HEALTH_CMD=''
 if [ "${PLANEX_P07_TEST_MODE:-0}" = '1' ]; then
+  TEST_MODE=1
   test_root="${PLANEX_P07_ROOT_OVERRIDE:-}"
   case "$test_root" in
     /tmp/*) ROOT="$test_root" ;;
@@ -34,7 +37,12 @@ if [ "${PLANEX_P07_TEST_MODE:-0}" = '1' ]; then
   if [ -n "${PLANEX_P07_PHP_BIN:-}" ]; then
     PHP_BIN="$PLANEX_P07_PHP_BIN"
   fi
-elif [ -n "${PLANEX_P07_ROOT_OVERRIDE:-}" ] || [ -n "${PLANEX_P07_PHP_BIN:-}" ]; then
+  HEALTH_CMD="${PLANEX_P07_HEALTH_CMD:-}"
+  if [ -z "$HEALTH_CMD" ] || [ ! -x "$HEALTH_CMD" ]; then
+    echo 'Test health command is required and must be executable.' >&2
+    exit 65
+  fi
+elif [ -n "${PLANEX_P07_ROOT_OVERRIDE:-}" ] || [ -n "${PLANEX_P07_PHP_BIN:-}" ] || [ -n "${PLANEX_P07_HEALTH_CMD:-}" ]; then
   echo 'P07 overrides are forbidden outside test mode.' >&2
   exit 65
 fi
@@ -58,6 +66,7 @@ DEPLOY="$ROOT/deploy"
 BACKUPS="$ROOT/deploy_backups"
 MARKER="$DEPLOY/P07_erpv2_deployed_commit.txt"
 ALLOWED_ROOTS=(app bootstrap config database public scripts tools tests resources)
+HOST_MANAGED_PUBLIC_FILES=(.htaccess .user.ini)
 
 mkdir -p "$DEPLOY" "$BACKUPS"
 test -d "$LIVE"
@@ -137,6 +146,44 @@ for name in "${ALLOWED_ROOTS[@]}"; do
   fi
 done
 
+# The repository intentionally does not own hosting control files inside public/.
+# Preserve a normal live copy. If a previous root swap already removed it, recover
+# only that exact hosting-control file from the newest controlled backup that has it.
+recover_public_control() {
+  local control="$1" live_control="$LIVE/public/$control" stage_control="$stage/public/$control"
+  local archive member meta restore_dir restored
+  [ ! -e "$stage_control" ] || return 0
+  if [ -f "$live_control" ] && [ ! -L "$live_control" ]; then
+    cp -p "$live_control" "$stage_control"
+    printf 'P07_PRESERVED_PUBLIC_CONTROL=%s\n' "$control"
+    return 0
+  fi
+  while IFS= read -r archive; do
+    [ -n "$archive" ] || continue
+    for member in "./public/$control" "public/$control"; do
+      meta="$(tar -tvzf "$archive" "$member" 2>/dev/null | head -n1 || true)"
+      case "$meta" in
+        -*) ;;
+        *) continue ;;
+      esac
+      restore_dir="$work/host_control_restore_${control//./_}"
+      rm -rf "$restore_dir"
+      mkdir -p "$restore_dir"
+      tar -xzf "$archive" -C "$restore_dir" "$member" 2>/dev/null || continue
+      restored="$restore_dir/${member#./}"
+      if [ -f "$restored" ] && [ ! -L "$restored" ]; then
+        cp -p "$restored" "$stage_control"
+        printf 'P07_RECOVERED_PUBLIC_CONTROL=%s backup=%s\n' "$control" "$archive"
+        return 0
+      fi
+    done
+  done < <(find "$BACKUPS" -mindepth 2 -maxdepth 2 -type f \( -name erpv2_current.tar.gz -o -name erpv2_before.tar.gz \) -printf '%T@ %p\n' 2>/dev/null | sort -nr | cut -d' ' -f2-)
+  printf 'P07_PUBLIC_CONTROL_UNAVAILABLE=%s\n' "$control"
+}
+for control in "${HOST_MANAGED_PUBLIC_FILES[@]}"; do
+  recover_public_control "$control"
+done
+
 while IFS= read -r -d '' file; do
   "$PHP_BIN" -l "$file" >/dev/null
 done < <(find "$stage/app" "$stage/bootstrap" "$stage/config" "$stage/public" "$stage/scripts" "$stage/tools" "$stage/tests" -type f -name '*.php' -print0)
@@ -161,10 +208,26 @@ for name in "${ALLOWED_ROOTS[@]}"; do
   test -d "$LIVE/$name"
 done
 
+health_http=''
+if [ "$TEST_MODE" -eq 1 ]; then
+  health_http="$("$HEALTH_CMD")"
+else
+  set +e
+  health_http="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)"
+  health_rc=$?
+  set -e
+  if [ "$health_rc" -ne 0 ]; then health_http=000; fi
+fi
+printf 'P07_HEALTH_HTTP=%s\n' "$health_http"
+if [ "$health_http" != 200 ]; then
+  echo "ERPv2 post-swap health check failed: HTTP $health_http" >&2
+  exit 70
+fi
+
 marker_tmp="$MARKER.tmp.$$"
 printf '%s\n' "$source_sha" > "$marker_tmp"
 mv "$marker_tmp" "$MARKER"
 committed=1
 rm -rf "$work"
 trap - EXIT INT TERM
-printf 'P07_DEPLOY_OK commit=%s backup=%s\n' "$source_sha" "$backup"
+printf 'P07_DEPLOY_OK commit=%s backup=%s http=%s\n' "$source_sha" "$backup" "$health_http"
