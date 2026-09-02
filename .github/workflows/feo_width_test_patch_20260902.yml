@@ -1,0 +1,40 @@
+name: FEO Width Test Patch 20260902
+
+on:
+  push:
+    branches: [qa/feo-width-test-patch-20260902]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-feature-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/feo-search-width-specificity-20260902
+          fetch-depth: 0
+      - name: Patch exact costs width assertions only
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('tests/feo_request_costs_regression_test.php')
+          s=p.read_text()
+          old1="$must(str_contains($view,'.feo-cost-search{width:1380px;min-width:320px;max-width:100%;resize:none;overflow:hidden}'),'cost search textarea desktop width must be tripled while remaining container-bounded');"
+          new1="$must(str_contains($view,'.feo-cost-toolbar .feo-cost-search{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden}'),'cost search textarea must override generic 200px toolbar width with effective 3x desktop width');"
+          old2="$must(str_contains($view,'.feo-cost-search{width:100%;min-width:0;max-width:100%}'),'cost search textarea must remain responsive without horizontal overflow');"
+          new2="$must(str_contains($view,'.feo-cost-toolbar .feo-cost-search{width:100%;min-width:0;max-width:100%}'),'cost search textarea must remain responsive without horizontal overflow');"
+          if s.count(old1)!=1 or s.count(old2)!=1:
+              raise SystemExit('expected width assertions not found exactly once')
+          p.write_text(s.replace(old1,new1).replace(old2,new2))
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = "tests/feo_request_costs_regression_test.php"
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add tests/feo_request_costs_regression_test.php
+          git commit -m 'Protect effective FEO costs search width'
+          git push origin HEAD:chatgpt/feo-search-width-specificity-20260902
