@@ -1,0 +1,94 @@
+name: Waste Trips Final Pre-Import Runtime
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-preimport-final-20260902
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_SHA: 0a72245c22164d0cfd88d5be45a5ff2327ee5d49
+  LIVE_ROOT: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/${{ secrets.ERPV2_SSH_USER }}/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  preimport:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Validate exact canonical and probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-preimport-final.php
+          grep -Fq 'SET SESSION TRANSACTION READ ONLY' .github/waste-trips-preimport-final.php
+          grep -Fq 'START TRANSACTION READ ONLY' .github/waste-trips-preimport-final.php
+          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+          echo "WASTE_PREIMPORT_CANONICAL=PASS sha=$EXPECTED_SHA"
+      - name: Public auth guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /company/trips/departures /company/trips/departures/import; do
+            safe="$(printf '%s' "$path" | tr '/' '_')"
+            code="$(curl -sS -o "/tmp/${safe}.html" -D "/tmp/${safe}.headers" -w '%{http_code}' --max-time 30 "https://plan-ex.ru/erpv2${path}")"
+            test "$code" = 302
+            grep -Eqi '^location: .*/erpv2/login([?[:space:]]|$)' "/tmp/${safe}.headers"
+          done
+          echo 'WASTE_PREIMPORT_AUTH_GUARD=PASS'
+      - name: Configure SSH
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Run read-only production probe
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          remote="/tmp/waste_preimport_final_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/waste-trips-preimport-final.php "$SSH_USER@$SSH_HOST:$remote"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' EXPECTED_SHA='$EXPECTED_SHA' DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5 '$remote'" | tee preimport-final.txt
+          grep -Fqx "WASTE_PREIMPORT_MARKER=PASS sha=$EXPECTED_SHA" preimport-final.txt
+          grep -Eq '^WASTE_PREIMPORT_ZERO_ROWS=PASS ' preimport-final.txt
+          grep -Fqx 'WASTE_PREIMPORT_FREGAT=PASS id=8' preimport-final.txt
+          grep -Fqx 'WASTE_PREIMPORT_RESPONSIBLE=PASS id=1' preimport-final.txt
+          grep -Fqx 'WASTE_PREIMPORT_PARTIAL_PLAN=PASS' preimport-final.txt
+          grep -Fqx 'WASTE_PREIMPORT_HISTORICAL_CONTRACT=PASS' preimport-final.txt
+          grep -Fqx 'WASTE_PREIMPORT_RUNTIME=PASS' preimport-final.txt
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-final-preimport-${{ env.EXPECTED_SHA }}
+          path: preimport-final.txt
+          if-no-files-found: warn
+          retention-days: 30
+      - name: Cleanup
+        if: always()
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          if [ -f "$HOME/.ssh/key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/waste_preimport_final_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/key"
