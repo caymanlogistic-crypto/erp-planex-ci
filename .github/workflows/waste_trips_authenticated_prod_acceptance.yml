@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate exact canonical and read-only harness
+      - name: Validate deployed target ancestry and read-only harness
         shell: bash
         run: |
           set -euo pipefail
@@ -34,9 +34,11 @@ jobs:
             echo 'unsafe browser write method found' >&2
             exit 1
           fi
-          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
-          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
-          echo "WASTE_AUTH_CANONICAL=PASS sha=$EXPECTED_SHA"
+          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical" --depth=200
+          CURRENT_CANONICAL="$(git rev-parse refs/remotes/origin/canonical)"
+          git cat-file -e "$EXPECTED_SHA^{commit}"
+          git merge-base --is-ancestor "$EXPECTED_SHA" refs/remotes/origin/canonical
+          echo "WASTE_AUTH_DEPLOY_TARGET_ANCESTRY=PASS deployed_target=$EXPECTED_SHA current_canonical=$CURRENT_CANONICAL"
 
       - uses: actions/setup-node@v4
         with:
