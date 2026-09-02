@@ -6,6 +6,7 @@ use App\Core\Database;
 use App\Service\FeoPlacementInputParser;
 use App\Service\FeoRequestCostEditService;
 use App\Service\FeoRequestCostService;
+use App\Service\FeoRequestInteractionService;
 use App\Service\FeoRequestService;
 
 final class FeoRequestCostController
@@ -13,6 +14,7 @@ final class FeoRequestCostController
     private FeoPlacementInputParser $parser;
     private FeoRequestCostService $costs;
     private FeoRequestCostEditService $editCosts;
+    private FeoRequestInteractionService $interactions;
     private FeoRequestService $requests;
 
     public function __construct(private readonly array $config, private readonly Database $db)
@@ -20,6 +22,7 @@ final class FeoRequestCostController
         $this->parser=new FeoPlacementInputParser();
         $this->costs=new FeoRequestCostService();
         $this->editCosts=new FeoRequestCostEditService();
+        $this->interactions=new FeoRequestInteractionService();
         $this->requests=new FeoRequestService($config,$db);
     }
 
@@ -106,7 +109,7 @@ final class FeoRequestCostController
     public function search(): void
     {
         requireRole(['company_owner','senior_logist','logist']);
-        try { $parsed=$this->parser->parseManual((string)($_GET['request_ids']??'')); [, $pdo]=$this->readyContext(); jsonResponse(['success'=>true,'duplicates'=>$parsed['duplicates'],'results'=>$this->costs->searchBlocks($pdo,$parsed['ids'])]); }
+        try { $ids=$this->interactions->extractRequestIds((string)($_GET['request_ids']??'')); [, $pdo]=$this->readyContext(); jsonResponse(['success'=>true,'duplicates'=>[],'results'=>$this->costs->searchBlocks($pdo,$ids)]); }
         catch (\Throwable $e) { jsonResponse(['success'=>false,'message'=>$e->getMessage()],422); }
     }
 
