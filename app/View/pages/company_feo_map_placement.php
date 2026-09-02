@@ -20,7 +20,7 @@ $fmtMass = static function ($value): string {
 .feo-placement-hide-disabled{display:flex;align-items:center;gap:6px;min-height:30px;white-space:nowrap;font-size:11px;color:var(--text);cursor:pointer}
 .feo-placement-hide-disabled input[type="checkbox"]{width:15px;height:15px;margin:0;accent-color:var(--accent)}
 .feo-placement-table-card:has([data-placement-hide-disabled]:checked) .feo-placement-table tbody tr[data-placement-block-status="disabled"]{display:none}
-.feo-placement-block-search-input{width:1380px;min-width:320px;max-width:100%;resize:none;overflow:hidden}
+.feo-placement-toolbar .feo-placement-block-search-input{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden}
 .feo-placement-block-search-results{padding:8px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-placement-block-search-results.is-hidden{display:none}
 .feo-placement-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px}
@@ -75,7 +75,7 @@ $fmtMass = static function ($value): string {
   .feo-placement-form-grid{grid-template-columns:1fr}
   .feo-placement-wide{grid-column:auto}
   .feo-placement-toolbar-actions{width:100%}
-  .feo-placement-block-search-input{width:100%;min-width:0;max-width:100%}
+  .feo-placement-toolbar .feo-placement-block-search-input{width:100%;min-width:0;max-width:100%}
   .feo-placement-detail-meta{grid-template-columns:1fr}
   .feo-placement-detail-meta>div{border-right:0;border-bottom:1px solid var(--line-soft)!important}
   .feo-placement-detail-meta>div:last-child{border-bottom:0!important}
