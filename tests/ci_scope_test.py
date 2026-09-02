@@ -24,6 +24,7 @@ yes("app/Service/Linear/Foo.php", "linear")
 yes("database/migrations-local/099_test.sql", "migrations")
 yes("database/migrations-local/099_test.sql", "tenant_schema")
 yes(".github/workflows/foo.yml", "control_plane")
+yes(".github/p07/P07_deploy_erpv2.sh", "control_plane")
 
 # Memory + preflight tooling scope.
 yes("docs/memory/critical_records.json", "memory")
@@ -40,6 +41,7 @@ for path in [
     "app/Service/CompanyDeletionService.php",
     "database/migrations-local/100_x.sql",
     ".github/workflows/ci.yml",
+    ".github/p07/P07_deploy_erpv2.sh",
     "tools/database/generate_schema_docs.php",
     "tools/agent_preflight.py",
     "AGENTS.md",

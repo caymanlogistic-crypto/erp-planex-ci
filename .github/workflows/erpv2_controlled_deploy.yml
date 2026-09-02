@@ -60,6 +60,17 @@ jobs:
           printf 'SOURCE_SHA=%s\nTARGET=%s\nDEPLOY_MODE=manual_exact_sha\n' "$SOURCE_SHA" "$TARGET"
           printf 'source_sha=%s\ndeploy_mode=manual_exact_sha\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
+      - name: Preserve exact-SHA P07 deploy engine
+        id: engine
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp .github/p07/P07_deploy_erpv2.sh /tmp/P07_deploy_erpv2.sh
+          chmod 700 /tmp/P07_deploy_erpv2.sh
+          bash -n /tmp/P07_deploy_erpv2.sh
+          sha256="$(sha256sum /tmp/P07_deploy_erpv2.sh | awk '{print $1}')"
+          printf 'sha256=%s\n' "$sha256" >> "$GITHUB_OUTPUT"
+
       - name: Publish deploy pending status
         shell: bash
         env:
@@ -126,7 +137,6 @@ jobs:
           OLD="$ROOT/public_html/erp"
           DEPLOY="$ROOT/deploy"
           BACKUPS="$ROOT/deploy_backups"
-          test -x "$DEPLOY/P07_deploy_erpv2.sh"
           current="$(cat "$DEPLOY/P07_erpv2_deployed_commit.txt")"
           oldfp="$(cd "$OLD" && find app bootstrap config database public -type f -printf '%P %s %T@\n' 2>/dev/null | sort | sha256sum | awk '{print $1}')"
           dbfp="$(php "/tmp/P21_readonly_db_fingerprint_${GITHUB_RUN_ID}.php")"
@@ -150,25 +160,31 @@ jobs:
           printf 'CURRENT_SERVER_SHA=%s\n' "$(printf '%s\n' "$out" | sed -n 's/^current=//p')"
           printf 'TARGET=%s\n' "$TARGET"
 
-      - name: Upload exact artifact and deploy through P07 engine
+      - name: Upload exact artifact and exact-SHA P07 engine
         shell: bash
         env:
           SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
           ARTIFACT: ${{ steps.artifact.outputs.artifact }}
           ARTIFACT_SHA: ${{ steps.artifact.outputs.sha256 }}
+          ENGINE_SHA: ${{ steps.engine.outputs.sha256 }}
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
           remote="$SERVER_ROOT/deploy/P21_artifact_${SOURCE_SHA}.tar.gz"
+          remote_engine="/tmp/P07_deploy_erpv2_${GITHUB_RUN_ID}.sh"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$ARTIFACT" "$SSH_USER@$SSH_HOST:$remote"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            /tmp/P07_deploy_erpv2.sh "$SSH_USER@$SSH_HOST:$remote_engine"
+          remote_engine_sha="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "sha256sum '$remote_engine' | awk '{print \\$1}'")"
+          test "$remote_engine_sha" = "$ENGINE_SHA"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "$SERVER_ROOT/deploy/P07_deploy_erpv2.sh '$remote' '$ARTIFACT_SHA' '$SOURCE_SHA'"
+            "chmod 700 '$remote_engine' && bash '$remote_engine' '$remote' '$ARTIFACT_SHA' '$SOURCE_SHA'"
           marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$SERVER_ROOT/deploy/P07_erpv2_deployed_commit.txt'")"
           test "$marker" = "$SOURCE_SHA"
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$remote'"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$remote' '$remote_engine'"
 
       - name: Verify marker HTTP DB old ERP runtime and document resources
         id: after
@@ -247,6 +263,7 @@ jobs:
             "final_server_sha": "${{ steps.after.outputs.marker }}",
             "backup": "${{ steps.before.outputs.backup }}",
             "artifact_sha256": "${{ steps.artifact.outputs.sha256 }}",
+            "p07_engine_sha256": "${{ steps.engine.outputs.sha256 }}",
             "http_login": "${{ steps.after.outputs.http }}",
             "database_fingerprint_before": "${{ steps.before.outputs.dbfp }}",
             "database_fingerprint_after": "${{ steps.after.outputs.dbfp }}",
@@ -305,6 +322,6 @@ jobs:
         run: |
           if [ -f "$HOME/.ssh/erpv2_controlled_deploy_key" ]; then
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-              "rm -f '/tmp/P21_readonly_db_fingerprint_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+              "rm -f '/tmp/P21_readonly_db_fingerprint_${GITHUB_RUN_ID}.php' '/tmp/P07_deploy_erpv2_${GITHUB_RUN_ID}.sh'" 2>/dev/null || true
           fi
-          rm -f "$HOME/.ssh/erpv2_controlled_deploy_key" /tmp/P21_readonly_db_fingerprint.php 2>/dev/null || true
+          rm -f "$HOME/.ssh/erpv2_controlled_deploy_key" /tmp/P21_readonly_db_fingerprint.php /tmp/P07_deploy_erpv2.sh 2>/dev/null || true
