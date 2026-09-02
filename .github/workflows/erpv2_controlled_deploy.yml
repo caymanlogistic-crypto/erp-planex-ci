@@ -249,9 +249,45 @@ jobs:
           test "$envfp" = "$ENV_FP_BEFORE"
           test "$contract_template_sha" = '0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc'
           test "$waybill_template_sha" = '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab'
-          http="$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)"
-          test "$http" = 200
+          login_body="/tmp/erpv2_login_verify_body_${GITHUB_RUN_ID}.html"
+          http="$(curl -sSL -o "$login_body" -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login || printf '000')"
           printf 'marker=%s\noldfp=%s\ndbfp=%s\nenvfp=%s\nhttp=%s\ncontract_template_sha=%s\nwaybill_template_sha=%s\n' "$marker" "$oldfp" "$dbfp" "$envfp" "$http" "$contract_template_sha" "$waybill_template_sha" >> "$GITHUB_OUTPUT"
+          rm -f "$login_body"
+          if [ "$http" != 200 ]; then
+            echo "ERPv2 login HTTP verification failed: $http" >&2
+            echo '::group::ERPv2 login runtime diagnostic'
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "SOURCE_SHA='$SOURCE_SHA' bash -se" <<'REMOTE'
+            set +e
+            ROOT=/home/s/spugovxsim/planexp
+            LIVE="$ROOT/public_html/erpv2"
+            echo 'P07_HTTP_DIAGNOSTIC_BEGIN'
+            printf 'server_marker='; cat "$ROOT/deploy/P07_erpv2_deployed_commit.txt" 2>&1
+            printf 'php_cli='; /usr/bin/php8.5 -r 'echo PHP_VERSION, PHP_EOL;' 2>&1
+            printf 'php_error_log='; /usr/bin/php8.5 -r 'echo ini_get("error_log"), PHP_EOL;' 2>&1
+            cd "$LIVE" || exit 0
+            diag="/tmp/erpv2_login_cli_${SOURCE_SHA}_$$.log"
+            REQUEST_METHOD=GET REQUEST_URI=/erpv2/login HTTPS=on HTTP_X_FORWARDED_PROTO=https HTTP_HOST=plan-ex.ru SERVER_NAME=plan-ex.ru SERVER_PORT=443 REMOTE_ADDR=127.0.0.1 \
+              /usr/bin/php8.5 -d display_errors=1 -d log_errors=0 public/index.php >"$diag" 2>&1
+            rc=$?
+            printf 'cli_entrypoint_rc=%s\n' "$rc"
+            tail -n 120 "$diag" 2>/dev/null || true
+            rm -f "$diag"
+            log_path="$(/usr/bin/php8.5 -r 'echo ini_get("error_log");' 2>/dev/null)"
+            if [ -n "$log_path" ] && [ "$log_path" != syslog ] && [ -r "$log_path" ]; then
+              printf 'php_error_log_tail=%s\n' "$log_path"
+              tail -n 80 "$log_path" 2>/dev/null || true
+            fi
+            if [ -d "$LIVE/logs" ]; then
+              find "$LIVE/logs" -maxdepth 2 -type f -mmin -10 -print 2>/dev/null | head -n 5 | while IFS= read -r log_file; do
+                printf 'runtime_log_tail=%s\n' "$log_file"
+                tail -n 40 "$log_file" 2>/dev/null || true
+              done
+            fi
+            echo 'P07_HTTP_DIAGNOSTIC_END'
+            REMOTE
+            echo '::endgroup::'
+            exit 1
+          fi
 
       - name: Write controlled deploy evidence
         if: always()
