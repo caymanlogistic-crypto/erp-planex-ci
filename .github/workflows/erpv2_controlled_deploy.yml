@@ -178,7 +178,7 @@ jobs:
             "$ARTIFACT" "$SSH_USER@$SSH_HOST:$remote"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             /tmp/P07_deploy_erpv2.sh "$SSH_USER@$SSH_HOST:$remote_engine"
-          remote_engine_sha="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "sha256sum '$remote_engine' | awk '{print \\$1}'")"
+          remote_engine_sha="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "sha256sum '$remote_engine'" | awk '{print $1}')"
           test "$remote_engine_sha" = "$ENGINE_SHA"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
             "chmod 700 '$remote_engine' && bash '$remote_engine' '$remote' '$ARTIFACT_SHA' '$SOURCE_SHA'"
