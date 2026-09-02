@@ -107,10 +107,9 @@ foreach ([
     'ALLOWED_ROOTS=(app bootstrap config database public scripts tools tests resources)',
     'PLANEX_P07_TEST_MODE',
     'PLANEX_P07_PHP_BIN',
-    'resolve_php_bin() {',
-    '/opt/php/8.1/bin/php',
-    'PHP_VERSION_ID >= 80100',
-    'PHP_BIN="$(resolve_php_bin)"',
+    'PHP_BIN=/usr/bin/php8.5',
+    'if [ ! -x "$PHP_BIN" ]; then',
+    '8.5.*)',
     '"$PHP_BIN" -l "$file"',
     "forbidden='(^|/)(\\.git|\\.env([^/]*)?|storage|uploads|logs|tmp|screenshots|node_modules|vendor)",
     'marker_tmp="$MARKER.tmp.$$"',
@@ -121,8 +120,14 @@ foreach ([
     }
 }
 
-if (!str_contains($p07, "echo 'No PHP CLI >= 8.1 available for P07 preflight.'")) {
-    throw new RuntimeException('P07 must fail closed when no compatible PHP CLI is available.');
+if (str_contains($p07, 'resolve_php_bin() {') || str_contains($p07, '/opt/php/8.1/bin/php') || str_contains($p07, 'PHP_VERSION_ID >= 80100')) {
+    throw new RuntimeException('P07 production staging lint must be pinned to ERPv2 PHP 8.5, not a generic compatible PHP resolver.');
+}
+if (!str_contains($p07, 'Required ERPv2 PHP runtime missing or not executable: $PHP_BIN')) {
+    throw new RuntimeException('P07 must fail closed when the ERPv2 PHP 8.5 runtime is unavailable.');
+}
+if (preg_match('~(^|[;&|[:space:]])php[[:space:]]+-l[[:space:]]+"\\$file"~m', $p07)) {
+    throw new RuntimeException('P07 staged artifact lint must not use bare php -l.');
 }
 
 echo "agent_deploy_request_contract_test: PASS\n";
