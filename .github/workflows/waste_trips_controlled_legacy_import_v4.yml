@@ -1,0 +1,157 @@
+name: Waste Trips Controlled Legacy Import V4
+
+on:
+  push:
+    branches:
+      - ops/waste-trips-legacy-import-v4-20260902
+    paths:
+      - '.github/waste-trips-controlled-import-v4.php'
+      - '.github/workflows/waste_trips_controlled_legacy_import_v4.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waste-trips-controlled-import-v4
+  cancel-in-progress: false
+
+jobs:
+  import-v4:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_SHA: 0a72245c22164d0cfd88d5be45a5ff2327ee5d49
+      LIVE_ROOT: ${{ secrets.P07_LIVE_ROOT }}
+      DEPLOY_MARKER: ${{ secrets.P07_DEPLOY_MARKER }}
+      LEGACY_DB_NAME_HINT: ${{ secrets.LEGACY_DB_NAME_HINT }}
+      LEGACY_DB_USER_HINT: ${{ secrets.LEGACY_DB_USER_HINT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Validate exact canonical and guarded harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-controlled-import-v4.php
+          grep -Fq "IMPORT_CURRENT_WASTE_TRIPS_V4" .github/waste-trips-controlled-import-v4.php
+          grep -Fq "beginTransaction" .github/waste-trips-controlled-import-v4.php
+          grep -Fq "rollBack" .github/waste-trips-controlled-import-v4.php
+          grep -Fq "WITH CONSISTENT SNAPSHOT, READ ONLY" .github/waste-trips-controlled-import-v4.php
+          grep -Fq "legacy snapshot changed before commit" .github/waste-trips-controlled-import-v4.php
+          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+          echo "WASTE_IMPORT_V4_CANONICAL=PASS sha=$EXPECTED_SHA"
+
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.P07_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.P07_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Verify exact deployed marker before write
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.P07_SSH_HOST }}
+          SSH_PORT: ${{ secrets.P07_SSH_PORT }}
+          SSH_USER: ${{ secrets.P07_SSH_USER }}
+        run: |
+          set -euo pipefail
+          actual="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$actual" = "$EXPECTED_SHA"
+          echo "WASTE_IMPORT_V4_DEPLOY_MARKER=PASS sha=$EXPECTED_SHA"
+
+      - name: Discover legacy config without logging credentials
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.P07_SSH_HOST }}
+          SSH_PORT: ${{ secrets.P07_SSH_PORT }}
+          SSH_USER: ${{ secrets.P07_SSH_USER }}
+        run: |
+          set -euo pipefail
+          remote_list="/tmp/waste_import_v4_candidates_${GITHUB_RUN_ID}.txt"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "HOME_ROOT='/home/s/$SSH_USER' DB_HINT='$LEGACY_DB_NAME_HINT' USER_HINT='$LEGACY_DB_USER_HINT' OUT='$remote_list' /bin/bash -s" <<'REMOTE'
+          set -euo pipefail
+          tmp="${OUT}.all"; : > "$tmp"; : > "$OUT"
+          find "$HOME_ROOT" -maxdepth 12 -type f \( -name 'config.php' -o -name 'database.php' -o -name 'db.php' -o -name '.env' -o -name 'flights.php' \) -size -512k -print 2>/dev/null > "$tmp"
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if [ "$(basename "$f")" = 'flights.php' ]; then
+              d=$(dirname "$f")
+              for c in "$d/config.php" "$d/db.php" "$d/database.php" "$d/.env"; do [ -f "$c" ] && printf '%s\n' "$c" >> "$OUT"; done
+            fi
+            if grep -aFq "$DB_HINT" "$f" 2>/dev/null || grep -aFq "$USER_HINT" "$f" 2>/dev/null; then printf '%s\n' "$f" >> "$OUT"; fi
+          done < "$tmp"
+          sort -u -o "$OUT" "$OUT"; rm -f "$tmp"; test "$(wc -l < "$OUT")" -gt 0
+          REMOTE
+          echo 'WASTE_IMPORT_V4_LEGACY_DISCOVERY=PASS'
+
+      - name: Execute fail-closed snapshot import v4
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.P07_SSH_HOST }}
+          SSH_PORT: ${{ secrets.P07_SSH_PORT }}
+          SSH_USER: ${{ secrets.P07_SSH_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts
+          remote_script="/tmp/waste_controlled_import_v4_${GITHUB_RUN_ID}.php"
+          remote_list="/tmp/waste_import_v4_candidates_${GITHUB_RUN_ID}.txt"
+          remote_json="/tmp/waste_controlled_import_v4_${GITHUB_RUN_ID}.json"
+          remote_csv="/tmp/waste_controlled_import_v4_${GITHUB_RUN_ID}.csv"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/waste-trips-controlled-import-v4.php "$SSH_USER@$SSH_HOST:$remote_script"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' EXPECTED_SHA='$EXPECTED_SHA' DEPLOY_MARKER='$DEPLOY_MARKER' CANDIDATE_LIST='$remote_list' CONFIRM_IMPORT='IMPORT_CURRENT_WASTE_TRIPS_V4' OUT_JSON='$remote_json' OUT_CSV='$remote_csv' /usr/bin/php8.5 '$remote_script'" | tee artifacts/import-summary.txt
+          grep -Eq '^WASTE_IMPORT_V4_SNAPSHOT=PASS sha256=[0-9a-f]{64} flights=75 links=[1-9][0-9]* unique_feo=[1-9][0-9]* repeated_feo=[0-9]+$' artifacts/import-summary.txt
+          grep -Eq '^WASTE_IMPORT_V4_PREFLIGHT=PASS partial=15 complete_range=6 max_abs_mass_delta_kg=[0-9]+\.[0-9]{3}$' artifacts/import-summary.txt
+          grep -Eq '^WASTE_IMPORT_V4_MAPPING=PASS client_id=[1-9][0-9]* client_created=(0|1) utilizer_id=8 responsible_user_id=1$' artifacts/import-summary.txt
+          grep -Eq '^WASTE_IMPORT_V4_ATOMIC_COMMIT=PASS trips=75 links=[1-9][0-9]* audits=75$' artifacts/import-summary.txt
+          grep -Fqx 'WASTE_IMPORT_V4_PARTIAL_PLAN=PASS partial=15 complete_range=6 unspecified=69' artifacts/import-summary.txt
+          grep -Eq '^WASTE_IMPORT_V4_MULTILEG=PASS request=.+ historical_trip_count=[2-9][0-9]*$' artifacts/import-summary.txt
+          grep -Fqx 'WASTE_IMPORT_V4_OPERATIONAL_CLAIM_ISOLATION=PASS' artifacts/import-summary.txt
+          grep -Fqx 'WASTE_IMPORT_V4_PENDING=PASS pending=0 all=75' artifacts/import-summary.txt
+          grep -Fqx 'WASTE_IMPORT_V4_CONTROLLED=PASS' artifacts/import-summary.txt
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$remote_json" artifacts/import-evidence.json
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST:$remote_csv" artifacts/import-evidence.csv
+
+      - name: Validate public runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in /company/trips/departures /company/trips/departures/import; do
+            safe="$(printf '%s' "$path" | tr '/' '_')"
+            code="$(curl -sS -o "/tmp/${safe}.html" -D "/tmp/${safe}.headers" -w '%{http_code}' --max-time 30 "https://plan-ex.ru/erpv2${path}")"
+            test "$code" = 302
+            grep -Eqi '^location: .*/erpv2/login([?[:space:]]|$)' "/tmp/${safe}.headers"
+          done
+          echo 'WASTE_IMPORT_V4_PUBLIC_RUNTIME=PASS'
+
+      - name: Upload controlled import evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-controlled-import-v4-${{ env.EXPECTED_SHA }}
+          path: artifacts/
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Cleanup temporary SSH material
+        if: always()
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.P07_SSH_HOST }}
+          SSH_PORT: ${{ secrets.P07_SSH_PORT }}
+          SSH_USER: ${{ secrets.P07_SSH_USER }}
+        run: |
+          if [ -f "$HOME/.ssh/key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '/tmp/waste_controlled_import_v4_${GITHUB_RUN_ID}.php' '/tmp/waste_import_v4_candidates_${GITHUB_RUN_ID}.txt' '/tmp/waste_controlled_import_v4_${GITHUB_RUN_ID}.json' '/tmp/waste_controlled_import_v4_${GITHUB_RUN_ID}.csv'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/key"
