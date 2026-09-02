@@ -1,0 +1,254 @@
+name: FEO Search Canonical UI Production QA 20260902
+
+on:
+  push:
+    branches:
+      - qa/feo-search-canonical-ui-20260902
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  TARGET_SHA: f6b980425ff1813051f758913149899b1675811f
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_DIR: public_html
+
+jobs:
+  production-ui:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify exact deployed canonical target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANONICAL_BRANCH" --depth=1
+          test "$(git rev-parse FETCH_HEAD)" = "$TARGET_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status" > /tmp/status.json
+          python3 - /tmp/status.json <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('target SHA deploy status is not success')
+          print('EXACT_DEPLOY_STATUS=PASS')
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Configure SSH and create temporary owner QA session
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+          REMOTE="/tmp/feo_search_canonical_ui_qa_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' create company_owner")
+          JSON=${OUT#QA_SESSION=}
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          o=json.loads(sys.argv[1])
+          print(f"::add-mask::{o['sid']}")
+          with open(sys.argv[2],'a') as f:
+              f.write(f"QA_COOKIE_NAME={o['cookie']}\nQA_OWNER_SESSION_ID={o['sid']}\n")
+          PY
+
+      - name: Read-only browser QA for costs and map placement
+        shell: bash
+        run: |
+          mkdir -p artifacts
+          node <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+          const assert=(v,m)=>{if(!v)throw new Error(m)};
+          const origin='https://plan-ex.ru';
+          const base='/erpv2/company/feo/requests';
+          const exactInput='257419\n\n281469\n257551';
+          const expectedIds=['257419','281469','257551'];
+          const canonicalVisible='257419, 281469, 257551';
+          const targetSha=process.env.TARGET_SHA;
+          const cookie={name:process.env.QA_COOKIE_NAME,value:process.env.QA_OWNER_SESSION_ID,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'};
+
+          function idsFromRows(rows){return [...new Set(rows.map(x=>String(x||'').trim()).filter(x=>/^\d{6}$/.test(x)))];}
+          function sameIds(actual,label){assert(JSON.stringify(actual)===JSON.stringify(expectedIds),`${label}: ${JSON.stringify(actual)}`);}
+          function isSearch(pathSuffix){return resp=>{try{const u=new URL(resp.url());return resp.request().method()==='GET'&&u.pathname.endsWith(pathSuffix);}catch{return false;}};}
+
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const context=await browser.newContext({viewport:{width:1920,height:1080},deviceScaleFactor:1});
+            await context.addCookies([cookie]);
+            const page=await context.newPage();
+            const forbiddenWrites=[];
+            const consoleErrors=[];
+            const pageErrors=[];
+            page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
+            page.on('pageerror',e=>pageErrors.push(String(e)));
+            page.on('request',r=>{if(r.url().includes('/company/feo/requests/')&&r.method()!=='GET')forbiddenWrites.push({method:r.method(),url:r.url()});});
+            await page.route('**/company/feo/requests/**',async route=>{
+              if(route.request().method()!=='GET'){
+                forbiddenWrites.push({method:route.request().method(),url:route.request().url(),blocked:true});
+                return route.abort('blockedbyclient');
+              }
+              return route.continue();
+            });
+
+            async function metrics(selector){
+              return await page.locator(selector).evaluate(el=>({
+                tag:el.tagName,
+                rows:el.getAttribute('rows'),
+                width:el.getBoundingClientRect().width,
+                right:el.getBoundingClientRect().right,
+                viewport:document.documentElement.clientWidth,
+                scrollWidth:document.documentElement.scrollWidth,
+                value:el.value
+              }));
+            }
+            async function assertDesktopWidth(selector,label){
+              const m=await metrics(selector);
+              assert(m.tag==='TEXTAREA'&&m.rows==='1',`${label}: search is not textarea rows=1`);
+              assert(m.width>=1200&&m.width<=1381,`${label}: desktop search width ${m.width} is not near 1380px`);
+              assert(m.scrollWidth<=m.viewport+1,`${label}: desktop horizontal page overflow ${m.scrollWidth}>${m.viewport}`);
+              return m;
+            }
+            async function assertNarrowNoOverflow(selector,label){
+              await page.setViewportSize({width:800,height:1000});
+              await page.waitForTimeout(150);
+              const m=await metrics(selector);
+              assert(m.width<=m.viewport+1,`${label}: narrow search width exceeds viewport`);
+              assert(m.right<=m.viewport+1,`${label}: narrow search right edge exceeds viewport`);
+              assert(m.scrollWidth<=m.viewport+1,`${label}: narrow horizontal page overflow ${m.scrollWidth}>${m.viewport}`);
+              await page.setViewportSize({width:1920,height:1080});
+              await page.waitForTimeout(150);
+              return m;
+            }
+
+            const evidence={status:'PASS',targetSha,canonicalVisible,costs:{},mapPlacement:{},forbiddenWrites,consoleErrors,pageErrors};
+
+            // COSTS
+            let nav=await page.goto(origin+base+'/costs',{waitUntil:'networkidle',timeout:60000});
+            assert(nav&&nav.status()===200,'costs HTTP != 200');
+            assert(page.url().includes('/company/feo/requests/costs'),'costs redirected away');
+            const costSelector='[data-cost-search]';
+            await page.locator(costSelector).waitFor({state:'visible',timeout:15000});
+            evidence.costs.desktop=await assertDesktopWidth(costSelector,'costs');
+            const costResponsePromise=page.waitForResponse(isSearch('/company/feo/requests/costs/search'),{timeout:15000});
+            await page.locator(costSelector).fill(exactInput);
+            const costResp=await costResponsePromise;
+            assert(costResp.status()===200,'costs search HTTP != 200');
+            const costUrl=new URL(costResp.url());
+            assert(costUrl.searchParams.get('request_ids')===canonicalVisible,'costs network request is not canonical comma-space');
+            const costJson=await costResp.json();
+            assert(costJson.success===true&&Array.isArray(costJson.results),'costs search payload invalid');
+            sameIds(costJson.results.map(x=>String(x.zayavka_id)),'costs backend IDs/order mismatch');
+            assert(await page.locator(costSelector).inputValue()===canonicalVisible,'costs visible value is not canonical comma-space');
+            await page.waitForFunction(()=>document.querySelectorAll('.feo-cost-search-table tbody tr').length===3,null,{timeout:10000});
+            const costUiIds=await page.locator('.feo-cost-search-table tbody tr td:first-child').allTextContents();
+            sameIds(idsFromRows(costUiIds),'costs UI IDs mismatch');
+            evidence.costs.exact={input:exactInput,visible:await page.locator(costSelector).inputValue(),request:costUrl.searchParams.get('request_ids'),backendIds:costJson.results.map(x=>String(x.zayavka_id)),uiIds:idsFromRows(costUiIds)};
+            evidence.costs.narrow=await assertNarrowNoOverflow(costSelector,'costs');
+            await page.screenshot({path:'artifacts/feo-costs-canonical-ui.png',fullPage:true});
+
+            // MAP PLACEMENT
+            nav=await page.goto(origin+base+'/map-placement',{waitUntil:'networkidle',timeout:60000});
+            assert(nav&&nav.status()===200,'map-placement HTTP != 200');
+            assert(page.url().includes('/company/feo/requests/map-placement'),'map-placement redirected away');
+            const mapSelector='[data-placement-block-search]';
+            await page.locator(mapSelector).waitFor({state:'visible',timeout:15000});
+            evidence.mapPlacement.desktop=await assertDesktopWidth(mapSelector,'map-placement');
+            const mapResponsePromise=page.waitForResponse(isSearch('/company/feo/requests/map-placement/search-blocks'),{timeout:15000});
+            await page.locator(mapSelector).fill(exactInput);
+            const mapResp=await mapResponsePromise;
+            assert(mapResp.status()===200,'map-placement search HTTP != 200');
+            const mapUrl=new URL(mapResp.url());
+            assert(mapUrl.searchParams.get('request_ids')===canonicalVisible,'map-placement network request is not canonical comma-space');
+            const mapJson=await mapResp.json();
+            assert(mapJson.success===true&&Array.isArray(mapJson.results),'map-placement search payload invalid');
+            sameIds(mapJson.results.map(x=>String(x.zayavka_id)),'map-placement backend IDs/order mismatch');
+            assert(await page.locator(mapSelector).inputValue()===canonicalVisible,'map-placement visible value is not canonical comma-space');
+            await page.locator('[data-placement-block-search-results]:not(.is-hidden)').waitFor({state:'visible',timeout:10000});
+            const mapUiIds=idsFromRows(await page.locator('[data-placement-block-search-results] tbody tr td:first-child').allTextContents());
+            sameIds(mapUiIds,'map-placement UI IDs mismatch');
+            evidence.mapPlacement.exact={input:exactInput,visible:await page.locator(mapSelector).inputValue(),request:mapUrl.searchParams.get('request_ids'),backendIds:mapJson.results.map(x=>String(x.zayavka_id)),uiIds:mapUiIds};
+            evidence.mapPlacement.narrow=await assertNarrowNoOverflow(mapSelector,'map-placement');
+            await page.screenshot({path:'artifacts/feo-map-placement-canonical-ui.png',fullPage:true});
+
+            assert(forbiddenWrites.length===0,'production business write attempt detected: '+JSON.stringify(forbiddenWrites));
+            assert(consoleErrors.length===0,'console errors: '+consoleErrors.join(' | '));
+            assert(pageErrors.length===0,'page errors: '+pageErrors.join(' | '));
+            fs.writeFileSync('artifacts/feo-search-canonical-ui-production-qa.json',JSON.stringify(evidence,null,2));
+            console.log('FEO_SEARCH_CANONICAL_UI_PRODUCTION_QA=PASS');
+            console.log('COSTS_DESKTOP_WIDTH='+evidence.costs.desktop.width);
+            console.log('MAP_DESKTOP_WIDTH='+evidence.mapPlacement.desktop.width);
+            console.log('CANONICAL_VISIBLE='+canonicalVisible);
+            console.log('COSTS_BACKEND_IDS='+evidence.costs.exact.backendIds.join(','));
+            console.log('MAP_BACKEND_IDS='+evidence.mapPlacement.exact.backendIds.join(','));
+            console.log('FORBIDDEN_WRITES='+forbiddenWrites.length);
+            await context.close();
+            await browser.close();
+          })().catch(e=>{console.error(e.stack||e);process.exit(1);});
+          NODE
+
+      - name: Cleanup QA session and prove it is unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          REMOTE="/tmp/feo_search_canonical_ui_qa_${GITHUB_RUN_ID}.php"
+          STATUS=0
+          if [ -n "${QA_OWNER_SESSION_ID:-}" ] && [ -n "${QA_COOKIE_NAME:-}" ]; then
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '${QA_OWNER_SESSION_ID}'") || STATUS=1
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" \
+              'https://plan-ex.ru/erpv2/company/feo/requests/costs' || true)
+            [ "$HTTP" != '200' ] || STATUS=1
+            printf 'session=%s\nold_sid_http=%s\n' "$OUT" "$HTTP" > artifacts/qa-session-cleanup.txt
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '$REMOTE' && test ! -e '$REMOTE'" || STATUS=1
+          else
+            echo 'session env missing' > artifacts/qa-session-cleanup.txt
+            STATUS=1
+          fi
+          rm -f "$HOME/.ssh/key"
+          [ "$STATUS" -eq 0 ] && echo 'QA_SESSION_CLEANUP=PASS' >> artifacts/qa-session-cleanup.txt
+          exit "$STATUS"
+
+      - name: Upload production QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feo-search-canonical-ui-production-${{ env.TARGET_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
