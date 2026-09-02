@@ -1,0 +1,267 @@
+name: FEO Map Placement Search Production QA
+
+on:
+  push:
+    branches:
+      - qa/feo-map-placement-search-production-20260902
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  TARGET_SHA: '0559dd6ff2e165dc9aaf783945dfcd514e7aab5f'
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_DIR: public_html
+
+jobs:
+  production-search:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify exact deployed canonical target
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANONICAL_BRANCH" --depth=1
+          test "$(git rev-parse FETCH_HEAD)" = "$TARGET_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status" > /tmp/status.json
+          python3 - /tmp/status.json <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('target SHA does not have erpv2/deploy success')
+          print('EXACT_DEPLOY_STATUS=PASS')
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Create temporary read-only owner QA session
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/feo_map_placement_search_qa_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' create company_owner")
+          JSON=${OUT#QA_SESSION=}
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          print(f"::add-mask::{obj['sid']}")
+          print(f"::add-mask::{obj['csrf']}")
+          with open(sys.argv[2],'a') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\nQA_OWNER_SESSION_ID={obj['sid']}\n")
+          PY
+
+      - name: Browser QA on real production map-placement search
+        run: |
+          mkdir -p artifacts
+          node <<'NODE'
+          const fs=require('fs');
+          const {chromium}=require('playwright');
+          const assert=(v,m)=>{if(!v)throw new Error(m)};
+          const base='https://plan-ex.ru/erpv2';
+          const placementUrl=base+'/company/feo/requests/map-placement';
+          const cookieName=process.env.QA_COOKIE_NAME;
+          const ownerSid=process.env.QA_OWNER_SESSION_ID;
+          const targetSha=process.env.TARGET_SHA;
+          assert(cookieName&&ownerSid,'QA session env missing');
+          const cookie={name:cookieName,value:ownerSid,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'};
+
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const context=await browser.newContext({viewport:{width:1440,height:1000}});
+            await context.addCookies([cookie]);
+            const page=await context.newPage();
+            const pageErrors=[],consoleErrors=[];
+            page.on('pageerror',e=>pageErrors.push(String(e)));
+            page.on('console',m=>{if(m.type()==='error')consoleErrors.push(m.text());});
+            let searchRequests=0;
+            page.on('request',r=>{if(r.url().includes('/company/feo/requests/map-placement/search-blocks?'))searchRequests++;});
+
+            const r=await page.goto(placementUrl,{waitUntil:'domcontentloaded',timeout:60000});
+            assert(r&&r.status()===200,'map-placement HTTP != 200');
+            const input=page.locator('[data-placement-block-search]');
+            await input.waitFor({state:'visible',timeout:15000});
+            const wiring=await page.evaluate(()=>{
+              const el=document.querySelector('[data-placement-block-search]');
+              const cfg=window.FEO_PLACEMENT_CONFIG||{};
+              const script=[...document.scripts].find(s=>s.src.includes('/assets/js/feo-map-placement.js'));
+              return {
+                tag:el?.tagName||'',rows:el?.getAttribute('rows')||'',
+                base:String(cfg.base||''),csrfPresent:Boolean(cfg.csrf),
+                scriptSrc:script?.src||''
+              };
+            });
+            assert(wiring.tag==='TEXTAREA'&&wiring.rows==='1','production search control is not textarea rows=1');
+            assert(wiring.base===base+'/company/feo/requests/map-placement','production FEO_PLACEMENT_CONFIG base mismatch');
+            assert(wiring.csrfPresent,'production FEO_PLACEMENT_CONFIG csrf missing');
+            assert(/\/assets\/js\/feo-map-placement\.js\?v=\d+/.test(wiring.scriptSrc),'production page-specific script/version marker missing');
+
+            const responseFor=()=>page.waitForResponse(resp=>{
+              try{return new URL(resp.url()).pathname.endsWith('/company/feo/requests/map-placement/search-blocks')&&resp.request().method()==='GET';}
+              catch{return false;}
+            },{timeout:15000});
+
+            async function pasteSearch(raw,expected,label){
+              await input.fill('');
+              await page.waitForTimeout(30);
+              const pending=responseFor();
+              await input.evaluate((el,text)=>{
+                el.focus();
+                const dt=new DataTransfer();
+                dt.setData('text/plain',text);
+                const ev=new ClipboardEvent('paste',{clipboardData:dt,bubbles:true,cancelable:true});
+                el.dispatchEvent(ev);
+              },raw);
+              const resp=await pending;
+              assert(resp.status()===200,label+' search HTTP != 200');
+              const requestIds=new URL(resp.url()).searchParams.get('request_ids');
+              assert(requestIds===expected.join(' '),label+' normalized GET mismatch: '+requestIds);
+              const value=await input.inputValue();
+              assert(value===expected.join(' '),label+' visible normalization mismatch: '+JSON.stringify(value));
+              const data=await resp.json();
+              assert(data.success===true,label+' success != true');
+              const resultIds=(data.results||[]).map(x=>String(x.zayavka_id));
+              assert(JSON.stringify(resultIds)===JSON.stringify(expected),label+' result ids mismatch: '+JSON.stringify(resultIds));
+              await page.locator('[data-placement-block-search-results]:not(.is-hidden)').waitFor({state:'visible',timeout:10000});
+              return data;
+            }
+
+            const exact=await pasteSearch('257419\n\n281469\n257551',['257419','281469','257551'],'exact multiline regression');
+            await pasteSearch('257419 281469 257551',['257419','281469','257551'],'spaces');
+            await pasteSearch('257419, 281469, 257551',['257419','281469','257551'],'commas');
+            await pasteSearch('257419\n281469\n257551',['257419','281469','257551'],'multiline');
+            await pasteSearch('257419\tТекст\t123456\n281469\tТекст\t654321\n257551\tТекст\t777777',['257419','281469','257551'],'TSV first column');
+            await pasteSearch('| ID | Комментарий | Число |\n|---|---|---|\n| 257419 | test | 123456 |\n| 281469 | test | 654321 |\n| 257551 | test | 777777 |',['257419','281469','257551'],'Markdown first column');
+            await pasteSearch('257419\n257419\n281469\n257551\n281469',['257419','281469','257551'],'duplicates');
+
+            const beforeInvalid=searchRequests;
+            await input.fill('нет заявок 12345 1234567');
+            await page.waitForTimeout(450);
+            assert(searchRequests===beforeInvalid,'invalid input caused a search request');
+            const invalidText=await page.locator('[data-placement-block-search-results]').innerText();
+            assert(invalidText.includes('Не найдено самостоятельных шестизначных номеров заявок.'),'invalid input warning missing');
+
+            const blockIds=await page.locator('tr[data-placement-block-id]').evaluateAll(rows=>rows.map(r=>r.getAttribute('data-placement-block-id')).filter(Boolean));
+            const memberships=new Map();
+            for(const blockId of blockIds){
+              const resp=await page.request.get(placementUrl+'/blocks/'+encodeURIComponent(blockId)+'/json');
+              if(resp.status()!==200)continue;
+              const data=await resp.json();
+              const b=data.block||{};
+              for(const req of (b.requests||[])){
+                const id=String(req.zayavka_id||'');
+                if(!/^\d{6}$/.test(id))continue;
+                if(!memberships.has(id))memberships.set(id,[]);
+                memberships.get(id).push(Number(b.id));
+              }
+            }
+            const multi=[...memberships.entries()].find(([,ids])=>new Set(ids).size>=2);
+            assert(multi,'no production request with >=2 placement blocks found for history QA');
+            const historyId=multi[0];
+            const history=await pasteSearch(historyId,[historyId],'history');
+            const historyBlocks=(history.results[0]?.blocks||[]).map(b=>Number(b.id));
+            assert(historyBlocks.length>=2,'history QA request returned <2 blocks');
+            const sorted=[...historyBlocks].sort((a,b)=>b-a);
+            assert(JSON.stringify(historyBlocks)===JSON.stringify(sorted),'history is not newest to oldest: '+JSON.stringify(historyBlocks));
+            const rowIds=await page.locator('[data-placement-block-search-results] tbody tr').evaluateAll(rows=>rows.map(r=>(r.querySelector('td:first-child')?.textContent||'').trim()));
+            assert(rowIds.length===historyBlocks.length,'history row count mismatch');
+            assert(rowIds.every(x=>x===historyId),'request ID missing from one or more history rows: '+JSON.stringify(rowIds));
+
+            const firstHistoryRow=page.locator('[data-placement-search-block-id]').first();
+            const doubleClickBlockId=await firstHistoryRow.getAttribute('data-placement-search-block-id');
+            assert(doubleClickBlockId,'double-click block id missing');
+            const detailPending=page.waitForResponse(resp=>new URL(resp.url()).pathname.endsWith('/company/feo/requests/map-placement/blocks/'+doubleClickBlockId+'/json'),{timeout:15000});
+            await firstHistoryRow.dblclick();
+            const detailResp=await detailPending;
+            assert(detailResp.status()===200,'double-click block detail HTTP != 200');
+            await page.locator('#feo-placement-detail-modal').waitFor({state:'visible',timeout:10000});
+            const detailTitle=await page.locator('[data-placement-detail-title]').innerText();
+            assert(detailTitle.includes('#'+doubleClickBlockId),'double-click opened wrong block: '+detailTitle);
+
+            const relevantConsole=consoleErrors.filter(x=>!/favicon|Failed to load resource.*404/i.test(x));
+            assert(pageErrors.length===0,'page errors: '+pageErrors.join(' | '));
+            assert(relevantConsole.length===0,'console errors: '+relevantConsole.join(' | '));
+
+            const evidence={
+              status:'PASS',targetSha,wiring,
+              exactScenario:{input:'257419\\n\\n281469\\n257551',normalized:'257419 281469 257551',results:(exact.results||[]).map(x=>String(x.zayavka_id))},
+              formats:['spaces','commas','multiline','TSV-first-column','Markdown-first-column','duplicates','invalid'],
+              history:{requestId:historyId,blockIds:historyBlocks,newestFirst:true,idEveryRow:true},
+              doubleClick:{blockId:Number(doubleClickBlockId),detailHttp:200},
+              searchRequests
+            };
+            fs.writeFileSync('artifacts/feo-map-placement-search-production-qa.json',JSON.stringify(evidence,null,2));
+            console.log('FEO_MAP_PLACEMENT_SEARCH_PRODUCTION_QA=PASS');
+            await context.close();
+            await browser.close();
+          })().catch(e=>{console.error(e.stack||e);process.exit(1);});
+          NODE
+
+      - name: Cleanup temporary QA session and prove old SID unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          REMOTE="/tmp/feo_map_placement_search_qa_session_${GITHUB_RUN_ID}.php"
+          STATUS=0
+          if [ -z "${QA_OWNER_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ]; then
+            echo 'QA_SESSION_CLEANUP_FAIL=session env missing' | tee artifacts/qa-session-cleanup.txt
+            STATUS=1
+          else
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '${QA_OWNER_SESSION_ID}'") || STATUS=1
+            printf 'owner=%s\n' "$OUT" | tee artifacts/qa-session-cleanup.txt
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" \
+              "https://plan-ex.ru/erpv2/company/feo/requests/map-placement" || true)
+            printf 'QA_OWNER_OLD_SID_HTTP=%s\n' "$HTTP" | tee -a artifacts/qa-session-cleanup.txt
+            [ "$HTTP" != '200' ] || STATUS=1
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE' && test ! -e '$REMOTE'" || STATUS=1
+          fi
+          rm -f "$HOME/.ssh/key"
+          [ "$STATUS" -eq 0 ] && echo 'QA_SESSION_CLEANUP=PASS' | tee -a artifacts/qa-session-cleanup.txt
+          exit "$STATUS"
+
+      - name: Upload production search QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feo-map-placement-search-production-${{ env.TARGET_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
