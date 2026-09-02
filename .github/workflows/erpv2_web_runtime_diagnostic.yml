@@ -1,0 +1,115 @@
+name: ERPv2 Web Runtime Diagnostic
+
+on:
+  push:
+    branches:
+      - qa/erpv2-web-runtime-diagnostic-20260902
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_DIR: public_html
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify exact canonical HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANONICAL_BRANCH" --depth=1
+          test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"
+          echo "EXACT_CANONICAL_SHA=$(git rev-parse HEAD)"
+
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/erpv2_runtime_diag_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/erpv2_runtime_diag_key" "$HOME/.ssh/known_hosts"
+
+      - name: Probe web PHP runtime and reset web OPcache
+        id: probe
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          TOKEN="$(openssl rand -hex 24)"
+          PROBE_NAME="_p07_runtime_${GITHUB_RUN_ID}.php"
+          REMOTE_PROBE="$HOME/planexp/${LIVE_DIR}/erpv2/public/$PROBE_NAME"
+          printf '::add-mask::%s\n' "$TOKEN"
+          cleanup() {
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '$REMOTE_PROBE' && test ! -e '$REMOTE_PROBE'" >/dev/null 2>&1 || true
+          }
+          trap cleanup EXIT
+
+          LOCAL_PROBE="$(mktemp)"
+          cat > "$LOCAL_PROBE" <<PHP
+          <?php
+          if (!hash_equals('${TOKEN}', (string)(\$_GET['token'] ?? ''))) { http_response_code(404); exit; }
+          header('Content-Type: text/plain; charset=utf-8');
+          echo 'PHP_VERSION=', PHP_VERSION, PHP_EOL;
+          echo 'PHP_SAPI=', PHP_SAPI, PHP_EOL;
+          echo 'OPCACHE_ENABLE=', ini_get('opcache.enable'), PHP_EOL;
+          echo 'OPCACHE_VALIDATE_TIMESTAMPS=', ini_get('opcache.validate_timestamps'), PHP_EOL;
+          echo 'OPCACHE_REVALIDATE_FREQ=', ini_get('opcache.revalidate_freq'), PHP_EOL;
+          echo 'OPCACHE_RESET=', (function_exists('opcache_reset') && opcache_reset() ? '1' : '0'), PHP_EOL;
+          PHP
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$LOCAL_PROBE" "$SSH_USER@$SSH_HOST:$REMOTE_PROBE"
+          rm -f "$LOCAL_PROBE"
+
+          PROBE_BODY="$(mktemp)"
+          PROBE_HTTP="$(curl -sS -o "$PROBE_BODY" -w '%{http_code}' --max-time 30 "https://plan-ex.ru/erpv2/${PROBE_NAME}?token=${TOKEN}" || printf '000')"
+          echo "WEB_PROBE_HTTP=$PROBE_HTTP"
+          cat "$PROBE_BODY"
+          WEB_VERSION="$(sed -n 's/^PHP_VERSION=//p' "$PROBE_BODY" | head -n1)"
+          WEB_SAPI="$(sed -n 's/^PHP_SAPI=//p' "$PROBE_BODY" | head -n1)"
+          OPCACHE_RESET="$(sed -n 's/^OPCACHE_RESET=//p' "$PROBE_BODY" | head -n1)"
+          rm -f "$PROBE_BODY"
+          cleanup
+          trap - EXIT
+
+          LOGIN_HTTP="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login || printf '000')"
+          echo "LOGIN_HTTP_AFTER_WEB_OPCACHE_RESET=$LOGIN_HTTP"
+          printf 'probe_http=%s\nweb_version=%s\nweb_sapi=%s\nopcache_reset=%s\nlogin_http=%s\n' \
+            "$PROBE_HTTP" "$WEB_VERSION" "$WEB_SAPI" "$OPCACHE_RESET" "$LOGIN_HTTP" >> "$GITHUB_OUTPUT"
+
+          test "$PROBE_HTTP" = 200
+          case "$WEB_VERSION" in 8.5.*) ;; *) echo "ERPv2 web runtime is not PHP 8.5: $WEB_VERSION" >&2; exit 1 ;; esac
+
+      - name: Assert diagnostic cleanup and login health
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          LOGIN_HTTP: ${{ steps.probe.outputs.login_http }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "test ! -e '$HOME/planexp/${LIVE_DIR}/erpv2/public/_p07_runtime_${GITHUB_RUN_ID}.php'"
+          test "$LOGIN_HTTP" = 200
+          echo 'ERPV2_WEB_RUNTIME_DIAGNOSTIC=PASS'
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/erpv2_runtime_diag_key"
