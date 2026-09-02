@@ -21,24 +21,26 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
+
           p=Path('.github/workflows/feo_search_canonical_ui_production_qa_20260902.yml')
           s=p.read_text()
-          old_sha='TARGET_SHA: f6b980425ff1813051f758913149899b1675811f'
-          new_sha='TARGET_SHA: 93a054ab24d0ccdda0806c990a6f8eb5ffae32ed'
-          old_width="assert(m.width>=1200&&m.width<=1381,`${label}: desktop search width ${m.width} is not near 1380px`);"
-          new_width="assert(m.width>=590&&m.width<=610,`${label}: desktop search width ${m.width} is not near effective 600px`);"
-          old_metrics='''            async function metrics(selector){
-              return await page.locator(selector).evaluate(el=>({
-                tag:el.tagName,
-                rows:el.getAttribute('rows'),
-                width:el.getBoundingClientRect().width,
-                right:el.getBoundingClientRect().right,
-                viewport:document.documentElement.clientWidth,
-                scrollWidth:document.documentElement.scrollWidth,
-                value:el.value
-              }));
-            }'''
-          new_metrics='''            async function metrics(selector){
+
+          replacements=[
+              ('TARGET_SHA: f6b980425ff1813051f758913149899b1675811f',
+               'TARGET_SHA: 93a054ab24d0ccdda0806c990a6f8eb5ffae32ed',
+               'target SHA'),
+              ('assert(m.width>=1200&&m.width<=1381,`${label}: desktop search width ${m.width} is not near 1380px`);',
+               'assert(m.width>=590&&m.width<=610,`${label}: desktop search width ${m.width} is not near effective 600px`);',
+               'desktop width'),
+          ]
+          for old,new,label in replacements:
+              if s.count(old)!=1:
+                  raise SystemExit(f'{label} replacement count={s.count(old)}')
+              s=s.replace(old,new)
+
+          metrics_re=re.compile(r"(?ms)^            async function metrics\(selector\)\{.*?^            async function assertDesktopWidth")
+          metrics_new='''            async function metrics(selector){
               return await page.locator(selector).evaluate(el=>{
                 const rect=el.getBoundingClientRect();
                 const parent=el.parentElement?.getBoundingClientRect();
@@ -59,19 +61,14 @@ jobs:
                   value:el.value
                 };
               });
-            }'''
-          old_narrow='''            async function assertNarrowNoOverflow(selector,label){
-              await page.setViewportSize({width:800,height:1000});
-              await page.waitForTimeout(150);
-              const m=await metrics(selector);
-              assert(m.width<=m.viewport+1,`${label}: narrow search width exceeds viewport`);
-              assert(m.right<=m.viewport+1,`${label}: narrow search right edge exceeds viewport`);
-              assert(m.scrollWidth<=m.viewport+1,`${label}: narrow horizontal page overflow ${m.scrollWidth}>${m.viewport}`);
-              await page.setViewportSize({width:1920,height:1080});
-              await page.waitForTimeout(150);
-              return m;
-            }'''
-          new_narrow='''            async function assertNarrowNoOverflow(selector,label){
+            }
+            async function assertDesktopWidth'''
+          s,n=metrics_re.subn(metrics_new,s,count=1)
+          if n!=1:
+              raise SystemExit(f'metrics regex replacement count={n}')
+
+          narrow_re=re.compile(r"(?ms)^            async function assertNarrowNoOverflow\(selector,label\)\{.*?^            const evidence=")
+          narrow_new='''            async function assertNarrowNoOverflow(selector,label){
               await page.setViewportSize({width:800,height:1000});
               await page.waitForTimeout(150);
               const m=await metrics(selector);
@@ -82,15 +79,19 @@ jobs:
               await page.setViewportSize({width:1920,height:1080});
               await page.waitForTimeout(150);
               return m;
-            }'''
-          for old,new,label in [(old_sha,new_sha,'target SHA'),(old_width,new_width,'desktop width'),(old_metrics,new_metrics,'metrics'),(old_narrow,new_narrow,'narrow overflow')]:
-              if s.count(old)!=1:
-                  raise SystemExit(f'{label} replacement count={s.count(old)}')
-              s=s.replace(old,new)
+            }
+
+            const evidence='''
+          s,n=narrow_re.subn(narrow_new,s,count=1)
+          if n!=1:
+              raise SystemExit(f'narrow regex replacement count={n}')
+
           p.write_text(s)
           PY
           git diff --check
           test "$(git diff --name-only)" = ".github/workflows/feo_search_canonical_ui_production_qa_20260902.yml"
+          grep -Fq 'TARGET_SHA: 93a054ab24d0ccdda0806c990a6f8eb5ffae32ed' .github/workflows/feo_search_canonical_ui_production_qa_20260902.yml
+          grep -Fq 'not near effective 600px' .github/workflows/feo_search_canonical_ui_production_qa_20260902.yml
           git config user.name planexerp
           git config user.email info@plan-ex.ru
           git add .github/workflows/feo_search_canonical_ui_production_qa_20260902.yml
