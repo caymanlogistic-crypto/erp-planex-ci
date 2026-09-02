@@ -66,7 +66,7 @@ function resultForId(id){
   return {zayavka_id:id,exists_in_feo:id!=='999999',is_current:id!=='999999',block:null};
 }
 function responseFor(url){
-  const ids=idsFromUrl(url).split(/\s+/).filter(Boolean);
+  const ids=idsFromUrl(url).split(/\s*,\s*/).filter(Boolean);
   return {success:true,duplicates:[],results:ids.map(resultForId)};
 }
 function responseObject(payload){return {ok:true,async json(){return payload;}};}
@@ -110,22 +110,24 @@ function normalized(call){return idsFromUrl(call.url);}
 
 for(const [label,input,expected] of [
   ['single','257419','257419'],
-  ['spaces','257419 281469 257551','257419 281469 257551'],
-  ['commas','257419, 281469, 257551','257419 281469 257551'],
-  ['multiline','257419\n281469\n257551','257419 281469 257551'],
-  ['exact multiline','257419\n\n281469\n257551','257419 281469 257551'],
-  ['arbitrary text','Заявки: 257419, затем 281469 и отдельно 257551.','257419 281469 257551'],
-  ['TSV first column','257419\t999999\n281469\t888888\n257551\t777777','257419 281469 257551'],
-  ['Markdown first column','| 257419 | 999999 |\n| 281469 | 888888 |\n| 257551 | 777777 |','257419 281469 257551'],
-  ['duplicates','257419 257419 281469 257551 281469','257419 281469 257551'],
+  ['spaces','257419 281469 257551','257419, 281469, 257551'],
+  ['commas','257419,281469,257551','257419, 281469, 257551'],
+  ['multiline','257419\n281469\n257551','257419, 281469, 257551'],
+  ['exact multiline','257419\n\n281469\n257551','257419, 281469, 257551'],
+  ['arbitrary text','Заявки: 257419, затем 281469 и отдельно 257551.','257419, 281469, 257551'],
+  ['TSV first column','257419\t999999\n281469\t888888\n257551\t777777','257419, 281469, 257551'],
+  ['Markdown first column','| 257419 | 999999 |\n| 281469 | 888888 |\n| 257551 | 777777 |','257419, 281469, 257551'],
+  ['duplicates','257419 257419 281469 257551 281469','257419, 281469, 257551'],
 ]){
   const calls=await search(input);
   assert.equal(calls.length,1,`${label}: exactly one request expected`);
   assert.equal(normalized(calls[0]),expected,`${label}: normalized request_ids mismatch`);
+  assert.equal(searchInput.value,expected,`${label}: visible value must use canonical comma-space separators`);
 }
 
 const exactCalls=await search('257419\n\n281469\n257551');
-assert.equal(normalized(exactCalls[0]),'257419 281469 257551','exact multiline must never concatenate IDs');
+assert.equal(normalized(exactCalls[0]),'257419, 281469, 257551','exact multiline must never concatenate IDs');
+assert.equal(searchInput.value,'257419, 281469, 257551','exact multiline visible value must be canonical');
 assert.match(searchResults.innerHTML,/257419/,'render must include first ID');
 assert.match(searchResults.innerHTML,/281469/,'render must include second ID');
 assert.match(searchResults.innerHTML,/257551/,'render must include third ID');
@@ -146,7 +148,7 @@ const pasteEvent=new FakeEvent('paste',{clipboardData:{getData:()=> '257419\n\n2
 searchInput.value='';
 searchInput.dispatchEvent(pasteEvent);
 assert.equal(pasteEvent.defaultPrevented,true,'valid paste should be normalized by page UX');
-assert.equal(searchInput.value,'257419\n281469\n257551','paste UX should preserve visible separators in textarea');
+assert.equal(searchInput.value,'257419, 281469, 257551','paste UX must expose canonical comma-space separators');
 
 // Required stale-response regression: a valid request is in flight, then the field
 // becomes invalid. The invalid input must abort/invalidate the old generation, and
