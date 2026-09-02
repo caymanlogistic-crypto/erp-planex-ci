@@ -59,6 +59,12 @@ $controlled = (string) file_get_contents($controlledPath);
 $controlledNeedles = [
     'git archive --format=tar --output=erpv2_source.tar "$SOURCE_SHA" -- app bootstrap config database public scripts tools tests resources',
     'php tests/document_generator_deploy_artifact_test.php "$artifact"',
+    '.github/p07/P07_deploy_erpv2.sh',
+    'Preserve exact-SHA P07 deploy engine',
+    'P07_deploy_erpv2_${GITHUB_RUN_ID}.sh',
+    'steps.engine.outputs.sha256',
+    'remote_engine_sha=',
+    'p07_engine_sha256',
     'resources/document-templates',
     '0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc',
     '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
@@ -70,8 +76,24 @@ foreach ($controlledNeedles as $needle) {
         throw new RuntimeException('Missing controlled deploy artifact contract marker: ' . $needle);
     }
 }
+if (str_contains($controlled, '$SERVER_ROOT/deploy/P07_deploy_erpv2.sh')) {
+    throw new RuntimeException('Controlled deploy must execute the exact-SHA canonical P07 helper, not a persistent server copy.');
+}
 if (preg_match('~git archive[^\n]*--[^\n]*(?:storage|uploads|logs|vendor|\.env)~', $controlled)) {
     throw new RuntimeException('Controlled deploy artifact roots must not include runtime/secret directories.');
+}
+
+$p07 = (string) file_get_contents(__DIR__ . '/../.github/p07/P07_deploy_erpv2.sh');
+foreach ([
+    'ALLOWED_ROOTS=(app bootstrap config database public scripts tools tests resources)',
+    'PLANEX_P07_TEST_MODE',
+    "forbidden='(^|/)(\\.git|\\.env([^/]*)?|storage|uploads|logs|tmp|screenshots|node_modules|vendor)",
+    'marker_tmp="$MARKER.tmp.$$"',
+    "printf 'P07_DEPLOY_OK commit=%s backup=%s",
+] as $needle) {
+    if (!str_contains($p07, $needle)) {
+        throw new RuntimeException('Missing canonical P07 engine contract marker: ' . $needle);
+    }
 }
 
 echo "agent_deploy_request_contract_test: PASS\n";
