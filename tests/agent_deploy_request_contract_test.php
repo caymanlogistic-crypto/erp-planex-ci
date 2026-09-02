@@ -113,6 +113,20 @@ if (preg_match('~curl\s+-f[^\n]*https://plan-ex\.ru/erpv2/login~', $controlled))
 if (!str_contains($controlled, 'printf \'marker=%s\\noldfp=%s\\ndbfp=%s\\nenvfp=%s\\nhttp=%s')) {
     throw new RuntimeException('Controlled deploy must persist marker/fingerprint/HTTP outputs before fail-closed login diagnostics.');
 }
+$diagnosticHeredocClose = <<<'YAML'
+          REMOTE
+            echo '::endgroup::'
+YAML;
+if (!str_contains($controlled, $diagnosticHeredocClose)) {
+    throw new RuntimeException('Nested login diagnostic heredoc terminator must be aligned to the YAML run-block margin so bash sees it at column zero.');
+}
+$badDiagnosticHeredocClose = <<<'YAML'
+            REMOTE
+            echo '::endgroup::'
+YAML;
+if (str_contains($controlled, $badDiagnosticHeredocClose)) {
+    throw new RuntimeException('Nested login diagnostic heredoc terminator must not retain shell indentation.');
+}
 
 $p07 = (string) file_get_contents(__DIR__ . '/../.github/p07/P07_deploy_erpv2.sh');
 foreach ([
