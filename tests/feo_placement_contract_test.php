@@ -26,11 +26,45 @@ $ok = static function (string $name, bool $value) use (&$pass, &$fail): void {
 $root = dirname(__DIR__);
 $read = static fn(string $path): string => file_get_contents($path) ?: '';
 
+$view = $read($root . '/app/View/pages/company_feo_map_placement.php');
+$layout = $read($root . '/app/View/layouts/main.php');
+$configPos = strpos($view, 'window.FEO_PLACEMENT_CONFIG');
+$scriptPos = strpos($view, "app_url('/assets/js/feo-map-placement.js')");
+$ok(
+    'map-placement page preserves multiline search input even if paste interception is bypassed',
+    preg_match('/<textarea\b[^>]*\brows="1"[^>]*\bdata-placement-block-search\b[^>]*><\/textarea>/i', $view) === 1
+    && preg_match('/<input\b[^>]*\bdata-placement-block-search\b[^>]*>/i', $view) === 0
+);
+$ok(
+    'map-placement page owns the placement script instead of loading it globally',
+    $scriptPos !== false
+    && !str_contains($layout, 'feo-map-placement.js')
+);
+$ok(
+    'placement config is declared before the page-specific script',
+    $configPos !== false
+    && $scriptPos !== false
+    && $configPos < $scriptPos
+);
+$ok(
+    'placement config exposes canonical base and csrf before JS boot',
+    str_contains($view, "base: <?= json_encode(app_url('/company/feo/requests/map-placement')")
+    && str_contains($view, 'csrf: <?= json_encode(csrfToken()')
+);
+$ok(
+    'placement script include is cache-busted with filemtime',
+    str_contains($view, "filemtime(base_path('public/assets/js/feo-map-placement.js'))")
+);
+
 $parser = new FeoRequestInteractionService();
 $ok('search accepts one request id', $parser->extractRequestIds('302545') === ['302545']);
 $ok('search accepts space-separated ids', $parser->extractRequestIds('302545 285664 281861') === ['302545','285664','281861']);
 $ok('search accepts comma-separated ids', $parser->extractRequestIds('302545, 285664, 281861') === ['302545','285664','281861']);
 $ok('search accepts multiline ids', $parser->extractRequestIds("302545\n285664\n281861") === ['302545','285664','281861']);
+$ok(
+    'production regression multiline ids stay distinct',
+    $parser->extractRequestIds("257419\n\n281469\n257551") === ['257419','281469','257551']
+);
 $ok(
     'search TSV uses first column only',
     $parser->extractRequestIds("302545\t123456\t777777\n285664\t654321\t888888") === ['302545','285664']
@@ -75,6 +109,11 @@ $ok(
 );
 
 $js = $read($root . '/public/assets/js/feo-map-placement.js');
+$ok(
+    'multiline paste handler normalizes the visible search value',
+    str_contains($js, "blockSearchInput?.addEventListener('paste'")
+    && str_contains($js, "blockSearchInput.value=ids.join(' ');")
+);
 $ok(
     'search normalizes every request before GET',
     str_contains($js, 'const ids=extractClientRequestIds(raw);')
