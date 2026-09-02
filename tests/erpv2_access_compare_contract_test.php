@@ -18,10 +18,11 @@ foreach ([
     'LAST_GOOD_PUBLIC_HTACCESS=',
     'ROUTING_FILE=',
     'ACCESS_MODE=',
-    'ERPV2_LOGIN_HTTP=',
-    'ERPV2_ASSET_HTTP=',
-    'LEGACY_ERP_HTTP=',
-    'ROOT_SITE_HTTP=',
+    "'ERPV2_LOGIN|https://plan-ex.ru/erpv2/login'",
+    "'ERPV2_ASSET|https://plan-ex.ru/erpv2/assets/css/app.css'",
+    "'LEGACY_ERP|https://plan-ex.ru/erp/'",
+    "'ROOT_SITE|https://plan-ex.ru/'",
+    "printf '%s_HTTP=%s\\n' \"\$name\" \"\$code\"",
 ] as $needle) {
     if (!str_contains($yaml, $needle)) {
         throw new RuntimeException('Missing ERPv2 access compare contract marker: ' . $needle);
