@@ -30,10 +30,47 @@ if [ "${PLANEX_P07_TEST_MODE:-0}" = '1' ]; then
     /tmp/*) ROOT="$test_root" ;;
     *) echo 'Test root override must be under /tmp.' >&2; exit 65 ;;
   esac
-elif [ -n "${PLANEX_P07_ROOT_OVERRIDE:-}" ]; then
-  echo 'Root override is forbidden outside test mode.' >&2
+elif [ -n "${PLANEX_P07_ROOT_OVERRIDE:-}" ] || [ -n "${PLANEX_P07_PHP_BIN:-}" ]; then
+  echo 'P07 overrides are forbidden outside test mode.' >&2
   exit 65
 fi
+
+resolve_php_bin() {
+  local candidate resolved
+  local candidates=()
+  if [ "${PLANEX_P07_TEST_MODE:-0}" = '1' ] && [ -n "${PLANEX_P07_PHP_BIN:-}" ]; then
+    candidates=("$PLANEX_P07_PHP_BIN")
+  else
+    candidates=(
+      /opt/php/8.1/bin/php
+      /opt/php/8.2/bin/php
+      /opt/php/8.3/bin/php
+      /opt/php/8.4/bin/php
+      /opt/php/8.5/bin/php
+      php8.1 php8.2 php8.3 php8.4 php8.5 php
+    )
+  fi
+  for candidate in "${candidates[@]}"; do
+    if [[ "$candidate" == /* ]]; then
+      [ -x "$candidate" ] || continue
+      resolved="$candidate"
+    else
+      resolved="$(command -v "$candidate" 2>/dev/null || true)"
+      [ -n "$resolved" ] || continue
+    fi
+    if "$resolved" -r 'exit(PHP_VERSION_ID >= 80100 ? 0 : 1);' >/dev/null 2>&1; then
+      printf '%s\n' "$resolved"
+      return 0
+    fi
+  done
+  return 1
+}
+
+PHP_BIN="$(resolve_php_bin)" || {
+  echo 'No PHP CLI >= 8.1 available for P07 preflight.' >&2
+  exit 69
+}
+printf 'P07_PHP_BIN=%s version=%s\n' "$PHP_BIN" "$("$PHP_BIN" -r 'echo PHP_VERSION;')"
 
 LIVE="$ROOT/public_html/erpv2"
 DEPLOY="$ROOT/deploy"
@@ -120,7 +157,7 @@ for name in "${ALLOWED_ROOTS[@]}"; do
 done
 
 while IFS= read -r -d '' file; do
-  php -l "$file" >/dev/null
+  "$PHP_BIN" -l "$file" >/dev/null
 done < <(find "$stage/app" "$stage/bootstrap" "$stage/config" "$stage/public" "$stage/scripts" "$stage/tools" "$stage/tests" -type f -name '*.php' -print0)
 
 echo 'Preflight passed.'
