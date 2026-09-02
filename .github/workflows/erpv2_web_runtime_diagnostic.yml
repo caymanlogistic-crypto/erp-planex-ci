@@ -112,7 +112,7 @@ jobs:
           LOGIN_HTTP="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login || printf '000')"
           echo "LOGIN_HTTP_AFTER_WEB_OPCACHE_RESET=$LOGIN_HTTP"
 
-          if [ "$PROBE_HTTP" != 200 ] || [ "$LOGIN_HTTP" != 200 ]; then
+          if [ "$STATIC_HTTP" != 200 ] || [ "$ASSET_HTTP" != 200 ] || [ "$PROBE_HTTP" != 200 ] || [ "$LOGIN_HTTP" != 200 ]; then
             echo '::group::ERPv2 bounded web-server diagnostic'
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
               "SERVER_ROOT='$SERVER_ROOT' LIVE_DIR='$LIVE_DIR' PROBE_NAME='$PROBE_NAME' STATIC_NAME='$STATIC_NAME' bash -se" <<'REMOTE'
@@ -154,8 +154,13 @@ jobs:
           cleanup
           trap - EXIT
 
+          test "$STATIC_HTTP" = 200
+          test "$ASSET_HTTP" = 200
           test "$PROBE_HTTP" = 200
-          case "$WEB_VERSION" in 8.5.*) ;; *) echo "ERPv2 web runtime is not PHP 8.5: $WEB_VERSION" >&2; exit 1 ;; esac
+          test "$LOGIN_HTTP" = 200
+          test -n "$WEB_VERSION"
+          test -n "$WEB_SAPI"
+          echo "ERPv2 observed web runtime: PHP $WEB_VERSION ($WEB_SAPI)"
 
       - name: Assert diagnostic cleanup and login health
         shell: bash

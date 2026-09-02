@@ -33,7 +33,13 @@ foreach ([
     'PHP_WEB_CONFIG_BEGIN',
     'RECENT_SERVER_ERROR_EVIDENCE_BEGIN',
     'ERPV2_WEB_SERVER_DIAGNOSTIC_END',
-    'case "$WEB_VERSION" in 8.5.*)',
+    'test "$STATIC_HTTP" = 200',
+    'test "$ASSET_HTTP" = 200',
+    'test "$PROBE_HTTP" = 200',
+    'test "$LOGIN_HTTP" = 200',
+    'test -n "$WEB_VERSION"',
+    'test -n "$WEB_SAPI"',
+    'ERPv2 observed web runtime: PHP $WEB_VERSION ($WEB_SAPI)',
     'ERPV2_WEB_RUNTIME_DIAGNOSTIC=PASS',
 ] as $needle) {
     if (!str_contains($yaml, $needle)) {
@@ -64,6 +70,9 @@ if (!str_contains($yaml, "grep -Ei 'erpv2|_p07_runtime|_p07_static|internal redi
 }
 if (str_contains($yaml, 'cat "$SERVER_ROOT/$LIVE_DIR/.htaccess"') || str_contains($yaml, 'cat "$LIVE/.htaccess"') || str_contains($yaml, 'cat "$cfg"')) {
     throw new RuntimeException('Runtime diagnostic must not dump complete server/PHP configuration files.');
+}
+if (str_contains($yaml, 'case "$WEB_VERSION" in 8.5.*)') || str_contains($yaml, 'ERPv2 web runtime is not PHP 8.5')) {
+    throw new RuntimeException('Web runtime diagnostic must validate executable health without hard-pinning the hosting PHP minor version.');
 }
 if (str_contains($yaml, 'workflow_dispatch:')) {
     throw new RuntimeException('Runtime diagnostic must run only from the exact-canonical guarded QA ref, not arbitrary manual source input.');
