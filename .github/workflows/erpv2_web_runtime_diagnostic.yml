@@ -10,6 +10,7 @@ permissions:
 
 env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  SERVER_ROOT: /home/s/spugovxsim/planexp
   LIVE_DIR: public_html
 
 jobs:
@@ -52,7 +53,7 @@ jobs:
           set -euo pipefail
           TOKEN="$(openssl rand -hex 24)"
           PROBE_NAME="_p07_runtime_${GITHUB_RUN_ID}.php"
-          REMOTE_PROBE="$HOME/planexp/${LIVE_DIR}/erpv2/public/$PROBE_NAME"
+          REMOTE_PROBE="$SERVER_ROOT/${LIVE_DIR}/erpv2/public/$PROBE_NAME"
           printf '::add-mask::%s\n' "$TOKEN"
           cleanup() {
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
@@ -105,7 +106,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "test ! -e '$HOME/planexp/${LIVE_DIR}/erpv2/public/_p07_runtime_${GITHUB_RUN_ID}.php'"
+            "test ! -e '$SERVER_ROOT/${LIVE_DIR}/erpv2/public/_p07_runtime_${GITHUB_RUN_ID}.php'"
           test "$LOGIN_HTTP" = 200
           echo 'ERPV2_WEB_RUNTIME_DIAGNOSTIC=PASS'
 
