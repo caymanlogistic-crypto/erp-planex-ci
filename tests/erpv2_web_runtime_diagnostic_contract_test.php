@@ -14,6 +14,9 @@ foreach ([
     'ERPV2_SSH_KNOWN_HOSTS',
     'PROBE_NAME="_p07_runtime_${GITHUB_RUN_ID}.php"',
     'REMOTE_PROBE="$SERVER_ROOT/${LIVE_DIR}/erpv2/public/$PROBE_NAME"',
+    'chmod 0644 "$LOCAL_PROBE"',
+    'chmod 0644 \'$REMOTE_PROBE\'',
+    'PROBE_MODE=%a',
     'PHP_VERSION=',
     'PHP_SAPI=',
     'OPCACHE_VALIDATE_TIMESTAMPS=',
@@ -21,6 +24,8 @@ foreach ([
     "function_exists('opcache_reset') && opcache_reset()",
     'https://plan-ex.ru/erpv2/${PROBE_NAME}?token=${TOKEN}',
     'LOGIN_HTTP_AFTER_WEB_OPCACHE_RESET=',
+    'ERPV2_WEB_SERVER_DIAGNOSTIC_BEGIN',
+    'ERPV2_WEB_SERVER_DIAGNOSTIC_END',
     'case "$WEB_VERSION" in 8.5.*)',
     'test ! -e',
     'ERPV2_WEB_RUNTIME_DIAGNOSTIC=PASS',
@@ -41,6 +46,12 @@ if (!str_contains($yaml, 'trap cleanup EXIT') || !str_contains($yaml, 'rm -f \'$
 }
 if (!str_contains($yaml, "printf '::add-mask::%s\\n' \"\$TOKEN\"")) {
     throw new RuntimeException('Transient runtime probe token must be masked in Actions logs.');
+}
+if (!str_contains($yaml, "grep -Ein 'php|handler|cgi|fcgi|rewrite|error|index|options|require|allow|deny'")) {
+    throw new RuntimeException('Failure diagnostics must remain bounded to handler/rewrite/access directives.');
+}
+if (str_contains($yaml, 'cat "$SERVER_ROOT/$LIVE_DIR/.htaccess"') || str_contains($yaml, 'cat "$LIVE/.htaccess"')) {
+    throw new RuntimeException('Runtime diagnostic must not dump complete server configuration files.');
 }
 if (str_contains($yaml, 'workflow_dispatch:')) {
     throw new RuntimeException('Runtime diagnostic must run only from the exact-canonical guarded QA ref, not arbitrary manual source input.');
