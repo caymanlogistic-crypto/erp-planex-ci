@@ -77,7 +77,7 @@ $stmt = $tenant->query("SELECT id, legacy_flight_id FROM waste_trips WHERE legac
 foreach ($stmt->fetchAll() as $row) {
     $legacyMap[(string)$row['legacy_flight_id']] = (int)$row['id'];
 }
-if (array_keys($legacyMap) !== ['1','257','258']) {
+if (array_map('strval', array_keys($legacyMap)) !== ['1','257','258']) {
     throw new RuntimeException('required legacy acceptance trips missing: ' . json_encode($legacyMap));
 }
 
