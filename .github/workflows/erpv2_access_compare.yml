@@ -1,0 +1,115 @@
+name: ERPv2 Access Compare
+
+on:
+  push:
+    branches:
+      - qa/erpv2-access-compare-20260902
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  SERVER_ROOT: /home/s/spugovxsim/planexp
+  LAST_GOOD_SHA: 001f9f49134e42819a4645610d5df2e78d733133
+
+jobs:
+  compare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Verify exact canonical HEAD
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANONICAL_BRANCH" --depth=1
+          test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"
+          echo "EXACT_CANONICAL_SHA=$(git rev-parse HEAD)"
+
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/erpv2_access_compare_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/erpv2_access_compare_key" "$HOME/.ssh/known_hosts"
+
+      - name: Compare current ERPv2 legacy ERP and last-good snapshot
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_access_compare_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "SERVER_ROOT='$SERVER_ROOT' LAST_GOOD_SHA='$LAST_GOOD_SHA' bash -se" <<'REMOTE'
+          set -euo pipefail
+          LIVE="$SERVER_ROOT/public_html/erpv2"
+          OLD="$SERVER_ROOT/public_html/erp"
+          BACKUPS="$SERVER_ROOT/deploy_backups"
+          echo 'ERPV2_ACCESS_COMPARE_BEGIN'
+          for path in "$SERVER_ROOT/public_html" "$LIVE" "$LIVE/.htaccess" "$LIVE/public" "$LIVE/public/index.php" "$OLD" "$OLD/.htaccess" "$OLD/public" "$OLD/public/index.php"; do
+            if [ -e "$path" ]; then
+              stat -c 'ACCESS_MODE=%a ACCESS_OWNER=%U:%G ACCESS_MTIME=%y ACCESS_PATH=%n' "$path"
+            else
+              printf 'ACCESS_MISSING=%s\n' "$path"
+            fi
+          done
+          for htaccess in "$SERVER_ROOT/public_html/.htaccess" "$LIVE/.htaccess" "$LIVE/public/.htaccess" "$OLD/.htaccess" "$OLD/public/.htaccess"; do
+            if [ -r "$htaccess" ]; then
+              printf 'ROUTING_FILE=%s SHA256=%s\n' "$htaccess" "$(sha256sum "$htaccess" | awk '{print $1}')"
+              grep -Ein 'options|directoryindex|rewrite|fallbackresource|errordocument|redirect|alias|php|handler|cgi|fcgi|require|allow|deny|setenv' "$htaccess" 2>/dev/null | head -n 120 || true
+            fi
+          done
+          good_dir="$(find "$BACKUPS" -maxdepth 1 -type d -name "P21_*_${LAST_GOOD_SHA}" -print 2>/dev/null | LC_ALL=C sort | tail -n 1)"
+          printf 'LAST_GOOD_SNAPSHOT_DIR=%s\n' "$good_dir"
+          if [ -n "$good_dir" ] && [ -r "$good_dir/erpv2_current.tar.gz" ]; then
+            archive="$good_dir/erpv2_current.tar.gz"
+            printf 'LAST_GOOD_ARCHIVE=%s\n' "$archive"
+            tar -tvzf "$archive" 2>/dev/null | head -n 1 | sed 's/^/LAST_GOOD_ROOT_META=/' || true
+            tmp="$(mktemp)"
+            if tar -xOzf "$archive" ./.htaccess > "$tmp" 2>/dev/null; then
+              printf 'LAST_GOOD_HTACCESS_SHA256=%s\n' "$(sha256sum "$tmp" | awk '{print $1}')"
+              grep -Ein 'options|directoryindex|rewrite|fallbackresource|errordocument|redirect|alias|php|handler|cgi|fcgi|require|allow|deny|setenv' "$tmp" 2>/dev/null | head -n 120 || true
+            else
+              echo 'LAST_GOOD_HTACCESS_MISSING=YES'
+            fi
+            rm -f "$tmp"
+            if tar -tzf "$archive" 2>/dev/null | grep -qx './public/.htaccess'; then
+              echo 'LAST_GOOD_PUBLIC_HTACCESS=YES'
+            else
+              echo 'LAST_GOOD_PUBLIC_HTACCESS=NO'
+            fi
+          else
+            echo 'LAST_GOOD_SNAPSHOT_FOUND=NO'
+          fi
+          echo 'ERPV2_ACCESS_COMPARE_END'
+          REMOTE
+
+      - name: Public HTTP comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          for row in \
+            'ERPV2_LOGIN|https://plan-ex.ru/erpv2/login' \
+            'ERPV2_ASSET|https://plan-ex.ru/erpv2/assets/css/app.css' \
+            'LEGACY_ERP|https://plan-ex.ru/erp/' \
+            'ROOT_SITE|https://plan-ex.ru/'; do
+            IFS='|' read -r name url <<< "$row"
+            code="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 "$url" || printf '000')"
+            printf '%s_HTTP=%s\n' "$name" "$code"
+          done
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/erpv2_access_compare_key"
