@@ -1,0 +1,91 @@
+name: Waste Trips Cardinality Facts
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-cardinality-facts-20260902
+
+permissions:
+  contents: read
+
+env:
+  EXPECTED_SHA: 0a72245c22164d0cfd88d5be45a5ff2327ee5d49
+  LEGACY_DB_NAME_HINT: spugovxsim_frega
+  LEGACY_DB_USER_HINT: spugovxsim_frega
+
+jobs:
+  facts:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate read-only probe and canonical
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l .github/waste-trips-cardinality-facts.php
+          grep -Fq 'SET SESSION TRANSACTION READ ONLY' .github/waste-trips-cardinality-facts.php
+          grep -Fq 'START TRANSACTION READ ONLY' .github/waste-trips-cardinality-facts.php
+          git fetch --no-tags origin "+refs/heads/chatgpt/production-stabilization-20260802:refs/remotes/origin/canonical"
+          test "$(git rev-parse refs/remotes/origin/canonical)" = "$EXPECTED_SHA"
+      - name: Configure SSH
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+      - name: Discover legacy config
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          remote_list="/tmp/waste_cardinality_candidates_${GITHUB_RUN_ID}.txt"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "HOME_ROOT='/home/s/$SSH_USER' DB_HINT='$LEGACY_DB_NAME_HINT' USER_HINT='$LEGACY_DB_USER_HINT' OUT='$remote_list' /bin/bash -s" <<'REMOTE'
+          set -euo pipefail
+          tmp="${OUT}.all"; : > "$tmp"; : > "$OUT"
+          find "$HOME_ROOT" -maxdepth 12 -type f \( -name 'config.php' -o -name 'database.php' -o -name 'db.php' -o -name '.env' -o -name 'flights.php' \) -size -512k -print 2>/dev/null > "$tmp"
+          while IFS= read -r f; do
+            [ -f "$f" ] || continue
+            if [ "$(basename "$f")" = 'flights.php' ]; then d=$(dirname "$f"); for c in "$d/config.php" "$d/db.php" "$d/database.php" "$d/.env"; do [ -f "$c" ] && printf '%s\n' "$c" >> "$OUT"; done; fi
+            if grep -aFq "$DB_HINT" "$f" 2>/dev/null || grep -aFq "$USER_HINT" "$f" 2>/dev/null; then printf '%s\n' "$f" >> "$OUT"; fi
+          done < "$tmp"
+          sort -u -o "$OUT" "$OUT"; rm -f "$tmp"; test "$(wc -l < "$OUT")" -gt 0
+          REMOTE
+      - name: Read current cardinality facts
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          remote_script="/tmp/waste_cardinality_${GITHUB_RUN_ID}.php"
+          remote_list="/tmp/waste_cardinality_candidates_${GITHUB_RUN_ID}.txt"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/waste-trips-cardinality-facts.php "$SSH_USER@$SSH_HOST:$remote_script"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "CANDIDATE_LIST='$remote_list' /usr/bin/php8.5 '$remote_script'" | tee cardinality-facts.txt
+          grep -Fqx 'WASTE_CARDINALITY_FACTS=PASS' cardinality-facts.txt
+      - name: Upload evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-cardinality-facts
+          path: cardinality-facts.txt
+          retention-days: 30
+      - name: Cleanup
+        if: always()
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          if [ -f "$HOME/.ssh/key" ]; then ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/waste_cardinality_candidates_${GITHUB_RUN_ID}.txt' '/tmp/waste_cardinality_${GITHUB_RUN_ID}.php'" 2>/dev/null || true; fi
+          rm -f "$HOME/.ssh/key"
