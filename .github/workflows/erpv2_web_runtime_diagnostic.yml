@@ -42,7 +42,7 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/erpv2_runtime_diag_key" "$HOME/.ssh/known_hosts"
 
-      - name: Probe web PHP runtime and reset web OPcache
+      - name: Probe web server PHP runtime and static routing
         id: probe
         shell: bash
         env:
@@ -53,11 +53,13 @@ jobs:
           set -euo pipefail
           TOKEN="$(openssl rand -hex 24)"
           PROBE_NAME="_p07_runtime_${GITHUB_RUN_ID}.php"
+          STATIC_NAME="_p07_static_${GITHUB_RUN_ID}.txt"
           REMOTE_PROBE="$SERVER_ROOT/${LIVE_DIR}/erpv2/public/$PROBE_NAME"
+          REMOTE_STATIC="$SERVER_ROOT/${LIVE_DIR}/erpv2/public/$STATIC_NAME"
           printf '::add-mask::%s\n' "$TOKEN"
           cleanup() {
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-              "rm -f '$REMOTE_PROBE' && test ! -e '$REMOTE_PROBE'" >/dev/null 2>&1 || true
+              "rm -f '$REMOTE_PROBE' '$REMOTE_STATIC' && test ! -e '$REMOTE_PROBE' && test ! -e '$REMOTE_STATIC'" >/dev/null 2>&1 || true
           }
           trap cleanup EXIT
 
@@ -73,12 +75,30 @@ jobs:
           echo 'OPCACHE_REVALIDATE_FREQ=', ini_get('opcache.revalidate_freq'), PHP_EOL;
           echo 'OPCACHE_RESET=', (function_exists('opcache_reset') && opcache_reset() ? '1' : '0'), PHP_EOL;
           PHP
-          chmod 0644 "$LOCAL_PROBE"
+          LOCAL_STATIC="$(mktemp)"
+          printf 'ERPV2_STATIC_DIAGNOSTIC=OK\n' > "$LOCAL_STATIC"
+          chmod 0644 "$LOCAL_PROBE" "$LOCAL_STATIC"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$LOCAL_PROBE" "$SSH_USER@$SSH_HOST:$REMOTE_PROBE"
-          rm -f "$LOCAL_PROBE"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$LOCAL_STATIC" "$SSH_USER@$SSH_HOST:$REMOTE_STATIC"
+          rm -f "$LOCAL_PROBE" "$LOCAL_STATIC"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "chmod 0644 '$REMOTE_PROBE' && stat -c 'PROBE_MODE=%a PROBE_OWNER=%U:%G PROBE_PATH=%n' '$REMOTE_PROBE'"
+            "chmod 0644 '$REMOTE_PROBE' '$REMOTE_STATIC' && stat -c 'PROBE_MODE=%a PROBE_OWNER=%U:%G PROBE_PATH=%n' '$REMOTE_PROBE' '$REMOTE_STATIC'"
+
+          STATIC_BODY="$(mktemp)"
+          STATIC_HTTP="$(curl -sS -o "$STATIC_BODY" -w '%{http_code}' --max-time 30 "https://plan-ex.ru/erpv2/${STATIC_NAME}" || printf '000')"
+          echo "STATIC_PROBE_HTTP=$STATIC_HTTP"
+          head -c 120 "$STATIC_BODY" || true
+          echo
+          rm -f "$STATIC_BODY"
+
+          ASSET_HTTP="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/assets/css/app.css || printf '000')"
+          LEGACY_HTTP="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erp/ || printf '000')"
+          ROOT_HTTP="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/ || printf '000')"
+          echo "ERPV2_ASSET_HTTP=$ASSET_HTTP"
+          echo "LEGACY_ERP_HTTP=$LEGACY_HTTP"
+          echo "ROOT_SITE_HTTP=$ROOT_HTTP"
 
           PROBE_BODY="$(mktemp)"
           PROBE_HTTP="$(curl -sS -o "$PROBE_BODY" -w '%{http_code}' --max-time 30 "https://plan-ex.ru/erpv2/${PROBE_NAME}?token=${TOKEN}" || printf '000')"
@@ -95,25 +115,42 @@ jobs:
           if [ "$PROBE_HTTP" != 200 ] || [ "$LOGIN_HTTP" != 200 ]; then
             echo '::group::ERPv2 bounded web-server diagnostic'
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-              "SERVER_ROOT='$SERVER_ROOT' LIVE_DIR='$LIVE_DIR' PROBE_NAME='$PROBE_NAME' bash -se" <<'REMOTE'
+              "SERVER_ROOT='$SERVER_ROOT' LIVE_DIR='$LIVE_DIR' PROBE_NAME='$PROBE_NAME' STATIC_NAME='$STATIC_NAME' bash -se" <<'REMOTE'
           set +e
           LIVE="$SERVER_ROOT/$LIVE_DIR/erpv2"
+          ACCOUNT_ROOT="$(dirname "$SERVER_ROOT")"
           echo 'ERPV2_WEB_SERVER_DIAGNOSTIC_BEGIN'
-          stat -c 'PATH_MODE=%a PATH_OWNER=%U:%G PATH=%n' \
-            "$SERVER_ROOT/$LIVE_DIR" "$LIVE" "$LIVE/public" "$LIVE/public/index.php" "$LIVE/public/$PROBE_NAME" 2>/dev/null || true
+          stat -c 'PATH_MODE=%a PATH_OWNER=%U:%G PATH_MTIME=%y PATH=%n' \
+            "$SERVER_ROOT/$LIVE_DIR" "$LIVE" "$LIVE/.htaccess" "$LIVE/public" "$LIVE/public/index.php" "$LIVE/public/$PROBE_NAME" "$LIVE/public/$STATIC_NAME" 2>/dev/null || true
           for htaccess in "$SERVER_ROOT/$LIVE_DIR/.htaccess" "$LIVE/.htaccess" "$LIVE/public/.htaccess"; do
             if [ -r "$htaccess" ]; then
-              printf 'HTACCESS=%s\n' "$htaccess"
-              grep -Ein 'php|handler|cgi|fcgi|rewrite|error|index|options|require|allow|deny' "$htaccess" 2>/dev/null | head -n 80 || true
+              printf 'HTACCESS=%s SHA256=%s\n' "$htaccess" "$(sha256sum "$htaccess" | awk '{print $1}')"
+              grep -Ein 'php|handler|cgi|fcgi|rewrite|error|index|options|require|allow|deny' "$htaccess" 2>/dev/null | head -n 100 || true
             fi
           done
+          echo 'PHP_WEB_CONFIG_BEGIN'
+          for base in "$ACCOUNT_ROOT" "$SERVER_ROOT/$LIVE_DIR" "$LIVE" "$LIVE/public"; do
+            for cfg in "$base/.user.ini" "$base/php.ini" "$base/.phpversion" "$base/.php-version"; do
+              if [ -r "$cfg" ]; then
+                printf 'PHP_WEB_CONFIG=%s MODE=%s SHA256=%s\n' "$cfg" "$(stat -c '%a' "$cfg" 2>/dev/null)" "$(sha256sum "$cfg" | awk '{print $1}')"
+                grep -Ein 'php|version|handler|cgi|fcgi|auto_prepend|auto_append|error_log|opcache|session|extension|zend' "$cfg" 2>/dev/null | head -n 80 || true
+              fi
+            done
+          done
+          echo 'PHP_WEB_CONFIG_END'
+          echo 'RECENT_SERVER_ERROR_EVIDENCE_BEGIN'
+          find "$ACCOUNT_ROOT" -maxdepth 5 -type f \( -iname 'error_log' -o -iname '*error*.log' -o -iname '*php*.log' -o -iname '*apache*.log' -o -iname '*cgi*.log' \) -mmin -30 -print 2>/dev/null | head -n 12 | while IFS= read -r log_file; do
+            printf 'ERROR_LOG_CANDIDATE=%s\n' "$log_file"
+            tail -n 200 "$log_file" 2>/dev/null | grep -Ei 'erpv2|_p07_runtime|_p07_static|internal redirect|AH[0-9]+|premature|script headers|permission denied|primary script|php|cgi|fastcgi|fcgi' | tail -n 80 || true
+          done
+          echo 'RECENT_SERVER_ERROR_EVIDENCE_END'
           echo 'ERPV2_WEB_SERVER_DIAGNOSTIC_END'
           REMOTE
             echo '::endgroup::'
           fi
 
-          printf 'probe_http=%s\nweb_version=%s\nweb_sapi=%s\nopcache_reset=%s\nlogin_http=%s\n' \
-            "$PROBE_HTTP" "$WEB_VERSION" "$WEB_SAPI" "$OPCACHE_RESET" "$LOGIN_HTTP" >> "$GITHUB_OUTPUT"
+          printf 'probe_http=%s\nstatic_http=%s\nasset_http=%s\nlegacy_http=%s\nroot_http=%s\nweb_version=%s\nweb_sapi=%s\nopcache_reset=%s\nlogin_http=%s\n' \
+            "$PROBE_HTTP" "$STATIC_HTTP" "$ASSET_HTTP" "$LEGACY_HTTP" "$ROOT_HTTP" "$WEB_VERSION" "$WEB_SAPI" "$OPCACHE_RESET" "$LOGIN_HTTP" >> "$GITHUB_OUTPUT"
           cleanup
           trap - EXIT
 
@@ -130,7 +167,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "test ! -e '$SERVER_ROOT/${LIVE_DIR}/erpv2/public/_p07_runtime_${GITHUB_RUN_ID}.php'"
+            "test ! -e '$SERVER_ROOT/${LIVE_DIR}/erpv2/public/_p07_runtime_${GITHUB_RUN_ID}.php' && test ! -e '$SERVER_ROOT/${LIVE_DIR}/erpv2/public/_p07_static_${GITHUB_RUN_ID}.txt'"
           test "$LOGIN_HTTP" = 200
           echo 'ERPV2_WEB_RUNTIME_DIAGNOSTIC=PASS'
 
