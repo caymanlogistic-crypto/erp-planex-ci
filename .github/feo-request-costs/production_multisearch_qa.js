@@ -18,6 +18,13 @@ function parseMoney(text) {
   return Number.isFinite(value) ? value : NaN;
 }
 
+function isSearchResponse(response) {
+  try {
+    const u = new URL(response.url());
+    return response.request().method() === 'GET' && u.pathname.endsWith('/company/feo/requests/costs/search');
+  } catch (_) { return false; }
+}
+
 (async () => {
   fs.mkdirSync('artifacts', { recursive: true });
   const browser = await chromium.launch({ headless: true });
@@ -55,26 +62,22 @@ function parseMoney(text) {
 
   const search = page.locator('[data-cost-search]');
   assert(await search.count() === 1, 'search control missing');
-  const tagName = await search.evaluate(el => el.tagName.toLowerCase());
-  assert(tagName === 'textarea', 'search control is not textarea');
+  assert(await search.evaluate(el => el.tagName.toLowerCase()) === 'textarea', 'search control is not textarea');
 
-  const searchResponsePromise = page.waitForResponse(response => {
-    try {
-      const u = new URL(response.url());
-      return response.request().method() === 'GET' && u.pathname.endsWith('/company/feo/requests/costs/search');
-    } catch (_) { return false; }
-  }, { timeout: 15000 });
+  async function performSearch(input) {
+    const responsePromise = page.waitForResponse(isSearchResponse, { timeout: 15000 });
+    await search.fill(input);
+    const response = await responsePromise;
+    assert(response.status() === 200, 'real production search HTTP != 200');
+    return { response, json: await response.json(), url: new URL(response.url()) };
+  }
 
-  await search.fill(exactInput);
+  const mandatorySearch = await performSearch(exactInput);
   assert(await search.inputValue() === exactInput, 'textarea did not preserve exact multiline input');
-
-  const searchResponse = await searchResponsePromise;
-  assert(searchResponse.status() === 200, 'real production search HTTP != 200');
-  const searchUrl = new URL(searchResponse.url());
-  const normalizedRequest = searchUrl.searchParams.get('request_ids');
+  const normalizedRequest = mandatorySearch.url.searchParams.get('request_ids');
   assert(normalizedRequest === expectedNormalized, `normalized network request mismatch: ${normalizedRequest}`);
 
-  const backend = await searchResponse.json();
+  const backend = mandatorySearch.json;
   assert(backend && backend.success === true, 'backend search success != true');
   assert(Array.isArray(backend.results), 'backend results missing');
   assert(backend.results.length === 3, `backend must return 3 independent results, got ${backend.results.length}`);
@@ -83,7 +86,7 @@ function parseMoney(text) {
   assert(new Set(backendIds).size === 3, 'backend returned glued or duplicate IDs');
 
   await page.waitForFunction(() => document.querySelectorAll('.feo-cost-search-table tbody tr').length === 3, null, { timeout: 10000 });
-  const rows = page.locator('.feo-cost-search-table tbody tr');
+  let rows = page.locator('.feo-cost-search-table tbody tr');
   assert(await rows.count() === 3, 'UI must render exactly 3 result rows');
 
   const uiRows = {};
@@ -118,35 +121,94 @@ function parseMoney(text) {
     }
   }
 
-  const pricedItem = backend.results.find(item => item.block);
-  assert(pricedItem, 'none of mandatory QA requests has a cost block; cannot verify popup mapping');
-  const pricedId = String(pricedItem.zayavka_id);
-  const pricedBlockId = String(pricedItem.block.block_id);
-  let pricedRow = null;
-  for (let i = 0; i < 3; i++) {
-    const row = rows.nth(i);
-    if ((await row.locator('td').nth(0).innerText()).trim() === pricedId) { pricedRow = row; break; }
+  let popupRequestId = null;
+  let popupBlockId = null;
+  let popupCost = null;
+  let popupSource = null;
+  let modalTitle = null;
+
+  const mandatoryPriced = backend.results.find(item => item.block);
+  if (mandatoryPriced) {
+    popupRequestId = String(mandatoryPriced.zayavka_id);
+    popupBlockId = String(mandatoryPriced.block.block_id);
+    popupCost = Number(mandatoryPriced.block.total_cost);
+    popupSource = 'mandatory-input';
+  } else {
+    const mainRows = page.locator('tbody tr[data-cost-block-id]');
+    assert(await mainRows.count() > 0, 'production has no priced block row available for modal QA');
+    const mainRow = mainRows.first();
+    const discoveredBlockId = String(await mainRow.getAttribute('data-cost-block-id'));
+    assert(discoveredBlockId && /^\d+$/.test(discoveredBlockId), 'main priced row has invalid block id');
+
+    const discoveryDetailPromise = page.waitForResponse(response => {
+      try {
+        const u = new URL(response.url());
+        return response.request().method() === 'GET' && u.pathname.endsWith(`/company/feo/requests/costs/blocks/${discoveredBlockId}/json`);
+      } catch (_) { return false; }
+    }, { timeout: 15000 });
+    await mainRow.dblclick();
+    const discoveryDetail = await discoveryDetailPromise;
+    assert(discoveryDetail.status() === 200, 'priced block discovery detail HTTP != 200');
+    const discoveryJson = await discoveryDetail.json();
+    assert(discoveryJson && discoveryJson.success === true && discoveryJson.block, 'priced block discovery payload invalid');
+    assert(String(discoveryJson.block.id) === discoveredBlockId, 'main row opened wrong priced block');
+    const firstRequest = (discoveryJson.block.requests || [])[0];
+    assert(firstRequest && /^\d{6}$/.test(String(firstRequest.zayavka_id)), 'priced block has no six-digit request for popup QA');
+    popupRequestId = String(firstRequest.zayavka_id);
+    popupBlockId = discoveredBlockId;
+    popupCost = Number(discoveryJson.block.total_cost);
+    popupSource = 'discovered-production-priced-block';
+    await page.waitForSelector('#feo-cost-detail-modal.is-open', { timeout: 10000 });
+    await page.locator('#feo-cost-detail-modal [data-close-modal="feo-cost-detail-modal"]').first().click();
+
+    const pricedSearch = await performSearch(popupRequestId);
+    assert(pricedSearch.json && pricedSearch.json.success === true, 'priced request search failed');
+    assert(Array.isArray(pricedSearch.json.results) && pricedSearch.json.results.length === 1, 'priced request search must return one result');
+    const pricedResult = pricedSearch.json.results[0];
+    assert(String(pricedResult.zayavka_id) === popupRequestId, 'priced search returned wrong request');
+    assert(pricedResult.block, 'priced request unexpectedly has no block in search');
+    assert(String(pricedResult.block.block_id) === popupBlockId, `priced request mapped to wrong block ${pricedResult.block.block_id} != ${popupBlockId}`);
+    assert(Math.abs(Number(pricedResult.block.total_cost) - popupCost) < 0.01, 'priced request backend cost differs from block detail cost');
+    await page.waitForFunction(() => document.querySelectorAll('.feo-cost-search-table tbody tr').length === 1, null, { timeout: 10000 });
+    const pricedSearchRow = page.locator('.feo-cost-search-table tbody tr').first();
+    const pricedCells = pricedSearchRow.locator('td');
+    assert((await pricedCells.nth(0).innerText()).trim() === popupRequestId, 'priced UI search row has wrong request id');
+    assert((await pricedCells.nth(3).innerText()).trim() === `#${popupBlockId}`, 'priced UI search row has wrong block');
+    assert(Math.abs(parseMoney(await pricedCells.nth(6).innerText()) - popupCost) < 0.01, 'priced UI search row has wrong cost');
   }
-  assert(pricedRow, `priced UI row missing for ${pricedId}`);
+
+  rows = page.locator('.feo-cost-search-table tbody tr');
+  let popupRow = null;
+  for (let i = 0; i < await rows.count(); i++) {
+    const row = rows.nth(i);
+    if ((await row.locator('td').nth(0).innerText()).trim() === popupRequestId) { popupRow = row; break; }
+  }
+  if (!popupRow) {
+    const pricedSearch = await performSearch(popupRequestId);
+    assert(pricedSearch.json && pricedSearch.json.results && pricedSearch.json.results.length === 1, 'popup request re-search failed');
+    await page.waitForFunction(() => document.querySelectorAll('.feo-cost-search-table tbody tr').length === 1, null, { timeout: 10000 });
+    popupRow = page.locator('.feo-cost-search-table tbody tr').first();
+  }
+  assert(await popupRow.getAttribute('data-cost-search-block-id') === popupBlockId, 'popup search row points to wrong block');
 
   const detailResponsePromise = page.waitForResponse(response => {
     try {
       const u = new URL(response.url());
-      return response.request().method() === 'GET' && u.pathname.endsWith(`/company/feo/requests/costs/blocks/${pricedBlockId}/json`);
+      return response.request().method() === 'GET' && u.pathname.endsWith(`/company/feo/requests/costs/blocks/${popupBlockId}/json`);
     } catch (_) { return false; }
   }, { timeout: 15000 });
-  await pricedRow.dblclick();
+  await popupRow.dblclick();
   const detailResponse = await detailResponsePromise;
-  assert(detailResponse.status() === 200, 'block detail HTTP != 200');
+  assert(detailResponse.status() === 200, 'popup block detail HTTP != 200');
   const detailJson = await detailResponse.json();
-  assert(detailJson && detailJson.success === true && detailJson.block, 'block detail payload invalid');
-  assert(String(detailJson.block.id) === pricedBlockId, `popup opened wrong block ${detailJson.block.id} != ${pricedBlockId}`);
-  assert((detailJson.block.requests || []).some(r => String(r.zayavka_id) === pricedId), `popup block ${pricedBlockId} does not contain request ${pricedId}`);
+  assert(detailJson && detailJson.success === true && detailJson.block, 'popup block detail payload invalid');
+  assert(String(detailJson.block.id) === popupBlockId, `popup opened wrong block ${detailJson.block.id} != ${popupBlockId}`);
+  assert((detailJson.block.requests || []).some(r => String(r.zayavka_id) === popupRequestId), `popup block ${popupBlockId} does not contain request ${popupRequestId}`);
   await page.waitForSelector('#feo-cost-detail-modal.is-open', { timeout: 10000 });
-  const modalTitle = (await page.locator('[data-cost-detail-title]').innerText()).trim();
-  assert(modalTitle.includes(`#${pricedBlockId}`), `modal title is wrong: ${modalTitle}`);
+  modalTitle = (await page.locator('[data-cost-detail-title]').innerText()).trim();
+  assert(modalTitle.includes(`#${popupBlockId}`), `modal title is wrong: ${modalTitle}`);
   const modalBody = await page.locator('[data-cost-detail-body]').innerText();
-  assert(modalBody.includes(pricedId), `modal body does not contain selected request ${pricedId}`);
+  assert(modalBody.includes(popupRequestId), `modal body does not contain selected request ${popupRequestId}`);
   await page.locator('#feo-cost-detail-modal [data-close-modal="feo-cost-detail-modal"]').first().click();
 
   const searchCountBeforeInvalid = costRequests.filter(r => {
@@ -167,7 +229,8 @@ function parseMoney(text) {
   assert(consoleErrors.length === 0, 'console errors: ' + consoleErrors.join(' | '));
   assert(pageErrors.length === 0, 'page errors: ' + pageErrors.join(' | '));
 
-  await search.fill(exactInput);
+  const finalMandatory = await performSearch(exactInput);
+  assert(finalMandatory.url.searchParams.get('request_ids') === expectedNormalized, 'final exact multiline normalization drifted');
   await page.waitForFunction(() => document.querySelectorAll('.feo-cost-search-table tbody tr').length === 3, null, { timeout: 10000 });
   await page.screenshot({ path: 'artifacts/feo-request-costs-multisearch-production.png', fullPage: true });
 
@@ -186,7 +249,7 @@ function parseMoney(text) {
       isCurrent: !!item.is_current
     })),
     uiRows,
-    popup: { requestId: pricedId, blockId: pricedBlockId, modalTitle },
+    popup: { requestId: popupRequestId, blockId: popupBlockId, totalCost: popupCost, source: popupSource, modalTitle },
     invalidInputSearchDelta: searchCountAfterInvalid - searchCountBeforeInvalid,
     forbiddenWrites,
     consoleErrors,
@@ -196,8 +259,9 @@ function parseMoney(text) {
   fs.writeFileSync('artifacts/network_requests.json', JSON.stringify(costRequests, null, 2));
   console.log('FEO_REQUEST_COSTS_AUTHENTICATED_PRODUCTION_QA=PASS');
   console.log('NORMALIZED_REQUEST=' + normalizedRequest);
-  console.log('BACKEND_RESULTS=' + JSON.stringify(summary.backendResults));
-  console.log('POPUP_REQUEST=' + pricedId + ' BLOCK=' + pricedBlockId);
+  console.log('MANDATORY_BACKEND_RESULTS=' + JSON.stringify(summary.backendResults));
+  console.log('POPUP_EVIDENCE=' + JSON.stringify(summary.popup));
+  console.log('INVALID_INPUT_SEARCH_DELTA=0');
   console.log('BUSINESS_WRITES=0');
   await browser.close();
 })().catch(async e => {
