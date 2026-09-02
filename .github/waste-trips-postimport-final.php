@@ -50,24 +50,17 @@ foreach (['waste_trips', 'waste_trip_requests', 'waste_trip_legacy_import_audits
 }
 $expectedCounts = ['waste_trips'=>75,'waste_trip_requests'=>961,'waste_trip_legacy_import_audits'=>75,'waste_trip_audit_log'=>75];
 if ($counts !== $expectedCounts) throw new RuntimeException('post-import counts mismatch ' . json_encode($counts));
-
 echo 'WASTE_POSTIMPORT_COUNTS=PASS trips=75 links=961 import_audits=75 audit_log=75' . PHP_EOL;
 
 $clientStmt = $tenant->prepare("SELECT id,name,inn,status,deleted_at FROM clients WHERE inn=? ORDER BY id");
 $clientStmt->execute(['4714004270']);
 $clients = $clientStmt->fetchAll();
-if (count($clients) !== 1 || (int)$clients[0]['id'] !== 6 || (string)$clients[0]['status'] !== 'active' || $clients[0]['deleted_at'] !== null) {
-    throw new RuntimeException('FEO client verification failed');
-}
-if ((string)$clients[0]['name'] !== 'ФГУП "Федеральный экологический оператор"') {
-    throw new RuntimeException('FEO client name mismatch');
-}
+if (count($clients) !== 1 || (int)$clients[0]['id'] !== 6 || (string)$clients[0]['status'] !== 'active' || $clients[0]['deleted_at'] !== null) throw new RuntimeException('FEO client verification failed');
+if ((string)$clients[0]['name'] !== 'ФГУП "Федеральный экологический оператор"') throw new RuntimeException('FEO client name mismatch');
 echo 'WASTE_POSTIMPORT_CLIENT=PASS id=6 inn=4714004270' . PHP_EOL;
 
 $identity = $tenant->query("SELECT COUNT(*) total, COUNT(DISTINCT legacy_flight_id) legacy_ids, COUNT(DISTINCT source_system) sources, MIN(source_system) source_min, MAX(source_system) source_max FROM waste_trips")->fetch();
-if ((int)$identity['total'] !== 75 || (int)$identity['legacy_ids'] !== 75 || (int)$identity['sources'] !== 1 || $identity['source_min'] !== 'legacy_flights' || $identity['source_max'] !== 'legacy_flights') {
-    throw new RuntimeException('legacy identity verification failed');
-}
+if ((int)$identity['total'] !== 75 || (int)$identity['legacy_ids'] !== 75 || (int)$identity['sources'] !== 1 || $identity['source_min'] !== 'legacy_flights' || $identity['source_max'] !== 'legacy_flights') throw new RuntimeException('legacy identity verification failed');
 $distinctFeo = (int)$tenant->query('SELECT COUNT(DISTINCT feo_request_id) FROM waste_trip_requests')->fetchColumn();
 if ($distinctFeo !== 828) throw new RuntimeException('distinct FEO mismatch=' . $distinctFeo);
 echo 'WASTE_POSTIMPORT_IDENTITY=PASS legacy_flights=75 distinct_feo=828' . PHP_EOL;
@@ -97,6 +90,7 @@ if ($rangeDates !== 6 || $invalidUnspecified !== 0) throw new RuntimeException('
 echo 'WASTE_POSTIMPORT_PARTIAL_PLAN=PASS normalized=15 complete_ranges=6 invalid_unspecified=0' . PHP_EOL;
 
 $massStmt = $tenant->prepare("SELECT wt.legacy_flight_id,a.mass_delta_kg,a.warnings_json FROM waste_trips wt JOIN waste_trip_legacy_import_audits a ON a.waste_trip_id=wt.id WHERE wt.legacy_flight_id IN (257,258) ORDER BY wt.legacy_flight_id");
+$massStmt->execute();
 $massRows = $massStmt->fetchAll();
 if (count($massRows) !== 2) throw new RuntimeException('mass evidence rows missing');
 $expectedDelta = [257=>-145.0, 258=>-152.0];
@@ -105,9 +99,7 @@ foreach ($massRows as $row) {
     $delta = (float)$row['mass_delta_kg'];
     if (!isset($expectedDelta[$id]) || abs($delta - $expectedDelta[$id]) > 0.0001) throw new RuntimeException('mass delta mismatch flight=' . $id);
     $warnings = json_decode((string)$row['warnings_json'], true);
-    if (!is_array($warnings) || !in_array('legacy_mass_delta_kg=' . number_format($delta, 3, '.', ''), $warnings, true)) {
-        throw new RuntimeException('mass warning missing flight=' . $id);
-    }
+    if (!is_array($warnings) || !in_array('legacy_mass_delta_kg=' . number_format($delta, 3, '.', ''), $warnings, true)) throw new RuntimeException('mass warning missing flight=' . $id);
 }
 echo 'WASTE_POSTIMPORT_MASS_EVIDENCE=PASS flight257=-145.000 flight258=-152.000' . PHP_EOL;
 
