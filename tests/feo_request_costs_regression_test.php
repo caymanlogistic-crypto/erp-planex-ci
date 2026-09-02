@@ -87,7 +87,9 @@ $must(str_contains($view,'window.FEO_REQUEST_COST_CONFIG={base:'),'cost page mus
 $must(str_contains($view,'data-cost-page-ready'),'cost screen ready marker must exist');
 $must(str_contains($view,'<textarea rows="1" class="toolbar-search feo-cost-search" data-cost-search'),'cost search control must be multiline-safe textarea rendered as one row');
 $must(!str_contains($view,'<input type="text" class="toolbar-search feo-cost-search" data-cost-search'),'cost search must no longer use single-line input control');
-$must(str_contains($view,'.feo-cost-search{width:460px;min-width:320px;max-width:min(460px,80vw);resize:none;overflow:hidden}'),'cost search textarea must preserve toolbar geometry and hide resize/overflow');
+$must(str_contains($view,'.feo-cost-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0}'),'cost toolbar actions must remain bounded by the page container');
+$must(str_contains($view,'.feo-cost-search{width:1380px;min-width:320px;max-width:100%;resize:none;overflow:hidden}'),'cost search textarea desktop width must be tripled while remaining container-bounded');
+$must(str_contains($view,'.feo-cost-search{width:100%;min-width:0;max-width:100%}'),'cost search textarea must remain responsive without horizontal overflow');
 $must(str_contains($view,'id="feo-cost-create-modal" class="modal-overlay"'),'create UI must use system modal overlay');
 $must(str_contains($view,'id="feo-cost-detail-modal" class="modal-overlay"'),'detail/edit UI must use system modal overlay');
 $must(str_contains($view,'id="feo-cost-confirm-modal" class="modal-overlay"'),'confirmation UI must use system modal overlay');
@@ -103,7 +105,7 @@ $must(str_contains($view,'data-cost-edit-type-choice="rate_34_5"')&&str_contains
 $must(str_contains($view,'data-cost-confirm-copy')&&str_contains($view,'data-cost-confirm-submit'),'create/edit must use confirmation modal');
 $must(str_contains($view,'csrfField()'),'cost forms must contain CSRF field');
 $must(str_contains($js,'function extractSearchRequestIds(raw)')&&str_contains($js,"const structured=raw.indexOf('\\t')!==-1||raw.indexOf('|')!==-1"),'interactive search client parser must mirror canonical structured-input contract');
-$must(str_contains($js,"const normalized=ids.join(' ')")&&str_contains($js,"new URLSearchParams({request_ids:normalized})"),'runSearch must send normalized IDs only');
+$must(str_contains($js,"const normalized=ids.join(', ')")&&str_contains($js,'searchInput.value=normalized;')&&str_contains($js,"new URLSearchParams({request_ids:normalized})"),'runSearch must show and send canonical comma-separated IDs');
 $must(str_contains($js,'function cancelSearchRequest(){search.generation++;search.controller?.abort();search.controller=null;}'),'input changes must invalidate and abort stale search requests');
 $must(str_contains($js,"if(!extractSearchRequestIds(raw).length){renderInvalidSearch();return;}"),'invalid input must stop before network scheduling');
 $must(str_contains($js,'added_ids')&&str_contains($js,'removed_ids')&&str_contains($js,'old_total_cost'),'edit confirmation must show composition and price diff');

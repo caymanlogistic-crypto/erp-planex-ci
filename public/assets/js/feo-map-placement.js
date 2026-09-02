@@ -471,7 +471,8 @@ async function runBlockSearch(){
     }
     return;
   }
-  const normalized=ids.join(' ');
+  const normalized=ids.join(', ');
+  blockSearchInput.value=normalized;
   const generation=++blockSearch.generation;
   if(blockSearch.controller)blockSearch.controller.abort();
   blockSearch.controller=new AbortController();
@@ -501,7 +502,7 @@ blockSearchInput?.addEventListener('paste',ev=>{
   const ids=extractClientRequestIds(pasted);
   if(ids.length){
     ev.preventDefault();
-    blockSearchInput.value=ids.join(' ');
+    blockSearchInput.value=ids.join(', ');
     scheduleBlockSearch(true);
   }
 });

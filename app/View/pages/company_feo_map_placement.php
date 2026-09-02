@@ -16,11 +16,11 @@ $fmtMass = static function ($value): string {
 .feo-placement-toolbar{min-height:42px;height:auto;padding:6px 8px;gap:8px;flex-wrap:wrap}
 .feo-placement-toolbar-summary{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
 .feo-placement-toolbar-summary .sep{color:var(--text-muted);font-weight:400}
-.feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0}
 .feo-placement-hide-disabled{display:flex;align-items:center;gap:6px;min-height:30px;white-space:nowrap;font-size:11px;color:var(--text);cursor:pointer}
 .feo-placement-hide-disabled input[type="checkbox"]{width:15px;height:15px;margin:0;accent-color:var(--accent)}
 .feo-placement-table-card:has([data-placement-hide-disabled]:checked) .feo-placement-table tbody tr[data-placement-block-status="disabled"]{display:none}
-.feo-placement-block-search-input{width:460px;min-width:320px;max-width:min(460px,80vw);resize:none;overflow:hidden}
+.feo-placement-block-search-input{width:1380px;min-width:320px;max-width:100%;resize:none;overflow:hidden}
 .feo-placement-block-search-results{padding:8px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-placement-block-search-results.is-hidden{display:none}
 .feo-placement-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px}
@@ -74,7 +74,8 @@ $fmtMass = static function ($value): string {
 @media(max-width:900px){
   .feo-placement-form-grid{grid-template-columns:1fr}
   .feo-placement-wide{grid-column:auto}
-  .feo-placement-block-search-input{width:min(100%,86vw);min-width:240px}
+  .feo-placement-toolbar-actions{width:100%}
+  .feo-placement-block-search-input{width:100%;min-width:0;max-width:100%}
   .feo-placement-detail-meta{grid-template-columns:1fr}
   .feo-placement-detail-meta>div{border-right:0;border-bottom:1px solid var(--line-soft)!important}
   .feo-placement-detail-meta>div:last-child{border-bottom:0!important}
