@@ -5,6 +5,7 @@ $topbarCrumbs = [
     ['label' => 'Генератор договоров', 'url' => app_url('/company/document-generator')],
     ['label' => 'Шаблоны договоров', 'url' => null],
 ];
+$bootstrapWarnings = \App\Service\DocumentGeneratorService::builtInTemplateWarnings();
 ?>
 <div class="page-head">
     <div class="page-head-left">
@@ -19,6 +20,9 @@ $topbarCrumbs = [
 
 <?php if ($flash): ?><div class="notice <?= str_starts_with((string)$flash, 'Ошибка:') ? 'warn' : 'success' ?>"><?= e((string)$flash) ?></div><?php endif; ?>
 <?php if ($formError): ?><div class="notice warn"><?= e($formError) ?></div><?php endif; ?>
+<?php foreach ($bootstrapWarnings as $warning): ?>
+<div class="notice warn">Встроенный шаблон «<?= e((string)($warning['name'] ?? $warning['filename'] ?? 'DOCX')) ?>» временно не инициализирован: <?= e((string)($warning['message'] ?? 'неизвестная ошибка')) ?> Сохранённые исправные шаблоны продолжают работать.</div>
+<?php endforeach; ?>
 
 <div class="panel mb-4">
     <div class="panel-head"><strong>Загрузить шаблон договора / новую версию</strong></div>
