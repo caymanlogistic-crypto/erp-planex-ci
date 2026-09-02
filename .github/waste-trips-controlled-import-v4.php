@@ -38,8 +38,7 @@ function connectV4(array $c): PDO {
 function connectLegacySnapshotV4(array $c): PDO {
     $pdo=connectV4($c);
     $pdo->exec('SET SESSION TRANSACTION ISOLATION LEVEL REPEATABLE READ');
-    $pdo->exec('SET SESSION TRANSACTION READ ONLY');
-    $pdo->exec('START TRANSACTION READ ONLY WITH CONSISTENT SNAPSHOT');
+    $pdo->exec('START TRANSACTION WITH CONSISTENT SNAPSHOT, READ ONLY');
     return $pdo;
 }
 function tableExistsV4(PDO $pdo,string $table): bool {
@@ -84,10 +83,7 @@ function snapshotRowsV4(PDO $legacy): array {
 }
 function snapshotFingerprintV4(array $rows): string {
     $stable=[];
-    foreach($rows as $row){
-        ksort($row,SORT_STRING);
-        $stable[]=$row;
-    }
+    foreach($rows as $row){ksort($row,SORT_STRING);$stable[]=$row;}
     return hash('sha256',json_encode($stable,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_PRESERVE_ZERO_FRACTION|JSON_THROW_ON_ERROR));
 }
 
@@ -104,7 +100,7 @@ $paths=array_values(array_unique(array_filter(array_map('trim',file($candidateLi
 foreach($paths as $path){
     if(!is_file($path)||filesize($path)>524288)continue;
     $src=@file_get_contents($path); if(!is_string($src))continue; $c=configV4($src); if(!$c)continue;
-    try{$x=connectLegacySnapshotV4($c);if(!tableExistsV4($x,'flights'))continue;$matches[hash('sha256',$c['host']."\0".$c['database']."\0".$c['username'])]=$c;$x->rollBack();}catch(Throwable){}
+    try{$x=connectLegacySnapshotV4($c);if(!tableExistsV4($x,'flights')){$x->rollBack();continue;}$matches[hash('sha256',$c['host']."\0".$c['database']."\0".$c['username'])]=$c;$x->rollBack();}catch(Throwable){}
 }
 if(count($matches)!==1) failV4('legacy connection count='.count($matches));
 $legacyConfig=array_values($matches)[0];
@@ -167,7 +163,7 @@ try{
     $destRows=$tenant->query("SELECT destination_type,COUNT(*) n FROM waste_trips WHERE source_system='legacy_flights' GROUP BY destination_type ORDER BY destination_type")->fetchAll();$destCounts=[];foreach($destRows as $r)$destCounts[$r['destination_type']]=(int)$r['n'];ksort($destCounts);if($destCounts!==['utilizer'=>68,'warehouse'=>7])failV4('precommit destination counts '.json_encode($destCounts));
     $newStatusRows=$tenant->query("SELECT status,COUNT(*) n FROM waste_trips WHERE source_system='legacy_flights' GROUP BY status ORDER BY status")->fetchAll();$newStatus=[];foreach($newStatusRows as $r)$newStatus[$r['status']]=(int)$r['n'];ksort($newStatus);$expectNew=['completed'=>65,'executor_assigned'=>1,'in_progress'=>3,'searching_executor'=>6];ksort($expectNew);if($newStatus!==$expectNew)failV4('precommit status counts '.json_encode($newStatus));
     $planRows=$tenant->query("SELECT planned_start_mode,COUNT(*) n FROM waste_trips WHERE source_system='legacy_flights' GROUP BY planned_start_mode ORDER BY planned_start_mode")->fetchAll();$planCounts=[];foreach($planRows as $r)$planCounts[$r['planned_start_mode']]=(int)$r['n'];ksort($planCounts);$expectPlan=['range'=>6,'unspecified'=>69];ksort($expectPlan);if($planCounts!==$expectPlan)failV4('precommit planning counts '.json_encode($planCounts));
-    $normalizedAudit=(int)$tenant->query("SELECT COUNT(*) FROM waste_trip_legacy_import_audits WHERE source_system='legacy_flights' AND JSON_EXTRACT(legacy_payload_json,'$.legacy_planning_normalization.reason')='partial_range_not_representable'")->fetchColumn();if($normalizedAudit!==15)failV4('partial planning audit count='.$normalizedAudit);
+    $normalizedAudit=(int)$tenant->query("SELECT COUNT(*) FROM waste_trip_legacy_import_audits WHERE source_system='legacy_flights' AND JSON_UNQUOTE(JSON_EXTRACT(legacy_payload_json,'$.legacy_planning_normalization.reason'))='partial_range_not_representable'")->fetchColumn();if($normalizedAudit!==15)failV4('partial planning audit count='.$normalizedAudit);
     if(trim((string)file_get_contents($markerPath))!==$expectedSha)failV4('production marker changed during transaction');
 
     $freshLegacy=connectLegacySnapshotV4($legacyConfig);$freshRows=snapshotRowsV4($freshLegacy);$freshHash=snapshotFingerprintV4($freshRows);$freshLegacy->rollBack();
