@@ -16,7 +16,10 @@ on:
       - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
       - 'tests/document_generator_regression_v2_test.php'
+      - 'tests/document_generator_builtin_seed_resilience_test.php'
+      - 'tests/document_generator_deploy_artifact_test.php'
       - '.github/workflows/document_generator_regression.yml'
+      - '.github/workflows/erpv2_controlled_deploy.yml'
   push:
     branches:
       - chatgpt/production-stabilization-20260802
@@ -32,7 +35,10 @@ on:
       - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
       - 'tests/document_generator_regression_v2_test.php'
+      - 'tests/document_generator_builtin_seed_resilience_test.php'
+      - 'tests/document_generator_deploy_artifact_test.php'
       - '.github/workflows/document_generator_regression.yml'
+      - '.github/workflows/erpv2_controlled_deploy.yml'
   workflow_dispatch:
 
 permissions:
@@ -48,6 +54,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Ensure PHP DOCX runtime
         shell: bash
@@ -114,8 +122,11 @@ jobs:
           php -l tests/document_generator_navigation_test.php
           php -l tests/document_generator_regression_test.php
           php -l tests/document_generator_regression_v2_test.php
+          php -l tests/document_generator_builtin_seed_resilience_test.php
+          php -l tests/document_generator_deploy_artifact_test.php
           php tests/document_generator_navigation_test.php
           php tests/document_generator_regression_test.php | tee /tmp/document-generator-regression.log
+          php tests/document_generator_builtin_seed_resilience_test.php | tee /tmp/document-generator-seed.log
           for marker in \
             DOCUMENT_GENERATOR_CANONICAL_WIRING=PASS \
             DOCUMENT_GENERATOR_FEO_PARSER=PASS \
@@ -130,6 +141,14 @@ jobs:
           do
             grep -Fqx "$marker" /tmp/document-generator-regression.log
           done
+          grep -Fqx 'DOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS' /tmp/document-generator-seed.log
+
+      - name: Verify production-like deploy artifact contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/document_generator_deploy_artifact_test.php | tee /tmp/document-generator-deploy-artifact.log
+          grep -Fqx 'DOCUMENT_GENERATOR_DEPLOY_ARTIFACT=PASS' /tmp/document-generator-deploy-artifact.log
 
       - name: Upload generated DOCX acceptance artifacts
         if: always()

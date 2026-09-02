@@ -84,7 +84,7 @@ jobs:
         run: |
           set -euo pipefail
           artifact="erpv2_${SOURCE_SHA}.tar.gz"
-          git archive --format=tar --output=erpv2_source.tar "$SOURCE_SHA" -- app bootstrap config database public scripts tools tests
+          git archive --format=tar --output=erpv2_source.tar "$SOURCE_SHA" -- app bootstrap config database public scripts tools tests resources
           gzip -n erpv2_source.tar
           mv erpv2_source.tar.gz "$artifact"
           tar -tzf "$artifact" > erpv2_artifact_listing.txt
@@ -92,6 +92,7 @@ jobs:
             echo 'Forbidden runtime or secret path in deployment artifact.' >&2
             exit 1
           fi
+          php tests/document_generator_deploy_artifact_test.php "$artifact"
           sha256="$(sha256sum "$artifact" | awk '{print $1}')"
           printf 'artifact=%s\nsha256=%s\n' "$artifact" "$sha256" >> "$GITHUB_OUTPUT"
 
@@ -169,7 +170,7 @@ jobs:
           test "$marker" = "$SOURCE_SHA"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$remote'"
 
-      - name: Verify marker HTTP DB old ERP and runtime preservation
+      - name: Verify marker HTTP DB old ERP runtime and document resources
         id: after
         shell: bash
         env:
@@ -197,7 +198,17 @@ jobs:
           for d in "${dirs[@]}"; do
             [ -z "$d" ] || test -d "$LIVE/$d"
           done
-          printf 'marker=%s\noldfp=%s\ndbfp=%s\nenvfp=%s\n' "$marker" "$oldfp" "$dbfp" "$envfp"
+          template_dir="$LIVE/resources/document-templates"
+          test -d "$template_dir"
+          template_shas="$(php -r '
+            $dir=$argv[1];
+            $expected=[
+              "contract_vehicle_lease_crew_v1.docx"=>"0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc",
+              "waybill_driver_assignment_v1.docx"=>"5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab",
+            ];
+            foreach($expected as$name=>$sha){$parts=glob($dir."/".$name.".b64.part*")?:[];sort($parts,SORT_STRING);if($parts===[]){fwrite(STDERR,"missing $name\n");exit(1);}$bytes="";foreach($parts as$part){$encoded=preg_replace("/\\s+/","",(string)file_get_contents($part))??"";$decoded=base64_decode($encoded,true);if(!is_string($decoded)||$decoded===""){fwrite(STDERR,"decode $part\n");exit(1);}$bytes.=$decoded;}$actual=hash("sha256",$bytes);if(!hash_equals($sha,$actual)){fwrite(STDERR,"sha $name $actual\n");exit(1);}printf("%s=%s\n",str_starts_with($name,"contract_")?"contract_template_sha":"waybill_template_sha",$actual);}
+          ' "$template_dir")"
+          printf 'marker=%s\noldfp=%s\ndbfp=%s\nenvfp=%s\n%s\n' "$marker" "$oldfp" "$dbfp" "$envfp" "$template_shas"
           REMOTE
           )"
           printf '%s\n' "$out"
@@ -205,13 +216,17 @@ jobs:
           oldfp="$(printf '%s\n' "$out" | sed -n 's/^oldfp=//p')"
           dbfp="$(printf '%s\n' "$out" | sed -n 's/^dbfp=//p')"
           envfp="$(printf '%s\n' "$out" | sed -n 's/^envfp=//p')"
+          contract_template_sha="$(printf '%s\n' "$out" | sed -n 's/^contract_template_sha=//p')"
+          waybill_template_sha="$(printf '%s\n' "$out" | sed -n 's/^waybill_template_sha=//p')"
           test "$marker" = "$SOURCE_SHA"
           test "$oldfp" = "$OLD_FP_BEFORE"
           test "$dbfp" = "$DB_FP_BEFORE"
           test "$envfp" = "$ENV_FP_BEFORE"
+          test "$contract_template_sha" = '0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc'
+          test "$waybill_template_sha" = '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab'
           http="$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)"
           test "$http" = 200
-          printf 'marker=%s\noldfp=%s\ndbfp=%s\nenvfp=%s\nhttp=%s\n' "$marker" "$oldfp" "$dbfp" "$envfp" "$http" >> "$GITHUB_OUTPUT"
+          printf 'marker=%s\noldfp=%s\ndbfp=%s\nenvfp=%s\nhttp=%s\ncontract_template_sha=%s\nwaybill_template_sha=%s\n' "$marker" "$oldfp" "$dbfp" "$envfp" "$http" "$contract_template_sha" "$waybill_template_sha" >> "$GITHUB_OUTPUT"
 
       - name: Write controlled deploy evidence
         if: always()
@@ -240,6 +255,8 @@ jobs:
             "env_fingerprint_before": "${{ steps.before.outputs.envfp }}",
             "env_fingerprint_after": "${{ steps.after.outputs.envfp }}",
             "runtime_dirs_preserved": "${{ steps.before.outputs.runtime_dirs }}",
+            "contract_template_sha256": "${{ steps.after.outputs.contract_template_sha }}",
+            "waybill_template_sha256": "${{ steps.after.outputs.waybill_template_sha }}",
             "migrations_run": false
           }
           EOF

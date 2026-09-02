@@ -54,4 +54,24 @@ if (str_contains($yaml, 'FAIL:*) echo "Canonical push CI failed: $push_state"') 
     throw new RuntimeException('Skipped canonical push CI must not be treated as a hard failure before dispatched CI is checked.');
 }
 
+$controlledPath = __DIR__ . '/../.github/workflows/erpv2_controlled_deploy.yml';
+$controlled = (string) file_get_contents($controlledPath);
+$controlledNeedles = [
+    'git archive --format=tar --output=erpv2_source.tar "$SOURCE_SHA" -- app bootstrap config database public scripts tools tests resources',
+    'php tests/document_generator_deploy_artifact_test.php "$artifact"',
+    'resources/document-templates',
+    '0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc',
+    '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
+    'contract_template_sha256',
+    'waybill_template_sha256',
+];
+foreach ($controlledNeedles as $needle) {
+    if (!str_contains($controlled, $needle)) {
+        throw new RuntimeException('Missing controlled deploy artifact contract marker: ' . $needle);
+    }
+}
+if (preg_match('~git archive[^\n]*--[^\n]*(?:storage|uploads|logs|vendor|\.env)~', $controlled)) {
+    throw new RuntimeException('Controlled deploy artifact roots must not include runtime/secret directories.');
+}
+
 echo "agent_deploy_request_contract_test: PASS\n";

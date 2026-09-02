@@ -9,6 +9,7 @@ use Throwable;
 trait DocumentGeneratorTemplateTrait
 {
     private const REQUIRED_TABLES = ['document_templates', 'document_template_versions', 'generated_documents', 'generated_document_requests'];
+    private static array $builtInTemplateWarnings = [];
 
     public static function schemaReady(PDO $pdo): bool
     {
@@ -26,6 +27,7 @@ trait DocumentGeneratorTemplateTrait
 
     public static function seedDefaultTemplates(PDO $pdo, int $companyId, int $userId, string $role): void
     {
+        self::$builtInTemplateWarnings = [];
         if (!self::schemaReady($pdo)) throw new RuntimeException('Схема генератора документов ещё не установлена.');
         $database = (string)$pdo->query('SELECT DATABASE()')->fetchColumn();
         $lockName = 'planex_docgen_seed_' . substr(hash('sha256', $database), 0, 24);
@@ -44,7 +46,17 @@ trait DocumentGeneratorTemplateTrait
                 $stmt = $pdo->prepare('SELECT id FROM document_templates WHERE document_type=? ORDER BY id LIMIT 1');
                 $stmt->execute([$type]);
                 if ((int)$stmt->fetchColumn() > 0) continue;
-                $source = self::materializeBuiltInTemplate($filename);
+                try {
+                    $source = self::materializeBuiltInTemplate($filename);
+                } catch (RuntimeException $e) {
+                    self::$builtInTemplateWarnings[] = [
+                        'document_type' => $type,
+                        'name' => $name,
+                        'filename' => $filename,
+                        'message' => $e->getMessage(),
+                    ];
+                    continue;
+                }
                 try {
                     self::createTemplateVersionFromFile($pdo, $companyId, null, $type, $name, $source, $filename, $userId, $role);
                 } finally {
@@ -58,6 +70,11 @@ trait DocumentGeneratorTemplateTrait
             } catch (Throwable) {
             }
         }
+    }
+
+    public static function builtInTemplateWarnings(): array
+    {
+        return self::$builtInTemplateWarnings;
     }
 
     private static function materializeBuiltInTemplate(string $filename): string
