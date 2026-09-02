@@ -1,0 +1,142 @@
+name: FEO Request Costs Authenticated Production QA
+
+on:
+  push:
+    branches:
+      - qa/feo-request-costs-multisearch-20260902
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  APPLICATION_SHA: 1be4ac72bc4add7bfdaa0aecc7cf2c79c6396709
+  CANONICAL_SHA: 1496fb7be3d1d99cd550820d3c2e7aecf50c1c52
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  authenticated-production-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify current canonical and deployed application evidence
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANONICAL_BRANCH" --depth=1
+          test "$(git rev-parse FETCH_HEAD)" = "$CANONICAL_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/commits/$APPLICATION_SHA/status" > /tmp/status.json
+          python3 - /tmp/status.json <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('deployed application SHA does not have erpv2/deploy success')
+          print('DEPLOYED_APPLICATION_STATUS=PASS')
+          PY
+          echo "CURRENT_CANONICAL_SHA=$CANONICAL_SHA"
+          echo "DEPLOYED_APPLICATION_SHA=$APPLICATION_SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Create temporary authenticated QA session
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/feo_cost_multisearch_qa_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/feo-request-costs/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' create")
+          JSON=${OUT#QA_SESSION=}
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          sid=obj['sid']; cookie=obj['cookie']
+          print(f'::add-mask::{sid}')
+          with open(sys.argv[2],'a') as f:
+              f.write(f'QA_SESSION_ID={sid}\nQA_COOKIE_NAME={cookie}\n')
+          PY
+
+      - name: Real authenticated browser QA against production backend
+        run: node .github/feo-request-costs/production_multisearch_qa.js
+
+      - name: Cleanup QA session and prove it is unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          REMOTE="/tmp/feo_cost_multisearch_qa_session_${GITHUB_RUN_ID}.php"
+          STATUS=0
+          if [ -z "${QA_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ]; then
+            echo 'QA_SESSION_CLEANUP_FAIL=session env missing' | tee artifacts/qa-session-cleanup.txt
+            STATUS=1
+          else
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$QA_SESSION_ID'" 2>&1) || STATUS=1
+            printf '%s\n' "$OUT" | tee artifacts/qa-session-cleanup.txt
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP=$(curl -sS -D artifacts/qa-session-old-sid-headers.txt -o /dev/null -w '%{http_code}' \
+              -H "Cookie: ${QA_COOKIE_NAME}=${QA_SESSION_ID}" \
+              'https://plan-ex.ru/erpv2/company/feo/requests/costs' || true)
+            printf 'QA_SESSION_OLD_SID_HTTP=%s\n' "$HTTP" | tee -a artifacts/qa-session-cleanup.txt
+            if [ "$HTTP" = '200' ]; then
+              echo 'QA_SESSION_CLEANUP_FAIL=old SID still authenticated' | tee -a artifacts/qa-session-cleanup.txt
+              STATUS=1
+            elif grep -Eqi '^location: .*\/erpv2\/login' artifacts/qa-session-old-sid-headers.txt; then
+              echo 'QA_SESSION_OLD_SID_REJECTED' | tee -a artifacts/qa-session-cleanup.txt
+            else
+              echo 'QA_SESSION_CLEANUP_FAIL=old SID did not redirect to login' | tee -a artifacts/qa-session-cleanup.txt
+              STATUS=1
+            fi
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '$REMOTE' && test ! -e '$REMOTE'" || STATUS=1
+            echo 'QA_SESSION_HELPER_REMOVED' | tee -a artifacts/qa-session-cleanup.txt
+          fi
+          rm -f "$HOME/.ssh/key"
+          if [ "$STATUS" -eq 0 ]; then echo 'QA_SESSION_CLEANUP=PASS' | tee -a artifacts/qa-session-cleanup.txt; fi
+          exit "$STATUS"
+
+      - name: Upload authenticated production QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feo-request-costs-authenticated-production-qa-${{ env.APPLICATION_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
