@@ -53,18 +53,19 @@ jobs:
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_access_compare_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
             "SERVER_ROOT='$SERVER_ROOT' LAST_GOOD_SHA='$LAST_GOOD_SHA' bash -se" <<'REMOTE'
           set -euo pipefail
-          LIVE="$SERVER_ROOT/public_html/erpv2"
-          OLD="$SERVER_ROOT/public_html/erp"
+          DOCROOT="$SERVER_ROOT/public_html"
+          LIVE="$DOCROOT/erpv2"
+          OLD="$DOCROOT/erp"
           BACKUPS="$SERVER_ROOT/deploy_backups"
           echo 'ERPV2_ACCESS_COMPARE_BEGIN'
-          for path in "$SERVER_ROOT/public_html" "$LIVE" "$LIVE/.htaccess" "$LIVE/public" "$LIVE/public/index.php" "$OLD" "$OLD/.htaccess" "$OLD/public" "$OLD/public/index.php"; do
+          for path in "$DOCROOT" "$LIVE" "$LIVE/.htaccess" "$LIVE/public" "$LIVE/public/index.php" "$OLD" "$OLD/.htaccess" "$OLD/public" "$OLD/public/index.php"; do
             if [ -e "$path" ]; then
               stat -c 'ACCESS_MODE=%a ACCESS_OWNER=%U:%G ACCESS_MTIME=%y ACCESS_PATH=%n' "$path"
             else
               printf 'ACCESS_MISSING=%s\n' "$path"
             fi
           done
-          for htaccess in "$SERVER_ROOT/public_html/.htaccess" "$LIVE/.htaccess" "$LIVE/public/.htaccess" "$OLD/.htaccess" "$OLD/public/.htaccess"; do
+          for htaccess in "$DOCROOT/.htaccess" "$LIVE/.htaccess" "$LIVE/public/.htaccess" "$OLD/.htaccess" "$OLD/public/.htaccess"; do
             if [ -r "$htaccess" ]; then
               printf 'ROUTING_FILE=%s SHA256=%s\n' "$htaccess" "$(sha256sum "$htaccess" | awk '{print $1}')"
               grep -Ein 'options|directoryindex|rewrite|fallbackresource|errordocument|redirect|alias|php|handler|cgi|fcgi|require|allow|deny|setenv' "$htaccess" 2>/dev/null | head -n 120 || true
