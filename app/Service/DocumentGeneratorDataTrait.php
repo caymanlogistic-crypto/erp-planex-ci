@@ -2,8 +2,6 @@
 
 namespace App\Service;
 
-use Throwable;
-
 trait DocumentGeneratorDataTrait
 {
     private static function normalizeParameters(string $type, array $params): array
@@ -37,7 +35,7 @@ trait DocumentGeneratorDataTrait
                 if (!$validDate($value)) $errors[]='Укажите корректную ' . $label . '.';
             }
             $time=trim((string)($params['start_time'] ?? ''));
-            if (!preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)) $errors[]='Время подачи должно быть в формате ЧЧ:ММ.';
+            if ($time!=='' && !preg_match('/^(?:[01]\d|2[0-3]):[0-5]\d$/',$time)) $errors[]='Время подачи должно быть в формате ЧЧ:ММ.';
             $price=str_replace(["\u{00A0}",' '],'',str_replace(',','.',trim((string)($params['price'] ?? ''))));
             if ($price==='' || !is_numeric($price) || (float)$price<0) $errors[]='Укажите корректную стоимость договора.';
             if (trim((string)($params['vat_mode'] ?? ''))==='') $errors[]='Укажите режим НДС.';
@@ -48,15 +46,21 @@ trait DocumentGeneratorDataTrait
         return array_values(array_unique($errors));
     }
 
+    private static function optionalDisplay(mixed $value): string
+    {
+        $text=trim((string)$value);
+        return $text==='' ? '—' : $text;
+    }
+
     private static function buildFixedValues(array $snapshot): array
     {
         $c=$snapshot['company'];$e=$snapshot['executor'];$d=$snapshot['driver'];$v=$snapshot['vehicle'];$t=$snapshot['trailer'];$p=$snapshot['parameters'];$s=$snapshot['requests_summary'] ?? [];
         $price=self::formatMoneyText((string)($p['price'] ?? ''));
         return [
-            'contract.number'=>(string)($snapshot['document']['number'] ?? ''),'contract.date'=>self::formatRuDate((string)($p['contract_date'] ?? '')),'contract.start_date'=>self::formatRuDate((string)($p['start_date'] ?? '')),'contract.start_time'=>(string)($p['start_time'] ?? ''),'contract.finish_date'=>self::formatRuDate((string)($p['finish_date'] ?? '')),'contract.price'=>$price,'contract.vat_mode'=>(string)($p['vat_mode'] ?? ''),
+            'contract.number'=>(string)($snapshot['document']['number'] ?? ''),'contract.date'=>self::formatRuDate((string)($p['contract_date'] ?? '')),'contract.start_date'=>self::formatRuDate((string)($p['start_date'] ?? '')),'contract.start_time'=>self::optionalDisplay($p['start_time'] ?? ''),'contract.finish_date'=>self::formatRuDate((string)($p['finish_date'] ?? '')),'contract.price'=>$price,'contract.vat_mode'=>(string)($p['vat_mode'] ?? ''),
             'waybill.number'=>(string)($p['waybill_number'] ?? ''),'waybill.date'=>self::formatRuDate((string)($p['waybill_date'] ?? '')),
-            'company.name'=>$c['name'],'company.inn'=>$c['inn'],'company.kpp_line'=>$c['kpp']!==''?'КПП: '.$c['kpp']:'','company.ogrn_line'=>$c['ogrn']!==''?'ОГРН: '.$c['ogrn']:'','company.legal_address'=>$c['legal_address'],'company.physical_address'=>$c['physical_address'],'company.bank_name'=>$c['bank_name'],'company.bank_account'=>$c['bank_account'],'company.bank_corr_account'=>$c['bank_corr_account'],'company.bank_bik'=>$c['bank_bik'],'company.contact_phone'=>$c['contact_phone'],'company.contact_email'=>$c['contact_email'],'company.director_full_name'=>$c['director_full_name'],'company.director_position'=>$c['director_position'],'company.signature_name'=>self::signatureName($c['director_full_name']),
-            'executor.name'=>$e['name'],'executor.inn'=>$e['inn'],'executor.kpp_line'=>$e['kpp']!==''?'КПП: '.$e['kpp']:'','executor.ogrn_line'=>$e['ogrn']!==''?((strlen($e['ogrn'])===15?'ОГРНИП: ':'ОГРН: ').$e['ogrn']):'','executor.legal_address'=>$e['legal_address'],'executor.physical_address'=>$e['physical_address'],'executor.bank_name'=>$e['bank_name'],'executor.bank_account'=>$e['bank_account'],'executor.bank_corr_account'=>$e['bank_corr_account'],'executor.bank_bik'=>$e['bank_bik'],'executor.bank_inn'=>(string)($e['bank_inn'] ?? ''),'executor.director_full_name'=>$e['director_full_name'],'executor.director_position'=>$e['director_position'],'executor.signature_name'=>$e['signature_name'],
+            'company.name'=>$c['name'],'company.inn'=>$c['inn'],'company.kpp_line'=>$c['kpp']!==''?'КПП: '.$c['kpp']:'','company.ogrn_line'=>$c['ogrn']!==''?'ОГРН: '.$c['ogrn']:'','company.legal_address'=>$c['legal_address'],'company.physical_address'=>self::optionalDisplay($c['physical_address'] ?? ''),'company.bank_name'=>$c['bank_name'],'company.bank_account'=>$c['bank_account'],'company.bank_corr_account'=>$c['bank_corr_account'],'company.bank_bik'=>$c['bank_bik'],'company.contact_phone'=>self::optionalDisplay($c['contact_phone'] ?? ''),'company.contact_email'=>self::optionalDisplay($c['contact_email'] ?? ''),'company.director_full_name'=>$c['director_full_name'],'company.director_position'=>$c['director_position'],'company.signature_name'=>self::signatureName($c['director_full_name']),
+            'executor.name'=>$e['name'],'executor.inn'=>$e['inn'],'executor.kpp_line'=>$e['kpp']!==''?'КПП: '.$e['kpp']:'','executor.ogrn_line'=>$e['ogrn']!==''?((strlen($e['ogrn'])===15?'ОГРНИП: ':'ОГРН: ').$e['ogrn']):'','executor.legal_address'=>$e['legal_address'],'executor.physical_address'=>$e['physical_address'],'executor.bank_name'=>$e['bank_name'],'executor.bank_account'=>$e['bank_account'],'executor.bank_corr_account'=>$e['bank_corr_account'],'executor.bank_bik'=>$e['bank_bik'],'executor.bank_inn'=>'—','executor.director_full_name'=>$e['director_full_name'],'executor.director_position'=>$e['director_position'],'executor.signature_name'=>$e['signature_name'],
             'driver.full_name'=>$d['full_name'],'driver.passport'=>$d['passport'],'driver.license'=>$d['license'],'driver.signature_name'=>$d['signature_name'],
             'vehicle.model'=>$v['model'],'vehicle.plate'=>$v['plate'],'trailer.display'=>$t['display'],
             'requests.count'=>(string)($s['count'] ?? count($snapshot['requests'] ?? [])),'requests.total_mass_kg'=>self::formatMassKg((float)($s['total_mass_kg'] ?? 0)),'requests.unload_address'=>(string)($s['unload_address'] ?? ''),
@@ -65,7 +69,7 @@ trait DocumentGeneratorDataTrait
 
     private static function validateFixedPlaceholders(array $placeholders, array $values, array $snapshot): array
     {
-        $optional=['executor.kpp_line','executor.ogrn_line','executor.physical_address','trailer.display'];
+        $optional=['contract.start_time','company.physical_address','company.contact_phone','company.contact_email','executor.kpp_line','executor.ogrn_line','executor.physical_address','executor.bank_inn','trailer.display'];
         $requestPrefixes=['request.'];
         $errors=[];
         foreach ($placeholders as $name) {
@@ -73,9 +77,8 @@ trait DocumentGeneratorDataTrait
             $isRequest=false;foreach($requestPrefixes as $prefix)if(str_starts_with($name,$prefix)){$isRequest=true;break;}
             if($isRequest)continue;
             if ($name==='contract.number' && (string)($snapshot['document']['number_mode'] ?? '')==='automatic') continue;
-            if ($name==='executor.bank_inn') continue;
-            if (!array_key_exists($name,$values)) { $errors[]='Для переменной {{'.$name.'}} не определён источник данных.'; continue; }
-            if (trim((string)$values[$name])==='') $errors[]='Не хватает данных для {{'.$name.'}}.';
+            if (!array_key_exists($name,$values)) { $errors[]='В выбранном шаблоне используется неподдерживаемое поле. Обратитесь к руководителю.'; continue; }
+            if (trim((string)$values[$name])==='') $errors[]=self::missingPlaceholderMessage($name);
         }
         $company=$snapshot['company'];
         if (in_array('company.kpp_line',$placeholders,true) && trim((string)$company['kpp'])==='') $errors[]='У компании не заполнен КПП.';
@@ -85,13 +88,19 @@ trait DocumentGeneratorDataTrait
             if (in_array('executor.kpp_line',$placeholders,true) && trim((string)$executor['kpp'])==='') $errors[]='У Арендодателя-юрлица не заполнен КПП.';
             if (in_array('executor.ogrn_line',$placeholders,true) && trim((string)$executor['ogrn'])==='') $errors[]='У Арендодателя-юрлица не заполнен ОГРН.';
         }
-        if (in_array('executor.bank_inn',$placeholders,true)) {
-            $bankInn=preg_replace('/\D/','',trim((string)($executor['bank_inn'] ?? ''))) ?? '';
-            if (!preg_match('/^\d{10}$/',$bankInn)) {
-                $errors[]='У Арендодателя/Подрядчика не заполнен ИНН банка. Заполните его в карточке Подрядчика.';
-            }
-        }
         return array_values(array_unique($errors));
+    }
+
+    private static function missingPlaceholderMessage(string $name): string
+    {
+        if (str_starts_with($name,'company.')) return 'Не заполнен обязательный реквизит компании.';
+        if (str_starts_with($name,'executor.')) return 'Не заполнен обязательный реквизит Подрядчика.';
+        if (str_starts_with($name,'driver.')) return 'Не заполнен обязательный реквизит водителя.';
+        if (str_starts_with($name,'vehicle.') || str_starts_with($name,'trailer.')) return 'Не заполнены обязательные данные транспорта.';
+        if (str_starts_with($name,'contract.')) return 'Не заполнен обязательный параметр договора.';
+        if (str_starts_with($name,'waybill.')) return 'Не заполнен обязательный параметр путевого листа.';
+        if (str_starts_with($name,'requests.')) return 'Не заполнены обязательные данные заявок ФЭО.';
+        return 'Не заполнены обязательные данные документа.';
     }
 
     private static function validateRequestRows(array $rows, array $placeholders): array
@@ -102,7 +111,6 @@ trait DocumentGeneratorDataTrait
             if (in_array('request.mass_kg',$placeholders,true) && ($row['mass_netto'] ?? null)===null) $items[]='нет массы';
             if (in_array('request.sender',$placeholders,true) && trim((string)($row['naim_oo_gruzootpravitel'] ?? ''))==='') $items[]='нет грузоотправителя';
             if (in_array('request.loading_address',$placeholders,true) && trim((string)($row['mno_adres_pogruzki'] ?? ''))==='') $items[]='нет адреса погрузки';
-            if (in_array('request.contacts',$placeholders,true) && self::requestContacts($row)==='') $items[]='отсутствуют контакты';
             if (in_array('requests.unload_address',$placeholders,true) && trim((string)($row['adres_vygruzki_otkhodov'] ?? ''))==='') $items[]='нет места выгрузки';
             if ($items!==[]) $errors[$id]=$items;
         }
