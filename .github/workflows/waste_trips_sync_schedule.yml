@@ -1,0 +1,83 @@
+name: Waste Trips Legacy Sync Schedule
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: waste-trips-legacy-sync-production
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  sync:
+    if: ${{ github.repository == 'planexerp/erp-planex' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Resolve exact canonical source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA='${{ github.sha }}'
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          canonical="$(curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/branches/$CANONICAL_BRANCH" \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])')"
+          test "$canonical" = "$SOURCE_SHA"
+          printf 'source_sha=%s\n' "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/waste_trip_sync_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/waste_trip_sync_key" "$HOME/.ssh/known_hosts"
+
+      - name: Require deployed marker and run legacy sync
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" \
+            -i "$HOME/.ssh/waste_trip_sync_key" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "SOURCE_SHA='$SOURCE_SHA' LIVE_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' bash -se" <<'REMOTE' | tee waste_trip_sync_schedule.txt
+          set -euo pipefail
+          marker="$(cat "$DEPLOY_MARKER")"
+          test "$marker" = "$SOURCE_SHA"
+          cd "$LIVE_ROOT"
+          PLANEX_ROOT="$LIVE_ROOT" /usr/bin/php8.5 scripts/waste_trip_sync.php
+          REMOTE
+          grep -Fqx 'WASTE_TRIP_SYNC_OK' waste_trip_sync_schedule.txt
+
+      - name: Cleanup
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/waste_trip_sync_key"

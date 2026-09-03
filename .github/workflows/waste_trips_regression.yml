@@ -62,7 +62,7 @@ jobs:
             app/View/partials/company_waste_trip_modal_view.php \
             app/View/partials/company_waste_trip_modal_edit.php \
             scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php \
-            tests/waste_trip_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trips_130_production_migration_contract_test.php
+            tests/waste_trip_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_130_production_migration_contract_test.php
           do php -l "$f"; done
       - name: Static target contracts
         shell: bash
@@ -72,6 +72,8 @@ jobs:
           grep -Fqx 'WASTE_TRIP_LEGACY_LINKED=PASS' /tmp/legacy.out
           php tests/waste_trip_owner_layout_contract_test.php | tee /tmp/owner.out
           grep -Fqx 'WASTE_TRIP_OWNER_LAYOUT=PASS' /tmp/owner.out
+          php tests/waste_trip_scheduler_contract_test.php | tee /tmp/scheduler.out
+          grep -Fqx 'WASTE_TRIP_SCHEDULER=PASS' /tmp/scheduler.out
           php tests/waste_trips_130_production_migration_contract_test.php | tee /tmp/m130.out
           grep -Fqx 'WASTE_TRIPS_130_PRODUCTION_MIGRATION=PASS' /tmp/m130.out
       - name: Start isolated MySQL
