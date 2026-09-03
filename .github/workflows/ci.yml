@@ -306,6 +306,7 @@ jobs:
           deploy_engine = 'P07_' + 'deploy_erpv2.sh'
           violations = []
           production_write = []
+          approved_automatic = {'waste_trips_sync_schedule.yml'}
           for p in Path('.github/workflows').glob('*.y*ml'):
               if p.name == 'ci.yml': continue
               text = p.read_text(encoding='utf-8')
@@ -314,8 +315,30 @@ jobs:
               production_write.append(str(p))
               manual = '\n  workflow_dispatch:' in text
               automatic = any(trigger in text for trigger in ['\n  workflow_run:','\n  push:','\n  pull_request:','\n  schedule:'])
-              if not manual or automatic: violations.append(str(p))
+              if automatic and p.name in approved_automatic:
+                  required = [
+                      "cron: '*/5 * * * *'",
+                      'workflow_dispatch:',
+                      'contents: read',
+                      'group: waste-trips-legacy-sync-production',
+                      'cancel-in-progress: false',
+                      'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
+                      'P07_erpv2_deployed_commit.txt',
+                      'test "$canonical" = "$SOURCE_SHA"',
+                      'test "$marker" = "$SOURCE_SHA"',
+                      'scripts/waste_trip_sync.php',
+                      "grep -Fqx 'WASTE_TRIP_SYNC_OK' waste_trip_sync_schedule.txt",
+                  ]
+                  forbidden = ['\n  workflow_run:', '\n  push:', '\n  pull_request:', 'Slitex2DB.php', '/fregat/', 'crontab ']
+                  if (not manual or any(token not in text for token in required)
+                          or any(token in text for token in forbidden)
+                          or text.count("cron: '*/5 * * * *'") != 1):
+                      violations.append(str(p))
+                  continue
+              if not manual or automatic:
+                  violations.append(str(p))
           print('production-write workflows=', production_write)
+          print('approved automatic production-write workflows=', sorted(approved_automatic))
           print('automatic production-write violations=', violations)
           raise SystemExit(1 if violations else 0)
           PY
