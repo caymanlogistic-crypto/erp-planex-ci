@@ -1,0 +1,48 @@
+name: Document Generator Check UX
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/View/pages/company_document_generator.php'
+      - 'tests/document_generator_check_ux_test.php'
+      - '.github/document-generator/production_check_qa.js'
+      - '.github/workflows/document_generator_check_ux.yml'
+      - '.github/workflows/document_generator_production_browser_qa.yml'
+  push:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/View/pages/company_document_generator.php'
+      - 'tests/document_generator_check_ux_test.php'
+      - '.github/document-generator/production_check_qa.js'
+      - '.github/workflows/document_generator_check_ux.yml'
+      - '.github/workflows/document_generator_production_browser_qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: document-generator-check-ux-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ux-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Lint and run UX contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          php -l app/View/pages/company_document_generator.php
+          php -l tests/document_generator_check_ux_test.php
+          node --check .github/document-generator/production_check_qa.js
+          php tests/document_generator_check_ux_test.php | tee /tmp/document-generator-check-ux.log
+          grep -Eq '^DOCUMENT_GENERATOR_CHECK_UX=PASS assertions=[0-9]+$' /tmp/document-generator-check-ux.log

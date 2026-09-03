@@ -30,7 +30,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
     </div>
 </div>
 
-<?php if ($formError): ?><div class="notice warn docgen-form-width"><?= e($formError) ?></div><?php endif; ?>
+<?php if ($formError): ?><div class="notice danger docgen-form-width"><?= e($formError) ?></div><?php endif; ?>
 
 <?php if (!$company): ?>
 <div class="notice warn">Компания недоступна.</div>
@@ -39,7 +39,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 <?php elseif ($executors === []): ?>
 <div class="notice warn">Нет доступных активных Исполнителей рейса.</div>
 <?php else: ?>
-<form id="document-generator-form" class="docgen-form-width" method="post" action="<?= app_url('/company/document-generator/preview') ?>" data-docgen-form>
+<form id="document-generator-form" class="docgen-form-width" method="post" action="<?= app_url('/company/document-generator/preview') ?>" data-docgen-form novalidate>
     <input type="hidden" name="_csrf" value="<?= e($csrfToken) ?>">
 
     <div class="panel mb-3">
@@ -99,8 +99,9 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
         </div>
     </div>
 
+    <div data-docgen-check-result aria-live="polite" aria-atomic="true"></div>
     <div class="form-actions docgen-form-actions">
-        <button type="submit" class="btn btn-primary" formaction="<?= app_url('/company/document-generator/preview') ?>">Проверить</button>
+        <button type="submit" class="btn btn-primary" formaction="<?= app_url('/company/document-generator/preview') ?>" data-docgen-check>Проверить</button>
     </div>
 </form>
 
@@ -134,7 +135,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
                     <?php endif; ?>
                 </div>
             <?php else: ?>
-                <div class="notice warn mb-3"><strong>Документ пока нельзя сформировать.</strong></div>
+                <div class="notice danger mb-3"><strong>Документ пока нельзя сформировать.</strong></div>
                 <?php if (!empty($preview['errors'])): ?>
                     <ul class="docgen-error-list">
                         <?php foreach ($preview['errors'] as $error): ?><li><?= e((string)$error) ?></li><?php endforeach; ?>
@@ -159,16 +160,167 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 (function () {
     const form=document.querySelector('[data-docgen-form]');
     const select=document.querySelector('[data-docgen-template]');
-    if (!form || !select) return;
+    const result=document.querySelector('[data-docgen-check-result]');
+    const checkButton=document.querySelector('[data-docgen-check]');
+    if (!form || !select || !result || !checkButton) return;
+    let checking=false;
+
+    const currentType=()=>select.options[select.selectedIndex]?.dataset.documentType || '';
+    const control=(name)=>form.elements.namedItem(name);
+    const field=(name)=>control(name)?.closest('.field') || null;
+    const clearFieldErrors=()=>{
+        form.querySelectorAll('.field.is-error').forEach((node)=>node.classList.remove('is-error'));
+        form.querySelectorAll('[aria-invalid="true"]').forEach((node)=>node.removeAttribute('aria-invalid'));
+    };
+    const markField=(name)=>{
+        const node=control(name);
+        const wrapper=field(name);
+        if (wrapper) wrapper.classList.add('is-error');
+        if (node) node.setAttribute('aria-invalid','true');
+    };
+    const makeNotice=(kind,title,messages=[])=>{
+        const notice=document.createElement('div');
+        notice.className='notice '+kind;
+        const content=document.createElement('div');
+        const strong=document.createElement('strong');
+        strong.textContent=title;
+        content.appendChild(strong);
+        if (messages.length) {
+            const list=document.createElement('ul');
+            list.className='docgen-error-list mt-2';
+            messages.forEach((message)=>{ const item=document.createElement('li'); item.textContent=message; list.appendChild(item); });
+            content.appendChild(list);
+        }
+        notice.appendChild(content);
+        return notice;
+    };
+    const showErrorResult=(messages,title='Проверка не пройдена')=>{
+        result.replaceChildren(makeNotice('danger',title,messages));
+        result.dataset.docgenState='error';
+        result.scrollIntoView({behavior:'smooth',block:'nearest'});
+    };
+    const showRequestFailure=()=>showErrorResult([],'Не удалось выполнить проверку');
+    const setChecking=(active)=>{
+        checking=active;
+        checkButton.disabled=active;
+        checkButton.setAttribute('aria-busy',active?'true':'false');
+        checkButton.textContent=active?'Проверяем…':'Проверить';
+        if (active) result.dataset.docgenState='checking';
+    };
+    const clientErrors=()=>{
+        const errors=[];
+        const add=(name,message)=>{ if (!String(control(name)?.value || '').trim()) { errors.push(message); markField(name); } };
+        clearFieldErrors();
+        add('template_id','Не выбран шаблон.');
+        add('crew_id','Не выбран исполнитель рейса.');
+        add('request_input','Не указаны заявки ФЭО.');
+        if (currentType()==='vehicle_lease_crew') {
+            add('contract_date','Не указана дата договора.');
+            add('start_date','Не указана дата начала.');
+            add('finish_date','Не указана плановая дата завершения.');
+            add('price','Не указана стоимость.');
+            add('vat_mode','Не указан режим НДС.');
+        } else if (currentType()==='waybill_driver_assignment') {
+            add('waybill_number','Не указан номер путевого листа.');
+            add('waybill_date','Не указана дата путевого листа.');
+        }
+        return errors;
+    };
+    const mapServerError=(message)=>{
+        const text=String(message || '').toLowerCase();
+        if (text.includes('исполнитель рейса')) return 'crew_id';
+        if (text.includes('заяв')) return 'request_input';
+        if (text.includes('дату договора')) return 'contract_date';
+        if (text.includes('дату начала')) return 'start_date';
+        if (text.includes('время подачи')) return 'start_time';
+        if (text.includes('завершения')) return 'finish_date';
+        if (text.includes('стоимость')) return 'price';
+        if (text.includes('режим ндс')) return 'vat_mode';
+        if (text.includes('номер путевого')) return 'waybill_number';
+        if (text.includes('дату путевого')) return 'waybill_date';
+        if (text.includes('шаблон')) return 'template_id';
+        return '';
+    };
+    const showServerPreview=(doc)=>{
+        const modal=doc.querySelector('#document-generator-preview-modal');
+        if (!modal) throw new Error('preview result missing');
+        const serverErrors=Array.from(modal.querySelectorAll('.docgen-error-list li')).map((item)=>String(item.textContent || '').trim()).filter(Boolean);
+        if (serverErrors.length || modal.querySelector('.notice.danger')) {
+            clearFieldErrors();
+            serverErrors.forEach((message)=>{ const name=mapServerError(message); if (name) markField(name); });
+            showErrorResult(serverErrors.length ? serverErrors : ['Документ пока нельзя сформировать.']);
+            return;
+        }
+        const success=modal.querySelector('.notice.success');
+        const body=modal.querySelector('.modal-body');
+        const generate=modal.querySelector('button[formaction*="/company/document-generator/generate"]');
+        if (!success || !body || !generate) throw new Error('successful preview incomplete');
+        clearFieldErrors();
+        const panel=document.createElement('div');
+        panel.className='panel';
+        const head=document.createElement('div');
+        head.className='panel-head';
+        head.innerHTML='<strong>Результат проверки</strong>';
+        const panelBody=document.createElement('div');
+        panelBody.className='panel-body';
+        Array.from(body.childNodes).forEach((node)=>panelBody.appendChild(node.cloneNode(true)));
+        const actions=document.createElement('div');
+        actions.className='form-actions';
+        actions.appendChild(generate.cloneNode(true));
+        panelBody.appendChild(actions);
+        panel.appendChild(head);
+        panel.appendChild(panelBody);
+        result.replaceChildren(panel);
+        result.dataset.docgenState='success';
+        result.scrollIntoView({behavior:'smooth',block:'nearest'});
+    };
+    const runCheck=async()=>{
+        if (checking) return;
+        const errors=clientErrors();
+        if (errors.length) { showErrorResult(errors); return; }
+        setChecking(true);
+        try {
+            const response=await fetch(checkButton.formAction || form.action,{
+                method:'POST',
+                body:new FormData(form),
+                credentials:'same-origin',
+                headers:{'X-Requested-With':'XMLHttpRequest'}
+            });
+            if (!response.ok) throw new Error('HTTP '+response.status);
+            const html=await response.text();
+            const doc=new DOMParser().parseFromString(html,'text/html');
+            showServerPreview(doc);
+        } catch (error) {
+            console.error('Document generator preview failed',error);
+            clearFieldErrors();
+            showRequestFailure();
+        } finally {
+            setChecking(false);
+        }
+    };
     const syncType=()=>{
-        const type=select.options[select.selectedIndex]?.dataset.documentType || '';
+        const type=currentType();
         form.querySelectorAll('[data-docgen-section]').forEach((section)=>{
             const active=section.dataset.docgenSection===type;
             section.classList.toggle('is-hidden',!active);
-            section.querySelectorAll('input,select,textarea').forEach((control)=>{ control.disabled=!active; });
+            section.querySelectorAll('input,select,textarea').forEach((node)=>{ node.disabled=!active; });
         });
     };
-    select.addEventListener('change',syncType);
+    form.addEventListener('submit',(event)=>{
+        if (!event.submitter?.matches('[data-docgen-check]')) return;
+        event.preventDefault();
+        runCheck();
+    });
+    form.addEventListener('input',(event)=>{
+        const wrapper=event.target?.closest?.('.field');
+        if (wrapper) wrapper.classList.remove('is-error');
+        event.target?.removeAttribute?.('aria-invalid');
+        if (result.dataset.docgenState==='success') {
+            result.replaceChildren();
+            result.dataset.docgenState='';
+        }
+    });
+    select.addEventListener('change',()=>{syncType();clearFieldErrors();result.replaceChildren();result.dataset.docgenState='';});
     syncType();
     <?php if (is_array($preview)): ?>
     if (typeof openModal==='function') openModal('document-generator-preview-modal');
