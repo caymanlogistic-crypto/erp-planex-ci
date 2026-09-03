@@ -15,3 +15,4 @@ if(str_contains($script,'UPDATE document_templates SET active_version_id'))$fail
 $has($trait,'contract_vehicle_lease_crew_v2.docx','built-in v2 seed missing');
 $has($trait,'7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa','built-in v2 SHA missing');
 echo "DOCUMENT_GENERATOR_TEMPLATE_V2_PRODUCTION_CONTRACT=PASS\n";
+require __DIR__.'/document_generator_template_v2_agent_request_contract_test.php';
