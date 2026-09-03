@@ -2,33 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `c860d050af5b39210696a612cc54841f1022923be0989c191bca875a5cba8696`
-
-## `waste_trip_requests`
-
-**Domain:** Other tenant domain  
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `feo_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `snapshot_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
-| `position_no` | `int unsigned` | NO | `0` | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_waste_trip_requests_position` (`waste_trip_id`, `position_no`, `id`)
-- **INDEX** `idx_waste_trip_requests_request` (`feo_request_id`, `waste_trip_id`)
-- **UNIQUE** `uk_waste_trip_request` (`waste_trip_id`, `feo_request_id`)
-
-### Physical foreign keys
-
-- `fk_waste_trip_requests_feo`: (`feo_request_id`) → `feo_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-- `fk_waste_trip_requests_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
 
 ## `waste_trips`
 
@@ -38,7 +12,7 @@
 | Column | Type | Null | Default | Extra | Key |
 |---|---|---|---|---|---|
 | `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `business_id` | `bigint unsigned` | YES | NULL | — | — |
+| `business_id` | `bigint unsigned` | NO | NULL | — | `UNI` |
 | `client_id` | `int unsigned` | NO | NULL | — | `MUL` |
 | `route_executor_id` | `int unsigned` | YES | NULL | — | `MUL` |
 | `responsible_user_id` | `int unsigned` | NO | NULL | — | `MUL` |
@@ -79,6 +53,7 @@
 - **INDEX** `idx_waste_trips_responsible` (`responsible_user_id`, `id`)
 - **INDEX** `idx_waste_trips_status` (`status`, `id`)
 - **INDEX** `idx_waste_trips_utilizer` (`utilizer_id`, `id`)
+- **UNIQUE** `uk_waste_trip_business_id` (`business_id`)
 - **UNIQUE** `uk_waste_trip_legacy_identity` (`source_system`, `legacy_flight_id`)
 
 ### Physical foreign keys

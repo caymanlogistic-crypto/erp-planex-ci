@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `c860d050af5b39210696a612cc54841f1022923be0989c191bca875a5cba8696`
+**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
 
 ## Architecture overview
 
@@ -130,7 +130,6 @@ erDiagram
   T_feo_utilizers ||--o{ T_feo_utilizer_aliases : "fk_feo_utilizer_alias_utilizer"
   T_feo_utilizers ||--o{ T_feo_utilizer_match_rules : "fk_feo_utilizer_rule_utilizer"
   T_waste_trips ||--o{ T_waste_trip_audit_log : "fk_waste_trip_audit_trip"
-  T_waste_trips ||--o{ T_waste_trip_legacy_import_audits : "fk_waste_trip_legacy_audit_trip"
   T_feo_requests ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_feo"
   T_waste_trips ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_trip"
   T_clients ||--o{ T_waste_trips : "fk_waste_trips_client"
@@ -139,7 +138,7 @@ erDiagram
   T_feo_utilizers ||--o{ T_waste_trips : "fk_waste_trips_utilizer"
 ```
 
-Tables: `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `waste_trip_audit_log`, `waste_trip_legacy_import_audits`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
+Tables: `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `waste_trip_audit_log`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
 
 ## System / Migration metadata
 
