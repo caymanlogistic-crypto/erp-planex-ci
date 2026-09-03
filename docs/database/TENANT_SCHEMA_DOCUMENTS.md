@@ -2,7 +2,28 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `a839e09922efd5a37e40b38d2298d46e3f87110e962be10e151acec54a552477`
+**Schema fingerprint:** `26554495b38d95cb9881d3bd2ed86c94c9a61e0141463f2311beaf73e8d093c6`
+
+## `document_number_sequences`
+
+**Domain:** Documents  
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `sequence_key` | `varchar(64)` | NO | NULL | — | `PRI` |
+| `prefix` | `varchar(16)` | NO | NULL | — | — |
+| `next_number` | `bigint unsigned` | NO | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`sequence_key`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `document_template_versions`
 
@@ -201,6 +222,7 @@
 - **INDEX** `idx_generated_documents_executor` (`route_executor_id`, `id`)
 - **INDEX** `idx_generated_documents_template_version` (`template_version_id`, `id`)
 - **INDEX** `idx_generated_documents_type_date` (`document_type`, `document_date`)
+- **UNIQUE** `uk_generated_documents_type_number` (`document_type`, `document_number`)
 
 ### Physical foreign keys
 

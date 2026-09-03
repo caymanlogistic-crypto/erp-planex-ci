@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `a839e09922efd5a37e40b38d2298d46e3f87110e962be10e151acec54a552477`
+**Schema fingerprint:** `26554495b38d95cb9881d3bd2ed86c94c9a61e0141463f2311beaf73e8d093c6`
 
 ## `client_contacts`
 
@@ -188,6 +188,7 @@
 | `bank_name` | `varchar(255)` | YES | NULL | — | — |
 | `bank_bik` | `varchar(20)` | YES | NULL | — | — |
 | `bank_corr_account` | `varchar(50)` | YES | NULL | — | — |
+| `bank_inn` | `varchar(10)` | YES | NULL | — | — |
 | `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
 | `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `director_full_name` | `varchar(255)` | YES | NULL | — | — |
