@@ -12,7 +12,6 @@ permissions:
   statuses: read
 
 env:
-  EXPECTED_DEPLOYED_SHA: adfadae8f14230b28ff09e957483f237e4343ef0
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
   LIVE_DIR: public_html
   DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
@@ -23,52 +22,6 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
-
-      - name: Verify deployed product lineage and no product-code drift
-        env:
-          GH_TOKEN: ${{ github.token }}
-          REPOSITORY: ${{ github.repository }}
-          API_URL: ${{ github.api_url }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          [[ "$EXPECTED_DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]
-          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$API_URL/repos/$REPOSITORY/branches/$CANONICAL_BRANCH" > /tmp/canonical.json
-          CANONICAL_SHA=$(python3 -c 'import json; print(json.load(open("/tmp/canonical.json"))["commit"]["sha"])')
-          [[ "$CANONICAL_SHA" =~ ^[0-9a-f]{40}$ ]]
-          echo "CURRENT_CANONICAL_SHA=$CANONICAL_SHA" >> "$GITHUB_ENV"
-
-          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$API_URL/repos/$REPOSITORY/commits/$EXPECTED_DEPLOYED_SHA/status" > /tmp/deploy-status.json
-          python3 - /tmp/deploy-status.json <<'PY'
-          import json,sys
-          data=json.load(open(sys.argv[1]))
-          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
-          if not rows or rows[0].get('state')!='success':
-              raise SystemExit('expected deployed SHA lacks erpv2/deploy success')
-          print('QA_DEPLOY_STATUS=PASS')
-          PY
-
-          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$API_URL/repos/$REPOSITORY/compare/$EXPECTED_DEPLOYED_SHA...$CANONICAL_SHA" > /tmp/lineage.json
-          python3 - /tmp/lineage.json "$EXPECTED_DEPLOYED_SHA" <<'PY'
-          import json,sys
-          data=json.load(open(sys.argv[1])); deployed=sys.argv[2]
-          if data.get('status') not in ('ahead','identical'):
-              raise SystemExit(f"bad canonical lineage: {data.get('status')}")
-          if (data.get('merge_base_commit') or {}).get('sha') != deployed:
-              raise SystemExit('deployed SHA is not canonical ancestor')
-          product_prefixes=('app/','bootstrap/','config/','public/','scripts/','database/')
-          product_files=[]
-          for row in data.get('files',[]):
-              name=row.get('filename','')
-              if name.startswith(product_prefixes) or name in ('composer.json','composer.lock'):
-                  product_files.append(name)
-          if product_files:
-              raise SystemExit('product-code drift since deployed marker: '+', '.join(product_files))
-          print('QA_DEPLOYED_PRODUCT_LINEAGE=PASS')
-          PY
 
       - uses: actions/setup-node@v4
         with:
@@ -90,17 +43,63 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
 
-      - name: Require unchanged production marker
+      - name: Resolve live deployed marker and verify canonical product lineage
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
         run: |
           set -euo pipefail
-          MARKER=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          DEPLOYED_SHA=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")
-          test "$MARKER" = "$EXPECTED_DEPLOYED_SHA"
-          echo 'QA_DEPLOY_MARKER=PASS'
+          [[ "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "LIVE_DEPLOYED_SHA=$DEPLOYED_SHA" >> "$GITHUB_ENV"
+
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/branches/$CANONICAL_BRANCH" > /tmp/canonical.json
+          CANONICAL_SHA=$(python3 -c 'import json; print(json.load(open("/tmp/canonical.json"))["commit"]["sha"])')
+          [[ "$CANONICAL_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "CURRENT_CANONICAL_SHA=$CANONICAL_SHA" >> "$GITHUB_ENV"
+
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$DEPLOYED_SHA/status" > /tmp/deploy-status.json
+          python3 - /tmp/deploy-status.json <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('live marker lacks erpv2/deploy success')
+          print('QA_DEPLOY_STATUS=PASS')
+          PY
+
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/compare/$DEPLOYED_SHA...$CANONICAL_SHA" > /tmp/lineage.json
+          python3 - /tmp/lineage.json "$DEPLOYED_SHA" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1])); deployed=sys.argv[2]
+          if data.get('status') not in ('ahead','identical'):
+              raise SystemExit(f"bad canonical lineage: {data.get('status')}")
+          if (data.get('merge_base_commit') or {}).get('sha') != deployed:
+              raise SystemExit('live marker is not canonical ancestor')
+          product_prefixes=('app/','bootstrap/','config/','public/','scripts/','database/')
+          product_files=[]
+          for row in data.get('files',[]):
+              name=row.get('filename','')
+              if name.startswith(product_prefixes) or name in ('composer.json','composer.lock'):
+                  product_files.append(name)
+          if product_files:
+              raise SystemExit('product-code drift since live marker: '+', '.join(product_files))
+          print('QA_LIVE_PRODUCT_LINEAGE=PASS')
+          PY
+
+          MARKER_AGAIN=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")
+          test "$MARKER_AGAIN" = "$DEPLOYED_SHA"
+          echo 'QA_DEPLOY_MARKER_STABLE=PASS'
 
       - name: Create temporary authenticated QA sessions
         env:
@@ -173,7 +172,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: waste-trips-production-browser-${{ env.EXPECTED_DEPLOYED_SHA }}
+          name: waste-trips-production-browser-live
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
