@@ -32,15 +32,17 @@ PREPARE addMembershipUnique FROM @preparedStatement;
 EXECUTE addMembershipUnique;
 DEALLOCATE PREPARE addMembershipUnique;
 
+-- One global account can have only one membership in a given company/tenant,
+-- therefore its tenant actor projection must also be unique.
 SET @preparedStatement = (SELECT IF(
     (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
-      WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME='users' AND INDEX_NAME='idx_users_global_user_id') > 0,
-    'SELECT 1 AS users_global_user_index_already_exists',
-    'ALTER TABLE `users` ADD KEY `idx_users_global_user_id` (`global_user_id`)'
+      WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME='users' AND INDEX_NAME='uk_users_global_user_id') > 0,
+    'SELECT 1 AS users_global_user_unique_already_exists',
+    'ALTER TABLE `users` ADD UNIQUE KEY `uk_users_global_user_id` (`global_user_id`)'
 ));
-PREPARE addGlobalUserIndex FROM @preparedStatement;
-EXECUTE addGlobalUserIndex;
-DEALLOCATE PREPARE addGlobalUserIndex;
+PREPARE addGlobalUserUnique FROM @preparedStatement;
+EXECUTE addGlobalUserUnique;
+DEALLOCATE PREPARE addGlobalUserUnique;
 
 CREATE TABLE IF NOT EXISTS `company_user_assignments` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
