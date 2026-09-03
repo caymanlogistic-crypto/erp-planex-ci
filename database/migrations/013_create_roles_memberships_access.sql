@@ -1,6 +1,51 @@
 -- Migration 013: flexible company roles, memberships and access overrides.
 -- CRITICAL: schema only. Legacy data conversion is performed by the controlled
 -- roles/access migration runner after BEFORE snapshot validation.
+--
+-- company_users is the canonical global authentication identity after cutover.
+-- Its legacy company_id remains only as an optional home-company reference;
+-- membership is the authority for company access.
+
+SET @dbname = DATABASE();
+
+-- Global login must be unique. If historical duplicates exist this ALTER fails
+-- closed and the migration must not guess how to merge credentials.
+SET @preparedStatement = (SELECT IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.STATISTICS
+      WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME='company_users' AND INDEX_NAME='uk_company_users_login') > 0,
+    'SELECT 1 AS company_users_login_unique_already_exists',
+    'ALTER TABLE `company_users` ADD UNIQUE KEY `uk_company_users_login` (`login`)'
+));
+PREPARE addCompanyUsersLoginUnique FROM @preparedStatement;
+EXECUTE addCompanyUsersLoginUnique;
+DEALLOCATE PREPARE addCompanyUsersLoginUnique;
+
+-- A global account must not be deleted merely because its legacy/home company is deleted.
+-- Drop the old CASCADE FK when present, make the reference nullable, then restore as SET NULL.
+SET @preparedStatement = (SELECT IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+      WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME='company_users'
+        AND CONSTRAINT_NAME='fk_company_users_company' AND CONSTRAINT_TYPE='FOREIGN KEY') > 0,
+    'ALTER TABLE `company_users` DROP FOREIGN KEY `fk_company_users_company`',
+    'SELECT 1 AS company_users_company_fk_not_present'
+));
+PREPARE dropCompanyUsersCompanyFk FROM @preparedStatement;
+EXECUTE dropCompanyUsersCompanyFk;
+DEALLOCATE PREPARE dropCompanyUsersCompanyFk;
+
+ALTER TABLE `company_users`
+    MODIFY COLUMN `company_id` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Legacy/home company only; access authority is company_memberships';
+
+SET @preparedStatement = (SELECT IF(
+    (SELECT COUNT(*) FROM INFORMATION_SCHEMA.TABLE_CONSTRAINTS
+      WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME='company_users'
+        AND CONSTRAINT_NAME='fk_company_users_company' AND CONSTRAINT_TYPE='FOREIGN KEY') > 0,
+    'SELECT 1 AS company_users_company_fk_already_exists',
+    'ALTER TABLE `company_users` ADD CONSTRAINT `fk_company_users_company` FOREIGN KEY (`company_id`) REFERENCES `companies` (`id`) ON DELETE SET NULL'
+));
+PREPARE addCompanyUsersCompanyFk FROM @preparedStatement;
+EXECUTE addCompanyUsersCompanyFk;
+DEALLOCATE PREPARE addCompanyUsersCompanyFk;
 
 CREATE TABLE IF NOT EXISTS `company_roles` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -22,9 +67,9 @@ CREATE TABLE IF NOT EXISTS `company_roles` (
 CREATE TABLE IF NOT EXISTS `company_memberships` (
     `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
     `company_id` INT UNSIGNED NOT NULL,
-    `user_id` BIGINT UNSIGNED NOT NULL COMMENT 'Global identity: central company_users.id',
+    `user_id` INT UNSIGNED NOT NULL COMMENT 'Global identity: central company_users.id',
     `role_id` BIGINT UNSIGNED NOT NULL,
-    `tenant_user_id` BIGINT UNSIGNED DEFAULT NULL COMMENT 'Technical actor projection in tenant users.id',
+    `tenant_user_id` INT UNSIGNED DEFAULT NULL COMMENT 'Technical actor projection in tenant users.id',
     `status` VARCHAR(20) NOT NULL DEFAULT 'active',
     `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     `updated_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
