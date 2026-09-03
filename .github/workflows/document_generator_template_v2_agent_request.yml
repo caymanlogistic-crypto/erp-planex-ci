@@ -1,0 +1,99 @@
+name: Document Generator Template V2 Agent Request
+
+on:
+  push:
+    branches:
+      - template/document-generator-v2-agent
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: document-generator-template-v2-agent-request
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  authorize-and-dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Resolve and verify exact canonical source
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_url="${GITHUB_API_URL}/repos/${REPOSITORY}"
+          auth=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json")
+
+          branch_json="$(curl -fsS "${auth[@]}" "$base_url/branches/$CANONICAL_BRANCH")"
+          canonical_sha="$(printf '%s' "$branch_json" | python3 -c 'import json,sys; print(json.load(sys.stdin)["commit"]["sha"])')"
+          [[ "$canonical_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$canonical_sha"
+
+          case "$GITHUB_ACTOR" in
+            planexerp|chatgpt-codex-connector|chatgpt-connector) ;;
+            *) echo "::error::Unauthorized actor: $GITHUB_ACTOR"; exit 1 ;;
+          esac
+
+          runs_json="$(curl -fsS "${auth[@]}" "$base_url/actions/workflows/ci.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100")"
+          ci_run_id="$(RUNS_JSON="$runs_json" CANONICAL_SHA="$canonical_sha" python3 - <<'PY'
+          import json, os
+          data = json.loads(os.environ['RUNS_JSON'])
+          sha = os.environ['CANONICAL_SHA']
+          for run in data.get('workflow_runs', []):
+              if run.get('head_sha') == sha and run.get('conclusion') == 'success':
+                  print(run['id'])
+                  break
+          PY
+          )"
+          [[ "$ci_run_id" =~ ^[0-9]+$ ]]
+
+          docgen_runs="$(curl -fsS "${auth[@]}" "$base_url/actions/workflows/document_generator_regression.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100")"
+          docgen_run_id="$(RUNS_JSON="$docgen_runs" CANONICAL_SHA="$canonical_sha" python3 - <<'PY'
+          import json, os
+          data = json.loads(os.environ['RUNS_JSON'])
+          sha = os.environ['CANONICAL_SHA']
+          for run in data.get('workflow_runs', []):
+              if run.get('head_sha') == sha and run.get('conclusion') == 'success':
+                  print(run['id'])
+                  break
+          PY
+          )"
+          [[ "$docgen_run_id" =~ ^[0-9]+$ ]]
+
+          echo "source_sha=$canonical_sha" >> "$GITHUB_OUTPUT"
+          echo "ci_run_id=$ci_run_id" >> "$GITHUB_OUTPUT"
+          echo "docgen_run_id=$docgen_run_id" >> "$GITHUB_OUTPUT"
+          echo "Exact canonical source accepted: $canonical_sha (ERP CI $ci_run_id, Document Generator $docgen_run_id)."
+
+      - name: Dispatch guarded template versioning
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$SOURCE_SHA" > /tmp/template-v2-dispatch.json <<'PY'
+          import json, sys
+          print(json.dumps({
+              'ref': 'chatgpt/production-stabilization-20260802',
+              'inputs': {
+                  'source_sha': sys.argv[1],
+                  'confirm_template_update': 'APPLY_DOCUMENT_GENERATOR_TEMPLATE_V2',
+              },
+          }))
+          PY
+          curl -fsS -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$REPOSITORY/actions/workflows/document_generator_template_v2_production.yml/dispatches" \
+            --data-binary @/tmp/template-v2-dispatch.json
+          echo "Agent document-template v2 request accepted for canonical SHA $SOURCE_SHA."
