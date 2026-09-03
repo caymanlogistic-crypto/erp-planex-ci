@@ -142,6 +142,10 @@ final class ContractorService
         if (($data['bank_corr_account'] ?? '') !== '' && !preg_match('/^\d{20}$/', $data['bank_corr_account'])) {
             $errors['bank_corr_account'] = 'Корр. счёт должен содержать 20 цифр';
         }
+        $bankInn = trim((string)($data['bank_inn'] ?? ''));
+        if ($bankInn !== '' && !preg_match('/^\d{10}$/', $bankInn)) {
+            $errors['bank_inn'] = 'ИНН банка должен содержать 10 цифр';
+        }
 
         if ($inn !== '') {
             $checkStmt = $localPdo->prepare('SELECT COUNT(*) FROM contractors WHERE inn = ?');
@@ -163,11 +167,11 @@ final class ContractorService
     {
         $insert = $localPdo->prepare(
             'INSERT INTO contractors (name, inn, kpp, ogrn, contractor_type, legal_address, physical_address,
-             bank_account, bank_name, bank_bik, bank_corr_account,
+             bank_account, bank_name, bank_bik, bank_corr_account, bank_inn,
              director_full_name, director_position,
              status, comments, created_by_user_id, created_by_role)
              VALUES (:name, :inn, :kpp, :ogrn, :contractor_type, :legal_address, :physical_address,
-             :bank_account, :bank_name, :bank_bik, :bank_corr_account,
+             :bank_account, :bank_name, :bank_bik, :bank_corr_account, :bank_inn,
              :director_full_name, :director_position,
              :status, :comments, :created_by_user_id, :created_by_role)'
         );
@@ -183,6 +187,7 @@ final class ContractorService
             ':bank_name'          => ($data['bank_name'] ?? '') !== '' ? $data['bank_name'] : null,
             ':bank_bik'           => ($data['bank_bik'] ?? '') !== '' ? $data['bank_bik'] : null,
             ':bank_corr_account'  => ($data['bank_corr_account'] ?? '') !== '' ? $data['bank_corr_account'] : null,
+            ':bank_inn'           => ($v = trim((string)($data['bank_inn'] ?? ''))) !== '' ? $v : null,
             ':director_full_name' => ($v = trim($data['director_full_name'] ?? '')) !== '' ? $v : null,
             ':director_position'  => ($v = trim($data['director_position'] ?? '')) !== '' ? $v : null,
             ':status'             => 'active',
@@ -208,6 +213,7 @@ final class ContractorService
                 bank_name = :bank_name,
                 bank_bik = :bank_bik,
                 bank_corr_account = :bank_corr_account,
+                bank_inn = :bank_inn,
                 director_full_name = :director_full_name,
                 director_position = :director_position,
                 status = :status,
@@ -228,6 +234,7 @@ final class ContractorService
             ':bank_name'        => ($data['bank_name'] ?? '') !== '' ? $data['bank_name'] : null,
             ':bank_bik'         => ($data['bank_bik'] ?? '') !== '' ? $data['bank_bik'] : null,
             ':bank_corr_account'=> ($data['bank_corr_account'] ?? '') !== '' ? $data['bank_corr_account'] : null,
+            ':bank_inn'         => ($v = trim((string)($data['bank_inn'] ?? ''))) !== '' ? $v : null,
             ':director_full_name' => ($v = trim($data['director_full_name'] ?? '')) !== '' ? $v : null,
             ':director_position'  => ($v = trim($data['director_position'] ?? '')) !== '' ? $v : null,
             ':status'           => $data['status'] ?? 'active',

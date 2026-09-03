@@ -19,6 +19,9 @@ trait DocumentGeneratorWorkflowTrait
         string $requestInput,
         array $params
     ): array {
+        if (!self::runtimeSchemaReady($localPdo)) {
+            return self::failed(['Схема генератора договоров не обновлена. Требуется штатная tenant migration 129.']);
+        }
         $template = self::getTemplateVersion($localPdo,$templateId,null,true);
         if (!$template) return self::failed(['Выбранный шаблон не найден, неактивен или не имеет активной версии.']);
         $executor = self::loadAccessibleExecutor($localPdo,$crewId,$userId,$role);
@@ -77,6 +80,7 @@ trait DocumentGeneratorWorkflowTrait
     public static function generate(PDO $pdo, int $companyId, int $userId, string $role, array $prepared): int
     {
         if (!($prepared['ok'] ?? false)) throw new RuntimeException('Документ нельзя сформировать до устранения ошибок проверки.');
+        if (!self::runtimeSchemaReady($pdo)) throw new RuntimeException('Схема генератора договоров не обновлена. Требуется штатная tenant migration 129.');
         $template = $prepared['template'] ?? null;
         if (!is_array($template)) throw new RuntimeException('Версия шаблона не определена.');
         $templatePath = DocumentService::resolveStoredPath($companyId,(string)$template['stored_path']);
@@ -86,28 +90,40 @@ trait DocumentGeneratorWorkflowTrait
             throw new RuntimeException('Контрольная сумма активной версии шаблона не совпадает. Формирование заблокировано.');
         }
 
-        $snapshot = $prepared['snapshot'];
-        $params = is_array($snapshot['parameters'] ?? null) ? $snapshot['parameters'] : [];
         $type = (string)$template['document_type'];
-        $number = trim((string)($type==='vehicle_lease_crew' ? ($params['contract_number'] ?? '') : ($params['waybill_number'] ?? '')));
-        $date = (string)($type==='vehicle_lease_crew' ? ($params['contract_date'] ?? '') : ($params['waybill_date'] ?? ''));
-        $downloadBase = $type==='vehicle_lease_crew' ? 'Договор-заявка' : 'Приложение-к-путевому-листу';
-        $downloadName = DocumentService::safeDownloadName($downloadBase . ($number!=='' ? '_' . $number : '') . '.docx');
-        $relativeDir = sprintf('companies/%d/document-generator/generated/%s', $companyId, date('Y/m'));
-        $absoluteDir = storage_path($relativeDir);
-        if (!is_dir($absoluteDir) && !mkdir($absoluteDir,0775,true) && !is_dir($absoluteDir)) throw new RuntimeException('Не удалось создать каталог сформированных документов.');
-        $storedName = sprintf('%s_%s.docx', date('Ymd_His'), bin2hex(random_bytes(8)));
-        $relativePath = $relativeDir . '/' . $storedName;
-        $absolutePath = storage_path($relativePath);
-        DocumentTemplateService::render($templatePath,$absolutePath,$prepared['values'],$prepared['request_values']);
-        $sha = hash_file('sha256',$absolutePath) ?: '';
-        if ($sha === '') {
-            @unlink($absolutePath);
-            throw new RuntimeException('Не удалось вычислить контрольную сумму сформированного документа.');
-        }
+        $snapshot = $prepared['snapshot'] ?? null;
+        if (!is_array($snapshot)) throw new RuntimeException('Snapshot документа не определён.');
+        $absolutePath = null;
 
         $pdo->beginTransaction();
         try {
+            $params = is_array($snapshot['parameters'] ?? null) ? $snapshot['parameters'] : [];
+            if ($type === 'vehicle_lease_crew') {
+                $number = DocumentNumberSequenceService::allocateVehicleLeaseContractNumber($pdo);
+                $snapshot['document']['number'] = $number;
+                $snapshot['document']['number_mode'] = 'automatic';
+                $snapshot['parameters']['contract_number'] = $number;
+                $params = $snapshot['parameters'];
+            } else {
+                $number = trim((string)($params['waybill_number'] ?? ''));
+                $snapshot['document']['number'] = $number;
+                $snapshot['document']['number_mode'] = 'manual';
+            }
+            $date = (string)($type==='vehicle_lease_crew' ? ($params['contract_date'] ?? '') : ($params['waybill_date'] ?? ''));
+            $values = self::buildFixedValues($snapshot);
+
+            $downloadBase = $type==='vehicle_lease_crew' ? 'Договор-заявка' : 'Приложение-к-путевому-листу';
+            $downloadName = DocumentService::safeDownloadName($downloadBase . ($number!=='' ? '_' . $number : '') . '.docx');
+            $relativeDir = sprintf('companies/%d/document-generator/generated/%s', $companyId, date('Y/m'));
+            $absoluteDir = storage_path($relativeDir);
+            if (!is_dir($absoluteDir) && !mkdir($absoluteDir,0775,true) && !is_dir($absoluteDir)) throw new RuntimeException('Не удалось создать каталог сформированных документов.');
+            $storedName = sprintf('%s_%s.docx', date('Ymd_His'), bin2hex(random_bytes(8)));
+            $relativePath = $relativeDir . '/' . $storedName;
+            $absolutePath = storage_path($relativePath);
+            DocumentTemplateService::render($templatePath,$absolutePath,$values,$prepared['request_values']);
+            $sha = hash_file('sha256',$absolutePath) ?: '';
+            if ($sha === '') throw new RuntimeException('Не удалось вычислить контрольную сумму сформированного документа.');
+
             $summary = $snapshot['requests_summary'];
             $stmt = $pdo->prepare(
                 'INSERT INTO generated_documents(document_type,document_number,document_date,template_id,template_version_id,route_executor_id,request_ids_json,total_mass_kg,unload_address,parameters_json,snapshot_json,stored_path,original_name,sha256,created_by_user_id,created_by_role)
@@ -127,7 +143,7 @@ trait DocumentGeneratorWorkflowTrait
             return $documentId;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
-            @unlink($absolutePath);
+            if (is_string($absolutePath) && $absolutePath !== '') @unlink($absolutePath);
             throw $e;
         }
     }
@@ -162,11 +178,13 @@ trait DocumentGeneratorWorkflowTrait
         if (!is_array($snapshot)) return [];
         $summary=$snapshot['requests_summary'] ?? [];
         $params=$snapshot['parameters'] ?? [];
+        if (!is_array($params)) $params=[];
+        unset($params['contract_number'],$params['executor_bank_inn']);
         return [
             'template_id'=>(int)($generated['template_id'] ?? 0),
             'crew_id'=>(int)($snapshot['executor']['crew_id'] ?? 0),
             'request_input'=>implode("\n",array_map('strval',$summary['input_ids'] ?? [])),
-            'params'=>is_array($params)?$params:[],
+            'params'=>$params,
         ];
     }
 

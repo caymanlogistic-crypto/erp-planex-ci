@@ -19,8 +19,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "b0c216555e590f22459a2bb52655dd81ab24a596",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/b0c216555e590f22459a2bb52655dd81ab24a596/docs/database/TENANT_SCHEMA.md",
+      "verified_sha": "488fbb0acd06514b93205a41cfbf5f658c1dd9c3",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/488fbb0acd06514b93205a41cfbf5f658c1dd9c3/docs/database/TENANT_SCHEMA.md",
       "owning_paths": ["database/migrations-local/**", "app/Service/LocalMigrationService.php", "tools/database/generate_schema_docs.php", "docs/database/TENANT_SCHEMA*.md"],
       "navigation": "active",
       "machine_ownership_id": "data.tenant_schema"

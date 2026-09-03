@@ -2,8 +2,6 @@
 
 namespace App\Service;
 
-use PDO;
-use RuntimeException;
 use Throwable;
 
 trait DocumentGeneratorDataTrait
@@ -12,14 +10,12 @@ trait DocumentGeneratorDataTrait
     {
         if ($type==='vehicle_lease_crew') {
             return [
-                'contract_number'=>trim((string)($params['contract_number'] ?? '')),
                 'contract_date'=>trim((string)($params['contract_date'] ?? '')),
                 'start_date'=>trim((string)($params['start_date'] ?? '')),
                 'start_time'=>trim((string)($params['start_time'] ?? '')),
                 'finish_date'=>trim((string)($params['finish_date'] ?? '')),
                 'price'=>trim((string)($params['price'] ?? '')),
                 'vat_mode'=>trim((string)($params['vat_mode'] ?? 'без НДС')),
-                'executor_bank_inn'=>trim((string)($params['executor_bank_inn'] ?? '')),
             ];
         }
         return [
@@ -36,7 +32,6 @@ trait DocumentGeneratorDataTrait
             return checkdate((int)$m[2],(int)$m[3],(int)$m[1]);
         };
         if ($type==='vehicle_lease_crew') {
-            if (trim((string)($params['contract_number'] ?? ''))==='') $errors[]='Укажите номер договора.';
             foreach (['contract_date'=>'дату договора','start_date'=>'дату начала аренды','finish_date'=>'плановую дату завершения'] as $field=>$label) {
                 $value=trim((string)($params[$field] ?? ''));
                 if (!$validDate($value)) $errors[]='Укажите корректную ' . $label . '.';
@@ -46,8 +41,6 @@ trait DocumentGeneratorDataTrait
             $price=str_replace(["\u{00A0}",' '],'',str_replace(',','.',trim((string)($params['price'] ?? ''))));
             if ($price==='' || !is_numeric($price) || (float)$price<0) $errors[]='Укажите корректную стоимость договора.';
             if (trim((string)($params['vat_mode'] ?? ''))==='') $errors[]='Укажите режим НДС.';
-            $bankInn=preg_replace('/\D/','',trim((string)($params['executor_bank_inn'] ?? ''))) ?? '';
-            if ($bankInn==='' || !in_array(strlen($bankInn),[10,12],true)) $errors[]='Укажите ИНН банка Арендодателя (10 или 12 цифр).';
         } elseif ($type==='waybill_driver_assignment') {
             if (trim((string)($params['waybill_number'] ?? ''))==='') $errors[]='Укажите номер путевого листа.';
             if (!$validDate(trim((string)($params['waybill_date'] ?? '')))) $errors[]='Укажите корректную дату путевого листа.';
@@ -60,10 +53,10 @@ trait DocumentGeneratorDataTrait
         $c=$snapshot['company'];$e=$snapshot['executor'];$d=$snapshot['driver'];$v=$snapshot['vehicle'];$t=$snapshot['trailer'];$p=$snapshot['parameters'];$s=$snapshot['requests_summary'] ?? [];
         $price=self::formatMoneyText((string)($p['price'] ?? ''));
         return [
-            'contract.number'=>(string)($p['contract_number'] ?? ''),'contract.date'=>self::formatRuDate((string)($p['contract_date'] ?? '')),'contract.start_date'=>self::formatRuDate((string)($p['start_date'] ?? '')),'contract.start_time'=>(string)($p['start_time'] ?? ''),'contract.finish_date'=>self::formatRuDate((string)($p['finish_date'] ?? '')),'contract.price'=>$price,'contract.vat_mode'=>(string)($p['vat_mode'] ?? ''),
+            'contract.number'=>(string)($snapshot['document']['number'] ?? ''),'contract.date'=>self::formatRuDate((string)($p['contract_date'] ?? '')),'contract.start_date'=>self::formatRuDate((string)($p['start_date'] ?? '')),'contract.start_time'=>(string)($p['start_time'] ?? ''),'contract.finish_date'=>self::formatRuDate((string)($p['finish_date'] ?? '')),'contract.price'=>$price,'contract.vat_mode'=>(string)($p['vat_mode'] ?? ''),
             'waybill.number'=>(string)($p['waybill_number'] ?? ''),'waybill.date'=>self::formatRuDate((string)($p['waybill_date'] ?? '')),
             'company.name'=>$c['name'],'company.inn'=>$c['inn'],'company.kpp_line'=>$c['kpp']!==''?'КПП: '.$c['kpp']:'','company.ogrn_line'=>$c['ogrn']!==''?'ОГРН: '.$c['ogrn']:'','company.legal_address'=>$c['legal_address'],'company.physical_address'=>$c['physical_address'],'company.bank_name'=>$c['bank_name'],'company.bank_account'=>$c['bank_account'],'company.bank_corr_account'=>$c['bank_corr_account'],'company.bank_bik'=>$c['bank_bik'],'company.contact_phone'=>$c['contact_phone'],'company.contact_email'=>$c['contact_email'],'company.director_full_name'=>$c['director_full_name'],'company.director_position'=>$c['director_position'],'company.signature_name'=>self::signatureName($c['director_full_name']),
-            'executor.name'=>$e['name'],'executor.inn'=>$e['inn'],'executor.kpp_line'=>$e['kpp']!==''?'КПП: '.$e['kpp']:'','executor.ogrn_line'=>$e['ogrn']!==''?((strlen($e['ogrn'])===15?'ОГРНИП: ':'ОГРН: ').$e['ogrn']):'','executor.legal_address'=>$e['legal_address'],'executor.physical_address'=>$e['physical_address'],'executor.bank_name'=>$e['bank_name'],'executor.bank_account'=>$e['bank_account'],'executor.bank_corr_account'=>$e['bank_corr_account'],'executor.bank_bik'=>$e['bank_bik'],'executor.bank_inn'=>(string)($p['executor_bank_inn'] ?? ''),'executor.director_full_name'=>$e['director_full_name'],'executor.director_position'=>$e['director_position'],'executor.signature_name'=>$e['signature_name'],
+            'executor.name'=>$e['name'],'executor.inn'=>$e['inn'],'executor.kpp_line'=>$e['kpp']!==''?'КПП: '.$e['kpp']:'','executor.ogrn_line'=>$e['ogrn']!==''?((strlen($e['ogrn'])===15?'ОГРНИП: ':'ОГРН: ').$e['ogrn']):'','executor.legal_address'=>$e['legal_address'],'executor.physical_address'=>$e['physical_address'],'executor.bank_name'=>$e['bank_name'],'executor.bank_account'=>$e['bank_account'],'executor.bank_corr_account'=>$e['bank_corr_account'],'executor.bank_bik'=>$e['bank_bik'],'executor.bank_inn'=>(string)($e['bank_inn'] ?? ''),'executor.director_full_name'=>$e['director_full_name'],'executor.director_position'=>$e['director_position'],'executor.signature_name'=>$e['signature_name'],
             'driver.full_name'=>$d['full_name'],'driver.passport'=>$d['passport'],'driver.license'=>$d['license'],'driver.signature_name'=>$d['signature_name'],
             'vehicle.model'=>$v['model'],'vehicle.plate'=>$v['plate'],'trailer.display'=>$t['display'],
             'requests.count'=>(string)($s['count'] ?? count($snapshot['requests'] ?? [])),'requests.total_mass_kg'=>self::formatMassKg((float)($s['total_mass_kg'] ?? 0)),'requests.unload_address'=>(string)($s['unload_address'] ?? ''),
@@ -72,15 +65,15 @@ trait DocumentGeneratorDataTrait
 
     private static function validateFixedPlaceholders(array $placeholders, array $values, array $snapshot): array
     {
-        $optional=[
-            'executor.kpp_line','executor.ogrn_line','executor.physical_address','trailer.display',
-        ];
+        $optional=['executor.kpp_line','executor.ogrn_line','executor.physical_address','trailer.display'];
         $requestPrefixes=['request.'];
         $errors=[];
         foreach ($placeholders as $name) {
             if (!is_string($name) || in_array($name,$optional,true)) continue;
             $isRequest=false;foreach($requestPrefixes as $prefix)if(str_starts_with($name,$prefix)){$isRequest=true;break;}
             if($isRequest)continue;
+            if ($name==='contract.number' && (string)($snapshot['document']['number_mode'] ?? '')==='automatic') continue;
+            if ($name==='executor.bank_inn') continue;
             if (!array_key_exists($name,$values)) { $errors[]='Для переменной {{'.$name.'}} не определён источник данных.'; continue; }
             if (trim((string)$values[$name])==='') $errors[]='Не хватает данных для {{'.$name.'}}.';
         }
@@ -91,6 +84,12 @@ trait DocumentGeneratorDataTrait
         if (strlen(preg_replace('/\D/','',(string)$executor['inn']) ?? '')===10) {
             if (in_array('executor.kpp_line',$placeholders,true) && trim((string)$executor['kpp'])==='') $errors[]='У Арендодателя-юрлица не заполнен КПП.';
             if (in_array('executor.ogrn_line',$placeholders,true) && trim((string)$executor['ogrn'])==='') $errors[]='У Арендодателя-юрлица не заполнен ОГРН.';
+        }
+        if (in_array('executor.bank_inn',$placeholders,true)) {
+            $bankInn=preg_replace('/\D/','',trim((string)($executor['bank_inn'] ?? ''))) ?? '';
+            if (!preg_match('/^\d{10}$/',$bankInn)) {
+                $errors[]='У Арендодателя/Подрядчика не заполнен ИНН банка. Заполните его в карточке Подрядчика.';
+            }
         }
         return array_values(array_unique($errors));
     }
@@ -173,7 +172,6 @@ trait DocumentGeneratorDataTrait
 
     private static function json(mixed $value): string
     {
-        $json=json_encode($value,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
-        return $json;
+        return json_encode($value,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
     }
 }

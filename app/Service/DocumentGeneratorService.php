@@ -2,6 +2,7 @@
 
 namespace App\Service;
 
+require_once __DIR__ . '/DocumentNumberSequenceService.php';
 require_once __DIR__ . '/DocumentGeneratorTemplateTrait.php';
 require_once __DIR__ . '/DocumentGeneratorWorkflowTrait.php';
 require_once __DIR__ . '/DocumentGeneratorAccessTrait.php';
