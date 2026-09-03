@@ -1,4 +1,4 @@
-name: Waste Trips Existing Scheduler Probe Once
+name: Waste Trips Existing Scheduler Contract Probe Once
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Inspect existing user scheduler contract without secret values
+      - name: Inspect existing scheduler contract safely
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -38,29 +38,31 @@ jobs:
           set -u
           H=/home/s/spugovxsim
           C="$H/public_html/crone"
-          echo 'CRONE_FILES_BEGIN'
-          find "$C" -maxdepth 3 -type f -printf '%P|%s|%TY-%Tm-%TdT%TH:%TM:%TS\n' 2>/dev/null | sort | head -200
-          echo 'CRONE_FILES_END'
-          echo 'CRONE_DIRS_BEGIN'
-          find "$C" -maxdepth 3 -type d -printf '%P\n' 2>/dev/null | sort | head -100
-          echo 'CRONE_DIRS_END'
-          echo 'CRONE_PHP_META_BEGIN'
-          while IFS= read -r f; do
-            rel="${f#$H/}"
-            printf 'FILE=%s\n' "$rel"
-            php -l "$f" 2>&1 | sed 's#'$H'#~#g' || true
-            grep -En "(require|include|curl|file_get_contents|exec|shell_exec|system|passthru|cron|schedule|http|https)" "$f" 2>/dev/null \
-              | sed -E 's#(["'"'][^"'"']*(password|passwd|secret|token|key)[^"'"']*["'"'])#"***"#Ig' \
-              | sed 's#'$H'#~#g' | head -80 || true
-          done < <(find "$C" -maxdepth 3 -type f -name '*.php' 2>/dev/null | sort)
-          echo 'CRONE_PHP_META_END'
-          echo 'CRONE_REFERENCES_BEGIN'
-          grep -RIl --exclude='*.log' --exclude='*.sql' --exclude='.env*' --exclude-dir=vendor --exclude-dir=node_modules -E '(public_html/)?crone(/|$)|cron_sync' "$H" 2>/dev/null \
+          echo 'CRONE_JOB_META_BEGIN'
+          for f in "$C/Slitex2DB.php" "$C/dumpDB.php"; do
+            [ -f "$f" ] || continue
+            echo "FILE=$(basename "$f")"
+            php -l "$f" 2>&1 || true
+            echo 'SAFE_LINES_BEGIN'
+            grep -En '(require|include|curl|file_get_contents|exec|shell_exec|system|passthru|date\(|sleep\(|flock|log|echo|SELECT|INSERT|UPDATE|DELETE|PDO|mysqli)' "$f" 2>/dev/null \
+              | grep -Eiv '(password|passwd|username|user[[:space:]]*=|host[[:space:]]*=|dbname|database[[:space:]]*=|token|secret|api[_-]?key|authorization)' \
+              | head -120 || true
+            echo 'SAFE_LINES_END'
+          done
+          echo 'CRON_LOG_TAIL_BEGIN'
+          tail -40 "$C/cron_sync.log" 2>/dev/null | grep -Eiv '(password|passwd|token|secret|authorization|api[_-]?key)' || true
+          echo 'CRON_LOG_TAIL_END'
+          echo 'CRON_LOG_STAT_BEGIN'
+          stat -c 'mtime_epoch=%Y size=%s' "$C/cron_sync.log" 2>/dev/null || true
+          echo 'CRON_LOG_STAT_END'
+          echo 'JOB_REFERENCES_BEGIN'
+          grep -RIl --exclude='*.log' --exclude='*.sql' --exclude='.env*' --exclude-dir=vendor --exclude-dir=node_modules -E 'Slitex2DB\.php|dumpDB\.php|public_html/crone' "$H" 2>/dev/null \
             | sed "s#^$H#~#" | sort | head -100 || true
-          echo 'CRONE_REFERENCES_END'
-          echo 'LEGACY_CRON_MTIMES_BEGIN'
-          find "$H/public_html/fregat/feo/max" -maxdepth 1 -type f -name 'cron_*.php' -printf '%f|%TY-%Tm-%TdT%TH:%TM:%TS\n' 2>/dev/null | sort
-          echo 'LEGACY_CRON_MTIMES_END'
+          echo 'JOB_REFERENCES_END'
+          echo 'HIDDEN_SCHEDULER_PATHS_BEGIN'
+          find "$H" -maxdepth 4 \( -type d -o -type f \) \( -path '*/.*cron*' -o -path '*/.*schedul*' -o -path '*/cron*' -o -path '*/schedule*' \) 2>/dev/null \
+            | sed "s#^$H#~#" | sort | head -120 || true
+          echo 'HIDDEN_SCHEDULER_PATHS_END'
           SH
       - name: Cleanup
         if: always()
