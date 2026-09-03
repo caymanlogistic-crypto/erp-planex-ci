@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `26554495b38d95cb9881d3bd2ed86c94c9a61e0141463f2311beaf73e8d093c6`
+**Schema fingerprint:** `c860d050af5b39210696a612cc54841f1022923be0989c191bca875a5cba8696`
 
 ## `feo_requests`
 
@@ -222,28 +222,25 @@
 
 - `fk_waste_trip_legacy_audit_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
-## `waste_trip_requests`
+## `waste_trip_namespace_state`
 
 **Domain:** Other tenant domain  
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
 |---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `feo_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `snapshot_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
-| `position_no` | `int unsigned` | NO | `0` | — | — |
+| `singleton_id` | `tinyint unsigned` | NO | NULL | — | `PRI` |
+| `legacy_high_water_at_cutover` | `bigint unsigned` | NO | NULL | — | — |
+| `last_issued_business_id` | `bigint unsigned` | NO | NULL | — | — |
+| `cutover_started_at` | `datetime` | YES | NULL | — | — |
+| `cutover_completed_at` | `datetime` | YES | NULL | — | — |
 | `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 
 ### Indexes / constraints
 
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_waste_trip_requests_position` (`waste_trip_id`, `position_no`, `id`)
-- **INDEX** `idx_waste_trip_requests_request` (`feo_request_id`, `waste_trip_id`)
-- **UNIQUE** `uk_waste_trip_request` (`waste_trip_id`, `feo_request_id`)
+- **PRIMARY** `PRIMARY` (`singleton_id`)
 
 ### Physical foreign keys
 
-- `fk_waste_trip_requests_feo`: (`feo_request_id`) → `feo_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-- `fk_waste_trip_requests_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- None enforced by MySQL.
