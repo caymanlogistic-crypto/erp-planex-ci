@@ -32,6 +32,16 @@ async function assertNoOverflow(page, label) {
   assert(d.bsw <= d.cw + 1, `${label}: body overflow ${JSON.stringify(d)}`);
 }
 async function assertSingleActiveModal(page, expectedId, label) {
+  await page.waitForFunction((id) => {
+    const node = document.getElementById(id);
+    if (!node || !node.classList.contains('is-open')) return false;
+    const s = getComputedStyle(node);
+    return s.display !== 'none'
+      && s.visibility !== 'hidden'
+      && Number.parseFloat(s.opacity || '1') > 0.01
+      && s.pointerEvents !== 'none';
+  }, expectedId, { timeout: 3000 });
+
   const states = await page.locator('.modal-overlay').evaluateAll((nodes) => nodes.map((node) => {
     const s = getComputedStyle(node);
     return {
