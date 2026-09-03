@@ -31,6 +31,28 @@ async function assertNoOverflow(page, label) {
   assert(d.sw <= d.cw + 1, `${label}: document overflow ${JSON.stringify(d)}`);
   assert(d.bsw <= d.cw + 1, `${label}: body overflow ${JSON.stringify(d)}`);
 }
+async function assertSingleActiveModal(page, expectedId, label) {
+  const states = await page.locator('.modal-overlay').evaluateAll((nodes) => nodes.map((node) => {
+    const s = getComputedStyle(node);
+    return {
+      id: node.id,
+      open: node.classList.contains('is-open'),
+      display: s.display,
+      visibility: s.visibility,
+      opacity: Number.parseFloat(s.opacity || '1'),
+      pointerEvents: s.pointerEvents,
+    };
+  }));
+  const open = states.filter((x) => x.open);
+  assert.deepStrictEqual(open.map((x) => x.id), [expectedId], `${label}: active modal classes ${JSON.stringify(states)}`);
+  const expected = states.find((x) => x.id === expectedId);
+  assert(expected, `${label}: expected modal state missing`);
+  assert(expected.display !== 'none' && expected.visibility !== 'hidden' && expected.opacity > 0.01 && expected.pointerEvents !== 'none', `${label}: expected modal not interactively visible ${JSON.stringify(expected)}`);
+  for (const state of states.filter((x) => x.id !== expectedId)) {
+    const inactive = state.display === 'none' || state.visibility === 'hidden' || state.opacity <= 0.01 || state.pointerEvents === 'none';
+    assert(inactive, `${label}: closed overlay can still obscure/intercept UI ${JSON.stringify(state)}`);
+  }
+}
 
 (async () => {
   const browser = await chromium.launch({ headless: true });
@@ -53,11 +75,13 @@ async function assertNoOverflow(page, label) {
         await assertNoOverflow(page, `${suffix}: registry`);
 
         await page.locator('button[onclick="openModal(\'waste-trip-create-modal\')"]').click();
-        await page.locator('#waste-trip-create-modal').waitFor({ state: 'visible' });
-        assert.strictEqual(await page.locator('.modal-overlay:visible').count(), 1, `${suffix}: create overlay count`);
+        await page.locator('#waste-trip-create-modal.is-open').waitFor();
+        await assertSingleActiveModal(page, 'waste-trip-create-modal', `${suffix}: create modal`);
         await page.screenshot({ path: `artifacts/waste-${suffix}-create.png`, fullPage: true });
         await page.locator('#waste-trip-create-modal .modal-close').click();
-        await page.locator('#waste-trip-create-modal').waitFor({ state: 'hidden' });
+        await page.locator('#waste-trip-create-modal.is-open').waitFor({ state: 'detached' }).catch(async () => {
+          assert.strictEqual(await page.locator('#waste-trip-create-modal.is-open').count(), 0, `${suffix}: create modal did not close`);
+        });
 
         response = await page.goto(`${BASE}/company/trips/departures/legacy`, { waitUntil: 'networkidle' });
         assert(response && response.status() === 200, `${suffix}: legacy HTTP ${response ? response.status() : 'none'}`);
@@ -74,8 +98,8 @@ async function assertNoOverflow(page, label) {
         assert.strictEqual(await materialize.count(), 1, `${suffix}: no materializable legacy row`);
         const legacyId = await materialize.getAttribute('data-materialize-legacy');
         await materialize.click();
-        await page.locator('#waste-trip-materialize-modal').waitFor({ state: 'visible' });
-        assert.strictEqual(await page.locator('.modal-overlay:visible').count(), 1, `${suffix}: materialize overlay count`);
+        await page.locator('#waste-trip-materialize-modal.is-open').waitFor();
+        await assertSingleActiveModal(page, 'waste-trip-materialize-modal', `${suffix}: materialize modal`);
         const info = (await page.locator('#waste-trip-materialize-modal .notice.info').innerText()).trim();
         assert(info.includes('business ID') && info.includes('старой БД'), `${suffix}: ownership notice missing`);
         const formNames = await page.locator('#waste-materialize-form [name]').evaluateAll((nodes) => nodes.map((n) => n.getAttribute('name')).filter(Boolean));
