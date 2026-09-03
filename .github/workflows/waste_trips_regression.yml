@@ -17,7 +17,7 @@ on:
       - 'tests/waste_trip*.php'
       - '.github/workflows/waste_trips*.yml'
   push:
-    branches: [chatgpt/production-stabilization-20260802]
+    branches: [chatgpt/production-stabilization-20260802, chatgpt/waste-trips-legacy-linked-20260903]
     paths:
       - 'app/Http/Controllers/Company/WasteTripController.php'
       - 'app/Http/Routes/company_linear_trips.php'
@@ -34,7 +34,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   waste-trips:
@@ -91,3 +91,41 @@ jobs:
           set -euo pipefail
           php tests/waste_trip_regression_test.php | tee /tmp/waste.out
           for marker in WASTE_TRIP_DOMAIN=PASS WASTE_TRIP_STATIC_SECURITY=PASS WASTE_TRIP_MYSQL=PASS WASTE_TRIP_CONCURRENCY=PASS; do grep -Fqx "$marker" /tmp/waste.out; done
+
+  refresh-schema-docs:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/chatgpt/waste-trips-legacy-linked-20260903' && contains(github.event.head_commit.message, '[schema-docs-refresh]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/waste-trips-legacy-linked-20260903
+          fetch-depth: 1
+      - name: Start isolated MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+      - name: Generate canonical tenant schema docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tools/database/generate_schema_docs.php --write
+          unexpected="$(git status --porcelain | awk '{print $2}' | grep -Ev '^docs/database/TENANT.*\.md$' || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected generated diff:"
+            echo "$unexpected"
+            exit 1
+          fi
+          git add docs/database/TENANT*.md
+          git diff --cached --quiet && { echo 'Expected schema docs drift, but generator produced none'; exit 1; }
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Waste Trips: refresh generated tenant schema docs'
+          git push origin HEAD:chatgpt/waste-trips-legacy-linked-20260903
