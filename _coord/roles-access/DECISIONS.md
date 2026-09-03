@@ -202,3 +202,77 @@ The implementation is not ready for OWNER final review until all three are prove
 - CODE PASS;
 - CI PASS;
 - MIGRATION BEFORE↔AFTER PASS.
+
+---
+
+## D-017 — Existing `company_users` becomes global identity authority
+
+**Problem**
+
+At START_HEAD authentication has two incompatible company-user paths:
+
+- `company_owner` authenticates against central `company_users`;
+- logist/senior_logist authentication scans every tenant `users` table and becomes ambiguous if the same login exists in several companies.
+
+At the same time `UserSyncService` already treats central `company_users` as the central registry for ordinary users, while company-owner CRUD creates only the central row.
+
+**Decision**
+
+Do **not** create another parallel global-account table. After cutover the existing central `company_users` row is the one global authentication/profile identity.
+
+Its legacy columns `company_id`, `role` and `status` remain compatibility/migration fields only and must cease to be the authority for current company access.
+
+New central `company_memberships` rows provide company-specific state:
+
+- `company_id`;
+- global `user_id` → `company_users.id`;
+- `role_id`;
+- membership status;
+- personal page/data overrides;
+- mapping to a tenant-local actor projection when legacy tenant code/FKs require it.
+
+Unique business membership invariant: `(company_id, user_id)`.
+
+Authentication stays on the existing `/login` mechanism but is changed to authenticate `company_users` once and then resolve one of that account's active memberships. Tenant `users` tables are no longer authentication authorities.
+
+**Migration safety**
+
+Existing central logins are already treated as globally unique by current owner/superadmin create flows. Migration/preflight must nevertheless detect duplicate/conflicting normalized central logins and tenant-only drift; it must block rather than guess identity merges.
+
+**Agents affected**
+
+02, 04, 07.
+
+---
+
+## D-018 — Tenant `users` is a technical actor projection after cutover
+
+**Problem**
+
+Tenant business schema contains real references to local `users.id` (creator/ownership/audit relations; Waste Trip has an explicit FK). Current company-owner rows may have no tenant `users` row at all because owner creation writes only central `company_users`, and current reconciliation intentionally skips `company_owner`.
+
+Replacing every local actor reference with a cross-database global ID would be a broad unrelated schema rewrite and would destabilize existing ERP modules.
+
+**Decision**
+
+Keep tenant `users` as a compatibility **actor projection**, not as a second account or authentication source.
+
+Each normal company membership that needs to act in tenant business operations has a stable `tenant_user_id` mapping. Existing local rows are reused where trustworthy login/company reconciliation proves the mapping. Missing leader actor projections are created/backfilled by the controlled migration/synchronization path before creator/assignment semantics rely on them.
+
+The projection may cache legacy display/profile fields required by existing tenant code, but:
+
+- password/login data there is not an authentication authority after cutover;
+- role/status there is not an authorization authority after cutover;
+- the canonical global profile remains central `company_users`;
+- the canonical company role/status remains `company_memberships`;
+- no second independently managed company account is created.
+
+Session/runtime must distinguish identifiers explicitly (`global_user_id`, `membership_id`, `tenant_user_id`) instead of overloading one ambiguous `user_id`. Legacy `user_id` compatibility may temporarily point to `tenant_user_id` only where old tenant business code requires it; security decisions must use membership/resolver state.
+
+**Reason**
+
+This preserves existing tenant FKs and creator/audit semantics while enabling one global account in several companies and ensuring a Руководитель can also be the concrete creator for assignment rules.
+
+**Agents affected**
+
+02, 04, 05, 07.
