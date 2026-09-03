@@ -3,15 +3,21 @@
 namespace App\Http\Controllers;
 
 use App\Core\Database;
+use App\Service\CompanyMembershipService;
 
 require_once BASE_PATH . '/app/Support/company_database.php';
+require_once BASE_PATH . '/app/Service/CompanyRoleService.php';
+require_once BASE_PATH . '/app/Service/CompanyMembershipService.php';
 
 final class AuthController
 {
+    private CompanyMembershipService $memberships;
+
     public function __construct(
         private readonly array $config,
         private readonly Database $db
     ) {
+        $this->memberships = new CompanyMembershipService();
     }
 
     public function showLogin(): void
@@ -66,6 +72,9 @@ final class AuthController
     public function login(): void
     {
         if (isAuthenticated()) {
+            if (($_SESSION['role_code'] ?? '') === 'superadmin') {
+                redirect_to('/superadmin/companies');
+            }
             redirect_to('/company/dashboard');
         }
 
@@ -85,16 +94,14 @@ final class AuthController
         }
 
         if (!empty($errors)) {
-            ob_start();
-            require base_path('app/View/pages/login_form.php');
-            $content = ob_get_clean();
-            require base_path('app/View/layouts/auth-layout.php');
+            $this->renderLogin($loginValue, $errors, $authError, $multiLogistError, $devSeedPassword);
             return;
         }
 
         try {
             $pdo = $this->db->connection();
 
+            // superadmin remains a separate technical authentication boundary.
             $superStmt = $pdo->prepare(
                 "SELECT * FROM superadmin_users WHERE email = :login AND is_active = 1"
             );
@@ -104,108 +111,83 @@ final class AuthController
             if ($superUser && password_verify($password, $superUser['password_hash'])) {
                 session_regenerate_id(true);
                 $_SESSION['user_id'] = (int) $superUser['id'];
+                $_SESSION['global_user_id'] = null;
+                $_SESSION['membership_id'] = null;
+                $_SESSION['tenant_user_id'] = null;
+                $_SESSION['role_id'] = null;
                 $_SESSION['role_code'] = 'superadmin';
+                $_SESSION['role_name'] = 'Superadmin';
                 $_SESSION['company_id'] = null;
+                $_SESSION['company_name'] = null;
                 $_SESSION['user_name'] = $superUser['name'] ?? 'Super Admin';
+                $_SESSION['is_company_leader'] = false;
+                $_SESSION['session_auth_version'] = 2;
                 $_SESSION['user'] = [
                     'user_id' => $_SESSION['user_id'],
+                    'global_user_id' => null,
+                    'membership_id' => null,
+                    'tenant_user_id' => null,
                     'role_code' => 'superadmin',
                     'company_id' => null,
                 ];
                 redirect_to('/superadmin/companies');
             }
 
-            $ownerStmt = $pdo->prepare(
-                "SELECT cu.*, c.name as company_name, c.status as company_status
-                 FROM company_users cu
-                 JOIN companies c ON cu.company_id = c.id
-                 WHERE cu.login = :login
-                   AND cu.role = 'company_owner'"
-            );
-            $ownerStmt->execute([':login' => $loginValue]);
-            $owner = $ownerStmt->fetch(\PDO::FETCH_ASSOC);
-
-            if ($owner && password_verify($password, $owner['password_hash'])) {
-                if ($owner['status'] !== 'active') {
-                    $authError = 'Доступ к компании временно ограничен. Обратитесь к администратору.';
-                } elseif (!in_array($owner['company_status'], ['active'], true)) {
-                    $authError = 'Доступ к компании временно ограничен. Обратитесь к администратору.';
-                } else {
-                    session_regenerate_id(true);
-                    $_SESSION['user_id'] = (int) $owner['id'];
-                    $_SESSION['role_code'] = 'company_owner';
-                    $_SESSION['company_id'] = (int) $owner['company_id'];
-                    $_SESSION['user_name'] = $owner['full_name'];
-                    $_SESSION['company_name'] = $owner['company_name'];
-                    $_SESSION['user'] = [
-                        'user_id' => $_SESSION['user_id'],
-                        'role_code' => 'company_owner',
-                        'company_id' => $_SESSION['company_id'],
-                    ];
-                    redirect_to('/company/dashboard');
-                }
-            }
-
-            $companiesStmt = $pdo->query("SELECT id, name, db_identifier, db_host, db_port, db_username, db_password FROM companies WHERE status = 'active'");
-            $activeCompanies = $companiesStmt->fetchAll(\PDO::FETCH_ASSOC);
-
-            $logistCandidates = [];
-
-            foreach ($activeCompanies as $ac) {
-                try {
-                    $localDbConfig = companyDatabaseConfig($this->config, $ac);
-                    $localDb = new Database($localDbConfig);
-                    $localPdo = $localDb->connection();
-
-                    $logistStmt = $localPdo->prepare(
-                        "SELECT * FROM users WHERE login = :login AND status = 'active'"
-                    );
-                    $logistStmt->execute([':login' => $loginValue]);
-                    $logistUser = $logistStmt->fetch(\PDO::FETCH_ASSOC);
-
-                    if ($logistUser) {
-                        $logistCandidates[] = [
-                            'user' => $logistUser,
-                            'company_id' => (int) $ac['id'],
-                            'company_name' => $ac['name'],
-                            'db_identifier' => $ac['db_identifier'],
-                        ];
-                    }
-                } catch (\Exception $e) {
-                    continue;
-                }
-            }
-
-            if (count($logistCandidates) === 1) {
-                $candidate = $logistCandidates[0];
-                if (password_verify($password, $candidate['user']['password_hash'])) {
-                    session_regenerate_id(true);
-                    $_SESSION['user_id'] = (int) $candidate['user']['id'];
-                    $_SESSION['role_code'] = $candidate['user']['role_code'] ?? 'logist';
-                    $_SESSION['company_id'] = $candidate['company_id'];
-                    $_SESSION['user_name'] = $candidate['user']['full_name'];
-                    $_SESSION['company_name'] = $candidate['company_name'];
-                    $_SESSION['user'] = [
-                        'user_id' => $_SESSION['user_id'],
-                        'role_code' => $_SESSION['role_code'],
-                        'company_id' => $_SESSION['company_id'],
-                    ];
-                    redirect_to('/company/dashboard');
-                }
+            // One canonical company-user authentication lookup. Tenant users are
+            // never scanned and never verify passwords after this cutover.
+            $globalUser = $this->memberships->findGlobalUserByLogin($pdo, $loginValue);
+            if (!$globalUser || !password_verify($password, (string) $globalUser['password_hash'])) {
                 $authError = 'Неверный логин или пароль.';
-            } elseif (count($logistCandidates) > 1) {
-                $multiLogistError = 'Логин найден в нескольких компаниях, обратитесь к администратору.';
-            } else {
-                $authError = 'Неверный логин или пароль.';
+                $this->renderLogin($loginValue, $errors, $authError, $multiLogistError, $devSeedPassword);
+                return;
             }
-        } catch (\Exception $e) {
-            $authError = 'Неверный логин или пароль.';
+
+            $activeMemberships = $this->memberships->membershipsForUser($pdo, (int) $globalUser['id'], true);
+            $selected = $this->memberships->selectInitialMembership($globalUser, $activeMemberships);
+            if (!$selected) {
+                $authError = 'Нет активного доступа ни к одной компании. Обратитесь к Руководителю.';
+                $this->renderLogin($loginValue, $errors, $authError, $multiLogistError, $devSeedPassword);
+                return;
+            }
+
+            $this->activateCompanyMembership($globalUser, $selected);
+            redirect_to('/company/dashboard');
+        } catch (\Throwable $e) {
+            // Authentication deliberately does not expose migration/DB detail.
+            $authError = 'Не удалось войти. Обратитесь к администратору.';
         }
 
-        ob_start();
-        require base_path('app/View/pages/login_form.php');
-        $content = ob_get_clean();
-        require base_path('app/View/layouts/auth-layout.php');
+        $this->renderLogin($loginValue, $errors, $authError, $multiLogistError, $devSeedPassword);
+    }
+
+    public function switchCompany(): void
+    {
+        if (!isAuthenticated() || ($_SESSION['role_code'] ?? '') === 'superadmin') {
+            http_response_code(403);
+            return;
+        }
+
+        $globalUserId = (int) ($_SESSION['global_user_id'] ?? 0);
+        $companyId = (int) ($_POST['company_id'] ?? 0);
+        if ($globalUserId <= 0 || $companyId <= 0) {
+            http_response_code(400);
+            return;
+        }
+
+        try {
+            $pdo = $this->db->connection();
+            $globalUser = $this->memberships->findGlobalUserById($pdo, $globalUserId);
+            $membership = $this->memberships->getMembership($pdo, $globalUserId, $companyId);
+            if (!$globalUser || !$membership) {
+                http_response_code(403);
+                return;
+            }
+
+            $this->activateCompanyMembership($globalUser, $membership);
+            redirect_to('/company/dashboard');
+        } catch (\Throwable $e) {
+            http_response_code(403);
+        }
     }
 
     public function logout(): void
@@ -217,5 +199,54 @@ final class AuthController
         }
         session_destroy();
         redirect_to('/login', 302);
+    }
+
+    private function activateCompanyMembership(array $globalUser, array $membership): void
+    {
+        $this->memberships->assertMembershipUsable($membership);
+
+        $tenantUserId = (int) $membership['tenant_user_id'];
+        $globalUserId = (int) $globalUser['id'];
+        $membershipId = (int) $membership['id'];
+        $roleCode = $this->memberships->compatibilityRoleCode($membership);
+        $isLeader = ($membership['system_key'] ?? null) === \App\Service\CompanyRoleService::SYSTEM_LEADER;
+
+        session_regenerate_id(true);
+        $_SESSION['global_user_id'] = $globalUserId;
+        $_SESSION['membership_id'] = $membershipId;
+        $_SESSION['tenant_user_id'] = $tenantUserId;
+        // Compatibility alias only for legacy tenant creator/FK code.
+        $_SESSION['user_id'] = $tenantUserId;
+        $_SESSION['role_id'] = (int) $membership['role_id'];
+        $_SESSION['role_code'] = $roleCode;
+        $_SESSION['role_name'] = (string) ($membership['role_name'] ?? '');
+        $_SESSION['company_id'] = (int) $membership['company_id'];
+        $_SESSION['company_name'] = (string) ($membership['company_name'] ?? '');
+        $_SESSION['user_name'] = (string) ($globalUser['full_name'] ?? '');
+        $_SESSION['is_company_leader'] = $isLeader;
+        $_SESSION['session_auth_version'] = 2;
+        $_SESSION['user'] = [
+            'user_id' => $tenantUserId,
+            'global_user_id' => $globalUserId,
+            'membership_id' => $membershipId,
+            'tenant_user_id' => $tenantUserId,
+            'role_id' => (int) $membership['role_id'],
+            'role_code' => $roleCode,
+            'company_id' => (int) $membership['company_id'],
+            'is_company_leader' => $isLeader,
+        ];
+    }
+
+    private function renderLogin(
+        string $loginValue,
+        array $errors,
+        ?string $authError,
+        ?string $multiLogistError,
+        ?string $devSeedPassword
+    ): void {
+        ob_start();
+        require base_path('app/View/pages/login_form.php');
+        $content = ob_get_clean();
+        require base_path('app/View/layouts/auth-layout.php');
     }
 }
