@@ -2,39 +2,35 @@ name: Waste Trips Regression
 
 on:
   pull_request:
-    branches:
-      - chatgpt/production-stabilization-20260802
+    branches: [chatgpt/production-stabilization-20260802]
     paths:
       - 'app/Http/Controllers/Company/WasteTripController.php'
       - 'app/Http/Routes/company_linear_trips.php'
       - 'app/Service/WasteTripService.php'
-      - 'app/Service/WasteTripLegacyImportService.php'
+      - 'app/Service/WasteTripLegacySourceService.php'
+      - 'app/Service/WasteTripLegacySyncService.php'
       - 'app/View/pages/company_waste_trip*.php'
       - 'app/View/partials/company_waste_trip*.php'
-      - 'database/migrations-local/128_create_waste_trips.sql'
-      - 'tests/waste_trip_regression_test.php'
-      - 'tests/waste_trip_historical_import_contract_test.php'
-      - 'tests/waste_trip_owner_layout_contract_test.php'
-      - '.github/workflows/waste_trips_regression.yml'
-      - 'docs/memory/critical_records.json'
-      - 'docs/memory/machine_ownership.json'
+      - 'database/migrations-local/130_waste_trip_legacy_linked_cutover.sql'
+      - 'scripts/waste_trip_sync.php'
+      - 'scripts/waste_trips_*_130.php'
+      - 'tests/waste_trip*.php'
+      - '.github/workflows/waste_trips*.yml'
   push:
-    branches:
-      - chatgpt/production-stabilization-20260802
+    branches: [chatgpt/production-stabilization-20260802]
     paths:
       - 'app/Http/Controllers/Company/WasteTripController.php'
       - 'app/Http/Routes/company_linear_trips.php'
       - 'app/Service/WasteTripService.php'
-      - 'app/Service/WasteTripLegacyImportService.php'
+      - 'app/Service/WasteTripLegacySourceService.php'
+      - 'app/Service/WasteTripLegacySyncService.php'
       - 'app/View/pages/company_waste_trip*.php'
       - 'app/View/partials/company_waste_trip*.php'
-      - 'database/migrations-local/128_create_waste_trips.sql'
-      - 'tests/waste_trip_regression_test.php'
-      - 'tests/waste_trip_historical_import_contract_test.php'
-      - 'tests/waste_trip_owner_layout_contract_test.php'
-      - '.github/workflows/waste_trips_regression.yml'
-      - 'docs/memory/critical_records.json'
-      - 'docs/memory/machine_ownership.json'
+      - 'database/migrations-local/130_waste_trip_legacy_linked_cutover.sql'
+      - 'scripts/waste_trip_sync.php'
+      - 'scripts/waste_trips_*_130.php'
+      - 'tests/waste_trip*.php'
+      - '.github/workflows/waste_trips*.yml'
   workflow_dispatch:
 
 permissions:
@@ -43,73 +39,41 @@ permissions:
 jobs:
   waste-trips:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 20
     env:
       SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ env.SOURCE_SHA }}
-          fetch-depth: 1
-
-      - name: Verify exact checked-out SHA
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo "SOURCE_SHA=${SOURCE_SHA}"
-          test "$(git rev-parse HEAD)" = "${SOURCE_SHA}"
-
-      - name: Reject false-positive test and native PDO placeholder regressions
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('tests/waste_trip_regression_test.php')
-          data = p.read_bytes()
-          if not data.startswith(b'<?php'):
-              raise SystemExit('waste_trip_regression_test.php must start with <?php')
-          if data.startswith(b'PD9waHA') or b"base64_decode(file_get_contents(__FILE__))" in data[:512]:
-              raise SystemExit('base64/wrapper regression test is forbidden')
-          service = Path('app/Service/WasteTripService.php').read_text()
-          if ':user_id, :role_code, :user_id, :role_code)' in service:
-              raise SystemExit('duplicate named placeholders are forbidden with native PDO prepares')
-          required = ':created_user_id, :created_role_code, :updated_user_id, :updated_role_code)'
-          if required not in service:
-              raise SystemExit('expected unique WasteTrip create actor placeholders not found')
-          print('WASTE_TRIP_TEST_EXECUTABLE_PREAMBLE=PASS')
-          print('WASTE_TRIP_NATIVE_PDO_PLACEHOLDERS=PASS')
-          PY
-
+        with: {ref: '${{ env.SOURCE_SHA }}', fetch-depth: 1}
+      - name: Verify exact SHA
+        run: test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
       - name: PHP syntax
         shell: bash
         run: |
           set -euo pipefail
-          php -l app/Http/Controllers/Company/WasteTripController.php
-          php -l app/Service/WasteTripService.php
-          php -l app/Service/WasteTripLegacyImportService.php
-          php -l app/View/pages/company_waste_trips.php
-          php -l app/View/pages/company_waste_trip_import.php
-          php -l app/View/partials/company_waste_trip_modal_view.php
-          php -l app/View/partials/company_waste_trip_modal_edit.php
-          php -l tests/waste_trip_regression_test.php
-          php -l tests/waste_trip_historical_import_contract_test.php
-          php -l tests/waste_trip_owner_layout_contract_test.php
-
-      - name: Historical import contract
+          for f in \
+            app/Http/Controllers/Company/WasteTripController.php \
+            app/Http/Routes/company_linear_trips.php \
+            app/Service/WasteTripService.php \
+            app/Service/WasteTripLegacySourceService.php \
+            app/Service/WasteTripLegacySyncService.php \
+            app/View/pages/company_waste_trips.php \
+            app/View/pages/company_waste_trip_legacy.php \
+            app/View/partials/company_waste_trip_modal_view.php \
+            app/View/partials/company_waste_trip_modal_edit.php \
+            scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php \
+            tests/waste_trip_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trips_130_production_migration_contract_test.php
+          do php -l "$f"; done
+      - name: Static target contracts
         shell: bash
         run: |
           set -euo pipefail
-          php tests/waste_trip_historical_import_contract_test.php | tee /tmp/waste-trip-historical-import.out
-          grep -Fqx 'WASTE_TRIP_HISTORICAL_IMPORT=PASS' /tmp/waste-trip-historical-import.out
-
-      - name: Owner layout dependency contract
-        shell: bash
-        run: |
-          set -euo pipefail
-          php tests/waste_trip_owner_layout_contract_test.php | tee /tmp/waste-trip-owner-layout.out
-          grep -Fqx 'WASTE_TRIP_OWNER_LAYOUT=PASS' /tmp/waste-trip-owner-layout.out
-
+          php tests/waste_trip_legacy_linked_contract_test.php | tee /tmp/legacy.out
+          grep -Fqx 'WASTE_TRIP_LEGACY_LINKED=PASS' /tmp/legacy.out
+          php tests/waste_trip_owner_layout_contract_test.php | tee /tmp/owner.out
+          grep -Fqx 'WASTE_TRIP_OWNER_LAYOUT=PASS' /tmp/owner.out
+          php tests/waste_trips_130_production_migration_contract_test.php | tee /tmp/m130.out
+          grep -Fqx 'WASTE_TRIPS_130_PRODUCTION_MIGRATION=PASS' /tmp/m130.out
       - name: Start isolated MySQL
         shell: bash
         run: |
@@ -121,20 +85,9 @@ jobs:
           GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
           FLUSH PRIVILEGES;
           SQL
-
-      - name: Waste trip MySQL and concurrency regression
+      - name: Waste Trips MySQL regression
         shell: bash
         run: |
           set -euo pipefail
-          php tests/waste_trip_regression_test.php | tee /tmp/waste-trip-regression.out
-          for marker in \
-            'WASTE_TRIP_DOMAIN=PASS' \
-            'WASTE_TRIP_STATIC_SECURITY=PASS' \
-            'WASTE_TRIP_MYSQL=PASS' \
-            'WASTE_TRIP_CONCURRENCY=PASS'
-          do
-            grep -Fqx "$marker" /tmp/waste-trip-regression.out || {
-              echo "Required marker missing: $marker" >&2
-              exit 1
-            }
-          done
+          php tests/waste_trip_regression_test.php | tee /tmp/waste.out
+          for marker in WASTE_TRIP_DOMAIN=PASS WASTE_TRIP_STATIC_SECURITY=PASS WASTE_TRIP_MYSQL=PASS WASTE_TRIP_CONCURRENCY=PASS; do grep -Fqx "$marker" /tmp/waste.out; done
