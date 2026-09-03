@@ -22,6 +22,17 @@ final class CompanyMembershipService
         return $rows[0] ?? null;
     }
 
+    public function findGlobalUserById(PDO $pdo, int $userId): ?array
+    {
+        if ($userId <= 0) {
+            return null;
+        }
+        $stmt = $pdo->prepare('SELECT * FROM company_users WHERE id = ? LIMIT 1');
+        $stmt->execute([$userId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        return $row ?: null;
+    }
+
     public function membershipsForUser(PDO $pdo, int $userId, bool $onlyActive = true): array
     {
         $sql = 'SELECT m.*, r.name AS role_name, r.system_key, r.legacy_role_code,
@@ -37,6 +48,25 @@ final class CompanyMembershipService
         $sql .= ' ORDER BY c.name ASC, m.id ASC';
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    }
+
+    /**
+     * Company-admin listing. It intentionally exposes only memberships of the
+     * requested company; no other-company role/status/override state is joined.
+     */
+    public function membershipsForCompany(PDO $pdo, int $companyId): array
+    {
+        $stmt = $pdo->prepare(
+            'SELECT m.*, r.name AS role_name, r.system_key, r.legacy_role_code,
+                    u.full_name, u.login, u.email, u.phone, u.position
+               FROM company_memberships m
+               JOIN company_roles r ON r.id = m.role_id AND r.company_id = m.company_id
+               JOIN company_users u ON u.id = m.user_id
+              WHERE m.company_id = ?
+              ORDER BY CASE WHEN r.system_key = ? THEN 0 ELSE 1 END, u.full_name ASC, m.id ASC'
+        );
+        $stmt->execute([$companyId, CompanyRoleService::SYSTEM_LEADER]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC) ?: [];
     }
 
@@ -73,10 +103,50 @@ final class CompanyMembershipService
         return $row ?: null;
     }
 
+    public function selectInitialMembership(array $globalUser, array $activeMemberships): ?array
+    {
+        if ($activeMemberships === []) {
+            return null;
+        }
+
+        $legacyHomeCompanyId = (int) ($globalUser['company_id'] ?? 0);
+        if ($legacyHomeCompanyId > 0) {
+            foreach ($activeMemberships as $membership) {
+                if ((int) ($membership['company_id'] ?? 0) === $legacyHomeCompanyId) {
+                    return $membership;
+                }
+            }
+        }
+
+        return $activeMemberships[0];
+    }
+
+    public function assertMembershipUsable(array $membership): void
+    {
+        if (($membership['status'] ?? '') !== 'active') {
+            throw new RuntimeException('Доступ к компании отключён.');
+        }
+        if (($membership['company_status'] ?? 'active') !== 'active') {
+            throw new RuntimeException('Компания недоступна.');
+        }
+        if ((int) ($membership['tenant_user_id'] ?? 0) <= 0) {
+            throw new RuntimeException('Учётная запись компании не завершила безопасную миграцию actor identity.');
+        }
+    }
+
+    public function compatibilityRoleCode(array $membership): string
+    {
+        if (($membership['system_key'] ?? null) === CompanyRoleService::SYSTEM_LEADER) {
+            return 'company_owner';
+        }
+
+        $legacy = trim((string) ($membership['legacy_role_code'] ?? ''));
+        return $legacy !== '' ? $legacy : 'company_member';
+    }
+
     public function createMembership(PDO $pdo, int $companyId, int $userId, int $roleId, ?int $tenantUserId = null): int
     {
-        $role = $this->requireRoleInCompany($pdo, $companyId, $roleId);
-        unset($role);
+        $this->requireRoleInCompany($pdo, $companyId, $roleId);
 
         $exists = $pdo->prepare('SELECT id FROM company_memberships WHERE company_id = ? AND user_id = ? LIMIT 1');
         $exists->execute([$companyId, $userId]);
@@ -98,7 +168,7 @@ final class CompanyMembershipService
         return (int) $pdo->lastInsertId();
     }
 
-    public function createGlobalUser(PDO $pdo, int $homeCompanyId, array $data): int
+    public function createGlobalUser(PDO $pdo, ?int $homeCompanyId, array $data): int
     {
         $fullName = trim((string) ($data['full_name'] ?? ''));
         $login = trim((string) ($data['login'] ?? ''));
@@ -126,7 +196,7 @@ final class CompanyMembershipService
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)'
         );
         $stmt->execute([
-            $homeCompanyId,
+            $homeCompanyId && $homeCompanyId > 0 ? $homeCompanyId : null,
             $fullName,
             $login,
             $email !== '' ? $email : null,
@@ -166,6 +236,10 @@ final class CompanyMembershipService
 
         $pdo->beginTransaction();
         try {
+            // Lock the complete active-leader set in deterministic order before
+            // evaluating the invariant. This serializes concurrent leader removal.
+            $this->lockActiveLeaderMemberships($pdo, $companyId);
+
             $current = $this->getMembershipById($pdo, $companyId, $membershipId, true);
             if (!$current) {
                 throw new RuntimeException('Membership не найден.');
@@ -197,6 +271,8 @@ final class CompanyMembershipService
     {
         $pdo->beginTransaction();
         try {
+            $this->lockActiveLeaderMemberships($pdo, $companyId);
+
             $current = $this->getMembershipById($pdo, $companyId, $membershipId, true);
             if (!$current) {
                 throw new RuntimeException('Membership не найден.');
@@ -226,6 +302,18 @@ final class CompanyMembershipService
         if (($membership['system_key'] ?? null) === CompanyRoleService::SYSTEM_LEADER) {
             if ($pageOverrides !== [] || $dataOverrides !== []) {
                 throw new RuntimeException('Руководителя нельзя ограничивать персональными настройками.');
+            }
+            // Heal any historical/corrupt rows instead of silently leaving them.
+            $pdo->beginTransaction();
+            try {
+                $pdo->prepare('DELETE FROM company_membership_page_overrides WHERE membership_id = ?')->execute([$membershipId]);
+                $pdo->prepare('DELETE FROM company_membership_data_overrides WHERE membership_id = ?')->execute([$membershipId]);
+                $pdo->commit();
+            } catch (\Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $e;
             }
             return;
         }
@@ -283,6 +371,22 @@ final class CompanyMembershipService
             throw new RuntimeException('Роль не найдена в текущей компании.');
         }
         return $role;
+    }
+
+    private function lockActiveLeaderMemberships(PDO $pdo, int $companyId): void
+    {
+        $stmt = $pdo->prepare(
+            "SELECT m.id
+               FROM company_memberships m
+               JOIN company_roles r ON r.id = m.role_id AND r.company_id = m.company_id
+              WHERE m.company_id = ?
+                AND m.status = 'active'
+                AND r.system_key = ?
+              ORDER BY m.id
+              FOR UPDATE"
+        );
+        $stmt->execute([$companyId, CompanyRoleService::SYSTEM_LEADER]);
+        $stmt->fetchAll(PDO::FETCH_COLUMN);
     }
 
     private function assertAnotherActiveLeaderExists(PDO $pdo, int $companyId, int $excludedMembershipId): void
