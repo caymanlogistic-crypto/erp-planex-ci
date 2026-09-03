@@ -1,4 +1,4 @@
-# QA modal-state iteration 6
+# QA modal-state iteration 7
 name: Waste Trips Production Browser QA Once
 
 on:
@@ -7,6 +7,7 @@ on:
       - qa/waste-trips-production-acceptance-20260903
     paths:
       - .github/workflows/zz_waste_trips_production_browser_qa_once.yml
+      - .github/qa_waste_trips_production.js
 
 permissions:
   contents: read
