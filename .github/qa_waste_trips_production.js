@@ -111,10 +111,10 @@ async function assertSingleActiveModal(page, expectedId, label) {
         await page.screenshot({ path: `artifacts/waste-${suffix}-materialize.png`, fullPage: true });
         await page.locator('#waste-trip-materialize-modal .modal-close').click();
 
-        response = await page.goto(`${BASE}/company/trips/departures/import`, { waitUntil: 'domcontentloaded' });
-        assert(response && response.status() !== 200, `${suffix}: obsolete import route still HTTP 200`);
+        const obsoleteImport = await context.request.get(`${BASE}/company/trips/departures/import`, { maxRedirects: 0 });
+        assert(obsoleteImport.status() !== 200, `${suffix}: obsolete import route still HTTP 200`);
         assert.deepStrictEqual(errors, [], `${suffix}: runtime errors: ${errors.join(' | ')}`);
-        evidence.push({ role, viewport, legacyRows: ids.length, oldImportHttp: response.status() });
+        evidence.push({ role, viewport, legacyRows: ids.length, oldImportHttp: obsoleteImport.status() });
         await context.close();
       }
     }
