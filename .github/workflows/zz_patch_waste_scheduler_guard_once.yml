@@ -1,4 +1,4 @@
-name: Patch Waste Scheduler Guard Once
+name: Build Waste Scheduler Guard Patch Once
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
       - .github/workflows/zz_patch_waste_scheduler_guard_once.yml
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   patch:
@@ -19,16 +19,20 @@ jobs:
         with:
           ref: chatgpt/waste-trip-sync-scheduler-20260903
           fetch-depth: 1
-      - name: Apply narrow automatic-write exception
+      - name: Build narrow automatic-write exception
         shell: bash
         run: |
           set -euo pipefail
           python3 tools/zz_patch_waste_scheduler_guard_once.py
           php tests/waste_trip_scheduler_contract_test.php
           git diff --check
-          git status --short
-          git config user.name planexerp
-          git config user.email info@plan-ex.ru
-          git add -A
-          git commit -m 'Control plane: narrowly authorize Waste Trips scheduled sync'
-          git push origin HEAD:chatgpt/waste-trip-sync-scheduler-20260903
+          mkdir -p /tmp/waste-scheduler-guard
+          cp .github/workflows/ci.yml /tmp/waste-scheduler-guard/ci.yml
+          git diff -- .github/workflows/ci.yml > /tmp/waste-scheduler-guard/ci.patch
+      - name: Upload patched CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-scheduler-guard-patch
+          path: /tmp/waste-scheduler-guard
+          if-no-files-found: error
+          retention-days: 1
