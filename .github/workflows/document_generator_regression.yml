@@ -5,39 +5,61 @@ on:
     branches:
       - chatgpt/production-stabilization-20260802
     paths:
+      - 'app/Service/ContractorService.php'
       - 'app/Service/DocumentGenerator*.php'
+      - 'app/Service/DocumentNumberSequenceService.php'
       - 'app/Service/DocumentTemplateService.php'
       - 'app/Service/FeoRequestInteractionService.php'
       - 'app/Http/Controllers/Company/DocumentGeneratorController.php'
       - 'app/View/layouts/main.php'
       - 'app/View/pages/company_document_generator.php'
       - 'app/View/pages/company_document_generator_templates.php'
+      - 'app/View/partials/legal_entity_create_form.php'
+      - 'database/migrations-local/129_document_generator_auto_number_and_bank_inn.sql'
+      - 'scripts/document_generator_apply_129.php'
+      - 'scripts/document_generator_verify_129.php'
       - 'resources/document-templates/**'
       - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
       - 'tests/document_generator_regression_v2_test.php'
+      - 'tests/document_generator_regression_v3_test.php'
+      - 'tests/document_generator_concurrency_test.php'
+      - 'tests/document_generator_129_production_migration_contract_test.php'
       - 'tests/document_generator_builtin_seed_resilience_test.php'
       - 'tests/document_generator_deploy_artifact_test.php'
+      - '.github/agent_db_migration_request.json'
       - '.github/workflows/document_generator_regression.yml'
+      - '.github/workflows/document_generator_129_production_migration.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
   push:
     branches:
       - chatgpt/production-stabilization-20260802
     paths:
+      - 'app/Service/ContractorService.php'
       - 'app/Service/DocumentGenerator*.php'
+      - 'app/Service/DocumentNumberSequenceService.php'
       - 'app/Service/DocumentTemplateService.php'
       - 'app/Service/FeoRequestInteractionService.php'
       - 'app/Http/Controllers/Company/DocumentGeneratorController.php'
       - 'app/View/layouts/main.php'
       - 'app/View/pages/company_document_generator.php'
       - 'app/View/pages/company_document_generator_templates.php'
+      - 'app/View/partials/legal_entity_create_form.php'
+      - 'database/migrations-local/129_document_generator_auto_number_and_bank_inn.sql'
+      - 'scripts/document_generator_apply_129.php'
+      - 'scripts/document_generator_verify_129.php'
       - 'resources/document-templates/**'
       - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
       - 'tests/document_generator_regression_v2_test.php'
+      - 'tests/document_generator_regression_v3_test.php'
+      - 'tests/document_generator_concurrency_test.php'
+      - 'tests/document_generator_129_production_migration_contract_test.php'
       - 'tests/document_generator_builtin_seed_resilience_test.php'
       - 'tests/document_generator_deploy_artifact_test.php'
+      - '.github/agent_db_migration_request.json'
       - '.github/workflows/document_generator_regression.yml'
+      - '.github/workflows/document_generator_129_production_migration.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
   workflow_dispatch:
 
@@ -119,13 +141,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          php -l tests/document_generator_navigation_test.php
-          php -l tests/document_generator_regression_test.php
-          php -l tests/document_generator_regression_v2_test.php
-          php -l tests/document_generator_builtin_seed_resilience_test.php
-          php -l tests/document_generator_deploy_artifact_test.php
+          for file in \
+            tests/document_generator_navigation_test.php \
+            tests/document_generator_regression_test.php \
+            tests/document_generator_regression_v3_test.php \
+            tests/document_generator_concurrency_test.php \
+            tests/document_generator_129_production_migration_contract_test.php \
+            tests/document_generator_builtin_seed_resilience_test.php \
+            tests/document_generator_deploy_artifact_test.php \
+            scripts/document_generator_apply_129.php \
+            scripts/document_generator_verify_129.php
+          do
+            php -l "$file"
+          done
           php tests/document_generator_navigation_test.php
           php tests/document_generator_regression_test.php | tee /tmp/document-generator-regression.log
+          php tests/document_generator_concurrency_test.php | tee /tmp/document-generator-concurrency.log
+          php tests/document_generator_129_production_migration_contract_test.php | tee /tmp/document-generator-migration-contract.log
           php tests/document_generator_builtin_seed_resilience_test.php | tee /tmp/document-generator-seed.log
           for marker in \
             DOCUMENT_GENERATOR_CANONICAL_WIRING=PASS \
@@ -134,6 +166,7 @@ jobs:
             DOCUMENT_GENERATOR_DOCX_SECURITY=PASS \
             DOCUMENT_GENERATOR_ACCESS_ISOLATION=PASS \
             DOCUMENT_GENERATOR_DATA_VALIDATION=PASS \
+            DOCUMENT_GENERATOR_AUTO_NUMBERING=PASS \
             DOCUMENT_GENERATOR_CONTRACT_DOCX=PASS \
             DOCUMENT_GENERATOR_WAYBILL_DOCX=PASS \
             DOCUMENT_GENERATOR_HISTORY_SNAPSHOT=PASS \
@@ -141,6 +174,9 @@ jobs:
           do
             grep -Fqx "$marker" /tmp/document-generator-regression.log
           done
+          grep -Fqx 'DOCUMENT_GENERATOR_CONCURRENCY=PASS' /tmp/document-generator-concurrency.log
+          grep -Fqx 'DOCUMENT_GENERATOR_UNIQUE=PASS' /tmp/document-generator-concurrency.log
+          grep -Fqx 'DOCUMENT_GENERATOR_129_PRODUCTION_MIGRATION_CONTRACT=PASS' /tmp/document-generator-migration-contract.log
           grep -Fqx 'DOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS' /tmp/document-generator-seed.log
 
       - name: Verify production-like deploy artifact contract

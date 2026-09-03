@@ -1,0 +1,223 @@
+name: Document Generator 129 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact canonical SHA containing document generator migration 129 tooling'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_DOCUMENT_GENERATOR_129 to authorize production migration 129'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: document-generator-129-production-migration
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  migrate-129:
+    if: ${{ inputs.confirm_migration == 'APPLY_DOCUMENT_GENERATOR_129' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+
+      - name: Validate exact canonical source and tooling
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          CANONICAL_SHA="$(git ls-remote origin refs/heads/chatgpt/production-stabilization-20260802 | awk '{print $1}')"
+          test -n "$CANONICAL_SHA"
+          test "$CANONICAL_SHA" = "$SOURCE_SHA"
+          php -l scripts/document_generator_apply_129.php
+          php -l scripts/document_generator_verify_129.php
+          php -l tests/document_generator_129_production_migration_contract_test.php
+          php tests/document_generator_129_production_migration_contract_test.php
+          php tests/agent_db_migration_request_contract_test.php
+          test -s database/migrations-local/129_document_generator_auto_number_and_bank_inn.sql
+
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - > /tmp/payload.json <<'PY'
+          import json
+          print(json.dumps({'state':'pending','context':'erpv2/migration129','description':'Document generator migration 129 in progress'}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Upload isolated migration tooling
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            scripts/document_generator_verify_129.php "$SSH_USER@$SSH_HOST:/tmp/docgen_verify129_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            scripts/document_generator_apply_129.php "$SSH_USER@$SSH_HOST:/tmp/docgen_apply129_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            database/migrations-local/129_document_generator_auto_number_and_bank_inn.sql "$SSH_USER@$SSH_HOST:/tmp/docgen_129_${GITHUB_RUN_ID}.sql"
+
+      - name: Snapshot before
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/docgen_verify129_${GITHUB_RUN_ID}.php'" | tee docgen129_before.txt
+          grep -q 'DOCGEN_129_READ_ONLY_OK' docgen129_before.txt
+
+      - name: Apply tenant migration 129
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TENANT_MIGRATION_PATH='/tmp/docgen_129_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/docgen_apply129_${GITHUB_RUN_ID}.php'" | tee docgen129_migration.txt
+          grep -q 'DOCGEN_129_OK' docgen129_migration.txt
+
+      - name: Snapshot after and verify invariants
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/docgen_verify129_${GITHUB_RUN_ID}.php'" | tee docgen129_after.txt
+          grep -q 'DOCGEN_129_READ_ONLY_OK' docgen129_after.txt
+          python3 - "$(sed -n 's/^DOCGEN_129_SNAPSHOT=//p' docgen129_before.txt)" "$(sed -n 's/^DOCGEN_129_SNAPSHOT=//p' docgen129_after.txt)" <<'PY'
+          import json, sys
+          before, after = map(json.loads, sys.argv[1:3])
+          if before['central']['db'] != after['central']['db']:
+              raise SystemExit('central database identity changed')
+          if before['central']['active_companies'] != after['central']['active_companies']:
+              raise SystemExit('active company count changed')
+          b = {x['company_id']: x for x in before['tenants']}
+          a = {x['company_id']: x for x in after['tenants']}
+          if set(b) != set(a):
+              raise SystemExit('active tenant set changed during migration')
+          for cid, row in a.items():
+              old = b[cid]
+              if old['migration_128'] != 1 or row['migration_128'] != 1:
+                  raise SystemExit(f'company {cid}: migration 128 prerequisite missing')
+              if row['migration_129'] != 1:
+                  raise SystemExit(f'company {cid}: migration 129 journal missing')
+              for key in ('contractors', 'generated_documents'):
+                  if row[key] != old[key]:
+                      raise SystemExit(f'company {cid}: business row count changed for {key}')
+              for key in ('bank_inn_column', 'sequence_table', 'sequence_row', 'unique_number_index'):
+                  if row[key] != 1:
+                      raise SystemExit(f'company {cid}: migration 129 schema incomplete for {key}')
+              if row['sequence_prefix'] != 'П ' or row['sequence_next'] < 105:
+                  raise SystemExit(f'company {cid}: invalid document number sequence')
+              if row['duplicate_document_numbers'] != 0:
+                  raise SystemExit(f'company {cid}: duplicate document numbers remain')
+              if old['migration_129'] == 0:
+                  if old['bank_inn_column'] or old['sequence_table'] or old['sequence_row'] or old['unique_number_index']:
+                      raise SystemExit(f'company {cid}: unjournaled migration 129 schema existed before migration')
+                  if old['auto_range_rows'] != 0 or row['auto_range_rows'] != 0:
+                      raise SystemExit(f'company {cid}: P105+ collision appeared during schema migration')
+                  if row['sequence_next'] != 105:
+                      raise SystemExit(f'company {cid}: fresh sequence must start at P105')
+              else:
+                  if row['sequence_next'] != old['sequence_next']:
+                      raise SystemExit(f'company {cid}: idempotent rerun changed sequence_next')
+                  if row['auto_range_rows'] != old['auto_range_rows']:
+                      raise SystemExit(f'company {cid}: idempotent rerun changed generated number range rows')
+          print('DOCGEN_129_INVARIANTS_OK')
+          PY
+
+      - name: HTTP acceptance
+        shell: bash
+        run: test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+
+      - name: Upload migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document_generator_129_production_migration_${{ inputs.source_sha }}
+          path: |
+            docgen129_before.txt
+            docgen129_migration.txt
+            docgen129_after.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish final migration status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$JOB_STATUS" = success ]; then state=success; desc='Document generator migration 129 verified'; else state=failure; desc='Document generator migration 129 failed'; fi
+          python3 - "$state" "$desc" > /tmp/payload.json <<'PY'
+          import json, sys
+          print(json.dumps({'state':sys.argv[1],'context':'erpv2/migration129','description':sys.argv[2]}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          if [ -f "$HOME/.ssh/key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '/tmp/docgen_verify129_${GITHUB_RUN_ID}.php' '/tmp/docgen_apply129_${GITHUB_RUN_ID}.php' '/tmp/docgen_129_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/key"

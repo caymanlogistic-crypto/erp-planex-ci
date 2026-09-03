@@ -185,6 +185,13 @@ $leTypeOptions = [
                         <input type="text" name="bank_corr_account" class="field-input" inputmode="numeric" placeholder="30101810..." value="<?= e($leOld['bank_corr_account'] ?? '') ?>">
                         <div class="field-msg"><?= !empty($leErrors['bank_corr_account']) ? e($leErrors['bank_corr_account']) : '' ?></div>
                     </div>
+<?php if ($leEntityType === 'contractor'): ?>
+                    <div class="field<?= !empty($leErrors['bank_inn']) ? ' is-error' : '' ?>" data-field="bank_inn">
+                        <label class="field-label">ИНН банка</label>
+                        <input type="text" name="bank_inn" class="field-input" inputmode="numeric" placeholder="7707083893" value="<?= e($leOld['bank_inn'] ?? '') ?>">
+                        <div class="field-msg"><?= !empty($leErrors['bank_inn']) ? e($leErrors['bank_inn']) : '' ?></div>
+                    </div>
+<?php endif; ?>
                 </div>
             </div>
 <?php endif; ?>
