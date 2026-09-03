@@ -204,6 +204,6 @@ trait DocumentGeneratorWorkflowTrait
             $value=trim((string)($row[$field] ?? ''));
             if ($value!=='' && !in_array($value,$parts,true)) $parts[]=$value;
         }
-        return implode(', ',$parts);
+        return $parts===[] ? '—' : implode(', ',$parts);
     }
 }

@@ -1,0 +1,187 @@
+name: Document Generator Contract Template v2 Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact canonical SHA containing the verified template-v2 tooling'
+        required: true
+        type: string
+      confirm_template_update:
+        description: 'Type APPLY_DOCUMENT_GENERATOR_TEMPLATE_V2 to authorize immutable production template versioning'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: document-generator-template-v2-production
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  template-v2:
+    if: ${{ inputs.confirm_template_update == 'APPLY_DOCUMENT_GENERATOR_TEMPLATE_V2' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+
+      - name: Validate exact canonical source and tooling
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          CANONICAL_SHA="$(git ls-remote origin refs/heads/$CANONICAL_BRANCH | awk '{print $1}')"
+          test -n "$CANONICAL_SHA"
+          test "$CANONICAL_SHA" = "$SOURCE_SHA"
+          php -l scripts/document_generator_template_v2.php
+          php -l tests/document_generator_template_v2_production_contract_test.php
+          php tests/document_generator_template_v2_production_contract_test.php
+
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '{"state":"pending","context":"erpv2/template-v2","description":"Document generator contract template v2 in progress"}' >/tmp/status.json
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/status.json >/dev/null
+
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Upload isolated versioning tooling
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/document_generator_template_v2.php "$SSH_USER@$SSH_HOST:/tmp/docgen_template_v2_${GITHUB_RUN_ID}.php"
+
+      - name: Snapshot before
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=snapshot /usr/bin/php8.5 '/tmp/docgen_template_v2_${GITHUB_RUN_ID}.php'" | tee template_v2_before.txt
+          grep -q 'DOCGEN_TEMPLATE_V2_READ_ONLY_OK' template_v2_before.txt
+
+      - name: Create and activate immutable template v2
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=apply /usr/bin/php8.5 '/tmp/docgen_template_v2_${GITHUB_RUN_ID}.php'" | tee template_v2_apply.txt
+          grep -q 'DOCGEN_TEMPLATE_V2_APPLY_OK' template_v2_apply.txt
+
+      - name: Snapshot after and verify invariants
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=snapshot /usr/bin/php8.5 '/tmp/docgen_template_v2_${GITHUB_RUN_ID}.php'" | tee template_v2_after.txt
+          grep -q 'DOCGEN_TEMPLATE_V2_READ_ONLY_OK' template_v2_after.txt
+          python3 - "$(sed -n 's/^DOCGEN_TEMPLATE_V2_SNAPSHOT=//p' template_v2_before.txt)" "$(sed -n 's/^DOCGEN_TEMPLATE_V2_SNAPSHOT=//p' template_v2_after.txt)" <<'PY'
+          import json, sys
+          before, after = map(json.loads, sys.argv[1:3])
+          if before['central_db'] != after['central_db']:
+              raise SystemExit('central DB identity changed')
+          b={x['company_id']:x for x in before['tenants']}; a={x['company_id']:x for x in after['tenants']}
+          if set(b)!=set(a): raise SystemExit('active tenant set changed')
+          total=0
+          for cid,row in a.items():
+              old=b[cid]
+              ob={x['template_id']:x for x in old['templates']}; oa={x['template_id']:x for x in row['templates']}
+              if set(ob)!=set(oa): raise SystemExit(f'company {cid}: template set changed')
+              for tid,new in oa.items():
+                  prev=ob[tid]; total+=1
+                  if new['needs_update'] != 0 or new['has_bank_placeholder'] != 0 or new['has_bank_label'] != 0:
+                      raise SystemExit(f'company {cid} template {tid}: active version still uses bank INN')
+                  expected=prev['version_no'] + (1 if prev['needs_update'] else 0)
+                  if new['version_no'] != expected:
+                      raise SystemExit(f'company {cid} template {tid}: unexpected version transition {prev["version_no"]}->{new["version_no"]}')
+          if total < 1: raise SystemExit('no active vehicle-lease contract templates found')
+          print('DOCGEN_TEMPLATE_V2_INVARIANTS_OK')
+          PY
+
+      - name: HTTP acceptance
+        shell: bash
+        run: test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document_generator_template_v2_${{ inputs.source_sha }}
+          path: |
+            template_v2_before.txt
+            template_v2_apply.txt
+            template_v2_after.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish final status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$JOB_STATUS" = success ]; then state=success; desc='Document generator contract template v2 verified'; else state=failure; desc='Document generator contract template v2 failed'; fi
+          python3 - "$state" "$desc" >/tmp/status.json <<'PY'
+          import json,sys
+          print(json.dumps({'state':sys.argv[1],'context':'erpv2/template-v2','description':sys.argv[2]}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/status.json >/dev/null
+
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          if [ -f "$HOME/.ssh/key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/docgen_template_v2_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/key"

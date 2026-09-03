@@ -18,18 +18,22 @@ on:
       - 'database/migrations-local/129_document_generator_auto_number_and_bank_inn.sql'
       - 'scripts/document_generator_apply_129.php'
       - 'scripts/document_generator_verify_129.php'
+      - 'scripts/document_generator_template_v2.php'
       - 'resources/document-templates/**'
       - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
       - 'tests/document_generator_regression_v2_test.php'
       - 'tests/document_generator_regression_v3_test.php'
+      - 'tests/document_generator_regression_v4_test.php'
       - 'tests/document_generator_concurrency_test.php'
       - 'tests/document_generator_129_production_migration_contract_test.php'
+      - 'tests/document_generator_template_v2_production_contract_test.php'
       - 'tests/document_generator_builtin_seed_resilience_test.php'
       - 'tests/document_generator_deploy_artifact_test.php'
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/document_generator_regression.yml'
       - '.github/workflows/document_generator_129_production_migration.yml'
+      - '.github/workflows/document_generator_template_v2_production.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
   push:
     branches:
@@ -48,18 +52,22 @@ on:
       - 'database/migrations-local/129_document_generator_auto_number_and_bank_inn.sql'
       - 'scripts/document_generator_apply_129.php'
       - 'scripts/document_generator_verify_129.php'
+      - 'scripts/document_generator_template_v2.php'
       - 'resources/document-templates/**'
       - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
       - 'tests/document_generator_regression_v2_test.php'
       - 'tests/document_generator_regression_v3_test.php'
+      - 'tests/document_generator_regression_v4_test.php'
       - 'tests/document_generator_concurrency_test.php'
       - 'tests/document_generator_129_production_migration_contract_test.php'
+      - 'tests/document_generator_template_v2_production_contract_test.php'
       - 'tests/document_generator_builtin_seed_resilience_test.php'
       - 'tests/document_generator_deploy_artifact_test.php'
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/document_generator_regression.yml'
       - '.github/workflows/document_generator_129_production_migration.yml'
+      - '.github/workflows/document_generator_template_v2_production.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
   workflow_dispatch:
 
@@ -108,7 +116,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/document-generator
           php -r '
-            foreach (["contract_vehicle_lease_crew_v1.docx", "waybill_driver_assignment_v1.docx"] as $name) {
+            foreach (["contract_vehicle_lease_crew_v1.docx", "contract_vehicle_lease_crew_v2.docx", "waybill_driver_assignment_v1.docx"] as $name) {
               $parts = glob("resources/document-templates/{$name}.b64.part*") ?: [];
               sort($parts, SORT_STRING);
               if ($parts === []) { fwrite(STDERR, "missing parts: {$name}\n"); exit(1); }
@@ -128,6 +136,7 @@ jobs:
             }
           '
           test "$(sha256sum artifacts/document-generator/input_contract_vehicle_lease_crew_v1.docx | awk '{print $1}')" = "0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc"
+          test "$(sha256sum artifacts/document-generator/input_contract_vehicle_lease_crew_v2.docx | awk '{print $1}')" = "7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa"
           test "$(sha256sum artifacts/document-generator/input_waybill_driver_assignment_v1.docx | awk '{print $1}')" = "5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab"
           for f in artifacts/document-generator/input_*.docx; do
             echo "ZIP_DIAGNOSTIC=$f"
@@ -144,13 +153,15 @@ jobs:
           for file in \
             tests/document_generator_navigation_test.php \
             tests/document_generator_regression_test.php \
-            tests/document_generator_regression_v3_test.php \
+            tests/document_generator_regression_v4_test.php \
             tests/document_generator_concurrency_test.php \
             tests/document_generator_129_production_migration_contract_test.php \
+            tests/document_generator_template_v2_production_contract_test.php \
             tests/document_generator_builtin_seed_resilience_test.php \
             tests/document_generator_deploy_artifact_test.php \
             scripts/document_generator_apply_129.php \
-            scripts/document_generator_verify_129.php
+            scripts/document_generator_verify_129.php \
+            scripts/document_generator_template_v2.php
           do
             php -l "$file"
           done
@@ -158,6 +169,7 @@ jobs:
           php tests/document_generator_regression_test.php | tee /tmp/document-generator-regression.log
           php tests/document_generator_concurrency_test.php | tee /tmp/document-generator-concurrency.log
           php tests/document_generator_129_production_migration_contract_test.php | tee /tmp/document-generator-migration-contract.log
+          php tests/document_generator_template_v2_production_contract_test.php | tee /tmp/document-generator-template-v2-contract.log
           php tests/document_generator_builtin_seed_resilience_test.php | tee /tmp/document-generator-seed.log
           for marker in \
             DOCUMENT_GENERATOR_CANONICAL_WIRING=PASS \
@@ -177,6 +189,7 @@ jobs:
           grep -Fqx 'DOCUMENT_GENERATOR_CONCURRENCY=PASS' /tmp/document-generator-concurrency.log
           grep -Fqx 'DOCUMENT_GENERATOR_UNIQUE=PASS' /tmp/document-generator-concurrency.log
           grep -Fqx 'DOCUMENT_GENERATOR_129_PRODUCTION_MIGRATION_CONTRACT=PASS' /tmp/document-generator-migration-contract.log
+          grep -Fqx 'DOCUMENT_GENERATOR_TEMPLATE_V2_PRODUCTION_CONTRACT=PASS' /tmp/document-generator-template-v2-contract.log
           grep -Fqx 'DOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS' /tmp/document-generator-seed.log
 
       - name: Verify production-like deploy artifact contract
