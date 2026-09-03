@@ -52,7 +52,7 @@ async function assertNoOverflow(page, label) {
         assert.strictEqual(await page.getByRole('link', { name: 'Рейсы из старой БД' }).count(), 1, `${suffix}: legacy link missing`);
         await assertNoOverflow(page, `${suffix}: registry`);
 
-        await page.getByRole('button', { name: 'Создать рейс' }).click();
+        await page.locator('button[onclick="openModal(\'waste-trip-create-modal\')"]').click();
         await page.locator('#waste-trip-create-modal').waitFor({ state: 'visible' });
         assert.strictEqual(await page.locator('.modal-overlay:visible').count(), 1, `${suffix}: create overlay count`);
         await page.screenshot({ path: `artifacts/waste-${suffix}-create.png`, fullPage: true });
