@@ -42,10 +42,11 @@ jobs:
             *) echo "::error::Unauthorized actor: $GITHUB_ACTOR"; exit 1 ;;
           esac
 
-          runs_json="$(curl -fsS "${auth[@]}" "$base_url/actions/workflows/ci.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100")"
-          ci_run_id="$(RUNS_JSON="$runs_json" CANONICAL_SHA="$canonical_sha" python3 - <<'PY'
+          curl -fsS "${auth[@]}" "$base_url/actions/workflows/ci.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/erp-ci-runs.json
+          ci_run_id="$(CANONICAL_SHA="$canonical_sha" python3 - <<'PY'
           import json, os
-          data = json.loads(os.environ['RUNS_JSON'])
+          with open('/tmp/erp-ci-runs.json', encoding='utf-8') as fh:
+              data = json.load(fh)
           sha = os.environ['CANONICAL_SHA']
           for run in data.get('workflow_runs', []):
               if run.get('head_sha') == sha and run.get('conclusion') == 'success':
@@ -55,10 +56,11 @@ jobs:
           )"
           [[ "$ci_run_id" =~ ^[0-9]+$ ]]
 
-          docgen_runs="$(curl -fsS "${auth[@]}" "$base_url/actions/workflows/document_generator_regression.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100")"
-          docgen_run_id="$(RUNS_JSON="$docgen_runs" CANONICAL_SHA="$canonical_sha" python3 - <<'PY'
+          curl -fsS "${auth[@]}" "$base_url/actions/workflows/document_generator_regression.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/document-generator-runs.json
+          docgen_run_id="$(CANONICAL_SHA="$canonical_sha" python3 - <<'PY'
           import json, os
-          data = json.loads(os.environ['RUNS_JSON'])
+          with open('/tmp/document-generator-runs.json', encoding='utf-8') as fh:
+              data = json.load(fh)
           sha = os.environ['CANONICAL_SHA']
           for run in data.get('workflow_runs', []):
               if run.get('head_sha') == sha and run.get('conclusion') == 'success':
