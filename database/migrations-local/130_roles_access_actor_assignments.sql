@@ -6,7 +6,7 @@ SET @preparedStatement = (SELECT IF(
     (SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
       WHERE TABLE_SCHEMA=@dbname AND TABLE_NAME='users' AND COLUMN_NAME='global_user_id') > 0,
     'SELECT 1 AS global_user_id_already_exists',
-    'ALTER TABLE `users` ADD COLUMN `global_user_id` BIGINT UNSIGNED DEFAULT NULL COMMENT ''central company_users.id; auth authority is central'''
+    'ALTER TABLE `users` ADD COLUMN `global_user_id` INT UNSIGNED DEFAULT NULL COMMENT ''central company_users.id; auth authority is central'''
 ));
 PREPARE addGlobalUserId FROM @preparedStatement;
 EXECUTE addGlobalUserId;
