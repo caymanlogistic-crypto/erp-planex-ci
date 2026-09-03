@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `26554495b38d95cb9881d3bd2ed86c94c9a61e0141463f2311beaf73e8d093c6`
+**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
 
 ## `feo_requests`
 
@@ -172,7 +172,7 @@
 |---|---|---|---|---|---|
 | `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `action` | `enum('create','update','composition_correction','cancel','import')` | NO | NULL | — | — |
+| `action` | `enum('create','update','composition_correction','cancel')` | NO | NULL | — | — |
 | `before_json` | `longtext` | YES | NULL | — | — |
 | `after_json` | `longtext` | YES | NULL | — | — |
 | `actor_user_id` | `int unsigned` | YES | NULL | — | — |
@@ -188,39 +188,28 @@
 
 - `fk_waste_trip_audit_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
-## `waste_trip_legacy_import_audits`
+## `waste_trip_namespace_state`
 
 **Domain:** Other tenant domain  
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
 |---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `UNI` |
-| `source_system` | `varchar(50)` | NO | NULL | — | `MUL` |
-| `legacy_flight_id` | `bigint unsigned` | NO | NULL | — | — |
-| `legacy_payload_json` | `longtext` | NO | NULL | — | — |
-| `mapping_json` | `longtext` | NO | NULL | — | — |
-| `snapshot_request_count` | `int unsigned` | NO | NULL | — | — |
-| `snapshot_total_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
-| `mass_delta_kg` | `decimal(18,3)` | YES | NULL | — | — |
-| `warnings_json` | `longtext` | YES | NULL | — | — |
-| `legacy_total_mass_kg` | `decimal(18,3)` | YES | NULL | — | — |
-| `legacy_cost` | `decimal(18,2)` | YES | NULL | — | — |
-| `legacy_payment_terms` | `varchar(500)` | YES | NULL | — | — |
-| `imported_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `imported_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `singleton_id` | `tinyint unsigned` | NO | NULL | — | `PRI` |
+| `legacy_high_water_at_cutover` | `bigint unsigned` | NO | NULL | — | — |
+| `last_issued_business_id` | `bigint unsigned` | NO | NULL | — | — |
+| `cutover_started_at` | `datetime` | YES | NULL | — | — |
+| `cutover_completed_at` | `datetime` | YES | NULL | — | — |
 | `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 
 ### Indexes / constraints
 
-- **PRIMARY** `PRIMARY` (`id`)
-- **UNIQUE** `uk_waste_trip_legacy_audit_identity` (`source_system`, `legacy_flight_id`)
-- **UNIQUE** `uk_waste_trip_legacy_audit_trip` (`waste_trip_id`)
+- **PRIMARY** `PRIMARY` (`singleton_id`)
 
 ### Physical foreign keys
 
-- `fk_waste_trip_legacy_audit_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- None enforced by MySQL.
 
 ## `waste_trip_requests`
 

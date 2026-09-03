@@ -1,7 +1,8 @@
 <?php
 
+require_once base_path('app/Service/WasteTripLegacySourceService.php');
 require_once base_path('app/Service/WasteTripService.php');
-require_once base_path('app/Service/WasteTripLegacyImportService.php');
+require_once base_path('app/Service/WasteTripLegacySyncService.php');
 require_once base_path('app/Http/Controllers/Company/LinearTripController.php');
 require_once base_path('app/Http/Controllers/Company/WasteTripController.php');
 
@@ -20,8 +21,8 @@ $router->get('/company/trips/linear/cargo-types', [$controller, 'cargoTypes']);
 $router->get('/company/trips/departures', [$wasteTripController, 'index']);
 $router->post('/company/trips/departures/preview', [$wasteTripController, 'previewSelection']);
 $router->post('/company/trips/departures/create', [$wasteTripController, 'createSubmit']);
-$router->get('/company/trips/departures/import', [$wasteTripController, 'importIndex']);
-$router->post('/company/trips/departures/import/{legacyId}', [$wasteTripController, 'importSubmit']);
+$router->get('/company/trips/departures/legacy', [$wasteTripController, 'legacyIndex']);
+$router->post('/company/trips/departures/legacy/{legacyId}/materialize', [$wasteTripController, 'materializeSubmit']);
 $router->get('/company/trips/departures/{id}/modal-view', [$wasteTripController, 'modalView']);
 $router->get('/company/trips/departures/{id}/modal-edit', [$wasteTripController, 'modalEditForm']);
 $router->post('/company/trips/departures/{id}/modal-edit', [$wasteTripController, 'modalEditSubmit']);

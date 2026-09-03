@@ -19,8 +19,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "488fbb0acd06514b93205a41cfbf5f658c1dd9c3",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/488fbb0acd06514b93205a41cfbf5f658c1dd9c3/docs/database/TENANT_SCHEMA.md",
+      "verified_sha": "d072be5e4b6ffc00677cf1ca135e283328e81409",
+      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33752345582",
       "owning_paths": ["database/migrations-local/**", "app/Service/LocalMigrationService.php", "tools/database/generate_schema_docs.php", "docs/database/TENANT_SCHEMA*.md"],
       "navigation": "active",
       "machine_ownership_id": "data.tenant_schema"
@@ -41,9 +41,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "55deaab0400eebf24af71da90c9ba2ac3b47d02f",
-      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33599630336",
-      "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "tests/waste_trip_regression_test.php", "tests/waste_trip_historical_import_contract_test.php", "tests/waste_trip_owner_layout_contract_test.php", ".github/workflows/waste_trips_regression.yml"],
+      "verified_sha": "d072be5e4b6ffc00677cf1ca135e283328e81409",
+      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33752345580",
+      "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql", "scripts/waste_trip*.php", "tests/waste_trip*.php", ".github/workflows/waste_trips*.yml"],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
     },
