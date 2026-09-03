@@ -1,4 +1,4 @@
-name: Waste Trips Scheduler Probe Once
+name: Waste Trips Existing Scheduler Probe Once
 
 on:
   push:
@@ -26,7 +26,7 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
-      - name: Inspect available scheduler mechanisms without secrets
+      - name: Inspect existing user scheduler contract without secret values
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -36,26 +36,31 @@ jobs:
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" 'bash -s' <<'SH'
           set -u
-          HOME_ROOT=/home/s/spugovxsim
-          echo "WHOAMI=$(whoami)"
-          for cmd in crontab systemctl at php flock curl wget; do
-            if command -v "$cmd" >/dev/null 2>&1; then echo "CMD_${cmd}=YES"; else echo "CMD_${cmd}=NO"; fi
-          done
-          echo "CRONTAB_LIST_BEGIN"
-          crontab -l 2>&1 || true
-          echo "CRONTAB_LIST_END"
-          echo "SCHEDULER_PATHS_BEGIN"
-          find "$HOME_ROOT" -maxdepth 5 \( -type d -o -type f \) \
-            \( -iname '*cron*' -o -iname '*schedul*' -o -iname '*timer*' -o -iname '*task*' \) \
-            2>/dev/null | sed "s#^$HOME_ROOT#~#" | sort | head -200
-          echo "SCHEDULER_PATHS_END"
-          echo "PHP_JOB_FILES_BEGIN"
-          find "$HOME_ROOT" -maxdepth 6 -type f \( -iname 'cron*.php' -o -iname '*cron*.php' -o -iname '*schedule*.php' -o -iname '*worker*.php' \) \
-            2>/dev/null | sed "s#^$HOME_ROOT#~#" | sort | head -200
-          echo "PHP_JOB_FILES_END"
-          echo "USER_SYSTEMD_BEGIN"
-          find "$HOME_ROOT/.config/systemd/user" -maxdepth 2 -type f 2>/dev/null | sed "s#^$HOME_ROOT#~#" | sort | head -100 || true
-          echo "USER_SYSTEMD_END"
+          H=/home/s/spugovxsim
+          C="$H/public_html/crone"
+          echo 'CRONE_FILES_BEGIN'
+          find "$C" -maxdepth 3 -type f -printf '%P|%s|%TY-%Tm-%TdT%TH:%TM:%TS\n' 2>/dev/null | sort | head -200
+          echo 'CRONE_FILES_END'
+          echo 'CRONE_DIRS_BEGIN'
+          find "$C" -maxdepth 3 -type d -printf '%P\n' 2>/dev/null | sort | head -100
+          echo 'CRONE_DIRS_END'
+          echo 'CRONE_PHP_META_BEGIN'
+          while IFS= read -r f; do
+            rel="${f#$H/}"
+            printf 'FILE=%s\n' "$rel"
+            php -l "$f" 2>&1 | sed 's#'$H'#~#g' || true
+            grep -En "(require|include|curl|file_get_contents|exec|shell_exec|system|passthru|cron|schedule|http|https)" "$f" 2>/dev/null \
+              | sed -E 's#(["'"'][^"'"']*(password|passwd|secret|token|key)[^"'"']*["'"'])#"***"#Ig' \
+              | sed 's#'$H'#~#g' | head -80 || true
+          done < <(find "$C" -maxdepth 3 -type f -name '*.php' 2>/dev/null | sort)
+          echo 'CRONE_PHP_META_END'
+          echo 'CRONE_REFERENCES_BEGIN'
+          grep -RIl --exclude='*.log' --exclude='*.sql' --exclude='.env*' --exclude-dir=vendor --exclude-dir=node_modules -E '(public_html/)?crone(/|$)|cron_sync' "$H" 2>/dev/null \
+            | sed "s#^$H#~#" | sort | head -100 || true
+          echo 'CRONE_REFERENCES_END'
+          echo 'LEGACY_CRON_MTIMES_BEGIN'
+          find "$H/public_html/fregat/feo/max" -maxdepth 1 -type f -name 'cron_*.php' -printf '%f|%TY-%Tm-%TdT%TH:%TM:%TS\n' 2>/dev/null | sort
+          echo 'LEGACY_CRON_MTIMES_END'
           SH
       - name: Cleanup
         if: always()
