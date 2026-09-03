@@ -1,0 +1,179 @@
+name: Waste Trips Production Browser QA Once
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-production-acceptance-20260903
+    paths:
+      - .github/workflows/zz_waste_trips_production_browser_qa_once.yml
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  EXPECTED_DEPLOYED_SHA: adfadae8f14230b28ff09e957483f237e4343ef0
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_DIR: public_html
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  production-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify deployed product lineage and no product-code drift
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/branches/$CANONICAL_BRANCH" > /tmp/canonical.json
+          CANONICAL_SHA=$(python3 -c 'import json; print(json.load(open("/tmp/canonical.json"))["commit"]["sha"])')
+          [[ "$CANONICAL_SHA" =~ ^[0-9a-f]{40}$ ]]
+          echo "CURRENT_CANONICAL_SHA=$CANONICAL_SHA" >> "$GITHUB_ENV"
+
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$EXPECTED_DEPLOYED_SHA/status" > /tmp/deploy-status.json
+          python3 - /tmp/deploy-status.json <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('expected deployed SHA lacks erpv2/deploy success')
+          print('QA_DEPLOY_STATUS=PASS')
+          PY
+
+          curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/compare/$EXPECTED_DEPLOYED_SHA...$CANONICAL_SHA" > /tmp/lineage.json
+          python3 - /tmp/lineage.json "$EXPECTED_DEPLOYED_SHA" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1])); deployed=sys.argv[2]
+          if data.get('status') not in ('ahead','identical'):
+              raise SystemExit(f"bad canonical lineage: {data.get('status')}")
+          if (data.get('merge_base_commit') or {}).get('sha') != deployed:
+              raise SystemExit('deployed SHA is not canonical ancestor')
+          product_prefixes=('app/','bootstrap/','config/','public/','scripts/','database/')
+          product_files=[]
+          for row in data.get('files',[]):
+              name=row.get('filename','')
+              if name.startswith(product_prefixes) or name in ('composer.json','composer.lock'):
+                  product_files.append(name)
+          if product_files:
+              raise SystemExit('product-code drift since deployed marker: '+', '.join(product_files))
+          print('QA_DEPLOYED_PRODUCT_LINEAGE=PASS')
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Require unchanged production marker
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          MARKER=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")
+          test "$MARKER" = "$EXPECTED_DEPLOYED_SHA"
+          echo 'QA_DEPLOY_MARKER=PASS'
+
+      - name: Create temporary authenticated QA sessions
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/waste_trips_qa_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/qa_waste_trips_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          for role in company_owner senior_logist logist; do
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' create '$role'")
+            JSON=${OUT#QA_SESSION=}
+            ROLE_KEY=$(printf '%s' "$role" | tr '[:lower:]' '[:upper:]')
+            python3 - "$JSON" "$ROLE_KEY" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1]); key=sys.argv[2]
+          for secret_key in ('sid','csrf'):
+              print(f'::add-mask::{obj[secret_key]}')
+          with open(sys.argv[3],'a') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
+              f.write(f"QA_{key}_SID={obj['sid']}\n")
+          PY
+          done
+
+      - name: Production browser scenario
+        run: node .github/qa_waste_trips_production.js
+
+      - name: Cleanup temporary QA sessions and prove old SIDs are unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          STATUS=0
+          mkdir -p artifacts
+          : > artifacts/waste-trips-qa-cleanup.txt
+          REMOTE="/tmp/waste_trips_qa_session_${GITHUB_RUN_ID}.php"
+          if [ -f "$HOME/.ssh/key" ]; then
+            for role in company_owner senior_logist logist; do
+              ROLE_KEY=$(printf '%s' "$role" | tr '[:lower:]' '[:upper:]')
+              VAR="QA_${ROLE_KEY}_SID"
+              SID="${!VAR:-}"
+              if [ -z "$SID" ] || [ -z "${QA_COOKIE_NAME:-}" ]; then
+                printf '%s_SESSION_NOT_CREATED\n' "$role" | tee -a artifacts/waste-trips-qa-cleanup.txt
+                continue
+              fi
+              OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+                "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$SID'") || STATUS=1
+              printf '%s_SESSION_DELETE=%s\n' "$role" "$OUT" | tee -a artifacts/waste-trips-qa-cleanup.txt
+              [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+              HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME}=${SID}" \
+                'https://plan-ex.ru/erpv2/company/trips/departures' || true)
+              printf '%s_OLD_SID_HTTP=%s\n' "$role" "$HTTP" | tee -a artifacts/waste-trips-qa-cleanup.txt
+              [ "$HTTP" != '200' ] || STATUS=1
+            done
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '$REMOTE' && test ! -e '$REMOTE'" || STATUS=1
+          fi
+          rm -f "$HOME/.ssh/key"
+          [ "$STATUS" -eq 0 ] && echo 'QA_SESSION_CLEANUP=PASS' | tee -a artifacts/waste-trips-qa-cleanup.txt
+          exit "$STATUS"
+
+      - name: Upload production browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-production-browser-${{ env.EXPECTED_DEPLOYED_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
