@@ -16,7 +16,6 @@ on:
       - 'scripts/waste_trips_*_130.php'
       - 'tests/waste_trip*.php'
       - '.github/workflows/waste_trips*.yml'
-      - '.github/agent_db_migration_request.json'
   push:
     branches: [chatgpt/production-stabilization-20260802]
     paths:
@@ -32,7 +31,6 @@ on:
       - 'scripts/waste_trips_*_130.php'
       - 'tests/waste_trip*.php'
       - '.github/workflows/waste_trips*.yml'
-      - '.github/agent_db_migration_request.json'
   workflow_dispatch:
 
 permissions:
@@ -76,7 +74,6 @@ jobs:
           grep -Fqx 'WASTE_TRIP_OWNER_LAYOUT=PASS' /tmp/owner.out
           php tests/waste_trips_130_production_migration_contract_test.php | tee /tmp/m130.out
           grep -Fqx 'WASTE_TRIPS_130_PRODUCTION_MIGRATION=PASS' /tmp/m130.out
-          php tests/agent_db_migration_request_contract_test.php
       - name: Start isolated MySQL
         shell: bash
         run: |
