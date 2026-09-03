@@ -47,5 +47,7 @@ $assert(str_contains($qa, "mark('HTTP_JS_FAILURE')"), 'production browser QA cov
 $assert(str_contains($qa, "mark('CORRECT_CONTRACT_PREVIEW')"), 'production browser QA covers successful contract preview');
 $assert(str_contains($qa, "mark('DOCX_GENERATION'"), 'production browser QA covers successful real DOCX generation');
 $assert(str_contains($qa, 'waybill_driver_assignment'), 'real production generation uses waybill path and does not consume automatic contract P-number');
+$assert(str_contains($qa, 'waitForResultState'), 'production QA uses CSP-safe locator polling');
+$assert(!str_contains($qa, 'waitForFunction'), 'production QA must not use CSP-blocked waitForFunction/eval');
 
 fwrite(STDOUT, "DOCUMENT_GENERATOR_CHECK_UX=PASS assertions={$assertions}\n");
