@@ -4,6 +4,8 @@
 require_once base_path('app/Core/Database.php');
 require_once base_path('app/Http/Router.php');
 require_once base_path('app/Service/AccessControlService.php');
+require_once base_path('app/Service/CompanyAssignmentService.php');
+require_once base_path('app/Service/DataScopeService.php');
 require_once base_path('app/Service/CompanyInnLookupService.php');
 require_once base_path('app/Service/ContractorContactService.php');
 require_once base_path('app/Service/ClientContactService.php');
