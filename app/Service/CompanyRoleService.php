@@ -46,6 +46,40 @@ final class CompanyRoleService
         return $row ?: null;
     }
 
+    public function getRoleAccess(PDO $pdo, int $companyId, int $roleId): array
+    {
+        $role = $this->getRole($pdo, $companyId, $roleId);
+        if (!$role) {
+            throw new RuntimeException('Роль не найдена.');
+        }
+
+        $pagesStmt = $pdo->prepare(
+            'SELECT page_key FROM company_role_page_permissions WHERE role_id = ? AND is_allowed = 1 ORDER BY page_key'
+        );
+        $pagesStmt->execute([$roleId]);
+        $pages = $pagesStmt->fetchAll(PDO::FETCH_COLUMN) ?: [];
+
+        $scopeStmt = $pdo->prepare(
+            'SELECT entity_key, scope FROM company_role_data_scopes WHERE role_id = ?'
+        );
+        $scopeStmt->execute([$roleId]);
+        $scopes = [];
+        foreach ($scopeStmt->fetchAll(PDO::FETCH_ASSOC) ?: [] as $row) {
+            $scopes[(string) $row['entity_key']] = (string) $row['scope'];
+        }
+        foreach (self::DATA_ENTITIES as $entityKey) {
+            if (!isset($scopes[$entityKey])) {
+                $scopes[$entityKey] = ($role['system_key'] ?? null) === self::SYSTEM_LEADER ? 'all' : 'none';
+            }
+        }
+
+        return [
+            'role' => $role,
+            'page_keys' => array_values($pages),
+            'data_scopes' => $scopes,
+        ];
+    }
+
     public function createRole(PDO $pdo, int $companyId, string $name): int
     {
         $name = trim((string) preg_replace('/\s+/u', ' ', $name));
@@ -86,8 +120,7 @@ final class CompanyRoleService
 
     public function renameRole(PDO $pdo, int $companyId, int $roleId, string $name): void
     {
-        $role = $this->requireOrdinaryRole($pdo, $companyId, $roleId);
-        unset($role);
+        $this->requireOrdinaryRole($pdo, $companyId, $roleId);
 
         $name = trim((string) preg_replace('/\s+/u', ' ', $name));
         $normalized = self::normalizeName($name);
@@ -105,11 +138,27 @@ final class CompanyRoleService
         $stmt->execute([$name, $normalized, $roleId, $companyId]);
     }
 
-    public function copyRole(PDO $pdo, int $companyId, int $sourceRoleId, string $newName): int
-    {
+    /**
+     * For ordinary roles, copies persisted page/data settings.
+     * For the system leader, callers MUST provide the current PageRegistry keys
+     * because leader access is automatic and therefore not stored as a static
+     * permission snapshot. The copied role itself is always ordinary.
+     */
+    public function copyRole(
+        PDO $pdo,
+        int $companyId,
+        int $sourceRoleId,
+        string $newName,
+        ?array $currentSystemPageKeys = null
+    ): int {
         $source = $this->getRole($pdo, $companyId, $sourceRoleId);
         if (!$source) {
             throw new RuntimeException('Исходная роль не найдена.');
+        }
+
+        $isLeaderSource = ($source['system_key'] ?? null) === self::SYSTEM_LEADER;
+        if ($isLeaderSource && $currentSystemPageKeys === null) {
+            throw new RuntimeException('Для копирования Руководителя требуется текущий server PageRegistry snapshot.');
         }
 
         $newName = trim((string) preg_replace('/\s+/u', ' ', $newName));
@@ -131,26 +180,48 @@ final class CompanyRoleService
             $insert->execute([$companyId, $newName, $normalized]);
             $newRoleId = (int) $pdo->lastInsertId();
 
-            $pages = $pdo->prepare(
-                'INSERT INTO company_role_page_permissions (role_id, page_key, is_allowed)
-                 SELECT ?, page_key, is_allowed FROM company_role_page_permissions WHERE role_id = ?'
-            );
-            $pages->execute([$newRoleId, $sourceRoleId]);
+            if ($isLeaderSource) {
+                $pageInsert = $pdo->prepare(
+                    'INSERT INTO company_role_page_permissions (role_id, page_key, is_allowed) VALUES (?, ?, 1)'
+                );
+                $seen = [];
+                foreach ($currentSystemPageKeys ?? [] as $pageKey) {
+                    $pageKey = trim((string) $pageKey);
+                    if ($pageKey === '' || isset($seen[$pageKey])) {
+                        continue;
+                    }
+                    $seen[$pageKey] = true;
+                    $pageInsert->execute([$newRoleId, $pageKey]);
+                }
 
-            $scopes = $pdo->prepare(
-                'INSERT INTO company_role_data_scopes (role_id, entity_key, scope)
-                 SELECT ?, entity_key, scope FROM company_role_data_scopes WHERE role_id = ?'
-            );
-            $scopes->execute([$newRoleId, $sourceRoleId]);
+                $scopeInsert = $pdo->prepare(
+                    'INSERT INTO company_role_data_scopes (role_id, entity_key, scope) VALUES (?, ?, ?)'
+                );
+                foreach (self::DATA_ENTITIES as $entityKey) {
+                    $scopeInsert->execute([$newRoleId, $entityKey, 'all']);
+                }
+            } else {
+                $pages = $pdo->prepare(
+                    'INSERT INTO company_role_page_permissions (role_id, page_key, is_allowed)
+                     SELECT ?, page_key, is_allowed FROM company_role_page_permissions WHERE role_id = ?'
+                );
+                $pages->execute([$newRoleId, $sourceRoleId]);
 
-            foreach (self::DATA_ENTITIES as $entityKey) {
+                $scopes = $pdo->prepare(
+                    'INSERT INTO company_role_data_scopes (role_id, entity_key, scope)
+                     SELECT ?, entity_key, scope FROM company_role_data_scopes WHERE role_id = ?'
+                );
+                $scopes->execute([$newRoleId, $sourceRoleId]);
+
                 $ensure = $pdo->prepare(
                     'INSERT INTO company_role_data_scopes (role_id, entity_key, scope)
                      SELECT ?, ?, ? WHERE NOT EXISTS (
                          SELECT 1 FROM company_role_data_scopes WHERE role_id = ? AND entity_key = ?
                      )'
                 );
-                $ensure->execute([$newRoleId, $entityKey, 'none', $newRoleId, $entityKey]);
+                foreach (self::DATA_ENTITIES as $entityKey) {
+                    $ensure->execute([$newRoleId, $entityKey, 'none', $newRoleId, $entityKey]);
+                }
             }
 
             $pdo->commit();
@@ -181,14 +252,47 @@ final class CompanyRoleService
         }
     }
 
-    public function saveRoleAccess(PDO $pdo, int $companyId, int $roleId, array $pagePermissions, array $dataScopes): void
-    {
+    /**
+     * $knownPageKeys, when supplied by PageRegistry, is the server whitelist.
+     * Unknown client keys are rejected rather than persisted as inert ACL junk.
+     */
+    public function saveRoleAccess(
+        PDO $pdo,
+        int $companyId,
+        int $roleId,
+        array $pagePermissions,
+        array $dataScopes,
+        ?array $knownPageKeys = null
+    ): void {
         $role = $this->getRole($pdo, $companyId, $roleId);
         if (!$role) {
             throw new RuntimeException('Роль не найдена.');
         }
         if (($role['system_key'] ?? null) === self::SYSTEM_LEADER) {
             throw new RuntimeException('Системная роль Руководитель всегда имеет полный доступ.');
+        }
+
+        $knownLookup = null;
+        if ($knownPageKeys !== null) {
+            $knownLookup = [];
+            foreach ($knownPageKeys as $pageKey) {
+                $pageKey = trim((string) $pageKey);
+                if ($pageKey !== '') {
+                    $knownLookup[$pageKey] = true;
+                }
+            }
+        }
+
+        $allowedPageKeys = [];
+        foreach ($pagePermissions as $pageKey => $allowed) {
+            $pageKey = trim((string) $pageKey);
+            if ($pageKey === '' || !(bool) $allowed) {
+                continue;
+            }
+            if ($knownLookup !== null && !isset($knownLookup[$pageKey])) {
+                throw new RuntimeException('Неизвестная страница в настройках роли: ' . $pageKey);
+            }
+            $allowedPageKeys[$pageKey] = true;
         }
 
         $validScopes = ['all', 'only_own', 'none'];
@@ -198,11 +302,8 @@ final class CompanyRoleService
             $pageInsert = $pdo->prepare(
                 'INSERT INTO company_role_page_permissions (role_id, page_key, is_allowed) VALUES (?, ?, 1)'
             );
-            foreach ($pagePermissions as $pageKey => $allowed) {
-                $pageKey = trim((string) $pageKey);
-                if ($pageKey !== '' && (bool) $allowed) {
-                    $pageInsert->execute([$roleId, $pageKey]);
-                }
+            foreach (array_keys($allowedPageKeys) as $pageKey) {
+                $pageInsert->execute([$roleId, $pageKey]);
             }
 
             $scopeUpsert = $pdo->prepare(
@@ -244,7 +345,8 @@ final class CompanyRoleService
         if ($name === '' || $normalized === '') {
             throw new RuntimeException('Укажите название роли.');
         }
-        if (strlen($name) > 120) {
+        $length = function_exists('mb_strlen') ? mb_strlen($name, 'UTF-8') : strlen($name);
+        if ($length > 120) {
             throw new RuntimeException('Название роли слишком длинное.');
         }
 
