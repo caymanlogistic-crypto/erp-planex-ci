@@ -1,0 +1,124 @@
+name: Document Generator Production Browser QA
+
+on:
+  push:
+    branches:
+      - qa/document-generator-check-production-20260903
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  SOURCE_SHA: ${{ github.sha }}
+  LIVE_DIR: public_html
+
+jobs:
+  production-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify exact canonical and successful deploy status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        run: |
+          set -euo pipefail
+          git fetch origin chatgpt/production-stabilization-20260802 --depth=1
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/commits/$SOURCE_SHA/status" > /tmp/status.json
+          python3 - /tmp/status.json <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('exact source SHA does not have erpv2/deploy success')
+          print('EXACT_DEPLOY_STATUS=PASS')
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Create temporary authenticated QA session
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/document_generator_qa_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' create company_owner")
+          JSON=${OUT#QA_SESSION=}
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          for key in ('sid','csrf'):
+              print(f'::add-mask::{obj[key]}')
+          with open(sys.argv[2],'a') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
+              f.write(f"QA_OWNER_SESSION_ID={obj['sid']}\n")
+          PY
+
+      - name: Production browser scenario
+        run: node .github/document-generator/production_check_qa.js
+
+      - name: Cleanup temporary QA session and prove old SID is unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -u -o pipefail
+          STATUS=0
+          mkdir -p artifacts
+          REMOTE="/tmp/document_generator_qa_session_${GITHUB_RUN_ID}.php"
+          if [ -z "${QA_OWNER_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ]; then
+            echo 'QA_SESSION_CLEANUP_FAIL=session env missing' | tee artifacts/document-generator-qa-cleanup.txt
+            STATUS=1
+          else
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '${QA_OWNER_SESSION_ID}'") || STATUS=1
+            printf 'SESSION_DELETE=%s\n' "$OUT" | tee artifacts/document-generator-qa-cleanup.txt
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP=$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" \
+              'https://plan-ex.ru/erpv2/company/document-generator' || true)
+            printf 'OLD_SID_HTTP=%s\n' "$HTTP" | tee -a artifacts/document-generator-qa-cleanup.txt
+            [ "$HTTP" != '200' ] || STATUS=1
+          fi
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE' && test ! -e '$REMOTE'" || STATUS=1
+          rm -f "$HOME/.ssh/key"
+          [ "$STATUS" -eq 0 ] && echo 'QA_SESSION_CLEANUP=PASS' | tee -a artifacts/document-generator-qa-cleanup.txt
+          exit "$STATUS"
+
+      - name: Upload production browser evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-generator-production-browser-${{ env.SOURCE_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
