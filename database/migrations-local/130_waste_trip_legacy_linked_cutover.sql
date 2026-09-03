@@ -16,3 +16,14 @@ CREATE TABLE `waste_trip_namespace_state` (
   PRIMARY KEY (`singleton_id`),
   CONSTRAINT `chk_waste_trip_namespace_singleton` CHECK (`singleton_id` = 1)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+ALTER TABLE `waste_trips`
+  ADD UNIQUE KEY `uk_waste_trip_business_id` (`business_id`);
+
+DROP TABLE `waste_trip_legacy_import_audits`;
+
+ALTER TABLE `waste_trip_audit_log`
+  MODIFY COLUMN `action` ENUM('create','update','composition_correction','cancel') NOT NULL;
+
+ALTER TABLE `waste_trips`
+  MODIFY COLUMN `business_id` BIGINT UNSIGNED NOT NULL;
