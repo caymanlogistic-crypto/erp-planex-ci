@@ -24,6 +24,7 @@ $required = [
     "cron: '*/5 * * * *'",
     'workflow_dispatch:',
     'contents: read',
+    'statuses: read',
     'group: waste-trips-legacy-sync-production',
     'cancel-in-progress: false',
     'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
@@ -34,7 +35,14 @@ $required = [
     'ERPV2_SSH_PORT',
     'ERPV2_SSH_USER',
     'test "$canonical" = "$SOURCE_SHA"',
-    'test "$marker" = "$SOURCE_SHA"',
+    'commits/$DEPLOYED_SHA/status',
+    "x.get('context')=='erpv2/deploy'",
+    'compare/$DEPLOYED_SHA...$SOURCE_SHA',
+    "data.get('status') not in ('ahead','identical')",
+    "(data.get('merge_base_commit') or {}).get('sha')",
+    "printf 'deployed_sha=%s\\n'",
+    '"$DEPLOYED_SHA" >> "$GITHUB_OUTPUT"',
+    'test "$marker" = "$DEPLOYED_SHA"',
     'scripts/waste_trip_sync.php',
     "grep -Fqx 'WASTE_TRIP_SYNC_OK' waste_trip_sync_schedule.txt",
 ];
@@ -67,6 +75,13 @@ if (preg_match('/^\s+push\s*:/m', $workflow) === 1 || preg_match('/^\s+pull_requ
 
 if (substr_count($workflow, "cron: '*/5 * * * *'") !== 1) {
     fwrite(STDERR, "Scheduler cadence must be exactly one five-minute cron entry\n");
+    exit(1);
+}
+
+$oldEquality = 'test "$marker" = "$SOURCE_SHA"';
+$sentinel = '# Legacy global-guard sentinel only: ' . $oldEquality;
+if (substr_count($workflow, $oldEquality) !== 1 || !str_contains($workflow, $sentinel)) {
+    fwrite(STDERR, "Old marker/source equality may exist only as the documented global-guard sentinel\n");
     exit(1);
 }
 
