@@ -4,6 +4,7 @@
 require_once base_path('app/Core/Database.php');
 require_once base_path('app/Http/Router.php');
 require_once base_path('app/Service/AccessControlService.php');
+require_once base_path('app/Service/EffectiveAccessResolver.php');
 require_once base_path('app/Service/CompanyInnLookupService.php');
 require_once base_path('app/Service/ContractorContactService.php');
 require_once base_path('app/Service/ClientContactService.php');
@@ -74,6 +75,7 @@ require_once base_path('app/Support/core_runtime.php');
 require_once base_path('app/Support/crypto_helper.php');
 require_once base_path('app/Support/company_database.php');
 require_once base_path('app/Support/http_runtime.php');
+require_once base_path('app/Support/access_runtime.php');
 require_once base_path('app/Support/legal_entity_document_upload.php');
 require_once base_path('app/Support/runtime_ui_hotfixes.php');
 
