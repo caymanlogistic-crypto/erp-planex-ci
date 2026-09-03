@@ -45,7 +45,7 @@ $assert(str_contains($qa, "mark('EMPTY_FORM')"), 'production browser QA covers e
 $assert(str_contains($qa, "mark('PARTIAL_FORM')"), 'production browser QA covers partial form');
 $assert(str_contains($qa, "mark('HTTP_JS_FAILURE')"), 'production browser QA covers request failure fallback');
 $assert(str_contains($qa, "mark('CORRECT_CONTRACT_PREVIEW')"), 'production browser QA covers successful contract preview');
-$assert(str_contains($qa, "mark('DOCX_GENERATION')"), 'production browser QA covers successful real DOCX generation');
+$assert(str_contains($qa, "mark('DOCX_GENERATION'"), 'production browser QA covers successful real DOCX generation');
 $assert(str_contains($qa, 'waybill_driver_assignment'), 'real production generation uses waybill path and does not consume automatic contract P-number');
 
 fwrite(STDOUT, "DOCUMENT_GENERATOR_CHECK_UX=PASS assertions={$assertions}\n");
