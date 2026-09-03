@@ -50,6 +50,15 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
 
     const result = page.locator('[data-docgen-check-result]');
     const checkButton = page.locator('[data-docgen-check]');
+    const waitForResultState = async (predicate, description, timeoutMs = 15000) => {
+      const deadline = Date.now() + timeoutMs;
+      while (Date.now() < deadline) {
+        const state = await result.getAttribute('data-docgen-state');
+        if (predicate(state)) return state;
+        await page.waitForTimeout(50);
+      }
+      throw new Error(`Timed out waiting for ${description}`);
+    };
     const set = async (name, value) => {
       const el = page.locator(`[name="${name}"]`);
       const tag = await el.evaluate((node) => node.tagName.toLowerCase());
@@ -57,10 +66,7 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
     };
     const check = async () => {
       await checkButton.click();
-      await page.waitForFunction(() => {
-        const node = document.querySelector('[data-docgen-check-result]');
-        return node && node.dataset.docgenState && node.dataset.docgenState !== 'checking';
-      });
+      await waitForResultState((state) => Boolean(state) && state !== 'checking', 'preview completion');
       return result.getAttribute('data-docgen-state');
     };
 
@@ -102,14 +108,14 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
     assert(await checkButton.isDisabled(), 'check button must be disabled while preview request is active');
     assert((await checkButton.innerText()).includes('Проверяем'), 'check button must show loading label');
     await loadingClick;
-    await page.waitForFunction(() => document.querySelector('[data-docgen-check-result]')?.dataset.docgenState !== 'checking');
+    await waitForResultState((state) => state !== 'checking', 'loading-state completion');
     assert(!(await checkButton.isDisabled()), 'check button must recover after request completion');
     mark('LOADING_STATE');
 
     await page.route('**/company/document-generator/preview', (route) => route.abort('failed'), { times: 1 });
     await set('request_input', requestIds[0]);
     await checkButton.click();
-    await page.waitForFunction(() => document.querySelector('[data-docgen-check-result]')?.dataset.docgenState === 'error');
+    await waitForResultState((state) => state === 'error', 'network failure feedback');
     assert((await result.innerText()).includes('Не удалось выполнить проверку'), 'network failure must show standard generic error');
     mark('HTTP_JS_FAILURE');
 
