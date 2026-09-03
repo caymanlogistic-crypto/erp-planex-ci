@@ -21,6 +21,8 @@ foreach([
     ['planexerp|chatgpt-codex-connector|chatgpt-connector','authorized actors'],
     ['actions/workflows/ci.yml/runs?','exact ERP CI query'],
     ['document_generator_regression.yml/runs?','exact Document Generator CI query'],
+    ['/tmp/erp-ci-runs.json','bounded ERP CI JSON file'],
+    ['/tmp/document-generator-runs.json','bounded Document Generator JSON file'],
     ["run.get('head_sha') == sha",'exact CI SHA'],
     ["run.get('conclusion') == 'success'",'successful CI'],
     ['document_generator_template_v2_production.yml/dispatches','guarded target dispatch'],
@@ -28,6 +30,7 @@ foreach([
     ["'confirm_template_update': 'APPLY_DOCUMENT_GENERATOR_TEMPLATE_V2'",'confirmation token'],
 ] as [$needle,$message]) $has($request,$needle,$message);
 
+$ok(!str_contains($request,'RUNS_JSON='),'large Actions JSON must not be passed through environment');
 $ok(!str_contains($request,'ERPV2_SSH_PRIVATE_KEY'),'request workflow must not have SSH private key');
 $ok(!str_contains($request,'public_html/erpv2'),'request workflow must not write production');
 $ok(!str_contains($request,'document_generator_template_v2.php'),'request workflow must not run production script directly');
