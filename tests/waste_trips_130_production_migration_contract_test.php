@@ -14,7 +14,6 @@ $paths = [
     'scripts/waste_trips_verify_130.php',
     'scripts/waste_trip_sync.php',
     '.github/workflows/waste_trips_130_production_migration.yml',
-    '.github/agent_db_migration_request.json',
 ];
 foreach ($paths as $path) {
     if (!is_file($root . '/' . $path)) {
@@ -59,17 +58,8 @@ foreach ([
 if (str_contains($workflow, "\n  schedule:") || str_contains($workflow, "\n    schedule:")) {
     $fail('production migration workflow itself must be manual only');
 }
-
-$manifest = json_decode((string) file_get_contents($root . '/.github/agent_db_migration_request.json'), true);
-$expected = [
-    'migration_id' => '130',
-    'workflow' => 'waste_trips_130_production_migration.yml',
-    'source_sha_input' => 'source_sha',
-    'confirmation_input' => 'confirm_migration',
-    'confirmation_value' => 'APPLY_WASTE_TRIPS_130',
-];
-if ($manifest !== $expected) {
-    $fail('agent DB migration request manifest is not exact migration 130 contract');
+if (str_contains($workflow, 'agent_db_migration_request.json')) {
+    $fail('Waste Trips 130 must not take ownership of the shared migration request manifest');
 }
 
 echo "WASTE_TRIPS_130_PRODUCTION_MIGRATION=PASS\n";
