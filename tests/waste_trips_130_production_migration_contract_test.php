@@ -21,6 +21,22 @@ foreach ($paths as $path) {
     }
 }
 
+$migration = (string) file_get_contents($root . '/database/migrations-local/130_waste_trip_legacy_linked_cutover.sql');
+foreach ([
+    'ADD COLUMN `business_id` BIGINT UNSIGNED NULL',
+    'ADD UNIQUE KEY `uk_waste_trip_business_id` (`business_id`)',
+    'DROP TABLE `waste_trip_legacy_import_audits`',
+    "ENUM('create','update','composition_correction','cancel') NOT NULL",
+    'MODIFY COLUMN `business_id` BIGINT UNSIGNED NOT NULL',
+] as $needle) {
+    if (!str_contains($migration, $needle)) {
+        $fail('migration 130 final-schema contract missing ' . $needle);
+    }
+}
+if (str_contains($migration, "ENUM('create','update','composition_correction','cancel','import')")) {
+    $fail('migration 130 must not preserve legacy import audit action');
+}
+
 $apply = (string) file_get_contents($root . '/scripts/waste_trips_apply_130.php');
 foreach ([
     '--preview', '--apply', 'APPLY_WASTE_TRIPS_130', 'legacy_high_water_at_cutover',
