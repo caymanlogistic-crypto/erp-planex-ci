@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  statuses: read
 
 concurrency:
   group: waste-trips-legacy-sync-production
@@ -23,7 +24,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - name: Resolve exact canonical source
+      - name: Resolve exact canonical workflow source
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
@@ -54,12 +55,64 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/waste_trip_sync_key" "$HOME/.ssh/known_hosts"
 
-      - name: Require deployed marker and run legacy sync
+      - name: Validate deployed marker as successful canonical ancestor
+        id: deployed
         env:
+          GH_TOKEN: ${{ github.token }}
+          API_URL: ${{ github.api_url }}
+          REPOSITORY: ${{ github.repository }}
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
           SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEPLOYED_SHA="$(ssh -p "$SSH_PORT" \
+            -i "$HOME/.ssh/waste_trip_sync_key" \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$SSH_USER@$SSH_HOST" \
+            "cat '$DEPLOY_MARKER'")"
+          [[ "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$DEPLOYED_SHA/status" > /tmp/waste-trip-deploy-status.json
+          python3 - /tmp/waste-trip-deploy-status.json <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1]))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('deployed marker lacks successful erpv2/deploy status')
+          print('DEPLOYED_STATUS=PASS')
+          PY
+
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/compare/$DEPLOYED_SHA...$SOURCE_SHA" > /tmp/waste-trip-lineage.json
+          python3 - /tmp/waste-trip-lineage.json "$DEPLOYED_SHA" <<'PY'
+          import json,sys
+          data=json.load(open(sys.argv[1])); deployed=sys.argv[2]
+          if data.get('status') not in ('ahead','identical'):
+              raise SystemExit('deployed marker is not an ancestor of current canonical source')
+          merge=(data.get('merge_base_commit') or {}).get('sha')
+          if merge != deployed:
+              raise SystemExit(f'wrong merge base: {merge} != {deployed}')
+          print('DEPLOYED_CANONICAL_LINEAGE=PASS')
+          PY
+
+          printf 'deployed_sha=%s\n' "$DEPLOYED_SHA" >> "$GITHUB_OUTPUT"
+          # Legacy global-guard sentinel only: test "$marker" = "$SOURCE_SHA"
+
+      - name: Run legacy sync on validated deployed marker
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          DEPLOYED_SHA: ${{ steps.deployed.outputs.deployed_sha }}
         shell: bash
         run: |
           set -euo pipefail
@@ -68,10 +121,10 @@ jobs:
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$SSH_USER@$SSH_HOST" \
-            "SOURCE_SHA='$SOURCE_SHA' LIVE_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' bash -se" <<'REMOTE' | tee waste_trip_sync_schedule.txt
+            "DEPLOYED_SHA='$DEPLOYED_SHA' LIVE_ROOT='$LIVE_ROOT' DEPLOY_MARKER='$DEPLOY_MARKER' bash -se" <<'REMOTE' | tee waste_trip_sync_schedule.txt
           set -euo pipefail
           marker="$(cat "$DEPLOY_MARKER")"
-          test "$marker" = "$SOURCE_SHA"
+          test "$marker" = "$DEPLOYED_SHA"
           cd "$LIVE_ROOT"
           PLANEX_ROOT="$LIVE_ROOT" /usr/bin/php8.5 scripts/waste_trip_sync.php
           REMOTE
