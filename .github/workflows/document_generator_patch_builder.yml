@@ -1,0 +1,31 @@
+name: Document Generator Patch Builder
+
+on:
+  push:
+    branches:
+      - chatgpt/document-generator-google-contacts-vehicle-vin-v2-20260904
+    paths:
+      - .github/document-generator/apply_google_vehicle_patch.py
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/document-generator-google-contacts-vehicle-vin-v2-20260904
+          fetch-depth: 0
+      - name: Apply exact patch
+        run: python3 .github/document-generator/apply_google_vehicle_patch.py
+      - name: Commit product patch
+        run: |
+          set -euo pipefail
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add app tests resources/document-templates
+          git diff --cached --check
+          git commit -m "Document generator: add Google contacts and VIN-aware contract v3"
+          git push origin HEAD:chatgpt/document-generator-google-contacts-vehicle-vin-v2-20260904
