@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
 use App\Service\LinearRouteService;
+use App\Service\WasteTripLegacyPrefillService;
 use App\Service\WasteTripLegacySourceService;
-use App\Service\WasteTripLegacySyncService;
 use App\Service\WasteTripService;
 use PDO;
 use RuntimeException;
@@ -75,7 +75,8 @@ final class WasteTripController
             if (!$legacyPdo instanceof PDO) $legacyError='Legacy flights DB не настроена.';
             else { $diagnostic=WasteTripService::legacyRangeDiagnostic($legacyPdo); $legacyWarning=$diagnostic['warning']; $legacyRows=WasteTripLegacySourceService::listCatalog($legacyPdo,$localPdo,300); }
         } catch(Throwable $e) { error_log('waste legacy catalog failed: '.$e->getMessage()); $legacyError=$this->publicError($e,'Не удалось прочитать старую БД.'); }
-        $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; unset($_SESSION['waste_trip_error'],$_SESSION['waste_trip_success']);
+        $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; $old=$_SESSION['waste_trip_old']??[];
+        unset($_SESSION['waste_trip_error'],$_SESSION['waste_trip_success'],$_SESSION['waste_trip_old']);
         ob_start(); require base_path('app/View/pages/company_waste_trip_legacy.php'); $content=(string)ob_get_clean();
         $config=$this->config; $db=$this->db; require base_path('app/View/layouts/main.php');
     }
@@ -84,11 +85,15 @@ final class WasteTripController
     {
         requireRole(['company_owner','senior_logist','logist']); $context=$this->tenantContext(true); $id=(int)$legacyId;
         try {
-            $this->rejectLegacyOwnedPost($_POST); $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
+            $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
+            $parsed=WasteTripService::parseRequestIds((string)($_POST['request_ids']??'')); $this->assertParsedRequests($parsed);
             $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if (!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена.');
-            $businessId=WasteTripLegacySyncService::materialize($legacy,$pdo,$id,$_POST,$context['sessionUser']);
-            $_SESSION['waste_trip_success']='Legacy-рейс #'.$id.' материализован как рейс #'.$businessId.'.';
-        } catch(Throwable $e) { $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Материализация не выполнена.'); }
+            $businessId=WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,$id,$_POST,$parsed['ids'],$context['sessionUser']);
+            $_SESSION['waste_trip_success']='Legacy-рейс #'.$id.' создан как ERP-рейс #'.$businessId.'.';
+        } catch(Throwable $e) {
+            $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Создание рейса не выполнено.');
+            $_SESSION['waste_trip_old']=$_POST+['_legacy_id'=>$id];
+        }
         header('Location: '.app_url('/company/trips/departures/legacy')); exit;
     }
 
@@ -147,12 +152,6 @@ final class WasteTripController
     { if(!WasteTripService::schemaReady($pdo))throw new RuntimeException('Схема Waste Trips не готова: требуется завершённый controlled cutover migration 130.'); }
     private function assertParsedRequests(array $parsed): void
     { if(($parsed['invalid']??[])!==[])throw new RuntimeException('Некорректные номера заявок: '.implode(', ',$parsed['invalid']).'.'); if(($parsed['duplicates']??[])!==[])throw new RuntimeException('В списке повторяются заявки: '.implode(', ',$parsed['duplicates']).'.'); }
-    private function rejectLegacyOwnedPost(array $input): void
-    {
-        $keys=['business_id','comment','planned_start_mode','planned_start_date','planned_start_date_from','planned_start_date_to','planned_finish_date','actual_start_date','actual_end_date','request_ids'];
-        $present=array_values(array_filter($keys,static fn(string $key):bool=>array_key_exists($key,$input)));
-        if($present!==[])throw new RuntimeException('Legacy-owned поля нельзя передавать при materialization: '.implode(', ',$present).'.');
-    }
     private function publicError(Throwable $e,string $fallback): string
     { if($e instanceof \PDOException){error_log('waste trip database error: '.$e->getMessage());return$fallback;} if($e instanceof RuntimeException)return$e->getMessage(); error_log('waste unexpected: '.$e->getMessage());return$fallback; }
     private function loadOptions(PDO $pdo,array $sessionUser): array
