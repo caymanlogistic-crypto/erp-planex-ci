@@ -18,13 +18,16 @@ require_once $root.'/app/Service/WasteTripLegacySourceService.php';
 require_once $root.'/app/Service/WasteTripService.php';
 require_once $root.'/app/Service/WasteTripLegacySyncService.php';
 require_once $root.'/app/Service/WasteTripLegacyPrefillService.php';
+require_once $root.'/app/Support/company_database.php';
 $fail=static function(string$m):never{fwrite(STDERR,"FAIL: {$m}\n");exit(1);};
 $ok=static function(bool$v,string$m)use($fail):void{if(!$v)$fail($m);};
 if(!extension_loaded('pdo_mysql')){fwrite(STDERR,"pdo_mysql required for legacy prefill regression\n");exit(2);}
 $host=getenv('PLANEX_SCHEMA_DB_HOST')?:'127.0.0.1';$port=(int)(getenv('PLANEX_SCHEMA_DB_PORT')?:3306);$user=getenv('PLANEX_SCHEMA_DB_USER')?:'planex_ci';$pass=getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'planex_ci';
+$fixedDb=(string)(getenv('PLANEX_TEST_FIXED_DB')?:'');$fixedMode=$fixedDb!=='';
+if($fixedMode){$allow=array_values(array_filter(array_map('trim',explode(',',(string)(getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')?:'')))));$ok((string)(getenv('APP_ENV')?:'')==='test','fixed DB requires APP_ENV=test');$ok(in_array($fixedDb,$allow,true),'fixed DB is not OWNER-approved');}
 $admin=new PDO("mysql:host={$host};port={$port};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
-$db='planex_waste_prefill_'.getmypid();$legacyDb=$db.'_legacy';
-$admin->exec("DROP DATABASE IF EXISTS `{$db}`;CREATE DATABASE `{$db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;DROP DATABASE IF EXISTS `{$legacyDb}`;CREATE DATABASE `{$legacyDb}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+$db=$fixedMode?$fixedDb:'planex_waste_prefill_'.getmypid();$legacyDb=$fixedMode?$fixedDb:$db.'_legacy';
+if($fixedMode){$fixedPdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);cleanCompanyPoolDatabase($fixedPdo);$fixedPdo=null;}else{$admin->exec("DROP DATABASE IF EXISTS `{$db}`;CREATE DATABASE `{$db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;DROP DATABASE IF EXISTS `{$legacyDb}`;CREATE DATABASE `{$legacyDb}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");}
 try{
 $pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
 $legacy=new PDO("mysql:host={$host};port={$port};dbname={$legacyDb};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
@@ -61,5 +64,5 @@ $historicalAfter=$pdo->query('SELECT comment,planned_start_date FROM waste_trips
 $prefillAfter=$pdo->query('SELECT comment,planned_start_date,planned_finish_date FROM waste_trips WHERE business_id=300')->fetch(PDO::FETCH_ASSOC);$ok($prefillAfter['comment']==='ERP edited after save'&&$prefillAfter['planned_start_date']==='2026-09-12'&&$prefillAfter['planned_finish_date']==='2026-09-22','syncAll mutated legacy_prefill ERP-owned fields');$prefillLinksAfter=(string)$pdo->query("SELECT GROUP_CONCAT(fr.zayavka_id ORDER BY wtr.position_no) FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.waste_trip_id={$prefillId}")->fetchColumn();$ok($prefillLinksAfter==='1003','syncAll mutated legacy_prefill composition');
 
 echo "WASTE_TRIP_LEGACY_PREFILL_MYSQL=PASS\n";
-}finally{$admin->exec("DROP DATABASE IF EXISTS `{$db}`;DROP DATABASE IF EXISTS `{$legacyDb}`");}
+}finally{if($fixedMode){$cleanup=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);cleanCompanyPoolDatabase($cleanup);}else{$admin->exec("DROP DATABASE IF EXISTS `{$db}`;DROP DATABASE IF EXISTS `{$legacyDb}`");}}
 }

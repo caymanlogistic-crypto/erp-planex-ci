@@ -16,6 +16,7 @@ $root=dirname(__DIR__);
 require_once $root.'/app/Service/WasteTripLegacySourceService.php';
 require_once $root.'/app/Service/WasteTripService.php';
 require_once $root.'/app/Service/WasteTripLegacySyncService.php';
+require_once $root.'/app/Support/company_database.php';
 $fail=static function(string$m):never{fwrite(STDERR,"FAIL: {$m}\n");exit(1);};
 $ok=static function(bool$v,string$m)use($fail):void{if(!$v)$fail($m);};
 
@@ -39,9 +40,11 @@ echo "WASTE_TRIP_STATIC_SECURITY=PASS\n";
 
 if(!extension_loaded('pdo_mysql')){fwrite(STDERR,"pdo_mysql required for Waste Trip MySQL regression\n");exit(2);}
 $host=getenv('PLANEX_SCHEMA_DB_HOST')?:'127.0.0.1';$port=(int)(getenv('PLANEX_SCHEMA_DB_PORT')?:3306);$user=getenv('PLANEX_SCHEMA_DB_USER')?:'planex_ci';$pass=getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'planex_ci';
+$fixedDb=(string)(getenv('PLANEX_TEST_FIXED_DB')?:'');$fixedMode=$fixedDb!=='';
+if($fixedMode){$allow=array_values(array_filter(array_map('trim',explode(',',(string)(getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')?:'')))));$ok((string)(getenv('APP_ENV')?:'')==='test','fixed DB requires APP_ENV=test');$ok(in_array($fixedDb,$allow,true),'fixed DB is not OWNER-approved');}
 $admin=new PDO("mysql:host={$host};port={$port};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
-$db='planex_waste_'.getmypid();$legacyDb=$db.'_legacy';
-$admin->exec("DROP DATABASE IF EXISTS `{$db}`;CREATE DATABASE `{$db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;DROP DATABASE IF EXISTS `{$legacyDb}`;CREATE DATABASE `{$legacyDb}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+$db=$fixedMode?$fixedDb:'planex_waste_'.getmypid();$legacyDb=$fixedMode?$fixedDb:$db.'_legacy';
+if($fixedMode){$fixedPdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);cleanCompanyPoolDatabase($fixedPdo);$fixedPdo=null;}else{$admin->exec("DROP DATABASE IF EXISTS `{$db}`;CREATE DATABASE `{$db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;DROP DATABASE IF EXISTS `{$legacyDb}`;CREATE DATABASE `{$legacyDb}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");}
 try{
 $pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
 $legacy=new PDO("mysql:host={$host};port={$port};dbname={$legacyDb};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
@@ -114,5 +117,5 @@ foreach([300,389,390,404]as$legacyOnlyId)$ok((int)$pdo->query('SELECT COUNT(*) F
 $dbName=(string)$pdo->query('SELECT DATABASE()')->fetchColumn();$lockName='erp_waste_trip_legacy_sync_'.substr(hash('sha256',$dbName),0,24);$pdo2=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);$ls=$pdo2->prepare('SELECT GET_LOCK(?,0)');$ls->execute([$lockName]);$overlap=WasteTripLegacySyncService::syncAll($legacy,$pdo);$ok($overlap['skipped_overlap']===true,'overlapping sync not rejected');$ok($overlap['warning']===WasteTripService::LEGACY_RANGE_WARNING,'warning must remain non-blocking during overlap');$rel=$pdo2->prepare('SELECT RELEASE_LOCK(?)');$rel->execute([$lockName]);
 
 echo "WASTE_TRIP_MYSQL=PASS\n";
-}finally{$admin->exec("DROP DATABASE IF EXISTS `{$db}`;DROP DATABASE IF EXISTS `{$legacyDb}`");}
+}finally{if($fixedMode){$cleanup=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);cleanCompanyPoolDatabase($cleanup);}else{$admin->exec("DROP DATABASE IF EXISTS `{$db}`;DROP DATABASE IF EXISTS `{$legacyDb}`");}}
 }
