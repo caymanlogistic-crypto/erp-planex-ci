@@ -25,7 +25,7 @@ jobs:
           set -euo pipefail
           git config user.name planexerp
           git config user.email info@plan-ex.ru
-          git add app tests resources/document-templates
+          git add app tests resources/document-templates .github/workflows/document_generator_regression.yml
           git diff --cached --check
-          git commit -m "Document generator: add Google contacts and VIN-aware contract v3"
+          git commit -m "Document generator: wire Google contacts and VIN regressions"
           git push origin HEAD:chatgpt/document-generator-google-contacts-vehicle-vin-v2-20260904
