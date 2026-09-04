@@ -19,6 +19,7 @@ on:
       - 'scripts/document_generator_apply_129.php'
       - 'scripts/document_generator_verify_129.php'
       - 'scripts/document_generator_template_v2.php'
+      - 'scripts/document_generator_template_v3.php'
       - 'resources/document-templates/**'
       - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
@@ -28,12 +29,15 @@ on:
       - 'tests/document_generator_concurrency_test.php'
       - 'tests/document_generator_129_production_migration_contract_test.php'
       - 'tests/document_generator_template_v2_production_contract_test.php'
+      - 'tests/document_generator_template_v3_production_contract_test.php'
       - 'tests/document_generator_builtin_seed_resilience_test.php'
       - 'tests/document_generator_deploy_artifact_test.php'
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/document_generator_regression.yml'
       - '.github/workflows/document_generator_129_production_migration.yml'
       - '.github/workflows/document_generator_template_v2_production.yml'
+      - '.github/workflows/document_generator_template_v3_production.yml'
+      - '.github/workflows/document_generator_template_v3_agent_request.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
   push:
     branches:
@@ -53,6 +57,7 @@ on:
       - 'scripts/document_generator_apply_129.php'
       - 'scripts/document_generator_verify_129.php'
       - 'scripts/document_generator_template_v2.php'
+      - 'scripts/document_generator_template_v3.php'
       - 'resources/document-templates/**'
       - 'tests/document_generator_navigation_test.php'
       - 'tests/document_generator_regression_test.php'
@@ -62,12 +67,15 @@ on:
       - 'tests/document_generator_concurrency_test.php'
       - 'tests/document_generator_129_production_migration_contract_test.php'
       - 'tests/document_generator_template_v2_production_contract_test.php'
+      - 'tests/document_generator_template_v3_production_contract_test.php'
       - 'tests/document_generator_builtin_seed_resilience_test.php'
       - 'tests/document_generator_deploy_artifact_test.php'
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/document_generator_regression.yml'
       - '.github/workflows/document_generator_129_production_migration.yml'
       - '.github/workflows/document_generator_template_v2_production.yml'
+      - '.github/workflows/document_generator_template_v3_production.yml'
+      - '.github/workflows/document_generator_template_v3_agent_request.yml'
       - '.github/workflows/erpv2_controlled_deploy.yml'
   workflow_dispatch:
 
@@ -157,11 +165,13 @@ jobs:
             tests/document_generator_concurrency_test.php \
             tests/document_generator_129_production_migration_contract_test.php \
             tests/document_generator_template_v2_production_contract_test.php \
+            tests/document_generator_template_v3_production_contract_test.php \
             tests/document_generator_builtin_seed_resilience_test.php \
             tests/document_generator_deploy_artifact_test.php \
             scripts/document_generator_apply_129.php \
             scripts/document_generator_verify_129.php \
-            scripts/document_generator_template_v2.php
+            scripts/document_generator_template_v2.php \
+            scripts/document_generator_template_v3.php
           do
             php -l "$file"
           done
@@ -170,6 +180,7 @@ jobs:
           php tests/document_generator_concurrency_test.php | tee /tmp/document-generator-concurrency.log
           php tests/document_generator_129_production_migration_contract_test.php | tee /tmp/document-generator-migration-contract.log
           php tests/document_generator_template_v2_production_contract_test.php | tee /tmp/document-generator-template-v2-contract.log
+          php tests/document_generator_template_v3_production_contract_test.php | tee /tmp/document-generator-template-v3-contract.log
           php tests/document_generator_builtin_seed_resilience_test.php | tee /tmp/document-generator-seed.log
           for marker in \
             DOCUMENT_GENERATOR_CANONICAL_WIRING=PASS \
@@ -190,6 +201,7 @@ jobs:
           grep -Fqx 'DOCUMENT_GENERATOR_UNIQUE=PASS' /tmp/document-generator-concurrency.log
           grep -Fqx 'DOCUMENT_GENERATOR_129_PRODUCTION_MIGRATION_CONTRACT=PASS' /tmp/document-generator-migration-contract.log
           grep -Fqx 'DOCUMENT_GENERATOR_TEMPLATE_V2_PRODUCTION_CONTRACT=PASS' /tmp/document-generator-template-v2-contract.log
+          grep -Fqx 'DOCUMENT_GENERATOR_TEMPLATE_V3_PRODUCTION_CONTRACT=PASS' /tmp/document-generator-template-v3-contract.log
           grep -Fqx 'DOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS' /tmp/document-generator-seed.log
 
       - name: Verify production-like deploy artifact contract
