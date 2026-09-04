@@ -41,8 +41,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "d072be5e4b6ffc00677cf1ca135e283328e81409",
-      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33752345580",
+      "verified_sha": "3f3ab9c6b31cf93076f9725e337f214e445217ef",
+      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33891486566",
       "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql", "scripts/waste_trip*.php", "tests/waste_trip*.php", ".github/workflows/waste_trips*.yml"],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
@@ -52,8 +52,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9e07efc93cedb866f61949c617cbd6f72d480ba0",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/9e07efc93cedb866f61949c617cbd6f72d480ba0/.github/workflows/ci.yml",
+      "verified_sha": "3f3ab9c6b31cf93076f9725e337f214e445217ef",
+      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33891486800",
       "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py"],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
