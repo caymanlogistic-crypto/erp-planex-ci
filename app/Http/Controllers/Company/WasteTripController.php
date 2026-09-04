@@ -43,7 +43,7 @@ final class WasteTripController
         try {
             $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
             $parsed=WasteTripService::parseRequestIds((string)($_POST['request_ids']??'')); $this->assertParsedRequests($parsed);
-            $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if(!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена: namespace guard недоступен.');
+            $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if(!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена: проверка ID-коллизий недоступна.');
             $businessId=WasteTripService::createIndependent($pdo,$legacy,$_POST,$parsed['ids'],$context['sessionUser']);
             $_SESSION['waste_trip_success']='Рейс #'.$businessId.' создан.';
             header('Location: '.app_url('/company/trips/departures'));
@@ -69,11 +69,11 @@ final class WasteTripController
         requireRole(['company_owner','senior_logist','logist']); $context=$this->tenantContext(false);
         $company=$context['company']; $localPdo=$this->requireTenantPdo($context); $this->assertSchemaReady($localPdo); $sessionUser=$context['sessionUser'];
         [$clients,$routeExecutors,$responsibleUsers,$utilizers]=$this->loadOptions($localPdo,$sessionUser);
-        $pageTitle='Рейсы из старой БД'; $pageContext='Рейсы › Перевозка отходов › Рейсы из старой БД'; $legacyRows=[]; $legacyError=null;
+        $pageTitle='Рейсы из старой БД'; $pageContext='Рейсы › Перевозка отходов › Рейсы из старой БД'; $legacyRows=[]; $legacyError=null; $legacyWarning=null;
         try {
             $legacyPdo=WasteTripLegacySourceService::connectionFromEnvironment();
             if (!$legacyPdo instanceof PDO) $legacyError='Legacy flights DB не настроена.';
-            else { WasteTripService::assertNamespaceSafe($localPdo,$legacyPdo); $legacyRows=WasteTripLegacySourceService::listCatalog($legacyPdo,$localPdo,300); }
+            else { $diagnostic=WasteTripService::legacyRangeDiagnostic($legacyPdo); $legacyWarning=$diagnostic['warning']; $legacyRows=WasteTripLegacySourceService::listCatalog($legacyPdo,$localPdo,300); }
         } catch(Throwable $e) { error_log('waste legacy catalog failed: '.$e->getMessage()); $legacyError=$this->publicError($e,'Не удалось прочитать старую БД.'); }
         $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; unset($_SESSION['waste_trip_error'],$_SESSION['waste_trip_success']);
         ob_start(); require base_path('app/View/pages/company_waste_trip_legacy.php'); $content=(string)ob_get_clean();
