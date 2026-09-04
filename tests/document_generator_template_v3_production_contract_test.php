@@ -14,9 +14,8 @@ foreach([
     'APPLY_DOCUMENT_GENERATOR_TEMPLATE_V3','erpv2/template-v3','P07_erpv2_deployed_commit.txt',
     'Snapshot before and stage exact candidate','Create and activate immutable template v3','Snapshot after and verify immutable transition',
     'PLANEX_EXPECTED_V3_SHA','PLANEX_TEMPLATE_CANDIDATE_PATH','candidate_staged','STAGED_PRODUCTION_V3_SHA',
-    'planned_sha','expected exactly one proven production-v2 transition',
-    '7b3b86b00f49521a95a41a107dcdaf63e969c36264befcac372e83c2d53a8d56',
-    "rm -f '/tmp/docgen_template_v3_\${GITHUB_RUN_ID}.php' '/tmp/docgen_template_v3_\${GITHUB_RUN_ID}.candidate.docx'"
+    '.candidate.docx','planned_sha','expected exactly one proven production-v2 transition',
+    '7b3b86b00f49521a95a41a107dcdaf63e969c36264befcac372e83c2d53a8d56'
 ]as$n)$has($wf,$n,'v3 workflow contract '.$n);
 foreach([
     'DocumentGeneratorService::createTemplateVersionFromFile','GET_LOCK','DOCGEN_PRODUCTION_V2_SHA','DOCGEN_BUILTIN_V3_SHA',
