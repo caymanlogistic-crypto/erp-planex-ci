@@ -1,0 +1,135 @@
+name: Waste Trips Production Browser QA
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-production-browser-20260904
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  TARGET_SHA: 2394036274efa2bd37a1c585605f1780d8d99d0d
+  SOURCE_SHA: 2394036274efa2bd37a1c585605f1780d8d99d0d
+  LIVE_DIR: public_html
+
+jobs:
+  production-browser:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify exact canonical and deploy success
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin chatgpt/production-stabilization-20260802 --depth=1
+          test "$(git rev-parse FETCH_HEAD)" = "$TARGET_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status" > /tmp/status.json
+          TARGET_SHA="$TARGET_SHA" python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/status.json'))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('exact TARGET_SHA lacks erpv2/deploy success')
+          print('WASTE_TRIPS_QA_TARGET_SHA='+os.environ['TARGET_SHA'])
+          print('EXACT_DEPLOY_STATUS=PASS')
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
+
+      - name: Create temporary owner QA session
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          REMOTE="/tmp/waste_trips_qa_session_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' create company_owner")
+          JSON=${OUT#QA_SESSION=}
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          for key in ('sid','csrf'):
+              print(f'::add-mask::{obj[key]}')
+          with open(sys.argv[2],'a') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
+              f.write(f"QA_OWNER_SESSION_ID={obj['sid']}\n")
+          PY
+
+      - name: Browser QA on real production Waste Trips
+        run: |
+          mkdir -p artifacts
+          node .github/waste-trips-production-qa/production_browser.js
+
+      - name: Cleanup temporary QA session and prove old SID unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          REMOTE="/tmp/waste_trips_qa_session_${GITHUB_RUN_ID}.php"
+          STATUS=0
+          if [ -z "${QA_OWNER_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ]; then
+            echo 'QA_SESSION_CLEANUP_FAIL=session env missing' | tee artifacts/qa-session-cleanup.txt
+            STATUS=1
+          else
+            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' delete '$QA_OWNER_SESSION_ID'") || STATUS=1
+            printf 'owner=%s\n' "$OUT" | tee artifacts/qa-session-cleanup.txt
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP=$(curl -sS -D artifacts/qa-old-sid-headers.txt -o /dev/null -w '%{http_code}' \
+              -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" \
+              https://plan-ex.ru/erpv2/company/trips/departures || true)
+            printf 'QA_OWNER_OLD_SID_HTTP=%s\n' "$HTTP" | tee -a artifacts/qa-session-cleanup.txt
+            [ "$HTTP" != '200' ] || STATUS=1
+          fi
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "rm -f '$REMOTE' && test ! -e '$REMOTE'" || STATUS=1
+          rm -f "$HOME/.ssh/key"
+          [ "$STATUS" -eq 0 ] && echo 'QA_SESSION_CLEANUP=PASS' | tee -a artifacts/qa-session-cleanup.txt
+          exit "$STATUS"
+
+      - name: Upload Waste Trips production QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-production-browser-${{ env.TARGET_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
