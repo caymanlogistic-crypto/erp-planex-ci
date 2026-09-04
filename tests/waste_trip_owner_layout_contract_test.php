@@ -8,7 +8,7 @@ foreach(['index','legacyIndex']as$m){$start=strpos($source,'public function '.$m
 if(!str_contains($routes,"/company/trips/departures/legacy")||!str_contains($routes,'materializeSubmit'))$fail('legacy catalog/create route missing');
 if(str_contains($routes,"/company/trips/departures/import"))$fail('old import route remains');
 if(!str_contains($page,'Рейсы из старой БД')||str_contains($page,'Импорт из старой системы'))$fail('target navigation not canonical');
-foreach(['waste-request-list','flex-wrap:wrap','overflow-wrap:anywhere','word-break:break-word','max-width:0']as$n)if(!str_contains($page,$n))$fail('registry wrap contract missing '.$n);
+foreach(['waste-request-list','flex-wrap:wrap','overflow-wrap:anywhere','word-break:break-word','max-width:0','text-overflow:clip!important']as$n)if(!str_contains($page,$n))$fail('registry wrap contract missing '.$n);
 if(str_contains($page,'white-space:nowrap')||str_contains($page,'text-overflow:ellipsis'))$fail('registry contains nowrap/ellipsis that can hide request list');
 foreach(['Создание рейса','Заявки ФЭО *','Заказчик *','Менеджер *','Статус *','Исполнитель','Назначение *','Планирование начала *','Плановое окончание','Фактическое начало','Фактическое окончание','Описание рейса','Создать рейс','Отмена']as$n)if(!str_contains($legacy,$n))$fail('legacy ordinary create form missing '.$n);
 if(substr_count($legacy,'class="modal-overlay"')!==1||substr_count($legacy,'id="waste-trip-create-modal"')!==1)$fail('legacy catalog must contain one page-specific modal overlay');
