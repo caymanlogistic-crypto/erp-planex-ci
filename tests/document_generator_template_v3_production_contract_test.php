@@ -14,5 +14,5 @@ foreach(['APPLY_DOCUMENT_GENERATOR_TEMPLATE_V3','erpv2/template-v3','P07_erpv2_d
 foreach(['DocumentGeneratorService::createTemplateVersionFromFile','GET_LOCK','DOCGEN_V2_SHA','DOCGEN_V3_SHA','Old immutable v2 changed','PLANEX_TEMPLATE_ACTION','Unexpected/custom active vehicle-lease template SHA']as$n)$has($script,$n,'v3 script contract '.$n);
 if(str_contains($script,'UPDATE document_templates SET active_version_id'))$fail('v3 rollout must use canonical template versioning service');
 foreach(['contract_vehicle_lease_crew_v3.docx','87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2']as$n)$has($trait,$n,'built-in v3 contract '.$n);
-foreach(['/tmp/erp-ci-runs.json','/tmp/document-generator-runs.json','template/document-generator-v3-agent']as$n)$has($agent,$n,'v3 agent gate '.$n);
+foreach(['/tmp/erp-ci-runs.json','/tmp/document-generator-runs.json','/tmp/document-generator-google-vehicle-runs.json','document_generator_google_vehicle_regression.yml','template/document-generator-v3-agent']as$n)$has($agent,$n,'v3 agent gate '.$n);
 echo "DOCUMENT_GENERATOR_TEMPLATE_V3_PRODUCTION_CONTRACT=PASS\n";
