@@ -1,0 +1,65 @@
+name: Document Generator Template V3 Agent Request
+
+on:
+  push:
+    branches:
+      - template/document-generator-v3-agent
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: document-generator-template-v3-agent-request
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  authorize-and-dispatch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Resolve exact canonical source and green gates
+        id: source
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="$GITHUB_API_URL/repos/$REPOSITORY"
+          auth=(-H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json")
+          curl -fsS "${auth[@]}" "$base/branches/$CANONICAL_BRANCH" -o /tmp/canonical.json
+          canonical_sha="$(python3 -c 'import json; print(json.load(open("/tmp/canonical.json"))["commit"]["sha"])')"
+          [[ "$canonical_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_SHA" = "$canonical_sha"
+          case "$GITHUB_ACTOR" in planexerp|chatgpt-codex-connector|chatgpt-connector) ;; *) exit 1;; esac
+          curl -fsS "${auth[@]}" "$base/actions/workflows/ci.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/erp-ci-runs.json
+          curl -fsS "${auth[@]}" "$base/actions/workflows/document_generator_regression.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/document-generator-runs.json
+          CANONICAL_SHA="$canonical_sha" python3 - <<'PY'
+          import json,os
+          sha=os.environ['CANONICAL_SHA']
+          for path in ['/tmp/erp-ci-runs.json','/tmp/document-generator-runs.json']:
+              data=json.load(open(path))
+              if not any(r.get('head_sha')==sha and r.get('conclusion')=='success' for r in data.get('workflow_runs',[])):
+                  raise SystemExit(f'missing green exact-SHA gate: {path}')
+          PY
+          echo "source_sha=$canonical_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Dispatch guarded template v3 update
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$SOURCE_SHA" >/tmp/template-v3-dispatch.json <<'PY'
+          import json,sys
+          print(json.dumps({'ref':'chatgpt/production-stabilization-20260802','inputs':{'source_sha':sys.argv[1],'confirm_template_update':'APPLY_DOCUMENT_GENERATOR_TEMPLATE_V3'}}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$REPOSITORY/actions/workflows/document_generator_template_v3_production.yml/dispatches" --data-binary @/tmp/template-v3-dispatch.json
+          echo "Template v3 request accepted for $SOURCE_SHA"
