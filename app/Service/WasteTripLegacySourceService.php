@@ -38,13 +38,17 @@ final class WasteTripLegacySourceService
         $map=[];
         foreach($linked->fetchAll(PDO::FETCH_ASSOC)as$row)$map[(int)$row['business_id']]=['id'=>(int)$row['id'],'source_system'=>(string)($row['source_system']??'')];
 
+        $allRequestIds=[];
+        foreach($rows as$row)$allRequestIds=array_merge($allRequestIds,self::parseRequestIdsLenient((string)($row['zayavki_ids']??''))['ids']);
+        $knownRequestMap=self::knownRequestMap($tenantPdo,$allRequestIds);
+
         foreach($rows as&$row){
             $id=(int)($row['id']??0);
             $row['erp_waste_trip_id']=$map[$id]['id']??null;
             $row['erp_source_system']=$map[$id]['source_system']??null;
             $row['materialized']=isset($map[$id]);
             $row['source_error']=null;
-            $state=self::prefillState($tenantPdo,$row);
+            $state=self::prefillState($tenantPdo,$row,$knownRequestMap);
             $row['request_ids']=$state['request_ids'];
             $row['prefill_state']=$state;
             $row['authoritative_state']=null;
@@ -65,7 +69,7 @@ final class WasteTripLegacySourceService
     public static function hasFlightId(PDO $legacyPdo,int $legacyId): bool
     { $stmt=$legacyPdo->prepare('SELECT 1 FROM flights WHERE id=? LIMIT 1');$stmt->execute([$legacyId]);return$stmt->fetchColumn()!==false; }
 
-    public static function prefillState(PDO $tenantPdo,array $flight): array
+    public static function prefillState(PDO $tenantPdo,array $flight,?array $knownRequestMap=null): array
     {
         $businessId=(int)($flight['id']??0);
         if($businessId<self::MIN_LEGACY_ID)throw new RuntimeException('Legacy ID должен быть больше 243.');
@@ -75,14 +79,9 @@ final class WasteTripLegacySourceService
         foreach($parsed['invalid'] as$value)$warnings[]='Значение «'.$value.'» из списка заявок старой базы не распознано как ID.';
         foreach($parsed['duplicates'] as$value)$warnings[]='Заявка '.$value.' повторяется в старой базе; в prefill оставлена один раз.';
         $requestIds=$parsed['ids'];
+        $known=$knownRequestMap??self::knownRequestMap($tenantPdo,$requestIds);
         $found=[];$missing=[];
-        if($requestIds!==[]){
-            $marks=implode(',',array_fill(0,count($requestIds),'?'));
-            $stmt=$tenantPdo->prepare("SELECT zayavka_id FROM feo_requests WHERE zayavka_id IN ({$marks})");
-            $stmt->execute($requestIds);$known=[];
-            foreach($stmt->fetchAll(PDO::FETCH_COLUMN)as$id)$known[(string)$id]=true;
-            foreach($requestIds as$id){if(isset($known[$id]))$found[]=$id;else{$missing[]=$id;$warnings[]='Заявка '.$id.' из старой базы не найдена в ERP';}}
-        }
+        foreach($requestIds as$id){if(isset($known[$id]))$found[]=$id;else{$missing[]=$id;$warnings[]='Заявка '.$id.' из старой базы не найдена в ERP';}}
 
         $comment=self::text($flight['comment']??null,500);
         $exact=self::dateLenient($flight['planned_start_date']??null,'planned_start_date',$warnings,$references);
@@ -153,6 +152,13 @@ final class WasteTripLegacySourceService
         $parts=preg_split('/[\s,;]+/u',trim($raw),-1,PREG_SPLIT_NO_EMPTY)?:[];$seen=[];$ids=[];$invalid=[];$duplicates=[];
         foreach($parts as$part){$id=trim((string)$part);if($id===''||preg_match('/^[0-9]+$/D',$id)!==1){if($id!=='')$invalid[]=$id;continue;}if(isset($seen[$id])){$duplicates[]=$id;continue;}$seen[$id]=true;$ids[]=$id;}
         return['ids'=>$ids,'invalid'=>array_values(array_unique($invalid)),'duplicates'=>array_values(array_unique($duplicates))];
+    }
+
+    private static function knownRequestMap(PDO $tenantPdo,array $requestIds): array
+    {
+        $requestIds=array_values(array_unique(array_filter(array_map('strval',$requestIds),static fn(string$id):bool=>$id!=='')));if($requestIds===[])return[];$known=[];
+        foreach(array_chunk($requestIds,500)as$chunk){$marks=implode(',',array_fill(0,count($chunk),'?'));$stmt=$tenantPdo->prepare("SELECT zayavka_id FROM feo_requests WHERE zayavka_id IN ({$marks})");$stmt->execute($chunk);foreach($stmt->fetchAll(PDO::FETCH_COLUMN)as$id)$known[(string)$id]=true;}
+        return$known;
     }
 
     private static function baseSql(): string
