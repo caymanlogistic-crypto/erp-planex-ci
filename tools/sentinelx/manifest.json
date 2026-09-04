@@ -1,0 +1,68 @@
+{
+  "schema": "erp-planex-sentinelx-source-pin/v1",
+  "pinned_at": "2026-09-05",
+  "deployment_mode": "user-source-no-root-no-systemd",
+  "upstream": {
+    "core": {
+      "repository": "https://github.com/pensados/sentinelx-cloud-core",
+      "commit": "d6b33822b61e7fccf39547d5cce8add8bc7021f9",
+      "source_project_version": "0.11.14",
+      "runtime_reported_version": "0.0.0+dev",
+      "archive_name": "core.tar.gz",
+      "archive_sha256": "0263a714e87cd43adf3ff440de063a3d016f60f4e5d4355de219ce321caf7152"
+    },
+    "protocol": {
+      "repository": "https://github.com/pensados/sentinelx-cloud-protocol",
+      "tag": "v1.11.0",
+      "commit": "2ffe1b6ae6bcae282b39f6939b9b50669c93b917",
+      "package_version": "1.11.0",
+      "wire_protocol_version": "1.10.0",
+      "archive_name": "protocol.tar.gz",
+      "archive_sha256": "bb71a8f5310e7b79b1cb80fc0c24682aa9ddb6357bbce341a01fa8478b0de8f1"
+    }
+  },
+  "python": {
+    "requires": ">=3.11",
+    "installed_version": "3.11.8",
+    "system_executable": "/usr/bin/python3.11",
+    "venv_executable": "~/erp-planex-test/sentinelx-agent/.venv/bin/python",
+    "lock_file": "tools/sentinelx/requirements.lock"
+  },
+  "paths": {
+    "install_root": "~/erp-planex-test/sentinelx-agent",
+    "config": "~/erp-planex-test/sentinelx-agent/runtime/config.yaml",
+    "identity": "~/erp-planex-test/sentinelx-agent/runtime/identity.json",
+    "host_id": "~/erp-planex-test/sentinelx-agent/runtime/host_id",
+    "pid": "~/erp-planex-test/sentinelx-agent/runtime/pid",
+    "log": "~/erp-planex-test/sentinelx-agent/runtime/sentinelx.log",
+    "nohup_log": "~/erp-planex-test/sentinelx-agent/runtime/nohup.out"
+  },
+  "startup": {
+    "cwd": "~/erp-planex-test",
+    "pythonpath": [
+      "~/erp-planex-test/sentinelx-agent/core/src",
+      "~/erp-planex-test/sentinelx-agent/protocol/python"
+    ],
+    "argv": [
+      "~/erp-planex-test/sentinelx-agent/.venv/bin/python",
+      "-m",
+      "sentinelx_core",
+      "--hub",
+      "https://mcp.sentinelx.app",
+      "--identity",
+      "~/erp-planex-test/sentinelx-agent/runtime/identity.json",
+      "--config",
+      "~/erp-planex-test/sentinelx-agent/runtime/config.yaml",
+      "--log-file",
+      "~/erp-planex-test/sentinelx-agent/runtime/sentinelx.log"
+    ]
+  },
+  "official_linux_installer": {
+    "compatible_with_this_host": false,
+    "reason": "Current upstream Linux installer requires root and systemctl and creates a system sentinelx user; this shared-hosting deployment is intentionally user-mode without root/systemd."
+  },
+  "residual_risks": [
+    "shared Unix UID with production remains an OWNER-accepted risk, not technical isolation",
+    "SentinelX script_run remains a residual execution risk and does not authorize production shell or DB access"
+  ]
+}
