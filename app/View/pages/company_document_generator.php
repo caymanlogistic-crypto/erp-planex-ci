@@ -115,11 +115,19 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
         <div class="modal-body">
             <?php if ($preview['ok'] ?? false): ?>
                 <div class="notice success mb-3">Проверка пройдена. Документ можно сформировать.</div>
+                <?php if (!empty($preview['warnings'])): ?>
+                    <div class="notice warn mb-3"><strong>Внешний источник данных:</strong><ul class="docgen-error-list mt-2"><?php foreach ($preview['warnings'] as $warning): ?><li><?= e((string)$warning) ?></li><?php endforeach; ?></ul></div>
+                <?php endif; ?>
                 <div class="kv">
                     <div class="kv-row"><span class="kv-key">Шаблон</span><span class="kv-value"><?= e((string)($preview['template']['template_name'] ?? '')) ?> · v<?= (int)($preview['template']['version_no'] ?? 0) ?></span></div>
                     <div class="kv-row"><span class="kv-key">Исполнитель</span><span class="kv-value"><?= e((string)($preview['snapshot']['executor']['name'] ?? '—')) ?></span></div>
                     <div class="kv-row"><span class="kv-key">Водитель</span><span class="kv-value"><?= e((string)($preview['snapshot']['driver']['full_name'] ?? '—')) ?></span></div>
-                    <div class="kv-row"><span class="kv-key">Автомобиль</span><span class="kv-value"><?= e(trim((string)($preview['snapshot']['vehicle']['model'] ?? '') . ' ' . (string)($preview['snapshot']['vehicle']['plate'] ?? '')) ?: '—') ?></span></div>
+                    <?php $primaryVehicle = is_array($preview['snapshot']['vehicle'] ?? null) ? $preview['snapshot']['vehicle'] : []; ?>
+                    <div class="kv-row"><span class="kv-key"><?= e((string)($primaryVehicle['label'] ?? 'Транспортное средство')) ?></span><span class="kv-value"><?= e(trim((string)($primaryVehicle['model'] ?? '') . ' · ' . (string)($primaryVehicle['plate'] ?? '')) ?: '—') ?><br><span class="text-muted">VIN: <?= e(trim((string)($primaryVehicle['vin'] ?? '')) ?: '—') ?></span></span></div>
+                    <?php $secondaryVehicle = is_array($preview['snapshot']['trailer'] ?? null) ? $preview['snapshot']['trailer'] : []; ?>
+                    <?php if ((int)($secondaryVehicle['id'] ?? 0) > 0): ?>
+                        <div class="kv-row"><span class="kv-key"><?= e((string)($secondaryVehicle['label'] ?? 'Транспортная единица')) ?></span><span class="kv-value"><?= e(trim((string)($secondaryVehicle['model'] ?? '') . ' · ' . (string)($secondaryVehicle['plate'] ?? '')) ?: '—') ?><br><span class="text-muted">VIN: <?= e(trim((string)($secondaryVehicle['vin'] ?? '')) ?: '—') ?></span></span></div>
+                    <?php endif; ?>
                     <div class="kv-row"><span class="kv-key">Заявок</span><span class="kv-value"><?= (int)($preview['found_count'] ?? 0) ?></span></div>
                     <div class="kv-row"><span class="kv-key">Общая масса</span><span class="kv-value"><?= e((string)($preview['total_mass_kg_formatted'] ?? '0')) ?> кг</span></div>
                     <div class="kv-row"><span class="kv-key">Выгрузка</span><span class="kv-value"><?= e((string)($preview['unload_address'] ?? '—')) ?></span></div>
