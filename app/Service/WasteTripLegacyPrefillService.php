@@ -20,7 +20,7 @@ final class WasteTripLegacyPrefillService
         }
 
         $data = WasteTripService::normalizeInput($input);
-        $errors = WasteTripService::validateInput($data, true, true);
+        $errors = WasteTripService::validateInput($data);
         $requestBusinessIds = array_values(array_unique(array_map('strval', $requestBusinessIds)));
         if ($requestBusinessIds === []) $errors[] = 'Добавьте хотя бы одну существующую заявку ФЭО.';
         if ($errors !== []) throw new RuntimeException(implode(' ', $errors));
