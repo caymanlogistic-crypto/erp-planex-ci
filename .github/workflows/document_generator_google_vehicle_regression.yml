@@ -1,0 +1,129 @@
+name: Document Generator Google Contacts and VIN Regression
+
+on:
+  pull_request:
+    branches:
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Service/DocumentGenerator*.php'
+      - 'app/Service/DocumentTemplateService.php'
+      - 'app/Service/GoogleSheetsRequestContactService.php'
+      - 'app/View/pages/company_document_generator.php'
+      - 'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part*'
+      - 'scripts/document_generator_template_v3.php'
+      - 'tests/document_generator_google_vehicle_contract_test.php'
+      - 'tests/document_generator_regression_v4_test.php'
+      - 'tests/document_generator_template_v3_production_contract_test.php'
+      - 'tests/document_generator_deploy_artifact_test.php'
+      - '.github/workflows/document_generator_google_vehicle_regression.yml'
+      - '.github/workflows/document_generator_template_v3_agent_request.yml'
+      - '.github/workflows/document_generator_template_v3_production.yml'
+  push:
+    branches:
+      - chatgpt/document-generator-google-contacts-vehicle-vin-v2-20260904
+      - chatgpt/production-stabilization-20260802
+    paths:
+      - 'app/Service/DocumentGenerator*.php'
+      - 'app/Service/DocumentTemplateService.php'
+      - 'app/Service/GoogleSheetsRequestContactService.php'
+      - 'app/View/pages/company_document_generator.php'
+      - 'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part*'
+      - 'scripts/document_generator_template_v3.php'
+      - 'tests/document_generator_google_vehicle_contract_test.php'
+      - 'tests/document_generator_regression_v4_test.php'
+      - 'tests/document_generator_template_v3_production_contract_test.php'
+      - 'tests/document_generator_deploy_artifact_test.php'
+      - '.github/workflows/document_generator_google_vehicle_regression.yml'
+      - '.github/workflows/document_generator_template_v3_agent_request.yml'
+      - '.github/workflows/document_generator_template_v3_production.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: document-generator-google-vehicle-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure PHP runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! php -r 'exit(class_exists("ZipArchive") ? 0 : 1);'; then
+            sudo apt-get update
+            sudo apt-get install -y php-zip
+          fi
+          php -r 'exit(class_exists("ZipArchive") ? 0 : 1);'
+          php -r 'exit(extension_loaded("pdo_mysql") ? 0 : 1);'
+
+      - name: Start isolated MySQL
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          GRANT ALL PRIVILEGES ON *.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+
+      - name: PHP syntax and immutable template integrity
+        shell: bash
+        run: |
+          set -euo pipefail
+          for file in \
+            app/Service/GoogleSheetsRequestContactService.php \
+            app/Service/DocumentGeneratorAccessTrait.php \
+            app/Service/DocumentGeneratorDataTrait.php \
+            app/Service/DocumentGeneratorWorkflowTrait.php \
+            app/Service/DocumentTemplateService.php \
+            scripts/document_generator_template_v3.php \
+            tests/document_generator_google_vehicle_contract_test.php \
+            tests/document_generator_regression_v4_test.php \
+            tests/document_generator_template_v3_production_contract_test.php \
+            tests/document_generator_deploy_artifact_test.php
+          do
+            php -l "$file"
+          done
+          cat resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part* | tr -d '[:space:]' | base64 -d > /tmp/contract_vehicle_lease_crew_v3.docx
+          test "$(sha256sum /tmp/contract_vehicle_lease_crew_v3.docx | awk '{print $1}')" = "87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2"
+          unzip -t /tmp/contract_vehicle_lease_crew_v3.docx
+
+      - name: Run Google contacts and vehicle identity contracts
+        env:
+          PLANEX_DOCGEN_REQUIRE_RUNTIME: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/document_generator_google_vehicle_contract_test.php | tee /tmp/google-vehicle.log
+          grep -Fqx 'DOCUMENT_GENERATOR_GOOGLE_CONTACTS=PASS' /tmp/google-vehicle.log
+          grep -Fqx 'DOCUMENT_GENERATOR_VEHICLE_IDENTITY=PASS' /tmp/google-vehicle.log
+          grep -Fqx 'DOCUMENT_GENERATOR_GOOGLE_VEHICLE_CONTRACT=PASS' /tmp/google-vehicle.log
+          php tests/document_generator_template_v3_production_contract_test.php | tee /tmp/template-v3-contract.log
+          grep -Fqx 'DOCUMENT_GENERATOR_TEMPLATE_V3_PRODUCTION_CONTRACT=PASS' /tmp/template-v3-contract.log
+
+      - name: Run existing Document Generator v4 regression
+        env:
+          PLANEX_DOCGEN_REQUIRE_RUNTIME: '1'
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/document_generator_regression_v4_test.php | tee /tmp/docgen-v4.log
+          grep -Fqx 'DOCUMENT_GENERATOR_REGRESSION_V4=PASS' /tmp/docgen-v4.log
+
+      - name: Verify deploy artifact includes v3
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/document_generator_deploy_artifact_test.php | tee /tmp/deploy-artifact.log
+          grep -Fqx 'DOCUMENT_GENERATOR_DEPLOY_ARTIFACT=PASS' /tmp/deploy-artifact.log
