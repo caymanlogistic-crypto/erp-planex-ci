@@ -576,91 +576,27 @@ final class LinearRouteService
             $activeClause .= ' AND deleted_at IS NULL';
         }
 
-        if (AccessControlService::canSeeAllCompanyData($user)) {
-            $stmt = $localPdo->prepare("SELECT COUNT(*) FROM `{$table}` WHERE id = ? AND {$activeClause}");
-            $stmt->execute([$entityId]);
-
-            return (int) $stmt->fetchColumn() > 0;
-        }
-
-        $userId = (int) ($user['user_id'] ?? 0);
-        $stmt = $localPdo->prepare(
-            "SELECT COUNT(*)
-               FROM `{$table}`
-              WHERE id = ?
-                AND {$activeClause}
-                AND (
-                    created_by_user_id = ?
-                    OR id IN (
-                        SELECT entity_id
-                          FROM entity_access_grants
-                         WHERE entity_type = ?
-                           AND granted_to_user_id = ?
-                           AND access_level IN ('view','edit')
-                           AND revoked_at IS NULL
-                    )
-                )"
-        );
-        $stmt->execute([$entityId, $userId, $entityType, $userId]);
+        $access = RegulatedDataScopeService::condition($entityType, "{$table}.id");
+        $stmt = $localPdo->prepare("SELECT COUNT(*) FROM `{$table}` WHERE id = ? AND {$activeClause} AND {$access['sql']}");
+        $stmt->execute(array_merge([$entityId], $access['params']));
 
         return (int) $stmt->fetchColumn() > 0;
     }
 
     public static function fetchVisibleClients(PDO $localPdo, array $user): array
     {
-        if (AccessControlService::canSeeAllCompanyData($user)) {
-            return $localPdo->query("SELECT id, name, inn FROM clients WHERE status = 'active' AND deleted_at IS NULL ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-        }
-
-        $userId = (int) ($user['user_id'] ?? 0);
-        $stmt = $localPdo->prepare(
-            "SELECT id, name, inn
-               FROM clients
-              WHERE status = 'active'
-                AND deleted_at IS NULL
-                AND (
-                    created_by_user_id = ?
-                    OR id IN (
-                        SELECT entity_id
-                          FROM entity_access_grants
-                         WHERE entity_type = 'client'
-                           AND granted_to_user_id = ?
-                           AND access_level IN ('view','edit')
-                           AND revoked_at IS NULL
-                    )
-                )
-              ORDER BY name"
-        );
-        $stmt->execute([$userId, $userId]);
+        $access = RegulatedDataScopeService::condition('client', 'clients.id');
+        $stmt = $localPdo->prepare("SELECT id, name, inn FROM clients WHERE status = 'active' AND deleted_at IS NULL AND {$access['sql']} ORDER BY name");
+        $stmt->execute($access['params']);
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public static function fetchVisibleContractors(PDO $localPdo, array $user): array
     {
-        if (AccessControlService::canSeeAllCompanyData($user)) {
-            return $localPdo->query("SELECT id, name, inn FROM contractors WHERE status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-        }
-
-        $userId = (int) ($user['user_id'] ?? 0);
-        $stmt = $localPdo->prepare(
-            "SELECT id, name, inn
-               FROM contractors
-              WHERE status = 'active'
-                AND (
-                    created_by_user_id = ?
-                    OR id IN (
-                        SELECT entity_id
-                          FROM entity_access_grants
-                         WHERE entity_type = 'contractor'
-                           AND granted_to_user_id = ?
-                           AND access_level IN ('view','edit')
-                           AND revoked_at IS NULL
-                    )
-                )
-              ORDER BY name"
-        );
-        $stmt->execute([$userId, $userId]);
+        $access = RegulatedDataScopeService::condition('contractor', 'contractors.id');
+        $stmt = $localPdo->prepare("SELECT id, name, inn FROM contractors WHERE status = 'active' AND {$access['sql']} ORDER BY name");
+        $stmt->execute($access['params']);
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -691,65 +627,16 @@ final class LinearRouteService
                  LEFT JOIN vehicle_units vu2 ON vu2.id = vs.secondary_vehicle_unit_id
                      WHERE c.status = 'active'";
 
-        if (AccessControlService::canSeeAllCompanyData($user)) {
-            return $localPdo->query($baseSql . ' ORDER BY c.created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
-        }
-
-        $userId = (int) ($user['user_id'] ?? 0);
-        $stmt = $localPdo->prepare(
-            $baseSql . " AND (
-                c.created_by_user_id = ?
-                OR c.id IN (
-                    SELECT entity_id
-                      FROM entity_access_grants
-                     WHERE entity_type = 'crew'
-                       AND granted_to_user_id = ?
-                       AND access_level IN ('view','edit')
-                       AND revoked_at IS NULL
-                )
-                OR (
-                    (ct.created_by_user_id = ? OR ct.id IN (
-                        SELECT entity_id
-                          FROM entity_access_grants
-                         WHERE entity_type = 'contractor'
-                           AND granted_to_user_id = ?
-                           AND access_level IN ('view','edit')
-                           AND revoked_at IS NULL
-                    ))
-                    AND (
-                        dvb.created_by_user_id = ? OR dvb.id IN (
-                            SELECT entity_id
-                              FROM entity_access_grants
-                             WHERE entity_type = 'driver_vehicle_block'
-                               AND granted_to_user_id = ?
-                               AND access_level IN ('view','edit')
-                               AND revoked_at IS NULL
-                        )
-                        OR (
-                            (d.created_by_user_id = ? OR d.id IN (
-                                SELECT entity_id
-                                  FROM entity_access_grants
-                                 WHERE entity_type = 'driver'
-                                   AND granted_to_user_id = ?
-                                   AND access_level IN ('view','edit')
-                                   AND revoked_at IS NULL
-                            ))
-                            AND
-                            (vs.created_by_user_id = ? OR vs.id IN (
-                                SELECT entity_id
-                                  FROM entity_access_grants
-                                 WHERE entity_type = 'vehicle_set'
-                                   AND granted_to_user_id = ?
-                                   AND access_level IN ('view','edit')
-                                   AND revoked_at IS NULL
-                            ))
-                        )
-                    )
-                )
-            )
-            ORDER BY c.created_at DESC"
-        );
-        $stmt->execute([$userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId, $userId]);
+        $contractor = RegulatedDataScopeService::condition('contractor', 'ct.id');
+        $driver = RegulatedDataScopeService::condition('driver', 'd.id');
+        $primaryVehicle = RegulatedDataScopeService::condition('vehicle_unit', 'vu1.id');
+        $secondaryVehicle = RegulatedDataScopeService::condition('vehicle_unit', 'vu2.id');
+        $stmt = $localPdo->prepare($baseSql
+            . " AND {$contractor['sql']} AND {$driver['sql']}"
+            . " AND (vu1.id IS NULL OR {$primaryVehicle['sql']})"
+            . " AND (vu2.id IS NULL OR {$secondaryVehicle['sql']})"
+            . ' ORDER BY c.created_at DESC');
+        $stmt->execute(array_merge($contractor['params'], $driver['params'], $primaryVehicle['params'], $secondaryVehicle['params']));
 
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -842,6 +729,7 @@ final class LinearRouteService
             return null;
         }
 
+        $access = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
         $stmt = $localPdo->prepare(
             "SELECT lr.*,
                     ct.name AS client_name,
@@ -868,9 +756,10 @@ final class LinearRouteService
           LEFT JOIN vehicle_units exec_vu2 ON exec_vu2.id = exec_vs.secondary_vehicle_unit_id
               WHERE lr.id = ?
                 AND lr.deleted_at IS NULL
+                AND {$access['sql']}
               LIMIT 1"
         );
-        $stmt->execute([$routeId]);
+        $stmt->execute(array_merge([$routeId], $access['params']));
         $route = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
         if ($route === null) {
@@ -1154,27 +1043,10 @@ final class LinearRouteService
                  LEFT JOIN vehicle_units exec_vu2 ON exec_vu2.id = exec_vs.secondary_vehicle_unit_id
                      WHERE lr.deleted_at IS NULL";
 
-        if (($user['role_code'] ?? '') === 'logist') {
-            $userId = (int) ($user['user_id'] ?? 0);
-            $stmt = $localPdo->prepare(
-                $baseSql . " AND (
-                    lr.created_by_user_id = ?
-                    OR lr.id IN (
-                        SELECT entity_id
-                          FROM entity_access_grants
-                         WHERE entity_type = 'linear_route'
-                           AND granted_to_user_id = ?
-                           AND access_level IN ('view','edit')
-                           AND revoked_at IS NULL
-                    )
-                )
-                ORDER BY lr.created_at DESC"
-            );
-            $stmt->execute([$userId, $userId]);
-            $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
-        } else {
-            $routes = $localPdo->query($baseSql . ' ORDER BY lr.created_at DESC')->fetchAll(PDO::FETCH_ASSOC);
-        }
+        $access = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
+        $stmt = $localPdo->prepare($baseSql . " AND {$access['sql']} ORDER BY lr.created_at DESC");
+        $stmt->execute($access['params']);
+        $routes = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
         foreach ($routes as &$route) {
             $route = self::decorateRoute($localPdo, $route, $includeFinance);
@@ -1568,39 +1440,12 @@ final class LinearRouteService
 
     public static function canViewRoute(array $route, PDO $localPdo, array $user): bool
     {
-        if (AccessControlService::canSeeAllCompanyData($user)) {
-            return true;
-        }
-
-        $userId = (int) ($user['user_id'] ?? 0);
-        if ($userId <= 0) {
-            return false;
-        }
-
-        if ((int) ($route['created_by_user_id'] ?? 0) === $userId) {
-            return true;
-        }
-
-        return self::routeGrantLevel($localPdo, (int) ($route['id'] ?? 0), $userId) !== null;
+        return RegulatedDataScopeService::canAccess($localPdo, 'linear_trip', 'linear_routes', (int) ($route['id'] ?? 0));
     }
 
     public static function canEditRoute(array $route, PDO $localPdo, array $user): bool
     {
-        $roleCode = (string) ($user['role_code'] ?? '');
-        if ($roleCode === 'company_owner' || $roleCode === 'senior_logist') {
-            return true;
-        }
-
-        $userId = (int) ($user['user_id'] ?? 0);
-        if ($userId <= 0) {
-            return false;
-        }
-
-        if ((int) ($route['created_by_user_id'] ?? 0) === $userId) {
-            return true;
-        }
-
-        return self::routeGrantLevel($localPdo, (int) ($route['id'] ?? 0), $userId) === 'edit';
+        return self::canViewRoute($route, $localPdo, $user);
     }
 
     public static function canDeleteRoute(array $route, PDO $localPdo, array $user): bool

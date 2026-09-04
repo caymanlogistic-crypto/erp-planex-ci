@@ -60,18 +60,6 @@ try {
     $createdByUser = null;
     $updatedByUser = null;
     if ($contractor) {
-        $isLogist = ($_SESSION['role_code'] ?? '') === 'logist';
-        if ($isLogist) {
-            $userId = (int)$_SESSION['user_id'];
-            $hasGrant = false;
-            $grantCheck = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type = 'contractor' AND entity_id = ? AND granted_to_user_id = ? AND revoked_at IS NULL LIMIT 1");
-            $grantCheck->execute([(int)$id, $userId]);
-            $grantRow = $grantCheck->fetch(PDO::FETCH_ASSOC);
-            $hasGrant = ($grantRow && in_array($grantRow['access_level'], ['view', 'edit']));
-            if ((int)$contractor['created_by_user_id'] !== $userId && !$hasGrant) {
-                $accessDenied = 'У вас нет доступа к этой записи.';
-            }
-        }
         $createdByUser = $localPdo->prepare("SELECT full_name FROM users WHERE id = ?");
         $createdByUser->execute([(int)$contractor['created_by_user_id']]);
         $createdByUser = $createdByUser->fetchColumn() ?: null;

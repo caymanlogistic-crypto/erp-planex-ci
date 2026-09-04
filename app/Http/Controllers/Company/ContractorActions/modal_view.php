@@ -32,20 +32,9 @@ try {
 
     $roleCode = (string) ($_SESSION['role_code'] ?? '');
     $userId = (int) ($_SESSION['user_id'] ?? 0);
-    $grantLevel = null;
-    if ($roleCode === 'logist') {
-        $grantStmt = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type = 'contractor' AND entity_id = ? AND granted_to_user_id = ? AND access_level IN ('view','edit') AND revoked_at IS NULL LIMIT 1");
-        $grantStmt->execute([(int) $id, $userId]);
-        $grantLevel = $grantStmt->fetchColumn() ?: null;
-        if ((int) ($contractor['created_by_user_id'] ?? 0) !== $userId && !$grantLevel) {
-            $renderMessage('У вас нет доступа к этой записи.');
-            return;
-        }
-    }
-
     $contacts = ContractorContactService::loadByContractorId($localPdo, (int) $id);
-    $canEdit = $roleCode !== 'logist' || (int) ($contractor['created_by_user_id'] ?? 0) === $userId || $grantLevel === 'edit';
-    $canArchive = $roleCode === 'company_owner' || $roleCode === 'senior_logist' || ($roleCode === 'logist' && (int) ($contractor['created_by_user_id'] ?? 0) === $userId);
+    $canEdit = true;
+    $canArchive = true;
     $archiveBlockedMessage = '';
     try {
         $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch();

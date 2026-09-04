@@ -79,35 +79,21 @@ final class ClientService
 
     public function listClients(PDO $localPdo, bool $isLogist, int $userId): array
     {
-        if ($isLogist) {
-            $stmt = $localPdo->prepare(
-                "SELECT * FROM clients
-                  WHERE deleted_at IS NULL
-                    AND status = 'active'
-                    AND (
-                        created_by_user_id = ?
-                        OR id IN (
-                            SELECT entity_id
-                              FROM entity_access_grants
-                             WHERE entity_type = 'client'
-                               AND granted_to_user_id = ?
-                               AND access_level IN ('view','edit')
-                               AND revoked_at IS NULL
-                        )
-                    )
-                  ORDER BY created_at DESC"
-            );
-            $stmt->execute([$userId, $userId]);
-        } else {
-            $stmt = $localPdo->query("SELECT * FROM clients WHERE deleted_at IS NULL AND status = 'active' ORDER BY created_at DESC");
-        }
+        $access = RegulatedDataScopeService::condition('client', 'clients.id');
+        $stmt = $localPdo->prepare(
+            "SELECT * FROM clients
+              WHERE deleted_at IS NULL AND status = 'active' AND {$access['sql']}
+              ORDER BY created_at DESC"
+        );
+        $stmt->execute($access['params']);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function getClientById(PDO $localPdo, int $id): ?array
     {
-        $stmt = $localPdo->prepare('SELECT * FROM clients WHERE id = ? AND deleted_at IS NULL');
-        $stmt->execute([$id]);
+        $access = RegulatedDataScopeService::condition('client', 'clients.id');
+        $stmt = $localPdo->prepare("SELECT * FROM clients WHERE id = ? AND deleted_at IS NULL AND {$access['sql']}");
+        $stmt->execute(array_merge([$id], $access['params']));
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
@@ -165,16 +151,18 @@ final class ClientService
 
     public function createClient(PDO $localPdo, array $data, int $userId, string $role): int
     {
+        $membershipId = RegulatedDataScopeService::assertCanCreate('client');
+        return EntityAssignmentService::createAssigned($localPdo, 'client', $membershipId, function () use ($localPdo, $data, $userId, $role, $membershipId): int {
         $insert = $localPdo->prepare(
             'INSERT INTO clients (name, inn, kpp, ogrn, entity_type, legal_address, physical_address,
              bank_account, bank_name, bank_bik, bank_corr_account,
              director_full_name, director_position,
-             status, comments, created_by_user_id, created_by_role,
+             status, comments, created_by_user_id, created_by_membership_id, created_by_role,
              updated_by_user_id, updated_by_role)
              VALUES (:name, :inn, :kpp, :ogrn, :entity_type, :legal_address, :physical_address,
              :bank_account, :bank_name, :bank_bik, :bank_corr_account,
              :director_full_name, :director_position,
-             :status, :comments, :created_by_user_id, :created_by_role,
+             :status, :comments, :created_by_user_id, :created_by_membership_id, :created_by_role,
              :updated_by_user_id, :updated_by_role)'
         );
         $insert->execute([
@@ -194,11 +182,13 @@ final class ClientService
             ':status'             => 'active',
             ':comments'           => ($v = trim($data['comments'] ?? '')) !== '' ? $v : null,
             ':created_by_user_id' => $userId,
+            ':created_by_membership_id' => $membershipId,
             ':created_by_role'    => $role,
             ':updated_by_user_id' => $userId,
             ':updated_by_role'    => $role,
         ]);
         return (int)$localPdo->lastInsertId();
+        });
     }
 
     public function updateClient(PDO $localPdo, int $id, array $data, int $userId, string $role): void
@@ -267,10 +257,10 @@ final class ClientService
     public function getGrants(PDO $localPdo, int $clientId): array
     {
         $stmt = $localPdo->prepare(
-            "SELECT g.*, u.full_name AS logist_name
-             FROM entity_access_grants g
-             LEFT JOIN users u ON g.granted_to_user_id = u.id
-             WHERE g.entity_type = ? AND g.entity_id = ?"
+            "SELECT a.*, u.full_name AS logist_name
+             FROM entity_assignments a
+             LEFT JOIN users u ON u.membership_id = a.membership_id
+             WHERE a.entity_type = ? AND a.entity_id = ?"
         );
         $stmt->execute(['client', $clientId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -278,32 +268,16 @@ final class ClientService
 
     public function getLogists(PDO $localPdo): array
     {
-        return $localPdo->query("SELECT id, full_name, login FROM users WHERE role_code IN ('logist', 'senior_logist') AND status='active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
+        return $localPdo->query("SELECT membership_id AS id, full_name, login FROM users WHERE membership_id IS NOT NULL AND status='active' AND deleted_at IS NULL ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function checkLogistAccess(PDO $localPdo, int $clientId, int $userId, string $requiredLevel = 'view'): ?string
     {
-        $stmt = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type = 'client' AND entity_id = ? AND granted_to_user_id = ? AND access_level IN ('view','edit') AND revoked_at IS NULL LIMIT 1");
-        $stmt->execute([$clientId, $userId]);
-        return $stmt->fetchColumn() ?: null;
+        return RegulatedDataScopeService::canAccess($localPdo, 'client', 'clients', $clientId) ? 'edit' : null;
     }
 
     public function canAccessClient(PDO $localPdo, array $client, int $userId, string $roleCode, string $mode = 'view'): bool
     {
-        if (in_array($roleCode, ['company_owner', 'senior_logist'], true)) {
-            return true;
-        }
-        if ($roleCode !== 'logist' || $userId <= 0) {
-            return false;
-        }
-        if ((int) ($client['created_by_user_id'] ?? 0) === $userId) {
-            return true;
-        }
-        if ($mode === 'archive') {
-            return false;
-        }
-
-        $grant = $this->checkLogistAccess($localPdo, (int) ($client['id'] ?? 0), $userId, $mode);
-        return $mode === 'edit' ? $grant === 'edit' : in_array($grant, ['view', 'edit'], true);
+        return RegulatedDataScopeService::canAccess($localPdo, 'client', 'clients', (int) ($client['id'] ?? 0));
     }
 }

@@ -66,35 +66,25 @@ final class DriverService
 
     public function listDrivers(PDO $localPdo, bool $isLogist, int $userId): array
     {
-        if ($isLogist) {
-            $stmt = $localPdo->prepare(
-                "SELECT d.*, COALESCE(dp.phone, d.phone) AS main_phone,
-                        (SELECT COUNT(*) FROM driver_phones WHERE driver_id = d.id AND is_main = 0) AS extra_phones_count,
-                        (SELECT COUNT(*) FROM documents doc WHERE doc.entity_type = 'driver' AND doc.entity_id = d.id AND doc.deleted_at IS NULL) AS files_count
-                 FROM drivers d
-                 LEFT JOIN driver_phones dp ON d.id = dp.driver_id AND dp.is_main = 1
-                 WHERE d.deleted_at IS NULL AND (d.created_by_user_id = ? OR d.id IN (SELECT entity_id FROM entity_access_grants WHERE entity_type = 'driver' AND granted_to_user_id = ? AND access_level = 'view'))
-                 ORDER BY d.created_at DESC"
-            );
-            $stmt->execute([$userId, $userId]);
-        } else {
-            $stmt = $localPdo->query(
-                "SELECT d.*, COALESCE(dp.phone, d.phone) AS main_phone,
-                        (SELECT COUNT(*) FROM driver_phones WHERE driver_id = d.id AND is_main = 0) AS extra_phones_count,
-                        (SELECT COUNT(*) FROM documents doc WHERE doc.entity_type = 'driver' AND doc.entity_id = d.id AND doc.deleted_at IS NULL) AS files_count
-                 FROM drivers d
-                 LEFT JOIN driver_phones dp ON d.id = dp.driver_id AND dp.is_main = 1
-                 WHERE d.deleted_at IS NULL
-                 ORDER BY d.created_at DESC"
-            );
-        }
+        $access = RegulatedDataScopeService::condition('driver', 'd.id');
+        $stmt = $localPdo->prepare(
+            "SELECT d.*, COALESCE(dp.phone, d.phone) AS main_phone,
+                    (SELECT COUNT(*) FROM driver_phones WHERE driver_id = d.id AND is_main = 0) AS extra_phones_count,
+                    (SELECT COUNT(*) FROM documents doc WHERE doc.entity_type = 'driver' AND doc.entity_id = d.id AND doc.deleted_at IS NULL) AS files_count
+             FROM drivers d
+             LEFT JOIN driver_phones dp ON d.id = dp.driver_id AND dp.is_main = 1
+             WHERE d.deleted_at IS NULL AND {$access['sql']}
+             ORDER BY d.created_at DESC"
+        );
+        $stmt->execute($access['params']);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function getDriverById(PDO $localPdo, int $id): ?array
     {
-        $stmt = $localPdo->prepare('SELECT * FROM drivers WHERE id = ? AND deleted_at IS NULL');
-        $stmt->execute([$id]);
+        $access = RegulatedDataScopeService::condition('driver', 'drivers.id');
+        $stmt = $localPdo->prepare("SELECT * FROM drivers WHERE id = ? AND deleted_at IS NULL AND {$access['sql']}");
+        $stmt->execute(array_merge([$id], $access['params']));
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
@@ -150,39 +140,37 @@ final class DriverService
 
     public function getGrants(PDO $localPdo, int $driverId): array
     {
-        $stmt = $localPdo->prepare("SELECT g.*, u.full_name AS logist_name FROM entity_access_grants g LEFT JOIN users u ON g.granted_to_user_id = u.id WHERE g.entity_type = ? AND g.entity_id = ?");
+        $stmt = $localPdo->prepare("SELECT a.*, u.full_name AS logist_name FROM entity_assignments a LEFT JOIN users u ON u.membership_id = a.membership_id WHERE a.entity_type = ? AND a.entity_id = ?");
         $stmt->execute(['driver', $driverId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function getLogists(PDO $localPdo): array
     {
-        return $localPdo->query("SELECT id, full_name, login FROM users WHERE role_code IN ('logist', 'senior_logist') AND status='active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
+        return $localPdo->query("SELECT membership_id AS id, full_name, login FROM users WHERE membership_id IS NOT NULL AND status='active' AND deleted_at IS NULL ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function checkLogistAccess(PDO $localPdo, int $entityId, int $userId): ?string
     {
-        $stmt = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type = 'driver' AND entity_id = ? AND granted_to_user_id = ? AND access_level IN ('view','edit') AND revoked_at IS NULL LIMIT 1");
-        $stmt->execute([$entityId, $userId]);
-        return $stmt->fetchColumn() ?: null;
+        return RegulatedDataScopeService::canAccess($localPdo, 'driver', 'drivers', $entityId) ? 'edit' : null;
     }
 
     public function checkLogistCanEdit(PDO $localPdo, int $entityId, int $userId, int $createdByUserId): bool
     {
-        if ($createdByUserId === $userId) return true;
-        $grantLevel = $this->checkLogistAccess($localPdo, $entityId, $userId);
-        return $grantLevel === 'edit';
+        return RegulatedDataScopeService::canAccess($localPdo, 'driver', 'drivers', $entityId);
     }
 
     public function createDriver(PDO $localPdo, array $data, int $userId, string $role): int
     {
+        $membershipId = RegulatedDataScopeService::assertCanCreate('driver');
+        return EntityAssignmentService::createAssigned($localPdo, 'driver', $membershipId, function () use ($localPdo, $data, $userId, $role, $membershipId): int {
         $insert = $localPdo->prepare(
             'INSERT INTO drivers (full_name, phone, email, license_number, license_category,
              license_issue_date, license_expire_date, passport_number, passport_issued_by,
-             passport_department_code, passport_issue_date, snils, status, comments, created_by_user_id, created_by_role)
+             passport_department_code, passport_issue_date, snils, status, comments, created_by_user_id, created_by_membership_id, created_by_role)
              VALUES (:full_name, :phone, :email, :license_number, :license_category,
              :license_issue_date, :license_expire_date, :passport_number, :passport_issued_by,
-             :passport_department_code, :passport_issue_date, :snils, :status, :comments, :created_by_user_id, :created_by_role)'
+             :passport_department_code, :passport_issue_date, :snils, :status, :comments, :created_by_user_id, :created_by_membership_id, :created_by_role)'
         );
         $insert->execute([
             ':full_name' => $data['full_name'],
@@ -200,9 +188,11 @@ final class DriverService
             ':status' => 'active',
             ':comments' => !empty($data['comments']) ? $data['comments'] : null,
             ':created_by_user_id' => $userId,
+            ':created_by_membership_id' => $membershipId,
             ':created_by_role' => $role,
         ]);
         return (int)$localPdo->lastInsertId();
+        });
     }
 
     public function updateDriver(PDO $localPdo, int $id, array $data, int $userId, string $role): void

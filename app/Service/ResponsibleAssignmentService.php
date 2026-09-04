@@ -5,10 +5,10 @@ namespace App\Service;
 final class ResponsibleAssignmentService
 {
     public const ENTITY_TYPES = [
-        'route_executor' => 'crew',
+        'client' => 'client',
         'contractor' => 'contractor',
         'driver' => 'driver',
-        'vehicle_set' => 'vehicle_set',
+        'vehicle_unit' => 'vehicle_unit',
     ];
 
     public static function normalizeEntityType(?string $type): ?string

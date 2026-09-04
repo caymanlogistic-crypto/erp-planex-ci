@@ -225,6 +225,10 @@ try {
     try {
         $uid = (int)$_SESSION['user_id'];
         $role = $_SESSION['role_code'];
+        $membershipId = \App\Service\AccessControlService::effectiveMembershipId();
+        if ($contractorMode !== 'existing') \App\Service\RegulatedDataScopeService::assertCanCreate('contractor');
+        if ($driverMode !== 'existing') \App\Service\RegulatedDataScopeService::assertCanCreate('driver');
+        if ($vehicleMode !== 'existing') \App\Service\RegulatedDataScopeService::assertCanCreate('vehicle_unit');
 
         $contractorId = null;
         $contractorNameForSuccess = '';
@@ -235,8 +239,8 @@ try {
             $contractorInnForSuccess = $existingContractorRow['inn'] ?? '';
         } else {
             $insertContractor = $localPdo->prepare(
-                'INSERT INTO contractors (name, inn, kpp, status, created_by_user_id, created_by_role)
-                 VALUES (:name, :inn, :kpp, :status, :uid, :role)'
+                'INSERT INTO contractors (name, inn, kpp, status, created_by_user_id, created_by_membership_id, created_by_role)
+                 VALUES (:name, :inn, :kpp, :status, :uid, :membership_id, :role)'
             );
             $insertContractor->execute([
                 ':name'   => $name,
@@ -244,9 +248,11 @@ try {
                 ':kpp'    => $kpp !== '' ? $kpp : null,
                 ':status' => 'active',
                 ':uid'    => $uid,
+                ':membership_id' => $membershipId,
                 ':role'   => $role,
             ]);
             $contractorId = (int)$localPdo->lastInsertId();
+            \App\Service\EntityAssignmentService::autoAssignCreator($localPdo, 'contractor', $contractorId, $membershipId);
             ContractorContactService::replaceForContractor(
                 $localPdo,
                 $contractorId,
@@ -275,17 +281,19 @@ try {
             $driverNameForSuccess = $drvRow['full_name'] ?? '';
         } else {
             $insertDriver = $localPdo->prepare(
-                'INSERT INTO drivers (full_name, phone, status, created_by_user_id, created_by_role)
-                 VALUES (:full_name, :phone, :status, :uid, :role)'
+                'INSERT INTO drivers (full_name, phone, status, created_by_user_id, created_by_membership_id, created_by_role)
+                 VALUES (:full_name, :phone, :status, :uid, :membership_id, :role)'
             );
             $insertDriver->execute([
                 ':full_name' => $driverFullName,
                 ':phone'     => $driverPhone !== '' ? $driverPhone : '',
                 ':status'    => 'active',
                 ':uid'       => $uid,
+                ':membership_id' => $membershipId,
                 ':role'      => $role,
             ]);
             $driverId = (int)$localPdo->lastInsertId();
+            \App\Service\EntityAssignmentService::autoAssignCreator($localPdo, 'driver', $driverId, $membershipId);
             $driverNameForSuccess = $driverFullName;
         }
 
@@ -307,8 +315,8 @@ try {
             $vehicleSecondaryPlateForSuccess = !empty($vsRow['secondary_plate']) ? $vsRow['secondary_plate'] : null;
         } else {
             $insertPrimaryUnit = $localPdo->prepare(
-                'INSERT INTO vehicle_units (plate_number, brand, model, unit_type, status, created_by_user_id, created_by_role)
-                 VALUES (:plate_number, :brand, :model, :unit_type, :status, :uid, :role)'
+                'INSERT INTO vehicle_units (plate_number, brand, model, unit_type, status, created_by_user_id, created_by_membership_id, created_by_role)
+                 VALUES (:plate_number, :brand, :model, :unit_type, :status, :uid, :membership_id, :role)'
             );
             $insertPrimaryUnit->execute([
                 ':plate_number' => $plateNumber,
@@ -317,24 +325,28 @@ try {
                 ':unit_type'    => 'tractor',
                 ':status'       => 'active',
                 ':uid'          => $uid,
+                ':membership_id' => $membershipId,
                 ':role'         => $role,
             ]);
             $primaryUnitId = (int)$localPdo->lastInsertId();
+            \App\Service\EntityAssignmentService::autoAssignCreator($localPdo, 'vehicle_unit', $primaryUnitId, $membershipId);
 
             $secondaryUnitId = null;
             if ($secondaryPlateNumber !== '') {
                 $insertSecondaryUnit = $localPdo->prepare(
-                    'INSERT INTO vehicle_units (plate_number, unit_type, status, created_by_user_id, created_by_role)
-                     VALUES (:plate_number, :unit_type, :status, :uid, :role)'
+                    'INSERT INTO vehicle_units (plate_number, unit_type, status, created_by_user_id, created_by_membership_id, created_by_role)
+                     VALUES (:plate_number, :unit_type, :status, :uid, :membership_id, :role)'
                 );
                 $insertSecondaryUnit->execute([
                     ':plate_number' => $secondaryPlateNumber,
                     ':unit_type'    => 'trailer',
                     ':status'       => 'active',
                     ':uid'          => $uid,
+                    ':membership_id' => $membershipId,
                     ':role'         => $role,
                 ]);
                 $secondaryUnitId = (int)$localPdo->lastInsertId();
+                \App\Service\EntityAssignmentService::autoAssignCreator($localPdo, 'vehicle_unit', $secondaryUnitId, $membershipId);
             }
 
             $insertVehicleSet = $localPdo->prepare(

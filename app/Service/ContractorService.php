@@ -77,35 +77,25 @@ final class ContractorService
 
     public function listContractors(PDO $localPdo, bool $isLogist, int $userId): array
     {
-        if ($isLogist) {
-            $stmt = $localPdo->prepare(
-                "SELECT c.*,
-                        " . ContractorContactService::buildPrimaryContactSubquery('contact_person') . " AS primary_contact_person,
-                        " . ContractorContactService::buildPrimaryContactSubquery('phone') . " AS primary_contact_phone,
-                        " . ContractorContactService::buildDocumentEmailSubquery() . " AS doc_email
-                 FROM contractors c
-                 WHERE c.deleted_at IS NULL AND (c.created_by_user_id = ? OR c.id IN (SELECT entity_id FROM entity_access_grants WHERE entity_type = 'contractor' AND granted_to_user_id = ? AND access_level = 'view'))
-                 ORDER BY c.created_at DESC"
-            );
-            $stmt->execute([$userId, $userId]);
-        } else {
-            $stmt = $localPdo->query(
-                "SELECT c.*,
-                        " . ContractorContactService::buildPrimaryContactSubquery('contact_person') . " AS primary_contact_person,
-                        " . ContractorContactService::buildPrimaryContactSubquery('phone') . " AS primary_contact_phone,
-                        " . ContractorContactService::buildDocumentEmailSubquery() . " AS doc_email
-                 FROM contractors c
-                 WHERE c.deleted_at IS NULL
-                 ORDER BY c.created_at DESC"
-            );
-        }
+        $access = RegulatedDataScopeService::condition('contractor', 'c.id');
+        $stmt = $localPdo->prepare(
+            "SELECT c.*,
+                    " . ContractorContactService::buildPrimaryContactSubquery('contact_person') . " AS primary_contact_person,
+                    " . ContractorContactService::buildPrimaryContactSubquery('phone') . " AS primary_contact_phone,
+                    " . ContractorContactService::buildDocumentEmailSubquery() . " AS doc_email
+             FROM contractors c
+             WHERE c.deleted_at IS NULL AND {$access['sql']}
+             ORDER BY c.created_at DESC"
+        );
+        $stmt->execute($access['params']);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function getContractorById(PDO $localPdo, int $id): ?array
     {
-        $stmt = $localPdo->prepare('SELECT * FROM contractors WHERE id = ? AND deleted_at IS NULL');
-        $stmt->execute([$id]);
+        $access = RegulatedDataScopeService::condition('contractor', 'contractors.id');
+        $stmt = $localPdo->prepare("SELECT * FROM contractors WHERE id = ? AND deleted_at IS NULL AND {$access['sql']}");
+        $stmt->execute(array_merge([$id], $access['params']));
         return $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
@@ -165,15 +155,17 @@ final class ContractorService
 
     public function createContractor(PDO $localPdo, array $data, int $userId, string $role): int
     {
+        $membershipId = RegulatedDataScopeService::assertCanCreate('contractor');
+        return EntityAssignmentService::createAssigned($localPdo, 'contractor', $membershipId, function () use ($localPdo, $data, $userId, $role, $membershipId): int {
         $insert = $localPdo->prepare(
             'INSERT INTO contractors (name, inn, kpp, ogrn, contractor_type, legal_address, physical_address,
              bank_account, bank_name, bank_bik, bank_corr_account, bank_inn,
              director_full_name, director_position,
-             status, comments, created_by_user_id, created_by_role)
+             status, comments, created_by_user_id, created_by_membership_id, created_by_role)
              VALUES (:name, :inn, :kpp, :ogrn, :contractor_type, :legal_address, :physical_address,
              :bank_account, :bank_name, :bank_bik, :bank_corr_account, :bank_inn,
              :director_full_name, :director_position,
-             :status, :comments, :created_by_user_id, :created_by_role)'
+             :status, :comments, :created_by_user_id, :created_by_membership_id, :created_by_role)'
         );
         $insert->execute([
             ':name'               => trim($data['name'] ?? ''),
@@ -193,9 +185,11 @@ final class ContractorService
             ':status'             => 'active',
             ':comments'           => ($v = trim($data['comments'] ?? '')) !== '' ? $v : null,
             ':created_by_user_id' => $userId,
+            ':created_by_membership_id' => $membershipId,
             ':created_by_role'    => $role,
         ]);
         return (int)$localPdo->lastInsertId();
+        });
     }
 
     public function updateContractor(PDO $localPdo, int $id, array $data, int $userId, string $role): void
@@ -266,10 +260,10 @@ final class ContractorService
     public function getContractorGrants(PDO $localPdo, int $contractorId): array
     {
         $stmt = $localPdo->prepare(
-            "SELECT g.*, u.full_name AS logist_name
-             FROM entity_access_grants g
-             LEFT JOIN users u ON g.granted_to_user_id = u.id
-             WHERE g.entity_type = ? AND g.entity_id = ?"
+            "SELECT a.*, u.full_name AS logist_name
+             FROM entity_assignments a
+             LEFT JOIN users u ON u.membership_id = a.membership_id
+             WHERE a.entity_type = ? AND a.entity_id = ?"
         );
         $stmt->execute(['contractor', $contractorId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -277,22 +271,16 @@ final class ContractorService
 
     public function getLogists(PDO $localPdo): array
     {
-        return $localPdo->query("SELECT id, full_name, login FROM users WHERE role_code IN ('logist', 'senior_logist') AND status='active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
+        return $localPdo->query("SELECT membership_id AS id, full_name, login FROM users WHERE membership_id IS NOT NULL AND status='active' AND deleted_at IS NULL ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function checkLogistAccess(PDO $localPdo, int $entityId, int $userId, string $requiredLevel = 'view'): ?string
     {
-        $stmt = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type = 'contractor' AND entity_id = ? AND granted_to_user_id = ? AND access_level IN ('view','edit') AND revoked_at IS NULL LIMIT 1");
-        $stmt->execute([$entityId, $userId]);
-        return $stmt->fetchColumn() ?: null;
+        return RegulatedDataScopeService::canAccess($localPdo, 'contractor', 'contractors', $entityId) ? 'edit' : null;
     }
 
     public function checkLogistCanEdit(PDO $localPdo, int $entityId, int $userId, int $createdByUserId): bool
     {
-        if ($createdByUserId === $userId) {
-            return true;
-        }
-        $grantLevel = $this->checkLogistAccess($localPdo, $entityId, $userId, 'edit');
-        return $grantLevel === 'edit';
+        return RegulatedDataScopeService::canAccess($localPdo, 'contractor', 'contractors', $entityId);
     }
 }

@@ -444,6 +444,7 @@ try {
         }
     };
 
+    $membershipId = \App\Service\RegulatedDataScopeService::assertCanCreate('linear_trip');
     $localPdo->beginTransaction();
 
     $insertRoute = $localPdo->prepare(
@@ -463,6 +464,7 @@ try {
             status,
             comments,
             created_by_user_id,
+            created_by_membership_id,
             created_by_role,
             updated_by_user_id,
             updated_by_role
@@ -482,6 +484,7 @@ try {
             'active',
             :comments,
             :created_by_user_id,
+            :created_by_membership_id,
             :created_by_role,
             :updated_by_user_id,
             :updated_by_role
@@ -499,6 +502,7 @@ try {
         ':actual_unloading_date' => $actualUnloadingDate,
         ':comments' => $comments !== '' ? $comments : null,
         ':created_by_user_id' => $userId,
+        ':created_by_membership_id' => $membershipId,
         ':created_by_role' => $roleCode,
         ':updated_by_user_id' => $userId,
         ':updated_by_role' => $roleCode,

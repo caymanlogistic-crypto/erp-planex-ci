@@ -32,16 +32,6 @@ try {
 
     $roleCode = (string) ($_SESSION['role_code'] ?? '');
     $userId = (int) ($_SESSION['user_id'] ?? 0);
-    if ($roleCode === 'logist') {
-        $grantStmt = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type = 'contractor' AND entity_id = ? AND granted_to_user_id = ? AND access_level = 'edit' AND revoked_at IS NULL LIMIT 1");
-        $grantStmt->execute([(int) $id, $userId]);
-        $canEditGrant = $grantStmt->fetchColumn() ?: null;
-        if ((int) ($contractor['created_by_user_id'] ?? 0) !== $userId && !$canEditGrant) {
-            $renderMessage('У вас нет прав на редактирование этой записи.');
-            return;
-        }
-    }
-
     $contacts = ContractorContactService::loadByContractorId($localPdo, (int) $id);
     $errors = [];
     $old = $contractor;

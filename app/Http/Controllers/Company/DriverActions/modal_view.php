@@ -16,9 +16,7 @@ try {
     $allDocs = $service->getDriverDocuments($localPdo, (int)$id);
     $docsByType = $service->getDocsByType($localPdo, $allDocs);
     $zipAvailable = class_exists('ZipArchive');
-    $role = $_SESSION['role_code'] ?? ''; $canEdit = false; $canDelete = false;
-    if ($role === 'company_owner' || $role === 'senior_logist') { $canEdit = true; $canDelete = true; }
-    elseif ($role === 'logist') { $userId = (int)$_SESSION['user_id']; if ((int)$driver['created_by_user_id'] === $userId) { $canEdit = true; $canDelete = true; } else { $gc = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type='driver' AND entity_id=? AND granted_to_user_id=? AND revoked_at IS NULL LIMIT 1"); $gc->execute([(int)$id, $userId]); $gr = $gc->fetch(PDO::FETCH_ASSOC); if ($gr && $gr['access_level'] === 'edit') $canEdit = true; } }
+    $role = $_SESSION['role_code'] ?? ''; $canEdit = true; $canDelete = true;
     header('Content-Type: text/html; charset=utf-8');
     require base_path('app/View/partials/company_driver_modal_view.php');
     exit;
