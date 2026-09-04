@@ -1,0 +1,1 @@
+SentinelX E2E CI trigger only; disposable branch, never merge.
