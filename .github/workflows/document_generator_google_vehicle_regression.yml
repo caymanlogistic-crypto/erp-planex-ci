@@ -16,6 +16,7 @@ on:
       - 'tests/document_generator_template_v3_production_contract_test.php'
       - 'tests/document_generator_deploy_artifact_test.php'
       - '.github/workflows/document_generator_google_vehicle_regression.yml'
+      - '.github/workflows/document_generator_regression.yml'
       - '.github/workflows/document_generator_template_v3_agent_request.yml'
       - '.github/workflows/document_generator_template_v3_production.yml'
   push:
@@ -34,6 +35,7 @@ on:
       - 'tests/document_generator_template_v3_production_contract_test.php'
       - 'tests/document_generator_deploy_artifact_test.php'
       - '.github/workflows/document_generator_google_vehicle_regression.yml'
+      - '.github/workflows/document_generator_regression.yml'
       - '.github/workflows/document_generator_template_v3_agent_request.yml'
       - '.github/workflows/document_generator_template_v3_production.yml'
   workflow_dispatch:
