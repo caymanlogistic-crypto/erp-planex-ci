@@ -127,6 +127,11 @@ $clientArchiveBlocked = (string) ($archiveBlockedMessage ?? '');
       <?php endif; ?>
     </div>
   </div>
+  <?php
+  $assignmentEntityType = 'client';
+  $assignmentEntityId = (int) ($client['id'] ?? 0);
+  require base_path('app/View/partials/company_entity_assignment_block.php');
+  ?>
 </div>
 
 <div class="modal-foot is-spaced">

@@ -184,44 +184,11 @@
         </div>
         <?php endif; ?>
 
-        <?php if (($_SESSION['role_code'] ?? '') === 'company_owner'): ?>
-        <div class="form-section">
-            <h3 class="panel-head-title">Доступ логистов</h3>
-            <?php if (!empty($grants)): ?>
-            <div class="tbl-wrap">
-                <table class="tbl">
-                    <thead><tr><th>Пользователь</th><th>Доступ</th><th>Выдан</th></tr></thead>
-                    <tbody>
-                    <?php foreach($grants as $g): ?>
-                    <tr>
-                        <td><?= e($g['logist_name']) ?></td>
-                        <td><?= e(ui_access_level($g['access_level'] ?? null)) ?></td>
-                        <td class="col-muted"><?= e(ui_date($g['created_at'] ?? null)) ?></td>
-                    </tr>
-                    <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-            <?php else: ?>
-            <p class="text-muted">Доступ логистам не выдан.</p>
-            <?php endif; ?>
-
-            <form method="post" action="<?= app_url('/company/access-grants/grant') ?>" class="grant-form">
-                <input type="hidden" name="entity_type" value="vehicle_unit">
-                <input type="hidden" name="entity_id" value="<?= $vehicle['id'] ?>">
-                <input type="hidden" name="redirect" value="/company/vehicles/<?= $vehicle['id'] ?>">
-                <div class="field inline-field">
-                    <select name="granted_to_user_id" class="field-select">
-                        <option value="">— Выберите пользователя —</option>
-                        <?php foreach($logists as $l): ?>
-                        <option value="<?= $l['id'] ?>"><?= e($l['full_name']) ?> (<?= e($l['login']) ?>)</option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <button type="submit" class="btn btn-ghost">Дать доступ</button>
-            </form>
-        </div>
-        <?php endif; ?>
+        <?php
+        $assignmentEntityType = 'vehicle_unit';
+        $assignmentEntityId = (int) ($vehicle['id'] ?? 0);
+        require base_path('app/View/partials/company_entity_assignment_block.php');
+        ?>
 
         <div class="form-section">
             <h3 class="panel-head-title">Опасная зона</h3>

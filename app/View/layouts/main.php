@@ -13,6 +13,33 @@ $appName = $config['app']['app_name'] ?? 'ERP PLANEX';
 $roleCode = $_SESSION['role_code'] ?? '';
 $companyId = $_SESSION['company_id'] ?? 0;
 $requestPath = current_app_path();
+$effectiveAccess = class_exists(\App\Security\AccessRuntime::class)
+    ? \App\Security\AccessRuntime::current()
+    : null;
+$registryNavigationActive = $roleCode !== 'superadmin'
+    && $effectiveAccess !== null
+    && $effectiveAccess->isActive();
+$registryNavigationTree = [];
+$activeNavigationKey = '';
+$activeNavigationPathLength = -1;
+if ($registryNavigationActive) {
+    $registry = new \App\Security\PageRegistry();
+    foreach ($registry->tree() as $section => $groups) {
+        foreach ($groups as $group => $pages) {
+            foreach ($pages as $page) {
+                if ($effectiveAccess->canAccessPage((string) $page['key'])) {
+                    $registryNavigationTree[$section][$group][] = $page;
+                    $candidatePath = (string) $page['path'];
+                    if (($requestPath === $candidatePath || str_starts_with($requestPath, rtrim($candidatePath, '/') . '/'))
+                        && strlen($candidatePath) > $activeNavigationPathLength) {
+                        $activeNavigationKey = (string) $page['key'];
+                        $activeNavigationPathLength = strlen($candidatePath);
+                    }
+                }
+            }
+        }
+    }
+}
 $clientsActive = str_starts_with($requestPath, '/company/clients');
 $tripsActive = str_starts_with($requestPath, '/company/trips');
 $linearTripsActive = str_starts_with($requestPath, '/company/trips/linear');
@@ -98,6 +125,23 @@ $roleLabel = match($roleCode) {
     'logist' => 'Логист',
     default => '',
 };
+if ($roleLabel === '' && $effectiveAccess !== null && $effectiveAccess->isSystemOwner()) {
+    $roleLabel = 'Руководитель';
+} elseif ($roleLabel === '' && $registryNavigationActive) {
+    $roleLabel = 'Сотрудник';
+}
+
+$switchCompanies = [];
+$accountId = filter_var($_SESSION['account_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+if ($accountId !== false && $roleCode !== 'superadmin') {
+    try {
+        require_once base_path('app/Service/CompanyMembershipService.php');
+        $switchCompanies = (new \App\Service\CompanyMembershipService($db->connection()))
+            ->activeCompaniesForAccount((int) $accountId);
+    } catch (\Throwable) {
+        $switchCompanies = [];
+    }
+}
 
 $initials = '';
 if ($userName !== '') {
@@ -139,6 +183,7 @@ if (empty($topbarCrumbs)) {
     <link rel="preload" href="<?= app_url('/assets/fonts/IBMPlexSans-Bold.woff2') ?>" as="font" type="font/woff2" crossorigin>
     <link rel="stylesheet" href="<?= app_url('/assets/css/app.css') ?>?v=<?= filemtime(base_path('public/assets/css/app.css')) ?>">
     <link rel="stylesheet" href="<?= app_url('/assets/css/erp-ui.css') ?>?v=<?= filemtime(base_path('public/assets/css/erp-ui.css')) ?>">
+    <link rel="stylesheet" href="<?= app_url('/assets/css/roles-access.css') ?>?v=<?= filemtime(base_path('public/assets/css/roles-access.css')) ?>">
 </head>
 <body>
     <div class="app">
@@ -174,6 +219,16 @@ if (empty($topbarCrumbs)) {
             </div>
             <div class="topbar-right">
                 <?php if (!empty($_SESSION['user_id'])): ?>
+                <?php if (count($switchCompanies) > 1): ?>
+                <form method="post" action="<?= app_url('/company/switch') ?>" class="company-switch-form" aria-label="Переключение компании">
+                    <label class="sr-only" for="active-company-switch">Компания</label>
+                    <select id="active-company-switch" name="company_id" class="field-select company-switch-select" onchange="this.form.submit()">
+                        <?php foreach ($switchCompanies as $switchCompany): ?>
+                        <option value="<?= (int) $switchCompany['id'] ?>"<?= (int) $switchCompany['id'] === (int) $companyId ? ' selected' : '' ?>><?= e($switchCompany['name']) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </form>
+                <?php endif; ?>
                 <div class="avatar"><?= e($initials) ?></div>
                 <div class="user-info">
                     <strong><?= e($userName) ?></strong>
@@ -207,6 +262,49 @@ if (empty($topbarCrumbs)) {
                     <span class="nav-label">Удалённые данные</span>
                 </a>
             </div>
+
+            <?php elseif ($registryNavigationActive): ?>
+
+            <?php foreach ($registryNavigationTree as $navigationSection => $navigationGroups): ?>
+            <div class="nav-group">
+                <div class="nav-section-label"><?= e(mb_strtoupper((string) $navigationSection)) ?></div>
+                <?php foreach ($navigationGroups as $navigationGroup => $navigationPages): ?>
+                    <?php if ($navigationGroup === ''): ?>
+                        <?php foreach ($navigationPages as $navigationPage):
+                            $navigationPath = (string) $navigationPage['path'];
+                            $navigationIsActive = $activeNavigationKey === (string) $navigationPage['key'];
+                        ?>
+                        <a class="nav-item<?= $navigationIsActive ? ' is-active' : '' ?>" href="<?= app_url($navigationPath) ?>">
+                            <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                            <span class="nav-label"><?= e($navigationPage['label']) ?></span>
+                        </a>
+                        <?php endforeach; ?>
+                    <?php else:
+                        $navigationGroupOpen = false;
+                        foreach ($navigationPages as $navigationPage) {
+                            if ($activeNavigationKey === (string) $navigationPage['key']) {
+                                $navigationGroupOpen = true;
+                                break;
+                            }
+                        }
+                    ?>
+                    <div class="nav-item is-parent<?= $navigationGroupOpen ? ' is-open is-active' : '' ?>">
+                        <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4h4l1.5 2H14v7H2V4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                        <span class="nav-label"><?= e($navigationGroup) ?></span>
+                        <svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    </div>
+                    <div class="nav-sub<?= $navigationGroupOpen ? ' is-open' : '' ?>">
+                        <?php foreach ($navigationPages as $navigationPage):
+                            $navigationPath = (string) $navigationPage['path'];
+                            $navigationIsActive = $activeNavigationKey === (string) $navigationPage['key'];
+                        ?>
+                        <a class="nav-sub-item<?= $navigationIsActive ? ' is-active' : '' ?>" href="<?= app_url($navigationPath) ?>"><span><?= e($navigationPage['label']) ?></span></a>
+                        <?php endforeach; ?>
+                    </div>
+                    <?php endif; ?>
+                <?php endforeach; ?>
+            </div>
+            <?php endforeach; ?>
 
             <?php elseif ($roleCode === 'company_owner'): ?>
 
@@ -534,5 +632,6 @@ if (empty($topbarCrumbs)) {
     <script src="<?= app_url('/assets/js/legal-entity-inn.js') ?>?v=<?= filemtime(base_path('public/assets/js/legal-entity-inn.js')) ?>"></script>
     <script src="<?= app_url('/assets/js/legal-entity-modal.js') ?>?v=<?= filemtime(base_path('public/assets/js/legal-entity-modal.js')) ?>"></script>
     <script src="<?= app_url('/assets/js/app.js') ?>?v=<?= filemtime(base_path('public/assets/js/app.js')) ?>"></script>
+    <script src="<?= app_url('/assets/js/entity-assignments.js') ?>?v=<?= filemtime(base_path('public/assets/js/entity-assignments.js')) ?>"></script>
 </body>
 </html>
