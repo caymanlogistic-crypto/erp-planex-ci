@@ -30,7 +30,8 @@ final class DocumentTemplateService
         'executor.bank_account', 'executor.bank_corr_account', 'executor.bank_bik', 'executor.bank_inn',
         'executor.director_full_name', 'executor.director_position', 'executor.signature_name',
         'driver.full_name', 'driver.passport', 'driver.license', 'driver.signature_name',
-        'vehicle.model', 'vehicle.plate', 'trailer.display',
+        'vehicle.label', 'vehicle.model', 'vehicle.plate', 'vehicle.vin',
+        'trailer.label', 'trailer.model', 'trailer.plate', 'trailer.vin', 'trailer.display',
         'requests.count', 'requests.total_mass_kg', 'requests.unload_address',
         'request.index', 'request.id', 'request.mass_kg', 'request.sender',
         'request.loading_address', 'request.contacts',
@@ -338,6 +339,9 @@ final class DocumentTemplateService
         for ($i = count($nodes) - 1; $i >= 0; $i--) {
             $node = $nodes[$i];
             $escaped = htmlspecialchars($node['text'], ENT_QUOTES | ENT_XML1, 'UTF-8');
+            // Replacement values may contain semantic line breaks (for example trailer.display).
+            // WordprocessingML does not reliably render literal LF inside w:t, so emit w:br elements.
+            $escaped = str_replace(["\r\n", "\r", "\n"], '</w:t><w:br/><w:t>', $escaped);
             $newFull = preg_replace_callback(
                 '~(<w:t\b[^>]*>).*?(</w:t>)~s',
                 static fn(array $m): string => $m[1] . $escaped . $m[2],

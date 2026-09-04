@@ -11,18 +11,27 @@ final class GoogleSheetsRequestContactService
     public const DEFAULT_GID = '1200010467';
     public const ID_COLUMN = 0;
     public const CONTACTS_COLUMN = 9;
+    public const MAX_CSV_BYTES = 8 * 1024 * 1024;
     public const DEFAULT_CSV_URL = 'https://docs.google.com/spreadsheets/d/' . self::DEFAULT_SPREADSHEET_ID . '/export?format=csv&gid=' . self::DEFAULT_GID;
 
+    /** @var callable|null */
+    private static $testDefaultFetcher = null;
     /** @var callable|null */
     private $fetcher;
     private string $url;
 
     public function __construct(?callable $fetcher = null, ?string $url = null)
     {
-        $this->fetcher = $fetcher;
+        $this->fetcher = $fetcher ?? self::$testDefaultFetcher;
         $configured = trim((string)($url ?? getenv('GOOGLE_SHEETS_FEO_CSV_URL') ?: self::DEFAULT_CSV_URL));
         $this->url = $configured !== '' ? $configured : self::DEFAULT_CSV_URL;
         $this->assertAllowedUrl($this->url);
+    }
+
+    public static function setDefaultFetcherForTests(?callable $fetcher): void
+    {
+        if (PHP_SAPI !== 'cli') throw new RuntimeException('Test fetcher override is CLI-only.');
+        self::$testDefaultFetcher = $fetcher;
     }
 
     /**
@@ -69,7 +78,7 @@ final class GoogleSheetsRequestContactService
     {
         if ($this->fetcher !== null) {
             $payload = ($this->fetcher)($this->url);
-            if (!is_string($payload) || $payload === '') throw new RuntimeException('Google Sheets CSV is empty.');
+            if (!is_string($payload) || $payload === '' || strlen($payload) > self::MAX_CSV_BYTES) throw new RuntimeException('Google Sheets CSV is empty or too large.');
             return $payload;
         }
 
@@ -84,7 +93,7 @@ final class GoogleSheetsRequestContactService
             ],
         ]);
         $payload = @file_get_contents($this->url, false, $context);
-        if (!is_string($payload) || $payload === '') throw new RuntimeException('Google Sheets CSV unavailable.');
+        if (!is_string($payload) || $payload === '' || strlen($payload) > self::MAX_CSV_BYTES) throw new RuntimeException('Google Sheets CSV unavailable or too large.');
         return $payload;
     }
 
