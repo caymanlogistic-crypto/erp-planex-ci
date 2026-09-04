@@ -1,0 +1,81 @@
+#!/bin/bash
+
+ROOT="${PLANEX_TEST_ROOT:-$HOME/erp-planex-test}"
+CANONICAL="chatgpt/production-stabilization-20260802"
+
+. "$ROOT/bin/runner-env"
+
+TASK="${1:-}"
+BRANCH="${2:-}"
+
+if [ -z "$TASK" ] || [ -z "$BRANCH" ]; then
+    echo "Usage: new-task TASK_ID BRANCH_NAME"
+    exit 2
+fi
+
+case "$TASK" in
+    *[!A-Za-z0-9._-]*)
+        echo "INVALID_TASK_ID"
+        exit 2
+        ;;
+esac
+
+if ! git check-ref-format --branch "$BRANCH" >/dev/null 2>&1; then
+    echo "INVALID_BRANCH_NAME"
+    exit 3
+fi
+
+case "$BRANCH" in
+    chatgpt/*) ;;
+    *)
+        echo "REFUSED: agent task branch must use chatgpt/*"
+        exit 3
+        ;;
+esac
+
+if [ "$BRANCH" = "$CANONICAL" ]; then
+    echo "REFUSED: task branch cannot be canonical branch"
+    exit 3
+fi
+
+WT="$ROOT/worktrees/$TASK"
+META="$ROOT/state/tasks/$TASK.env"
+
+if [ -e "$WT" ] || [ -e "$META" ]; then
+    echo "TASK_ALREADY_EXISTS"
+    exit 4
+fi
+
+cd "$ROOT/repo"
+
+git fetch origin || exit 5
+
+REMOTE_HEAD="$(git rev-parse "origin/$CANONICAL")"
+
+if git show-ref --verify --quiet "refs/heads/$BRANCH"; then
+    echo "LOCAL_BRANCH_ALREADY_EXISTS"
+    exit 6
+fi
+
+if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
+    echo "REMOTE_BRANCH_ALREADY_EXISTS"
+    exit 7
+fi
+
+git worktree add -b "$BRANCH" "$WT" "$REMOTE_HEAD" || exit 8
+
+{
+    printf 'TASK_ID=%q\n' "$TASK"
+    printf 'BRANCH=%q\n' "$BRANCH"
+    printf 'WORKTREE=%q\n' "$WT"
+    printf 'START_HEAD=%q\n' "$REMOTE_HEAD"
+    printf 'CREATED_AT=%q\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+} > "$META"
+
+chmod 600 "$META"
+
+echo "TASK_WORKTREE_READY"
+echo "TASK_ID=$TASK"
+echo "BRANCH=$BRANCH"
+echo "WORKTREE=$WT"
+echo "START_HEAD=$REMOTE_HEAD"

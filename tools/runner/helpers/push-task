@@ -1,0 +1,252 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+import os
+import subprocess
+import sys
+
+ROOT = Path.home() / "erp-planex-test"
+
+CANONICAL = "chatgpt/production-stabilization-20260802"
+WRITE_REMOTE = "git@github.com:planexerp/erp-planex.git"
+
+
+def read_env(path):
+    data = {}
+
+    if not path.exists():
+        return data
+
+    for raw in path.read_text().splitlines():
+        raw = raw.strip()
+
+        if not raw or raw.startswith("#") or "=" not in raw:
+            continue
+
+        key, value = raw.split("=", 1)
+        data[key.strip()] = value.strip().strip('"').strip("'")
+
+    return data
+
+
+def runtime_env():
+    env = os.environ.copy()
+
+    env["PATH"] = (
+        f"{ROOT}/tools/git/bin:"
+        f"{ROOT}/bin:"
+        f"/usr/bin:/bin:"
+        + env.get("PATH", "")
+    )
+
+    env["GIT_PAGER"] = "cat"
+    env["PAGER"] = "cat"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+
+    return env
+
+
+def git(worktree, *args, env=None):
+    return subprocess.check_output(
+        ["git", *args],
+        cwd=str(worktree),
+        env=env or runtime_env(),
+        text=True,
+        stderr=subprocess.STDOUT,
+    ).strip()
+
+
+if len(sys.argv) not in {2, 3}:
+    print("USAGE=push-task TASK_ID [--dry-run]")
+    sys.exit(2)
+
+
+task_id = sys.argv[1]
+dry_run = False
+
+if len(sys.argv) == 3:
+    if sys.argv[2] != "--dry-run":
+        print("PUSH_TASK_BLOCK=INVALID_ARGUMENT")
+        sys.exit(3)
+
+    dry_run = True
+
+
+task_file = ROOT / "state" / "tasks" / f"{task_id}.env"
+proof_file = ROOT / "state" / "tasks" / f"{task_id}.preflight.env"
+
+meta = read_env(task_file)
+proof = read_env(proof_file)
+
+branch = meta.get("BRANCH", "")
+start_head = meta.get("START_HEAD", "")
+worktree_raw = meta.get("WORKTREE", "")
+
+if not branch or not start_head or not worktree_raw:
+    print("PUSH_TASK_BLOCK=TASK_METADATA_MISSING")
+    sys.exit(4)
+
+
+worktree = Path(worktree_raw)
+
+try:
+    resolved = worktree.resolve()
+    allowed = (ROOT / "worktrees").resolve()
+    resolved.relative_to(allowed)
+except Exception:
+    print("PUSH_TASK_BLOCK=WORKTREE_OUTSIDE_RUNNER")
+    sys.exit(5)
+
+
+if not branch.startswith("chatgpt/"):
+    print("PUSH_TASK_BLOCK=NON_TASK_BRANCH")
+    sys.exit(6)
+
+
+if branch == CANONICAL:
+    print("PUSH_TASK_BLOCK=CANONICAL_FORBIDDEN")
+    sys.exit(7)
+
+
+try:
+    current_branch = git(worktree, "branch", "--show-current")
+    candidate_head = git(worktree, "rev-parse", "HEAD")
+    status = git(worktree, "status", "--porcelain")
+except subprocess.CalledProcessError as exc:
+    print(exc.output)
+    print("PUSH_TASK_BLOCK=GIT_STATE_ERROR")
+    sys.exit(8)
+
+
+if current_branch != branch:
+    print("PUSH_TASK_BLOCK=BRANCH_MISMATCH")
+    sys.exit(9)
+
+
+if status:
+    print(status)
+    print("PUSH_TASK_BLOCK=DIRTY_WORKTREE")
+    sys.exit(10)
+
+
+if candidate_head == start_head:
+    print("PUSH_TASK_BLOCK=NO_CANDIDATE_CHANGE")
+    sys.exit(11)
+
+
+if proof.get("TASK_ID") != task_id:
+    print("PUSH_TASK_BLOCK=PREFLIGHT_TASK_MISMATCH")
+    sys.exit(12)
+
+
+if proof.get("BRANCH") != branch:
+    print("PUSH_TASK_BLOCK=PREFLIGHT_BRANCH_MISMATCH")
+    sys.exit(13)
+
+
+if proof.get("START_HEAD") != start_head:
+    print("PUSH_TASK_BLOCK=PREFLIGHT_BASE_MISMATCH")
+    sys.exit(14)
+
+
+if proof.get("CANDIDATE_HEAD") != candidate_head:
+    print("PUSH_TASK_BLOCK=PREFLIGHT_STALE")
+    sys.exit(15)
+
+
+if proof.get("RESULT") != "PASS":
+    print("PUSH_TASK_BLOCK=PREFLIGHT_NOT_PASS")
+    sys.exit(16)
+
+
+print("=== VERIFY CURRENT CANONICAL ===")
+
+fetch_env = runtime_env()
+
+fetch_env["GIT_SSH_COMMAND"] = (
+    f"ssh -i {ROOT}/.ssh/github_runner "
+    "-o IdentitiesOnly=yes "
+    "-o BatchMode=yes"
+)
+
+try:
+    remote_line = subprocess.check_output(
+        [
+            "git",
+            "ls-remote",
+            "origin",
+            f"refs/heads/{CANONICAL}",
+        ],
+        cwd=str(worktree),
+        env=fetch_env,
+        text=True,
+        stderr=subprocess.STDOUT,
+    ).strip()
+except subprocess.CalledProcessError as exc:
+    print(exc.output)
+    print("PUSH_TASK_BLOCK=CANONICAL_LOOKUP_FAILED")
+    sys.exit(17)
+
+
+if not remote_line:
+    print("PUSH_TASK_BLOCK=CANONICAL_NOT_FOUND")
+    sys.exit(18)
+
+
+remote_canonical = remote_line.split()[0]
+
+print(f"START_HEAD={start_head}")
+print(f"REMOTE_CANONICAL_HEAD={remote_canonical}")
+print(f"CANDIDATE_HEAD={candidate_head}")
+print(f"BRANCH={branch}")
+
+
+if remote_canonical != start_head:
+    print("PUSH_TASK_BLOCK=CANONICAL_DRIFT")
+    sys.exit(19)
+
+
+push_env = runtime_env()
+
+push_env["GIT_SSH_COMMAND"] = (
+    f"ssh -i {ROOT}/.ssh/github_push "
+    "-o IdentitiesOnly=yes "
+    "-o BatchMode=yes"
+)
+
+command = [
+    "git",
+    "push",
+    "--porcelain",
+]
+
+if dry_run:
+    command.append("--dry-run")
+
+command.extend(
+    [
+        WRITE_REMOTE,
+        f"HEAD:refs/heads/{branch}",
+    ]
+)
+
+
+print()
+print("=== GUARDED PUSH ===")
+
+result = subprocess.run(
+    command,
+    cwd=str(worktree),
+    env=push_env,
+    text=True,
+)
+
+print(f"PUSH_TASK_RC={result.returncode}")
+
+if result.returncode == 0:
+    if dry_run:
+        print("PUSH_TASK_DRY_RUN=PASS")
+    else:
+        print("PUSH_TASK=PASS")
+
+sys.exit(result.returncode)

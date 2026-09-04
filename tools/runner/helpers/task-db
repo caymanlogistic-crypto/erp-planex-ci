@@ -1,0 +1,261 @@
+#!/bin/bash
+
+ROOT="${PLANEX_TEST_ROOT:-$HOME/erp-planex-test}"
+
+. "$ROOT/bin/runner-env"
+ACTION="${1:-}"
+TASK="${2:-}"
+
+usage() {
+    echo "Usage:"
+    echo "  task-db status TASK_ID"
+    echo "  task-db no-db TASK_ID"
+    echo "  task-db claim TASK_ID"
+    echo "  task-db run TASK_ID COMMAND [ARGS...]"
+    echo "  task-db release TASK_ID"
+    exit 2
+}
+
+[ -n "$ACTION" ] || usage
+[ -n "$TASK" ] || usage
+
+META="$ROOT/state/tasks/$TASK.env"
+DBSTATE="$ROOT/state/tasks/$TASK.db.env"
+
+if [ ! -f "$META" ]; then
+    echo "TASK_NOT_FOUND"
+    exit 3
+fi
+
+unset TASK_ID BRANCH WORKTREE START_HEAD CREATED_AT
+. "$META"
+
+if [ "$TASK_ID" != "$TASK" ]; then
+    echo "TASK_METADATA_MISMATCH"
+    exit 4
+fi
+
+case "$ACTION" in
+
+status)
+    echo "TASK_ID=$TASK_ID"
+    echo "BRANCH=$BRANCH"
+    echo "WORKTREE=$WORKTREE"
+
+    if [ -f "$DBSTATE" ]; then
+        . "$DBSTATE"
+        echo "DB_MODE=${DB_MODE:-UNKNOWN}"
+        echo "DB_STATE=${DB_STATE:-UNKNOWN}"
+        [ -n "${DB_SLOT:-}" ] && echo "DB_SLOT=$DB_SLOT"
+    else
+        echo "DB_MODE=UNCLASSIFIED"
+    fi
+    ;;
+
+no-db)
+    if [ -f "$DBSTATE" ]; then
+        . "$DBSTATE"
+        if [ "${DB_MODE:-}" = "MUTABLE_DB" ] &&
+           [ "${DB_STATE:-}" = "READY" ]; then
+            echo "REFUSED: mutable DB slot already claimed"
+            exit 5
+        fi
+    fi
+
+    {
+        echo "DB_MODE=NO_DB"
+        echo "DB_STATE=NOT_REQUIRED"
+        printf 'UPDATED_AT=%q\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    } > "$DBSTATE"
+
+    chmod 600 "$DBSTATE"
+
+    echo "TASK_DB_MODE=NO_DB"
+    ;;
+
+claim)
+    cd "$WORKTREE" || exit 6
+
+    OUT="$("$ROOT/bin/test-db-slot" claim "$TASK" 2>&1)"
+    RC=$?
+
+    echo "$OUT"
+
+    if [ "$RC" -ne 0 ]; then
+        exit "$RC"
+    fi
+
+    SLOT="$(printf '%s\n' "$OUT" | sed -n 's/^DB_SLOT=//p' | tail -n 1)"
+    CLAIM_ID="$(printf '%s\n' "$OUT" | sed -n 's/^CLAIM_ID=//p' | tail -n 1)"
+
+    case "$SLOT" in
+        2|3|4|5) ;;
+        *)
+            echo "INVALID_MUTABLE_SLOT"
+            exit 7
+            ;;
+    esac
+
+    "$ROOT/bin/clean-test-db" "$SLOT"
+    CLEAN_RC=$?
+
+    if [ "$CLEAN_RC" -ne 0 ]; then
+        {
+            echo "DB_MODE=MUTABLE_DB"
+            echo "DB_STATE=QUARANTINED"
+            echo "DB_SLOT=$SLOT"
+            printf 'CLAIM_ID=%q\n' "$CLAIM_ID"
+        } > "$DBSTATE"
+
+        chmod 600 "$DBSTATE"
+
+        echo "TEST_DB_SLOT_QUARANTINED"
+        echo "Slot remains reserved. Report to OWNER."
+        exit 8
+    fi
+
+    {
+        echo "DB_MODE=MUTABLE_DB"
+        echo "DB_STATE=READY"
+        echo "DB_SLOT=$SLOT"
+        printf 'CLAIM_ID=%q\n' "$CLAIM_ID"
+        printf 'CLAIMED_AT=%q\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    } > "$DBSTATE"
+
+    chmod 600 "$DBSTATE"
+
+    echo "TASK_DB_READY"
+    echo "DB_SLOT=$SLOT"
+    ;;
+
+run)
+    shift 2
+
+    if [ "$#" -eq 0 ]; then
+        usage
+    fi
+
+    if [ ! -f "$DBSTATE" ]; then
+        echo "DB_SLOT_NOT_CLAIMED"
+        exit 9
+    fi
+
+    unset DB_MODE DB_STATE DB_SLOT CLAIM_ID
+    . "$DBSTATE"
+
+    if [ "$DB_MODE" != "MUTABLE_DB" ] ||
+       [ "$DB_STATE" != "READY" ]; then
+        echo "DB_SLOT_NOT_READY"
+        exit 10
+    fi
+
+    OWNERFILE="$ROOT/state/db-slots/slot-$DB_SLOT.lock/owner.env"
+
+    if [ ! -f "$OWNERFILE" ]; then
+        echo "DB_SLOT_OWNERSHIP_LOST"
+        exit 11
+    fi
+
+    unset OWNER_TASK OWNER_WORKTREE
+    OWNER_TASK="$(sed -n 's/^TASK_ID=//p' "$OWNERFILE")"
+    OWNER_WORKTREE="$(sed -n 's/^WORKTREE=//p' "$OWNERFILE")"
+
+    if [ "$OWNER_TASK" != "$TASK" ] ||
+       [ "$OWNER_WORKTREE" != "$WORKTREE" ]; then
+        echo "DB_SLOT_OWNERSHIP_MISMATCH"
+        exit 12
+    fi
+
+    ENVFILE="$ROOT/secrets/db-slot-$DB_SLOT.env"
+
+    if [ ! -f "$ENVFILE" ]; then
+        echo "DB_SECRET_MISSING"
+        exit 13
+    fi
+
+    unset PLANEX_TEST_DB_HOST PLANEX_TEST_DB_PORT \
+          PLANEX_TEST_DB_NAME PLANEX_TEST_DB_USER \
+          PLANEX_TEST_DB_PASSWORD
+
+    . "$ENVFILE"
+
+    case "$PLANEX_TEST_DB_NAME" in
+        spugovxsim_test2|spugovxsim_test3|spugovxsim_test4|spugovxsim_test5) ;;
+        *)
+            echo "PRODUCTION_DB_GUARD_REFUSED"
+            exit 14
+            ;;
+    esac
+
+    export APP_ENV=test
+
+    export PLANEX_SCHEMA_DB_HOST="$PLANEX_TEST_DB_HOST"
+    export PLANEX_SCHEMA_DB_PORT="$PLANEX_TEST_DB_PORT"
+    export PLANEX_SCHEMA_DB_USER="$PLANEX_TEST_DB_USER"
+    export PLANEX_SCHEMA_DB_PASSWORD="$PLANEX_TEST_DB_PASSWORD"
+
+    export PLANEX_TEST_FIXED_DB="$PLANEX_TEST_DB_NAME"
+    export PLANEX_TEST_FIXED_DB_ALLOWLIST="spugovxsim_test2,spugovxsim_test3,spugovxsim_test4,spugovxsim_test5"
+
+    cd "$WORKTREE" || exit 15
+
+    "$@"
+    exit $?
+    ;;
+
+release)
+    if [ ! -f "$DBSTATE" ]; then
+        echo "NO_DB_SLOT_TO_RELEASE"
+        exit 0
+    fi
+
+    unset DB_MODE DB_STATE DB_SLOT CLAIM_ID
+    . "$DBSTATE"
+
+    if [ "$DB_MODE" != "MUTABLE_DB" ]; then
+        echo "NO_MUTABLE_DB_SLOT"
+        exit 0
+    fi
+
+    case "$DB_SLOT" in
+        2|3|4|5) ;;
+        *)
+            echo "INVALID_DB_SLOT"
+            exit 16
+            ;;
+    esac
+
+    "$ROOT/bin/clean-test-db" "$DB_SLOT"
+    CLEAN_RC=$?
+
+    if [ "$CLEAN_RC" -ne 0 ]; then
+        echo "TEST_DB_SLOT_QUARANTINED"
+        echo "Cleanup failed; slot will NOT be released."
+        exit 17
+    fi
+
+    cd "$WORKTREE" || exit 18
+
+    "$ROOT/bin/test-db-slot" release "$TASK"
+    RELEASE_RC=$?
+
+    if [ "$RELEASE_RC" -ne 0 ]; then
+        exit "$RELEASE_RC"
+    fi
+
+    {
+        echo "DB_MODE=MUTABLE_DB"
+        echo "DB_STATE=RELEASED"
+        echo "DB_SLOT=$DB_SLOT"
+        printf 'RELEASED_AT=%q\n' "$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    } > "$DBSTATE"
+
+    chmod 600 "$DBSTATE"
+
+    echo "TASK_DB_RELEASED"
+    ;;
+
+*)
+    usage
+    ;;
+esac

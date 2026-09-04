@@ -1,0 +1,217 @@
+#!/usr/bin/env python3
+
+from pathlib import Path
+import os
+import subprocess
+import sys
+import time
+
+ROOT = Path.home() / "erp-planex-test"
+CANONICAL = "chatgpt/production-stabilization-20260802"
+
+
+def read_env(path):
+    data = {}
+
+    if not path.exists():
+        return data
+
+    for raw in path.read_text().splitlines():
+        raw = raw.strip()
+
+        if not raw or raw.startswith("#") or "=" not in raw:
+            continue
+
+        key, value = raw.split("=", 1)
+        data[key.strip()] = value.strip().strip('"').strip("'")
+
+    return data
+
+
+def runtime_env():
+    env = os.environ.copy()
+
+    env["PATH"] = (
+        f"{ROOT}/tools/git/bin:"
+        f"{ROOT}/bin:"
+        f"/usr/bin:/bin:"
+        + env.get("PATH", "")
+    )
+
+    env["GIT_PAGER"] = "cat"
+    env["PAGER"] = "cat"
+    env["PYTHONDONTWRITEBYTECODE"] = "1"
+    env["APP_ENV"] = "test"
+
+    return env
+
+
+def git(worktree, *args):
+    return subprocess.check_output(
+        ["git", *args],
+        cwd=str(worktree),
+        env=runtime_env(),
+        text=True,
+        stderr=subprocess.STDOUT,
+    ).strip()
+
+
+if len(sys.argv) != 3:
+    print("USAGE=preflight-task TASK_ID FAST|STANDARD|CRITICAL")
+    sys.exit(2)
+
+
+task_id = sys.argv[1]
+task_class = sys.argv[2].upper()
+
+if task_class not in {"FAST", "STANDARD", "CRITICAL"}:
+    print("PREFLIGHT_TASK_BLOCK=INVALID_CLASS")
+    sys.exit(3)
+
+
+task_file = ROOT / "state" / "tasks" / f"{task_id}.env"
+meta = read_env(task_file)
+
+branch = meta.get("BRANCH", "")
+start_head = meta.get("START_HEAD", "")
+worktree_raw = meta.get("WORKTREE", "")
+
+if not branch or not start_head or not worktree_raw:
+    print("PREFLIGHT_TASK_BLOCK=TASK_METADATA_MISSING")
+    sys.exit(4)
+
+
+worktree = Path(worktree_raw)
+
+try:
+    resolved = worktree.resolve()
+    allowed = (ROOT / "worktrees").resolve()
+    resolved.relative_to(allowed)
+except Exception:
+    print("PREFLIGHT_TASK_BLOCK=WORKTREE_OUTSIDE_RUNNER")
+    sys.exit(5)
+
+
+if not branch.startswith("chatgpt/"):
+    print("PREFLIGHT_TASK_BLOCK=NON_TASK_BRANCH")
+    sys.exit(6)
+
+
+if branch == CANONICAL:
+    print("PREFLIGHT_TASK_BLOCK=CANONICAL_FORBIDDEN")
+    sys.exit(7)
+
+
+if not worktree.exists():
+    print("PREFLIGHT_TASK_BLOCK=WORKTREE_MISSING")
+    sys.exit(8)
+
+
+try:
+    current_branch = git(worktree, "branch", "--show-current")
+    candidate_head = git(worktree, "rev-parse", "HEAD")
+    status = git(worktree, "status", "--porcelain")
+except subprocess.CalledProcessError as exc:
+    print(exc.output)
+    print("PREFLIGHT_TASK_BLOCK=GIT_STATE_ERROR")
+    sys.exit(9)
+
+
+if current_branch != branch:
+    print(f"EXPECTED_BRANCH={branch}")
+    print(f"ACTUAL_BRANCH={current_branch}")
+    print("PREFLIGHT_TASK_BLOCK=BRANCH_MISMATCH")
+    sys.exit(10)
+
+
+if status:
+    print(status)
+    print("PREFLIGHT_TASK_BLOCK=DIRTY_WORKTREE")
+    sys.exit(11)
+
+
+if candidate_head == start_head:
+    print("PREFLIGHT_TASK_BLOCK=NO_CANDIDATE_CHANGE")
+    sys.exit(12)
+
+
+command = [
+    "python3",
+    "tools/agent_preflight.py",
+    "--class",
+    task_class,
+    "--base",
+    start_head,
+    "--head",
+    candidate_head,
+]
+
+print(f"TASK_ID={task_id}")
+print(f"CLASS={task_class}")
+print(f"BRANCH={branch}")
+print(f"START_HEAD={start_head}")
+print(f"CANDIDATE_HEAD={candidate_head}")
+print()
+print("=== AGENT PREFLIGHT ===")
+
+result = subprocess.run(
+    command,
+    cwd=str(worktree),
+    env=runtime_env(),
+    text=True,
+    stdout=subprocess.PIPE,
+    stderr=subprocess.STDOUT,
+)
+
+print(result.stdout, end="")
+
+if result.returncode != 0:
+    print(f"PREFLIGHT_TASK_RC={result.returncode}")
+    sys.exit(result.returncode)
+
+
+pass_markers = (
+    "LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES",
+    "LOCAL_PREFLIGHT_PASS",
+    "LOCAL PREFLIGHT PASS WITH REMOTE GATES",
+    "LOCAL PREFLIGHT PASS",
+)
+
+marker = None
+
+for candidate in pass_markers:
+    if candidate in result.stdout:
+        marker = candidate
+        break
+
+
+if marker is None:
+    print("PREFLIGHT_TASK_BLOCK=PASS_MARKER_MISSING")
+    sys.exit(13)
+
+
+evidence = ROOT / "state" / "tasks" / f"{task_id}.preflight.env"
+temporary = ROOT / "state" / "tasks" / f"{task_id}.preflight.tmp"
+
+temporary.write_text(
+    "\n".join(
+        [
+            f"TASK_ID={task_id}",
+            f"CLASS={task_class}",
+            f"BRANCH={branch}",
+            f"START_HEAD={start_head}",
+            f"CANDIDATE_HEAD={candidate_head}",
+            "RESULT=PASS",
+            f"CHECKED_AT={int(time.time())}",
+            "",
+        ]
+    )
+)
+
+os.chmod(temporary, 0o600)
+os.replace(temporary, evidence)
+
+print()
+print("PREFLIGHT_TASK_PASS=YES")
+print(f"CANDIDATE_HEAD={candidate_head}")
+sys.exit(0)
