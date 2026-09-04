@@ -10,7 +10,6 @@ def patch(path, old, new, expected=1):
         raise SystemExit(f'{path}: expected {expected} occurrences, got {n}: {old[:120]!r}')
     p.write_text(s.replace(old,new),encoding='utf-8')
 
-# Placeholder vocabulary + safe Word line breaks for multiline replacement values.
 patch('app/Service/DocumentTemplateService.php',
 "        'vehicle.model', 'vehicle.plate', 'trailer.display',",
 "        'vehicle.label', 'vehicle.model', 'vehicle.plate', 'vehicle.vin',\n        'trailer.label', 'trailer.model', 'trailer.plate', 'trailer.vin', 'trailer.display',")
@@ -18,7 +17,6 @@ patch('app/Service/DocumentTemplateService.php',
 "            $escaped = htmlspecialchars($node['text'], ENT_QUOTES | ENT_XML1, 'UTF-8');",
 "            $escaped = htmlspecialchars($node['text'], ENT_QUOTES | ENT_XML1, 'UTF-8');\n            // Replacement values may contain semantic line breaks (for example trailer.display).\n            // WordprocessingML does not reliably render literal LF inside w:t, so emit w:br elements.\n            $escaped = str_replace([\"\\r\\n\", \"\\r\", \"\\n\"], '</w:t><w:br/><w:t>', $escaped);")
 
-# New tenants seed the VIN-aware immutable v3 contract template.
 patch('app/Service/DocumentGeneratorTemplateTrait.php',
 "                'vehicle_lease_crew' => ['Договор-заявка аренды ТС с экипажем', 'contract_vehicle_lease_crew_v2.docx'],",
 "                'vehicle_lease_crew' => ['Договор-заявка аренды ТС с экипажем', 'contract_vehicle_lease_crew_v3.docx'],")
@@ -26,12 +24,10 @@ patch('app/Service/DocumentGeneratorTemplateTrait.php',
 "            'contract_vehicle_lease_crew_v2.docx' => '7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa',",
 "            'contract_vehicle_lease_crew_v2.docx' => '7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa',\n            'contract_vehicle_lease_crew_v3.docx' => '87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',")
 
-# Deterministic class loading for CLI regressions as well as the normal autoloader.
 patch('app/Service/DocumentGeneratorService.php',
 "require_once __DIR__ . '/DocumentNumberSequenceService.php';",
 "require_once __DIR__ . '/DocumentNumberSequenceService.php';\nrequire_once __DIR__ . '/GoogleSheetsRequestContactService.php';")
 
-# Explicit CLI-only fetcher injection lets regression tests prove Google semantics without network dependence.
 p=ROOT/'app/Service/GoogleSheetsRequestContactService.php'
 s=p.read_text(encoding='utf-8')
 s=s.replace("    /** @var callable|null */\n    private $fetcher;", "    /** @var callable|null */\n    private static $testDefaultFetcher = null;\n    /** @var callable|null */\n    private $fetcher;")
@@ -45,7 +41,6 @@ s=s.replace("            if (!is_string($payload) || $payload === '') throw new 
 s=s.replace("        if (!is_string($payload) || $payload === '') throw new RuntimeException('Google Sheets CSV unavailable.');", "        if (!is_string($payload) || $payload === '' || strlen($payload) > self::MAX_CSV_BYTES) throw new RuntimeException('Google Sheets CSV unavailable or too large.');")
 p.write_text(s,encoding='utf-8')
 
-# Preview: surface integration warning and identify each selected transport unit before generation.
 patch('app/View/pages/company_document_generator.php',
 "                <div class=\"notice success mb-3\">Проверка пройдена. Документ можно сформировать.</div>\n                <div class=\"kv\">",
 "                <div class=\"notice success mb-3\">Проверка пройдена. Документ можно сформировать.</div>\n                <?php if (!empty($preview['warnings'])): ?>\n                    <div class=\"notice warn mb-3\"><strong>Внешний источник данных:</strong><ul class=\"docgen-error-list mt-2\"><?php foreach ($preview['warnings'] as $warning): ?><li><?= e((string)$warning) ?></li><?php endforeach; ?></ul></div>\n                <?php endif; ?>\n                <div class=\"kv\">")
@@ -53,7 +48,6 @@ patch('app/View/pages/company_document_generator.php',
 "                    <div class=\"kv-row\"><span class=\"kv-key\">Автомобиль</span><span class=\"kv-value\"><?= e(trim((string)($preview['snapshot']['vehicle']['model'] ?? '') . ' ' . (string)($preview['snapshot']['vehicle']['plate'] ?? '')) ?: '—') ?></span></div>",
 "                    <?php $primaryVehicle = is_array($preview['snapshot']['vehicle'] ?? null) ? $preview['snapshot']['vehicle'] : []; ?>\n                    <div class=\"kv-row\"><span class=\"kv-key\"><?= e((string)($primaryVehicle['label'] ?? 'Транспортное средство')) ?></span><span class=\"kv-value\"><?= e(trim((string)($primaryVehicle['model'] ?? '') . ' · ' . (string)($primaryVehicle['plate'] ?? '')) ?: '—') ?><br><span class=\"text-muted\">VIN: <?= e(trim((string)($primaryVehicle['vin'] ?? '')) ?: '—') ?></span></span></div>\n                    <?php $secondaryVehicle = is_array($preview['snapshot']['trailer'] ?? null) ? $preview['snapshot']['trailer'] : []; ?>\n                    <?php if ((int)($secondaryVehicle['id'] ?? 0) > 0): ?>\n                        <div class=\"kv-row\"><span class=\"kv-key\"><?= e((string)($secondaryVehicle['label'] ?? 'Транспортная единица')) ?></span><span class=\"kv-value\"><?= e(trim((string)($secondaryVehicle['model'] ?? '') . ' · ' . (string)($secondaryVehicle['plate'] ?? '')) ?: '—') ?><br><span class=\"text-muted\">VIN: <?= e(trim((string)($secondaryVehicle['vin'] ?? '')) ?: '—') ?></span></span></div>\n                    <?php endif; ?>")
 
-# Keep the existing broad v4 regression green under the canonical schema/query changes and isolate it from live Google network.
 p=ROOT/'tests/document_generator_regression_v4_test.php'
 s=p.read_text(encoding='utf-8')
 s=s.replace("$has($wf,\"return \\$parts===[] ? '—'\",'empty request contacts dash');", "$has($wf,'GoogleSheetsRequestContactService','Google contacts wiring');$ok(!str_contains($access,'kontakt_tel'),'FEO contact columns removed from generator query');")
@@ -70,7 +64,8 @@ s=s.replace("$ok(!in_array('executor.bank_inn',$ph,true),'active v2 placeholder 
 p.write_text(s,encoding='utf-8')
 
 p=ROOT/'tests/document_generator_builtin_seed_resilience_test.php';s=p.read_text(encoding='utf-8');s=s.replace('contract_vehicle_lease_crew_v2.docx.b64.part001','contract_vehicle_lease_crew_v3.docx.b64.part001');p.write_text(s,encoding='utf-8')
-p=ROOT/'tests/document_generator_deploy_artifact_test.php';s=p.read_text(encoding='utf-8');anchor="'resources/document-templates/contract_vehicle_lease_crew_v2.docx.b64.part001',";assert anchor in s;s=s.replace(anchor,anchor+"\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part001',\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part002',\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part003',",1);p.write_text(s,encoding='utf-8')
+patch('tests/document_generator_deploy_artifact_test.php',
+"'contract_vehicle_lease_crew_v2.docx'=>'7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa',",
+"'contract_vehicle_lease_crew_v2.docx'=>'7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa',\n'contract_vehicle_lease_crew_v3.docx'=>'87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',")
 
 print('DOCUMENT_GENERATOR_PATCH_BUILDER=PASS')
-# trigger
