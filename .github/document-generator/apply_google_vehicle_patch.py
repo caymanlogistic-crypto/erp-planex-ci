@@ -40,7 +40,6 @@ needle="    /**\n     * @param array<int,string|int> $requestIds"
 insert="    public static function setDefaultFetcherForTests(?callable $fetcher): void\n    {\n        if (PHP_SAPI !== 'cli') throw new RuntimeException('Test fetcher override is CLI-only.');\n        self::$testDefaultFetcher = $fetcher;\n    }\n\n"
 if needle not in s: raise SystemExit('Google service insertion anchor missing')
 s=s.replace(needle,insert+needle,1)
-# Bound untrusted remote body size before CSV parsing.
 s=s.replace("    public const CONTACTS_COLUMN = 9;", "    public const CONTACTS_COLUMN = 9;\n    public const MAX_CSV_BYTES = 8 * 1024 * 1024;")
 s=s.replace("            if (!is_string($payload) || $payload === '') throw new RuntimeException('Google Sheets CSV is empty.');\n            return $payload;", "            if (!is_string($payload) || $payload === '' || strlen($payload) > self::MAX_CSV_BYTES) throw new RuntimeException('Google Sheets CSV is empty or too large.');\n            return $payload;")
 s=s.replace("        if (!is_string($payload) || $payload === '') throw new RuntimeException('Google Sheets CSV unavailable.');", "        if (!is_string($payload) || $payload === '' || strlen($payload) > self::MAX_CSV_BYTES) throw new RuntimeException('Google Sheets CSV unavailable or too large.');")
@@ -70,12 +69,8 @@ s=s.replace("$eq($bt['vehicle_lease_crew']['sha256'],$canon['contract_vehicle_le
 s=s.replace("$ok(!in_array('executor.bank_inn',$ph,true),'active v2 placeholder clean');", "$ok(!in_array('executor.bank_inn',$ph,true),'active v3 bank placeholder clean');$ok(in_array('vehicle.vin',$ph,true),'active v3 vehicle VIN placeholder');")
 p.write_text(s,encoding='utf-8')
 
-# Seed-resilience and deploy-artifact contracts follow the new built-in default while retaining v1/v2 history.
 p=ROOT/'tests/document_generator_builtin_seed_resilience_test.php';s=p.read_text(encoding='utf-8');s=s.replace('contract_vehicle_lease_crew_v2.docx.b64.part001','contract_vehicle_lease_crew_v3.docx.b64.part001');p.write_text(s,encoding='utf-8')
-p=ROOT/'tests/document_generator_deploy_artifact_test.php';s=p.read_text(encoding='utf-8');
-anchor="'resources/document-templates/contract_vehicle_lease_crew_v2.docx.b64.part001',"
-if anchor not in s: raise SystemExit('deploy artifact v2 anchor missing')
-s=s.replace(anchor,anchor+"\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part001',\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part002',\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part003',",1)
-p.write_text(s,encoding='utf-8')
+p=ROOT/'tests/document_generator_deploy_artifact_test.php';s=p.read_text(encoding='utf-8');anchor="'resources/document-templates/contract_vehicle_lease_crew_v2.docx.b64.part001',";assert anchor in s;s=s.replace(anchor,anchor+"\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part001',\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part002',\n    'resources/document-templates/contract_vehicle_lease_crew_v3.docx.b64.part003',",1);p.write_text(s,encoding='utf-8')
 
 print('DOCUMENT_GENERATOR_PATCH_BUILDER=PASS')
+# trigger
