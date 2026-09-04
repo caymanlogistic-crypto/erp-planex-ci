@@ -45,6 +45,9 @@ final class WasteTripLegacySourceService
     public static function maxLegacyId(PDO $legacyPdo): int
     { return(int)$legacyPdo->query('SELECT COALESCE(MAX(id),0) FROM flights')->fetchColumn(); }
 
+    public static function hasFlightId(PDO $legacyPdo,int $legacyId): bool
+    { $stmt=$legacyPdo->prepare('SELECT 1 FROM flights WHERE id=? LIMIT 1');$stmt->execute([$legacyId]);return$stmt->fetchColumn()!==false; }
+
     public static function authoritativeState(array $flight): array
     {
         $businessId=(int)($flight['id']??0); if($businessId<self::MIN_LEGACY_ID)throw new RuntimeException('Legacy ID должен быть больше 243.');
