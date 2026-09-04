@@ -1,0 +1,17 @@
+# Exact packages observed in the working user-mode SentinelX venv on 2026-09-05.
+# sentinelx-cloud-protocol is intentionally installed from the pinned local
+# source directory described in manifest.json, not from PyPI or an unpinned VCS ref.
+PyYAML==6.0.3
+annotated-types==0.8.0
+hatchling==1.32.0
+packaging==26.3
+pathspec==1.1.1
+pluggy==1.6.0
+pydantic==2.13.5
+pydantic_core==2.46.5
+structlog==26.1.0
+tomlkit==0.15.1
+trove-classifiers==2026.6.1.19
+typing-inspection==0.4.4
+typing_extensions==4.16.0
+websockets==17.1
