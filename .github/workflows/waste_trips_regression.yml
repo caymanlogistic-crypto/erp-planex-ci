@@ -9,6 +9,7 @@ on:
       - 'app/Service/WasteTripService.php'
       - 'app/Service/WasteTripLegacySourceService.php'
       - 'app/Service/WasteTripLegacySyncService.php'
+      - 'app/Service/WasteTripLegacyPrefillService.php'
       - 'app/View/pages/company_waste_trip*.php'
       - 'app/View/partials/company_waste_trip*.php'
       - 'database/migrations-local/130_waste_trip_legacy_linked_cutover.sql'
@@ -24,6 +25,7 @@ on:
       - 'app/Service/WasteTripService.php'
       - 'app/Service/WasteTripLegacySourceService.php'
       - 'app/Service/WasteTripLegacySyncService.php'
+      - 'app/Service/WasteTripLegacyPrefillService.php'
       - 'app/View/pages/company_waste_trip*.php'
       - 'app/View/partials/company_waste_trip*.php'
       - 'database/migrations-local/130_waste_trip_legacy_linked_cutover.sql'
@@ -57,12 +59,13 @@ jobs:
             app/Service/WasteTripService.php \
             app/Service/WasteTripLegacySourceService.php \
             app/Service/WasteTripLegacySyncService.php \
+            app/Service/WasteTripLegacyPrefillService.php \
             app/View/pages/company_waste_trips.php \
             app/View/pages/company_waste_trip_legacy.php \
             app/View/partials/company_waste_trip_modal_view.php \
             app/View/partials/company_waste_trip_modal_edit.php \
             scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php \
-            tests/waste_trip_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_130_production_migration_contract_test.php
+            tests/waste_trip_regression_test.php tests/waste_trip_legacy_prefill_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_130_production_migration_contract_test.php
           do php -l "$f"; done
       - name: Static target contracts
         shell: bash
@@ -93,3 +96,5 @@ jobs:
           set -euo pipefail
           php tests/waste_trip_regression_test.php | tee /tmp/waste.out
           for marker in WASTE_TRIP_DOMAIN=PASS WASTE_TRIP_STATIC_SECURITY=PASS WASTE_TRIP_MYSQL=PASS WASTE_TRIP_CONCURRENCY=PASS; do grep -Fqx "$marker" /tmp/waste.out; done
+          php tests/waste_trip_legacy_prefill_regression_test.php | tee /tmp/prefill.out
+          grep -Fqx 'WASTE_TRIP_LEGACY_PREFILL_MYSQL=PASS' /tmp/prefill.out
