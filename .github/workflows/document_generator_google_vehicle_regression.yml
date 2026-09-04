@@ -119,7 +119,7 @@ jobs:
         run: |
           set -euo pipefail
           php tests/document_generator_regression_v4_test.php | tee /tmp/docgen-v4.log
-          grep -Fqx 'DOCUMENT_GENERATOR_REGRESSION_V4=PASS' /tmp/docgen-v4.log
+          grep -Fqx 'DOCUMENT_GENERATOR_REGRESSION=PASS' /tmp/docgen-v4.log
 
       - name: Verify deploy artifact includes v3
         shell: bash
