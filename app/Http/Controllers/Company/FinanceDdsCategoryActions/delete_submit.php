@@ -1,5 +1,4 @@
 <?php
-requireRole(['company_owner']);
 verifyCsrfRequest();
 $companyId = (int)(getSessionCompanyId() ?? 0);
 try {

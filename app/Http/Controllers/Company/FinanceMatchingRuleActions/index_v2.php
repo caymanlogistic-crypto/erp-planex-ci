@@ -1,5 +1,4 @@
 <?php
-requireRole(['company_owner']);
 $pageTitle='Правила разнесения';
 $pageContext='Финансы › Выписки со счёта › Правила разнесения';
 $companyId=(int)(getSessionCompanyId()??0);

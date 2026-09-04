@@ -28,7 +28,6 @@ final class FeoRequestCostController
 
     public function index(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         $pageTitle='Стоимость заявок';
         $pageContext='Заявки ФЭО › Стоимость заявок';
         $company=null;$dbError=null;$blocks=[];$integrity=['block_count'=>0,'request_count'=>0,'has_issues'=>false];
@@ -51,7 +50,6 @@ final class FeoRequestCostController
 
     public function validate(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             $parsed=$this->parser->parseManual((string)($_POST['request_ids']??''));
             [, $pdo]=$this->readyContext();
@@ -65,7 +63,6 @@ final class FeoRequestCostController
 
     public function analyzeCreate(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo]=$this->readyContext(); $this->cleanupPreviews((int)$company['id']);
             $parsed=$this->parser->parseManual((string)($_POST['request_ids']??''));
@@ -85,7 +82,6 @@ final class FeoRequestCostController
 
     public function commitCreate(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo]=$this->readyContext();
             $token=trim((string)($_POST['preview_token']??'')); $record=$this->previewRecord($token,(int)$company['id'],'create');
@@ -101,21 +97,18 @@ final class FeoRequestCostController
 
     public function detail(string $id): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try { [, $pdo]=$this->readyContext(); $block=$this->costs->block($pdo,(int)$id); if (!$block) { jsonResponse(['success'=>false,'message'=>'Блок стоимости не найден.'],404); return; } jsonResponse(['success'=>true,'block'=>$block]); }
         catch (\Throwable $e) { jsonResponse(['success'=>false,'message'=>$e->getMessage()],422); }
     }
 
     public function search(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try { $ids=$this->interactions->extractRequestIds((string)($_GET['request_ids']??'')); [, $pdo]=$this->readyContext(); jsonResponse(['success'=>true,'duplicates'=>[],'results'=>$this->costs->searchBlocks($pdo,$ids)]); }
         catch (\Throwable $e) { jsonResponse(['success'=>false,'message'=>$e->getMessage()],422); }
     }
 
     public function validateEdit(string $id): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             $parsed=$this->parser->parseManual((string)($_POST['request_ids']??''));
             [, $pdo]=$this->readyContext();
@@ -128,7 +121,6 @@ final class FeoRequestCostController
 
     public function analyzeEdit(string $id): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo]=$this->readyContext(); $this->cleanupPreviews((int)$company['id']);
             $parsed=$this->parser->parseManual((string)($_POST['request_ids']??''));
@@ -152,7 +144,6 @@ final class FeoRequestCostController
 
     public function commitEdit(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo]=$this->readyContext(); $token=trim((string)($_POST['preview_token']??'')); $record=$this->previewRecord($token,(int)$company['id'],'edit');
             $result=$this->editCosts->editBlock($pdo,(int)$record['block_id'],[

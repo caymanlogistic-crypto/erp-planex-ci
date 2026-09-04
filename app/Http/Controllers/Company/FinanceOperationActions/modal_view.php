@@ -3,7 +3,6 @@
 use App\Core\Database;
 use App\Service\FinanceAllocationService;
 
-requireRole(['company_owner']);
 
 $operation = null;
 $allocations = [];
@@ -25,7 +24,7 @@ try {
         throw new \RuntimeException('Операция не найдена.');
     }
     $allocations = FinanceAllocationService::fetchOperationAllocations($localPdo, $operationId);
-    $canAllocate = (string) ($_SESSION['role_code'] ?? ($_SESSION['user']['role_code'] ?? '')) === 'company_owner';
+    $canAllocate = true;
 } catch (\Throwable $e) {
     if (http_response_code() < 400) {
         http_response_code(500);

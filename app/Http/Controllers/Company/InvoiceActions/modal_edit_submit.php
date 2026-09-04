@@ -5,7 +5,6 @@ use App\Service\FinanceInvoicePrepaymentService;
 use App\Service\FinanceInvoiceService;
 use App\Service\FinanceObligationService;
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 $errors = [];
 

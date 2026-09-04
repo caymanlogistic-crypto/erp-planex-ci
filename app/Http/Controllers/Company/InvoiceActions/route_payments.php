@@ -3,7 +3,6 @@
 use App\Core\Database;
 use App\Service\FinanceInvoiceService;
 
-requireRole(['company_owner']);
 
 header('Content-Type: application/json; charset=utf-8');
 

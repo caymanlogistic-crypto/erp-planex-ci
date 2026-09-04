@@ -4,4 +4,4 @@ require_once base_path('app/Http/Controllers/Company/FinancePaymentPlanFactContr
 
 $controller = new \App\Http\Controllers\Company\FinancePaymentPlanFactController($config, $db);
 
-$router->get('/company/finance/reports/payment-plan-fact', [$controller, 'index']);
+$router->get('/company/finance/reports/payment-plan-fact', [$controller, 'index'], 'company.finance.payment_plan_fact');

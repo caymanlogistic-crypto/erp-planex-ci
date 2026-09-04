@@ -3,7 +3,6 @@
 use App\Core\Database;
 use App\Service\FinanceEmployeeClientReceiptEditService;
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 $employeeRef=trim((string)($_POST['employee_ref']??''));
 try{

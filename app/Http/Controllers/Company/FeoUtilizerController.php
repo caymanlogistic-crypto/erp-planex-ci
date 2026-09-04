@@ -19,7 +19,6 @@ final class FeoUtilizerController
 
     public function index(): void
     {
-        requireRole(['company_owner']);
         $pageTitle = 'Утилизаторы';
         $pageContext = 'Заявки ФЭО › Карта › Утилизаторы';
         $company = null;
@@ -65,7 +64,6 @@ final class FeoUtilizerController
 
     public function modalView(string $id): void
     {
-        requireRole(['company_owner']);
         $utilizer = null;
         $modalError = null;
         try {
@@ -80,7 +78,6 @@ final class FeoUtilizerController
 
     public function modalEditForm(string $id): void
     {
-        requireRole(['company_owner']);
         try {
             [, $pdo] = $this->companyContext();
             $utilizer = $this->findUtilizer($pdo, (int)$id);
@@ -97,7 +94,6 @@ final class FeoUtilizerController
 
     public function modalEditSubmit(string $id): void
     {
-        requireRole(['company_owner']);
         $utilizerId = (int)$id;
         try {
             [, $pdo] = $this->companyContext();
@@ -119,7 +115,6 @@ final class FeoUtilizerController
 
     public function modalDelete(string $id): void
     {
-        requireRole(['company_owner']);
         try {
             [, $pdo] = $this->companyContext();
             $this->utilizers->deleteUtilizer($pdo, (int)$id);
@@ -131,7 +126,6 @@ final class FeoUtilizerController
 
     private function mutate(callable $callback): void
     {
-        requireRole(['company_owner']);
         try {
             [, $pdo] = $this->companyContext();
             $_SESSION['flash_success'] = (string)$callback($pdo);

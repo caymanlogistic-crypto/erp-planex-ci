@@ -1,3 +1,3 @@
 <?php
-requireRole(['company_owner']);verifyCsrfRequest();$companyId=(int)(getSessionCompanyId()??0);
+verifyCsrfRequest();$companyId=(int)(getSessionCompanyId()??0);
 try{$central=$db->connection();$s=$central->prepare("SELECT * FROM companies WHERE id=? AND status='active'");$s->execute([$companyId]);$company=$s->fetch(PDO::FETCH_ASSOC);if(!$company)throw new RuntimeException('Компания не найдена.');$local=(new \App\Core\Database(companyDatabaseConfig($config,$company)))->connection();\App\Service\FinanceMatchingRuleService::saveCashFlowCenter($local,$_POST,['id'=>$_SESSION['user_id']??0,'role'=>$_SESSION['role_code']??'company_owner']);$_SESSION['finance_matching_rules_success']='ЦФУ сохранён.';}catch(Throwable $e){$_SESSION['finance_matching_rules_error']=$e->getMessage();}redirect_to('/company/finance/settings/matching-rules');

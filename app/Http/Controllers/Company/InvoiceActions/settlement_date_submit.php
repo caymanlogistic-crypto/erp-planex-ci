@@ -3,7 +3,6 @@
 use App\Core\Database;
 use App\Service\FinanceInvoiceSettlementDateService;
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 header('Content-Type: application/json; charset=utf-8');
 

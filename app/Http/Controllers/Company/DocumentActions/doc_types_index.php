@@ -1,5 +1,4 @@
 <?php
-requireRole(['company_owner', 'senior_logist', 'logist']);
 $companyId=(int)(getSessionCompanyId()??0);$pageTitle='Типы документов';$pageContext='Типы документов › Компания';
 if($companyId<=0){$company=null;$docTypes=[];$dbError=null;ob_start();require base_path('app/View/pages/company_document_types.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
 try{$pdo=$db->connection();$stmt=$pdo->prepare('SELECT * FROM companies WHERE id=?');$stmt->execute([$companyId]);$company=$stmt->fetch(PDO::FETCH_ASSOC);

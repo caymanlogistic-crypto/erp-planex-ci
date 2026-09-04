@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'Редактирование статьи ДДС';
 
     $companyId = (int)(getSessionCompanyId() ?? 0);

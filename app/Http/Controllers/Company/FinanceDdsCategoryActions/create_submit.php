@@ -1,5 +1,5 @@
 <?php
-requireRole(['company_owner']);verifyCsrfRequest();
+verifyCsrfRequest();
 $companyId=(int)(getSessionCompanyId()??0);
 try{
  if($companyId<=0)throw new RuntimeException('Компания не найдена.');

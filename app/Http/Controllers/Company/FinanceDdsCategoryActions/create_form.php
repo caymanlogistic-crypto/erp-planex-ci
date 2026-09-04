@@ -1,5 +1,4 @@
 <?php
-requireRole(['company_owner']);
 $companyId=(int)(getSessionCompanyId()??0);$cfuId=(int)($_GET['cfu_id']??0);
 if($companyId<=0){echo '<div class="form-alert alert-error">Компания не найдена.</div>';return;}
 try{

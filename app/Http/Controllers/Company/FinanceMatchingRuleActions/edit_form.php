@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'Редактирование правила разнесения';
 
     $companyId = (int)(getSessionCompanyId() ?? 0);

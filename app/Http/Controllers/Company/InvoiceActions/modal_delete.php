@@ -3,7 +3,6 @@
 use App\Core\Database;
 use App\Service\FinanceInvoiceService;
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 
 $isAjax = !empty($_SERVER['HTTP_X_REQUESTED_WITH']) && $_SERVER['HTTP_X_REQUESTED_WITH'] === 'XMLHttpRequest';
@@ -46,8 +45,8 @@ if ($isAjax) {
     }
     $invoice = FinanceInvoiceService::fetchInvoiceById($localPdo, $invoiceId);
     $links = FinanceInvoiceService::fetchInvoiceLinks($localPdo, $invoiceId);
-    $canEdit = in_array($roleCode ?? '', ['company_owner'], true);
-    $canDelete = $roleCode === 'company_owner';
+    $canEdit = true;
+    $canDelete = true;
     require base_path('app/View/partials/company_invoice_modal_view.php');
     exit;
 }

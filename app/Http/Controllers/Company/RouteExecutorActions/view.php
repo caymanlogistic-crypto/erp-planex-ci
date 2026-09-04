@@ -1,6 +1,5 @@
 <?php
 
-requireRole(['company_owner', 'senior_logist', 'logist']);
 require_once base_path('app/Support/crew_driver_helpers.php');
 $crewId = (int)$crewId;
 $pageTitle = 'Исполнитель рейса';
@@ -23,9 +22,6 @@ try {
     $cStmt->execute([$crewId]);$crew=$cStmt->fetch(PDO::FETCH_ASSOC);
     if(!$crew){$entityNotFound=true;}
     $accessDenied=null;
-    if($crew&&($_SESSION['role_code']??'')==='logist'){
-        $userId=(int)$_SESSION['user_id'];if(!hasRouteExecutorAccess($localPdo,$crew,$userId,'view'))$accessDenied='У вас нет доступа к этой записи.';
-    }
     if($crew&&!$accessDenied){
         $crew['driver_name']=crewDriverNames($localPdo,$crewId,(string)($crew['driver_name']??''));
         $ids=loadCrewDriverIds($localPdo,$crewId,(int)($crew['driver_id']??0));

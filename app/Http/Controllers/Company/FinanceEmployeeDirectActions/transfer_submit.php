@@ -4,7 +4,6 @@ use App\Core\Database;
 use App\Service\FinanceEmployeeDirectTransferService;
 use App\Service\FinanceEmployeePaymentService;
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 
 $redirectRef = trim((string)($_SESSION['employee_payments_filter_employee_ref'] ?? $_POST['source_employee_ref'] ?? ''));

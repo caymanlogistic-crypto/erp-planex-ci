@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'Кассовая операция';
 
     $companyId = (int)(getSessionCompanyId() ?? 0);

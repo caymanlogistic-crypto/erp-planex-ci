@@ -4,7 +4,6 @@ use App\Core\Database;
 use App\Service\FinanceEmployeeBankSettlementService;
 use App\Service\FinanceEmployeePaymentService;
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 
 try {

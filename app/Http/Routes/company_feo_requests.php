@@ -12,15 +12,17 @@ require_once base_path('app/Http/Controllers/Company/FeoPlacementController.php'
 registerFeoFreshnessNavigation($config, $db);
 
 $feoController = new \App\Http\Controllers\Company\FeoRequestsController($config, $db);
-$router->get('/company/feo/requests', [$feoController, 'index']);
-$router->get('/company/feo/requests/data', [$feoController, 'data']);
-$router->get('/company/feo/requests/{id}/json', [$feoController, 'detail']);
-$router->post('/company/feo/requests/{id}/update', [$feoController, 'update']);
-$router->post('/company/feo/requests/import/analyze', [$feoController, 'analyzeImport']);
-$router->post('/company/feo/requests/import/commit', [$feoController, 'commitImport']);
-$router->post('/company/feo/requests/import/rollback', [$feoController, 'rollbackImport']);
-$router->post('/company/feo/requests/import/restore', [$feoController, 'restoreImport']);
-$router->post('/company/feo/requests/import/delete', [$feoController, 'deleteImport']);
+$feoRequestsPage = 'company.feo.requests';
+$feoPlacementPage = 'company.feo.map_placement';
+$router->get('/company/feo/requests', [$feoController, 'index'], $feoRequestsPage);
+$router->get('/company/feo/requests/data', [$feoController, 'data'], $feoRequestsPage);
+$router->get('/company/feo/requests/{id}/json', [$feoController, 'detail'], $feoRequestsPage);
+$router->post('/company/feo/requests/{id}/update', [$feoController, 'update'], $feoRequestsPage);
+$router->post('/company/feo/requests/import/analyze', [$feoController, 'analyzeImport'], $feoRequestsPage);
+$router->post('/company/feo/requests/import/commit', [$feoController, 'commitImport'], $feoRequestsPage);
+$router->post('/company/feo/requests/import/rollback', [$feoController, 'rollbackImport'], $feoRequestsPage);
+$router->post('/company/feo/requests/import/restore', [$feoController, 'restoreImport'], $feoRequestsPage);
+$router->post('/company/feo/requests/import/delete', [$feoController, 'deleteImport'], $feoRequestsPage);
 
 $feoPlacementCompanyContext = static function () use ($config, $db): array {
     $requests = new \App\Service\FeoRequestService($config, $db);
@@ -92,14 +94,13 @@ $feoPlacementPreviewRecord = static function (string $token, int $companyId, str
 };
 
 $feoPlacementController = new \App\Http\Controllers\Company\FeoPlacementController($config, $db);
-$router->get('/company/feo/requests/map-placement', [$feoPlacementController, 'index']);
+$router->get('/company/feo/requests/map-placement', [$feoPlacementController, 'index'], $feoPlacementPage);
 
 $router->post('/company/feo/requests/map-placement/validate-manual', static function () use (
     $feoPlacementCompanyContext,
     $feoPlacementRegistryState,
     $feoPlacementMemberships
 ): void {
-    requireRole(['company_owner','senior_logist','logist']);
     try {
         $blockType = (string)($_POST['block_type'] ?? '');
         if (!in_array($blockType, ['addition','exclusion'], true)) throw new \RuntimeException('Выберите тип блока.');
@@ -128,14 +129,13 @@ $router->post('/company/feo/requests/map-placement/validate-manual', static func
     } catch (\Throwable $e) {
         jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
     }
-});
+}, $feoPlacementPage);
 
 $router->get('/company/feo/requests/map-placement/search-blocks', static function () use (
     $feoPlacementCompanyContext,
     $feoPlacementRegistryState,
     $feoPlacementMemberships
 ): void {
-    requireRole(['company_owner','senior_logist','logist']);
     try {
         $parser = new \App\Service\FeoRequestInteractionService();
         $ids = $parser->extractRequestIds((string)($_GET['request_ids'] ?? ''));
@@ -157,14 +157,13 @@ $router->get('/company/feo/requests/map-placement/search-blocks', static functio
     } catch (\Throwable $e) {
         jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
     }
-});
+}, $feoPlacementPage);
 
 $router->post('/company/feo/requests/map-placement/analyze', static function () use (
     $feoPlacementController,
     $feoPlacementCompanyContext,
     $feoPlacementMemberships
 ): void {
-    requireRole(['company_owner','senior_logist','logist']);
     try {
         $sourceMode = (string)($_POST['source_mode'] ?? 'manual');
         $blockType = (string)($_POST['block_type'] ?? '');
@@ -209,16 +208,15 @@ $router->post('/company/feo/requests/map-placement/analyze', static function () 
         return;
     }
     $feoPlacementController->analyze();
-});
-$router->post('/company/feo/requests/map-placement/commit', [$feoPlacementController, 'commitCreate']);
-$router->get('/company/feo/requests/map-placement/current', [$feoPlacementController, 'current']);
-$router->get('/company/feo/requests/map-placement/blocks/{id}/json', [$feoPlacementController, 'detail']);
-$router->get('/company/feo/requests/map-placement/blocks/{id}/download', [$feoPlacementController, 'download']);
-$router->post('/company/feo/requests/map-placement/blocks/{id}/preview-status', [$feoPlacementController, 'previewStatus']);
-$router->post('/company/feo/requests/map-placement/status/commit', [$feoPlacementController, 'commitStatus']);
+}, $feoPlacementPage);
+$router->post('/company/feo/requests/map-placement/commit', [$feoPlacementController, 'commitCreate'], $feoPlacementPage);
+$router->get('/company/feo/requests/map-placement/current', [$feoPlacementController, 'current'], $feoPlacementPage);
+$router->get('/company/feo/requests/map-placement/blocks/{id}/json', [$feoPlacementController, 'detail'], $feoPlacementPage);
+$router->get('/company/feo/requests/map-placement/blocks/{id}/download', [$feoPlacementController, 'download'], $feoPlacementPage);
+$router->post('/company/feo/requests/map-placement/blocks/{id}/preview-status', [$feoPlacementController, 'previewStatus'], $feoPlacementPage);
+$router->post('/company/feo/requests/map-placement/status/commit', [$feoPlacementController, 'commitStatus'], $feoPlacementPage);
 
 $router->post('/company/feo/requests/map-placement/blocks/{id}/preview-delete', static function (string $id) use ($feoPlacementCompanyContext): void {
-    requireRole(['company_owner','senior_logist','logist']);
     try {
         [$company, $pdo, $placement] = $feoPlacementCompanyContext();
         $preview = $placement->previewDelete($pdo, (int)$id);
@@ -234,13 +232,12 @@ $router->post('/company/feo/requests/map-placement/blocks/{id}/preview-delete', 
     } catch (\Throwable $e) {
         jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
     }
-});
+}, $feoPlacementPage);
 
 $router->post('/company/feo/requests/map-placement/delete/commit', static function () use (
     $feoPlacementCompanyContext,
     $feoPlacementPreviewRecord
 ): void {
-    requireRole(['company_owner','senior_logist','logist']);
     try {
         [$company, $pdo, $placement] = $feoPlacementCompanyContext();
         $token = trim((string)($_POST['preview_token'] ?? ''));
@@ -272,7 +269,7 @@ $router->post('/company/feo/requests/map-placement/delete/commit', static functi
     } catch (\Throwable $e) {
         jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
     }
-});
+}, $feoPlacementPage);
 
-$router->post('/company/feo/requests/map-placement/reconcile/preview', [$feoPlacementController, 'previewReconcile']);
-$router->post('/company/feo/requests/map-placement/reconcile/commit', [$feoPlacementController, 'commitReconcile']);
+$router->post('/company/feo/requests/map-placement/reconcile/preview', [$feoPlacementController, 'previewReconcile'], $feoPlacementPage);
+$router->post('/company/feo/requests/map-placement/reconcile/commit', [$feoPlacementController, 'commitReconcile'], $feoPlacementPage);

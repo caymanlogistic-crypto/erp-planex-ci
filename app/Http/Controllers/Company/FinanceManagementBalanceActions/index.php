@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'Управленческий баланс';
     $pageContext = 'Финансы › Управленческий баланс';
 

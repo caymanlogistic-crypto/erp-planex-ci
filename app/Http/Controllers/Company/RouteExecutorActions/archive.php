@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner', 'senior_logist', 'logist']);
     $crewId = (int)$crewId;
 
     $companyId = (int)(getSessionCompanyId() ?? 0);
@@ -33,10 +32,6 @@
             $localPdo->exec($migrationSql);
         }
 
-        // Permission check
-        $currentUserId = (int)($_SESSION['user_id'] ?? 0);
-        $currentRole = $_SESSION['role_code'] ?? '';
-
         $crewStmt = $localPdo->prepare('SELECT * FROM crews WHERE id = ?');
         $crewStmt->execute([$crewId]);
         $crew = $crewStmt->fetch(PDO::FETCH_ASSOC);
@@ -44,26 +39,6 @@
         if (!$crew) {
             header('Location: /company/route-executors');
             exit;
-        }
-
-        if ($currentRole !== 'company_owner' && $currentRole !== 'senior_logist') {
-            $isCreator = ($crew['created_by_user_id'] ?? 0) === $currentUserId;
-
-            $grantStmt = $localPdo->prepare(
-                "SELECT 1 FROM entity_access_grants
-                 WHERE entity_type = 'crew' AND entity_id = ?
-                 AND granted_to_user_id = ? AND access_level = 'edit'
-                 AND (revoked_at IS NULL)"
-            );
-            $grantStmt->execute([$crewId, $currentUserId]);
-            $hasEditGrant = (bool)$grantStmt->fetchColumn();
-
-            if (!$isCreator && !$hasEditGrant) {
-                http_response_code(403);
-                header('Content-Type: text/plain');
-                echo '403 Forbidden';
-                exit;
-            }
         }
 
         $update = $localPdo->prepare("UPDATE crews SET deleted_at = NOW(), deleted_by_user_id = ?, deleted_by_role = ? WHERE id = ?");

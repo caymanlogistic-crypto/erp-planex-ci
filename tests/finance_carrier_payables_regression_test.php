@@ -36,7 +36,8 @@ foreach (['FinanceOperationInvoiceSettlementService.php','FinanceInvoiceSettleme
 
 fcp_has($routes,"/company/finance/payables",'Payables route must exist');
 fcp_has($controller,'function payables()', 'Controller must expose payables');
-fcp_has($action,"requireRole(['company_owner'])",'Payables must remain owner-only');
+fcp_not($action,'requireRole(', 'Payables must not retain a literal role gate');
+fcp_has($routes,"get('/company/finance/payables', [\$controller, 'payables'], \$invoicesPage)",'Payables must use the invoices page permission');
 fcp_has($report,"o.direction='PAYABLE'",'AP register must be driven by PAYABLE obligations');
 fcp_has($report,"fo.status='POSTED'",'AP paid facts must only use posted money operations');
 fcp_has($report,'a.cancelled_at IS NULL','Cancelled allocations must not count as paid');
@@ -102,7 +103,8 @@ fcp_has($history,'finance_employee_invoice_payments','History must identify empl
 
 fcp_has($routes,'/{id}/settlements/{operationId}/date','Settlement date update route must exist');
 fcp_has($controller,'function settlementDateSubmit(', 'Controller must expose settlement date update');
-fcp_has($dateAction,"requireRole(['company_owner'])",'Settlement date edit must remain owner-only');
+fcp_not($dateAction,'requireRole(', 'Settlement date edit must not retain a literal role gate');
+fcp_has($routes,"post('/company/finance/invoices/{id}/settlements/{operationId}/date', [\$controller, 'settlementDateSubmit'], \$invoicesPage)",'Settlement date edit must use the invoices page permission');
 fcp_has($dateAction,'verifyCsrfRequest()','Settlement date edit must require CSRF');
 fcp_has($dateAction,'FinanceInvoiceSettlementDateService::updateDate','Date action must delegate to the date service');
 fcp_has($dateService,'bank_transaction_id','Date service must distinguish bank-sourced dates');

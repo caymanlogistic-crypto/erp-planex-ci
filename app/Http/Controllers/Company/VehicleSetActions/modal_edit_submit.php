@@ -1,6 +1,5 @@
 <?php
 /** @var VehicleSetService $service */
-requireRole(['company_owner', 'senior_logist', 'logist']);
 
 $companyId = $service->getCompanyId();
 if ($companyId <= 0) { http_response_code(404); echo '<div class="notice warn">Компания не найдена.</div>'; exit; }
@@ -14,16 +13,7 @@ try {
 
     $roleCode = (string) ($_SESSION['role_code'] ?? '');
     $userId = (int) ($_SESSION['user_id'] ?? 0);
-    $canEdit = $roleCode === 'company_owner' || $roleCode === 'senior_logist';
-    if ($roleCode === 'logist') {
-        if ((int) ($vs['created_by_user_id'] ?? 0) === $userId) {
-            $canEdit = true;
-        } else {
-            $gc = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type='vehicle_set' AND entity_id=? AND granted_to_user_id=? AND revoked_at IS NULL LIMIT 1");
-            $gc->execute([(int) $id, $userId]);
-            $canEdit = $gc->fetchColumn() === 'edit';
-        }
-    }
+    $canEdit = vehicleSetAllUnitsAccessible($localPdo, $vs);
     if (!$canEdit) { http_response_code(403); echo '<div class="notice warn">У вас нет права редактировать эту запись.</div>'; exit; }
 
     $rules = vehicleSetTypeRules();

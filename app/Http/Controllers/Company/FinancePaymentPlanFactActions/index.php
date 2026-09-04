@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'План-факт оплаты';
     $pageContext = 'Финансы › План-факт оплаты';
 

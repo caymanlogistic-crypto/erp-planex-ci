@@ -1,6 +1,5 @@
 <?php
 /** @var VehicleSetService $service */
-requireRole(['company_owner', 'senior_logist', 'logist']);
 // This file contains the EXACT same logic as the original POST /company/vehicle-sets/create route closure
 // Variables available: $config, $db, $service
 $VSC_pageTitle='Создать транспорт';$VSC_pageContext='Транспорт > Компания';
@@ -10,6 +9,7 @@ try{$VSC_pdo=$db->connection();$VSC_stmt=$VSC_pdo->prepare('SELECT * FROM compan
 if(!$VSC_company){$VSC_company=null;$VSC_formError='Компания не найдена';goto VSC_render;}
 $VSC_pageContext='Транспорт > Компания: '.$VSC_company['name'];if(($VSC_company['status']??'')!=='active'){$VSC_formError='Компания недоступна';goto VSC_render;}
 $VSC_cfg=companyDatabaseConfig($config, $VSC_company);$VSC_ldb=new \App\Core\Database($VSC_cfg);$VSC_lpdo=$VSC_ldb->connection();applyLocalMigrations($VSC_lpdo);
+$VSC_membershipId=\App\Service\RegulatedDataScopeService::assertCanCreate('vehicle_unit');
 try{$VSC_lpdo->query('SELECT 1 FROM document_types LIMIT 1')->fetch();}catch(\Exception$e){$VSC_lpdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql')));$VSC_lpdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql')));}
 $VSC_docTypes=$VSC_lpdo->query("SELECT id,name,code,entity_type FROM document_types WHERE entity_type='vehicle_unit' OR entity_type IS NULL ORDER BY sort_order,name")->fetchAll(PDO::FETCH_ASSOC);
 if(isPostTruncated()){$VSC_formError='Общий размер отправки превышает серверный лимит.';goto VSC_render;}
@@ -36,7 +36,7 @@ $ins->execute([':et'=>$et,':eid'=>$eid,':dtype'=>$dtn,':dtid'=>$dtid,':oname'=>$
 $VSC_lpdo->beginTransaction();
 try{$VSC_insertUnit=$VSC_lpdo->prepare('INSERT INTO vehicle_units(plate_number,brand,model,unit_type,vin,capacity_tons,volume_m3,diagnostic_card_number,diagnostic_card_date,status,comments,created_by_user_id,created_by_role)VALUES(:plate_number,:brand,:model,:unit_type,:vin,:capacity_tons,:volume_m3,:diagnostic_card_number,:diagnostic_card_date,:status,:comments,:created_by_user_id,:created_by_role)');
 foreach($VSC_activeRoles as $VSC_role){$VSC_payload=$VSC_unitPayload[$VSC_role];$VSC_insertUnit->execute([':plate_number'=>$VSC_payload['plate_number'],':brand'=>$VSC_payload['brand'],':model'=>$VSC_payload['model'],':unit_type'=>$VSC_payload['unit_type'],':vin'=>$VSC_payload['vin'],':capacity_tons'=>($VSC_payload['show_capacity']&&$VSC_payload['capacity_tons']!=='')?(float)$VSC_payload['capacity_tons']:null,':volume_m3'=>($VSC_payload['show_volume']&&$VSC_payload['volume_m3']!=='')?(float)$VSC_payload['volume_m3']:null,':diagnostic_card_number'=>$VSC_payload['diagnostic_card_number']!==''?$VSC_payload['diagnostic_card_number']:null,':diagnostic_card_date'=>$VSC_payload['diagnostic_card_date']!==''?$VSC_payload['diagnostic_card_date']:null,':status'=>$VSC_status,':comments'=>null,':created_by_user_id'=>(int)$_SESSION['user_id'],':created_by_role'=>$_SESSION['role_code']]);
-$VSC_unitId=(int)$VSC_lpdo->lastInsertId();$VSC_createdUnitIds[$VSC_role]=$VSC_unitId;$VSC_createdUnits[$VSC_role]=$VSC_payload+['id'=>$VSC_unitId];}
+$VSC_unitId=(int)$VSC_lpdo->lastInsertId();\App\Service\EntityAssignmentService::autoAssignCreator($VSC_lpdo,'vehicle_unit',$VSC_unitId,$VSC_membershipId);$VSC_createdUnitIds[$VSC_role]=$VSC_unitId;$VSC_createdUnits[$VSC_role]=$VSC_payload+['id'=>$VSC_unitId];}
 $VSC_insertSet=$VSC_lpdo->prepare('INSERT INTO vehicle_sets(set_type,primary_vehicle_unit_id,secondary_vehicle_unit_id,status,comments,created_by_user_id,created_by_role)VALUES(:set_type,:primary_id,:secondary_id,:status,:comments,:uid,:role)');
 $VSC_insertSet->execute([':set_type'=>$VSC_setType,':primary_id'=>(int)($VSC_createdUnitIds['primary']??0),':secondary_id'=>isset($VSC_createdUnitIds['secondary'])?(int)$VSC_createdUnitIds['secondary']:null,':status'=>$VSC_status,':comments'=>$VSC_comments!==''?$VSC_comments:null,':uid'=>(int)$_SESSION['user_id'],':role'=>$_SESSION['role_code']]);
 $VSC_newSetId=(int)$VSC_lpdo->lastInsertId();

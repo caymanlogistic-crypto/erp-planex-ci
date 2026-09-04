@@ -1,6 +1,5 @@
 <?php
 
-requireRole(['company_owner']);
 $pageTitle = 'Финансовая структура';
 $pageContext = 'Финансы › Финансовая структура';
 $companyId = (int)(getSessionCompanyId() ?? 0);

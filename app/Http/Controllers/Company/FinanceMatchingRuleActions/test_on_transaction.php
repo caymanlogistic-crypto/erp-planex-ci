@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
 
     $companyId = (int)(getSessionCompanyId() ?? 0);
     if ($companyId <= 0) {
