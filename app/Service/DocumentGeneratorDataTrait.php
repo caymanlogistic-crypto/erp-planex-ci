@@ -52,6 +52,41 @@ trait DocumentGeneratorDataTrait
         return $text==='' ? '—' : $text;
     }
 
+    private static function vehicleTypeLabel(string $type, bool $secondary, bool $hasSecondary): string
+    {
+        return match ($type) {
+            'tractor' => 'Тягач',
+            'semi_trailer' => 'Полуприцеп',
+            'trailer' => 'Прицеп',
+            'truck' => $secondary ? 'Грузовик' : 'Транспортное средство',
+            'single' => $secondary ? 'Транспортная единица' : 'Транспортное средство',
+            default => $secondary ? 'Транспортная единица' : ($hasSecondary ? 'Тягач' : 'Транспортное средство'),
+        };
+    }
+
+    private static function vehicleTypeGenitive(string $type, bool $secondary): string
+    {
+        return match ($type) {
+            'tractor' => 'тягача',
+            'semi_trailer' => 'полуприцепа',
+            'trailer' => 'прицепа',
+            'truck', 'single' => 'автомобиля',
+            default => $secondary ? 'прицепа/полуприцепа' : 'автомобиля',
+        };
+    }
+
+    private static function vehicleIdentity(array $unit): string
+    {
+        $parts=[];
+        foreach (['model','plate'] as $field) {
+            $value=trim((string)($unit[$field] ?? ''));
+            if ($value!=='') $parts[]=$value;
+        }
+        if ($parts!==[]) return implode(' / ',$parts);
+        $id=(int)($unit['id'] ?? 0);
+        return $id>0 ? '#' . $id : 'без идентификатора';
+    }
+
     private static function buildFixedValues(array $snapshot): array
     {
         $c=$snapshot['company'];$e=$snapshot['executor'];$d=$snapshot['driver'];$v=$snapshot['vehicle'];$t=$snapshot['trailer'];$p=$snapshot['parameters'];$s=$snapshot['requests_summary'] ?? [];
@@ -62,14 +97,15 @@ trait DocumentGeneratorDataTrait
             'company.name'=>$c['name'],'company.inn'=>$c['inn'],'company.kpp_line'=>$c['kpp']!==''?'КПП: '.$c['kpp']:'','company.ogrn_line'=>$c['ogrn']!==''?'ОГРН: '.$c['ogrn']:'','company.legal_address'=>$c['legal_address'],'company.physical_address'=>self::optionalDisplay($c['physical_address'] ?? ''),'company.bank_name'=>$c['bank_name'],'company.bank_account'=>$c['bank_account'],'company.bank_corr_account'=>$c['bank_corr_account'],'company.bank_bik'=>$c['bank_bik'],'company.contact_phone'=>self::optionalDisplay($c['contact_phone'] ?? ''),'company.contact_email'=>self::optionalDisplay($c['contact_email'] ?? ''),'company.director_full_name'=>$c['director_full_name'],'company.director_position'=>$c['director_position'],'company.signature_name'=>self::signatureName($c['director_full_name']),
             'executor.name'=>$e['name'],'executor.inn'=>$e['inn'],'executor.kpp_line'=>$e['kpp']!==''?'КПП: '.$e['kpp']:'','executor.ogrn_line'=>$e['ogrn']!==''?((strlen($e['ogrn'])===15?'ОГРНИП: ':'ОГРН: ').$e['ogrn']):'','executor.legal_address'=>$e['legal_address'],'executor.physical_address'=>$e['physical_address'],'executor.bank_name'=>$e['bank_name'],'executor.bank_account'=>$e['bank_account'],'executor.bank_corr_account'=>$e['bank_corr_account'],'executor.bank_bik'=>$e['bank_bik'],'executor.bank_inn'=>'—','executor.director_full_name'=>$e['director_full_name'],'executor.director_position'=>$e['director_position'],'executor.signature_name'=>$e['signature_name'],
             'driver.full_name'=>$d['full_name'],'driver.passport'=>$d['passport'],'driver.license'=>$d['license'],'driver.signature_name'=>$d['signature_name'],
-            'vehicle.model'=>$v['model'],'vehicle.plate'=>$v['plate'],'trailer.display'=>$t['display'],
+            'vehicle.label'=>(string)($v['label'] ?? 'Транспортное средство'),'vehicle.model'=>$v['model'],'vehicle.plate'=>$v['plate'],'vehicle.vin'=>(string)($v['vin'] ?? ''),
+            'trailer.label'=>(string)($t['label'] ?? ''),'trailer.model'=>(string)($t['model'] ?? ''),'trailer.plate'=>(string)($t['plate'] ?? ''),'trailer.vin'=>(string)($t['vin'] ?? ''),'trailer.display'=>(string)($t['display'] ?? ''),
             'requests.count'=>(string)($s['count'] ?? count($snapshot['requests'] ?? [])),'requests.total_mass_kg'=>self::formatMassKg((float)($s['total_mass_kg'] ?? 0)),'requests.unload_address'=>(string)($s['unload_address'] ?? ''),
         ];
     }
 
     private static function validateFixedPlaceholders(array $placeholders, array $values, array $snapshot): array
     {
-        $optional=['contract.start_time','company.physical_address','company.contact_phone','company.contact_email','executor.kpp_line','executor.ogrn_line','executor.physical_address','executor.bank_inn','trailer.display'];
+        $optional=['contract.start_time','company.physical_address','company.contact_phone','company.contact_email','executor.kpp_line','executor.ogrn_line','executor.physical_address','executor.bank_inn','vehicle.vin','trailer.label','trailer.model','trailer.plate','trailer.vin','trailer.display'];
         $requestPrefixes=['request.'];
         $errors=[];
         foreach ($placeholders as $name) {
@@ -87,6 +123,26 @@ trait DocumentGeneratorDataTrait
         if (strlen(preg_replace('/\D/','',(string)$executor['inn']) ?? '')===10) {
             if (in_array('executor.kpp_line',$placeholders,true) && trim((string)$executor['kpp'])==='') $errors[]='У Арендодателя-юрлица не заполнен КПП.';
             if (in_array('executor.ogrn_line',$placeholders,true) && trim((string)$executor['ogrn'])==='') $errors[]='У Арендодателя-юрлица не заполнен ОГРН.';
+        }
+
+        $vehicle=is_array($snapshot['vehicle'] ?? null)?$snapshot['vehicle']:[];
+        if (in_array('vehicle.vin',$placeholders,true) && trim((string)($vehicle['vin'] ?? ''))==='') {
+            $kind=self::vehicleTypeGenitive((string)($vehicle['type'] ?? ''),false);
+            $errors[]='У ' . $kind . ' ' . self::vehicleIdentity($vehicle) . ' не заполнен VIN. Заполните его в карточке транспорта.';
+        }
+
+        $trailer=is_array($snapshot['trailer'] ?? null)?$snapshot['trailer']:[];
+        $trailerId=(int)($trailer['id'] ?? 0);
+        $trailerPlaceholders=['trailer.label','trailer.model','trailer.plate','trailer.vin','trailer.display'];
+        $usesTrailer=false;
+        foreach ($trailerPlaceholders as $name) if (in_array($name,$placeholders,true)) { $usesTrailer=true; break; }
+        if ($trailerId>0 && $usesTrailer) {
+            if (trim((string)($trailer['model'] ?? ''))==='') $errors[]='У второй транспортной единицы не заполнены марка/модель. Заполните карточку транспорта.';
+            if (trim((string)($trailer['plate'] ?? ''))==='') $errors[]='У второй транспортной единицы не заполнен государственный номер. Заполните карточку транспорта.';
+            if (trim((string)($trailer['vin'] ?? ''))==='') {
+                $kind=self::vehicleTypeGenitive((string)($trailer['type'] ?? ''),true);
+                $errors[]='У ' . $kind . ' ' . self::vehicleIdentity($trailer) . ' не заполнен VIN. Заполните его в карточке транспорта.';
+            }
         }
         return array_values(array_unique($errors));
     }
@@ -175,7 +231,7 @@ trait DocumentGeneratorDataTrait
 
     private static function failed(array $errors): array
     {
-        return ['ok'=>false,'errors'=>$errors,'request_errors'=>[],'missing_request_ids'=>[],'found_count'=>0,'total_mass_kg'=>0.0,'total_mass_kg_formatted'=>'0','unload_groups'=>[]];
+        return ['ok'=>false,'errors'=>$errors,'warnings'=>[],'request_errors'=>[],'missing_request_ids'=>[],'found_count'=>0,'total_mass_kg'=>0.0,'total_mass_kg_formatted'=>'0','unload_groups'=>[]];
     }
 
     private static function json(mixed $value): string
