@@ -2,30 +2,47 @@
 
 namespace App\Http;
 
+use App\Security\AccessRequestContext;
+use App\Security\AccessRuntime;
+use App\Security\EffectiveAccess;
+use App\Security\EffectiveAccessResolver;
+use App\Security\PageRegistry;
+
 class Router
 {
     private array $routes = [];
+    private PageRegistry $pageRegistry;
+    private ?EffectiveAccess $effectiveAccess = null;
 
-    public function get(string $path, callable $handler): self
+    public function __construct(?PageRegistry $pageRegistry = null)
     {
-        $this->routes[] = [
-            'method'  => 'GET',
-            'path'    => $path,
-            'handler' => $handler,
-        ];
+        $this->pageRegistry = $pageRegistry ?? new PageRegistry();
+    }
 
+    /** @param string|list<string>|null $pageKeys */
+    public function get(string $path, callable $handler, string|array|null $pageKeys = null): self
+    {
+        return $this->addRoute('GET', $path, $handler, $pageKeys);
+    }
+
+    /** @param string|list<string>|null $pageKeys */
+    public function post(string $path, callable $handler, string|array|null $pageKeys = null): self
+    {
+        return $this->addRoute('POST', $path, $handler, $pageKeys);
+    }
+
+    public function enableCompanyAccess(EffectiveAccessResolver $resolver, AccessRequestContext $request): self
+    {
+        // Resolution occurs once for this request and the provider itself must
+        // read current central state. The result is never persisted in session.
+        $this->effectiveAccess = $resolver->resolve($request);
+        AccessRuntime::setCurrent($this->effectiveAccess);
         return $this;
     }
 
-    public function post(string $path, callable $handler): self
+    public function pageRegistry(): PageRegistry
     {
-        $this->routes[] = [
-            'method'  => 'POST',
-            'path'    => $path,
-            'handler' => $handler,
-        ];
-
-        return $this;
+        return $this->pageRegistry;
     }
 
     public function dispatch(string $method, string $uri): mixed
@@ -51,6 +68,9 @@ class Router
             $params = $this->matchPath($route['path'], $uri);
 
             if ($params !== false) {
+                if ($this->mustAuthorize($uri) && !$this->routeIsAuthorized($route)) {
+                    return $this->denyAccess($uri);
+                }
                 return ($route['handler'])(...$params);
             }
         }
@@ -91,5 +111,72 @@ class Router
         }
 
         return $params;
+    }
+
+    /** @param string|list<string>|null $pageKeys */
+    private function addRoute(string $method, string $path, callable $handler, string|array|null $pageKeys): self
+    {
+        $normalizedPageKeys = null;
+        if ($pageKeys !== null) {
+            $normalizedPageKeys = is_array($pageKeys) ? array_values($pageKeys) : [$pageKeys];
+            $this->pageRegistry->registerEndpoint($method, $path, $normalizedPageKeys);
+        }
+
+        $this->routes[] = [
+            'method' => $method,
+            'path' => $path,
+            'handler' => $handler,
+            'page_keys' => $normalizedPageKeys,
+        ];
+
+        return $this;
+    }
+
+    private function mustAuthorize(string $uri): bool
+    {
+        return $this->effectiveAccess !== null
+            && ($uri === '/company' || str_starts_with($uri, '/company/'));
+    }
+
+    /** @param array{method:string,path:string,handler:callable,page_keys:?array} $route */
+    private function routeIsAuthorized(array $route): bool
+    {
+        $pageKeys = $this->pageRegistry->endpointPageKeys($route['method'], $route['path']);
+        if (!is_array($pageKeys) || $pageKeys === []) {
+            return false;
+        }
+
+        foreach ($pageKeys as $pageKey) {
+            if (is_string($pageKey) && $this->effectiveAccess?->canAccessPage($pageKey)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function denyAccess(string $uri): null
+    {
+        http_response_code(403);
+        if ($this->expectsJson($uri)) {
+            header('Content-Type: application/json; charset=utf-8');
+            echo json_encode(['error' => 'access_denied'], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        } else {
+            header('Content-Type: text/plain; charset=utf-8');
+            echo '403 Forbidden';
+        }
+
+        return null;
+    }
+
+    private function expectsJson(string $uri): bool
+    {
+        $accept = strtolower((string) ($_SERVER['HTTP_ACCEPT'] ?? ''));
+        $requestedWith = strtolower((string) ($_SERVER['HTTP_X_REQUESTED_WITH'] ?? ''));
+
+        return str_contains($accept, 'application/json')
+            || $requestedWith === 'xmlhttprequest'
+            || str_ends_with($uri, '/json')
+            || str_ends_with($uri, '/data');
     }
 }
