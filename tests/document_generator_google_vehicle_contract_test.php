@@ -62,7 +62,7 @@ $values=['vehicle.vin'=>'XTC111','trailer.display'=>''];
 $errors=$validate->invoke(null,['vehicle.vin','trailer.display'],$values,$baseSnapshot);$eq($errors,[],'V5 no secondary VIN blocker');
 $missing=$baseSnapshot;$missing['vehicle']['vin']='';$errors=$validate->invoke(null,['vehicle.vin'],['vehicle.vin'=>''],$missing);$ok((bool)array_filter($errors,static fn($e)=>str_contains((string)$e,'автомобиля')&&str_contains((string)$e,'VIN')),'V3 missing primary VIN blocks');
 $secondary=$baseSnapshot;$secondary['vehicle']['label']='Тягач';$secondary['trailer']=['id'=>2,'model'=>'SCHMITZ','plate'=>'АВ123477','vin'=>'','label'=>'Полуприцеп'];$errors=$validate->invoke(null,['vehicle.vin','trailer.display'],['vehicle.vin'=>'XTC111','trailer.display'=>''],$secondary);$ok((bool)array_filter($errors,static fn($e)=>str_contains(mb_strtolower((string)$e),'полуприцеп')&&str_contains((string)$e,'VIN')),'V4 missing secondary VIN blocks');
-$eq($labels->invoke(null,'tractor'),'Тягач','V7 tractor label');$eq($labels->invoke(null,'trailer'),'Прицеп','V7 trailer label');$eq($labels->invoke(null,'semi_trailer'),'Полуприцеп','V7 semitrailer label');
+$eq($labels->invoke(null,'tractor',false,true),'Тягач','V7 tractor label');$eq($labels->invoke(null,'trailer',true,true),'Прицеп','V7 trailer label');$eq($labels->invoke(null,'semi_trailer',true,true),'Полуприцеп','V7 semitrailer label');
 $vinOld=['vehicle'=>['vin'=>'VIN-OLD']];$vinNew=['vehicle'=>['vin'=>'VIN-NEW']];$eq($vinOld['vehicle']['vin'],'VIN-OLD','V6 old VIN snapshot immutable');$eq($vinNew['vehicle']['vin'],'VIN-NEW','V6 new VIN snapshot uses current master data');
 echo "DOCUMENT_GENERATOR_VEHICLE_IDENTITY=PASS\n";
 
