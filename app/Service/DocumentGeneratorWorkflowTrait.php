@@ -17,7 +17,8 @@ trait DocumentGeneratorWorkflowTrait
         int $templateId,
         int $crewId,
         string $requestInput,
-        array $params
+        array $params,
+        ?GoogleSheetsRequestContactService $contactService = null
     ): array {
         if (!self::runtimeSchemaReady($localPdo)) {
             return self::failed(['Схема генератора договоров не обновлена. Требуется штатная tenant migration 129.']);
@@ -43,6 +44,16 @@ trait DocumentGeneratorWorkflowTrait
         $ordered = [];
         foreach ($ids as $id) if (isset($present[$id])) $ordered[] = $present[$id];
 
+        $contactService ??= new GoogleSheetsRequestContactService();
+        $googleContacts = $contactService->loadContacts($ids);
+        foreach ($ordered as &$row) {
+            $requestId = (string)($row['zayavka_id'] ?? '');
+            $row['contacts'] = trim((string)($googleContacts['contacts'][$requestId] ?? '—')) ?: '—';
+        }
+        unset($row);
+        $warnings=[];
+        if (trim((string)($googleContacts['warning'] ?? ''))!=='') $warnings[]=(string)$googleContacts['warning'];
+
         $placeholders = json_decode((string)($template['placeholders_json'] ?? '[]'), true);
         if (!is_array($placeholders)) $placeholders = [];
         $groups = self::unloadGroups($ordered);
@@ -51,6 +62,11 @@ trait DocumentGeneratorWorkflowTrait
         $totalKg = round($totalKg,3);
         $unload = count($groups)===1 ? (string)array_key_first($groups) : '';
         $snapshot = self::buildSnapshot($company,$executor,$ordered,$params,$template);
+        $snapshot['integrations']['google_sheets_contacts'] = [
+            'available'=>(bool)($googleContacts['available'] ?? false),
+            'warning'=>(string)($googleContacts['warning'] ?? ''),
+            'source'=>is_array($googleContacts['source'] ?? null)?$googleContacts['source']:[],
+        ];
         $snapshot['requests_summary'] = [
             'count'=>count($ordered),'total_mass_kg'=>$totalKg,'unload_address'=>$unload,
             'unload_groups'=>$groups,'missing_ids'=>$missing,'input_ids'=>$ids,
@@ -69,7 +85,7 @@ trait DocumentGeneratorWorkflowTrait
         $repeat = self::buildRequestPlaceholderRows($ordered);
 
         return [
-            'ok'=>$errors===[], 'errors'=>$errors, 'request_errors'=>$requestErrors,
+            'ok'=>$errors===[], 'errors'=>$errors, 'warnings'=>$warnings, 'request_errors'=>$requestErrors,
             'missing_request_ids'=>$missing,'request_ids'=>$ids,'found_count'=>count($ordered),
             'total_mass_kg'=>$totalKg,'total_mass_kg_formatted'=>self::formatMassKg($totalKg),
             'unload_groups'=>$groups,'unload_address'=>$unload,'template'=>$template,'executor'=>$executor,
@@ -199,11 +215,7 @@ trait DocumentGeneratorWorkflowTrait
 
     public static function requestContacts(array $row): string
     {
-        $parts=[];
-        foreach (['kontakt_tel','tel_dopolnitelnyy','kontakt_email'] as $field) {
-            $value=trim((string)($row[$field] ?? ''));
-            if ($value!=='' && !in_array($value,$parts,true)) $parts[]=$value;
-        }
-        return $parts===[] ? '—' : implode(', ',$parts);
+        $value=trim((string)($row['contacts'] ?? ''));
+        return $value!=='' ? $value : '—';
     }
 }
