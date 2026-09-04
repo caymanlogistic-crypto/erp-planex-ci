@@ -143,11 +143,33 @@ if ($accountId !== false && $roleCode !== 'superadmin') {
     }
 }
 
+$uiTextSlice = static function (string $value, int $start, ?int $length = null): string {
+    if (function_exists('mb_substr')) {
+        return mb_substr($value, $start, $length, 'UTF-8');
+    }
+    if (preg_match_all('/./us', $value, $characters) !== false) {
+        return implode('', array_slice($characters[0], $start, $length));
+    }
+    return $length === null ? substr($value, $start) : substr($value, $start, $length);
+};
+$uiTextUpper = static function (string $value): string {
+    if (function_exists('mb_strtoupper')) {
+        return mb_strtoupper($value, 'UTF-8');
+    }
+    return strtr(strtoupper($value), [
+        'а' => 'А', 'б' => 'Б', 'в' => 'В', 'г' => 'Г', 'д' => 'Д', 'е' => 'Е', 'ё' => 'Ё',
+        'ж' => 'Ж', 'з' => 'З', 'и' => 'И', 'й' => 'Й', 'к' => 'К', 'л' => 'Л', 'м' => 'М',
+        'н' => 'Н', 'о' => 'О', 'п' => 'П', 'р' => 'Р', 'с' => 'С', 'т' => 'Т', 'у' => 'У',
+        'ф' => 'Ф', 'х' => 'Х', 'ц' => 'Ц', 'ч' => 'Ч', 'ш' => 'Ш', 'щ' => 'Щ', 'ъ' => 'Ъ',
+        'ы' => 'Ы', 'ь' => 'Ь', 'э' => 'Э', 'ю' => 'Ю', 'я' => 'Я',
+    ]);
+};
+
 $initials = '';
 if ($userName !== '') {
     $words = array_filter(explode(' ', trim($userName)));
-    $initials = implode('', array_map(fn($w) => mb_substr($w, 0, 1), $words));
-    $initials = mb_strtoupper(mb_substr($initials, 0, 2));
+    $initials = implode('', array_map(fn($w) => $uiTextSlice($w, 0, 1), $words));
+    $initials = $uiTextUpper($uiTextSlice($initials, 0, 2));
 }
 
 $crumbTitle = (string)($pageTitle ?? 'ERP PLANEX');
@@ -267,7 +289,7 @@ if (empty($topbarCrumbs)) {
 
             <?php foreach ($registryNavigationTree as $navigationSection => $navigationGroups): ?>
             <div class="nav-group">
-                <div class="nav-section-label"><?= e(mb_strtoupper((string) $navigationSection)) ?></div>
+                <div class="nav-section-label"><?= e($uiTextUpper((string) $navigationSection)) ?></div>
                 <?php foreach ($navigationGroups as $navigationGroup => $navigationPages): ?>
                     <?php if ($navigationGroup === ''): ?>
                         <?php foreach ($navigationPages as $navigationPage):
