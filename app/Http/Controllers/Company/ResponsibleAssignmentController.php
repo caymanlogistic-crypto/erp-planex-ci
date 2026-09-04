@@ -27,4 +27,12 @@ final class ResponsibleAssignmentController
 
         require base_path('app/Http/Controllers/Company/ResponsibleAssignmentActions/reassign.php');
     }
+
+    public function assignments(): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+
+        require base_path('app/Http/Controllers/Company/ResponsibleAssignmentActions/assignments.php');
+    }
 }

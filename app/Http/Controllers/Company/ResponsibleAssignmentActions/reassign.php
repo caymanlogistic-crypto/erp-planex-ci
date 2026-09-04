@@ -6,29 +6,39 @@ use App\Service\EntityAssignmentService;
 requireRole(['company_owner', 'senior_logist', 'logist']);
 
 if (!AccessControlService::isEffectiveSystemOwner()) {
-    http_response_code(403);
-    echo 'Изменять закрепления может только Руководитель.';
+    jsonResponse([
+        'success' => false,
+        'error' => 'forbidden',
+        'message' => 'Изменять закрепления может только Руководитель.',
+    ], 403);
     return;
 }
 
 $companyId = (int) (getSessionCompanyId() ?? 0);
-$entityType = trim((string) ($_POST['entity_type'] ?? ''));
-$entityId = (int) ($_POST['entity_id'] ?? 0);
-$membershipIds = $_POST['membership_ids'] ?? [];
+$payload = array_replace($_POST, requestJsonBody());
+$entityType = trim((string) ($payload['entity_type'] ?? ''));
+$entityId = (int) ($payload['entity_id'] ?? 0);
+$membershipIds = $payload['membership_ids'] ?? [];
 if (!is_array($membershipIds)) {
     $membershipIds = [$membershipIds];
 }
 
 // Never allow the legacy transfer/cascade request to rewrite creator history.
-if (isset($_POST['new_logist_id'], $_POST['entity_ids']) || isset($_POST['cascade'])) {
-    http_response_code(410);
-    echo 'Старый механизм переназначения отключён. Обновите страницу.';
+if (isset($payload['new_logist_id'], $payload['entity_ids']) || isset($payload['cascade'])) {
+    jsonResponse([
+        'success' => false,
+        'error' => 'legacy_assignment_payload_retired',
+        'message' => 'Старый механизм переназначения отключён. Обновите страницу.',
+    ], 410);
     return;
 }
 
 if ($companyId <= 0 || !EntityAssignmentService::isSupported($entityType) || $entityId <= 0) {
-    http_response_code(422);
-    echo 'Некорректные параметры закрепления.';
+    jsonResponse([
+        'success' => false,
+        'error' => 'invalid_assignment_target',
+        'message' => 'Некорректные параметры закрепления.',
+    ], 422);
     return;
 }
 
@@ -46,7 +56,7 @@ try {
     applyLocalMigrations($localPdo);
 
     $table = ['client'=>'clients','contractor'=>'contractors','vehicle_unit'=>'vehicle_units','driver'=>'drivers'][$entityType];
-    $exists = $localPdo->prepare("SELECT 1 FROM `{$table}` WHERE id = ? AND deleted_at IS NULL LIMIT 1");
+    $exists = $localPdo->prepare("SELECT 1 FROM `{$table}` WHERE id = ? AND deleted_at IS NULL AND status <> 'archived' LIMIT 1");
     $exists->execute([$entityId]);
     if (!$exists->fetchColumn()) {
         throw new RuntimeException('Объект не найден.');
@@ -55,10 +65,13 @@ try {
     $normalized = array_values(array_unique(array_filter(array_map('intval', $membershipIds))));
     if ($normalized !== []) {
         $marks = implode(',', array_fill(0, count($normalized), '?'));
-        $members = $localPdo->prepare("SELECT COUNT(*) FROM users WHERE membership_id IN ({$marks}) AND status = 'active' AND deleted_at IS NULL");
-        $members->execute($normalized);
+        $members = $central->prepare(
+            "SELECT COUNT(*) FROM company_memberships
+             WHERE company_id = ? AND id IN ({$marks})"
+        );
+        $members->execute(array_merge([$companyId], $normalized));
         if ((int) $members->fetchColumn() !== count($normalized)) {
-            throw new RuntimeException('Выбрано неактивное или чужое членство компании.');
+            throw new RuntimeException('Выбрано членство другой компании или несуществующий сотрудник.');
         }
     }
 
@@ -70,10 +83,11 @@ try {
         (int) AccessControlService::effectiveMembershipId()
     );
 
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['success'=>true,'membership_ids'=>$normalized], JSON_UNESCAPED_UNICODE);
+    jsonResponse(['success'=>true,'membership_ids'=>$normalized]);
 } catch (Throwable $e) {
-    http_response_code(422);
-    header('Content-Type: application/json; charset=utf-8');
-    echo json_encode(['success'=>false,'message'=>$e->getMessage()], JSON_UNESCAPED_UNICODE);
+    jsonResponse([
+        'success' => false,
+        'error' => 'assignment_update_failed',
+        'message' => $e->getMessage(),
+    ], 422);
 }

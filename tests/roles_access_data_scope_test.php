@@ -71,7 +71,7 @@ namespace {
     foreach ([$client,$contractor,$driver,$vehicles] as $source) {
         $assert(str_contains($source, 'autoAssignCreator') || str_contains($source, 'createAssigned'), 'reference creation auto-assigns atomically');
     }
-    $assert(str_contains($reassign, "isset(\$_POST['cascade'])"), 'legacy cascade payload explicitly retired');
+    $assert(str_contains($reassign, "isset(\$payload['cascade'])"), 'legacy cascade payload explicitly retired');
     $assert(!str_contains($reassign, 'UPDATE contractors SET created_by_user_id'), 'assignment mutation never rewrites creator');
 
     echo "PASS roles access data scope\n";
