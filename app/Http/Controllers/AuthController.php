@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Core\Database;
+use App\Security\AccessStateProvider;
+use App\Service\AccountAuthenticationService;
 
 require_once BASE_PATH . '/app/Support/company_database.php';
 
@@ -10,7 +12,8 @@ final class AuthController
 {
     public function __construct(
         private readonly array $config,
-        private readonly Database $db
+        private readonly Database $db,
+        private readonly ?AccessStateProvider $accessStateProvider = null
     ) {
     }
 
@@ -115,17 +118,47 @@ final class AuthController
                 redirect_to('/superadmin/companies');
             }
 
-            $ownerStmt = $pdo->prepare(
+            // The new global identity path is enabled only together with the
+            // central access readiness provider. Partial schema rollout must
+            // never silently activate a membership or bypass the readiness gate.
+            if ($this->accessStateProvider !== null) {
+                require_once base_path('app/Service/IdentityNormalizer.php');
+                require_once base_path('app/Service/AccountAuthenticationService.php');
+                $globalAuth = (new AccountAuthenticationService($pdo))->authenticate($loginValue, $password);
+                if ($globalAuth !== null) {
+                    $readyCompanyId = null;
+                    foreach ($globalAuth['memberships'] as $membership) {
+                        if ($this->accessStateProvider->isCompanyAccessReady($membership['company_id'])) {
+                            $readyCompanyId = $membership['company_id'];
+                            break;
+                        }
+                    }
+                    if ($readyCompanyId === null) {
+                        $authError = 'Система доступов компании ещё не готова. Обратитесь к администратору.';
+                    } else {
+                        session_regenerate_id(true);
+                        (new AccountAuthenticationService($pdo))->establishSession($_SESSION, $globalAuth, $readyCompanyId);
+                        redirect_to('/company/dashboard');
+                    }
+                } else {
+                    // Once the global access provider is wired, tenant-local
+                    // authentication must not become a bypass around membership.
+                    $authError = 'Неверный логин или пароль.';
+                }
+            }
+
+            if ($authError === null) {
+                $ownerStmt = $pdo->prepare(
                 "SELECT cu.*, c.name as company_name, c.status as company_status
                  FROM company_users cu
                  JOIN companies c ON cu.company_id = c.id
                  WHERE cu.login = :login
                    AND cu.role = 'company_owner'"
             );
-            $ownerStmt->execute([':login' => $loginValue]);
-            $owner = $ownerStmt->fetch(\PDO::FETCH_ASSOC);
+                $ownerStmt->execute([':login' => $loginValue]);
+                $owner = $ownerStmt->fetch(\PDO::FETCH_ASSOC);
 
-            if ($owner && password_verify($password, $owner['password_hash'])) {
+                if ($owner && password_verify($password, $owner['password_hash'])) {
                 if ($owner['status'] !== 'active') {
                     $authError = 'Доступ к компании временно ограничен. Обратитесь к администратору.';
                 } elseif (!in_array($owner['company_status'], ['active'], true)) {
@@ -144,14 +177,14 @@ final class AuthController
                     ];
                     redirect_to('/company/dashboard');
                 }
-            }
+                }
 
-            $companiesStmt = $pdo->query("SELECT id, name, db_identifier, db_host, db_port, db_username, db_password FROM companies WHERE status = 'active'");
-            $activeCompanies = $companiesStmt->fetchAll(\PDO::FETCH_ASSOC);
+                $companiesStmt = $pdo->query("SELECT id, name, db_identifier, db_host, db_port, db_username, db_password FROM companies WHERE status = 'active'");
+                $activeCompanies = $companiesStmt->fetchAll(\PDO::FETCH_ASSOC);
 
-            $logistCandidates = [];
+                $logistCandidates = [];
 
-            foreach ($activeCompanies as $ac) {
+                foreach ($activeCompanies as $ac) {
                 try {
                     $localDbConfig = companyDatabaseConfig($this->config, $ac);
                     $localDb = new Database($localDbConfig);
@@ -174,9 +207,9 @@ final class AuthController
                 } catch (\Exception $e) {
                     continue;
                 }
-            }
+                }
 
-            if (count($logistCandidates) === 1) {
+                if (count($logistCandidates) === 1) {
                 $candidate = $logistCandidates[0];
                 if (password_verify($password, $candidate['user']['password_hash'])) {
                     session_regenerate_id(true);
@@ -193,10 +226,11 @@ final class AuthController
                     redirect_to('/company/dashboard');
                 }
                 $authError = 'Неверный логин или пароль.';
-            } elseif (count($logistCandidates) > 1) {
+                } elseif (count($logistCandidates) > 1) {
                 $multiLogistError = 'Логин найден в нескольких компаниях, обратитесь к администратору.';
-            } else {
+                } else {
                 $authError = 'Неверный логин или пароль.';
+                }
             }
         } catch (\Exception $e) {
             $authError = 'Неверный логин или пароль.';
