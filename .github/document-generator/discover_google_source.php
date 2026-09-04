@@ -24,49 +24,70 @@ $result = [
     'uses_google_api_client' => stripos($source, 'Google\\Client') !== false || stripos($source, 'Google_Client') !== false,
     'uses_service_account' => stripos($source, 'service_account') !== false || stripos($source, 'GOOGLE_APPLICATION_CREDENTIALS') !== false,
     'uses_csv' => stripos($source, 'csv') !== false,
-    'uses_gviz' => stripos($source, 'gviz') !== false,
-    'uses_pubhtml' => stripos($source, 'pubhtml') !== false,
 ];
 
-$ids = [];
-if (preg_match_all('~docs\.google\.com/spreadsheets/d/(?:e/)?([A-Za-z0-9_-]{16,})~', $source, $m)) {
-    foreach ($m[1] as $id) $ids[(string)$id] = true;
-}
-$result['spreadsheet_ids'] = array_keys($ids);
+final class DocgenCaptureHttpsStream
+{
+    public static string $url = '';
+    private int $offset = 0;
+    private string $payload = "id,c1,c2,c3,c4,c5,c6,c7,c8,contacts\n";
+    public mixed $context;
 
-$hosts = [];
-if (preg_match_all('~https?://([^/\s\"\']+)~i', $source, $m)) {
-    foreach ($m[1] as $host) {
-        $host = strtolower((string)$host);
-        if (str_contains($host, 'google')) $hosts[$host] = true;
+    public function stream_open(string $path, string $mode, int $options, ?string &$openedPath): bool
+    {
+        self::$url = $path;
+        $this->offset = 0;
+        return true;
     }
-}
-$result['google_hosts'] = array_keys($hosts);
-
-$config = [];
-if (preg_match_all('/\$([A-Za-z_][A-Za-z0-9_]*(?:sheet|spreadsheet|gid|url|csv)[A-Za-z0-9_]*)\s*=\s*([\'\"])(.*?)\2\s*;/is', $source, $m, PREG_SET_ORDER)) {
-    foreach ($m as $match) {
-        $name = (string)$match[1];
-        $value = trim((string)$match[3]);
-        if ($value === '') continue;
-        if (preg_match('~^https?://~i', $value)) {
-            $parts = parse_url($value);
-            if (!is_array($parts)) continue;
-            $entry = [
-                'host' => strtolower((string)($parts['host'] ?? '')),
-                'path' => (string)($parts['path'] ?? ''),
-            ];
-            if (isset($parts['query'])) {
-                parse_str((string)$parts['query'], $q);
-                $entry['query_keys'] = array_values(array_map('strval', array_keys($q)));
-            }
-            $config[$name] = $entry;
-        } elseif (preg_match('/^[0-9]+$/', $value) || preg_match('/^[A-Za-z0-9_-]{12,}$/', $value)) {
-            $config[$name] = $value;
-        }
+    public function stream_read(int $count): string
+    {
+        $part = substr($this->payload, $this->offset, $count);
+        $this->offset += strlen($part);
+        return $part;
     }
+    public function stream_eof(): bool { return $this->offset >= strlen($this->payload); }
+    public function stream_stat(): array { return []; }
+    public function url_stat(string $path, int $flags): array|false { return []; }
 }
-$result['safe_config_literals'] = $config;
 
-// Never print API keys, credentials, cookies, tokens, or query values.
+$hadHttps = in_array('https', stream_get_wrappers(), true);
+if ($hadHttps && !stream_wrapper_unregister('https')) {
+    throw new RuntimeException('Cannot isolate HTTPS wrapper');
+}
+try {
+    if (!stream_wrapper_register('https', DocgenCaptureHttpsStream::class)) {
+        throw new RuntimeException('Cannot register capture HTTPS wrapper');
+    }
+    require_once $helper;
+    if (!function_exists('getGoogleSheetsData')) throw new RuntimeException('getGoogleSheetsData missing');
+    getGoogleSheetsData();
+} finally {
+    if (in_array('https', stream_get_wrappers(), true)) stream_wrapper_unregister('https');
+    if ($hadHttps) stream_wrapper_restore('https');
+}
+
+$url = DocgenCaptureHttpsStream::$url;
+if ($url === '') throw new RuntimeException('Google helper did not request HTTPS URL');
+$parts = parse_url($url);
+if (!is_array($parts) || strtolower((string)($parts['host'] ?? '')) !== 'docs.google.com') {
+    throw new RuntimeException('Captured source is not docs.google.com');
+}
+$query = [];
+parse_str((string)($parts['query'] ?? ''), $query);
+$safeQuery = [];
+foreach ($query as $key => $value) {
+    if (in_array((string)$key, ['output','format','gid','sheet'], true)) $safeQuery[(string)$key] = (string)$value;
+    else $safeQuery[(string)$key] = '[redacted]';
+}
+$result['captured'] = [
+    'host' => strtolower((string)$parts['host']),
+    'path' => (string)($parts['path'] ?? ''),
+    'query' => $safeQuery,
+];
+
+if (preg_match('~/spreadsheets/d/(?:e/)?([A-Za-z0-9_-]+)~', (string)($parts['path'] ?? ''), $m)) {
+    $result['captured']['spreadsheet_id'] = (string)$m[1];
+}
+
+// Never print API keys, credentials, cookies, tokens, or unapproved query values.
 echo 'DOCGEN_GOOGLE_SOURCE_DISCOVERY=' . json_encode($result, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
