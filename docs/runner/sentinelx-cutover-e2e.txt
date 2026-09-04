@@ -1,0 +1,3 @@
+SentinelX autonomous runner cutover E2E proof
+Task: sentinelx-cutover-e2e-20260905
+No production access.
