@@ -7,17 +7,13 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'cgi-fcgi') {
     exit(1);
 }
 
-$legacyRoot = rtrim((string)(getenv('PLANEX_LEGACY_ROOT') ?: ''), '/');
-if ($legacyRoot === '') {
-    throw new RuntimeException('PLANEX_LEGACY_ROOT is required');
-}
-$helper = $legacyRoot . '/include/googleSheetsHelper.php';
-if (!is_file($helper) || !is_readable($helper)) {
-    throw new RuntimeException('Legacy Google Sheets helper is unavailable for read-only discovery');
+$helper = (string)(getenv('PLANEX_GOOGLE_HELPER') ?: '');
+if ($helper === '' || !is_file($helper) || !is_readable($helper)) {
+    throw new RuntimeException('Google Sheets helper is unavailable for read-only discovery');
 }
 $source = file_get_contents($helper);
 if (!is_string($source) || $source === '') {
-    throw new RuntimeException('Legacy Google Sheets helper is empty');
+    throw new RuntimeException('Google Sheets helper is empty');
 }
 
 $result = [
