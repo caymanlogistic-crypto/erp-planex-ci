@@ -68,7 +68,7 @@ try{
 
     $reset();
     $userTemplate('waybill_driver_assignment','Пользовательский waybill','waybill_driver_assignment_v1.docx');
-    $s=$stash('contract_vehicle_lease_crew_v2.docx');
+    $s=$stash('contract_vehicle_lease_crew_v3.docx');
     try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),1,'C waybill visible');$eq(count($warnings()),1,'C warning');$renderSaved('waybill_driver_assignment');}finally{$restore($s);}
     echo "SEED_CASE_C=PASS\n";
 
