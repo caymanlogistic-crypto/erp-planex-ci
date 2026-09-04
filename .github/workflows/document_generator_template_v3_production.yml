@@ -85,7 +85,8 @@ jobs:
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/document_generator_template_v3.php "$SSH_USER@$SSH_HOST:/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php"
           echo "DEPLOYED_SOURCE_SHA=$marker"
 
-      - name: Snapshot before
+      - name: Snapshot before and bind planned SHA
+        id: before
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -94,42 +95,76 @@ jobs:
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=snapshot /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_before.txt
           grep -q 'DOCGEN_TEMPLATE_V3_READ_ONLY_OK' template_v3_before.txt
+          planned_sha="$(python3 - <<'PY'
+          import json,re
+          line=next((x for x in open('template_v3_before.txt',encoding='utf-8') if x.startswith('DOCGEN_TEMPLATE_V3_SNAPSHOT=')),None)
+          if not line: raise SystemExit('snapshot JSON missing')
+          data=json.loads(line.split('=',1)[1])
+          planned=[]
+          for tenant in data.get('tenants',[]):
+              for template in tenant.get('templates',[]):
+                  if template.get('needs_update')==1:
+                      planned.append(template.get('planned_sha256',''))
+          if len(planned)!=1: raise SystemExit(f'expected exactly one proven production-v2 transition, found {len(planned)}')
+          sha=planned[0]
+          if not re.fullmatch(r'[0-9a-f]{64}',sha): raise SystemExit('planned v3 SHA invalid')
+          print(sha)
+          PY
+          )"
+          echo "planned_sha=$planned_sha" >> "$GITHUB_OUTPUT"
+          echo "PLANNED_PRODUCTION_V3_SHA=$planned_sha"
 
       - name: Create and activate immutable template v3
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          PLANNED_SHA: ${{ steps.before.outputs.planned_sha }}
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=apply /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_apply.txt
+          [[ "$PLANNED_SHA" =~ ^[0-9a-f]{64}$ ]]
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=apply PLANEX_EXPECTED_V3_SHA='$PLANNED_SHA' /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_apply.txt
           grep -q 'DOCGEN_TEMPLATE_V3_APPLY_OK' template_v3_apply.txt
+          grep -q "$PLANNED_SHA" template_v3_apply.txt
 
       - name: Snapshot after and verify immutable transition
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          PLANNED_SHA: ${{ steps.before.outputs.planned_sha }}
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=snapshot /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_after.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=snapshot PLANEX_EXPECTED_V3_SHA='$PLANNED_SHA' /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_after.txt
           grep -q 'DOCGEN_TEMPLATE_V3_READ_ONLY_OK' template_v3_after.txt
-          python3 - "$(sed -n 's/^DOCGEN_TEMPLATE_V3_SNAPSHOT=//p' template_v3_before.txt)" "$(sed -n 's/^DOCGEN_TEMPLATE_V3_SNAPSHOT=//p' template_v3_after.txt)" <<'PY'
-          import json,sys
-          before,after=map(json.loads,sys.argv[1:3])
+          python3 - "$PLANNED_SHA" "$(sed -n 's/^DOCGEN_TEMPLATE_V3_SNAPSHOT=//p' template_v3_before.txt)" "$(sed -n 's/^DOCGEN_TEMPLATE_V3_SNAPSHOT=//p' template_v3_after.txt)" <<'PY'
+          import json,re,sys
+          planned,before_raw,after_raw=sys.argv[1:4]
+          if not re.fullmatch(r'[0-9a-f]{64}',planned): raise SystemExit('planned SHA invalid')
+          before,after=map(json.loads,[before_raw,after_raw])
+          if before.get('central_db')!=after.get('central_db'): raise SystemExit('central DB identity changed')
           b={x['company_id']:x for x in before['tenants']}; a={x['company_id']:x for x in after['tenants']}
           if set(b)!=set(a): raise SystemExit('tenant set changed')
-          total=0
+          total=updated=0
           for cid,row in a.items():
               ob={x['template_id']:x for x in b[cid]['templates']}; oa={x['template_id']:x for x in row['templates']}
               if set(ob)!=set(oa): raise SystemExit(f'company {cid}: template set changed')
               for tid,new in oa.items():
                   prev=ob[tid]; total+=1
-                  if new['state']!='v3' or new['sha256']!='87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2' or new['has_vehicle_vin']!=1 or new['has_trailer_display']!=1:
-                      raise SystemExit(f'company {cid} template {tid}: active v3 contract invalid')
-                  expected=prev['version_no']+(1 if prev['needs_update'] else 0)
-                  if new['version_no']!=expected: raise SystemExit(f'company {cid} template {tid}: unexpected version transition')
-          if total<1: raise SystemExit('no active contract templates')
+                  if prev.get('needs_update')==1:
+                      updated+=1
+                      if prev.get('state')!='production_v2' or prev.get('sha256')!='7b3b86b00f49521a95a41a107dcdaf63e969c36264befcac372e83c2d53a8d56':
+                          raise SystemExit(f'company {cid} template {tid}: predecessor is not proven production-v2')
+                      if prev.get('planned_sha256')!=planned: raise SystemExit('before planned SHA drift')
+                      if new.get('state')!='production_v3' or new.get('sha256')!=planned:
+                          raise SystemExit(f'company {cid} template {tid}: active production-v3 SHA invalid')
+                      if new.get('version_no')!=prev.get('version_no')+1: raise SystemExit('version did not increment exactly once')
+                  else:
+                      if new.get('sha256')!=prev.get('sha256') or new.get('version_no')!=prev.get('version_no'):
+                          raise SystemExit(f'company {cid} template {tid}: unrelated template changed')
+                  if new.get('has_vehicle_vin')!=1 or new.get('has_trailer_display')!=1 or new.get('has_request_contacts')!=1:
+                      raise SystemExit(f'company {cid} template {tid}: required v3 placeholders missing')
+          if total<1 or updated!=1: raise SystemExit(f'unexpected transition cardinality total={total} updated={updated}')
           print('DOCGEN_TEMPLATE_V3_INVARIANTS_OK')
           PY
 
