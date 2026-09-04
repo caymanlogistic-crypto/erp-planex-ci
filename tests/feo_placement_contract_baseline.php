@@ -51,8 +51,15 @@ foreach ([
 ] as $needle => $label) $ok($label, str_contains($service, $needle));
 
 $controller = $read($root . '/app/Http/Controllers/Company/FeoPlacementController.php');
+$route = $read($root . '/app/Http/Routes/company_feo_requests.php');
+$ok(
+    'FEO placement access is registry-page based without a legacy role allowlist',
+    !str_contains($controller, 'requireRole(')
+    && str_contains($route, "\$feoPlacementPage = 'company.feo.map_placement';")
+    && str_contains($route, "[\$feoPlacementController, 'index'], \$feoPlacementPage")
+    && str_contains($route, "[\$feoPlacementController, 'commitCreate'], \$feoPlacementPage")
+);
 foreach ([
-    "requireRole(['company_owner','senior_logist','logist'])" => 'all operational FEO roles are allowed',
     "parseManual" => 'manual parser wired',
     "parseFile" => 'file parser wired',
     "in_array(\$ext, ['xls','xlsx'], true)" => 'xls and xlsx upload extensions accepted',
@@ -82,7 +89,6 @@ foreach (['feo_placement_blocks','feo_placement_block_requests','feo_placement_c
 }
 $ok('placement tables do not physically FK to mutable feo_requests rows', !str_contains($migration, 'REFERENCES `feo_requests`'));
 
-$route = $read($root . '/app/Http/Routes/company_feo_requests.php');
 foreach ([
     'FeoPlacementInputParser.php',
     'FeoPlacementService.php',
