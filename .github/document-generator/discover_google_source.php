@@ -43,5 +43,30 @@ if (preg_match_all('~https?://([^/\s\"\']+)~i', $source, $m)) {
 }
 $result['google_hosts'] = array_keys($hosts);
 
-// Never print API keys, credentials, complete URLs with query strings, cookies or tokens.
+$config = [];
+if (preg_match_all('/\$([A-Za-z_][A-Za-z0-9_]*(?:sheet|spreadsheet|gid|url|csv)[A-Za-z0-9_]*)\s*=\s*([\'\"])(.*?)\2\s*;/is', $source, $m, PREG_SET_ORDER)) {
+    foreach ($m as $match) {
+        $name = (string)$match[1];
+        $value = trim((string)$match[3]);
+        if ($value === '') continue;
+        if (preg_match('~^https?://~i', $value)) {
+            $parts = parse_url($value);
+            if (!is_array($parts)) continue;
+            $entry = [
+                'host' => strtolower((string)($parts['host'] ?? '')),
+                'path' => (string)($parts['path'] ?? ''),
+            ];
+            if (isset($parts['query'])) {
+                parse_str((string)$parts['query'], $q);
+                $entry['query_keys'] = array_values(array_map('strval', array_keys($q)));
+            }
+            $config[$name] = $entry;
+        } elseif (preg_match('/^[0-9]+$/', $value) || preg_match('/^[A-Za-z0-9_-]{12,}$/', $value)) {
+            $config[$name] = $value;
+        }
+    }
+}
+$result['safe_config_literals'] = $config;
+
+// Never print API keys, credentials, cookies, tokens, or query values.
 echo 'DOCGEN_GOOGLE_SOURCE_DISCOVERY=' . json_encode($result, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . "\n";
