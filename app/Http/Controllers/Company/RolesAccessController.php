@@ -10,20 +10,45 @@ use App\Service\CompanyRoleService;
 
 final class RolesAccessController
 {
-    public function __construct(private readonly Database $db)
+    public function __construct(private readonly array $config, private readonly Database $db)
     {
+    }
+
+    public function index(): void
+    {
+        $companyId = $this->ownerCompanyId();
+        if ($companyId === null) {
+            return;
+        }
+
+        $rolesAccessInitialState = $this->snapshotPayload($companyId);
+        $rolesAccessInitialStateJson = json_encode(
+            $rolesAccessInitialState,
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT
+        ) ?: '{}';
+        $pageTree = $rolesAccessInitialState['page_tree'];
+        $pageList = $rolesAccessInitialState['pages'];
+        $roles = $rolesAccessInitialState['roles'];
+        $memberships = $rolesAccessInitialState['memberships'];
+        $regulatedEntities = $rolesAccessInitialState['regulated_entities'];
+        $pageTitle = 'Роли и доступы';
+        $pageContext = 'Настройки › Роли и доступы';
+        $topbarCrumbs = [
+            ['label' => 'НАСТРОЙКИ', 'url' => null],
+            ['label' => 'Роли и доступы', 'url' => null],
+        ];
+        $config = $this->config;
+        $db = $this->db;
+
+        ob_start();
+        require base_path('app/View/pages/company/roles_access.php');
+        $content = ob_get_clean();
+        require base_path('app/View/layouts/main.php');
     }
 
     public function snapshot(): void
     {
-        $this->execute(function (array $payload, int $companyId): array {
-            $pdo = $this->db->connection();
-            return [
-                'roles' => (new CompanyRoleService($pdo))->listForCompany($companyId),
-                'memberships' => (new CompanyMembershipService($pdo))->listForCompany($companyId),
-                'regulated_entities' => CompanyRoleService::regulatedEntities(),
-            ];
-        });
+        $this->execute(fn (array $payload, int $companyId): array => $this->snapshotPayload($companyId));
     }
 
     public function createRole(): void
@@ -123,6 +148,42 @@ final class RolesAccessController
         } catch (\DomainException $e) {
             jsonResponse(['ok' => false, 'error' => $e->getMessage()], 409);
         }
+    }
+
+    /** @return array<string,mixed> */
+    private function snapshotPayload(int $companyId): array
+    {
+        $pdo = $this->db->connection();
+        $registry = new PageRegistry();
+        $roles = (new CompanyRoleService($pdo))->listForCompany($companyId, $registry->pageKeys());
+
+        return [
+            'roles' => $roles,
+            'memberships' => (new CompanyMembershipService($pdo))->listForCompany(
+                $companyId,
+                $registry->pageKeys(),
+                $roles
+            ),
+            'page_tree' => $registry->tree(),
+            'pages' => $registry->pages(),
+            'regulated_entities' => CompanyRoleService::regulatedEntities(),
+        ];
+    }
+
+    private function ownerCompanyId(): ?int
+    {
+        if (!AccessRuntime::current()->isSystemOwner()) {
+            http_response_code(403);
+            echo '<div class="notice warn">Доступ запрещён.</div>';
+            return null;
+        }
+        $companyId = AccessRuntime::current()->companyId() ?? 0;
+        if ($companyId < 1) {
+            http_response_code(403);
+            echo '<div class="notice warn">Компания не определена.</div>';
+            return null;
+        }
+        return $companyId;
     }
 
     private function positiveId(mixed $value): int

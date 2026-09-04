@@ -20,7 +20,7 @@ final class CompanyMembershipService
      *
      * @return list<array<string,mixed>>
      */
-    public function listForCompany(int $companyId): array
+    public function listForCompany(int $companyId, array $pageKeys = [], ?array $roles = null): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT m.id, m.account_id, a.full_name, a.login, a.email, a.phone,
@@ -32,7 +32,94 @@ final class CompanyMembershipService
              ORDER BY a.full_name, m.id'
         );
         $stmt->execute([$companyId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $memberships = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $roles ??= (new CompanyRoleService($this->pdo))->listForCompany($companyId, $pageKeys);
+
+        $pageOverrides = $this->pdo->prepare(
+            'SELECT o.membership_id, o.page_key, o.effect
+             FROM membership_page_overrides o
+             JOIN company_memberships m ON m.id = o.membership_id
+             WHERE m.company_id = ?'
+        );
+        $pageOverrides->execute([$companyId]);
+        $pageOverrideRows = $pageOverrides->fetchAll(PDO::FETCH_ASSOC);
+
+        $scopeOverrides = $this->pdo->prepare(
+            'SELECT o.membership_id, o.entity_type, o.scope
+             FROM membership_data_scope_overrides o
+             JOIN company_memberships m ON m.id = o.membership_id
+             WHERE m.company_id = ?'
+        );
+        $scopeOverrides->execute([$companyId]);
+        $scopeOverrideRows = $scopeOverrides->fetchAll(PDO::FETCH_ASSOC);
+
+        $rolesById = [];
+        foreach ($roles as $role) {
+            $rolesById[(int) ($role['id'] ?? 0)] = $role;
+        }
+        $membershipIndexes = [];
+        foreach ($memberships as $index => &$membership) {
+            $membershipId = (int) ($membership['id'] ?? 0);
+            $roleId = (int) ($membership['role_id'] ?? 0);
+            $role = $rolesById[$roleId] ?? null;
+            if ($role === null) {
+                unset($memberships[$index]);
+                continue;
+            }
+            $membershipIndexes[$membershipId] = $index;
+            $membership['id'] = $membershipId;
+            $membership['account_id'] = (int) ($membership['account_id'] ?? 0);
+            $membership['role_id'] = $roleId;
+            $membership['page_overrides'] = [];
+            $membership['data_scope_overrides'] = [];
+            $membership['effective_pages'] = $role['pages'];
+            $membership['effective_data_scopes'] = $role['data_scopes'];
+            $membership['is_system_owner'] = ($role['system_key'] ?? null) === CompanyRoleService::OWNER_SYSTEM_KEY;
+        }
+        unset($membership);
+
+        foreach ($pageOverrideRows as $row) {
+            $membershipId = (int) ($row['membership_id'] ?? 0);
+            $pageKey = (string) ($row['page_key'] ?? '');
+            $effect = (string) ($row['effect'] ?? '');
+            if (!isset($membershipIndexes[$membershipId])
+                || !array_key_exists($pageKey, $memberships[$membershipIndexes[$membershipId]]['effective_pages'])
+                || !in_array($effect, self::PAGE_OVERRIDE_VALUES, true)) {
+                continue;
+            }
+            $index = $membershipIndexes[$membershipId];
+            $memberships[$index]['page_overrides'][$pageKey] = $effect;
+            if (!$memberships[$index]['is_system_owner']) {
+                $memberships[$index]['effective_pages'][$pageKey] = $effect === 'allow';
+            }
+        }
+        foreach ($scopeOverrideRows as $row) {
+            $membershipId = (int) ($row['membership_id'] ?? 0);
+            $entityType = (string) ($row['entity_type'] ?? '');
+            $scope = (string) ($row['scope'] ?? '');
+            if (!isset($membershipIndexes[$membershipId])
+                || !array_key_exists($entityType, $memberships[$membershipIndexes[$membershipId]]['effective_data_scopes'])
+                || !in_array($scope, self::DATA_OVERRIDE_VALUES, true)) {
+                continue;
+            }
+            $index = $membershipIndexes[$membershipId];
+            $memberships[$index]['data_scope_overrides'][$entityType] = $scope;
+            if (!$memberships[$index]['is_system_owner']) {
+                $memberships[$index]['effective_data_scopes'][$entityType] = $scope;
+            }
+        }
+
+        foreach ($memberships as &$membership) {
+            $membership['personal_settings_count'] = count($membership['page_overrides'])
+                + count($membership['data_scope_overrides']);
+            $membership['effective_page_count'] = count(array_filter(
+                $membership['effective_pages'],
+                static fn (bool $allowed): bool => $allowed
+            ));
+        }
+        unset($membership);
+
+        return array_values($memberships);
     }
 
     /**

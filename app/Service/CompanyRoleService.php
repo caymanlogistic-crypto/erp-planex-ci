@@ -14,8 +14,11 @@ final class CompanyRoleService
     {
     }
 
-    /** @return list<array<string,mixed>> */
-    public function listForCompany(int $companyId): array
+    /**
+     * @param list<string> $pageKeys Current keys from the canonical Page Registry.
+     * @return list<array<string,mixed>>
+     */
+    public function listForCompany(int $companyId, array $pageKeys = []): array
     {
         $stmt = $this->pdo->prepare(
             'SELECT r.id, r.name, r.system_key, r.is_system, COUNT(m.id) AS membership_count
@@ -26,7 +29,68 @@ final class CompanyRoleService
              ORDER BY r.is_system DESC, r.name, r.id'
         );
         $stmt->execute([$companyId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $pages = $this->pdo->prepare(
+            'SELECT p.role_id, p.page_key, p.is_allowed
+             FROM role_page_permissions p
+             JOIN company_roles r ON r.id = p.role_id
+             WHERE r.company_id = ?'
+        );
+        $pages->execute([$companyId]);
+        $pageRows = $pages->fetchAll(PDO::FETCH_ASSOC);
+
+        $scopes = $this->pdo->prepare(
+            'SELECT s.role_id, s.entity_type, s.scope
+             FROM role_data_scopes s
+             JOIN company_roles r ON r.id = s.role_id
+             WHERE r.company_id = ?'
+        );
+        $scopes->execute([$companyId]);
+        $scopeRows = $scopes->fetchAll(PDO::FETCH_ASSOC);
+
+        $roleIndexes = [];
+        foreach ($roles as $index => &$role) {
+            $roleId = (int) ($role['id'] ?? 0);
+            $roleIndexes[$roleId] = $index;
+            $role['id'] = $roleId;
+            $role['is_system'] = (bool) ($role['is_system'] ?? false);
+            $role['membership_count'] = (int) ($role['membership_count'] ?? 0);
+            $role['pages'] = array_fill_keys($pageKeys, false);
+            $role['data_scopes'] = array_fill_keys(self::regulatedEntities(), 'none');
+        }
+        unset($role);
+
+        foreach ($pageRows as $row) {
+            $roleId = (int) ($row['role_id'] ?? 0);
+            $pageKey = (string) ($row['page_key'] ?? '');
+            if (!isset($roleIndexes[$roleId]) || !array_key_exists($pageKey, $roles[$roleIndexes[$roleId]]['pages'])) {
+                continue;
+            }
+            $roles[$roleIndexes[$roleId]]['pages'][$pageKey] = (bool) ($row['is_allowed'] ?? false);
+        }
+        foreach ($scopeRows as $row) {
+            $roleId = (int) ($row['role_id'] ?? 0);
+            $entityType = (string) ($row['entity_type'] ?? '');
+            $scope = (string) ($row['scope'] ?? '');
+            if (!isset($roleIndexes[$roleId])
+                || !array_key_exists($entityType, $roles[$roleIndexes[$roleId]]['data_scopes'])
+                || !in_array($scope, self::DATA_SCOPES, true)) {
+                continue;
+            }
+            $roles[$roleIndexes[$roleId]]['data_scopes'][$entityType] = $scope;
+        }
+
+        foreach ($roles as &$role) {
+            if (($role['system_key'] ?? null) === self::OWNER_SYSTEM_KEY) {
+                $role['pages'] = array_fill_keys($pageKeys, true);
+                $role['data_scopes'] = array_fill_keys(self::regulatedEntities(), 'all');
+            }
+            $role['available_page_count'] = count(array_filter($role['pages'], static fn (bool $allowed): bool => $allowed));
+        }
+        unset($role);
+
+        return $roles;
     }
 
     /** @return array{id:int,name:string,system_key:?string} */
