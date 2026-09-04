@@ -1,0 +1,37 @@
+name: Waste Trips Ellipsis Patch Builder
+
+on:
+  push:
+    branches:
+      - chatgpt/waste-trips-request-ellipsis-fix-20260904
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chatgpt/waste-trips-request-ellipsis-fix-20260904
+          fetch-depth: 1
+      - name: Build minimal production fix
+        run: |
+          set -euo pipefail
+          python3 tools/one_shot_waste_trip_ellipsis_patch.py
+          php -l app/View/pages/company_waste_trips.php
+          php -l tests/waste_trip_owner_layout_contract_test.php
+          php tests/waste_trip_owner_layout_contract_test.php | tee /tmp/owner.out
+          grep -Fqx 'WASTE_TRIP_OWNER_LAYOUT=PASS' /tmp/owner.out
+      - name: Remove one-shot builder and commit candidate
+        run: |
+          set -euo pipefail
+          rm -f tools/one_shot_waste_trip_ellipsis_patch.py .github/workflows/zz_waste_trip_ellipsis_patch_builder.yml
+          git config user.name planexerp
+          git config user.email info@plan-ex.ru
+          git add app/View/pages/company_waste_trips.php tests/waste_trip_owner_layout_contract_test.php tools/one_shot_waste_trip_ellipsis_patch.py .github/workflows/zz_waste_trip_ellipsis_patch_builder.yml
+          git diff --cached --check
+          git commit -m 'Waste Trips: disable ellipsis in request column'
+          git push origin HEAD:chatgpt/waste-trips-request-ellipsis-fix-20260904
