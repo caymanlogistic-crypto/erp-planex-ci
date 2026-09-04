@@ -14,6 +14,9 @@ final class WasteTripService
     public const STATUS_COMPLETED = 'completed';
     public const STATUS_CANCELLED = 'cancelled';
     public const CUTOVER_MIGRATION = '130_waste_trip_legacy_linked_cutover.sql';
+    public const ERP_BUSINESS_ID_START = 400;
+    public const LEGACY_RANGE_WARNING_THRESHOLD = 390;
+    public const LEGACY_RANGE_WARNING = 'Legacy ID range approaching ERP range start (400)';
 
     public const STATUS_LABELS = [
         self::STATUS_SEARCHING => 'Поиск исполнителя',
@@ -59,7 +62,7 @@ final class WasteTripService
             $migration->execute([self::CUTOVER_MIGRATION]);
             if ((int) $migration->fetchColumn() !== 1) return false;
             $state = $pdo->query('SELECT legacy_high_water_at_cutover,last_issued_business_id,cutover_completed_at FROM waste_trip_namespace_state WHERE singleton_id=1')->fetch(PDO::FETCH_ASSOC);
-            if (!$state || (int) $state['legacy_high_water_at_cutover'] < 243 || (int) $state['last_issued_business_id'] < (int) $state['legacy_high_water_at_cutover'] || empty($state['cutover_completed_at'])) return false;
+            if (!$state || (int) $state['legacy_high_water_at_cutover'] < 243 || (int) $state['last_issued_business_id'] < 0 || empty($state['cutover_completed_at'])) return false;
             return true;
         } catch (Throwable) { return false; }
     }
@@ -96,15 +99,15 @@ final class WasteTripService
 
     public static function createIndependent(PDO $pdo,PDO $legacyPdo,array $input,array $requestBusinessIds,array $sessionUser): int
     {
-        self::assertNamespaceSafe($pdo,$legacyPdo);$data=self::normalizeInput($input);$errors=self::validateInput($data);if($requestBusinessIds===[])$errors[]='Добавьте хотя бы одну заявку ФЭО.';if($errors!==[])throw new RuntimeException(implode(' ',$errors));self::assertEntitiesVisible($pdo,$data,$sessionUser);
-        $pdo->beginTransaction();try{$businessId=self::allocateBusinessId($pdo);$resolved=self::resolveRequestsForClaim($pdo,$requestBusinessIds,true);self::assertNoActiveClaims($pdo,array_column($resolved,'id'));$tripId=self::insertTrip($pdo,$businessId,$data,null,null,$sessionUser);self::insertRequestLinks($pdo,$tripId,$resolved);self::logAudit($pdo,$tripId,'create',null,['business_id'=>$businessId,'trip'=>$data,'request_ids'=>array_values($requestBusinessIds)],$sessionUser);$pdo->commit();return$businessId;}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
+        $data=self::normalizeInput($input);$errors=self::validateInput($data);if($requestBusinessIds===[])$errors[]='Добавьте хотя бы одну заявку ФЭО.';if($errors!==[])throw new RuntimeException(implode(' ',$errors));self::assertEntitiesVisible($pdo,$data,$sessionUser);
+        $pdo->beginTransaction();try{$businessId=self::allocateBusinessId($pdo,$legacyPdo);$resolved=self::resolveRequestsForClaim($pdo,$requestBusinessIds,true);self::assertNoActiveClaims($pdo,array_column($resolved,'id'));$tripId=self::insertTrip($pdo,$businessId,$data,null,null,$sessionUser);self::insertRequestLinks($pdo,$tripId,$resolved);self::logAudit($pdo,$tripId,'create',null,['business_id'=>$businessId,'trip'=>$data,'request_ids'=>array_values($requestBusinessIds)],$sessionUser);$pdo->commit();return$businessId;}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
     }
 
     public static function materializeLinked(PDO $pdo,int $legacyId,array $operationalInput,array $sourceState,array $sessionUser): int
     {
         if($legacyId<WasteTripLegacySourceService::MIN_LEGACY_ID||(int)($sourceState['business_id']??0)!==$legacyId)throw new RuntimeException('Некорректная legacy identity.');self::assertLegacyOwnedMutationAbsent($operationalInput);$requestIds=array_values($sourceState['request_ids']??[]);if($requestIds===[])throw new RuntimeException('В legacy-рейсе нет полного состава заявок ФЭО.');
         $data=self::normalizeInput(array_merge($operationalInput,['planned_start_mode'=>$sourceState['planned_start_mode'],'planned_start_date'=>$sourceState['planned_start_date'],'planned_start_date_from'=>$sourceState['planned_start_date_from'],'planned_start_date_to'=>$sourceState['planned_start_date_to'],'planned_finish_date'=>$sourceState['planned_finish_date'],'actual_start_date'=>$sourceState['actual_start_date'],'actual_end_date'=>$sourceState['actual_end_date'],'comment'=>$sourceState['comment']]));$errors=self::validateInput($data,true,true);if($errors!==[])throw new RuntimeException(implode(' ',$errors));self::assertEntitiesVisible($pdo,$data,$sessionUser);
-        $pdo->beginTransaction();try{self::assertBusinessIdWithinHighWater($pdo,$legacyId);$dup=$pdo->prepare('SELECT id FROM waste_trips WHERE business_id=? OR (source_system=? AND legacy_flight_id=?) FOR UPDATE');$dup->execute([$legacyId,WasteTripLegacySourceService::SOURCE_SYSTEM,$legacyId]);if($dup->fetchColumn()!==false)throw new RuntimeException('Этот legacy-рейс уже материализован или его business ID уже занят.');$resolved=self::resolveRequestsForClaim($pdo,$requestIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'));$tripId=self::insertTrip($pdo,$legacyId,$data,WasteTripLegacySourceService::SOURCE_SYSTEM,$legacyId,$sessionUser);self::insertRequestLinks($pdo,$tripId,$resolved);$pdo->prepare('UPDATE waste_trips SET legacy_last_checked_at=NOW(),legacy_last_success_at=NOW(),legacy_sync_error=NULL WHERE id=?')->execute([$tripId]);self::logAudit($pdo,$tripId,'create',null,['business_id'=>$legacyId,'source_system'=>WasteTripLegacySourceService::SOURCE_SYSTEM,'request_ids'=>$requestIds],$sessionUser);$pdo->commit();return$legacyId;}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
+        $pdo->beginTransaction();try{$dup=$pdo->prepare('SELECT id FROM waste_trips WHERE business_id=? OR (source_system=? AND legacy_flight_id=?) FOR UPDATE');$dup->execute([$legacyId,WasteTripLegacySourceService::SOURCE_SYSTEM,$legacyId]);if($dup->fetchColumn()!==false)throw new RuntimeException('Этот legacy-рейс уже материализован или его business ID уже занят.');$resolved=self::resolveRequestsForClaim($pdo,$requestIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'));$tripId=self::insertTrip($pdo,$legacyId,$data,WasteTripLegacySourceService::SOURCE_SYSTEM,$legacyId,$sessionUser);self::insertRequestLinks($pdo,$tripId,$resolved);$pdo->prepare('UPDATE waste_trips SET legacy_last_checked_at=NOW(),legacy_last_success_at=NOW(),legacy_sync_error=NULL WHERE id=?')->execute([$tripId]);self::logAudit($pdo,$tripId,'create',null,['business_id'=>$legacyId,'source_system'=>WasteTripLegacySourceService::SOURCE_SYSTEM,'request_ids'=>$requestIds],$sessionUser);$pdo->commit();return$legacyId;}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
     }
 
     public static function update(PDO $pdo,int $tripId,array $input,array $requestBusinessIds,int $expectedVersion,array $sessionUser): void
@@ -121,14 +124,17 @@ final class WasteTripService
     public static function syncLegacyOwnedState(PDO $pdo,int $tripId,array $sourceState): void
     {
         $businessId=(int)($sourceState['business_id']??0);$requestIds=array_values($sourceState['request_ids']??[]);if($businessId<WasteTripLegacySourceService::MIN_LEGACY_ID||$requestIds===[])throw new RuntimeException('Некорректный authoritative legacy state.');$pdo->beginTransaction();
-        try{$trip=self::fetchTripForUpdate($pdo,$tripId);if($trip===null||!self::isLegacyLinked($trip)||(int)$trip['business_id']!==$businessId||(int)$trip['legacy_flight_id']!==$businessId)throw new RuntimeException('Linked Waste Trip identity mismatch.');self::assertBusinessIdWithinHighWater($pdo,$businessId);$resolved=self::resolveRequestsForClaim($pdo,$requestIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'),$tripId);$stmt=$pdo->prepare('UPDATE waste_trips SET comment=?,planned_start_mode=?,planned_start_date=?,planned_start_date_from=?,planned_start_date_to=?,planned_finish_date=?,actual_start_date=?,actual_end_date=?,legacy_sync_error=NULL,legacy_last_checked_at=NOW(),legacy_last_success_at=NOW(),lock_version=lock_version+1 WHERE id=?');$stmt->execute([$sourceState['comment'],$sourceState['planned_start_mode'],$sourceState['planned_start_date'],$sourceState['planned_start_date_from'],$sourceState['planned_start_date_to'],$sourceState['planned_finish_date'],$sourceState['actual_start_date'],$sourceState['actual_end_date'],$tripId]);$pdo->prepare('DELETE FROM waste_trip_requests WHERE waste_trip_id=?')->execute([$tripId]);self::insertRequestLinks($pdo,$tripId,$resolved);$pdo->commit();}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
+        try{$trip=self::fetchTripForUpdate($pdo,$tripId);if($trip===null||!self::isLegacyLinked($trip)||(int)$trip['business_id']!==$businessId||(int)$trip['legacy_flight_id']!==$businessId)throw new RuntimeException('Linked Waste Trip identity mismatch.');$resolved=self::resolveRequestsForClaim($pdo,$requestIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'),$tripId);$stmt=$pdo->prepare('UPDATE waste_trips SET comment=?,planned_start_mode=?,planned_start_date=?,planned_start_date_from=?,planned_start_date_to=?,planned_finish_date=?,actual_start_date=?,actual_end_date=?,legacy_sync_error=NULL,legacy_last_checked_at=NOW(),legacy_last_success_at=NOW(),lock_version=lock_version+1 WHERE id=?');$stmt->execute([$sourceState['comment'],$sourceState['planned_start_mode'],$sourceState['planned_start_date'],$sourceState['planned_start_date_from'],$sourceState['planned_start_date_to'],$sourceState['planned_finish_date'],$sourceState['actual_start_date'],$sourceState['actual_end_date'],$tripId]);$pdo->prepare('DELETE FROM waste_trip_requests WHERE waste_trip_id=?')->execute([$tripId]);self::insertRequestLinks($pdo,$tripId,$resolved);$pdo->commit();}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
     }
 
     public static function markLegacySyncError(PDO $pdo,int $tripId,string $message): void
     { $message=self::nullableText($message,1000)??'Unknown legacy sync error';$stmt=$pdo->prepare("UPDATE waste_trips SET legacy_sync_error=?,legacy_last_checked_at=NOW() WHERE id=? AND source_system='legacy_flights'");$stmt->execute([$message,$tripId]); }
 
-    public static function assertNamespaceSafe(PDO $pdo,PDO $legacyPdo): void
-    { $state=self::namespaceState($pdo,false);$freshMax=WasteTripLegacySourceService::maxLegacyId($legacyPdo);if($freshMax>(int)$state['legacy_high_water_at_cutover'])throw new RuntimeException('CRITICAL LEGACY NAMESPACE VIOLATION: flights.MAX(id)='.$freshMax.' выше cutover high-water '.(int)$state['legacy_high_water_at_cutover'].'.'); }
+    public static function legacyRangeWarningForMax(int $legacyMax): ?string
+    { return $legacyMax >= self::LEGACY_RANGE_WARNING_THRESHOLD ? self::LEGACY_RANGE_WARNING : null; }
+
+    public static function legacyRangeDiagnostic(PDO $legacyPdo): array
+    { $legacyMax=WasteTripLegacySourceService::maxLegacyId($legacyPdo);return['legacy_max_id'=>$legacyMax,'warning'=>self::legacyRangeWarningForMax($legacyMax)]; }
 
     public static function linkedTripsForSync(PDO $pdo,int $limit=500): array
     { $limit=max(1,min(500,$limit));return$pdo->query("SELECT id,business_id,legacy_flight_id FROM waste_trips WHERE source_system='legacy_flights' ORDER BY (legacy_last_checked_at IS NULL) DESC, legacy_last_checked_at ASC, id ASC LIMIT {$limit}")->fetchAll(PDO::FETCH_ASSOC); }
@@ -163,10 +169,17 @@ final class WasteTripService
     { return[':client_id'=>$data['client_id'],':route_executor_id'=>$data['route_executor_id'],':responsible_user_id'=>$data['responsible_user_id'],':destination_type'=>$data['destination_type'],':utilizer_id'=>$data['utilizer_id'],':status'=>$data['status'],':planned_start_mode'=>$data['planned_start_mode'],':planned_start_date'=>$data['planned_start_date'],':planned_start_date_from'=>$data['planned_start_date_from'],':planned_start_date_to'=>$data['planned_start_date_to'],':planned_finish_date'=>$data['planned_finish_date'],':actual_start_date'=>$data['actual_start_date'],':actual_end_date'=>$data['actual_end_date'],':comment'=>$data['comment'],':cancellation_reason'=>$data['cancellation_reason']]; }
     private static function tripUpdateParams(array $data,array $sessionUser): array { $actor=(int)($sessionUser['user_id']??0)?:null;$role=(string)($sessionUser['role_code']??'');return self::tripParams($data)+[':user_id'=>$actor,':role_code'=>$role]; }
 
-    private static function allocateBusinessId(PDO $pdo): int
-    { $state=self::namespaceState($pdo,true);$next=max((int)$state['legacy_high_water_at_cutover'],(int)$state['last_issued_business_id'])+1;$stmt=$pdo->prepare('UPDATE waste_trip_namespace_state SET last_issued_business_id=?,updated_at=NOW() WHERE singleton_id=1 AND last_issued_business_id=?');$stmt->execute([$next,(int)$state['last_issued_business_id']]);if($stmt->rowCount()!==1)throw new RuntimeException('Конфликт выдачи business ID. Повторите операцию.');return$next; }
+    private static function allocateBusinessId(PDO $pdo,PDO $legacyPdo): int
+    {
+        $state=self::namespaceState($pdo,true);$previous=(int)$state['last_issued_business_id'];$next=max(self::ERP_BUSINESS_ID_START,$previous+1);
+        $occupied=$pdo->prepare('SELECT id FROM waste_trips WHERE business_id=? LIMIT 1 FOR UPDATE');
+        while(true){
+            if(!WasteTripLegacySourceService::hasFlightId($legacyPdo,$next)){$occupied->execute([$next]);if($occupied->fetchColumn()===false)break;}
+            $next++;
+        }
+        $stmt=$pdo->prepare('UPDATE waste_trip_namespace_state SET last_issued_business_id=?,updated_at=NOW() WHERE singleton_id=1 AND last_issued_business_id=?');$stmt->execute([$next,$previous]);if($stmt->rowCount()!==1)throw new RuntimeException('Конфликт выдачи business ID. Повторите операцию.');return$next;
+    }
     private static function namespaceState(PDO $pdo,bool $forUpdate): array { $sql='SELECT legacy_high_water_at_cutover,last_issued_business_id,cutover_completed_at FROM waste_trip_namespace_state WHERE singleton_id=1'.($forUpdate?' FOR UPDATE':'');$row=$pdo->query($sql)->fetch(PDO::FETCH_ASSOC);if(!$row||empty($row['cutover_completed_at']))throw new RuntimeException('Waste Trips cutover не завершён.');return$row; }
-    private static function assertBusinessIdWithinHighWater(PDO $pdo,int $businessId): void { $state=self::namespaceState($pdo,true);if($businessId>(int)$state['legacy_high_water_at_cutover'])throw new RuntimeException('CRITICAL LEGACY NAMESPACE VIOLATION: legacy ID выше cutover high-water.'); }
     private static function isLegacyLinked(array $trip): bool { return($trip['source_system']??null)===WasteTripLegacySourceService::SOURCE_SYSTEM&&(int)($trip['legacy_flight_id']??0)>0; }
     private static function assertLegacyOwnedMutationAbsent(array $input): void { $present=[];foreach(self::LEGACY_OWNED_INPUT_KEYS as$key)if(array_key_exists($key,$input))$present[]=$key;if($present!==[])throw new RuntimeException('Legacy-owned поля нельзя изменять из ERP: '.implode(', ',$present).'.'); }
     private static function assertCanAccessTrip(PDO $pdo,array $trip,array $sessionUser): void { if(!self::canAccessTrip($pdo,$trip,$sessionUser))throw new RuntimeException('У вас нет доступа к этому рейсу.'); }
