@@ -14,7 +14,6 @@ s=s.replace("      - 'app/Service/DocumentGenerator*.php'", "      - 'app/Servic
 s=s.replace("      - 'scripts/document_generator_template_v2.php'", "      - 'scripts/document_generator_template_v2.php'\n      - 'scripts/document_generator_template_v3.php'")
 s=s.replace("      - 'tests/document_generator_template_v2_production_contract_test.php'", "      - 'tests/document_generator_template_v2_production_contract_test.php'\n      - 'tests/document_generator_template_v3_production_contract_test.php'\n      - 'tests/document_generator_google_vehicle_contract_test.php'")
 s=s.replace("      - '.github/workflows/document_generator_template_v2_production.yml'", "      - '.github/workflows/document_generator_template_v2_production.yml'\n      - '.github/workflows/document_generator_template_v3_production.yml'\n      - '.github/workflows/document_generator_template_v3_agent_request.yml'")
-# Each of the four replacements above intentionally occurs twice (PR + push).
 for needle in ["app/Service/GoogleSheetsRequestContactService.php","scripts/document_generator_template_v3.php","tests/document_generator_google_vehicle_contract_test.php",".github/workflows/document_generator_template_v3_production.yml"]:
     if s.count(needle)<2: raise SystemExit('path filter wiring missing '+needle)
 
@@ -28,3 +27,4 @@ one("          php tests/document_generator_template_v2_production_contract_test
 one("          grep -Fqx 'DOCUMENT_GENERATOR_TEMPLATE_V2_PRODUCTION_CONTRACT=PASS' /tmp/document-generator-template-v2-contract.log", "          grep -Fqx 'DOCUMENT_GENERATOR_TEMPLATE_V2_PRODUCTION_CONTRACT=PASS' /tmp/document-generator-template-v2-contract.log\n          grep -Fqx 'DOCUMENT_GENERATOR_TEMPLATE_V3_PRODUCTION_CONTRACT=PASS' /tmp/document-generator-template-v3-contract.log\n          grep -Fqx 'DOCUMENT_GENERATOR_GOOGLE_VEHICLE_CONTRACT=PASS' /tmp/document-generator-google-vehicle.log")
 p.write_text(s,encoding='utf-8')
 print('DOCUMENT_GENERATOR_CI_WIRING_PATCH=PASS')
+# one-shot rerun trigger
