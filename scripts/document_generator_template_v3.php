@@ -5,9 +5,12 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'cgi-fcgi') { fwrite(STDERR,"CLI/CGI only
 $root=rtrim((string)(getenv('PLANEX_ROOT')?:($argv[1]??'')),'/');
 $action=(string)(getenv('PLANEX_TEMPLATE_ACTION')?:'snapshot');
 $expectedV3Sha=strtolower(trim((string)(getenv('PLANEX_EXPECTED_V3_SHA')?:'')));
+$candidatePath=trim((string)(getenv('PLANEX_TEMPLATE_CANDIDATE_PATH')?:''));
 if(!in_array($action,['snapshot','apply'],true))throw new RuntimeException('PLANEX_TEMPLATE_ACTION must be snapshot or apply');
 if($action==='apply'&&!preg_match('/^[0-9a-f]{64}$/',$expectedV3Sha))throw new RuntimeException('PLANEX_EXPECTED_V3_SHA is required for apply');
 if($expectedV3Sha!==''&&!preg_match('/^[0-9a-f]{64}$/',$expectedV3Sha))throw new RuntimeException('PLANEX_EXPECTED_V3_SHA invalid');
+if($candidatePath!==''&&!preg_match('~^/tmp/docgen_template_v3_[A-Za-z0-9_.-]+\.candidate\.docx$~',$candidatePath))throw new RuntimeException('PLANEX_TEMPLATE_CANDIDATE_PATH invalid');
+if($action==='apply'&&$candidatePath==='')throw new RuntimeException('PLANEX_TEMPLATE_CANDIDATE_PATH is required for apply');
 if($root===''||!is_file($root.'/.env')||!is_file($root.'/bootstrap/app.php'))throw new RuntimeException('PLANEX_ROOT invalid');
 $config=require $root.'/bootstrap/app.php';
 require_once $root.'/app/Support/crypto_helper.php';
@@ -41,9 +44,20 @@ $inspectDocx=static function(string $path):array{
     ];
 };
 
+$validateV3Candidate=static function(string $path)use($inspectDocx):array{
+    if(!is_file($path))throw new RuntimeException('Staged production v3 candidate missing');
+    $info=$inspectDocx($path);
+    foreach(['vehicle.model','vehicle.plate','vehicle.vin','trailer.display','request.contacts']as$required){
+        if(!in_array($required,$info['placeholders'],true))throw new RuntimeException('Staged production v3 candidate missing '.$required);
+    }
+    if($info['has_bank_placeholder'])throw new RuntimeException('Staged production v3 candidate contains bank placeholder');
+    if(!preg_match('/^[0-9a-f]{64}$/',(string)$info['sha256']))throw new RuntimeException('Staged production v3 candidate SHA invalid');
+    return$info;
+};
+
 // Transform a copy of the proven production-v2. Only the vehicle identity paragraph is rewritten;
 // all other Word parts, paragraph properties and the first run formatting are preserved.
-$transformProductionV2=static function(string $source)use($inspectDocx):string{
+$transformProductionV2=static function(string $source)use($inspectDocx,$validateV3Candidate):string{
     $before=$inspectDocx($source);
     if(!hash_equals(DOCGEN_PRODUCTION_V2_SHA,(string)$before['sha256']))throw new RuntimeException('Production v2 source SHA mismatch');
     if($before['has_bank_placeholder'])throw new RuntimeException('Production v2 unexpectedly contains bank placeholder');
@@ -80,9 +94,7 @@ $transformProductionV2=static function(string $source)use($inspectDocx):string{
         }
     }finally{$zip->close();}
     if($matched!==1){@unlink($out);throw new RuntimeException('Expected exactly one vehicle paragraph, found '.$matched);}
-    $after=$inspectDocx($out);
-    foreach(['vehicle.vin','trailer.display','request.contacts']as$required){if(!in_array($required,$after['placeholders'],true)){@unlink($out);throw new RuntimeException('Transformed v3 missing '.$required);}}
-    if($after['has_bank_placeholder']){@unlink($out);throw new RuntimeException('Transformed v3 reintroduced bank placeholder');}
+    try{$validateV3Candidate($out);}catch(Throwable$e){@unlink($out);throw$e;}
     return$out;
 };
 
@@ -107,33 +119,41 @@ foreach($companies as$company){
         $state='unexpected';$plannedSha='';$candidate=null;
         if(hash_equals(DOCGEN_PRODUCTION_V2_SHA,$actual)){
             $state='production_v2';
-            $candidate=$transformProductionV2($path);$plannedSha=hash_file('sha256',$candidate)?:'';
-            if(!preg_match('/^[0-9a-f]{64}$/',$plannedSha)){@unlink($candidate);throw new RuntimeException('Cannot calculate planned production v3 SHA');}
+            if($action==='apply'){
+                $candidate=$candidatePath;
+                $candidateInfo=$validateV3Candidate($candidate);
+                $plannedSha=(string)$candidateInfo['sha256'];
+            }else{
+                $candidate=$transformProductionV2($path);
+                $plannedSha=hash_file('sha256',$candidate)?:'';
+            }
+            if(!preg_match('/^[0-9a-f]{64}$/',$plannedSha)){if(is_string($candidate)&&$candidate!==$candidatePath)@unlink($candidate);throw new RuntimeException('Cannot calculate planned production v3 SHA');}
         }elseif($hasVin&&$hasTrailer&&$hasContacts){
             $previous=$pdo->prepare('SELECT sha256 FROM document_template_versions WHERE template_id=? AND version_no=? LIMIT 1');
             $previous->execute([(int)$row['template_id'],(int)$row['version_no']-1]);
             $previousSha=(string)($previous->fetchColumn()?:'');
             if((int)$row['version_no']>=3&&hash_equals(DOCGEN_PRODUCTION_V2_SHA,$previousSha)&&($expectedV3Sha===''||hash_equals($expectedV3Sha,$actual)))$state='production_v3';
         }
-        if($state==='unexpected'){if(is_string($candidate))@unlink($candidate);throw new RuntimeException('Unexpected/custom active vehicle-lease template SHA for company '.$company['id'].' template '.$row['template_id']);}
+        if($state==='unexpected'){if(is_string($candidate)&&$candidate!==$candidatePath)@unlink($candidate);throw new RuntimeException('Unexpected/custom active vehicle-lease template SHA for company '.$company['id'].' template '.$row['template_id']);}
         $entry=['template_id'=>(int)$row['template_id'],'version_id'=>(int)$row['active_version_id'],'version_no'=>(int)$row['version_no'],'sha256'=>$actual,'state'=>$state,'needs_update'=>$state==='production_v2'?1:0,'planned_sha256'=>$plannedSha,'has_vehicle_vin'=>$hasVin?1:0,'has_trailer_display'=>$hasTrailer?1:0,'has_request_contacts'=>$hasContacts?1:0,'updated'=>0];
         $rowIndex=count($tenant['templates']);$tenant['templates'][]=$entry;
         if($state==='production_v2')$targets[]=['pdo'=>$pdo,'company'=>$company,'row'=>$row,'path'=>$path,'candidate'=>$candidate,'planned_sha'=>$plannedSha,'tenant_index'=>$tenantIndex,'row_index'=>$rowIndex];
-        elseif(is_string($candidate))@unlink($candidate);
+        elseif(is_string($candidate)&&$candidate!==$candidatePath)@unlink($candidate);
     }
     $result['tenants'][]=$tenant;
 }
 
 if($action==='apply'){
-    if(count($targets)!==1){foreach($targets as$t)if(is_string($t['candidate']??null))@unlink($t['candidate']);throw new RuntimeException('Apply requires exactly one proven production-v2 template; found '.count($targets));}
+    if(count($targets)!==1){if($candidatePath!==''&&is_file($candidatePath))@unlink($candidatePath);throw new RuntimeException('Apply requires exactly one proven production-v2 template; found '.count($targets));}
     $target=$targets[0];
-    if(!hash_equals($expectedV3Sha,(string)$target['planned_sha'])){@unlink((string)$target['candidate']);throw new RuntimeException('Planned production v3 SHA changed before apply');}
+    if(!hash_equals($expectedV3Sha,(string)$target['planned_sha'])){@unlink($candidatePath);throw new RuntimeException('Staged production v3 SHA does not match bound planned SHA');}
     /** @var PDO $pdo */$pdo=$target['pdo'];$row=$target['row'];$company=$target['company'];$candidate=(string)$target['candidate'];
     $db=(string)$pdo->query('SELECT DATABASE()')->fetchColumn();$lockName='planex_docgen_tpl_v3_'.substr(hash('sha256',$db.':'.$row['template_id']),0,24);$lock=$pdo->prepare('SELECT GET_LOCK(?,10)');$lock->execute([$lockName]);if((int)$lock->fetchColumn()!==1){@unlink($candidate);throw new RuntimeException('Cannot lock template '.$row['template_id']);}
     try{
         $fresh=DocumentGeneratorService::getTemplateVersion($pdo,(int)$row['template_id'],null,true);if(!$fresh)throw new RuntimeException('Template changed before apply');
         if((int)$fresh['version_id']!==(int)$row['active_version_id']||!hash_equals(DOCGEN_PRODUCTION_V2_SHA,(string)$fresh['sha256']))throw new RuntimeException('Active template changed concurrently');
-        if(!hash_equals($expectedV3Sha,hash_file('sha256',$candidate)?:''))throw new RuntimeException('Candidate v3 SHA changed');
+        $candidateInfo=$validateV3Candidate($candidate);
+        if(!hash_equals($expectedV3Sha,(string)$candidateInfo['sha256']))throw new RuntimeException('Staged production v3 candidate SHA changed');
         $newVersionId=DocumentGeneratorService::createTemplateVersionFromFile($pdo,(int)$company['id'],(int)$row['template_id'],'vehicle_lease_crew',(string)$row['name'],$candidate,'contract_vehicle_lease_crew_v3.docx',0,'system');
         $after=DocumentGeneratorService::getTemplateVersion($pdo,(int)$row['template_id'],null,true);if(!$after||(int)$after['version_id']!==$newVersionId)throw new RuntimeException('New production v3 not active');
         if((int)$after['version_no']!==(int)$row['version_no']+1)throw new RuntimeException('Template version did not increment exactly once');
@@ -143,7 +163,21 @@ if($action==='apply'){
         $result['tenants'][$ti]['templates'][$ri]['updated']=1;$result['tenants'][$ti]['templates'][$ri]['new_version_id']=$newVersionId;$result['tenants'][$ti]['templates'][$ri]['new_version_no']=(int)$after['version_no'];$result['tenants'][$ti]['templates'][$ri]['new_sha256']=(string)$after['sha256'];
     }finally{@unlink($candidate);try{$rel=$pdo->prepare('SELECT RELEASE_LOCK(?)');$rel->execute([$lockName]);}catch(Throwable){}}
 }else{
-    foreach($targets as$t)if(is_string($t['candidate']??null))@unlink($t['candidate']);
+    if($candidatePath!==''&&count($targets)!==1){foreach($targets as$t)if(is_string($t['candidate']??null))@unlink($t['candidate']);@unlink($candidatePath);throw new RuntimeException('Snapshot staging requires exactly one proven production-v2 template; found '.count($targets));}
+    if($candidatePath!==''&&count($targets)===1){
+        $target=$targets[0];$tmpCandidate=(string)$target['candidate'];$plannedSha=(string)$target['planned_sha'];
+        @unlink($candidatePath);
+        if(!rename($tmpCandidate,$candidatePath)){
+            if(!copy($tmpCandidate,$candidatePath)){@unlink($tmpCandidate);throw new RuntimeException('Cannot stage production v3 candidate');}
+            @unlink($tmpCandidate);
+        }
+        @chmod($candidatePath,0600);
+        $stagedInfo=$validateV3Candidate($candidatePath);
+        if(!hash_equals($plannedSha,(string)$stagedInfo['sha256'])){@unlink($candidatePath);throw new RuntimeException('Staged production v3 SHA changed during snapshot');}
+        $ti=(int)$target['tenant_index'];$ri=(int)$target['row_index'];$result['tenants'][$ti]['templates'][$ri]['candidate_staged']=1;
+    }else{
+        foreach($targets as$t)if(is_string($t['candidate']??null))@unlink($t['candidate']);
+    }
 }
 
 echo 'DOCGEN_TEMPLATE_V3_SNAPSHOT='.json_encode($result,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)."\n";

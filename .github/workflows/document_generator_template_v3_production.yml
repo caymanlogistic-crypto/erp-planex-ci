@@ -85,7 +85,7 @@ jobs:
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/document_generator_template_v3.php "$SSH_USER@$SSH_HOST:/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php"
           echo "DEPLOYED_SOURCE_SHA=$marker"
 
-      - name: Snapshot before and bind planned SHA
+      - name: Snapshot before and stage exact candidate
         id: before
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -93,8 +93,10 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=snapshot /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_before.txt
+          candidate="/tmp/docgen_template_v3_${GITHUB_RUN_ID}.candidate.docx"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=snapshot PLANEX_TEMPLATE_CANDIDATE_PATH='$candidate' /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_before.txt
           grep -q 'DOCGEN_TEMPLATE_V3_READ_ONLY_OK' template_v3_before.txt
+          grep -q '"candidate_staged":1' template_v3_before.txt
           planned_sha="$(python3 - <<'PY'
           import json,re
           line=next((x for x in open('template_v3_before.txt',encoding='utf-8') if x.startswith('DOCGEN_TEMPLATE_V3_SNAPSHOT=')),None)
@@ -111,8 +113,11 @@ jobs:
           print(sha)
           PY
           )"
+          remote_sha="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "sha256sum '$candidate' | awk '{print \$1}'")"
+          test "$remote_sha" = "$planned_sha"
           echo "planned_sha=$planned_sha" >> "$GITHUB_OUTPUT"
           echo "PLANNED_PRODUCTION_V3_SHA=$planned_sha"
+          echo "STAGED_PRODUCTION_V3_SHA=$remote_sha"
 
       - name: Create and activate immutable template v3
         env:
@@ -123,7 +128,8 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$PLANNED_SHA" =~ ^[0-9a-f]{64}$ ]]
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=apply PLANEX_EXPECTED_V3_SHA='$PLANNED_SHA' /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_apply.txt
+          candidate="/tmp/docgen_template_v3_${GITHUB_RUN_ID}.candidate.docx"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TEMPLATE_ACTION=apply PLANEX_EXPECTED_V3_SHA='$PLANNED_SHA' PLANEX_TEMPLATE_CANDIDATE_PATH='$candidate' /usr/bin/php8.5 '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" | tee template_v3_apply.txt
           grep -q 'DOCGEN_TEMPLATE_V3_APPLY_OK' template_v3_apply.txt
           grep -q "$PLANNED_SHA" template_v3_apply.txt
 
@@ -155,6 +161,7 @@ jobs:
                       updated+=1
                       if prev.get('state')!='production_v2' or prev.get('sha256')!='7b3b86b00f49521a95a41a107dcdaf63e969c36264befcac372e83c2d53a8d56':
                           raise SystemExit(f'company {cid} template {tid}: predecessor is not proven production-v2')
+                      if prev.get('candidate_staged')!=1: raise SystemExit('before candidate was not staged')
                       if prev.get('planned_sha256')!=planned: raise SystemExit('before planned SHA drift')
                       if new.get('state')!='production_v3' or new.get('sha256')!=planned:
                           raise SystemExit(f'company {cid} template {tid}: active production-v3 SHA invalid')
@@ -204,5 +211,5 @@ jobs:
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
-          if [ -f "$HOME/.ssh/key" ]; then ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php'" 2>/dev/null || true; fi
+          if [ -f "$HOME/.ssh/key" ]; then ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.php' '/tmp/docgen_template_v3_${GITHUB_RUN_ID}.candidate.docx'" 2>/dev/null || true; fi
           rm -f "$HOME/.ssh/key"
