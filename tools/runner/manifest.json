@@ -1,0 +1,16 @@
+{
+  "schema": "erp-planex-runner-helpers/v1",
+  "version": "2026-09-05.1",
+  "canonical_branch": "chatgpt/production-stabilization-20260802",
+  "runner_root": "~/erp-planex-test",
+  "destination": "bin",
+  "files": [
+    {"name": "new-task", "source": "helpers/new-task", "sha256": "da53b4b4eaa9459706b64088e15ca95765d4965ee49cb9f1b420ca2c37d53c8b", "mode": "0700"},
+    {"name": "task-db", "source": "helpers/task-db", "sha256": "d9834e3cc5aca21d63cebdfc1c92a9898a68e7cd71d64615c9fcc9ce90788739", "mode": "0700"},
+    {"name": "test-db-slot", "source": "helpers/test-db-slot", "sha256": "35ff2735c9ee68225ceed6c07db78760ec67a80393dabc1e375e19eba782e085", "mode": "0700"},
+    {"name": "clean-test-db", "source": "helpers/clean-test-db", "sha256": "5df0177c227b6218391d13dd6e85bb760cf5bade2fbfe2ef7f7855af4b12c784", "mode": "0700"},
+    {"name": "preflight-task", "source": "helpers/preflight-task", "sha256": "db1a24f0c391966e6c181fb34da955f4ed47b905624ede18bc172b4523cf66ab", "mode": "0700"},
+    {"name": "push-task", "source": "helpers/push-task", "sha256": "62f815f507b4ab46859a5a075dfc3abb1e399054e607302a633cb1fb1e4e0ad4", "mode": "0700"},
+    {"name": "runner-env", "source": "helpers/runner-env", "sha256": "4f24947a2ec8a7e84f4c3b0b6c75af0be72f96745b85dae7257e97c5713dde92", "mode": "0700"}
+  ]
+}

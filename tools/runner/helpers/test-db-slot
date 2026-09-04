@@ -1,0 +1,159 @@
+#!/bin/bash
+
+ROOT="${PLANEX_TEST_ROOT:-$HOME/erp-planex-test}"
+LOCKROOT="$ROOT/state/db-slots"
+
+mkdir -p "$LOCKROOT"
+chmod 700 "$ROOT/state" "$LOCKROOT" 2>/dev/null
+
+usage() {
+    echo "Usage:"
+    echo "  test-db-slot status"
+    echo "  test-db-slot claim TASK_ID"
+    echo "  test-db-slot release TASK_ID"
+    exit 2
+}
+
+worktree_now() {
+    git rev-parse --show-toplevel 2>/dev/null || pwd -P
+}
+
+branch_now() {
+    git symbolic-ref --short HEAD 2>/dev/null || echo "DETACHED"
+}
+
+status() {
+    echo "SLOT_1=SHARED_NON_DESTRUCTIVE DB=spugovxsim_test"
+
+    for n in 2 3 4 5; do
+        D="$LOCKROOT/slot-$n.lock"
+
+        if [ -d "$D" ] && [ -f "$D/owner.env" ]; then
+            unset TASK_ID WORKTREE BRANCH CLAIMED_AT CLAIM_ID
+            . "$D/owner.env"
+
+            echo "SLOT_$n=BUSY TASK=$TASK_ID BRANCH=$BRANCH SINCE=$CLAIMED_AT"
+        else
+            echo "SLOT_$n=FREE"
+        fi
+    done
+}
+
+claim() {
+    TASK="$1"
+
+    if [ -z "$TASK" ]; then
+        usage
+    fi
+
+    case "$TASK" in
+        *[!A-Za-z0-9._/-]*)
+            echo "INVALID_TASK_ID"
+            exit 2
+            ;;
+    esac
+
+    WT="$(worktree_now)"
+    BR="$(branch_now)"
+
+    # If this task already owns a slot, return it instead of taking another.
+    for n in 2 3 4 5; do
+        D="$LOCKROOT/slot-$n.lock"
+
+        if [ -f "$D/owner.env" ]; then
+            unset TASK_ID WORKTREE BRANCH CLAIMED_AT CLAIM_ID
+            . "$D/owner.env"
+
+            if [ "$TASK_ID" = "$TASK" ] && [ "$WORKTREE" = "$WT" ]; then
+                echo "TEST_DB_SLOT_ALREADY_CLAIMED"
+                echo "DB_SLOT=$n"
+                echo "DB_ENV_FILE=$ROOT/secrets/db-slot-$n.env"
+                echo "CLAIM_ID=$CLAIM_ID"
+                exit 0
+            fi
+        fi
+    done
+
+    for n in 2 3 4 5; do
+        D="$LOCKROOT/slot-$n.lock"
+
+        if mkdir "$D" 2>/dev/null; then
+            chmod 700 "$D"
+
+            NOW="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+            CID="$(date +%s)-$$-${RANDOM:-0}"
+
+            {
+                printf 'TASK_ID=%q\n' "$TASK"
+                printf 'WORKTREE=%q\n' "$WT"
+                printf 'BRANCH=%q\n' "$BR"
+                printf 'CLAIMED_AT=%q\n' "$NOW"
+                printf 'CLAIM_ID=%q\n' "$CID"
+            } > "$D/owner.env"
+
+            chmod 600 "$D/owner.env"
+
+            echo "TEST_DB_SLOT_CLAIMED"
+            echo "DB_SLOT=$n"
+            echo "DB_ENV_FILE=$ROOT/secrets/db-slot-$n.env"
+            echo "CLAIM_ID=$CID"
+            exit 0
+        fi
+    done
+
+    echo "TEST_DB_POOL_EXHAUSTED"
+    echo "All mutable OWNER-APPROVED test DB slots are occupied."
+    echo "Do not use another agent's slot."
+    echo "Do not use production DB."
+    echo "Pause DB-dependent execution and report to OWNER."
+    exit 75
+}
+
+release() {
+    TASK="$1"
+
+    if [ -z "$TASK" ]; then
+        usage
+    fi
+
+    WT="$(worktree_now)"
+
+    for n in 2 3 4 5; do
+        D="$LOCKROOT/slot-$n.lock"
+
+        if [ -f "$D/owner.env" ]; then
+            unset TASK_ID WORKTREE BRANCH CLAIMED_AT CLAIM_ID
+            . "$D/owner.env"
+
+            if [ "$TASK_ID" = "$TASK" ] && [ "$WORKTREE" = "$WT" ]; then
+                rm -f "$D/owner.env"
+                rmdir "$D" 2>/dev/null
+
+                echo "TEST_DB_SLOT_RELEASED"
+                echo "DB_SLOT=$n"
+                exit 0
+            fi
+        fi
+    done
+
+    echo "TEST_DB_SLOT_RELEASE_REFUSED"
+    echo "No slot owned by this TASK_ID and worktree."
+    exit 3
+}
+
+case "$1" in
+    status)
+        status
+        ;;
+    claim)
+        [ "$#" -eq 2 ] || usage
+        claim "$2"
+        ;;
+    release)
+        [ "$#" -eq 2 ] || usage
+        release "$2"
+        ;;
+    *)
+        usage
+        ;;
+esac

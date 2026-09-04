@@ -30,6 +30,8 @@ yes(".github/p07/P07_deploy_erpv2.sh", "control_plane")
 yes("docs/memory/critical_records.json", "memory")
 yes("tools/agent_preflight.py", "control_plane")
 yes("tests/agent_preflight_test.py", "control_plane")
+yes("tools/runner/helpers/push-task", "control_plane")
+yes("tests/runner_helpers_contract_test.py", "control_plane")
 
 # Fail-closed known CRITICAL families.
 for path in [
@@ -44,6 +46,8 @@ for path in [
     ".github/p07/P07_deploy_erpv2.sh",
     "tools/database/generate_schema_docs.php",
     "tools/agent_preflight.py",
+    "tools/runner/manifest.json",
+    "tests/runner_helpers_contract_test.py",
     "AGENTS.md",
     "docs/GITHUB_CONTROL_PLANE.md",
     "docs/memory/critical_records.json",

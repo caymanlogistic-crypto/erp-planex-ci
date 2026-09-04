@@ -148,6 +148,7 @@ jobs:
           set -euo pipefail
           python3 tests/ci_scope_test.py
           python3 tests/agent_preflight_test.py
+          python3 tests/runner_helpers_contract_test.py
 
       - name: Migration checks when relevant
         if: steps.changes.outputs.migrations == 'true'

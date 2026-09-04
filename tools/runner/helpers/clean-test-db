@@ -1,0 +1,216 @@
+#!/bin/bash
+
+ROOT="$HOME/erp-planex-test"
+SLOT="${1:-}"
+
+case "$SLOT" in
+    2) EXPECTED_DB="spugovxsim_test2" ;;
+    3) EXPECTED_DB="spugovxsim_test3" ;;
+    4) EXPECTED_DB="spugovxsim_test4" ;;
+    5) EXPECTED_DB="spugovxsim_test5" ;;
+    *)
+        echo "CLEAN_TEST_DB_REFUSED=SLOT_NOT_MUTABLE"
+        exit 2
+        ;;
+esac
+
+ENV_FILE="$ROOT/secrets/db-slot-$SLOT.env"
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo "CLEAN_TEST_DB_FAIL=ENV_NOT_FOUND"
+    exit 3
+fi
+
+set -a
+. "$ENV_FILE"
+set +a
+
+export CLEAN_EXPECTED_DB="$EXPECTED_DB"
+
+"$ROOT/bin/php" <<'PHP'
+<?php
+
+function qi(string $name): string
+{
+    return '`' . str_replace('`', '``', $name) . '`';
+}
+
+$expected = getenv('CLEAN_EXPECTED_DB');
+$host = getenv('PLANEX_TEST_DB_HOST');
+$port = getenv('PLANEX_TEST_DB_PORT');
+$db   = getenv('PLANEX_TEST_DB_NAME');
+$user = getenv('PLANEX_TEST_DB_USER');
+$pass = getenv('PLANEX_TEST_DB_PASSWORD');
+
+try {
+    if ($host !== '127.0.0.1') {
+        throw new RuntimeException('HOST_GUARD_FAIL');
+    }
+
+    if ($port !== '3308') {
+        throw new RuntimeException('PORT_GUARD_FAIL');
+    }
+
+    if ($db !== $expected) {
+        throw new RuntimeException(
+            'DATABASE_ENV_GUARD_FAIL expected=' . $expected . ' actual=' . $db
+        );
+    }
+
+    $pdo = new PDO(
+        "mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",
+        $user,
+        $pass,
+        [
+            PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+            PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        ]
+    );
+
+    $actualDb = (string)$pdo->query("SELECT DATABASE()")->fetchColumn();
+    $version  = (string)$pdo->query("SELECT VERSION()")->fetchColumn();
+
+    if ($actualDb !== $expected) {
+        throw new RuntimeException(
+            'DATABASE_CONNECTION_GUARD_FAIL expected=' . $expected .
+            ' actual=' . $actualDb
+        );
+    }
+
+    if (!preg_match('/^8\./', $version)) {
+        throw new RuntimeException(
+            'MYSQL_VERSION_GUARD_FAIL version=' . $version
+        );
+    }
+
+    $schema = $pdo->quote($actualDb);
+
+    $fetchColumn = static function (PDO $pdo, string $sql): array {
+        return $pdo->query($sql)->fetchAll(PDO::FETCH_COLUMN);
+    };
+
+    echo "CLEAN_DB={$actualDb}\n";
+    echo "MYSQL_VERSION={$version}\n";
+
+    $triggers = $fetchColumn(
+        $pdo,
+        "SELECT TRIGGER_NAME
+         FROM information_schema.TRIGGERS
+         WHERE TRIGGER_SCHEMA = {$schema}"
+    );
+
+    foreach ($triggers as $name) {
+        $pdo->exec("DROP TRIGGER IF EXISTS " . qi((string)$name));
+    }
+
+    $views = $fetchColumn(
+        $pdo,
+        "SELECT TABLE_NAME
+         FROM information_schema.VIEWS
+         WHERE TABLE_SCHEMA = {$schema}"
+    );
+
+    foreach ($views as $name) {
+        $pdo->exec("DROP VIEW IF EXISTS " . qi((string)$name));
+    }
+
+    $routines = $pdo->query(
+        "SELECT ROUTINE_NAME, ROUTINE_TYPE
+         FROM information_schema.ROUTINES
+         WHERE ROUTINE_SCHEMA = {$schema}"
+    )->fetchAll();
+
+    foreach ($routines as $routine) {
+        $type = strtoupper((string)$routine['ROUTINE_TYPE']);
+
+        if ($type !== 'PROCEDURE' && $type !== 'FUNCTION') {
+            throw new RuntimeException(
+                'UNEXPECTED_ROUTINE_TYPE=' . $type
+            );
+        }
+
+        $pdo->exec(
+            "DROP {$type} IF EXISTS " .
+            qi((string)$routine['ROUTINE_NAME'])
+        );
+    }
+
+    $events = $fetchColumn(
+        $pdo,
+        "SELECT EVENT_NAME
+         FROM information_schema.EVENTS
+         WHERE EVENT_SCHEMA = {$schema}"
+    );
+
+    foreach ($events as $name) {
+        $pdo->exec("DROP EVENT IF EXISTS " . qi((string)$name));
+    }
+
+    $tables = $fetchColumn(
+        $pdo,
+        "SELECT TABLE_NAME
+         FROM information_schema.TABLES
+         WHERE TABLE_SCHEMA = {$schema}
+           AND TABLE_TYPE = 'BASE TABLE'"
+    );
+
+    $pdo->exec("SET FOREIGN_KEY_CHECKS=0");
+
+    try {
+        foreach ($tables as $name) {
+            $pdo->exec(
+                "DROP TABLE IF EXISTS " . qi((string)$name)
+            );
+        }
+    } finally {
+        $pdo->exec("SET FOREIGN_KEY_CHECKS=1");
+    }
+
+    $checks = [
+        'TABLES' =>
+            "SELECT COUNT(*)
+             FROM information_schema.TABLES
+             WHERE TABLE_SCHEMA = {$schema}",
+
+        'TRIGGERS' =>
+            "SELECT COUNT(*)
+             FROM information_schema.TRIGGERS
+             WHERE TRIGGER_SCHEMA = {$schema}",
+
+        'ROUTINES' =>
+            "SELECT COUNT(*)
+             FROM information_schema.ROUTINES
+             WHERE ROUTINE_SCHEMA = {$schema}",
+
+        'EVENTS' =>
+            "SELECT COUNT(*)
+             FROM information_schema.EVENTS
+             WHERE EVENT_SCHEMA = {$schema}",
+    ];
+
+    foreach ($checks as $type => $sql) {
+        $count = (int)$pdo->query($sql)->fetchColumn();
+
+        echo "{$type}_LEFT={$count}\n";
+
+        if ($count !== 0) {
+            throw new RuntimeException(
+                "POST_CLEAN_OBJECTS_LEFT={$type}:{$count}"
+            );
+        }
+    }
+
+    echo "CLEAN_TEST_DB=PASS\n";
+    exit(0);
+
+} catch (Throwable $e) {
+    fwrite(STDERR, "CLEAN_TEST_DB=FAIL\n");
+    fwrite(STDERR, "ERROR=" . $e->getMessage() . "\n");
+    exit(1);
+}
+PHP
+
+RC=$?
+
+echo "CLEAN_PHP_RC=$RC"
+exit "$RC"
