@@ -38,10 +38,11 @@ jobs:
           case "$GITHUB_ACTOR" in planexerp|chatgpt-codex-connector|chatgpt-connector) ;; *) exit 1;; esac
           curl -fsS "${auth[@]}" "$base/actions/workflows/ci.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/erp-ci-runs.json
           curl -fsS "${auth[@]}" "$base/actions/workflows/document_generator_regression.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/document-generator-runs.json
+          curl -fsS "${auth[@]}" "$base/actions/workflows/document_generator_google_vehicle_regression.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/document-generator-google-vehicle-runs.json
           CANONICAL_SHA="$canonical_sha" python3 - <<'PY'
           import json,os
           sha=os.environ['CANONICAL_SHA']
-          for path in ['/tmp/erp-ci-runs.json','/tmp/document-generator-runs.json']:
+          for path in ['/tmp/erp-ci-runs.json','/tmp/document-generator-runs.json','/tmp/document-generator-google-vehicle-runs.json']:
               data=json.load(open(path))
               if not any(r.get('head_sha')==sha and r.get('conclusion')=='success' for r in data.get('workflow_runs',[])):
                   raise SystemExit(f'missing green exact-SHA gate: {path}')
