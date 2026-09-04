@@ -41,19 +41,6 @@ if (!function_exists('e')) {
         return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }
-if (!function_exists('mb_substr')) {
-    function mb_substr(string $value, int $offset, ?int $length = null): string
-    {
-        return $length === null ? substr($value, $offset) : substr($value, $offset, $length);
-    }
-}
-if (!function_exists('mb_strtoupper')) {
-    function mb_strtoupper(string $value): string
-    {
-        return strtoupper($value);
-    }
-}
-
 if (!class_exists('App\\Service\\NavigationCounterService', false)) {
     eval('namespace App\\Service; final class NavigationCounterService { public static function forCompany(...$args): array { return ["bank_attention" => 0, "cash_attention" => 0, "closing_documents_problem" => 0]; } }');
 }
