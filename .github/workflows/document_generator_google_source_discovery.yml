@@ -26,7 +26,7 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/key" "$HOME/.ssh/known_hosts"
 
-      - name: Classify legacy Google Sheets helper read-only
+      - name: Locate and classify Google Sheets helper read-only
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -37,9 +37,7 @@ jobs:
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             .github/document-generator/discover_google_source.php "$SSH_USER@$SSH_HOST:$REMOTE"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "PLANEX_LEGACY_ROOT=\"\$HOME/planexp/public_html/erp\" /usr/bin/php8.5 '$REMOTE'"
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "rm -f '$REMOTE' && test ! -e '$REMOTE'"
+            'set -euo pipefail; ROOT="$HOME/planexp/public_html"; HELPER=$(find "$ROOT" -maxdepth 6 -type f -name googleSheetsHelper.php -print -quit); test -n "$HELPER"; printf "GOOGLE_HELPER_RELATIVE=%s\n" "${HELPER#${ROOT}/}"; PLANEX_GOOGLE_HELPER="$HELPER" /usr/bin/php8.5 '"'$REMOTE'"'; rm -f '"'$REMOTE'"'; test ! -e '"'$REMOTE'"''
 
       - name: Cleanup SSH key
         if: always()
