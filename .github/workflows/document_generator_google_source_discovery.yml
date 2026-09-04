@@ -37,7 +37,7 @@ jobs:
           scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
             .github/document-generator/discover_google_source.php "$SSH_USER@$SSH_HOST:$REMOTE"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            'set -euo pipefail; ROOT="$HOME/planexp/public_html"; HELPER=$(find "$ROOT" -maxdepth 6 -type f -name googleSheetsHelper.php -print -quit); test -n "$HELPER"; printf "GOOGLE_HELPER_RELATIVE=%s\n" "${HELPER#${ROOT}/}"; PLANEX_GOOGLE_HELPER="$HELPER" /usr/bin/php8.5 '"'$REMOTE'"'; rm -f '"'$REMOTE'"'; test ! -e '"'$REMOTE'"''
+            'set -euo pipefail; FOUND=$(find "$HOME" -maxdepth 8 -type f \( -name googleSheetsHelper.php -o -name timeline.php \) -print 2>/dev/null); printf "%s\n" "$FOUND" | sed "s#^$HOME/#DISCOVERED_RELATIVE=#"; HELPER=$(printf "%s\n" "$FOUND" | grep "/googleSheetsHelper.php$" | head -1 || true); test -n "$HELPER"; PLANEX_GOOGLE_HELPER="$HELPER" /usr/bin/php8.5 '"'$REMOTE'"'; rm -f '"'$REMOTE'"'; test ! -e '"'$REMOTE'"''
 
       - name: Cleanup SSH key
         if: always()
