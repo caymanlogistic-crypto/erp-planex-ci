@@ -92,11 +92,20 @@ final class LegacyAccessMigrationExecutor
             $companyId = (int) $companyId;
             $tenantUserMap = [];
             foreach ($identityPlan['memberships'] as $membership) {
-                if ((int) $membership['company_id'] !== $companyId || $membership['legacy_source'] !== 'tenant_user') {
+                if ((int) $membership['company_id'] !== $companyId) {
                     continue;
                 }
                 $key = (string) $membership['migration_key'];
-                $tenantUserMap[(int) $membership['legacy_source_id']] = $membershipIds[$key];
+                $membershipId = $membershipIds[$key] ?? null;
+                if (!is_int($membershipId)) {
+                    throw new RuntimeException('Tenant membership alias mapping is incomplete.');
+                }
+                foreach (array_values(array_unique(array_map('intval', $membership['tenant_user_ids'] ?? []))) as $tenantUserId) {
+                    if ($tenantUserId <= 0 || (isset($tenantUserMap[$tenantUserId]) && $tenantUserMap[$tenantUserId] !== $membershipId)) {
+                        throw new RuntimeException("Ambiguous tenant membership alias for user {$tenantUserId}");
+                    }
+                    $tenantUserMap[$tenantUserId] = $membershipId;
+                }
             }
 
             $assignmentPlan = self::tenantAssignmentPlan($tenant, $tenantUserMap);

@@ -56,8 +56,12 @@ final class AccessSnapshotCollector
                     $row[$category] = [];
                 } elseif (in_array($role, ['company_owner', 'senior_logist'], true)) {
                     $row[$category] = $allIds[$category];
-                } elseif ($role === 'logist' && $subject['legacy_source'] === 'tenant_user') {
-                    $row[$category] = self::legacyOwnIds($tenant, $table, $category, (int) $subject['legacy_source_id']);
+                } elseif ($role === 'logist' && ($subject['tenant_user_ids'] ?? []) !== []) {
+                    $visible = [];
+                    foreach (array_values(array_unique(array_map('intval', $subject['tenant_user_ids']))) as $tenantUserId) {
+                        $visible = array_merge($visible, self::legacyOwnIds($tenant, $table, $category, $tenantUserId));
+                    }
+                    $row[$category] = self::normalizedIds($visible);
                 } else {
                     $row[$category] = [];
                 }
@@ -167,7 +171,7 @@ final class AccessSnapshotCollector
     /** @return list<array<string,mixed>> */
     private static function legacySubjects(PDO $central, PDO $tenant, int $companyId): array
     {
-        $rows = self::legacyIdentityRows($central, $tenant, $companyId);
+        $rows = MigrationProof::collapseExactMirrors(self::legacyIdentityRows($central, $tenant, $companyId));
         foreach ($rows as &$row) {
             $row['role_code'] = (string) ($row['role_code'] ?? '');
         }
