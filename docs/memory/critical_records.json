@@ -30,8 +30,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "4afacc83862a77548d29abb40569e834270b648a",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/4afacc83862a77548d29abb40569e834270b648a/app/Support/http_runtime.php",
+      "verified_sha": "e54f5e5b994a0a8423c856752422872e837cbbcf",
+      "evidence": "https://github.com/planexerp/erp-planex/blob/e54f5e5b994a0a8423c856752422872e837cbbcf/.github/workflows/roles_access_production_browser_qa.yml",
       "owning_paths": ["app/Security/**", "app/Service/AccessControlService.php", "app/Service/AccountAuthenticationService.php", "app/Service/CompanyMembershipService.php", "app/Service/CompanyRoleService.php", "app/Service/CompanySwitchService.php", "app/Service/EntityAssignmentService.php", "app/Service/IdentityNormalizer.php", "app/Service/RegulatedDataScopeService.php", "app/Http/Controllers/Company/RolesAccessController.php", "app/Http/Routes/company_roles_access.php", "app/View/pages/company/roles_access.php", "public/assets/css/roles-access.css", "public/assets/js/roles-access.js", "public/assets/js/entity-assignments.js", "database/migrations/013_create_roles_access.sql", "database/migrations-local/131_create_roles_access_projection.sql", "tools/roles_access/**", "scripts/roles_access_migration_proof.php", "tests/roles_access*", "app/Service/LegacySessionIdentityUpgradeService.php", "app/Support/http_runtime.php", "public/index.php", ".github/roles-access/**", ".github/workflows/roles_access_*.yml"],
       "navigation": "active",
       "machine_ownership_id": "security.access"
