@@ -52,8 +52,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "04fea3afe7c5541c50554525d5e50a44663377d6",
-      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33924219962",
+      "verified_sha": "5dd391ed153593510b6176f5f912febf084af69d",
+      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33955927684",
       "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py", "tools/runner/**", "tests/runner_helpers_contract_test.py"],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
@@ -63,8 +63,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "0336b6cd9add0b476743d672d2cc4f23d6d7cd19",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/0336b6cd9add0b476743d672d2cc4f23d6d7cd19/tools/sentinelx/manifest.json",
+      "verified_sha": "ed6488ce9c61cfadffa0adea6024a82f8adeef88",
+      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33956383877",
       "owning_paths": ["tools/sentinelx/**", "tools/runner/**"],
       "navigation": "active",
       "machine_ownership_id": "control.sentinelx_runner"
