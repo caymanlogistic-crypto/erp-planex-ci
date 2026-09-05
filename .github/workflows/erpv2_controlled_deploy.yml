@@ -118,9 +118,11 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/erpv2_controlled_deploy_key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/erpv2_controlled_deploy_key" "$HOME/.ssh/known_hosts"
-          SSH_CONTROL_DIR="$RUNNER_TEMP/erpv2_controlled_deploy_mux"
+          SSH_CONTROL_DIR="/tmp/erpv2_mux_${GITHUB_RUN_ID}"
           install -d -m 700 "$SSH_CONTROL_DIR"
-          printf 'SSH_CONTROL_DIR=%s\nSSH_CONTROL_PATH=%s\n' "$SSH_CONTROL_DIR" "$SSH_CONTROL_DIR/%C" >> "$GITHUB_ENV"
+          SSH_CONTROL_PATH="$SSH_CONTROL_DIR/%C"
+          test "${#SSH_CONTROL_PATH}" -lt 90
+          printf 'SSH_CONTROL_DIR=%s\nSSH_CONTROL_PATH=%s\n' "$SSH_CONTROL_DIR" "$SSH_CONTROL_PATH" >> "$GITHUB_ENV"
 
       - name: Snapshot server state and create backup
         id: before
