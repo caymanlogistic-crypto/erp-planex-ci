@@ -19,7 +19,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  LIVE_PARENT: /home/s/spugovxsim/planexp/public_html
+  APP_DIR: erpv2
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
   RESULT_DIR: roles_access_session_qa_result
 
@@ -92,7 +93,7 @@ jobs:
           make_session() {
             mode="$1"
             ssh -p "$PORT" -i "$HOME/.ssh/roles_session_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
-              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_session_qa_${GITHUB_RUN_ID}.php' '$mode'"
+              "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_access_session_qa_${GITHUB_RUN_ID}.php' '$mode'"
           }
           LEGACY_JSON="$(make_session create-legacy-owner)"; LEGACY_JSON="${LEGACY_JSON#ROLES_QA_SESSION=}"
           INVALID_JSON="$(make_session create-invalid-owner)"; INVALID_JSON="${INVALID_JSON#ROLES_QA_SESSION=}"
@@ -124,7 +125,7 @@ jobs:
           for sid in "${QA_LEGACY_SESSION_ID:-}" "${QA_INVALID_SESSION_ID:-}" "${QA_UPGRADED_SESSION_ID:-}" "${QA_REAL_LOGIN_SESSION_ID:-}"; do
             if [ -n "$sid" ] && [ -f "$HOME/.ssh/roles_session_qa" ]; then
               ssh -p "$PORT" -i "$HOME/.ssh/roles_session_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
-                "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_session_qa_${GITHUB_RUN_ID}.php' delete '$sid'" >/dev/null 2>&1 || true
+                "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_access_session_qa_${GITHUB_RUN_ID}.php' delete '$sid'" >/dev/null 2>&1 || true
             fi
           done
           if [ -f "$HOME/.ssh/roles_session_qa" ]; then
