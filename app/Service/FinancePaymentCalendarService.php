@@ -43,7 +43,7 @@ final class FinancePaymentCalendarService
         $params = [];
 
         $roleCode = (string)($filters['role_code'] ?? '');
-        if (\App\Security\AccessRuntime::current()->isActive()) {
+        if (class_exists(\App\Security\AccessRuntime::class) && \App\Security\AccessRuntime::current()->isActive()) {
             $access = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
             $sql .= " AND (o.source_parent_type<>'LINEAR_ROUTE' OR ({$access['sql']}))";
             array_push($params, ...$access['params']);

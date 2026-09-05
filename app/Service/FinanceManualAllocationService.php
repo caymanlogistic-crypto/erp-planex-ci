@@ -507,7 +507,7 @@ final class FinanceManualAllocationService
         if (!$route) {
             throw new RuntimeException('Рейс не найден или удалён.');
         }
-        if (\App\Security\AccessRuntime::current()->isActive()) {
+        if (class_exists(\App\Security\AccessRuntime::class) && \App\Security\AccessRuntime::current()->isActive()) {
             if (!RegulatedDataScopeService::canAccess($pdo, 'linear_trip', 'linear_routes', $routeId)) {
                 throw new RuntimeException('Нет доступа к указанному рейсу.');
             }

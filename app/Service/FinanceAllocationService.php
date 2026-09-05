@@ -169,7 +169,7 @@ final class FinanceAllocationService
                       JOIN contractors carrier ON carrier.id=lr.carrier_contractor_id
                      WHERE lr.deleted_at IS NULL";
         $roleCode = (string)($user['role_code'] ?? '');
-        if (\App\Security\AccessRuntime::current()->isActive()) {
+        if (class_exists(\App\Security\AccessRuntime::class) && \App\Security\AccessRuntime::current()->isActive()) {
             $access = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
             $stmt = $pdo->prepare($baseSql . ' AND ' . $access['sql'] . ' ORDER BY lr.created_at DESC');
             $stmt->execute($access['params']);
