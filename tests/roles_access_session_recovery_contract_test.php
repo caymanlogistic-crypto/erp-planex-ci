@@ -24,7 +24,11 @@ $flagPos=strpos($index,'if ($rolesAccessEnabled) {');
 $bridgePos=strpos($index,'recoverLegacyRolesAccessSession(', $flagPos === false ? 0 : $flagPos);
 $enablePos=strpos($index,'$router->enableCompanyAccess(', $flagPos === false ? 0 : $flagPos);
 if($flagPos===false||$bridgePos===false||$enablePos===false||!($flagPos<$bridgePos&&$bridgePos<$enablePos))$fail('session bridge must run only inside feature-enabled block and before ACL resolution');
-foreach (['session_regenerate_id(true)',"redirect_to('/login')",'LegacySessionIdentityUpgradeService::INVALID'] as $needle) $need($httpRuntime,$needle,'runtime invalidation');
+foreach (['session_regenerate_id(true)',"redirect_to('/login')",'LegacySessionIdentityUpgradeService::INVALID','enforceUsableCompanyAccessSession','missing_account_or_company','inactive_or_missing_membership','invalid_role'] as $needle) $need($httpRuntime,$needle,'runtime invalidation');
+$barrierPos=strpos($index,'enforceUsableCompanyAccessSession();', $enablePos === false ? 0 : $enablePos);
+$compatPos=strpos($index,'$compatibilityRoleCode =', $enablePos === false ? 0 : $enablePos);
+if($barrierPos===false||$compatPos===false||!($enablePos<$barrierPos&&$barrierPos<$compatPos))$fail('identity-deny barrier must run after ACL resolution and before compatibility metadata');
+foreach (['loadMembershipAccess($accountId, $companyId)','nestedCompanyId','nestedLegacyUserId'] as $needle) $need($service,$needle,'session-shape validation');
 
 foreach (['P12_CREDENTIALS_B64','input[name="login"]','input[name="password"]','/company/dashboard','/company/clients','ROLES_ACCESS_REAL_LOGIN_PASS=YES','ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200','ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES','ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES'] as $needle) $need($qa,$needle,'real browser QA');
 foreach (['workflow_dispatch:',"push:\n    branches:\n      - qa/roles-access-agent",'inputs.source_sha || github.sha','P11_RUNTIME_CREDENTIALS_B64','Validate exact canonical and deployed SHA','create-legacy-owner','create-invalid-owner','Real login and legacy-session production browser acceptance'] as $needle) $need($workflow,$needle,'postdeploy QA workflow');

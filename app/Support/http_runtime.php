@@ -127,6 +127,41 @@ if (!function_exists('recoverLegacyRolesAccessSession')) {
     }
 }
 
+if (!function_exists('enforceUsableCompanyAccessSession')) {
+    function enforceUsableCompanyAccessSession(): void
+    {
+        $access = \App\Security\AccessRuntime::current();
+        if ($access->isActive()) {
+            return;
+        }
+
+        $path = current_app_path();
+        if ($path !== '/company' && !str_starts_with($path, '/company/')) {
+            return;
+        }
+
+        $nested = isset($_SESSION['user']) && is_array($_SESSION['user']) ? $_SESSION['user'] : [];
+        $hasAuthenticationResidue = (int) ($_SESSION['account_id'] ?? ($nested['account_id'] ?? 0)) > 0
+            || (int) ($_SESSION['user_id'] ?? ($nested['user_id'] ?? 0)) > 0
+            || trim((string) ($_SESSION['role_code'] ?? ($nested['role_code'] ?? ''))) !== '';
+        if (!$hasAuthenticationResidue) {
+            return;
+        }
+
+        if (!in_array($access->denialReason(), [
+            'missing_account_or_company',
+            'inactive_or_missing_membership',
+            'invalid_role',
+        ], true)) {
+            return;
+        }
+
+        session_regenerate_id(true);
+        $_SESSION = [];
+        redirect_to('/login');
+    }
+}
+
 if (!function_exists('hasPageAccess')) {
     /** @param string|list<string> $pageKeys */
     function hasPageAccess(string|array $pageKeys): bool
