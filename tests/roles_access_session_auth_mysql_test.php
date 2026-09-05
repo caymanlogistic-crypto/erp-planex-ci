@@ -81,6 +81,17 @@ foreach([['owner','Pass!101'],['senior','Pass!102'],['logist','Pass!103']] as [$
     $ok($access->canAccessPage('company.clients'),'protected clients denied '.$login);
 }
 
+// Nested-only pre-activation owner shape still upgrades deterministically.
+$nestedOnly=['user'=>['user_id'=>501,'role_code'=>'company_owner','company_id'=>7]];
+$ok($bridge->upgrade($nestedOnly)===Bridge::UPGRADED,'nested-only owner legacy session failed to upgrade');
+$ok($resolver->resolve(AccessRequestContext::fromSession($nestedOnly))->canAccessPage('company.dashboard'),'nested-only owner dashboard denied');
+
+// Current-looking sessions must still prove an active membership; stale account/company pairs fail closed.
+$current=['account_id'=>103,'user_id'=>103,'company_id'=>7];
+$ok($bridge->upgrade($current)===Bridge::CURRENT,'valid current account session rejected');
+$staleCurrent=['account_id'=>999999,'user_id'=>999999,'company_id'=>7];
+$ok($bridge->upgrade($staleCurrent)===Bridge::INVALID,'stale current account session bypassed membership validation');
+
 // Invalid legacy identity gets no access.
 $invalid=['user_id'=>999999,'role_code'=>'logist','company_id'=>7];
 $ok($bridge->upgrade($invalid)===Bridge::INVALID,'invalid legacy identity accepted');

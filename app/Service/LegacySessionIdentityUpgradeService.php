@@ -28,21 +28,59 @@ final class LegacySessionIdentityUpgradeService
     /** @param array<string,mixed> $session */
     public function upgrade(array &$session): string
     {
-        if ((int) ($session['account_id'] ?? 0) > 0) {
-            return self::CURRENT;
-        }
+        $nested = isset($session['user']) && is_array($session['user']) ? $session['user'] : [];
 
-        $legacyUserId = (int) ($session['user_id'] ?? 0);
-        if ($legacyUserId <= 0) {
-            return self::ANONYMOUS;
+        $topCompanyId = max(0, (int) ($session['company_id'] ?? 0));
+        $nestedCompanyId = max(0, (int) ($nested['company_id'] ?? 0));
+        if ($topCompanyId > 0 && $nestedCompanyId > 0 && $topCompanyId !== $nestedCompanyId) {
+            return self::INVALID;
         }
+        $companyId = $topCompanyId > 0 ? $topCompanyId : $nestedCompanyId;
 
-        $legacyRole = (string) ($session['role_code'] ?? '');
+        $topRole = trim((string) ($session['role_code'] ?? ''));
+        $nestedRole = trim((string) ($nested['role_code'] ?? ''));
+        if ($topRole !== '' && $nestedRole !== '' && $topRole !== $nestedRole) {
+            return self::INVALID;
+        }
+        $legacyRole = $topRole !== '' ? $topRole : $nestedRole;
+
+        // Technical superadmin is a separate non-company authority and never
+        // participates in company membership recovery.
         if ($legacyRole === 'superadmin') {
             return self::CURRENT;
         }
 
-        $companyId = (int) ($session['company_id'] ?? 0);
+        $accountId = max(0, (int) ($session['account_id'] ?? ($nested['account_id'] ?? 0)));
+        if ($accountId > 0) {
+            if ($companyId <= 0) {
+                return self::INVALID;
+            }
+            try {
+                if (!$this->accessStateProvider->isCompanyAccessReady($companyId)) {
+                    return self::INVALID;
+                }
+                $snapshot = $this->accessStateProvider->loadMembershipAccess($accountId, $companyId);
+            } catch (\Throwable) {
+                return self::INVALID;
+            }
+            if ($snapshot === null
+                || $snapshot->membershipId <= 0
+                || $snapshot->companyId !== $companyId
+                || $snapshot->status !== 'active') {
+                return self::INVALID;
+            }
+            return self::CURRENT;
+        }
+
+        $topLegacyUserId = max(0, (int) ($session['user_id'] ?? 0));
+        $nestedLegacyUserId = max(0, (int) ($nested['user_id'] ?? 0));
+        if ($topLegacyUserId > 0 && $nestedLegacyUserId > 0 && $topLegacyUserId !== $nestedLegacyUserId) {
+            return self::INVALID;
+        }
+        $legacyUserId = $topLegacyUserId > 0 ? $topLegacyUserId : $nestedLegacyUserId;
+        if ($legacyUserId <= 0) {
+            return self::ANONYMOUS;
+        }
         if ($companyId <= 0) {
             return self::INVALID;
         }

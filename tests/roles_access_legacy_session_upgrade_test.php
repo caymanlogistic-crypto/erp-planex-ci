@@ -21,6 +21,7 @@ final class LegacySessionStmt extends PDOStatement
 }
 
 require_once __DIR__ . '/../app/Security/AccessStateProvider.php';
+require_once __DIR__ . '/../app/Security/MembershipAccessSnapshot.php';
 require_once __DIR__ . '/../app/Service/LegacySessionIdentityUpgradeService.php';
 
 use App\Security\AccessStateProvider;
@@ -30,8 +31,10 @@ use App\Service\LegacySessionIdentityUpgradeService as Bridge;
 final class ReadyProvider implements AccessStateProvider
 {
     public bool $ready=true;
+    /** @var array<string,MembershipAccessSnapshot> */
+    public array $snapshots=[];
     public function isCompanyAccessReady(int $companyId): bool { return $this->ready; }
-    public function loadMembershipAccess(int $accountId,int $companyId): ?MembershipAccessSnapshot { return null; }
+    public function loadMembershipAccess(int $accountId,int $companyId): ?MembershipAccessSnapshot { return $this->snapshots[$accountId.'|'.$companyId] ?? null; }
 }
 function ok(bool $v,string $m): void { if(!$v) throw new RuntimeException($m); }
 
@@ -63,8 +66,15 @@ foreach ([
     ok(($session['user']['account_id']??0)===$case['account'], $case['role'].' nested identity not hydrated');
 }
 
+$provider->snapshots['55|7']=new MembershipAccessSnapshot(77,7,'active',3,'',[],[],[],[],'logist');
 $current=['account_id'=>55,'user_id'=>9,'company_id'=>7,'role_code'=>'logist'];
-ok($bridge->upgrade($current)===Bridge::CURRENT && $current['account_id']===55, 'current session must not be remapped from legacy user_id');
+ok($bridge->upgrade($current)===Bridge::CURRENT && $current['account_id']===55, 'valid current session must remain current');
+$staleCurrent=['account_id'=>56,'user_id'=>56,'company_id'=>7,'role_code'=>'logist'];
+ok($bridge->upgrade($staleCurrent)===Bridge::INVALID, 'stale current session without active membership must fail closed');
+$nestedOnly=['user'=>['user_id'=>101,'role_code'=>'company_owner','company_id'=>7]];
+ok($bridge->upgrade($nestedOnly)===Bridge::UPGRADED && ($nestedOnly['account_id']??0)===1001, 'nested-only legacy owner session must upgrade');
+$conflicting=['user_id'=>101,'role_code'=>'company_owner','company_id'=>7,'user'=>['user_id'=>201,'role_code'=>'company_owner','company_id'=>7]];
+ok($bridge->upgrade($conflicting)===Bridge::INVALID, 'conflicting top/nested legacy identity must fail closed');
 $anonymous=[];
 ok($bridge->upgrade($anonymous)===Bridge::ANONYMOUS, 'anonymous request must remain anonymous');
 $super=['user_id'=>1,'role_code'=>'superadmin','company_id'=>null];

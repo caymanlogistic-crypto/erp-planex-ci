@@ -68,7 +68,6 @@ use App\Security\PdoAccessStateProvider;
 use App\Service\CompanyInnLookupService;
 use App\Service\ContractorContactService;
 use App\Service\ClientContactService;
-
 $db = new Database($config['database']);
 $pageRegistry = new PageRegistry();
 $rolesAccessEnabled = filter_var(env('ERP_ROLES_ACCESS_ENABLED', false), FILTER_VALIDATE_BOOL);
@@ -88,6 +87,7 @@ if ($rolesAccessEnabled) {
         new EffectiveAccessResolver($pageRegistry, $accessStateProvider),
         AccessRequestContext::fromSession($_SESSION)
     );
+    enforceUsableCompanyAccessSession();
     // role_code is compatibility metadata only. Authority is resolved from
     // current central membership state first, then this value is refreshed
     // for legacy UI/audit code on every request. Dynamic roles never
