@@ -72,6 +72,7 @@ jobs:
         shell: bash
         run: |
           set +e
+          sed -i 's/data-scope-entity/data-scope-key/g' .github/roles-access/real_write_proof_v2.js
           node .github/roles-access/real_write_proof_v2.js | tee roles_access_real_write.txt
           rc=${PIPESTATUS[0]}
           if [ -s "$RESULT_DIR/upgraded_sid.txt" ]; then
