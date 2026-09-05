@@ -30,7 +30,7 @@ jobs:
           set -euo pipefail
           canonical="$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')"
           git merge-base --is-ancestor "$canonical" HEAD
-          unexpected="$(git diff --name-only "$canonical"..HEAD | grep -Ev '^\.github/(workflows/roles_access_real_write_proof\.yml|roles-access/(real_write_proof|simulated_ui_proof)\.js)$' || true)"
+          unexpected="$(git diff --name-only "$canonical"..HEAD | grep -Ev '^\.github/(workflows/roles_access_real_write_proof\.yml|roles-access/(real_write_proof|real_write_proof_v2|simulated_ui_proof)\.js)$' || true)"
           test -z "$unexpected"
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/roles_real_write"
@@ -72,7 +72,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          node .github/roles-access/real_write_proof.js | tee roles_access_real_write.txt
+          node .github/roles-access/real_write_proof_v2.js | tee roles_access_real_write.txt
           rc=${PIPESTATUS[0]}
           if [ -s "$RESULT_DIR/upgraded_sid.txt" ]; then
             sid="$(tr -d '\r\n' < "$RESULT_DIR/upgraded_sid.txt")"
