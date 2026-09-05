@@ -16,7 +16,7 @@ $router->get('/', function () use ($config) {
     }
 
     redirect_to('/company/dashboard');
-});
+}, 'company.dashboard');
 
 $router->get('/dev/ui-foundation', function () use ($config) {
     if (($config['app']['app_env'] ?? 'production') !== 'local') {

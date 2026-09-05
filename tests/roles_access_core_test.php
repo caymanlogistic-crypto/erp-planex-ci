@@ -24,15 +24,22 @@ use App\Service\AccessControlService;
 final class TestAccessProvider implements AccessStateProvider
 {
     public bool $ready = true;
+    public bool $throw = false;
     public ?MembershipAccessSnapshot $snapshot = null;
 
     public function isCompanyAccessReady(int $companyId): bool
     {
+        if ($this->throw) {
+            throw new RuntimeException('provider unavailable');
+        }
         return $this->ready;
     }
 
     public function loadMembershipAccess(int $accountId, int $companyId): ?MembershipAccessSnapshot
     {
+        if ($this->throw) {
+            throw new RuntimeException('provider unavailable');
+        }
         return $this->snapshot;
     }
 }
@@ -107,6 +114,10 @@ $provider->ready = false;
 $denied = $resolver->resolve(new AccessRequestContext(4, 7));
 expect(!$denied->isActive() && $denied->denialReason() === 'access_not_ready', 'Readiness gate must fail closed.');
 $provider->ready = true;
+$provider->throw = true;
+$denied = $resolver->resolve(new AccessRequestContext(4, 7));
+expect(!$denied->isActive() && $denied->denialReason() === 'access_state_error', 'Provider failure must fail closed.');
+$provider->throw = false;
 $provider->snapshot = memberSnapshot(status: 'blocked');
 $denied = $resolver->resolve(new AccessRequestContext(4, 7));
 expect(!$denied->isActive(), 'Inactive membership must fail closed.');
@@ -126,6 +137,7 @@ $router->post('/company/contractors/save', static fn (): string => 'must-not-run
 $router->get('/company/shared', static fn (): string => 'shared', ['company.clients', 'company.contractors']);
 $router->get('/company/unknown', static fn (): string => 'must-not-run');
 $router->get('/company/json', static fn (): string => 'must-not-run', 'company.contractors');
+$router->post('/company/switch', static fn (): string => 'switched');
 $router->enableCompanyAccess($resolver, new AccessRequestContext(4, 7));
 
 [$result, $output, $status] = dispatchOutput($router, 'GET', '/company/clients');
@@ -140,6 +152,8 @@ expect($result === 'shared' && $status === 200, 'Shared endpoint OR mapping fail
 expect($result === null && $status === 403, 'Unknown protected endpoint must deny.');
 [$result, $output, $status] = dispatchOutput($router, 'GET', '/company/json', ['HTTP_ACCEPT' => 'application/json']);
 expect($result === null && $status === 403 && $output === '{"error":"access_denied"}', 'JSON denial contract failed.');
+[$result, $output, $status] = dispatchOutput($router, 'POST', '/company/switch');
+expect($result === 'switched' && $status === 200, 'Company switch must reach membership-validating service without page authorization.');
 
 expect(AccessControlService::effectiveMembershipId() === 91, 'Runtime membership id contract failed.');
 expect(!AccessControlService::isEffectiveSystemOwner(), 'Ordinary member must not be owner.');

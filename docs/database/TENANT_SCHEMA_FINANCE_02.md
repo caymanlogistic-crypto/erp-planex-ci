@@ -2,11 +2,11 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
+**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
 
 ## `finance_cash_resolutions`
 
-**Domain:** Finance  
+**Domain:** Finance<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -39,7 +39,7 @@
 
 ## `finance_cash_route_receipts`
 
-**Domain:** Finance  
+**Domain:** Finance<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -69,7 +69,7 @@
 
 ## `finance_closing_counterparties`
 
-**Domain:** Finance  
+**Domain:** Finance<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -92,7 +92,7 @@
 
 ## `finance_closing_document_exceptions`
 
-**Domain:** Finance  
+**Domain:** Finance<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -118,7 +118,7 @@
 
 ## `finance_closing_document_links`
 
-**Domain:** Finance  
+**Domain:** Finance<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -145,7 +145,7 @@
 
 ## `finance_closing_document_manual_statuses`
 
-**Domain:** Finance  
+**Domain:** Finance<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -166,7 +166,7 @@
 
 ## `finance_closing_document_requirement_exceptions`
 
-**Domain:** Finance  
+**Domain:** Finance<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -186,7 +186,7 @@
 
 ## `finance_dds_categories`
 
-**Domain:** Finance  
+**Domain:** Finance<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |

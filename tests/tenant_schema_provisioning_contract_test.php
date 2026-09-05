@@ -14,10 +14,17 @@ $host = getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1';
 $port = (int) (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306);
 $user = getenv('PLANEX_SCHEMA_DB_USER') ?: 'planex_ci';
 $pass = getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: 'planex_ci';
-$admin = new PDO("mysql:host={$host};port={$port};charset=utf8mb4", $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$fixedDb = trim((string) getenv('PLANEX_TEST_FIXED_DB'));
+$fixedAllowlist = array_filter(array_map('trim', explode(',', (string) getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST'))));
+if ($fixedDb !== '' && !in_array($fixedDb, $fixedAllowlist, true)) {
+    throw new RuntimeException('Fixed DB is not present in PLANEX_TEST_FIXED_DB_ALLOWLIST.');
+}
+$fixedMode = $fixedDb !== '';
+$adminDsn = "mysql:host={$host};port={$port}" . ($fixedMode ? ";dbname={$fixedDb}" : '') . ';charset=utf8mb4';
+$admin = new PDO($adminDsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $prefix = 'planex_contract_' . getmypid() . '_' . bin2hex(random_bytes(3));
-$dbEmpty = $prefix . '_empty';
-$dbDirty = $prefix . '_dirty';
+$dbEmpty = $fixedMode ? $fixedDb : $prefix . '_empty';
+$dbDirty = $fixedMode ? $fixedDb : $prefix . '_dirty';
 
 $quote = static fn(string $db): string => '`' . str_replace('`', '``', $db) . '`';
 $connect = static fn(string $db): PDO => new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4", $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
@@ -27,8 +34,12 @@ $assert = static function (bool $ok, string $message): void {
     }
 };
 
-foreach ([$dbEmpty, $dbDirty] as $db) {
-    $admin->exec('CREATE DATABASE ' . $quote($db) . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+if (!$fixedMode) {
+    foreach ([$dbEmpty, $dbDirty] as $db) {
+        $admin->exec('CREATE DATABASE ' . $quote($db) . ' CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci');
+    }
+} else {
+    cleanCompanyPoolDatabase($admin);
 }
 try {
     // CASE 1: truly empty resource -> canonical migrations.
@@ -56,6 +67,11 @@ try {
     $emptyCatalog = TenantSchemaCatalog::capture($empty);
 
     // CASE 2: pool resource with stale application objects/data/view/trigger/routine/event.
+    // The guarded runner exposes one fixed DB per task, so the two canonical
+    // scenarios execute sequentially against the same cleaned resource.
+    if ($fixedMode) {
+        cleanCompanyPoolDatabase($empty);
+    }
     $dirty = $connect($dbDirty);
     $dirty->exec('CREATE TABLE stale_parent (id INT PRIMARY KEY, payload VARCHAR(30)) ENGINE=InnoDB');
     $dirty->exec("INSERT INTO stale_parent VALUES (1, 'legacy-data')");
@@ -89,7 +105,11 @@ try {
 
     fwrite(STDOUT, "TENANT_PROVISIONING_EMPTY=PASS\nDIRTY_POOL_CLEANUP=PASS\nDIRTY_POOL_EQUIVALENCE=PASS\nLATEST_MIGRATION={$expectedLatest}\nSCHEMA_FINGERPRINT={$emptyFp}\n");
 } finally {
-    foreach ([$dbEmpty, $dbDirty] as $db) {
-        $admin->exec('DROP DATABASE IF EXISTS ' . $quote($db));
+    if ($fixedMode) {
+        cleanCompanyPoolDatabase($admin);
+    } else {
+        foreach ([$dbEmpty, $dbDirty] as $db) {
+            $admin->exec('DROP DATABASE IF EXISTS ' . $quote($db));
+        }
     }
 }

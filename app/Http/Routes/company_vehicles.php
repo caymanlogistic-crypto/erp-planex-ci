@@ -97,7 +97,7 @@ $router->get('/company/vehicles', function () use ($config, $db) {
     require base_path('app/View/pages/company_vehicles.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 $router->get('/company/vehicles/create', function () use ($config, $db) {
     requireRole(['company_owner', 'senior_logist', 'logist']);
@@ -162,7 +162,7 @@ $router->get('/company/vehicles/create', function () use ($config, $db) {
     require base_path('app/View/pages/company_vehicles_create.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 $router->post('/company/vehicles/create', function () use ($config, $db) {
     requireRole(['company_owner', 'senior_logist', 'logist']);
@@ -314,7 +314,7 @@ $router->post('/company/vehicles/create', function () use ($config, $db) {
     require base_path('app/View/pages/company_vehicles_create.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 // --- Vehicle View ---
 $router->get('/company/vehicles/{id}', function ($vehicleId) use ($config, $db) {
@@ -467,7 +467,7 @@ $router->get('/company/vehicles/{id}', function ($vehicleId) use ($config, $db) 
     require base_path('app/View/pages/company_vehicle_view.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 // --- Vehicle Edit (form) ---
 $router->get('/company/vehicles/{id}/edit', function ($vehicleId) use ($config, $db) {
@@ -574,7 +574,7 @@ $router->get('/company/vehicles/{id}/edit', function ($vehicleId) use ($config, 
     require base_path('app/View/pages/company_vehicle_edit.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 // --- Vehicle Edit (handle) ---
 $router->post('/company/vehicles/{id}/edit', function ($vehicleId) use ($config, $db) {
@@ -750,7 +750,7 @@ $router->post('/company/vehicles/{id}/edit', function ($vehicleId) use ($config,
     require base_path('app/View/pages/company_vehicle_edit.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 // --- Vehicle Archive ---
 $router->post('/company/vehicles/{id}/archive', function ($vehicleId) use ($config, $db) {
@@ -850,4 +850,4 @@ $router->post('/company/vehicles/{id}/archive', function ($vehicleId) use ($conf
         header('Location: /company/vehicles');
         exit;
     }
-});
+}, 'company.vehicle_units');

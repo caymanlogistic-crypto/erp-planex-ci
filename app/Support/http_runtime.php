@@ -129,6 +129,14 @@ if (!function_exists('requireRole')) {
             redirect_to('/login');
         }
 
+        // A protected route has already been authorized by Router from the
+        // current central snapshot. Literal legacy roles remain only as the
+        // compatibility gate while ERP_ROLES_ACCESS_ENABLED is off.
+        if (\App\Security\AccessRuntime::current()->isActive()
+            && !\App\Security\AccessRuntime::current()->isTechnicalSuperadmin()) {
+            return;
+        }
+
         $allowed = is_array($roles) ? $roles : [$roles];
         if (!in_array($_SESSION['role_code'] ?? '', $allowed, true)) {
             http_response_code(403);

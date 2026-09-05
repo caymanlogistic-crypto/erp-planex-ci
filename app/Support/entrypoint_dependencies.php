@@ -3,6 +3,7 @@
 // Ordered runtime dependency manifest for the public entrypoint.
 require_once base_path('app/Core/Database.php');
 require_once base_path('app/Security/AccessStateProvider.php');
+require_once base_path('app/Security/PdoAccessStateProvider.php');
 require_once base_path('app/Security/AccessRequestContext.php');
 require_once base_path('app/Security/MembershipAccessSnapshot.php');
 require_once base_path('app/Security/EffectiveAccess.php');

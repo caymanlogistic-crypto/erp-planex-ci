@@ -95,7 +95,7 @@ final class TenantSchemaCatalog
         foreach ($catalog['tables'] as $table => $meta) {
             $out[] = '## `' . $table . '`';
             $out[] = '';
-            $out[] = '**Domain:** ' . $meta['domain'] . '  ';
+            $out[] = '**Domain:** ' . $meta['domain'] . '<br>';
             $out[] = '**Purpose:** ' . $meta['purpose'];
             $out[] = '';
             $out[] = '| Column | Type | Null | Default | Extra | Key |';

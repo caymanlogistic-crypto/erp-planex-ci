@@ -115,10 +115,17 @@ $router->get('/company/dashboard', function () use ($config, $db) {
     $content = ob_get_clean();
 
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.dashboard');
 
 $router->post('/company/access-grants/grant', function () use ($config, $db) {
     requireRole('company_owner');
+
+    // D-007: legacy entity_access_grants is read-only migration input once the
+    // centralized roles/access runtime is active.
+    if (\App\Security\AccessRuntime::current()->isActive()) {
+        http_response_code(410);
+        return null;
+    }
 
     $companyId = (int)(getSessionCompanyId() ?? 0);
     $entityType = trim($_POST['entity_type'] ?? '');
@@ -196,11 +203,17 @@ $router->post('/company/access-grants/grant', function () use ($config, $db) {
     }
 
     redirect_to($redirect);
-});
+}, 'company.roles_access');
 
 // Revoke access grant
 $router->post('/company/access-grants/{id}/revoke', function ($id) use ($config, $db) {
     requireRole('company_owner');
+
+    // D-007: revocation moves to centralized assignment endpoints.
+    if (\App\Security\AccessRuntime::current()->isActive()) {
+        http_response_code(410);
+        return null;
+    }
 
     $companyId = (int)(getSessionCompanyId() ?? 0);
     $redirect = $_GET['redirect'] ?? '/company/dashboard';
@@ -224,7 +237,7 @@ $router->post('/company/access-grants/{id}/revoke', function ($id) use ($config,
     } catch (\Exception $e) {}
 
     redirect_to($redirect);
-});
+}, 'company.roles_access');
 
 // ============================================================
 // BLOCK D5: Contractor assignment management

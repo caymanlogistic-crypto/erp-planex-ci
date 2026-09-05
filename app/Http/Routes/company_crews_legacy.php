@@ -172,7 +172,7 @@ $router->post('/company/crews/create', function () use ($config, $db) {
     require base_path('app/View/pages/company_crews_create.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.route_executors');
 
 // --- Crew View ---
 $router->get('/company/crews/{id}', function ($crewId) use ($config, $db) {
@@ -320,7 +320,7 @@ $router->get('/company/crews/{id}', function ($crewId) use ($config, $db) {
     require base_path('app/View/pages/company_crew_view.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.route_executors');
 
 // --- Crew Edit (form) ---
 $router->get('/company/crews/{id}/edit', function ($crewId) use ($config, $db) {
@@ -512,7 +512,7 @@ $router->get('/company/crews/{id}/edit', function ($crewId) use ($config, $db) {
     require base_path('app/View/pages/company_crew_edit.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.route_executors');
 
 // --- Crew Edit (handle) ---
 $router->post('/company/crews/{id}/edit', function ($crewId) use ($config, $db) {
@@ -818,7 +818,7 @@ $router->post('/company/crews/{id}/edit', function ($crewId) use ($config, $db) 
     require base_path('app/View/pages/company_crew_edit.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.route_executors');
 
 // --- Crew Archive ---
 $router->post('/company/crews/{id}/archive', function ($crewId) use ($config, $db) {
@@ -915,6 +915,6 @@ $router->post('/company/crews/{id}/archive', function ($crewId) use ($config, $d
         header('Location: /company/crews');
         exit;
     }
-});
+}, 'company.route_executors');
 
 // ---- VEHICLE SETS (Транспорт) ----

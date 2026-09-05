@@ -61,13 +61,31 @@ verifyCsrfRequest();
 
 use App\Core\Database;
 use App\Http\Router;
+use App\Security\AccessRequestContext;
+use App\Security\EffectiveAccessResolver;
+use App\Security\PageRegistry;
+use App\Security\PdoAccessStateProvider;
 use App\Service\CompanyInnLookupService;
 use App\Service\ContractorContactService;
 use App\Service\ClientContactService;
 
-$db     = new Database($config['database']);
-$router = new Router();
+$db = new Database($config['database']);
+$pageRegistry = new PageRegistry();
+$rolesAccessEnabled = filter_var(env('ERP_ROLES_ACCESS_ENABLED', false), FILTER_VALIDATE_BOOL);
+$accessStateProvider = $rolesAccessEnabled
+    ? new PdoAccessStateProvider($db->connection())
+    : null;
+$router = new Router($pageRegistry);
 
+// Activation is an explicit deployment switch. Once enabled, provider/readiness
+// failures stay fail-closed inside EffectiveAccessResolver and never fall back
+// to legacy role checks.
+if ($rolesAccessEnabled) {
+    $router->enableCompanyAccess(
+        new EffectiveAccessResolver($pageRegistry, $accessStateProvider),
+        AccessRequestContext::fromSession($_SESSION)
+    );
+}
 
 // Route registration extracted from the legacy index monolith.
 require_once base_path('app/Http/Routes/core.php');
@@ -82,8 +100,11 @@ require_once base_path('app/Http/Routes/company_crews_legacy.php');
 require_once base_path('app/Http/Routes/company_vehicle_sets.php');
 require_once base_path('app/Http/Routes/company_driver_vehicle_blocks_legacy.php');
 require_once base_path('app/Http/Routes/company_documents.php');
+require_once base_path('app/Http/Routes/company_document_generator.php');
 require_once base_path('app/Http/Routes/auth.php');
 require_once base_path('app/Http/Routes/company_dashboard.php');
+require_once base_path('app/Http/Routes/company_switch.php');
+require_once base_path('app/Http/Routes/company_roles_access.php');
 require_once base_path('app/Http/Routes/company_contractor_assignments.php');
 require_once base_path('app/Http/Routes/company_route_executors.php');
 require_once base_path('app/Http/Routes/company_responsible_assignments.php');

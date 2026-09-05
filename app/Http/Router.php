@@ -135,6 +135,7 @@ class Router
     private function mustAuthorize(string $uri): bool
     {
         return $this->effectiveAccess !== null
+            && $uri !== '/company/switch'
             && ($uri === '/company' || str_starts_with($uri, '/company/'));
     }
 

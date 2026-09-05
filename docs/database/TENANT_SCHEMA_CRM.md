@@ -2,11 +2,11 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
+**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
 
 ## `client_contacts`
 
-**Domain:** CRM  
+**Domain:** CRM<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -37,7 +37,7 @@
 
 ## `clients`
 
-**Domain:** CRM  
+**Domain:** CRM<br>
 **Purpose:** Customer/client master records.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -54,6 +54,7 @@
 | `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 | `updated_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 | `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
 | `created_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `entity_type` | `varchar(20)` | YES | NULL | — | — |
 | `director_full_name` | `varchar(255)` | YES | NULL | — | — |
@@ -71,6 +72,7 @@
 ### Indexes / constraints
 
 - **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_clients_creator_membership` (`created_by_membership_id`)
 - **INDEX** `idx_inn` (`inn`)
 
 ### Physical foreign keys
@@ -79,7 +81,7 @@
 
 ## `contractor_assignment_history`
 
-**Domain:** CRM  
+**Domain:** CRM<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -104,7 +106,7 @@
 
 ## `contractor_contacts`
 
-**Domain:** CRM  
+**Domain:** CRM<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -135,7 +137,7 @@
 
 ## `contractor_tax_history`
 
-**Domain:** CRM  
+**Domain:** CRM<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -165,7 +167,7 @@
 
 ## `contractors`
 
-**Domain:** CRM  
+**Domain:** CRM<br>
 **Purpose:** Carrier/contractor master records.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -182,6 +184,7 @@
 | `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 | `updated_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 | `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
 | `created_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `contractor_type` | `varchar(20)` | YES | NULL | — | — |
 | `bank_account` | `varchar(50)` | YES | NULL | — | — |
@@ -200,7 +203,34 @@
 ### Indexes / constraints
 
 - **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_contractors_creator_membership` (`created_by_membership_id`)
 - **INDEX** `idx_inn` (`inn`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `entity_assignments`
+
+**Domain:** CRM<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `entity_type` | `enum('client','contractor','vehicle_unit','driver')` | NO | NULL | — | `MUL` |
+| `entity_id` | `bigint unsigned` | NO | NULL | — | — |
+| `membership_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `assigned_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_assignment_entity` (`entity_type`, `entity_id`)
+- **INDEX** `idx_assignment_membership_entity` (`membership_id`, `entity_type`, `entity_id`)
+- **UNIQUE** `uk_entity_assignment` (`entity_type`, `entity_id`, `membership_id`)
 
 ### Physical foreign keys
 
@@ -208,7 +238,7 @@
 
 ## `responsible_assignment_history`
 
-**Domain:** CRM  
+**Domain:** CRM<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
