@@ -127,6 +127,33 @@ jobs:
           SQL
           php tests/feo_request_costs_regression_test.php
 
+      - name: Roles Access session recovery regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/roles_access_legacy_session_upgrade_test.php
+          php tests/roles_access_session_recovery_contract_test.php
+          php tests/roles_access_131_production_migration_contract_test.php
+          php tests/roles_access_core_test.php
+          php tests/roles_access_identity_membership_contract_test.php
+          php tests/roles_access_endpoint_integration_test.php
+          python3 tests/roles_access_route_registry_test.py
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          CREATE DATABASE IF NOT EXISTS `spugovxsim_test2` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+          GRANT ALL PRIVILEGES ON `spugovxsim_test2`.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+          PLANEX_SCHEMA_DB_HOST=127.0.0.1 \
+          PLANEX_SCHEMA_DB_PORT=3306 \
+          PLANEX_SCHEMA_DB_USER=planex_ci \
+          PLANEX_SCHEMA_DB_PASSWORD=planex_ci \
+          PLANEX_TEST_FIXED_DB=spugovxsim_test2 \
+          PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
+            php tests/roles_access_session_auth_mysql_test.php
+
       - name: Changed Python syntax
         if: steps.changes.outputs.python == 'true'
         shell: bash

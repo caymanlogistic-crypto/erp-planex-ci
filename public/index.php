@@ -77,10 +77,13 @@ $accessStateProvider = $rolesAccessEnabled
     : null;
 $router = new Router($pageRegistry);
 
-// Activation is an explicit deployment switch. Once enabled, provider/readiness
-// failures stay fail-closed inside EffectiveAccessResolver and never fall back
-// to legacy role checks.
+// Activation is an explicit deployment switch. Sessions created before the
+// global identity rollout are upgraded only through immutable migration
+// provenance. If that identity cannot be proven exactly, invalidate the old
+// session and force a normal login instead of turning an otherwise-valid old
+// cookie into an opaque company-route 403.
 if ($rolesAccessEnabled) {
+    recoverLegacyRolesAccessSession($db->connection(), $accessStateProvider);
     $router->enableCompanyAccess(
         new EffectiveAccessResolver($pageRegistry, $accessStateProvider),
         AccessRequestContext::fromSession($_SESSION)
