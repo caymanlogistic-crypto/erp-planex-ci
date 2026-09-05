@@ -1,0 +1,145 @@
+name: Roles Access Real Write Proof
+on:
+  push:
+    branches: [chatgpt/roles-access-real-write-proof-20260905]
+permissions:
+  contents: read
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_PARENT: /home/s/spugovxsim/planexp/public_html
+  APP_DIR: erpv2
+  RESULT_DIR: roles_access_real_write_result
+  SIM_RESULT_DIR: roles_access_simulated_result
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate exact deployed canonical and stage session helper
+        shell: bash
+        env:
+          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          canonical="$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')"
+          git merge-base --is-ancestor "$canonical" HEAD
+          unexpected="$(git diff --name-only "$canonical"..HEAD | grep -Ev '^\.github/(workflows/roles_access_real_write_proof\.yml|roles-access/(real_write_proof|simulated_ui_proof)\.js)$' || true)"
+          test -z "$unexpected"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/roles_real_write"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/roles_real_write" "$HOME/.ssh/known_hosts"
+          marker="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt')"
+          test "$marker" = "$canonical"
+          echo "EXPECTED_SHA=$canonical" >> "$GITHUB_ENV"
+          scp -P "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/roles-access/qa_session.php "$USER@$HOST:/tmp/roles_real_write_${GITHUB_RUN_ID}.php"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Create isolated QA sessions
+        shell: bash
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          owner="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_real_write_${GITHUB_RUN_ID}.php' create-legacy-owner")"
+          invalid="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_real_write_${GITHUB_RUN_ID}.php' create-invalid-legacy")"
+          sim="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_real_write_${GITHUB_RUN_ID}.php' create-legacy-owner")"
+          python3 - "$owner" "$invalid" "$sim" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          vals=[]
+          for raw in sys.argv[1:4]: vals.append(json.loads(raw.split('=',1)[1]))
+          owner,invalid,sim=vals
+          for x in (owner,invalid,sim):
+              for v in (x['cookie'],x['sid']): print(f'::add-mask::{v}')
+          with open(sys.argv[4],'a') as f:
+              f.write(f"QA_COOKIE_NAME={owner['cookie']}\nQA_LEGACY_SESSION_ID={owner['sid']}\nQA_INVALID_SESSION_ID={invalid['sid']}\nQA_SIM_SESSION_ID={sim['sid']}\n")
+          PY
+      - name: Run REAL reversible production write proof
+        shell: bash
+        run: |
+          set +e
+          node .github/roles-access/real_write_proof.js | tee roles_access_real_write.txt
+          rc=${PIPESTATUS[0]}
+          if [ -s "$RESULT_DIR/upgraded_sid.txt" ]; then
+            sid="$(tr -d '\r\n' < "$RESULT_DIR/upgraded_sid.txt")"
+            echo "::add-mask::$sid"
+            echo "QA_REAL_UPGRADED_SESSION_ID=$sid" >> "$GITHUB_ENV"
+          fi
+          exit "$rc"
+      - name: Assert REAL write evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^REAL_BACKEND_WRITES_PASS=YES$' roles_access_real_write.txt
+          grep -q '^REAL_ASSIGNMENT_CLIENT=PASS$' roles_access_real_write.txt
+          grep -q '^REAL_ASSIGNMENT_CONTRACTOR=PASS$' roles_access_real_write.txt
+          grep -q '^REAL_ASSIGNMENT_VEHICLE=PASS$' roles_access_real_write.txt
+          grep -q '^REAL_ASSIGNMENT_DRIVER=PASS$' roles_access_real_write.txt
+          grep -q '^INLINE_ASSIGNMENTS=PASS$' roles_access_real_write.txt
+          grep -q '^REAL_ROLE_CRUD=PASS$' roles_access_real_write.txt
+          grep -q '^RESTORE_DIFF=0$' roles_access_real_write.txt
+          grep -q '^QA_RESIDUE=0$' roles_access_real_write.txt
+      - name: Run simulated destructive-failure and bulk UI proof
+        shell: bash
+        run: |
+          set +e
+          node .github/roles-access/simulated_ui_proof.js | tee roles_access_simulated_ui.txt
+          rc=${PIPESTATUS[0]}
+          if [ -s "$SIM_RESULT_DIR/upgraded_sid.txt" ]; then
+            sid="$(tr -d '\r\n' < "$SIM_RESULT_DIR/upgraded_sid.txt")"
+            echo "::add-mask::$sid"
+            echo "QA_SIM_UPGRADED_SESSION_ID=$sid" >> "$GITHUB_ENV"
+          fi
+          exit "$rc"
+      - name: Assert simulated UI evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q '^BULK_FILTER_LABELS=PASS$' roles_access_simulated_ui.txt
+          grep -q '^FILTERED_HIDDEN_ROWS_UNCHANGED=PASS$' roles_access_simulated_ui.txt
+          grep -q '^PARTIAL_FAILURE_ROLLBACK=PASS$' roles_access_simulated_ui.txt
+          grep -q '^BULK_DOUBLE_CLICK_GUARD=PASS$' roles_access_simulated_ui.txt
+          grep -q '^WRITE_REQUESTS=0$' roles_access_simulated_ui.txt
+          grep -q '^SIMULATED_BROWSER_UI_PASS=YES$' roles_access_simulated_ui.txt
+      - name: Cleanup QA sessions and helper
+        if: always()
+        shell: bash
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set +e
+          if [ -f "$HOME/.ssh/roles_real_write" ]; then
+            for sid in "${QA_LEGACY_SESSION_ID:-}" "${QA_REAL_UPGRADED_SESSION_ID:-}" "${QA_INVALID_SESSION_ID:-}" "${QA_SIM_SESSION_ID:-}" "${QA_SIM_UPGRADED_SESSION_ID:-}"; do
+              [ -n "$sid" ] || continue
+              ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_real_write_${GITHUB_RUN_ID}.php' delete '$sid'" >/dev/null 2>&1 || true
+            done
+            ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "rm -f '/tmp/roles_real_write_${GITHUB_RUN_ID}.php'" >/dev/null 2>&1 || true
+          fi
+          rm -f "$HOME/.ssh/roles_real_write"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: roles_access_real_write_${{ env.EXPECTED_SHA }}
+          path: |
+            roles_access_real_write.txt
+            roles_access_simulated_ui.txt
+            roles_access_real_write_result/
+            roles_access_simulated_result/
+          if-no-files-found: warn
+          retention-days: 30
