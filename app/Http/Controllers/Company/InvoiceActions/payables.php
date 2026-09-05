@@ -3,7 +3,6 @@
 use App\Core\Database;
 use App\Service\FinancePayablesReportService;
 
-requireRole(['company_owner']);
 
 $pageTitle = 'Кредиторская задолженность';
 $pageContext = 'Финансы › Кредиторская задолженность';

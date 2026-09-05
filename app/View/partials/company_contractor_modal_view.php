@@ -108,6 +108,11 @@ $contractorDocumentsUrl = '/company/documents?entity_type=contractor&entity_id='
       <?php endif; ?>
     </div>
   </div>
+  <?php
+  $assignmentEntityType = 'contractor';
+  $assignmentEntityId = (int) ($contractor['id'] ?? 0);
+  require base_path('app/View/partials/company_entity_assignment_block.php');
+  ?>
 </div>
 
 <div class="modal-foot is-spaced">

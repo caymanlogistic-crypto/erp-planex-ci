@@ -7,7 +7,7 @@ if($companyId<=0){echo json_encode(['success'=>false,'error'=>'Компания 
 try{$company=$service->loadCompany($companyId);if(!$company||$company['status']!=='active'){echo json_encode(['success'=>false,'error'=>'Компания не найдена или не активна.']);exit;}
 $localPdo=$service->getLocalPdo($company);$driver=$service->getDriverById($localPdo,(int)$id);
 if(!$driver){echo json_encode(['success'=>false,'error'=>'Водитель не найден.']);exit;}
-$role=$_SESSION['role_code']??'';if($role==='logist'){$userId=(int)$_SESSION['user_id'];if((int)$driver['created_by_user_id']!==$userId){echo json_encode(['success'=>false,'error'=>'У вас нет права архивировать эту запись.']);exit;}}
+$role=$_SESSION['role_code']??'';
 if($service->checkDriverHasCrews($localPdo,(int)$id)){echo json_encode(['success'=>false,'error'=>'Водитель участвует в экипажах. Сначала удалите экипажи.']);exit;}
 $uid=(int)($_SESSION['user_id']??0);$rl=(string)($_SESSION['role_code']??'');
 $localPdo->prepare("UPDATE drivers SET deleted_at=NOW(),deleted_by_user_id=?,deleted_by_role=? WHERE id=?")->execute([$uid,$rl,(int)$id]);

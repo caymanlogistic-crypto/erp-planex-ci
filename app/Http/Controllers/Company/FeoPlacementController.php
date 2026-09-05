@@ -22,7 +22,6 @@ final class FeoPlacementController
 
     public function index(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         $pageTitle = 'Размещение на карте';
         $pageContext = 'Заявки ФЭО › Размещение на карте';
         $company = null;
@@ -62,7 +61,6 @@ final class FeoPlacementController
 
     public function analyze(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         $moved = null;
         try {
             [$company,$pdo] = $this->companyContext();
@@ -116,7 +114,6 @@ final class FeoPlacementController
 
     public function commitCreate(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         $finalPath = null;
         try {
             [$company,$pdo] = $this->companyContext();
@@ -149,7 +146,6 @@ final class FeoPlacementController
 
     public function detail(string $id): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [, $pdo] = $this->companyContext();
             $block = $this->placement->block($pdo, (int)$id);
@@ -162,7 +158,6 @@ final class FeoPlacementController
 
     public function current(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [, $pdo] = $this->companyContext();
             jsonResponse(['success'=>true,'rows'=>$this->placement->currentRows($pdo, 20000),'summary'=>$this->placement->currentSummary($pdo)]);
@@ -173,7 +168,6 @@ final class FeoPlacementController
 
     public function previewStatus(string $id): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo] = $this->companyContext();
             $target = (string)($_POST['target_status'] ?? '');
@@ -191,7 +185,6 @@ final class FeoPlacementController
 
     public function commitStatus(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo] = $this->companyContext();
             $token = trim((string)($_POST['preview_token'] ?? ''));
@@ -207,7 +200,6 @@ final class FeoPlacementController
 
     public function previewReconcile(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo] = $this->companyContext();
             $preview = $this->placement->previewReconcile($pdo);
@@ -224,7 +216,6 @@ final class FeoPlacementController
 
     public function commitReconcile(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo] = $this->companyContext();
             $token = trim((string)($_POST['preview_token'] ?? ''));
@@ -240,7 +231,6 @@ final class FeoPlacementController
 
     public function download(string $id): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company,$pdo] = $this->companyContext();
             $block = $this->placement->block($pdo, (int)$id);

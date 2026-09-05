@@ -1,6 +1,5 @@
 <?php
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 $companyId=(int)(getSessionCompanyId()??0);
 if($companyId<=0){$_SESSION['bank_finance_error']='Компания не найдена.';redirect_to('/company/finance/bank-accounts');}

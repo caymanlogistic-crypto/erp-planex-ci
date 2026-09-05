@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'Внутренний перевод';
 
     $companyId = (int)(getSessionCompanyId() ?? 0);

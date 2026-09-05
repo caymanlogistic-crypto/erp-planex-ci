@@ -22,7 +22,6 @@ final class FeoMapController
 
     public function index(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         $pageTitle = 'Карта';
         $pageContext = 'Заявки ФЭО › Карта';
         $company = null;
@@ -54,7 +53,6 @@ final class FeoMapController
 
     public function data(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [, $pdo] = $this->companyContext();
             jsonResponse(['success'=>true] + $this->map->payload($pdo));
@@ -65,7 +63,6 @@ final class FeoMapController
 
     public function tile(string $z, string $x, string $y): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         $this->tiles->serve($z, $x, $y);
     }
 

@@ -82,18 +82,10 @@ $router->get('/company/vehicles', function () use ($config, $db) {
             $localPdo->exec($migrationSql);
         }
 
-        $isLogist = ($_SESSION['role_code'] ?? '') === 'logist';
-        if ($isLogist) {
-            $userId = (int)$_SESSION['user_id'];
-            $vehicleStmt = $localPdo->prepare(
-                "SELECT * FROM vehicle_units WHERE deleted_at IS NULL AND (created_by_user_id = ? OR id IN (SELECT entity_id FROM entity_access_grants WHERE entity_type = 'vehicle_unit' AND granted_to_user_id = ? AND access_level = 'view')) ORDER BY created_at DESC"
-            );
-            $vehicleStmt->execute([$userId, $userId]);
-            $vehicles = $vehicleStmt->fetchAll(PDO::FETCH_ASSOC);
-        } else {
-            $vehicleStmt = $localPdo->query("SELECT * FROM vehicle_units WHERE deleted_at IS NULL ORDER BY created_at DESC");
-            $vehicles = $vehicleStmt->fetchAll(PDO::FETCH_ASSOC);
-        }
+        $access = \App\Service\RegulatedDataScopeService::condition('vehicle_unit', 'vehicle_units.id');
+        $vehicleStmt = $localPdo->prepare("SELECT * FROM vehicle_units WHERE deleted_at IS NULL AND {$access['sql']} ORDER BY created_at DESC");
+        $vehicleStmt->execute($access['params']);
+        $vehicles = $vehicleStmt->fetchAll(PDO::FETCH_ASSOC);
         $dbError = null;
     } catch (\Exception $e) {
         $company = $company ?? null;
@@ -105,7 +97,7 @@ $router->get('/company/vehicles', function () use ($config, $db) {
     require base_path('app/View/pages/company_vehicles.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 $router->get('/company/vehicles/create', function () use ($config, $db) {
     requireRole(['company_owner', 'senior_logist', 'logist']);
@@ -170,7 +162,7 @@ $router->get('/company/vehicles/create', function () use ($config, $db) {
     require base_path('app/View/pages/company_vehicles_create.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 $router->post('/company/vehicles/create', function () use ($config, $db) {
     requireRole(['company_owner', 'senior_logist', 'logist']);
@@ -278,11 +270,13 @@ $router->post('/company/vehicles/create', function () use ($config, $db) {
         $volumeM3 = trim($_POST['volume_m3'] ?? '');
         $comments = trim($_POST['comments'] ?? '');
 
+        $membershipId = \App\Service\RegulatedDataScopeService::assertCanCreate('vehicle_unit');
+        $localPdo->beginTransaction();
         $insert = $localPdo->prepare(
             'INSERT INTO vehicle_units (plate_number, brand, model, unit_type, vin,
-             sts_number, pts_number, capacity_tons, volume_m3, status, comments, created_by_user_id, created_by_role)
+             sts_number, pts_number, capacity_tons, volume_m3, status, comments, created_by_user_id, created_by_membership_id, created_by_role)
              VALUES (:plate_number, :brand, :model, :unit_type, :vin,
-             :sts_number, :pts_number, :capacity_tons, :volume_m3, :status, :comments, :created_by_user_id, :created_by_role)'
+             :sts_number, :pts_number, :capacity_tons, :volume_m3, :status, :comments, :created_by_user_id, :created_by_membership_id, :created_by_role)'
         );
         $insert->execute([
             ':plate_number'       => $plateNumber,
@@ -297,15 +291,21 @@ $router->post('/company/vehicles/create', function () use ($config, $db) {
             ':status'             => 'active',
             ':comments'           => $comments !== '' ? $comments : null,
             ':created_by_user_id' => (int)$_SESSION['user_id'],
+            ':created_by_membership_id' => $membershipId,
             ':created_by_role'    => $_SESSION['role_code'],
         ]);
 
-        $lastId = $localPdo->lastInsertId();
+        $lastId = (int)$localPdo->lastInsertId();
+        \App\Service\EntityAssignmentService::autoAssignCreator($localPdo, 'vehicle_unit', $lastId, $membershipId);
+        $localPdo->commit();
         $selectStmt = $localPdo->prepare('SELECT * FROM vehicle_units WHERE id = ?');
         $selectStmt->execute([$lastId]);
         $createdVehicle = $selectStmt->fetch(PDO::FETCH_ASSOC);
         $success = true;
     } catch (\Exception $e) {
+        if (isset($localPdo) && $localPdo instanceof PDO && $localPdo->inTransaction()) {
+            $localPdo->rollBack();
+        }
         $company = $company ?? null;
         $formError = 'Ошибка добавления транспорта: ' . $e->getMessage();
     }
@@ -314,7 +314,7 @@ $router->post('/company/vehicles/create', function () use ($config, $db) {
     require base_path('app/View/pages/company_vehicles_create.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 // --- Vehicle View ---
 $router->get('/company/vehicles/{id}', function ($vehicleId) use ($config, $db) {
@@ -403,30 +403,20 @@ $router->get('/company/vehicles/{id}', function ($vehicleId) use ($config, $db) 
             $localPdo->exec($migrationSql);
         }
 
+        $accessDenied = null;
         $vStmt = $localPdo->prepare('SELECT * FROM vehicle_units WHERE id = ?');
         $vStmt->execute([$vehicleId]);
         $vehicle = $vStmt->fetch(PDO::FETCH_ASSOC);
-
-        if (!$vehicle) {
-            $entityNotFound = true;
+        if ($vehicle && !\App\Service\RegulatedDataScopeService::canAccess($localPdo, 'vehicle_unit', 'vehicle_units', $vehicleId)) {
+            $vehicle = null;
+            $accessDenied = 'У вас нет доступа к этой записи.';
         }
 
-        $accessDenied = null;
+        if (!$vehicle && $accessDenied === null) {
+            $entityNotFound = true;
+        }
         $relatedSets = [];
         if ($vehicle) {
-            // Access check for logist
-            $isLogist = ($_SESSION['role_code'] ?? '') === 'logist';
-            if ($isLogist) {
-                $userId = (int)$_SESSION['user_id'];
-                $hasGrant = false;
-                $gc = $localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type = 'vehicle_unit' AND entity_id = ? AND granted_to_user_id = ? AND revoked_at IS NULL LIMIT 1");
-                $gc->execute([$vehicleId, $userId]);
-                $gr = $gc->fetch(PDO::FETCH_ASSOC);
-                $hasGrant = ($gr && in_array($gr['access_level'], ['view', 'edit']));
-                if ((int)$vehicle['created_by_user_id'] !== $userId && !$hasGrant) {
-                    $accessDenied = 'У вас нет доступа к этой записи.';
-                }
-            }
             // Load related vehicle sets
             if (!$accessDenied) {
                 $rsStmt = $localPdo->prepare(
@@ -447,21 +437,24 @@ $router->get('/company/vehicles/{id}', function ($vehicleId) use ($config, $db) 
 
         $grants = [];
         $logists = [];
-        if (($_SESSION['role_code'] ?? '') === 'company_owner') {
+        if (\App\Service\AccessControlService::isEffectiveSystemOwner()) {
             $grantsStmt = $localPdo->prepare(
-                "SELECT g.*, u.full_name AS logist_name
-                 FROM entity_access_grants g
-                 LEFT JOIN users u ON g.granted_to_user_id = u.id
-                 WHERE g.entity_type = ? AND g.entity_id = ?"
+                "SELECT a.*, u.full_name AS logist_name
+                 FROM entity_assignments a
+                 LEFT JOIN users u ON u.membership_id = a.membership_id
+                 WHERE a.entity_type = ? AND a.entity_id = ?"
             );
             $grantsStmt->execute(['vehicle_unit', $vehicleId]);
             $grants = $grantsStmt->fetchAll(PDO::FETCH_ASSOC);
 
-            $logists = $localPdo->query("SELECT id, full_name, login FROM users WHERE role_code IN ('logist', 'senior_logist') AND status='active' AND deleted_at IS NULL ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
+            $logists = $localPdo->query("SELECT membership_id AS id, full_name, login FROM users WHERE membership_id IS NOT NULL AND status='active' AND deleted_at IS NULL ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
         }
 
         $dbError = null;
     } catch (\Exception $e) {
+        if (isset($localPdo) && $localPdo instanceof PDO && $localPdo->inTransaction()) {
+            $localPdo->rollBack();
+        }
         $company = $company ?? null;
         $vehicle = null;
         $grants = [];
@@ -474,7 +467,7 @@ $router->get('/company/vehicles/{id}', function ($vehicleId) use ($config, $db) 
     require base_path('app/View/pages/company_vehicle_view.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 // --- Vehicle Edit (form) ---
 $router->get('/company/vehicles/{id}/edit', function ($vehicleId) use ($config, $db) {
@@ -558,6 +551,10 @@ $router->get('/company/vehicles/{id}/edit', function ($vehicleId) use ($config, 
         $vStmt->execute([$vehicleId]);
         $vehicle = $vStmt->fetch(PDO::FETCH_ASSOC);
 
+        if ($vehicle && !\App\Service\RegulatedDataScopeService::canAccess($localPdo, 'vehicle_unit', 'vehicle_units', $vehicleId)) {
+            $vehicle = null;
+        }
+
         if (!$vehicle) {
             $entityNotFound = true;
             $old = [];
@@ -577,7 +574,7 @@ $router->get('/company/vehicles/{id}/edit', function ($vehicleId) use ($config, 
     require base_path('app/View/pages/company_vehicle_edit.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 // --- Vehicle Edit (handle) ---
 $router->post('/company/vehicles/{id}/edit', function ($vehicleId) use ($config, $db) {
@@ -661,6 +658,12 @@ $router->post('/company/vehicles/{id}/edit', function ($vehicleId) use ($config,
         $vStmt = $localPdo->prepare('SELECT * FROM vehicle_units WHERE id = ?');
         $vStmt->execute([$vehicleId]);
         $vehicle = $vStmt->fetch(PDO::FETCH_ASSOC);
+
+        if ($vehicle && !\App\Service\RegulatedDataScopeService::canAccess($localPdo, 'vehicle_unit', 'vehicle_units', $vehicleId)) {
+            http_response_code(403);
+            $vehicle = null;
+            $formError = 'У вас нет доступа к этой записи.';
+        }
 
         if (!$vehicle) {
             $entityNotFound = true;
@@ -747,7 +750,7 @@ $router->post('/company/vehicles/{id}/edit', function ($vehicleId) use ($config,
     require base_path('app/View/pages/company_vehicle_edit.php');
     $content = ob_get_clean();
     require base_path('app/View/layouts/main.php');
-});
+}, 'company.vehicle_units');
 
 // --- Vehicle Archive ---
 $router->post('/company/vehicles/{id}/archive', function ($vehicleId) use ($config, $db) {
@@ -801,6 +804,10 @@ $router->post('/company/vehicles/{id}/archive', function ($vehicleId) use ($conf
         $vStmt = $localPdo->prepare('SELECT * FROM vehicle_units WHERE id = ?');
         $vStmt->execute([$vehicleId]);
         $vehicleForDelete = $vStmt->fetch(PDO::FETCH_ASSOC);
+        if ($vehicleForDelete && !\App\Service\RegulatedDataScopeService::canAccess($localPdo, 'vehicle_unit', 'vehicle_units', $vehicleId)) {
+            http_response_code(403);
+            return;
+        }
 
         $crewCheck = $localPdo->prepare('SELECT COUNT(*) FROM crews WHERE vehicle_id = ? AND status = ?');
         $crewCheck->execute([$vehicleId, 'active']);
@@ -843,4 +850,4 @@ $router->post('/company/vehicles/{id}/archive', function ($vehicleId) use ($conf
         header('Location: /company/vehicles');
         exit;
     }
-});
+}, 'company.vehicle_units');

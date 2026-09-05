@@ -1,5 +1,4 @@
 <?php
-requireRole(['company_owner']);
 $companyId=(int)(getSessionCompanyId()??0);if($companyId<=0){http_response_code(400);echo '<div class="form-alert alert-error">Компания не найдена.</div>';return;}
 try{
  $central=$db->connection();$s=$central->prepare("SELECT * FROM companies WHERE id=? AND status='active'");$s->execute([$companyId]);$company=$s->fetch(PDO::FETCH_ASSOC);if(!$company)throw new RuntimeException('Компания не найдена или неактивна.');

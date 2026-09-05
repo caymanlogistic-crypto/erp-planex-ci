@@ -4,7 +4,6 @@ use App\Core\Database;
 use App\Service\FinanceEmployeeDirectTransferEditService;
 use App\Service\FinanceEmployeeTransferService;
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 $returnRef=trim((string)($_POST['return_employee_ref']??$_POST['source_employee_ref']??''));
 try{

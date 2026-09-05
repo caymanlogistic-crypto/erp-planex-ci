@@ -1,5 +1,4 @@
 <?php
-requireRole(['company_owner', 'senior_logist', 'logist']);
 $companyId=(int)(getSessionCompanyId()??0);$entityType=$_GET['entity_type']??'';$entityId=(int)($_GET['entity_id']??0);
 $missingEntityContext=($entityType===''&&$entityId<=0);
 $whitelist=[
@@ -12,6 +11,7 @@ $whitelist=[
     'crew'=>['label'=>'Экипаж','labelDative'=>'экипажам','table'=>'crews','backRoute'=>'/company/crews','displayField'=>'id'],
 ];
 if(!isset($whitelist[$entityType])){$entityTypeError=!$missingEntityContext;$company=null;$documents=[];$entityLabel='';$entityLabelDative='';$entityName='';$backRoute='';$dbError=null;$entityNotFound=false;$pageTitle='Документы';$pageContext='Документы › Компания';ob_start();require base_path('app/View/pages/company_documents.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
+requireDocumentEntityPage($entityType);
 $entityLabel=$whitelist[$entityType]['label'];$entityLabelDative=$whitelist[$entityType]['labelDative'];$entityTable=$whitelist[$entityType]['table'];$backRoute=$whitelist[$entityType]['backRoute'];$displayField=$whitelist[$entityType]['displayField'];
 if($companyId<=0){$company=null;$documents=[];$entityName='';$dbError=null;$entityNotFound=false;$pageTitle='Документы';$pageContext='Документы › Компания';ob_start();require base_path('app/View/pages/company_documents.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
 try{$pdo=$db->connection();$stmt=$pdo->prepare('SELECT * FROM companies WHERE id=?');$stmt->execute([$companyId]);$company=$stmt->fetch(PDO::FETCH_ASSOC);
@@ -19,7 +19,7 @@ if(!$company){$company=null;$documents=[];$entityName='';$dbError=null;$entityNo
 $pageContext='Документы › Компания: '.$company['name'];
 if($company['status']!=='active'){$documents=[];$entityName='';$dbError=null;$entityNotFound=false;$pageTitle='Документы';$pageContext='Документы › Компания: '.$company['name'];ob_start();require base_path('app/View/pages/company_documents.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
 $localDbConfig=companyDatabaseConfig($config, $company);$localDb=new \App\Core\Database($localDbConfig);$localPdo=$localDb->connection();applyLocalMigrations($localPdo);
-if($entityId>0&&!\App\Service\DocumentService::canCurrentUserView($localPdo,['entity_type'=>$entityType,'entity_id'=>$entityId])){denyEntityAccess();return;}
+if($entityId>0&&!canAccessDocumentEntity($localPdo,$entityType,$entityId)){denyEntityAccess();return;}
 try{$localPdo->query("SELECT 1 FROM documents LIMIT 1")->fetch();}catch(\Exception$e){$localPdo->exec(file_get_contents(base_path('database/migrations-local/007_create_company_documents.sql')));}
 try{$localPdo->query("SELECT 1 FROM document_types LIMIT 1")->fetch();}catch(\Exception$e){$localPdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql')));$localPdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql')));}
 try{$localPdo->query("SELECT created_by_user_id FROM documents LIMIT 1")->fetch();}catch(\Exception$e){$localPdo->exec("ALTER TABLE documents ADD COLUMN created_by_user_id INT UNSIGNED DEFAULT NULL, ADD COLUMN created_by_role VARCHAR(20) DEFAULT NULL");}

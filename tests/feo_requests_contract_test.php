@@ -79,7 +79,7 @@ $ok('import analysis reads explicit overwrite checkbox', str_contains($controlle
 $ok('analyze protects existing rows when overwrite is off', str_contains($controller, 'prepareImportRows($pdo, $rows, $overwriteExisting)'));
 $ok('commit re-applies protected import semantics from preview', substr_count($controller, 'prepareImportRows($pdo, $rows, $overwriteExisting)') >= 2);
 $ok('preview persists overwrite choice', str_contains($controller, "'overwrite_existing'=>\$overwriteExisting"));
-$ok('restore controller is privileged', str_contains($controller, 'public function restoreImport(): void') && substr_count($controller, "requireRole(['company_owner','senior_logist']);") >= 3);
+$ok('restore controller action exists', str_contains($controller, 'public function restoreImport(): void'));
 $ok('restore controller calls service', str_contains($controller, 'restoreRolledBackImport($pdo, $importId, $_SESSION)'));
 $ok('index exposes freshness', str_contains($controller, 'freshnessState($pdo)'));
 
@@ -87,6 +87,7 @@ $route = $read($root . '/app/Http/Routes/company_feo_requests.php');
 foreach (['FeoRequestInteractionService.php','/company/feo/requests/data','/{id}/update','import/rollback','import/restore','import/delete','registerFeoFreshnessNavigation'] as $needle) {
     $ok('route contains ' . $needle, str_contains($route, $needle));
 }
+$ok('restore route uses configurable FEO request page access', str_contains($route, "[\$feoController, 'restoreImport'], \$feoRequestsPage"));
 
 $nav = $read($root . '/app/Support/feo_freshness_navigation.php');
 $ok('menu freshness badge is global HTML-safe', str_contains($nav, 'data-feo-freshness-badge') && str_contains($nav, 'application/json'));

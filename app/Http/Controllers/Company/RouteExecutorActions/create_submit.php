@@ -1,6 +1,5 @@
 <?php
 
-requireRole(['company_owner', 'senior_logist', 'logist']);
 require_once base_path('app/Support/crew_driver_helpers.php');
 $pageTitle = 'Создать исполнителя рейса';
 $pageContext = 'Исполнители рейса › Компания';
@@ -44,19 +43,12 @@ try {
     $pageContext = 'Исполнители рейса › Компания: ' . $company['name'];
 
     $localPdo = (new \App\Core\Database(companyDatabaseConfig($config, $company)))->connection();
-    $isLogist = ($_SESSION['role_code'] ?? '') === 'logist';
     $userId = (int)($_SESSION['user_id'] ?? 0);
     $userRole = (string)($_SESSION['role_code'] ?? '');
 
-    if ($isLogist) {
-        $s=$localPdo->prepare("SELECT id,name,inn FROM contractors WHERE deleted_at IS NULL AND status='active' AND (created_by_user_id=? OR id IN(SELECT entity_id FROM entity_access_grants WHERE entity_type='contractor' AND granted_to_user_id=? AND access_level IN('view','edit') AND revoked_at IS NULL)) ORDER BY name"); $s->execute([$userId,$userId]); $contractors=$s->fetchAll(PDO::FETCH_ASSOC);
-        $s=$localPdo->prepare("SELECT id,full_name,phone FROM drivers WHERE deleted_at IS NULL AND status='active' AND (created_by_user_id=? OR id IN(SELECT entity_id FROM entity_access_grants WHERE entity_type='driver' AND granted_to_user_id=? AND access_level IN('view','edit') AND revoked_at IS NULL)) ORDER BY full_name"); $s->execute([$userId,$userId]); $drivers=$s->fetchAll(PDO::FETCH_ASSOC);
-        $s=$localPdo->prepare("SELECT vs.id,vs.set_type,vu1.plate_number primary_plate,vu2.plate_number secondary_plate FROM vehicle_sets vs LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id=vu1.id LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id=vu2.id WHERE vs.deleted_at IS NULL AND vs.status='active' AND (vs.created_by_user_id=? OR vs.id IN(SELECT entity_id FROM entity_access_grants WHERE entity_type='vehicle_set' AND granted_to_user_id=? AND access_level IN('view','edit') AND revoked_at IS NULL)) ORDER BY vs.set_type"); $s->execute([$userId,$userId]); $vehicleSets=$s->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        $contractors=$localPdo->query("SELECT id,name,inn FROM contractors WHERE deleted_at IS NULL AND status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-        $drivers=$localPdo->query("SELECT id,full_name,phone FROM drivers WHERE deleted_at IS NULL AND status='active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
-        $vehicleSets=$localPdo->query("SELECT vs.id,vs.set_type,vu1.plate_number primary_plate,vu2.plate_number secondary_plate FROM vehicle_sets vs LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id=vu1.id LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id=vu2.id WHERE vs.deleted_at IS NULL AND vs.status='active' ORDER BY vs.set_type")->fetchAll(PDO::FETCH_ASSOC);
-    }
+    $contractors=$localPdo->query("SELECT id,name,inn FROM contractors WHERE deleted_at IS NULL AND status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+    $drivers=$localPdo->query("SELECT id,full_name,phone FROM drivers WHERE deleted_at IS NULL AND status='active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
+    $vehicleSets=$localPdo->query("SELECT vs.id,vs.set_type,vu1.plate_number primary_plate,vu2.plate_number secondary_plate FROM vehicle_sets vs LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id=vu1.id LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id=vu2.id WHERE vs.deleted_at IS NULL AND vs.status='active' ORDER BY vs.set_type")->fetchAll(PDO::FETCH_ASSOC);
 
     $contractorId=(int)($_POST['contractor_id']??0);
     $vehicleSetId=(int)($_POST['vehicle_set_id']??0);
@@ -70,24 +62,20 @@ try {
     if(count($driverIds)!==count(array_filter(array_map('intval',$rawDriverIds))))$errors['driver_ids']='Один и тот же водитель не может быть добавлен в экипаж дважды.';
     if($vehicleSetId<=0)$errors['vehicle_set_id']='Выберите транспортный комплект.';
 
-    $checkDriverAccess = static function(PDO $pdo,int $driverId,bool $isLogist,int $userId): bool {
-        $s=$pdo->prepare("SELECT created_by_user_id FROM drivers WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$driverId]);$owner=$s->fetchColumn();
-        if($owner===false)return false; if(!$isLogist||(int)$owner===$userId)return true;
-        $g=$pdo->prepare("SELECT COUNT(*) FROM entity_access_grants WHERE entity_type='driver' AND entity_id=? AND granted_to_user_id=? AND access_level IN('view','edit') AND revoked_at IS NULL");$g->execute([$driverId,$userId]);return (int)$g->fetchColumn()>0;
+    $checkDriverAccess = static function(PDO $pdo,int $driverId): bool {
+        $s=$pdo->prepare("SELECT 1 FROM drivers WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$driverId]);return (bool)$s->fetchColumn();
     };
-    foreach($driverIds as $driverId){ if(!$checkDriverAccess($localPdo,$driverId,$isLogist,$userId)){ $errors['driver_ids']='Один из выбранных водителей недоступен или неактивен.'; break; } }
+    foreach($driverIds as $driverId){ if(!$checkDriverAccess($localPdo,$driverId)){ $errors['driver_ids']='Один из выбранных водителей недоступен или неактивен.'; break; } }
 
     if(!$errors){
         $s=$localPdo->prepare("SELECT primary_vehicle_unit_id FROM vehicle_sets WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$vehicleSetId]);$vehicleUnitId=(int)$s->fetchColumn();
         if($vehicleUnitId<=0)$errors['vehicle_set_id']='У выбранного транспортного комплекта не найдена основная транспортная единица.';
     }
-    if($isLogist&&!$errors){
-        $s=$localPdo->prepare("SELECT created_by_user_id FROM contractors WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$contractorId]);$owner=$s->fetchColumn();
-        if($owner===false)$errors['contractor_id']='Подрядчик не найден или неактивен.';
-        elseif((int)$owner!==$userId){$g=$localPdo->prepare("SELECT COUNT(*) FROM entity_access_grants WHERE entity_type='contractor' AND entity_id=? AND granted_to_user_id=? AND access_level IN('view','edit') AND revoked_at IS NULL");$g->execute([$contractorId,$userId]);if((int)$g->fetchColumn()===0)$errors['contractor_id']='Подрядчик недоступен.';}
-        $s=$localPdo->prepare("SELECT created_by_user_id FROM vehicle_sets WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$vehicleSetId]);$owner=$s->fetchColumn();
-        if($owner===false)$errors['vehicle_set_id']='Транспортный комплект не найден или неактивен.';
-        elseif((int)$owner!==$userId){$g=$localPdo->prepare("SELECT COUNT(*) FROM entity_access_grants WHERE entity_type='vehicle_set' AND entity_id=? AND granted_to_user_id=? AND access_level IN('view','edit') AND revoked_at IS NULL");$g->execute([$vehicleSetId,$userId]);if((int)$g->fetchColumn()===0)$errors['vehicle_set_id']='Транспортный комплект недоступен.';}
+    if(!$errors){
+        $s=$localPdo->prepare("SELECT 1 FROM contractors WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$contractorId]);
+        if(!$s->fetchColumn())$errors['contractor_id']='Подрядчик не найден или неактивен.';
+        $s=$localPdo->prepare("SELECT 1 FROM vehicle_sets WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$vehicleSetId]);
+        if(!$s->fetchColumn())$errors['vehicle_set_id']='Транспортный комплект не найден или неактивен.';
     }
 
     if(!$errors){

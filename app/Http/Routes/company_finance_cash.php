@@ -10,22 +10,21 @@
  */
 
 $legacyMoneyAccountGet = static function (): void {
-    requireRole(['company_owner']);
     redirect_to('/company/finance/employee-payments');
 };
 
 $legacyMoneyAccountPost = static function (): void {
-    requireRole(['company_owner']);
     verifyCsrfRequest();
     $_SESSION['employee_payments_error'] = 'Этот устаревший способ операции отключён. Используйте операции банка и сотрудников.';
     redirect_to('/company/finance/employee-payments');
 };
 
-$router->get('/company/finance/cash', $legacyMoneyAccountGet);
-$router->get('/company/finance/cash/account-create', $legacyMoneyAccountGet);
-$router->post('/company/finance/cash/account-create', $legacyMoneyAccountPost);
-$router->get('/company/finance/cash/operation-create', $legacyMoneyAccountGet);
-$router->post('/company/finance/cash/operation-create', $legacyMoneyAccountPost);
-$router->get('/company/finance/cash/transfer-create', $legacyMoneyAccountGet);
-$router->post('/company/finance/cash/transfer-create', $legacyMoneyAccountPost);
-$router->post('/company/finance/cash/dispatch-employee', $legacyMoneyAccountPost);
+$cashPage = 'company.finance.cash';
+$router->get('/company/finance/cash', $legacyMoneyAccountGet, $cashPage);
+$router->get('/company/finance/cash/account-create', $legacyMoneyAccountGet, $cashPage);
+$router->post('/company/finance/cash/account-create', $legacyMoneyAccountPost, $cashPage);
+$router->get('/company/finance/cash/operation-create', $legacyMoneyAccountGet, $cashPage);
+$router->post('/company/finance/cash/operation-create', $legacyMoneyAccountPost, $cashPage);
+$router->get('/company/finance/cash/transfer-create', $legacyMoneyAccountGet, $cashPage);
+$router->post('/company/finance/cash/transfer-create', $legacyMoneyAccountPost, $cashPage);
+$router->post('/company/finance/cash/dispatch-employee', $legacyMoneyAccountPost, $cashPage);

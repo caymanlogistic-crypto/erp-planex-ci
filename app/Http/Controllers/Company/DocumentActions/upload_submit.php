@@ -1,9 +1,9 @@
 <?php
-requireRole(['company_owner', 'senior_logist', 'logist']);
 $companyId=(int)(getSessionCompanyId()??0);$entityType=$_POST['entity_type']??'';$entityId=(int)($_POST['entity_id']??0);
 if($companyId<=0||$entityType===''||$entityId<=0){header('Location: /company/documents?error=invalid_request');exit;}
 $whitelist=['client','contractor','driver','vehicle_unit','vehicle_set','driver_vehicle_block','crew'];
 if(!in_array($entityType,$whitelist,true)){header('Location: /company/documents?entity_type='.urlencode($entityType).'&entity_id='.$entityId.'&error=invalid_entity');exit;}
+requireDocumentEntityPage($entityType);
 $allowedExt=['pdf','doc','docx','rtf','odt','xls','xlsx','csv','ods','jpg','jpeg','png','webp','gif','bmp','tif','tiff','heic','heif','txt'];$maxSize=20*1024*1024;
 // Read doc_type from both document_type (form standard) and doc_type (legacy fallback)
 $docType=trim($_POST['document_type']??$_POST['doc_type']??'');
@@ -12,7 +12,7 @@ $ext=strtolower(pathinfo($_FILES['doc_file']['name'],PATHINFO_EXTENSION));
 try{$pdo=$db->connection();$stmt=$pdo->prepare('SELECT * FROM companies WHERE id=?');$stmt->execute([$companyId]);$company=$stmt->fetch(PDO::FETCH_ASSOC);
 if(!$company||$company['status']!=='active'){header('Location: /company/documents?entity_type='.urlencode($entityType).'&entity_id='.$entityId.'&error=company_inactive');exit;}
 $cfg=companyDatabaseConfig($config, $company);$ldb=new \App\Core\Database($cfg);$lpdo=$ldb->connection();applyLocalMigrations($lpdo);
-if(!\App\Service\DocumentService::canCurrentUserEdit($lpdo,['entity_type'=>$entityType,'entity_id'=>$entityId])){denyEntityAccess();return;}
+if(!canAccessDocumentEntity($lpdo,$entityType,$entityId)){denyEntityAccess();return;}
 try{$lpdo->query("SELECT 1 FROM documents LIMIT 1")->fetch();}catch(\Exception$e){$lpdo->exec(file_get_contents(base_path('database/migrations-local/007_create_company_documents.sql')));}
 try{$lpdo->query("SELECT 1 FROM document_types LIMIT 1")->fetch();}catch(\Exception$e){$lpdo->exec(file_get_contents(base_path('database/migrations-local/024_create_document_types.sql')));$lpdo->exec(file_get_contents(base_path('database/migrations-local/025_add_document_type_id.sql')));}
 $storedName=uniqid('doc_',true).'.'.$ext;$relativeDir='companies/'.$companyId.'/documents/'.$entityType.'/'.$entityId;$absoluteDir=storage_path($relativeDir);

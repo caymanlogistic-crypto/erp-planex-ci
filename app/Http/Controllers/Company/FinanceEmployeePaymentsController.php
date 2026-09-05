@@ -20,7 +20,6 @@ final class FinanceEmployeePaymentsController
 
     public function index(): void
     {
-        requireRole(['company_owner']);
         [$company, $pdo, $central] = $this->tenant();
         $employees = FinanceEmployeePaymentService::fetchActiveEmployees($pdo, $central, (int)$company['id']);
         $summaries = FinanceEmployeePaymentService::fetchEmployeeSummaries($pdo);
@@ -80,7 +79,6 @@ final class FinanceEmployeePaymentsController
 
     public function createForm(): void
     {
-        requireRole(['company_owner']);
         [$company, $pdo, $central] = $this->tenant();
         $movementType = strtoupper(trim((string)($_GET['type'] ?? 'PAYMENT')));
         if (!in_array($movementType, ['PAYMENT', 'RETURN'], true)) {
@@ -94,7 +92,6 @@ final class FinanceEmployeePaymentsController
 
     public function createSubmit(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         try {
             [$company, $pdo, $central] = $this->tenant();
@@ -123,7 +120,6 @@ final class FinanceEmployeePaymentsController
 
     public function transferSubmit(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $redirectRef = trim((string)($_SESSION['employee_payments_filter_employee_ref'] ?? $_POST['source_employee_ref'] ?? ''));
         try {
@@ -153,7 +149,6 @@ final class FinanceEmployeePaymentsController
 
     public function transferUpdateSubmit(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $redirectRef = trim((string)($_POST['return_employee_ref'] ?? $_POST['source_employee_ref'] ?? ''));
         try {
@@ -178,7 +173,6 @@ final class FinanceEmployeePaymentsController
 
     public function transferDeleteSubmit(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $redirectRef = trim((string)($_POST['return_employee_ref'] ?? ''));
         try {
@@ -200,7 +194,6 @@ final class FinanceEmployeePaymentsController
 
     public function employeeDetail(string $type, string $id): void
     {
-        requireRole(['company_owner']);
         [$company, $pdo, $central] = $this->tenant();
         $employeeRef = FinanceEmployeePaymentService::makeEmployeeRef(strtoupper($type), (int)$id);
         try {
@@ -225,7 +218,6 @@ final class FinanceEmployeePaymentsController
 
     public function reassignMovement(int $id): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         try {
             [$company, $pdo, $central] = $this->tenant();
@@ -250,7 +242,6 @@ final class FinanceEmployeePaymentsController
 
     public function bankLink(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $_SESSION['bank_finance_error'] = 'Прямая связь банковской операции с сотрудником отключена. Создайте правило взаиморасчёта с сотрудником — система проведёт деньги через кассу.';
         redirect_to('/company/finance/bank-accounts');
@@ -258,7 +249,6 @@ final class FinanceEmployeePaymentsController
 
     public function bankUnlink(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         try {
             [, $pdo] = $this->tenant();

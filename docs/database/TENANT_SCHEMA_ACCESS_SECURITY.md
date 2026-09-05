@@ -2,11 +2,11 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
+**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
 
 ## `entity_access_grants`
 
-**Domain:** Access / Security  
+**Domain:** Access / Security<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -36,12 +36,13 @@
 
 ## `users`
 
-**Domain:** Access / Security  
+**Domain:** Access / Security<br>
 **Purpose:** Tenant company users.
 
 | Column | Type | Null | Default | Extra | Key |
 |---|---|---|---|---|---|
 | `id` | `int unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `membership_id` | `bigint unsigned` | YES | NULL | — | `UNI` |
 | `full_name` | `varchar(255)` | NO | NULL | — | — |
 | `login` | `varchar(100)` | NO | NULL | — | `UNI` |
 | `email` | `varchar(255)` | YES | NULL | — | — |
@@ -62,6 +63,7 @@
 
 - **PRIMARY** `PRIMARY` (`id`)
 - **UNIQUE** `uk_login` (`login`)
+- **UNIQUE** `uk_users_membership_id` (`membership_id`)
 
 ### Physical foreign keys
 

@@ -1,6 +1,5 @@
 <?php
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 
 require_once base_path('app/Service/FinanceCarrierBankAutoSettlementService.php');

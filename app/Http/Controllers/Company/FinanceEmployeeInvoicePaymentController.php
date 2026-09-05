@@ -16,7 +16,6 @@ final class FinanceEmployeeInvoicePaymentController
 
     public function createSubmit(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $employeeRef = trim((string)($_POST['employee_ref'] ?? ''));
         try {
@@ -41,7 +40,6 @@ final class FinanceEmployeeInvoicePaymentController
 
     public function updateSubmit(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $employeeRef = trim((string)($_POST['employee_ref'] ?? ''));
         try {
@@ -61,7 +59,6 @@ final class FinanceEmployeeInvoicePaymentController
 
     public function cancelSubmit(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $employeeRef = trim((string)($_POST['employee_ref'] ?? ''));
         try {

@@ -2,11 +2,11 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
+**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
 
 ## `crew_drivers`
 
-**Domain:** Transport  
+**Domain:** Transport<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -31,7 +31,7 @@
 
 ## `crews`
 
-**Domain:** Transport  
+**Domain:** Transport<br>
 **Purpose:** Operational crews.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -64,7 +64,7 @@
 
 ## `driver_phones`
 
-**Domain:** Transport  
+**Domain:** Transport<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -93,7 +93,7 @@
 
 ## `driver_vehicle_blocks`
 
-**Domain:** Transport  
+**Domain:** Transport<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -126,7 +126,7 @@
 
 ## `drivers`
 
-**Domain:** Transport  
+**Domain:** Transport<br>
 **Purpose:** Driver master records.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -144,6 +144,7 @@
 | `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 | `updated_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 | `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
 | `created_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `passport_number` | `varchar(50)` | YES | NULL | — | — |
 | `passport_issued_by` | `varchar(500)` | YES | NULL | — | — |
@@ -159,6 +160,7 @@
 ### Indexes / constraints
 
 - **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_drivers_creator_membership` (`created_by_membership_id`)
 
 ### Physical foreign keys
 
@@ -166,7 +168,7 @@
 
 ## `vehicle_sets`
 
-**Domain:** Transport  
+**Domain:** Transport<br>
 **Purpose:** Vehicle-unit combinations/sets.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -200,7 +202,7 @@
 
 ## `vehicle_units`
 
-**Domain:** Transport  
+**Domain:** Transport<br>
 **Purpose:** Physical vehicle units.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -220,6 +222,7 @@
 | `created_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 | `updated_at` | `timestamp` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 | `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
 | `created_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `unit_type` | `varchar(20)` | YES | NULL | — | — |
 | `diagnostic_card_number` | `varchar(50)` | YES | NULL | — | — |
@@ -235,6 +238,7 @@
 
 - **PRIMARY** `PRIMARY` (`id`)
 - **INDEX** `idx_plate` (`plate_number`)
+- **INDEX** `idx_vehicle_units_creator_membership` (`created_by_membership_id`)
 
 ### Physical foreign keys
 

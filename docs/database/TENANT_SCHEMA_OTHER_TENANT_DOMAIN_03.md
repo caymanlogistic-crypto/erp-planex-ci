@@ -2,11 +2,11 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
+**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
 
 ## `waste_trips`
 
-**Domain:** Other tenant domain  
+**Domain:** Other tenant domain<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -38,6 +38,7 @@
 | `legacy_last_success_at` | `datetime` | YES | NULL | — | — |
 | `lock_version` | `int unsigned` | NO | `1` | — | — |
 | `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
 | `created_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
 | `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
@@ -48,6 +49,7 @@
 
 - **PRIMARY** `PRIMARY` (`id`)
 - **INDEX** `idx_waste_trips_client` (`client_id`, `id`)
+- **INDEX** `idx_waste_trips_creator_membership` (`created_by_membership_id`)
 - **INDEX** `idx_waste_trips_dates` (`planned_start_date`, `planned_start_date_from`, `planned_start_date_to`)
 - **INDEX** `idx_waste_trips_executor` (`route_executor_id`, `id`)
 - **INDEX** `idx_waste_trips_responsible` (`responsible_user_id`, `id`)

@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'Платёжный календарь';
     $pageContext = 'Финансы › Платёжный календарь';
 

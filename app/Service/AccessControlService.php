@@ -2,6 +2,8 @@
 
 namespace App\Service;
 
+use App\Security\AccessRuntime;
+
 /**
  * AccessControlService — единая будущая точка проверки прав доступа внутри company ERP.
  *
@@ -31,6 +33,28 @@ namespace App\Service;
 
 final class AccessControlService
 {
+    /** Current central membership id; null means unresolved/denied/technical superadmin. */
+    public static function effectiveMembershipId(): ?int
+    {
+        return AccessRuntime::current()->membershipId();
+    }
+
+    public static function isEffectiveSystemOwner(): bool
+    {
+        return AccessRuntime::current()->isSystemOwner();
+    }
+
+    /** @return 'all'|'own'|'none' */
+    public static function effectiveDataScope(string $entityType): string
+    {
+        return AccessRuntime::current()->dataScope($entityType);
+    }
+
+    public static function canAccessPage(string $pageKey): bool
+    {
+        return AccessRuntime::current()->canAccessPage($pageKey);
+    }
+
     public static function hasEntityAccess(\PDO $pdo, string $entityType, int $entityId, int $userId, array $levels = ['view', 'edit']): bool
     {
         if ($entityId <= 0 || $userId <= 0) {

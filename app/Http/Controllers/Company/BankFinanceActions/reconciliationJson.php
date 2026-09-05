@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
 
     $companyId = (int)(getSessionCompanyId() ?? 0);
     $controlFromDate = '2026-07-24';

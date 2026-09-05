@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'Настройки выписок';
     $pageContext = 'Система › Настройки выписок';
 

@@ -4,4 +4,4 @@ require_once base_path('app/Http/Controllers/Company/FinanceDashboardController.
 
 $controller = new \App\Http\Controllers\Company\FinanceDashboardController($config, $db);
 
-$router->get('/company/finance/dashboard', [$controller, 'index']);
+$router->get('/company/finance/dashboard', [$controller, 'index'], 'company.finance.dashboard');

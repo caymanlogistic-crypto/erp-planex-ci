@@ -19,7 +19,6 @@ final class ClosingDocumentsController
 
     public function index(): void
     {
-        requireRole(['company_owner']);
         $config = $this->config;
         $db = $this->db;
         $pageTitle = 'Закрывающие документы';
@@ -49,7 +48,6 @@ final class ClosingDocumentsController
 
     public function modalView(string|int $id): void
     {
-        requireRole(['company_owner']);
         $transactionId = (int) $id;
         if ($transactionId <= 0) {
             http_response_code(404);
@@ -78,7 +76,6 @@ final class ClosingDocumentsController
 
     public function exceptions(): void
     {
-        requireRole(['company_owner']);
         $config = $this->config;
         $db = $this->db;
         $pageTitle = 'Исключения по документам';
@@ -108,14 +105,12 @@ final class ClosingDocumentsController
 
     public function exceptionCreateForm(): void
     {
-        requireRole(['company_owner']);
         $rule = null;
         require base_path('app/View/pages/company_finance_closing_document_exception_form.php');
     }
 
     public function exceptionEditForm(): void
     {
-        requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
             if (!ClosingDocumentService::schemaReady($tenantPdo)) throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
@@ -134,7 +129,6 @@ final class ClosingDocumentsController
 
     public function saveException(): void
     {
-        requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
             $id = (int) ($_POST['id'] ?? 0);
@@ -157,7 +151,6 @@ final class ClosingDocumentsController
 
     public function removeException(): void
     {
-        requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
             ClosingDocumentService::removeException($tenantPdo, (int) ($_POST['id'] ?? 0));
@@ -170,7 +163,6 @@ final class ClosingDocumentsController
 
     public function saveRequirementOverrides(): void
     {
-        requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
             ClosingDocumentComplianceService::saveRequirementOverrides(
@@ -189,7 +181,6 @@ final class ClosingDocumentsController
 
     public function linkDocument(): void
     {
-        requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
             ClosingDocumentService::linkExistingDocument($tenantPdo, (int) ($_POST['transaction_id'] ?? 0), (int) ($_POST['document_id'] ?? 0), trim((string) ($_POST['requirement_code'] ?? '')), (int) ($_SESSION['user_id'] ?? 0));
@@ -202,7 +193,6 @@ final class ClosingDocumentsController
 
     public function uploadDocument(): void
     {
-        requireRole(['company_owner']);
         require_once base_path('app/Support/legal_entity_document_upload.php');
         try {
             [$company, $tenantPdo] = $this->tenant();
@@ -225,7 +215,6 @@ final class ClosingDocumentsController
 
     public function updateDocumentEdo(): void
     {
-        requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
             if (!ClosingDocumentComplianceService::schemaReady($tenantPdo)) throw new RuntimeException('Для раздела требуется актуальная tenant schema.');
@@ -254,7 +243,6 @@ final class ClosingDocumentsController
 
     public function downloadArchive(): void
     {
-        requireRole(['company_owner']);
         $tmpPath = null;
         try {
             if (!class_exists(\ZipArchive::class)) throw new RuntimeException('На сервере недоступно создание ZIP-архивов');
@@ -361,7 +349,6 @@ final class ClosingDocumentsController
 
     public function unlinkDocument(): void
     {
-        requireRole(['company_owner']);
         try {
             [, $tenantPdo] = $this->tenant();
             ClosingDocumentService::unlinkDocument($tenantPdo, (int) ($_POST['transaction_id'] ?? 0), (int) ($_POST['link_id'] ?? 0));

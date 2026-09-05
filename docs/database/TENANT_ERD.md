@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
+**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
 
 ## Architecture overview
 
@@ -57,12 +57,15 @@ erDiagram
   T_contractors {
     int _schema_catalog_anchor
   }
+  T_entity_assignments {
+    int _schema_catalog_anchor
+  }
   T_responsible_assignment_history {
     int _schema_catalog_anchor
   }
 ```
 
-Tables: `client_contacts`, `clients`, `contractor_assignment_history`, `contractor_contacts`, `contractor_tax_history`, `contractors`, `responsible_assignment_history`
+Tables: `client_contacts`, `clients`, `contractor_assignment_history`, `contractor_contacts`, `contractor_tax_history`, `contractors`, `entity_assignments`, `responsible_assignment_history`
 
 ## Documents
 

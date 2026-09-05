@@ -83,9 +83,9 @@ $ok('utilizer admin has own route family', str_contains($route, '/company/feo/ut
 
 $mapController = $read($root . '/app/Http/Controllers/Company/FeoMapController.php');
 $adminController = $read($root . '/app/Http/Controllers/Company/FeoUtilizerController.php');
-$ok('map RBAC keeps operational roles', str_contains($mapController, "requireRole(['company_owner','senior_logist','logist'])"));
+$ok('map routes use configurable map page access', substr_count($route, '$feoMapPage') === 4);
 $ok('map uses tenant local PDO', str_contains($mapController, '$this->requests->localPdo($company)'));
-$ok('utilizer mutations are owner-only', str_contains($adminController, "requireRole(['company_owner'])"));
+$ok('utilizer routes use configurable utilizer page access', substr_count($route, '$feoUtilizersPage') === 7);
 $ok('utilizer admin uses tenant local PDO', str_contains($adminController, '$this->requests->localPdo($company)'));
 
 $nav = $read($root . '/app/Support/feo_freshness_navigation.php');

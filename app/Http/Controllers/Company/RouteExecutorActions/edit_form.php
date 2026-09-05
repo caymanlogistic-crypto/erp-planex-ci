@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner', 'senior_logist', 'logist']);
     $crewId = (int)$crewId;
     $pageTitle = 'Редактировать исполнителя рейса';
     $pageContext = 'Исполнители рейса › Компания';
@@ -92,82 +91,31 @@
             $contractors = []; $drivers = []; $vehicleSets = [];
             $blockingNotices = [];
         } else {
-            // Permission check
-            $currentUserId = (int)($_SESSION['user_id'] ?? 0);
-            $currentRole = $_SESSION['role_code'] ?? '';
-
-            if ($currentRole !== 'company_owner' && $currentRole !== 'senior_logist') {
-                if (!hasRouteExecutorAccess($localPdo, $crew, $currentUserId, 'edit')) {
-                    http_response_code(403);
-                    header('Content-Type: text/plain; charset=utf-8');
-                    echo 'Нет доступа к редактированию исполнителя рейса.';
-                    exit;
-                }
-            }
-
             $old = $crew;
 
-            $isLogist = ($_SESSION['role_code'] ?? '') === 'logist';
-            $userId = (int)$_SESSION['user_id'];
-
             // Load contractors
-            if ($isLogist) {
-                $cStmt = $localPdo->prepare("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' AND (created_by_user_id = ? OR id IN (SELECT entity_id FROM entity_access_grants WHERE entity_type = 'contractor' AND granted_to_user_id = ? AND access_level IN ('view','edit') AND revoked_at IS NULL)) ORDER BY name");
-                $cStmt->execute([$userId, $userId]);
-                $contractors = $cStmt->fetchAll(PDO::FETCH_ASSOC);
-            } else {
-                $contractors = $localPdo->query("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-            }
+            $contractors = $localPdo->query("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
 
             // Load drivers (include current driver even if inactive)
             $currentDriverId = (int)($crew['driver_id'] ?? 0);
-            if ($isLogist) {
-                $dStmt = $localPdo->prepare(
-                    "SELECT id, full_name, phone FROM drivers
-                     WHERE deleted_at IS NULL
-                       AND (status = 'active'" . ($currentDriverId > 0 ? " OR id = ?" : "") . ")
-                       AND (created_by_user_id = ? OR id IN (SELECT entity_id FROM entity_access_grants WHERE entity_type = 'driver' AND granted_to_user_id = ? AND access_level IN ('view','edit') AND revoked_at IS NULL))
-                     ORDER BY full_name"
-                );
-                $params = $currentDriverId > 0 ? [$currentDriverId, $userId, $userId] : [$userId, $userId];
-                $dStmt->execute($params);
-                $drivers = $dStmt->fetchAll(PDO::FETCH_ASSOC);
-            } else {
-                $drivers = $localPdo->query(
-                    "SELECT id, full_name, phone FROM drivers
-                     WHERE deleted_at IS NULL
-                       AND (status = 'active'" . ($currentDriverId > 0 ? " OR id = " . $currentDriverId : "") . ")
-                     ORDER BY full_name"
-                )->fetchAll(PDO::FETCH_ASSOC);
-            }
+            $drivers = $localPdo->query(
+                "SELECT id, full_name, phone FROM drivers
+                 WHERE deleted_at IS NULL
+                   AND (status = 'active'" . ($currentDriverId > 0 ? " OR id = " . $currentDriverId : "") . ")
+                 ORDER BY full_name"
+            )->fetchAll(PDO::FETCH_ASSOC);
 
             // Load vehicle sets (include current even if inactive)
             $currentVsId = (int)($crew['vehicle_set_id'] ?? 0);
-            if ($isLogist) {
-                $vsStmt = $localPdo->prepare(
-                    "SELECT vs.id, vs.set_type, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate
-                     FROM vehicle_sets vs
-                     LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id = vu1.id
-                     LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id = vu2.id
-                     WHERE vs.deleted_at IS NULL
-                       AND (vs.status = 'active'" . ($currentVsId > 0 ? " OR vs.id = ?" : "") . ")
-                       AND (vs.created_by_user_id = ? OR vs.id IN (SELECT entity_id FROM entity_access_grants WHERE entity_type = 'vehicle_set' AND granted_to_user_id = ? AND access_level IN ('view','edit') AND revoked_at IS NULL))
-                     ORDER BY vs.set_type"
-                );
-                $params = $currentVsId > 0 ? [$currentVsId, $userId, $userId] : [$userId, $userId];
-                $vsStmt->execute($params);
-                $vehicleSets = $vsStmt->fetchAll(PDO::FETCH_ASSOC);
-            } else {
-                $vehicleSets = $localPdo->query(
-                    "SELECT vs.id, vs.set_type, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate
-                     FROM vehicle_sets vs
-                     LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id = vu1.id
-                     LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id = vu2.id
-                     WHERE vs.deleted_at IS NULL
-                       AND (vs.status = 'active'" . ($currentVsId > 0 ? " OR vs.id = " . $currentVsId : "") . ")
-                     ORDER BY vs.set_type"
-                )->fetchAll(PDO::FETCH_ASSOC);
-            }
+            $vehicleSets = $localPdo->query(
+                "SELECT vs.id, vs.set_type, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate
+                 FROM vehicle_sets vs
+                 LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id = vu1.id
+                 LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id = vu2.id
+                 WHERE vs.deleted_at IS NULL
+                   AND (vs.status = 'active'" . ($currentVsId > 0 ? " OR vs.id = " . $currentVsId : "") . ")
+                 ORDER BY vs.set_type"
+            )->fetchAll(PDO::FETCH_ASSOC);
 
             $blockingNotices = [];
             if (empty($contractors)) {

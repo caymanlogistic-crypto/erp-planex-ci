@@ -20,7 +20,6 @@ final class FinanceEmployeePersonalExpenseController
 
     public function createForm(): void
     {
-        requireRole(['company_owner']);
         try {
             [$company, $pdo, $central] = $this->tenant();
             $employees = FinanceEmployeePaymentService::fetchActiveEmployees($pdo, $central, (int)$company['id']);
@@ -39,7 +38,6 @@ final class FinanceEmployeePersonalExpenseController
 
     public function createSubmit(): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $employeeRef = trim((string)($_POST['employee_ref'] ?? ''));
         try {
@@ -56,7 +54,6 @@ final class FinanceEmployeePersonalExpenseController
 
     public function editForm(string $id): void
     {
-        requireRole(['company_owner']);
         try {
             [, $pdo, $central] = $this->tenant();
             $event = FinanceEmployeePersonalExpenseEventService::fetchOne($pdo, (int)$id);
@@ -79,7 +76,6 @@ final class FinanceEmployeePersonalExpenseController
 
     public function updateSubmit(string $id): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $employeeRef = trim((string)($_POST['employee_ref'] ?? ''));
         try {
@@ -95,7 +91,6 @@ final class FinanceEmployeePersonalExpenseController
 
     public function cancelSubmit(string $id): void
     {
-        requireRole(['company_owner']);
         verifyCsrfRequest();
         $employeeRef = trim((string)($_POST['employee_ref'] ?? ''));
         try {
@@ -111,7 +106,6 @@ final class FinanceEmployeePersonalExpenseController
 
     public function listForEmployee(): void
     {
-        requireRole(['company_owner']);
         try {
             [, $pdo] = $this->tenant();
             $employeeRef = trim((string)($_GET['employee_ref'] ?? ''));

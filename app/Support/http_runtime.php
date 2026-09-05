@@ -100,11 +100,41 @@ if (!function_exists('isAuthenticated')) {
     }
 }
 
+if (!function_exists('currentAccessRequestContext')) {
+    function currentAccessRequestContext(): \App\Security\AccessRequestContext
+    {
+        return \App\Security\AccessRequestContext::fromSession($_SESSION);
+    }
+}
+
+if (!function_exists('hasPageAccess')) {
+    /** @param string|list<string> $pageKeys */
+    function hasPageAccess(string|array $pageKeys): bool
+    {
+        $keys = is_array($pageKeys) ? $pageKeys : [$pageKeys];
+        foreach ($keys as $pageKey) {
+            if (is_string($pageKey) && \App\Service\AccessControlService::canAccessPage($pageKey)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+}
+
 if (!function_exists('requireRole')) {
     function requireRole(string|array $roles): void
     {
         if (!isAuthenticated()) {
             redirect_to('/login');
+        }
+
+        // A protected route has already been authorized by Router from the
+        // current central snapshot. Literal legacy roles remain only as the
+        // compatibility gate while ERP_ROLES_ACCESS_ENABLED is off.
+        if (\App\Security\AccessRuntime::current()->isActive()
+            && !\App\Security\AccessRuntime::current()->isTechnicalSuperadmin()) {
+            return;
         }
 
         $allowed = is_array($roles) ? $roles : [$roles];

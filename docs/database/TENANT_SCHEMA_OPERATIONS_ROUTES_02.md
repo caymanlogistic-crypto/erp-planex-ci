@@ -2,11 +2,11 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `26758e5548fce4aff978b3339f1e2c53b0651b2ffde9cf2c10ff275e1b5de005`
+**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
 
 ## `linear_route_services`
 
-**Domain:** Operations / Routes  
+**Domain:** Operations / Routes<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -39,7 +39,7 @@
 
 ## `linear_routes`
 
-**Domain:** Operations / Routes  
+**Domain:** Operations / Routes<br>
 **Purpose:** Linear route/trip operational records.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -61,6 +61,7 @@
 | `status` | `varchar(20)` | NO | `active` | — | `MUL` |
 | `comments` | `text` | YES | NULL | — | — |
 | `created_by_user_id` | `int unsigned` | YES | NULL | — | `MUL` |
+| `created_by_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
 | `created_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
 | `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
@@ -77,6 +78,7 @@
 - **INDEX** `idx_linear_routes_carrier` (`carrier_contractor_id`)
 - **INDEX** `idx_linear_routes_client` (`client_id`)
 - **INDEX** `idx_linear_routes_created_by` (`created_by_user_id`)
+- **INDEX** `idx_linear_routes_creator_membership` (`created_by_membership_id`)
 - **INDEX** `idx_linear_routes_dates` (`planned_loading_date`, `planned_unloading_date`)
 - **INDEX** `idx_linear_routes_executor` (`route_executor_id`)
 - **INDEX** `idx_linear_routes_principal` (`principal_type`, `principal_id`)
@@ -90,7 +92,7 @@
 
 ## `production_calendar_days`
 
-**Domain:** Operations / Routes  
+**Domain:** Operations / Routes<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
@@ -122,7 +124,7 @@
 
 ## `production_calendar_years`
 
-**Domain:** Operations / Routes  
+**Domain:** Operations / Routes<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |

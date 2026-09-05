@@ -5,7 +5,6 @@ use App\Service\FinanceInvoicePaymentTimelineService;
 use App\Service\FinanceInvoiceService;
 use App\Service\FinanceObligationService;
 
-requireRole(['company_owner']);
 
 $pageTitle = 'Счета';
 $pageContext = 'Финансы › Счета';

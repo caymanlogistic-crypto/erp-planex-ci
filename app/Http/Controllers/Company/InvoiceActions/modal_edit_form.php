@@ -4,7 +4,6 @@ use App\Core\Database;
 use App\Service\FinanceInvoiceService;
 use App\Service\FinanceObligationService;
 
-requireRole(['company_owner']);
 $invoice = null;
 $formError = null;
 $clients = [];

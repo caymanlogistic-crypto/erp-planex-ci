@@ -4,4 +4,4 @@ require_once base_path('app/Http/Controllers/Company/FinanceCashFlowReportContro
 
 $controller = new \App\Http\Controllers\Company\FinanceCashFlowReportController($config, $db);
 
-$router->get('/company/finance/reports/cash-flow', [$controller, 'index']);
+$router->get('/company/finance/reports/cash-flow', [$controller, 'index'], 'company.finance.cash_flow');

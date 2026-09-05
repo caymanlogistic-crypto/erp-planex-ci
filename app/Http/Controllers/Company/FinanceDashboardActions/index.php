@@ -1,6 +1,5 @@
 <?php
 
-    requireRole(['company_owner']);
     $pageTitle = 'Финансовый дашборд';
     $pageContext = 'Финансы › Дашборд';
 

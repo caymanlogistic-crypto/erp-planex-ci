@@ -3,7 +3,6 @@
 use App\Core\Database;
 use App\Service\FinanceOperationActionService;
 
-requireRole(['company_owner']);
 
 $logs = [];
 $error = null;

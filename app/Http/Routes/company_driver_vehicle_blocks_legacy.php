@@ -121,7 +121,7 @@ $router->post('/company/driver-vehicle-blocks/create', function () use ($config,
     renderPostBlock:
     ob_start(); require base_path('app/View/pages/company_driver_vehicle_blocks_create.php');
     $content = ob_get_clean(); require base_path('app/View/layouts/main.php');
-});
+}, 'company.route_executors');
 
 $router->get('/company/driver-vehicle-blocks/{id}', function ($id) use ($config, $db) {
     requireRole(['company_owner', 'senior_logist', 'logist']);
@@ -210,7 +210,7 @@ $router->get('/company/driver-vehicle-blocks/{id}', function ($id) use ($config,
     renderViewBlock:
     ob_start(); require base_path('app/View/pages/company_driver_vehicle_block_view.php');
     $content = ob_get_clean(); require base_path('app/View/layouts/main.php');
-});
+}, 'company.route_executors');
 
 $router->get('/company/driver-vehicle-blocks/{id}/edit', function ($id) use ($config, $db) {
     requireRole(['company_owner', 'senior_logist', 'logist']);
@@ -290,7 +290,7 @@ $router->get('/company/driver-vehicle-blocks/{id}/edit', function ($id) use ($co
     renderEditBlock:
     ob_start(); require base_path('app/View/pages/company_driver_vehicle_block_edit.php');
     $content = ob_get_clean(); require base_path('app/View/layouts/main.php');
-});
+}, 'company.route_executors');
 
 $router->post('/company/driver-vehicle-blocks/{id}/edit', function ($id) use ($config, $db) {
     requireRole(['company_owner', 'senior_logist', 'logist']);
@@ -373,7 +373,7 @@ $router->post('/company/driver-vehicle-blocks/{id}/edit', function ($id) use ($c
     renderEditBlockPost:
     ob_start(); require base_path('app/View/pages/company_driver_vehicle_block_edit.php');
     $content = ob_get_clean(); require base_path('app/View/layouts/main.php');
-});
+}, 'company.route_executors');
 
 $router->post('/company/driver-vehicle-blocks/{id}/archive', function ($id) use ($config, $db) {
     requireRole(['company_owner', 'senior_logist', 'logist']);
@@ -428,4 +428,4 @@ $router->post('/company/driver-vehicle-blocks/{id}/archive', function ($id) use 
     } catch (\Exception $e) {
         header('Location: /company/driver-vehicle-blocks'); exit;
     }
-});
+}, 'company.route_executors');

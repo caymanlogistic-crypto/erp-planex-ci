@@ -62,20 +62,6 @@ try {
         return;
     }
 
-    $isLogist = ($_SESSION['role_code'] ?? '') === 'logist';
-    if ($isLogist) {
-        $userId = (int)$_SESSION['user_id'];
-        if ((int)$contractor['created_by_user_id'] !== $userId) {
-            $archiveError = 'Логист может архивировать только записи, созданные им самим.';
-            $dbError = null;
-            ob_start();
-            require base_path('app/View/pages/company_contractor_view.php');
-            $content = ob_get_clean();
-            require base_path('app/View/layouts/main.php');
-            return;
-        }
-    }
-
     $pageTitle = 'Перевозчик: ' . $contractor['name'];
 
     try {

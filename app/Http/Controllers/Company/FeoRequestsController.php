@@ -22,7 +22,6 @@ final class FeoRequestsController
 
     public function index(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         $pageTitle = 'Заявки ФЭО';
         $pageContext = 'Заявки ФЭО › Все заявки';
         $company = null;
@@ -52,7 +51,6 @@ final class FeoRequestsController
 
     public function data(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -91,7 +89,6 @@ final class FeoRequestsController
 
     public function detail(string $id): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -105,7 +102,6 @@ final class FeoRequestsController
 
     public function update(string $id): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -120,7 +116,6 @@ final class FeoRequestsController
 
     public function analyzeImport(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -166,7 +161,6 @@ final class FeoRequestsController
 
     public function commitImport(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
         try {
             [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -204,7 +198,6 @@ final class FeoRequestsController
 
     public function rollbackImport(): void
     {
-        requireRole(['company_owner','senior_logist']);
         try {
             [, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -219,7 +212,6 @@ final class FeoRequestsController
 
     public function restoreImport(): void
     {
-        requireRole(['company_owner','senior_logist']);
         try {
             [, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
@@ -234,7 +226,6 @@ final class FeoRequestsController
 
     public function deleteImport(): void
     {
-        requireRole(['company_owner','senior_logist']);
         try {
             [, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');

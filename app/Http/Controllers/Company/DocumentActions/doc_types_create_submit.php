@@ -1,5 +1,4 @@
 <?php
-requireRole(['company_owner', 'senior_logist', 'logist']);
 $companyId=(int)(getSessionCompanyId()??0);if($companyId<=0){header('Location: /company/document-types');exit;}
 try{$pdo=$db->connection();$stmt=$pdo->prepare('SELECT * FROM companies WHERE id=?');$stmt->execute([$companyId]);$company=$stmt->fetch(PDO::FETCH_ASSOC);if(!$company||$company['status']!=='active'){header('Location: /company/document-types');exit;}
 $cfg=companyDatabaseConfig($config, $company);$ldb=new \App\Core\Database($cfg);$lpdo=$ldb->connection();applyLocalMigrations($lpdo);

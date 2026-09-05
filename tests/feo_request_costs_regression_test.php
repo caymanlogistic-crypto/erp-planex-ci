@@ -70,7 +70,7 @@ $js=$read('public/assets/js/feo-request-costs.js');
 $editService=$read('app/Service/FeoRequestCostEditService.php');
 
 $must(str_contains($controller,"require base_path('app/View/layouts/main.php')"),'cost screen must render through standard main layout');
-$must(substr_count($controller,"requireRole(['company_owner','senior_logist','logist'])")>=9,'all cost endpoints must keep role gate');
+$must(substr_count($routes, '$feoCostsPage')===10,'all cost endpoints must use configurable cost page access');
 $must(str_contains($controller,'moduleReady($pdo)')&&str_contains($controller,'ещё не инициализирован'),'cost controller must fail closed when schema is absent');
 $must(str_contains($controller,"'preview_contract'=>[")&&str_contains($controller,"'added_snapshot_fingerprint'"),'edit preview token must retain added live snapshot contract');
 $must(str_contains($controller,'use App\\Service\\FeoRequestInteractionService;'),'interactive search must import canonical FEO interaction parser');

@@ -2,7 +2,6 @@
 
 use App\Service\LinearRouteService;
 
-requireRole(['company_owner', 'senior_logist', 'logist']);
 
 $companyId = (int) (getSessionCompanyId() ?? 0);
 $docId = (int) ($_GET['id'] ?? 0);
@@ -35,6 +34,8 @@ try {
         exit;
     }
 
+    requireDocumentEntityPage((string) ($doc['entity_type'] ?? ''));
+
     if (($doc['entity_type'] ?? '') === 'linear_route') {
         $route = LinearRouteService::fetchRouteById($lpdo, (int) ($doc['entity_id'] ?? 0));
         $sessionUser = [
@@ -50,7 +51,7 @@ try {
             http_response_code(403);
             exit;
         }
-    } elseif (!\App\Service\DocumentService::canCurrentUserView($lpdo, $doc)) {
+    } elseif (!canAccessDocumentEntity($lpdo, (string) ($doc['entity_type'] ?? ''), (int) ($doc['entity_id'] ?? 0))) {
         http_response_code(403);
         exit;
     }

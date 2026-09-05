@@ -1,5 +1,4 @@
 <?php
-requireRole(['company_owner']);
 $pageTitle='Выписки со счёта';
 $pageContext='Финансы › Выписки со счёта';
 $companyId=(int)(getSessionCompanyId()??0);

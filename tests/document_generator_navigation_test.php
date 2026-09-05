@@ -41,7 +41,6 @@ if (!function_exists('e')) {
         return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
     }
 }
-
 if (!class_exists('App\\Service\\NavigationCounterService', false)) {
     eval('namespace App\\Service; final class NavigationCounterService { public static function forCompany(...$args): array { return ["bank_attention" => 0, "cash_attention" => 0, "closing_documents_problem" => 0]; } }');
 }
@@ -163,12 +162,22 @@ $extractMethod = static function (string $source, string $method): string {
     }
     return '';
 };
-$assert(str_contains($extractMethod($controller, 'templates'), "requireRole(['company_owner'])"), 'templates backend route remains company_owner-only');
-$assert(str_contains($extractMethod($controller, 'uploadTemplate'), "requireRole(['company_owner'])"), 'template upload backend route remains company_owner-only');
-
 $routes = (string)file_get_contents($root . '/app/Http/Routes/company_document_generator.php');
 $assert(str_contains($routes, "'/company/document-generator/templates'"), 'templates GET route remains registered');
 $assert(str_contains($routes, "'/company/document-generator/templates/upload'"), 'template upload route remains registered');
+$assert(
+    !str_contains($extractMethod($controller, 'templates'), 'requireRole(')
+    && !str_contains($extractMethod($controller, 'uploadTemplate'), 'requireRole('),
+    'template controller delegates authorization to the Page Registry without a legacy role gate'
+);
+$assert(
+    str_contains($routes, "\$documentTemplatesPage = 'company.documents.templates';")
+    && str_contains($routes, "[\$documentGeneratorController, 'templates'], \$documentTemplatesPage")
+    && str_contains($routes, "[\$documentGeneratorController, 'uploadTemplate'], \$documentTemplatesPage")
+    && str_contains($routes, "[\$documentGeneratorController, 'toggleTemplate'], \$documentTemplatesPage")
+    && str_contains($routes, "[\$documentGeneratorController, 'downloadTemplateVersion'], \$documentTemplatesPage"),
+    'all template read and mutation endpoints use the protected templates page key'
+);
 
 $templateView = (string)file_get_contents($root . '/app/View/pages/company_document_generator_templates.php');
 $assert(str_contains($templateView, "\$pageTitle = 'Шаблоны договоров';"), 'template page title is user-facing Шаблоны договоров');

@@ -119,7 +119,6 @@ final class DocumentGeneratorController
 
     public function templates(): void
     {
-        requireRole(['company_owner']);
         $pageTitle = 'Шаблоны документов';
         $pageContext = 'Генератор договоров';
         $templates = [];
@@ -128,7 +127,7 @@ final class DocumentGeneratorController
         $flash = $_SESSION['document_template_flash'] ?? null;
         unset($_SESSION['document_template_flash']);
         try {
-            [$company, $localPdo, $companyId] = $this->companyContext(['company_owner']);
+            [$company, $localPdo, $companyId] = $this->companyContext();
             $this->requireSchema($localPdo);
             DocumentGeneratorService::seedDefaultTemplates($localPdo, $companyId, 0, 'system');
             $templates = DocumentGeneratorService::listTemplates($localPdo, false);
@@ -152,10 +151,9 @@ final class DocumentGeneratorController
 
     public function uploadTemplate(): void
     {
-        requireRole(['company_owner']);
         try {
             $this->assertCsrf();
-            [, $localPdo, $companyId, $userId, $role] = $this->companyContext(['company_owner']);
+            [, $localPdo, $companyId, $userId, $role] = $this->companyContext();
             $this->requireSchema($localPdo);
             $templateId = (int)($_POST['template_id'] ?? 0);
             $documentType = trim((string)($_POST['document_type'] ?? ''));
@@ -188,10 +186,9 @@ final class DocumentGeneratorController
 
     public function toggleTemplate(string $id): void
     {
-        requireRole(['company_owner']);
         try {
             $this->assertCsrf();
-            [, $localPdo, , $userId, $role] = $this->companyContext(['company_owner']);
+            [, $localPdo, , $userId, $role] = $this->companyContext();
             $this->requireSchema($localPdo);
             $active = (string)($_POST['active'] ?? '') === '1';
             DocumentGeneratorService::setTemplateActive($localPdo, (int)$id, $active, $userId, $role);
@@ -204,9 +201,8 @@ final class DocumentGeneratorController
 
     public function downloadTemplateVersion(string $templateId, string $versionId): void
     {
-        requireRole(['company_owner']);
         try {
-            [, $localPdo, $companyId] = $this->companyContext(['company_owner']);
+            [, $localPdo, $companyId] = $this->companyContext();
             $this->requireSchema($localPdo);
             $row = DocumentGeneratorService::getTemplateVersion($localPdo, (int)$templateId, (int)$versionId, false);
             if (!$row) throw new RuntimeException('Версия шаблона не найдена.');
@@ -284,9 +280,8 @@ final class DocumentGeneratorController
         require base_path('app/View/layouts/main.php');
     }
 
-    private function companyContext(array $roles = ['company_owner','senior_logist','logist']): array
+    private function companyContext(): array
     {
-        requireRole($roles);
         $companyId = (int)(getSessionCompanyId() ?? 0);
         if ($companyId <= 0) throw new RuntimeException('Компания не выбрана.');
         $pdo = $this->db->connection();

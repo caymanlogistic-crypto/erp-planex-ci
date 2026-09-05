@@ -67,7 +67,7 @@ foreach(['/modal-view','/modal-edit','/modal-delete']as$suffix)$must(str_contain
 foreach(['full_name','short_name','address','latitude','longitude','fkko_classification','color_hex','adr','is_active','sort_order','aliases']as$name){$must(str_contains($view,'name="'.$name.'"'),'create field missing: '.$name);$must(str_contains($modalEdit,'name="'.$name.'"'),'edit field missing: '.$name);}
 $must(str_contains($modalView,'data-feo-utilizer-edit-btn')&&str_contains($modalView,'data-feo-utilizer-delete-btn')&&str_contains($modalView,'data-feo-utilizer-close-btn'),'view modal actions missing');
 foreach(['modalView','modalEditForm','modalEditSubmit','modalDelete']as$methodName)$must(str_contains($controller,'function '.$methodName.'('),'controller modal method missing: '.$methodName);
-$must(substr_count($controller,"requireRole(['company_owner'])")>=5,'owner-only RBAC must cover utilizer mutations/modal endpoints');
+$must(substr_count($routes, '$feoUtilizersPage')===7,'configurable utilizer page access must cover the complete route family');
 
 $must(str_contains($productionQa,'data-feo-utilizer-problem'),'production QA must inspect unresolved problem surface');
 $must(str_contains($productionQa,'aliases'),'production QA must check synonym field');

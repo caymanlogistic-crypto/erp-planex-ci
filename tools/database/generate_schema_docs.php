@@ -15,10 +15,22 @@ $host = getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1';
 $port = (int) (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306);
 $user = getenv('PLANEX_SCHEMA_DB_USER') ?: 'planex_ci';
 $pass = getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: 'planex_ci';
-$dbName = 'planex_schema_docs_' . getmypid() . '_' . bin2hex(random_bytes(4));
-$admin = new PDO("mysql:host={$host};port={$port};charset=utf8mb4", $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
+$fixedDb = trim((string) getenv('PLANEX_TEST_FIXED_DB'));
+$fixedAllowlist = array_filter(array_map('trim', explode(',', (string) getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST'))));
+if ($fixedDb !== '' && !in_array($fixedDb, $fixedAllowlist, true)) {
+    throw new RuntimeException('Fixed DB is not present in PLANEX_TEST_FIXED_DB_ALLOWLIST.');
+}
+$fixedMode = $fixedDb !== '';
+$dbName = $fixedMode ? $fixedDb : 'planex_schema_docs_' . getmypid() . '_' . bin2hex(random_bytes(4));
+$adminDsn = "mysql:host={$host};port={$port}" . ($fixedMode ? ";dbname={$dbName}" : '') . ';charset=utf8mb4';
+$admin = new PDO($adminDsn, $user, $pass, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $quotedDb = '`' . str_replace('`', '``', $dbName) . '`';
-$admin->exec("CREATE DATABASE {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+if ($fixedMode) {
+    require_once BASE_PATH . '/app/Support/company_database.php';
+    cleanCompanyPoolDatabase($admin);
+} else {
+    $admin->exec("CREATE DATABASE {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+}
 
 $slug = static function (string $value): string {
     $value = strtoupper(preg_replace('/[^A-Za-z0-9]+/', '_', $value) ?? 'DOMAIN');
@@ -51,7 +63,7 @@ $buildSchemaFiles = static function (array $catalog) use ($slug, $chunkSections)
     $header = array_shift($parts) ?? '';
     $byDomain = [];
     foreach ($parts as $section) {
-        if (!preg_match('/^## `([^`]+)`.*?^\*\*Domain:\*\* (.+?)  $/ms', $section, $m)) {
+        if (!preg_match('/^## `([^`]+)`.*?^\*\*Domain:\*\* (.+?)<br>$/ms', $section, $m)) {
             throw new RuntimeException('Cannot classify generated schema section.');
         }
         $byDomain[$m[2]][] = ['table' => $m[1], 'section' => $section];
@@ -147,5 +159,9 @@ try {
 
     fwrite(STDOUT, $files['TENANT_SCHEMA.md']);
 } finally {
-    $admin->exec("DROP DATABASE IF EXISTS {$quotedDb}");
+    if ($fixedMode) {
+        cleanCompanyPoolDatabase($admin);
+    } else {
+        $admin->exec("DROP DATABASE IF EXISTS {$quotedDb}");
+    }
 }

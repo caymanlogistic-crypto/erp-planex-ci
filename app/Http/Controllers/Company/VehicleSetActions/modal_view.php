@@ -1,15 +1,14 @@
 <?php
 /** @var VehicleSetService $service */
-requireRole(['company_owner', 'senior_logist', 'logist']);
 $companyId=$service->getCompanyId();if($companyId<=0){http_response_code(404);echo'<div class="notice warn">Компания не найдена.</div>';exit;}
 try{$company=$service->loadCompany($companyId);if(!$company||($company['status']??'')!=='active'){http_response_code(404);echo'<div class="notice warn">Компания не найдена или неактивна.</div>';exit;}
 $localPdo=$service->getLocalPdo($company);$vs=$service->getVehicleSetById($localPdo,(int)$id);if(!$vs){http_response_code(404);echo'<div class="notice warn">Транспорт не найден.</div>';exit;}
-$grantAccessLevel=null;$roleCode=$_SESSION['role_code']??'';if($roleCode==='logist'){$userId=(int)($_SESSION['user_id']??0);$grantCheck=$localPdo->prepare("SELECT access_level FROM entity_access_grants WHERE entity_type='vehicle_set' AND entity_id=? AND granted_to_user_id=? AND revoked_at IS NULL LIMIT 1");$grantCheck->execute([(int)$id,$userId]);$grantRow=$grantCheck->fetch(PDO::FETCH_ASSOC);$grantAccessLevel=$grantRow['access_level']??null;$hasGrant=in_array($grantAccessLevel,['view','edit'],true);if((int)($vs['created_by_user_id']??0)!==$userId&&!$hasGrant){http_response_code(403);echo'<div class="notice warn">У вас нет доступа к этой записи.</div>';exit;}}
-$unitIds=array_values(array_filter([(int)($vs['primary_vehicle_unit_id']??0),(int)($vs['secondary_vehicle_unit_id']??0)]));
+$allowedUnitIds=vehicleSetAccessibleUnitIds($localPdo,$vs);if($allowedUnitIds===[]){http_response_code(403);echo'<div class="notice warn">У вас нет доступа к транспортным единицам этого состава.</div>';exit;}
+$unitIds=array_keys($allowedUnitIds);
 $unitsByRole=['primary'=>[],'secondary'=>[]];if(!empty($unitIds)){$units=$service->getUnitsByIds($localPdo,$unitIds);foreach($units as $unit){$uId=(int)($unit['id']??0);if($uId===(int)($vs['primary_vehicle_unit_id']??0))$unitsByRole['primary']=$unit;elseif($uId===(int)($vs['secondary_vehicle_unit_id']??0))$unitsByRole['secondary']=$unit;}}
 $docsByRole=['primary'=>[],'secondary'=>[]];if(!empty($unitIds)){$docs=$service->getDocsForUnits($localPdo,$unitIds);foreach($docs as $doc){$eId=(int)($doc['entity_id']??0);if($eId===(int)($vs['primary_vehicle_unit_id']??0))$docsByRole['primary'][]=$doc;elseif($eId===(int)($vs['secondary_vehicle_unit_id']??0))$docsByRole['secondary'][]=$doc;}}
 $rules=vehicleSetTypeRules();$unitTitles=['primary'=>$rules[$vs['set_type']??'']['units']['primary']['label']??'Основная единица','secondary'=>$rules[$vs['set_type']??'']['units']['secondary']['label']??'Доп. единица'];
-$canEdit=false;$canDelete=false;if($roleCode==='company_owner'||$roleCode==='senior_logist'){$canEdit=true;$canDelete=true;}elseif($roleCode==='logist'){$userId=(int)($_SESSION['user_id']??0);if((int)($vs['created_by_user_id']??0)===$userId){$canEdit=true;$canDelete=true;}elseif($grantAccessLevel==='edit'){$canEdit=true;}}
+$canEdit=vehicleSetAllUnitsAccessible($localPdo,$vs);$canDelete=$canEdit;
 $vehicleSet=$vs;
 header('Content-Type: text/html; charset=utf-8');require base_path('app/View/partials/company_vehicle_set_modal_view.php');exit;}
 catch(\Throwable $e){http_response_code(500);echo'<div class="notice warn">Ошибка загрузки: '.e($e->getMessage()).'</div>';exit;}

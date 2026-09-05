@@ -4,7 +4,6 @@ use App\Core\Database;
 use App\Service\FinanceCashInvoiceEventService;
 use App\Service\FinanceCashService;
 
-requireRole(['company_owner']);
 verifyCsrfRequest();
 
 $companyId = (int)(getSessionCompanyId() ?? 0);

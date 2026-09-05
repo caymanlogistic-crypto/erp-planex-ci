@@ -4,4 +4,4 @@ require_once base_path('app/Http/Controllers/Company/FinanceManagementBalanceCon
 
 $controller = new \App\Http\Controllers\Company\FinanceManagementBalanceController($config, $db);
 
-$router->get('/company/finance/reports/management-balance', [$controller, 'index']);
+$router->get('/company/finance/reports/management-balance', [$controller, 'index'], 'company.finance.management_balance');

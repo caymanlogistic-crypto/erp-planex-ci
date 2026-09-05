@@ -57,6 +57,60 @@ final class UserSyncService
         }
     }
 
+    /**
+     * Update the tenant compatibility projection using stable membership_id.
+     * Global authentication/profile and central membership remain authoritative.
+     * This method performs no schema changes and fails closed before migration 131+.
+     *
+     * @param array{id:int,full_name:string,login:string,email?:?string,phone?:?string,password_hash:string} $account
+     * @param array{id:int,status:string} $membership
+     * @param array{id:int,system_key:?string} $role
+     */
+    public function syncMembershipProjection(PDO $localPdo, array $account, array $membership, array $role): void
+    {
+        $columns = $localPdo->query("SHOW COLUMNS FROM `users`")->fetchAll(PDO::FETCH_COLUMN, 0);
+        if (!in_array('membership_id', $columns, true)) {
+            throw new \RuntimeException('Tenant users.membership_id отсутствует; требуется migration 131+.');
+        }
+        $localPdo->beginTransaction();
+        try {
+            $find = $localPdo->prepare('SELECT id FROM users WHERE membership_id = ? FOR UPDATE');
+            $find->execute([(int) $membership['id']]);
+            $tenantId = $find->fetchColumn();
+            $roleCode = ($role['system_key'] ?? null) === CompanyRoleService::OWNER_SYSTEM_KEY
+                ? 'company_owner'
+                : 'membership_role';
+            if ($tenantId === false) {
+                $insert = $localPdo->prepare(
+                    'INSERT INTO users
+                     (membership_id, full_name, login, email, phone, password_hash, role_code, status, created_by_user_id, created_by_role)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                );
+                $insert->execute([
+                    (int) $membership['id'], (string) $account['full_name'], (string) $account['login'],
+                    $account['email'] ?? null, $account['phone'] ?? null, (string) $account['password_hash'],
+                    $roleCode, (string) $membership['status'], (int) ($_SESSION['account_id'] ?? 0), 'membership',
+                ]);
+            } else {
+                $update = $localPdo->prepare(
+                    'UPDATE users SET full_name = ?, login = ?, email = ?, phone = ?, password_hash = ?,
+                     role_code = ?, status = ?, updated_at = NOW() WHERE membership_id = ?'
+                );
+                $update->execute([
+                    (string) $account['full_name'], (string) $account['login'], $account['email'] ?? null,
+                    $account['phone'] ?? null, (string) $account['password_hash'], $roleCode,
+                    (string) $membership['status'], (int) $membership['id'],
+                ]);
+            }
+            $localPdo->commit();
+        } catch (\Throwable $e) {
+            if ($localPdo->inTransaction()) {
+                $localPdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     public function loginExistsInCentral(PDO $centralPdo, string $login, ?int $excludeId = null): bool
     {
         if ($excludeId) {
