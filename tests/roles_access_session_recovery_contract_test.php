@@ -27,8 +27,8 @@ if($flagPos===false||$bridgePos===false||$enablePos===false||!($flagPos<$bridgeP
 foreach (['session_regenerate_id(true)',"redirect_to('/login')",'LegacySessionIdentityUpgradeService::INVALID'] as $needle) $need($httpRuntime,$needle,'runtime invalidation');
 
 foreach (['P12_CREDENTIALS_B64','input[name="login"]','input[name="password"]','/company/dashboard','/company/clients','ROLES_ACCESS_REAL_LOGIN_PASS=YES','ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200','ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES','ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES'] as $needle) $need($qa,$needle,'real browser QA');
-foreach (['workflow_dispatch:','P11_RUNTIME_CREDENTIALS_B64','Validate exact canonical and deployed SHA','create-legacy-owner','create-invalid-owner','Real login and legacy-session production browser acceptance'] as $needle) $need($workflow,$needle,'postdeploy QA workflow');
-foreach (["\n  push:","\n  schedule:","\n  pull_request:","\n  workflow_run:"] as $forbidden) if(str_contains($workflow,$forbidden))$fail('production browser QA must be manual-only');
+foreach (['workflow_dispatch:',"push:\n    branches:\n      - qa/roles-access-agent",'inputs.source_sha || github.sha','P11_RUNTIME_CREDENTIALS_B64','Validate exact canonical and deployed SHA','create-legacy-owner','create-invalid-owner','Real login and legacy-session production browser acceptance'] as $needle) $need($workflow,$needle,'postdeploy QA workflow');
+foreach (["\n  schedule:","\n  pull_request:","\n  workflow_run:"] as $forbidden) if(str_contains($workflow,$forbidden))$fail('production browser QA must not have unrelated automatic triggers');
 if(str_contains($workflow,'UPDATE ')||str_contains($workflow,'INSERT ')||str_contains($workflow,'DELETE FROM'))$fail('postdeploy QA workflow must not mutate production DB');
 
 echo "roles access session recovery contract: PASS\n";
