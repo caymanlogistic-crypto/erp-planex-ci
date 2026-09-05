@@ -101,6 +101,33 @@ final class MigrationProof
     }
 
     /**
+     * Sanitized evidence for blocked identity planning. Raw login/profile values
+     * are deliberately excluded; source refs and conflict field names are enough
+     * to diagnose whether the blocker is duplicate membership or identity drift.
+     *
+     * @param list<array<string,mixed>> $conflicts
+     * @return list<array{login_fingerprint:string,source_refs:list<string>,fields:list<string>}>
+     */
+    public static function identityConflictEvidence(array $conflicts): array
+    {
+        $out = [];
+        foreach ($conflicts as $conflict) {
+            $normalized = trim((string) ($conflict['normalized_login'] ?? ''));
+            $sourceRefs = array_values(array_map('strval', is_array($conflict['source_refs'] ?? null) ? $conflict['source_refs'] : []));
+            sort($sourceRefs, SORT_STRING);
+            $fieldsRaw = is_array($conflict['fields'] ?? null) ? $conflict['fields'] : [];
+            $fields = array_values(array_map('strval', array_keys($fieldsRaw)));
+            sort($fields, SORT_STRING);
+            $out[] = [
+                'login_fingerprint' => substr(hash('sha256', $normalized), 0, 16),
+                'source_refs' => $sourceRefs,
+                'fields' => $fields,
+            ];
+        }
+        return $out;
+    }
+
+    /**
      * Seeds only direct, live legacy grants and explicit creator links whose tenant user has a proven membership mapping.
      * @param list<array<string,mixed>> $grants
      * @param list<array<string,mixed>> $creatorLinks

@@ -341,7 +341,11 @@ function identityPreflight(PDO $central, array $companies, array $tenants): arra
     }
     $plan = MigrationProof::identityPlan($rows);
     if (($plan['blocked'] ?? true) === true) {
-        throw new RuntimeException('Identity/duplicate preflight blocked: ' . count($plan['conflicts'] ?? []) . ' conflict(s).');
+        $conflicts = is_array($plan['conflicts'] ?? null) ? $plan['conflicts'] : [];
+        foreach (MigrationProof::identityConflictEvidence($conflicts) as $conflict) {
+            echo 'ROLES_ACCESS_IDENTITY_CONFLICT=' . json_encode($conflict, JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+        }
+        throw new RuntimeException('Identity/duplicate preflight blocked: ' . count($conflicts) . ' conflict(s).');
     }
     return $plan;
 }
