@@ -1,17 +1,16 @@
-# Exact packages observed in the working user-mode SentinelX venv on 2026-09-05.
-# sentinelx-cloud-protocol is intentionally installed from the pinned local
-# source directory described in manifest.json, not from PyPI or an unpinned VCS ref.
-PyYAML==6.0.3
-annotated-types==0.8.0
-hatchling==1.32.0
-packaging==26.3
-pathspec==1.1.1
-pluggy==1.6.0
-pydantic==2.13.5
-pydantic_core==2.46.5
-structlog==26.1.0
-tomlkit==0.15.1
-trove-classifiers==2026.6.1.19
-typing-inspection==0.4.4
-typing_extensions==4.16.0
-websockets==17.1
+# Generated canonical hash lock for ERP PLANEX SentinelX.
+# Install with: pip install --require-hashes --no-deps -r <this-file>
+PyYAML==6.0.3 --hash=sha256:b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d
+annotated-types==0.8.0 --hash=sha256:f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0
+hatchling==1.32.0 --hash=sha256:0e17c9c3b9aa7c625acc8d0f5b622f107d5049af9ecf5ada4de1aada5be7cdbc
+packaging==26.3 --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+pathspec==1.1.1 --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
+pluggy==1.6.0 --hash=sha256:e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746
+pydantic==2.13.5 --hash=sha256:346a034f080da3755d8e9cb5e00e8b07de1d39e4f6e2c87d8ab7cafa0b269a73
+pydantic_core==2.46.5 --hash=sha256:49776eab08766a08dfff7012f8b422dcd7e25e43b316eedf0477c24fcfa84b7c
+structlog==26.1.0 --hash=sha256:e081a26d6c373e6d201eca24eede26d8ffab07f88f477822e679183428d3d91e
+tomlkit==0.15.1 --hash=sha256:177a05aece5a8ca5266fd3c448abb47b8d352f09d477d3ca8332db4d89b24304
+trove-classifiers==2026.6.1.19 --hash=sha256:ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3
+typing-inspection==0.4.4 --hash=sha256:65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147
+typing_extensions==4.16.0 --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8
+websockets==17.1 --hash=sha256:0c84bdef916556cbe1d5a43b423398be4dd3cba6522b463e53d848578b920695

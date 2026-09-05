@@ -1,0 +1,4 @@
+# Generated canonical hash lock for ERP PLANEX SentinelX.
+# Install with: pip install --require-hashes --no-deps -r <this-file>
+pip==23.3 --hash=sha256:bc38bb52bc286514f8f7cb3a1ba5ed100b76aaef29b521d48574329331c5ae7b
+setuptools==68.2.2 --hash=sha256:b454a35605876da60632df1a60f736524eb73cc47bbc9f3f1ef1b644de74fd2a
