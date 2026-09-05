@@ -34,7 +34,7 @@ try {
     $pdo->exec('CREATE TABLE companies (id INT UNSIGNED PRIMARY KEY,name VARCHAR(255),status VARCHAR(20)) ENGINE=InnoDB');
     $pdo->exec('CREATE TABLE company_users (id INT UNSIGNED PRIMARY KEY,company_id INT UNSIGNED,full_name VARCHAR(255),login VARCHAR(100),email VARCHAR(255),phone VARCHAR(50),password_hash VARCHAR(255),role VARCHAR(50),status VARCHAR(20)) ENGINE=InnoDB');
     $pdo->exec("INSERT INTO companies VALUES (7,'Test','active')");
-    $pdo->exec("INSERT INTO company_users VALUES (1,7,'Owner','owner',NULL,NULL,'hash-owner','company_owner','active')");
+    $pdo->exec("INSERT INTO company_users VALUES (1,7,'Owner','owner',NULL,NULL,'hash-owner','company_owner','active'),(2,7,'Logist','logist',NULL,NULL,'hash-logist','logist','active')");
     $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations/013_create_roles_access.sql'));
 
     $pdo->exec('CREATE TABLE users (id INT UNSIGNED PRIMARY KEY,full_name VARCHAR(255),login VARCHAR(100),email VARCHAR(255),phone VARCHAR(50),password_hash VARCHAR(255),role_code VARCHAR(50),status VARCHAR(20),deleted_at DATETIME NULL) ENGINE=InnoDB');

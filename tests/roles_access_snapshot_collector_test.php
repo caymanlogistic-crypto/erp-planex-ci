@@ -11,7 +11,7 @@ require_once __DIR__ . '/../tools/roles_access/AccessSnapshotCollector.php';
 $central = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $tenant = new PDO('sqlite::memory:', null, null, [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]);
 $central->exec('CREATE TABLE company_users (id INTEGER PRIMARY KEY,company_id INTEGER,full_name TEXT,login TEXT,email TEXT,phone TEXT,password_hash TEXT,role TEXT,status TEXT)');
-$central->exec("INSERT INTO company_users VALUES (1,7,'Owner','owner',NULL,NULL,'hash-owner','company_owner','active')");
+$central->exec("INSERT INTO company_users VALUES (1,7,'Owner','owner',NULL,NULL,'hash-owner','company_owner','active'),(2,7,'Logist','logist',NULL,NULL,'hash-logist','logist','active')");
 $tenant->exec('CREATE TABLE users (id INTEGER PRIMARY KEY,full_name TEXT,login TEXT,email TEXT,phone TEXT,password_hash TEXT,role_code TEXT,status TEXT,deleted_at TEXT,membership_id INTEGER)');
 $tenant->exec("INSERT INTO users VALUES (1,'Logist','logist',NULL,NULL,'hash-logist','logist','active',NULL,NULL)");
 $tenant->exec('CREATE TABLE entity_access_grants (entity_type TEXT,entity_id INTEGER,granted_to_user_id INTEGER,revoked_at TEXT)');
@@ -42,7 +42,7 @@ $central->exec('CREATE TABLE membership_page_overrides (membership_id INTEGER,pa
 $central->exec('CREATE TABLE role_data_scopes (role_id INTEGER,entity_type TEXT,scope TEXT)');
 $central->exec('CREATE TABLE membership_data_scope_overrides (membership_id INTEGER,entity_type TEXT,scope TEXT)');
 $central->exec("INSERT INTO company_roles VALUES (10,7,'company_owner'),(11,7,NULL)");
-$central->exec("INSERT INTO company_memberships VALUES (100,7,10,'active','central_company_user',1),(101,7,11,'active','tenant_user',1)");
+$central->exec("INSERT INTO company_memberships VALUES (100,7,10,'active','central_company_user',1),(101,7,11,'active','central_company_user',2)");
 $central->exec("INSERT INTO role_page_permissions VALUES (11,'company.dashboard',1),(11,'company.clients',1)");
 foreach (['client', 'contractor', 'vehicle_unit', 'driver', 'linear_trip', 'waste_trip'] as $entityType) {
     $central->exec("INSERT INTO role_data_scopes VALUES (10,'{$entityType}','all')");

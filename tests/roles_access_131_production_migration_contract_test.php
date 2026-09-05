@@ -122,6 +122,8 @@ if ($beforeWritePos === false || $prepareIdentityPos === false || $beforeWritePo
 }
 $executor = (string) file_get_contents($root . '/tools/roles_access/LegacyAccessMigrationExecutor.php');
 $need($executor, 'MigrationProof::assignmentPlan($grants, [], $tenantUserMap)', 'explicit-grant-only historical assignment migration');
+$need($executor, "['tenant_user_ids']", 'tenant alias projection for mirrored memberships');
+$need($script, 'MigrationProof::identityPlan($rows)', 'identity planner remains the production preflight authority');
 if (str_contains($executor, '$creatorLinks[]')) $fail('historical creator links must not be invented as assignments');
 
 

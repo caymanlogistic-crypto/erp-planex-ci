@@ -82,6 +82,38 @@ if (count($conflictEvidence) !== 1
 ) {
     throw new RuntimeException('identity conflict evidence is not sanitized/deterministic');
 }
+$mirroredMembership = MigrationProof::identityPlan([
+    ['company_id' => 1, 'legacy_source' => 'central_company_user', 'legacy_source_id' => 20, 'login' => 'mirror', 'full_name' => 'Mirror User', 'email' => '', 'phone' => '', 'password_hash' => 'hash-mirror', 'role_code' => 'logist', 'status' => 'active'],
+    ['company_id' => 1, 'legacy_source' => 'tenant_user', 'legacy_source_id' => 7, 'login' => ' MIRROR ', 'full_name' => 'Mirror User', 'email' => '', 'phone' => '', 'password_hash' => 'hash-mirror', 'role_code' => 'logist', 'status' => 'active'],
+]);
+if ($mirroredMembership['blocked']
+    || count($mirroredMembership['accounts']) !== 1
+    || count($mirroredMembership['memberships']) !== 1
+    || ($mirroredMembership['memberships'][0]['legacy_source'] ?? '') !== 'central_company_user'
+    || ($mirroredMembership['memberships'][0]['legacy_source_id'] ?? 0) !== 20
+    || ($mirroredMembership['memberships'][0]['tenant_user_ids'] ?? []) !== [7]
+    || ($mirroredMembership['memberships'][0]['legacy_source_refs'] ?? []) !== ['1:central_company_user:20', '1:tenant_user:7']
+) {
+    throw new RuntimeException('exact central/tenant mirror was not collapsed deterministically');
+}
+$roleMismatchMirror = MigrationProof::identityPlan([
+    ['company_id' => 1, 'legacy_source' => 'central_company_user', 'legacy_source_id' => 21, 'login' => 'role-mismatch', 'full_name' => 'Role User', 'password_hash' => 'hash-role', 'role_code' => 'senior_logist', 'status' => 'active'],
+    ['company_id' => 1, 'legacy_source' => 'tenant_user', 'legacy_source_id' => 8, 'login' => 'role-mismatch', 'full_name' => 'Role User', 'password_hash' => 'hash-role', 'role_code' => 'logist', 'status' => 'active'],
+]);
+if (!$roleMismatchMirror['blocked']
+    || !isset($roleMismatchMirror['conflicts'][0]['fields']['_company_membership'])
+    || !isset($roleMismatchMirror['conflicts'][0]['fields']['role_code'])) {
+    throw new RuntimeException('role-mismatched mirror was accepted');
+}
+$statusMismatchMirror = MigrationProof::identityPlan([
+    ['company_id' => 1, 'legacy_source' => 'central_company_user', 'legacy_source_id' => 22, 'login' => 'status-mismatch', 'full_name' => 'Status User', 'password_hash' => 'hash-status', 'role_code' => 'logist', 'status' => 'active'],
+    ['company_id' => 1, 'legacy_source' => 'tenant_user', 'legacy_source_id' => 9, 'login' => 'status-mismatch', 'full_name' => 'Status User', 'password_hash' => 'hash-status', 'role_code' => 'logist', 'status' => 'blocked'],
+]);
+if (!$statusMismatchMirror['blocked']
+    || !isset($statusMismatchMirror['conflicts'][0]['fields']['_company_membership'])
+    || !isset($statusMismatchMirror['conflicts'][0]['fields']['status'])) {
+    throw new RuntimeException('status-mismatched mirror was accepted');
+}
 $missingIdentity = MigrationProof::identityPlan([
     ['company_id' => 1, 'legacy_company_user_id' => 12, 'login' => 'missing', 'full_name' => '', 'password_hash' => ''],
 ]);

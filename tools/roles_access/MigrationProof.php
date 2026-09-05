@@ -12,8 +12,15 @@ final class MigrationProof
         'pages', 'clients', 'contractors', 'vehicle_units', 'drivers', 'linear_trips', 'waste_trips',
     ];
 
-    /** @param list<array<string,mixed>> $legacyUsers @return array<string,mixed> */
-    public static function identityPlan(array $legacyUsers): array
+    /**
+     * Collapse only a provably exact central+tenant mirror of the same legacy
+     * membership. Ambiguous duplicates remain separate so identityPlan() can
+     * fail closed after the factual BEFORE snapshot has been frozen.
+     *
+     * @param list<array<string,mixed>> $legacyUsers
+     * @return list<array<string,mixed>>
+     */
+    public static function collapseExactMirrors(array $legacyUsers): array
     {
         $groups = [];
         foreach ($legacyUsers as $row) {
@@ -33,7 +40,45 @@ final class MigrationProof
             $row['legacy_source_id'] = $sourceId;
             $row['login'] = $login;
             $row['normalized_login'] = $normalized;
-            $groups[$normalized][] = $row;
+            $row['legacy_source_refs'] = [$companyId . ':' . $source . ':' . $sourceId];
+            $row['tenant_user_ids'] = $source === 'tenant_user' ? [$sourceId] : [];
+            $groups[$normalized . "\0" . $companyId][] = $row;
+        }
+        ksort($groups, SORT_STRING);
+
+        $out = [];
+        foreach ($groups as $rows) {
+            usort($rows, static fn(array $a, array $b): int => [$a['legacy_source'], $a['legacy_source_id']] <=> [$b['legacy_source'], $b['legacy_source_id']]);
+            if (count($rows) === 2) {
+                $bySource = [];
+                foreach ($rows as $row) {
+                    $bySource[(string) $row['legacy_source']][] = $row;
+                }
+                if (count($bySource['central_company_user'] ?? []) === 1
+                    && count($bySource['tenant_user'] ?? []) === 1
+                    && self::exactMirror($bySource['central_company_user'][0], $bySource['tenant_user'][0])) {
+                    $central = $bySource['central_company_user'][0];
+                    $tenant = $bySource['tenant_user'][0];
+                    $refs = array_merge($central['legacy_source_refs'], $tenant['legacy_source_refs']);
+                    sort($refs, SORT_STRING);
+                    $central['legacy_source_refs'] = $refs;
+                    $central['tenant_user_ids'] = [(int) $tenant['legacy_source_id']];
+                    $out[] = $central;
+                    continue;
+                }
+            }
+            array_push($out, ...$rows);
+        }
+        usort($out, static fn(array $a, array $b): int => [$a['normalized_login'], $a['company_id'], $a['legacy_source'], $a['legacy_source_id']] <=> [$b['normalized_login'], $b['company_id'], $b['legacy_source'], $b['legacy_source_id']]);
+        return $out;
+    }
+
+    /** @param list<array<string,mixed>> $legacyUsers @return array<string,mixed> */
+    public static function identityPlan(array $legacyUsers): array
+    {
+        $groups = [];
+        foreach (self::collapseExactMirrors($legacyUsers) as $row) {
+            $groups[(string) $row['normalized_login']][] = $row;
         }
         ksort($groups, SORT_STRING);
 
@@ -43,17 +88,30 @@ final class MigrationProof
         foreach ($groups as $normalized => $rows) {
             usort($rows, static fn(array $a, array $b): int => [$a['company_id'], $a['legacy_source'], $a['legacy_source_id']] <=> [$b['company_id'], $b['legacy_source'], $b['legacy_source_id']]);
             $fieldConflicts = [];
-            $companySources = [];
+            $companyRows = [];
             foreach ($rows as $row) {
-                $companySources[(int) $row['company_id']][] = $row['legacy_source'] . ':' . $row['legacy_source_id'];
+                $companyRows[(int) $row['company_id']][] = $row;
             }
-            foreach ($companySources as $companyId => $sourceIds) {
-                if (count($sourceIds) > 1) {
+            foreach ($companyRows as $companyId => $companyGroup) {
+                if (count($companyGroup) > 1) {
+                    $sourceIds = [];
+                    foreach ($companyGroup as $row) {
+                        foreach (($row['legacy_source_refs'] ?? []) as $sourceRef) {
+                            $sourceIds[] = (string) $sourceRef;
+                        }
+                    }
                     sort($sourceIds, SORT_STRING);
-                    $fieldConflicts['_company_membership'] = array_map(
-                        static fn(string $sourceRef): string => $companyId . ':' . $sourceRef,
-                        $sourceIds,
-                    );
+                    $fieldConflicts['_company_membership'] = $sourceIds;
+                    foreach (['role_code', 'status'] as $field) {
+                        $values = [];
+                        foreach ($companyGroup as $row) {
+                            $value = trim((string) ($row[$field] ?? ($field === 'role_code' ? ($row['role'] ?? '') : '')));
+                            $values[$value === '' ? '<missing>' : $value] = true;
+                        }
+                        if (count($values) > 1) {
+                            $fieldConflicts[$field] = array_keys($values);
+                        }
+                    }
                 }
             }
             foreach (['full_name', 'email', 'phone', 'password_hash'] as $field) {
@@ -67,9 +125,17 @@ final class MigrationProof
                 }
             }
             if ($fieldConflicts !== []) {
+                $sourceRefs = [];
+                foreach ($rows as $row) {
+                    foreach (($row['legacy_source_refs'] ?? []) as $sourceRef) {
+                        $sourceRefs[] = (string) $sourceRef;
+                    }
+                }
+                $sourceRefs = array_values(array_unique($sourceRefs));
+                sort($sourceRefs, SORT_STRING);
                 $conflicts[] = [
                     'normalized_login' => $normalized,
-                    'source_refs' => array_map(static fn(array $r): string => $r['company_id'] . ':' . $r['legacy_source'] . ':' . $r['legacy_source_id'], $rows),
+                    'source_refs' => $sourceRefs,
                     'fields' => $fieldConflicts,
                 ];
                 continue;
@@ -91,6 +157,8 @@ final class MigrationProof
                     'company_id' => $row['company_id'],
                     'legacy_source' => $row['legacy_source'],
                     'legacy_source_id' => $row['legacy_source_id'],
+                    'legacy_source_refs' => array_values($row['legacy_source_refs'] ?? []),
+                    'tenant_user_ids' => array_values(array_map('intval', $row['tenant_user_ids'] ?? [])),
                     'legacy_role_code' => (string) ($row['role'] ?? $row['role_code'] ?? ''),
                     'status' => (string) ($row['status'] ?? 'blocked'),
                 ];
@@ -404,6 +472,20 @@ final class MigrationProof
     {
         self::recursiveSort($value);
         return hash('sha256', json_encode($value, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
+    }
+
+    private static function exactMirror(array $central, array $tenant): bool
+    {
+        foreach (['full_name', 'email', 'phone', 'password_hash'] as $field) {
+            if (trim((string) ($central[$field] ?? '')) !== trim((string) ($tenant[$field] ?? ''))) {
+                return false;
+            }
+        }
+        $centralRole = trim((string) ($central['role_code'] ?? $central['role'] ?? ''));
+        $tenantRole = trim((string) ($tenant['role_code'] ?? $tenant['role'] ?? ''));
+        return $centralRole !== ''
+            && $centralRole === $tenantRole
+            && trim((string) ($central['status'] ?? '')) === trim((string) ($tenant['status'] ?? ''));
     }
 
     private static function membershipKey(int $companyId, string $source, int $sourceId): string
