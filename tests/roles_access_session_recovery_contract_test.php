@@ -21,6 +21,10 @@ foreach ([
     "unset(\n            \$session['role_code']",
 ] as $needle) $need($service,$needle,'legacy upgrade');
 $need($deps,"LegacySessionIdentityUpgradeService.php",'runtime dependency');
+$need($deps,"RegulatedDataScopeService.php",'runtime dependency');
+$regulatedPos=strpos($deps,"RegulatedDataScopeService.php");
+$clientServicePos=strpos($deps,"ClientService.php");
+if($regulatedPos===false||$clientServicePos===false||$regulatedPos>$clientServicePos)$fail('RegulatedDataScopeService must load before ClientService web consumer');
 $flagPos=strpos($index,'if ($rolesAccessEnabled) {');
 $bridgePos=strpos($index,'recoverLegacyRolesAccessSession(', $flagPos === false ? 0 : $flagPos);
 $enablePos=strpos($index,'$router->enableCompanyAccess(', $flagPos === false ? 0 : $flagPos);
