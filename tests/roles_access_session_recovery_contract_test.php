@@ -10,6 +10,7 @@ $deps=(string)file_get_contents($root.'/app/Support/entrypoint_dependencies.php'
 $httpRuntime=(string)file_get_contents($root.'/app/Support/http_runtime.php');
 $qa=(string)file_get_contents($root.'/.github/roles-access/production_browser_qa.js');
 $workflow=(string)file_get_contents($root.'/.github/workflows/roles_access_production_browser_qa.yml');
+$qaSession=(string)file_get_contents($root.'/.github/roles-access/qa_session.php');
 
 foreach ([
     "'company_owner' => 'central_company_user'",
@@ -30,10 +31,15 @@ $compatPos=strpos($index,'$compatibilityRoleCode =', $enablePos === false ? 0 : 
 if($barrierPos===false||$compatPos===false||!($enablePos<$barrierPos&&$barrierPos<$compatPos))$fail('identity-deny barrier must run after ACL resolution and before compatibility metadata');
 foreach (['loadMembershipAccess($accountId, $companyId)','nestedCompanyId','nestedLegacyUserId'] as $needle) $need($service,$needle,'session-shape validation');
 
-foreach (['P12_CREDENTIALS_B64','input[name="login"]','input[name="password"]','/company/dashboard','/company/clients','ROLES_ACCESS_REAL_LOGIN_PASS=YES','ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200','ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES','ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES'] as $needle) $need($qa,$needle,'real browser QA');
-foreach (['workflow_dispatch:',"push:\n    branches:\n      - qa/roles-access-agent",'inputs.source_sha || github.sha','P11_RUNTIME_CREDENTIALS_B64','RUNTIME_ACCESS_NOTES.md','company_owner','Validate exact canonical and deployed SHA','create-legacy-owner','create-invalid-owner','Real login and legacy-session production browser acceptance'] as $needle) $need($workflow,$needle,'postdeploy QA workflow');
+foreach (['P12_CREDENTIALS_B64','QA_REAL_LOGIN_AVAILABLE','input[name="login"]','input[name="password"]','/company/dashboard','/company/clients','ROLES_ACCESS_REAL_LOGIN_PASS=YES','ROLES_ACCESS_REAL_LOGIN_SKIPPED=NO_CURRENT_VERIFIED_CREDENTIAL','ROLES_ACCESS_LEGACY_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200','ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES','ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES'] as $needle) $need($qa,$needle,'real browser QA');
+$legacyPos=strpos($qa,'// A. Real pre-activation owner session');
+$realPos=strpos($qa,'// C. REAL normal login');
+if($legacyPos===false||$realPos===false||$legacyPos>$realPos)$fail('legacy production session proof must execute before optional plaintext login');
+foreach (['workflow_dispatch:',"push:\n    branches:\n      - qa/roles-access-agent",'inputs.source_sha || github.sha','P11_RUNTIME_CREDENTIALS_B64','RUNTIME_ACCESS_NOTES.md','company_owner','Validate exact canonical and deployed SHA','diagnose-credentials','QA_REAL_LOGIN_AVAILABLE','Legacy-session and current-login production browser acceptance','Require current real-login proof','ROLES_ACCESS_REAL_LOGIN_BLOCKER=NO_CURRENT_VERIFIED_CREDENTIAL','create-legacy-owner','create-invalid-owner'] as $needle) $need($workflow,$needle,'postdeploy QA workflow');
+foreach (['diagnose-credentials','AccountAuthenticationService','authenticate($login, $password)','company_access_readiness','selected_index','ready_company','usable'] as $needle) $need($qaSession,$needle,'sanitized current credential diagnostic');
 if(str_contains($workflow,'P11_runtime_credentials.enc.json')||str_contains($workflow,'P11_decrypt_credentials.py'))$fail('stale encrypted credential fallback must not be used');
 foreach (["\n  schedule:","\n  pull_request:","\n  workflow_run:"] as $forbidden) if(str_contains($workflow,$forbidden))$fail('production browser QA must not have unrelated automatic triggers');
 if(str_contains($workflow,'UPDATE ')||str_contains($workflow,'INSERT ')||str_contains($workflow,'DELETE FROM'))$fail('postdeploy QA workflow must not mutate production DB');
+if(str_contains($qaSession,'UPDATE ')||str_contains($qaSession,'INSERT ')||str_contains($qaSession,'DELETE FROM'))$fail('QA session helper must remain read-only for production DB');
 
 echo "roles access session recovery contract: PASS\n";

@@ -23,8 +23,71 @@ if ($mode === 'delete') {
 }
 
 require_once $root . '/app/Core/Database.php';
+require_once $root . '/app/Service/IdentityNormalizer.php';
+require_once $root . '/app/Service/AccountAuthenticationService.php';
 $config = require $root . '/bootstrap/app.php';
 $pdo = (new App\Core\Database($config['database']))->connection();
+
+if ($mode === 'diagnose-credentials') {
+    $encoded = (string) ($argv[2] ?? '');
+    $decoded = base64_decode($encoded, true);
+    if ($decoded === false) { fwrite(STDERR, "invalid credential payload encoding\n"); exit(1); }
+    try { $candidates = json_decode($decoded, true, 64, JSON_THROW_ON_ERROR); }
+    catch (Throwable) { fwrite(STDERR, "invalid credential payload json\n"); exit(1); }
+    if (!is_array($candidates) || $candidates === [] || count($candidates) > 20) {
+        fwrite(STDERR, "credential candidate list invalid\n"); exit(1);
+    }
+
+    $auth = new App\Service\AccountAuthenticationService($pdo);
+    $results = [];
+    $selected = null;
+    foreach (array_values($candidates) as $index => $candidate) {
+        $login = is_array($candidate) ? trim((string) ($candidate['username'] ?? '')) : '';
+        $password = is_array($candidate) ? (string) ($candidate['password'] ?? '') : '';
+        $authenticated = false;
+        $selectedCompanyId = null;
+        $selectedCompanyReady = false;
+        if ($login !== '' && $password !== '') {
+            try {
+                $resolved = $auth->authenticate($login, $password);
+                $authenticated = is_array($resolved) && ($resolved['memberships'] ?? []) !== [];
+                if ($authenticated) {
+                    $first = $resolved['memberships'][0] ?? null;
+                    $selectedCompanyId = is_array($first) ? (int) ($first['company_id'] ?? 0) : null;
+                    if (($selectedCompanyId ?? 0) > 0) {
+                        $ready = $pdo->prepare(
+                            "SELECT 1 FROM company_access_readiness
+                             WHERE company_id=? AND state='ready' AND verified_at IS NOT NULL AND activated_at IS NOT NULL
+                             LIMIT 1"
+                        );
+                        $ready->execute([$selectedCompanyId]);
+                        $selectedCompanyReady = (bool) $ready->fetchColumn();
+                    }
+                }
+            } catch (Throwable) {
+                $authenticated = false;
+                $selectedCompanyId = null;
+                $selectedCompanyReady = false;
+            }
+        }
+        $usable = $authenticated && $selectedCompanyReady;
+        if ($usable && $selected === null) { $selected = $index; }
+        $results[] = [
+            'index' => $index,
+            'authenticated' => $authenticated,
+            'ready_company' => $selectedCompanyReady,
+            'usable' => $usable,
+            'company_id' => $selectedCompanyId,
+        ];
+    }
+    echo 'ROLES_QA_CREDENTIAL_DIAGNOSTIC=' . json_encode([
+        'candidate_count' => count($results),
+        'selected_index' => $selected,
+        'results' => $results,
+    ], JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR) . PHP_EOL;
+    exit(0);
+}
+
 $stmt = $pdo->query(
     "SELECT m.legacy_source_id legacy_user_id,a.full_name,c.id company_id,c.name company_name
      FROM company_memberships m
