@@ -118,6 +118,7 @@ final class LegacyAccessMigrationExecutor
                 self::projectTenantMemberships($tenant, $tenantUserMap);
                 self::projectCreators($tenant, $tenantUserMap);
                 self::insertAssignments($tenant, $assignmentPlan['assignments']);
+                self::insertLegacyAccessProjections($tenant, $assignmentPlan['legacy_projections']);
                 $tenant->commit();
             } catch (Throwable $e) {
                 if ($tenant->inTransaction()) {
@@ -137,6 +138,7 @@ final class LegacyAccessMigrationExecutor
             $companyReports[$companyId] = [
                 'memberships' => count($tenantUserMap),
                 'assignments' => count($assignmentPlan['assignments']),
+                'legacy_access_projections' => count($assignmentPlan['legacy_projections']),
                 'state' => 'migrated',
             ];
         }
@@ -278,13 +280,14 @@ final class LegacyAccessMigrationExecutor
     private static function tenantAssignmentPlan(PDO $tenant, array $tenantUserMap): array
     {
         $grants = $tenant->query(
-            'SELECT entity_type,entity_id,granted_to_user_id,revoked_at,1 is_live FROM entity_access_grants'
+            'SELECT id legacy_grant_id,entity_type,entity_id,granted_to_user_id,access_level,revoked_at,1 is_live FROM entity_access_grants'
         )->fetchAll(PDO::FETCH_ASSOC);
 
         // Historical creator identity is preserved only by created_by_membership_id.
-        // It must not be duplicated into entity_assignments: assignments migrate
-        // only explicit factual live grants.
-        return MigrationProof::assignmentPlan($grants, [], $tenantUserMap);
+        // It must not be duplicated into entity_assignments. Direct live grants
+        // are projected either to normal assignments or to the narrow immutable
+        // compatibility projection for legacy linear_route / vehicle_set access.
+        return MigrationProof::historicalAccessPlan($grants, $tenantUserMap);
     }
 
     private static function projectTenantMemberships(PDO $tenant, array $tenantUserMap): void
@@ -302,7 +305,7 @@ final class LegacyAccessMigrationExecutor
 
     private static function projectCreators(PDO $tenant, array $tenantUserMap): void
     {
-        foreach (['clients', 'contractors', 'vehicle_units', 'drivers', 'linear_routes', 'waste_trips'] as $table) {
+        foreach (['clients', 'contractors', 'vehicle_units', 'vehicle_sets', 'drivers', 'linear_routes', 'waste_trips'] as $table) {
             $rows = $tenant->query("SELECT id,created_by_user_id FROM `{$table}` WHERE created_by_user_id IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC);
             $update = $tenant->prepare("UPDATE `{$table}` SET created_by_membership_id=? WHERE id=? AND (created_by_membership_id IS NULL OR created_by_membership_id=?)");
             foreach ($rows as $row) {
@@ -328,4 +331,22 @@ final class LegacyAccessMigrationExecutor
             ]);
         }
     }
+
+    private static function insertLegacyAccessProjections(PDO $tenant, array $projections): void
+    {
+        $insert = $tenant->prepare(
+            'INSERT INTO legacy_access_projections
+                (legacy_grant_id,entity_type,entity_id,membership_id,access_level)
+             VALUES (?,?,?,?,?)
+             ON DUPLICATE KEY UPDATE
+                legacy_grant_id=VALUES(legacy_grant_id),access_level=VALUES(access_level)'
+        );
+        foreach ($projections as $projection) {
+            $insert->execute([
+                $projection['legacy_grant_id'], $projection['entity_type'], $projection['entity_id'],
+                $projection['membership_id'], $projection['access_level'],
+            ]);
+        }
+    }
+
 }

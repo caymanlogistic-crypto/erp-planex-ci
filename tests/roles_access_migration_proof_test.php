@@ -66,6 +66,26 @@ if (MigrationProof::inferTripScope([1, 2], [1], [1])['scope'] !== 'own'
 }
 
 
+$historical = MigrationProof::historicalAccessPlan([
+    ['legacy_grant_id'=>1,'entity_type'=>'client','entity_id'=>5,'granted_to_user_id'=>9,'access_level'=>'view','revoked_at'=>null],
+    ['legacy_grant_id'=>2,'entity_type'=>'linear_route','entity_id'=>6,'granted_to_user_id'=>9,'access_level'=>'view','revoked_at'=>null],
+    ['legacy_grant_id'=>3,'entity_type'=>'vehicle_set','entity_id'=>7,'granted_to_user_id'=>9,'access_level'=>'edit','revoked_at'=>null],
+], [9=>90]);
+if ($historical['blocked']
+    || count($historical['assignments']) !== 1
+    || count($historical['legacy_projections']) !== 2
+    || ($historical['legacy_projections'][0]['entity_type'] ?? '') !== 'linear_trip'
+    || ($historical['legacy_projections'][1]['entity_type'] ?? '') !== 'vehicle_set') {
+    throw new RuntimeException('factual historical access projection plan failed');
+}
+$unknownHistorical = MigrationProof::historicalAccessPlan([
+    ['legacy_grant_id'=>4,'entity_type'=>'crew','entity_id'=>8,'granted_to_user_id'=>9,'access_level'=>'edit','revoked_at'=>null],
+], [9=>90]);
+if (!$unknownHistorical['blocked'] || ($unknownHistorical['conflicts'][0]['reason'] ?? '') !== 'unsupported_entity') {
+    throw new RuntimeException('unknown historical grant type was not blocked');
+}
+
+
 $duplicateMembership = MigrationProof::identityPlan([
     ['company_id' => 1, 'legacy_company_user_id' => 10, 'login' => 'same', 'full_name' => 'User', 'password_hash' => 'hash'],
     ['company_id' => 1, 'legacy_company_user_id' => 11, 'login' => ' SAME ', 'full_name' => 'User', 'password_hash' => 'hash'],

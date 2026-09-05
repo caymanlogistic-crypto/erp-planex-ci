@@ -66,6 +66,7 @@ require_once $root . '/app/Service/IdentityNormalizer.php';
 require_once $root . '/app/Service/CompanyRoleService.php';
 require_once $root . '/app/Service/CompanyMembershipService.php';
 require_once $root . '/app/Service/AccessControlService.php';
+require_once $root . '/app/Service/LegacyAccessProjectionService.php';
 require_once $root . '/app/Service/EntityAssignmentService.php';
 require_once $root . '/app/Service/RegulatedDataScopeService.php';
 require_once $root . '/tools/roles_access/MigrationProof.php';
@@ -254,8 +255,8 @@ function assertLegacySchema(PDO $central, array $companies, array $tenants): voi
             throw new RuntimeException("Tenant connection missing for company {$id}");
         }
         assertColumns($tenant, 'users', ['id','full_name','login','email','phone','password_hash','role_code','status','deleted_at']);
-        assertColumns($tenant, 'entity_access_grants', ['entity_type','entity_id','granted_to_user_id','revoked_at']);
-        foreach (['clients','contractors','vehicle_units','drivers','linear_routes','waste_trips'] as $table) {
+        assertColumns($tenant, 'entity_access_grants', ['id','entity_type','entity_id','granted_to_user_id','access_level','revoked_at']);
+        foreach (['clients','contractors','vehicle_units','vehicle_sets','drivers','linear_routes','waste_trips'] as $table) {
             assertColumns($tenant, $table, ['id','created_by_user_id']);
         }
         $badRoles = $tenant->query("SELECT COUNT(*) FROM users WHERE deleted_at IS NULL AND role_code NOT IN ('logist','senior_logist')")->fetchColumn();
@@ -282,6 +283,7 @@ function assertTargetSchema(PDO $central, array $tenants): void
     }
     foreach ($tenants as $companyId => $tenant) {
         assertColumns($tenant, 'entity_assignments', ['id','entity_type','entity_id','membership_id','assigned_by_membership_id']);
+        assertColumns($tenant, 'legacy_access_projections', ['id','legacy_grant_id','entity_type','entity_id','membership_id','access_level']);
         if (!indexExists($tenant, 'entity_assignments', 'uk_entity_assignment')) {
             throw new RuntimeException("Company {$companyId}: entity_assignments unique index missing.");
         }
@@ -290,6 +292,7 @@ function assertTargetSchema(PDO $central, array $tenants): void
             'clients' => 'created_by_membership_id',
             'contractors' => 'created_by_membership_id',
             'vehicle_units' => 'created_by_membership_id',
+            'vehicle_sets' => 'created_by_membership_id',
             'drivers' => 'created_by_membership_id',
             'linear_routes' => 'created_by_membership_id',
             'waste_trips' => 'created_by_membership_id',
@@ -364,14 +367,21 @@ function backupImpactState(PDO $central, array $companies, array $tenants): arra
     foreach ($companies as $company) {
         $id = (int) $company['id'];
         $tenant = $tenants[$id];
-        $entry = ['entity_assignments' => tableExists($tenant, 'entity_assignments')
-            ? $tenant->query('SELECT * FROM entity_assignments')->fetchAll(PDO::FETCH_ASSOC)
-            : ['__absent__' => true], 'projections' => []];
+        $entry = [
+            'entity_assignments' => tableExists($tenant, 'entity_assignments')
+                ? $tenant->query('SELECT * FROM entity_assignments')->fetchAll(PDO::FETCH_ASSOC)
+                : ['__absent__' => true],
+            'legacy_access_projections' => tableExists($tenant, 'legacy_access_projections')
+                ? $tenant->query('SELECT * FROM legacy_access_projections')->fetchAll(PDO::FETCH_ASSOC)
+                : ['__absent__' => true],
+            'projections' => [],
+        ];
         foreach ([
             'users' => 'membership_id',
             'clients' => 'created_by_membership_id',
             'contractors' => 'created_by_membership_id',
             'vehicle_units' => 'created_by_membership_id',
+            'vehicle_sets' => 'created_by_membership_id',
             'drivers' => 'created_by_membership_id',
             'linear_routes' => 'created_by_membership_id',
             'waste_trips' => 'created_by_membership_id',
@@ -557,7 +567,8 @@ function assertProjectionIsolation(PDO $central, array $companies, array $tenant
         foreach ($tenant->query('SELECT membership_id FROM users WHERE membership_id IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN) as $v) $ids[(int)$v] = true;
         foreach ($tenant->query('SELECT membership_id FROM entity_assignments')->fetchAll(PDO::FETCH_COLUMN) as $v) $ids[(int)$v] = true;
         foreach ($tenant->query('SELECT assigned_by_membership_id FROM entity_assignments WHERE assigned_by_membership_id IS NOT NULL')->fetchAll(PDO::FETCH_COLUMN) as $v) $ids[(int)$v] = true;
-        foreach (['clients','contractors','vehicle_units','drivers','linear_routes','waste_trips'] as $table) {
+        foreach ($tenant->query('SELECT membership_id FROM legacy_access_projections')->fetchAll(PDO::FETCH_COLUMN) as $v) $ids[(int)$v] = true;
+        foreach (['clients','contractors','vehicle_units','vehicle_sets','drivers','linear_routes','waste_trips'] as $table) {
             foreach ($tenant->query("SELECT created_by_membership_id FROM `{$table}` WHERE created_by_membership_id IS NOT NULL")->fetchAll(PDO::FETCH_COLUMN) as $v) $ids[(int)$v] = true;
         }
         foreach (array_keys($ids) as $membershipId) {
@@ -946,10 +957,12 @@ function assertProductionRuntimeSemantics(string $root, PDO $central, array $com
         AccessRuntime::setCurrent(EffectiveAccess::member($membershipA, $companyA, [], $ownScopes));
         $linear = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
         $waste = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
-        if ($linear['params'] !== [$membershipA] || $waste['params'] !== [$membershipA]
+        if ($linear['params'] !== [$membershipA, 'linear_trip', $membershipA, 'view', 'edit']
+            || $waste['params'] !== [$membershipA]
             || !str_contains($linear['sql'], 'created_by_membership_id')
+            || !str_contains($linear['sql'], 'legacy_access_projections')
             || !str_contains($waste['sql'], 'created_by_membership_id')) {
-            throw new RuntimeException('Linear/Waste creator scope does not use membership identity.');
+            throw new RuntimeException('Linear/Waste creator scope or historical linear projection is invalid.');
         }
 
         // Same global account in another company must resolve only that company's role.

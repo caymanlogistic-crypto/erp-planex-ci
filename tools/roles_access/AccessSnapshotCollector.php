@@ -18,6 +18,7 @@ final class AccessSnapshotCollector
         'clients' => 'clients',
         'contractors' => 'contractors',
         'vehicle_units' => 'vehicle_units',
+        'vehicle_sets' => 'vehicle_sets',
         'drivers' => 'drivers',
         'linear_trips' => 'linear_routes',
         'waste_trips' => 'waste_trips',
@@ -121,7 +122,9 @@ final class AccessSnapshotCollector
                 $scope = self::effectiveScope($central, $roleId, $membershipId, self::scopeEntity($category));
                 $row[$category] = match ($scope) {
                     'all' => $allIds[$category],
-                    'own' => self::newOwnIds($tenant, $table, $category, $membershipId),
+                    'own' => $category === 'vehicle_sets'
+                        ? self::newVehicleSetIds($tenant, $membershipId)
+                        : self::newOwnIds($tenant, $table, $category, $membershipId),
                     'none' => [],
                     default => throw new RuntimeException('Invalid effective data scope: ' . $scope),
                 };
@@ -192,17 +195,18 @@ final class AccessSnapshotCollector
     /** @return list<string> */
     private static function legacyOwnIds(PDO $tenant, string $table, string $category, int $tenantUserId): array
     {
-        if (in_array($category, ['linear_trips', 'waste_trips'], true)) {
+        if ($category === 'waste_trips') {
             return self::queryIds($tenant, "SELECT id FROM `{$table}` WHERE created_by_user_id=? ORDER BY id", [$tenantUserId]);
         }
-        $entityType = self::scopeEntity($category);
+        $entityType = self::legacyGrantEntity($category);
         return self::queryIds(
             $tenant,
             "SELECT id FROM `{$table}`
              WHERE created_by_user_id=?
                 OR id IN (
                     SELECT entity_id FROM entity_access_grants
-                    WHERE entity_type=? AND granted_to_user_id=? AND revoked_at IS NULL
+                    WHERE entity_type=? AND granted_to_user_id=?
+                      AND access_level IN ('view','edit') AND revoked_at IS NULL
                 )
              ORDER BY id",
             [$tenantUserId, $entityType, $tenantUserId],
@@ -212,8 +216,21 @@ final class AccessSnapshotCollector
     /** @return list<string> */
     private static function newOwnIds(PDO $tenant, string $table, string $category, int $membershipId): array
     {
-        if (in_array($category, ['linear_trips', 'waste_trips'], true)) {
+        if ($category === 'waste_trips') {
             return self::queryIds($tenant, "SELECT id FROM `{$table}` WHERE created_by_membership_id=? ORDER BY id", [$membershipId]);
+        }
+        if ($category === 'linear_trips') {
+            return self::queryIds(
+                $tenant,
+                "SELECT id FROM `{$table}`
+                 WHERE created_by_membership_id=?
+                    OR id IN (
+                        SELECT entity_id FROM legacy_access_projections
+                        WHERE entity_type='linear_trip' AND membership_id=?
+                    )
+                 ORDER BY id",
+                [$membershipId, $membershipId],
+            );
         }
         $entityType = self::scopeEntity($category);
         return self::queryIds(
@@ -226,6 +243,32 @@ final class AccessSnapshotCollector
                 )
              ORDER BY id",
             [$membershipId, $entityType, $membershipId],
+        );
+    }
+
+    /** @return list<string> */
+    private static function newVehicleSetIds(PDO $tenant, int $membershipId): array
+    {
+        return self::queryIds(
+            $tenant,
+            "SELECT vs.id FROM vehicle_sets vs
+             WHERE vs.created_by_membership_id=?
+                OR vs.id IN (
+                    SELECT entity_id FROM legacy_access_projections
+                    WHERE entity_type='vehicle_set' AND membership_id=?
+                )
+                OR vs.primary_vehicle_unit_id IN (
+                    SELECT vu.id FROM vehicle_units vu
+                    WHERE vu.created_by_membership_id=?
+                       OR vu.id IN (SELECT entity_id FROM entity_assignments WHERE entity_type='vehicle_unit' AND membership_id=?)
+                )
+                OR vs.secondary_vehicle_unit_id IN (
+                    SELECT vu.id FROM vehicle_units vu
+                    WHERE vu.created_by_membership_id=?
+                       OR vu.id IN (SELECT entity_id FROM entity_assignments WHERE entity_type='vehicle_unit' AND membership_id=?)
+                )
+             ORDER BY vs.id",
+            [$membershipId, $membershipId, $membershipId, $membershipId, $membershipId, $membershipId],
         );
     }
 
@@ -282,10 +325,24 @@ final class AccessSnapshotCollector
             'clients' => 'client',
             'contractors' => 'contractor',
             'vehicle_units' => 'vehicle_unit',
+            'vehicle_sets' => 'vehicle_unit',
             'drivers' => 'driver',
             'linear_trips' => 'linear_trip',
             'waste_trips' => 'waste_trip',
             default => throw new RuntimeException('Unsupported snapshot category: ' . $category),
+        };
+    }
+
+    private static function legacyGrantEntity(string $category): string
+    {
+        return match ($category) {
+            'clients' => 'client',
+            'contractors' => 'contractor',
+            'vehicle_units' => 'vehicle_unit',
+            'vehicle_sets' => 'vehicle_set',
+            'drivers' => 'driver',
+            'linear_trips' => 'linear_route',
+            default => throw new RuntimeException('Unsupported legacy grant category: ' . $category),
         };
     }
 
