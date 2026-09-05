@@ -47,6 +47,10 @@ assert dashboard_source.count("http_response_code(410)") >= 2
 assert "$uri !== '/company/switch'" in (ROOT / "app/Http/Router.php").read_text()
 index_source = (ROOT / "public/index.php").read_text()
 assert "ERP_ROLES_ACCESS_ENABLED" in index_source and "if ($rolesAccessEnabled)" in index_source
+assert "AccessRuntime::current()->compatibilityRoleCode()" in index_source
+assert "$_SESSION['role_code'] = $compatibilityRoleCode" in index_source
+http_runtime = (ROOT / "app/Support/http_runtime.php").read_text()
+assert "!in_array('superadmin', $allowed, true)" in http_runtime, "company ACL must never bypass technical superadmin role boundary"
 activation = index_source[index_source.index("if ($rolesAccessEnabled)"):index_source.index("// Route registration")]
 assert "catch (" not in activation
 for route_file in ("company_document_generator.php", "company_switch.php", "company_roles_access.php"):

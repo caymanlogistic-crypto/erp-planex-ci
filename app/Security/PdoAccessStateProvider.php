@@ -49,7 +49,7 @@ final class PdoAccessStateProvider implements AccessStateProvider
         }
 
         $membership = $this->pdo->prepare(
-            'SELECT m.id, m.company_id, m.status, m.role_id, r.system_key
+            'SELECT m.id, m.company_id, m.status, m.role_id, r.system_key, r.normalized_name
              FROM company_memberships m
              JOIN company_roles r
                ON r.id = m.role_id
@@ -142,6 +142,21 @@ final class PdoAccessStateProvider implements AccessStateProvider
             $pageOverrides,
             $roleDataScopes,
             $dataScopeOverrides,
+            self::compatibilityRoleCode((string) ($row['system_key'] ?? ''), (string) ($row['normalized_name'] ?? '')),
         );
+    }
+
+    private static function compatibilityRoleCode(string $systemKey, string $normalizedName): string
+    {
+        if ($systemKey === 'company_owner') {
+            return 'company_owner';
+        }
+        if ($systemKey !== '') {
+            return 'custom_role';
+        }
+
+        return in_array($normalizedName, ['senior_logist', 'logist'], true)
+            ? $normalizedName
+            : 'custom_role';
     }
 }

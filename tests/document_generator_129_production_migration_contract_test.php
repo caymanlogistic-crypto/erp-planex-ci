@@ -45,8 +45,15 @@ $must(!preg_match('/\b(?:UPDATE|DELETE|REPLACE)\b\s+(?:INTO\s+|FROM\s+)?(?:contr
 $must(!preg_match('/\bINSERT\s+INTO\s+(?:contractors|generated_documents|feo_requests|crews|drivers|clients)\b/i', $apply), 'production migration may not insert business rows');
 
 $data = json_decode($manifest, true, 512, JSON_THROW_ON_ERROR);
-$must(($data['migration_id'] ?? '') === '129', 'manifest migration_id must be 129');
-$must(($data['workflow'] ?? '') === 'document_generator_129_production_migration.yml', 'manifest workflow mismatch');
-$must(($data['confirmation_value'] ?? '') === 'APPLY_DOCUMENT_GENERATOR_129', 'manifest confirmation mismatch');
+// The shared agent migration manifest is intentionally a mutable pointer to
+// the currently OWNER-authorized production migration. Historical migration
+// contracts must not pin that shared pointer forever. When 129 is selected,
+// however, its dispatch tuple must still be exact.
+$manifestId = (string) ($data['migration_id'] ?? '');
+$must(preg_match('/^\d{3}$/D', $manifestId) === 1, 'shared manifest migration_id must be exactly 3 digits');
+if ($manifestId === '129') {
+    $must(($data['workflow'] ?? '') === 'document_generator_129_production_migration.yml', 'manifest workflow mismatch for 129');
+    $must(($data['confirmation_value'] ?? '') === 'APPLY_DOCUMENT_GENERATOR_129', 'manifest confirmation mismatch for 129');
+}
 
 echo "DOCUMENT_GENERATOR_129_PRODUCTION_MIGRATION_CONTRACT=PASS\n";

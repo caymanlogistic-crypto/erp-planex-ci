@@ -85,6 +85,20 @@ if ($rolesAccessEnabled) {
         new EffectiveAccessResolver($pageRegistry, $accessStateProvider),
         AccessRequestContext::fromSession($_SESSION)
     );
+    // role_code is compatibility metadata only. Authority is resolved from
+    // current central membership state first, then this value is refreshed
+    // for legacy UI/audit code on every request. Dynamic roles never
+    // masquerade as one of the privileged preset roles.
+    $compatibilityRoleCode = \App\Security\AccessRuntime::current()->compatibilityRoleCode();
+    if ($compatibilityRoleCode !== '') {
+        $_SESSION['role_code'] = $compatibilityRoleCode;
+        if (!isset($_SESSION['user']) || !is_array($_SESSION['user'])) {
+            $_SESSION['user'] = [];
+        }
+        $_SESSION['user']['role_code'] = $compatibilityRoleCode;
+    } else {
+        unset($_SESSION['role_code'], $_SESSION['user']['role_code']);
+    }
 }
 
 // Route registration extracted from the legacy index monolith.

@@ -31,33 +31,37 @@ final class EffectiveAccess
         private readonly array $pagePermissions,
         private readonly array $dataScopes,
         private readonly string $denialReason,
+        private readonly string $compatibilityRoleCode,
     ) {
     }
 
     /** @param list<string> $allPageKeys */
     public static function technicalSuperadmin(array $allPageKeys): self
     {
-        return new self(null, null, true, false, true, array_fill_keys($allPageKeys, true), self::allDataScopes(), '');
+        return new self(null, null, true, false, true, array_fill_keys($allPageKeys, true), self::allDataScopes(), '', 'superadmin');
     }
 
     /** @param list<string> $allPageKeys */
     public static function systemOwner(int $membershipId, int $companyId, array $allPageKeys): self
     {
-        return new self($membershipId, $companyId, false, true, true, array_fill_keys($allPageKeys, true), self::allDataScopes(), '');
+        return new self($membershipId, $companyId, false, true, true, array_fill_keys($allPageKeys, true), self::allDataScopes(), '', 'company_owner');
     }
 
     /**
      * @param array<string, bool> $pagePermissions
      * @param array<string, 'all'|'own'|'none'> $dataScopes
      */
-    public static function member(int $membershipId, int $companyId, array $pagePermissions, array $dataScopes): self
+    public static function member(int $membershipId, int $companyId, array $pagePermissions, array $dataScopes, string $compatibilityRoleCode = 'custom_role'): self
     {
-        return new self($membershipId, $companyId, false, false, true, $pagePermissions, $dataScopes, '');
+        if (!in_array($compatibilityRoleCode, ['senior_logist', 'logist', 'custom_role'], true)) {
+            $compatibilityRoleCode = 'custom_role';
+        }
+        return new self($membershipId, $companyId, false, false, true, $pagePermissions, $dataScopes, '', $compatibilityRoleCode);
     }
 
     public static function denied(string $reason = 'unresolved_access'): self
     {
-        return new self(null, null, false, false, false, [], [], $reason);
+        return new self(null, null, false, false, false, [], [], $reason, '');
     }
 
     public function membershipId(): ?int
@@ -88,6 +92,11 @@ final class EffectiveAccess
     public function denialReason(): string
     {
         return $this->denialReason;
+    }
+
+    public function compatibilityRoleCode(): string
+    {
+        return $this->compatibilityRoleCode;
     }
 
     public function canAccessPage(string $pageKey): bool

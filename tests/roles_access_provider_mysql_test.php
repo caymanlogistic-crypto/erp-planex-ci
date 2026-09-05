@@ -55,8 +55,13 @@ if ($snapshot === null
     || $snapshot->rolePageKeys !== ['company.dashboard']
     || $snapshot->pageOverrides !== ['company.clients' => 'allow']
     || $snapshot->roleDataScopes !== ['client' => 'own']
-    || $snapshot->dataScopeOverrides !== ['client' => 'all']) {
+    || $snapshot->dataScopeOverrides !== ['client' => 'all']
+    || $snapshot->compatibilityRoleCode !== 'custom_role') {
     throw new RuntimeException('provider snapshot mismatch');
+}
+$pdo->exec("UPDATE company_roles SET normalized_name='logist' WHERE id=20");
+if ($provider->loadMembershipAccess(10, 1)?->compatibilityRoleCode !== 'logist') {
+    throw new RuntimeException('preset compatibility role derivation failed');
 }
 $crossCompanyRejected = false;
 try {
