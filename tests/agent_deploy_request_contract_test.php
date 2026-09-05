@@ -80,10 +80,25 @@ $controlledNeedles = [
     'P07_HTTP_DIAGNOSTIC_BEGIN',
     '/usr/bin/php8.5 -d display_errors=1 -d log_errors=0 public/index.php',
     'P07_HTTP_DIAGNOSTIC_END',
+    'SSH_CONTROL_PATH',
+    'ControlMaster=auto',
+    'ControlPersist=600',
+    'ControlPath="$SSH_CONTROL_PATH"',
+    '-O exit',
 ];
 foreach ($controlledNeedles as $needle) {
     if (!str_contains($controlled, $needle)) {
         throw new RuntimeException('Missing controlled deploy artifact contract marker: ' . $needle);
+    }
+}
+foreach (preg_split('/\R/', $controlled) as $line) {
+    if (preg_match('/\b(?:ssh -p|scp -P)\b/', $line) !== 1) {
+        continue;
+    }
+    foreach (['StrictHostKeyChecking=yes', 'ControlMaster=auto', 'ControlPersist=600', 'ControlPath="$SSH_CONTROL_PATH"'] as $transportGuard) {
+        if (!str_contains($line, $transportGuard)) {
+            throw new RuntimeException('Controlled deploy SSH transport guard missing from command: ' . $transportGuard);
+        }
     }
 }
 $quoteSafeRemoteSha = <<<'YAML'
