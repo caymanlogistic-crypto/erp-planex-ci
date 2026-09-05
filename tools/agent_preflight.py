@@ -148,7 +148,7 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
     if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",["python3","tools/dynamic_table_safety_audit.py"])
     if "ARCHITECTURE_GUARD" in want: need("tools/architecture_guard.php"); cmdcheck(results,"ARCHITECTURE_GUARD",["php","tools/architecture_guard.php"])
     if "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in want:
-        for t in ["tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/runner_helpers_contract_test.py"]: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",["python3",t])
+        for t in ["tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/runner_helpers_contract_test.py","tests/sentinelx_hardening_test.py"]: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",["python3",t])
         for t in ["tests/agent_deploy_request_contract_test.php","tests/agent_db_migration_request_contract_test.php"]: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",["php",t])
     if "MEMORY_INTEGRITY_CONTRACTS" in want: memory_checks(head,results)
     if "ACTIVE_REGISTRY_CONTRACTS" in want: registry_checks(results)

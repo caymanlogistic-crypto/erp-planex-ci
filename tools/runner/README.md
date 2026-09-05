@@ -1,30 +1,47 @@
 # ERP PLANEX persistent runner helpers
 
-This directory is the canonical GitHub source-of-truth for the persistent ERP test-runner helper code deployed to `~/erp-planex-test/bin`.
+`tools/runner/` is the only Git-authoritative source for the persistent test-runner helpers deployed to `~/erp-planex-test/bin`.
 
-## Authority flow
+## Exact live inventory
 
-`canonical GitHub source -> manifest/checksum validation -> sync_runner_helpers.py -> ~/erp-planex-test/bin`
+`manifest.json` schema `erp-planex-runner-helpers/v2` declares the complete allowed directory inventory, not only the managed files:
 
-The live runner copy is a deployed instance, not an authoritative editing location. Never commit DB credentials, SSH private keys, SentinelX tokens, or host-specific secret environment files here.
+- seven managed regular helper files, exact SHA256 and mode `0700`;
+- `php`, an infrastructure support symlink whose only accepted target is `/usr/bin/php8.5`.
 
-## Files
+`verify-live` fails on any undeclared file/executable/symlink, missing entry, wrong entry type, wrong PHP target, checksum drift, or mode drift. The installer also checks the complete live inventory before mutation and **refuses** undeclared drift; it never treats destructive cleanup of unknown files as an install step.
 
-- `helpers/` — exact versioned helper sources.
-- `manifest.json` — schema/version, exact expected helper set, deployment mode and SHA256 per helper.
-- `sync_runner_helpers.py` — fail-closed source verifier, live verifier and installer.
+## Normal install
 
-## Governed update procedure
+Normal install is intentionally stricter than source verification:
 
-1. Capture the current live helper bytes read-only and update `helpers/` intentionally.
-2. Regenerate/verify the SHA256 values in `manifest.json`; bump `version`.
-3. Run `python3 tools/runner/sync_runner_helpers.py verify-source` and `python3 tests/runner_helpers_contract_test.py`.
-4. Complete CRITICAL preflight, guarded task push, GitHub CI and governed merge.
-5. Only from the merged canonical checkout run `python3 tools/runner/sync_runner_helpers.py install`.
-6. Run `python3 tools/runner/sync_runner_helpers.py verify-live` and the disposable runner E2E proof required by current governance.
+```bash
+python3 tools/runner/sync_runner_helpers.py install
+```
 
-The installer accepts only the exact destination `~/erp-planex-test/bin`, refuses symlink escapes, verifies the manifest before writing, stages within the runner root, installs only the declared helper set, applies mode `0700`, and verifies checksums after installation.
+It is permitted only from a clean, attached checkout of `planexerp/erp-planex` on exact branch `chatgpt/production-stabilization-20260802`, after a fresh fetch, with local `HEAD == origin/<canonical>` and a second live remote-head check. Task branches, detached HEADs, dirty worktrees, stale canonical checkouts, wrong repositories and remote drift are refused with `RUNNER_INSTALL_REFUSED=...`.
 
-## Rollback
+The live helper destination remains fixed at `~/erp-planex-test/bin`; source is staged under the runner state directory, atomically replaced, and then verified again.
 
-Rollback is Git-authoritative: select the previously approved merged canonical commit/version, run that commit's `verify-source`, then run that commit's installer and `verify-live`. Do not restore ad-hoc live edits as authoritative source. If the desired historical version predates this versioned mechanism, stop and obtain OWNER authorization rather than reconstructing helper code from production or secrets.
+## Explicit rollback
+
+Historical rollback is a separate operation and cannot happen by running normal `install` from an old checkout:
+
+```bash
+python3 tools/runner/sync_runner_helpers.py rollback \
+  --commit <exact-40-hex-historical-canonical-sha> \
+  --dry-run
+```
+
+Remove `--dry-run` only for an approved rollback. The rollback engine itself must run from the current exact canonical checkout. The target SHA must exist on canonical history and contain a valid runner manifest whose helper blobs verify against their declared hashes. The target commit/version is printed before mutation, the same exact live-inventory guard applies, and post-install `verify-live` is mandatory.
+
+## Governed update flow
+
+1. Change only canonical `tools/runner/` source and bump runner version.
+2. Run source/contracts/preflight.
+3. Guarded push, PR, required CI, governed merge.
+4. Synchronize the persistent canonical checkout to the exact merged SHA.
+5. Run normal install from that merged canonical source only.
+6. Run `verify-live` and the autonomous disposable runner E2E.
+
+Never commit DB credentials, SSH keys, SentinelX tokens or host-specific secrets here. The runner is test/pre-push infrastructure, not a production deploy surface and not a sandbox.

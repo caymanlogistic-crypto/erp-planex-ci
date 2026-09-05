@@ -149,6 +149,7 @@ assert p.ci.classify([".github/workflows/ci.yml"])["tenant_schema"] is True
 assert "memory_integrity_checker_test.py" in source
 assert "active_registry_coverage_checker_test.py" in source
 assert "runner_helpers_contract_test.py" in source
+assert "sentinelx_hardening_test.py" in source
 assert '"--head"' in source
 assert '"tools/active_registry_coverage_check.py","docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json"' in source
 

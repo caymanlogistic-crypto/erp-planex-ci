@@ -1,0 +1,222 @@
+{
+  "schema": "erp-planex-sentinelx-dependency-lock/v1",
+  "version": "2026-09-05.2",
+  "index": "https://pypi.org/simple",
+  "platform_contract": {
+    "python": "3.11.8",
+    "implementation": "CPython",
+    "os": "linux",
+    "arch": "x86_64"
+  },
+  "external_artifacts": [
+    {
+      "name": "PyYAML",
+      "version": "6.0.3",
+      "role": "managed_runtime",
+      "artifact": "pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl",
+      "sha256": "b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "role": "managed_runtime",
+      "artifact": "annotated_types-0.8.0-py3-none-any.whl",
+      "sha256": "f072f4d804ea359e4eaf198b1af7a8b0943881a87f31bb764f8bf219bb9419e0",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "hatchling",
+      "version": "1.32.0",
+      "role": "managed_build",
+      "artifact": "hatchling-1.32.0-py3-none-any.whl",
+      "sha256": "0e17c9c3b9aa7c625acc8d0f5b622f107d5049af9ecf5ada4de1aada5be7cdbc",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "packaging",
+      "version": "26.3",
+      "role": "managed_build",
+      "artifact": "packaging-26.3-py3-none-any.whl",
+      "sha256": "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "pathspec",
+      "version": "1.1.1",
+      "role": "managed_build",
+      "artifact": "pathspec-1.1.1-py3-none-any.whl",
+      "sha256": "a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "pluggy",
+      "version": "1.6.0",
+      "role": "managed_build",
+      "artifact": "pluggy-1.6.0-py3-none-any.whl",
+      "sha256": "e920276dd6813095e9377c0bc5566d94c932c33b27a3e3945d8389c374dd4746",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "pydantic",
+      "version": "2.13.5",
+      "role": "managed_runtime",
+      "artifact": "pydantic-2.13.5-py3-none-any.whl",
+      "sha256": "346a034f080da3755d8e9cb5e00e8b07de1d39e4f6e2c87d8ab7cafa0b269a73",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "pydantic_core",
+      "version": "2.46.5",
+      "role": "managed_runtime",
+      "artifact": "pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "sha256": "49776eab08766a08dfff7012f8b422dcd7e25e43b316eedf0477c24fcfa84b7c",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "structlog",
+      "version": "26.1.0",
+      "role": "managed_runtime",
+      "artifact": "structlog-26.1.0-py3-none-any.whl",
+      "sha256": "e081a26d6c373e6d201eca24eede26d8ffab07f88f477822e679183428d3d91e",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "tomlkit",
+      "version": "0.15.1",
+      "role": "managed_build",
+      "artifact": "tomlkit-0.15.1-py3-none-any.whl",
+      "sha256": "177a05aece5a8ca5266fd3c448abb47b8d352f09d477d3ca8332db4d89b24304",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "trove-classifiers",
+      "version": "2026.6.1.19",
+      "role": "managed_build",
+      "artifact": "trove_classifiers-2026.6.1.19-py3-none-any.whl",
+      "sha256": "ab4c4ec93cc4a4e7815fa759906e05e6bb3f2fbd92ea0f897288c6a43efd15b3",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.4",
+      "role": "managed_runtime",
+      "artifact": "typing_inspection-0.4.4-py3-none-any.whl",
+      "sha256": "65b8397ba37ccbce054456aaccddfc91e6e3083c92824df348d96ca832f3f147",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "typing_extensions",
+      "version": "4.16.0",
+      "role": "managed_runtime",
+      "artifact": "typing_extensions-4.16.0-py3-none-any.whl",
+      "sha256": "481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "websockets",
+      "version": "17.1",
+      "role": "managed_runtime",
+      "artifact": "websockets-17.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl",
+      "sha256": "0c84bdef916556cbe1d5a43b423398be4dd3cba6522b463e53d848578b920695",
+      "provenance": "pypi-index-wheel"
+    }
+  ],
+  "bootstrap_artifacts": [
+    {
+      "name": "pip",
+      "version": "23.3",
+      "role": "allowed_bootstrap",
+      "artifact": "pip-23.3-py3-none-any.whl",
+      "sha256": "bc38bb52bc286514f8f7cb3a1ba5ed100b76aaef29b521d48574329331c5ae7b",
+      "provenance": "pypi-index-wheel"
+    },
+    {
+      "name": "setuptools",
+      "version": "68.2.2",
+      "role": "allowed_bootstrap",
+      "artifact": "setuptools-68.2.2-py3-none-any.whl",
+      "sha256": "b454a35605876da60632df1a60f736524eb73cc47bbc9f3f1ef1b644de74fd2a",
+      "provenance": "pypi-index-wheel"
+    }
+  ],
+  "local_distributions": [
+    {
+      "name": "sentinelx-cloud-protocol",
+      "version": "1.11.0",
+      "role": "managed_runtime_local",
+      "source": "protocol",
+      "source_archive": "protocol.tar.gz",
+      "source_archive_sha256": "bb71a8f5310e7b79b1cb80fc0c24682aa9ddb6357bbce341a01fa8478b0de8f1"
+    },
+    {
+      "name": "sentinelx-cloud-core",
+      "version": "0.11.14",
+      "role": "managed_runtime_local",
+      "source": "core",
+      "source_archive": "core.tar.gz",
+      "source_archive_sha256": "0263a714e87cd43adf3ff440de063a3d016f60f4e5d4355de219ce321caf7152",
+      "required_profiles": [
+        "final"
+      ]
+    }
+  ],
+  "profiles": {
+    "rollback-source": {
+      "core_distribution": "absent",
+      "runtime_reported_version": "0.0.0+dev",
+      "edit_capability": "broken-pre-hardening",
+      "expected_distributions": [
+        "PyYAML",
+        "annotated-types",
+        "hatchling",
+        "packaging",
+        "pathspec",
+        "pluggy",
+        "pydantic",
+        "pydantic_core",
+        "structlog",
+        "tomlkit",
+        "trove-classifiers",
+        "typing-inspection",
+        "typing_extensions",
+        "websockets",
+        "pip",
+        "setuptools",
+        "sentinelx-cloud-protocol"
+      ],
+      "artifact_cache_required": false
+    },
+    "final": {
+      "core_distribution": "installed",
+      "runtime_reported_version": "0.11.14",
+      "edit_capability": "working",
+      "required_console_scripts": [
+        "sentinelx-cloud-core",
+        "sentinelx-pensa-safe-edit"
+      ],
+      "expected_distributions": [
+        "PyYAML",
+        "annotated-types",
+        "hatchling",
+        "packaging",
+        "pathspec",
+        "pluggy",
+        "pydantic",
+        "pydantic_core",
+        "structlog",
+        "tomlkit",
+        "trove-classifiers",
+        "typing-inspection",
+        "typing_extensions",
+        "websockets",
+        "pip",
+        "setuptools",
+        "sentinelx-cloud-protocol",
+        "sentinelx-cloud-core"
+      ],
+      "artifact_cache_required": true
+    }
+  },
+  "artifact_cache_dir": "artifacts"
+}

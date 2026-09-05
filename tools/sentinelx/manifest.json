@@ -1,5 +1,5 @@
 {
-  "schema": "erp-planex-sentinelx-source-pin/v1",
+  "schema": "erp-planex-sentinelx-source-pin/v2",
   "pinned_at": "2026-09-05",
   "deployment_mode": "user-source-no-root-no-systemd",
   "upstream": {
@@ -7,9 +7,10 @@
       "repository": "https://github.com/pensados/sentinelx-cloud-core",
       "commit": "d6b33822b61e7fccf39547d5cce8add8bc7021f9",
       "source_project_version": "0.11.14",
-      "runtime_reported_version": "0.0.0+dev",
+      "runtime_reported_version": "0.11.14",
       "archive_name": "core.tar.gz",
-      "archive_sha256": "0263a714e87cd43adf3ff440de063a3d016f60f4e5d4355de219ce321caf7152"
+      "archive_sha256": "0263a714e87cd43adf3ff440de063a3d016f60f4e5d4355de219ce321caf7152",
+      "rollback_source_runtime_reported_version": "0.0.0+dev"
     },
     "protocol": {
       "repository": "https://github.com/pensados/sentinelx-cloud-protocol",
@@ -64,5 +65,21 @@
   "residual_risks": [
     "shared Unix UID with production remains an OWNER-accepted risk, not technical isolation",
     "SentinelX script_run remains a residual execution risk and does not authorize production shell or DB access"
-  ]
+  ],
+  "dependency_contract": {
+    "schema": "erp-planex-sentinelx-dependency-lock/v1",
+    "version": "2026-09-05.2",
+    "manifest": "tools/sentinelx/dependency-lock.json",
+    "requirements_lock": "tools/sentinelx/requirements.lock",
+    "bootstrap_lock": "tools/sentinelx/bootstrap.lock",
+    "install_mode": "hash-locked external wheels plus exact local protocol/core sources; --no-deps --no-build-isolation for local distributions",
+    "final_profile": "final",
+    "rollback_profile": "rollback-source"
+  },
+  "capability_contract": {
+    "final_agent_version": "0.11.14",
+    "edit": "required-working",
+    "edit_entry_point": "sentinelx-pensa-safe-edit",
+    "allowlist_expansion": false
+  }
 }
