@@ -414,6 +414,22 @@
         }).join('') + '</div>';
     }
 
+    function refreshAssignmentBulkLabels(group) {
+        if (!group) return;
+        var search = group.querySelector('[data-assignment-search]');
+        var filtered = !!(search && search.value.trim());
+        var select = group.querySelector('[data-assignment-bulk="select"]');
+        var clear = group.querySelector('[data-assignment-bulk="clear"]');
+        if (select) select.textContent = filtered ? 'Выбрать найденные' : 'Выбрать все';
+        if (clear) clear.textContent = filtered ? 'Снять найденные' : 'Снять все';
+    }
+
+    function setAssignmentBulkBusy(group, busy) {
+        if (!group) return;
+        group.dataset.assignmentBulkBusy = busy ? '1' : '0';
+        group.querySelectorAll('[data-assignment-bulk]').forEach(function (button) { button.disabled = !!busy; });
+    }
+
     function refreshAssignmentGroupUi(group) {
         if (!group) return;
         var rows = Array.prototype.slice.call(group.querySelectorAll('.roles-access__assignment-row'));
@@ -422,10 +438,12 @@
         if (count) count.textContent = selected + ' / ' + rows.length;
         var empty = group.querySelector('[data-assignment-search-empty]');
         if (empty) empty.classList.toggle('is-hidden', rows.some(function (row) { return !row.classList.contains('is-hidden'); }));
+        refreshAssignmentBulkLabels(group);
     }
 
-    function saveAssignmentCheckbox(checkbox, nextChecked) {
-        if (!checkbox || !assignmentCache || checkbox.disabled) return Promise.resolve();
+    function saveAssignmentCheckbox(checkbox, nextChecked, options) {
+        options = options || {};
+        if (!checkbox || !assignmentCache || checkbox.disabled) return Promise.resolve({ok:true, skipped:true});
         var row = checkbox.closest('.roles-access__assignment-row');
         var group = checkbox.closest('[data-assignment-group]');
         var key = checkbox.dataset.assignmentType + ':' + Number(checkbox.dataset.assignmentId);
@@ -436,8 +454,13 @@
         assignmentCache.sets[key] = after;
         row.classList.add('is-saving'); checkbox.disabled = true; refreshAssignmentGroupUi(group);
         return jsonRequest('/company/responsible-assignments/reassign', {method:'POST', body:{entity_type:checkbox.dataset.assignmentType,entity_id:Number(checkbox.dataset.assignmentId),membership_ids:after}})
-            .then(function (payload) { assignmentCache.sets[key] = (payload.membership_ids || after).map(Number); })
-            .catch(function (error) { assignmentCache.sets[key] = before; checkbox.checked = before.indexOf(activeAssignmentMembershipId) >= 0; announce(error.message,'error'); })
+            .then(function (payload) { assignmentCache.sets[key] = (payload.membership_ids || after).map(Number); return {ok:true}; })
+            .catch(function (error) {
+                assignmentCache.sets[key] = before;
+                checkbox.checked = before.indexOf(activeAssignmentMembershipId) >= 0;
+                if (!options.silent) announce(error.message,'error');
+                return {ok:false, error:error};
+            })
             .finally(function () { checkbox.disabled = false; row.classList.remove('is-saving'); refreshAssignmentGroupUi(group); });
     }
 
@@ -447,12 +470,19 @@
         var bulk = event.target.closest('[data-assignment-bulk]');
         if (!bulk || !assignmentCache) return;
         var group = bulk.closest('[data-assignment-group]');
+        if (!group || group.dataset.assignmentBulkBusy === '1') return;
         var target = bulk.dataset.assignmentBulk === 'select';
         var visible = Array.prototype.slice.call(group.querySelectorAll('.roles-access__assignment-row:not(.is-hidden) [data-assignment-type]'));
         var changed = visible.filter(function (box) { return box.checked !== target && !box.disabled; });
-        if (!changed.length) return;
-        bulk.disabled = true;
-        Promise.all(changed.map(function (box) { return saveAssignmentCheckbox(box, target); })).finally(function () { bulk.disabled = false; refreshAssignmentGroupUi(group); });
+        if (!changed.length) { announce('Закрепления сохранены.'); return; }
+        setAssignmentBulkBusy(group, true);
+        Promise.all(changed.map(function (box) { return saveAssignmentCheckbox(box, target, {silent:true}); }))
+            .then(function (results) {
+                var failed = results.filter(function (result) { return !result.ok; }).length;
+                var saved = results.length - failed;
+                announce(failed ? 'Сохранено: ' + saved + '. Не удалось: ' + failed + '.' : 'Закрепления сохранены.', failed ? 'error' : 'success');
+            })
+            .finally(function () { setAssignmentBulkBusy(group, false); refreshAssignmentGroupUi(group); });
     });
     root.querySelector('[data-assignment-content]').addEventListener('input', function (event) {
         var search = event.target.closest('[data-assignment-search]'); if (!search) return;

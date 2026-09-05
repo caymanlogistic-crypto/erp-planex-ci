@@ -8,6 +8,7 @@ assert(css.includes('max-height:85vh'), 'desktop modal max-height contract');
 assert(css.includes('@media(max-width:1439px)'), 'compact desktop breakpoint');
 assert(css.includes('width:min(1020px,calc(100vw - 24px))'), '1366 compact desktop width contract');
 assert(css.includes('@media(max-width:900px)'), 'around-800 viewport breakpoint');
+assert(css.includes('width:min(1480px,100%)'), '1920 workspace is compact and centered instead of full-width');
 assert(css.includes('.roles-access-modal__dialog{width:100%;max-width:100%;height:auto;max-height:85vh}'), 'around-800 modal dimensions contract');
 assert(css.includes('.roles-access-modal__body{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden'), 'modal body owns scrolling');
 assert(css.includes('.roles-access-modal__head,.roles-access-modal__foot{position:sticky'), 'header and footer remain visible');
