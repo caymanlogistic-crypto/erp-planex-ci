@@ -1,0 +1,98 @@
+name: Roles Access UI Readonly Proof
+on:
+  push:
+    branches: [chatgpt/roles-access-ui-readonly-proof-20260905]
+permissions:
+  contents: read
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_PARENT: /home/s/spugovxsim/planexp/public_html
+  APP_DIR: erpv2
+  RESULT_DIR: roles_access_ui_readonly_result
+jobs:
+  proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate exact production and stage helper
+        shell: bash
+        env:
+          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          canonical="$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')"
+          git merge-base --is-ancestor "$canonical" HEAD
+          unexpected="$(git diff --name-only "$canonical"..HEAD | grep -Ev '^\.github/(workflows/roles_access_ui_readonly_proof\.yml|roles-access/ui_readonly_proof\.js)$' || true)"
+          test -z "$unexpected"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/roles_ui_proof"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/roles_ui_proof" "$HOME/.ssh/known_hosts"
+          marker="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_ui_proof" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt')"
+          test "$marker" = "$canonical"
+          echo "EXPECTED_SHA=$canonical" >> "$GITHUB_ENV"
+          scp -P "$PORT" -i "$HOME/.ssh/roles_ui_proof" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/roles-access/qa_session.php "$USER@$HOST:/tmp/roles_ui_proof_${GITHUB_RUN_ID}.php"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Chromium
+        run: |
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+      - name: Create existing owner session
+        shell: bash
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          raw="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_ui_proof" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_ui_proof_${GITHUB_RUN_ID}.php' create-legacy-owner")"
+          json="${raw#ROLES_QA_SESSION=}"
+          python3 - "$json" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          x=json.loads(sys.argv[1])
+          for v in (x['cookie'],x['sid']): print(f'::add-mask::{v}')
+          with open(sys.argv[2],'a') as f: f.write(f"QA_COOKIE_NAME={x['cookie']}\nQA_LEGACY_SESSION_ID={x['sid']}\n")
+          PY
+      - name: Run read-only UI proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/roles-access/ui_readonly_proof.js | tee roles_access_ui_readonly.txt
+          grep -q '^ROLES_ACCESS_READONLY_BROWSER_UI_PASS=YES$' roles_access_ui_readonly.txt
+          grep -q '^ROLES_ACCESS_POPUP_OVER_POPUP=NO$' roles_access_ui_readonly.txt
+          grep -q '^ROLES_ACCESS_UI_WRITE_REQUESTS=0$' roles_access_ui_readonly.txt
+          grep -q '^BROWSER_UI_PASS=YES$' "$RESULT_DIR/proof.txt"
+      - name: Cleanup
+        if: always()
+        shell: bash
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set +e
+          if [ -n "${QA_LEGACY_SESSION_ID:-}" ] && [ -f "$HOME/.ssh/roles_ui_proof" ]; then
+            ssh -p "$PORT" -i "$HOME/.ssh/roles_ui_proof" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_ui_proof_${GITHUB_RUN_ID}.php' delete '$QA_LEGACY_SESSION_ID'" >/dev/null 2>&1 || true
+          fi
+          if [ -f "$HOME/.ssh/roles_ui_proof" ]; then
+            ssh -p "$PORT" -i "$HOME/.ssh/roles_ui_proof" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "rm -f '/tmp/roles_ui_proof_${GITHUB_RUN_ID}.php'" >/dev/null 2>&1 || true
+          fi
+          rm -f "$HOME/.ssh/roles_ui_proof"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: roles_access_ui_readonly_${{ env.EXPECTED_SHA }}
+          path: |
+            roles_access_ui_readonly.txt
+            roles_access_ui_readonly_result/
+          if-no-files-found: error
+          retention-days: 30
