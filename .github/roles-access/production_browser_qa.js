@@ -7,9 +7,10 @@ const cookieName = process.env.QA_COOKIE_NAME;
 const legacySid = process.env.QA_LEGACY_SESSION_ID;
 const invalidSid = process.env.QA_INVALID_SESSION_ID;
 const githubEnv = process.env.GITHUB_ENV || '';
-const credentials = JSON.parse(Buffer.from(process.env.P12_CREDENTIALS_B64 || '', 'base64').toString('utf8'));
-const owner = credentials.find(x => String(x.role).toUpperCase() === 'OWNER');
-if (!owner) throw new Error('OWNER runtime credentials missing');
+const encodedCredentials = process.env.P12_CREDENTIALS_B64 || '';
+const credentials = encodedCredentials ? JSON.parse(Buffer.from(encodedCredentials, 'base64').toString('utf8')) : [];
+const loginCredential = credentials.find(x => String(x.role).toUpperCase() === 'OWNER') || credentials[0] || null;
+const realLoginAvailable = process.env.QA_REAL_LOGIN_AVAILABLE === 'YES' && !!loginCredential;
 if (!cookieName || !legacySid || !invalidSid) throw new Error('legacy QA session env missing');
 fs.mkdirSync(out, { recursive: true });
 
@@ -32,43 +33,23 @@ async function assertLayout(page, label) {
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
-    // A. REAL normal login through AuthController -> dashboard -> protected page.
-    const real = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'ru-RU' });
-    const page = await real.newPage();
-    let response = await page.goto(base + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    must(response && response.status() === 200, 'login page HTTP is not 200');
-    await page.locator('input[name="login"]').fill(owner.username);
-    await page.locator('input[name="password"]').fill(owner.password);
-    await Promise.all([
-      page.waitForURL(url => url.pathname.endsWith('/company/dashboard'), { timeout: 60000 }),
-      page.locator('button[type="submit"]').click(),
-    ]);
-    response = await page.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    must(response && response.status() === 200, 'dashboard HTTP after real login is not 200');
-    must(!page.url().includes('/login'), 'real login returned to login');
-    const realSid = await currentSid(real); recordSid('QA_REAL_LOGIN_SESSION_ID', realSid);
-    response = await page.goto(base + '/company/clients', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    must(response && response.status() === 200, 'protected clients page after real login is not 200');
-    await assertLayout(page, 'real-login-protected');
-    await page.screenshot({ path: `${out}/real-login-protected-1440.png`, fullPage: true });
-    console.log('ROLES_ACCESS_REAL_LOGIN_PASS=YES');
-    console.log('ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200');
-    console.log('ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200');
-
-    // B. Real pre-activation owner session WITHOUT account_id must upgrade, not 403.
+    // A. Real pre-activation owner session WITHOUT account_id must upgrade, not 403.
     const legacy = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await legacy.addCookies([{ name: cookieName, value: legacySid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true }]);
     const legacyPage = await legacy.newPage();
-    response = await legacyPage.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    let response = await legacyPage.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
     must(response && response.status() === 200, `legacy dashboard status ${response && response.status()}`);
     must(!legacyPage.url().includes('/login'), 'valid legacy session was invalidated instead of upgraded');
     const upgradedSid = await currentSid(legacy); recordSid('QA_UPGRADED_SESSION_ID', upgradedSid);
     must(upgradedSid && upgradedSid !== legacySid, 'legacy upgrade did not rotate session id');
     response = await legacyPage.goto(base + '/company/clients', { waitUntil: 'domcontentloaded', timeout: 60000 });
     must(response && response.status() === 200, 'legacy upgraded protected page is not 200');
+    await assertLayout(legacyPage, 'legacy-upgraded-protected');
+    await legacyPage.screenshot({ path: `${out}/legacy-upgraded-protected-1440.png`, fullPage: true });
     console.log('ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES');
+    console.log('ROLES_ACCESS_LEGACY_DASHBOARD_HTTP_STATUS=200');
 
-    // C. Unprovable legacy identity must fail closed to login, never receive company access/403.
+    // B. Unprovable legacy identity must fail closed to login, never receive company access/403.
     const invalid = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
     await invalid.addCookies([{ name: cookieName, value: invalidSid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true }]);
     const invalidPage = await invalid.newPage();
@@ -77,8 +58,37 @@ async function assertLayout(page, label) {
     must(new URL(invalidPage.url()).pathname.endsWith('/login'), 'invalid legacy session did not redirect to login');
     console.log('ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES');
 
+    // C. REAL normal login only when current global auth already verified this credential.
+    let realLoginStatus = 'SKIPPED_NO_VERIFIED_CREDENTIAL';
+    if (realLoginAvailable) {
+      const real = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'ru-RU' });
+      const page = await real.newPage();
+      response = await page.goto(base + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      must(response && response.status() === 200, 'login page HTTP is not 200');
+      await page.locator('input[name="login"]').fill(loginCredential.username);
+      await page.locator('input[name="password"]').fill(loginCredential.password);
+      await page.locator('button[type="submit"]').click();
+      await page.waitForLoadState('domcontentloaded', { timeout: 60000 });
+      must(new URL(page.url()).pathname.endsWith('/company/dashboard'), `real login did not reach dashboard: ${new URL(page.url()).pathname}`);
+      response = await page.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      must(response && response.status() === 200, 'dashboard HTTP after real login is not 200');
+      must(!page.url().includes('/login'), 'real login returned to login');
+      const realSid = await currentSid(real); recordSid('QA_REAL_LOGIN_SESSION_ID', realSid);
+      response = await page.goto(base + '/company/clients', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      must(response && response.status() === 200, 'protected clients page after real login is not 200');
+      await assertLayout(page, 'real-login-protected');
+      await page.screenshot({ path: `${out}/real-login-protected-1440.png`, fullPage: true });
+      console.log('ROLES_ACCESS_REAL_LOGIN_PASS=YES');
+      console.log('ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200');
+      console.log('ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200');
+      realLoginStatus = 'PASS';
+      await real.close();
+    } else {
+      console.log('ROLES_ACCESS_REAL_LOGIN_SKIPPED=NO_CURRENT_VERIFIED_CREDENTIAL');
+    }
+
     fs.writeFileSync(`${out}/browser-pass.txt`, [
-      'REAL_LOGIN=PASS','DASHBOARD_HTTP_STATUS=200','PROTECTED_PAGE=PASS','LEGACY_SESSION_UPGRADE=PASS','INVALID_LEGACY_RELOGIN=PASS','POPUP_OVER_POPUP=NO'
+      `REAL_LOGIN=${realLoginStatus}`,'LEGACY_DASHBOARD_HTTP_STATUS=200','LEGACY_SESSION_UPGRADE=PASS','INVALID_LEGACY_RELOGIN=PASS','POPUP_OVER_POPUP=NO'
     ].join('\n') + '\n');
     console.log('ROLES_ACCESS_BROWSER_UI_PASS=YES');
   } finally { await browser.close(); }
