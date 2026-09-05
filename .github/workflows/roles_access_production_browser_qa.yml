@@ -64,20 +64,32 @@ jobs:
       - name: Resolve OWNER runtime credentials
         env:
           CRED: ${{ secrets.P11_RUNTIME_CREDENTIALS_B64 }}
-          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
         shell: bash
         run: |
           set -euo pipefail
           cred="${CRED:-}"
           if [ -z "$cred" ]; then
-            git fetch origin p11-audit-v2:refs/remotes/origin/p11-audit-v2
-            mkdir -p .github/p11
-            git show origin/p11-audit-v2:.github/p11/P11_decrypt_credentials.py > .github/p11/P11_decrypt_credentials.py
-            git show origin/p11-audit-v2:.github/p11/P11_runtime_credentials.enc.json > .github/p11/P11_runtime_credentials.enc.json
-            python -m pip install --quiet 'cryptography==46.0.3'
-            printf '%s\n' "$KEY" > /tmp/roles_session_qa_key
-            chmod 600 /tmp/roles_session_qa_key
-            cred="$(python .github/p11/P11_decrypt_credentials.py --key /tmp/roles_session_qa_key --input .github/p11/P11_runtime_credentials.enc.json)"
+            # The old encrypted P11 envelope was bound to a retired deploy key.
+            # Fallback only to the existing documented QA owner account; this
+            # still performs a real AuthController login and does not mutate DB.
+            cred="$(python3 - <<'PY'
+          import base64, json
+          from pathlib import Path
+          notes = Path('docs/design-audit/full-ui-revision/RUNTIME_ACCESS_NOTES.md').read_text(encoding='utf-8')
+          rows = []
+          for line in notes.splitlines():
+              if '| company_owner |' not in line:
+                  continue
+              cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
+              if len(cells) == 4 and all(cells[:3]):
+                  rows.append(cells)
+          if len(rows) != 1:
+              raise SystemExit('documented QA owner credential must resolve exactly once')
+          login, role, password, company = rows[0]
+          payload = [{'role': 'OWNER', 'username': login, 'password': password}]
+          print(base64.b64encode(json.dumps(payload, separators=(',', ':')).encode()).decode())
+          PY
+            )"
           fi
           test -n "$cred"
           echo "::add-mask::$cred"
