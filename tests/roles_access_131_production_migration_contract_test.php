@@ -113,6 +113,8 @@ if ($preparePos === false || $applyPos === false || $preparePos >= $applyPos) $f
 $need($script, "writeJson(\$evidenceDir . '/before_access.json'", 'immutable BEFORE evidence');
 $need($script, "hash_file('sha256', \$evidenceDir . '/before_access.json')", 'BEFORE hash revalidation');
 $need($script, "identityPreflight(\$central, \$companies, \$tenants);", 'identity preflight before mutation');
+$need($script, 'ROLES_ACCESS_IDENTITY_CONFLICT=', 'sanitized identity conflict evidence marker');
+$need($script, 'MigrationProof::identityConflictEvidence', 'identity conflict evidence sanitizer wiring');
 $beforeWritePos = strpos($script, "writeJson(\$evidenceDir . '/before_access.json'");
 $prepareIdentityPos = strpos($script, 'identityPreflight($central, $companies, $tenants);', $preparePos);
 if ($beforeWritePos === false || $prepareIdentityPos === false || $beforeWritePos >= $prepareIdentityPos || $prepareIdentityPos >= $applyPos) {

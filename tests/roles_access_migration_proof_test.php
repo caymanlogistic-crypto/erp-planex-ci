@@ -73,6 +73,15 @@ $duplicateMembership = MigrationProof::identityPlan([
 if (!$duplicateMembership['blocked'] || !isset($duplicateMembership['conflicts'][0]['fields']['_company_membership'])) {
     throw new RuntimeException('duplicate membership for normalized login/company was accepted');
 }
+$conflictEvidence = MigrationProof::identityConflictEvidence($duplicateMembership['conflicts']);
+if (count($conflictEvidence) !== 1
+    || ($conflictEvidence[0]['fields'] ?? []) !== ['_company_membership']
+    || ($conflictEvidence[0]['source_refs'] ?? []) !== ['1:central_company_user:10', '1:central_company_user:11']
+    || !preg_match('/^[a-f0-9]{16}$/', (string) ($conflictEvidence[0]['login_fingerprint'] ?? ''))
+    || str_contains(json_encode($conflictEvidence, JSON_THROW_ON_ERROR), 'same')
+) {
+    throw new RuntimeException('identity conflict evidence is not sanitized/deterministic');
+}
 $missingIdentity = MigrationProof::identityPlan([
     ['company_id' => 1, 'legacy_company_user_id' => 12, 'login' => 'missing', 'full_name' => '', 'password_hash' => ''],
 ]);
