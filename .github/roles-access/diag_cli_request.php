@@ -2,7 +2,7 @@
 declare(strict_types=1);
 $root = rtrim((string)(getenv('PLANEX_ROOT') ?: ''), '/');
 $sid = (string)($argv[1] ?? '');
-if ($root === '' || !preg_match('/^[a-f0-9]{48}$/D', $sid)) { fwrite(STDERR, "invalid input\n"); exit(2); }
+if ($root === '' || !preg_match('/^[A-Za-z0-9,-]{16,128}$/D', $sid)) { fwrite(STDERR, "invalid input\n"); exit(2); }
 require_once $root . '/app/Support/helpers.php';
 require_once $root . '/app/Support/environment.php';
 loadEnvFileNonOverwriting($root . '/.env');
