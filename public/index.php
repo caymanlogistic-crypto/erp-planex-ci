@@ -68,7 +68,6 @@ use App\Security\PdoAccessStateProvider;
 use App\Service\CompanyInnLookupService;
 use App\Service\ContractorContactService;
 use App\Service\ClientContactService;
-use App\Service\LegacySessionIdentityUpgradeService;
 
 $db = new Database($config['database']);
 $pageRegistry = new PageRegistry();
@@ -84,20 +83,7 @@ $router = new Router($pageRegistry);
 // session and force a normal login instead of turning an otherwise-valid old
 // cookie into an opaque company-route 403.
 if ($rolesAccessEnabled) {
-    $legacySessionResult = (new LegacySessionIdentityUpgradeService(
-        $db->connection(),
-        $accessStateProvider
-    ))->upgrade($_SESSION);
-    if ($legacySessionResult === LegacySessionIdentityUpgradeService::UPGRADED) {
-        session_regenerate_id(true);
-    } elseif ($legacySessionResult === LegacySessionIdentityUpgradeService::INVALID) {
-        session_regenerate_id(true);
-        $_SESSION = [];
-        if (current_app_path() !== '/login') {
-            redirect_to('/login');
-        }
-    }
-
+    recoverLegacyRolesAccessSession($db->connection(), $accessStateProvider);
     $router->enableCompanyAccess(
         new EffectiveAccessResolver($pageRegistry, $accessStateProvider),
         AccessRequestContext::fromSession($_SESSION)

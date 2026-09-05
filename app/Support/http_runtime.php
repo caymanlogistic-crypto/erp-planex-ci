@@ -107,6 +107,26 @@ if (!function_exists('currentAccessRequestContext')) {
     }
 }
 
+if (!function_exists('recoverLegacyRolesAccessSession')) {
+    function recoverLegacyRolesAccessSession(\PDO $pdo, \App\Security\AccessStateProvider $provider): void
+    {
+        $result = (new \App\Service\LegacySessionIdentityUpgradeService($pdo, $provider))->upgrade($_SESSION);
+        if ($result === \App\Service\LegacySessionIdentityUpgradeService::UPGRADED) {
+            session_regenerate_id(true);
+            return;
+        }
+        if ($result !== \App\Service\LegacySessionIdentityUpgradeService::INVALID) {
+            return;
+        }
+
+        session_regenerate_id(true);
+        $_SESSION = [];
+        if (current_app_path() !== '/login') {
+            redirect_to('/login');
+        }
+    }
+}
+
 if (!function_exists('hasPageAccess')) {
     /** @param string|list<string> $pageKeys */
     function hasPageAccess(string|array $pageKeys): bool
