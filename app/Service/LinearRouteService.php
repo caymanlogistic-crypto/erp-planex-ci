@@ -1445,7 +1445,7 @@ final class LinearRouteService
 
     public static function canEditRoute(array $route, PDO $localPdo, array $user): bool
     {
-        return self::canViewRoute($route, $localPdo, $user);
+        return RegulatedDataScopeService::canEditTrip($localPdo, 'linear_trip', 'linear_routes', (int) ($route['id'] ?? 0));
     }
 
     public static function canDeleteRoute(array $route, PDO $localPdo, array $user): bool

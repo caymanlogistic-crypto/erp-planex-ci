@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
+**Schema fingerprint:** `e3b9ded9de4f3d713c3ee0b229d9d072275fd38ed6fc69d000d1b127b39bccd6`
 
 ## `crew_drivers`
 
@@ -180,6 +180,7 @@
 | `status` | `varchar(20)` | YES | `active` | — | — |
 | `comments` | `text` | YES | NULL | — | — |
 | `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
 | `created_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
 | `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
@@ -195,6 +196,7 @@
 - **INDEX** `idx_primary` (`primary_vehicle_unit_id`)
 - **INDEX** `idx_secondary` (`secondary_vehicle_unit_id`)
 - **INDEX** `idx_set_type` (`set_type`)
+- **INDEX** `idx_vehicle_sets_creator_membership` (`created_by_membership_id`)
 
 ### Physical foreign keys
 

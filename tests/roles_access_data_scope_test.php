@@ -2,6 +2,19 @@
 
 declare(strict_types=1);
 
+namespace App\Security {
+    final class AccessRuntime
+    {
+        public static bool $active = true;
+        public static function current(): object
+        {
+            return new class {
+                public function isActive(): bool { return AccessRuntime::$active; }
+            };
+        }
+    }
+}
+
 namespace App\Service {
     final class AccessControlService
     {
@@ -13,11 +26,13 @@ namespace App\Service {
         public static function isEffectiveSystemOwner(): bool { return self::$owner; }
     }
 
+    require_once __DIR__ . '/../app/Service/LegacyAccessProjectionService.php';
     require_once __DIR__ . '/../app/Service/RegulatedDataScopeService.php';
     require_once __DIR__ . '/../app/Service/EntityAssignmentService.php';
 }
 
 namespace {
+    use App\Security\AccessRuntime;
     use App\Service\AccessControlService;
     use App\Service\EntityAssignmentService;
     use App\Service\RegulatedDataScopeService;
@@ -30,9 +45,10 @@ namespace {
     };
 
     $assert(EntityAssignmentService::ENTITY_TYPES === ['client','contractor','vehicle_unit','driver'], 'exact assignment types');
-    $assert(!EntityAssignmentService::isSupported('vehicle_set'), 'VehicleSet has no assignment');
-    $assert(!EntityAssignmentService::isSupported('linear_trip'), 'trips have no assignment');
+    $assert(!EntityAssignmentService::isSupported('vehicle_set'), 'VehicleSet has no normal assignment');
+    $assert(!EntityAssignmentService::isSupported('linear_trip'), 'trips have no normal assignment');
 
+    AccessRuntime::$active = true;
     AccessControlService::$scope = 'all';
     $condition = RegulatedDataScopeService::condition('client', 'c.id');
     $assert($condition === ['sql'=>'1 = 1','params'=>[]], 'all scope');
@@ -47,11 +63,19 @@ namespace {
 
     AccessControlService::$membershipId = 42;
     $condition = RegulatedDataScopeService::condition('vehicle_unit', 'vu.id');
-    $assert(str_contains($condition['sql'], 'entity_assignments'), 'reference own uses assignments');
-    $assert($condition['params'] === ['vehicle_unit', 42], 'assignment key is membership');
+    $assert(str_contains($condition['sql'], 'vu.created_by_membership_id') && str_contains($condition['sql'], 'entity_assignments'), 'reference own uses creator projection plus assignments');
+    $assert($condition['params'] === [42, 'vehicle_unit', 42], 'reference own key is membership');
 
     $condition = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
-    $assert($condition === ['sql'=>'lr.created_by_membership_id = ?','params'=>[42]], 'trip own uses creator membership only');
+    $assert(str_contains($condition['sql'], 'lr.created_by_membership_id') && str_contains($condition['sql'], 'legacy_access_projections'), 'linear trip own preserves creator plus immutable historical projection');
+    $assert($condition['params'] === [42, 'linear_trip', 42, 'view', 'edit'], 'linear trip historical visibility parameters');
+
+    AccessRuntime::$active = false;
+    $_SESSION = ['role_code' => 'logist', 'user_id' => 9];
+    $legacy = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
+    $assert(str_contains($legacy['sql'], 'lr.created_by_user_id') && str_contains($legacy['sql'], 'entity_access_grants'), 'feature OFF uses factual legacy route authority');
+    $assert($legacy['params'] === [9, 'linear_route', 9], 'legacy route parameters preserved');
+    $assert(RegulatedDataScopeService::assertCanCreate('client') === 0, 'legacy create is not blocked and does not invent membership');
 
     $root = dirname(__DIR__);
     $client = file_get_contents($root . '/app/Service/ClientService.php');

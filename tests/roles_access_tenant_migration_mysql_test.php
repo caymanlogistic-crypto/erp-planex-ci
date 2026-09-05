@@ -29,7 +29,7 @@ $assert = static function (bool $condition, string $message): void {
 cleanCompanyPoolDatabase($pdo);
 try {
     $pdo->exec('CREATE TABLE users (id INT UNSIGNED NOT NULL AUTO_INCREMENT, PRIMARY KEY(id)) ENGINE=InnoDB');
-    foreach (['clients', 'contractors', 'vehicle_units', 'drivers', 'linear_routes', 'waste_trips'] as $table) {
+    foreach (['clients', 'contractors', 'vehicle_units', 'vehicle_sets', 'drivers', 'linear_routes', 'waste_trips'] as $table) {
         $pdo->exec("CREATE TABLE `{$table}` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, created_by_user_id INT UNSIGNED NULL, PRIMARY KEY(id)) ENGINE=InnoDB");
     }
 
@@ -45,6 +45,7 @@ try {
         ['clients', 'created_by_membership_id', 'idx_clients_creator_membership'],
         ['contractors', 'created_by_membership_id', 'idx_contractors_creator_membership'],
         ['vehicle_units', 'created_by_membership_id', 'idx_vehicle_units_creator_membership'],
+        ['vehicle_sets', 'created_by_membership_id', 'idx_vehicle_sets_creator_membership'],
         ['drivers', 'created_by_membership_id', 'idx_drivers_creator_membership'],
         ['linear_routes', 'created_by_membership_id', 'idx_linear_routes_creator_membership'],
         ['waste_trips', 'created_by_membership_id', 'idx_waste_trips_creator_membership'],
@@ -57,6 +58,9 @@ try {
         $indexStmt->execute([$table, $index]);
         $assert((int) $indexStmt->fetchColumn() === 1, "missing {$table}.{$index}");
     }
+
+    $projectionStmt = $pdo->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='legacy_access_projections'");
+    $assert((int) $projectionStmt->fetchColumn() === 1, 'missing legacy_access_projections');
 
     fwrite(STDOUT, "roles access tenant migration recovery: PASS\n");
 } finally {

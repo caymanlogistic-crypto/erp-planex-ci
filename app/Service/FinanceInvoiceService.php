@@ -199,7 +199,24 @@ final class FinanceInvoiceService
         }
 
         $roleCode = (string) ($user['role_code'] ?? '');
-        if ($roleCode === 'logist') {
+        if (class_exists(\App\Security\AccessRuntime::class) && \App\Security\AccessRuntime::current()->isActive()) {
+            $scope = AccessControlService::effectiveDataScope('linear_trip');
+            if ($scope !== 'all') {
+                $userId = (int) ($user['user_id'] ?? ($_SESSION['user_id'] ?? 0));
+                $access = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
+                $accessFilter = " AND (fi.created_by_user_id = ? OR fi.id IN (
+                    SELECT fil.invoice_id FROM finance_invoice_links fil
+                    JOIN linear_routes lr ON lr.id=fil.linear_route_id
+                    WHERE {$access['sql']}
+                ))";
+                $baseWhere .= $accessFilter;
+                $params[] = $userId;
+                array_push($params, ...$access['params']);
+                $countWhere .= $accessFilter;
+                $countParams[] = $userId;
+                array_push($countParams, ...$access['params']);
+            }
+        } elseif ($roleCode === 'logist') {
             $userId = (int) ($user['user_id'] ?? 0);
             $accessFilter = " AND (fi.created_by_user_id = ?
                         OR fi.id IN (
@@ -551,7 +568,11 @@ final class FinanceInvoiceService
                      WHERE lr.deleted_at IS NULL";
 
         $roleCode = (string) ($user['role_code'] ?? '');
-        if ($roleCode === 'logist') {
+        if (class_exists(\App\Security\AccessRuntime::class) && \App\Security\AccessRuntime::current()->isActive()) {
+            $access = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
+            $stmt = $localPdo->prepare($baseSql . ' AND ' . $access['sql'] . ' ORDER BY lr.created_at DESC');
+            $stmt->execute($access['params']);
+        } elseif ($roleCode === 'logist') {
             $userId = (int) ($user['user_id'] ?? 0);
             $stmt = $localPdo->prepare(
                 $baseSql . " AND (

@@ -4,7 +4,7 @@
 
 **Physical source of truth:** `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
+**Schema fingerprint:** `e3b9ded9de4f3d713c3ee0b229d9d072275fd38ed6fc69d000d1b127b39bccd6`
 
 Foreign keys below are **DB-enforced physical relations only**. Logical/application relations are intentionally not inferred: if the database has no FK, this catalog will not invent one. Use owning application code/Notion semantic records for logical relations.
 
@@ -12,7 +12,7 @@ Introducing migration is not inferred from final `information_schema`, because l
 
 ## Domain index
 
-- **Access / Security**: `entity_access_grants`, `users`
+- **Access / Security**: `entity_access_grants`, `legacy_access_projections`, `users`
 - **CRM**: `client_contacts`, `clients`, `contractor_assignment_history`, `contractor_contacts`, `contractor_tax_history`, `contractors`, `entity_assignments`, `responsible_assignment_history`
 - **Documents**: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`
 - **Finance**: `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`, `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_closing_document_manual_statuses`, `finance_closing_document_requirement_exceptions`, `finance_dds_categories`, `finance_employee_invoice_payments`, `finance_employee_money_accounts`, `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`, `finance_invoices`, `finance_matching_results`, `finance_matching_rules`, `finance_money_accounts`, `finance_obligations`, `finance_operation_allocations`, `finance_operations`
@@ -25,7 +25,7 @@ Introducing migration is not inferred from final `information_schema`, because l
 
 Each linked file below is generated from the same disposable-MySQL `information_schema` snapshot. Columns, NULL/defaults, PK/UNIQUE/indexes and physical FKs are maintained there, not manually in Notion.
 
-- [Access / Security](TENANT_SCHEMA_ACCESS_SECURITY.md): `entity_access_grants`, `users`
+- [Access / Security](TENANT_SCHEMA_ACCESS_SECURITY.md): `entity_access_grants`, `legacy_access_projections`, `users`
 - [CRM](TENANT_SCHEMA_CRM.md): `client_contacts`, `clients`, `contractor_assignment_history`, `contractor_contacts`, `contractor_tax_history`, `contractors`, `entity_assignments`, `responsible_assignment_history`
 - [Documents](TENANT_SCHEMA_DOCUMENTS.md): `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`
 - [Finance — part 1](TENANT_SCHEMA_FINANCE_01.md): `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`

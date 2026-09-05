@@ -41,10 +41,12 @@ try {
     $pdo->exec("INSERT INTO users VALUES (1,'Logist','logist',NULL,NULL,'hash-logist','logist','active',NULL)");
     foreach (['clients', 'contractors', 'vehicle_units', 'drivers', 'linear_routes', 'waste_trips'] as $table) {
         $pdo->exec("CREATE TABLE `{$table}` (id BIGINT UNSIGNED PRIMARY KEY,created_by_user_id INT UNSIGNED NULL) ENGINE=InnoDB");
-        $pdo->exec("INSERT INTO `{$table}` VALUES (1,1)");
+        $pdo->exec("INSERT INTO `{$table}` VALUES (1,1),(2,NULL)");
     }
-    $pdo->exec('CREATE TABLE entity_access_grants (entity_type VARCHAR(50),entity_id BIGINT UNSIGNED,granted_to_user_id INT UNSIGNED,revoked_at DATETIME NULL) ENGINE=InnoDB');
-    $pdo->exec("INSERT INTO entity_access_grants VALUES ('client',1,1,NULL)");
+    $pdo->exec('CREATE TABLE vehicle_sets (id BIGINT UNSIGNED PRIMARY KEY,primary_vehicle_unit_id BIGINT UNSIGNED NULL,secondary_vehicle_unit_id BIGINT UNSIGNED NULL,created_by_user_id INT UNSIGNED NULL) ENGINE=InnoDB');
+    $pdo->exec("INSERT INTO vehicle_sets VALUES (1,1,NULL,1),(2,2,NULL,NULL)");
+    $pdo->exec('CREATE TABLE entity_access_grants (id BIGINT UNSIGNED PRIMARY KEY,entity_type VARCHAR(50),entity_id BIGINT UNSIGNED,granted_to_user_id INT UNSIGNED,access_level VARCHAR(10),revoked_at DATETIME NULL) ENGINE=InnoDB');
+    $pdo->exec("INSERT INTO entity_access_grants VALUES (1,'client',1,1,'view',NULL),(2,'linear_route',2,1,'view',NULL),(3,'vehicle_set',2,1,'edit',NULL)");
     $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations-local/131_create_roles_access_projection.sql'));
 
     $pageKeys = ['company.dashboard', 'company.clients'];
@@ -73,7 +75,8 @@ try {
     if ((int) $pdo->query('SELECT COUNT(*) FROM user_accounts')->fetchColumn() !== 2
         || (int) $pdo->query('SELECT COUNT(*) FROM company_memberships')->fetchColumn() !== 2
         || (int) $pdo->query('SELECT membership_id FROM users WHERE id=1')->fetchColumn() <= 0
-        || (int) $pdo->query('SELECT COUNT(*) FROM entity_assignments')->fetchColumn() !== 1) {
+        || (int) $pdo->query('SELECT COUNT(*) FROM entity_assignments')->fetchColumn() !== 1
+        || (int) $pdo->query('SELECT COUNT(*) FROM legacy_access_projections')->fetchColumn() !== 2) {
         throw new RuntimeException('identity/membership/assignment projection mismatch');
     }
     if ((int) $pdo->query("SELECT COUNT(*) FROM entity_assignments WHERE assigned_by_membership_id IS NOT NULL")->fetchColumn() !== 0) {

@@ -105,6 +105,8 @@ foreach ($expectedManifest as $key => $value) {
     if (($manifest[$key] ?? null) !== $value) $fail("migration manifest mismatch: {$key}");
 }
 if (count(glob($root . '/database/migrations-local/131_*.sql') ?: []) !== 1) $fail('migration 131 tenant SQL must be unique');
+$tenantMigration = (string) file_get_contents($root . '/database/migrations-local/131_create_roles_access_projection.sql');
+foreach (['legacy_access_projections','idx_vehicle_sets_creator_membership'] as $token) $need($tenantMigration, $token, 'tenant 131 compatibility projection token');
 
 // BEFORE must be written before either DDL call appears in apply execution flow.
 $preparePos = strpos($script, "function prepare(");
@@ -121,7 +123,8 @@ if ($beforeWritePos === false || $prepareIdentityPos === false || $beforeWritePo
     $fail('prepare ordering must be BACKUP/BEFORE then identity preflight, all before apply');
 }
 $executor = (string) file_get_contents($root . '/tools/roles_access/LegacyAccessMigrationExecutor.php');
-$need($executor, 'MigrationProof::assignmentPlan($grants, [], $tenantUserMap)', 'explicit-grant-only historical assignment migration');
+$need($executor, 'MigrationProof::historicalAccessPlan($grants, $tenantUserMap)', 'factual historical grant migration planner');
+$need($executor, 'insertLegacyAccessProjections', 'immutable historical route/set projection');
 $need($executor, "['tenant_user_ids']", 'tenant alias projection for mirrored memberships');
 $need($script, 'MigrationProof::identityPlan($rows)', 'identity planner remains the production preflight authority');
 if (str_contains($executor, '$creatorLinks[]')) $fail('historical creator links must not be invented as assignments');

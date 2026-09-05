@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
+**Schema fingerprint:** `e3b9ded9de4f3d713c3ee0b229d9d072275fd38ed6fc69d000d1b127b39bccd6`
 
 ## `entity_access_grants`
 
@@ -29,6 +29,32 @@
 - **PRIMARY** `PRIMARY` (`id`)
 - **INDEX** `idx_granted_user` (`granted_to_user_id`)
 - **UNIQUE** `uk_grant` (`entity_type`, `entity_id`, `granted_to_user_id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `legacy_access_projections`
+
+**Domain:** Access / Security<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `legacy_grant_id` | `bigint unsigned` | NO | NULL | — | `UNI` |
+| `entity_type` | `enum('linear_trip','vehicle_set')` | NO | NULL | — | `MUL` |
+| `entity_id` | `bigint unsigned` | NO | NULL | — | — |
+| `membership_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `access_level` | `enum('view','edit')` | NO | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_legacy_access_projection_membership` (`membership_id`, `entity_type`, `entity_id`)
+- **UNIQUE** `uk_legacy_access_projection_grant` (`legacy_grant_id`)
+- **UNIQUE** `uk_legacy_access_projection_target` (`entity_type`, `entity_id`, `membership_id`)
 
 ### Physical foreign keys
 

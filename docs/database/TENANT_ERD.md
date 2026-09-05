@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `dc8329459731680881b7dbdcddb300b6943cf230bc8e17e98c5f1936aea85f41`
+**Schema fingerprint:** `e3b9ded9de4f3d713c3ee0b229d9d072275fd38ed6fc69d000d1b127b39bccd6`
 
 ## Architecture overview
 
@@ -28,12 +28,15 @@ erDiagram
   T_entity_access_grants {
     int _schema_catalog_anchor
   }
+  T_legacy_access_projections {
+    int _schema_catalog_anchor
+  }
   T_users {
     int _schema_catalog_anchor
   }
 ```
 
-Tables: `entity_access_grants`, `users`
+Tables: `entity_access_grants`, `legacy_access_projections`, `users`
 
 ## CRM
 

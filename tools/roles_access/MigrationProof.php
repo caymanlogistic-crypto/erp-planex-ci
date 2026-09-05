@@ -9,7 +9,7 @@ use RuntimeException;
 final class MigrationProof
 {
     public const CATEGORIES = [
-        'pages', 'clients', 'contractors', 'vehicle_units', 'drivers', 'linear_trips', 'waste_trips',
+        'pages', 'clients', 'contractors', 'vehicle_units', 'vehicle_sets', 'drivers', 'linear_trips', 'waste_trips',
     ];
 
     /**
@@ -273,6 +273,93 @@ final class MigrationProof
         }
         ksort($assignments, SORT_STRING);
         return ['assignments' => array_values($assignments), 'conflicts' => $conflicts, 'blocked' => $conflicts !== []];
+    }
+
+    /**
+     * One-time factual migration of live legacy grants. Normal reference grants
+     * become ordinary assignments. Historical linear_route / vehicle_set grants
+     * become immutable compatibility projections; no UI writer can create them.
+     * Unknown live grant types remain fail-closed blockers.
+     *
+     * @return array{assignments:array,legacy_projections:array,conflicts:array,blocked:bool}
+     */
+    public static function historicalAccessPlan(array $grants, array $tenantUserToMembership): array
+    {
+        $assignmentTypes = ['client', 'contractor', 'vehicle_unit', 'driver'];
+        $compatibilityTypes = ['linear_route' => 'linear_trip', 'vehicle_set' => 'vehicle_set'];
+        $assignments = [];
+        $projections = [];
+        $conflicts = [];
+        foreach ($grants as $grant) {
+            $live = ($grant['revoked_at'] ?? null) === null && in_array($grant['is_live'] ?? true, [true, 1, '1'], true);
+            if (!$live) {
+                continue;
+            }
+            $legacyGrantId = (int) ($grant['legacy_grant_id'] ?? $grant['id'] ?? 0);
+            $type = (string) ($grant['entity_type'] ?? '');
+            $entityId = (int) ($grant['entity_id'] ?? 0);
+            $tenantUserId = (int) ($grant['granted_to_user_id'] ?? 0);
+            $membershipId = $tenantUserToMembership[$tenantUserId] ?? null;
+            if ($entityId <= 0 || !is_int($membershipId) || $membershipId <= 0) {
+                $conflicts[] = [
+                    'source' => 'legacy_grant', 'entity_type' => $type, 'entity_id' => $entityId,
+                    'tenant_user_id' => $tenantUserId,
+                    'reason' => $entityId <= 0 ? 'invalid_entity_id' : 'missing_membership_mapping',
+                ];
+                continue;
+            }
+            if (in_array($type, $assignmentTypes, true)) {
+                $key = $type . ':' . $entityId . ':' . $membershipId;
+                $assignments[$key] = [
+                    'entity_type' => $type,
+                    'entity_id' => $entityId,
+                    'membership_id' => $membershipId,
+                    'assigned_by_membership_id' => null,
+                ];
+                continue;
+            }
+            if (isset($compatibilityTypes[$type])) {
+                $level = (string) ($grant['access_level'] ?? '');
+                if ($legacyGrantId <= 0 || !in_array($level, ['view', 'edit'], true)) {
+                    $conflicts[] = [
+                        'source' => 'legacy_grant', 'entity_type' => $type, 'entity_id' => $entityId,
+                        'tenant_user_id' => $tenantUserId,
+                        'reason' => $legacyGrantId <= 0 ? 'missing_legacy_grant_id' : 'invalid_access_level',
+                    ];
+                    continue;
+                }
+                $projectedType = $compatibilityTypes[$type];
+                $key = $projectedType . ':' . $entityId . ':' . $membershipId;
+                $row = [
+                    'legacy_grant_id' => $legacyGrantId,
+                    'entity_type' => $projectedType,
+                    'entity_id' => $entityId,
+                    'membership_id' => $membershipId,
+                    'access_level' => $level,
+                ];
+                if (isset($projections[$key]) && $projections[$key] !== $row) {
+                    $conflicts[] = [
+                        'source' => 'legacy_grant', 'entity_type' => $type, 'entity_id' => $entityId,
+                        'tenant_user_id' => $tenantUserId, 'reason' => 'ambiguous_duplicate_projection',
+                    ];
+                    continue;
+                }
+                $projections[$key] = $row;
+                continue;
+            }
+            $conflicts[] = [
+                'source' => 'legacy_grant', 'entity_type' => $type, 'entity_id' => $entityId,
+                'tenant_user_id' => $tenantUserId, 'reason' => 'unsupported_entity',
+            ];
+        }
+        ksort($assignments, SORT_STRING);
+        ksort($projections, SORT_STRING);
+        return [
+            'assignments' => array_values($assignments),
+            'legacy_projections' => array_values($projections),
+            'conflicts' => $conflicts,
+            'blocked' => $conflicts !== [],
+        ];
     }
 
     /** @return array{scope:?string,blocked:bool,legacy:array,all:array,creator:array} */
