@@ -3,6 +3,7 @@
 
     var root = document.querySelector('[data-roles-access-root]');
     if (!root) return;
+    document.body.classList.add('roles-access-page');
 
     var stateNode = root.querySelector('[data-roles-access-state]');
     var state;
@@ -198,15 +199,17 @@
                     var controls = pages.map(function (page) {
                         var key = page.key, current = values[key];
                         if (mode === 'role') {
-                            return '<label class="roles-access__tree-page"><input type="checkbox" data-page-key="' + esc(key) + '" data-group="' + groupId + '"' + (current ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' + esc(page.label) + '</span></label>';
+                            return '<label class="roles-access__tree-page roles-access__tree-page--role"><input type="checkbox" data-page-key="' + esc(key) + '" data-group="' + groupId + '"' + (current ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' + esc(page.label) + '</span></label>';
                         }
-                        var inherited = effective[key] ? 'доступно' : 'закрыто';
-                        return '<label class="roles-access__tree-page"><span>' + esc(page.label) + '</span><select class="field-select" data-page-key="' + esc(key) + '"' + (disabled ? ' disabled' : '') + '>' +
-                            '<option value="inherit"' + (current == null ? ' selected' : '') + '>По роли · ' + inherited + '</option>' +
-                            '<option value="allow"' + (current === 'allow' ? ' selected' : '') + '>Разрешить · Персонально</option>' +
-                            '<option value="deny"' + (current === 'deny' ? ' selected' : '') + '>Запретить · Персонально</option></select></label>';
+                        var inherited = effective[key] ? 'разрешено' : 'закрыто';
+                        var chosen = current == null ? 'inherit' : current;
+                        return '<div class="roles-access__tree-page roles-access__tree-page--member"><span class="roles-access__tree-page-name">' + esc(page.label) + '</span>' +
+                            '<div class="roles-access__tri" role="radiogroup" aria-label="Доступ: ' + esc(page.label) + '" data-page-key="' + esc(key) + '" data-value="' + esc(chosen) + '" data-inherited="' + esc(inherited) + '">' +
+                            '<button type="button" class="roles-access__tri-btn' + (chosen === 'inherit' ? ' is-active' : '') + '" data-page-choice="inherit" title="По роли: ' + esc(inherited) + '"' + (disabled ? ' disabled' : '') + '>По роли</button>' +
+                            '<button type="button" class="roles-access__tri-btn is-allow' + (chosen === 'allow' ? ' is-active' : '') + '" data-page-choice="allow"' + (disabled ? ' disabled' : '') + '>Разрешить</button>' +
+                            '<button type="button" class="roles-access__tri-btn is-deny' + (chosen === 'deny' ? ' is-active' : '') + '" data-page-choice="deny"' + (disabled ? ' disabled' : '') + '>Запретить</button></div></div>';
                     }).join('');
-                    return '<div class="roles-access__tree-group"><label class="roles-access__tree-group-head"><input type="checkbox" data-page-group="' + groupId + '"' + (disabled ? ' disabled' : '') + '><span>' + esc(group || 'Страницы') + '</span></label><div class="roles-access__tree-pages">' + controls + '</div></div>';
+                    var groupHead = mode === 'role' ? '<label class="roles-access__tree-group-head"><input type="checkbox" data-page-group="' + groupId + '"' + (disabled ? ' disabled' : '') + '><span>' + esc(group || 'Страницы') + '</span></label>' : '<div class="roles-access__tree-group-head roles-access__tree-group-head--member"><span>' + esc(group || 'Страницы') + '</span></div>'; return '<div class="roles-access__tree-group">' + groupHead + '<div class="roles-access__tree-pages roles-access__tree-pages--' + mode + '">' + controls + '</div></div>';
                 }).join('') + '</div>';
         }).join('') + '</div>';
     }
@@ -233,6 +236,17 @@
     }
 
     function bindTreeAndScopeControls() {
+        modalBody.querySelectorAll('[data-page-choice]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                var control = button.closest('[data-page-key]');
+                if (!control || button.disabled) return;
+                control.dataset.value = button.dataset.pageChoice;
+                control.querySelectorAll('[data-page-choice]').forEach(function (item) {
+                    item.classList.toggle('is-active', item === button);
+                    item.setAttribute('aria-pressed', item === button ? 'true' : 'false');
+                });
+            });
+        });
         modalBody.querySelectorAll('[data-page-group]').forEach(function (group) {
             var children = modalBody.querySelectorAll('[data-group="' + group.dataset.pageGroup + '"]');
             var update = function () {
@@ -258,7 +272,10 @@
         var result = {};
         modalBody.querySelectorAll('[data-page-key]').forEach(function (control) {
             if (mode === 'role') result[control.dataset.pageKey] = control.checked;
-            else if (control.value !== 'inherit') result[control.dataset.pageKey] = control.value;
+            else {
+                var value = control.dataset.value || 'inherit';
+                if (value !== 'inherit') result[control.dataset.pageKey] = value;
+            }
         });
         return result;
     }
@@ -317,9 +334,9 @@
     function openMembershipModal(membership) {
         var system = !!membership.is_system_owner;
         var roles = state.roles.map(function (role) { return '<option value="' + Number(role.id) + '"' + (Number(role.id) === Number(membership.role_id) ? ' selected' : '') + '>' + esc(role.name) + '</option>'; }).join('');
-        var body = '<section class="roles-access-modal__section"><div class="roles-access-modal__identity"><label class="field"><span class="field-label">Пользователь</span><input class="field-input" value="' + esc(membership.full_name) + '" disabled></label>' +
-            '<label class="field"><span class="field-label">Статус</span><select class="field-select" data-member-status' + (system ? '' : '') + '><option value="active"' + (membership.status === 'active' ? ' selected' : '') + '>Активен</option><option value="blocked"' + (membership.status !== 'active' ? ' selected' : '') + '>Отключён</option></select></label>' +
-            '<label class="field is-wide"><span class="field-label">Роль</span><select class="field-select" data-member-role>' + roles + '</select></label></div><div class="notice info roles-access__warning is-hidden" data-role-change-warning>У пользователя есть персональные настройки. После смены роли они сохранятся.</div></section>' +
+        var body = '<section class="roles-access-modal__section roles-access-modal__identity-section"><div class="roles-access-modal__identity"><label class="field"><span class="field-label">Пользователь</span><input class="field-input" value="' + esc(membership.full_name) + '" disabled></label>' +
+            '<label class="field"><span class="field-label">Роль</span><select class="field-select" data-member-role>' + roles + '</select></label>' +
+            '<label class="field"><span class="field-label">Статус</span><select class="field-select" data-member-status' + (system ? '' : '') + '><option value="active"' + (membership.status === 'active' ? ' selected' : '') + '>Активен</option><option value="blocked"' + (membership.status !== 'active' ? ' selected' : '') + '>Отключён</option></select></label></div><div class="notice info roles-access__warning is-hidden" data-role-change-warning>У пользователя есть персональные настройки. После смены роли они сохранятся.</div></section>' +
             '<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Персональные настройки страниц</h3><p class="roles-access-modal__help">«По роли» использует настройку основной роли. Персональное значение действует только для этого пользователя.</p>' + pageTreeHtml('member', membership.page_overrides || {}, roleById(membership.role_id).pages || {}, system) + '</section>' +
             '<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Персональные настройки данных</h3><p class="roles-access-modal__help">«По роли» использует настройку основной роли.</p>' + scopesHtml('member', membership.data_scope_overrides || {}, roleById(membership.role_id).data_scopes || {}, system) + '</section>';
         openModal({title:'Настройка пользователя',subtitle:membership.login || '',body:body,readonly:false,
@@ -385,28 +402,70 @@
         var order = ['client','contractor','vehicle_unit','driver'];
         content.innerHTML = '<div class="roles-access__assignment-grid">' + order.map(function (type) {
             var entities = assignmentCache.entities[type] || [];
-            return '<section class="roles-access__assignment-group"><div class="roles-access__assignment-title"><span>' + esc(labels[type]) + '</span><span>' + entities.length + '</span></div><div class="roles-access__assignment-list">' +
+            var selected = entities.filter(function (entity) { return (assignmentCache.sets[type + ':' + Number(entity.id)] || []).indexOf(activeAssignmentMembershipId) >= 0; }).length;
+            return '<section class="roles-access__assignment-group" data-assignment-group="' + type + '"><div class="roles-access__assignment-title"><span>' + esc(labels[type]) + '</span><span class="roles-access__assignment-count" data-assignment-count>' + selected + ' / ' + entities.length + '</span></div>' +
+                '<div class="roles-access__assignment-tools"><input class="field-input roles-access__assignment-search" type="search" placeholder="Поиск…" aria-label="Поиск: ' + esc(labels[type]) + '" data-assignment-search>' +
+                '<div class="roles-access__assignment-actions"><button type="button" class="btn btn-ghost" data-assignment-bulk="select">Выбрать все</button><button type="button" class="btn btn-ghost" data-assignment-bulk="clear">Снять все</button></div></div>' +
+                '<div class="roles-access__assignment-list">' +
                 (entities.map(function (entity) {
                     var checked = (assignmentCache.sets[type + ':' + Number(entity.id)] || []).indexOf(activeAssignmentMembershipId) >= 0;
-                    return '<label class="roles-access__assignment-row"><input type="checkbox" data-assignment-type="' + type + '" data-assignment-id="' + Number(entity.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(entity.label) + '</span></label>';
-                }).join('') || '<div class="roles-access__empty">Нет объектов.</div>') + '</div></section>';
+                    return '<label class="roles-access__assignment-row" data-assignment-label="' + esc(String(entity.label).toLocaleLowerCase('ru-RU')) + '"><input type="checkbox" data-assignment-type="' + type + '" data-assignment-id="' + Number(entity.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(entity.label) + '</span></label>';
+                }).join('') || '<div class="roles-access__empty">Нет объектов.</div>') + '<div class="roles-access__empty is-hidden" data-assignment-search-empty>Ничего не найдено.</div></div></section>';
         }).join('') + '</div>';
+    }
+
+    function refreshAssignmentGroupUi(group) {
+        if (!group) return;
+        var rows = Array.prototype.slice.call(group.querySelectorAll('.roles-access__assignment-row'));
+        var count = group.querySelector('[data-assignment-count]');
+        var selected = rows.filter(function (row) { var box = row.querySelector('[data-assignment-type]'); return box && box.checked; }).length;
+        if (count) count.textContent = selected + ' / ' + rows.length;
+        var empty = group.querySelector('[data-assignment-search-empty]');
+        if (empty) empty.classList.toggle('is-hidden', rows.some(function (row) { return !row.classList.contains('is-hidden'); }));
+    }
+
+    function saveAssignmentCheckbox(checkbox, nextChecked) {
+        if (!checkbox || !assignmentCache || checkbox.disabled) return Promise.resolve();
+        var row = checkbox.closest('.roles-access__assignment-row');
+        var group = checkbox.closest('[data-assignment-group]');
+        var key = checkbox.dataset.assignmentType + ':' + Number(checkbox.dataset.assignmentId);
+        var before = (assignmentCache.sets[key] || []).slice();
+        var after = before.filter(function (id) { return id !== activeAssignmentMembershipId; });
+        checkbox.checked = nextChecked;
+        if (nextChecked) after.push(activeAssignmentMembershipId);
+        assignmentCache.sets[key] = after;
+        row.classList.add('is-saving'); checkbox.disabled = true; refreshAssignmentGroupUi(group);
+        return jsonRequest('/company/responsible-assignments/reassign', {method:'POST', body:{entity_type:checkbox.dataset.assignmentType,entity_id:Number(checkbox.dataset.assignmentId),membership_ids:after}})
+            .then(function (payload) { assignmentCache.sets[key] = (payload.membership_ids || after).map(Number); })
+            .catch(function (error) { assignmentCache.sets[key] = before; checkbox.checked = before.indexOf(activeAssignmentMembershipId) >= 0; announce(error.message,'error'); })
+            .finally(function () { checkbox.disabled = false; row.classList.remove('is-saving'); refreshAssignmentGroupUi(group); });
     }
 
     root.querySelector('[data-assignment-membership]').addEventListener('change', function () { activeAssignmentMembershipId=Number(this.value||0); renderAssignments(); });
     root.querySelector('[data-assignment-content]').addEventListener('click', function (event) {
-        if (event.target.closest('[data-assignment-retry]')) { assignmentCache=null; loadAssignmentMatrix(true); }
+        if (event.target.closest('[data-assignment-retry]')) { assignmentCache=null; loadAssignmentMatrix(true); return; }
+        var bulk = event.target.closest('[data-assignment-bulk]');
+        if (!bulk || !assignmentCache) return;
+        var group = bulk.closest('[data-assignment-group]');
+        var target = bulk.dataset.assignmentBulk === 'select';
+        var visible = Array.prototype.slice.call(group.querySelectorAll('.roles-access__assignment-row:not(.is-hidden) [data-assignment-type]'));
+        var changed = visible.filter(function (box) { return box.checked !== target && !box.disabled; });
+        if (!changed.length) return;
+        bulk.disabled = true;
+        Promise.all(changed.map(function (box) { return saveAssignmentCheckbox(box, target); })).finally(function () { bulk.disabled = false; refreshAssignmentGroupUi(group); });
+    });
+    root.querySelector('[data-assignment-content]').addEventListener('input', function (event) {
+        var search = event.target.closest('[data-assignment-search]'); if (!search) return;
+        var group = search.closest('[data-assignment-group]');
+        var term = search.value.trim().toLocaleLowerCase('ru-RU');
+        group.querySelectorAll('.roles-access__assignment-row').forEach(function (row) {
+            row.classList.toggle('is-hidden', term !== '' && (row.dataset.assignmentLabel || '').indexOf(term) < 0);
+        });
+        refreshAssignmentGroupUi(group);
     });
     root.querySelector('[data-assignment-content]').addEventListener('change', function (event) {
         var checkbox = event.target.closest('[data-assignment-type]'); if (!checkbox || !assignmentCache) return;
-        var row=checkbox.closest('.roles-access__assignment-row'), key=checkbox.dataset.assignmentType+':'+Number(checkbox.dataset.assignmentId);
-        var before=(assignmentCache.sets[key]||[]).slice(), after=before.filter(function(id){return id!==activeAssignmentMembershipId;});
-        if (checkbox.checked) after.push(activeAssignmentMembershipId);
-        assignmentCache.sets[key]=after; row.classList.add('is-saving'); checkbox.disabled=true;
-        jsonRequest('/company/responsible-assignments/reassign',{method:'POST',body:{entity_type:checkbox.dataset.assignmentType,entity_id:Number(checkbox.dataset.assignmentId),membership_ids:after}})
-            .then(function(payload){assignmentCache.sets[key]=(payload.membership_ids||after).map(Number);})
-            .catch(function(error){assignmentCache.sets[key]=before;checkbox.checked=before.indexOf(activeAssignmentMembershipId)>=0;announce(error.message,'error');})
-            .finally(function(){checkbox.disabled=false;row.classList.remove('is-saving');});
+        saveAssignmentCheckbox(checkbox, checkbox.checked);
     });
 
     root.querySelector('[data-role-create]').addEventListener('click', openNewRoleModal);
