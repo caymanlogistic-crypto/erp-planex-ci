@@ -118,6 +118,9 @@ jobs:
           printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/erpv2_controlled_deploy_key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/erpv2_controlled_deploy_key" "$HOME/.ssh/known_hosts"
+          SSH_CONTROL_DIR="$RUNNER_TEMP/erpv2_controlled_deploy_mux"
+          install -d -m 700 "$SSH_CONTROL_DIR"
+          printf 'SSH_CONTROL_DIR=%s\nSSH_CONTROL_PATH=%s\n' "$SSH_CONTROL_DIR" "$SSH_CONTROL_DIR/%C" >> "$GITHUB_ENV"
 
       - name: Snapshot server state and create backup
         id: before
@@ -128,9 +131,9 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" \
             /tmp/P21_readonly_db_fingerprint.php "$SSH_USER@$SSH_HOST:/tmp/P21_readonly_db_fingerprint_${GITHUB_RUN_ID}.php"
-          out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "GITHUB_RUN_ID='$GITHUB_RUN_ID' bash -se" <<'REMOTE'
+          out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "GITHUB_RUN_ID='$GITHUB_RUN_ID' bash -se" <<'REMOTE'
           set -euo pipefail
           ROOT=/home/s/spugovxsim/planexp
           LIVE="$ROOT/public_html/erpv2"
@@ -174,17 +177,17 @@ jobs:
           set -euo pipefail
           remote="$SERVER_ROOT/deploy/P21_artifact_${SOURCE_SHA}.tar.gz"
           remote_engine="/tmp/P07_deploy_erpv2_${GITHUB_RUN_ID}.sh"
-          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" \
             "$ARTIFACT" "$SSH_USER@$SSH_HOST:$remote"
-          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" \
             /tmp/P07_deploy_erpv2.sh "$SSH_USER@$SSH_HOST:$remote_engine"
-          remote_engine_sha="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "sha256sum '$remote_engine'" | awk '{print $1}')"
+          remote_engine_sha="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "sha256sum '$remote_engine'" | awk '{print $1}')"
           test "$remote_engine_sha" = "$ENGINE_SHA"
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
             "chmod 700 '$remote_engine' && bash '$remote_engine' '$remote' '$ARTIFACT_SHA' '$SOURCE_SHA'"
-          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$SERVER_ROOT/deploy/P07_erpv2_deployed_commit.txt'")"
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "cat '$SERVER_ROOT/deploy/P07_erpv2_deployed_commit.txt'")"
           test "$marker" = "$SOURCE_SHA"
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$remote' '$remote_engine'"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "rm -f '$remote' '$remote_engine'"
 
       - name: Verify marker HTTP DB old ERP runtime and document resources
         id: after
@@ -200,7 +203,7 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
-          out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "GITHUB_RUN_ID='$GITHUB_RUN_ID' SOURCE_SHA='$SOURCE_SHA' RUNTIME_DIRS_BEFORE='$RUNTIME_DIRS_BEFORE' bash -se" <<'REMOTE'
+          out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "GITHUB_RUN_ID='$GITHUB_RUN_ID' SOURCE_SHA='$SOURCE_SHA' RUNTIME_DIRS_BEFORE='$RUNTIME_DIRS_BEFORE' bash -se" <<'REMOTE'
           set -euo pipefail
           ROOT=/home/s/spugovxsim/planexp
           LIVE="$ROOT/public_html/erpv2"
@@ -256,7 +259,7 @@ jobs:
           if [ "$http" != 200 ]; then
             echo "ERPv2 login HTTP verification failed: $http" >&2
             echo '::group::ERPv2 login runtime diagnostic'
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "SOURCE_SHA='$SOURCE_SHA' bash -se" <<'REMOTE'
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "SOURCE_SHA='$SOURCE_SHA' bash -se" <<'REMOTE'
             set +e
             ROOT=/home/s/spugovxsim/planexp
             LIVE="$ROOT/public_html/erpv2"
@@ -366,7 +369,9 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           if [ -f "$HOME/.ssh/erpv2_controlled_deploy_key" ]; then
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
               "rm -f '/tmp/P21_readonly_db_fingerprint_${GITHUB_RUN_ID}.php' '/tmp/P07_deploy_erpv2_${GITHUB_RUN_ID}.sh'" 2>/dev/null || true
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_controlled_deploy_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" -O exit "$SSH_USER@$SSH_HOST" 2>/dev/null || true
           fi
+          rm -rf "${SSH_CONTROL_DIR:-}" 2>/dev/null || true
           rm -f "$HOME/.ssh/erpv2_controlled_deploy_key" /tmp/P21_readonly_db_fingerprint.php /tmp/P07_deploy_erpv2.sh 2>/dev/null || true
