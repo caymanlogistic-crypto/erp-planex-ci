@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 2 }
+        with: { fetch-depth: 0 }
       - name: Verify diagnostic-only branch over exact deployed canonical
         shell: bash
         env:
@@ -31,7 +31,9 @@ jobs:
         run: |
           set -euo pipefail
           canonical="$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')"
-          test "$(git rev-parse HEAD^)" = "$canonical"
+          git merge-base --is-ancestor "$canonical" HEAD
+          unexpected="$(git diff --name-only "$canonical"..HEAD | grep -Ev '^\.github/(workflows/roles_access_500_diagnostic\.yml|roles-access/diag_error_tail\.sh)$' || true)"
+          test -z "$unexpected"
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/roles_500_diag"
           printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
