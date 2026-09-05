@@ -56,7 +56,7 @@ jobs:
         run: |
           set -euo pipefail
           owner="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_real_write_${GITHUB_RUN_ID}.php' create-legacy-owner")"
-          invalid="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_real_write_${GITHUB_RUN_ID}.php' create-invalid-legacy")"
+          invalid="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_real_write_${GITHUB_RUN_ID}.php' create-invalid-owner")"
           sim="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_real_write" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_real_write_${GITHUB_RUN_ID}.php' create-legacy-owner")"
           python3 - "$owner" "$invalid" "$sim" "$GITHUB_ENV" <<'PY'
           import json,sys
