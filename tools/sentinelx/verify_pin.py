@@ -183,7 +183,7 @@ def runtime_reported_version(root: Path) -> str:
     return cp.stdout.strip()
 
 
-def validate_closure_snapshot(root: Path, lock: dict, profile: str, snap: dict, reported_version: str) -> None:
+def validate_closure_snapshot(root: Path, lock: dict, profile: str, snap: dict, reported_version: str, allow_relocation_drift: bool = False) -> None:
     profiles = lock.get("profiles", {})
     if profile not in profiles:
         fail(f"unknown dependency profile: {profile}")
@@ -212,20 +212,23 @@ def validate_closure_snapshot(root: Path, lock: dict, profile: str, snap: dict, 
         direct = installed[name].get("direct_url")
         if not isinstance(direct, dict) or not isinstance(direct.get("url"), str):
             fail(f"local distribution source metadata missing: {name}")
-        parsed = urlparse(direct["url"])
-        if parsed.scheme != "file":
-            fail(f"local distribution source is not file provenance: {name}")
-        source_path = Path(unquote(parsed.path))
-        runner_root = Path.home() / "erp-planex-test"
-        try:
-            relative = source_path.relative_to(runner_root)
-        except ValueError:
-            fail(f"local distribution source outside runner root: {name}")
-        if len(relative.parts) != 2 or relative.parts[1] != local["source"]:
-            fail(f"local distribution source path mismatch: {name}")
-        install_dir = relative.parts[0]
-        if install_dir != "sentinelx-agent" and not install_dir.startswith("sentinelx-agent.candidate"):
-            fail(f"local distribution source provenance root mismatch: {name}")
+        expected_url = (root / local["source"]).resolve().as_uri()
+        if direct["url"] != expected_url:
+            if not allow_relocation_drift:
+                fail(f"local distribution source path mismatch: {name} expected={expected_url} actual={direct['url']}")
+            parsed = urlparse(direct["url"])
+            if parsed.scheme != "file":
+                fail(f"local distribution source is not file provenance: {name}")
+            source_path = Path(unquote(parsed.path))
+            runner_root = Path.home() / "erp-planex-test"
+            try:
+                relative = source_path.relative_to(runner_root)
+            except ValueError:
+                fail(f"local distribution source outside runner root: {name}")
+            if len(relative.parts) != 2 or relative.parts[1] != local["source"]:
+                fail(f"local distribution source path mismatch: {name}")
+            if not relative.parts[0].startswith("sentinelx-agent.candidate"):
+                fail(f"local distribution source provenance root mismatch: {name}")
     core_name = "sentinelx-cloud-core"
     if cfg.get("core_distribution") == "absent" and core_name in installed:
         fail("core distribution unexpectedly installed in rollback-source profile")
@@ -249,8 +252,25 @@ def validate_closure_snapshot(root: Path, lock: dict, profile: str, snap: dict, 
         fail(f"runtime-reported version mismatch expected={cfg.get('runtime_reported_version')} actual={reported_version}")
 
 
-def verify_installed_closure(root: Path, manifest: dict, lock: dict, profile: str) -> None:
-    validate_closure_snapshot(root, lock, profile, venv_snapshot(root), runtime_reported_version(root))
+def verify_console_scripts(root: Path, lock: dict, profile: str) -> None:
+    cfg = lock.get("profiles", {}).get(profile, {})
+    for script in cfg.get("required_console_scripts", []):
+        target = root / ".venv" / "bin" / script
+        try:
+            cp = subprocess.run([str(target), "--help"], check=False, capture_output=True, text=True, timeout=10)
+        except OSError as exc:
+            fail(f"console script execution failed: {script}: {exc}")
+        if cp.returncode != 0:
+            fail(f"console script execution failed: {script}: rc={cp.returncode}: {(cp.stderr or cp.stdout).strip()}")
+
+
+def verify_installed_closure(root: Path, manifest: dict, lock: dict, profile: str, allow_relocation_drift: bool = False) -> None:
+    validate_closure_snapshot(
+        root, lock, profile, venv_snapshot(root), runtime_reported_version(root),
+        allow_relocation_drift=allow_relocation_drift,
+    )
+    if not allow_relocation_drift:
+        verify_console_scripts(root, lock, profile)
 
 
 def main() -> None:
@@ -258,7 +278,10 @@ def main() -> None:
     parser.add_argument("--agent-root", type=Path, required=True)
     parser.add_argument("--profile", choices=("rollback-source", "final"), default="final")
     parser.add_argument("--skip-runtime-state", action="store_true")
+    parser.add_argument("--pre-relocation-repair", action="store_true")
     args = parser.parse_args()
+    if args.pre_relocation_repair and args.profile != "final":
+        fail("--pre-relocation-repair is valid only with final profile")
     manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
     if manifest.get("schema") != SCHEMA:
         fail("unsupported manifest schema")
@@ -292,7 +315,7 @@ def main() -> None:
     if f"version = {expected_version}" not in pyvenv:
         fail("venv Python version mismatch")
     verify_artifact_cache(root, lock, args.profile)
-    verify_installed_closure(root, manifest, lock, args.profile)
+    verify_installed_closure(root, manifest, lock, args.profile, allow_relocation_drift=args.pre_relocation_repair)
     if not args.skip_runtime_state:
         for relative in ("runtime/config.yaml", "runtime/identity.json", "runtime/host_id"):
             path = root / relative
@@ -307,6 +330,8 @@ def main() -> None:
     print(f"protocol_commit={protocol['commit']}")
     print(f"wire_protocol={protocol['wire_protocol_version']}")
     print("dependency_closure=PASS")
+    if args.pre_relocation_repair:
+        print("relocation_pre_repair=PASS_NOT_FINAL")
 
 
 if __name__ == "__main__":

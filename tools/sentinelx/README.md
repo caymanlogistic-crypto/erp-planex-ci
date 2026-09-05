@@ -47,6 +47,20 @@ python3 tools/sentinelx/verify_pin.py --agent-root "$HOME/erp-planex-test/sentin
 
 Pinned core `0.11.14` declares `sentinelx-pensa-safe-edit = sentinelx_core.vendored.pensa_safe_edit:main`. In the historical source-only venv that console script was absent while `edit` was advertised. The final profile requires the exact local core distribution and both registered/executable core console scripts. No filesystem allowlist, sudo permission or production path is added. Acceptance must use real structured `sentinel_edit` on a disposable file inside a task worktree and confirm an outside-rw-path request is refused; `script_run` is not a substitute for that acceptance test.
 
+## Relocation-safe console entry points
+
+Python console scripts created by `pip` contain an absolute interpreter path. A venv built under `sentinelx-agent.candidate-*` is therefore **not** considered final merely because its files survive an atomic directory rename. After candidate -> live rename, the cutover engine force-reinstalls the exact archive-verified local `protocol` and `core` distributions from the final live path using `--force-reinstall --no-deps --no-build-isolation --no-index`. This regenerates console-script shebangs and `direct_url.json` without dependency resolution or network package selection.
+
+Final `verify_pin.py --profile final` now requires each local distribution's provenance to point to the exact current agent root and actually executes required SentinelX console scripts with `--help`. A stale candidate shebang therefore fails the final gate even when the file exists. `--pre-relocation-repair` is a transitional **non-final** verifier mode used only to authorize the one-time `repair-live` path for an already-relocated installation.
+
+For a previously relocated live install:
+
+```bash
+python3 tools/sentinelx/rootless_cutover.py repair-live
+```
+
+The repair creates a complete rollback image before reinstalling the exact local distributions, performs final verification, and restores the prior venv on repair failure. It does not expand SentinelX filesystem policy or production access.
+
 ## Rootless cutover and autonomous rollback
 
 The shared host has no compatible root/systemd installer path. `rootless_cutover.py` is therefore the controlled user-mode switch mechanism. Before any live switch:

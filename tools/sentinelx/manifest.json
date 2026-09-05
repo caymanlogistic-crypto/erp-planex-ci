@@ -81,5 +81,11 @@
     "edit": "required-working",
     "edit_entry_point": "sentinelx-pensa-safe-edit",
     "allowlist_expansion": false
+  },
+  "relocation_contract": {
+    "candidate_to_live": "after candidate directory rename, reinstall exact local protocol/core from the live source path with --force-reinstall --no-deps --no-build-isolation --no-index before agent start",
+    "final_provenance": "local distribution direct_url must equal the exact current agent-root protocol/core path",
+    "console_acceptance": "final verification executes every required SentinelX console script with --help; existence/metadata alone is insufficient",
+    "repair_command": "python3 tools/sentinelx/rootless_cutover.py repair-live"
   }
 }

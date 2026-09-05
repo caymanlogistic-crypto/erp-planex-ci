@@ -44,9 +44,10 @@ def safe_candidate(path: Path) -> Path:
     return p
 
 
-def verify(root: Path, profile: str, skip_runtime: bool=False) -> None:
+def verify(root: Path, profile: str, skip_runtime: bool=False, pre_relocation: bool=False) -> None:
     cmd=[sys.executable,str(HERE/"verify_pin.py"),"--agent-root",str(root),"--profile",profile]
     if skip_runtime: cmd.append("--skip-runtime-state")
+    if pre_relocation: cmd.append("--pre-relocation-repair")
     subprocess.run(cmd,check=True)
 
 
@@ -81,6 +82,46 @@ def copy_runtime_identity(src: Path,dst: Path) -> None:
         source=src/"runtime"/name
         if not source.is_file(): raise CutoverRefused(f"SENTINELX_CUTOVER_REFUSED=MISSING_RUNTIME:{name}")
         shutil.copyfile(source,runtime/name); os.chmod(runtime/name,0o600)
+
+
+def reinstall_local_distributions(root: Path) -> None:
+    """Regenerate local dist metadata and console scripts for root's final path."""
+    python=root/".venv"/"bin"/"python"
+    if not python.is_file():
+        raise CutoverRefused("SENTINELX_RELOCATION_REFUSED=VENV_PYTHON_MISSING")
+    for local in ("protocol","core"):
+        source=root/local
+        if not source.is_dir():
+            raise CutoverRefused(f"SENTINELX_RELOCATION_REFUSED=SOURCE_MISSING:{local}")
+        subprocess.run([
+            str(python),"-m","pip","install","--disable-pip-version-check",
+            "--force-reinstall","--no-deps","--no-build-isolation","--no-index",str(source)
+        ],check=True)
+
+
+def repair_live() -> None:
+    """Repair a previously relocated final install without restarting the agent."""
+    verify(LIVE,"final",pre_relocation=True)
+    tag=now_tag(); rollback=RUNNER_ROOT/f"sentinelx-agent.repair-rollback.{tag}"; failed=RUNNER_ROOT/f"sentinelx-agent.repair-failed-venv.{tag}"
+    if rollback.exists() or failed.exists():
+        raise CutoverRefused("SENTINELX_REPAIR_REFUSED=STATE_PATH_EXISTS")
+    shutil.copytree(LIVE,rollback,symlinks=True)
+    try:
+        reinstall_local_distributions(LIVE)
+        verify(LIVE,"final")
+        write_state({"status":"REPAIR_PASS","rollback_image":str(rollback),"timestamp":tag})
+        print(f"SENTINELX_REPAIR_LIVE=PASS rollback={rollback}")
+    except Exception as exc:
+        live_venv=LIVE/".venv"; rollback_venv=rollback/".venv"
+        try:
+            if live_venv.exists(): os.replace(live_venv,failed)
+            shutil.copytree(rollback_venv,live_venv,symlinks=True)
+            verify(LIVE,"final",pre_relocation=True)
+        except Exception as rollback_exc:
+            write_state({"status":"REPAIR_BLOCKER","error":str(exc),"rollback_error":str(rollback_exc),"rollback_image":str(rollback),"timestamp":tag})
+            raise CutoverRefused(f"SENTINELX_REPAIR_BLOCKER repair={exc} rollback={rollback_exc}") from rollback_exc
+        write_state({"status":"REPAIR_ROLLED_BACK","error":str(exc),"rollback_image":str(rollback),"timestamp":tag})
+        raise CutoverRefused(f"SENTINELX_REPAIR_ROLLED_BACK={exc}")
 
 
 def start_agent(root: Path) -> int:
@@ -190,6 +231,8 @@ def cutover(candidate: Path,health_timeout: float,stability: float) -> None:
     try:
         stop_pid(old_pid)
         move_layout(candidate,previous)
+        reinstall_local_distributions(LIVE)
+        verify(LIVE,"final")
         log=LIVE/"runtime"/"sentinelx.log"; offset=log.stat().st_size if log.exists() else 0
         candidate_pid=start_agent(LIVE)
         if not wait_marker(log,candidate_pid,offset,health_timeout): raise CutoverRefused("SENTINELX_CANDIDATE_HEALTH_FAIL")
@@ -221,8 +264,10 @@ def main() -> int:
     ap=argparse.ArgumentParser(); sub=ap.add_subparsers(dest="op",required=True)
     st=sub.add_parser("self-test"); st.add_argument("--root",type=Path,required=True)
     co=sub.add_parser("cutover"); co.add_argument("--candidate-root",type=Path,required=True); co.add_argument("--health-timeout",type=float,default=45); co.add_argument("--stability",type=float,default=5)
+    sub.add_parser("repair-live")
     a=ap.parse_args()
     if a.op=="self-test": self_test(a.root)
+    elif a.op=="repair-live": repair_live()
     else: cutover(a.candidate_root,a.health_timeout,a.stability)
     return 0
 
