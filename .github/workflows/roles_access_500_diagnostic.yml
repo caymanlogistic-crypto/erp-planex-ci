@@ -1,0 +1,108 @@
+name: Roles Access 500 Diagnostic
+
+on:
+  push:
+    branches:
+      - chatgpt/roles-access-500-diagnostic-20260905
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_PARENT: /home/s/spugovxsim/planexp/public_html
+  APP_DIR: erpv2
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 2 }
+      - name: Verify diagnostic-only branch over exact deployed canonical
+        shell: bash
+        env:
+          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          canonical="$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')"
+          test "$(git rev-parse HEAD^)" = "$canonical"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/roles_500_diag"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/roles_500_diag" "$HOME/.ssh/known_hosts"
+          marker="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt')"
+          test "$marker" = "$canonical"
+          echo "DIAG_CANONICAL=$canonical"
+          scp -P "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/roles-access/qa_session.php "$USER@$HOST:/tmp/roles_access_500_diag_${GITHUB_RUN_ID}.php"
+      - name: Reproduce legacy upgrade and capture bounded error evidence
+        shell: bash
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          helper="/tmp/roles_access_500_diag_${GITHUB_RUN_ID}.php"
+          raw="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '$helper' create-legacy-owner")"
+          json="${raw#ROLES_QA_SESSION=}"
+          cookie="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["cookie"])' "$json")"
+          sid="$(python3 -c 'import json,sys; print(json.loads(sys.argv[1])["sid"])' "$json")"
+          echo "::add-mask::$cookie"; echo "::add-mask::$sid"
+          jar="$(mktemp)"; h1="$(mktemp)"; b1="$(mktemp)"; h2="$(mktemp)"; b2="$(mktemp)"
+          cleanup_local(){ rm -f "$jar" "$h1" "$b1" "$h2" "$b2"; }
+          trap cleanup_local EXIT
+          s1="$(curl -sS -L -D "$h1" -o "$b1" -c "$jar" -b "$cookie=$sid" -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/company/dashboard || printf 000)"
+          current_sid="$(awk -v n="$cookie" '$6==n{v=$7} END{print v}' "$jar")"
+          [ -n "$current_sid" ] && echo "::add-mask::$current_sid"
+          s2="$(curl -sS -D "$h2" -o "$b2" -b "$jar" -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/company/clients || printf 000)"
+          echo "DASHBOARD_HTTP=$s1"
+          echo "CLIENTS_HTTP=$s2"
+          echo "CLIENTS_CONTENT_TYPE=$(grep -i '^content-type:' "$h2" | tail -1 | tr -d '\r' || true)"
+          echo "CLIENTS_BODY_PREFIX_BEGIN"
+          head -c 600 "$b2" | tr '\000' '?' || true
+          echo
+          echo "CLIENTS_BODY_PREFIX_END"
+          echo 'SERVER_ERROR_EVIDENCE_BEGIN'
+          ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "bash -se" <<'REMOTE'
+          set +e
+          for p in /home/s/spugovxsim/planexp/logs /home/s/spugovxsim/planexp/public_html/erpv2/logs /home/s/spugovxsim/logs; do
+            if [ -d "$p" ]; then
+              find "$p" -maxdepth 2 -type f -mmin -10 -print 2>/dev/null | head -n 12 | while IFS= read -r f; do
+                echo "LOG=$f"
+                tail -n 240 "$f" 2>/dev/null | grep -Eai 'fatal|uncaught|exception|typeerror|pdo|clients|roles|access|navigationcounter|migration' | tail -n 100 || true
+              done
+            fi
+          done
+          log_path="$(/usr/bin/php8.5 -r 'echo ini_get("error_log");' 2>/dev/null)"
+          if [ -n "$log_path" ] && [ "$log_path" != syslog ] && [ -r "$log_path" ]; then
+            echo "PHP_ERROR_LOG=$log_path"
+            tail -n 300 "$log_path" 2>/dev/null | grep -Eai 'fatal|uncaught|exception|typeerror|pdo|clients|roles|access|navigationcounter|migration' | tail -n 120 || true
+          fi
+REMOTE
+          echo 'SERVER_ERROR_EVIDENCE_END'
+          for x in "$sid" "$current_sid"; do
+            if [ -n "$x" ]; then
+              ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '$helper' delete '$x'" >/dev/null 2>&1 || true
+            fi
+          done
+          test "$s1" = 200
+          test "$s2" = 500
+      - name: Cleanup
+        if: always()
+        shell: bash
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set +e
+          if [ -f "$HOME/.ssh/roles_500_diag" ]; then
+            ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "rm -f '/tmp/roles_access_500_diag_${GITHUB_RUN_ID}.php'" >/dev/null 2>&1 || true
+          fi
+          rm -f "$HOME/.ssh/roles_500_diag"
