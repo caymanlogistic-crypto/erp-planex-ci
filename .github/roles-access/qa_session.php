@@ -29,7 +29,7 @@ $config = require $root . '/bootstrap/app.php';
 $pdo = (new App\Core\Database($config['database']))->connection();
 
 if ($mode === 'diagnose-credentials') {
-    $encoded = (string) ($argv[2] ?? '');
+    $encoded = trim((string) stream_get_contents(STDIN));
     $decoded = base64_decode($encoded, true);
     if ($decoded === false) { fwrite(STDERR, "invalid credential payload encoding\n"); exit(1); }
     try { $candidates = json_decode($decoded, true, 64, JSON_THROW_ON_ERROR); }

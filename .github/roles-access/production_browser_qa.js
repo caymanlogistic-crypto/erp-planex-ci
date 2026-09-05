@@ -11,6 +11,7 @@ const encodedCredentials = process.env.P12_CREDENTIALS_B64 || '';
 const credentials = encodedCredentials ? JSON.parse(Buffer.from(encodedCredentials, 'base64').toString('utf8')) : [];
 const loginCredential = credentials.find(x => String(x.role).toUpperCase() === 'OWNER') || credentials[0] || null;
 const realLoginAvailable = process.env.QA_REAL_LOGIN_AVAILABLE === 'YES' && !!loginCredential;
+const mode = process.env.QA_MODE || 'all';
 if (!cookieName || !legacySid || !invalidSid) throw new Error('legacy QA session env missing');
 fs.mkdirSync(out, { recursive: true });
 
@@ -33,34 +34,43 @@ async function assertLayout(page, label) {
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
-    // A. Real pre-activation owner session WITHOUT account_id must upgrade, not 403.
-    const legacy = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-    await legacy.addCookies([{ name: cookieName, value: legacySid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true }]);
-    const legacyPage = await legacy.newPage();
-    let response = await legacyPage.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    must(response && response.status() === 200, `legacy dashboard status ${response && response.status()}`);
-    must(!legacyPage.url().includes('/login'), 'valid legacy session was invalidated instead of upgraded');
-    const upgradedSid = await currentSid(legacy); recordSid('QA_UPGRADED_SESSION_ID', upgradedSid);
-    must(upgradedSid && upgradedSid !== legacySid, 'legacy upgrade did not rotate session id');
-    response = await legacyPage.goto(base + '/company/clients', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    must(response && response.status() === 200, 'legacy upgraded protected page is not 200');
-    await assertLayout(legacyPage, 'legacy-upgraded-protected');
-    await legacyPage.screenshot({ path: `${out}/legacy-upgraded-protected-1440.png`, fullPage: true });
-    console.log('ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES');
-    console.log('ROLES_ACCESS_LEGACY_DASHBOARD_HTTP_STATUS=200');
+    if (mode !== 'real') {
+      // A. Real pre-activation owner session WITHOUT account_id must upgrade, not 403.
+      const legacy = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+      await legacy.addCookies([{ name: cookieName, value: legacySid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true }]);
+      const legacyPage = await legacy.newPage();
+      let response = await legacyPage.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      must(response && response.status() === 200, `legacy dashboard status ${response && response.status()}`);
+      must(!legacyPage.url().includes('/login'), 'valid legacy session was invalidated instead of upgraded');
+      const upgradedSid = await currentSid(legacy); recordSid('QA_UPGRADED_SESSION_ID', upgradedSid);
+      must(upgradedSid && upgradedSid !== legacySid, 'legacy upgrade did not rotate session id');
+      response = await legacyPage.goto(base + '/company/clients', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      must(response && response.status() === 200, 'legacy upgraded protected page is not 200');
+      await assertLayout(legacyPage, 'legacy-upgraded-protected');
+      await legacyPage.screenshot({ path: `${out}/legacy-upgraded-protected-1440.png`, fullPage: true });
+      console.log('ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES');
+      console.log('ROLES_ACCESS_LEGACY_DASHBOARD_HTTP_STATUS=200');
 
-    // B. Unprovable legacy identity must fail closed to login, never receive company access/403.
-    const invalid = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-    await invalid.addCookies([{ name: cookieName, value: invalidSid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true }]);
-    const invalidPage = await invalid.newPage();
-    response = await invalidPage.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    must(response && response.status() === 200, 'invalid legacy session should land on login HTTP 200');
-    must(new URL(invalidPage.url()).pathname.endsWith('/login'), 'invalid legacy session did not redirect to login');
-    console.log('ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES');
+      // B. Unprovable legacy identity must fail closed to login, never receive company access/403.
+      const invalid = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+      await invalid.addCookies([{ name: cookieName, value: invalidSid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true }]);
+      const invalidPage = await invalid.newPage();
+      response = await invalidPage.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
+      must(response && response.status() === 200, 'invalid legacy session should land on login HTTP 200');
+      must(new URL(invalidPage.url()).pathname.endsWith('/login'), 'invalid legacy session did not redirect to login');
+      console.log('ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES');
+
+      console.log('ROLES_ACCESS_LEGACY_BROWSER_PASS=YES');
+      if (mode === 'legacy') {
+        fs.writeFileSync(`${out}/legacy-browser-pass.txt`, 'LEGACY_DASHBOARD_HTTP_STATUS=200\nLEGACY_SESSION_UPGRADE=PASS\nINVALID_LEGACY_RELOGIN=PASS\n');
+        return;
+      }
+    }
 
     // C. REAL normal login only when current global auth already verified this credential.
-    let realLoginStatus = 'SKIPPED_NO_VERIFIED_CREDENTIAL';
-    if (realLoginAvailable) {
+    must(realLoginAvailable, 'NO_CURRENT_VERIFIED_CREDENTIAL');
+    let realLoginStatus = 'PASS';
+    {
       const real = await browser.newContext({ viewport: { width: 1440, height: 1000 }, locale: 'ru-RU' });
       const page = await real.newPage();
       response = await page.goto(base + '/login', { waitUntil: 'domcontentloaded', timeout: 60000 });
@@ -81,10 +91,7 @@ async function assertLayout(page, label) {
       console.log('ROLES_ACCESS_REAL_LOGIN_PASS=YES');
       console.log('ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200');
       console.log('ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200');
-      realLoginStatus = 'PASS';
       await real.close();
-    } else {
-      console.log('ROLES_ACCESS_REAL_LOGIN_SKIPPED=NO_CURRENT_VERIFIED_CREDENTIAL');
     }
 
     fs.writeFileSync(`${out}/browser-pass.txt`, [

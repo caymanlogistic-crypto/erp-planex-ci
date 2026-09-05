@@ -61,53 +61,6 @@ jobs:
           set -euo pipefail
           npm install --no-save playwright@1.54.2
           npx playwright install --with-deps chromium
-      - name: Resolve OWNER runtime credentials
-        env:
-          CRED: ${{ secrets.P11_RUNTIME_CREDENTIALS_B64 }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          cred="${CRED:-}"
-          if [ -z "$cred" ]; then
-            # The old encrypted P11 envelope was bound to a retired deploy key.
-            # Fallback only to the existing documented QA owner account; this
-            # still performs a real AuthController login and does not mutate DB.
-            cred="$(python3 - <<'PY'
-          import base64, json
-          from pathlib import Path
-          notes = Path('docs/design-audit/full-ui-revision/RUNTIME_ACCESS_NOTES.md').read_text(encoding='utf-8')
-          rows = []
-          for line in notes.splitlines():
-              if '| company_owner |' not in line:
-                  continue
-              cells = [cell.strip() for cell in line.strip().strip('|').split('|')]
-              if len(cells) == 4 and all(cells[:3]):
-                  rows.append(cells)
-          if len(rows) != 1:
-              raise SystemExit('documented QA owner credential must resolve exactly once')
-          login, role, password, company = rows[0]
-          payload = [{'role': 'OWNER', 'username': login, 'password': password}]
-          print(base64.b64encode(json.dumps(payload, separators=(',', ':')).encode()).decode())
-          PY
-            )"
-          fi
-          test -n "$cred"
-          echo "::add-mask::$cred"
-          echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
-      - name: Validate resolved credential against current global auth
-        env:
-          HOST: ${{ secrets.ERPV2_SSH_HOST }}
-          PORT: ${{ secrets.ERPV2_SSH_PORT }}
-          USER: ${{ secrets.ERPV2_SSH_USER }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          diag="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_session_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST"             "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_access_session_qa_${GITHUB_RUN_ID}.php' diagnose-credentials '$P12_CREDENTIALS_B64'")"
-          diag="${diag#ROLES_QA_CREDENTIAL_DIAGNOSTIC=}"
-          printf '%s\n' "$diag" > roles_access_credential_diagnostic.json
-          selected="$(python3 -c 'import json,sys; x=json.loads(sys.argv[1]); print("YES" if isinstance(x.get("selected_index"),int) else "NO")' "$diag")"
-          echo "QA_REAL_LOGIN_AVAILABLE=$selected" >> "$GITHUB_ENV"
-          echo "ROLES_ACCESS_CURRENT_LOGIN_CREDENTIAL_AVAILABLE=$selected"
       - name: Create valid and invalid pre-activation sessions
         env:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -130,19 +83,66 @@ jobs:
           with open(sys.argv[3],'a') as f:
               f.write(f"QA_COOKIE_NAME={legacy['cookie']}\nQA_LEGACY_SESSION_ID={legacy['sid']}\nQA_INVALID_SESSION_ID={invalid['sid']}\n")
           PY
-      - name: Legacy-session and current-login production browser acceptance
+      - name: Legacy-session production browser acceptance
+        env:
+          QA_MODE: legacy
+        shell: bash
         run: |
           set -euo pipefail
-          node .github/roles-access/production_browser_qa.js | tee roles_access_session_browser.txt
-          grep -q '^ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES$' roles_access_session_browser.txt
-          grep -q '^ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES$' roles_access_session_browser.txt
-          if [ "${QA_REAL_LOGIN_AVAILABLE:-NO}" = YES ]; then
-            grep -q '^ROLES_ACCESS_REAL_LOGIN_PASS=YES$' roles_access_session_browser.txt
-            grep -q '^ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200$' roles_access_session_browser.txt
-            grep -q '^ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200$' roles_access_session_browser.txt
-          else
-            grep -q '^ROLES_ACCESS_REAL_LOGIN_SKIPPED=NO_CURRENT_VERIFIED_CREDENTIAL$' roles_access_session_browser.txt
+          node .github/roles-access/production_browser_qa.js | tee roles_access_legacy_browser.txt
+          grep -q '^ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES$' roles_access_legacy_browser.txt
+          grep -q '^ROLES_ACCESS_LEGACY_DASHBOARD_HTTP_STATUS=200$' roles_access_legacy_browser.txt
+          grep -q '^ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES$' roles_access_legacy_browser.txt
+          grep -q '^ROLES_ACCESS_LEGACY_BROWSER_PASS=YES$' roles_access_legacy_browser.txt
+      - name: Resolve OWNER runtime credentials
+        env:
+          CRED: ${{ secrets.P11_RUNTIME_CREDENTIALS_B64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cred="${CRED:-}"
+          if [ -z "$cred" ]; then
+            echo 'QA_REAL_LOGIN_AVAILABLE=NO' >> "$GITHUB_ENV"
+            echo 'ROLES_ACCESS_CURRENT_LOGIN_CREDENTIAL_AVAILABLE=NO'
+            exit 0
           fi
+          echo "::add-mask::$cred"
+          echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
+          echo 'QA_REAL_LOGIN_AVAILABLE=PENDING' >> "$GITHUB_ENV"
+      - name: Validate resolved credential against current global auth
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${QA_REAL_LOGIN_AVAILABLE:-NO}" != PENDING ]; then
+            echo 'ROLES_ACCESS_CURRENT_LOGIN_CREDENTIAL_AVAILABLE=NO'
+            exit 0
+          fi
+          diag="$(printf '%s' "$P12_CREDENTIALS_B64" | ssh -p "$PORT" -i "$HOME/.ssh/roles_session_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '/tmp/roles_access_session_qa_${GITHUB_RUN_ID}.php' diagnose-credentials")"
+          diag="${diag#ROLES_QA_CREDENTIAL_DIAGNOSTIC=}"
+          printf '%s\n' "$diag" > roles_access_credential_diagnostic.json
+          selected="$(python3 -c 'import json,sys; x=json.loads(sys.argv[1]); print("YES" if isinstance(x.get("selected_index"),int) else "NO")' "$diag")"
+          echo "QA_REAL_LOGIN_AVAILABLE=$selected" >> "$GITHUB_ENV"
+          echo "ROLES_ACCESS_CURRENT_LOGIN_CREDENTIAL_AVAILABLE=$selected"
+      - name: Real login dashboard protected-page acceptance
+        env:
+          QA_MODE: real
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${QA_REAL_LOGIN_AVAILABLE:-NO}" != YES ]; then
+            echo 'ROLES_ACCESS_REAL_LOGIN_BLOCKER=NO_CURRENT_VERIFIED_CREDENTIAL'
+            exit 1
+          fi
+          node .github/roles-access/production_browser_qa.js | tee roles_access_real_login_browser.txt
+          grep -q '^ROLES_ACCESS_REAL_LOGIN_PASS=YES$' roles_access_real_login_browser.txt
+          grep -q '^ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200$' roles_access_real_login_browser.txt
+          grep -q '^ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200$' roles_access_real_login_browser.txt
+          grep -q '^ROLES_ACCESS_BROWSER_UI_PASS=YES$' roles_access_real_login_browser.txt
       - name: Cleanup QA sessions/tooling
         if: always()
         env:
