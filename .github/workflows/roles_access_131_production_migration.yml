@@ -224,7 +224,29 @@ jobs:
           npm install --no-save playwright@1.54.2
           npx playwright install --with-deps chromium
 
-      - name: Create temporary ready-owner browser session
+      - name: Resolve OWNER runtime credentials for real login QA
+        env:
+          CRED: ${{ secrets.P11_RUNTIME_CREDENTIALS_B64 }}
+          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cred="${CRED:-}"
+          if [ -z "$cred" ]; then
+            git fetch origin p11-audit-v2:refs/remotes/origin/p11-audit-v2
+            mkdir -p .github/p11
+            git show origin/p11-audit-v2:.github/p11/P11_decrypt_credentials.py > .github/p11/P11_decrypt_credentials.py
+            git show origin/p11-audit-v2:.github/p11/P11_runtime_credentials.enc.json > .github/p11/P11_runtime_credentials.enc.json
+            python -m pip install --quiet 'cryptography==46.0.3'
+            printf '%s\n' "$KEY" > /tmp/roles_access_qa_key
+            chmod 600 /tmp/roles_access_qa_key
+            cred="$(python .github/p11/P11_decrypt_credentials.py --key /tmp/roles_access_qa_key --input .github/p11/P11_runtime_credentials.enc.json)"
+          fi
+          test -n "$cred"
+          echo "::add-mask::$cred"
+          echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
+
+      - name: Create valid and invalid pre-activation browser sessions
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -232,18 +254,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_131_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_qa_session_${GITHUB_RUN_ID}.php' create")
-          JSON=${OUT#ROLES_QA_SESSION=}
-          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          make_session() {
+            mode="$1"
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_131_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_qa_session_${GITHUB_RUN_ID}.php' '$mode'"
+          }
+          LEGACY_JSON="$(make_session create-legacy-owner)"; LEGACY_JSON="${LEGACY_JSON#ROLES_QA_SESSION=}"
+          INVALID_JSON="$(make_session create-invalid-owner)"; INVALID_JSON="${INVALID_JSON#ROLES_QA_SESSION=}"
+          python3 - "$LEGACY_JSON" "$INVALID_JSON" "$GITHUB_ENV" <<'PY'
           import json,sys
-          obj=json.loads(sys.argv[1])
-          for key in ('sid','cookie'):
-              print(f'::add-mask::{obj[key]}')
-          with open(sys.argv[2],'a') as f:
-              f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
-              f.write(f"QA_OWNER_SESSION_ID={obj['sid']}\n")
-              f.write(f"QA_COMPANY_ID={obj['company_id']}\n")
+          legacy=json.loads(sys.argv[1]); invalid=json.loads(sys.argv[2])
+          for value in (legacy['cookie'],legacy['sid'],invalid['sid']):
+              print(f'::add-mask::{value}')
+          with open(sys.argv[3],'a') as f:
+              f.write(f"QA_COOKIE_NAME={legacy['cookie']}\n")
+              f.write(f"QA_LEGACY_SESSION_ID={legacy['sid']}\n")
+              f.write(f"QA_INVALID_SESSION_ID={invalid['sid']}\n")
           PY
 
       - name: Production browser UI acceptance
@@ -251,9 +277,14 @@ jobs:
         run: |
           set -euo pipefail
           node .github/roles-access/production_browser_qa.js | tee roles_access_browser.txt
+          grep -q '^ROLES_ACCESS_REAL_LOGIN_PASS=YES$' roles_access_browser.txt
+          grep -q '^ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200$' roles_access_browser.txt
+          grep -q '^ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200$' roles_access_browser.txt
+          grep -q '^ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES$' roles_access_browser.txt
+          grep -q '^ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES$' roles_access_browser.txt
           grep -q '^ROLES_ACCESS_BROWSER_UI_PASS=YES$' roles_access_browser.txt
 
-      - name: Cleanup temporary browser session
+      - name: Cleanup temporary browser sessions
         if: always()
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -263,11 +294,14 @@ jobs:
         run: |
           set -u -o pipefail
           STATUS=0
-          if [ -n "${QA_OWNER_SESSION_ID:-}" ] && [ -f "$HOME/.ssh/roles_access_131_key" ]; then
-            OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_131_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
-              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_qa_session_${GITHUB_RUN_ID}.php' delete '${QA_OWNER_SESSION_ID}'") || STATUS=1
-            [ "$OUT" = 'ROLES_QA_SESSION_DELETED' ] || STATUS=1
-          fi
+          for sid in "${QA_LEGACY_SESSION_ID:-}" "${QA_INVALID_SESSION_ID:-}" "${QA_UPGRADED_SESSION_ID:-}" "${QA_REAL_LOGIN_SESSION_ID:-}"; do
+            if [ -n "$sid" ] && [ -f "$HOME/.ssh/roles_access_131_key" ]; then
+              OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_131_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+                "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_qa_session_${GITHUB_RUN_ID}.php' delete '$sid'") || STATUS=1
+              [ "$OUT" = 'ROLES_QA_SESSION_DELETED' ] || STATUS=1
+            fi
+          done
+          rm -f /tmp/roles_access_qa_key
           exit "$STATUS"
 
       - name: Fail-closed feature rollback after post-activation failure

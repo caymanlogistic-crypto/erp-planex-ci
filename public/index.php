@@ -68,6 +68,7 @@ use App\Security\PdoAccessStateProvider;
 use App\Service\CompanyInnLookupService;
 use App\Service\ContractorContactService;
 use App\Service\ClientContactService;
+use App\Service\LegacySessionIdentityUpgradeService;
 
 $db = new Database($config['database']);
 $pageRegistry = new PageRegistry();
@@ -77,10 +78,26 @@ $accessStateProvider = $rolesAccessEnabled
     : null;
 $router = new Router($pageRegistry);
 
-// Activation is an explicit deployment switch. Once enabled, provider/readiness
-// failures stay fail-closed inside EffectiveAccessResolver and never fall back
-// to legacy role checks.
+// Activation is an explicit deployment switch. Sessions created before the
+// global identity rollout are upgraded only through immutable migration
+// provenance. If that identity cannot be proven exactly, invalidate the old
+// session and force a normal login instead of turning an otherwise-valid old
+// cookie into an opaque company-route 403.
 if ($rolesAccessEnabled) {
+    $legacySessionResult = (new LegacySessionIdentityUpgradeService(
+        $db->connection(),
+        $accessStateProvider
+    ))->upgrade($_SESSION);
+    if ($legacySessionResult === LegacySessionIdentityUpgradeService::UPGRADED) {
+        session_regenerate_id(true);
+    } elseif ($legacySessionResult === LegacySessionIdentityUpgradeService::INVALID) {
+        session_regenerate_id(true);
+        $_SESSION = [];
+        if (current_app_path() !== '/login') {
+            redirect_to('/login');
+        }
+    }
+
     $router->enableCompanyAccess(
         new EffectiveAccessResolver($pageRegistry, $accessStateProvider),
         AccessRequestContext::fromSession($_SESSION)

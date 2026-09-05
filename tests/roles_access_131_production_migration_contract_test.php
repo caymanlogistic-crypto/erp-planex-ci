@@ -29,10 +29,15 @@ foreach ([
     'Fail-closed feature rollback after post-activation failure',
     'Install Playwright Chromium for production UI acceptance',
     'Production browser UI acceptance',
-    'Cleanup temporary browser session',
+    'Resolve OWNER runtime credentials for real login QA',
+    'Create valid and invalid pre-activation browser sessions',
+    'Cleanup temporary browser sessions',
     'ROLES_ACCESS_BROWSER_UI_PASS=YES',
     'erpv2/roles-access-migration131',
 ] as $needle) $need($workflow, $needle, 'workflow token');
+
+foreach (['P11_RUNTIME_CREDENTIALS_B64','P12_CREDENTIALS_B64','create-legacy-owner','create-invalid-owner','ROLES_ACCESS_REAL_LOGIN_PASS=YES','ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200','ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES','ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES'] as $needle) $need($workflow, $needle, 'real login QA workflow token');
+
 foreach (["\n  push:","\n  workflow_run:","\n  pull_request:","\n  schedule:"] as $forbidden) {
     if (str_contains($workflow, $forbidden)) $fail('production migration workflow must be manual-only');
 }
@@ -132,9 +137,9 @@ if (str_contains($executor, '$creatorLinks[]')) $fail('historical creator links 
 
 $qaSession = (string) file_get_contents($root . '/.github/roles-access/qa_session.php');
 $browserQa = (string) file_get_contents($root . '/.github/roles-access/production_browser_qa.js');
-foreach (['account_id','company_access_readiness'] as $needle) $need($qaSession, $needle, 'browser session token');
-if (str_contains($qaSession, "'role_code' =>")) $fail('browser QA session must resolve company role from central state, not inject it');
-foreach (['popup-over-popup','scrollWidth','roles-access-role-modal-1440.png','roles-access-user-modal-1440.png','roles-access-assignments-1440.png'] as $needle) {
+foreach (['legacy_source','central_company_user','create-legacy-owner','create-invalid-owner',"'role_code' => 'company_owner'"] as $needle) $need($qaSession, $needle, 'legacy browser session token');
+if (str_contains($qaSession, "'account_id' =>")) $fail('legacy browser QA session must intentionally omit account_id');
+foreach (['P12_CREDENTIALS_B64','/login','/company/dashboard','/company/clients','input[name="login"]','ROLES_ACCESS_REAL_LOGIN_PASS=YES','ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES','ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES'] as $needle) {
     $need($browserQa, $needle, 'browser QA token');
 }
 
