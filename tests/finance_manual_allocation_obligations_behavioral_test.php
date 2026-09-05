@@ -113,7 +113,7 @@ $allocB = $pdo->query("SELECT * FROM finance_operation_allocations WHERE id={$al
 check((int)$allocB['obligation_id']===(int)$b['id'], 'direct service manual allocation stores obligation_id');
 check($allocB['linear_route_payment_id']===null, 'service allocation leaves legacy linear_route_payment_id NULL');
 check(m($pdo->query("SELECT paid_amount FROM linear_route_service_payments WHERE id=2")->fetchColumn())==='120.00', 'service payment paid_amount updated through production cascade');
-check((string)$pdo->query("SELECT status FROM linear_route_service_payments WHERE id=2")->fetchColumn()==='partially_paid', 'service payment status becomes partial');
+check((string)$pdo->query("SELECT status FROM linear_route_service_payments WHERE id=2")->fetchColumn()==='overdue_partial', 'overdue service payment status becomes overdue partial');
 check(m($pdo->query("SELECT paid_amount FROM finance_obligations WHERE id=".(int)$b['id'])->fetchColumn())==='120.00', 'canonical obligation paid_amount updated');
 
 // Validation: counterparty, direction, overpayment, route access.
@@ -143,11 +143,11 @@ check(array_reduce($acRows,fn(bool $ok,array $r):bool=>$ok && (int)$r['obligatio
 check((int)$acRows[0]['obligation_id']===(int)$a['id'] && m($acRows[0]['amount'])==='100.00','first linked obligation consumes exact 100');
 check((int)$acRows[1]['obligation_id']===(int)$c['id'] && m($acRows[1]['amount'])==='30.00','second linked obligation receives residual 30');
 check($acRows[0]['linear_route_payment_id']===null && $acRows[1]['linear_route_payment_id']===null,'service invoice allocations never fake legacy route payment id');
-check(m($pdo->query("SELECT paid_amount FROM finance_invoices WHERE id=2")->fetchColumn())==='130.00' && (string)$pdo->query("SELECT status FROM finance_invoices WHERE id=2")->fetchColumn()==='partially_paid','invoice reflects partial production payment');
+check(m($pdo->query("SELECT paid_amount FROM finance_invoices WHERE id=2")->fetchColumn())==='130.00' && (string)$pdo->query("SELECT status FROM finance_invoices WHERE id=2")->fetchColumn()==='overdue_partial','invoice reflects overdue partial production payment');
 check(m($pdo->query("SELECT paid_amount FROM finance_obligations WHERE id=".(int)$a['id'])->fetchColumn())==='100.00','service A obligation fully paid');
 check(m($pdo->query("SELECT paid_amount FROM finance_obligations WHERE id=".(int)$c['id'])->fetchColumn())==='30.00','service C obligation partially paid');
 check((string)$pdo->query("SELECT status FROM linear_route_service_payments WHERE id=1")->fetchColumn()==='paid','service A source status paid');
-check((string)$pdo->query("SELECT status FROM linear_route_service_payments WHERE id=3")->fetchColumn()==='partially_paid','service C source status partial');
+check((string)$pdo->query("SELECT status FROM linear_route_service_payments WHERE id=3")->fetchColumn()==='overdue_partial','service C source status overdue partial');
 
 // Cross-report end-to-end semantics after partial invoice payment.
 $payables = FinancePayablesReportService::build($pdo);
