@@ -32,7 +32,7 @@ jobs:
           set -euo pipefail
           canonical="$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')"
           git merge-base --is-ancestor "$canonical" HEAD
-          unexpected="$(git diff --name-only "$canonical"..HEAD | grep -Ev '^\.github/(workflows/roles_access_500_diagnostic\.yml|roles-access/diag_error_tail\.sh)$' || true)"
+          unexpected="$(git diff --name-only "$canonical"..HEAD | grep -Ev '^\.github/(workflows/roles_access_500_diagnostic\.yml|roles-access/(diag_error_tail\.sh|diag_cli_request\.php))$' || true)"
           test -z "$unexpected"
           install -d -m 700 "$HOME/.ssh"
           printf '%s\n' "$KEY" > "$HOME/.ssh/roles_500_diag"
@@ -43,6 +43,7 @@ jobs:
           echo "DIAG_CANONICAL=$canonical"
           scp -P "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/roles-access/qa_session.php "$USER@$HOST:/tmp/roles_access_500_diag_${GITHUB_RUN_ID}.php"
           scp -P "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/roles-access/diag_error_tail.sh "$USER@$HOST:/tmp/roles_access_500_tail_${GITHUB_RUN_ID}.sh"
+          scp -P "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/roles-access/diag_cli_request.php "$USER@$HOST:/tmp/roles_access_500_cli_${GITHUB_RUN_ID}.php"
       - name: Reproduce legacy upgrade and capture bounded error evidence
         shell: bash
         env:
@@ -72,8 +73,11 @@ jobs:
           echo
           echo "CLIENTS_BODY_PREFIX_END"
           echo 'SERVER_ERROR_EVIDENCE_BEGIN'
-          ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "bash '/tmp/roles_access_500_tail_${GITHUB_RUN_ID}.sh'" || true
+          ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "bash '/tmp/roles_access_500_tail_${GITHUB_RUN_ID}.sh' '/tmp/roles_access_500_cli_${GITHUB_RUN_ID}.php'" || true
           echo 'SERVER_ERROR_EVIDENCE_END'
+          echo 'CLI_FATAL_EVIDENCE_BEGIN'
+          ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST"             "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 -d display_errors=1 -d log_errors=0 '/tmp/roles_access_500_cli_${GITHUB_RUN_ID}.php' '$current_sid'" 2>&1 | tail -n 120 || true
+          echo 'CLI_FATAL_EVIDENCE_END'
           for x in "$sid" "$current_sid"; do
             if [ -n "$x" ]; then
               ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' /usr/bin/php8.5 '$helper' delete '$x'" >/dev/null 2>&1 || true
@@ -91,6 +95,6 @@ jobs:
         run: |
           set +e
           if [ -f "$HOME/.ssh/roles_500_diag" ]; then
-            ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "rm -f '/tmp/roles_access_500_diag_${GITHUB_RUN_ID}.php' '/tmp/roles_access_500_tail_${GITHUB_RUN_ID}.sh'" >/dev/null 2>&1 || true
+            ssh -p "$PORT" -i "$HOME/.ssh/roles_500_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "rm -f '/tmp/roles_access_500_diag_${GITHUB_RUN_ID}.php' '/tmp/roles_access_500_tail_${GITHUB_RUN_ID}.sh' '/tmp/roles_access_500_cli_${GITHUB_RUN_ID}.php'" >/dev/null 2>&1 || true
           fi
           rm -f "$HOME/.ssh/roles_500_diag"
