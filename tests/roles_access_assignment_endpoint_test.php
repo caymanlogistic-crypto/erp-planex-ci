@@ -44,6 +44,15 @@ foreach (['memberships', 'selected_membership_id', 'entities', 'assigned'] as $k
     $assert(str_contains($service, "'{$key}'"), "Response contract must contain {$key}.");
 }
 $assert(str_contains($post, "'legacy_assignment_payload_retired'") && str_contains($post, '], 410)'), 'Legacy transfer/cascade payload must return JSON 410.');
+
+$entrypoint = file_get_contents($root . '/app/Support/entrypoint_dependencies.php');
+$assert(str_contains($entrypoint, "app/Service/EntityAssignmentService.php"), 'EntityAssignmentService must be loaded by the public entrypoint.');
+$assert(strpos($entrypoint, "app/Service/EntityAssignmentService.php") < strpos($entrypoint, "app/Service/ResponsibleAssignmentService.php"), 'EntityAssignmentService must load before ResponsibleAssignmentService consumers.');
+$assert(str_contains($post, "'error' => 'assignment_update_failed'") && str_contains($post, '], 500)'), 'Unexpected assignment backend failures must be bounded JSON 500.');
+$assert(str_contains($post, "'message' => 'Не удалось сохранить закрепление. Повторите позже.'"), 'Unexpected assignment failures must expose only a safe user message.');
+$assert(!str_contains($post, "'message' => \$e->getMessage()"), 'Unexpected backend exception text must never be returned to the user.');
+$assert(str_contains($post, "'error' => 'invalid_assignment_membership'") && str_contains($post, '], 422)'), 'Invalid membership set must return JSON 422.');
+$assert(str_contains($post, "'error' => 'assignment_target_not_found'") && str_contains($post, '], 422)'), 'Missing assignment target must return JSON 422.');
 $assert(str_contains($post, "'membership_ids' => \$normalized") || str_contains($post, "'membership_ids'=>\$normalized"), 'POST must return normalized full membership set.');
 
 if ($failures !== []) {

@@ -48,7 +48,12 @@ try {
     $companyStmt->execute([$companyId]);
     $company = $companyStmt->fetch(PDO::FETCH_ASSOC);
     if (!$company) {
-        throw new RuntimeException('Компания не найдена или отключена.');
+        jsonResponse([
+            'success' => false,
+            'error' => 'company_not_found',
+            'message' => 'Компания не найдена или отключена.',
+        ], 422);
+        return;
     }
 
     $tenant = new Database(companyDatabaseConfig($config, $company));
@@ -59,7 +64,12 @@ try {
     $exists = $localPdo->prepare("SELECT 1 FROM `{$table}` WHERE id = ? AND deleted_at IS NULL AND status <> 'archived' LIMIT 1");
     $exists->execute([$entityId]);
     if (!$exists->fetchColumn()) {
-        throw new RuntimeException('Объект не найден.');
+        jsonResponse([
+            'success' => false,
+            'error' => 'assignment_target_not_found',
+            'message' => 'Объект для закрепления не найден.',
+        ], 422);
+        return;
     }
 
     $normalized = array_values(array_unique(array_filter(array_map('intval', $membershipIds))));
@@ -71,7 +81,12 @@ try {
         );
         $members->execute(array_merge([$companyId], $normalized));
         if ((int) $members->fetchColumn() !== count($normalized)) {
-            throw new RuntimeException('Выбрано членство другой компании или несуществующий сотрудник.');
+            jsonResponse([
+                'success' => false,
+                'error' => 'invalid_assignment_membership',
+                'message' => 'Выбран недоступный сотрудник. Обновите страницу и повторите.',
+            ], 422);
+            return;
         }
     }
 
@@ -85,9 +100,10 @@ try {
 
     jsonResponse(['success'=>true,'membership_ids'=>$normalized]);
 } catch (Throwable $e) {
+    error_log('Responsible assignment update failed: ' . get_class($e) . ': ' . $e->getMessage());
     jsonResponse([
         'success' => false,
         'error' => 'assignment_update_failed',
-        'message' => $e->getMessage(),
-    ], 422);
+        'message' => 'Не удалось сохранить закрепление. Повторите позже.',
+    ], 500);
 }
