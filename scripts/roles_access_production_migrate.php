@@ -42,7 +42,17 @@ if ($evidenceDir === '' || !str_starts_with($evidenceDir, $expectedPrefix)) {
     fail('PLANEX_EVIDENCE_DIR must be inside production deploy_backups/roles_access_*.');
 }
 
+try {
+    assertMarker($projectRoot, $sourceHead);
+    if ($command === 'deactivate') {
+        deactivateFeature($root, $sourceHead, $evidenceDir);
+    }
+} catch (Throwable $e) {
+    fail($e->getMessage());
+}
+
 require_once $root . '/app/Core/Database.php';
+require_once $root . '/app/Support/crypto_helper.php';
 require_once $root . '/app/Support/company_database.php';
 require_once $root . '/app/Security/PageRegistry.php';
 require_once $root . '/app/Security/AccessRequestContext.php';
@@ -75,7 +85,6 @@ $pageMatrix = legacyPageMatrix($registry);
 $profiles = roleProfiles($companies, $registry);
 
 try {
-    assertMarker($projectRoot, $sourceHead);
     match ($command) {
         'prepare' => prepare($root, $sourceHead, $evidenceDir, $centralSql, $tenantSql, $central, $companies, $tenants, $pageMatrix),
         'apply' => applyMigration($root, $sourceHead, $evidenceDir, $centralSql, $tenantSql, $central, $companies, $tenants, $profiles),
@@ -83,8 +92,7 @@ try {
         'ready' => markReady($root, $sourceHead, $evidenceDir, $centralSql, $tenantSql, $central, $companies),
         'activate' => activateFeature($root, $sourceHead, $evidenceDir, $central, $companies),
         'accept' => acceptProduction($root, $sourceHead, $evidenceDir, $central, $companies, $tenants, $registry),
-        'deactivate' => deactivateFeature($root, $sourceHead, $evidenceDir),
-        default => throw new RuntimeException('Usage: prepare|apply|after|ready|activate|accept'),
+        default => throw new RuntimeException('Usage: prepare|apply|after|ready|activate|accept|deactivate'),
     };
 } catch (Throwable $e) {
     fail($e->getMessage());

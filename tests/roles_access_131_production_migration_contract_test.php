@@ -62,7 +62,8 @@ foreach ([
     "'ready' => markReady(",
     "'activate' => activateFeature(",
     "'accept' => acceptProduction(",
-    "'deactivate' => deactivateFeature(",
+    "require_once \$root . '/app/Support/crypto_helper.php';",
+    "if (\$command === 'deactivate') {",
     'assertFeatureOff($root);',
     'MigrationProof::identityPlan($rows)',
     'MigrationProof::compare($before, $after, [])',
@@ -129,5 +130,49 @@ if (str_contains($qaSession, "'role_code' =>")) $fail('browser QA session must r
 foreach (['popup-over-popup','scrollWidth','roles-access-role-modal-1440.png','roles-access-user-modal-1440.png','roles-access-assignments-1440.png'] as $needle) {
     $need($browserQa, $needle, 'browser QA token');
 }
+
+// Runtime bootstrap regression: pre-activation rollback must not initialize DB.
+$sourceSha = str_repeat('a', 40);
+$base = sys_get_temp_dir() . '/roles_access_cli_' . bin2hex(random_bytes(6));
+$live = $base . '/planexp/public_html/erpv2';
+$evidence = $base . '/planexp/deploy_backups/roles_access_' . $sourceSha . '_test';
+@mkdir($live . '/bootstrap', 0700, true);
+@mkdir($base . '/planexp/deploy', 0700, true);
+@mkdir($evidence, 0700, true);
+file_put_contents($live . '/bootstrap/app.php', "<?php return [];\n");
+file_put_contents($live . '/.env', "ERP_ROLES_ACCESS_ENABLED=false\n");
+file_put_contents($base . '/planexp/deploy/P07_erpv2_deployed_commit.txt', $sourceSha . "\n");
+
+$cmd = sprintf(
+    'PLANEX_ROOT=%s PLANEX_SOURCE_SHA=%s PLANEX_EVIDENCE_DIR=%s %s %s deactivate 2>&1',
+    escapeshellarg($live),
+    escapeshellarg($sourceSha),
+    escapeshellarg($evidence),
+    escapeshellarg(PHP_BINARY),
+    escapeshellarg($root . '/scripts/roles_access_production_migrate.php'),
+);
+exec($cmd, $output, $rc);
+$joined = implode("\n", $output);
+
+$remove = static function (string $path) use (&$remove): void {
+    if (!is_dir($path)) { @unlink($path); return; }
+    foreach (scandir($path) ?: [] as $name) {
+        if ($name === '.' || $name === '..') continue;
+        $remove($path . '/' . $name);
+    }
+    @rmdir($path);
+};
+$remove($base);
+
+if ($rc !== 0 || !str_contains($joined, 'ROLES_ACCESS_FEATURE_ROLLBACK_NOT_REQUIRED=YES')) {
+    fwrite(STDERR, "roles access CLI deactivate bootstrap failed rc={$rc}: {$joined}\n");
+    exit(1);
+}
+if (str_contains($joined, 'cryptoDecrypt') || str_contains($joined, 'Database connection')) {
+    fwrite(STDERR, "deactivate unexpectedly initialized DB/runtime: {$joined}\n");
+    exit(1);
+}
+
+echo "ROLES_ACCESS_PRODUCTION_CLI_BOOTSTRAP=PASS\n";
 
 echo "ROLES_ACCESS_131_PRODUCTION_MIGRATION_CONTRACT=PASS\n";
