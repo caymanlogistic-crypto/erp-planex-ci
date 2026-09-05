@@ -37,7 +37,7 @@ async function assertLayout(page, label) {
     if (mode !== 'real') {
       // A. Real pre-activation owner session WITHOUT account_id must upgrade, not 403.
       const legacy = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-      await legacy.addCookies([{ name: cookieName, value: legacySid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true }]);
+      await legacy.addCookies([{ name: cookieName, value: legacySid, url: base, secure: true, httpOnly: true }]);
       const legacyPage = await legacy.newPage();
       let response = await legacyPage.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
       must(response && response.status() === 200, `legacy dashboard status ${response && response.status()}`);
@@ -45,7 +45,9 @@ async function assertLayout(page, label) {
       const upgradedSid = await currentSid(legacy); recordSid('QA_UPGRADED_SESSION_ID', upgradedSid);
       must(upgradedSid && upgradedSid !== legacySid, 'legacy upgrade did not rotate session id');
       response = await legacyPage.goto(base + '/company/clients', { waitUntil: 'domcontentloaded', timeout: 60000 });
-      must(response && response.status() === 200, 'legacy upgraded protected page is not 200');
+      console.log(`ROLES_ACCESS_LEGACY_PROTECTED_STATUS=${response && response.status()}`);
+      console.log(`ROLES_ACCESS_LEGACY_PROTECTED_PATH=${new URL(legacyPage.url()).pathname}`);
+      must(response && response.status() === 200, `legacy upgraded protected page status ${response && response.status()}`);
       await assertLayout(legacyPage, 'legacy-upgraded-protected');
       await legacyPage.screenshot({ path: `${out}/legacy-upgraded-protected-1440.png`, fullPage: true });
       console.log('ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES');
@@ -53,7 +55,7 @@ async function assertLayout(page, label) {
 
       // B. Unprovable legacy identity must fail closed to login, never receive company access/403.
       const invalid = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
-      await invalid.addCookies([{ name: cookieName, value: invalidSid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true }]);
+      await invalid.addCookies([{ name: cookieName, value: invalidSid, url: base, secure: true, httpOnly: true }]);
       const invalidPage = await invalid.newPage();
       response = await invalidPage.goto(base + '/company/dashboard', { waitUntil: 'domcontentloaded', timeout: 60000 });
       must(response && response.status() === 200, 'invalid legacy session should land on login HTTP 200');

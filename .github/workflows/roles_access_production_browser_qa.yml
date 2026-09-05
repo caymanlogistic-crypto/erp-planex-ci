@@ -168,7 +168,8 @@ jobs:
         with:
           name: roles_access_session_browser_${{ inputs.source_sha || github.sha }}
           path: |
-            roles_access_session_browser.txt
+            roles_access_legacy_browser.txt
+            roles_access_real_login_browser.txt
             roles_access_credential_diagnostic.json
             roles_access_session_qa_result/
           if-no-files-found: warn
@@ -178,14 +179,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -f roles_access_session_browser.txt
-          grep -q '^ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES$' roles_access_session_browser.txt
-          grep -q '^ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES$' roles_access_session_browser.txt
+          test -f roles_access_legacy_browser.txt
+          grep -q '^ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES$' roles_access_legacy_browser.txt
+          grep -q '^ROLES_ACCESS_LEGACY_DASHBOARD_HTTP_STATUS=200$' roles_access_legacy_browser.txt
+          grep -q '^ROLES_ACCESS_LEGACY_PROTECTED_STATUS=200$' roles_access_legacy_browser.txt
+          grep -q '^ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES$' roles_access_legacy_browser.txt
           if [ "${QA_REAL_LOGIN_AVAILABLE:-NO}" != YES ]; then
             echo 'ROLES_ACCESS_REAL_LOGIN_BLOCKER=NO_CURRENT_VERIFIED_CREDENTIAL'
             exit 1
           fi
-          grep -q '^ROLES_ACCESS_REAL_LOGIN_PASS=YES$' roles_access_session_browser.txt
-          grep -q '^ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200$' roles_access_session_browser.txt
-          grep -q '^ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200$' roles_access_session_browser.txt
+          test -f roles_access_real_login_browser.txt
+          grep -q '^ROLES_ACCESS_REAL_LOGIN_PASS=YES$' roles_access_real_login_browser.txt
+          grep -q '^ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200$' roles_access_real_login_browser.txt
+          grep -q '^ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200$' roles_access_real_login_browser.txt
           echo 'ROLES_ACCESS_CURRENT_REAL_LOGIN_GATE=PASS'
