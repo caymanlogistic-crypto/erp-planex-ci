@@ -31,6 +31,12 @@ $compatPos=strpos($index,'$compatibilityRoleCode =', $enablePos === false ? 0 : 
 if($barrierPos===false||$compatPos===false||!($enablePos<$barrierPos&&$barrierPos<$compatPos))$fail('identity-deny barrier must run after ACL resolution and before compatibility metadata');
 foreach (['loadMembershipAccess($accountId, $companyId)','nestedCompanyId','nestedLegacyUserId'] as $needle) $need($service,$needle,'session-shape validation');
 
+
+foreach (["url: base",'ROLES_ACCESS_LEGACY_PROTECTED_STATUS='] as $needle) $need($qa,$needle,'host-only legacy browser continuity');
+if(str_contains($qa,"domain: 'plan-ex.ru'"))$fail('synthetic legacy cookies must be host-only so PHP session rotation replaces the same cookie');
+foreach (['roles_access_legacy_browser.txt','roles_access_real_login_browser.txt',"ROLES_ACCESS_LEGACY_PROTECTED_STATUS=200"] as $needle) $need($workflow,$needle,'split browser evidence');
+if(str_contains($workflow,'roles_access_session_browser.txt'))$fail('stale combined browser evidence filename must not be used');
+
 foreach (['P12_CREDENTIALS_B64','QA_REAL_LOGIN_AVAILABLE','input[name="login"]','input[name="password"]','/company/dashboard','/company/clients','ROLES_ACCESS_REAL_LOGIN_PASS=YES','ROLES_ACCESS_LEGACY_BROWSER_PASS=YES','ROLES_ACCESS_LEGACY_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_DASHBOARD_HTTP_STATUS=200','ROLES_ACCESS_PROTECTED_PAGE_HTTP_STATUS=200','ROLES_ACCESS_LEGACY_SESSION_UPGRADE_PASS=YES','ROLES_ACCESS_INVALID_LEGACY_RELOGIN_PASS=YES'] as $needle) $need($qa,$needle,'real browser QA');
 $legacyPos=strpos($qa,'// A. Real pre-activation owner session');
 $realPos=strpos($qa,'// C. REAL normal login');
