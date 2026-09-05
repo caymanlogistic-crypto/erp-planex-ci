@@ -11,6 +11,20 @@
         });
     }
 
+    function requestError(response, payload) {
+        var status = Number(response.status || 0);
+        var safeMessage = '';
+        if (status === 419) safeMessage = 'Сессия устарела. Обновите страницу и повторите.';
+        else if (status === 403) safeMessage = payload.message || 'Недостаточно прав для изменения закрепления.';
+        else if (status === 422) safeMessage = payload.message || 'Проверьте выбранные данные и повторите.';
+        else if (status >= 500) safeMessage = 'Не удалось сохранить закрепление из-за ошибки сервера. Повторите позже.';
+        else safeMessage = payload.message || payload.error || 'Не удалось обновить закрепление.';
+        var error = new Error(safeMessage);
+        error.status = status;
+        error.code = payload.error || '';
+        return error;
+    }
+
     function request(path, options) {
         options = options || {}; options.credentials = 'same-origin';
         options.headers = Object.assign({'Accept':'application/json'}, options.headers || {});
@@ -19,7 +33,7 @@
         }
         return fetch(url(path), options).then(function (response) {
             return response.json().catch(function () { return {}; }).then(function (payload) {
-                if (!response.ok || payload.ok === false || payload.success === false) throw new Error(payload.message || payload.error || 'Не удалось обновить закрепление.');
+                if (!response.ok || payload.ok === false || payload.success === false) throw requestError(response, payload);
                 return payload;
             });
         });

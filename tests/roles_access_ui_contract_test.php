@@ -33,6 +33,9 @@ $assert(str_contains($js, 'setAssignmentBulkBusy(group, true)') && str_contains(
 $assert(str_contains($js, "{silent:true}") && str_contains($js, "return {ok:false, error:error}") && str_contains($js, "'Сохранено: ' + saved + '. Не удалось: ' + failed + '.'") && str_contains($js, "'Закрепления сохранены.'"), 'bulk partial failure is counted while failed checkboxes roll back');
 $assert(str_contains($js, 'assignmentCache.sets[key] = before') && str_contains($js, 'checkbox.checked ='), 'assignment error rollback');
 $assert(str_contains($js, 'Promise.all(state.memberships.map') && str_contains($js, 'membership_ids:after'), 'full many-to-many assignment set preserved');
+$assert(str_contains($js, "status === 419") && str_contains($js, "status === 403") && str_contains($js, "status === 422") && str_contains($js, "status >= 500"), 'roles-access request errors distinguish 419/403/422/500');
+$assert(str_contains($inline, "status === 419") && str_contains($inline, "status === 403") && str_contains($inline, "status === 422") && str_contains($inline, "status >= 500"), 'inline assignment errors distinguish 419/403/422/500');
+$assert(str_contains($js, 'ошибки сервера') && str_contains($inline, 'ошибки сервера'), '500 errors must use safe user-facing wording');
 $assert(str_contains($component, 'isSystemOwner()') && str_contains($inline, 'data-inline-membership'), 'owner-only inline object assignments');
 $assert(str_contains($layout, 'PageRegistry') && str_contains($layout, 'canAccessPage'), 'menu consumes canonical registry and effective permissions');
 $assert(str_contains($layout, '/company/switch') && str_contains($layout, 'count($switchCompanies) > 1'), 'company selector appears only for multiple active companies');

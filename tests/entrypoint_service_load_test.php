@@ -26,6 +26,10 @@ if (($argv[1] ?? '') === '--subprocess') {
     require_once __DIR__ . '/../app/Service/FinanceAuditLogService.php';
     require_once __DIR__ . '/../app/Service/FinanceSettlementCascadeService.php';
     require_once __DIR__ . '/../app/Service/FinanceAdjustmentService.php';
+    require_once __DIR__ . '/../app/Security/EffectiveAccess.php';
+    require_once __DIR__ . '/../app/Security/AccessRuntime.php';
+    require_once __DIR__ . '/../app/Service/AccessControlService.php';
+    require_once __DIR__ . '/../app/Service/EntityAssignmentService.php';
 
     $classes = [
         'App\Service\DateCalculationService',
@@ -33,6 +37,7 @@ if (($argv[1] ?? '') === '--subprocess') {
         'App\Service\FinanceAuditLogService',
         'App\Service\FinanceSettlementCascadeService',
         'App\Service\FinanceAdjustmentService',
+        'App\Service\EntityAssignmentService',
     ];
     $missing = [];
     foreach ($classes as $class) {
@@ -87,6 +92,7 @@ $serviceFiles = [
     'app/Service/FinanceAuditLogService.php',
     'app/Service/FinanceSettlementCascadeService.php',
     'app/Service/FinanceAdjustmentService.php',
+    'app/Service/EntityAssignmentService.php',
 ];
 $missingFiles = [];
 foreach ($serviceFiles as $sf) {
@@ -94,7 +100,7 @@ foreach ($serviceFiles as $sf) {
         $missingFiles[] = $sf;
     }
 }
-check('all 5 CS-01 service files exist', $missingFiles === []);
+check('all 6 CS-01 service files exist', $missingFiles === []);
 
 // 3. Check no duplicate require entries in public/index.php.
 $dupes = array_filter(array_count_values($requires), fn($c) => $c > 1);
@@ -106,6 +112,7 @@ $foundational = [
     'app/Service/RoutePaymentStatusService.php',
     'app/Service/FinanceAuditLogService.php',
     'app/Service/FinanceSettlementCascadeService.php',
+    'app/Service/EntityAssignmentService.php',
 ];
 $missingRequires = [];
 foreach ($foundational as $f) {
@@ -113,7 +120,7 @@ foreach ($foundational as $f) {
         $missingRequires[] = $f;
     }
 }
-check('all 4 web-consumer foundational services required by entrypoint', $missingRequires === []);
+check('all 5 web-consumer foundational services required by entrypoint', $missingRequires === []);
 
 // 5. Dependency order: foundational must appear before every direct consumer.
 $consumers = [
@@ -138,6 +145,9 @@ $consumers = [
     'app/Service/FinanceSettlementCascadeService.php' => [
         'app/Service/FinanceAllocationService.php',
         'app/Service/FinanceInvoiceService.php',
+    ],
+    'app/Service/EntityAssignmentService.php' => [
+        'app/Service/ResponsibleAssignmentService.php',
     ],
 ];
 
@@ -177,7 +187,7 @@ $out = [];
 $code = 0;
 exec($cmd . ' 2>&1', $out, $code);
 $subOk = $code === 0;
-check('subprocess class_exists for all 5 CS-01 classes', $subOk);
+check('subprocess class_exists for all 6 CS-01 classes', $subOk);
 if (!$subOk) {
     echo "  subprocess output: " . trim(implode("\n", $out)) . "\n";
 }
