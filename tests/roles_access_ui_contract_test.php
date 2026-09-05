@@ -27,6 +27,10 @@ $assert(str_contains($js, 'page_overrides:collectPageValues') && str_contains($j
 $assert(str_contains($js, 'var readonlySystem = system && !copyMode') && str_contains($js, 'data-role-copy'), 'protected owner role remains read-only but can be copied as a template');
 $assert(str_contains($js, 'data-page-choice="inherit"') && str_contains($js, '>По роли</button>') && str_contains($js, '>Разрешить</button>') && str_contains($js, '>Запретить</button>'), 'compact tri-state member page controls');
 $assert(str_contains($js, 'data-assignment-search') && str_contains($js, 'data-assignment-count') && str_contains($js, 'data-assignment-bulk="select"') && str_contains($js, 'data-assignment-bulk="clear"'), 'assignment local search counts and UI-only bulk helpers');
+$assert(str_contains($js, "'Выбрать найденные'") && str_contains($js, "'Снять найденные'") && str_contains($js, "search.value.trim()"), 'bulk labels follow active local search');
+$assert(str_contains($js, ".roles-access__assignment-row:not(.is-hidden) [data-assignment-type]"), 'filtered bulk affects only visible rows');
+$assert(str_contains($js, 'setAssignmentBulkBusy(group, true)') && str_contains($js, "group.querySelectorAll('[data-assignment-bulk]')") && str_contains($js, "group.dataset.assignmentBulkBusy === '1'"), 'both bulk controls are locked against parallel operations');
+$assert(str_contains($js, "{silent:true}") && str_contains($js, "return {ok:false, error:error}") && str_contains($js, "'Сохранено: ' + saved + '. Не удалось: ' + failed + '.'") && str_contains($js, "'Закрепления сохранены.'"), 'bulk partial failure is counted while failed checkboxes roll back');
 $assert(str_contains($js, 'assignmentCache.sets[key] = before') && str_contains($js, 'checkbox.checked ='), 'assignment error rollback');
 $assert(str_contains($js, 'Promise.all(state.memberships.map') && str_contains($js, 'membership_ids:after'), 'full many-to-many assignment set preserved');
 $assert(str_contains($component, 'isSystemOwner()') && str_contains($inline, 'data-inline-membership'), 'owner-only inline object assignments');
@@ -37,6 +41,7 @@ $assert(str_contains($css, 'grid-template-columns:minmax(0,1.35fr) minmax(180px,
 $assert(str_contains($css, 'width:16px') && str_contains($css, 'height:16px'), 'compact checkbox geometry');
 $assert(str_contains($css, '@media(max-width:1439px)') && str_contains($css, '@media(max-width:900px)') && str_contains($css, '@media(max-width:620px)'), '1440 1366 800 narrow responsive contracts');
 $assert(str_contains($css, 'body.roles-access-page .app') && str_contains($css, 'min-width:0!important'), 'roles page removes shell horizontal min-width around 800px');
+$assert(str_contains($view, 'panel roles-access roles-access__workspace') && str_contains($css, 'width:min(1480px,100%)') && str_contains($css, 'margin:0 auto 6px') && str_contains($css, 'background:var(--surface-strong)') && str_contains($css, 'border:1px solid var(--line)'), 'roles administration lives in one standard PLANEX workspace box');
 $assert(!str_contains($view, 'users × pages') && !str_contains($view, 'users x pages'), 'no users-by-pages matrix');
 $assert(!str_contains($js, 'window.open('), 'no popup-over-popup path');
 

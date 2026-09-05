@@ -1,7 +1,7 @@
 <?php
 $rolesAccessInitialStateJson = $rolesAccessInitialStateJson ?? '{}';
 ?>
-<section class="roles-access" data-roles-access-root>
+<section class="panel roles-access roles-access__workspace" data-roles-access-root>
     <div class="page-head roles-access__head">
         <div class="page-head-left">
             <h1 class="page-title">Роли и доступы</h1>
