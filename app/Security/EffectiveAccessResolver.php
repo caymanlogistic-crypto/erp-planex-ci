@@ -78,7 +78,13 @@ final class EffectiveAccessResolver
             $scopes[$entityType] = $scope;
         }
 
-        return EffectiveAccess::member($snapshot->membershipId, $snapshot->companyId, $pages, $scopes);
+        return EffectiveAccess::member(
+            $snapshot->membershipId,
+            $snapshot->companyId,
+            $pages,
+            $scopes,
+            $snapshot->compatibilityRoleCode,
+        );
     }
 
     private function validScope(mixed $scope): bool

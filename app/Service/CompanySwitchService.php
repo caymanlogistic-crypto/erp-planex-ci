@@ -34,6 +34,13 @@ final class CompanySwitchService
         // from central state by AccessStateProvider on the next request.
         $session['company_id'] = (int) $membership['company_id'];
         $session['company_name'] = (string) $membership['company_name'];
-        unset($session['membership_id'], $session['role_id'], $session['permissions'], $session['data_scopes']);
+        unset(
+            $session['role_code'],
+            $session['membership_id'],
+            $session['role_id'],
+            $session['permissions'],
+            $session['data_scopes'],
+            $session['user']['role_code'],
+        );
     }
 }

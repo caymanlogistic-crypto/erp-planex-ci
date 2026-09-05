@@ -73,8 +73,11 @@ try {
     if ((int) $pdo->query('SELECT COUNT(*) FROM user_accounts')->fetchColumn() !== 2
         || (int) $pdo->query('SELECT COUNT(*) FROM company_memberships')->fetchColumn() !== 2
         || (int) $pdo->query('SELECT membership_id FROM users WHERE id=1')->fetchColumn() <= 0
-        || (int) $pdo->query('SELECT COUNT(*) FROM entity_assignments')->fetchColumn() !== 4) {
+        || (int) $pdo->query('SELECT COUNT(*) FROM entity_assignments')->fetchColumn() !== 1) {
         throw new RuntimeException('identity/membership/assignment projection mismatch');
+    }
+    if ((int) $pdo->query("SELECT COUNT(*) FROM entity_assignments WHERE assigned_by_membership_id IS NOT NULL")->fetchColumn() !== 0) {
+        throw new RuntimeException('historical creator identity was incorrectly invented as an assignment');
     }
 
     $after = AccessSnapshotCollector::after($pdo, $pdo, 7, $head, $pageKeys);

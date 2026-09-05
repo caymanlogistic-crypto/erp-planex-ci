@@ -20,6 +20,7 @@ final class MembershipAccessSnapshot
         public readonly array $pageOverrides,
         public readonly array $roleDataScopes,
         public readonly array $dataScopeOverrides,
+        public readonly string $compatibilityRoleCode = 'custom_role',
     ) {
     }
 }

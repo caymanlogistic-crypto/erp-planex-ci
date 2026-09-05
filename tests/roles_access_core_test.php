@@ -58,8 +58,9 @@ function memberSnapshot(
     array $scopeOverrides = [],
     string $systemKey = '',
     string $status = 'active',
+    string $compatibilityRoleCode = 'custom_role',
 ): MembershipAccessSnapshot {
-    return new MembershipAccessSnapshot(91, 7, $status, 12, $systemKey, $rolePages, $pageOverrides, $roleScopes, $scopeOverrides);
+    return new MembershipAccessSnapshot(91, 7, $status, 12, $systemKey, $rolePages, $pageOverrides, $roleScopes, $scopeOverrides, $compatibilityRoleCode);
 }
 
 function dispatchOutput(Router $router, string $method, string $uri, array $server = []): array
@@ -102,6 +103,7 @@ expect($access->dataScope('client') === 'none', 'Malformed data scope must fail 
 $provider->snapshot = memberSnapshot([], [], [], [], 'company_owner');
 $owner = $resolver->resolve(new AccessRequestContext(4, 7));
 expect($owner->isSystemOwner(), 'System owner key must identify owner.');
+expect($owner->compatibilityRoleCode() === 'company_owner', 'Owner compatibility role must derive from system ownership.');
 expect($owner->canAccessPage('company.finance.dashboard'), 'Owner must have every registered page.');
 expect($owner->dataScope('waste_trip') === 'all', 'Owner must have all regulated data.');
 
@@ -127,6 +129,11 @@ $provider->snapshot = memberSnapshot(['company.clients']);
 expect($resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.clients'), 'Initial role page allow failed.');
 $provider->snapshot = memberSnapshot([]);
 expect(!$resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.clients'), 'Immediate page revocation was cached.');
+
+$provider->snapshot = memberSnapshot(['company.clients'], compatibilityRoleCode: 'logist');
+expect($resolver->resolve(new AccessRequestContext(4, 7))->compatibilityRoleCode() === 'logist', 'Preset compatibility role must survive request-scoped resolution.');
+$provider->snapshot = memberSnapshot(['company.clients'], compatibilityRoleCode: 'company_owner');
+expect($resolver->resolve(new AccessRequestContext(4, 7))->compatibilityRoleCode() === 'custom_role', 'Ordinary role must never masquerade as owner through compatibility metadata.');
 
 // Runtime-facing domain contract.
 $provider->snapshot = memberSnapshot(['company.clients'], [], ['client' => 'own']);

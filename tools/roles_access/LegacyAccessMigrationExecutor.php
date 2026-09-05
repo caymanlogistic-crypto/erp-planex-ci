@@ -271,16 +271,11 @@ final class LegacyAccessMigrationExecutor
         $grants = $tenant->query(
             'SELECT entity_type,entity_id,granted_to_user_id,revoked_at,1 is_live FROM entity_access_grants'
         )->fetchAll(PDO::FETCH_ASSOC);
-        $creatorLinks = [];
-        foreach (['client' => 'clients', 'contractor' => 'contractors', 'vehicle_unit' => 'vehicle_units', 'driver' => 'drivers'] as $entityType => $table) {
-            $rows = $tenant->query("SELECT id entity_id,created_by_user_id FROM `{$table}` WHERE created_by_user_id IS NOT NULL")->fetchAll(PDO::FETCH_ASSOC);
-            foreach ($rows as $row) {
-                $row['entity_type'] = $entityType;
-                $row['proven'] = isset($tenantUserMap[(int) $row['created_by_user_id']]);
-                $creatorLinks[] = $row;
-            }
-        }
-        return MigrationProof::assignmentPlan($grants, $creatorLinks, $tenantUserMap);
+
+        // Historical creator identity is preserved only by created_by_membership_id.
+        // It must not be duplicated into entity_assignments: assignments migrate
+        // only explicit factual live grants.
+        return MigrationProof::assignmentPlan($grants, [], $tenantUserMap);
     }
 
     private static function projectTenantMemberships(PDO $tenant, array $tenantUserMap): void
