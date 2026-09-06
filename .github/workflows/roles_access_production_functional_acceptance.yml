@@ -91,40 +91,62 @@ jobs:
             "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' create")"
           cred="$(printf '%s\n' "$provision" | sed -n 's/^QA_CREDENTIALS_B64=//p')"
           foreign="$(printf '%s\n' "$provision" | sed -n 's/^QA_FOREIGN_MEMBERSHIP_ID=//p')"
+          owner_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_OWNER_MEMBERSHIP_ID=//p')"
           owner_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_OWNER_TENANT_USER_ID=//p')"
           dynamic_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_MEMBERSHIP_ID=//p')"
           dynamic_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_TENANT_USER_ID=//p')"
+          client_id="$(printf '%s\n' "$provision" | sed -n 's/^QA_CLIENT_ID=//p')"
           contractor_id="$(printf '%s\n' "$provision" | sed -n 's/^QA_CONTRACTOR_ID=//p')"
+          vehicle_unit_id="$(printf '%s\n' "$provision" | sed -n 's/^QA_VEHICLE_UNIT_ID=//p')"
+          driver_id="$(printf '%s\n' "$provision" | sed -n 's/^QA_DRIVER_ID=//p')"
           test -n "$cred"
           [[ "$foreign" =~ ^[1-9][0-9]*$ ]]
+          [[ "$owner_membership" =~ ^[1-9][0-9]*$ ]]
           [[ "$owner_user" =~ ^[1-9][0-9]*$ ]]
           [[ "$dynamic_membership" =~ ^[1-9][0-9]*$ ]]
           [[ "$dynamic_user" =~ ^[1-9][0-9]*$ ]]
+          [[ "$client_id" =~ ^[1-9][0-9]*$ ]]
           [[ "$contractor_id" =~ ^[1-9][0-9]*$ ]]
+          [[ "$vehicle_unit_id" =~ ^[1-9][0-9]*$ ]]
+          [[ "$driver_id" =~ ^[1-9][0-9]*$ ]]
           printf '%s\n' "$provision" | grep -q '^QA_IDENTITY_CREATED=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_DYNAMIC_RECIPIENT_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_TENANT_PROJECTIONS_READY=YES$'
+          printf '%s\n' "$provision" | grep -q '^QA_ASSIGNMENT_FIXTURES_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_CONTRACTOR_FIXTURE_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_RESPONSIBILITY_FIXTURE_READY=YES$'
           echo "::add-mask::$cred"
           echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
           echo "QA_FOREIGN_MEMBERSHIP_ID=$foreign" >> "$GITHUB_ENV"
+          echo "QA_OWNER_MEMBERSHIP_ID=$owner_membership" >> "$GITHUB_ENV"
           echo "QA_OWNER_TENANT_USER_ID=$owner_user" >> "$GITHUB_ENV"
           echo "QA_DYNAMIC_MEMBERSHIP_ID=$dynamic_membership" >> "$GITHUB_ENV"
           echo "QA_DYNAMIC_TENANT_USER_ID=$dynamic_user" >> "$GITHUB_ENV"
+          echo "QA_CLIENT_ID=$client_id" >> "$GITHUB_ENV"
           echo "QA_CONTRACTOR_ID=$contractor_id" >> "$GITHUB_ENV"
+          echo "QA_VEHICLE_UNIT_ID=$vehicle_unit_id" >> "$GITHUB_ENV"
+          echo "QA_DRIVER_ID=$driver_id" >> "$GITHUB_ENV"
           echo 'QA_TEMP_OWNER_PROVISIONED=YES'
 
       - name: Run authenticated reversible production acceptance
         shell: bash
+        env:
+          QA_SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          QA_SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          QA_SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          QA_PLANEX_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
         run: |
           set -euo pipefail
           test -n "${P12_CREDENTIALS_B64:-}"
           [[ "${QA_FOREIGN_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_OWNER_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_OWNER_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_DYNAMIC_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_DYNAMIC_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_CLIENT_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_CONTRACTOR_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_VEHICLE_UNIT_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_DRIVER_ID:-}" =~ ^[1-9][0-9]*$ ]]
           node .github/roles-access/production_functional_acceptance.js | tee roles_access_production_functional_acceptance.txt
 
       - name: Cleanup temporary QA owner identity and responsibility fixture
@@ -141,6 +163,8 @@ jobs:
             .github/roles-access/qa_identity.php "$USER@$HOST:$remote"
           ssh -p "$PORT" -i "$HOME/.ssh/roles_functional" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
             "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' cleanup" | tee roles_access_identity_cleanup.txt
+          grep -q '^ASSIGNMENT_QA_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^QA_ASSIGNMENT_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_CONTRACTOR_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_TENANT_PROJECTION_RESIDUE=0$' roles_access_identity_cleanup.txt
@@ -161,6 +185,12 @@ jobs:
             PERSONAL_OVERRIDES_READBACK=PASS \
             PERSONAL_OVERRIDES_RESTORE=PASS \
             ASSIGNMENTS_TAB=PASS \
+            NAVIGATION_BADGE_NONZERO=PASS \
+            REAL_ASSIGNMENT_CLIENT=PASS \
+            REAL_ASSIGNMENT_CONTRACTOR=PASS \
+            REAL_ASSIGNMENT_VEHICLE=PASS \
+            REAL_ASSIGNMENT_DRIVER=PASS \
+            ASSIGNMENT_RESTORE_DIFF=0 \
             RESPONSIBLE_ASSIGNMENTS=PASS \
             RESPONSIBILITY_RECIPIENT_SCOPE=PASS \
             DYNAMIC_RESPONSIBILITY_RECIPIENT=PASS \
@@ -172,6 +202,8 @@ jobs:
             PRODUCTION_FUNCTIONAL_ACCEPTANCE=PASS; do
             grep -q "^${marker}$" roles_access_production_functional_acceptance.txt
           done
+          grep -q '^ASSIGNMENT_QA_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^QA_ASSIGNMENT_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_CONTRACTOR_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_TENANT_PROJECTION_RESIDUE=0$' roles_access_identity_cleanup.txt
