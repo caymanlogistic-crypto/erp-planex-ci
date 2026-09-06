@@ -94,6 +94,7 @@ jobs:
           test -n "$cred"
           [[ "$foreign" =~ ^[1-9][0-9]*$ ]]
           printf '%s\n' "$provision" | grep -q '^QA_IDENTITY_CREATED=YES$'
+          printf '%s\n' "$provision" | grep -q '^QA_CONTRACTOR_FIXTURE_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_RESPONSIBILITY_FIXTURE_READY=YES$'
           echo "::add-mask::$cred"
           echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
@@ -123,6 +124,7 @@ jobs:
           ssh -p "$PORT" -i "$HOME/.ssh/roles_functional" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
             "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' cleanup" | tee roles_access_identity_cleanup.txt
           grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^QA_CONTRACTOR_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_IDENTITY_RESIDUE=0$' roles_access_identity_cleanup.txt
 
       - name: Require complete functional evidence
@@ -150,6 +152,7 @@ jobs:
             grep -q "^${marker}$" roles_access_production_functional_acceptance.txt
           done
           grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^QA_CONTRACTOR_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_IDENTITY_RESIDUE=0$' roles_access_identity_cleanup.txt
 
       - name: Publish exact-SHA functional acceptance status
