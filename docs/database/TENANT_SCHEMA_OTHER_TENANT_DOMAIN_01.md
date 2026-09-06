@@ -2,7 +2,30 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `e3b9ded9de4f3d713c3ee0b229d9d072275fd38ed6fc69d000d1b127b39bccd6`
+**Schema fingerprint:** `78da2bd5afff3c0ad1b42bbae3a77a46e354fb9b55fbb4f4dc70b4c0a8356c2c`
+
+## `entity_responsibilities`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `entity_type` | `enum('client','contractor','vehicle_unit','driver','vehicle_set','route_executor')` | NO | NULL | — | `PRI` |
+| `entity_id` | `bigint unsigned` | NO | NULL | — | `PRI` |
+| `membership_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `assigned_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`entity_type`, `entity_id`)
+- **INDEX** `idx_entity_responsibility_member` (`membership_id`, `entity_type`, `entity_id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `feo_import_changes`
 

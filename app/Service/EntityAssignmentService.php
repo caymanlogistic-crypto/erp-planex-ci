@@ -25,9 +25,10 @@ final class EntityAssignmentService
     {
         self::assertIdentity($entityType, $entityId, $membershipId);
         $stmt = $pdo->prepare(
-            'SELECT 1 FROM entity_assignments
+            "SELECT 1 FROM entity_assignments
               WHERE entity_type = ? AND entity_id = ? AND membership_id = ?
-              LIMIT 1'
+                AND assignment_kind = 'manual'
+              LIMIT 1"
         );
         $stmt->execute([$entityType, $entityId, $membershipId]);
 
@@ -39,9 +40,9 @@ final class EntityAssignmentService
     {
         self::assertEntity($entityType, $entityId);
         $stmt = $pdo->prepare(
-            'SELECT membership_id FROM entity_assignments
-              WHERE entity_type = ? AND entity_id = ?
-              ORDER BY membership_id'
+            "SELECT membership_id FROM entity_assignments
+              WHERE entity_type = ? AND entity_id = ? AND assignment_kind = 'manual'
+              ORDER BY membership_id"
         );
         $stmt->execute([$entityType, $entityId]);
 
@@ -64,10 +65,10 @@ final class EntityAssignmentService
         }
 
         $stmt = $pdo->prepare(
-            'INSERT INTO entity_assignments
-                (entity_type, entity_id, membership_id, assigned_by_membership_id)
-             VALUES (?, ?, ?, ?)
-             ON DUPLICATE KEY UPDATE membership_id = VALUES(membership_id)'
+            "INSERT INTO entity_assignments
+                (entity_type, entity_id, membership_id, assigned_by_membership_id, assignment_kind)
+             VALUES (?, ?, ?, ?, 'creator_auto')
+             ON DUPLICATE KEY UPDATE membership_id = VALUES(membership_id)"
         );
         $stmt->execute([$entityType, $entityId, $membershipId, $membershipId]);
     }
@@ -130,29 +131,31 @@ final class EntityAssignmentService
 
         try {
             $lock = $pdo->prepare(
-                'SELECT membership_id FROM entity_assignments
-                  WHERE entity_type = ? AND entity_id = ? FOR UPDATE'
+                "SELECT membership_id FROM entity_assignments
+                  WHERE entity_type = ? AND entity_id = ? AND assignment_kind = 'manual' FOR UPDATE"
             );
             $lock->execute([$entityType, $entityId]);
             $lock->fetchAll(PDO::FETCH_COLUMN);
 
             if ($normalized === []) {
-                $delete = $pdo->prepare('DELETE FROM entity_assignments WHERE entity_type = ? AND entity_id = ?');
+                $delete = $pdo->prepare("DELETE FROM entity_assignments WHERE entity_type = ? AND entity_id = ? AND assignment_kind = 'manual'");
                 $delete->execute([$entityType, $entityId]);
             } else {
                 $marks = implode(',', array_fill(0, count($normalized), '?'));
                 $delete = $pdo->prepare(
                     "DELETE FROM entity_assignments
-                      WHERE entity_type = ? AND entity_id = ?
+                      WHERE entity_type = ? AND entity_id = ? AND assignment_kind = 'manual'
                         AND membership_id NOT IN ({$marks})"
                 );
                 $delete->execute(array_merge([$entityType, $entityId], $normalized));
 
                 $insert = $pdo->prepare(
-                    'INSERT INTO entity_assignments
-                        (entity_type, entity_id, membership_id, assigned_by_membership_id)
-                     VALUES (?, ?, ?, ?)
-                     ON DUPLICATE KEY UPDATE assigned_by_membership_id = VALUES(assigned_by_membership_id)'
+                    "INSERT INTO entity_assignments
+                        (entity_type, entity_id, membership_id, assigned_by_membership_id, assignment_kind)
+                     VALUES (?, ?, ?, ?, 'manual')
+                     ON DUPLICATE KEY UPDATE
+                        assigned_by_membership_id = VALUES(assigned_by_membership_id),
+                        assignment_kind = 'manual'"
                 );
                 foreach ($normalized as $membershipId) {
                     $insert->execute([$entityType, $entityId, $membershipId, $actorMembershipId]);

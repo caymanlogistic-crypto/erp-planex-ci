@@ -21,11 +21,11 @@ final class CompanyRoleService
     public function listForCompany(int $companyId, array $pageKeys = []): array
     {
         $stmt = $this->pdo->prepare(
-            'SELECT r.id, r.name, r.system_key, r.is_system, COUNT(m.id) AS membership_count
+            'SELECT r.id, r.name, r.system_key, r.is_system, r.default_page_key, COUNT(m.id) AS membership_count
              FROM company_roles r
              LEFT JOIN company_memberships m ON m.role_id = r.id AND m.company_id = r.company_id
              WHERE r.company_id = ?
-             GROUP BY r.id, r.name, r.system_key, r.is_system
+             GROUP BY r.id, r.name, r.system_key, r.is_system, r.default_page_key
              ORDER BY r.is_system DESC, r.name, r.id'
         );
         $stmt->execute([$companyId]);
@@ -56,6 +56,7 @@ final class CompanyRoleService
             $role['id'] = $roleId;
             $role['is_system'] = (bool) ($role['is_system'] ?? false);
             $role['membership_count'] = (int) ($role['membership_count'] ?? 0);
+            $role['default_page_key'] = isset($role['default_page_key']) && $role['default_page_key'] !== '' ? (string)$role['default_page_key'] : null;
             $role['pages'] = array_fill_keys($pageKeys, false);
             $role['data_scopes'] = array_fill_keys(self::regulatedEntities(), 'none');
         }
@@ -83,6 +84,7 @@ final class CompanyRoleService
 
         foreach ($roles as &$role) {
             if (($role['system_key'] ?? null) === self::OWNER_SYSTEM_KEY) {
+                $role['default_page_key'] = 'company.dashboard';
                 $role['pages'] = array_fill_keys($pageKeys, true);
                 $role['data_scopes'] = array_fill_keys(self::regulatedEntities(), 'all');
             }
@@ -185,8 +187,22 @@ final class CompanyRoleService
         }
     }
 
-    /** @param array<string,bool> $pagePermissions @param array<string,string> $dataScopes */
-    public function save(int $companyId, int $roleId, string $name, array $pagePermissions, array $dataScopes): void
+    /**
+     * @param array<string,bool> $pagePermissions
+     * @param array<string,string> $dataScopes
+     * @param list<string> $allowedPageKeys Current grantable PageRegistry keys.
+     * @param list<string> $landingPageKeys Current grantable landing keys in canonical order.
+     */
+    public function save(
+        int $companyId,
+        int $roleId,
+        string $name,
+        array $pagePermissions,
+        array $dataScopes,
+        ?string $defaultPageKey = null,
+        array $allowedPageKeys = [],
+        array $landingPageKeys = []
+    ): void
     {
         $displayName = preg_replace('/\s+/u', ' ', trim($name)) ?? '';
         $normalized = IdentityNormalizer::roleName($displayName);
@@ -199,20 +215,41 @@ final class CompanyRoleService
                 throw new \DomainException('Системную роль нельзя изменять.');
             }
             $this->assertUniqueName($companyId, $normalized, $roleId);
+            $allowedKeyMap = array_fill_keys(array_values(array_unique(array_map('strval', $allowedPageKeys))), true);
+            if ($allowedKeyMap === []) {
+                throw new \InvalidArgumentException('Для сохранения роли нужен snapshot текущего Page Registry.');
+            }
+            foreach ($pagePermissions as $pageKey => $_allowed) {
+                if (!is_string($pageKey) || !isset($allowedKeyMap[$pageKey])) {
+                    throw new \InvalidArgumentException('Неизвестный или недоступный для роли page_key.');
+                }
+            }
+            $allowedLanding = [];
+            foreach ($landingPageKeys as $pageKey) {
+                if (isset($allowedKeyMap[$pageKey]) && !empty($pagePermissions[$pageKey])) {
+                    $allowedLanding[] = (string)$pageKey;
+                }
+            }
+            $defaultPageKey = trim((string)($defaultPageKey ?? ''));
+            if ($allowedLanding === []) {
+                $defaultPageKey = null;
+            } elseif ($defaultPageKey === '') {
+                $defaultPageKey = $allowedLanding[0];
+            } elseif (!in_array($defaultPageKey, $allowedLanding, true)) {
+                throw new \InvalidArgumentException('Выберите доступную страницу по умолчанию.');
+            }
+
             $stmt = $this->pdo->prepare(
-                'UPDATE company_roles SET name = :name, normalized_name = :normalized_name, updated_at = NOW()
+                'UPDATE company_roles SET name = :name, normalized_name = :normalized_name, default_page_key = :default_page_key, updated_at = NOW()
                  WHERE id = :id AND company_id = :company_id'
             );
-            $stmt->execute([':name' => $displayName, ':normalized_name' => $normalized, ':id' => $roleId, ':company_id' => $companyId]);
+            $stmt->execute([':name' => $displayName, ':normalized_name' => $normalized, ':default_page_key' => $defaultPageKey, ':id' => $roleId, ':company_id' => $companyId]);
 
             $this->pdo->prepare('DELETE FROM role_page_permissions WHERE role_id = ?')->execute([$roleId]);
             $pageInsert = $this->pdo->prepare(
                 'INSERT INTO role_page_permissions (role_id, page_key, is_allowed) VALUES (:role_id, :page_key, :is_allowed)'
             );
             foreach ($pagePermissions as $pageKey => $allowed) {
-                if (!is_string($pageKey) || !preg_match('/^[a-z0-9_.-]+$/', $pageKey)) {
-                    throw new \InvalidArgumentException('Некорректный page_key.');
-                }
                 $pageInsert->execute([':role_id' => $roleId, ':page_key' => $pageKey, ':is_allowed' => $allowed ? 1 : 0]);
             }
 

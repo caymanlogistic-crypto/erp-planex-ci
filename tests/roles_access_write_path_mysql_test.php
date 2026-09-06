@@ -9,6 +9,7 @@ use App\Security\EffectiveAccessResolver;
 use App\Security\PageRegistry;
 use App\Security\PdoAccessStateProvider;
 use App\Service\CompanyMembershipService;
+use App\Service\CompanyLandingPageService;
 use App\Service\CompanyRoleService;
 use App\Service\EntityAssignmentService;
 use App\Service\RegulatedDataScopeService;
@@ -29,7 +30,9 @@ foreach ([
     '/app/Service/IdentityNormalizer.php',
     '/app/Service/CompanyRoleService.php',
     '/app/Service/CompanyMembershipService.php',
+    '/app/Service/CompanyLandingPageService.php',
     '/app/Service/LegacyAccessProjectionService.php',
+    '/app/Service/EntityResponsibilityService.php',
     '/app/Service/RegulatedDataScopeService.php',
     '/app/Service/EntityAssignmentService.php',
 ] as $file) {
@@ -71,6 +74,7 @@ try {
     // Central ACL schema.
     $pdo->exec("CREATE TABLE companies (id INT UNSIGNED NOT NULL PRIMARY KEY,name VARCHAR(255) NOT NULL,status VARCHAR(20) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations/013_create_roles_access.sql'));
+    $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations/014_add_role_default_page.sql'));
     $pdo->exec("INSERT INTO companies(id,name,status) VALUES(7,'QA One','active'),(8,'QA Two','active')");
     $hash = str_repeat('a', 64);
     $ready = $pdo->prepare("INSERT INTO company_access_readiness(company_id,state,before_sha256,after_sha256,comparison_sha256,verified_at,activated_at) VALUES(?,'ready',?,?,?,NOW(),NOW())");
@@ -111,6 +115,7 @@ try {
         $pdo->exec("CREATE TABLE `{$table}` (id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT, created_by_user_id INT UNSIGNED NULL{$extra}, PRIMARY KEY(id)) ENGINE=InnoDB");
     }
     $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations-local/131_create_roles_access_projection.sql'));
+    $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations-local/132_split_assignment_and_responsibility.sql'));
 
     // Factual rows: id=1 is not created by logist; id=2 is creator-owned by logist.
     foreach (['clients','contractors','vehicle_units','drivers','linear_routes','waste_trips'] as $table) {
@@ -120,6 +125,8 @@ try {
 
     $registry = new PageRegistry();
     $pageKeys = $registry->pageKeys();
+    $grantablePageKeys = $registry->grantablePageKeys();
+    $landingPageKeys = array_values(array_map(static fn(array $p): string => (string)$p['key'], array_filter($registry->landingPages(), static fn(array $p): bool => (bool)($p['grantable'] ?? true))));
     $roleService = new CompanyRoleService($pdo);
     $membershipService = new CompanyMembershipService($pdo);
 
@@ -131,13 +138,14 @@ try {
         'driver' => 'own', 'linear_trip' => 'all', 'waste_trip' => 'none',
     ];
     $pages = ['company.dashboard' => true, 'company.clients' => true, 'company.finance.dashboard' => true];
-    $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages, $scopes);
+    $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages, $scopes, 'company.finance.dashboard', $grantablePageKeys, $landingPageKeys);
     $roles = $roleService->listForCompany(7, $pageKeys);
     $savedRole = null;
     foreach ($roles as $candidate) if ((int) $candidate['id'] === $roleId) $savedRole = $candidate;
     $ok(is_array($savedRole) && $savedRole['name'] === 'QA Temporary Role Renamed', 'role rename/readback failed');
     foreach ($pages as $pageKey => $allowed) $ok(($savedRole['pages'][$pageKey] ?? null) === $allowed, 'role page readback failed ' . $pageKey);
     foreach ($scopes as $entityType => $scope) $ok(($savedRole['data_scopes'][$entityType] ?? null) === $scope, 'role scope readback failed ' . $entityType);
+    $ok(($savedRole['default_page_key'] ?? null) === 'company.finance.dashboard', 'role default page readback failed');
     $copy = $roleService->copy(7, $roleId, 'QA Temporary Role Copy', $pageKeys);
     $copyId = (int) $copy['id'];
     $roles = $roleService->listForCompany(7, $pageKeys);
@@ -158,7 +166,7 @@ try {
     ], [
         'client' => 'all',
         'driver' => 'none',
-    ]);
+    ], $grantablePageKeys);
     $members = $membershipService->listForCompany(7, $pageKeys);
     $savedMember = null;
     foreach ($members as $candidate) if ((int) $candidate['id'] === $tempMembershipId) $savedMember = $candidate;
@@ -175,7 +183,10 @@ try {
     $access = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
     $ok(!$access->canAccessPage('company.clients') && $access->canAccessPage('company.finance.dashboard'), 'personal page overrides not effective on next resolve');
     $ok($access->dataScope('client') === 'all' && $access->dataScope('driver') === 'none', 'personal data overrides not effective on next resolve');
-    $membershipService->save(7, $tempMembershipId, $roleId, 'active', ['company.clients' => 'allow'], ['client' => 'own']);
+    $landingService = new CompanyLandingPageService($pdo, $registry);
+    $ok($landingService->pathForAccount($tempAccountId, 7) === '/company/finance/dashboard', 'ordinary role default landing not resolved');
+    $ok($landingService->pathForAccess(EffectiveAccess::systemOwner(11, 7, $pageKeys)) === '/company/dashboard', 'owner landing is not fixed to dashboard');
+    $membershipService->save(7, $tempMembershipId, $roleId, 'active', ['company.clients' => 'allow'], ['client' => 'own'], $grantablePageKeys);
     $access = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
     $ok($access->canAccessPage('company.clients') && $access->dataScope('client') === 'own', 'next-request override update was cached');
 

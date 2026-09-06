@@ -5,11 +5,15 @@ require_once base_path('app/Service/FeoRequestService.php');
 require_once base_path('app/Service/FeoRequestInteractionService.php');
 require_once base_path('app/Service/FeoPlacementInputParser.php');
 require_once base_path('app/Service/FeoPlacementService.php');
-require_once base_path('app/Support/feo_freshness_navigation.php');
 require_once base_path('app/Http/Controllers/Company/FeoRequestsController.php');
 require_once base_path('app/Http/Controllers/Company/FeoPlacementController.php');
 
-registerFeoFreshnessNavigation($config, $db);
+// Registry navigation owns FEO links and badges when effective access is active.
+// Keep the historical DOM helper only as a feature-off compatibility fallback.
+if (!class_exists(\App\Security\AccessRuntime::class) || !\App\Security\AccessRuntime::current()->isActive()) {
+    require_once base_path('app/Support/feo_freshness_navigation.php');
+    registerFeoFreshnessNavigation($config, $db);
+}
 
 $feoController = new \App\Http\Controllers\Company\FeoRequestsController($config, $db);
 $feoRequestsPage = 'company.feo.requests';

@@ -54,25 +54,8 @@ if (PHP_SAPI !== 'cli') {
             '<svg class="nav-icon" viewBox="0 0 16 16" fill="none"><circle cx="5.5" cy="5" r="2.5" stroke="currentColor" stroke-width="1.4"/><path d="M1.5 13.5C1.5 10.8 3.5 8.8 5.5 8.8C7.5 8.8 9.5 10.8 9.5 13.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/><path d="M10 5.5H14M12 3.5V7.5M10 11.5H14" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>' .
             '<span class="nav-label">Взаиморасчёты с сотрудниками</span></a>';
 
-        if (str_contains($html, '/company/finance/cash')) {
-            $hasEmployeeNav = str_contains($html, '<span class="nav-label">Выплаты сотрудникам</span>')
-                || str_contains($html, '<span class="nav-label">Взаиморасчёты с сотрудниками</span>');
-            if (!$hasEmployeeNav) {
-                $html = preg_replace(
-                    '~<a class="nav-item[^"]*" href="[^"]*/company/finance/cash">.*?</a>~s',
-                    $employeeItem,
-                    $html,
-                    1
-                ) ?? $html;
-            } else {
-                $html = preg_replace(
-                    '~<a class="nav-item[^"]*" href="[^"]*/company/finance/cash">.*?</a>~s',
-                    '',
-                    $html,
-                    1
-                ) ?? $html;
-            }
-        }
+        // Cash is a canonical visible finance page again. Navigation is owned by PageRegistry;
+        // compatibility code must not replace or remove it.
 
         // Normalize the employee-money workspace to the current business model.
         // Historical database facts remain immutable; only their presentation is
@@ -92,17 +75,8 @@ if (PHP_SAPI !== 'cli') {
         ];
         $html = str_replace(array_keys($financeVocabulary), array_values($financeVocabulary), $html);
 
-        // Some historical table cells contain whitespace/newlines around the old
-        // standalone source label, so a literal >...< replacement is insufficient.
-        // Replace only standalone rendered text between HTML tags; URLs, field
-        // names and historical technical identifiers are deliberately untouched.
-        if (str_starts_with(current_app_path(), '/company/finance')) {
-            $html = preg_replace(
-                '~(?<=>)(\s*)Касса(\s*)(?=<)~u',
-                '${1}Средства компании${2}',
-                $html
-            ) ?? $html;
-        }
+        // Preserve the canonical sidebar label «Касса»; finance content vocabulary may
+        // still normalize historical wording, but navigation is excluded below.
 
         // Low-frequency company utilities live in a separate MISC section rather
         // than in the operational logistics directories.
@@ -152,6 +126,7 @@ if (PHP_SAPI !== 'cli') {
     var walker=document.createTreeWalker(scope,NodeFilter.SHOW_TEXT);
     var node;
     while((node=walker.nextNode())){
+      if(node.parentElement&&node.parentElement.closest('.sidebar'))continue;
       var value=node.nodeValue||'';
       if(!/касс/iu.test(value))continue;
       value=value
@@ -201,7 +176,6 @@ if (PHP_SAPI !== 'cli') {
       var href=link.getAttribute('href')||'';
       if(href.indexOf('/company/documents')===0&&base)link.setAttribute('href',base+href);
     });
-    normalizeFinanceNavigation(root,base);
     normalizeFinanceText(root);
   }
   fix(document);

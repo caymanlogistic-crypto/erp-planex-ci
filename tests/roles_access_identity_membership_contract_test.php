@@ -186,7 +186,8 @@ expect(str_contains($authControllerSource, 'AccessStateProvider'), 'global auth 
 expect(str_contains($authControllerSource, 'tenant-local'), 'legacy tenant auth bypass guard missing');
 expect(str_contains($adminControllerSource, 'AccessRuntime::current()->isSystemOwner()'), 'admin writes must require effective system owner');
 expect(str_contains($adminControllerSource, 'requestJsonBody()'), 'admin endpoints must accept atomic JSON payloads');
-expect(str_contains($adminControllerSource, "'page_tree' => \$registry->tree()"), 'snapshot must expose the canonical Page Registry tree');
+expect(str_contains($adminControllerSource, "'page_tree' => \$registry->grantableTree()"), 'snapshot must expose only grantable canonical Page Registry pages');
+expect(str_contains($adminControllerSource, "'pages' => \$registry->grantablePages()"), 'snapshot must not expose owner-only system tools as editable permissions');
 expect(str_contains($adminControllerSource, "require base_path('app/View/pages/company/roles_access.php')"), 'HTML controller must prepare the future roles-access view');
 
 $adminRouteSource = file_get_contents(__DIR__ . '/../app/Http/Routes/company_roles_access.php');

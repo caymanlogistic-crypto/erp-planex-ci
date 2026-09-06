@@ -42,12 +42,12 @@ final class RegulatedDataScopeService
             : self::creatorExpression($idExpression);
 
         if (in_array($entityType, self::REFERENCE_ENTITIES, true)) {
-            return [
-                'sql' => "({$creatorExpression} = ? OR EXISTS (SELECT 1 FROM entity_assignments ea
-                          WHERE ea.entity_type = ? AND ea.entity_id = {$idExpression}
-                            AND ea.membership_id = ?))",
-                'params' => [$membershipId, $entityType, $membershipId],
-            ];
+            return EntityResponsibilityService::ownCondition(
+                $entityType,
+                $idExpression,
+                $creatorExpression,
+                $membershipId
+            );
         }
 
         if ($entityType === 'linear_trip') {

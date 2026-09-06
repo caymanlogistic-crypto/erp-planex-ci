@@ -2,29 +2,42 @@
 
 declare(strict_types=1);
 
-$host = getenv('EMPLOYEE_PAYMENTS_DB_HOST') ?: '127.0.0.1';
-$port = getenv('EMPLOYEE_PAYMENTS_DB_PORT') ?: '3306';
-$user = getenv('EMPLOYEE_PAYMENTS_DB_USER') ?: 'root';
-$password = getenv('EMPLOYEE_PAYMENTS_DB_PASSWORD') ?: 'root';
-$dbName = 'erp_navigation_counter_test';
+$root = dirname(__DIR__);
+require_once $root . '/bootstrap/app.php';
+require_once BASE_PATH . '/app/Support/company_database.php';
+require_once BASE_PATH . '/app/Core/Database.php';
+require_once BASE_PATH . '/app/Service/NavigationCounterService.php';
 
-$server = new PDO(
-    sprintf('mysql:host=%s;port=%s;charset=utf8mb4', $host, $port),
+$runnerDb = trim((string)getenv('PLANEX_TEST_FIXED_DB'));
+if ($runnerDb !== '') {
+    $host = getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1';
+    $port = (int)(getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306);
+    $user = getenv('PLANEX_SCHEMA_DB_USER') ?: '';
+    $password = getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: '';
+    $dbName = $runnerDb;
+    $allowlist = array_values(array_filter(array_map('trim', explode(',', (string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')))));
+    if (!in_array($dbName, $allowlist, true) || (string)getenv('APP_ENV') !== 'test') {
+        throw new RuntimeException('Guarded fixed runner DB is required.');
+    }
+} else {
+    $host = getenv('EMPLOYEE_PAYMENTS_DB_HOST') ?: '';
+    $port = (int)(getenv('EMPLOYEE_PAYMENTS_DB_PORT') ?: 0);
+    $user = getenv('EMPLOYEE_PAYMENTS_DB_USER') ?: '';
+    $password = getenv('EMPLOYEE_PAYMENTS_DB_PASSWORD') ?: '';
+    $dbName = trim((string)getenv('EMPLOYEE_PAYMENTS_DB_NAME'));
+    if ($host === '' || $port <= 0 || $user === '' || $dbName !== 'erp_employee_payments_test') {
+        throw new RuntimeException('Explicit isolated finance CI database is required.');
+    }
+}
+
+$pdo = new PDO(
+    "mysql:host={$host};port={$port};dbname={$dbName};charset=utf8mb4",
     $user,
     $password,
-    [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES=>false]
 );
-$server->exec("DROP DATABASE IF EXISTS `{$dbName}`");
-$server->exec("CREATE DATABASE `{$dbName}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
-
+cleanCompanyPoolDatabase($pdo);
 try {
-    $pdo = new PDO(
-        sprintf('mysql:host=%s;port=%s;dbname=%s;charset=utf8mb4', $host, $port, $dbName),
-        $user,
-        $password,
-        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
-    );
-
     $pdo->exec("CREATE TABLE bank_transactions (
         id INT UNSIGNED NOT NULL AUTO_INCREMENT PRIMARY KEY,
         classification_status VARCHAR(32) NOT NULL,
@@ -51,31 +64,15 @@ try {
     $pdo->exec("INSERT INTO finance_operations (money_account_id,status,operation_type,transfer_direction)
         VALUES (1,'POSTED','INCOME',NULL)");
 
-    // Deliberately DO NOT create finance_cash_resolutions. The cash counter must fail
-    // in isolation while the unrelated bank counter remains available.
-
-    require_once __DIR__ . '/../app/Core/Database.php';
-    require_once __DIR__ . '/../app/Support/company_database.php';
-    require_once __DIR__ . '/../app/Service/NavigationCounterService.php';
-
-    $config = [
-        'database' => [
-            'host' => $host,
-            'port' => $port,
-            'database' => $dbName,
-            'username' => $user,
-            'password' => $password,
-            'charset' => 'utf8mb4',
-        ],
-    ];
-    $company = [
-        'id' => 77,
-        'status' => 'active',
-        'db_identifier' => $dbName,
-    ];
-
-    $centralDb = new \App\Core\Database($config['database']);
-    $counters = \App\Service\NavigationCounterService::forCompany($config, $centralDb, 77, $company);
+    // Deliberately omit finance_cash_resolutions. Cash counter must fail in isolation
+    // without suppressing the unrelated bank attention counter.
+    $config = ['database'=>[
+        'host'=>$host,'port'=>$port,'database'=>$dbName,
+        'username'=>$user,'password'=>$password,'charset'=>'utf8mb4',
+    ]];
+    $company = ['id'=>77,'status'=>'active','db_identifier'=>$dbName];
+    $centralDb = new App\Core\Database($config['database']);
+    $counters = App\Service\NavigationCounterService::forCompany($config, $centralDb, 77, $company);
 
     if (($counters['bank_attention'] ?? null) !== 2) {
         throw new RuntimeException('Bank attention badge was suppressed by unrelated missing cash schema.');
@@ -86,5 +83,5 @@ try {
 
     echo "NAVIGATION_COUNTER_ISOLATION_OK bank=2 cash=0\n";
 } finally {
-    $server->exec("DROP DATABASE IF EXISTS `{$dbName}`");
+    cleanCompanyPoolDatabase($pdo);
 }

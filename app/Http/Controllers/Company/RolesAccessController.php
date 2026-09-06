@@ -62,19 +62,26 @@ final class RolesAccessController
     {
         $this->execute(function (array $payload, int $companyId) use ($id): array {
             $service = new CompanyRoleService($this->db->connection());
-            return ['role' => $service->copy($companyId, $this->positiveId($id), (string) ($payload['name'] ?? ''), (new PageRegistry())->pageKeys())];
+            return ['role' => $service->copy($companyId, $this->positiveId($id), (string) ($payload['name'] ?? ''), (new PageRegistry())->grantablePageKeys())];
         }, 201);
     }
 
     public function saveRole(string $id): void
     {
         $this->execute(function (array $payload, int $companyId) use ($id): array {
+            $registry = new PageRegistry();
             (new CompanyRoleService($this->db->connection()))->save(
                 $companyId,
                 $this->positiveId($id),
                 (string) ($payload['name'] ?? ''),
                 is_array($payload['pages'] ?? null) ? $payload['pages'] : [],
                 is_array($payload['data_scopes'] ?? null) ? $payload['data_scopes'] : [],
+                isset($payload['default_page_key']) ? (string)$payload['default_page_key'] : null,
+                $registry->grantablePageKeys(),
+                array_values(array_map(static fn(array $page): string => (string)$page['key'], array_filter(
+                    $registry->landingPages(),
+                    static fn(array $page): bool => (bool)($page['grantable'] ?? true)
+                ))),
             );
             return ['saved' => true];
         });
@@ -108,6 +115,7 @@ final class RolesAccessController
     public function saveMembership(string $id): void
     {
         $this->execute(function (array $payload, int $companyId) use ($id): array {
+            $registry = new PageRegistry();
             (new CompanyMembershipService($this->db->connection()))->save(
                 $companyId,
                 $this->positiveId($id),
@@ -115,6 +123,7 @@ final class RolesAccessController
                 (string) ($payload['status'] ?? ''),
                 is_array($payload['page_overrides'] ?? null) ? $payload['page_overrides'] : [],
                 is_array($payload['data_scope_overrides'] ?? null) ? $payload['data_scope_overrides'] : [],
+                $registry->grantablePageKeys(),
             );
             return ['saved' => true];
         });
@@ -155,17 +164,17 @@ final class RolesAccessController
     {
         $pdo = $this->db->connection();
         $registry = new PageRegistry();
-        $roles = (new CompanyRoleService($pdo))->listForCompany($companyId, $registry->pageKeys());
+        $roles = (new CompanyRoleService($pdo))->listForCompany($companyId, $registry->grantablePageKeys());
 
         return [
             'roles' => $roles,
             'memberships' => (new CompanyMembershipService($pdo))->listForCompany(
                 $companyId,
-                $registry->pageKeys(),
+                $registry->grantablePageKeys(),
                 $roles
             ),
-            'page_tree' => $registry->tree(),
-            'pages' => $registry->pages(),
+            'page_tree' => $registry->grantableTree(),
+            'pages' => $registry->grantablePages(),
             'regulated_entities' => CompanyRoleService::regulatedEntities(),
         ];
     }

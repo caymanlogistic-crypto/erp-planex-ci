@@ -249,6 +249,32 @@
         }).join('') + '</div>';
     }
 
+    function roleDefaultPageHtml(value, disabled) {
+        return '<label class="field"><span class="field-label">Стартовая страница</span><select class="field-select" data-role-default-page data-preferred="' + esc(value || '') + '"' + (disabled ? ' disabled' : '') + '></select><small class="roles-access-modal__help">После входа откроется эта доступная страница.</small></label>';
+    }
+
+    function refreshRoleDefaultPageSelect(preferred) {
+        var select = modalBody.querySelector('[data-role-default-page]');
+        if (!select) return;
+        var current = preferred != null ? String(preferred) : (select.value || select.dataset.preferred || '');
+        var allowed = {};
+        modalBody.querySelectorAll('input[type="checkbox"][data-page-key]').forEach(function (input) {
+            if (input.checked) allowed[input.dataset.pageKey] = true;
+        });
+        var pages = state.pages.filter(function (page) { return page.landing_eligible !== false && allowed[page.key]; });
+        if (!pages.length) {
+            select.innerHTML = '<option value="">Сначала разрешите страницу</option>';
+            select.value = '';
+            select.disabled = true;
+            return;
+        }
+        var originallyDisabled = select.hasAttribute('data-system-disabled');
+        select.innerHTML = pages.map(function (page) { return '<option value="' + esc(page.key) + '">' + esc(page.label) + '</option>'; }).join('');
+        select.value = pages.some(function (page) { return page.key === current; }) ? current : pages[0].key;
+        select.dataset.preferred = select.value;
+        select.disabled = originallyDisabled;
+    }
+
     function bindTreeAndScopeControls() {
         modalBody.querySelectorAll('[data-page-choice]').forEach(function (button) {
             button.addEventListener('click', function () {
@@ -267,8 +293,8 @@
                 var checked = Array.prototype.filter.call(children, function (item) { return item.checked; }).length;
                 group.checked = checked === children.length && children.length > 0; group.indeterminate = checked > 0 && checked < children.length;
             };
-            group.addEventListener('change', function () { children.forEach(function (item) { item.checked = group.checked; }); update(); });
-            children.forEach(function (item) { item.addEventListener('change', update); }); update();
+            group.addEventListener('change', function () { children.forEach(function (item) { item.checked = group.checked; }); update(); refreshRoleDefaultPageSelect(); });
+            children.forEach(function (item) { item.addEventListener('change', function () { update(); refreshRoleDefaultPageSelect(); }); }); update();
         });
         modalBody.querySelectorAll('[data-scope-key]').forEach(function (select) {
             select.addEventListener('change', function () {
@@ -280,6 +306,7 @@
                 if (help) help.textContent = scopeHelp(entity, key);
             });
         });
+        refreshRoleDefaultPageSelect();
     }
 
     function collectPageValues(mode) {
@@ -303,20 +330,21 @@
         var system = !!(role.is_system || role.system_key);
         var readonlySystem = system && !copyMode;
         var title = copyMode ? 'Копировать роль' : (system ? 'Роль «Руководитель»' : 'Настройка роли');
-        var body = '<section class="roles-access-modal__section"><label class="field"><span class="field-label">Название</span><input class="field-input" data-role-name maxlength="100" value="' + (copyMode ? '' : esc(role.name)) + '"' + (readonlySystem ? ' disabled' : '') + '></label></section>' +
+        var body = '<section class="roles-access-modal__section"><div class="roles-access__role-basics"><label class="field"><span class="field-label">Название</span><input class="field-input" data-role-name maxlength="100" value="' + (copyMode ? '' : esc(role.name)) + '"' + (readonlySystem ? ' disabled' : '') + '></label>' + roleDefaultPageHtml(role.default_page_key || 'company.dashboard', readonlySystem) + '</div></section>' +
             '<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Доступ к страницам</h3>' + pageTreeHtml('role', role.pages || {}, {}, readonlySystem) + '</section>' +
             '<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Доступ к данным</h3>' + scopesHtml('role', role.data_scopes || {}, {}, readonlySystem) + '</section>';
         openModal({ title: title, subtitle: readonlySystem ? 'Системная роль всегда имеет полный доступ.' : 'Все изменения применятся одной кнопкой.', body: body, readonly: readonlySystem,
             secondary: !copyMode ? '<button type="button" class="btn btn-ghost" data-role-copy>Копировать</button>' + (!system ? ' <button type="button" class="btn btn-danger" data-role-delete>Удалить</button>' : '') : '',
             submit: function () {
                 var name = modalBody.querySelector('[data-role-name]').value.trim();
-                var pages = collectPageValues('role'), dataScopes = collectScopeValues();
+                var pages = collectPageValues('role'), dataScopes = collectScopeValues(), defaultPageKey = (modalBody.querySelector('[data-role-default-page]') || {}).value || null;
                 var request = copyMode
-                    ? jsonRequest('/company/roles-access/roles/' + Number(role.id) + '/copy', { method:'POST', body:{ name:name } }).then(function (payload) { return jsonRequest('/company/roles-access/roles/' + Number(payload.role.id) + '/save', { method:'POST', body:{ name:name, pages:pages, data_scopes:dataScopes } }); })
-                    : jsonRequest('/company/roles-access/roles/' + Number(role.id) + '/save', { method:'POST', body:{ name:name, pages:pages, data_scopes:dataScopes } });
+                    ? jsonRequest('/company/roles-access/roles/' + Number(role.id) + '/copy', { method:'POST', body:{ name:name } }).then(function (payload) { return jsonRequest('/company/roles-access/roles/' + Number(payload.role.id) + '/save', { method:'POST', body:{ name:name, pages:pages, data_scopes:dataScopes, default_page_key:defaultPageKey } }); })
+                    : jsonRequest('/company/roles-access/roles/' + Number(role.id) + '/save', { method:'POST', body:{ name:name, pages:pages, data_scopes:dataScopes, default_page_key:defaultPageKey } });
                 return request.then(function () { closeModal(); return refreshSnapshot(copyMode ? 'Роль скопирована.' : 'Роль сохранена.'); });
             }
         });
+        var roleDefaultSelect = modalBody.querySelector('[data-role-default-page]'); if (roleDefaultSelect && readonlySystem) roleDefaultSelect.setAttribute('data-system-disabled','1');
         bindTreeAndScopeControls();
         var copy = modal.querySelector('[data-role-copy]'); if (copy) copy.addEventListener('click', function () { openRoleModal(role, true); });
         var remove = modal.querySelector('[data-role-delete]'); if (remove) remove.addEventListener('click', function () {
@@ -333,13 +361,13 @@
         var blank = { id:0, name:'', pages:{}, data_scopes:{} };
         state.pages.forEach(function (page) { blank.pages[page.key] = false; });
         state.regulated_entities.forEach(function (key) { blank.data_scopes[key] = 'none'; });
-        var body = '<section class="roles-access-modal__section"><label class="field"><span class="field-label">Название</span><input class="field-input" data-role-name maxlength="100" autocomplete="off"></label></section>' +
+        var body = '<section class="roles-access-modal__section"><div class="roles-access__role-basics"><label class="field"><span class="field-label">Название</span><input class="field-input" data-role-name maxlength="100" autocomplete="off"></label>' + roleDefaultPageHtml('', false) + '</div></section>' +
             '<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Доступ к страницам</h3>' + pageTreeHtml('role', blank.pages, {}, false) + '</section>' +
             '<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Доступ к данным</h3>' + scopesHtml('role', blank.data_scopes, {}, false) + '</section>';
         openModal({ title:'Новая роль', subtitle:'По умолчанию все страницы и данные закрыты.', body:body, submit:function () {
-            var name = modalBody.querySelector('[data-role-name]').value.trim(), pages = collectPageValues('role'), scopes = collectScopeValues();
+            var name = modalBody.querySelector('[data-role-name]').value.trim(), pages = collectPageValues('role'), scopes = collectScopeValues(), defaultPageKey = (modalBody.querySelector('[data-role-default-page]') || {}).value || null;
             return jsonRequest('/company/roles-access/roles', { method:'POST', body:{name:name} }).then(function (payload) {
-                return jsonRequest('/company/roles-access/roles/' + Number(payload.role.id) + '/save', {method:'POST', body:{name:name,pages:pages,data_scopes:scopes}});
+                return jsonRequest('/company/roles-access/roles/' + Number(payload.role.id) + '/save', {method:'POST', body:{name:name,pages:pages,data_scopes:scopes,default_page_key:defaultPageKey}});
             }).then(function () { closeModal(); return refreshSnapshot('Роль создана.'); });
         }});
         bindTreeAndScopeControls();
@@ -392,17 +420,19 @@
         activeAssignmentMembershipId = membershipId;
         if (!membershipId) { content.innerHTML = '<div class="roles-access__loading">Нет сотрудников для закрепления.</div>'; return; }
         if (assignmentCache && !force) { renderAssignments(); return; }
-        content.innerHTML = '<div class="roles-access__loading">Загрузка закреплений…</div>';
+        content.innerHTML = '<div class="roles-access__loading">Загрузка фактического доступа…</div>';
         Promise.all(state.memberships.map(function (membership) {
             return jsonRequest('/company/roles-access/assignments?membership_id=' + Number(membership.id));
         })).then(function (payloads) {
-            assignmentCache = { memberships: payloads[0] ? payloads[0].memberships : [], entities: {}, sets: {} };
+            assignmentCache = { memberships: payloads[0] ? payloads[0].memberships : [], payloads: {}, sets: {} };
             payloads.forEach(function (payload) {
+                var membershipId = Number(payload.selected_membership_id || 0);
+                assignmentCache.payloads[String(membershipId)] = payload;
                 Object.keys(payload.entities || {}).forEach(function (type) {
-                    assignmentCache.entities[type] = assignmentCache.entities[type] || payload.entities[type];
-                    payload.entities[type].forEach(function (entity) {
-                        var key = type + ':' + Number(entity.id); assignmentCache.sets[key] = assignmentCache.sets[key] || [];
-                        if (entity.assigned) assignmentCache.sets[key].push(Number(payload.selected_membership_id));
+                    (payload.entities[type] || []).forEach(function (entity) {
+                        var key = type + ':' + Number(entity.id);
+                        assignmentCache.sets[key] = assignmentCache.sets[key] || [];
+                        if (entity.explicit_assigned || entity.assigned) assignmentCache.sets[key].push(membershipId);
                     });
                 });
             });
@@ -410,20 +440,74 @@
         }).catch(function (error) { content.innerHTML = '<div class="notice warn">' + esc(error.message) + ' <button type="button" class="btn btn-ghost" data-assignment-retry>Повторить</button></div>'; });
     }
 
+    function selectedAssignmentPayload() {
+        return assignmentCache && assignmentCache.payloads ? assignmentCache.payloads[String(activeAssignmentMembershipId)] || null : null;
+    }
+
+    function assignmentScopeLabel(scope) {
+        return scope === 'all' ? 'Все' : (scope === 'own' ? 'Только свои' : 'Нет доступа');
+    }
+
+    function assignmentScopeSource(summary) {
+        if (!summary) return '';
+        if (summary.scope_source === 'personal_override') return 'персонально';
+        if (summary.scope_source === 'system_owner') return 'системно';
+        if (summary.scope_source === 'membership_inactive') return 'сотрудник отключён';
+        return 'по роли';
+    }
+
+    function recomputeAssignmentEntity(entity, summary) {
+        if (!entity || !summary) return;
+        var explicit = !!entity.explicit_assigned;
+        if (summary.scope === 'all') entity.accessible = true;
+        else if (summary.scope === 'none') entity.accessible = false;
+        else entity.accessible = !!entity.base_responsible || explicit || !!entity.legacy_assignment;
+    }
+
+    function refreshAssignmentSummary(type) {
+        var payload = selectedAssignmentPayload();
+        if (!payload) return null;
+        var entities = (payload.entities || {})[type] || [];
+        var summary = (payload.summaries || {})[type] || {scope:'none',scope_source:'role'};
+        entities.forEach(function (entity) { recomputeAssignmentEntity(entity, summary); });
+        summary.total_count = entities.length;
+        summary.accessible_count = entities.filter(function (entity) { return !!entity.accessible; }).length;
+        summary.explicit_assignment_count = entities.filter(function (entity) { return !!entity.explicit_assigned; }).length;
+        payload.summaries[type] = summary;
+        return summary;
+    }
+
+    function assignmentStateHtml(entity, summary) {
+        var chips = [];
+        if (summary.scope === 'all') chips.push('<span class="roles-access__reason is-access">Доступен · Все</span>');
+        else if (summary.scope === 'none') chips.push('<span class="roles-access__reason is-denied">Нет доступа по scope</span>');
+        else if (entity.accessible) chips.push('<span class="roles-access__reason is-access">Доступен</span>');
+        else chips.push('<span class="roles-access__reason is-denied">Нет доступа</span>');
+
+        if (entity.created_by_selected) chips.push('<span class="roles-access__reason">Создал</span>');
+        if (entity.base_responsible) chips.push('<span class="roles-access__reason is-base">' + (entity.responsibility_override ? 'Базово отвечает' : 'Базово свой') + '</span>');
+        if (entity.explicit_assigned) chips.push('<span class="roles-access__reason is-manual">Закреплён вручную</span>');
+        if (entity.legacy_assignment) chips.push('<span class="roles-access__reason is-legacy">Наследованный доступ</span>');
+        return chips.join('');
+    }
+
     function renderAssignments() {
         var content = root.querySelector('[data-assignment-content]');
-        if (!assignmentCache) return;
+        var payload = selectedAssignmentPayload();
+        if (!assignmentCache || !payload) { content.innerHTML = '<div class="roles-access__loading">Не удалось определить доступ сотрудника.</div>'; return; }
         var order = ['client','contractor','vehicle_unit','driver'];
-        content.innerHTML = '<div class="roles-access__assignment-grid">' + order.map(function (type) {
-            var entities = assignmentCache.entities[type] || [];
-            var selected = entities.filter(function (entity) { return (assignmentCache.sets[type + ':' + Number(entity.id)] || []).indexOf(activeAssignmentMembershipId) >= 0; }).length;
-            return '<section class="roles-access__assignment-group" data-assignment-group="' + type + '"><div class="roles-access__assignment-title"><span>' + esc(labels[type]) + '</span><span class="roles-access__assignment-count" data-assignment-count>' + selected + ' / ' + entities.length + '</span></div>' +
+        content.innerHTML = '<div class="roles-access__assignment-explain">Checkbox меняет только ручное закрепление. Фактический доступ дополнительно зависит от scope и базовой ответственности.</div>' +
+            '<div class="roles-access__assignment-grid">' + order.map(function (type) {
+            var entities = (payload.entities || {})[type] || [];
+            var summary = refreshAssignmentSummary(type) || {scope:'none',scope_source:'role',accessible_count:0,explicit_assignment_count:0,total_count:entities.length};
+            return '<section class="roles-access__assignment-group" data-assignment-group="' + type + '"><div class="roles-access__assignment-title"><div class="roles-access__assignment-title-main"><span>' + esc(labels[type]) + '</span><span class="roles-access__scope-pill">' + esc(assignmentScopeLabel(summary.scope)) + ' · ' + esc(assignmentScopeSource(summary)) + '</span></div>' +
+                '<span class="roles-access__assignment-count" data-assignment-count>Доступно: ' + Number(summary.accessible_count || 0) + ' из ' + entities.length + ' · вручную: ' + Number(summary.explicit_assignment_count || 0) + '</span></div>' +
                 '<div class="roles-access__assignment-tools"><input class="field-input roles-access__assignment-search" type="search" placeholder="Поиск…" aria-label="Поиск: ' + esc(labels[type]) + '" data-assignment-search>' +
-                '<div class="roles-access__assignment-actions"><button type="button" class="btn btn-ghost" data-assignment-bulk="select">Выбрать все</button><button type="button" class="btn btn-ghost" data-assignment-bulk="clear">Снять все</button></div></div>' +
+                '<div class="roles-access__assignment-actions"><button type="button" class="btn btn-ghost" data-assignment-bulk="select">Закрепить все</button><button type="button" class="btn btn-ghost" data-assignment-bulk="clear">Снять ручные</button></div></div>' +
                 '<div class="roles-access__assignment-list">' +
                 (entities.map(function (entity) {
-                    var checked = (assignmentCache.sets[type + ':' + Number(entity.id)] || []).indexOf(activeAssignmentMembershipId) >= 0;
-                    return '<label class="roles-access__assignment-row" data-assignment-label="' + esc(String(entity.label).toLocaleLowerCase('ru-RU')) + '"><input type="checkbox" data-assignment-type="' + type + '" data-assignment-id="' + Number(entity.id) + '"' + (checked ? ' checked' : '') + '><span>' + esc(entity.label) + '</span></label>';
+                    var checked = !!entity.explicit_assigned;
+                    return '<label class="roles-access__assignment-row" data-assignment-id="' + Number(entity.id) + '" data-assignment-label="' + esc(String(entity.label).toLocaleLowerCase('ru-RU')) + '"><input type="checkbox" aria-label="Ручное закрепление: ' + esc(entity.label) + '" data-assignment-type="' + type + '" data-assignment-id="' + Number(entity.id) + '"' + (checked ? ' checked' : '') + '><span class="roles-access__assignment-row-body"><span class="roles-access__assignment-name">' + esc(entity.label) + '</span><span class="roles-access__assignment-state" data-assignment-state>' + assignmentStateHtml(entity, summary) + '</span></span></label>';
                 }).join('') || '<div class="roles-access__empty">Нет объектов.</div>') + '<div class="roles-access__empty is-hidden" data-assignment-search-empty>Ничего не найдено.</div></div></section>';
         }).join('') + '</div>';
     }
@@ -446,13 +530,32 @@
 
     function refreshAssignmentGroupUi(group) {
         if (!group) return;
-        var rows = Array.prototype.slice.call(group.querySelectorAll('.roles-access__assignment-row'));
+        var type = group.dataset.assignmentGroup || '';
+        var payload = selectedAssignmentPayload();
+        var entities = payload && payload.entities ? (payload.entities[type] || []) : [];
+        var summary = refreshAssignmentSummary(type);
         var count = group.querySelector('[data-assignment-count]');
-        var selected = rows.filter(function (row) { var box = row.querySelector('[data-assignment-type]'); return box && box.checked; }).length;
-        if (count) count.textContent = selected + ' / ' + rows.length;
+        if (count && summary) count.textContent = 'Доступно: ' + Number(summary.accessible_count || 0) + ' из ' + entities.length + ' · вручную: ' + Number(summary.explicit_assignment_count || 0);
+        group.querySelectorAll('.roles-access__assignment-row').forEach(function (row) {
+            var id = Number(row.dataset.assignmentId || 0);
+            var entity = entities.find(function (item) { return Number(item.id) === id; });
+            var stateBox = row.querySelector('[data-assignment-state]');
+            if (entity && stateBox && summary) stateBox.innerHTML = assignmentStateHtml(entity, summary);
+        });
+        var rows = Array.prototype.slice.call(group.querySelectorAll('.roles-access__assignment-row'));
         var empty = group.querySelector('[data-assignment-search-empty]');
         if (empty) empty.classList.toggle('is-hidden', rows.some(function (row) { return !row.classList.contains('is-hidden'); }));
         refreshAssignmentBulkLabels(group);
+    }
+
+    function syncSelectedAssignmentEntity(type, entityId, explicit) {
+        var payload = selectedAssignmentPayload();
+        if (!payload || !payload.entities) return;
+        var entity = (payload.entities[type] || []).find(function (item) { return Number(item.id) === Number(entityId); });
+        if (!entity) return;
+        entity.explicit_assigned = !!explicit;
+        entity.assigned = !!explicit;
+        recomputeAssignmentEntity(entity, (payload.summaries || {})[type] || {scope:'none'});
     }
 
     function saveAssignmentCheckbox(checkbox, nextChecked, options) {
@@ -466,12 +569,14 @@
         checkbox.checked = nextChecked;
         if (nextChecked) after.push(activeAssignmentMembershipId);
         assignmentCache.sets[key] = after;
+        syncSelectedAssignmentEntity(checkbox.dataset.assignmentType, Number(checkbox.dataset.assignmentId), nextChecked);
         row.classList.add('is-saving'); checkbox.disabled = true; refreshAssignmentGroupUi(group);
-        return jsonRequest('/company/responsible-assignments/reassign', {method:'POST', body:{entity_type:checkbox.dataset.assignmentType,entity_id:Number(checkbox.dataset.assignmentId),membership_ids:after}})
-            .then(function (payload) { assignmentCache.sets[key] = (payload.membership_ids || after).map(Number); return {ok:true}; })
+        return jsonRequest('/company/roles-access/assignments/reassign', {method:'POST', body:{entity_type:checkbox.dataset.assignmentType,entity_id:Number(checkbox.dataset.assignmentId),membership_ids:after}})
+            .then(function (payload) { assignmentCache.sets[key] = (payload.membership_ids || after).map(Number); syncSelectedAssignmentEntity(checkbox.dataset.assignmentType, Number(checkbox.dataset.assignmentId), assignmentCache.sets[key].indexOf(activeAssignmentMembershipId) >= 0); return {ok:true}; })
             .catch(function (error) {
                 assignmentCache.sets[key] = before;
                 checkbox.checked = before.indexOf(activeAssignmentMembershipId) >= 0;
+                syncSelectedAssignmentEntity(checkbox.dataset.assignmentType, Number(checkbox.dataset.assignmentId), checkbox.checked);
                 if (!options.silent) announce(error.message,'error');
                 return {ok:false, error:error};
             })

@@ -35,4 +35,12 @@ final class ResponsibleAssignmentController
 
         require base_path('app/Http/Controllers/Company/ResponsibleAssignmentActions/assignments.php');
     }
+
+    public function explicitAssignment(): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+
+        require base_path('app/Http/Controllers/Company/ResponsibleAssignmentActions/explicit_assignment.php');
+    }
 }

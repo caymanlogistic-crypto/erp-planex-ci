@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Core\Database;
 use App\Security\AccessStateProvider;
 use App\Service\AccountAuthenticationService;
+use App\Service\CompanyLandingPageService;
 
 require_once BASE_PATH . '/app/Support/company_database.php';
 
@@ -25,7 +26,7 @@ final class AuthController
                 redirect_to('/superadmin/companies');
             }
 
-            redirect_to('/company/dashboard');
+            redirect_to($this->companyLandingPath());
         }
 
         $loginValue = '';
@@ -69,7 +70,7 @@ final class AuthController
     public function login(): void
     {
         if (isAuthenticated()) {
-            redirect_to('/company/dashboard');
+            redirect_to($this->companyLandingPath());
         }
 
         $loginValue = trim($_POST['login'] ?? '');
@@ -138,7 +139,7 @@ final class AuthController
                     } else {
                         session_regenerate_id(true);
                         (new AccountAuthenticationService($pdo))->establishSession($_SESSION, $globalAuth, $readyCompanyId);
-                        redirect_to('/company/dashboard');
+                        redirect_to($this->companyLandingPath());
                     }
                 } else {
                     // Once the global access provider is wired, tenant-local
@@ -175,7 +176,7 @@ final class AuthController
                         'role_code' => 'company_owner',
                         'company_id' => $_SESSION['company_id'],
                     ];
-                    redirect_to('/company/dashboard');
+                    redirect_to($this->companyLandingPath());
                 }
                 }
 
@@ -223,7 +224,7 @@ final class AuthController
                         'role_code' => $_SESSION['role_code'],
                         'company_id' => $_SESSION['company_id'],
                     ];
-                    redirect_to('/company/dashboard');
+                    redirect_to($this->companyLandingPath());
                 }
                 $authError = 'Неверный логин или пароль.';
                 } elseif (count($logistCandidates) > 1) {
@@ -240,6 +241,20 @@ final class AuthController
         require base_path('app/View/pages/login_form.php');
         $content = ob_get_clean();
         require base_path('app/View/layouts/auth-layout.php');
+    }
+
+    private function companyLandingPath(): string
+    {
+        $accountId = (int)($_SESSION['account_id'] ?? 0);
+        $companyId = (int)($_SESSION['company_id'] ?? 0);
+        if ($accountId <= 0 || $companyId <= 0) {
+            return '/company/dashboard';
+        }
+        try {
+            return (new CompanyLandingPageService($this->db->connection()))->pathForAccount($accountId, $companyId);
+        } catch (\Throwable) {
+            return '/access-unavailable';
+        }
     }
 
     public function logout(): void

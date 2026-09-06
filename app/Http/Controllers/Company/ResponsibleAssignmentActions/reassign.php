@@ -2,108 +2,74 @@
 
 use App\Core\Database;
 use App\Service\AccessControlService;
-use App\Service\EntityAssignmentService;
-requireRole(['company_owner', 'senior_logist', 'logist']);
+use App\Service\EntityResponsibilityService;
+
+requireRole('company_owner');
+verifyCsrfRequest();
 
 if (!AccessControlService::isEffectiveSystemOwner()) {
-    jsonResponse([
-        'success' => false,
-        'error' => 'forbidden',
-        'message' => 'Изменять закрепления может только Руководитель.',
-    ], 403);
+    http_response_code(403);
+    echo 'Доступ запрещён.';
     return;
 }
 
-$companyId = (int) (getSessionCompanyId() ?? 0);
-$payload = array_replace($_POST, requestJsonBody());
-$entityType = trim((string) ($payload['entity_type'] ?? ''));
-$entityId = (int) ($payload['entity_id'] ?? 0);
-$membershipIds = $payload['membership_ids'] ?? [];
-if (!is_array($membershipIds)) {
-    $membershipIds = [$membershipIds];
-}
+$companyId = (int)(getSessionCompanyId() ?? 0);
+$entityType = trim((string)($_POST['entity_type'] ?? ''));
+$entityIds = $_POST['entity_ids'] ?? [];
+if (!is_array($entityIds)) $entityIds = [$entityIds];
+$newLogistId = filter_var($_POST['new_logist_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+$cascade = (string)($_POST['cascade'] ?? '0') === '1';
+$tab = in_array($entityType, ['route_executor','contractor','driver','vehicle_set'], true) ? $entityType : 'route_executor';
 
-// Never allow the legacy transfer/cascade request to rewrite creator history.
-if (isset($payload['new_logist_id'], $payload['entity_ids']) || isset($payload['cascade'])) {
-    jsonResponse([
-        'success' => false,
-        'error' => 'legacy_assignment_payload_retired',
-        'message' => 'Старый механизм переназначения отключён. Обновите страницу.',
-    ], 410);
-    return;
-}
-
-if ($companyId <= 0 || !EntityAssignmentService::isSupported($entityType) || $entityId <= 0) {
-    jsonResponse([
-        'success' => false,
-        'error' => 'invalid_assignment_target',
-        'message' => 'Некорректные параметры закрепления.',
-    ], 422);
-    return;
+if ($companyId <= 0 || !EntityResponsibilityService::isSupported($entityType) || $newLogistId === false || $newLogistId === null) {
+    redirect_to('/company/responsible-assignments?tab=' . rawurlencode($tab) . '&msg=error', 303);
 }
 
 try {
     $central = $db->connection();
-    $companyStmt = $central->prepare("SELECT * FROM companies WHERE id = ? AND status = 'active'");
+    $companyStmt = $central->prepare("SELECT * FROM companies WHERE id=? AND status='active' LIMIT 1");
     $companyStmt->execute([$companyId]);
     $company = $companyStmt->fetch(PDO::FETCH_ASSOC);
-    if (!$company) {
-        jsonResponse([
-            'success' => false,
-            'error' => 'company_not_found',
-            'message' => 'Компания не найдена или отключена.',
-        ], 422);
-        return;
-    }
+    if (!$company) throw new RuntimeException('company not found');
 
-    $tenant = new Database(companyDatabaseConfig($config, $company));
-    $localPdo = $tenant->connection();
-    applyLocalMigrations($localPdo);
+    $tenant = (new Database(companyDatabaseConfig($config, $company)))->connection();
+    applyLocalMigrations($tenant);
 
-    $table = ['client'=>'clients','contractor'=>'contractors','vehicle_unit'=>'vehicle_units','driver'=>'drivers'][$entityType];
-    $exists = $localPdo->prepare("SELECT 1 FROM `{$table}` WHERE id = ? AND deleted_at IS NULL AND status <> 'archived' LIMIT 1");
-    $exists->execute([$entityId]);
-    if (!$exists->fetchColumn()) {
-        jsonResponse([
-            'success' => false,
-            'error' => 'assignment_target_not_found',
-            'message' => 'Объект для закрепления не найден.',
-        ], 422);
-        return;
-    }
+    $userStmt = $tenant->prepare("SELECT id,membership_id FROM users WHERE id=? AND status='active' AND deleted_at IS NULL LIMIT 1");
+    $userStmt->execute([(int)$newLogistId]);
+    $targetUser = $userStmt->fetch(PDO::FETCH_ASSOC);
+    $targetMembershipId = (int)($targetUser['membership_id'] ?? 0);
+    if ($targetMembershipId <= 0) throw new RuntimeException('target membership missing');
 
-    $normalized = array_values(array_unique(array_filter(array_map('intval', $membershipIds))));
-    if ($normalized !== []) {
-        $marks = implode(',', array_fill(0, count($normalized), '?'));
-        $members = $central->prepare(
-            "SELECT COUNT(*) FROM company_memberships
-             WHERE company_id = ? AND id IN ({$marks})"
-        );
-        $members->execute(array_merge([$companyId], $normalized));
-        if ((int) $members->fetchColumn() !== count($normalized)) {
-            jsonResponse([
-                'success' => false,
-                'error' => 'invalid_assignment_membership',
-                'message' => 'Выбран недоступный сотрудник. Обновите страницу и повторите.',
-            ], 422);
-            return;
+    $memberStmt = $central->prepare("SELECT 1 FROM company_memberships WHERE id=? AND company_id=? AND status='active' LIMIT 1");
+    $memberStmt->execute([$targetMembershipId, $companyId]);
+    if (!$memberStmt->fetchColumn()) throw new RuntimeException('cross company target');
+
+    $actorMembershipId = (int)(AccessControlService::effectiveMembershipId() ?? 0);
+    $result = EntityResponsibilityService::transfer($tenant, $entityType, $entityIds, $targetMembershipId, $actorMembershipId);
+
+    if ($cascade && in_array($entityType, ['contractor','driver','vehicle_set'], true)) {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $entityIds), static fn(int $id): bool => $id > 0)));
+        if ($ids !== []) {
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            if ($entityType === 'contractor') {
+                $sql = "SELECT id FROM crews WHERE contractor_id IN ({$marks}) AND status <> 'archived'";
+            } elseif ($entityType === 'driver') {
+                $sql = "SELECT c.id FROM crews c JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id WHERE dvb.driver_id IN ({$marks}) AND c.status <> 'archived'";
+            } else {
+                $sql = "SELECT c.id FROM crews c JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id WHERE dvb.vehicle_set_id IN ({$marks}) AND c.status <> 'archived'";
+            }
+            $related = $tenant->prepare($sql);
+            $related->execute($ids);
+            $crewIds = array_map('intval', $related->fetchAll(PDO::FETCH_COLUMN));
+            if ($crewIds !== []) {
+                EntityResponsibilityService::transfer($tenant, 'route_executor', $crewIds, $targetMembershipId, $actorMembershipId);
+            }
         }
     }
 
-    EntityAssignmentService::replace(
-        $localPdo,
-        $entityType,
-        $entityId,
-        $normalized,
-        (int) AccessControlService::effectiveMembershipId()
-    );
-
-    jsonResponse(['success'=>true,'membership_ids'=>$normalized]);
+    redirect_to('/company/responsible-assignments?tab=' . rawurlencode($tab) . '&msg=assigned', 303);
 } catch (Throwable $e) {
-    error_log('Responsible assignment update failed: ' . get_class($e) . ': ' . $e->getMessage());
-    jsonResponse([
-        'success' => false,
-        'error' => 'assignment_update_failed',
-        'message' => 'Не удалось сохранить закрепление. Повторите позже.',
-    ], 500);
+    error_log('Responsibility transfer failed: ' . get_class($e) . ': ' . $e->getMessage());
+    redirect_to('/company/responsible-assignments?tab=' . rawurlencode($tab) . '&msg=error', 303);
 }
