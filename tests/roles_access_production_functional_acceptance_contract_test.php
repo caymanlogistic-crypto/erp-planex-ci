@@ -57,6 +57,7 @@ $ok(str_contains($identity, "system_key='company_owner'") && str_contains($ident
 $ok(str_contains($identity, "SELECT id,name FROM companies WHERE status='active' AND id<>? ORDER BY id LIMIT 1"), 'foreign-company isolation must require only a second active company');
 $ok(!str_contains($identity, 'no two active QA companies with independent owners'), 'foreign-company isolation must not require an independent owner in the foreign company');
 $ok(str_contains($identity, 'EntityResponsibilityService::eligibleRecipients'), 'QA helper must verify tenant-projected eligible responsibility recipients');
+$ok(str_contains($identity, "app/Support/crypto_helper.php"), 'QA helper must load crypto_helper before resolving encrypted tenant DB credentials');
 $ok(str_contains($identity, '$foreign=$membershipService->add($foreignCompanyId,(int)$foreignRole'), 'foreign proof membership must use a run-scoped ordinary role rather than a foreign owner role');
 foreach (['QA Functional Role ','QA Functional Foreign Role ','QA Functional Owner ','QA Functional Dynamic ','QA Functional Foreign ','foreign_role_id','new App\\Service\\CompanyRoleService($pdo)','->create(','->delete('] as $needle) {
     $ok(str_contains($identity, $needle), "QA dynamic role/account lifecycle token missing {$needle}");

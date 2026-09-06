@@ -12,6 +12,7 @@ require_once $root . '/app/Support/helpers.php';
 require_once $root . '/app/Support/environment.php';
 loadEnvFileNonOverwriting($root . '/.env');
 require_once $root . '/app/Core/Database.php';
+require_once $root . '/app/Support/crypto_helper.php';
 require_once $root . '/app/Support/company_database.php';
 require_once $root . '/app/Service/IdentityNormalizer.php';
 require_once $root . '/app/Service/CompanyRoleService.php';
