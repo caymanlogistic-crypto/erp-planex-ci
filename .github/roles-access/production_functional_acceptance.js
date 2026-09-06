@@ -7,6 +7,7 @@ const out = process.env.RESULT_DIR || 'roles_access_functional_acceptance_result
 const encodedCredentials = process.env.P12_CREDENTIALS_B64 || '';
 const credentials = encodedCredentials ? JSON.parse(Buffer.from(encodedCredentials, 'base64').toString('utf8')) : [];
 const runId = process.env.GITHUB_RUN_ID || String(Date.now());
+const suppliedForeignMembershipId = Number(process.env.QA_FOREIGN_MEMBERSHIP_ID || 0);
 fs.mkdirSync(out, { recursive: true });
 
 const marks = [];
@@ -137,7 +138,7 @@ async function switchCompany(page, value) {
 }
 async function crossCompanyProof(page, originalState) {
   const originalIds = uniqInts((originalState.memberships||[]).map(x=>x.id));
-  let foreignMembershipId = 0;
+  let foreignMembershipId = suppliedForeignMembershipId > 0 ? suppliedForeignMembershipId : 0;
   let switchCount = 0;
   await page.goto(base + '/company/roles-access', { waitUntil:'networkidle', timeout:60000 });
   const switcher = page.locator('#active-company-switch');
@@ -158,7 +159,7 @@ async function crossCompanyProof(page, originalState) {
         const foreignIds = uniqInts((foreignState.memberships||[]).map(x=>x.id));
         must(foreignIds.length > 0, 'foreign company has no memberships for isolation proof');
         must(foreignIds.every(id => !originalIds.includes(id)), 'membership identifiers overlap across company snapshots');
-        foreignMembershipId = foreignIds[0];
+        if (foreignMembershipId <= 0) foreignMembershipId = foreignIds[0];
       } else {
         must(foreignAccess && foreignAccess.status() === 403, `unexpected foreign roles-access status ${foreignAccess && foreignAccess.status()}`);
         mark('FOREIGN_COMPANY_OWNER_ONLY_DENY=PASS');
@@ -173,13 +174,12 @@ async function crossCompanyProof(page, originalState) {
       await page.goto(base + '/company/roles-access', {waitUntil:'networkidle',timeout:60000});
       const restoredState = await snapshot(page);
       must(sameInts((restoredState.memberships||[]).map(x=>x.id), originalIds), 'company context did not restore after isolation probe');
-      if (foreignMembershipId > 0) {
-        const denied = await api(page, 'GET', `/company/roles-access/assignments?membership_id=${foreignMembershipId}`);
-        must(denied.status === 404 || denied.status === 422, `foreign membership was readable in original company: ${denied.status}`);
-        mark('FOREIGN_MEMBERSHIP_SERVER_REJECTION=PASS');
-      }
     }
   }
+  must(foreignMembershipId > 0, 'foreign membership id unavailable for isolation proof');
+  const denied = await api(page, 'GET', `/company/roles-access/assignments?membership_id=${foreignMembershipId}`);
+  must(denied.status === 404 || denied.status === 422, `foreign membership was readable in original company: ${denied.status}`);
+  mark('FOREIGN_MEMBERSHIP_SERVER_REJECTION=PASS');
   mark(`COMPANY_SWITCH_OPTIONS=${switchCount}`);
   return foreignMembershipId;
 }
@@ -200,13 +200,20 @@ async function assignmentTabProof(page, state, membershipId) {
   for (const key of ['client','contractor','vehicle_unit','driver']) must(Array.isArray((backend.payload.entities||{})[key]), `Закрепления missing ${key}`);
   mark('ASSIGNMENTS_TAB=PASS');
 }
-async function responsibilityCandidate(page, activeMembershipIds, foreignMembershipId) {
+async function responsibilityCandidate(page, activeMembershipIds, foreignMembershipId, state) {
   for (const tab of ['contractor','driver','vehicle_set','route_executor']) {
     let response = await page.goto(base + `/company/responsible-assignments?tab=${tab}`, {waitUntil:'networkidle',timeout:60000});
     if (!response || response.status() !== 200) continue;
     if (await page.locator('#massReassignToolbarForm').count() !== 1) continue;
     const recipientRows = await page.locator('#massReassignToolbarForm select[name="new_logist_id"] option[data-membership-id]').evaluateAll(nodes => nodes.map(n=>({user_id:Number(n.value),membership_id:Number(n.dataset.membershipId)})));
     if (recipientRows.length === 0) continue;
+    const dynamicRecipients = recipientRows.filter(r => {
+      const m = (state.memberships||[]).find(x => Number(x.id) === Number(r.membership_id));
+      const role = m && (state.roles||[]).find(x => Number(x.id) === Number(m.role_id));
+      return !!(m && role && !role.is_system && !role.system_key && m.status === 'active');
+    });
+    must(dynamicRecipients.length > 0, `${tab}: no dynamic-role responsibility recipient is visible`);
+    const dynamicRecipientIds = new Set(dynamicRecipients.map(r => Number(r.membership_id)));
     for (const r of recipientRows) {
       must(activeMembershipIds.includes(r.membership_id), `${tab}: recipient membership ${r.membership_id} is outside current active membership set`);
       if (foreignMembershipId > 0) must(r.membership_id !== foreignMembershipId, `${tab}: foreign membership leaked into recipient list`);
@@ -220,14 +227,17 @@ async function responsibilityCandidate(page, activeMembershipIds, foreignMembers
       const original = Number(await select.inputValue() || 0);
       if (original <= 0) continue;
       const options = await select.locator('option[data-membership-id]').evaluateAll(nodes => nodes.map(n=>({user_id:Number(n.value),membership_id:Number(n.dataset.membershipId)})));
-      const target = options.find(x=>x.user_id>0 && x.user_id!==original);
+      const target = options.find(x => x.user_id > 0 && x.user_id !== original && dynamicRecipientIds.has(Number(x.membership_id)));
       if (!target) continue;
       const entityId = Number(await form.locator('input[name="entity_ids[]"]').inputValue());
       const entityType = await form.locator('input[name="entity_type"]').inputValue();
-      if (entityId > 0 && entityType) return {tab,entityId,entityType,original,targetUserId:target.user_id,targetMembershipId:target.membership_id};
+      if (entityId > 0 && entityType) {
+        mark('DYNAMIC_RESPONSIBILITY_RECIPIENT=PASS');
+        return {tab,entityId,entityType,original,targetUserId:target.user_id,targetMembershipId:target.membership_id};
+      }
     }
   }
-  throw new Error('No reversible responsibility transfer candidate with two eligible recipients');
+  throw new Error('No reversible responsibility transfer candidate to a dynamic-role recipient');
 }
 async function selectedResponsibilityUser(page, candidate) {
   await page.goto(base + `/company/responsible-assignments?tab=${candidate.tab}`, {waitUntil:'networkidle',timeout:60000});
@@ -338,7 +348,7 @@ async function submitResponsibility(page, candidate, targetUserId) {
     await assignmentTabProof(page, state, memberId);
 
     const activeMembershipIds = uniqInts((state.memberships||[]).filter(m=>m.status==='active').map(m=>m.id));
-    responsibility = await responsibilityCandidate(page, activeMembershipIds, foreignMembershipId);
+    responsibility = await responsibilityCandidate(page, activeMembershipIds, foreignMembershipId, state);
     mark('RESPONSIBLE_ASSIGNMENTS=PASS');
     mark('RESPONSIBILITY_RECIPIENT_SCOPE=PASS');
     await submitResponsibility(page, responsibility, responsibility.targetUserId);
