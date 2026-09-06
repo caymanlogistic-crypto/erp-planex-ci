@@ -13,9 +13,11 @@ $ok = static function (bool $condition, string $message): void {
     }
 };
 
-$ok(str_contains($workflow, 'workflow_dispatch:'), 'functional acceptance must be manual-only');
-$ok(!preg_match('/^\s*push\s*:/m', $workflow), 'functional acceptance must never run automatically on push');
-$ok(str_contains($workflow, 'test "$(git rev-parse HEAD)" = "$SHA"'), 'workflow must bind checkout to requested exact SHA');
+$ok(str_contains($workflow, 'workflow_dispatch:'), 'functional acceptance must retain manual exact-SHA trigger');
+$ok(str_contains($workflow, 'push:') && str_contains($workflow, 'qa/roles-access-functional-agent'), 'functional acceptance must support only the dedicated QA push trigger');
+$ok(str_contains($workflow, 'test "$REF_NAME" = "$QA_TRIGGER_BRANCH"'), 'push-triggered acceptance must fail closed outside the dedicated QA branch');
+$ok(str_contains($workflow, 'SOURCE_SHA:') && str_contains($workflow, 'github.event_name') && str_contains($workflow, 'inputs.source_sha') && str_contains($workflow, 'github.sha'), 'workflow must resolve source SHA from manual input or exact QA push SHA');
+$ok(str_contains($workflow, 'ref: ${{ env.SOURCE_SHA }}') && str_contains($workflow, 'test "$(git rev-parse HEAD)" = "$SHA"'), 'workflow must bind checkout to resolved exact SHA');
 $ok(str_contains($workflow, 'git ls-remote origin refs/heads/${CANONICAL_BRANCH}'), 'workflow must reconfirm exact current canonical');
 $ok(str_contains($workflow, 'P07_erpv2_deployed_commit.txt'), 'workflow must require exact deployed marker');
 $ok(str_contains($workflow, 'P11_RUNTIME_CREDENTIALS_B64'), 'workflow must use protected current runtime credentials');
