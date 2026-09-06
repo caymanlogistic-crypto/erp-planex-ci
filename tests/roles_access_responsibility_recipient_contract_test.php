@@ -25,7 +25,7 @@ $ok(str_contains($service, 'membership_id IS NOT NULL') && str_contains($service
 $ok(!preg_match("/role_code\\s*=\\s*['\"](?:logist|senior_logist|membership_role)['\"]/", $service), 'eligibility service must not authorize by tenant role_code');
 
 $view = file_get_contents($root . '/app/View/pages/company_responsible_assignments.php');
-$ok(substr_count($view, 'csrfInput()') >= 2, 'responsibility transfer forms must carry CSRF token for real browser POSTs');
+$ok(substr_count($view, 'csrfField()') >= 2 && !str_contains($view, 'csrfInput()'), 'responsibility transfer forms must use the canonical CSRF field helper for real browser POSTs');
 $ok(str_contains($view, 'data-membership-id='), 'recipient options must expose stable membership id for functional/isolation verification');
 
 echo "ROLES_ACCESS_RESPONSIBILITY_RECIPIENT_CONTRACT_PASS=YES\n";
