@@ -5,15 +5,13 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 $workflowPath = $root . '/.github/workflows/roles_access_131_production_migration.yml';
 $scriptPath = $root . '/scripts/roles_access_production_migrate.php';
-$manifestPath = $root . '/.github/agent_db_migration_request.json';
 $workflow = is_file($workflowPath) ? (string) file_get_contents($workflowPath) : '';
 $script = is_file($scriptPath) ? (string) file_get_contents($scriptPath) : '';
-$manifest = json_decode((string) file_get_contents($manifestPath), true);
 $fail = static function (string $message): never { fwrite(STDERR, $message . PHP_EOL); exit(1); };
 $need = static function (string $haystack, string $needle, string $label) use ($fail): void {
     if (!str_contains($haystack, $needle)) $fail("missing {$label}: {$needle}");
 };
-if ($workflow === '' || $script === '' || !is_array($manifest)) $fail('roles access production migration artifacts missing');
+if ($workflow === '' || $script === '') $fail('roles access production migration artifacts missing');
 
 foreach ([
     "\n  workflow_dispatch:",
@@ -99,16 +97,9 @@ if (str_contains($script, 'owner_exceptions') && !str_contains($script, "'owner_
     $fail('owner exception channel must remain empty for production rollout');
 }
 
-$expectedManifest = [
-    'migration_id' => '131',
-    'workflow' => 'roles_access_131_production_migration.yml',
-    'source_sha_input' => 'source_sha',
-    'confirmation_input' => 'confirm_migration',
-    'confirmation_value' => 'APPLY_ROLES_ACCESS_131',
-];
-foreach ($expectedManifest as $key => $value) {
-    if (($manifest[$key] ?? null) !== $value) $fail("migration manifest mismatch: {$key}");
-}
+// Migration 131 is a historical manual-only rollout contract. The generic
+// request manifest is intentionally allowed to advance to newer migrations and
+// is governed independently by agent_db_migration_request_contract_test.php.
 if (count(glob($root . '/database/migrations-local/131_*.sql') ?: []) !== 1) $fail('migration 131 tenant SQL must be unique');
 $tenantMigration = (string) file_get_contents($root . '/database/migrations-local/131_create_roles_access_projection.sql');
 foreach (['legacy_access_projections','idx_vehicle_sets_creator_membership'] as $token) $need($tenantMigration, $token, 'tenant 131 compatibility projection token');
