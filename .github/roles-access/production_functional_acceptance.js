@@ -209,7 +209,21 @@ async function responsibilityCandidate(page, activeMembershipIds, foreignMembers
   must(suppliedContractorId > 0, 'run-scoped contractor id missing');
   const tab = 'contractor';
   const response = await page.goto(base + `/company/responsible-assignments?tab=${tab}`, {waitUntil:'networkidle',timeout:60000});
-  must(response && response.status() === 200, `${tab}: responsibility page did not return HTTP 200`);
+  const responseStatus = response ? response.status() : 0;
+  if (responseStatus !== 200) {
+    const finalPath = appPath(page.url());
+    let responseText = '';
+    try { responseText = response ? await response.text() : ''; } catch (_) {}
+    const safeSnippet = String(responseText)
+      .replace(/[A-Za-z0-9+\/_=-]{32,}/g, '[redacted]')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 800);
+    mark(`RESPONSIBILITY_PAGE_HTTP_STATUS=${responseStatus}`);
+    mark(`RESPONSIBILITY_PAGE_FINAL_PATH=${finalPath}`);
+    if (safeSnippet) console.error(`RESPONSIBILITY_PAGE_BODY_SNIPPET=${safeSnippet}`);
+    throw new Error(`${tab}: responsibility page did not return HTTP 200; status=${responseStatus}; final_path=${finalPath}`);
+  }
   const danger = page.locator('.notice.danger');
   if (await danger.count() > 0) throw new Error(`${tab}: responsibility page error: ${await danger.first().innerText()}`);
   must(await page.locator('#massReassignToolbarForm').count() === 1, `${tab}: responsibility toolbar missing for run-scoped contractor`);
