@@ -23,11 +23,16 @@ $ok(str_contains($workflow, 'git ls-remote origin refs/heads/${CANONICAL_BRANCH}
 $ok(str_contains($workflow, 'P07_erpv2_deployed_commit.txt'), 'workflow must require exact deployed marker');
 $ok(!str_contains($workflow, 'P11_RUNTIME_CREDENTIALS_B64'), 'functional acceptance must not depend on an unavailable real-user password secret');
 $ok(str_contains($workflow, 'Provision isolated temporary QA owner identity') && str_contains($workflow, '.github/roles-access/qa_identity.php'), 'workflow must provision the isolated temporary QA identity');
+$ok(str_contains($workflow, 'QA_DYNAMIC_RECIPIENT_READY=YES') && str_contains($workflow, 'QA_TENANT_PROJECTIONS_READY=YES'), 'workflow must require isolated dynamic recipient projections before browser writes');
 $ok(str_contains($workflow, 'QA_CONTRACTOR_FIXTURE_READY=YES') && str_contains($workflow, 'QA_RESPONSIBILITY_FIXTURE_READY=YES'), 'workflow must require the isolated contractor and responsibility fixtures before browser writes');
 $ok(str_contains($workflow, 'Cleanup temporary QA owner identity') && str_contains($workflow, 'if: always()') && str_contains($workflow, 'QA_IDENTITY_RESIDUE=0'), 'temporary QA identity cleanup must be unconditional and residue-gated');
 $ok(str_contains($workflow, 'QA_RESPONSIBILITY_FIXTURE_RESIDUE=0'), 'temporary responsibility fixture cleanup must be residue-gated');
 $ok(str_contains($workflow, 'QA_CONTRACTOR_FIXTURE_RESIDUE=0'), 'temporary contractor fixture cleanup must be residue-gated');
-$ok(str_contains($workflow, 'QA_FOREIGN_MEMBERSHIP_ID'), 'workflow must pass a real foreign membership identifier into the isolation proof');
+foreach (['QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0'] as $marker) {
+    $ok(str_contains($workflow, $marker), "workflow cleanup missing {$marker}");
+}
+$ok(str_contains($workflow, 'QA_FOREIGN_MEMBERSHIP_ID'), 'workflow must pass a foreign-company membership identifier into the isolation proof');
+$ok(str_contains($workflow, 'QA_DYNAMIC_MEMBERSHIP_ID') && str_contains($workflow, 'QA_DYNAMIC_TENANT_USER_ID'), 'workflow must bind browser acceptance to the exact run-scoped dynamic recipient');
 $ok(str_contains($workflow, 'LIVE_PARENT: /home/s/spugovxsim/planexp/public_html'), 'functional acceptance must use the real production web root');
 $ok(str_contains($script, "page.locator('input[name=\"login\"]')") && str_contains($script, "page.locator('input[name=\"password\"]')"), 'acceptance must perform normal username/password login');
 $ok(!str_contains($script, 'QA_LEGACY_SESSION_ID') && !str_contains($script, 'create-legacy-owner'), 'acceptance must not use synthetic legacy-session authentication');
@@ -44,12 +49,20 @@ $ok(str_contains($script, '/company/roles-access/assignments?membership_id='), '
 $ok(str_contains($script, '/company/responsible-assignments?tab='), 'acceptance must exercise responsibility UI');
 $ok(str_contains($script, 'form.evaluate(f=>f.requestSubmit())'), 'responsibility transfer must use the real browser form POST');
 $ok(str_contains($script, 'dynamicRecipientIds.has(Number(x.membership_id))'), 'responsibility transfer target must be a dynamic-role recipient');
-foreach (['CompanyMembershipService','qa_func_','OWNER_SYSTEM_KEY','user_accounts','company_memberships','QA_IDENTITY_CREATED=YES','QA_IDENTITY_RESIDUE=0'] as $needle) {
+$ok(str_contains($script, 'suppliedDynamicMembershipId') && str_contains($script, 'suppliedDynamicTenantUserId'), 'browser acceptance must bind to exact dynamic membership and tenant user ids');
+foreach (['CompanyRoleService','CompanyMembershipService','qa_func_','OWNER_SYSTEM_KEY','user_accounts','company_memberships','QA_IDENTITY_CREATED=YES','QA_IDENTITY_RESIDUE=0'] as $needle) {
     $ok(str_contains($identity, $needle), "QA identity helper missing lifecycle token {$needle}");
 }
 $ok(str_contains($identity, "system_key='company_owner'") && str_contains($identity, "ar.state='ready'"), 'QA identity must bind only to a ready company owner role');
-$ok(str_contains($identity, 'm.company_id<>?'), 'QA identity helper must resolve a real foreign-company membership for isolation');
-$ok(str_contains($identity, 'EntityResponsibilityService::eligibleRecipients'), 'QA helper must choose tenant-projected eligible and dynamic responsibility recipients');
+$ok(str_contains($identity, "c.id<>?"), 'QA helper must select a separate foreign company for isolation');
+$ok(str_contains($identity, 'EntityResponsibilityService::eligibleRecipients'), 'QA helper must verify tenant-projected eligible responsibility recipients');
+foreach (['QA Functional Role ','QA Functional Owner ','QA Functional Dynamic ','QA Functional Foreign ','CompanyRoleService($pdo))->create','CompanyRoleService($pdo))->delete'] as $needle) {
+    $ok(str_contains($identity, $needle), "QA dynamic role/account lifecycle token missing {$needle}");
+}
+$ok(str_contains($identity, 'INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status)') && str_contains($identity, "'membership_role'") && str_contains($identity, "'company_owner'"), 'QA helper must create stable membership-linked owner/dynamic tenant projections without role_code authority');
+foreach (['QA_DYNAMIC_MEMBERSHIP_ID=','QA_DYNAMIC_TENANT_USER_ID=','QA_DYNAMIC_RECIPIENT_READY=YES','QA_TENANT_PROJECTIONS_READY=YES','QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0'] as $needle) {
+    $ok(str_contains($identity, $needle), "QA dynamic fixture lifecycle token missing {$needle}");
+}
 foreach (['qa_contractor_fixture','QA Functional Contractor ','INSERT INTO contractors (name,inn,status)','cleanupQaContractorFixture','QA_CONTRACTOR_FIXTURE_READY=YES','QA_CONTRACTOR_FIXTURE_RESIDUE=0'] as $needle) {
     $ok(str_contains($identity, $needle), "QA contractor fixture lifecycle token missing {$needle}");
 }
@@ -59,12 +72,17 @@ foreach (['responsibility_fixture','QA_RESPONSIBILITY_FIXTURE_READY=YES','QA_RES
 $statePos = strpos($identity, 'file_put_contents($stateFile');
 $contractorWritePos = strpos($identity, 'INSERT INTO contractors (name,inn,status)');
 $fixtureWritePos = strrpos($identity, 'INSERT INTO entity_responsibilities');
-$contractorCleanupPos = strpos($identity, 'cleanupQaContractorFixture($pdo, $config, $state);');
-$ownerCleanupPos = strpos($identity, 'CompanyMembershipService($pdo))->remove');
+$contractorCleanupPos = strpos($identity, 'cleanupQaContractorFixture($pdo,$config,$state,$runId);');
+$projectionCleanupPos = strpos($identity, 'cleanupQaTenantProjections($pdo,$config,$runId,$accounts');
+$ownerCleanupPos = strpos($identity, '$membershipService->remove');
 $ok($statePos !== false && $contractorWritePos !== false && $statePos < $contractorWritePos, 'QA fixture must persist recovery state before tenant contractor mutation');
 $ok($contractorWritePos < $fixtureWritePos, 'QA responsibility baseline must only target the run-scoped contractor after it exists');
-$ok($contractorCleanupPos !== false && $ownerCleanupPos !== false && $contractorCleanupPos < $ownerCleanupPos, 'QA tenant fixture must be removed before temporary owner removal');
-$ok(!str_contains($identity, 'INSERT INTO users') && !str_contains($identity, 'company_users'), 'QA identity must not create tenant or legacy identity projections');
+$ok($contractorCleanupPos !== false && $projectionCleanupPos !== false && $ownerCleanupPos !== false && $contractorCleanupPos < $projectionCleanupPos && $projectionCleanupPos < $ownerCleanupPos, 'QA responsibility/contractor/projections must be removed before central memberships');
+$roleCreatePos = strpos($identity, 'CompanyRoleService($pdo))->create');
+$ownerAddPos = strpos($identity, "'QA Functional Owner '.");
+$projectionWritePos = strpos($identity, 'INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status)');
+$ok($roleCreatePos !== false && $ownerAddPos !== false && $projectionWritePos !== false && $roleCreatePos < $ownerAddPos && $ownerAddPos < $projectionWritePos && $projectionWritePos < $contractorWritePos, 'QA lifecycle order must be role -> central identities -> tenant projections -> contractor -> responsibility');
+$ok(!str_contains($identity, 'company_users'), 'QA helper must not use obsolete company_users projection');
 $ok(str_contains($workflow, 'erpv2/roles-access-functional'), 'successful acceptance must publish exact-SHA commit status');
 
 echo "ROLES_ACCESS_PRODUCTION_FUNCTIONAL_ACCEPTANCE_CONTRACT_PASS=YES\n";

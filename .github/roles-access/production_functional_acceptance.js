@@ -8,6 +8,8 @@ const encodedCredentials = process.env.P12_CREDENTIALS_B64 || '';
 const credentials = encodedCredentials ? JSON.parse(Buffer.from(encodedCredentials, 'base64').toString('utf8')) : [];
 const runId = process.env.GITHUB_RUN_ID || String(Date.now());
 const suppliedForeignMembershipId = Number(process.env.QA_FOREIGN_MEMBERSHIP_ID || 0);
+const suppliedDynamicMembershipId = Number(process.env.QA_DYNAMIC_MEMBERSHIP_ID || 0);
+const suppliedDynamicTenantUserId = Number(process.env.QA_DYNAMIC_TENANT_USER_ID || 0);
 fs.mkdirSync(out, { recursive: true });
 
 const marks = [];
@@ -210,7 +212,9 @@ async function responsibilityCandidate(page, activeMembershipIds, foreignMembers
     const dynamicRecipients = recipientRows.filter(r => {
       const m = (state.memberships||[]).find(x => Number(x.id) === Number(r.membership_id));
       const role = m && (state.roles||[]).find(x => Number(x.id) === Number(m.role_id));
-      return !!(m && role && !role.is_system && !role.system_key && m.status === 'active');
+      return !!(m && role && !role.is_system && !role.system_key && m.status === 'active'
+        && (suppliedDynamicMembershipId <= 0 || Number(m.id) === suppliedDynamicMembershipId)
+        && (suppliedDynamicTenantUserId <= 0 || Number(r.user_id) === suppliedDynamicTenantUserId));
     });
     must(dynamicRecipients.length > 0, `${tab}: no dynamic-role responsibility recipient is visible`);
     const dynamicRecipientIds = new Set(dynamicRecipients.map(r => Number(r.membership_id)));
@@ -299,8 +303,11 @@ async function submitResponsibility(page, candidate, targetUserId) {
     initialState = await snapshot(page);
     initialFingerprint = stateFingerprint(initialState);
 
-    const ordinaryMembership = (initialState.memberships||[]).find(m=>m.status==='active' && !m.is_system_owner && (initialState.roles||[]).some(r=>Number(r.id)===Number(m.role_id) && !r.is_system && !r.system_key));
-    must(ordinaryMembership, 'no active ordinary membership available for role/override acceptance');
+    const ordinaryMembership = (initialState.memberships||[]).find(m=>m.status==='active' && !m.is_system_owner
+      && (suppliedDynamicMembershipId <= 0 || Number(m.id) === suppliedDynamicMembershipId)
+      && (initialState.roles||[]).some(r=>Number(r.id)===Number(m.role_id) && !r.is_system && !r.system_key));
+    must(ordinaryMembership, 'run-scoped dynamic membership unavailable for role/override acceptance');
+    if (suppliedDynamicMembershipId > 0) must(Number(ordinaryMembership.id) === suppliedDynamicMembershipId, 'dynamic membership binding mismatch');
     const ordinaryRole = (initialState.roles||[]).find(r=>Number(r.id)===Number(ordinaryMembership.role_id));
     must(ordinaryRole, 'ordinary role missing');
 
