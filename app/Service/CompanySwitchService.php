@@ -31,9 +31,20 @@ final class CompanySwitchService
         }
 
         // Only the active-company selector is mutable. Permissions are loaded
-        // from central state by AccessStateProvider on the next request.
-        $session['company_id'] = (int) $membership['company_id'];
+        // from central state by AccessStateProvider on the next request. Keep
+        // the compatibility nested identity aligned with the same account/company
+        // pair, otherwise the next request correctly rejects the conflicting
+        // top-level/nested session as invalid.
+        $companyId = (int) $membership['company_id'];
+        $session['company_id'] = $companyId;
         $session['company_name'] = (string) $membership['company_name'];
+        $session['user_id'] = (int) $accountId;
+        if (!isset($session['user']) || !is_array($session['user'])) {
+            $session['user'] = [];
+        }
+        $session['user']['account_id'] = (int) $accountId;
+        $session['user']['user_id'] = (int) $accountId;
+        $session['user']['company_id'] = $companyId;
         unset(
             $session['role_code'],
             $session['membership_id'],
@@ -41,6 +52,10 @@ final class CompanySwitchService
             $session['permissions'],
             $session['data_scopes'],
             $session['user']['role_code'],
+            $session['user']['membership_id'],
+            $session['user']['role_id'],
+            $session['user']['permissions'],
+            $session['user']['data_scopes'],
         );
     }
 }
