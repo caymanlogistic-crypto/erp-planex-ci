@@ -27,6 +27,7 @@ namespace App\Service {
     }
 
     require_once __DIR__ . '/../app/Service/LegacyAccessProjectionService.php';
+    require_once __DIR__ . '/../app/Service/EntityResponsibilityService.php';
     require_once __DIR__ . '/../app/Service/RegulatedDataScopeService.php';
     require_once __DIR__ . '/../app/Service/EntityAssignmentService.php';
 }
@@ -64,7 +65,7 @@ namespace {
     AccessControlService::$membershipId = 42;
     $condition = RegulatedDataScopeService::condition('vehicle_unit', 'vu.id');
     $assert(str_contains($condition['sql'], 'vu.created_by_membership_id') && str_contains($condition['sql'], 'entity_assignments'), 'reference own uses creator projection plus assignments');
-    $assert($condition['params'] === [42, 'vehicle_unit', 42], 'reference own key is membership');
+    $assert($condition['params'] === ['vehicle_unit', 42, 'vehicle_unit', 42, 'vehicle_unit'], 'reference own key is responsibility + assignment membership');
 
     $condition = RegulatedDataScopeService::condition('linear_trip', 'lr.id', 'lr.created_by_membership_id');
     $assert(str_contains($condition['sql'], 'lr.created_by_membership_id') && str_contains($condition['sql'], 'legacy_access_projections'), 'linear trip own preserves creator plus immutable historical projection');
@@ -95,8 +96,8 @@ namespace {
     foreach ([$client,$contractor,$driver,$vehicles] as $source) {
         $assert(str_contains($source, 'autoAssignCreator') || str_contains($source, 'createAssigned'), 'reference creation auto-assigns atomically');
     }
-    $assert(str_contains($reassign, "isset(\$payload['cascade'])"), 'legacy cascade payload explicitly retired');
-    $assert(!str_contains($reassign, 'UPDATE contractors SET created_by_user_id'), 'assignment mutation never rewrites creator');
+    $assert(str_contains($reassign, 'EntityResponsibilityService::transfer'), 'responsibility transfer uses separate projection');
+    $assert(!str_contains($reassign, 'UPDATE contractors SET created_by_user_id') && !str_contains($reassign, 'UPDATE contractors SET created_by_membership_id'), 'responsibility transfer never rewrites creator');
 
     echo "PASS roles access data scope\n";
 }

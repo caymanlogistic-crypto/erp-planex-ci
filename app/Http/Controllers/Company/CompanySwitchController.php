@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
 use App\Service\CompanySwitchService;
+use App\Service\CompanyLandingPageService;
 
 final class CompanySwitchController
 {
@@ -25,7 +26,7 @@ final class CompanySwitchController
         try {
             (new CompanySwitchService($this->db->connection()))->switch($_SESSION, (int) $companyId);
             session_regenerate_id(true);
-            redirect_to('/company/dashboard', 303);
+            redirect_to((new CompanyLandingPageService($this->db->connection()))->pathForAccount((int)($_SESSION['account_id'] ?? 0), (int)($_SESSION['company_id'] ?? 0)), 303);
         } catch (\DomainException) {
             http_response_code(403);
             echo 'Нет доступа к выбранной компании.';

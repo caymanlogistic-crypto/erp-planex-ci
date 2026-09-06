@@ -10,7 +10,6 @@ final class NavigationCounterService
 {
     /** @var array<string,array<string,int>> */
     private static array $requestCache = [];
-    private static bool $tripBadgeScriptRegistered = false;
 
     /**
      * Return lightweight navigation counters for one tenant.
@@ -18,7 +17,7 @@ final class NavigationCounterService
      * Every counter is intentionally isolated. A missing/temporarily unavailable
      * schema object for one module must never suppress unrelated badges.
      *
-     * @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int}
+     * @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,feo_freshness:int,feo_utilizer_problem:int,production_calendar_warning:int}
      */
     public static function forCompany(array $config, Database $centralDb, int $companyId, ?array $knownCompany = null): array
     {
@@ -26,7 +25,6 @@ final class NavigationCounterService
 
         $cacheKey = (string)$companyId;
         if (isset(self::$requestCache[$cacheKey])) {
-            self::registerTripBadgeScript(self::$requestCache[$cacheKey]);
             return self::$requestCache[$cacheKey];
         }
 
@@ -97,46 +95,56 @@ final class NavigationCounterService
         // alias to the Linear Trips value.
         $counters['departures_problem'] = 0;
 
+        try {
+            // Same factual freshness rule as FeoRequestService::freshnessState():
+            // no applied import is a problem, otherwise the latest applied import
+            // becomes stale after seven days.
+            $row = $tenant->query(
+                "SELECT CASE WHEN created_at < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END AS is_stale
+                   FROM feo_imports
+                  WHERE status = 'applied'
+                  ORDER BY id DESC
+                  LIMIT 1"
+            )->fetchColumn();
+            $counters['feo_freshness'] = $row === false ? 1 : ((int)$row === 1 ? 1 : 0);
+        } catch (Throwable) {
+            // Preserve the legacy helper's staged-rollout behavior: missing FEO
+            // schema suppresses only this badge and never unrelated navigation.
+            $counters['feo_freshness'] = 0;
+        }
+
+        try {
+            if (!class_exists(FeoUtilizerService::class)) {
+                require_once base_path('app/Service/FeoUtilizerService.php');
+            }
+            $counters['feo_utilizer_problem'] = max(
+                0,
+                (int)((new FeoUtilizerService())->currentPlacementProblemSummary($tenant)['count'] ?? 0)
+            );
+        } catch (Throwable) {
+            $counters['feo_utilizer_problem'] = 0;
+        }
+
+        try {
+            $counters['production_calendar_warning'] = 0;
+            if ((int)date('n') === 12) {
+                if (!class_exists(ProductionCalendarService::class)) {
+                    require_once base_path('app/Service/ProductionCalendarService.php');
+                }
+                $nextYear = (int)date('Y') + 1;
+                $counters['production_calendar_warning'] = ProductionCalendarService::isYearReady($tenant, $nextYear) ? 0 : 1;
+            }
+        } catch (Throwable) {
+            // Historical behavior is fail-attentive in December when the calendar
+            // status cannot be proven ready.
+            $counters['production_calendar_warning'] = (int)date('n') === 12 ? 1 : 0;
+        }
+
         self::$requestCache[$cacheKey] = $counters;
-        self::registerTripBadgeScript($counters);
         return $counters;
     }
 
-    /**
-     * Render trip counters after the layout has finished instead of opening a
-     * nested output buffer. LinearTripController itself buffers the rendered page,
-     * so an ob_start callback here could be consumed by the controller and make
-     * the sidebar badges disappear. The small DOM upsert below is global for all
-     * company-owner pages because this service is already called by the main layout.
-     *
-     * @param array<string,int> $counters
-     */
-    private static function registerTripBadgeScript(array $counters): void
-    {
-        if (self::$tripBadgeScriptRegistered) return;
-        self::$tripBadgeScriptRegistered = true;
-
-        $linear = max(0, (int)($counters['linear_trips_problem'] ?? 0));
-        $departures = max(0, (int)($counters['departures_problem'] ?? 0));
-        $total = $linear + $departures;
-        if ($total <= 0) return;
-
-        register_shutdown_function(static function () use ($linear, $departures, $total): void {
-            $payload = json_encode(
-                ['linear' => $linear, 'departures' => $departures, 'total' => $total],
-                JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
-            );
-            if (!is_string($payload)) return;
-
-            echo '<script>(function(){\'use strict\';var counts=' . $payload . ';'
-                . 'function label(n){return n>999?\'999+\':String(n)}'
-                . 'function upsert(host,count,title,before){if(!host)return;var badge=host.querySelector(\':scope > [data-trip-nav-count]\');if(count<=0){if(badge)badge.remove();return;}if(!badge){badge=document.createElement(\'span\');badge.className=\'nav-count is-alert\';badge.setAttribute(\'data-trip-nav-count\',\'\');if(before)host.insertBefore(badge,before);else host.appendChild(badge);}badge.textContent=label(count);badge.title=title;}'
-                . 'function run(){var linear=document.querySelector(\'a.nav-sub-item[href$="/company/trips/linear"]\');var departures=document.querySelector(\'a.nav-sub-item[href$="/company/trips/departures"]\');upsert(linear,counts.linear,\'Требуется актуализировать дату выгрузки\',null);upsert(departures,counts.departures,\'Ошибки в рейсах отходов\',null);var parent=linear&&linear.closest(\'.nav-sub\')?linear.closest(\'.nav-sub\').previousElementSibling:null;var chevron=parent?parent.querySelector(\'.nav-chevron\'):null;upsert(parent,counts.total,\'Всего ошибок в рейсах\',chevron);}'
-                . 'if(document.readyState===\'loading\')document.addEventListener(\'DOMContentLoaded\',run,{once:true});else run();})();</script>';
-        });
-    }
-
-    /** @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int} */
+    /** @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,feo_freshness:int,feo_utilizer_problem:int,production_calendar_warning:int} */
     private static function emptyCounters(): array
     {
         return [
@@ -145,6 +153,9 @@ final class NavigationCounterService
             'closing_documents_problem' => 0,
             'linear_trips_problem' => 0,
             'departures_problem' => 0,
+            'feo_freshness' => 0,
+            'feo_utilizer_problem' => 0,
+            'production_calendar_warning' => 0,
         ];
     }
 }

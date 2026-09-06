@@ -49,13 +49,13 @@ final class EffectiveAccessResolver
 
         $pages = array_fill_keys($this->registry->pageKeys(), false);
         foreach ($snapshot->rolePageKeys as $pageKey) {
-            if (is_string($pageKey) && $this->registry->hasPage($pageKey)) {
+            if (is_string($pageKey) && $this->registry->hasPage($pageKey) && $this->registry->isGrantable($pageKey)) {
                 $pages[$pageKey] = true;
             }
         }
 
         foreach ($snapshot->pageOverrides as $pageKey => $override) {
-            if (!$this->registry->hasPage((string) $pageKey)) {
+            if (!$this->registry->hasPage((string) $pageKey) || !$this->registry->isGrantable((string) $pageKey)) {
                 continue;
             }
             if ($override === 'allow') {

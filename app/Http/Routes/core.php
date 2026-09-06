@@ -5,18 +5,10 @@ $router->get('/favicon.ico', function () {
     exit;
 });
 
-$router->get('/', function () use ($config) {
-    if (!isAuthenticated()) {
-        redirect_to('/login');
-    }
-
-    $role = $_SESSION['role_code'] ?? '';
-    if ($role === 'superadmin') {
-        redirect_to('/superadmin/companies');
-    }
-
-    redirect_to('/company/dashboard');
-}, 'company.dashboard');
+require_once base_path('app/Http/Controllers/CoreLandingController.php');
+$coreLandingController = new \App\Http\Controllers\CoreLandingController($config, $db);
+$router->get('/', [$coreLandingController, 'index']);
+$router->get('/access-unavailable', [$coreLandingController, 'unavailable']);
 
 $router->get('/dev/ui-foundation', function () use ($config) {
     if (($config['app']['app_env'] ?? 'production') !== 'local') {

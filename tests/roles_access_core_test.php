@@ -95,6 +95,16 @@ expect($access->dataScope('client') === 'all', 'Personal data scope must overrid
 expect($access->dataScope('driver') === 'none', 'Personal none scope must override role all.');
 expect($access->dataScope('not_registered') === 'none', 'Unknown data entity must fail closed.');
 
+$provider->snapshot = memberSnapshot(
+    ['company.responsible_assignments','company.roles_access','company.clients'],
+    ['company.responsible_assignments'=>'allow','company.roles_access'=>'allow'],
+    ['client'=>'own']
+);
+$access = $resolver->resolve(new AccessRequestContext(4, 7));
+expect($access->canAccessPage('company.clients'), 'Ordinary grantable page unexpectedly denied.');
+expect(!$access->canAccessPage('company.responsible_assignments'), 'Owner-only responsibility tool accepted ordinary role grant.');
+expect(!$access->canAccessPage('company.roles_access'), 'Owner-only roles-access page accepted ordinary override.');
+
 $provider->snapshot = memberSnapshot([], ['unknown.page' => 'allow'], ['client' => 'invalid']);
 $access = $resolver->resolve(new AccessRequestContext(4, 7));
 expect(!$access->canAccessPage('unknown.page'), 'Unknown page key must fail closed.');

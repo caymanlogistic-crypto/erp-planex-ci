@@ -24,7 +24,7 @@ $activeNavigationKey = '';
 $activeNavigationPathLength = -1;
 if ($registryNavigationActive) {
     $registry = new \App\Security\PageRegistry();
-    foreach ($registry->tree() as $section => $groups) {
+    foreach ($registry->navigationTree() as $section => $groups) {
         foreach ($groups as $group => $pages) {
             foreach ($pages as $page) {
                 if ($effectiveAccess->canAccessPage((string) $page['key'])) {
@@ -72,8 +72,12 @@ $bankStatementSettingsActive = str_starts_with($requestPath, '/company/bank-stat
 $feoRequestCostsActive = str_starts_with($requestPath, '/company/feo/requests/costs');
 $feoRequestsActive = str_starts_with($requestPath, '/company/feo/requests') && !$feoRequestCostsActive;
 
-$navigationCounters = ['bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0];
-if ($roleCode === 'company_owner' && (int)$companyId > 0) {
+$navigationCounters = [
+    'bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0,
+    'linear_trips_problem' => 0, 'departures_problem' => 0,
+    'feo_freshness' => 0, 'feo_utilizer_problem' => 0, 'production_calendar_warning' => 0,
+];
+if ((($effectiveAccess !== null && $effectiveAccess->isActive()) || $roleCode === 'company_owner') && (int)$companyId > 0) {
     $navigationCounters = \App\Service\NavigationCounterService::forCompany(
         $config,
         $db,
@@ -84,6 +88,31 @@ if ($roleCode === 'company_owner' && (int)$companyId > 0) {
 $bankAttentionCount = max(0, (int)($navigationCounters['bank_attention'] ?? 0));
 $cashAttentionCount = max(0, (int)($navigationCounters['cash_attention'] ?? 0));
 $closingDocumentsProblemCount = max(0, (int)($navigationCounters['closing_documents_problem'] ?? 0));
+$navigationBadgeCount = static function (array $page) use ($navigationCounters): int {
+    $provider = trim((string)($page['badge_provider'] ?? ''));
+    return $provider !== '' ? max(0, (int)($navigationCounters[$provider] ?? 0)) : 0;
+};
+$navigationBadgeTitle = static function (array $page): string {
+    return match ((string)($page['badge_provider'] ?? '')) {
+        'bank_attention' => 'Требуют разнесения',
+        'cash_attention' => 'Неразнесённые позиции кассы',
+        'closing_documents_problem' => 'Требуют закрывающих документов',
+        'linear_trips_problem' => 'Требуется актуализировать дату выгрузки',
+        'departures_problem' => 'Ошибки в рейсах отходов',
+        'feo_freshness' => 'Требуется обновить заявки ФЭО',
+        'feo_utilizer_problem' => 'Не определён утилизатор',
+        'production_calendar_warning' => 'Не загружен производственный календарь на следующий год',
+        default => 'Требует внимания',
+    };
+};
+$navigationBadgeHtml = static function (array $page) use ($navigationBadgeCount, $navigationBadgeTitle): string {
+    $count = $navigationBadgeCount($page);
+    if ($count <= 0) return '';
+    $label = (string)($page['badge_provider'] ?? '') === 'production_calendar_warning'
+        ? '!'
+        : ($count > 999 ? '999+' : (string)$count);
+    return '<span class="nav-count is-alert" title="' . e($navigationBadgeTitle($page)) . '">' . e($label) . '</span>';
+};
 $wideWorkspacePrefixes = [
     '/company/clients',
     '/company/trips/linear',
@@ -299,20 +328,25 @@ if (empty($topbarCrumbs)) {
                         <a class="nav-item<?= $navigationIsActive ? ' is-active' : '' ?>" href="<?= app_url($navigationPath) ?>">
                             <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
                             <span class="nav-label"><?= e($navigationPage['label']) ?></span>
+                            <?php if (in_array((string)($navigationPage['badge_display'] ?? 'self'), ['self','self_parent'], true)) echo $navigationBadgeHtml($navigationPage); ?>
                         </a>
                         <?php endforeach; ?>
                     <?php else:
                         $navigationGroupOpen = false;
+                        $navigationGroupBadgeCount = 0;
                         foreach ($navigationPages as $navigationPage) {
                             if ($activeNavigationKey === (string) $navigationPage['key']) {
                                 $navigationGroupOpen = true;
-                                break;
+                            }
+                            if (in_array((string)($navigationPage['badge_display'] ?? 'self'), ['parent','self_parent'], true)) {
+                                $navigationGroupBadgeCount += $navigationBadgeCount($navigationPage);
                             }
                         }
                     ?>
                     <div class="nav-item is-parent<?= $navigationGroupOpen ? ' is-open is-active' : '' ?>">
                         <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4h4l1.5 2H14v7H2V4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
                         <span class="nav-label"><?= e($navigationGroup) ?></span>
+                        <?php if ($navigationGroupBadgeCount > 0): ?><span class="nav-count is-alert" title="Требует внимания"><?= $navigationGroupBadgeCount > 999 ? '999+' : $navigationGroupBadgeCount ?></span><?php endif; ?>
                         <svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
                     </div>
                     <div class="nav-sub<?= $navigationGroupOpen ? ' is-open' : '' ?>">
@@ -320,7 +354,7 @@ if (empty($topbarCrumbs)) {
                             $navigationPath = (string) $navigationPage['path'];
                             $navigationIsActive = $activeNavigationKey === (string) $navigationPage['key'];
                         ?>
-                        <a class="nav-sub-item<?= $navigationIsActive ? ' is-active' : '' ?>" href="<?= app_url($navigationPath) ?>"><span><?= e($navigationPage['label']) ?></span></a>
+                        <a class="nav-sub-item<?= $navigationIsActive ? ' is-active' : '' ?>" href="<?= app_url($navigationPath) ?>"><span><?= e($navigationPage['label']) ?></span><?php if (in_array((string)($navigationPage['badge_display'] ?? 'self'), ['self','self_parent'], true)) echo $navigationBadgeHtml($navigationPage); ?></a>
                         <?php endforeach; ?>
                     </div>
                     <?php endif; ?>

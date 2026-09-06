@@ -14,6 +14,8 @@ $identityUi = (string) file_get_contents($root . '/app/View/partials/company_lin
 $dateUi = (string) file_get_contents($root . '/public/assets/js/linear-trip-date-mode.js');
 $marginFallbackJs = (string) file_get_contents($root . '/public/assets/js/linear-trip-document-delete.js');
 $navigationCounters = (string) file_get_contents($root . '/app/Service/NavigationCounterService.php');
+$navigationRegistry = (string) file_get_contents($root . '/app/Security/PageRegistry.php');
+$mainLayout = (string) file_get_contents($root . '/app/View/layouts/main.php');
 $migration = (string) file_get_contents($root . '/database/migrations-local/120_create_linear_route_services.sql');
 $persistenceTest = (string) file_get_contents($root . '/tests/linear_trip_service_persistence_mysql_test.php');
 
@@ -56,11 +58,17 @@ foreach (['data-service-payment-id', "paymentName(row, 'id')", 'bindExistingIds'
 if (str_contains($identityUi, 'syncLinearTripAttentionBadge') || str_contains($identityUi, 'data-linear-trip-attention-badge')) {
     throw new RuntimeException('linear trip menu counter must not be page-local');
 }
-foreach (['linear_trips_problem', 'departures_problem', 'planned_unloading_date', 'actual_unloading_date', 'CURRENT_DATE()', 'registerTripBadgeScript', 'register_shutdown_function', 'data-trip-nav-count', '/company/trips/linear', '/company/trips/departures', 'nav-count is-alert', '$total = $linear + $departures'] as $token) {
+foreach (['linear_trips_problem', 'departures_problem', 'planned_unloading_date', 'actual_unloading_date', 'CURRENT_DATE()'] as $token) {
     if (!str_contains($navigationCounters, $token)) throw new RuntimeException('global navigation counter missing ' . $token);
 }
-if (str_contains($navigationCounters, 'ob_start(')) {
-    throw new RuntimeException('trip navigation counter must not open a nested output buffer');
+foreach (["'company.trips.linear'", "badgeProvider: 'linear_trips_problem'", "'company.trips.waste'", "badgeProvider: 'departures_problem'", "badgeDisplay: 'self_parent'"] as $token) {
+    if (!str_contains($navigationRegistry, $token)) throw new RuntimeException('canonical trip navigation metadata missing ' . $token);
+}
+foreach (['navigationGroupBadgeCount', 'navigationBadgeHtml', 'nav-count is-alert'] as $token) {
+    if (!str_contains($mainLayout, $token)) throw new RuntimeException('registry-rendered trip badge missing ' . $token);
+}
+if (str_contains($navigationCounters, 'register_shutdown_function') || str_contains($navigationCounters, 'data-trip-nav-count') || str_contains($navigationCounters, 'ob_start(')) {
+    throw new RuntimeException('trip navigation counter must be server-rendered by PageRegistry without DOM/shutdown injection');
 }
 foreach (['CREATE TABLE IF NOT EXISTS linear_route_services', 'CREATE TABLE IF NOT EXISTS linear_route_service_payments', 'contractor_id', 'service_name', 'condition_type'] as $token) {
     if (!str_contains($migration, $token)) throw new RuntimeException('migration missing ' . $token);
@@ -103,7 +111,7 @@ echo "additional_services_margin=server_rendered_customer_minus_carrier_minus_se
 echo "end_date_mode=filled_date_infers_mode_without_data_loss\n";
 echo "additional_services_ui=left_column_dynamic_due_fields_days_default_3_stepper\n";
 echo "planned_unloading_attention=current_or_past_plan_without_actual_is_red\n";
-echo "navigation_attention=global_child_counter_parent_sum_no_nested_output_buffer\n";
+echo "navigation_attention=registry_server_rendered_child_counter_parent_sum\n";
 echo "service_payments=stable_identity_and_payable_obligations\n";
 echo "service_persistence=mysql_crud_regression_present\n";
 echo "registry=canonical_9_columns_with_additional_service_rows\n";

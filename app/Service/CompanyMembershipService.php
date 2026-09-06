@@ -222,10 +222,20 @@ final class CompanyMembershipService
         int $roleId,
         string $status,
         array $pageOverrides,
-        array $dataScopeOverrides
+        array $dataScopeOverrides,
+        array $allowedPageKeys = []
     ): void {
         if (!in_array($status, self::STATUSES, true)) {
             throw new \InvalidArgumentException('Некорректный статус membership.');
+        }
+        $allowedPageKeyMap = array_fill_keys(array_values(array_unique(array_map('strval', $allowedPageKeys))), true);
+        if ($pageOverrides !== [] && $allowedPageKeyMap === []) {
+            throw new \InvalidArgumentException('Для сохранения персональных страниц нужен snapshot текущего Page Registry.');
+        }
+        foreach ($pageOverrides as $pageKey => $_effect) {
+            if (!is_string($pageKey) || !isset($allowedPageKeyMap[$pageKey])) {
+                throw new \InvalidArgumentException('Неизвестная или системная персональная страница.');
+            }
         }
         $this->pdo->beginTransaction();
         try {
