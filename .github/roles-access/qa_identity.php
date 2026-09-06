@@ -26,11 +26,95 @@ function qaIdentityPrefix(string $runId): string
     return 'qa_func_' . $runId . '_';
 }
 
-function cleanupQaIdentity(PDO $pdo, string $stateFile, string $runId): void
+function restoreQaResponsibilityFixture(PDO $pdo, array $config, ?array $state): void
+{
+    $fixture = is_array($state) ? ($state['responsibility_fixture'] ?? null) : null;
+    if (!is_array($fixture)) {
+        return;
+    }
+    $companyId = (int)($state['company_id'] ?? 0);
+    $entityType = (string)($fixture['entity_type'] ?? '');
+    $entityId = (int)($fixture['entity_id'] ?? 0);
+    if ($companyId <= 0 || !App\Service\EntityResponsibilityService::isSupported($entityType) || $entityId <= 0) {
+        throw new RuntimeException('invalid QA responsibility fixture cleanup state');
+    }
+    $companyStmt = $pdo->prepare("SELECT * FROM companies WHERE id=? AND status='active' LIMIT 1");
+    $companyStmt->execute([$companyId]);
+    $company = $companyStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$company) {
+        throw new RuntimeException('QA responsibility fixture company unavailable during cleanup');
+    }
+    $tenant = (new App\Core\Database(companyDatabaseConfig($config, $company)))->connection();
+    $original = $fixture['original'] ?? null;
+    $tenant->beginTransaction();
+    try {
+        $lock = $tenant->prepare(
+            'SELECT membership_id,assigned_by_membership_id,created_at,updated_at '
+            . 'FROM entity_responsibilities WHERE entity_type=? AND entity_id=? FOR UPDATE'
+        );
+        $lock->execute([$entityType, $entityId]);
+        $lock->fetch(PDO::FETCH_ASSOC);
+        if (is_array($original)) {
+            $restore = $tenant->prepare(
+                'INSERT INTO entity_responsibilities '
+                . '(entity_type,entity_id,membership_id,assigned_by_membership_id,created_at,updated_at) '
+                . 'VALUES (?,?,?,?,?,?) ON DUPLICATE KEY UPDATE '
+                . 'membership_id=VALUES(membership_id),assigned_by_membership_id=VALUES(assigned_by_membership_id),'
+                . 'created_at=VALUES(created_at),updated_at=VALUES(updated_at)'
+            );
+            $restore->execute([
+                $entityType,
+                $entityId,
+                (int)($original['membership_id'] ?? 0),
+                $original['assigned_by_membership_id'] !== null ? (int)$original['assigned_by_membership_id'] : null,
+                (string)($original['created_at'] ?? ''),
+                (string)($original['updated_at'] ?? ''),
+            ]);
+        } else {
+            $delete = $tenant->prepare('DELETE FROM entity_responsibilities WHERE entity_type=? AND entity_id=?');
+            $delete->execute([$entityType, $entityId]);
+        }
+        $tenant->commit();
+    } catch (Throwable $e) {
+        if ($tenant->inTransaction()) {
+            $tenant->rollBack();
+        }
+        throw $e;
+    }
+
+    $verify = $tenant->prepare(
+        'SELECT membership_id,assigned_by_membership_id,created_at,updated_at '
+        . 'FROM entity_responsibilities WHERE entity_type=? AND entity_id=? LIMIT 1'
+    );
+    $verify->execute([$entityType, $entityId]);
+    $after = $verify->fetch(PDO::FETCH_ASSOC);
+    if (is_array($original)) {
+        $expected = [
+            'membership_id' => (int)($original['membership_id'] ?? 0),
+            'assigned_by_membership_id' => $original['assigned_by_membership_id'] !== null ? (int)$original['assigned_by_membership_id'] : null,
+            'created_at' => (string)($original['created_at'] ?? ''),
+            'updated_at' => (string)($original['updated_at'] ?? ''),
+        ];
+        $actual = is_array($after) ? [
+            'membership_id' => (int)($after['membership_id'] ?? 0),
+            'assigned_by_membership_id' => $after['assigned_by_membership_id'] !== null ? (int)$after['assigned_by_membership_id'] : null,
+            'created_at' => (string)($after['created_at'] ?? ''),
+            'updated_at' => (string)($after['updated_at'] ?? ''),
+        ] : null;
+        if ($actual !== $expected) {
+            throw new RuntimeException('QA responsibility fixture original row did not restore exactly');
+        }
+    } elseif ($after !== false) {
+        throw new RuntimeException('QA responsibility fixture row residue detected');
+    }
+}
+
+function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $runId): void
 {
     $prefix = qaIdentityPrefix($runId);
     $expectedAccountId = 0;
     $expectedMembershipId = 0;
+    $state = null;
     if (is_file($stateFile)) {
         $state = json_decode((string)file_get_contents($stateFile), true, 32, JSON_THROW_ON_ERROR);
         $expectedAccountId = (int)($state['account_id'] ?? 0);
@@ -41,6 +125,10 @@ function cleanupQaIdentity(PDO $pdo, string $stateFile, string $runId): void
             throw new RuntimeException('invalid QA identity cleanup state');
         }
     }
+
+    // Responsibility fixture state is written before the tenant mutation. Restore
+    // the exact pre-run row before removing the temporary owner membership.
+    restoreQaResponsibilityFixture($pdo, $config, $state);
 
     // Prefix is unique to this GitHub run. It lets cleanup recover even if the
     // process died after the DB insert but before the local state file was written.
@@ -102,72 +190,37 @@ function cleanupQaIdentity(PDO $pdo, string $stateFile, string $runId): void
     if (is_file($stateFile) && !unlink($stateFile)) {
         throw new RuntimeException('QA identity state cleanup failed');
     }
+    echo "QA_RESPONSIBILITY_FIXTURE_RESIDUE=0\n";
     echo "QA_IDENTITY_RESIDUE=0\n";
 }
 
 if ($mode === 'cleanup') {
-    cleanupQaIdentity($pdo, $stateFile, $runId);
+    cleanupQaIdentity($pdo, $config, $stateFile, $runId);
     exit(0);
 }
 if ($mode !== 'create') { fwrite(STDERR, "unknown QA identity mode\n"); exit(1); }
 if (is_file($stateFile)) { fwrite(STDERR, "QA identity state already exists\n"); exit(1); }
 
-/** @param list<array{id:int,membership_id:int,full_name:string,login:string}> $recipients
- *  @param list<array{id:int,membership_id:int,full_name:string,login:string}> $dynamicRecipients */
-function hasReversibleDynamicCandidate(PDO $tenant, array $recipients, array $dynamicRecipients): bool
+/** @return array{entity_type:string,entity_id:int}|null */
+function findResponsibilityFixtureEntity(PDO $tenant): ?array
 {
-    $eligibleUserIds = array_fill_keys(array_map(static fn(array $r): int => (int)$r['id'], $recipients), true);
-    $dynamicUserIds = array_values(array_filter(array_map(
-        static fn(array $r): int => (int)$r['id'],
-        $dynamicRecipients
-    ), static fn(int $id): bool => $id > 0));
-    if (count($eligibleUserIds) < 2 || $dynamicUserIds === []) {
-        return false;
-    }
-    $queries = [
-        "SELECT responsible_user.id AS responsible_user_id
-           FROM contractors e
-      LEFT JOIN users creator_user ON e.created_by_user_id=creator_user.id
-      LEFT JOIN entity_responsibilities er ON er.entity_type='contractor' AND er.entity_id=e.id
-      LEFT JOIN users responsible_user ON responsible_user.membership_id=COALESCE(er.membership_id,e.created_by_membership_id,creator_user.membership_id)
-          WHERE e.status!='archived'",
-        "SELECT responsible_user.id AS responsible_user_id
-           FROM drivers e
-      LEFT JOIN users creator_user ON e.created_by_user_id=creator_user.id
-      LEFT JOIN entity_responsibilities er ON er.entity_type='driver' AND er.entity_id=e.id
-      LEFT JOIN users responsible_user ON responsible_user.membership_id=COALESCE(er.membership_id,e.created_by_membership_id,creator_user.membership_id)
-          WHERE e.status!='archived'",
-        "SELECT responsible_user.id AS responsible_user_id
-           FROM vehicle_sets e
-      LEFT JOIN users creator_user ON e.created_by_user_id=creator_user.id
-      LEFT JOIN entity_responsibilities er ON er.entity_type='vehicle_set' AND er.entity_id=e.id
-      LEFT JOIN users responsible_user ON responsible_user.membership_id=COALESCE(er.membership_id,e.created_by_membership_id,creator_user.membership_id)
-          WHERE e.status!='archived'",
-        "SELECT responsible_user.id AS responsible_user_id
-           FROM crews e
-      LEFT JOIN users creator_user ON e.created_by_user_id=creator_user.id
-      LEFT JOIN entity_responsibilities er ON er.entity_type='route_executor' AND er.entity_id=e.id
-      LEFT JOIN users responsible_user ON responsible_user.membership_id=COALESCE(er.membership_id,creator_user.membership_id)
-          WHERE e.status!='archived'",
-    ];
-    foreach ($queries as $sql) {
+    foreach ([
+        ['contractor', 'contractors'],
+        ['driver', 'drivers'],
+        ['vehicle_set', 'vehicle_sets'],
+        ['route_executor', 'crews'],
+    ] as [$entityType, $table]) {
         try {
-            $currentUserIds = array_map('intval', $tenant->query($sql)->fetchAll(PDO::FETCH_COLUMN));
+            $stmt = $tenant->query("SELECT id FROM `{$table}` WHERE status!='archived' ORDER BY id LIMIT 1");
+            $entityId = (int)($stmt->fetchColumn() ?: 0);
+            if ($entityId > 0) {
+                return ['entity_type' => $entityType, 'entity_id' => $entityId];
+            }
         } catch (Throwable) {
             continue;
         }
-        foreach ($currentUserIds as $currentUserId) {
-            if ($currentUserId <= 0 || !isset($eligibleUserIds[$currentUserId])) {
-                continue;
-            }
-            foreach ($dynamicUserIds as $dynamicUserId) {
-                if ($dynamicUserId !== $currentUserId) {
-                    return true;
-                }
-            }
-        }
     }
-    return false;
+    return null;
 }
 
 $companySql = <<<SQL
@@ -224,15 +277,34 @@ foreach ($companies as $row) {
         $recipients,
         static fn(array $recipient): bool => isset($dynamicMembershipIds[(int)$recipient['membership_id']])
     ));
-    if ($dynamicRecipients === [] || !hasReversibleDynamicCandidate($tenant, $recipients, $dynamicRecipients)) {
+    if ($dynamicRecipients === []) {
         continue;
     }
-    $target = $row;
+    $dynamicTarget = $dynamicRecipients[0];
+    $baselineRecipient = null;
+    foreach ($recipients as $recipient) {
+        if ((int)$recipient['id'] !== (int)$dynamicTarget['id']) {
+            $baselineRecipient = $recipient;
+            break;
+        }
+    }
+    $fixtureEntity = findResponsibilityFixtureEntity($tenant);
+    if ($baselineRecipient === null || $fixtureEntity === null) {
+        continue;
+    }
+    $target = [
+        'row' => $row,
+        'company' => $company,
+        'tenant' => $tenant,
+        'baseline_recipient' => $baselineRecipient,
+        'dynamic_recipient' => $dynamicTarget,
+        'fixture_entity' => $fixtureEntity,
+    ];
     break;
 }
-if (!$target) { fwrite(STDERR, "no ready QA company with reversible dynamic responsibility fixture\n"); exit(1); }
-$companyId = (int)$target['id'];
-$ownerRoleId = (int)$target['owner_role_id'];
+if (!$target) { fwrite(STDERR, "no ready QA company with projected dynamic recipient and responsibility fixture entity\n"); exit(1); }
+$companyId = (int)$target['row']['id'];
+$ownerRoleId = (int)$target['row']['owner_role_id'];
 $foreign = $pdo->prepare(
     "SELECT m.id FROM company_memberships m
      JOIN user_accounts a ON a.id=m.account_id AND a.status='active'
@@ -252,25 +324,58 @@ try {
         $companyId, $ownerRoleId, 'QA Functional ' . $runId, $login, $password, null, null, 'active'
     );
     if (!($created['account_created'] ?? false)) throw new RuntimeException('QA account unexpectedly reused existing identity');
+    $tenant = $target['tenant'];
+    $fixtureEntity = $target['fixture_entity'];
+    $entityType = (string)$fixtureEntity['entity_type'];
+    $entityId = (int)$fixtureEntity['entity_id'];
+    $originalStmt = $tenant->prepare(
+        'SELECT membership_id,assigned_by_membership_id,created_at,updated_at FROM entity_responsibilities '
+        . 'WHERE entity_type=? AND entity_id=? LIMIT 1'
+    );
+    $originalStmt->execute([$entityType, $entityId]);
+    $original = $originalStmt->fetch(PDO::FETCH_ASSOC);
     $state = [
         'account_id'=>(int)$created['account_id'], 'membership_id'=>(int)$created['membership_id'],
         'company_id'=>$companyId, 'normalized_login'=>App\Service\IdentityNormalizer::login($login),
         'foreign_membership_id'=>$foreignMembershipId,
+        'responsibility_fixture' => [
+            'entity_type' => $entityType,
+            'entity_id' => $entityId,
+            'baseline_membership_id' => (int)$target['baseline_recipient']['membership_id'],
+            'dynamic_membership_id' => (int)$target['dynamic_recipient']['membership_id'],
+            'original' => $original !== false ? $original : null,
+        ],
     ];
-    file_put_contents($stateFile, json_encode($state, JSON_THROW_ON_ERROR), LOCK_EX);
-    chmod($stateFile, 0600);
+    // Persist exact pre-run responsibility state before mutating the tenant fixture.
+    $stateJson = json_encode($state, JSON_THROW_ON_ERROR);
+    if (file_put_contents($stateFile, $stateJson, LOCK_EX) === false || !chmod($stateFile, 0600)) {
+        throw new RuntimeException('QA identity/fixture state persistence failed');
+    }
+    $fixture = $tenant->prepare(
+        'INSERT INTO entity_responsibilities(entity_type,entity_id,membership_id,assigned_by_membership_id) '
+        . 'VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE '
+        . 'membership_id=VALUES(membership_id),assigned_by_membership_id=VALUES(assigned_by_membership_id),updated_at=NOW()'
+    );
+    $fixture->execute([
+        $entityType,
+        $entityId,
+        (int)$target['baseline_recipient']['membership_id'],
+        (int)$created['membership_id'],
+    ]);
+    if (App\Service\EntityResponsibilityService::effectiveBaseMembershipId($tenant, $entityType, $entityId)
+        !== (int)$target['baseline_recipient']['membership_id']) {
+        throw new RuntimeException('QA responsibility fixture baseline readback failed');
+    }
     $payload = base64_encode(json_encode([[ 'role'=>'OWNER', 'username'=>$login, 'password'=>$password ]], JSON_THROW_ON_ERROR));
     echo 'QA_CREDENTIALS_B64=' . $payload . PHP_EOL;
     echo 'QA_FOREIGN_MEMBERSHIP_ID=' . $foreignMembershipId . PHP_EOL;
+    echo 'QA_RESPONSIBILITY_FIXTURE_READY=YES' . PHP_EOL;
     echo 'QA_IDENTITY_CREATED=YES' . PHP_EOL;
 } catch (Throwable $e) {
-    if (is_array($created)) {
-        try {
-            $mid=(int)($created['membership_id']??0); $aid=(int)($created['account_id']??0);
-            if ($mid>0) (new App\Service\CompanyMembershipService($pdo))->remove($companyId,$mid);
-            if ($aid>0) { $d=$pdo->prepare('DELETE FROM user_accounts WHERE id=? AND NOT EXISTS (SELECT 1 FROM company_memberships WHERE account_id=user_accounts.id)'); $d->execute([$aid]); }
-        } catch (Throwable) {}
+    try {
+        cleanupQaIdentity($pdo, $config, $stateFile, $runId);
+    } catch (Throwable $cleanupError) {
+        fwrite(STDERR, "QA create cleanup failed: " . $cleanupError->getMessage() . "\n");
     }
-    @unlink($stateFile);
-    fwrite(STDERR, "QA identity create failed: " . $e->getMessage() . "\n"); exit(1);
+    fwrite(STDERR, "QA identity/fixture create failed: " . $e->getMessage() . "\n"); exit(1);
 }

@@ -76,7 +76,7 @@ jobs:
           npm install --no-save playwright@1.54.2
           npx playwright install --with-deps chromium
 
-      - name: Provision isolated temporary QA owner identity
+      - name: Provision isolated temporary QA owner identity and responsibility fixture
         env:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
           PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -94,6 +94,7 @@ jobs:
           test -n "$cred"
           [[ "$foreign" =~ ^[1-9][0-9]*$ ]]
           printf '%s\n' "$provision" | grep -q '^QA_IDENTITY_CREATED=YES$'
+          printf '%s\n' "$provision" | grep -q '^QA_RESPONSIBILITY_FIXTURE_READY=YES$'
           echo "::add-mask::$cred"
           echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
           echo "QA_FOREIGN_MEMBERSHIP_ID=$foreign" >> "$GITHUB_ENV"
@@ -107,7 +108,7 @@ jobs:
           [[ "${QA_FOREIGN_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
           node .github/roles-access/production_functional_acceptance.js | tee roles_access_production_functional_acceptance.txt
 
-      - name: Cleanup temporary QA owner identity
+      - name: Cleanup temporary QA owner identity and responsibility fixture
         if: always()
         env:
           HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -121,6 +122,7 @@ jobs:
             .github/roles-access/qa_identity.php "$USER@$HOST:$remote"
           ssh -p "$PORT" -i "$HOME/.ssh/roles_functional" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
             "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' cleanup" | tee roles_access_identity_cleanup.txt
+          grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_IDENTITY_RESIDUE=0$' roles_access_identity_cleanup.txt
 
       - name: Require complete functional evidence
@@ -147,6 +149,7 @@ jobs:
             PRODUCTION_FUNCTIONAL_ACCEPTANCE=PASS; do
             grep -q "^${marker}$" roles_access_production_functional_acceptance.txt
           done
+          grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_IDENTITY_RESIDUE=0$' roles_access_identity_cleanup.txt
 
       - name: Publish exact-SHA functional acceptance status
