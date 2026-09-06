@@ -1,0 +1,335 @@
+name: Roles Access 132 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact canonical SHA containing Roles & Access 014/132 migration tooling'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_ROLES_ACCESS_132 to authorize central 014 + tenant 132 production migration'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+# Serialize this pre-deploy schema write with the sole ERPv2 code deploy engine.
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  migrate-132:
+    if: ${{ inputs.confirm_migration == 'APPLY_ROLES_ACCESS_132' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Validate exact canonical source and tooling
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          php -l scripts/roles_access_apply_132.php
+          php -l scripts/roles_access_verify_132.php
+          php -l tests/roles_access_132_production_migration_contract_test.php
+          php tests/roles_access_132_production_migration_contract_test.php
+          php tests/agent_db_migration_request_contract_test.php
+          php tests/roles_access_audit_blockers_contract_test.php
+          test -s database/migrations/014_add_role_default_page.sql
+          test -s database/migrations-local/132_split_assignment_and_responsibility.sql
+
+      - name: Require successful exact canonical ERP PLANEX CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/ci-runs.json
+          SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/ci-runs.json'))
+          source=os.environ['SOURCE_SHA']
+          rows=[r for r in data.get('workflow_runs',[]) if r.get('head_sha')==source and r.get('event')=='push']
+          if not rows:
+              raise SystemExit('exact canonical ERP PLANEX CI run missing')
+          run=max(rows,key=lambda r:r.get('run_number',0))
+          if run.get('status')!='completed' or run.get('conclusion')!='success':
+              raise SystemExit(f"exact canonical ERP PLANEX CI not successful: {run.get('id')} {run.get('status')} {run.get('conclusion')}")
+          print(f"ROLES_ACCESS_132_CANONICAL_CI_PASS run={run.get('id')}")
+          PY
+
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - > /tmp/payload.json <<'PY'
+          import json
+          print(json.dumps({'state':'pending','context':'erpv2/migration132','description':'Roles Access migration 014/132 in progress'}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Configure isolated SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/roles_access_132_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/roles_access_132_key" "$HOME/.ssh/known_hosts"
+          SSH_CONTROL_DIR="/tmp/roles132_mux_${GITHUB_RUN_ID}"
+          install -d -m 700 "$SSH_CONTROL_DIR"
+          SSH_CONTROL_PATH="$SSH_CONTROL_DIR/%C"
+          test "${#SSH_CONTROL_PATH}" -lt 90
+          printf 'SSH_CONTROL_DIR=%s\nSSH_CONTROL_PATH=%s\n' "$SSH_CONTROL_DIR" "$SSH_CONTROL_PATH" >> "$GITHUB_ENV"
+
+      - name: Require deployed marker as successful canonical ancestor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
+          DEPLOYED="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          [[ "$DEPLOYED" =~ ^[0-9a-f]{40}$ ]]
+          test "$DEPLOYED" != "$SOURCE_SHA"
+          git merge-base --is-ancestor "$DEPLOYED" "$SOURCE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$DEPLOYED/status" > /tmp/deployed-status.json
+          DEPLOYED="$DEPLOYED" python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/deployed-status.json'))
+          rows=[s for s in data.get('statuses',[]) if s.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('deployed marker lacks successful erpv2/deploy status')
+          print('ROLES_ACCESS_132_DEPLOYED_ANCESTOR_PASS='+os.environ['DEPLOYED'])
+          PY
+          printf 'DEPLOYED_BEFORE=%s\n' "$DEPLOYED" >> "$GITHUB_ENV"
+          "${SCP[@]}" scripts/roles_access_apply_132.php "$SSH_USER@$SSH_HOST:/tmp/roles_access_apply132_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" scripts/roles_access_verify_132.php "$SSH_USER@$SSH_HOST:/tmp/roles_access_verify132_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" database/migrations/014_add_role_default_page.sql "$SSH_USER@$SSH_HOST:/tmp/roles_access_014_${GITHUB_RUN_ID}.sql"
+          "${SCP[@]}" database/migrations-local/132_split_assignment_and_responsibility.sql "$SSH_USER@$SSH_HOST:/tmp/roles_access_132_${GITHUB_RUN_ID}.sql"
+
+      - name: Snapshot BEFORE
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_verify132_${GITHUB_RUN_ID}.php'" | tee roles_access_132_before.txt
+          grep -q '^ROLES_ACCESS_132_READ_ONLY_OK$' roles_access_132_before.txt
+          python3 - <<'PY'
+          import json,re,os
+          text=open('roles_access_132_before.txt').read()
+          m=re.search(r'^ROLES_ACCESS_132_SNAPSHOT=(.+)$',text,re.M)
+          if not m: raise SystemExit('before snapshot missing')
+          d=json.loads(m.group(1)); c=d['central']
+          if c['migration_013']!=1: raise SystemExit('central migration 013 prerequisite missing')
+          absent=(c['migration_014']==0 and c['default_page_column']==0 and c['default_page_index']==0)
+          for t in d['tenants']:
+              if t['migration_131']!=1: raise SystemExit(f"company {t['company_id']}: migration 131 prerequisite missing")
+              if t['migration_132']==0:
+                  if not (t['assignment_kind_column']==0 and t['kind_unique']==0 and t['kind_index']==0 and t['responsibilities_table']==0 and t['old_unique']==1):
+                      raise SystemExit(f"company {t['company_id']}: non-clean pre-132 schema")
+              absent = absent and t['migration_132']==0
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('ROLLBACK_ELIGIBLE='+('YES' if absent else 'NO')+'\n')
+          print('ROLES_ACCESS_132_BEFORE_PASS=YES')
+          print('ROLES_ACCESS_132_ROLLBACK_ELIGIBLE='+('YES' if absent else 'NO'))
+          PY
+
+      - name: Apply central 014 and tenant 132
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_CENTRAL_MIGRATION_PATH='/tmp/roles_access_014_${GITHUB_RUN_ID}.sql' PLANEX_TENANT_MIGRATION_PATH='/tmp/roles_access_132_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/roles_access_apply132_${GITHUB_RUN_ID}.php' --apply" | tee roles_access_132_apply.txt
+          grep -q '^ROLES_ACCESS_014_OK ' roles_access_132_apply.txt
+          grep -q '^ROLES_ACCESS_132_OK ' roles_access_132_apply.txt
+
+      - name: Snapshot AFTER and verify invariants
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_verify132_${GITHUB_RUN_ID}.php'" | tee roles_access_132_after.txt
+          grep -q '^ROLES_ACCESS_132_READ_ONLY_OK$' roles_access_132_after.txt
+          python3 - <<'PY'
+          import json,re
+          def snap(path):
+              m=re.search(r'^ROLES_ACCESS_132_SNAPSHOT=(.+)$',open(path).read(),re.M)
+              if not m: raise SystemExit(path+' snapshot missing')
+              return json.loads(m.group(1))
+          b,a=snap('roles_access_132_before.txt'),snap('roles_access_132_after.txt')
+          bc,ac=b['central'],a['central']
+          for k in ('db','active_companies','company_roles','company_memberships','role_core_hash'):
+              if bc[k]!=ac[k]: raise SystemExit('central invariant changed: '+k)
+          if ac['migration_014']!=1 or ac['default_page_column']!=1 or ac['default_page_index']!=1:
+              raise SystemExit('central 014 schema/journal incomplete')
+          if ac['owner_roles']<1 or ac['owner_dashboard_defaults']!=ac['owner_roles']:
+              raise SystemExit('owner landing invariant incomplete')
+          by={x['company_id']:x for x in b['tenants']}; ay={x['company_id']:x for x in a['tenants']}
+          if set(by)!=set(ay): raise SystemExit('active tenant set changed')
+          for cid,row in ay.items():
+              old=by[cid]
+              for k in ('db','assignment_rows','assignment_core_hash'):
+                  if old[k]!=row[k]: raise SystemExit(f'company {cid}: assignment core changed: {k}')
+              if row['migration_131']!=1 or row['migration_132']!=1: raise SystemExit(f'company {cid}: migration journal incomplete')
+              if row['assignment_kind_column']!=1 or row['kind_unique']!=1 or row['kind_index']!=1 or row['old_unique']!=0 or row['responsibilities_table']!=1:
+                  raise SystemExit(f'company {cid}: 132 schema incomplete')
+              if row['assignment_kind_default']!='legacy_unclassified': raise SystemExit(f'company {cid}: invalid assignment_kind default')
+              if old['migration_132']==0:
+                  if row['legacy_kind_rows']!=row['assignment_rows'] or row['creator_kind_rows']!=0 or row['manual_kind_rows']!=0 or row['responsibilities_rows']!=0:
+                      raise SystemExit(f'company {cid}: migration invented provenance/responsibility')
+              else:
+                  for k in ('legacy_kind_rows','creator_kind_rows','manual_kind_rows','responsibilities_rows'):
+                      if old[k]!=row[k]: raise SystemExit(f'company {cid}: idempotent rerun changed {k}')
+          print('ROLES_ACCESS_132_INVARIANTS_PASS=YES')
+          print('LEGACY_PROVENANCE_GUESSED=NO')
+          print('CREATOR_HISTORY_IMMUTABLE=PASS')
+          PY
+
+      - name: HTTP acceptance before deploy
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+          CURRENT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$CURRENT" = "$DEPLOYED_BEFORE"
+          echo 'ROLES_ACCESS_132_PREDEPLOY_HTTP_PASS=YES'
+          echo 'ROLES_ACCESS_132_DEPLOY_MARKER_UNCHANGED=YES'
+
+      - name: Rollback only on failed migration while deployed marker is unchanged
+        if: ${{ failure() && env.ROLLBACK_ELIGIBLE == 'YES' }}
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          CURRENT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$CURRENT" = "$DEPLOYED_BEFORE"
+          test "$CURRENT" != "$SOURCE_SHA"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_CENTRAL_MIGRATION_PATH='/tmp/roles_access_014_${GITHUB_RUN_ID}.sql' PLANEX_TENANT_MIGRATION_PATH='/tmp/roles_access_132_${GITHUB_RUN_ID}.sql' PLANEX_ROLES_132_ROLLBACK_CONFIRM='ROLLBACK_ROLES_ACCESS_132' /usr/bin/php8.5 '/tmp/roles_access_apply132_${GITHUB_RUN_ID}.php' --rollback" | tee roles_access_132_rollback.txt
+          grep -q '^ROLES_ACCESS_132_ROLLBACK_OK$' roles_access_132_rollback.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/roles_access_verify132_${GITHUB_RUN_ID}.php'" | tee roles_access_132_rollback_after.txt
+          python3 - <<'PY'
+          import json,re
+          def s(p):
+              m=re.search(r'^ROLES_ACCESS_132_SNAPSHOT=(.+)$',open(p).read(),re.M)
+              if not m: raise SystemExit(p+' snapshot missing')
+              return json.loads(m.group(1))
+          b,a=s('roles_access_132_before.txt'),s('roles_access_132_rollback_after.txt')
+          if b['central']['role_core_hash']!=a['central']['role_core_hash'] or a['central']['migration_014']!=0 or a['central']['default_page_column']!=0:
+              raise SystemExit('central rollback proof failed')
+          by={x['company_id']:x for x in b['tenants']}; ay={x['company_id']:x for x in a['tenants']}
+          for cid,row in ay.items():
+              if row['migration_132']!=0 or row['assignment_kind_column']!=0 or row['old_unique']!=1 or row['responsibilities_table']!=0 or row['assignment_core_hash']!=by[cid]['assignment_core_hash']:
+                  raise SystemExit(f'company {cid}: rollback proof failed')
+          print('ROLES_ACCESS_132_ROLLBACK_PROOF=PASS')
+          PY
+
+      - name: Upload migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: roles_access_132_production_migration_${{ inputs.source_sha }}
+          path: |
+            roles_access_132_before.txt
+            roles_access_132_apply.txt
+            roles_access_132_after.txt
+            roles_access_132_rollback.txt
+            roles_access_132_rollback_after.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Publish final migration status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$JOB_STATUS" = success ]; then state=success; desc='Roles Access migration 014/132 verified'; else state=failure; desc='Roles Access migration 014/132 failed'; fi
+          python3 - "$state" "$desc" > /tmp/payload.json <<'PY'
+          import json,sys
+          print(json.dumps({'state':sys.argv[1],'context':'erpv2/migration132','description':sys.argv[2]}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          if [ -f "$HOME/.ssh/roles_access_132_key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+              "rm -f '/tmp/roles_access_apply132_${GITHUB_RUN_ID}.php' '/tmp/roles_access_verify132_${GITHUB_RUN_ID}.php' '/tmp/roles_access_014_${GITHUB_RUN_ID}.sql' '/tmp/roles_access_132_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/roles_access_132_key"
+          rm -rf "${SSH_CONTROL_DIR:-}"
