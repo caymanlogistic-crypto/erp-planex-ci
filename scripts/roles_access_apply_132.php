@@ -21,6 +21,7 @@ $centralChecksum=hash('sha256',$centralSql); $tenantChecksum=hash('sha256',$tena
 $config=require $root.'/bootstrap/app.php';
 require_once $root.'/app/Support/crypto_helper.php';
 require_once $root.'/app/Support/company_database.php';
+require_once __DIR__.'/roles_access_013_schema_proof.php';
 $centralCfg=$config['database'];
 $central=new PDO('mysql:host='.$centralCfg['host'].';port='.($centralCfg['port']??3306).';dbname='.$centralCfg['database'].';charset=utf8mb4',$centralCfg['username'],$centralCfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
 
@@ -55,7 +56,10 @@ $verifyTenant=static function(PDO $pdo) use($tableExists,$columnExists,$indexExi
 
 if($mode==='--apply'){
     $central013=$journal($central,'013_create_roles_access.sql');
-    if($central013===false) throw new RuntimeException('Central migration 013 prerequisite missing');
+    $central013Proof=rolesAccessCentral013SchemaProof($central);
+    if(!$central013Proof['complete']) throw new RuntimeException('Central migration 013 factual schema prerequisite incomplete: '.implode(',',$central013Proof['missing']));
+    $central013Provenance=$central013===false?'historical_shape':'journaled';
+    printf("ROLES_ACCESS_013_PREREQUISITE=%s\n",$central013Provenance);
     $cStored=$journal($central,$centralName);
     if($cStored!==false && !hash_equals($cStored,$centralChecksum)) throw new RuntimeException('Central 014 checksum mismatch');
     if($cStored===false && ($columnExists($central,'company_roles','default_page_key')||$indexExists($central,'company_roles','idx_company_roles_default_page'))) throw new RuntimeException('Unjournaled partial central 014 schema');
