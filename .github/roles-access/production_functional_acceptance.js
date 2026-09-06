@@ -17,6 +17,11 @@ const suppliedClientId = Number(process.env.QA_CLIENT_ID || 0);
 const suppliedContractorId = Number(process.env.QA_CONTRACTOR_ID || 0);
 const suppliedVehicleUnitId = Number(process.env.QA_VEHICLE_UNIT_ID || 0);
 const suppliedDriverId = Number(process.env.QA_DRIVER_ID || 0);
+const suppliedCompanyAId = Number(process.env.QA_COMPANY_A_ID || 0);
+const suppliedCompanyBId = Number(process.env.QA_COMPANY_B_ID || 0);
+const suppliedMultiCompanyMembershipId = Number(process.env.QA_MULTI_COMPANY_MEMBERSHIP_ID || 0);
+const suppliedMultiCompanyTenantUserId = Number(process.env.QA_MULTI_COMPANY_TENANT_USER_ID || 0);
+const suppliedMultiCompanyBClientId = Number(process.env.QA_MULTI_COMPANY_B_CLIENT_ID || 0);
 const assignmentFixtureIds = { client:suppliedClientId, contractor:suppliedContractorId, vehicle_unit:suppliedVehicleUnitId, driver:suppliedDriverId };
 const assignmentPassMarkers = {
   client:'REAL_ASSIGNMENT_CLIENT=PASS',
@@ -70,6 +75,24 @@ function assignmentSnapshot() {
   must(snapshot && snapshot.fixtures && typeof snapshot.fixtures === 'object', 'assignment DB snapshot payload invalid');
   return snapshot;
 }
+function multiCompanySnapshot() {
+  must(/^\d+$/.test(runId), 'QA run id is invalid for multi-company snapshot');
+  must(qaSshHost && qaSshPort && qaSshUser && qaPlanexRoot, 'QA SSH multi-company snapshot channel is unavailable');
+  const key = `${process.env.HOME || ''}/.ssh/roles_functional`;
+  const remote = `/tmp/roles_access_func_identity_${runId}.php`;
+  const command = `PLANEX_ROOT=${shellQuote(qaPlanexRoot)} QA_RUN_ID=${shellQuote(runId)} /usr/bin/php8.5 ${shellQuote(remote)} multi-company-snapshot`;
+  const output = execFileSync('ssh', [
+    '-p', qaSshPort, '-i', key, '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes',
+    `${qaSshUser}@${qaSshHost}`, command
+  ], {encoding:'utf8', maxBuffer:1024*1024});
+  const line = String(output).split(/\r?\n/).find(x => x.startsWith('QA_MULTI_COMPANY_SNAPSHOT_B64='));
+  must(line, 'multi-company DB snapshot marker missing');
+  const snapshot = JSON.parse(Buffer.from(line.slice('QA_MULTI_COMPANY_SNAPSHOT_B64='.length), 'base64').toString('utf8'));
+  must(snapshot && Array.isArray(snapshot.memberships), 'multi-company DB snapshot payload invalid');
+  return snapshot;
+}
+function qaClientAName() { return `QA Functional Client ${runId}`; }
+function qaClientBName() { return `QA Functional Switch B Client ${runId}`; }
 function exactJson(value) { return JSON.stringify(stableObject(value)); }
 function assignmentKindRows(fixture, kind) { return (fixture.assignments || []).filter(row => String(row.assignment_kind) === kind); }
 async function api(page, method, path, body) {
@@ -206,6 +229,94 @@ async function switchCompany(page, value) {
   await page.waitForLoadState('domcontentloaded', { timeout:60000 });
   // onchange submit can race the load-state call; require selected company by reloading roles-access below.
 }
+async function multiCompanySwitchProof(page, registryState) {
+  must(suppliedCompanyAId>0 && suppliedCompanyBId>0 && suppliedCompanyAId!==suppliedCompanyBId, 'multi-company fixture company ids unavailable');
+  must(suppliedOwnerMembershipId>0 && suppliedMultiCompanyMembershipId>0, 'multi-company membership ids unavailable');
+  must(suppliedMultiCompanyTenantUserId>0 && suppliedMultiCompanyBClientId>0, 'multi-company tenant fixture unavailable');
+  const centralBefore = multiCompanySnapshot();
+  fs.writeFileSync(`${out}/multi-company-before.json`, JSON.stringify(stableObject(centralBefore), null, 2)+'\n');
+  const memberships = centralBefore.memberships || [];
+  const a = memberships.find(m=>Number(m.company_id)===suppliedCompanyAId && Number(m.membership_id)===suppliedOwnerMembershipId);
+  const b = memberships.find(m=>Number(m.company_id)===suppliedCompanyBId && Number(m.membership_id)===suppliedMultiCompanyMembershipId);
+  must(a && b && Number(a.account_id)===Number(b.account_id) && Number(a.account_id)===Number(centralBefore.account_id), 'one global account is not bound to both company memberships');
+  must(String(a.status)==='active' && String(b.status)==='active', 'multi-company memberships are not active');
+  must(String(a.system_key||'')==='company_owner', 'company A membership is not the expected owner role');
+  must(String(b.system_key||'')==='' && String(b.default_page_key||'')==='company.clients', 'company B role/default landing fixture mismatch');
+  must(b.role_pages?.['company.dashboard']===true && b.role_pages?.['company.clients']===true && b.role_pages?.['company.contractors']===false, 'company B role page baseline mismatch');
+  must(String(b.role_data_scopes?.client||'')==='all' && String(b.role_data_scopes?.contractor||'')==='none', 'company B role data-scope baseline mismatch');
+  must(String(b.page_overrides?.['company.contractors']||'')==='allow', 'company B page override missing');
+  must(String(b.data_scope_overrides?.contractor||'')==='own', 'company B data override missing');
+  must(Object.keys(a.page_overrides||{}).length===0 && Object.keys(a.data_scope_overrides||{}).length===0, 'company B overrides leaked into company A membership');
+  mark('MULTI_COMPANY_ACCOUNT=PASS');
+
+  await page.goto(base + '/company/dashboard', {waitUntil:'networkidle',timeout:60000});
+  must(appPath(page.url())==='/company/dashboard', 'company A did not start on owner dashboard');
+  let switcher=page.locator('#active-company-switch');
+  must(await switcher.count()===1, 'multi-company selector missing in company A');
+  let options=await switcher.locator('option').evaluateAll(nodes=>nodes.map(n=>({value:Number(n.value),selected:n.selected,text:String(n.textContent||'').trim()})));
+  must(options.length>=2, 'multi-company selector has fewer than two companies');
+  must(options.some(x=>x.value===suppliedCompanyAId && x.selected), 'company A is not selected before switch');
+  must(options.some(x=>x.value===suppliedCompanyBId), 'company B option is absent');
+  mark(`COMPANY_SWITCH_OPTIONS=${options.length}`);
+  mark('COMPANY_SWITCH_OPTIONS>=2');
+  const menuA=(await visibleSidebarPaths(page)).sort();
+  must(menuA.includes('/company/roles-access') && menuA.includes('/company/responsible-assignments'), 'company A owner menu baseline missing');
+
+  await Promise.all([
+    page.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000}),
+    switcher.selectOption(String(suppliedCompanyBId))
+  ]);
+  must(appPath(page.url())==='/company/clients', `company B default landing mismatch: ${appPath(page.url())}`);
+  switcher=page.locator('#active-company-switch');
+  must(await switcher.count()===1 && Number(await switcher.inputValue())===suppliedCompanyBId, 'session/current company did not become company B');
+  mark('COMPANY_SWITCH_A_TO_B=PASS');
+  mark('COMPANY_B_DEFAULT_LANDING=PASS');
+
+  const menuB=(await visibleSidebarPaths(page)).sort();
+  const expectedB=(registryState.pages||[]).filter(p=>p.nav_visible!==false && ((b.page_overrides||{})[p.key]==='allow' || (((b.page_overrides||{})[p.key]!=='deny') && b.role_pages?.[p.key]===true))).map(p=>String(p.path)).sort();
+  const registryPaths=new Set((registryState.pages||[]).map(p=>String(p.path)));
+  const actualB=menuB.filter(p=>registryPaths.has(p)).sort();
+  must(JSON.stringify(actualB)===JSON.stringify(expectedB), `company B effective menu differs from role+membership permissions: expected=${JSON.stringify(expectedB)} actual=${JSON.stringify(actualB)}`);
+  must(!menuB.includes('/company/roles-access') && !menuB.includes('/company/responsible-assignments') && !menuB.includes('/company/finance/dashboard'), 'company A/owner permissions leaked into company B menu');
+  mark('COMPANY_B_EFFECTIVE_MENU=PASS');
+
+  const bodyB=String(await page.locator('body').innerText());
+  must(bodyB.includes(qaClientBName()), 'company B run-scoped client is not visible after switch');
+  must(!bodyB.includes(qaClientAName()), 'company A run-scoped client leaked into company B data');
+  mark('CROSS_COMPANY_DATA_ISOLATION=PASS');
+
+  const denied=await page.goto(base + '/company/roles-access', {waitUntil:'domcontentloaded',timeout:60000});
+  must(denied && denied.status()===403, `direct owner-only URL after switch returned ${denied && denied.status()}`);
+  mark('DIRECT_DENIED_AFTER_SWITCH=403_PASS');
+
+  await page.goto(base + '/company/dashboard', {waitUntil:'networkidle',timeout:60000});
+  switcher=page.locator('#active-company-switch');
+  must(await switcher.count()===1 && Number(await switcher.inputValue())===suppliedCompanyBId, 'company B context was lost after denied request');
+  const centralDuring=multiCompanySnapshot();
+  must(exactJson(centralDuring)===exactJson(centralBefore), 'company switch mutated central role/membership/override state');
+  await Promise.all([
+    page.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000}),
+    switcher.selectOption(String(suppliedCompanyAId))
+  ]);
+  must(appPath(page.url())==='/company/dashboard', `company A landing did not restore: ${appPath(page.url())}`);
+  switcher=page.locator('#active-company-switch');
+  must(await switcher.count()===1 && Number(await switcher.inputValue())===suppliedCompanyAId, 'session/current company did not restore to company A');
+  mark('COMPANY_SWITCH_B_TO_A=PASS');
+
+  const menuARestored=(await visibleSidebarPaths(page)).sort();
+  must(JSON.stringify(menuARestored)===JSON.stringify(menuA), 'company A effective menu did not restore exactly');
+  const rolesResponse=await page.goto(base + '/company/roles-access', {waitUntil:'networkidle',timeout:60000});
+  must(rolesResponse && rolesResponse.status()===200, 'company A owner-only access did not restore');
+  const aState=await snapshot(page);
+  must((aState.memberships||[]).some(m=>Number(m.id)===suppliedOwnerMembershipId), 'company A membership absent after restore');
+  must(!(aState.memberships||[]).some(m=>Number(m.id)===suppliedMultiCompanyMembershipId), 'company B membership leaked into company A roles snapshot');
+  const centralAfter=multiCompanySnapshot();
+  fs.writeFileSync(`${out}/multi-company-after.json`, JSON.stringify(stableObject(centralAfter), null, 2)+'\n');
+  must(exactJson(centralAfter)===exactJson(centralBefore), 'multi-company role/membership/override state changed after A-B-A switch');
+  mark('COMPANY_A_STATE_RESTORED=PASS');
+  mark('MEMBERSHIP_OVERRIDES_ISOLATED=PASS');
+}
+
 async function crossCompanyProof(page, originalState) {
   const originalIds = uniqInts((originalState.memberships||[]).map(x=>x.id));
   let foreignMembershipId = suppliedForeignMembershipId > 0 ? suppliedForeignMembershipId : 0;
@@ -485,6 +596,7 @@ async function submitResponsibility(page, candidate, targetUserId) {
     mark('EFFECTIVE_MENU=PASS');
     await navigationBadgeProof(page);
     await optionalSecondaryEffectiveMenu(browser, initialState);
+    await multiCompanySwitchProof(page, initialState);
 
     const foreignMembershipId = await crossCompanyProof(page, initialState);
     initialState = await snapshot(page);

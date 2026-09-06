@@ -95,6 +95,11 @@ jobs:
           owner_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_OWNER_TENANT_USER_ID=//p')"
           dynamic_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_MEMBERSHIP_ID=//p')"
           dynamic_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_TENANT_USER_ID=//p')"
+          company_a="$(printf '%s\n' "$provision" | sed -n 's/^QA_COMPANY_A_ID=//p')"
+          company_b="$(printf '%s\n' "$provision" | sed -n 's/^QA_COMPANY_B_ID=//p')"
+          multi_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_MULTI_COMPANY_MEMBERSHIP_ID=//p')"
+          multi_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_MULTI_COMPANY_TENANT_USER_ID=//p')"
+          multi_b_client="$(printf '%s\n' "$provision" | sed -n 's/^QA_MULTI_COMPANY_B_CLIENT_ID=//p')"
           client_id="$(printf '%s\n' "$provision" | sed -n 's/^QA_CLIENT_ID=//p')"
           contractor_id="$(printf '%s\n' "$provision" | sed -n 's/^QA_CONTRACTOR_ID=//p')"
           vehicle_unit_id="$(printf '%s\n' "$provision" | sed -n 's/^QA_VEHICLE_UNIT_ID=//p')"
@@ -105,12 +110,19 @@ jobs:
           [[ "$owner_user" =~ ^[1-9][0-9]*$ ]]
           [[ "$dynamic_membership" =~ ^[1-9][0-9]*$ ]]
           [[ "$dynamic_user" =~ ^[1-9][0-9]*$ ]]
+          [[ "$company_a" =~ ^[1-9][0-9]*$ ]]
+          [[ "$company_b" =~ ^[1-9][0-9]*$ ]]
+          test "$company_a" != "$company_b"
+          [[ "$multi_membership" =~ ^[1-9][0-9]*$ ]]
+          [[ "$multi_user" =~ ^[1-9][0-9]*$ ]]
+          [[ "$multi_b_client" =~ ^[1-9][0-9]*$ ]]
           [[ "$client_id" =~ ^[1-9][0-9]*$ ]]
           [[ "$contractor_id" =~ ^[1-9][0-9]*$ ]]
           [[ "$vehicle_unit_id" =~ ^[1-9][0-9]*$ ]]
           [[ "$driver_id" =~ ^[1-9][0-9]*$ ]]
           printf '%s\n' "$provision" | grep -q '^QA_IDENTITY_CREATED=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_DYNAMIC_RECIPIENT_READY=YES$'
+          printf '%s\n' "$provision" | grep -q '^QA_MULTI_COMPANY_ACCOUNT_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_TENANT_PROJECTIONS_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_ASSIGNMENT_FIXTURES_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_CONTRACTOR_FIXTURE_READY=YES$'
@@ -122,6 +134,11 @@ jobs:
           echo "QA_OWNER_TENANT_USER_ID=$owner_user" >> "$GITHUB_ENV"
           echo "QA_DYNAMIC_MEMBERSHIP_ID=$dynamic_membership" >> "$GITHUB_ENV"
           echo "QA_DYNAMIC_TENANT_USER_ID=$dynamic_user" >> "$GITHUB_ENV"
+          echo "QA_COMPANY_A_ID=$company_a" >> "$GITHUB_ENV"
+          echo "QA_COMPANY_B_ID=$company_b" >> "$GITHUB_ENV"
+          echo "QA_MULTI_COMPANY_MEMBERSHIP_ID=$multi_membership" >> "$GITHUB_ENV"
+          echo "QA_MULTI_COMPANY_TENANT_USER_ID=$multi_user" >> "$GITHUB_ENV"
+          echo "QA_MULTI_COMPANY_B_CLIENT_ID=$multi_b_client" >> "$GITHUB_ENV"
           echo "QA_CLIENT_ID=$client_id" >> "$GITHUB_ENV"
           echo "QA_CONTRACTOR_ID=$contractor_id" >> "$GITHUB_ENV"
           echo "QA_VEHICLE_UNIT_ID=$vehicle_unit_id" >> "$GITHUB_ENV"
@@ -143,6 +160,11 @@ jobs:
           [[ "${QA_OWNER_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_DYNAMIC_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_DYNAMIC_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_COMPANY_A_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_COMPANY_B_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_MULTI_COMPANY_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_MULTI_COMPANY_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_MULTI_COMPANY_B_CLIENT_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_CLIENT_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_CONTRACTOR_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_VEHICLE_UNIT_ID:-}" =~ ^[1-9][0-9]*$ ]]
@@ -171,6 +193,8 @@ jobs:
           grep -q '^QA_DYNAMIC_RECIPIENT_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_TEMP_ROLE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_IDENTITY_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^QA_MULTI_COMPANY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^MULTI_COMPANY_QA_RESIDUE=0$' roles_access_identity_cleanup.txt
 
       - name: Require complete functional evidence
         shell: bash
@@ -185,6 +209,15 @@ jobs:
             PERSONAL_OVERRIDES_READBACK=PASS \
             PERSONAL_OVERRIDES_RESTORE=PASS \
             ASSIGNMENTS_TAB=PASS \
+            MULTI_COMPANY_ACCOUNT=PASS \
+            COMPANY_SWITCH_A_TO_B=PASS \
+            COMPANY_B_DEFAULT_LANDING=PASS \
+            COMPANY_B_EFFECTIVE_MENU=PASS \
+            CROSS_COMPANY_DATA_ISOLATION=PASS \
+            DIRECT_DENIED_AFTER_SWITCH=403_PASS \
+            COMPANY_SWITCH_B_TO_A=PASS \
+            COMPANY_A_STATE_RESTORED=PASS \
+            MEMBERSHIP_OVERRIDES_ISOLATED=PASS \
             NAVIGATION_BADGE_NONZERO=PASS \
             REAL_ASSIGNMENT_CLIENT=PASS \
             REAL_ASSIGNMENT_CONTRACTOR=PASS \
@@ -202,6 +235,8 @@ jobs:
             PRODUCTION_FUNCTIONAL_ACCEPTANCE=PASS; do
             grep -q "^${marker}$" roles_access_production_functional_acceptance.txt
           done
+          grep -q '^COMPANY_SWITCH_OPTIONS>=2$' roles_access_production_functional_acceptance.txt
+          grep -Eq '^COMPANY_SWITCH_OPTIONS=([2-9]|[1-9][0-9]+)$' roles_access_production_functional_acceptance.txt
           grep -q '^ASSIGNMENT_QA_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_ASSIGNMENT_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
@@ -210,6 +245,8 @@ jobs:
           grep -q '^QA_DYNAMIC_RECIPIENT_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_TEMP_ROLE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_IDENTITY_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^QA_MULTI_COMPANY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^MULTI_COMPANY_QA_RESIDUE=0$' roles_access_identity_cleanup.txt
 
       - name: Publish exact-SHA functional acceptance status
         env:

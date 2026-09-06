@@ -18,6 +18,7 @@ require_once $root . '/app/Service/IdentityNormalizer.php';
 require_once $root . '/app/Service/CompanyRoleService.php';
 require_once $root . '/app/Service/CompanyMembershipService.php';
 require_once $root . '/app/Service/EntityResponsibilityService.php';
+require_once $root . '/app/Security/PageRegistry.php';
 $config = require $root . '/bootstrap/app.php';
 $pdo = (new App\Core\Database($config['database']))->connection();
 $mode = (string)($argv[1] ?? '');
@@ -32,6 +33,8 @@ function qaClientInn(string $runId): string { return '98' . str_pad((string)(((i
 function qaDriverName(string $runId): string { return 'QA Functional Driver ' . $runId; }
 function qaDriverPhone(string $runId): string { return '+7998' . str_pad((string)(((int)$runId) % 10000000), 7, '0', STR_PAD_LEFT); }
 function qaVehiclePlate(string $runId): string { return 'QA' . str_pad((string)(((int)$runId) % 1000000000000), 12, '0', STR_PAD_LEFT); }
+function qaSwitchBClientName(string $runId): string { return 'QA Functional Switch B Client ' . $runId; }
+function qaSwitchBClientInn(string $runId): string { return '97' . str_pad((string)(((int)$runId) % 10000000000), 10, '0', STR_PAD_LEFT); }
 
 function writeQaState(string $stateFile, array $state): void
 {
@@ -228,6 +231,73 @@ function cleanupQaAssignmentFixtures(PDO $pdo, array $config, ?array $state, str
     }
 }
 
+/** @return array<string,mixed> */
+function qaMultiCompanySnapshot(PDO $pdo, string $stateFile): array
+{
+    if (!is_file($stateFile)) throw new RuntimeException('QA state unavailable for multi-company snapshot');
+    $state=json_decode((string)file_get_contents($stateFile),true,32,JSON_THROW_ON_ERROR);
+    $accountId=(int)($state['owner']['account_id']??0);
+    $companyA=(int)($state['company_id']??0);
+    $companyB=(int)($state['foreign_company_id']??0);
+    if ($accountId<=0 || $companyA<=0 || $companyB<=0) throw new RuntimeException('QA multi-company state unavailable');
+    $stmt=$pdo->prepare(
+        'SELECT m.id AS membership_id,m.account_id,m.company_id,m.role_id,m.status,r.name AS role_name,r.system_key,r.default_page_key,c.name AS company_name '
+        . 'FROM company_memberships m JOIN company_roles r ON r.id=m.role_id AND r.company_id=m.company_id '
+        . 'JOIN companies c ON c.id=m.company_id WHERE m.account_id=? AND m.company_id IN (?,?) ORDER BY c.name,c.id'
+    );
+    $stmt->execute([$accountId,$companyA,$companyB]);
+    $memberships=[];
+    foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+        $mid=(int)$row['membership_id']; $rid=(int)$row['role_id'];
+        $pages=$pdo->prepare('SELECT page_key,is_allowed FROM role_page_permissions WHERE role_id=? ORDER BY page_key');
+        $pages->execute([$rid]);
+        $rolePages=[]; foreach ($pages->fetchAll(PDO::FETCH_ASSOC) as $x) $rolePages[(string)$x['page_key']]=(bool)$x['is_allowed'];
+        $scopes=$pdo->prepare('SELECT entity_type,scope FROM role_data_scopes WHERE role_id=? ORDER BY entity_type');
+        $scopes->execute([$rid]);
+        $roleScopes=[]; foreach ($scopes->fetchAll(PDO::FETCH_ASSOC) as $x) $roleScopes[(string)$x['entity_type']]=(string)$x['scope'];
+        $po=$pdo->prepare('SELECT page_key,effect FROM membership_page_overrides WHERE membership_id=? ORDER BY page_key');
+        $po->execute([$mid]);
+        $pageOverrides=[]; foreach ($po->fetchAll(PDO::FETCH_ASSOC) as $x) $pageOverrides[(string)$x['page_key']]=(string)$x['effect'];
+        $do=$pdo->prepare('SELECT entity_type,scope FROM membership_data_scope_overrides WHERE membership_id=? ORDER BY entity_type');
+        $do->execute([$mid]);
+        $dataOverrides=[]; foreach ($do->fetchAll(PDO::FETCH_ASSOC) as $x) $dataOverrides[(string)$x['entity_type']]=(string)$x['scope'];
+        $memberships[]=[
+            'membership_id'=>$mid,'account_id'=>(int)$row['account_id'],'company_id'=>(int)$row['company_id'],
+            'company_name'=>(string)$row['company_name'],'role_id'=>$rid,'role_name'=>(string)$row['role_name'],
+            'system_key'=>$row['system_key']!==null?(string)$row['system_key']:null,
+            'default_page_key'=>$row['default_page_key']!==null?(string)$row['default_page_key']:null,
+            'status'=>(string)$row['status'],'role_pages'=>$rolePages,'role_data_scopes'=>$roleScopes,
+            'page_overrides'=>$pageOverrides,'data_scope_overrides'=>$dataOverrides,
+        ];
+    }
+    return ['account_id'=>$accountId,'company_a_id'=>$companyA,'company_b_id'=>$companyB,'memberships'=>$memberships];
+}
+
+function emitQaMultiCompanySnapshot(PDO $pdo, string $stateFile): void
+{
+    echo 'QA_MULTI_COMPANY_SNAPSHOT_B64='.base64_encode(json_encode(qaMultiCompanySnapshot($pdo,$stateFile),JSON_THROW_ON_ERROR)).PHP_EOL;
+}
+
+function cleanupQaMultiCompanyFixture(PDO $pdo, array $config, ?array $state, string $runId): void
+{
+    $companyB=(int)($state['foreign_company_id']??0);
+    if ($companyB<=0) return;
+    $tenant=tenantFor($pdo,$config,$companyB);
+    $name=qaSwitchBClientName($runId); $inn=qaSwitchBClientInn($runId);
+    $q=$tenant->prepare('SELECT id,name,inn FROM clients WHERE name=? OR inn=? ORDER BY id LIMIT 2');
+    $q->execute([$name,$inn]); $rows=$q->fetchAll(PDO::FETCH_ASSOC);
+    if (count($rows)>1) throw new RuntimeException('ambiguous QA switch-B client namespace');
+    if ($rows!==[]) {
+        $r=$rows[0];
+        if ((string)$r['name']!==$name || (string)$r['inn']!==$inn) throw new RuntimeException('QA switch-B client namespace collision');
+        $del=$tenant->prepare('DELETE FROM clients WHERE id=? AND name=? AND inn=?');
+        $del->execute([(int)$r['id'],$name,$inn]);
+        if ($del->rowCount()!==1) throw new RuntimeException('QA switch-B client cleanup mismatch');
+    }
+    $q=$tenant->prepare('SELECT COUNT(*) FROM clients WHERE name=? OR inn=?'); $q->execute([$name,$inn]);
+    if ((int)$q->fetchColumn()!==0) throw new RuntimeException('QA switch-B client residue detected');
+}
+
 /** @return list<array<string,mixed>> */
 function qaAccounts(PDO $pdo, string $runId): array
 {
@@ -237,7 +307,7 @@ function qaAccounts(PDO $pdo, string $runId): array
     return $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
 
-function cleanupQaTenantProjections(PDO $pdo, array $config, string $runId, array $accounts, int $targetCompanyId): void
+function cleanupQaTenantProjections(PDO $pdo, array $config, string $runId, array $accounts): void
 {
     foreach ($accounts as $account) {
         $m=$pdo->prepare('SELECT m.id,m.company_id,r.system_key,r.is_system FROM company_memberships m JOIN company_roles r ON r.id=m.role_id AND r.company_id=m.company_id WHERE m.account_id=? ORDER BY m.id');
@@ -245,7 +315,6 @@ function cleanupQaTenantProjections(PDO $pdo, array $config, string $runId, arra
         foreach ($m->fetchAll(PDO::FETCH_ASSOC) as $membership) {
             $companyId=(int)$membership['company_id'];
             $membershipId=(int)$membership['id'];
-            if ($companyId !== $targetCompanyId) continue;
             $company=activeCompany($pdo,$companyId);
             if (!$company) continue;
             $tenant=(new App\Core\Database(companyDatabaseConfig($config,$company)))->connection();
@@ -277,9 +346,10 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
     restoreQaResponsibilityFixture($pdo,$config,$state);
     cleanupQaAssignmentFixtures($pdo,$config,$state,$runId);
     cleanupQaContractorFixture($pdo,$config,$state,$runId);
+    cleanupQaMultiCompanyFixture($pdo,$config,$state,$runId);
 
     $accounts=qaAccounts($pdo,$runId);
-    cleanupQaTenantProjections($pdo,$config,$runId,$accounts,(int)($state['company_id']??0));
+    cleanupQaTenantProjections($pdo,$config,$runId,$accounts);
 
     // Remove non-owner memberships first, then temporary owners. Every owner company
     // was selected with an existing independent active owner, so fail-closed owner
@@ -331,8 +401,8 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
         $roleCheck->execute([(int)$roleCompanyId,App\Service\IdentityNormalizer::roleName((string)$roleNameCheck)]);
         if ((int)$roleCheck->fetchColumn()!==0) throw new RuntimeException('QA role residue');
     }
-    if ($companyId>0) {
-        $tenant=tenantFor($pdo,$config,$companyId);
+    foreach (array_values(array_unique(array_filter([$companyId,$foreignCompanyId],static fn(int $id): bool => $id>0))) as $projectionCompanyId) {
+        $tenant=tenantFor($pdo,$config,(int)$projectionCompanyId);
         $projection=$tenant->prepare('SELECT COUNT(*) FROM users WHERE login LIKE ?');
         $projection->execute([qaIdentityPrefix($runId).'%']);
         if ((int)$projection->fetchColumn()!==0) throw new RuntimeException('QA tenant projection residue');
@@ -346,10 +416,13 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
     echo "QA_DYNAMIC_RECIPIENT_RESIDUE=0\n";
     echo "QA_TEMP_ROLE_RESIDUE=0\n";
     echo "QA_IDENTITY_RESIDUE=0\n";
+    echo "QA_MULTI_COMPANY_FIXTURE_RESIDUE=0\n";
+    echo "MULTI_COMPANY_QA_RESIDUE=0\n";
 }
 
 if ($mode==='cleanup') { cleanupQaIdentity($pdo,$config,$stateFile,$runId); exit(0); }
 if ($mode==='assignment-snapshot') { emitQaAssignmentSnapshot($pdo,$config,$stateFile); exit(0); }
+if ($mode==='multi-company-snapshot') { emitQaMultiCompanySnapshot($pdo,$stateFile); exit(0); }
 if ($mode!=='create') { fwrite(STDERR,"unknown QA identity mode\n"); exit(1); }
 if (is_file($stateFile)) { fwrite(STDERR,"QA state already exists\n"); exit(1); }
 
@@ -359,29 +432,31 @@ $companies=$pdo->query(
        FROM companies c
        JOIN company_access_readiness ar ON ar.company_id=c.id AND ar.state='ready' AND ar.verified_at IS NOT NULL AND ar.activated_at IS NOT NULL
        JOIN company_roles owner_role ON owner_role.company_id=c.id AND owner_role.system_key='company_owner' AND owner_role.is_system=1
-      WHERE c.status='active' ORDER BY c.id"
+      WHERE c.status='active' ORDER BY c.name,c.id"
 )->fetchAll(PDO::FETCH_ASSOC);
-$target=null;
+$ready=[];
 foreach ($companies as $candidate) {
-    if ((int)$candidate['owner_count']<=0) continue;
     $company=activeCompany($pdo,(int)$candidate['id']);
     if (!$company) continue;
     try {
         $tenant=(new App\Core\Database(companyDatabaseConfig($config,$company)))->connection();
         foreach (['users','clients','contractors','vehicle_units','drivers','entity_responsibilities','entity_assignments'] as $table) $tenant->query("SELECT 1 FROM `{$table}` LIMIT 1");
     } catch (Throwable) { continue; }
-    $target=['row'=>$candidate,'company'=>$company,'tenant'=>$tenant];
-    break;
+    $ready[]=['row'=>$candidate,'company'=>$company,'tenant'=>$tenant];
 }
-if (!$target) { fwrite(STDERR,"no ready QA company with an independent owner\n"); exit(1); }
-$foreignStmt=$pdo->prepare("SELECT id,name FROM companies WHERE status='active' AND id<>? ORDER BY id LIMIT 1");
-$foreignStmt->execute([(int)$target['row']['id']]);
-$foreignCompany=$foreignStmt->fetch(PDO::FETCH_ASSOC);
-if (!$foreignCompany) { fwrite(STDERR,"no second active company for foreign membership proof\n"); exit(1); }
+$target=null; $foreignTarget=null;
+for ($i=0,$n=count($ready);$i<$n;$i++) {
+    if ((int)$ready[$i]['row']['owner_count']<=0) continue;
+    for ($j=$i+1;$j<$n;$j++) {
+        $target=$ready[$i]; $foreignTarget=$ready[$j]; break 2;
+    }
+}
+if (!$target || !$foreignTarget) { fwrite(STDERR,"no ordered pair of ready QA companies for multi-company proof\n"); exit(1); }
+$foreignCompany=$foreignTarget['company'];
 
 $companyId=(int)$target['row']['id'];
 $ownerRoleId=(int)$target['row']['owner_role_id'];
-$foreignCompanyId=(int)$foreignCompany['id'];
+$foreignCompanyId=(int)$foreignTarget['row']['id'];
 $prefix=qaIdentityPrefix($runId);
 $roleName=qaRoleName($runId);
 $state=[
@@ -389,6 +464,7 @@ $state=[
     'foreign_company_id'=>$foreignCompanyId,
     'dynamic_role_id'=>0,
     'foreign_role_id'=>0,
+    'multi_company'=>['membership_id'=>0,'tenant_user_id'=>0,'b_client_id'=>0,'b_client_name'=>qaSwitchBClientName($runId),'b_client_inn'=>qaSwitchBClientInn($runId)],
     'responsibility_fixture'=>null,
     'qa_contractor_fixture'=>['id'=>0,'name'=>qaContractorName($runId),'inn'=>qaContractorInn($runId)],
     'assignment_fixtures'=>[
@@ -407,12 +483,25 @@ try {
     $state['dynamic_role_id']=(int)$role['id']; writeQaState($stateFile,$state);
     $foreignRole=$roleService->create($foreignCompanyId,qaForeignRoleName($runId));
     $state['foreign_role_id']=(int)$foreignRole['id']; writeQaState($stateFile,$state);
+    $registry=new App\Security\PageRegistry();
+    $grantableKeys=$registry->grantablePageKeys();
+    $landingKeys=array_values(array_map(static fn(array $page): string => (string)$page['key'],array_filter($registry->landingPages(),static fn(array $page): bool => $registry->isGrantable((string)$page['key']))));
+    $bPages=array_fill_keys($grantableKeys,false);
+    $bPages['company.dashboard']=true;
+    $bPages['company.clients']=true;
+    $bScopes=array_fill_keys(App\Service\CompanyRoleService::regulatedEntities(),'none');
+    $bScopes['client']='all';
+    $roleService->save($foreignCompanyId,(int)$foreignRole['id'],qaForeignRoleName($runId),$bPages,$bScopes,'company.clients',$grantableKeys,$landingKeys);
 
     $ownerLogin=$prefix.'owner_'.bin2hex(random_bytes(4));
     $ownerPassword=rtrim(strtr(base64_encode(random_bytes(30)),'+/','-_'),'=');
     $owner=$membershipService->add($companyId,$ownerRoleId,'QA Functional Owner '.$runId,$ownerLogin,$ownerPassword,null,null,'active');
     if (!($owner['account_created']??false)) throw new RuntimeException('QA owner account collision');
     $state['owner']=['account_id'=>(int)$owner['account_id'],'membership_id'=>(int)$owner['membership_id'],'login'=>$ownerLogin]; writeQaState($stateFile,$state);
+    $ownerB=$membershipService->add($foreignCompanyId,(int)$foreignRole['id'],'QA Functional Owner '.$runId,$ownerLogin,$ownerPassword,null,null,'active');
+    if (($ownerB['account_created']??true) || (int)$ownerB['account_id']!==(int)$owner['account_id']) throw new RuntimeException('QA multi-company account was not reused');
+    $membershipService->save($foreignCompanyId,(int)$ownerB['membership_id'],(int)$foreignRole['id'],'active',['company.contractors'=>'allow'],['contractor'=>'own'],$grantableKeys);
+    $state['multi_company']['membership_id']=(int)$ownerB['membership_id']; writeQaState($stateFile,$state);
 
     $dynamicLogin=$prefix.'dynamic_'.bin2hex(random_bytes(4));
     $dynamicPassword=rtrim(strtr(base64_encode(random_bytes(30)),'+/','-_'),'=');
@@ -436,6 +525,23 @@ try {
     if ($dynamicTenantUserId<=0) throw new RuntimeException('QA dynamic tenant projection failed');
     $state['owner']['tenant_user_id']=$ownerTenantUserId;
     $state['dynamic']['tenant_user_id']=$dynamicTenantUserId;
+    $foreignTenant=$foreignTarget['tenant'];
+    $foreignProjection=$foreignTenant->prepare('INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status) VALUES (?,?,?,?,?,\'active\')');
+    $foreignProjection->execute([(int)$ownerB['membership_id'],'QA Functional Owner '.$runId,$ownerLogin,password_hash($ownerPassword,PASSWORD_DEFAULT),'membership_role']);
+    $ownerBTenantUserId=(int)$foreignTenant->lastInsertId();
+    if ($ownerBTenantUserId<=0) throw new RuntimeException('QA multi-company tenant projection failed');
+    $state['multi_company']['tenant_user_id']=$ownerBTenantUserId;
+    writeQaState($stateFile,$state);
+
+    $switchBName=qaSwitchBClientName($runId); $switchBInn=qaSwitchBClientInn($runId);
+    $collision=$foreignTenant->prepare('SELECT COUNT(*) FROM clients WHERE name=? OR inn=?');
+    $collision->execute([$switchBName,$switchBInn]);
+    if ((int)$collision->fetchColumn()!==0) throw new RuntimeException('QA switch-B client namespace collision');
+    $insertB=$foreignTenant->prepare("INSERT INTO clients (name,inn,status,created_by_user_id,created_by_membership_id,created_by_role) VALUES (?,?,'active',?,?,?)");
+    $insertB->execute([$switchBName,$switchBInn,$ownerBTenantUserId,(int)$ownerB['membership_id'],'membership_role']);
+    $switchBClientId=(int)$foreignTenant->lastInsertId();
+    if ($switchBClientId<=0) throw new RuntimeException('QA switch-B client insert failed');
+    $state['multi_company']['b_client_id']=$switchBClientId;
     writeQaState($stateFile,$state);
 
     $recipients=App\Service\EntityResponsibilityService::eligibleRecipients($pdo,$tenant,$companyId);
@@ -522,11 +628,17 @@ try {
     echo 'QA_OWNER_TENANT_USER_ID='.$ownerTenantUserId.PHP_EOL;
     echo 'QA_DYNAMIC_MEMBERSHIP_ID='.(int)$dynamic['membership_id'].PHP_EOL;
     echo 'QA_DYNAMIC_TENANT_USER_ID='.$dynamicTenantUserId.PHP_EOL;
+    echo 'QA_COMPANY_A_ID='.$companyId.PHP_EOL;
+    echo 'QA_COMPANY_B_ID='.$foreignCompanyId.PHP_EOL;
+    echo 'QA_MULTI_COMPANY_MEMBERSHIP_ID='.(int)$ownerB['membership_id'].PHP_EOL;
+    echo 'QA_MULTI_COMPANY_TENANT_USER_ID='.$ownerBTenantUserId.PHP_EOL;
+    echo 'QA_MULTI_COMPANY_B_CLIENT_ID='.$switchBClientId.PHP_EOL;
     echo 'QA_CLIENT_ID='.$clientId.PHP_EOL;
     echo 'QA_CONTRACTOR_ID='.$contractorId.PHP_EOL;
     echo 'QA_VEHICLE_UNIT_ID='.$vehicleId.PHP_EOL;
     echo 'QA_DRIVER_ID='.$driverId.PHP_EOL;
     echo 'QA_DYNAMIC_RECIPIENT_READY=YES'.PHP_EOL;
+    echo 'QA_MULTI_COMPANY_ACCOUNT_READY=YES'.PHP_EOL;
     echo 'QA_TENANT_PROJECTIONS_READY=YES'.PHP_EOL;
     echo 'QA_ASSIGNMENT_FIXTURES_READY=YES'.PHP_EOL;
     echo 'QA_CONTRACTOR_FIXTURE_READY=YES'.PHP_EOL;
