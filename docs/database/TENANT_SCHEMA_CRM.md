@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `e3b9ded9de4f3d713c3ee0b229d9d072275fd38ed6fc69d000d1b127b39bccd6`
+**Schema fingerprint:** `78da2bd5afff3c0ad1b42bbae3a77a46e354fb9b55fbb4f4dc70b4c0a8356c2c`
 
 ## `client_contacts`
 
@@ -222,6 +222,7 @@
 | `entity_id` | `bigint unsigned` | NO | NULL | — | — |
 | `membership_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
 | `assigned_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `assignment_kind` | `enum('legacy_unclassified','creator_auto','manual')` | NO | `legacy_unclassified` | — | — |
 | `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 | `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 
@@ -229,8 +230,9 @@
 
 - **PRIMARY** `PRIMARY` (`id`)
 - **INDEX** `idx_assignment_entity` (`entity_type`, `entity_id`)
+- **INDEX** `idx_assignment_kind` (`entity_type`, `assignment_kind`, `membership_id`, `entity_id`)
 - **INDEX** `idx_assignment_membership_entity` (`membership_id`, `entity_type`, `entity_id`)
-- **UNIQUE** `uk_entity_assignment` (`entity_type`, `entity_id`, `membership_id`)
+- **UNIQUE** `uk_entity_assignment_kind` (`entity_type`, `entity_id`, `membership_id`, `assignment_kind`)
 
 ### Physical foreign keys
 

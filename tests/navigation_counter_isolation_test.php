@@ -8,14 +8,26 @@ require_once BASE_PATH . '/app/Support/company_database.php';
 require_once BASE_PATH . '/app/Core/Database.php';
 require_once BASE_PATH . '/app/Service/NavigationCounterService.php';
 
-$host = getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1';
-$port = (int)(getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306);
-$user = getenv('PLANEX_SCHEMA_DB_USER') ?: '';
-$password = getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: '';
-$dbName = trim((string)getenv('PLANEX_TEST_FIXED_DB'));
-$allowlist = array_values(array_filter(array_map('trim', explode(',', (string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')))));
-if ($dbName === '' || !in_array($dbName, $allowlist, true) || (string)getenv('APP_ENV') !== 'test') {
-    throw new RuntimeException('Guarded fixed test DB is required.');
+$runnerDb = trim((string)getenv('PLANEX_TEST_FIXED_DB'));
+if ($runnerDb !== '') {
+    $host = getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1';
+    $port = (int)(getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306);
+    $user = getenv('PLANEX_SCHEMA_DB_USER') ?: '';
+    $password = getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: '';
+    $dbName = $runnerDb;
+    $allowlist = array_values(array_filter(array_map('trim', explode(',', (string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')))));
+    if (!in_array($dbName, $allowlist, true) || (string)getenv('APP_ENV') !== 'test') {
+        throw new RuntimeException('Guarded fixed runner DB is required.');
+    }
+} else {
+    $host = getenv('EMPLOYEE_PAYMENTS_DB_HOST') ?: '';
+    $port = (int)(getenv('EMPLOYEE_PAYMENTS_DB_PORT') ?: 0);
+    $user = getenv('EMPLOYEE_PAYMENTS_DB_USER') ?: '';
+    $password = getenv('EMPLOYEE_PAYMENTS_DB_PASSWORD') ?: '';
+    $dbName = trim((string)getenv('EMPLOYEE_PAYMENTS_DB_NAME'));
+    if ($host === '' || $port <= 0 || $user === '' || $dbName !== 'erp_employee_payments_test') {
+        throw new RuntimeException('Explicit isolated finance CI database is required.');
+    }
 }
 
 $pdo = new PDO(
