@@ -25,6 +25,7 @@ $ok(!str_contains($workflow, 'P11_RUNTIME_CREDENTIALS_B64'), 'functional accepta
 $ok(str_contains($workflow, 'Provision isolated temporary QA owner identity') && str_contains($workflow, '.github/roles-access/qa_identity.php'), 'workflow must provision the isolated temporary QA identity');
 $ok(str_contains($workflow, 'Cleanup temporary QA owner identity') && str_contains($workflow, 'if: always()') && str_contains($workflow, 'QA_IDENTITY_RESIDUE=0'), 'temporary QA identity cleanup must be unconditional and residue-gated');
 $ok(str_contains($workflow, 'QA_FOREIGN_MEMBERSHIP_ID'), 'workflow must pass a real foreign membership identifier into the isolation proof');
+$ok(str_contains($workflow, 'LIVE_PARENT: /home/s/spugovxsim/planexp/public_html'), 'functional acceptance must use the real production web root');
 $ok(str_contains($script, "page.locator('input[name=\"login\"]')") && str_contains($script, "page.locator('input[name=\"password\"]')"), 'acceptance must perform normal username/password login');
 $ok(!str_contains($script, 'QA_LEGACY_SESSION_ID') && !str_contains($script, 'create-legacy-owner'), 'acceptance must not use synthetic legacy-session authentication');
 foreach ([

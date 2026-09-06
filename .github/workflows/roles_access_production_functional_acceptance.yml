@@ -24,7 +24,7 @@ env:
   QA_TRIGGER_BRANCH: qa/roles-access-functional-agent
   SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || github.sha }}
   RESULT_DIR: roles_access_functional_acceptance_result
-  LIVE_PARENT: /home/s/spugovxsim/planexp
+  LIVE_PARENT: /home/s/spugovxsim/planexp/public_html
   APP_DIR: erpv2
 
 jobs:
