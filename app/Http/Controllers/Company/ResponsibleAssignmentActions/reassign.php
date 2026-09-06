@@ -35,15 +35,13 @@ try {
     $tenant = (new Database(companyDatabaseConfig($config, $company)))->connection();
     applyLocalMigrations($tenant);
 
-    $userStmt = $tenant->prepare("SELECT id,membership_id FROM users WHERE id=? AND status='active' AND deleted_at IS NULL LIMIT 1");
-    $userStmt->execute([(int)$newLogistId]);
-    $targetUser = $userStmt->fetch(PDO::FETCH_ASSOC);
-    $targetMembershipId = (int)($targetUser['membership_id'] ?? 0);
-    if ($targetMembershipId <= 0) throw new RuntimeException('target membership missing');
-
-    $memberStmt = $central->prepare("SELECT 1 FROM company_memberships WHERE id=? AND company_id=? AND status='active' LIMIT 1");
-    $memberStmt->execute([$targetMembershipId, $companyId]);
-    if (!$memberStmt->fetchColumn()) throw new RuntimeException('cross company target');
+    $targetMembershipId = EntityResponsibilityService::eligibleRecipientMembershipId(
+        $central,
+        $tenant,
+        $companyId,
+        (int)$newLogistId
+    );
+    if ($targetMembershipId === null) throw new RuntimeException('responsibility recipient is not eligible');
 
     $actorMembershipId = (int)(AccessControlService::effectiveMembershipId() ?? 0);
     $result = EntityResponsibilityService::transfer($tenant, $entityType, $entityIds, $targetMembershipId, $actorMembershipId);

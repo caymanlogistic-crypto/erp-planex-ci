@@ -30,6 +30,95 @@ final class EntityResponsibilityService
     }
 
     /**
+     * Responsibility recipients are defined by the current central membership
+     * model, not by the tenant compatibility role_code. A recipient must have
+     * an active membership in the selected company, an active global account,
+     * a role belonging to that company, and an active tenant projection linked
+     * by the same stable membership_id.
+     *
+     * @return list<array{id:int,membership_id:int,full_name:string,login:string}>
+     */
+    public static function eligibleRecipients(PDO $central, PDO $tenant, int $companyId): array
+    {
+        if ($companyId <= 0) {
+            return [];
+        }
+
+        $memberships = $central->prepare(
+            "SELECT m.id AS membership_id, a.full_name, a.login
+               FROM company_memberships m
+               JOIN user_accounts a ON a.id=m.account_id
+               JOIN company_roles r ON r.id=m.role_id AND r.company_id=m.company_id
+              WHERE m.company_id=?
+                AND m.status='active'
+                AND a.status='active'
+              ORDER BY a.full_name, m.id"
+        );
+        $memberships->execute([$companyId]);
+        $centralRows = $memberships->fetchAll(PDO::FETCH_ASSOC);
+        if ($centralRows === []) {
+            return [];
+        }
+
+        $tenantRows = $tenant->query(
+            "SELECT id, membership_id
+               FROM users
+              WHERE membership_id IS NOT NULL
+                AND status='active'
+                AND deleted_at IS NULL
+              ORDER BY id"
+        )->fetchAll(PDO::FETCH_ASSOC);
+
+        $tenantByMembership = [];
+        foreach ($tenantRows as $row) {
+            $membershipId = (int)($row['membership_id'] ?? 0);
+            $tenantUserId = (int)($row['id'] ?? 0);
+            if ($membershipId <= 0 || $tenantUserId <= 0) {
+                continue;
+            }
+            if (isset($tenantByMembership[$membershipId])) {
+                throw new RuntimeException('Duplicate active tenant membership projection.');
+            }
+            $tenantByMembership[$membershipId] = $tenantUserId;
+        }
+
+        $result = [];
+        foreach ($centralRows as $row) {
+            $membershipId = (int)($row['membership_id'] ?? 0);
+            $tenantUserId = $tenantByMembership[$membershipId] ?? 0;
+            if ($membershipId <= 0 || $tenantUserId <= 0) {
+                continue;
+            }
+            $result[] = [
+                'id' => $tenantUserId,
+                'membership_id' => $membershipId,
+                'full_name' => (string)($row['full_name'] ?? ''),
+                'login' => (string)($row['login'] ?? ''),
+            ];
+        }
+
+        return $result;
+    }
+
+    public static function eligibleRecipientMembershipId(
+        PDO $central,
+        PDO $tenant,
+        int $companyId,
+        int $tenantUserId
+    ): ?int {
+        if ($tenantUserId <= 0) {
+            return null;
+        }
+        foreach (self::eligibleRecipients($central, $tenant, $companyId) as $recipient) {
+            if ((int)$recipient['id'] === $tenantUserId) {
+                return (int)$recipient['membership_id'];
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * ONLY_OWN for reference entities: current base responsibility (or creator
      * fallback) plus manual M:N assignment. creator_auto rows are not a second
      * access reason.
