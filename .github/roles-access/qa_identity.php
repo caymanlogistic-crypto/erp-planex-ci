@@ -109,6 +109,59 @@ function restoreQaResponsibilityFixture(PDO $pdo, array $config, ?array $state):
     }
 }
 
+function cleanupQaContractorFixture(PDO $pdo, array $config, ?array $state): void
+{
+    $fixture = is_array($state) ? ($state['qa_contractor_fixture'] ?? null) : null;
+    if (!is_array($fixture)) {
+        return;
+    }
+    $companyId = (int)($state['company_id'] ?? 0);
+    $contractorId = (int)($fixture['id'] ?? 0);
+    $name = (string)($fixture['name'] ?? '');
+    $inn = (string)($fixture['inn'] ?? '');
+    $expectedPrefix = 'QA Functional Contractor ';
+    if ($companyId <= 0 || $name === '' || !str_starts_with($name, $expectedPrefix)
+        || !preg_match('/^99[0-9]{10}$/D', $inn)) {
+        throw new RuntimeException('invalid QA contractor fixture cleanup state');
+    }
+    $companyStmt = $pdo->prepare("SELECT * FROM companies WHERE id=? AND status='active' LIMIT 1");
+    $companyStmt->execute([$companyId]);
+    $company = $companyStmt->fetch(PDO::FETCH_ASSOC);
+    if (!$company) {
+        throw new RuntimeException('QA contractor fixture company unavailable during cleanup');
+    }
+    $tenant = (new App\Core\Database(companyDatabaseConfig($config, $company)))->connection();
+    $lookupSql = $contractorId > 0
+        ? 'SELECT id,name,inn FROM contractors WHERE id=? AND name=? AND inn=? LIMIT 2'
+        : 'SELECT id,name,inn FROM contractors WHERE name=? AND inn=? ORDER BY id LIMIT 2';
+    $lookup = $tenant->prepare($lookupSql);
+    $lookup->execute($contractorId > 0 ? [$contractorId, $name, $inn] : [$name, $inn]);
+    $rows = $lookup->fetchAll(PDO::FETCH_ASSOC);
+    if (count($rows) > 1) {
+        throw new RuntimeException('ambiguous QA contractor fixture namespace');
+    }
+    if ($rows !== []) {
+        $actualId = (int)$rows[0]['id'];
+        $responsibility = $tenant->prepare(
+            "SELECT COUNT(*) FROM entity_responsibilities WHERE entity_type='contractor' AND entity_id=?"
+        );
+        $responsibility->execute([$actualId]);
+        if ((int)$responsibility->fetchColumn() !== 0) {
+            throw new RuntimeException('QA contractor fixture still has responsibility residue');
+        }
+        $delete = $tenant->prepare('DELETE FROM contractors WHERE id=? AND name=? AND inn=?');
+        $delete->execute([$actualId, $name, $inn]);
+        if ($delete->rowCount() !== 1) {
+            throw new RuntimeException('QA contractor fixture cleanup did not delete exactly one row');
+        }
+    }
+    $verify = $tenant->prepare('SELECT COUNT(*) FROM contractors WHERE name=? AND inn=?');
+    $verify->execute([$name, $inn]);
+    if ((int)$verify->fetchColumn() !== 0) {
+        throw new RuntimeException('QA contractor fixture residue detected');
+    }
+}
+
 function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $runId): void
 {
     $prefix = qaIdentityPrefix($runId);
@@ -129,6 +182,7 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
     // Responsibility fixture state is written before the tenant mutation. Restore
     // the exact pre-run row before removing the temporary owner membership.
     restoreQaResponsibilityFixture($pdo, $config, $state);
+    cleanupQaContractorFixture($pdo, $config, $state);
 
     // Prefix is unique to this GitHub run. It lets cleanup recover even if the
     // process died after the DB insert but before the local state file was written.
@@ -191,6 +245,7 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
         throw new RuntimeException('QA identity state cleanup failed');
     }
     echo "QA_RESPONSIBILITY_FIXTURE_RESIDUE=0\n";
+    echo "QA_CONTRACTOR_FIXTURE_RESIDUE=0\n";
     echo "QA_IDENTITY_RESIDUE=0\n";
 }
 
@@ -201,27 +256,6 @@ if ($mode === 'cleanup') {
 if ($mode !== 'create') { fwrite(STDERR, "unknown QA identity mode\n"); exit(1); }
 if (is_file($stateFile)) { fwrite(STDERR, "QA identity state already exists\n"); exit(1); }
 
-/** @return array{entity_type:string,entity_id:int}|null */
-function findResponsibilityFixtureEntity(PDO $tenant): ?array
-{
-    foreach ([
-        ['contractor', 'contractors'],
-        ['driver', 'drivers'],
-        ['vehicle_set', 'vehicle_sets'],
-        ['route_executor', 'crews'],
-    ] as [$entityType, $table]) {
-        try {
-            $stmt = $tenant->query("SELECT id FROM `{$table}` WHERE status!='archived' ORDER BY id LIMIT 1");
-            $entityId = (int)($stmt->fetchColumn() ?: 0);
-            if ($entityId > 0) {
-                return ['entity_type' => $entityType, 'entity_id' => $entityId];
-            }
-        } catch (Throwable) {
-            continue;
-        }
-    }
-    return null;
-}
 
 $companySql = <<<SQL
 SELECT c.id,c.name,owner_role.id AS owner_role_id,
@@ -288,8 +322,7 @@ foreach ($companies as $row) {
             break;
         }
     }
-    $fixtureEntity = findResponsibilityFixtureEntity($tenant);
-    if ($baselineRecipient === null || $fixtureEntity === null) {
+    if ($baselineRecipient === null) {
         continue;
     }
     $target = [
@@ -298,11 +331,10 @@ foreach ($companies as $row) {
         'tenant' => $tenant,
         'baseline_recipient' => $baselineRecipient,
         'dynamic_recipient' => $dynamicTarget,
-        'fixture_entity' => $fixtureEntity,
     ];
     break;
 }
-if (!$target) { fwrite(STDERR, "no ready QA company with projected dynamic recipient and responsibility fixture entity\n"); exit(1); }
+if (!$target) { fwrite(STDERR, "no ready QA company with two projected recipients including a dynamic role\n"); exit(1); }
 $companyId = (int)$target['row']['id'];
 $ownerRoleId = (int)$target['row']['owner_role_id'];
 $foreign = $pdo->prepare(
@@ -325,50 +357,67 @@ try {
     );
     if (!($created['account_created'] ?? false)) throw new RuntimeException('QA account unexpectedly reused existing identity');
     $tenant = $target['tenant'];
-    $fixtureEntity = $target['fixture_entity'];
-    $entityType = (string)$fixtureEntity['entity_type'];
-    $entityId = (int)$fixtureEntity['entity_id'];
-    $originalStmt = $tenant->prepare(
-        'SELECT membership_id,assigned_by_membership_id,created_at,updated_at FROM entity_responsibilities '
-        . 'WHERE entity_type=? AND entity_id=? LIMIT 1'
-    );
-    $originalStmt->execute([$entityType, $entityId]);
-    $original = $originalStmt->fetch(PDO::FETCH_ASSOC);
+    $contractorName = 'QA Functional Contractor ' . $runId;
+    $contractorInn = '99' . str_pad((string)(((int)$runId) % 10000000000), 10, '0', STR_PAD_LEFT);
+    $collision = $tenant->prepare('SELECT COUNT(*) FROM contractors WHERE name=? OR inn=?');
+    $collision->execute([$contractorName, $contractorInn]);
+    if ((int)$collision->fetchColumn() !== 0) {
+        throw new RuntimeException('QA contractor fixture namespace collision');
+    }
     $state = [
         'account_id'=>(int)$created['account_id'], 'membership_id'=>(int)$created['membership_id'],
         'company_id'=>$companyId, 'normalized_login'=>App\Service\IdentityNormalizer::login($login),
         'foreign_membership_id'=>$foreignMembershipId,
-        'responsibility_fixture' => [
-            'entity_type' => $entityType,
-            'entity_id' => $entityId,
-            'baseline_membership_id' => (int)$target['baseline_recipient']['membership_id'],
-            'dynamic_membership_id' => (int)$target['dynamic_recipient']['membership_id'],
-            'original' => $original !== false ? $original : null,
+        'qa_contractor_fixture' => [
+            'id' => 0,
+            'name' => $contractorName,
+            'inn' => $contractorInn,
         ],
     ];
-    // Persist exact pre-run responsibility state before mutating the tenant fixture.
+    // Persist recovery identity and contractor namespace before creating any tenant fixture row.
     $stateJson = json_encode($state, JSON_THROW_ON_ERROR);
     if (file_put_contents($stateFile, $stateJson, LOCK_EX) === false || !chmod($stateFile, 0600)) {
         throw new RuntimeException('QA identity/fixture state persistence failed');
     }
+    $insertContractor = $tenant->prepare(
+        "INSERT INTO contractors (name,inn,status) VALUES (?,?,'active')"
+    );
+    $insertContractor->execute([$contractorName, $contractorInn]);
+    $entityId = (int)$tenant->lastInsertId();
+    if ($entityId <= 0) {
+        throw new RuntimeException('QA contractor fixture insert did not return an id');
+    }
+    $state['qa_contractor_fixture']['id'] = $entityId;
+    $state['responsibility_fixture'] = [
+        'entity_type' => 'contractor',
+        'entity_id' => $entityId,
+        'baseline_membership_id' => (int)$target['baseline_recipient']['membership_id'],
+        'dynamic_membership_id' => (int)$target['dynamic_recipient']['membership_id'],
+        'original' => null,
+    ];
+    // Persist the concrete contractor id before creating the responsibility baseline.
+    $stateJson = json_encode($state, JSON_THROW_ON_ERROR);
+    if (file_put_contents($stateFile, $stateJson, LOCK_EX) === false || !chmod($stateFile, 0600)) {
+        throw new RuntimeException('QA contractor fixture state update failed');
+    }
     $fixture = $tenant->prepare(
         'INSERT INTO entity_responsibilities(entity_type,entity_id,membership_id,assigned_by_membership_id) '
-        . 'VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE '
-        . 'membership_id=VALUES(membership_id),assigned_by_membership_id=VALUES(assigned_by_membership_id),updated_at=NOW()'
+        . 'VALUES(?,?,?,?)'
     );
     $fixture->execute([
-        $entityType,
+        'contractor',
         $entityId,
         (int)$target['baseline_recipient']['membership_id'],
         (int)$created['membership_id'],
     ]);
-    if (App\Service\EntityResponsibilityService::effectiveBaseMembershipId($tenant, $entityType, $entityId)
+    if (App\Service\EntityResponsibilityService::effectiveBaseMembershipId($tenant, 'contractor', $entityId)
         !== (int)$target['baseline_recipient']['membership_id']) {
         throw new RuntimeException('QA responsibility fixture baseline readback failed');
     }
     $payload = base64_encode(json_encode([[ 'role'=>'OWNER', 'username'=>$login, 'password'=>$password ]], JSON_THROW_ON_ERROR));
     echo 'QA_CREDENTIALS_B64=' . $payload . PHP_EOL;
     echo 'QA_FOREIGN_MEMBERSHIP_ID=' . $foreignMembershipId . PHP_EOL;
+    echo 'QA_CONTRACTOR_FIXTURE_READY=YES' . PHP_EOL;
     echo 'QA_RESPONSIBILITY_FIXTURE_READY=YES' . PHP_EOL;
     echo 'QA_IDENTITY_CREATED=YES' . PHP_EOL;
 } catch (Throwable $e) {
