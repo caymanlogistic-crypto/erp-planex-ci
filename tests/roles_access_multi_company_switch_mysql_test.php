@@ -10,13 +10,14 @@ use App\Service\AccountAuthenticationService;
 use App\Service\CompanyLandingPageService;
 use App\Service\CompanyMembershipService;
 use App\Service\CompanySwitchService;
+use App\Service\LegacySessionIdentityUpgradeService as SessionBridge;
 
 $root = dirname(__DIR__);
 foreach ([
     '/app/Security/AccessStateProvider.php','/app/Security/AccessRequestContext.php','/app/Security/MembershipAccessSnapshot.php',
     '/app/Security/EffectiveAccess.php','/app/Security/PageRegistry.php','/app/Security/EffectiveAccessResolver.php','/app/Security/PdoAccessStateProvider.php',
     '/app/Service/IdentityNormalizer.php','/app/Service/AccountAuthenticationService.php','/app/Service/CompanyMembershipService.php',
-    '/app/Service/CompanySwitchService.php','/app/Service/CompanyLandingPageService.php',
+    '/app/Service/CompanySwitchService.php','/app/Service/CompanyLandingPageService.php','/app/Service/LegacySessionIdentityUpgradeService.php',
 ] as $file) require_once $root . $file;
 
 $host=getenv('PLANEX_SCHEMA_DB_HOST')?:'127.0.0.1';
@@ -63,13 +64,14 @@ $authService=new AccountAuthenticationService($pdo);
 $switchService=new CompanySwitchService($pdo);
 $landing=new CompanyLandingPageService($pdo,$registry);
 $membershipService=new CompanyMembershipService($pdo);
+$sessionBridge=new SessionBridge($pdo,$provider);
 
 $auth=$authService->authenticate('qa-multi',$pass);
 $ok($auth!==null && count($auth['memberships'])===2,'one global account did not authenticate with two memberships');
 $ok((int)$auth['memberships'][0]['company_id']===10 && (int)$auth['memberships'][1]['company_id']===20,'membership login order is not deterministic A then B');
 $session=[];
 $authService->establishSession($session,$auth,null);
-$ok((int)$session['company_id']===10,'login did not start in company A');
+$ok((int)$session['company_id']===10 && (int)($session['user']['company_id']??0)===10,'login did not start in a coherent company A session');
 $accessA=$resolver->resolve(AccessRequestContext::fromSession($session));
 $ok($accessA->isActive() && $accessA->isSystemOwner(),'company A owner access missing');
 $ok($landing->pathForAccount(100,10)==='/company/dashboard','company A owner landing mismatch');
@@ -78,8 +80,11 @@ $companies=$membershipService->activeCompaniesForAccount(100);
 $ok(count($companies)===2 && (int)$companies[0]['id']===10 && (int)$companies[1]['id']===20,'company switch options are not exactly the two active memberships');
 
 $session['role_code']='company_owner'; $session['membership_id']=11; $session['role_id']=1; $session['permissions']=['legacy']; $session['data_scopes']=['legacy'];
+$session['user']['role_code']='company_owner'; $session['user']['membership_id']=11; $session['user']['role_id']=1; $session['user']['permissions']=['legacy']; $session['user']['data_scopes']=['legacy'];
 $switchService->switch($session,20);
-$ok((int)$session['company_id']===20 && !isset($session['role_code'],$session['membership_id'],$session['role_id'],$session['permissions'],$session['data_scopes']),'switch A->B did not clear stale authority');
+$ok((int)$session['company_id']===20 && (int)($session['user']['company_id']??0)===20 && (int)($session['user']['account_id']??0)===100 && (int)($session['user']['user_id']??0)===100,'switch A->B did not synchronize nested global identity');
+$ok(!isset($session['role_code'],$session['membership_id'],$session['role_id'],$session['permissions'],$session['data_scopes'],$session['user']['role_code'],$session['user']['membership_id'],$session['user']['role_id'],$session['user']['permissions'],$session['user']['data_scopes']),'switch A->B did not clear stale authority');
+$ok($sessionBridge->upgrade($session)===SessionBridge::CURRENT,'next request rejected coherent A->B switched session');
 $accessB=$resolver->resolve(AccessRequestContext::fromSession($session));
 $ok($accessB->isActive() && !$accessB->isSystemOwner(),'company B resolved wrong membership role');
 $ok($landing->pathForAccount(100,20)==='/company/clients','company B default landing mismatch');
@@ -91,7 +96,8 @@ $ok((int)$pdo->query("SELECT COUNT(*) FROM membership_data_scope_overrides WHERE
 
 $switchService->switch($session,10);
 $accessARestored=$resolver->resolve(AccessRequestContext::fromSession($session));
-$ok((int)$session['company_id']===10 && $accessARestored->isSystemOwner(),'switch B->A did not restore company A membership authority');
+$ok((int)$session['company_id']===10 && (int)($session['user']['company_id']??0)===10 && $accessARestored->isSystemOwner(),'switch B->A did not restore coherent company A membership authority');
+$ok($sessionBridge->upgrade($session)===SessionBridge::CURRENT,'next request rejected coherent B->A switched session');
 $ok($landing->pathForAccount(100,10)==='/company/dashboard' && $accessARestored->canAccessPage('company.roles_access'),'company A landing/menu state did not restore');
 $ok((int)$pdo->query("SELECT COUNT(*) FROM membership_page_overrides WHERE membership_id=12 AND page_key='company.contractors' AND effect='allow'")->fetchColumn()===1,'company B page override was mutated by switch');
 $ok((int)$pdo->query("SELECT COUNT(*) FROM membership_data_scope_overrides WHERE membership_id=12 AND entity_type='contractor' AND scope='own'")->fetchColumn()===1,'company B data override was mutated by switch');

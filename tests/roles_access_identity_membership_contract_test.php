@@ -181,6 +181,8 @@ expect(str_contains($roleSource, 'Сначала назначьте им дру�
 expect(str_contains($switchSource, "\$session['account_id']"), 'switch must use global account id');
 expect(!str_contains($switchSource, "\$session['role_id'] ="), 'switch must not cache role id');
 expect(str_contains($switchSource, "\$session['role_code']"), 'switch must clear derived compatibility role for the next company');
+expect(str_contains($switchSource, "\$session['user']['company_id'] = \$companyId"), 'switch must synchronize nested compatibility company context');
+expect(str_contains($switchSource, "\$session['user']['account_id'] = (int) \$accountId") && str_contains($switchSource, "\$session['user']['user_id'] = (int) \$accountId"), 'switch must keep nested compatibility identity on the global account');
 expect(str_contains($authSource, "unset(\$session['role_code']"), 'global login must not cache company role');
 expect(str_contains($authControllerSource, 'AccessStateProvider'), 'global auth must be gated by the access-state provider');
 expect(str_contains($authControllerSource, 'tenant-local'), 'legacy tenant auth bypass guard missing');
