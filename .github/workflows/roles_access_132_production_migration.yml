@@ -144,6 +144,7 @@ jobs:
           printf 'DEPLOYED_BEFORE=%s\n' "$DEPLOYED" >> "$GITHUB_ENV"
           "${SCP[@]}" scripts/roles_access_apply_132.php "$SSH_USER@$SSH_HOST:/tmp/roles_access_apply132_${GITHUB_RUN_ID}.php"
           "${SCP[@]}" scripts/roles_access_verify_132.php "$SSH_USER@$SSH_HOST:/tmp/roles_access_verify132_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" scripts/roles_access_013_schema_proof.php "$SSH_USER@$SSH_HOST:/tmp/roles_access_013_schema_proof.php"
           "${SCP[@]}" database/migrations/014_add_role_default_page.sql "$SSH_USER@$SSH_HOST:/tmp/roles_access_014_${GITHUB_RUN_ID}.sql"
           "${SCP[@]}" database/migrations-local/132_split_assignment_and_responsibility.sql "$SSH_USER@$SSH_HOST:/tmp/roles_access_132_${GITHUB_RUN_ID}.sql"
 
@@ -165,7 +166,12 @@ jobs:
           m=re.search(r'^ROLES_ACCESS_132_SNAPSHOT=(.+)$',text,re.M)
           if not m: raise SystemExit('before snapshot missing')
           d=json.loads(m.group(1)); c=d['central']
-          if c['migration_013']!=1: raise SystemExit('central migration 013 prerequisite missing')
+          if c['central_013_shape_complete']!=1:
+              raise SystemExit('central migration 013 factual schema prerequisite incomplete: '+','.join(c.get('central_013_shape_missing',[])))
+          if c['central_013_provenance'] not in ('journaled','historical_shape'):
+              raise SystemExit('central migration 013 provenance unresolved')
+          if c['migration_013']==0 and c['central_013_provenance']!='historical_shape':
+              raise SystemExit('unjournaled central 013 must be proven by historical schema shape')
           absent=(c['migration_014']==0 and c['default_page_column']==0 and c['default_page_index']==0)
           for t in d['tenants']:
               if t['migration_131']!=1: raise SystemExit(f"company {t['company_id']}: migration 131 prerequisite missing")
@@ -189,6 +195,7 @@ jobs:
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
             "PLANEX_ROOT='$LIVE_ROOT' PLANEX_CENTRAL_MIGRATION_PATH='/tmp/roles_access_014_${GITHUB_RUN_ID}.sql' PLANEX_TENANT_MIGRATION_PATH='/tmp/roles_access_132_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/roles_access_apply132_${GITHUB_RUN_ID}.php' --apply" | tee roles_access_132_apply.txt
+          grep -Eq '^ROLES_ACCESS_013_PREREQUISITE=(journaled|historical_shape)$' roles_access_132_apply.txt
           grep -q '^ROLES_ACCESS_014_OK ' roles_access_132_apply.txt
           grep -q '^ROLES_ACCESS_132_OK ' roles_access_132_apply.txt
 
@@ -329,7 +336,7 @@ jobs:
         run: |
           if [ -f "$HOME/.ssh/roles_access_132_key" ]; then
             ssh -p "$SSH_PORT" -i "$HOME/.ssh/roles_access_132_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
-              "rm -f '/tmp/roles_access_apply132_${GITHUB_RUN_ID}.php' '/tmp/roles_access_verify132_${GITHUB_RUN_ID}.php' '/tmp/roles_access_014_${GITHUB_RUN_ID}.sql' '/tmp/roles_access_132_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
+              "rm -f '/tmp/roles_access_apply132_${GITHUB_RUN_ID}.php' '/tmp/roles_access_verify132_${GITHUB_RUN_ID}.php' '/tmp/roles_access_013_schema_proof.php' '/tmp/roles_access_014_${GITHUB_RUN_ID}.sql' '/tmp/roles_access_132_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
           fi
           rm -f "$HOME/.ssh/roles_access_132_key"
           rm -rf "${SSH_CONTROL_DIR:-}"

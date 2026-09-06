@@ -15,6 +15,7 @@ if ($root === '' || !is_file($root . '/.env') || !is_file($root . '/bootstrap/ap
 $config = require $root . '/bootstrap/app.php';
 require_once $root . '/app/Support/crypto_helper.php';
 require_once $root . '/app/Support/company_database.php';
+require_once __DIR__ . '/roles_access_013_schema_proof.php';
 
 $centralCfg = $config['database'];
 $central = new PDO(
@@ -62,13 +63,18 @@ $hashRows = static function(PDO $pdo, string $sql): string {
 };
 
 $defaultCol=$columnExists($central,'company_roles','default_page_key');
+$central013Proof=rolesAccessCentral013SchemaProof($central);
+$central013Journal=$migrationExists($central,'013_create_roles_access.sql');
 $centralSnapshot=[
     'db'=>(string)$central->query('SELECT DATABASE()')->fetchColumn(),
     'active_companies'=>(int)$central->query("SELECT COUNT(*) FROM companies WHERE status='active' AND db_identifier IS NOT NULL AND db_identifier<>''")->fetchColumn(),
     'company_roles'=>(int)$central->query('SELECT COUNT(*) FROM company_roles')->fetchColumn(),
     'company_memberships'=>(int)$central->query('SELECT COUNT(*) FROM company_memberships')->fetchColumn(),
     'role_core_hash'=>$hashRows($central,"SELECT id,company_id,name,normalized_name,system_key,is_system FROM company_roles ORDER BY id"),
-    'migration_013'=>$migrationExists($central,'013_create_roles_access.sql'),
+    'migration_013'=>$central013Journal,
+    'central_013_shape_complete'=>$central013Proof['complete'] ? 1 : 0,
+    'central_013_shape_missing'=>$central013Proof['missing'],
+    'central_013_provenance'=>$central013Journal === 1 ? 'journaled' : ($central013Proof['complete'] ? 'historical_shape' : 'missing'),
     'migration_014'=>$migrationExists($central,'014_add_role_default_page.sql'),
     'default_page_column'=>$defaultCol,
     'default_page_index'=>$indexExists($central,'company_roles','idx_company_roles_default_page'),
