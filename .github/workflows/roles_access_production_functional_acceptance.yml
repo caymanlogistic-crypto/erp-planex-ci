@@ -1,0 +1,123 @@
+name: Roles Access Production Functional Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact current canonical SHA already deployed to /erpv2
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: roles-access-production-functional-acceptance
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  RESULT_DIR: roles_access_functional_acceptance_result
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+
+      - name: Require exact canonical and exact deployed SHA
+        shell: bash
+        env:
+          SHA: ${{ inputs.source_sha }}
+          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SHA"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/roles_functional"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/roles_functional" "$HOME/.ssh/known_hosts"
+          marker="$(ssh -p "$PORT" -i "$HOME/.ssh/roles_functional" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt')"
+          test "$marker" = "$SHA"
+          echo "EXACT_CANONICAL_DEPLOYED_SHA=$SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install Playwright Chromium
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Run authenticated reversible production acceptance
+        env:
+          P12_CREDENTIALS_B64: ${{ secrets.P11_RUNTIME_CREDENTIALS_B64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${P12_CREDENTIALS_B64:-}"
+          node .github/roles-access/production_functional_acceptance.js | tee roles_access_production_functional_acceptance.txt
+
+      - name: Require complete functional evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in \
+            REAL_LOGIN=PASS \
+            DEFAULT_LANDING=PASS \
+            EFFECTIVE_MENU=PASS \
+            ROLES_ACCESS=PASS \
+            ROLES_READBACK=PASS \
+            PERSONAL_OVERRIDES_READBACK=PASS \
+            PERSONAL_OVERRIDES_RESTORE=PASS \
+            ASSIGNMENTS_TAB=PASS \
+            RESPONSIBLE_ASSIGNMENTS=PASS \
+            RESPONSIBILITY_RECIPIENT_SCOPE=PASS \
+            RESPONSIBILITY_TRANSFER=PASS \
+            RESPONSIBILITY_BACKEND_READBACK=PASS \
+            RESPONSIBILITY_RESTORE=PASS \
+            QA_RESIDUE=0 \
+            CROSS_COMPANY_LEAKAGE=NO \
+            PRODUCTION_FUNCTIONAL_ACCEPTANCE=PASS; do
+            grep -q "^${marker}$" roles_access_production_functional_acceptance.txt
+          done
+
+      - name: Publish exact-SHA functional acceptance status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" \
+            -f state=success \
+            -f context=erpv2/roles-access-functional \
+            -f description='Production functional acceptance verified'
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/roles_functional"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: roles_access_functional_${{ inputs.source_sha }}
+          path: |
+            roles_access_production_functional_acceptance.txt
+            roles_access_functional_acceptance_result/
+          if-no-files-found: warn
+          retention-days: 30

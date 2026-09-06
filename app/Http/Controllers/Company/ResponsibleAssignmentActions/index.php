@@ -74,12 +74,13 @@
         try { $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch(); }
         catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/006_create_company_crews.sql'))); }
 
-        // Load active logists for dropdowns
-        $logists = $localPdo->query(
-            "SELECT id, full_name, login FROM users
-             WHERE role_code = 'logist' AND status = 'active'
-             ORDER BY full_name"
-        )->fetchAll(PDO::FETCH_ASSOC);
+        // Central membership/role state is authoritative. Tenant role_code is
+        // compatibility metadata only and must not define responsibility eligibility.
+        $logists = \App\Service\EntityResponsibilityService::eligibleRecipients(
+            $pdo,
+            $localPdo,
+            $companyId
+        );
 
         // Load items based on active tab
         switch ($activeTab) {

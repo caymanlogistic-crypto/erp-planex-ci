@@ -48,7 +48,10 @@ $assert(str_contains($explicit, "'membership_ids'=>\$normalized") || str_contain
 $assert(str_contains($responsibility, 'EntityResponsibilityService::transfer'), 'Responsibility POST must mutate responsibility projection.');
 $assert(!str_contains($responsibility, 'EntityAssignmentService::replace'), 'Responsibility transfer must not rewrite explicit assignments.');
 $assert(!str_contains($responsibility, 'UPDATE contractors SET created_by_user_id') && !str_contains($responsibility, 'UPDATE contractors SET created_by_membership_id'), 'Responsibility transfer must not rewrite creator history.');
-$assert(str_contains($responsibility, 'WHERE id=? AND company_id=?') || str_contains($responsibility, 'WHERE id=? AND company_id=? AND'), 'Responsibility target membership must be company-isolated.');
+$assert(str_contains($responsibility, 'eligibleRecipientMembershipId'), 'Responsibility target must use shared recipient eligibility.');
+$entityResponsibility = (string)file_get_contents($root . '/app/Service/EntityResponsibilityService.php');
+$assert(str_contains($entityResponsibility, 'WHERE m.company_id=?') && str_contains($entityResponsibility, "m.status='active'") && str_contains($entityResponsibility, "a.status='active'"), 'Responsibility recipient eligibility must be company-isolated and active in central membership/account state.');
+$assert(str_contains($entityResponsibility, 'membership_id IS NOT NULL') && str_contains($entityResponsibility, 'deleted_at IS NULL'), 'Responsibility recipient eligibility must require a current tenant membership projection.');
 
 $entrypoint = (string)file_get_contents($root . '/app/Support/entrypoint_dependencies.php');
 foreach (['EntityAssignmentService.php','EntityResponsibilityService.php','ResponsibleAssignmentService.php'] as $dependency) {
