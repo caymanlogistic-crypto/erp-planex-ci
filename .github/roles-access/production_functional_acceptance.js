@@ -1,6 +1,7 @@
 const fs = require('fs');
 const crypto = require('crypto');
 const { chromium } = require('playwright');
+const { execFileSync } = require('child_process');
 
 const base = 'https://plan-ex.ru/erpv2';
 const out = process.env.RESULT_DIR || 'roles_access_functional_acceptance_result';
@@ -8,10 +9,25 @@ const encodedCredentials = process.env.P12_CREDENTIALS_B64 || '';
 const credentials = encodedCredentials ? JSON.parse(Buffer.from(encodedCredentials, 'base64').toString('utf8')) : [];
 const runId = process.env.GITHUB_RUN_ID || String(Date.now());
 const suppliedForeignMembershipId = Number(process.env.QA_FOREIGN_MEMBERSHIP_ID || 0);
+const suppliedOwnerMembershipId = Number(process.env.QA_OWNER_MEMBERSHIP_ID || 0);
 const suppliedOwnerTenantUserId = Number(process.env.QA_OWNER_TENANT_USER_ID || 0);
 const suppliedDynamicMembershipId = Number(process.env.QA_DYNAMIC_MEMBERSHIP_ID || 0);
 const suppliedDynamicTenantUserId = Number(process.env.QA_DYNAMIC_TENANT_USER_ID || 0);
+const suppliedClientId = Number(process.env.QA_CLIENT_ID || 0);
 const suppliedContractorId = Number(process.env.QA_CONTRACTOR_ID || 0);
+const suppliedVehicleUnitId = Number(process.env.QA_VEHICLE_UNIT_ID || 0);
+const suppliedDriverId = Number(process.env.QA_DRIVER_ID || 0);
+const assignmentFixtureIds = { client:suppliedClientId, contractor:suppliedContractorId, vehicle_unit:suppliedVehicleUnitId, driver:suppliedDriverId };
+const assignmentPassMarkers = {
+  client:'REAL_ASSIGNMENT_CLIENT=PASS',
+  contractor:'REAL_ASSIGNMENT_CONTRACTOR=PASS',
+  vehicle_unit:'REAL_ASSIGNMENT_VEHICLE=PASS',
+  driver:'REAL_ASSIGNMENT_DRIVER=PASS',
+};
+const qaSshHost = String(process.env.QA_SSH_HOST || '');
+const qaSshPort = String(process.env.QA_SSH_PORT || '');
+const qaSshUser = String(process.env.QA_SSH_USER || '');
+const qaPlanexRoot = String(process.env.QA_PLANEX_ROOT || '');
 fs.mkdirSync(out, { recursive: true });
 
 const marks = [];
@@ -37,6 +53,25 @@ function appPath(url) {
   const p = new URL(url).pathname;
   return p.startsWith('/erpv2') ? (p.slice('/erpv2'.length) || '/') : p;
 }
+function shellQuote(value) { return "'" + String(value).replace(/'/g, "'\\''") + "'"; }
+function assignmentSnapshot() {
+  must(/^\d+$/.test(runId), 'QA run id is invalid for assignment snapshot');
+  must(qaSshHost && qaSshPort && qaSshUser && qaPlanexRoot, 'QA SSH assignment snapshot channel is unavailable');
+  const key = `${process.env.HOME || ''}/.ssh/roles_functional`;
+  const remote = `/tmp/roles_access_func_identity_${runId}.php`;
+  const command = `PLANEX_ROOT=${shellQuote(qaPlanexRoot)} QA_RUN_ID=${shellQuote(runId)} /usr/bin/php8.5 ${shellQuote(remote)} assignment-snapshot`;
+  const output = execFileSync('ssh', [
+    '-p', qaSshPort, '-i', key, '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes',
+    `${qaSshUser}@${qaSshHost}`, command
+  ], {encoding:'utf8', maxBuffer:1024*1024});
+  const line = String(output).split(/\r?\n/).find(x => x.startsWith('QA_ASSIGNMENT_SNAPSHOT_B64='));
+  must(line, 'assignment DB snapshot marker missing');
+  const snapshot = JSON.parse(Buffer.from(line.slice('QA_ASSIGNMENT_SNAPSHOT_B64='.length), 'base64').toString('utf8'));
+  must(snapshot && snapshot.fixtures && typeof snapshot.fixtures === 'object', 'assignment DB snapshot payload invalid');
+  return snapshot;
+}
+function exactJson(value) { return JSON.stringify(stableObject(value)); }
+function assignmentKindRows(fixture, kind) { return (fixture.assignments || []).filter(row => String(row.assignment_kind) === kind); }
 async function api(page, method, path, body) {
   return page.evaluate(async x => {
     const options = { method: x.method, headers: { Accept: 'application/json' }, credentials: 'same-origin' };
@@ -75,6 +110,37 @@ async function visibleSidebarPaths(page) {
     return p.startsWith('/erpv2') ? (p.slice('/erpv2'.length) || '/') : p;
   }))].sort());
 }
+async function navigationBadgeProof(page) {
+  await page.goto(base + '/company/dashboard', {waitUntil:'networkidle',timeout:60000});
+  const badges = page.locator('.sidebar .nav-count.is-alert');
+  const count = await badges.count();
+  let evidence = null;
+  for (let i=0;i<count;i++) {
+    const badge = badges.nth(i);
+    if (!(await badge.isVisible())) continue;
+    const text = String(await badge.innerText()).trim();
+    if (!/^\d+\+?$/.test(text) || Number.parseInt(text,10) <= 0) continue;
+    const meta = await badge.evaluate(el => {
+      const style = getComputedStyle(el);
+      const holder = el.closest('a.nav-item,a.nav-sub-item,.nav-item.is-parent');
+      return {
+        text: String(el.textContent || '').trim(),
+        title: String(el.getAttribute('title') || ''),
+        holder: String(holder ? holder.textContent || '' : '').replace(/\s+/g,' ').trim(),
+        href: holder && holder.tagName === 'A' ? holder.getAttribute('href') || '' : '',
+        display: style.display, visibility: style.visibility, opacity: style.opacity,
+      };
+    });
+    if (meta.display === 'none' || meta.visibility === 'hidden' || Number(meta.opacity) === 0) continue;
+    evidence = meta; break;
+  }
+  must(evidence && Number.parseInt(evidence.text,10) > 0, 'no visible nonzero production navigation badge/counter found');
+  mark('NAVIGATION_BADGE_NONZERO=PASS');
+  mark(`NAVIGATION_BADGE_VALUE=${String(evidence.text)}`);
+  mark(`NAVIGATION_BADGE_CONTEXT=${String(evidence.holder || evidence.title).replace(/[\r\n=]+/g,' ').slice(0,160)}`);
+  await page.screenshot({path:`${out}/navigation-badge-nonzero.png`,fullPage:true});
+}
+
 async function loginWithCredential(browser, credential) {
   const context = await browser.newContext({ viewport:{width:1440,height:1000}, locale:'ru-RU' });
   const page = await context.newPage();
@@ -204,6 +270,111 @@ async function assignmentTabProof(page, state, membershipId) {
   for (const key of ['client','contractor','vehicle_unit','driver']) must(Array.isArray((backend.payload.entities||{})[key]), `Закрепления missing ${key}`);
   mark('ASSIGNMENTS_TAB=PASS');
 }
+
+async function assignmentBackendEntity(page, membershipId, type, entityId) {
+  const backend = await api(page,'GET',`/company/roles-access/assignments?membership_id=${Number(membershipId)}`);
+  must(backend.status===200 && backend.payload.success===true, `${type}: assignment backend read failed`);
+  const entity = ((backend.payload.entities||{})[type]||[]).find(x=>Number(x.id)===Number(entityId));
+  must(entity, `${type}: exact run-scoped assignment entity missing from backend readback`);
+  return entity;
+}
+
+async function realAssignmentCheckboxPost(page, type, entityId, checked) {
+  const checkbox = page.locator(`[data-assignment-type="${type}"][data-assignment-id="${Number(entityId)}"]`);
+  must(await checkbox.count()===1, `${type}: exact run-scoped assignment checkbox missing`);
+  await checkbox.waitFor({state:'visible',timeout:30000});
+  const responsePromise = page.waitForResponse(response =>
+    response.url() === base + '/company/roles-access/assignments/reassign'
+      && response.request().method() === 'POST', {timeout:60000});
+  if (checked) await checkbox.check(); else await checkbox.uncheck();
+  const response = await responsePromise;
+  let payload = {};
+  try { payload = await response.json(); } catch (_) {}
+  must(response.status()===200 && payload && payload.success===true, `${type}: real assignment POST failed with HTTP ${response.status()}`);
+  for (let i=0;i<120;i++) {
+    if (!(await checkbox.isDisabled())) break;
+    await page.waitForTimeout(50);
+  }
+  must(!(await checkbox.isDisabled()), `${type}: checkbox remained locked after real POST`);
+  must((await checkbox.isChecked())===checked, `${type}: checkbox state differs from server-confirmed write`);
+  return payload;
+}
+
+function validateManualAssignmentDelta(beforeFixture, afterFixture, type) {
+  const protectedCreatorFields = ['created_by_user_id','created_by_membership_id','created_by_role'];
+  for (const field of protectedCreatorFields) {
+    must(String(beforeFixture.entity?.[field] ?? '')===String(afterFixture.entity?.[field] ?? ''), `${type}: ${field} changed during manual assignment`);
+  }
+  must(exactJson(beforeFixture.entity)===exactJson(afterFixture.entity), `${type}: entity row changed during manual assignment`);
+  must(exactJson(beforeFixture.responsibilities||[])===exactJson(afterFixture.responsibilities||[]), `${type}: entity_responsibilities changed during manual assignment`);
+  const beforeCreator=assignmentKindRows(beforeFixture,'creator_auto');
+  const afterCreator=assignmentKindRows(afterFixture,'creator_auto');
+  const beforeLegacy=assignmentKindRows(beforeFixture,'legacy_unclassified');
+  const afterLegacy=assignmentKindRows(afterFixture,'legacy_unclassified');
+  const beforeManual=assignmentKindRows(beforeFixture,'manual');
+  const afterManual=assignmentKindRows(afterFixture,'manual');
+  must(exactJson(beforeCreator)===exactJson(afterCreator), `${type}: creator_auto rows changed`);
+  must(exactJson(beforeLegacy)===exactJson(afterLegacy), `${type}: legacy_unclassified rows changed`);
+  must(beforeCreator.length===1 && beforeLegacy.length===1 && beforeManual.length===0, `${type}: exact BEFORE provenance baseline invalid`);
+  must(afterManual.length===1, `${type}: real POST did not create exactly one manual row`);
+  must(Number(afterManual[0].membership_id)===suppliedDynamicMembershipId, `${type}: manual row membership mismatch`);
+  must(Number(afterManual[0].assigned_by_membership_id)===suppliedOwnerMembershipId, `${type}: manual row actor mismatch`);
+}
+
+async function realManualAssignmentsProof(page, state, membershipId) {
+  must(suppliedOwnerMembershipId>0 && suppliedDynamicMembershipId>0, 'assignment proof membership bindings missing');
+  for (const [type,id] of Object.entries(assignmentFixtureIds)) must(Number(id)>0, `assignment fixture id missing for ${type}`);
+  await assignmentTabProof(page,state,membershipId);
+  const allBefore = assignmentSnapshot();
+  fs.writeFileSync(`${out}/assignments_before_all.json`, JSON.stringify(allBefore,null,2)+'\n');
+  const order=['client','contractor','vehicle_unit','driver'];
+  for (const type of order) {
+    const entityId=Number(assignmentFixtureIds[type]);
+    const before = assignmentSnapshot();
+    const beforeFixture = before.fixtures[type];
+    must(beforeFixture, `${type}: exact BEFORE DB snapshot missing`);
+    fs.writeFileSync(`${out}/assignment_${type}_before.json`, JSON.stringify(beforeFixture,null,2)+'\n');
+    const beforeApi = await assignmentBackendEntity(page,membershipId,type,entityId);
+    must(beforeApi.explicit_assigned===false, `${type}: exact BEFORE unexpectedly has manual assignment`);
+    let changed=false;
+    try {
+      const post = await realAssignmentCheckboxPost(page,type,entityId,true);
+      changed=true;
+      must((post.membership_ids||[]).map(Number).includes(membershipId), `${type}: server success payload omitted selected membership`);
+      const afterApi = await assignmentBackendEntity(page,membershipId,type,entityId);
+      must(afterApi.explicit_assigned===true, `${type}: backend GET did not read back manual assignment`);
+      const after = assignmentSnapshot();
+      const afterFixture = after.fixtures[type];
+      fs.writeFileSync(`${out}/assignment_${type}_manual.json`, JSON.stringify(afterFixture,null,2)+'\n');
+      validateManualAssignmentDelta(beforeFixture,afterFixture,type);
+      for (const otherType of order) {
+        if (otherType === type) continue;
+        must(exactJson(after.fixtures[otherType])===exactJson(before.fixtures[otherType]), `${type}: real manual POST mutated unrelated ${otherType} fixture`);
+      }
+
+      const restorePost = await realAssignmentCheckboxPost(page,type,entityId,false);
+      changed=false;
+      must(!(restorePost.membership_ids||[]).map(Number).includes(membershipId), `${type}: restore server payload still contains selected membership`);
+      const restoredApi = await assignmentBackendEntity(page,membershipId,type,entityId);
+      must(restoredApi.explicit_assigned===false, `${type}: backend GET did not confirm manual restore`);
+      const restored = assignmentSnapshot();
+      fs.writeFileSync(`${out}/assignment_${type}_restored.json`, JSON.stringify(restored.fixtures[type],null,2)+'\n');
+      must(exactJson(restored.fixtures[type])===exactJson(beforeFixture), `${type}: exact DB BEFORE was not restored`);
+      must(exactJson(restored)===exactJson(before), `${type}: assignment restore changed another fixture`);
+      must(assignmentPassMarkers[type], `${type}: mandatory production proof marker missing`);
+      mark(assignmentPassMarkers[type]);
+    } finally {
+      if (changed) {
+        try { await realAssignmentCheckboxPost(page,type,entityId,false); } catch (e) { console.error(`CLEANUP ${type} manual restore failed:`, e.message); }
+      }
+    }
+  }
+  const final = assignmentSnapshot();
+  fs.writeFileSync(`${out}/assignments_restored_all.json`, JSON.stringify(final,null,2)+'\n');
+  must(exactJson(final)===exactJson(allBefore), 'assignment fixture set differs from exact BEFORE after all restores');
+  mark('ASSIGNMENT_RESTORE_DIFF=0');
+}
+
 async function responsibilityCandidate(page, activeMembershipIds, foreignMembershipId, state) {
   must(suppliedOwnerTenantUserId > 0, 'run-scoped owner tenant user id missing');
   must(suppliedContractorId > 0, 'run-scoped contractor id missing');
@@ -312,6 +483,7 @@ async function submitResponsibility(page, candidate, targetUserId) {
     must(JSON.stringify(actualOwnerGrantable)===JSON.stringify(expectedOwnerGrantable), 'owner sidebar differs from effective grantable pages');
     for (const ownerOnly of ['/company/roles-access','/company/responsible-assignments','/company/misc/production-calendar']) must(visible.includes(ownerOnly), `owner menu missing ${ownerOnly}`);
     mark('EFFECTIVE_MENU=PASS');
+    await navigationBadgeProof(page);
     await optionalSecondaryEffectiveMenu(browser, initialState);
 
     const foreignMembershipId = await crossCompanyProof(page, initialState);
@@ -367,7 +539,7 @@ async function submitResponsibility(page, candidate, targetUserId) {
     overridesChanged = false;
     mark('PERSONAL_OVERRIDES_RESTORE=PASS');
 
-    await assignmentTabProof(page, state, memberId);
+    await realManualAssignmentsProof(page, state, memberId);
 
     const activeMembershipIds = uniqInts((state.memberships||[]).filter(m=>m.status==='active').map(m=>m.id));
     responsibility = await responsibilityCandidate(page, activeMembershipIds, foreignMembershipId, state);

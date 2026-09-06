@@ -27,6 +27,11 @@ function qaRoleName(string $runId): string { return 'QA Functional Role ' . $run
 function qaForeignRoleName(string $runId): string { return 'QA Functional Foreign Role ' . $runId; }
 function qaContractorName(string $runId): string { return 'QA Functional Contractor ' . $runId; }
 function qaContractorInn(string $runId): string { return '99' . str_pad((string)(((int)$runId) % 10000000000), 10, '0', STR_PAD_LEFT); }
+function qaClientName(string $runId): string { return 'QA Functional Client ' . $runId; }
+function qaClientInn(string $runId): string { return '98' . str_pad((string)(((int)$runId) % 10000000000), 10, '0', STR_PAD_LEFT); }
+function qaDriverName(string $runId): string { return 'QA Functional Driver ' . $runId; }
+function qaDriverPhone(string $runId): string { return '+7998' . str_pad((string)(((int)$runId) % 10000000), 7, '0', STR_PAD_LEFT); }
+function qaVehiclePlate(string $runId): string { return 'QA' . str_pad((string)(((int)$runId) % 1000000000000), 12, '0', STR_PAD_LEFT); }
 
 function writeQaState(string $stateFile, array $state): void
 {
@@ -117,6 +122,112 @@ function cleanupQaContractorFixture(PDO $pdo, array $config, ?array $state, stri
     if ((int)$verify->fetchColumn() !== 0) throw new RuntimeException('QA contractor residue detected');
 }
 
+/** @return array<string,mixed> */
+function qaAssignmentSnapshot(PDO $pdo, array $config, array $state): array
+{
+    $companyId=(int)($state['company_id']??0);
+    $fixtures=$state['assignment_fixtures']??null;
+    if ($companyId<=0 || !is_array($fixtures)) throw new RuntimeException('QA assignment fixture state unavailable');
+    $tenant=tenantFor($pdo,$config,$companyId);
+    $tables=['client'=>'clients','contractor'=>'contractors','vehicle_unit'=>'vehicle_units','driver'=>'drivers'];
+    $snapshot=['company_id'=>$companyId,'fixtures'=>[]];
+    foreach ($tables as $type=>$table) {
+        $id=(int)($fixtures[$type]['id']??0);
+        if ($id<=0) throw new RuntimeException('QA assignment fixture id missing for '.$type);
+        $entity=$tenant->prepare("SELECT id,status,deleted_at,created_by_user_id,created_by_membership_id,created_by_role FROM `{$table}` WHERE id=? LIMIT 2");
+        $entity->execute([$id]);
+        $entityRows=$entity->fetchAll(PDO::FETCH_ASSOC);
+        if (count($entityRows)!==1) throw new RuntimeException('QA assignment fixture entity mismatch for '.$type);
+        $assign=$tenant->prepare("SELECT id,entity_type,entity_id,membership_id,assigned_by_membership_id,assignment_kind,created_at,updated_at FROM entity_assignments WHERE entity_type=? AND entity_id=? ORDER BY assignment_kind,membership_id,id");
+        $assign->execute([$type,$id]);
+        $responsibility=$tenant->prepare("SELECT entity_type,entity_id,membership_id,assigned_by_membership_id,created_at,updated_at FROM entity_responsibilities WHERE entity_type=? AND entity_id=? ORDER BY entity_type,entity_id");
+        $responsibility->execute([$type,$id]);
+        $snapshot['fixtures'][$type]=[
+            'entity'=>$entityRows[0],
+            'assignments'=>$assign->fetchAll(PDO::FETCH_ASSOC),
+            'responsibilities'=>$responsibility->fetchAll(PDO::FETCH_ASSOC),
+        ];
+    }
+    return $snapshot;
+}
+
+function emitQaAssignmentSnapshot(PDO $pdo, array $config, string $stateFile): void
+{
+    if (!is_file($stateFile)) throw new RuntimeException('QA state unavailable for assignment snapshot');
+    $state=json_decode((string)file_get_contents($stateFile),true,32,JSON_THROW_ON_ERROR);
+    $snapshot=qaAssignmentSnapshot($pdo,$config,$state);
+    echo 'QA_ASSIGNMENT_SNAPSHOT_B64='.base64_encode(json_encode($snapshot,JSON_THROW_ON_ERROR)).PHP_EOL;
+}
+
+function cleanupQaAssignmentFixtures(PDO $pdo, array $config, ?array $state, string $runId): void
+{
+    $companyId=(int)($state['company_id']??0);
+    if ($companyId<=0) return;
+    $tenant=tenantFor($pdo,$config,$companyId);
+    $ownerMembership=(int)($state['owner']['membership_id']??0);
+    $dynamicMembership=(int)($state['dynamic']['membership_id']??0);
+    $fixtures=is_array($state['assignment_fixtures']??null) ? $state['assignment_fixtures'] : [];
+
+    $resolved=[];
+    $lookups=[
+        'client'=>['table'=>'clients','sql'=>'SELECT id,name,inn FROM clients WHERE name=? OR inn=? ORDER BY id LIMIT 2','params'=>[qaClientName($runId),qaClientInn($runId)]],
+        'vehicle_unit'=>['table'=>'vehicle_units','sql'=>'SELECT id,plate_number FROM vehicle_units WHERE plate_number=? ORDER BY id LIMIT 2','params'=>[qaVehiclePlate($runId)]],
+        'driver'=>['table'=>'drivers','sql'=>'SELECT id,full_name,phone FROM drivers WHERE full_name=? OR phone=? ORDER BY id LIMIT 2','params'=>[qaDriverName($runId),qaDriverPhone($runId)]],
+    ];
+    foreach ($lookups as $type=>$spec) {
+        $q=$tenant->prepare($spec['sql']); $q->execute($spec['params']); $rows=$q->fetchAll(PDO::FETCH_ASSOC);
+        if (count($rows)>1) throw new RuntimeException('ambiguous QA assignment namespace for '.$type);
+        if ($rows!==[]) $resolved[$type]=(int)$rows[0]['id'];
+    }
+    $contractor=$tenant->prepare('SELECT id,name,inn FROM contractors WHERE name=? OR inn=? ORDER BY id LIMIT 2');
+    $contractor->execute([qaContractorName($runId),qaContractorInn($runId)]);
+    $contractorRows=$contractor->fetchAll(PDO::FETCH_ASSOC);
+    if (count($contractorRows)>1) throw new RuntimeException('ambiguous QA assignment namespace for contractor');
+    if ($contractorRows!==[]) $resolved['contractor']=(int)$contractorRows[0]['id'];
+
+    foreach ($resolved as $type=>$id) {
+        $expectedId=(int)($fixtures[$type]['id']??0);
+        if ($expectedId>0 && $expectedId!==$id) throw new RuntimeException('QA assignment fixture id mismatch for '.$type);
+        $a=$tenant->prepare('SELECT membership_id,assigned_by_membership_id,assignment_kind FROM entity_assignments WHERE entity_type=? AND entity_id=? ORDER BY id');
+        $a->execute([$type,$id]);
+        foreach ($a->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $kind=(string)$row['assignment_kind']; $membership=(int)$row['membership_id'];
+            $allowed=($kind==='creator_auto' && $membership===$ownerMembership)
+                || ($kind==='legacy_unclassified' && $membership===$dynamicMembership)
+                || ($kind==='manual' && $membership===$dynamicMembership);
+            if (!$allowed) throw new RuntimeException('unexpected QA assignment row during cleanup for '.$type);
+        }
+        $del=$tenant->prepare('DELETE FROM entity_assignments WHERE entity_type=? AND entity_id=?');
+        $del->execute([$type,$id]);
+    }
+
+    if (isset($resolved['client'])) {
+        $del=$tenant->prepare('DELETE FROM clients WHERE id=? AND name=? AND inn=?');
+        $del->execute([$resolved['client'],qaClientName($runId),qaClientInn($runId)]);
+        if ($del->rowCount()!==1) throw new RuntimeException('QA client cleanup mismatch');
+    }
+    if (isset($resolved['vehicle_unit'])) {
+        $del=$tenant->prepare('DELETE FROM vehicle_units WHERE id=? AND plate_number=?');
+        $del->execute([$resolved['vehicle_unit'],qaVehiclePlate($runId)]);
+        if ($del->rowCount()!==1) throw new RuntimeException('QA vehicle cleanup mismatch');
+    }
+    if (isset($resolved['driver'])) {
+        $del=$tenant->prepare('DELETE FROM drivers WHERE id=? AND full_name=? AND phone=?');
+        $del->execute([$resolved['driver'],qaDriverName($runId),qaDriverPhone($runId)]);
+        if ($del->rowCount()!==1) throw new RuntimeException('QA driver cleanup mismatch');
+    }
+
+    $checks=[
+        ['SELECT COUNT(*) FROM clients WHERE name=? OR inn=?',[qaClientName($runId),qaClientInn($runId)]],
+        ['SELECT COUNT(*) FROM vehicle_units WHERE plate_number=?',[qaVehiclePlate($runId)]],
+        ['SELECT COUNT(*) FROM drivers WHERE full_name=? OR phone=?',[qaDriverName($runId),qaDriverPhone($runId)]],
+    ];
+    foreach ($checks as [$sql,$params]) {
+        $q=$tenant->prepare($sql); $q->execute($params);
+        if ((int)$q->fetchColumn()!==0) throw new RuntimeException('QA assignment entity residue detected');
+    }
+}
+
 /** @return list<array<string,mixed>> */
 function qaAccounts(PDO $pdo, string $runId): array
 {
@@ -164,6 +275,7 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
 {
     $state=is_file($stateFile) ? json_decode((string)file_get_contents($stateFile),true,32,JSON_THROW_ON_ERROR) : [];
     restoreQaResponsibilityFixture($pdo,$config,$state);
+    cleanupQaAssignmentFixtures($pdo,$config,$state,$runId);
     cleanupQaContractorFixture($pdo,$config,$state,$runId);
 
     $accounts=qaAccounts($pdo,$runId);
@@ -226,6 +338,8 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
         if ((int)$projection->fetchColumn()!==0) throw new RuntimeException('QA tenant projection residue');
     }
     if (is_file($stateFile) && !unlink($stateFile)) throw new RuntimeException('QA state cleanup failed');
+    echo "ASSIGNMENT_QA_RESIDUE=0\n";
+    echo "QA_ASSIGNMENT_FIXTURE_RESIDUE=0\n";
     echo "QA_RESPONSIBILITY_FIXTURE_RESIDUE=0\n";
     echo "QA_CONTRACTOR_FIXTURE_RESIDUE=0\n";
     echo "QA_TENANT_PROJECTION_RESIDUE=0\n";
@@ -235,6 +349,7 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
 }
 
 if ($mode==='cleanup') { cleanupQaIdentity($pdo,$config,$stateFile,$runId); exit(0); }
+if ($mode==='assignment-snapshot') { emitQaAssignmentSnapshot($pdo,$config,$stateFile); exit(0); }
 if ($mode!=='create') { fwrite(STDERR,"unknown QA identity mode\n"); exit(1); }
 if (is_file($stateFile)) { fwrite(STDERR,"QA state already exists\n"); exit(1); }
 
@@ -253,7 +368,7 @@ foreach ($companies as $candidate) {
     if (!$company) continue;
     try {
         $tenant=(new App\Core\Database(companyDatabaseConfig($config,$company)))->connection();
-        foreach (['users','contractors','entity_responsibilities','entity_assignments'] as $table) $tenant->query("SELECT 1 FROM `{$table}` LIMIT 1");
+        foreach (['users','clients','contractors','vehicle_units','drivers','entity_responsibilities','entity_assignments'] as $table) $tenant->query("SELECT 1 FROM `{$table}` LIMIT 1");
     } catch (Throwable) { continue; }
     $target=['row'=>$candidate,'company'=>$company,'tenant'=>$tenant];
     break;
@@ -276,6 +391,12 @@ $state=[
     'foreign_role_id'=>0,
     'responsibility_fixture'=>null,
     'qa_contractor_fixture'=>['id'=>0,'name'=>qaContractorName($runId),'inn'=>qaContractorInn($runId)],
+    'assignment_fixtures'=>[
+        'client'=>['id'=>0,'name'=>qaClientName($runId),'inn'=>qaClientInn($runId)],
+        'contractor'=>['id'=>0,'name'=>qaContractorName($runId),'inn'=>qaContractorInn($runId)],
+        'vehicle_unit'=>['id'=>0,'plate_number'=>qaVehiclePlate($runId)],
+        'driver'=>['id'=>0,'full_name'=>qaDriverName($runId),'phone'=>qaDriverPhone($runId)],
+    ],
 ];
 writeQaState($stateFile,$state);
 
@@ -323,25 +444,73 @@ try {
     if ((int)($byMembership[(int)$owner['membership_id']]['id']??0)!==$ownerTenantUserId) throw new RuntimeException('QA owner is not eligible projected recipient');
     if ((int)($byMembership[(int)$dynamic['membership_id']]['id']??0)!==$dynamicTenantUserId) throw new RuntimeException('QA dynamic is not eligible projected recipient');
 
+    $clientName=qaClientName($runId); $clientInn=qaClientInn($runId);
+    $collision=$tenant->prepare('SELECT COUNT(*) FROM clients WHERE name=? OR inn=?');
+    $collision->execute([$clientName,$clientInn]);
+    if ((int)$collision->fetchColumn()!==0) throw new RuntimeException('QA client namespace collision');
+    $insert=$tenant->prepare("INSERT INTO clients (name,inn,status,created_by_user_id,created_by_membership_id,created_by_role) VALUES (?,?,'active',?,?,?)");
+    $insert->execute([$clientName,$clientInn,$ownerTenantUserId,(int)$owner['membership_id'],'company_owner']);
+    $clientId=(int)$tenant->lastInsertId();
+    if ($clientId<=0) throw new RuntimeException('QA client insert failed');
+    $state['assignment_fixtures']['client']['id']=$clientId; writeQaState($stateFile,$state);
+
     $contractorName=qaContractorName($runId); $contractorInn=qaContractorInn($runId);
     $collision=$tenant->prepare('SELECT COUNT(*) FROM contractors WHERE name=? OR inn=?');
     $collision->execute([$contractorName,$contractorInn]);
     if ((int)$collision->fetchColumn()!==0) throw new RuntimeException('QA contractor namespace collision');
-    $insert=$tenant->prepare("INSERT INTO contractors (name,inn,status) VALUES (?,?,'active')");
-    $insert->execute([$contractorName,$contractorInn]);
-    $entityId=(int)$tenant->lastInsertId();
-    if ($entityId<=0) throw new RuntimeException('QA contractor insert failed');
-    $state['qa_contractor_fixture']['id']=$entityId;
+    $insert=$tenant->prepare("INSERT INTO contractors (name,inn,status,created_by_user_id,created_by_membership_id,created_by_role) VALUES (?,?,'active',?,?,?)");
+    $insert->execute([$contractorName,$contractorInn,$ownerTenantUserId,(int)$owner['membership_id'],'company_owner']);
+    $contractorId=(int)$tenant->lastInsertId();
+    if ($contractorId<=0) throw new RuntimeException('QA contractor insert failed');
+    $state['qa_contractor_fixture']['id']=$contractorId;
+    $state['assignment_fixtures']['contractor']['id']=$contractorId;
+    writeQaState($stateFile,$state);
+
+    $vehiclePlate=qaVehiclePlate($runId);
+    $collision=$tenant->prepare('SELECT COUNT(*) FROM vehicle_units WHERE plate_number=?');
+    $collision->execute([$vehiclePlate]);
+    if ((int)$collision->fetchColumn()!==0) throw new RuntimeException('QA vehicle namespace collision');
+    $insert=$tenant->prepare("INSERT INTO vehicle_units (plate_number,brand,model,unit_type,status,created_by_user_id,created_by_membership_id,created_by_role) VALUES (?,?,?,'truck','active',?,?,?)");
+    $insert->execute([$vehiclePlate,'QA Functional','Vehicle '.$runId,$ownerTenantUserId,(int)$owner['membership_id'],'company_owner']);
+    $vehicleId=(int)$tenant->lastInsertId();
+    if ($vehicleId<=0) throw new RuntimeException('QA vehicle insert failed');
+    $state['assignment_fixtures']['vehicle_unit']['id']=$vehicleId; writeQaState($stateFile,$state);
+
+    $driverName=qaDriverName($runId); $driverPhone=qaDriverPhone($runId);
+    $collision=$tenant->prepare('SELECT COUNT(*) FROM drivers WHERE full_name=? OR phone=?');
+    $collision->execute([$driverName,$driverPhone]);
+    if ((int)$collision->fetchColumn()!==0) throw new RuntimeException('QA driver namespace collision');
+    $insert=$tenant->prepare("INSERT INTO drivers (full_name,phone,status,created_by_user_id,created_by_membership_id,created_by_role) VALUES (?,?,'active',?,?,?)");
+    $insert->execute([$driverName,$driverPhone,$ownerTenantUserId,(int)$owner['membership_id'],'company_owner']);
+    $driverId=(int)$tenant->lastInsertId();
+    if ($driverId<=0) throw new RuntimeException('QA driver insert failed');
+    $state['assignment_fixtures']['driver']['id']=$driverId; writeQaState($stateFile,$state);
+
+    $assignment=$tenant->prepare("INSERT INTO entity_assignments(entity_type,entity_id,membership_id,assigned_by_membership_id,assignment_kind) VALUES(?,?,?,?,'creator_auto')");
+    $legacy=$tenant->prepare("INSERT INTO entity_assignments(entity_type,entity_id,membership_id,assigned_by_membership_id,assignment_kind) VALUES(?,?,?,?,'legacy_unclassified')");
+    foreach (['client'=>$clientId,'contractor'=>$contractorId,'vehicle_unit'=>$vehicleId,'driver'=>$driverId] as $type=>$id) {
+        $assignment->execute([$type,$id,(int)$owner['membership_id'],(int)$owner['membership_id']]);
+        $legacy->execute([$type,$id,(int)$dynamic['membership_id'],(int)$owner['membership_id']]);
+    }
+
     $state['responsibility_fixture']=[
-        'entity_type'=>'contractor','entity_id'=>$entityId,
+        'entity_type'=>'contractor','entity_id'=>$contractorId,
         'baseline_membership_id'=>(int)$owner['membership_id'],
         'dynamic_membership_id'=>(int)$dynamic['membership_id'],
         'original'=>null,
     ];
     writeQaState($stateFile,$state);
     $fixture=$tenant->prepare('INSERT INTO entity_responsibilities(entity_type,entity_id,membership_id,assigned_by_membership_id) VALUES(?,?,?,?)');
-    $fixture->execute(['contractor',$entityId,(int)$owner['membership_id'],(int)$owner['membership_id']]);
-    if (App\Service\EntityResponsibilityService::effectiveBaseMembershipId($tenant,'contractor',$entityId)!==(int)$owner['membership_id']) throw new RuntimeException('QA responsibility baseline readback failed');
+    $fixture->execute(['contractor',$contractorId,(int)$owner['membership_id'],(int)$owner['membership_id']]);
+    if (App\Service\EntityResponsibilityService::effectiveBaseMembershipId($tenant,'contractor',$contractorId)!==(int)$owner['membership_id']) throw new RuntimeException('QA responsibility baseline readback failed');
+
+    $baseline=qaAssignmentSnapshot($pdo,$config,$state);
+    foreach ($baseline['fixtures'] as $type=>$fixtureState) {
+        $kinds=array_count_values(array_map(static fn(array $row): string => (string)$row['assignment_kind'],$fixtureState['assignments']));
+        if (($kinds['creator_auto']??0)!==1 || ($kinds['legacy_unclassified']??0)!==1 || ($kinds['manual']??0)!==0) {
+            throw new RuntimeException('QA assignment baseline mismatch for '.$type);
+        }
+    }
 
     $payload=base64_encode(json_encode([
         ['role'=>'OWNER','username'=>$ownerLogin,'password'=>$ownerPassword],
@@ -349,12 +518,17 @@ try {
     ],JSON_THROW_ON_ERROR));
     echo 'QA_CREDENTIALS_B64='.$payload.PHP_EOL;
     echo 'QA_FOREIGN_MEMBERSHIP_ID='.(int)$foreign['membership_id'].PHP_EOL;
+    echo 'QA_OWNER_MEMBERSHIP_ID='.(int)$owner['membership_id'].PHP_EOL;
     echo 'QA_OWNER_TENANT_USER_ID='.$ownerTenantUserId.PHP_EOL;
     echo 'QA_DYNAMIC_MEMBERSHIP_ID='.(int)$dynamic['membership_id'].PHP_EOL;
     echo 'QA_DYNAMIC_TENANT_USER_ID='.$dynamicTenantUserId.PHP_EOL;
-    echo 'QA_CONTRACTOR_ID='.$entityId.PHP_EOL;
+    echo 'QA_CLIENT_ID='.$clientId.PHP_EOL;
+    echo 'QA_CONTRACTOR_ID='.$contractorId.PHP_EOL;
+    echo 'QA_VEHICLE_UNIT_ID='.$vehicleId.PHP_EOL;
+    echo 'QA_DRIVER_ID='.$driverId.PHP_EOL;
     echo 'QA_DYNAMIC_RECIPIENT_READY=YES'.PHP_EOL;
     echo 'QA_TENANT_PROJECTIONS_READY=YES'.PHP_EOL;
+    echo 'QA_ASSIGNMENT_FIXTURES_READY=YES'.PHP_EOL;
     echo 'QA_CONTRACTOR_FIXTURE_READY=YES'.PHP_EOL;
     echo 'QA_RESPONSIBILITY_FIXTURE_READY=YES'.PHP_EOL;
     echo 'QA_IDENTITY_CREATED=YES'.PHP_EOL;
