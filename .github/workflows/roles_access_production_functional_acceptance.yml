@@ -134,7 +134,7 @@ jobs:
           QA_SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           QA_SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           QA_SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
-          QA_PLANEX_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+          QA_PLANEX_ROOT: ${{ env.LIVE_PARENT }}/${{ env.APP_DIR }}
         run: |
           set -euo pipefail
           test -n "${P12_CREDENTIALS_B64:-}"
