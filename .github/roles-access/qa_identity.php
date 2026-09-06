@@ -23,6 +23,7 @@ $mode = (string)($argv[1] ?? '');
 
 function qaIdentityPrefix(string $runId): string { return 'qa_func_' . $runId . '_'; }
 function qaRoleName(string $runId): string { return 'QA Functional Role ' . $runId; }
+function qaForeignRoleName(string $runId): string { return 'QA Functional Foreign Role ' . $runId; }
 function qaContractorName(string $runId): string { return 'QA Functional Contractor ' . $runId; }
 function qaContractorInn(string $runId): string { return '99' . str_pad((string)(((int)$runId) % 10000000000), 10, '0', STR_PAD_LEFT); }
 
@@ -188,25 +189,36 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
     }
 
     $companyId=(int)($state['company_id']??0);
-    $roleId=(int)($state['dynamic_role_id']??0);
-    if ($companyId>0) {
-        $normalized=App\Service\IdentityNormalizer::roleName(qaRoleName($runId));
+    $foreignCompanyId=(int)($state['foreign_company_id']??0);
+    $roleService=new App\Service\CompanyRoleService($pdo);
+    foreach ([
+        ['company_id'=>$companyId,'role_id'=>(int)($state['dynamic_role_id']??0),'name'=>qaRoleName($runId)],
+        ['company_id'=>$foreignCompanyId,'role_id'=>(int)($state['foreign_role_id']??0),'name'=>qaForeignRoleName($runId)],
+    ] as $roleSpec) {
+        if ((int)$roleSpec['company_id']<=0) continue;
+        $normalized=App\Service\IdentityNormalizer::roleName((string)$roleSpec['name']);
         $role=$pdo->prepare('SELECT id,name,is_system,system_key FROM company_roles WHERE company_id=? AND normalized_name=? LIMIT 2');
-        $role->execute([$companyId,$normalized]);
+        $role->execute([(int)$roleSpec['company_id'],$normalized]);
         $rows=$role->fetchAll(PDO::FETCH_ASSOC);
         if (count($rows)>1) throw new RuntimeException('ambiguous QA role namespace');
         if ($rows!==[]) {
             $r=$rows[0];
-            if ((int)$r['is_system']!==0 || $r['system_key']!==null || (string)$r['name']!==qaRoleName($runId) || ($roleId>0 && (int)$r['id']!==$roleId)) throw new RuntimeException('unexpected QA role shape');
-            (new App\Service\CompanyRoleService($pdo))->delete($companyId,(int)$r['id']);
+            if ((int)$r['is_system']!==0 || $r['system_key']!==null || (string)$r['name']!==(string)$roleSpec['name'] || ((int)$roleSpec['role_id']>0 && (int)$r['id']!==(int)$roleSpec['role_id'])) throw new RuntimeException('unexpected QA role shape');
+            $roleService->delete((int)$roleSpec['company_id'],(int)$r['id']);
         }
     }
 
     if (qaAccounts($pdo,$runId)!==[]) throw new RuntimeException('QA account namespace residue');
-    if ($companyId>0) {
+    foreach ([
+        [$companyId,qaRoleName($runId)],
+        [$foreignCompanyId,qaForeignRoleName($runId)],
+    ] as [$roleCompanyId,$roleNameCheck]) {
+        if ((int)$roleCompanyId<=0) continue;
         $roleCheck=$pdo->prepare('SELECT COUNT(*) FROM company_roles WHERE company_id=? AND normalized_name=?');
-        $roleCheck->execute([$companyId,App\Service\IdentityNormalizer::roleName(qaRoleName($runId))]);
+        $roleCheck->execute([(int)$roleCompanyId,App\Service\IdentityNormalizer::roleName((string)$roleNameCheck)]);
         if ((int)$roleCheck->fetchColumn()!==0) throw new RuntimeException('QA role residue');
+    }
+    if ($companyId>0) {
         $tenant=tenantFor($pdo,$config,$companyId);
         $projection=$tenant->prepare('SELECT COUNT(*) FROM users WHERE login LIKE ?');
         $projection->execute([qaIdentityPrefix($runId).'%']);
@@ -234,7 +246,6 @@ $companies=$pdo->query(
       WHERE c.status='active' ORDER BY c.id"
 )->fetchAll(PDO::FETCH_ASSOC);
 $target=null;
-$foreignCompany=null;
 foreach ($companies as $candidate) {
     if ((int)$candidate['owner_count']<=0) continue;
     $company=activeCompany($pdo,(int)$candidate['id']);
@@ -243,30 +254,25 @@ foreach ($companies as $candidate) {
         $tenant=(new App\Core\Database(companyDatabaseConfig($config,$company)))->connection();
         foreach (['users','contractors','entity_responsibilities','entity_assignments'] as $table) $tenant->query("SELECT 1 FROM `{$table}` LIMIT 1");
     } catch (Throwable) { continue; }
-    $foreign=$pdo->prepare(
-        "SELECT c.id,c.name,r.id AS owner_role_id,
-                (SELECT COUNT(*) FROM company_memberships om JOIN user_accounts oa ON oa.id=om.account_id AND oa.status='active' JOIN company_roles rr ON rr.id=om.role_id AND rr.company_id=om.company_id WHERE om.company_id=c.id AND om.status='active' AND rr.system_key='company_owner') AS owner_count
-           FROM companies c JOIN company_roles r ON r.company_id=c.id AND r.system_key='company_owner' AND r.is_system=1
-          WHERE c.status='active' AND c.id<>? ORDER BY c.id"
-    );
-    $foreign->execute([(int)$candidate['id']]);
-    foreach ($foreign->fetchAll(PDO::FETCH_ASSOC) as $foreignRow) {
-        if ((int)$foreignRow['owner_count']>0) { $foreignCompany=$foreignRow; break; }
-    }
-    if ($foreignCompany) { $target=['row'=>$candidate,'company'=>$company,'tenant'=>$tenant]; break; }
+    $target=['row'=>$candidate,'company'=>$company,'tenant'=>$tenant];
+    break;
 }
-if (!$target || !$foreignCompany) { fwrite(STDERR,"no two active QA companies with independent owners\n"); exit(1); }
+if (!$target) { fwrite(STDERR,"no ready QA company with an independent owner\n"); exit(1); }
+$foreignStmt=$pdo->prepare("SELECT id,name FROM companies WHERE status='active' AND id<>? ORDER BY id LIMIT 1");
+$foreignStmt->execute([(int)$target['row']['id']]);
+$foreignCompany=$foreignStmt->fetch(PDO::FETCH_ASSOC);
+if (!$foreignCompany) { fwrite(STDERR,"no second active company for foreign membership proof\n"); exit(1); }
 
 $companyId=(int)$target['row']['id'];
 $ownerRoleId=(int)$target['row']['owner_role_id'];
 $foreignCompanyId=(int)$foreignCompany['id'];
-$foreignOwnerRoleId=(int)$foreignCompany['owner_role_id'];
 $prefix=qaIdentityPrefix($runId);
 $roleName=qaRoleName($runId);
 $state=[
     'company_id'=>$companyId,
     'foreign_company_id'=>$foreignCompanyId,
     'dynamic_role_id'=>0,
+    'foreign_role_id'=>0,
     'responsibility_fixture'=>null,
     'qa_contractor_fixture'=>['id'=>0,'name'=>qaContractorName($runId),'inn'=>qaContractorInn($runId)],
 ];
@@ -274,8 +280,11 @@ writeQaState($stateFile,$state);
 
 $membershipService=new App\Service\CompanyMembershipService($pdo);
 try {
-    $role=(new App\Service\CompanyRoleService($pdo))->create($companyId,$roleName);
+    $roleService=new App\Service\CompanyRoleService($pdo);
+    $role=$roleService->create($companyId,$roleName);
     $state['dynamic_role_id']=(int)$role['id']; writeQaState($stateFile,$state);
+    $foreignRole=$roleService->create($foreignCompanyId,qaForeignRoleName($runId));
+    $state['foreign_role_id']=(int)$foreignRole['id']; writeQaState($stateFile,$state);
 
     $ownerLogin=$prefix.'owner_'.bin2hex(random_bytes(4));
     $ownerPassword=rtrim(strtr(base64_encode(random_bytes(30)),'+/','-_'),'=');
@@ -291,7 +300,7 @@ try {
 
     $foreignLogin=$prefix.'foreign_'.bin2hex(random_bytes(4));
     $foreignPassword=rtrim(strtr(base64_encode(random_bytes(30)),'+/','-_'),'=');
-    $foreign=$membershipService->add($foreignCompanyId,$foreignOwnerRoleId,'QA Functional Foreign '.$runId,$foreignLogin,$foreignPassword,null,null,'active');
+    $foreign=$membershipService->add($foreignCompanyId,(int)$foreignRole['id'],'QA Functional Foreign '.$runId,$foreignLogin,$foreignPassword,null,null,'active');
     if (!($foreign['account_created']??false)) throw new RuntimeException('QA foreign account collision');
     $state['foreign']=['account_id'=>(int)$foreign['account_id'],'membership_id'=>(int)$foreign['membership_id'],'login'=>$foreignLogin]; writeQaState($stateFile,$state);
 

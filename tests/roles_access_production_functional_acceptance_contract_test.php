@@ -54,9 +54,11 @@ foreach (['CompanyRoleService','CompanyMembershipService','qa_func_','OWNER_SYST
     $ok(str_contains($identity, $needle), "QA identity helper missing lifecycle token {$needle}");
 }
 $ok(str_contains($identity, "system_key='company_owner'") && str_contains($identity, "ar.state='ready'"), 'QA identity must bind only to a ready company owner role');
-$ok(str_contains($identity, "c.id<>?"), 'QA helper must select a separate foreign company for isolation');
+$ok(str_contains($identity, "SELECT id,name FROM companies WHERE status='active' AND id<>? ORDER BY id LIMIT 1"), 'foreign-company isolation must require only a second active company');
+$ok(!str_contains($identity, 'no two active QA companies with independent owners'), 'foreign-company isolation must not require an independent owner in the foreign company');
 $ok(str_contains($identity, 'EntityResponsibilityService::eligibleRecipients'), 'QA helper must verify tenant-projected eligible responsibility recipients');
-foreach (['QA Functional Role ','QA Functional Owner ','QA Functional Dynamic ','QA Functional Foreign ','CompanyRoleService($pdo))->create','CompanyRoleService($pdo))->delete'] as $needle) {
+$ok(str_contains($identity, '$foreign=$membershipService->add($foreignCompanyId,(int)$foreignRole'), 'foreign proof membership must use a run-scoped ordinary role rather than a foreign owner role');
+foreach (['QA Functional Role ','QA Functional Foreign Role ','QA Functional Owner ','QA Functional Dynamic ','QA Functional Foreign ','foreign_role_id','new App\\Service\\CompanyRoleService($pdo)','->create(','->delete('] as $needle) {
     $ok(str_contains($identity, $needle), "QA dynamic role/account lifecycle token missing {$needle}");
 }
 $ok(str_contains($identity, 'INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status)') && str_contains($identity, "'membership_role'") && str_contains($identity, "'company_owner'"), 'QA helper must create stable membership-linked owner/dynamic tenant projections without role_code authority');
@@ -78,7 +80,7 @@ $ownerCleanupPos = strpos($identity, '$membershipService->remove');
 $ok($statePos !== false && $contractorWritePos !== false && $statePos < $contractorWritePos, 'QA fixture must persist recovery state before tenant contractor mutation');
 $ok($contractorWritePos < $fixtureWritePos, 'QA responsibility baseline must only target the run-scoped contractor after it exists');
 $ok($contractorCleanupPos !== false && $projectionCleanupPos !== false && $ownerCleanupPos !== false && $contractorCleanupPos < $projectionCleanupPos && $projectionCleanupPos < $ownerCleanupPos, 'QA responsibility/contractor/projections must be removed before central memberships');
-$roleCreatePos = strpos($identity, 'CompanyRoleService($pdo))->create');
+$roleCreatePos = strpos($identity, '$role=$roleService->create($companyId,$roleName);');
 $ownerAddPos = strpos($identity, "'QA Functional Owner '.");
 $projectionWritePos = strpos($identity, 'INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status)');
 $ok($roleCreatePos !== false && $ownerAddPos !== false && $projectionWritePos !== false && $roleCreatePos < $ownerAddPos && $ownerAddPos < $projectionWritePos && $projectionWritePos < $contractorWritePos, 'QA lifecycle order must be role -> central identities -> tenant projections -> contractor -> responsibility');
