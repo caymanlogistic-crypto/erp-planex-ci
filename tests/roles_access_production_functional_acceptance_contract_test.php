@@ -49,6 +49,7 @@ foreach ([
 $ok(str_contains($script, '/company/roles-access/assignments?membership_id='), 'acceptance must exercise assignments backend readback/isolation');
 $ok(str_contains($script, '/company/responsible-assignments?tab='), 'acceptance must exercise responsibility UI');
 $ok(str_contains($script, 'form.evaluate(f=>f.requestSubmit())'), 'responsibility transfer must use the real browser form POST');
+$ok(str_contains($script, "const suppliedOwnerTenantUserId = Number(process.env.QA_OWNER_TENANT_USER_ID || 0);") && str_contains($script, "const suppliedContractorId = Number(process.env.QA_CONTRACTOR_ID || 0);"), 'browser acceptance must declare exact owner/contractor env bindings before responsibility proof');
 $ok(str_contains($script, 'suppliedContractorId') && str_contains($script, 'exact run-scoped contractor transfer form is missing'), 'responsibility proof must target the exact run-scoped contractor row');
 $ok(str_contains($script, 'original === suppliedOwnerTenantUserId'), 'responsibility proof must verify the exact run-scoped owner baseline before transfer');
 $ok(str_contains($script, 'Number(x.user_id) === suppliedDynamicTenantUserId') && str_contains($script, 'Number(x.membership_id) === suppliedDynamicMembershipId'), 'responsibility transfer target must be the exact run-scoped dynamic-role recipient');
