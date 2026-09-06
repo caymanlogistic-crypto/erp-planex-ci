@@ -28,11 +28,12 @@ $ok(str_contains($workflow, 'QA_ASSIGNMENT_FIXTURES_READY=YES') && str_contains(
 $ok(str_contains($workflow, 'Cleanup temporary QA owner identity') && str_contains($workflow, 'if: always()') && str_contains($workflow, 'QA_IDENTITY_RESIDUE=0'), 'temporary QA identity cleanup must be unconditional and residue-gated');
 $ok(str_contains($workflow, 'QA_RESPONSIBILITY_FIXTURE_RESIDUE=0'), 'temporary responsibility fixture cleanup must be residue-gated');
 $ok(str_contains($workflow, 'QA_CONTRACTOR_FIXTURE_RESIDUE=0'), 'temporary contractor fixture cleanup must be residue-gated');
-foreach (['ASSIGNMENT_QA_RESIDUE=0','QA_ASSIGNMENT_FIXTURE_RESIDUE=0','QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0'] as $marker) {
+foreach (['ASSIGNMENT_QA_RESIDUE=0','QA_ASSIGNMENT_FIXTURE_RESIDUE=0','QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0','QA_MULTI_COMPANY_FIXTURE_RESIDUE=0','MULTI_COMPANY_QA_RESIDUE=0'] as $marker) {
     $ok(str_contains($workflow, $marker), "workflow cleanup missing {$marker}");
 }
 $ok(str_contains($workflow, 'QA_FOREIGN_MEMBERSHIP_ID'), 'workflow must pass a foreign-company membership identifier into the isolation proof');
 $ok(str_contains($workflow, 'QA_OWNER_MEMBERSHIP_ID') && str_contains($workflow, 'QA_OWNER_TENANT_USER_ID') && str_contains($workflow, 'QA_DYNAMIC_MEMBERSHIP_ID') && str_contains($workflow, 'QA_DYNAMIC_TENANT_USER_ID'), 'workflow must bind browser acceptance to the exact run-scoped owner and dynamic tenant projections');
+$ok(str_contains($workflow, 'QA_COMPANY_A_ID') && str_contains($workflow, 'QA_COMPANY_B_ID') && str_contains($workflow, 'QA_MULTI_COMPANY_MEMBERSHIP_ID') && str_contains($workflow, 'QA_MULTI_COMPANY_TENANT_USER_ID') && str_contains($workflow, 'QA_MULTI_COMPANY_B_CLIENT_ID'), 'workflow must bind browser acceptance to exact multi-company fixtures');
 $ok(str_contains($workflow, 'QA_CLIENT_ID') && str_contains($workflow, 'QA_CONTRACTOR_ID') && str_contains($workflow, 'QA_VEHICLE_UNIT_ID') && str_contains($workflow, 'QA_DRIVER_ID'), 'workflow must bind browser acceptance to all exact run-scoped assignment fixtures');
 $ok(str_contains($workflow, 'LIVE_PARENT: /home/s/spugovxsim/planexp/public_html'), 'functional acceptance must use the real production web root');
 $ok(str_contains($script, "page.locator('input[name=\"login\"]')") && str_contains($script, "page.locator('input[name=\"password\"]')"), 'acceptance must perform normal username/password login');
@@ -40,6 +41,8 @@ $ok(!str_contains($script, 'QA_LEGACY_SESSION_ID') && !str_contains($script, 'cr
 foreach ([
     'DEFAULT_LANDING=PASS','EFFECTIVE_MENU=PASS','ROLES_ACCESS=PASS','ROLES_READBACK=PASS',
     'PERSONAL_OVERRIDES_READBACK=PASS','ASSIGNMENTS_TAB=PASS','NAVIGATION_BADGE_NONZERO=PASS',
+    'MULTI_COMPANY_ACCOUNT=PASS','COMPANY_SWITCH_OPTIONS>=2','COMPANY_SWITCH_A_TO_B=PASS','COMPANY_B_DEFAULT_LANDING=PASS','COMPANY_B_EFFECTIVE_MENU=PASS',
+    'CROSS_COMPANY_DATA_ISOLATION=PASS','DIRECT_DENIED_AFTER_SWITCH=403_PASS','COMPANY_SWITCH_B_TO_A=PASS','COMPANY_A_STATE_RESTORED=PASS','MEMBERSHIP_OVERRIDES_ISOLATED=PASS',
     'REAL_ASSIGNMENT_CLIENT=PASS','REAL_ASSIGNMENT_CONTRACTOR=PASS','REAL_ASSIGNMENT_VEHICLE=PASS','REAL_ASSIGNMENT_DRIVER=PASS','ASSIGNMENT_RESTORE_DIFF=0',
     'RESPONSIBLE_ASSIGNMENTS=PASS','DYNAMIC_RESPONSIBILITY_RECIPIENT=PASS',
     'RESPONSIBILITY_TRANSFER=PASS','RESPONSIBILITY_BACKEND_READBACK=PASS','RESPONSIBILITY_RESTORE=PASS',
@@ -51,6 +54,7 @@ $ok(str_contains($script, '/company/roles-access/assignments?membership_id='), '
 $ok(str_contains($script, "response.url() === base + '/company/roles-access/assignments/reassign'") && str_contains($script, "response.request().method() === 'POST'"), 'assignment acceptance must wait for the real production POST response');
 $ok(str_contains($script, 'await checkbox.check()') && str_contains($script, 'await checkbox.uncheck()'), 'assignment acceptance must operate the real rendered checkbox in both directions');
 $ok(!str_contains($script, 'page.route(') && !str_contains($script, 'route.fulfill('), 'production functional acceptance must not intercept or mock assignment HTTP writes');
+$ok(str_contains($script, "switcher.selectOption(String(suppliedCompanyBId))") && str_contains($script, "switcher.selectOption(String(suppliedCompanyAId))"), 'multi-company proof must use the real rendered company switch UI in both directions');
 foreach (["'creator_auto'","'legacy_unclassified'","'manual'",'created_by_membership_id','entity_responsibilities','ASSIGNMENT_RESTORE_DIFF=0'] as $needle) {
     $ok(str_contains($script, $needle), "assignment production proof missing invariant token {$needle}");
 }
@@ -69,11 +73,16 @@ foreach (['CompanyRoleService','CompanyMembershipService','qa_func_','OWNER_SYST
     $ok(str_contains($identity, $needle), "QA identity helper missing lifecycle token {$needle}");
 }
 $ok(str_contains($identity, "system_key='company_owner'") && str_contains($identity, "ar.state='ready'"), 'QA identity must bind only to a ready company owner role');
-$ok(str_contains($identity, "SELECT id,name FROM companies WHERE status='active' AND id<>? ORDER BY id LIMIT 1"), 'foreign-company isolation must require only a second active company');
-$ok(!str_contains($identity, 'no two active QA companies with independent owners'), 'foreign-company isolation must not require an independent owner in the foreign company');
+$ok(str_contains($identity, "WHERE c.status='active' ORDER BY c.name,c.id") && str_contains($identity, 'no ordered pair of ready QA companies for multi-company proof'), 'multi-company fixture must use an ordered pair of ready active companies so login deterministically starts in company A');
+$ok(!str_contains($identity, 'no two active QA companies with independent owners'), 'company B must not require an independent owner');
 $ok(str_contains($identity, 'EntityResponsibilityService::eligibleRecipients'), 'QA helper must verify tenant-projected eligible responsibility recipients');
 $ok(str_contains($identity, "app/Support/crypto_helper.php"), 'QA helper must load crypto_helper before resolving encrypted tenant DB credentials');
 $ok(str_contains($identity, '$foreign=$membershipService->add($foreignCompanyId,(int)$foreignRole'), 'foreign proof membership must use a run-scoped ordinary role rather than a foreign owner role');
+$ok(str_contains($identity, '$ownerB=$membershipService->add($foreignCompanyId,(int)$foreignRole[\'id\'],\'QA Functional Owner \'') && str_contains($identity, '(int)$ownerB[\'account_id\']!==(int)$owner[\'account_id\']'), 'one global QA owner account must be reused for company B membership');
+$ok(str_contains($identity, '\'company.clients\',$grantableKeys,$landingKeys') && str_contains($identity, '[\'company.contractors\'=>\'allow\']') && str_contains($identity, '[\'contractor\'=>\'own\']'), 'company B role/default landing and membership overrides must be intentionally distinct');
+$ok(str_contains($identity, 'qaMultiCompanySnapshot') && str_contains($identity, 'multi-company-snapshot') && str_contains($identity, 'QA_MULTI_COMPANY_SNAPSHOT_B64='), 'multi-company proof must have DB readback for roles/memberships/overrides');
+$ok(str_contains($identity, 'qaSwitchBClientName') && str_contains($identity, 'cleanupQaMultiCompanyFixture') && str_contains($identity, 'QA_MULTI_COMPANY_FIXTURE_RESIDUE=0'), 'company B data isolation fixture must be run-scoped and cleanup-gated');
+$ok(str_contains($identity, 'MULTI_COMPANY_QA_RESIDUE=0'), 'multi-company cleanup must publish zero residue marker');
 foreach (['QA Functional Role ','QA Functional Foreign Role ','QA Functional Owner ','QA Functional Dynamic ','QA Functional Foreign ','foreign_role_id','new App\\Service\\CompanyRoleService($pdo)','->create(','->delete('] as $needle) {
     $ok(str_contains($identity, $needle), "QA dynamic role/account lifecycle token missing {$needle}");
 }
@@ -98,11 +107,12 @@ $contractorWritePos = strpos($identity, 'INSERT INTO contractors (name,inn,statu
 $fixtureWritePos = strrpos($identity, 'INSERT INTO entity_responsibilities');
 $assignmentCleanupPos = strpos($identity, 'cleanupQaAssignmentFixtures($pdo,$config,$state,$runId);');
 $contractorCleanupPos = strpos($identity, 'cleanupQaContractorFixture($pdo,$config,$state,$runId);');
+$multiCleanupPos = strpos($identity, 'cleanupQaMultiCompanyFixture($pdo,$config,$state,$runId);');
 $projectionCleanupPos = strpos($identity, 'cleanupQaTenantProjections($pdo,$config,$runId,$accounts');
 $ownerCleanupPos = strpos($identity, '$membershipService->remove');
 $ok($statePos !== false && $contractorWritePos !== false && $statePos < $contractorWritePos, 'QA fixture must persist recovery state before tenant contractor mutation');
 $ok($contractorWritePos < $fixtureWritePos, 'QA responsibility baseline must only target the run-scoped contractor after it exists');
-$ok($assignmentCleanupPos !== false && $contractorCleanupPos !== false && $projectionCleanupPos !== false && $ownerCleanupPos !== false && $assignmentCleanupPos < $contractorCleanupPos && $contractorCleanupPos < $projectionCleanupPos && $projectionCleanupPos < $ownerCleanupPos, 'QA assignment/responsibility/contractor/projections must be removed before central memberships');
+$ok($assignmentCleanupPos !== false && $contractorCleanupPos !== false && $multiCleanupPos !== false && $projectionCleanupPos !== false && $ownerCleanupPos !== false && $assignmentCleanupPos < $contractorCleanupPos && $contractorCleanupPos < $multiCleanupPos && $multiCleanupPos < $projectionCleanupPos && $projectionCleanupPos < $ownerCleanupPos, 'QA assignment/responsibility/data/projections must be removed before central memberships');
 $roleCreatePos = strpos($identity, '$role=$roleService->create($companyId,$roleName);');
 $ownerAddPos = strpos($identity, "'QA Functional Owner '.");
 $projectionWritePos = strpos($identity, 'INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status)');
