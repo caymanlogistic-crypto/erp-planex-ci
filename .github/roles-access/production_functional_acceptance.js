@@ -8,8 +8,10 @@ const encodedCredentials = process.env.P12_CREDENTIALS_B64 || '';
 const credentials = encodedCredentials ? JSON.parse(Buffer.from(encodedCredentials, 'base64').toString('utf8')) : [];
 const runId = process.env.GITHUB_RUN_ID || String(Date.now());
 const suppliedForeignMembershipId = Number(process.env.QA_FOREIGN_MEMBERSHIP_ID || 0);
+const suppliedOwnerTenantUserId = Number(process.env.QA_OWNER_TENANT_USER_ID || 0);
 const suppliedDynamicMembershipId = Number(process.env.QA_DYNAMIC_MEMBERSHIP_ID || 0);
 const suppliedDynamicTenantUserId = Number(process.env.QA_DYNAMIC_TENANT_USER_ID || 0);
+const suppliedContractorId = Number(process.env.QA_CONTRACTOR_ID || 0);
 fs.mkdirSync(out, { recursive: true });
 
 const marks = [];
