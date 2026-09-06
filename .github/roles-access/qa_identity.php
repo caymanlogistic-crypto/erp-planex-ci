@@ -349,8 +349,10 @@ try {
     ],JSON_THROW_ON_ERROR));
     echo 'QA_CREDENTIALS_B64='.$payload.PHP_EOL;
     echo 'QA_FOREIGN_MEMBERSHIP_ID='.(int)$foreign['membership_id'].PHP_EOL;
+    echo 'QA_OWNER_TENANT_USER_ID='.$ownerTenantUserId.PHP_EOL;
     echo 'QA_DYNAMIC_MEMBERSHIP_ID='.(int)$dynamic['membership_id'].PHP_EOL;
     echo 'QA_DYNAMIC_TENANT_USER_ID='.$dynamicTenantUserId.PHP_EOL;
+    echo 'QA_CONTRACTOR_ID='.$entityId.PHP_EOL;
     echo 'QA_DYNAMIC_RECIPIENT_READY=YES'.PHP_EOL;
     echo 'QA_TENANT_PROJECTIONS_READY=YES'.PHP_EOL;
     echo 'QA_CONTRACTOR_FIXTURE_READY=YES'.PHP_EOL;

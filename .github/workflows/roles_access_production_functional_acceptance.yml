@@ -91,12 +91,16 @@ jobs:
             "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' create")"
           cred="$(printf '%s\n' "$provision" | sed -n 's/^QA_CREDENTIALS_B64=//p')"
           foreign="$(printf '%s\n' "$provision" | sed -n 's/^QA_FOREIGN_MEMBERSHIP_ID=//p')"
+          owner_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_OWNER_TENANT_USER_ID=//p')"
           dynamic_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_MEMBERSHIP_ID=//p')"
           dynamic_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_TENANT_USER_ID=//p')"
+          contractor_id="$(printf '%s\n' "$provision" | sed -n 's/^QA_CONTRACTOR_ID=//p')"
           test -n "$cred"
           [[ "$foreign" =~ ^[1-9][0-9]*$ ]]
+          [[ "$owner_user" =~ ^[1-9][0-9]*$ ]]
           [[ "$dynamic_membership" =~ ^[1-9][0-9]*$ ]]
           [[ "$dynamic_user" =~ ^[1-9][0-9]*$ ]]
+          [[ "$contractor_id" =~ ^[1-9][0-9]*$ ]]
           printf '%s\n' "$provision" | grep -q '^QA_IDENTITY_CREATED=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_DYNAMIC_RECIPIENT_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_TENANT_PROJECTIONS_READY=YES$'
@@ -105,8 +109,10 @@ jobs:
           echo "::add-mask::$cred"
           echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
           echo "QA_FOREIGN_MEMBERSHIP_ID=$foreign" >> "$GITHUB_ENV"
+          echo "QA_OWNER_TENANT_USER_ID=$owner_user" >> "$GITHUB_ENV"
           echo "QA_DYNAMIC_MEMBERSHIP_ID=$dynamic_membership" >> "$GITHUB_ENV"
           echo "QA_DYNAMIC_TENANT_USER_ID=$dynamic_user" >> "$GITHUB_ENV"
+          echo "QA_CONTRACTOR_ID=$contractor_id" >> "$GITHUB_ENV"
           echo 'QA_TEMP_OWNER_PROVISIONED=YES'
 
       - name: Run authenticated reversible production acceptance
@@ -115,8 +121,10 @@ jobs:
           set -euo pipefail
           test -n "${P12_CREDENTIALS_B64:-}"
           [[ "${QA_FOREIGN_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_OWNER_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_DYNAMIC_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_DYNAMIC_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_CONTRACTOR_ID:-}" =~ ^[1-9][0-9]*$ ]]
           node .github/roles-access/production_functional_acceptance.js | tee roles_access_production_functional_acceptance.txt
 
       - name: Cleanup temporary QA owner identity and responsibility fixture

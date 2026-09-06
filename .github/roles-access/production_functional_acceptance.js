@@ -203,45 +203,42 @@ async function assignmentTabProof(page, state, membershipId) {
   mark('ASSIGNMENTS_TAB=PASS');
 }
 async function responsibilityCandidate(page, activeMembershipIds, foreignMembershipId, state) {
-  for (const tab of ['contractor','driver','vehicle_set','route_executor']) {
-    let response = await page.goto(base + `/company/responsible-assignments?tab=${tab}`, {waitUntil:'networkidle',timeout:60000});
-    if (!response || response.status() !== 200) continue;
-    if (await page.locator('#massReassignToolbarForm').count() !== 1) continue;
-    const recipientRows = await page.locator('#massReassignToolbarForm select[name="new_logist_id"] option[data-membership-id]').evaluateAll(nodes => nodes.map(n=>({user_id:Number(n.value),membership_id:Number(n.dataset.membershipId)})));
-    if (recipientRows.length === 0) continue;
-    const dynamicRecipients = recipientRows.filter(r => {
-      const m = (state.memberships||[]).find(x => Number(x.id) === Number(r.membership_id));
-      const role = m && (state.roles||[]).find(x => Number(x.id) === Number(m.role_id));
-      return !!(m && role && !role.is_system && !role.system_key && m.status === 'active'
-        && (suppliedDynamicMembershipId <= 0 || Number(m.id) === suppliedDynamicMembershipId)
-        && (suppliedDynamicTenantUserId <= 0 || Number(r.user_id) === suppliedDynamicTenantUserId));
-    });
-    must(dynamicRecipients.length > 0, `${tab}: no dynamic-role responsibility recipient is visible`);
-    const dynamicRecipientIds = new Set(dynamicRecipients.map(r => Number(r.membership_id)));
-    for (const r of recipientRows) {
-      must(activeMembershipIds.includes(r.membership_id), `${tab}: recipient membership ${r.membership_id} is outside current active membership set`);
-      if (foreignMembershipId > 0) must(r.membership_id !== foreignMembershipId, `${tab}: foreign membership leaked into recipient list`);
-    }
-    const forms = page.locator('form.inline-actions[action$="/company/responsible-assignments/reassign"]');
-    for (let i=0;i<await forms.count();i++) {
-      const form = forms.nth(i);
-      const csrf = form.locator('input[name="_csrf_token"]');
-      if (await csrf.count() !== 1 || !(await csrf.inputValue())) continue;
-      const select = form.locator('select[name="new_logist_id"]');
-      const original = Number(await select.inputValue() || 0);
-      if (original <= 0) continue;
-      const options = await select.locator('option[data-membership-id]').evaluateAll(nodes => nodes.map(n=>({user_id:Number(n.value),membership_id:Number(n.dataset.membershipId)})));
-      const target = options.find(x => x.user_id > 0 && x.user_id !== original && dynamicRecipientIds.has(Number(x.membership_id)));
-      if (!target) continue;
-      const entityId = Number(await form.locator('input[name="entity_ids[]"]').inputValue());
-      const entityType = await form.locator('input[name="entity_type"]').inputValue();
-      if (entityId > 0 && entityType) {
-        mark('DYNAMIC_RESPONSIBILITY_RECIPIENT=PASS');
-        return {tab,entityId,entityType,original,targetUserId:target.user_id,targetMembershipId:target.membership_id};
-      }
-    }
+  must(suppliedOwnerTenantUserId > 0, 'run-scoped owner tenant user id missing');
+  must(suppliedContractorId > 0, 'run-scoped contractor id missing');
+  const tab = 'contractor';
+  const response = await page.goto(base + `/company/responsible-assignments?tab=${tab}`, {waitUntil:'networkidle',timeout:60000});
+  must(response && response.status() === 200, `${tab}: responsibility page did not return HTTP 200`);
+  const danger = page.locator('.notice.danger');
+  if (await danger.count() > 0) throw new Error(`${tab}: responsibility page error: ${await danger.first().innerText()}`);
+  must(await page.locator('#massReassignToolbarForm').count() === 1, `${tab}: responsibility toolbar missing for run-scoped contractor`);
+  const recipientRows = await page.locator('#massReassignToolbarForm select[name="new_logist_id"] option[data-membership-id]').evaluateAll(nodes => nodes.map(n=>({user_id:Number(n.value),membership_id:Number(n.dataset.membershipId)})));
+  must(recipientRows.length > 0, `${tab}: no responsibility recipients are visible`);
+  const dynamicRecipients = recipientRows.filter(r => {
+    const m = (state.memberships||[]).find(x => Number(x.id) === Number(r.membership_id));
+    const role = m && (state.roles||[]).find(x => Number(x.id) === Number(m.role_id));
+    return !!(m && role && !role.is_system && !role.system_key && m.status === 'active'
+      && Number(m.id) === suppliedDynamicMembershipId
+      && Number(r.user_id) === suppliedDynamicTenantUserId);
+  });
+  must(dynamicRecipients.length === 1, `${tab}: exact dynamic-role responsibility recipient is not uniquely visible`);
+  for (const r of recipientRows) {
+    must(activeMembershipIds.includes(r.membership_id), `${tab}: recipient membership ${r.membership_id} is outside current active membership set`);
+    if (foreignMembershipId > 0) must(r.membership_id !== foreignMembershipId, `${tab}: foreign membership leaked into recipient list`);
   }
-  throw new Error('No reversible responsibility transfer candidate to a dynamic-role recipient');
+  const hidden = page.locator(`form.inline-actions input[name="entity_ids[]"][value="${suppliedContractorId}"]`);
+  must(await hidden.count() === 1, `${tab}: exact run-scoped contractor transfer form is missing`);
+  const form = hidden.locator('xpath=..');
+  const csrf = form.locator('input[name="_csrf_token"]');
+  must(await csrf.count() === 1 && !!(await csrf.inputValue()), `${tab}: exact run-scoped contractor CSRF token missing`);
+  const select = form.locator('select[name="new_logist_id"]');
+  const original = Number(await select.inputValue() || 0);
+  must(original === suppliedOwnerTenantUserId, `${tab}: run-scoped contractor baseline owner mismatch; expected tenant user ${suppliedOwnerTenantUserId}, got ${original}`);
+  const options = await select.locator('option[data-membership-id]').evaluateAll(nodes => nodes.map(n=>({user_id:Number(n.value),membership_id:Number(n.dataset.membershipId)})));
+  const target = options.find(x => Number(x.user_id) === suppliedDynamicTenantUserId && Number(x.membership_id) === suppliedDynamicMembershipId);
+  must(!!target, `${tab}: exact dynamic-role target missing from run-scoped contractor form`);
+  must(String(await form.locator('input[name="entity_type"]').inputValue()) === 'contractor', `${tab}: run-scoped fixture entity type mismatch`);
+  mark('DYNAMIC_RESPONSIBILITY_RECIPIENT=PASS');
+  return {tab,entityId:suppliedContractorId,entityType:'contractor',original,targetUserId:target.user_id,targetMembershipId:target.membership_id};
 }
 async function selectedResponsibilityUser(page, candidate) {
   await page.goto(base + `/company/responsible-assignments?tab=${candidate.tab}`, {waitUntil:'networkidle',timeout:60000});

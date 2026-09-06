@@ -32,7 +32,8 @@ foreach (['QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_
     $ok(str_contains($workflow, $marker), "workflow cleanup missing {$marker}");
 }
 $ok(str_contains($workflow, 'QA_FOREIGN_MEMBERSHIP_ID'), 'workflow must pass a foreign-company membership identifier into the isolation proof');
-$ok(str_contains($workflow, 'QA_DYNAMIC_MEMBERSHIP_ID') && str_contains($workflow, 'QA_DYNAMIC_TENANT_USER_ID'), 'workflow must bind browser acceptance to the exact run-scoped dynamic recipient');
+$ok(str_contains($workflow, 'QA_OWNER_TENANT_USER_ID') && str_contains($workflow, 'QA_DYNAMIC_MEMBERSHIP_ID') && str_contains($workflow, 'QA_DYNAMIC_TENANT_USER_ID'), 'workflow must bind browser acceptance to the exact run-scoped owner and dynamic tenant projections');
+$ok(str_contains($workflow, 'QA_CONTRACTOR_ID'), 'workflow must bind browser acceptance to the exact run-scoped contractor fixture');
 $ok(str_contains($workflow, 'LIVE_PARENT: /home/s/spugovxsim/planexp/public_html'), 'functional acceptance must use the real production web root');
 $ok(str_contains($script, "page.locator('input[name=\"login\"]')") && str_contains($script, "page.locator('input[name=\"password\"]')"), 'acceptance must perform normal username/password login');
 $ok(!str_contains($script, 'QA_LEGACY_SESSION_ID') && !str_contains($script, 'create-legacy-owner'), 'acceptance must not use synthetic legacy-session authentication');
@@ -48,7 +49,9 @@ foreach ([
 $ok(str_contains($script, '/company/roles-access/assignments?membership_id='), 'acceptance must exercise assignments backend readback/isolation');
 $ok(str_contains($script, '/company/responsible-assignments?tab='), 'acceptance must exercise responsibility UI');
 $ok(str_contains($script, 'form.evaluate(f=>f.requestSubmit())'), 'responsibility transfer must use the real browser form POST');
-$ok(str_contains($script, 'dynamicRecipientIds.has(Number(x.membership_id))'), 'responsibility transfer target must be a dynamic-role recipient');
+$ok(str_contains($script, 'suppliedContractorId') && str_contains($script, 'exact run-scoped contractor transfer form is missing'), 'responsibility proof must target the exact run-scoped contractor row');
+$ok(str_contains($script, 'original === suppliedOwnerTenantUserId'), 'responsibility proof must verify the exact run-scoped owner baseline before transfer');
+$ok(str_contains($script, 'Number(x.user_id) === suppliedDynamicTenantUserId') && str_contains($script, 'Number(x.membership_id) === suppliedDynamicMembershipId'), 'responsibility transfer target must be the exact run-scoped dynamic-role recipient');
 $ok(str_contains($script, 'suppliedDynamicMembershipId') && str_contains($script, 'suppliedDynamicTenantUserId'), 'browser acceptance must bind to exact dynamic membership and tenant user ids');
 foreach (['CompanyRoleService','CompanyMembershipService','qa_func_','OWNER_SYSTEM_KEY','user_accounts','company_memberships','QA_IDENTITY_CREATED=YES','QA_IDENTITY_RESIDUE=0'] as $needle) {
     $ok(str_contains($identity, $needle), "QA identity helper missing lifecycle token {$needle}");
@@ -63,10 +66,10 @@ foreach (['QA Functional Role ','QA Functional Foreign Role ','QA Functional Own
     $ok(str_contains($identity, $needle), "QA dynamic role/account lifecycle token missing {$needle}");
 }
 $ok(str_contains($identity, 'INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status)') && str_contains($identity, "'membership_role'") && str_contains($identity, "'company_owner'"), 'QA helper must create stable membership-linked owner/dynamic tenant projections without role_code authority');
-foreach (['QA_DYNAMIC_MEMBERSHIP_ID=','QA_DYNAMIC_TENANT_USER_ID=','QA_DYNAMIC_RECIPIENT_READY=YES','QA_TENANT_PROJECTIONS_READY=YES','QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0'] as $needle) {
+foreach (['QA_OWNER_TENANT_USER_ID=','QA_DYNAMIC_MEMBERSHIP_ID=','QA_DYNAMIC_TENANT_USER_ID=','QA_DYNAMIC_RECIPIENT_READY=YES','QA_TENANT_PROJECTIONS_READY=YES','QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0'] as $needle) {
     $ok(str_contains($identity, $needle), "QA dynamic fixture lifecycle token missing {$needle}");
 }
-foreach (['qa_contractor_fixture','QA Functional Contractor ','INSERT INTO contractors (name,inn,status)','cleanupQaContractorFixture','QA_CONTRACTOR_FIXTURE_READY=YES','QA_CONTRACTOR_FIXTURE_RESIDUE=0'] as $needle) {
+foreach (['qa_contractor_fixture','QA Functional Contractor ','INSERT INTO contractors (name,inn,status)','QA_CONTRACTOR_ID=','cleanupQaContractorFixture','QA_CONTRACTOR_FIXTURE_READY=YES','QA_CONTRACTOR_FIXTURE_RESIDUE=0'] as $needle) {
     $ok(str_contains($identity, $needle), "QA contractor fixture lifecycle token missing {$needle}");
 }
 foreach (['responsibility_fixture','QA_RESPONSIBILITY_FIXTURE_READY=YES','QA_RESPONSIBILITY_FIXTURE_RESIDUE=0','restoreQaResponsibilityFixture'] as $needle) {
