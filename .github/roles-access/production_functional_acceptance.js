@@ -245,7 +245,8 @@ async function responsibilityCandidate(page, activeMembershipIds, foreignMembers
   must(await hidden.count() === 1, `${tab}: exact run-scoped contractor transfer form is missing`);
   const form = hidden.locator('xpath=..');
   const csrf = form.locator('input[name="_csrf_token"]');
-  must(await csrf.count() === 1 && !!(await csrf.inputValue()), `${tab}: exact run-scoped contractor CSRF token missing`);
+  const csrfValues = await csrf.evaluateAll(nodes => nodes.map(n => String(n.value || '')));
+  must(csrfValues.length >= 1 && csrfValues.every(Boolean) && new Set(csrfValues).size === 1, `${tab}: exact run-scoped contractor CSRF token missing or inconsistent`);
   const select = form.locator('select[name="new_logist_id"]');
   const original = Number(await select.inputValue() || 0);
   must(original === suppliedOwnerTenantUserId, `${tab}: run-scoped contractor baseline owner mismatch; expected tenant user ${suppliedOwnerTenantUserId}, got ${original}`);
@@ -268,7 +269,8 @@ async function submitResponsibility(page, candidate, targetUserId) {
   must(await hidden.count()===1, 'responsibility transfer form missing');
   const form = hidden.locator('xpath=..');
   const csrf = form.locator('input[name="_csrf_token"]');
-  must(await csrf.count()===1 && !!(await csrf.inputValue()), 'responsibility transfer CSRF token missing');
+  const csrfValues = await csrf.evaluateAll(nodes => nodes.map(n => String(n.value || '')));
+  must(csrfValues.length >= 1 && csrfValues.every(Boolean) && new Set(csrfValues).size === 1, 'responsibility transfer CSRF token missing or inconsistent');
   await form.locator('select[name="new_logist_id"]').selectOption(String(targetUserId));
   await Promise.all([
     page.waitForNavigation({waitUntil:'domcontentloaded',timeout:60000}),
