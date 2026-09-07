@@ -65,9 +65,7 @@ trait DocumentGeneratorAccessTrait
         $stmt->execute([$crewId]);
         $row=$stmt->fetch(PDO::FETCH_ASSOC) ?: null;
         if (!$row) return null;
-        if (in_array($role,['company_owner','senior_logist'],true)) return $row;
-        if ($role==='logist' && $userId>0 && AccessControlService::hasRouteExecutorAccess($pdo,$row,$userId,'view')) return $row;
-        return null;
+        return RouteExecutorService::canAccessCrew($pdo, $crewId) ? $row : null;
     }
 
     private static function loadFeoRequests(PDO $pdo, array $ids): array
