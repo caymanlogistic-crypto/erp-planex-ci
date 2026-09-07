@@ -261,9 +261,7 @@ trait DocumentGeneratorTemplateTrait
     {
         $sql = self::executorSelectSql() . self::activeExecutorWhere() . ' ORDER BY ct.name,d.full_name,c.id';
         $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-        if (in_array($role, ['company_owner','senior_logist'], true)) return $rows;
-        if ($role !== 'logist' || $userId <= 0) return [];
-        return array_values(array_filter($rows, static fn(array $row): bool => AccessControlService::hasRouteExecutorAccess($pdo,$row,$userId,'view')));
+        return RouteExecutorService::filterVisibleCrews($pdo, $rows);
     }
 
     public static function loadAccessibleExecutor(PDO $pdo, int $crewId, int $userId, string $role): ?array
@@ -272,8 +270,6 @@ trait DocumentGeneratorTemplateTrait
         $stmt->execute([$crewId]);
         $row=$stmt->fetch(PDO::FETCH_ASSOC) ?: null;
         if (!$row) return null;
-        if (in_array($role,['company_owner','senior_logist'],true)) return $row;
-        if ($role==='logist' && $userId>0 && AccessControlService::hasRouteExecutorAccess($pdo,$row,$userId,'view')) return $row;
-        return null;
+        return RouteExecutorService::canAccessCrew($pdo, $crewId) ? $row : null;
     }
 }

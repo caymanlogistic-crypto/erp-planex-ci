@@ -167,9 +167,14 @@ trait DocumentGeneratorWorkflowTrait
     public static function listHistory(PDO $pdo, int $limit = 100, int $userId = 0, string $role = ''): array
     {
         $limit=max(1,min(500,$limit));
-        $rows=$pdo->query("SELECT g.*,t.name template_name,v.version_no FROM generated_documents g LEFT JOIN document_templates t ON t.id=g.template_id LEFT JOIN document_template_versions v ON v.id=g.template_version_id ORDER BY g.id DESC LIMIT {$limit}")->fetchAll(PDO::FETCH_ASSOC);
-        if (in_array($role,['company_owner','senior_logist'],true)) return $rows;
-        if ($role!=='logist' || $userId<=0) return [];
+        $base="SELECT g.*,t.name template_name,v.version_no FROM generated_documents g LEFT JOIN document_templates t ON t.id=g.template_id LEFT JOIN document_template_versions v ON v.id=g.template_version_id";
+        if (AccessControlService::isEffectiveSystemOwner()) {
+            return $pdo->query($base . " ORDER BY g.id DESC LIMIT {$limit}")->fetchAll(PDO::FETCH_ASSOC);
+        }
+        if ($userId<=0) return [];
+        $stmt=$pdo->prepare($base . " WHERE g.created_by_user_id=? ORDER BY g.id DESC LIMIT {$limit}");
+        $stmt->execute([$userId]);
+        $rows=$stmt->fetchAll(PDO::FETCH_ASSOC);
         return array_values(array_filter($rows, static fn(array $row): bool => self::loadExecutorForAccess($pdo,(int)($row['route_executor_id'] ?? 0),$userId,$role)!==null));
     }
 
@@ -183,8 +188,8 @@ trait DocumentGeneratorWorkflowTrait
     {
         $row=self::getGenerated($pdo,$id);
         if (!$row) return null;
-        if (in_array($role,['company_owner','senior_logist'],true)) return $row;
-        if ($role!=='logist' || $userId<=0) return null;
+        if (AccessControlService::isEffectiveSystemOwner()) return $row;
+        if ($userId<=0 || (int)($row['created_by_user_id'] ?? 0)!==$userId) return null;
         return self::loadExecutorForAccess($pdo,(int)($row['route_executor_id'] ?? 0),$userId,$role)!==null ? $row : null;
     }
 
