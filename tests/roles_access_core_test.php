@@ -80,6 +80,11 @@ $resolver = new EffectiveAccessResolver($registry, $provider);
 
 expect($registry->hasPage('company.vehicle_units'), 'Canonical vehicle_unit page is missing.');
 expect($registry->hasPage('company.vehicle_sets'), 'VehicleSet must remain a separate page.');
+expect(($registry->page('company.vehicle_units')['nav_visible'] ?? true) === false, 'Dead vehicle_unit page must stay hidden from navigation.');
+expect(!$registry->isGrantable('company.vehicle_units'), 'Dead vehicle_unit page must stay hidden from role administration.');
+expect(($registry->page('company.vehicle_sets')['label'] ?? '') === 'ТС', 'VehicleSet must be shown as ТС.');
+expect(in_array('company.vehicle_sets', array_column($registry->navigationPages(), 'key'), true), 'VehicleSet must remain visible in navigation.');
+expect(in_array('company.vehicle_sets', $registry->grantablePageKeys(), true), 'VehicleSet must remain configurable in role administration.');
 expect(count($registry->pageKeys()) === count(array_unique($registry->pageKeys())), 'Page keys must be unique.');
 
 $provider->snapshot = memberSnapshot(
