@@ -30,10 +30,12 @@ final class EntityResponsibilityService
     }
 
     /**
-     * Responsibility recipients are active central memberships whose factual
-     * role is Logist/Logist+. The central membership id is the stable identity
-     * used by responsibility rows; tenant role_code is compatibility metadata
-     * only and never defines recipient eligibility.
+     * Responsibility recipients are all active central memberships in the
+     * selected company whose global account is active. Role display names,
+     * normalized role names and tenant role_code are not recipient authority.
+     * The central membership id is the stable identity used by responsibility
+     * rows, so an incomplete tenant users.membership_id projection must not hide
+     * an otherwise eligible company user.
      *
      * @return list<array{id:int,membership_id:int,full_name:string,login:string}>
      */
@@ -51,7 +53,6 @@ final class EntityResponsibilityService
               WHERE m.company_id=?
                 AND m.status='active'
                 AND a.status='active'
-                AND r.normalized_name IN ('logist','senior_logist')
               ORDER BY a.full_name, m.id"
         );
         $memberships->execute([$companyId]);

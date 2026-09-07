@@ -51,7 +51,7 @@ $assert(!str_contains($responsibility, 'UPDATE contractors SET created_by_user_i
 $assert(str_contains($responsibility, 'eligibleRecipientMembershipId'), 'Responsibility target must use shared recipient eligibility.');
 $entityResponsibility = (string)file_get_contents($root . '/app/Service/EntityResponsibilityService.php');
 $assert(str_contains($entityResponsibility, 'WHERE m.company_id=?') && str_contains($entityResponsibility, "m.status='active'") && str_contains($entityResponsibility, "a.status='active'"), 'Responsibility recipient eligibility must be company-isolated and active in central membership/account state.');
-$assert(str_contains($entityResponsibility, "r.normalized_name IN ('logist','senior_logist')"), 'Responsibility recipient eligibility must be limited to Logist/Logist+ central roles.');
+$assert(!str_contains($entityResponsibility, 'r.normalized_name'), 'Responsibility recipient eligibility must not depend on mutable normalized role names.');
 $assert(!str_contains($entityResponsibility, 'membership_id IS NOT NULL') && str_contains($entityResponsibility, "'id' => \$membershipId"), 'Responsibility recipient identity must not depend on tenant projection completeness and must use stable membership_id.');
 
 $entrypoint = (string)file_get_contents($root . '/app/Support/entrypoint_dependencies.php');

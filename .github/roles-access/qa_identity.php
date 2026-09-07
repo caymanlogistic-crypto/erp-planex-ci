@@ -547,8 +547,8 @@ try {
     $recipients=App\Service\EntityResponsibilityService::eligibleRecipients($pdo,$tenant,$companyId);
     $byMembership=[];
     foreach ($recipients as $recipient) $byMembership[(int)$recipient['membership_id']]=$recipient;
-    if (isset($byMembership[(int)$owner['membership_id']])) throw new RuntimeException('QA owner must not be an eligible responsibility recipient');
-    if (isset($byMembership[(int)$dynamic['membership_id']])) throw new RuntimeException('QA dynamic role must not be an eligible responsibility recipient');
+    if ((int)($byMembership[(int)$owner['membership_id']]['id']??0)!==(int)$owner['membership_id']) throw new RuntimeException('QA owner is not an eligible stable-membership recipient');
+    if ((int)($byMembership[(int)$dynamic['membership_id']]['id']??0)!==(int)$dynamic['membership_id']) throw new RuntimeException('QA dynamic is not an eligible stable-membership recipient');
 
     $clientName=qaClientName($runId); $clientInn=qaClientInn($runId);
     $collision=$tenant->prepare('SELECT COUNT(*) FROM clients WHERE name=? OR inn=?');

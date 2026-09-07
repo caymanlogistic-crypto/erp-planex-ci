@@ -29,7 +29,7 @@ $central->exec('CREATE TABLE company_memberships (id INTEGER PRIMARY KEY, accoun
 $tenant->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, membership_id INTEGER, full_name TEXT, login TEXT, role_code TEXT, status TEXT, deleted_at TEXT NULL)');
 
 $central->exec("INSERT INTO company_roles(id,company_id,name,normalized_name) VALUES
-    (11,25,'Руководитель','company_owner'),(12,25,'Логист+','senior_logist'),(13,25,'Пользовательская роль','custom'),(14,25,'Логист','logist'),(21,27,'Чужая роль','logist')");
+    (11,25,'Руководитель','company_owner'),(12,25,'Логист+','логист+'),(13,25,'Пользовательская роль','custom'),(14,25,'Логист','логист'),(21,27,'Чужая роль','logist')");
 $central->exec("INSERT INTO user_accounts(id,full_name,login,status) VALUES
     (101,'Owner','owner','active'),
     (102,'Senior','senior','active'),
@@ -63,17 +63,21 @@ $tenant->exec("INSERT INTO users(id,membership_id,full_name,login,role_code,stat
 
 $rows = EntityResponsibilityService::eligibleRecipients($central, $tenant, 25);
 $ids = array_map(static fn(array $row): int => (int)$row['membership_id'], $rows);
-$ok($ids === [209, 202], 'eligible recipients must contain only active Logist/Logist+ memberships, including a logist without tenant projection; got ' . json_encode($ids));
+$sortedIds = $ids; sort($sortedIds);
+$ok($sortedIds === [201, 202, 203, 207, 208, 209], 'eligible recipients must contain every active current-company membership regardless of role name or tenant projection; got ' . json_encode($ids));
 
 $byId = [];
 foreach ($rows as $row) $byId[(int)$row['membership_id']] = $row;
 $ok(($byId[202]['full_name'] ?? '') === 'Senior', 'senior_logist display identity must come from central account');
-$ok(($byId[209]['full_name'] ?? '') === 'No projection', 'logist without tenant projection must remain eligible');
-$ok(!isset($byId[201]) && !isset($byId[203]), 'owner/custom roles must not be eligible recipients');
+$ok(($byId[209]['full_name'] ?? '') === 'No projection', 'user without tenant projection must remain eligible');
+$ok(($byId[203]['full_name'] ?? '') === 'Dynamic', 'dynamic ordinary role must remain eligible');
+$ok(($byId[201]['full_name'] ?? '') === 'Owner', 'owner must remain eligible so responsibility can be restored');
+$ok(isset($byId[207]) && isset($byId[208]), 'tenant projection status/deletion must not override active central membership/account authority');
 
 $ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 202) === 202, 'senior recipient lookup failed');
 $ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 209) === 209, 'logist without tenant projection lookup failed');
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 203) === null, 'custom role must be rejected');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 203) === 203, 'dynamic role membership lookup failed');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 201) === 201, 'owner membership lookup failed');
 $ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 204) === null, 'blocked membership must be rejected');
 $ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 205) === null, 'blocked account must be rejected');
 $ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 206) === null, 'cross-company membership must be rejected');
@@ -83,8 +87,9 @@ $tenant->exec("UPDATE users SET role_code='totally_legacy_irrelevant' WHERE id=3
 $ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 202) === 202, 'tenant role_code must never define eligibility');
 
 echo "ROLES_ACCESS_RESPONSIBILITY_RECIPIENT_PASS=YES\n";
-echo "SENIOR_LOGIST_ELIGIBLE=YES\n";
-echo "LOGIST_WITHOUT_TENANT_PROJECTION_ELIGIBLE=YES\n";
-echo "CUSTOM_ROLE_ELIGIBLE=NO\n";
+echo "RENAMED_LEGACY_ROLE_ELIGIBLE=YES\n";
+echo "USER_WITHOUT_TENANT_PROJECTION_ELIGIBLE=YES\n";
+echo "DYNAMIC_ROLE_ELIGIBLE=YES\n";
+echo "OWNER_RECIPIENT_ELIGIBLE=YES\n";
 echo "TENANT_ROLE_CODE_AUTHORITY=NO\n";
 echo "CROSS_COMPANY_RECIPIENT=DENY\n";
