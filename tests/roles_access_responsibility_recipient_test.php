@@ -24,12 +24,12 @@ $tenant = new PDO('sqlite::memory:');
 $tenant->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
 $central->exec('CREATE TABLE user_accounts (id INTEGER PRIMARY KEY, full_name TEXT, login TEXT, status TEXT)');
-$central->exec('CREATE TABLE company_roles (id INTEGER PRIMARY KEY, company_id INTEGER, name TEXT)');
+$central->exec('CREATE TABLE company_roles (id INTEGER PRIMARY KEY, company_id INTEGER, name TEXT, normalized_name TEXT)');
 $central->exec('CREATE TABLE company_memberships (id INTEGER PRIMARY KEY, account_id INTEGER, company_id INTEGER, role_id INTEGER, status TEXT)');
 $tenant->exec('CREATE TABLE users (id INTEGER PRIMARY KEY, membership_id INTEGER, full_name TEXT, login TEXT, role_code TEXT, status TEXT, deleted_at TEXT NULL)');
 
-$central->exec("INSERT INTO company_roles(id,company_id,name) VALUES
-    (11,25,'Руководитель'),(12,25,'Логист+'),(13,25,'Пользовательская роль'),(21,27,'Чужая роль')");
+$central->exec("INSERT INTO company_roles(id,company_id,name,normalized_name) VALUES
+    (11,25,'Руководитель','company_owner'),(12,25,'Логист+','senior_logist'),(13,25,'Пользовательская роль','custom'),(14,25,'Логист','logist'),(21,27,'Чужая роль','logist')");
 $central->exec("INSERT INTO user_accounts(id,full_name,login,status) VALUES
     (101,'Owner','owner','active'),
     (102,'Senior','senior','active'),
@@ -49,7 +49,7 @@ $central->exec("INSERT INTO company_memberships(id,account_id,company_id,role_id
     (206,106,27,21,'active'),
     (207,107,25,13,'active'),
     (208,108,25,13,'active'),
-    (209,109,25,13,'active')");
+    (209,109,25,14,'active')");
 
 $tenant->exec("INSERT INTO users(id,membership_id,full_name,login,role_code,status,deleted_at) VALUES
     (301,201,'Owner tenant','owner','company_owner','active',NULL),
@@ -62,29 +62,29 @@ $tenant->exec("INSERT INTO users(id,membership_id,full_name,login,role_code,stat
     (308,208,'Inactive tenant','inactive_p','membership_role','blocked',NULL)");
 
 $rows = EntityResponsibilityService::eligibleRecipients($central, $tenant, 25);
-$ids = array_map(static fn(array $row): int => (int)$row['id'], $rows);
-$ok($ids === [303, 301, 302], 'eligible recipients must follow central active membership/account and ignore tenant role_code; got ' . json_encode($ids));
+$ids = array_map(static fn(array $row): int => (int)$row['membership_id'], $rows);
+$ok($ids === [209, 202], 'eligible recipients must contain only active Logist/Logist+ memberships, including a logist without tenant projection; got ' . json_encode($ids));
 
 $byId = [];
-foreach ($rows as $row) $byId[(int)$row['id']] = $row;
-$ok(($byId[302]['membership_id'] ?? null) === 202, 'senior_logist projection must resolve to membership 202');
-$ok(($byId[303]['membership_id'] ?? null) === 203, 'membership_role projection must resolve to membership 203');
-$ok(($byId[303]['full_name'] ?? '') === 'Dynamic', 'display identity must come from central global account');
+foreach ($rows as $row) $byId[(int)$row['membership_id']] = $row;
+$ok(($byId[202]['full_name'] ?? '') === 'Senior', 'senior_logist display identity must come from central account');
+$ok(($byId[209]['full_name'] ?? '') === 'No projection', 'logist without tenant projection must remain eligible');
+$ok(!isset($byId[201]) && !isset($byId[203]), 'owner/custom roles must not be eligible recipients');
 
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 302) === 202, 'senior recipient lookup failed');
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 303) === 203, 'dynamic recipient lookup failed');
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 304) === null, 'blocked membership must be rejected');
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 305) === null, 'blocked account must be rejected');
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 306) === null, 'cross-company membership must be rejected');
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 307) === null, 'deleted tenant projection must be rejected');
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 308) === null, 'inactive tenant projection must be rejected');
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 999) === null, 'unknown tenant user must be rejected');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 202) === 202, 'senior recipient lookup failed');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 209) === 209, 'logist without tenant projection lookup failed');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 203) === null, 'custom role must be rejected');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 204) === null, 'blocked membership must be rejected');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 205) === null, 'blocked account must be rejected');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 206) === null, 'cross-company membership must be rejected');
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 999) === null, 'unknown membership must be rejected');
 
-$tenant->exec("UPDATE users SET role_code='totally_legacy_irrelevant' WHERE id=303");
-$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 303) === 203, 'tenant role_code must never define eligibility');
+$tenant->exec("UPDATE users SET role_code='totally_legacy_irrelevant' WHERE id=302");
+$ok(EntityResponsibilityService::eligibleRecipientMembershipId($central, $tenant, 25, 202) === 202, 'tenant role_code must never define eligibility');
 
 echo "ROLES_ACCESS_RESPONSIBILITY_RECIPIENT_PASS=YES\n";
 echo "SENIOR_LOGIST_ELIGIBLE=YES\n";
-echo "MEMBERSHIP_ROLE_ELIGIBLE=YES\n";
+echo "LOGIST_WITHOUT_TENANT_PROJECTION_ELIGIBLE=YES\n";
+echo "CUSTOM_ROLE_ELIGIBLE=NO\n";
 echo "TENANT_ROLE_CODE_AUTHORITY=NO\n";
 echo "CROSS_COMPANY_RECIPIENT=DENY\n";
