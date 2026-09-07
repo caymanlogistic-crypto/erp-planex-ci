@@ -74,8 +74,9 @@
         try { $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch(); }
         catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/006_create_company_crews.sql'))); }
 
-        // Central membership/role state is authoritative. Tenant role_code is
-        // compatibility metadata only and must not define responsibility eligibility.
+        // Central membership/role state is authoritative. The service returns
+        // active Логист/Логист+ memberships by stable central membership_id;
+        // tenant users.role_code and projection completeness are not authority.
         $logists = \App\Service\EntityResponsibilityService::eligibleRecipients(
             $pdo,
             $localPdo,
@@ -91,7 +92,8 @@
                             d.full_name AS driver_name,
                             CONCAT(vu1.plate_number, IFNULL(CONCAT(' + ', vu2.plate_number), '')) AS plates,
                             responsible_user.id AS logist_id,
-                            responsible_user.full_name AS logist_name
+                            responsible_user.full_name AS logist_name,
+                            COALESCE(er.membership_id, creator_user.membership_id) AS logist_membership_id
                      FROM crews c
                      JOIN contractors ct ON c.contractor_id = ct.id
                      JOIN driver_vehicle_blocks dvb ON c.driver_vehicle_block_id = dvb.id
@@ -112,6 +114,7 @@
                     "SELECT c.id, c.name, c.inn,
                             responsible_user.id AS logist_id,
                             responsible_user.full_name AS logist_name,
+                            COALESCE(er.membership_id, c.created_by_membership_id, creator_user.membership_id) AS logist_membership_id,
                             COUNT(DISTINCT cr.id) AS crew_count
                      FROM contractors c
                      LEFT JOIN users creator_user ON c.created_by_user_id = creator_user.id
@@ -129,6 +132,7 @@
                     "SELECT d.id, d.full_name, d.phone,
                             responsible_user.id AS logist_id,
                             responsible_user.full_name AS logist_name,
+                            COALESCE(er.membership_id, d.created_by_membership_id, creator_user.membership_id) AS logist_membership_id,
                             COUNT(DISTINCT cr.id) AS crew_count
                      FROM drivers d
                      LEFT JOIN users creator_user ON d.created_by_user_id = creator_user.id
@@ -148,6 +152,7 @@
                             vu1.plate_number,
                             responsible_user.id AS logist_id,
                             responsible_user.full_name AS logist_name,
+                            COALESCE(er.membership_id, vs.created_by_membership_id, creator_user.membership_id) AS logist_membership_id,
                             COUNT(DISTINCT cr.id) AS crew_count
                      FROM vehicle_sets vs
                      LEFT JOIN users creator_user ON vs.created_by_user_id = creator_user.id
@@ -162,6 +167,21 @@
                 )->fetchAll(PDO::FETCH_ASSOC);
                 break;
         }
+
+        $logistNamesByMembership = [];
+        foreach ($logists as $logist) {
+            $membershipId = (int)($logist['membership_id'] ?? 0);
+            if ($membershipId > 0) {
+                $logistNamesByMembership[$membershipId] = (string)($logist['full_name'] ?? '');
+            }
+        }
+        foreach ($items as &$item) {
+            $membershipId = (int)($item['logist_membership_id'] ?? 0);
+            if ($membershipId > 0 && empty($item['logist_name']) && isset($logistNamesByMembership[$membershipId])) {
+                $item['logist_name'] = $logistNamesByMembership[$membershipId];
+            }
+        }
+        unset($item);
 
         $dbError = null;
     } catch (\Exception $e) {

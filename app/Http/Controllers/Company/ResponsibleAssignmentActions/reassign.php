@@ -17,11 +17,11 @@ $companyId = (int)(getSessionCompanyId() ?? 0);
 $entityType = trim((string)($_POST['entity_type'] ?? ''));
 $entityIds = $_POST['entity_ids'] ?? [];
 if (!is_array($entityIds)) $entityIds = [$entityIds];
-$newLogistId = filter_var($_POST['new_logist_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+$newLogistMembershipId = filter_var($_POST['new_logist_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
 $cascade = (string)($_POST['cascade'] ?? '0') === '1';
 $tab = in_array($entityType, ['route_executor','contractor','driver','vehicle_set'], true) ? $entityType : 'route_executor';
 
-if ($companyId <= 0 || !EntityResponsibilityService::isSupported($entityType) || $newLogistId === false || $newLogistId === null) {
+if ($companyId <= 0 || !EntityResponsibilityService::isSupported($entityType) || $newLogistMembershipId === false || $newLogistMembershipId === null) {
     redirect_to('/company/responsible-assignments?tab=' . rawurlencode($tab) . '&msg=error', 303);
 }
 
@@ -39,7 +39,7 @@ try {
         $central,
         $tenant,
         $companyId,
-        (int)$newLogistId
+        (int)$newLogistMembershipId
     );
     if ($targetMembershipId === null) throw new RuntimeException('responsibility recipient is not eligible');
 

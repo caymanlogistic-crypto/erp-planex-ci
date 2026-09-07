@@ -30,11 +30,10 @@ final class EntityResponsibilityService
     }
 
     /**
-     * Responsibility recipients are defined by the current central membership
-     * model, not by the tenant compatibility role_code. A recipient must have
-     * an active membership in the selected company, an active global account,
-     * a role belonging to that company, and an active tenant projection linked
-     * by the same stable membership_id.
+     * Responsibility recipients are active central memberships whose factual
+     * role is Logist/Logist+. The central membership id is the stable identity
+     * used by responsibility rows; tenant role_code is compatibility metadata
+     * only and never defines recipient eligibility.
      *
      * @return list<array{id:int,membership_id:int,full_name:string,login:string}>
      */
@@ -52,6 +51,7 @@ final class EntityResponsibilityService
               WHERE m.company_id=?
                 AND m.status='active'
                 AND a.status='active'
+                AND r.normalized_name IN ('logist','senior_logist')
               ORDER BY a.full_name, m.id"
         );
         $memberships->execute([$companyId]);
@@ -60,37 +60,14 @@ final class EntityResponsibilityService
             return [];
         }
 
-        $tenantRows = $tenant->query(
-            "SELECT id, membership_id
-               FROM users
-              WHERE membership_id IS NOT NULL
-                AND status='active'
-                AND deleted_at IS NULL
-              ORDER BY id"
-        )->fetchAll(PDO::FETCH_ASSOC);
-
-        $tenantByMembership = [];
-        foreach ($tenantRows as $row) {
-            $membershipId = (int)($row['membership_id'] ?? 0);
-            $tenantUserId = (int)($row['id'] ?? 0);
-            if ($membershipId <= 0 || $tenantUserId <= 0) {
-                continue;
-            }
-            if (isset($tenantByMembership[$membershipId])) {
-                throw new RuntimeException('Duplicate active tenant membership projection.');
-            }
-            $tenantByMembership[$membershipId] = $tenantUserId;
-        }
-
         $result = [];
         foreach ($centralRows as $row) {
             $membershipId = (int)($row['membership_id'] ?? 0);
-            $tenantUserId = $tenantByMembership[$membershipId] ?? 0;
-            if ($membershipId <= 0 || $tenantUserId <= 0) {
+            if ($membershipId <= 0) {
                 continue;
             }
             $result[] = [
-                'id' => $tenantUserId,
+                'id' => $membershipId,
                 'membership_id' => $membershipId,
                 'full_name' => (string)($row['full_name'] ?? ''),
                 'login' => (string)($row['login'] ?? ''),
@@ -104,13 +81,13 @@ final class EntityResponsibilityService
         PDO $central,
         PDO $tenant,
         int $companyId,
-        int $tenantUserId
+        int $membershipId
     ): ?int {
-        if ($tenantUserId <= 0) {
+        if ($membershipId <= 0) {
             return null;
         }
         foreach (self::eligibleRecipients($central, $tenant, $companyId) as $recipient) {
-            if ((int)$recipient['id'] === $tenantUserId) {
+            if ((int)$recipient['membership_id'] === $membershipId) {
                 return (int)$recipient['membership_id'];
             }
         }
