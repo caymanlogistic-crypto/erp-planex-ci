@@ -36,7 +36,7 @@
         $crewStmt->execute([$crewId]);
         $crew = $crewStmt->fetch(PDO::FETCH_ASSOC);
 
-        if (!$crew) {
+        if (!$crew || !\App\Service\RouteExecutorService::canAccessCrew($localPdo, $crewId)) {
             header('Location: /company/route-executors');
             exit;
         }

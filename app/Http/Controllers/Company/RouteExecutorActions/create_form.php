@@ -50,13 +50,13 @@
             catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/018_create_driver_vehicle_blocks.sql'))); }
 
             // Load contractors for dropdown
-            $contractors = $localPdo->query("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+            $contractors = \App\Service\RouteExecutorService::filterVisibleContractors($localPdo, $localPdo->query("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC));
 
             // Load drivers for dropdown
-            $drivers = $localPdo->query("SELECT id, full_name, phone FROM drivers WHERE deleted_at IS NULL AND status = 'active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
+            $drivers = \App\Service\RouteExecutorService::filterVisibleDrivers($localPdo, $localPdo->query("SELECT id, full_name, phone FROM drivers WHERE deleted_at IS NULL AND status = 'active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC));
 
             // Load vehicle sets for dropdown
-            $vehicleSets = $localPdo->query("SELECT vs.id, vs.set_type, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate FROM vehicle_sets vs LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id = vu1.id LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id = vu2.id WHERE vs.deleted_at IS NULL AND vs.status = 'active' ORDER BY vs.set_type")->fetchAll(PDO::FETCH_ASSOC);
+            $vehicleSets = \App\Service\RouteExecutorService::filterVisibleVehicleSets($localPdo, $localPdo->query("SELECT vs.id, vs.set_type, vs.primary_vehicle_unit_id, vs.secondary_vehicle_unit_id, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate FROM vehicle_sets vs LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id = vu1.id LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id = vu2.id WHERE vs.deleted_at IS NULL AND vs.status = 'active' ORDER BY vs.set_type")->fetchAll(PDO::FETCH_ASSOC));
 
             $blockingNotices = [];
             if (empty($contractors)) {

@@ -46,9 +46,9 @@ try {
     $userId = (int)($_SESSION['user_id'] ?? 0);
     $userRole = (string)($_SESSION['role_code'] ?? '');
 
-    $contractors=$localPdo->query("SELECT id,name,inn FROM contractors WHERE deleted_at IS NULL AND status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
-    $drivers=$localPdo->query("SELECT id,full_name,phone FROM drivers WHERE deleted_at IS NULL AND status='active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC);
-    $vehicleSets=$localPdo->query("SELECT vs.id,vs.set_type,vu1.plate_number primary_plate,vu2.plate_number secondary_plate FROM vehicle_sets vs LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id=vu1.id LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id=vu2.id WHERE vs.deleted_at IS NULL AND vs.status='active' ORDER BY vs.set_type")->fetchAll(PDO::FETCH_ASSOC);
+    $contractors=\App\Service\RouteExecutorService::filterVisibleContractors($localPdo,$localPdo->query("SELECT id,name,inn FROM contractors WHERE deleted_at IS NULL AND status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC));
+    $drivers=\App\Service\RouteExecutorService::filterVisibleDrivers($localPdo,$localPdo->query("SELECT id,full_name,phone FROM drivers WHERE deleted_at IS NULL AND status='active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC));
+    $vehicleSets=\App\Service\RouteExecutorService::filterVisibleVehicleSets($localPdo,$localPdo->query("SELECT vs.id,vs.set_type,vs.primary_vehicle_unit_id,vs.secondary_vehicle_unit_id,vu1.plate_number primary_plate,vu2.plate_number secondary_plate FROM vehicle_sets vs LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id=vu1.id LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id=vu2.id WHERE vs.deleted_at IS NULL AND vs.status='active' ORDER BY vs.set_type")->fetchAll(PDO::FETCH_ASSOC));
 
     $contractorId=(int)($_POST['contractor_id']??0);
     $vehicleSetId=(int)($_POST['vehicle_set_id']??0);
@@ -63,7 +63,8 @@ try {
     if($vehicleSetId<=0)$errors['vehicle_set_id']='Выберите транспортный комплект.';
 
     $checkDriverAccess = static function(PDO $pdo,int $driverId): bool {
-        $s=$pdo->prepare("SELECT 1 FROM drivers WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$driverId]);return (bool)$s->fetchColumn();
+        $s=$pdo->prepare("SELECT 1 FROM drivers WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$driverId]);
+        return (bool)$s->fetchColumn() && \App\Service\RouteExecutorService::canAccessDriver($pdo,$driverId);
     };
     foreach($driverIds as $driverId){ if(!$checkDriverAccess($localPdo,$driverId)){ $errors['driver_ids']='Один из выбранных водителей недоступен или неактивен.'; break; } }
 
@@ -73,9 +74,13 @@ try {
     }
     if(!$errors){
         $s=$localPdo->prepare("SELECT 1 FROM contractors WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$contractorId]);
-        if(!$s->fetchColumn())$errors['contractor_id']='Подрядчик не найден или неактивен.';
+        if(!$s->fetchColumn() || !\App\Service\RouteExecutorService::canAccessContractor($localPdo,$contractorId))$errors['contractor_id']='Подрядчик не найден, неактивен или недоступен.';
         $s=$localPdo->prepare("SELECT 1 FROM vehicle_sets WHERE id=? AND deleted_at IS NULL AND status='active'");$s->execute([$vehicleSetId]);
         if(!$s->fetchColumn())$errors['vehicle_set_id']='Транспортный комплект не найден или неактивен.';
+        if(!isset($errors['vehicle_set_id'])){
+            $vsAccess=$localPdo->prepare('SELECT id,primary_vehicle_unit_id,secondary_vehicle_unit_id FROM vehicle_sets WHERE id=? LIMIT 1');$vsAccess->execute([$vehicleSetId]);$vsAccessRow=$vsAccess->fetch(PDO::FETCH_ASSOC)?:[];
+            if(!\App\Service\RouteExecutorService::canAccessVehicleSet($localPdo,$vsAccessRow))$errors['vehicle_set_id']='Транспортный комплект недоступен по текущему data scope.';
+        }
     }
 
     if(!$errors){
