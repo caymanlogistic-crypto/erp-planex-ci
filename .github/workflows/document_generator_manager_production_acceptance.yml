@@ -26,22 +26,29 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
-      - name: Resolve exact canonical parent
+      - name: Resolve exact canonical base
         id: source
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "$QA_BRANCH"
-          source_sha="$(git rev-parse HEAD^)"
-          [[ "$source_sha" =~ ^[0-9a-f]{40}$ ]]
-          test "$(git rev-list --count "${source_sha}..HEAD")" = 1
           git fetch --no-tags origin "+refs/heads/${CANONICAL_BRANCH}:refs/remotes/origin/${CANONICAL_BRANCH}"
           canonical_sha="$(git rev-parse "refs/remotes/origin/${CANONICAL_BRANCH}")"
-          test "$source_sha" = "$canonical_sha"
-          printf 'source_sha=%s\n' "$source_sha" >> "$GITHUB_OUTPUT"
-          printf 'SOURCE_SHA=%s\nCANONICAL_SHA=%s\nQA_COMMIT=%s\n' "$source_sha" "$canonical_sha" "$(git rev-parse HEAD)"
+          [[ "$canonical_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git merge-base HEAD "$canonical_sha")" = "$canonical_sha"
+          test "$(git rev-list --count "${canonical_sha}..HEAD")" -ge 1
+          test -z "$(git rev-list --merges "${canonical_sha}..HEAD")"
+          while IFS= read -r changed; do
+            case "$changed" in
+              .github/document-generator/qa_manager_access.php|.github/workflows/document_generator_manager_production_acceptance.yml) ;;
+              '') ;;
+              *) echo "QA branch contains forbidden path: $changed" >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only "${canonical_sha}..HEAD")
+          printf 'source_sha=%s\n' "$canonical_sha" >> "$GITHUB_OUTPUT"
+          printf 'SOURCE_SHA=%s\nCANONICAL_SHA=%s\nQA_COMMIT=%s\n' "$canonical_sha" "$canonical_sha" "$(git rev-parse HEAD)"
 
       - name: Configure isolated SSH credentials
         shell: bash
@@ -79,12 +86,14 @@ jobs:
           mkdir -p "$RESULT_DIR"
           remote="/tmp/docgen_manager_access_${GITHUB_RUN_ID}.php"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/document-generator/qa_manager_access.php "$SSH_USER@$SSH_HOST:$remote"
-          stale_run='34161538112'
-          stale_out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$stale_run' /usr/bin/php8.5 '$remote' audit-empty")"
-          printf '%s\n' "$stale_out" | tee "$RESULT_DIR/stale_cleanup.txt"
-          printf '%s\n' "$stale_out" | grep -q '^QA_EMPTY_NAMESPACE=PASS$'
-          printf '%s\n' "$stale_out" | grep -q '^QA_RESIDUE=0$'
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/docgen_manager_access_${stale_run}.php'"
+          : > "$RESULT_DIR/stale_cleanup.txt"
+          for stale_run in 34161538112 34161992218; do
+            stale_out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$stale_run' /usr/bin/php8.5 '$remote' audit-empty")"
+            printf 'STALE_RUN=%s\n%s\n' "$stale_run" "$stale_out" | tee -a "$RESULT_DIR/stale_cleanup.txt"
+            printf '%s\n' "$stale_out" | grep -q '^QA_EMPTY_NAMESPACE=PASS$'
+            printf '%s\n' "$stale_out" | grep -q '^QA_RESIDUE=0$'
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/docgen_manager_access_${stale_run}.php'"
+          done
           echo 'PRIOR_FAILED_RUN_RESIDUE=0' | tee -a "$RESULT_DIR/stale_cleanup.txt"
 
           out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' create")"
