@@ -87,7 +87,7 @@ jobs:
           remote="/tmp/docgen_manager_access_${GITHUB_RUN_ID}.php"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/document-generator/qa_manager_access.php "$SSH_USER@$SSH_HOST:$remote"
           : > "$RESULT_DIR/stale_cleanup.txt"
-          for stale_run in 34161538112 34161992218; do
+          for stale_run in 34161538112 34161992218 34162092890; do
             stale_out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$stale_run' /usr/bin/php8.5 '$remote' audit-empty")"
             printf 'STALE_RUN=%s\n%s\n' "$stale_run" "$stale_out" | tee -a "$RESULT_DIR/stale_cleanup.txt"
             printf '%s\n' "$stale_out" | grep -q '^QA_EMPTY_NAMESPACE=PASS$'
@@ -142,7 +142,20 @@ jobs:
           generator_html="/tmp/docgen_manager_generator_${GITHUB_RUN_ID}.html"
           history_html="/tmp/docgen_manager_history_${GITHUB_RUN_ID}.html"
           own_file="/tmp/docgen_manager_own_${GITHUB_RUN_ID}.docx"
-          login_meta="$(curl -sS -L -c "$cookie" -b "$cookie" -o "$login_html" -w '%{http_code}|%{url_effective}' --data-urlencode "login=$QA_LOGIN" --data-urlencode "password=$QA_PASSWORD" https://plan-ex.ru/erpv2/login)"
+          login_get="$(curl -sS -c "$cookie" -b "$cookie" -o "$login_html" -w '%{http_code}' https://plan-ex.ru/erpv2/login)"
+          test "$login_get" = 200
+          csrf="$(python3 - "$login_html" <<'PY'
+          import html,re,sys
+          body=open(sys.argv[1],encoding='utf-8').read()
+          match=re.search(r'<input[^>]+name=["\']_csrf_token["\'][^>]+value=["\']([^"\']+)["\']',body,re.I)
+          if not match:
+              raise SystemExit('login csrf token missing')
+          print(html.unescape(match.group(1)))
+          PY
+          )"
+          test -n "$csrf"
+          echo "::add-mask::$csrf"
+          login_meta="$(curl -sS -L -c "$cookie" -b "$cookie" -o "$login_html" -w '%{http_code}|%{url_effective}' --data-urlencode "_csrf_token=$csrf" --data-urlencode "login=$QA_LOGIN" --data-urlencode "password=$QA_PASSWORD" https://plan-ex.ru/erpv2/login)"
           case "$login_meta" in 200\|*'/erpv2/company/'*) ;; *) echo "REAL_LOGIN_FAIL=$login_meta" >&2; exit 1;; esac
           echo 'REAL_LOGIN=PASS' | tee "$RESULT_DIR/acceptance.txt"
 
@@ -184,7 +197,7 @@ jobs:
           echo 'FOREIGN_DOCUMENT_DIRECT_DOWNLOAD=404_PASS' | tee -a "$RESULT_DIR/acceptance.txt"
 
           cp "$cookie" "$old_cookie"
-          logout_http="$(curl -sS -b "$cookie" -c "$cookie" -o /dev/null -w '%{http_code}' -X POST https://plan-ex.ru/erpv2/logout)"
+          logout_http="$(curl -sS -b "$cookie" -c "$cookie" -o /dev/null -w '%{http_code}' --data-urlencode "_csrf_token=$csrf" https://plan-ex.ru/erpv2/logout)"
           case "$logout_http" in 302|303) ;; *) echo "LOGOUT_HTTP_UNEXPECTED=$logout_http" >&2; exit 1;; esac
           old_http="$(curl -sS -b "$old_cookie" -o /dev/null -w '%{http_code}' https://plan-ex.ru/erpv2/company/document-generator)"
           test "$old_http" != 200
@@ -203,7 +216,21 @@ jobs:
           set -euo pipefail
           mkdir -p "$RESULT_DIR"
           cookie="/tmp/docgen_manager_cookie_${GITHUB_RUN_ID}.txt"
-          if [ -s "$cookie" ]; then curl -sS -b "$cookie" -c "$cookie" -o /dev/null -X POST https://plan-ex.ru/erpv2/logout || true; fi
+          if [ -s "$cookie" ]; then
+            cleanup_html="/tmp/docgen_manager_cleanup_${GITHUB_RUN_ID}.html"
+            curl -sSL -b "$cookie" -c "$cookie" https://plan-ex.ru/erpv2/company/document-generator -o "$cleanup_html" || true
+            cleanup_csrf="$(python3 - "$cleanup_html" <<'PY' 2>/dev/null || true
+          import html,re,sys
+          body=open(sys.argv[1],encoding='utf-8').read()
+          match=re.search(r'<input[^>]+name=["\']_csrf_token["\'][^>]+value=["\']([^"\']+)["\']',body,re.I)
+          print(html.unescape(match.group(1)) if match else '')
+          PY
+            )"
+            if [ -n "$cleanup_csrf" ]; then
+              curl -sS -b "$cookie" -c "$cookie" -o /dev/null --data-urlencode "_csrf_token=$cleanup_csrf" https://plan-ex.ru/erpv2/logout || true
+            fi
+            rm -f "$cleanup_html"
+          fi
           remote="/tmp/docgen_manager_access_${GITHUB_RUN_ID}.php"
           test -f .github/document-generator/qa_manager_access.php
           scp -P "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/document-generator/qa_manager_access.php "$SSH_USER@$SSH_HOST:$remote"
