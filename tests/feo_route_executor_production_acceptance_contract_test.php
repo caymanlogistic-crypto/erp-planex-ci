@@ -27,7 +27,7 @@ foreach([
     'CROSS_COMPANY_LEAKAGE=NO'
 ] as $marker){$ok(str_contains($script,$marker),"browser acceptance missing {$marker}");}
 $ok(str_contains($script,'/company/roles-access/roles/${Number(role.id)}/save')&&str_contains($script,'/company/roles-access/memberships/${Number(m.id)}/save'),'role and personal override proof must use real Roles & Access POSTs');
-$ok(str_contains($script,"[data-route-executor-id]")&&str_contains($script,'foreignIds.includes(routeIds.component)'),'company isolation must inspect rendered route-executor IDs after switch');
+$ok(str_contains($script,"denied.status()===403")&&str_contains($script,'QA Route ${process.env.GITHUB_RUN_ID')&&str_contains($script,'!foreignText.includes(routeNamespace)'),'company isolation must use the real company switch, require the expected company-B page denial, and prove the run-scoped company-A route namespace is absent');
 $ok(str_contains($script,"'company.feo.requests':'/company/feo/requests'")&&str_contains($script,"'company.feo.costs':'/company/feo/requests/costs'"),'all FEO child routes must be asserted from rendered navigation');
 $ok(str_contains($script,"expected<=0?''")&&str_contains($script,"parentLabel=sum<=0?''"),'zero child badge and parent sum behavior must be asserted');
 
