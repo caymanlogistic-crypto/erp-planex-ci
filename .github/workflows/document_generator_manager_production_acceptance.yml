@@ -79,6 +79,14 @@ jobs:
           mkdir -p "$RESULT_DIR"
           remote="/tmp/docgen_manager_access_${GITHUB_RUN_ID}.php"
           scp -P "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/document-generator/qa_manager_access.php "$SSH_USER@$SSH_HOST:$remote"
+          stale_run='34161538112'
+          stale_out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$stale_run' /usr/bin/php8.5 '$remote' audit-empty")"
+          printf '%s\n' "$stale_out" | tee "$RESULT_DIR/stale_cleanup.txt"
+          printf '%s\n' "$stale_out" | grep -q '^QA_EMPTY_NAMESPACE=PASS$'
+          printf '%s\n' "$stale_out" | grep -q '^QA_RESIDUE=0$'
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/docgen_manager_access_${stale_run}.php'"
+          echo 'PRIOR_FAILED_RUN_RESIDUE=0' | tee -a "$RESULT_DIR/stale_cleanup.txt"
+
           out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' create")"
           printf '%s\n' "$out" | grep -q '^QA_MANAGER_FIXTURE_READY=YES$'
           cred="$(printf '%s\n' "$out" | sed -n 's/^QA_CREDENTIALS_B64=//p')"
@@ -190,13 +198,21 @@ jobs:
           remote="/tmp/docgen_manager_access_${GITHUB_RUN_ID}.php"
           test -f .github/document-generator/qa_manager_access.php
           scp -P "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/document-generator/qa_manager_access.php "$SSH_USER@$SSH_HOST:$remote"
+          set +e
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' cleanup" | tee "$RESULT_DIR/cleanup.txt"
-          grep -q '^FOREIGN_DOCUMENT_PRESERVED=PASS$' "$RESULT_DIR/cleanup.txt"
-          grep -q '^ACTIVE_TEMPLATES_PRESERVED=PASS$' "$RESULT_DIR/cleanup.txt"
-          grep -q '^BASELINE_DOCUMENT_COUNT_RESTORED=PASS$' "$RESULT_DIR/cleanup.txt"
-          grep -q '^CROSS_COMPANY_LEAKAGE=NO$' "$RESULT_DIR/cleanup.txt"
+          cleanup_rc=${PIPESTATUS[0]}
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$remote'" || true
+          set -e
+          test "$cleanup_rc" = 0
           grep -q '^QA_RESIDUE=0$' "$RESULT_DIR/cleanup.txt"
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$remote'"
+          if grep -q '^QA_EARLY_SETUP_STATE_ABSENT=PASS$' "$RESULT_DIR/cleanup.txt"; then
+            echo 'EARLY_SETUP_CLEANUP=PASS' | tee -a "$RESULT_DIR/cleanup.txt"
+          else
+            grep -q '^FOREIGN_DOCUMENT_PRESERVED=PASS$' "$RESULT_DIR/cleanup.txt"
+            grep -q '^ACTIVE_TEMPLATES_PRESERVED=PASS$' "$RESULT_DIR/cleanup.txt"
+            grep -q '^BASELINE_DOCUMENT_COUNT_RESTORED=PASS$' "$RESULT_DIR/cleanup.txt"
+            grep -q '^CROSS_COMPANY_LEAKAGE=NO$' "$RESULT_DIR/cleanup.txt"
+          fi
           rm -f "$cookie" "/tmp/docgen_manager_old_cookie_${GITHUB_RUN_ID}.txt" "/tmp/docgen_manager_login_${GITHUB_RUN_ID}.html" "/tmp/docgen_manager_route_${GITHUB_RUN_ID}.html" "/tmp/docgen_manager_generator_${GITHUB_RUN_ID}.html" "/tmp/docgen_manager_history_${GITHUB_RUN_ID}.html" "/tmp/docgen_manager_own_${GITHUB_RUN_ID}.docx"
 
       - name: Require complete acceptance evidence
@@ -205,6 +221,7 @@ jobs:
           set -euo pipefail
           for marker in REAL_LOGIN=PASS ROUTE_EXECUTOR_MANAGER_VISIBLE=PASS DOCUMENT_GENERATOR_EXECUTORS=PASS DOCUMENT_GENERATOR_ALL_ACTIVE_TEMPLATES=PASS DOCUMENT_HISTORY_CREATOR_ONLY=PASS OWN_DOCUMENT_DOWNLOAD=PASS FOREIGN_DOCUMENT_DIRECT_DOWNLOAD=404_PASS QA_SESSION_LOGOUT=PASS PRODUCTION_MANAGER_DOCUMENT_GENERATOR_ACCEPTANCE=PASS; do grep -q "^${marker}$" "$RESULT_DIR/acceptance.txt"; done
           for marker in FOREIGN_DOCUMENT_PRESERVED=PASS ACTIVE_TEMPLATES_PRESERVED=PASS BASELINE_DOCUMENT_COUNT_RESTORED=PASS CROSS_COMPANY_LEAKAGE=NO QA_RESIDUE=0; do grep -q "^${marker}$" "$RESULT_DIR/cleanup.txt"; done
+          grep -q '^PRIOR_FAILED_RUN_RESIDUE=0$' "$RESULT_DIR/stale_cleanup.txt"
           echo 'DOCUMENT_GENERATOR_MANAGER_PRODUCTION_GATE=PASS' | tee "$RESULT_DIR/final.txt"
 
       - uses: actions/upload-artifact@v4

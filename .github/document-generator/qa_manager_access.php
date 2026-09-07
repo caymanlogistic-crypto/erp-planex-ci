@@ -14,6 +14,7 @@ require_once $root . '/app/Support/helpers.php';
 require_once $root . '/app/Support/environment.php';
 loadEnvFileNonOverwriting($root . '/.env');
 require_once $root . '/app/Core/Database.php';
+require_once $root . '/app/Support/crypto_helper.php';
 require_once $root . '/app/Support/company_database.php';
 require_once $root . '/app/Service/IdentityNormalizer.php';
 require_once $root . '/app/Service/CompanyRoleService.php';
@@ -64,6 +65,65 @@ function qaDocgenCreateDocx(string $path, string $label): string
         throw new RuntimeException('QA DOCX SHA failed');
     }
     return $sha;
+}
+
+/** @return array<string,int> */
+function qaDocgenResidue(PDO $central, array $config, int $companyId, string $login, string $roleName, string $documentNumber, string $runId): array
+{
+    $tenant = qaDocgenTenant($central, $config, $companyId);
+    $normalizedLogin = App\Service\IdentityNormalizer::login($login);
+    $normalizedRole = App\Service\IdentityNormalizer::roleName($roleName);
+
+    $stmt = $central->prepare('SELECT COUNT(*) FROM user_accounts WHERE normalized_login=?');
+    $stmt->execute([$normalizedLogin]);
+    $accounts = (int) $stmt->fetchColumn();
+    $stmt = $central->prepare('SELECT COUNT(*) FROM company_roles WHERE company_id=? AND normalized_name=?');
+    $stmt->execute([$companyId, $normalizedRole]);
+    $roles = (int) $stmt->fetchColumn();
+    $stmt = $central->prepare('SELECT COUNT(*) FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id WHERE m.company_id=? AND a.normalized_login=?');
+    $stmt->execute([$companyId, $normalizedLogin]);
+    $memberships = (int) $stmt->fetchColumn();
+    $stmt = $tenant->prepare('SELECT COUNT(*) FROM users WHERE login=?');
+    $stmt->execute([$login]);
+    $tenantUsers = (int) $stmt->fetchColumn();
+    $stmt = $tenant->prepare('SELECT COUNT(*) FROM generated_documents WHERE document_number=?');
+    $stmt->execute([$documentNumber]);
+    $documents = (int) $stmt->fetchColumn();
+    $expectedDir = storage_path("companies/{$companyId}/document-generator/qa-access-{$runId}");
+    $storage = is_dir($expectedDir) ? 1 : 0;
+
+    $cross = 0;
+    $foreignCompany = $central->query("SELECT * FROM companies WHERE id=27 AND status='active' LIMIT 1")->fetch(PDO::FETCH_ASSOC) ?: null;
+    if ($foreignCompany) {
+        $foreignTenant = (new App\Core\Database(companyDatabaseConfig($config, $foreignCompany)))->connection();
+        $crossStmt = $foreignTenant->prepare('SELECT COUNT(*) FROM users WHERE login=?');
+        $crossStmt->execute([$login]);
+        $cross = (int) $crossStmt->fetchColumn();
+    }
+
+    return [
+        'accounts' => $accounts,
+        'roles' => $roles,
+        'memberships' => $memberships,
+        'tenant_users' => $tenantUsers,
+        'documents' => $documents,
+        'storage' => $storage,
+        'cross_company_users' => $cross,
+    ];
+}
+
+function qaDocgenAssertEmptyNamespace(PDO $central, array $config, int $companyId, string $login, string $roleName, string $documentNumber, string $runId): void
+{
+    $residue = qaDocgenResidue($central, $config, $companyId, $login, $roleName, $documentNumber, $runId);
+    if (array_sum($residue) !== 0) {
+        throw new RuntimeException('QA namespace not empty: ' . json_encode($residue, JSON_THROW_ON_ERROR));
+    }
+}
+
+if ($mode === 'audit-empty') {
+    qaDocgenAssertEmptyNamespace($central, $config, $companyId, $login, $roleName, $documentNumber, $runId);
+    echo "QA_EMPTY_NAMESPACE=PASS\nQA_RESIDUE=0\n";
+    exit(0);
 }
 
 if ($mode === 'create') {
@@ -210,8 +270,9 @@ if ($mode === 'create') {
 
 if ($mode === 'cleanup') {
     if (!is_file($stateFile)) {
-        fwrite(STDERR, "QA state missing; cannot prove cleanup\n");
-        exit(1);
+        qaDocgenAssertEmptyNamespace($central, $config, $companyId, $login, $roleName, $documentNumber, $runId);
+        echo "QA_EARLY_SETUP_STATE_ABSENT=PASS\nQA_RESIDUE=0\n";
+        exit(0);
     }
     $state = json_decode((string) file_get_contents($stateFile), true, 64, JSON_THROW_ON_ERROR);
     $tenant = qaDocgenTenant($central, $config, $companyId);
