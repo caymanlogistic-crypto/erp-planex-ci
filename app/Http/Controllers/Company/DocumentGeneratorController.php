@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Service\AccessControlService;
 use App\Service\DocumentGeneratorService;
 use App\Service\DocumentService;
 use App\Service\DocumentTemplateService;
@@ -292,7 +293,12 @@ final class DocumentGeneratorController
         if (($company['status'] ?? '') !== 'active') throw new RuntimeException('Генератор договоров недоступен для неактивной компании.');
         $localDb = new Database(companyDatabaseConfig($this->config, $company));
         $localPdo = $localDb->connection();
-        return [$company, $localPdo, $companyId, (int)($_SESSION['user_id'] ?? 0), (string)($_SESSION['role_code'] ?? '')];
+        $userId = DocumentGeneratorService::resolveActorTenantUserId(
+            $localPdo,
+            AccessControlService::effectiveMembershipId(),
+            (int)($_SESSION['user_id'] ?? 0)
+        );
+        return [$company, $localPdo, $companyId, $userId, (string)($_SESSION['role_code'] ?? '')];
     }
 
     private function requireSchema(PDO $pdo): void

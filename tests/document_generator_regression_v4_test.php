@@ -11,6 +11,7 @@ $rm=function(string $p)use(&$rm){if(!file_exists($p))return;if(!is_dir($p)||is_l
 $wf=$src('app/Service/DocumentGeneratorWorkflowTrait.php');
 $data=$src('app/Service/DocumentGeneratorDataTrait.php');
 $access=$src('app/Service/DocumentGeneratorAccessTrait.php');
+$controller=$src('app/Http/Controllers/Company/DocumentGeneratorController.php');
 $view=$src('app/View/pages/company_document_generator.php');
 $templateTrait=$src('app/Service/DocumentGeneratorTemplateTrait.php');
 $sequence=$src('app/Service/DocumentNumberSequenceService.php');
@@ -24,6 +25,8 @@ $has($wf,'GoogleSheetsRequestContactService','Google contacts wiring');$ok(!str_
 $ok(!str_contains($view,'name="contract_number"'),'manual contract number removed');
 $ok(!str_contains($view,'name="executor_bank_inn"'),'manual bank INN removed');
 $ok(!str_contains($view,'ИНН банка Арендодателя'),'bank INN removed from preview');
+$has($controller,'AccessControlService::effectiveMembershipId()','controller must resolve current stable membership');
+$has($controller,'DocumentGeneratorService::resolveActorTenantUserId','controller must translate membership to tenant user id');
 foreach(['document-generator-preview-modal','data-docgen-section="vehicle_lease_crew"','data-docgen-section="waybill_driver_assignment"','Сформировать DOCX','Номер будет присвоен автоматически при формировании.']as$n)$has($view,$n,'UI contract '.$n);
 $has($templateTrait,'contract_vehicle_lease_crew_v3.docx','built-in v3 seed');
 $has($templateTrait,'87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2','built-in v3 SHA');
@@ -69,6 +72,7 @@ try{
 $pdo=new PDO("mysql:host=$host;port=$port;dbname=$db;charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
 if(!$ownsDatabase)cleanCompanyPoolDatabase($pdo);
 foreach([
+"CREATE TABLE users(id INT UNSIGNED PRIMARY KEY,membership_id BIGINT UNSIGNED NULL UNIQUE,status VARCHAR(32) DEFAULT 'active',deleted_at DATETIME NULL) ENGINE=InnoDB",
 "CREATE TABLE contractors(id INT UNSIGNED PRIMARY KEY,name VARCHAR(255),inn VARCHAR(32),kpp VARCHAR(32),ogrn VARCHAR(32),contractor_type VARCHAR(32),legal_address TEXT,physical_address TEXT,bank_account VARCHAR(64),bank_name VARCHAR(255),bank_bik VARCHAR(32),bank_corr_account VARCHAR(64),director_full_name VARCHAR(255),director_position VARCHAR(255),created_by_user_id INT,status VARCHAR(32) DEFAULT 'active',deleted_at DATETIME NULL) ENGINE=InnoDB",
 "CREATE TABLE drivers(id INT UNSIGNED PRIMARY KEY,full_name VARCHAR(255),passport_number VARCHAR(64),passport_issued_by VARCHAR(255),passport_issue_date DATE,license_number VARCHAR(64),license_issue_date DATE,created_by_user_id INT,status VARCHAR(32) DEFAULT 'active',deleted_at DATETIME NULL) ENGINE=InnoDB",
 "CREATE TABLE vehicle_units(id INT UNSIGNED PRIMARY KEY,unit_type VARCHAR(32),brand VARCHAR(255),model VARCHAR(255),plate_number VARCHAR(64),vin VARCHAR(64),created_by_user_id INT,status VARCHAR(32) DEFAULT 'active',deleted_at DATETIME NULL) ENGINE=InnoDB",
@@ -87,12 +91,14 @@ foreach(["INSERT INTO vehicle_units VALUES(1,'truck','КАМАЗ','5490','А123�
 $pdo->exec("INSERT INTO feo_requests VALUES('300001',1.0,'Отправитель 1','Погрузка 1','111',NULL,NULL,'Воскресенск'),('300002',0.5,'Отправитель 2','Погрузка 2','222',NULL,'two@test','Воскресенск'),('300003',0.25,'Отправитель 3','Погрузка 3',NULL,NULL,'three@test','Воскресенск'),('300004',0.25,'Отправитель 4','Погрузка 4',NULL,NULL,NULL,'Воскресенск'),('300005',0.1,'Отправитель 5','Погрузка 5','555',NULL,NULL,'Коломна')");
 $googleFixture="header,c1,c2,c3,c4,c5,c6,c7,c8,contacts\n300001,,,,,,,,,111\n300002,,,,,,,,,\"222, two@test\"\n300003,,,,,,,,,three@test\n300004,,,,,,,,,\n300005,,,,,,,,,555\n";App\Service\GoogleSheetsRequestContactService::setDefaultFetcherForTests(static fn(string $url):string=>$googleFixture);
 $company=['id'=>$cid,'name'=>'ООО «ПЛАНЭКС»','inn'=>'5005061234','kpp'=>'500501001','ogrn'=>'1205000000001','legal_address'=>'Воскресенск','physical_address'=>'','bank_name'=>'Банк ПЛАНЭКС','bank_account'=>'40702810000000000001','bank_corr_account'=>'30101810000000000001','bank_bik'=>'044525001','contact_phone'=>'','contact_email'=>'','director_full_name'=>'Гладских Карина Владимировна','director_position'=>'Генеральный директор'];
+$pdo->exec("INSERT INTO users(id,membership_id,status,deleted_at) VALUES(101,12,'active',NULL),(202,13,'active',NULL)");
 App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,1,'company_owner');$ts=App\Service\DocumentGeneratorService::listTemplates($pdo,true);$bt=[];foreach($ts as$t)$bt[$t['document_type']]=$t;$eq($bt['vehicle_lease_crew']['sha256'],$canon['contract_vehicle_lease_crew_v3.docx'],'contract seed v3');$ph=json_decode((string)$bt['vehicle_lease_crew']['placeholders_json'],true)?:[];$ok(!in_array('executor.bank_inn',$ph,true),'active v3 bank placeholder clean');$ok(in_array('vehicle.vin',$ph,true),'active v3 vehicle VIN placeholder');
 $allScopes=['client'=>'all','contractor'=>'all','vehicle_unit'=>'all','driver'=>'all','linear_trip'=>'all','waste_trip'=>'all'];
 $managerAccess=App\Security\EffectiveAccess::member(12,$cid,['company.route_executors'=>true,'company.documents.create'=>true,'company.documents.history'=>true],$allScopes,'custom_role');
 App\Security\AccessRuntime::setCurrent($managerAccess);
-$eq(array_map('intval',array_column(App\Service\DocumentGeneratorService::listAccessibleExecutors($pdo,101,'custom_role'),'crew_id')),[1,2],'dynamic manager must see same effective route executors as canonical Route Executors ACL');
-$ok(App\Service\DocumentGeneratorService::loadAccessibleExecutor($pdo,2,101,'custom_role')!==null,'dynamic manager must load an executor allowed by effective scopes');
+$managerUserId=App\Service\DocumentGeneratorService::resolveActorTenantUserId($pdo,12,900001);$eq($managerUserId,101,'global account id must resolve through membership to tenant user id');$eq(App\Service\DocumentGeneratorService::resolveActorTenantUserId($pdo,null,101),101,'legacy session fallback keeps tenant user id');$mappingBlocked=false;try{App\Service\DocumentGeneratorService::resolveActorTenantUserId($pdo,999,900001);}catch(RuntimeException){$mappingBlocked=true;}$ok($mappingBlocked,'missing membership projection must fail closed');
+$eq(array_map('intval',array_column(App\Service\DocumentGeneratorService::listAccessibleExecutors($pdo,$managerUserId,'custom_role'),'crew_id')),[1,2],'dynamic manager must see same effective route executors as canonical Route Executors ACL');
+$ok(App\Service\DocumentGeneratorService::loadAccessibleExecutor($pdo,2,$managerUserId,'custom_role')!==null,'dynamic manager must load an executor allowed by effective scopes');
 $templateTypes=array_keys($bt);sort($templateTypes);$eq($templateTypes,['vehicle_lease_crew','waybill_driver_assignment'],'dynamic manager create flow must receive all active company templates');
 echo "DOCUMENT_GENERATOR_DYNAMIC_MANAGER_EXECUTORS=PASS\nDOCUMENT_GENERATOR_MANAGER_ALL_TEMPLATES=PASS\n";
 $params=['contract_date'=>'2026-09-03','start_date'=>'2026-09-03','start_time'=>'','finish_date'=>'2026-09-10','price'=>'100000','vat_mode'=>'без НДС','waybill_number'=>'IGNORED','waybill_date'=>''];
@@ -103,12 +109,12 @@ $id1=App\Service\DocumentGeneratorService::generate($pdo,$cid,101,'company_owner
 $pdo->beginTransaction();$n=App\Service\DocumentNumberSequenceService::allocateVehicleLeaseContractNumber($pdo);$eq($n,'П 106','rollback candidate');$pdo->rollBack();$eq((int)$pdo->query("SELECT next_number FROM document_number_sequences WHERE sequence_key='vehicle_lease_crew_contract'")->fetchColumn(),106,'rollback does not burn');$id2=App\Service\DocumentGeneratorService::generate($pdo,$cid,101,'company_owner',$pr);$row2=App\Service\DocumentGeneratorService::getGenerated($pdo,$id2);$eq($row2['document_number'],'П 106','second auto number');$seed=App\Service\DocumentGeneratorService::copySeedFromGenerated($row1);$ok(!array_key_exists('contract_number',$seed['params']),'copy no old number');$duplicateBlocked=false;try{$pdo->exec('INSERT INTO generated_documents(document_type,document_number,document_date,template_id,template_version_id,route_executor_id,request_ids_json,total_mass_kg,unload_address,parameters_json,snapshot_json,stored_path,original_name,sha256,created_by_user_id,created_by_role) SELECT document_type,document_number,document_date,template_id,template_version_id,route_executor_id,request_ids_json,total_mass_kg,unload_address,parameters_json,snapshot_json,stored_path,original_name,sha256,created_by_user_id,created_by_role FROM generated_documents WHERE id='.(int)$id1);}catch(PDOException){$duplicateBlocked=true;}$ok($duplicateBlocked,'database unique barrier');echo "DOCUMENT_GENERATOR_AUTO_NUMBERING=PASS\nDOCUMENT_GENERATOR_CONTRACT_DOCX=PASS\n";
 $wp=App\Service\DocumentGeneratorService::prepare($pdo,$company,$cid,101,'company_owner',(int)$bt['waybill_driver_assignment']['id'],1,"300001\n300002",['waybill_number'=>'ПЛ-001','waybill_date'=>'2026-09-03','contract_date'=>'','start_date'=>'','finish_date'=>'','price'=>'']);$ok($wp['ok']??false,'waybill prepare ignores contract fields');$ok(!array_key_exists('contract_date',$wp['snapshot']['parameters']),'waybill ignores contract parameters');$wid=App\Service\DocumentGeneratorService::generate($pdo,$cid,101,'company_owner',$wp);$wr=App\Service\DocumentGeneratorService::getGenerated($pdo,$wid);$eq($wr['document_number'],'ПЛ-001','waybill manual unchanged');$wpath=App\Service\DocumentService::resolveStoredPath($cid,(string)$wr['stored_path']);$ok(is_string($wpath)&&is_file($wpath),'waybill file');echo "DOCUMENT_GENERATOR_WAYBILL_DOCX=PASS\n";
 $foreignId=App\Service\DocumentGeneratorService::generate($pdo,$cid,202,'custom_role',$pr);
-$managerHistory=App\Service\DocumentGeneratorService::listHistory($pdo,200,101,'custom_role');
+$managerHistory=App\Service\DocumentGeneratorService::listHistory($pdo,200,$managerUserId,'custom_role');
 $managerHistoryIds=array_map('intval',array_column($managerHistory,'id'));
 $ok(in_array($id1,$managerHistoryIds,true)&&in_array($id2,$managerHistoryIds,true)&&in_array($wid,$managerHistoryIds,true),'manager history must contain own generated documents');
 $ok(!in_array($foreignId,$managerHistoryIds,true),'manager history must exclude documents created by another user');
-$ok(App\Service\DocumentGeneratorService::getAccessibleGenerated($pdo,$id1,101,'custom_role')!==null,'manager must download own generated document');
-$ok(App\Service\DocumentGeneratorService::getAccessibleGenerated($pdo,$foreignId,101,'custom_role')===null,'direct download must not bypass creator isolation');
+$ok(App\Service\DocumentGeneratorService::getAccessibleGenerated($pdo,$id1,$managerUserId,'custom_role')!==null,'manager must download own generated document');
+$ok(App\Service\DocumentGeneratorService::getAccessibleGenerated($pdo,$foreignId,$managerUserId,'custom_role')===null,'direct download must not bypass creator isolation');
 $ownerAccess=App\Security\EffectiveAccess::systemOwner(11,$cid,[]);App\Security\AccessRuntime::setCurrent($ownerAccess);
 $ownerHistoryIds=array_map('intval',array_column(App\Service\DocumentGeneratorService::listHistory($pdo,200,101,'company_owner'),'id'));
 $ok(in_array($foreignId,$ownerHistoryIds,true),'system owner retains company-wide document history');

@@ -3,10 +3,33 @@
 namespace App\Service;
 
 use PDO;
+use RuntimeException;
 use Throwable;
 
 trait DocumentGeneratorAccessTrait
 {
+    public static function resolveActorTenantUserId(PDO $pdo, ?int $membershipId, int $legacyUserId): int
+    {
+        if (($membershipId ?? 0) > 0) {
+            try {
+                $stmt = $pdo->prepare('SELECT id FROM users WHERE membership_id = ? LIMIT 2');
+                $stmt->execute([(int)$membershipId]);
+                $ids = array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN));
+            } catch (Throwable $e) {
+                throw new RuntimeException('Не удалось определить пользователя компании по membership.', 0, $e);
+            }
+            if (count($ids) !== 1 || $ids[0] <= 0) {
+                throw new RuntimeException('Пользователь компании не синхронизирован с текущим membership.');
+            }
+            return $ids[0];
+        }
+
+        if ($legacyUserId <= 0) {
+            throw new RuntimeException('Пользователь компании не определён.');
+        }
+        return $legacyUserId;
+    }
+
     public static function runtimeSchemaReady(PDO $pdo): bool
     {
         try {
