@@ -108,8 +108,14 @@ endpointExpect(str_contains($vehicleActions, "autoAssignCreator(\$VSC_lpdo,'vehi
 endpointExpect(!str_contains($vehicleActions, "entity_type='vehicle_set'"), 'VehicleSet must not use legacy grants or a new data-scope');
 
 $routeExecutorActions = implode('', array_map('file_get_contents', glob($root . '/app/Http/Controllers/Company/RouteExecutorActions/*.php') ?: []));
-endpointExpect(!str_contains($routeExecutorActions, 'entity_access_grants'), 'RouteExecutor must remain page-only');
-endpointExpect(!str_contains($routeExecutorActions, '$isLogist'), 'RouteExecutor must not retain role-conditioned access');
+$routeExecutorService = (string) file_get_contents($root . '/app/Service/RouteExecutorService.php');
+endpointExpect(str_contains($routeExecutorActions, 'RouteExecutorService::filterVisibleCrews'), 'RouteExecutor list must enforce canonical crew visibility');
+endpointExpect(str_contains($routeExecutorActions, 'RouteExecutorService::canAccessCrew'), 'RouteExecutor direct actions must enforce canonical crew visibility');
+endpointExpect(str_contains($routeExecutorService, "RegulatedDataScopeService::canAccess(\$pdo, 'contractor'"), 'RouteExecutor contractor scope missing');
+endpointExpect(str_contains($routeExecutorService, "RegulatedDataScopeService::canAccess(\$pdo, 'driver'"), 'RouteExecutor driver scope missing');
+endpointExpect(str_contains($routeExecutorService, "RegulatedDataScopeService::canAccess(\$pdo, 'vehicle_unit'"), 'RouteExecutor vehicle scope missing');
+endpointExpect(!str_contains($routeExecutorActions . $routeExecutorService, 'entity_access_grants'), 'RouteExecutor must not reintroduce legacy grants');
+endpointExpect(!str_contains($routeExecutorActions . $routeExecutorService, '$isLogist'), 'RouteExecutor must not retain role-conditioned access');
 
 // Focused Router acceptance: ordinary member allow, deny, POST/AJAX and server-owned OR mapping.
 $registry = new PageRegistry();

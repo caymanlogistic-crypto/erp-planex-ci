@@ -1,0 +1,208 @@
+name: FEO Badges and Route Executor Production Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact current canonical SHA already deployed to /erpv2
+        required: true
+        type: string
+  push:
+    branches:
+      - qa/feo-route-executor-agent
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: feo-route-executor-production-acceptance
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  QA_TRIGGER_BRANCH: qa/feo-route-executor-agent
+  SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || github.sha }}
+  RESULT_DIR: feo_route_executor_acceptance_result
+  LIVE_PARENT: /home/s/spugovxsim/planexp/public_html
+  APP_DIR: erpv2
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.SOURCE_SHA }}
+          fetch-depth: 1
+
+      - name: Require exact canonical and exact deployed SHA
+        env:
+          SHA: ${{ env.SOURCE_SHA }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [ "$EVENT_NAME" = push ]; then test "$REF_NAME" = "$QA_TRIGGER_BRANCH"; else test "$EVENT_NAME" = workflow_dispatch; fi
+          test "$(git rev-parse HEAD)" = "$SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SHA"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/feo_route_qa"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/feo_route_qa" "$HOME/.ssh/known_hosts"
+          marker="$(ssh -p "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" 'cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt')"
+          test "$marker" = "$SHA"
+          echo "EXACT_CANONICAL_DEPLOYED_SHA=$SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install Playwright Chromium
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Provision temporary authenticated QA identities
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="/tmp/feo_route_identity_${GITHUB_RUN_ID}.php"
+          scp -P "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/roles-access/qa_identity.php "$USER@$HOST:$remote"
+          provision="$(ssh -p "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' create")"
+          cred="$(printf '%s\n' "$provision" | sed -n 's/^QA_CREDENTIALS_B64=//p')"
+          owner_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_OWNER_MEMBERSHIP_ID=//p')"
+          owner_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_OWNER_TENANT_USER_ID=//p')"
+          dynamic_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_MEMBERSHIP_ID=//p')"
+          company_a="$(printf '%s\n' "$provision" | sed -n 's/^QA_COMPANY_A_ID=//p')"
+          company_b="$(printf '%s\n' "$provision" | sed -n 's/^QA_COMPANY_B_ID=//p')"
+          test -n "$cred"; [[ "$owner_membership" =~ ^[1-9][0-9]*$ ]]; [[ "$owner_user" =~ ^[1-9][0-9]*$ ]]; [[ "$dynamic_membership" =~ ^[1-9][0-9]*$ ]]; [[ "$company_a" =~ ^[1-9][0-9]*$ ]]; [[ "$company_b" =~ ^[1-9][0-9]*$ ]]; test "$company_a" != "$company_b"
+          printf '%s\n' "$provision" | grep -q '^QA_IDENTITY_CREATED=YES$'
+          echo "::add-mask::$cred"
+          echo "P12_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
+          echo "QA_OWNER_MEMBERSHIP_ID=$owner_membership" >> "$GITHUB_ENV"
+          echo "QA_OWNER_TENANT_USER_ID=$owner_user" >> "$GITHUB_ENV"
+          echo "QA_DYNAMIC_MEMBERSHIP_ID=$dynamic_membership" >> "$GITHUB_ENV"
+          echo "QA_COMPANY_A_ID=$company_a" >> "$GITHUB_ENV"
+          echo "QA_COMPANY_B_ID=$company_b" >> "$GITHUB_ENV"
+
+      - name: Provision isolated route-executor fixtures
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="/tmp/feo_route_fixture_${GITHUB_RUN_ID}.php"
+          scp -P "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-route-executor/qa_route_fixture.php "$USER@$HOST:$remote"
+          result="$(ssh -p "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' QA_COMPANY_ID='$QA_COMPANY_A_ID' QA_OWNER_MEMBERSHIP_ID='$QA_OWNER_MEMBERSHIP_ID' QA_OWNER_TENANT_USER_ID='$QA_OWNER_TENANT_USER_ID' QA_DYNAMIC_MEMBERSHIP_ID='$QA_DYNAMIC_MEMBERSHIP_ID' /usr/bin/php8.5 '$remote' create")"
+          component="$(printf '%s\n' "$result" | sed -n 's/^QA_ROUTE_COMPONENT_CREW_ID=//p')"; direct="$(printf '%s\n' "$result" | sed -n 's/^QA_ROUTE_DIRECT_CREW_ID=//p')"; hidden="$(printf '%s\n' "$result" | sed -n 's/^QA_ROUTE_HIDDEN_CREW_ID=//p')"
+          [[ "$component" =~ ^[1-9][0-9]*$ ]]; [[ "$direct" =~ ^[1-9][0-9]*$ ]]; [[ "$hidden" =~ ^[1-9][0-9]*$ ]]
+          printf '%s\n' "$result" | grep -q '^QA_ROUTE_FIXTURES_READY=YES$'
+          echo "QA_ROUTE_COMPONENT_CREW_ID=$component" >> "$GITHUB_ENV"; echo "QA_ROUTE_DIRECT_CREW_ID=$direct" >> "$GITHUB_ENV"; echo "QA_ROUTE_HIDDEN_CREW_ID=$hidden" >> "$GITHUB_ENV"
+
+      - name: Read factual FEO counters and Sidorov scope
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="/tmp/feo_route_probe_${GITHUB_RUN_ID}.php"
+          scp -P "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-route-executor/production_probe.php "$USER@$HOST:$remote"
+          ssh -p "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_COMPANY_ID='$QA_COMPANY_A_ID' /usr/bin/php8.5 '$remote'" | tee feo_route_backend_probe.txt
+          counters="$(sed -n 's/^FEO_COUNTERS_B64=//p' feo_route_backend_probe.txt)"; test -n "$counters"; echo "FEO_COUNTERS_B64=$counters" >> "$GITHUB_ENV"
+          grep -q '^SIDOROV_CONTRACTORS_CORRECT=PASS$' feo_route_backend_probe.txt
+          grep -q '^SIDOROV_DRIVERS_CORRECT=PASS$' feo_route_backend_probe.txt
+          grep -q '^SIDOROV_VEHICLE_SETS_CORRECT=PASS$' feo_route_backend_probe.txt
+          grep -q '^SIDOROV_ROUTE_EXECUTORS_EXPECTED_EMPTY=PASS$' feo_route_backend_probe.txt
+
+      - name: Run authenticated production UI proof
+        run: |
+          set -euo pipefail
+          node .github/feo-route-executor/production_acceptance.js | tee feo_route_browser_acceptance.txt
+
+      - name: Cleanup route-executor fixtures
+        if: ${{ always() && env.QA_COMPANY_A_ID != '' }}
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="/tmp/feo_route_fixture_${GITHUB_RUN_ID}.php"
+          scp -P "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-route-executor/qa_route_fixture.php "$USER@$HOST:$remote"
+          ssh -p "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' QA_COMPANY_ID='${QA_COMPANY_A_ID:-0}' QA_OWNER_MEMBERSHIP_ID='${QA_OWNER_MEMBERSHIP_ID:-0}' QA_OWNER_TENANT_USER_ID='${QA_OWNER_TENANT_USER_ID:-0}' QA_DYNAMIC_MEMBERSHIP_ID='${QA_DYNAMIC_MEMBERSHIP_ID:-0}' /usr/bin/php8.5 '$remote' cleanup" | tee feo_route_fixture_cleanup.txt
+          grep -q '^ROUTE_EXECUTOR_QA_RESIDUE=0$' feo_route_fixture_cleanup.txt
+
+      - name: Cleanup temporary QA identities
+        if: always()
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="/tmp/feo_route_identity_${GITHUB_RUN_ID}.php"
+          scp -P "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/roles-access/qa_identity.php "$USER@$HOST:$remote"
+          ssh -p "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "PLANEX_ROOT='$LIVE_PARENT/$APP_DIR' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' cleanup" | tee feo_route_identity_cleanup.txt
+          grep -q '^QA_IDENTITY_RESIDUE=0$' feo_route_identity_cleanup.txt
+          grep -q '^MULTI_COMPANY_QA_RESIDUE=0$' feo_route_identity_cleanup.txt
+
+      - name: Require complete acceptance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in FEO_CHILD_BADGES=PASS FEO_PARENT_BADGE_SUM=PASS FEO_ZERO_BADGE_HIDDEN=PASS ROUTE_EXECUTOR_ALL=PASS ROUTE_EXECUTOR_ONLY_OWN=PASS ROUTE_EXECUTOR_DIRECT_RESPONSIBILITY=PASS ROUTE_EXECUTOR_NONE=PASS ROUTE_EXECUTOR_PERSONAL_OVERRIDE=PASS ROUTE_EXECUTOR_DYNAMIC_ROLE=PASS ROUTE_EXECUTOR_OWNER_ALL=PASS CROSS_COMPANY_LEAKAGE=NO QA_BROWSER_RESIDUE=0; do grep -q "^${marker}$" feo_route_browser_acceptance.txt; done
+          for marker in SIDOROV_CONTRACTORS_CORRECT=PASS SIDOROV_DRIVERS_CORRECT=PASS SIDOROV_VEHICLE_SETS_CORRECT=PASS SIDOROV_ROUTE_EXECUTORS_EXPECTED_EMPTY=PASS; do grep -q "^${marker}$" feo_route_backend_probe.txt; done
+          grep -q '^ROUTE_EXECUTOR_QA_RESIDUE=0$' feo_route_fixture_cleanup.txt
+          grep -q '^QA_IDENTITY_RESIDUE=0$' feo_route_identity_cleanup.txt
+          grep -q '^MULTI_COMPANY_QA_RESIDUE=0$' feo_route_identity_cleanup.txt
+          echo 'QA_RESIDUE=0' | tee -a feo_route_browser_acceptance.txt
+
+      - name: Publish exact-SHA acceptance status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ env.SOURCE_SHA }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${SHA}" -f state=success -f context=erpv2/feo-route-executor-functional -f description='FEO badges and route executor production acceptance verified'
+
+      - name: Cleanup SSH material
+        if: always()
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          if [ -s "$HOME/.ssh/feo_route_qa" ]; then ssh -p "$PORT" -i "$HOME/.ssh/feo_route_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "rm -f '/tmp/feo_route_identity_${GITHUB_RUN_ID}.php' '/tmp/feo_route_fixture_${GITHUB_RUN_ID}.php' '/tmp/feo_route_probe_${GITHUB_RUN_ID}.php'" || true; fi
+          rm -f "$HOME/.ssh/feo_route_qa"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: feo_route_executor_acceptance_${{ env.SOURCE_SHA }}
+          path: |
+            feo_route_browser_acceptance.txt
+            feo_route_backend_probe.txt
+            feo_route_fixture_cleanup.txt
+            feo_route_identity_cleanup.txt
+            feo_route_executor_acceptance_result

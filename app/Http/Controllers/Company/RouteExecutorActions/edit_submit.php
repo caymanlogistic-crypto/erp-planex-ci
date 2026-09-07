@@ -97,6 +97,10 @@
         $cStmt->execute([$crewId]);
         $crew = $cStmt->fetch(PDO::FETCH_ASSOC);
 
+        if ($crew && !\App\Service\RouteExecutorService::canAccessCrew($localPdo, $crewId)) {
+            $crew = false;
+        }
+
         if (!$crew) {
             $entityNotFound = true;
             $dbError = null;
@@ -111,26 +115,26 @@
         }
 
         // Reload dropdowns
-        $contractors = $localPdo->query("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+        $contractors = \App\Service\RouteExecutorService::filterVisibleContractors($localPdo, $localPdo->query("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC));
 
         $currentDriverId = (int)($crew['driver_id'] ?? 0);
-        $drivers = $localPdo->query(
+        $drivers = \App\Service\RouteExecutorService::filterVisibleDrivers($localPdo, $localPdo->query(
             "SELECT id, full_name, phone FROM drivers
              WHERE deleted_at IS NULL
                AND (status = 'active'" . ($currentDriverId > 0 ? " OR id = " . $currentDriverId : "") . ")
              ORDER BY full_name"
-        )->fetchAll(PDO::FETCH_ASSOC);
+        )->fetchAll(PDO::FETCH_ASSOC));
 
         $currentVsId = (int)($crew['vehicle_set_id'] ?? 0);
-        $vehicleSets = $localPdo->query(
-            "SELECT vs.id, vs.set_type, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate
+        $vehicleSets = \App\Service\RouteExecutorService::filterVisibleVehicleSets($localPdo, $localPdo->query(
+            "SELECT vs.id, vs.set_type, vs.primary_vehicle_unit_id, vs.secondary_vehicle_unit_id, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate
              FROM vehicle_sets vs
              LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id = vu1.id
              LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id = vu2.id
              WHERE vs.deleted_at IS NULL
                AND (vs.status = 'active'" . ($currentVsId > 0 ? " OR vs.id = " . $currentVsId : "") . ")
              ORDER BY vs.set_type"
-        )->fetchAll(PDO::FETCH_ASSOC);
+        )->fetchAll(PDO::FETCH_ASSOC));
 
         $blockingNotices = [];
         if (empty($contractors)) {
@@ -170,13 +174,17 @@
         if (empty($errors)) {
             $cCheck = $localPdo->prepare("SELECT 1 FROM contractors WHERE id = ? AND deleted_at IS NULL AND status = 'active'");
             $cCheck->execute([(int)$contractorId]);
-            if (!$cCheck->fetchColumn()) $errors['contractor_id'] = 'Подрядчик не найден или неактивен.';
+            if (!$cCheck->fetchColumn() || !\App\Service\RouteExecutorService::canAccessContractor($localPdo, (int)$contractorId)) $errors['contractor_id'] = 'Подрядчик не найден, неактивен или недоступен.';
             $dCheck = $localPdo->prepare("SELECT 1 FROM drivers WHERE id = ? AND deleted_at IS NULL AND status = 'active'");
             $dCheck->execute([(int)$driverId]);
-            if (!$dCheck->fetchColumn()) $errors['driver_id'] = 'Водитель не найден или неактивен.';
+            if (!$dCheck->fetchColumn() || !\App\Service\RouteExecutorService::canAccessDriver($localPdo, (int)$driverId)) $errors['driver_id'] = 'Водитель не найден, неактивен или недоступен.';
             $vsCheck = $localPdo->prepare("SELECT 1 FROM vehicle_sets WHERE id = ? AND deleted_at IS NULL AND status = 'active'");
             $vsCheck->execute([(int)$vehicleSetId]);
             if (!$vsCheck->fetchColumn()) $errors['vehicle_set_id'] = 'Транспортный комплект не найден или неактивен.';
+            if (!isset($errors['vehicle_set_id'])) {
+                $vsAccess=$localPdo->prepare('SELECT id,primary_vehicle_unit_id,secondary_vehicle_unit_id FROM vehicle_sets WHERE id=? LIMIT 1');$vsAccess->execute([(int)$vehicleSetId]);$vsAccessRow=$vsAccess->fetch(PDO::FETCH_ASSOC)?:[];
+                if (!\App\Service\RouteExecutorService::canAccessVehicleSet($localPdo,$vsAccessRow)) $errors['vehicle_set_id']='Транспортный комплект недоступен по текущему data scope.';
+            }
         }
 
         if (!empty($errors)) {

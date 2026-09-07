@@ -17,7 +17,7 @@ final class NavigationCounterService
      * Every counter is intentionally isolated. A missing/temporarily unavailable
      * schema object for one module must never suppress unrelated badges.
      *
-     * @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,feo_freshness:int,feo_utilizer_problem:int,production_calendar_warning:int}
+     * @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,feo_freshness:int,feo_placement_problem:int,feo_map_problem:int,feo_utilizer_problem:int,feo_cost_problem:int,production_calendar_warning:int}
      */
     public static function forCompany(array $config, Database $centralDb, int $companyId, ?array $knownCompany = null): array
     {
@@ -114,6 +114,37 @@ final class NavigationCounterService
         }
 
         try {
+            if (!class_exists(FeoPlacementService::class)) {
+                require_once base_path('app/Service/FeoPlacementService.php');
+            }
+            $placement = new FeoPlacementService();
+            if ($placement->moduleReady($tenant)) {
+                $consistency = $placement->consistency($tenant);
+                $counters['feo_placement_problem'] = !empty($consistency['is_consistent']) ? 0 : 1;
+            }
+        } catch (Throwable) {
+            $counters['feo_placement_problem'] = 0;
+        }
+
+        try {
+            if (!class_exists(FeoUtilizerService::class)) {
+                require_once base_path('app/Service/FeoUtilizerService.php');
+            }
+            if (!class_exists(FeoMapService::class)) {
+                require_once base_path('app/Service/FeoMapService.php');
+            }
+            $diagnostics = (new FeoMapService())->payload($tenant)['diagnostics'] ?? [];
+            $counters['feo_map_problem'] = max(0,
+                (int)($diagnostics['missing_coordinates_count'] ?? 0)
+                + (int)($diagnostics['invalid_coordinates_count'] ?? 0)
+                + (int)($diagnostics['unmatched_utilizer_count'] ?? 0)
+                + (int)($diagnostics['inactive_utilizer_count'] ?? 0)
+            );
+        } catch (Throwable) {
+            $counters['feo_map_problem'] = 0;
+        }
+
+        try {
             if (!class_exists(FeoUtilizerService::class)) {
                 require_once base_path('app/Service/FeoUtilizerService.php');
             }
@@ -123,6 +154,18 @@ final class NavigationCounterService
             );
         } catch (Throwable) {
             $counters['feo_utilizer_problem'] = 0;
+        }
+
+        try {
+            if (!class_exists(FeoRequestCostService::class)) {
+                require_once base_path('app/Service/FeoRequestCostService.php');
+            }
+            $costService = new FeoRequestCostService();
+            if ($costService->moduleReady($tenant)) {
+                $counters['feo_cost_problem'] = max(0, (int)(($costService->pageState($tenant)['integrity']['block_count'] ?? 0)));
+            }
+        } catch (Throwable) {
+            $counters['feo_cost_problem'] = 0;
         }
 
         try {
@@ -144,7 +187,7 @@ final class NavigationCounterService
         return $counters;
     }
 
-    /** @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,feo_freshness:int,feo_utilizer_problem:int,production_calendar_warning:int} */
+    /** @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,feo_freshness:int,feo_placement_problem:int,feo_map_problem:int,feo_utilizer_problem:int,feo_cost_problem:int,production_calendar_warning:int} */
     private static function emptyCounters(): array
     {
         return [
@@ -154,7 +197,10 @@ final class NavigationCounterService
             'linear_trips_problem' => 0,
             'departures_problem' => 0,
             'feo_freshness' => 0,
+            'feo_placement_problem' => 0,
+            'feo_map_problem' => 0,
             'feo_utilizer_problem' => 0,
+            'feo_cost_problem' => 0,
             'production_calendar_warning' => 0,
         ];
     }

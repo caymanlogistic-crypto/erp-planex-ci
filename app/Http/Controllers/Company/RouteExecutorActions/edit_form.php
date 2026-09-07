@@ -85,6 +85,10 @@
         $cStmt->execute([$crewId]);
         $crew = $cStmt->fetch(PDO::FETCH_ASSOC);
 
+        if ($crew && !\App\Service\RouteExecutorService::canAccessCrew($localPdo, $crewId)) {
+            $crew = false;
+        }
+
         if (!$crew) {
             $entityNotFound = true;
             $old = [];
@@ -94,28 +98,28 @@
             $old = $crew;
 
             // Load contractors
-            $contractors = $localPdo->query("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC);
+            $contractors = \App\Service\RouteExecutorService::filterVisibleContractors($localPdo, $localPdo->query("SELECT id, name, inn FROM contractors WHERE deleted_at IS NULL AND status = 'active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC));
 
             // Load drivers (include current driver even if inactive)
             $currentDriverId = (int)($crew['driver_id'] ?? 0);
-            $drivers = $localPdo->query(
+            $drivers = \App\Service\RouteExecutorService::filterVisibleDrivers($localPdo, $localPdo->query(
                 "SELECT id, full_name, phone FROM drivers
                  WHERE deleted_at IS NULL
                    AND (status = 'active'" . ($currentDriverId > 0 ? " OR id = " . $currentDriverId : "") . ")
                  ORDER BY full_name"
-            )->fetchAll(PDO::FETCH_ASSOC);
+            )->fetchAll(PDO::FETCH_ASSOC));
 
             // Load vehicle sets (include current even if inactive)
             $currentVsId = (int)($crew['vehicle_set_id'] ?? 0);
-            $vehicleSets = $localPdo->query(
-                "SELECT vs.id, vs.set_type, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate
+            $vehicleSets = \App\Service\RouteExecutorService::filterVisibleVehicleSets($localPdo, $localPdo->query(
+                "SELECT vs.id, vs.set_type, vs.primary_vehicle_unit_id, vs.secondary_vehicle_unit_id, vu1.plate_number AS primary_plate, vu2.plate_number AS secondary_plate
                  FROM vehicle_sets vs
                  LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id = vu1.id
                  LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id = vu2.id
                  WHERE vs.deleted_at IS NULL
                    AND (vs.status = 'active'" . ($currentVsId > 0 ? " OR vs.id = " . $currentVsId : "") . ")
                  ORDER BY vs.set_type"
-            )->fetchAll(PDO::FETCH_ASSOC);
+            )->fetchAll(PDO::FETCH_ASSOC));
 
             $blockingNotices = [];
             if (empty($contractors)) {
