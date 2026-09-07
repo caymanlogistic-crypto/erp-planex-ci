@@ -21,7 +21,7 @@ $ok(!str_contains($reassign, "company_memberships WHERE id=? AND company_id=? AN
 $ok(str_contains($service, "JOIN user_accounts a ON a.id=m.account_id"), 'eligibility must require current global account');
 $ok(str_contains($service, "JOIN company_roles r ON r.id=m.role_id AND r.company_id=m.company_id"), 'eligibility must require role bound to current company');
 $ok(str_contains($service, "m.status='active'") && str_contains($service, "a.status='active'"), 'eligibility must require active membership and account');
-$ok(str_contains($service, "r.normalized_name IN ('logist','senior_logist')"), 'eligibility must be limited to factual Logist/Logist+ central roles');
+$ok(!str_contains($service, 'r.normalized_name'), 'recipient eligibility must not depend on mutable normalized role names');
 $ok(!preg_match("/role_code\\s*=\\s*['\"](?:logist|senior_logist|membership_role)['\"]/", $service), 'eligibility service must not authorize by tenant role_code');
 
 $view = file_get_contents($root . '/app/View/pages/company_responsible_assignments.php');
