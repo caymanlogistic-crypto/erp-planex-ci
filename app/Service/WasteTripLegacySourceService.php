@@ -33,10 +33,10 @@ final class WasteTripLegacySourceService
 
         $ids=array_values(array_unique(array_map(static fn(array $row):int=>(int)$row['id'],$rows)));
         $marks=implode(',',array_fill(0,count($ids),'?'));
-        $linked=$tenantPdo->prepare("SELECT business_id,id,source_system FROM waste_trips WHERE business_id IN ({$marks})");
+        $linked=$tenantPdo->prepare("SELECT business_id,id,source_system,legacy_flight_id FROM waste_trips WHERE business_id IN ({$marks})");
         $linked->execute($ids);
         $map=[];
-        foreach($linked->fetchAll(PDO::FETCH_ASSOC)as$row)$map[(int)$row['business_id']]=['id'=>(int)$row['id'],'source_system'=>(string)($row['source_system']??'')];
+        foreach($linked->fetchAll(PDO::FETCH_ASSOC)as$row)$map[(int)$row['business_id']]=['id'=>(int)$row['id'],'source_system'=>(string)($row['source_system']??''),'legacy_flight_id'=>(int)($row['legacy_flight_id']??0)];
 
         $allRequestIds=[];
         foreach($rows as$row)$allRequestIds=array_merge($allRequestIds,self::parseRequestIdsLenient((string)($row['zayavki_ids']??''))['ids']);
@@ -44,9 +44,12 @@ final class WasteTripLegacySourceService
 
         foreach($rows as&$row){
             $id=(int)($row['id']??0);
-            $row['erp_waste_trip_id']=$map[$id]['id']??null;
-            $row['erp_source_system']=$map[$id]['source_system']??null;
-            $row['materialized']=isset($map[$id]);
+            $existing=$map[$id]??null;
+            $sameLegacy=is_array($existing)&&(int)($existing['legacy_flight_id']??0)===$id&&in_array((string)($existing['source_system']??''),[self::SOURCE_SYSTEM,self::PREFILL_SOURCE_SYSTEM],true);
+            $row['erp_waste_trip_id']=$sameLegacy?(int)$existing['id']:null;
+            $row['erp_source_system']=$existing['source_system']??null;
+            $row['materialized']=$sameLegacy;
+            $row['id_collision']=is_array($existing)&&!$sameLegacy;
             $row['source_error']=null;
             $state=self::prefillState($tenantPdo,$row,$knownRequestMap);
             $row['request_ids']=$state['request_ids'];
@@ -74,7 +77,7 @@ final class WasteTripLegacySourceService
         $businessId=(int)($flight['id']??0);
         if($businessId<self::MIN_LEGACY_ID)throw new RuntimeException('Legacy ID должен быть больше 243.');
 
-        $warnings=[];$references=[];
+        $warnings=[];$notices=[];$references=[];
         $parsed=self::parseRequestIdsLenient((string)($flight['zayavki_ids']??''));
         foreach($parsed['invalid'] as$value)$warnings[]='Значение «'.$value.'» из списка заявок старой базы не распознано как ID.';
         foreach($parsed['duplicates'] as$value)$warnings[]='Заявка '.$value.' повторяется в старой базе; в prefill оставлена один раз.';
@@ -87,23 +90,23 @@ final class WasteTripLegacySourceService
         $exact=self::dateLenient($flight['planned_start_date']??null,'planned_start_date',$warnings,$references);
         $from=self::dateLenient($flight['planned_start_date_from']??null,'planned_start_date_from',$warnings,$references);
         $to=self::dateLenient($flight['planned_start_date_to']??null,'planned_start_date_to',$warnings,$references);
+        $plannedStartIncomplete=null;
         if($exact!==null&&($from!==null||$to!==null)){
-            $warnings[]='В старой базе одновременно указаны точная плановая дата и диапазон; в prefill использована точная дата.';
+            $notices[]='В старой базе есть и точная дата, и диапазон. Для формы использована точная дата.';
             $references['planned_start_range']=['from'=>$flight['planned_start_date_from']??null,'to'=>$flight['planned_start_date_to']??null];$from=$to=null;
         }elseif(($from===null)xor($to===null)){
-            $warnings[]='В старой базе указан неполный диапазон плановых дат; диапазон не предзаполнен.';
-            $references['planned_start_range']=['from'=>$flight['planned_start_date_from']??null,'to'=>$flight['planned_start_date_to']??null];$from=$to=null;
+            $plannedStartIncomplete=$from!==null?'to':'from';
+            $notices[]=$from!==null?'В старой базе указана только дата начала диапазона. Укажите дату окончания перед созданием.':'В старой базе указана только дата окончания диапазона. Укажите дату начала перед созданием.';
         }elseif($from!==null&&$to!==null&&$from>$to){
-            $warnings[]='В старой базе начало планового диапазона позже окончания; диапазон не предзаполнен.';
-            $references['planned_start_range']=['from'=>$from,'to'=>$to];$from=$to=null;
+            $warnings[]='Проверьте плановые даты: дата начала диапазона позже даты окончания.';
         }
-        $mode=$exact!==null?'exact':(($from!==null&&$to!==null)?'range':'unspecified');
+        $mode=$exact!==null?'exact':(($from!==null||$to!==null)?'range':'unspecified');
 
         $actualStart=self::dateLenient($flight['actual_start_date']??null,'actual_start_date',$warnings,$references);
         $actualEnd=self::dateLenient($flight['actual_end_date']??null,'actual_end_date',$warnings,$references);
         if($actualStart!==null&&$actualEnd!==null&&$actualStart>$actualEnd){
-            $warnings[]='В старой базе фактическое начало позже окончания; фактические даты показаны только как reference.';
-            $references['actual_dates']=['start'=>$actualStart,'end'=>$actualEnd];$actualStart=$actualEnd=null;
+            $warnings[]='Проверьте фактические даты: дата начала позже даты окончания.';
+            $references['actual_dates']=['start'=>$actualStart,'end'=>$actualEnd];
         }
 
         return[
@@ -122,6 +125,8 @@ final class WasteTripLegacySourceService
             'found_request_ids'=>$found,
             'missing_request_ids'=>$missing,
             'warnings'=>$warnings,
+            'notices'=>$notices,
+            'planned_start_incomplete'=>$plannedStartIncomplete,
             'references'=>$references,
         ];
     }
