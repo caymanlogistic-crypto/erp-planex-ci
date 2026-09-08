@@ -102,6 +102,42 @@ final class FeoPlacementService
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /**
+     * Logical current set rebuilt from applied placement blocks.
+     * Addition puts a request into the set; a later exclusion removes it.
+     * This is the semantic source for parity controls even if the materialized
+     * feo_placement_current table temporarily requires reconciliation.
+     *
+     * @return list<array<string,mixed>>
+     */
+    public function effectiveCurrentRows(PDO $pdo): array
+    {
+        $set = $this->replay($pdo);
+        if ($set === []) return [];
+
+        $requests = $this->requestRows($pdo, array_keys($set));
+        $blockIds = array_values(array_unique(array_map('intval', array_values($set))));
+        $blockNames = [];
+        foreach (array_chunk($blockIds, self::CHUNK) as $chunk) {
+            if ($chunk === []) continue;
+            $q = $pdo->prepare('SELECT id,COALESCE(name,\'\') name FROM feo_placement_blocks WHERE id IN (' . implode(',', array_fill(0, count($chunk), '?')) . ')');
+            $q->execute($chunk);
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $row) $blockNames[(int)$row['id']] = (string)$row['name'];
+        }
+
+        $out = [];
+        foreach ($set as $requestId => $blockId) {
+            $request = $requests[(string)$requestId] ?? [];
+            $out[] = [
+                'zayavka_id' => (string)$requestId,
+                'mass_kg' => round(((float)($request['mass_netto'] ?? 0)) * 1000, 3),
+                'source_block_id' => (int)$blockId,
+                'source_block_name' => $blockNames[(int)$blockId] ?? '',
+            ];
+        }
+        return $out;
+    }
+
     public function previewCreate(PDO $pdo, array $ids, string $blockType): array
     {
         $blockType = $this->normalizeType($blockType);

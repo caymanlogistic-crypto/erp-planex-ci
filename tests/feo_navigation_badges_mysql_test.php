@@ -50,6 +50,8 @@ try {
         $st=$pdo->prepare('INSERT INTO feo_placement_block_requests(block_id,zayavka_id,position_no) VALUES(1,?,?)');
         $st->execute([$id,$i+1]);
     }
+    $pdo->exec("INSERT INTO feo_placement_blocks(id,name,block_type,status,source_type) VALUES(2,'QA remove','exclusion','applied','manual')");
+    $pdo->exec("INSERT INTO feo_placement_block_requests(block_id,zayavka_id,position_no) VALUES(2,'100004',1)");
     foreach (['100001','100002','100003'] as $id) {
         $st=$pdo->prepare('INSERT INTO feo_placement_current(zayavka_id,source_block_id) VALUES(?,1)');
         $st->execute([$id]);

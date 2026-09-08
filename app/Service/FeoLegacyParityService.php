@@ -183,14 +183,7 @@ final class FeoLegacyParityService
     /** @return list<array<string,mixed>> */
     private function currentRows(PDO $pdo): array
     {
-        return $pdo->query("SELECT c.zayavka_id,
-                                   COALESCE(r.mass_netto,0)*1000 mass_kg,
-                                   c.source_block_id,
-                                   COALESCE(b.name,'') source_block_name
-                              FROM feo_placement_current c
-                         LEFT JOIN feo_requests r ON r.zayavka_id=c.zayavka_id
-                         LEFT JOIN feo_placement_blocks b ON b.id=c.source_block_id
-                          ORDER BY c.zayavka_id")->fetchAll(PDO::FETCH_ASSOC);
+        return (new FeoPlacementService())->effectiveCurrentRows($pdo);
     }
 
     /** @return list<string> */

@@ -45,6 +45,7 @@ $equal = $service->compareRows([
 $ok($equal['is_consistent'] === true && $equal['mismatch_count'] === 0, 'identical snapshots pass');
 
 $source = (string)file_get_contents($root . '/app/Service/FeoLegacyParityService.php');
+$placementSource = (string)file_get_contents($root . '/app/Service/FeoPlacementService.php');
 $legacyConnector = (string)file_get_contents($root . '/app/Service/WasteTripLegacySourceService.php');
 $view = (string)file_get_contents($root . '/app/View/pages/company_feo_map_placement.php');
 $js = (string)file_get_contents($root . '/public/assets/js/feo-map-placement.js');
@@ -60,7 +61,8 @@ $ok(!str_contains($source, "['id',") && !str_contains($source, "'idColumn'=>'id'
 $ok(str_contains($source, 'WasteTripLegacySourceService::connectionFromEnvironment()'), 'existing legacy connection contract is reused');
 $ok(str_contains($legacyConnector, 'SET SESSION TRANSACTION READ ONLY'), 'legacy PDO is read-only');
 $ok(!preg_match('/\b(?:INSERT|UPDATE|DELETE|REPLACE|TRUNCATE)\b[^\n]*`feo`/i', $source), 'parity service never mutates legacy feo');
-$ok(str_contains($source, 'feo_placement_current') && str_contains($source, 'source_block_id'), 'ERP comparison uses current placement and block ownership');
+$ok(str_contains($source, 'effectiveCurrentRows') && !str_contains($source, 'FROM feo_placement_current'), 'ERP parity uses the logically replayed current set instead of trusting materialized history state');
+$ok(str_contains($placementSource, 'private function replay') && str_contains($placementSource, 'else unset($set[$requestId]);'), 'a later exclusion removes a previously added request from the effective current set');
 $ok(str_contains($source, 'feo_placement_block_requests') && str_contains($source, 'ORDER BY b.id DESC'), 'mismatch rows expose block history');
 $ok(str_contains($nav, 'FeoLegacyParityService') && str_contains($nav, '$legacyProblem > 0 ? $legacyProblem : $internalProblem'), 'menu badge prefers request-level legacy mismatch count and preserves internal fallback');
 $ok(str_contains($layout, 'Расхождения размещения со старой базой или блоками'), 'menu badge title explains combined attention source');

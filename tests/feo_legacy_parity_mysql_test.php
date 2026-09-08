@@ -6,6 +6,7 @@ $root = dirname(__DIR__);
 require_once $root . '/bootstrap/app.php';
 require_once BASE_PATH . '/app/Support/company_database.php';
 require_once BASE_PATH . '/app/Service/WasteTripLegacySourceService.php';
+require_once BASE_PATH . '/app/Service/FeoPlacementService.php';
 require_once BASE_PATH . '/app/Service/FeoLegacyParityService.php';
 
 use App\Service\FeoLegacyParityService;
@@ -69,6 +70,17 @@ try {
     foreach ([['100001',1.0],['100002',2.0],['100003',3.0]] as [$id,$mass]) $legacyInsert->execute([$id,$mass]);
     $equal = (new FeoLegacyParityService())->state($pdo, $pdo);
     $ok($equal['available'] === true && $equal['is_consistent'] === true && $equal['mismatch_count'] === 0, 'equal legacy and ERP pools pass');
+
+    // OWNER invariant: parity compares the logical current ERP set, not placement history.
+    // Keep the materialized current table intentionally stale to prove that an applied
+    // exclusion wins over an earlier addition for parity purposes.
+    $pdo->exec("INSERT INTO feo_placement_blocks(id,name,block_type,status,source_type) VALUES(2,'Исключение','exclusion','applied','manual')");
+    $pdo->exec("INSERT INTO feo_placement_block_requests(block_id,zayavka_id,position_no) VALUES(2,'100003',1)");
+    $ok((int)$pdo->query("SELECT COUNT(*) FROM feo_placement_current WHERE zayavka_id='100003'")->fetchColumn() === 1, 'fixture keeps stale materialized row for removed request');
+    $effective = (new FeoLegacyParityService())->state($pdo, $pdo);
+    $ok(($effective['new']['request_count'] ?? -1) === 2, 'parity new-side count uses effective current requests after exclusion');
+    $ok(array_column($effective['only_legacy'], 'zayavka_id') === ['100003'], 'added then excluded request is not current in new ERP');
+    $ok(!in_array('100003', array_column($effective['only_new'], 'zayavka_id'), true), 'removed request can never be reported as ERP-current');
 
     $pdo->exec("INSERT INTO feo(zayavka_id,mass_netto) VALUES('100001',1.0)");
     $duplicate = (new FeoLegacyParityService())->state($pdo, $pdo);
