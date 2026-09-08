@@ -9,6 +9,9 @@ on:
       - 'app/Http/Routes/company_feo_requests.php'
       - 'app/Service/FeoPlacementInputParser.php'
       - 'app/Service/FeoPlacementService.php'
+      - 'app/Service/FeoLegacyParityService.php'
+      - 'app/Service/NavigationCounterService.php'
+      - 'app/View/layouts/main.php'
       - 'app/Support/feo_freshness_navigation.php'
       - 'app/View/pages/company_feo_map_placement.php'
       - 'public/assets/js/feo-map-placement.js'
@@ -16,6 +19,9 @@ on:
       - 'scripts/feo_apply_123.php'
       - 'scripts/feo_verify_123.php'
       - 'tests/feo_placement_contract_test.php'
+      - 'tests/feo_legacy_parity_contract_test.php'
+      - 'tests/feo_legacy_parity_mysql_test.php'
+      - 'tests/feo_navigation_badges_mysql_test.php'
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/feo_123_production_migration.yml'
       - '.github/workflows/feo_placement_contract.yml'
@@ -27,6 +33,9 @@ on:
       - 'app/Http/Routes/company_feo_requests.php'
       - 'app/Service/FeoPlacementInputParser.php'
       - 'app/Service/FeoPlacementService.php'
+      - 'app/Service/FeoLegacyParityService.php'
+      - 'app/Service/NavigationCounterService.php'
+      - 'app/View/layouts/main.php'
       - 'app/Support/feo_freshness_navigation.php'
       - 'app/View/pages/company_feo_map_placement.php'
       - 'public/assets/js/feo-map-placement.js'
@@ -34,6 +43,9 @@ on:
       - 'scripts/feo_apply_123.php'
       - 'scripts/feo_verify_123.php'
       - 'tests/feo_placement_contract_test.php'
+      - 'tests/feo_legacy_parity_contract_test.php'
+      - 'tests/feo_legacy_parity_mysql_test.php'
+      - 'tests/feo_navigation_badges_mysql_test.php'
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/feo_123_production_migration.yml'
       - '.github/workflows/feo_placement_contract.yml'
@@ -66,16 +78,53 @@ jobs:
           php -l app/Http/Controllers/Company/FeoPlacementController.php
           php -l app/Service/FeoPlacementInputParser.php
           php -l app/Service/FeoPlacementService.php
+          php -l app/Service/FeoLegacyParityService.php
+          php -l app/Service/NavigationCounterService.php
+          php -l app/View/layouts/main.php
           php -l app/View/pages/company_feo_map_placement.php
           php -l scripts/feo_apply_123.php
           php -l scripts/feo_verify_123.php
           php -l tests/feo_placement_contract_test.php
+          php -l tests/feo_legacy_parity_contract_test.php
+          php -l tests/feo_legacy_parity_mysql_test.php
+          php -l tests/feo_navigation_badges_mysql_test.php
 
       - name: JavaScript syntax
         run: node --check public/assets/js/feo-map-placement.js
 
       - name: Placement regression contract
-        run: php tests/feo_placement_contract_test.php
+        run: |
+          php tests/feo_placement_contract_test.php
+          php tests/feo_legacy_parity_contract_test.php
+
+      - name: Legacy parity MySQL regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          CREATE DATABASE IF NOT EXISTS `spugovxsim_test2` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+          GRANT ALL PRIVILEGES ON `spugovxsim_test2`.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+          APP_ENV=test \
+          PLANEX_SCHEMA_DB_HOST=127.0.0.1 \
+          PLANEX_SCHEMA_DB_PORT=3306 \
+          PLANEX_SCHEMA_DB_USER=planex_ci \
+          PLANEX_SCHEMA_DB_PASSWORD=planex_ci \
+          PLANEX_TEST_FIXED_DB=spugovxsim_test2 \
+          PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
+            php tests/feo_legacy_parity_mysql_test.php
+          APP_ENV=test \
+          PLANEX_SCHEMA_DB_HOST=127.0.0.1 \
+          PLANEX_SCHEMA_DB_PORT=3306 \
+          PLANEX_SCHEMA_DB_USER=planex_ci \
+          PLANEX_SCHEMA_DB_PASSWORD=planex_ci \
+          PLANEX_TEST_FIXED_DB=spugovxsim_test2 \
+          PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
+            php tests/feo_navigation_badges_mysql_test.php
 
       - name: Migration 123 static contract
         shell: bash

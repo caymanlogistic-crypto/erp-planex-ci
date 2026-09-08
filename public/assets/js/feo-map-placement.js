@@ -4,6 +4,7 @@
 const cfg=window.FEO_PLACEMENT_CONFIG||{};
 const base=cfg.base||'';
 const csrf=cfg.csrf||'';
+const legacyParity=cfg.legacyParity||null;
 const q=(s,r=document)=>r.querySelector(s);
 const qa=(s,r=document)=>Array.from(r.querySelectorAll(s));
 const fmt=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:3}).format(Number(n||0));
@@ -405,6 +406,47 @@ q('[data-placement-reconcile]')?.addEventListener('click',async()=>{
     location.reload();
   }
 });
+
+function parityBlockText(row){
+  const currentId=Number(row?.source_block_id||0);
+  const currentName=String(row?.source_block_name||'').trim();
+  if(currentId>0)return `#${currentId}${currentName?' · '+currentName:''} · актуальный источник`;
+  const blocks=Array.isArray(row?.blocks)?row.blocks:[];
+  if(!blocks.length)return 'Не найдена в блоках ERP';
+  return blocks.map(b=>`#${Number(b.id||0)}${b.name?' · '+String(b.name):''} · ${b.block_type==='addition'?'добавление':'исключение'} · ${b.status==='applied'?'применяется':'отключён'}`).join('; ');
+}
+function parityMass(value){return value===null||value===undefined?'—':`${fmt(value)} кг`;}
+function parityChecked(value){
+  const d=new Date(String(value||''));
+  return Number.isNaN(d.getTime())?'—':new Intl.DateTimeFormat('ru-RU',{dateStyle:'short',timeStyle:'short'}).format(d);
+}
+function paritySection(title,rows,note){
+  if(!Array.isArray(rows)||!rows.length)return '';
+  return `<section class="feo-placement-parity-section"><h3>${esc(title)}</h3>${note?`<div class="feo-placement-parity-section-note">${esc(note)}</div>`:''}<table class="table"><thead><tr><th style="width:14%">Заявка</th><th style="width:15%">ERP</th><th style="width:15%">Старая база</th><th style="width:14%">Разница</th><th style="width:42%">Блок / история</th></tr></thead><tbody>${rows.map(r=>`<tr><td><b>${esc(r.zayavka_id)}</b></td><td>${parityMass(r.new_mass_kg)}</td><td>${parityMass(r.legacy_mass_kg)}</td><td>${parityMass(r.mass_delta_kg)}</td><td class="feo-placement-parity-location">${esc(parityBlockText(r))}</td></tr>`).join('')}</tbody></table></section>`;
+}
+function renderLegacyParity(){
+  const body=q('[data-placement-parity-body]');
+  if(!body||!legacyParity)return;
+  if(!legacyParity.available){
+    const dupes=Array.isArray(legacyParity.duplicate_ids)&&legacyParity.duplicate_ids.length?`<div class="feo-placement-parity-section-note">Повторяющиеся ID: ${esc(legacyParity.duplicate_ids.join(', '))}</div>`:'';
+    body.innerHTML=`<div class="notice warn"><b>Сверка не выполнена.</b><br>${esc(legacyParity.message||'Старая база недоступна.')}</div>${dupes}<div class="feo-placement-parity-checked">Последняя попытка сверки: ${esc(parityChecked(legacyParity.checked_at))}</div>`;
+    return;
+  }
+  const n=legacyParity.new||{};
+  const l=legacyParity.legacy||{};
+  const d=legacyParity.delta||{};
+  const onlyNew=legacyParity.only_new_summary||{};
+  const onlyLegacy=legacyParity.only_legacy_summary||{};
+  const signed=v=>Number(v||0)>0?'+'+fmt(v):fmt(v);
+  let html=`<div class="feo-placement-parity-grid"><div class="feo-placement-parity-card"><span>Количество доступных заявок</span><b>ERP ${Number(n.request_count||0)} · старая ${Number(l.request_count||0)} · Δ ${signed(d.request_count)}</b></div><div class="feo-placement-parity-card"><span>Общий вес доступных заявок</span><b>ERP ${fmt(n.total_mass_kg)} кг · старая ${fmt(l.total_mass_kg)} кг · Δ ${signed(d.total_mass_kg)} кг</b></div><div class="feo-placement-parity-card"><span>Требуют внимания</span><b>${Number(legacyParity.mismatch_count||0)} заявок · только ERP ${Number(onlyNew.request_count||0)} · только старая ${Number(onlyLegacy.request_count||0)} · вес отличается ${Number(legacyParity.mass_mismatch_count||0)}</b></div></div>`;
+  html+=paritySection('Есть только в новой ERP',legacyParity.only_new,`${Number(onlyNew.request_count||0)} заявок · ${fmt(onlyNew.total_mass_kg)} кг`);
+  html+=paritySection('Есть только в старой базе',legacyParity.only_legacy,`${Number(onlyLegacy.request_count||0)} заявок · ${fmt(onlyLegacy.total_mass_kg)} кг`);
+  html+=paritySection('Одинаковый ID, но отличается вес',legacyParity.mass_mismatches,`${Number(legacyParity.mass_mismatch_count||0)} заявок`);
+  if(Number(legacyParity.mismatch_count||0)===0)html+='<div class="notice success">Состав, количество и вес доступных заявок совпадают.</div>';
+  html+=`<div class="feo-placement-parity-checked">Последняя сверка: ${esc(parityChecked(legacyParity.checked_at))}</div>`;
+  body.innerHTML=html;
+}
+q('[data-placement-open-parity]')?.addEventListener('click',()=>{renderLegacyParity();openModal('feo-placement-parity-modal');});
 
 q('[data-placement-open-current]')?.addEventListener('click',async()=>{
   const body=q('[data-placement-current-body]');

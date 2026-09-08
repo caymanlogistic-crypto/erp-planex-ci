@@ -117,13 +117,21 @@ final class NavigationCounterService
             if (!class_exists(FeoPlacementService::class)) {
                 require_once base_path('app/Service/FeoPlacementService.php');
             }
+            if (!class_exists(FeoLegacyParityService::class)) {
+                require_once base_path('app/Service/FeoLegacyParityService.php');
+            }
             $placement = new FeoPlacementService();
             if ($placement->moduleReady($tenant)) {
                 $consistency = $placement->consistency($tenant);
-                $counters['feo_placement_problem'] = !empty($consistency['is_consistent']) ? 0 : 1;
+                $internalProblem = !empty($consistency['is_consistent']) ? 0 : 1;
+                $legacyProblem = (new FeoLegacyParityService())->attentionCount($tenant);
+                // When legacy parity is available the badge number is the actual
+                // request-level mismatch count requested by the OWNER. The older
+                // replay/current guard is preserved as a fallback attention flag.
+                $counters['feo_placement_problem'] = $legacyProblem > 0 ? $legacyProblem : $internalProblem;
             }
         } catch (Throwable) {
-            $counters['feo_placement_problem'] = 0;
+            $counters['feo_placement_problem'] = 1;
         }
 
         try {

@@ -71,12 +71,29 @@ $fmtMass = static function ($value): string {
 .feo-placement-list{max-height:54vh;width:100%;max-width:100%;overflow-y:auto;overflow-x:hidden}
 .feo-placement-list table{width:100%;max-width:100%;min-width:0!important;table-layout:fixed}
 .feo-placement-list th,.feo-placement-list td{white-space:normal;overflow-wrap:anywhere;word-break:break-word}
+.feo-placement-parity-warning{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.feo-placement-parity-warning-copy{min-width:0;display:grid;gap:3px}
+.feo-placement-parity-warning-summary{font-size:12px;color:var(--text-muted)}
+.feo-placement-parity-modal{width:min(900px,calc(100vw - 24px));max-width:900px}
+.feo-placement-parity-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--line-soft);background:var(--surface-form);margin-bottom:12px}
+.feo-placement-parity-card{padding:10px 12px;min-width:0;border-right:1px solid var(--line-soft)}
+.feo-placement-parity-card:last-child{border-right:0}
+.feo-placement-parity-card span{display:block;color:var(--text-muted);font-size:11px;margin-bottom:4px}
+.feo-placement-parity-card b{display:block;font-size:14px;overflow-wrap:anywhere}
+.feo-placement-parity-section{margin-top:12px}
+.feo-placement-parity-section h3{font-size:13px;margin:0 0 6px}
+.feo-placement-parity-section-note{font-size:11px;color:var(--text-muted);margin-bottom:6px}
+.feo-placement-parity-location{white-space:normal!important;overflow-wrap:anywhere}
+.feo-placement-parity-checked{margin-top:10px;color:var(--text-muted);font-size:11px}
 @media(max-width:900px){
   .feo-placement-form-grid{grid-template-columns:1fr}
   .feo-placement-wide{grid-column:auto}
   .feo-placement-toolbar-actions{width:100%}
   .feo-placement-toolbar .feo-placement-block-search-input{width:100%;min-width:0;max-width:100%}
   .feo-placement-detail-meta{grid-template-columns:1fr}
+  .feo-placement-parity-grid{grid-template-columns:1fr}
+  .feo-placement-parity-card{border-right:0;border-bottom:1px solid var(--line-soft)}
+  .feo-placement-parity-card:last-child{border-bottom:0}
   .feo-placement-detail-meta>div{border-right:0;border-bottom:1px solid var(--line-soft)!important}
   .feo-placement-detail-meta>div:last-child{border-bottom:0!important}
 }
@@ -100,6 +117,24 @@ $fmtMass = static function ($value): string {
   <b>Актуальный состав не согласован с применяемыми блоками.</b>
   В рабочем наборе <?= (int)($consistency['actual_count'] ?? 0) ?> заявок, расчёт по блокам даёт <?= (int)($consistency['expected_count'] ?? 0) ?>.
   <button type="button" class="btn btn-secondary btn--toolbar" data-placement-reconcile>Пересчитать состав</button>
+</div>
+<?php endif; ?>
+
+<?php if (empty($legacyParity['available'])): ?>
+<div class="notice warn feo-placement-parity-warning" data-placement-parity-warning>
+  <div class="feo-placement-parity-warning-copy">
+    <b>Контрольная сверка со старой базой недоступна.</b>
+    <span class="feo-placement-parity-warning-summary"><?= e((string)($legacyParity['message'] ?? 'Не удалось выполнить сверку.')) ?></span>
+  </div>
+  <button type="button" class="btn btn-secondary btn--toolbar" data-placement-open-parity>Системная информация</button>
+</div>
+<?php elseif ((int)($legacyParity['mismatch_count'] ?? 0) > 0): ?>
+<div class="notice warn feo-placement-parity-warning" data-placement-parity-warning>
+  <div class="feo-placement-parity-warning-copy">
+    <b>Обнаружены расхождения со старой базой: <?= (int)$legacyParity['mismatch_count'] ?> заявок.</b>
+    <span class="feo-placement-parity-warning-summary">ERP: <?= (int)($legacyParity['new']['request_count'] ?? 0) ?> заявок / <?= e($fmtMass($legacyParity['new']['total_mass_kg'] ?? 0)) ?> кг · Старая база: <?= (int)($legacyParity['legacy']['request_count'] ?? 0) ?> заявок / <?= e($fmtMass($legacyParity['legacy']['total_mass_kg'] ?? 0)) ?> кг.</span>
+  </div>
+  <button type="button" class="btn btn-secondary btn--toolbar" data-placement-open-parity>Показать расхождения</button>
 </div>
 <?php endif; ?>
 
@@ -201,10 +236,19 @@ $fmtMass = static function ($value): string {
   </div>
 </div>
 
+<div id="feo-placement-parity-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
+  <div class="modal modal-lg feo-placement-parity-modal">
+    <div class="modal-head"><span class="modal-title">Сверка со старой базой</span><button type="button" class="modal-close" data-close-modal="feo-placement-parity-modal">&times;</button></div>
+    <div class="modal-body"><div class="feo-placement-list" data-placement-parity-body></div></div>
+    <div class="modal-foot"><button type="button" class="btn btn-ghost" data-close-modal="feo-placement-parity-modal">Закрыть</button></div>
+  </div>
+</div>
+
 <script>
 window.FEO_PLACEMENT_CONFIG = {
   base: <?= json_encode(app_url('/company/feo/requests/map-placement'), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
-  csrf: <?= json_encode(csrfToken(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>
+  csrf: <?= json_encode(csrfToken(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) ?>,
+  legacyParity: <?= json_encode($legacyParity, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>
 };
 </script>
 <script src="<?= app_url('/assets/js/feo-map-placement.js') ?>?v=<?= filemtime(base_path('public/assets/js/feo-map-placement.js')) ?>"></script>
