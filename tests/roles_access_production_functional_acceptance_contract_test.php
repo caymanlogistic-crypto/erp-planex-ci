@@ -28,11 +28,12 @@ $ok(str_contains($workflow, 'QA_ASSIGNMENT_FIXTURES_READY=YES') && str_contains(
 $ok(str_contains($workflow, 'Cleanup temporary QA owner identity') && str_contains($workflow, 'if: always()') && str_contains($workflow, 'QA_IDENTITY_RESIDUE=0'), 'temporary QA identity cleanup must be unconditional and residue-gated');
 $ok(str_contains($workflow, 'QA_RESPONSIBILITY_FIXTURE_RESIDUE=0'), 'temporary responsibility fixture cleanup must be residue-gated');
 $ok(str_contains($workflow, 'QA_CONTRACTOR_FIXTURE_RESIDUE=0'), 'temporary contractor fixture cleanup must be residue-gated');
-foreach (['ASSIGNMENT_QA_RESIDUE=0','QA_ASSIGNMENT_FIXTURE_RESIDUE=0','QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0','QA_MULTI_COMPANY_FIXTURE_RESIDUE=0','MULTI_COMPANY_QA_RESIDUE=0'] as $marker) {
+foreach (['ASSIGNMENT_QA_RESIDUE=0','QA_ASSIGNMENT_FIXTURE_RESIDUE=0','QA_TENANT_PROJECTION_RESIDUE=0','QA_WASTE_MANAGER_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0','QA_MULTI_COMPANY_FIXTURE_RESIDUE=0','MULTI_COMPANY_QA_RESIDUE=0'] as $marker) {
     $ok(str_contains($workflow, $marker), "workflow cleanup missing {$marker}");
 }
 $ok(str_contains($workflow, 'QA_FOREIGN_MEMBERSHIP_ID'), 'workflow must pass a foreign-company membership identifier into the isolation proof');
 $ok(str_contains($workflow, 'QA_OWNER_MEMBERSHIP_ID') && str_contains($workflow, 'QA_OWNER_TENANT_USER_ID') && str_contains($workflow, 'QA_DYNAMIC_MEMBERSHIP_ID') && str_contains($workflow, 'QA_DYNAMIC_TENANT_USER_ID'), 'workflow must bind browser acceptance to the exact run-scoped owner and dynamic tenant projections');
+$ok(str_contains($workflow, 'QA_WASTE_MANAGER_MEMBERSHIP_ID') && str_contains($workflow, 'QA_WASTE_MANAGER_TENANT_USER_ID') && str_contains($workflow, 'QA_WASTE_MANAGER_UNPROJECTED_READY=YES'), 'workflow must bind the Waste Trips manager proof to an exact unprojected run-scoped membership/user fixture');
 $ok(str_contains($workflow, 'QA_COMPANY_A_ID') && str_contains($workflow, 'QA_COMPANY_B_ID') && str_contains($workflow, 'QA_MULTI_COMPANY_MEMBERSHIP_ID') && str_contains($workflow, 'QA_MULTI_COMPANY_TENANT_USER_ID') && str_contains($workflow, 'QA_MULTI_COMPANY_B_CLIENT_ID'), 'workflow must bind browser acceptance to exact multi-company fixtures');
 $ok(str_contains($workflow, 'QA_CLIENT_ID') && str_contains($workflow, 'QA_CONTRACTOR_ID') && str_contains($workflow, 'QA_VEHICLE_UNIT_ID') && str_contains($workflow, 'QA_DRIVER_ID'), 'workflow must bind browser acceptance to all exact run-scoped assignment fixtures');
 $ok(str_contains($workflow, 'LIVE_PARENT: /home/s/spugovxsim/planexp/public_html'), 'functional acceptance must use the real production web root');
@@ -41,6 +42,9 @@ $ok(!str_contains($script, 'QA_LEGACY_SESSION_ID') && !str_contains($script, 'cr
 foreach ([
     'DEFAULT_LANDING=PASS','EFFECTIVE_MENU=PASS','ROLES_ACCESS=PASS','ROLES_READBACK=PASS',
     'PERSONAL_OVERRIDES_READBACK=PASS','ASSIGNMENTS_TAB=PASS','NAVIGATION_BADGE_NONZERO=PASS',
+    'WASTE_TRIP_MANAGER_MAIN=PASS','WASTE_TRIP_MANAGER_LEGACY=PASS','WASTE_TRIP_MANAGER_UNPROJECTED_VISIBLE=PASS',
+    'WASTE_TRIP_LEGACY_TECHNICAL_JSON_HIDDEN=PASS','WASTE_TRIP_LEGACY_244_STATE=PASS','WASTE_TRIP_MANAGER_ADOPTION=PASS',
+    'WASTE_TRIP_MANAGER_FOREIGN_REJECTION=PASS','WASTE_TRIP_MANAGER_TENANT_ID_STABLE=PASS','WASTE_TRIP_MANAGER_UI=PASS',
     'MULTI_COMPANY_ACCOUNT=PASS','COMPANY_SWITCH_OPTIONS>=2','COMPANY_SWITCH_A_TO_B=PASS','COMPANY_B_DEFAULT_LANDING=PASS','COMPANY_B_EFFECTIVE_MENU=PASS',
     'CROSS_COMPANY_DATA_ISOLATION=PASS','DIRECT_DENIED_AFTER_SWITCH=403_PASS','COMPANY_SWITCH_B_TO_A=PASS','COMPANY_A_STATE_RESTORED=PASS','MEMBERSHIP_OVERRIDES_ISOLATED=PASS',
     'REAL_ASSIGNMENT_CLIENT=PASS','REAL_ASSIGNMENT_CONTRACTOR=PASS','REAL_ASSIGNMENT_VEHICLE=PASS','REAL_ASSIGNMENT_DRIVER=PASS','ASSIGNMENT_RESTORE_DIFF=0',
@@ -54,6 +58,11 @@ $ok(str_contains($script, '/company/roles-access/assignments?membership_id='), '
 $ok(str_contains($script, "response.url() === base + '/company/roles-access/assignments/reassign'") && str_contains($script, "response.request().method() === 'POST'"), 'assignment acceptance must wait for the real production POST response');
 $ok(str_contains($script, 'await checkbox.check()') && str_contains($script, 'await checkbox.uncheck()'), 'assignment acceptance must operate the real rendered checkbox in both directions');
 $ok(!str_contains($script, 'page.route(') && !str_contains($script, 'route.fulfill('), 'production functional acceptance must not intercept or mock assignment HTTP writes');
+$ok(str_contains($script, '/company/trips/departures') && str_contains($script, '/company/trips/departures/legacy') && str_contains($script, 'responsible_membership_id'), 'production acceptance must inspect the real Waste Trips manager selectors on both create surfaces');
+$ok(str_contains($script, 'waste-manager-snapshot') && str_contains($script, 'waste-manager-resolve') && str_contains($script, 'QA_WASTE_MANAGER_SNAPSHOT_B64='), 'Waste Trips manager proof must compare exact tenant projection state before and after safe adoption');
+$ok(str_contains($script, 'Number(before.tenant.membership_id || 0) === 0') && str_contains($script, 'WASTE_TRIP_MANAGER_UNPROJECTED_VISIBLE=PASS'), 'Waste Trips manager must be proven visible before tenant membership projection exists');
+$ok(str_contains($script, 'data-create-legacy=') && str_contains($script, '244') && str_contains($script, 'WASTE_TRIP_LEGACY_244_STATE=PASS'), 'production acceptance must inspect the current Legacy #244 create/read-only state without creating the trip');
+$ok(str_contains($script, 'Reference из старой БД') && str_contains($script, 'planned_start_range') && str_contains($script, 'WASTE_TRIP_LEGACY_TECHNICAL_JSON_HIDDEN=PASS'), 'production acceptance must reject technical legacy reference JSON in the rendered UI');
 $ok(str_contains($script, "switcher.selectOption(String(suppliedCompanyBId))") && str_contains($script, "switcher.selectOption(String(suppliedCompanyAId))"), 'multi-company proof must use the real rendered company switch UI in both directions');
 foreach (["'creator_auto'","'legacy_unclassified'","'manual'",'created_by_membership_id','entity_responsibilities','ASSIGNMENT_RESTORE_DIFF=0'] as $needle) {
     $ok(str_contains($script, $needle), "assignment production proof missing invariant token {$needle}");
@@ -90,6 +99,11 @@ $ok(str_contains($identity, 'INSERT INTO users (membership_id,full_name,login,pa
 foreach (['QA_OWNER_TENANT_USER_ID=','QA_DYNAMIC_MEMBERSHIP_ID=','QA_DYNAMIC_TENANT_USER_ID=','QA_DYNAMIC_RECIPIENT_READY=YES','QA_TENANT_PROJECTIONS_READY=YES','QA_TENANT_PROJECTION_RESIDUE=0','QA_DYNAMIC_RECIPIENT_RESIDUE=0','QA_TEMP_ROLE_RESIDUE=0'] as $needle) {
     $ok(str_contains($identity, $needle), "QA dynamic fixture lifecycle token missing {$needle}");
 }
+foreach (['UserSyncService.php','qaWasteManagerName','QA Functional Waste Manager ','waste-manager-snapshot','waste-manager-resolve','QA_WASTE_MANAGER_SNAPSHOT_B64=','QA_WASTE_MANAGER_UNPROJECTED_READY=YES','QA_WASTE_MANAGER_ADOPTION=PASS','QA_WASTE_MANAGER_FOREIGN_REJECTION=PASS','QA_WASTE_MANAGER_RESIDUE=0','resolveMembershipTenantUserId'] as $needle) {
+    $ok(str_contains($identity, $needle), "QA Waste Trips manager lifecycle token missing {$needle}");
+}
+$ok(str_contains($identity, "VALUES (NULL,?,?,?,'logist','active')"), 'QA Waste Trips manager fixture must begin as an unprojected tenant user with a matching login');
+$ok(!str_contains($identity, 'INSERT INTO waste_trips'), 'Waste Trips manager production acceptance must not create a production trip');
 foreach (['qa_contractor_fixture','QA Functional Contractor ','INSERT INTO contractors (name,inn,status,created_by_user_id,created_by_membership_id,created_by_role)','QA_CONTRACTOR_ID=','cleanupQaContractorFixture','QA_CONTRACTOR_FIXTURE_READY=YES','QA_CONTRACTOR_FIXTURE_RESIDUE=0'] as $needle) {
     $ok(str_contains($identity, $needle), "QA contractor fixture lifecycle token missing {$needle}");
 }

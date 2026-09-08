@@ -22,6 +22,8 @@ const suppliedCompanyBId = Number(process.env.QA_COMPANY_B_ID || 0);
 const suppliedMultiCompanyMembershipId = Number(process.env.QA_MULTI_COMPANY_MEMBERSHIP_ID || 0);
 const suppliedMultiCompanyTenantUserId = Number(process.env.QA_MULTI_COMPANY_TENANT_USER_ID || 0);
 const suppliedMultiCompanyBClientId = Number(process.env.QA_MULTI_COMPANY_B_CLIENT_ID || 0);
+const suppliedWasteManagerMembershipId = Number(process.env.QA_WASTE_MANAGER_MEMBERSHIP_ID || 0);
+const suppliedWasteManagerTenantUserId = Number(process.env.QA_WASTE_MANAGER_TENANT_USER_ID || 0);
 const assignmentFixtureIds = { client:suppliedClientId, contractor:suppliedContractorId, vehicle_unit:suppliedVehicleUnitId, driver:suppliedDriverId };
 const assignmentPassMarkers = {
   client:'REAL_ASSIGNMENT_CLIENT=PASS',
@@ -91,6 +93,119 @@ function multiCompanySnapshot() {
   must(snapshot && Array.isArray(snapshot.memberships), 'multi-company DB snapshot payload invalid');
   return snapshot;
 }
+function qaWasteManagerName() { return `QA Functional Waste Manager ${runId}`; }
+function remoteQaIdentity(mode) {
+  must(/^\d+$/.test(runId), `QA run id is invalid for ${mode}`);
+  must(qaSshHost && qaSshPort && qaSshUser && qaPlanexRoot, `QA SSH channel is unavailable for ${mode}`);
+  const key = `${process.env.HOME || ''}/.ssh/roles_functional`;
+  const remote = `/tmp/roles_access_func_identity_${runId}.php`;
+  const command = `PLANEX_ROOT=${shellQuote(qaPlanexRoot)} QA_RUN_ID=${shellQuote(runId)} /usr/bin/php8.5 ${shellQuote(remote)} ${shellQuote(mode)}`;
+  return execFileSync('ssh', [
+    '-p', qaSshPort, '-i', key, '-o', 'IdentitiesOnly=yes', '-o', 'StrictHostKeyChecking=yes',
+    `${qaSshUser}@${qaSshHost}`, command
+  ], {encoding:'utf8', maxBuffer:1024*1024});
+}
+function wasteManagerSnapshot() {
+  const output = remoteQaIdentity('waste-manager-snapshot');
+  const line = String(output).split(/\r?\n/).find(x => x.startsWith('QA_WASTE_MANAGER_SNAPSHOT_B64='));
+  must(line, 'Waste Trips manager snapshot marker missing');
+  const snapshot = JSON.parse(Buffer.from(line.slice('QA_WASTE_MANAGER_SNAPSHOT_B64='.length), 'base64').toString('utf8'));
+  must(snapshot && snapshot.central && snapshot.tenant, 'Waste Trips manager snapshot payload invalid');
+  return snapshot;
+}
+function resolveWasteManager() {
+  const output = remoteQaIdentity('waste-manager-resolve');
+  const lines = new Set(String(output).split(/\r?\n/).filter(Boolean));
+  must(lines.has('QA_WASTE_MANAGER_ADOPTION=PASS'), 'Waste Trips manager safe-adoption marker missing');
+  must(lines.has('QA_WASTE_MANAGER_FOREIGN_REJECTION=PASS'), 'Waste Trips foreign-manager rejection marker missing');
+  const idLine = [...lines].find(x => x.startsWith('QA_WASTE_MANAGER_RESOLVED_TENANT_USER_ID='));
+  must(idLine && Number(idLine.split('=')[1]) === suppliedWasteManagerTenantUserId, 'Waste Trips manager resolved tenant id changed');
+}
+async function wasteManagerOptions(page, selector) {
+  const select = page.locator(selector);
+  must(await select.count() === 1, `Waste Trips manager select missing: ${selector}`);
+  return select.locator('option').evaluateAll(nodes => nodes.map(n => ({
+    value:Number(n.value || 0), text:String(n.textContent || '').replace(/\s+/g,' ').trim()
+  })));
+}
+async function assertWasteManagerOptionSet(options, foreignMembershipId, where) {
+  const manager = options.filter(x => x.value === suppliedWasteManagerMembershipId);
+  must(manager.length === 1, `${where}: run-scoped Waste Trips manager is not uniquely visible`);
+  must(manager[0].text === qaWasteManagerName(), `${where}: Waste Trips manager label mismatch`);
+  must(!options.some(x => x.value === Number(foreignMembershipId)), `${where}: foreign membership leaked into Waste Trips manager selector`);
+}
+async function wasteTripManagerProof(page, foreignMembershipId) {
+  must(suppliedWasteManagerMembershipId > 0 && suppliedWasteManagerTenantUserId > 0, 'Waste Trips manager fixture ids unavailable');
+  must(Number(foreignMembershipId) > 0, 'foreign membership unavailable for Waste Trips manager isolation proof');
+  const before = wasteManagerSnapshot();
+  must(Number(before.company_id) === suppliedCompanyAId, 'Waste Trips manager fixture company mismatch');
+  must(Number(before.central.membership_id) === suppliedWasteManagerMembershipId, 'Waste Trips manager central membership mismatch');
+  must(String(before.central.membership_status) === 'active' && String(before.central.account_status) === 'active', 'Waste Trips manager central identity is not active');
+  must(String(before.central.full_name) === qaWasteManagerName(), 'Waste Trips manager central display name mismatch');
+  must(Number(before.tenant.id) === suppliedWasteManagerTenantUserId, 'Waste Trips manager unprojected tenant row id mismatch');
+  must(Number(before.tenant.membership_id || 0) === 0, 'Waste Trips manager unexpectedly projected before UI proof');
+
+  let response = await page.goto(base + '/company/trips/departures', {waitUntil:'networkidle',timeout:60000});
+  must(response && response.status() === 200, 'Waste Trips registry did not return HTTP 200');
+  let options = await wasteManagerOptions(page, '#waste-trip-create-modal select[name="responsible_membership_id"]');
+  await assertWasteManagerOptionSet(options, foreignMembershipId, 'Waste Trips main create');
+  mark('WASTE_TRIP_MANAGER_MAIN=PASS');
+
+  response = await page.goto(base + '/company/trips/departures/legacy', {waitUntil:'networkidle',timeout:60000});
+  must(response && response.status() === 200, 'Waste Trips legacy catalog did not return HTTP 200');
+  options = await wasteManagerOptions(page, '#waste-trip-create-modal select[name="responsible_membership_id"]');
+  await assertWasteManagerOptionSet(options, foreignMembershipId, 'Waste Trips legacy create');
+  mark('WASTE_TRIP_MANAGER_LEGACY=PASS');
+  mark('WASTE_TRIP_MANAGER_UNPROJECTED_VISIBLE=PASS');
+
+  const visibleText = String(await page.locator('body').innerText());
+  must(!visibleText.includes('Reference из старой БД') && !visibleText.includes('planned_start_range'), 'technical legacy reference JSON leaked into production UI');
+  mark('WASTE_TRIP_LEGACY_TECHNICAL_JSON_HIDDEN=PASS');
+
+  const row244 = page.locator('tr.waste-legacy-row').filter({hasText:'#244'});
+  must(await row244.count() === 1, 'Legacy #244 is absent from the production legacy catalog');
+  const open244 = page.locator('[data-create-legacy="244"]');
+  if (await open244.count() > 0) {
+    await open244.last().click();
+    const modal = page.locator('#waste-trip-create-modal');
+    await modal.waitFor({state:'visible',timeout:10000});
+    const form = modal.locator('#waste-legacy-create-form');
+    must(await form.count() === 1, 'Legacy #244 create form missing');
+    const action = String(await form.getAttribute('action') || '');
+    must(action.endsWith('/company/trips/departures/legacy/244/materialize'), `Legacy #244 create action mismatch: ${action}`);
+    const mode = await form.locator('[name="planned_start_mode"]').inputValue();
+    const exact = await form.locator('[name="planned_start_date"]').inputValue();
+    const from = await form.locator('[name="planned_start_date_from"]').inputValue();
+    const to = await form.locator('[name="planned_start_date_to"]').inputValue();
+    must((mode === 'range' && !!from && !to) || (mode === 'exact' && !!exact), 'Legacy #244 known planned-start data was not prefilled');
+    const hint = form.locator('[data-legacy-hint="planned_start"]');
+    const hintText = String(await hint.innerText());
+    must(!hintText.includes('Reference из старой БД') && !hintText.includes('planned_start_range'), 'Legacy #244 planned-start hint exposes technical reference data');
+    if (mode === 'range' && from && !to) must(!(await hint.evaluate(el => el.classList.contains('is-warning'))), 'Legacy #244 incomplete range is rendered as a red technical error');
+    const modalText = String(await modal.innerText());
+    must(!modalText.includes('Reference из старой БД') && !modalText.includes('planned_start_range'), 'Legacy #244 modal exposes technical JSON');
+  } else {
+    const stateText = String(await row244.innerText());
+    must(stateText.includes('Уже перенесён') || stateText.includes('Конфликт ID'), `Legacy #244 is non-createable without a known terminal state: ${stateText.slice(0,200)}`);
+  }
+  mark('WASTE_TRIP_LEGACY_244_STATE=PASS');
+
+  resolveWasteManager();
+  const after = wasteManagerSnapshot();
+  must(Number(after.tenant.id) === suppliedWasteManagerTenantUserId, 'Waste Trips manager tenant id changed during safe adoption');
+  must(Number(after.tenant.membership_id) === suppliedWasteManagerMembershipId, 'Waste Trips manager tenant row was not linked to stable membership id');
+  must(String(after.tenant.role_code) === 'membership_role' && String(after.tenant.status) === 'active' && after.tenant.deleted_at === null, 'Waste Trips manager adopted projection state mismatch');
+  mark('WASTE_TRIP_MANAGER_ADOPTION=PASS');
+  mark('WASTE_TRIP_MANAGER_FOREIGN_REJECTION=PASS');
+  mark('WASTE_TRIP_MANAGER_TENANT_ID_STABLE=PASS');
+
+  response = await page.goto(base + '/company/trips/departures/legacy', {waitUntil:'networkidle',timeout:60000});
+  must(response && response.status() === 200, 'Waste Trips legacy catalog failed after manager adoption');
+  options = await wasteManagerOptions(page, '#waste-trip-create-modal select[name="responsible_membership_id"]');
+  await assertWasteManagerOptionSet(options, foreignMembershipId, 'Waste Trips legacy create after adoption');
+  mark('WASTE_TRIP_MANAGER_UI=PASS');
+}
+
 function qaClientAName() { return `QA Functional Client ${runId}`; }
 function qaClientBName() { return `QA Functional Switch B Client ${runId}`; }
 function exactJson(value) { return JSON.stringify(stableObject(value)); }
@@ -600,6 +715,8 @@ async function submitResponsibility(page, candidate, targetMembershipId) {
     await multiCompanySwitchProof(page, initialState);
 
     const foreignMembershipId = await crossCompanyProof(page, initialState);
+    await wasteTripManagerProof(page, foreignMembershipId);
+    await page.goto(base + '/company/roles-access', {waitUntil:'networkidle',timeout:60000});
     initialState = await snapshot(page);
     initialFingerprint = stateFingerprint(initialState);
 

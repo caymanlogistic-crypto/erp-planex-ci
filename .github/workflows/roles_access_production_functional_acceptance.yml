@@ -95,6 +95,8 @@ jobs:
           owner_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_OWNER_TENANT_USER_ID=//p')"
           dynamic_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_MEMBERSHIP_ID=//p')"
           dynamic_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_DYNAMIC_TENANT_USER_ID=//p')"
+          waste_manager_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_WASTE_MANAGER_MEMBERSHIP_ID=//p')"
+          waste_manager_user="$(printf '%s\n' "$provision" | sed -n 's/^QA_WASTE_MANAGER_TENANT_USER_ID=//p')"
           company_a="$(printf '%s\n' "$provision" | sed -n 's/^QA_COMPANY_A_ID=//p')"
           company_b="$(printf '%s\n' "$provision" | sed -n 's/^QA_COMPANY_B_ID=//p')"
           multi_membership="$(printf '%s\n' "$provision" | sed -n 's/^QA_MULTI_COMPANY_MEMBERSHIP_ID=//p')"
@@ -110,6 +112,8 @@ jobs:
           [[ "$owner_user" =~ ^[1-9][0-9]*$ ]]
           [[ "$dynamic_membership" =~ ^[1-9][0-9]*$ ]]
           [[ "$dynamic_user" =~ ^[1-9][0-9]*$ ]]
+          [[ "$waste_manager_membership" =~ ^[1-9][0-9]*$ ]]
+          [[ "$waste_manager_user" =~ ^[1-9][0-9]*$ ]]
           [[ "$company_a" =~ ^[1-9][0-9]*$ ]]
           [[ "$company_b" =~ ^[1-9][0-9]*$ ]]
           test "$company_a" != "$company_b"
@@ -124,6 +128,7 @@ jobs:
           printf '%s\n' "$provision" | grep -q '^QA_DYNAMIC_RECIPIENT_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_MULTI_COMPANY_ACCOUNT_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_TENANT_PROJECTIONS_READY=YES$'
+          printf '%s\n' "$provision" | grep -q '^QA_WASTE_MANAGER_UNPROJECTED_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_ASSIGNMENT_FIXTURES_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_CONTRACTOR_FIXTURE_READY=YES$'
           printf '%s\n' "$provision" | grep -q '^QA_RESPONSIBILITY_FIXTURE_READY=YES$'
@@ -134,6 +139,8 @@ jobs:
           echo "QA_OWNER_TENANT_USER_ID=$owner_user" >> "$GITHUB_ENV"
           echo "QA_DYNAMIC_MEMBERSHIP_ID=$dynamic_membership" >> "$GITHUB_ENV"
           echo "QA_DYNAMIC_TENANT_USER_ID=$dynamic_user" >> "$GITHUB_ENV"
+          echo "QA_WASTE_MANAGER_MEMBERSHIP_ID=$waste_manager_membership" >> "$GITHUB_ENV"
+          echo "QA_WASTE_MANAGER_TENANT_USER_ID=$waste_manager_user" >> "$GITHUB_ENV"
           echo "QA_COMPANY_A_ID=$company_a" >> "$GITHUB_ENV"
           echo "QA_COMPANY_B_ID=$company_b" >> "$GITHUB_ENV"
           echo "QA_MULTI_COMPANY_MEMBERSHIP_ID=$multi_membership" >> "$GITHUB_ENV"
@@ -160,6 +167,8 @@ jobs:
           [[ "${QA_OWNER_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_DYNAMIC_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_DYNAMIC_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_WASTE_MANAGER_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
+          [[ "${QA_WASTE_MANAGER_TENANT_USER_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_COMPANY_A_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_COMPANY_B_ID:-}" =~ ^[1-9][0-9]*$ ]]
           [[ "${QA_MULTI_COMPANY_MEMBERSHIP_ID:-}" =~ ^[1-9][0-9]*$ ]]
@@ -190,6 +199,7 @@ jobs:
           grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_CONTRACTOR_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_TENANT_PROJECTION_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^QA_WASTE_MANAGER_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_DYNAMIC_RECIPIENT_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_TEMP_ROLE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_IDENTITY_RESIDUE=0$' roles_access_identity_cleanup.txt
@@ -219,6 +229,15 @@ jobs:
             COMPANY_A_STATE_RESTORED=PASS \
             MEMBERSHIP_OVERRIDES_ISOLATED=PASS \
             NAVIGATION_BADGE_NONZERO=PASS \
+            WASTE_TRIP_MANAGER_MAIN=PASS \
+            WASTE_TRIP_MANAGER_LEGACY=PASS \
+            WASTE_TRIP_MANAGER_UNPROJECTED_VISIBLE=PASS \
+            WASTE_TRIP_LEGACY_TECHNICAL_JSON_HIDDEN=PASS \
+            WASTE_TRIP_LEGACY_244_STATE=PASS \
+            WASTE_TRIP_MANAGER_ADOPTION=PASS \
+            WASTE_TRIP_MANAGER_FOREIGN_REJECTION=PASS \
+            WASTE_TRIP_MANAGER_TENANT_ID_STABLE=PASS \
+            WASTE_TRIP_MANAGER_UI=PASS \
             REAL_ASSIGNMENT_CLIENT=PASS \
             REAL_ASSIGNMENT_CONTRACTOR=PASS \
             REAL_ASSIGNMENT_VEHICLE=PASS \
@@ -242,6 +261,7 @@ jobs:
           grep -q '^QA_RESPONSIBILITY_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_CONTRACTOR_FIXTURE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_TENANT_PROJECTION_RESIDUE=0$' roles_access_identity_cleanup.txt
+          grep -q '^QA_WASTE_MANAGER_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_DYNAMIC_RECIPIENT_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_TEMP_ROLE_RESIDUE=0$' roles_access_identity_cleanup.txt
           grep -q '^QA_IDENTITY_RESIDUE=0$' roles_access_identity_cleanup.txt
