@@ -74,9 +74,26 @@ final class UserSyncService
         }
         $localPdo->beginTransaction();
         try {
+            $membershipId = (int) $membership['id'];
             $find = $localPdo->prepare('SELECT id FROM users WHERE membership_id = ? FOR UPDATE');
-            $find->execute([(int) $membership['id']]);
+            $find->execute([$membershipId]);
             $tenantId = $find->fetchColumn();
+            if ($tenantId === false) {
+                $byLogin = $localPdo->prepare('SELECT id,membership_id FROM users WHERE login = ? AND deleted_at IS NULL ORDER BY id FOR UPDATE');
+                $byLogin->execute([(string) $account['login']]);
+                $loginRows = $byLogin->fetchAll(PDO::FETCH_ASSOC);
+                if (count($loginRows) > 1) {
+                    throw new \RuntimeException('Tenant users содержит несколько активных записей с этим логином.');
+                }
+                if ($loginRows !== []) {
+                    $projected = (int) ($loginRows[0]['membership_id'] ?? 0);
+                    if ($projected > 0 && $projected !== $membershipId) {
+                        throw new \RuntimeException('Tenant user уже связан с другим membership.');
+                    }
+                    $tenantId = (int) $loginRows[0]['id'];
+                    $localPdo->prepare('UPDATE users SET membership_id=? WHERE id=?')->execute([$membershipId, $tenantId]);
+                }
+            }
             $roleCode = ($role['system_key'] ?? null) === CompanyRoleService::OWNER_SYSTEM_KEY
                 ? 'company_owner'
                 : 'membership_role';
@@ -87,7 +104,7 @@ final class UserSyncService
                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
                 );
                 $insert->execute([
-                    (int) $membership['id'], (string) $account['full_name'], (string) $account['login'],
+                    $membershipId, (string) $account['full_name'], (string) $account['login'],
                     $account['email'] ?? null, $account['phone'] ?? null, (string) $account['password_hash'],
                     $roleCode, (string) $membership['status'], (int) ($_SESSION['account_id'] ?? 0), 'membership',
                 ]);
@@ -99,7 +116,7 @@ final class UserSyncService
                 $update->execute([
                     (string) $account['full_name'], (string) $account['login'], $account['email'] ?? null,
                     $account['phone'] ?? null, (string) $account['password_hash'], $roleCode,
-                    (string) $membership['status'], (int) $membership['id'],
+                    (string) $membership['status'], $membershipId,
                 ]);
             }
             $localPdo->commit();
@@ -109,6 +126,43 @@ final class UserSyncService
             }
             throw $e;
         }
+    }
+
+    public function resolveMembershipTenantUserId(PDO $centralPdo, PDO $localPdo, int $companyId, int $membershipId): int
+    {
+        if ($companyId <= 0 || $membershipId <= 0) {
+            throw new \RuntimeException('Менеджер не выбран.');
+        }
+        $stmt = $centralPdo->prepare(
+            "SELECT m.id AS membership_id,m.status AS membership_status,
+                    a.id,a.full_name,a.login,a.email,a.phone,a.password_hash,a.status AS account_status,
+                    r.id AS role_id,r.system_key
+               FROM company_memberships m
+               JOIN user_accounts a ON a.id=m.account_id
+               JOIN company_roles r ON r.id=m.role_id AND r.company_id=m.company_id
+              WHERE m.id=? AND m.company_id=? LIMIT 1"
+        );
+        $stmt->execute([$membershipId, $companyId]);
+        $row = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row || (string) ($row['membership_status'] ?? '') !== 'active' || (string) ($row['account_status'] ?? '') !== 'active') {
+            throw new \RuntimeException('Выбранный менеджер недоступен или неактивен.');
+        }
+        $this->syncMembershipProjection(
+            $localPdo,
+            [
+                'id'=>(int)$row['id'],'full_name'=>(string)$row['full_name'],'login'=>(string)$row['login'],
+                'email'=>$row['email']??null,'phone'=>$row['phone']??null,'password_hash'=>(string)$row['password_hash'],
+            ],
+            ['id'=>$membershipId,'status'=>'active'],
+            ['id'=>(int)$row['role_id'],'system_key'=>$row['system_key']??null],
+        );
+        $find = $localPdo->prepare("SELECT id FROM users WHERE membership_id=? AND status='active' AND deleted_at IS NULL ORDER BY id LIMIT 2");
+        $find->execute([$membershipId]);
+        $ids = array_map('intval', $find->fetchAll(PDO::FETCH_COLUMN));
+        if (count($ids) !== 1) {
+            throw new \RuntimeException('Не удалось однозначно сопоставить менеджера с БД компании.');
+        }
+        return $ids[0];
     }
 
     public function loginExistsInCentral(PDO $centralPdo, string $login, ?int $excludeId = null): bool
