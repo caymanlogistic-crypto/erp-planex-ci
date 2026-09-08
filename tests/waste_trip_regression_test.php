@@ -27,6 +27,7 @@ $ok(WasteTripService::ERP_BUSINESS_ID_START===400,'ERP range start must be 400')
 $ok(WasteTripService::LEGACY_RANGE_WARNING_THRESHOLD===390,'legacy warning threshold must be 390');
 $ok(WasteTripService::legacyRangeWarningForMax(389)===null,'warning must be absent at 389');
 $ok(WasteTripService::legacyRangeWarningForMax(390)===WasteTripService::LEGACY_RANGE_WARNING,'warning must appear at 390');
+$dateErrors=WasteTripService::validateInput(['client_id'=>1,'responsible_user_id'=>1,'destination_type'=>'warehouse','status'=>'searching_executor','planned_start_mode'=>'exact','planned_start_date'=>'2026-09-10','planned_finish_date'=>'2026-09-09']);$ok(in_array('Плановое окончание не может быть раньше планового начала.',$dateErrors,true),'planned finish before planned start must fail');
 echo "WASTE_TRIP_DOMAIN=PASS\n";
 
 $service=(string)file_get_contents($root.'/app/Service/WasteTripService.php');
