@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Service\FeoLegacyParityService;
 use App\Service\FeoPlacementInputParser;
 use App\Service\FeoPlacementService;
 use App\Service\FeoRequestService;
@@ -29,6 +30,7 @@ final class FeoPlacementController
         $blocks = [];
         $current = ['request_count'=>0,'total_mass_kg'=>0,'missing_request_count'=>0];
         $consistency = ['is_consistent'=>true,'expected_count'=>0,'actual_count'=>0];
+        $legacyParity = ['available'=>false,'source_error'=>true,'mismatch_count'=>0,'message'=>'Сверка со старой базой недоступна.'];
         $successFlash = $_SESSION['flash_success'] ?? null;
         $errorFlash = $_SESSION['flash_error'] ?? null;
         unset($_SESSION['flash_success'], $_SESSION['flash_error']);
@@ -40,6 +42,7 @@ final class FeoPlacementController
             $blocks = $state['blocks'];
             $current = $state['current'];
             $consistency = $state['consistency'];
+            $legacyParity = (new FeoLegacyParityService())->state($pdo);
         } catch (\Throwable $e) {
             $dbError = $e->getMessage();
         }

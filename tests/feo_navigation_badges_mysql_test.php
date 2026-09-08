@@ -55,18 +55,29 @@ try {
         $st->execute([$id]);
     }
 
+    $pdo->exec("CREATE TABLE feo (zayavka_id VARCHAR(64) NOT NULL, mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $legacy=$pdo->prepare('INSERT INTO feo(zayavka_id,mass_netto) VALUES(?,?)');
+    foreach ([['100001',1.0],['100002',2.5],['100005',5.0]] as [$id,$mass]) $legacy->execute([$id,$mass]);
+
     $pdo->exec("INSERT INTO feo_request_cost_blocks(id,pricing_type,snapshot_request_count,snapshot_total_mass_kg,total_cost) VALUES(1,'agreement',1,999.000,100.00)");
     $pdo->exec("INSERT INTO feo_request_cost_block_requests(block_id,zayavka_id,snapshot_mass_kg,position_no) VALUES(1,'100001',999.000,1)");
+
+    putenv('LEGACY_FLIGHTS_DB_HOST=' . $host);
+    putenv('LEGACY_FLIGHTS_DB_PORT=' . $port);
+    putenv('LEGACY_FLIGHTS_DB_DATABASE=' . $dbName);
+    putenv('LEGACY_FLIGHTS_DB_USERNAME=' . $user);
+    putenv('LEGACY_FLIGHTS_DB_PASSWORD=' . $pass);
+    putenv('LEGACY_FLIGHTS_DB_CHARSET=utf8mb4');
 
     $config=['database'=>['host'=>$host,'port'=>$port,'database'=>$dbName,'username'=>$user,'password'=>$pass,'charset'=>'utf8mb4']];
     $central = new App\Core\Database($config['database']);
     $company=['id'=>501,'status'=>'active','db_identifier'=>$dbName];
     $c=App\Service\NavigationCounterService::forCompany($config,$central,501,$company);
 
-    $expected=['feo_freshness'=>1,'feo_placement_problem'=>1,'feo_map_problem'=>3,'feo_utilizer_problem'=>1,'feo_cost_problem'=>1];
+    $expected=['feo_freshness'=>1,'feo_placement_problem'=>3,'feo_map_problem'=>3,'feo_utilizer_problem'=>1,'feo_cost_problem'=>1];
     foreach ($expected as $key=>$value) $ok(($c[$key]??null)===$value, "{$key} expected {$value}, got " . json_encode($c[$key]??null));
     $sum=0; foreach (array_keys($expected) as $key) $sum += (int)$c[$key];
-    $ok($sum===7, 'FEO parent child-derived sum must equal 7 in factual fixture.');
+    $ok($sum===9, 'FEO parent child-derived sum must equal 9 in factual fixture.');
 
     echo "FEO_CHILD_BADGES_MYSQL=PASS\n";
     echo "FEO_PARENT_BADGE_SUM_MYSQL=PASS sum={$sum}\n";
