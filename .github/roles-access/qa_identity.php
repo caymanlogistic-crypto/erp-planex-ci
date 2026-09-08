@@ -18,6 +18,7 @@ require_once $root . '/app/Service/IdentityNormalizer.php';
 require_once $root . '/app/Service/CompanyRoleService.php';
 require_once $root . '/app/Service/CompanyMembershipService.php';
 require_once $root . '/app/Service/EntityResponsibilityService.php';
+require_once $root . '/app/Service/UserSyncService.php';
 require_once $root . '/app/Security/PageRegistry.php';
 $config = require $root . '/bootstrap/app.php';
 $pdo = (new App\Core\Database($config['database']))->connection();
@@ -35,6 +36,7 @@ function qaDriverPhone(string $runId): string { return '+7998' . str_pad((string
 function qaVehiclePlate(string $runId): string { return 'QA' . str_pad((string)(((int)$runId) % 1000000000000), 12, '0', STR_PAD_LEFT); }
 function qaSwitchBClientName(string $runId): string { return 'QA Functional Switch B Client ' . $runId; }
 function qaSwitchBClientInn(string $runId): string { return '97' . str_pad((string)(((int)$runId) % 10000000000), 10, '0', STR_PAD_LEFT); }
+function qaWasteManagerName(string $runId): string { return 'QA Functional Waste Manager ' . $runId; }
 
 function writeQaState(string $stateFile, array $state): void
 {
@@ -340,6 +342,93 @@ function cleanupQaTenantProjections(PDO $pdo, array $config, string $runId, arra
     }
 }
 
+function cleanupQaWasteManagerOrphan(PDO $pdo, array $config, ?array $state, string $runId): void
+{
+    if (!is_array($state)) return;
+    $companyId=(int)($state['company_id']??0);
+    $manager=is_array($state['waste_manager']??null)?$state['waste_manager']:[];
+    $login=(string)($manager['login']??'');
+    if ($companyId<=0 || $login==='') return;
+    if (!str_starts_with($login,qaIdentityPrefix($runId))) throw new RuntimeException('invalid QA waste manager login namespace');
+    $tenant=tenantFor($pdo,$config,$companyId);
+    $q=$tenant->prepare('SELECT id,membership_id,full_name,login FROM users WHERE login=? ORDER BY id LIMIT 2');
+    $q->execute([$login]);
+    $rows=$q->fetchAll(PDO::FETCH_ASSOC);
+    if (count($rows)>1) throw new RuntimeException('ambiguous QA waste manager tenant residue');
+    if ($rows!==[]) {
+        $row=$rows[0];
+        if ((string)$row['full_name']!==qaWasteManagerName($runId) || (int)($row['membership_id']??0)!==0) {
+            throw new RuntimeException('unexpected QA waste manager tenant row during orphan cleanup');
+        }
+        $del=$tenant->prepare('DELETE FROM users WHERE id=? AND login=? AND membership_id IS NULL');
+        $del->execute([(int)$row['id'],$login]);
+        if ($del->rowCount()!==1) throw new RuntimeException('QA waste manager orphan cleanup mismatch');
+    }
+    $q->execute([$login]);
+    if ($q->fetch(PDO::FETCH_ASSOC)!==false) throw new RuntimeException('QA waste manager tenant residue detected');
+}
+
+function qaWasteManagerSnapshot(PDO $pdo, array $config, string $stateFile): array
+{
+    if (!is_file($stateFile)) throw new RuntimeException('QA state missing for Waste Trips manager proof');
+    $state=json_decode((string)file_get_contents($stateFile),true,32,JSON_THROW_ON_ERROR);
+    $companyId=(int)($state['company_id']??0);
+    $manager=is_array($state['waste_manager']??null)?$state['waste_manager']:[];
+    $membershipId=(int)($manager['membership_id']??0);
+    $tenantUserId=(int)($manager['tenant_user_id']??0);
+    $login=(string)($manager['login']??'');
+    if ($companyId<=0 || $membershipId<=0 || $tenantUserId<=0 || $login==='') throw new RuntimeException('QA Waste Trips manager state incomplete');
+    $central=$pdo->prepare(
+        'SELECT m.id AS membership_id,m.company_id,m.status AS membership_status,a.id AS account_id,a.full_name,a.login,a.status AS account_status '
+        . 'FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id WHERE m.id=? AND m.company_id=? LIMIT 1'
+    );
+    $central->execute([$membershipId,$companyId]);
+    $centralRow=$central->fetch(PDO::FETCH_ASSOC);
+    if (!$centralRow) throw new RuntimeException('QA Waste Trips manager central membership missing');
+    $tenant=tenantFor($pdo,$config,$companyId);
+    $row=$tenant->prepare('SELECT id,membership_id,full_name,login,role_code,status,deleted_at FROM users WHERE id=? AND login=? LIMIT 2');
+    $row->execute([$tenantUserId,$login]);
+    $rows=$row->fetchAll(PDO::FETCH_ASSOC);
+    if (count($rows)!==1) throw new RuntimeException('QA Waste Trips manager tenant row is not unique');
+    return ['company_id'=>$companyId,'central'=>$centralRow,'tenant'=>$rows[0]];
+}
+
+function emitQaWasteManagerSnapshot(PDO $pdo, array $config, string $stateFile): void
+{
+    echo 'QA_WASTE_MANAGER_SNAPSHOT_B64='.base64_encode(json_encode(qaWasteManagerSnapshot($pdo,$config,$stateFile),JSON_THROW_ON_ERROR)).PHP_EOL;
+}
+
+function resolveQaWasteManager(PDO $pdo, array $config, string $stateFile): void
+{
+    if (!is_file($stateFile)) throw new RuntimeException('QA state missing for Waste Trips manager resolution');
+    $state=json_decode((string)file_get_contents($stateFile),true,32,JSON_THROW_ON_ERROR);
+    $companyId=(int)($state['company_id']??0);
+    $manager=is_array($state['waste_manager']??null)?$state['waste_manager']:[];
+    $membershipId=(int)($manager['membership_id']??0);
+    $tenantUserId=(int)($manager['tenant_user_id']??0);
+    $foreignMembershipId=(int)($state['foreign']['membership_id']??0);
+    $before=qaWasteManagerSnapshot($pdo,$config,$stateFile);
+    if ((int)($before['tenant']['membership_id']??0)!==0) throw new RuntimeException('QA Waste Trips manager must be unprojected before resolution');
+    $tenant=tenantFor($pdo,$config,$companyId);
+    $service=new App\Service\UserSyncService($config);
+    $resolved=$service->resolveMembershipTenantUserId($pdo,$tenant,$companyId,$membershipId);
+    if ($resolved!==$tenantUserId) throw new RuntimeException('QA Waste Trips manager safe-adoption returned a different tenant user');
+    $after=qaWasteManagerSnapshot($pdo,$config,$stateFile);
+    $tenantRow=$after['tenant'];
+    if ((int)($tenantRow['membership_id']??0)!==$membershipId || (string)($tenantRow['full_name']??'')!==qaWasteManagerName((string)getenv('QA_RUN_ID')) || (string)($tenantRow['role_code']??'')!=='membership_role' || (string)($tenantRow['status']??'')!=='active' || ($tenantRow['deleted_at']??null)!==null) {
+        throw new RuntimeException('QA Waste Trips manager safe-adoption readback mismatch');
+    }
+    $foreignRejected=false;
+    if ($foreignMembershipId>0) {
+        try { $service->resolveMembershipTenantUserId($pdo,$tenant,$companyId,$foreignMembershipId); }
+        catch (RuntimeException $e) { $foreignRejected=str_contains($e->getMessage(),'недоступен'); }
+    }
+    if (!$foreignRejected) throw new RuntimeException('QA foreign membership resolved as Waste Trips manager');
+    echo 'QA_WASTE_MANAGER_ADOPTION=PASS'.PHP_EOL;
+    echo 'QA_WASTE_MANAGER_FOREIGN_REJECTION=PASS'.PHP_EOL;
+    echo 'QA_WASTE_MANAGER_RESOLVED_TENANT_USER_ID='.$resolved.PHP_EOL;
+}
+
 function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $runId): void
 {
     $state=is_file($stateFile) ? json_decode((string)file_get_contents($stateFile),true,32,JSON_THROW_ON_ERROR) : [];
@@ -350,6 +439,7 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
 
     $accounts=qaAccounts($pdo,$runId);
     cleanupQaTenantProjections($pdo,$config,$runId,$accounts);
+    cleanupQaWasteManagerOrphan($pdo,$config,$state,$runId);
 
     // Remove non-owner memberships first, then temporary owners. Every owner company
     // was selected with an existing independent active owner, so fail-closed owner
@@ -413,6 +503,7 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
     echo "QA_RESPONSIBILITY_FIXTURE_RESIDUE=0\n";
     echo "QA_CONTRACTOR_FIXTURE_RESIDUE=0\n";
     echo "QA_TENANT_PROJECTION_RESIDUE=0\n";
+    echo "QA_WASTE_MANAGER_RESIDUE=0\n";
     echo "QA_DYNAMIC_RECIPIENT_RESIDUE=0\n";
     echo "QA_TEMP_ROLE_RESIDUE=0\n";
     echo "QA_IDENTITY_RESIDUE=0\n";
@@ -423,6 +514,8 @@ function cleanupQaIdentity(PDO $pdo, array $config, string $stateFile, string $r
 if ($mode==='cleanup') { cleanupQaIdentity($pdo,$config,$stateFile,$runId); exit(0); }
 if ($mode==='assignment-snapshot') { emitQaAssignmentSnapshot($pdo,$config,$stateFile); exit(0); }
 if ($mode==='multi-company-snapshot') { emitQaMultiCompanySnapshot($pdo,$stateFile); exit(0); }
+if ($mode==='waste-manager-snapshot') { emitQaWasteManagerSnapshot($pdo,$config,$stateFile); exit(0); }
+if ($mode==='waste-manager-resolve') { resolveQaWasteManager($pdo,$config,$stateFile); exit(0); }
 if ($mode!=='create') { fwrite(STDERR,"unknown QA identity mode\n"); exit(1); }
 if (is_file($stateFile)) { fwrite(STDERR,"QA state already exists\n"); exit(1); }
 
@@ -466,6 +559,7 @@ $state=[
     'foreign_role_id'=>0,
     'multi_company'=>['membership_id'=>0,'tenant_user_id'=>0,'b_client_id'=>0,'b_client_name'=>qaSwitchBClientName($runId),'b_client_inn'=>qaSwitchBClientInn($runId)],
     'responsibility_fixture'=>null,
+    'waste_manager'=>['account_id'=>0,'membership_id'=>0,'tenant_user_id'=>0,'login'=>''],
     'qa_contractor_fixture'=>['id'=>0,'name'=>qaContractorName($runId),'inn'=>qaContractorInn($runId)],
     'assignment_fixtures'=>[
         'client'=>['id'=>0,'name'=>qaClientName($runId),'inn'=>qaClientInn($runId)],
@@ -515,7 +609,21 @@ try {
     if (!($foreign['account_created']??false)) throw new RuntimeException('QA foreign account collision');
     $state['foreign']=['account_id'=>(int)$foreign['account_id'],'membership_id'=>(int)$foreign['membership_id'],'login'=>$foreignLogin]; writeQaState($stateFile,$state);
 
+    $managerLogin=$prefix.'waste_manager_'.bin2hex(random_bytes(4));
+    $managerPassword=rtrim(strtr(base64_encode(random_bytes(30)),'+/','-_'),'=');
+    $manager=$membershipService->add($companyId,(int)$role['id'],qaWasteManagerName($runId),$managerLogin,$managerPassword,null,null,'active');
+    if (!($manager['account_created']??false)) throw new RuntimeException('QA waste manager account collision');
+    $state['waste_manager']=['account_id'=>(int)$manager['account_id'],'membership_id'=>(int)$manager['membership_id'],'tenant_user_id'=>0,'login'=>$managerLogin]; writeQaState($stateFile,$state);
+
     $tenant=$target['tenant'];
+    $managerCollision=$tenant->prepare('SELECT COUNT(*) FROM users WHERE login=?');
+    $managerCollision->execute([$managerLogin]);
+    if ((int)$managerCollision->fetchColumn()!==0) throw new RuntimeException('QA waste manager tenant login collision');
+    $managerInsert=$tenant->prepare("INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status) VALUES (NULL,?,?,?,'logist','active')");
+    $managerInsert->execute([qaWasteManagerName($runId),$managerLogin,password_hash($managerPassword,PASSWORD_DEFAULT)]);
+    $managerTenantUserId=(int)$tenant->lastInsertId();
+    if ($managerTenantUserId<=0) throw new RuntimeException('QA waste manager unprojected tenant row failed');
+    $state['waste_manager']['tenant_user_id']=$managerTenantUserId; writeQaState($stateFile,$state);
     $projection=$tenant->prepare('INSERT INTO users (membership_id,full_name,login,password_hash,role_code,status) VALUES (?,?,?,?,?,\'active\')');
     $projection->execute([(int)$owner['membership_id'],'QA Functional Owner '.$runId,$ownerLogin,password_hash($ownerPassword,PASSWORD_DEFAULT),'company_owner']);
     $ownerTenantUserId=(int)$tenant->lastInsertId();
@@ -549,6 +657,7 @@ try {
     foreach ($recipients as $recipient) $byMembership[(int)$recipient['membership_id']]=$recipient;
     if ((int)($byMembership[(int)$owner['membership_id']]['id']??0)!==(int)$owner['membership_id']) throw new RuntimeException('QA owner is not an eligible stable-membership recipient');
     if ((int)($byMembership[(int)$dynamic['membership_id']]['id']??0)!==(int)$dynamic['membership_id']) throw new RuntimeException('QA dynamic is not an eligible stable-membership recipient');
+    if ((int)($byMembership[(int)$manager['membership_id']]['id']??0)!==(int)$manager['membership_id']) throw new RuntimeException('QA Waste Trips manager is not an eligible stable-membership recipient');
 
     $clientName=qaClientName($runId); $clientInn=qaClientInn($runId);
     $collision=$tenant->prepare('SELECT COUNT(*) FROM clients WHERE name=? OR inn=?');
@@ -628,6 +737,9 @@ try {
     echo 'QA_OWNER_TENANT_USER_ID='.$ownerTenantUserId.PHP_EOL;
     echo 'QA_DYNAMIC_MEMBERSHIP_ID='.(int)$dynamic['membership_id'].PHP_EOL;
     echo 'QA_DYNAMIC_TENANT_USER_ID='.$dynamicTenantUserId.PHP_EOL;
+    echo 'QA_WASTE_MANAGER_MEMBERSHIP_ID='.(int)$manager['membership_id'].PHP_EOL;
+    echo 'QA_WASTE_MANAGER_TENANT_USER_ID='.$managerTenantUserId.PHP_EOL;
+    echo 'QA_WASTE_MANAGER_UNPROJECTED_READY=YES'.PHP_EOL;
     echo 'QA_COMPANY_A_ID='.$companyId.PHP_EOL;
     echo 'QA_COMPANY_B_ID='.$foreignCompanyId.PHP_EOL;
     echo 'QA_MULTI_COMPANY_MEMBERSHIP_ID='.(int)$ownerB['membership_id'].PHP_EOL;
