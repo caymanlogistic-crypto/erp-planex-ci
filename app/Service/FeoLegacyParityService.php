@@ -63,7 +63,7 @@ final class FeoLegacyParityService
             $comparison['available'] = true;
             $comparison['source_error'] = false;
             $comparison['message'] = '';
-            $comparison['legacy_filter'] = 'Доступные блоки старой базы: ID > ' . self::LEGACY_AVAILABLE_BLOCK_MIN_ID;
+            $comparison['legacy_filter'] = 'Блоки старой базы: ID > ' . self::LEGACY_AVAILABLE_BLOCK_MIN_ID;
             $comparison['checked_at'] = date(DATE_ATOM);
             return $this->cache($cacheKey, $comparison);
         } catch (Throwable) {
@@ -220,7 +220,7 @@ final class FeoLegacyParityService
     {
         $blocks = $pdo->prepare("SELECT id,zayavki_ids
                                    FROM `status_blocks`
-                                  WHERE id > ? AND status_type = 'dostupno'
+                                  WHERE id > ?
                                ORDER BY id");
         $blocks->execute([self::LEGACY_AVAILABLE_BLOCK_MIN_ID]);
 
@@ -355,7 +355,7 @@ final class FeoLegacyParityService
             'only_legacy_summary'=>['request_count'=>0,'total_mass_kg'=>0.0],
             'mass_mismatches'=>[],
             'mass_mismatch_count'=>0,
-            'legacy_filter'=>'Доступные блоки старой базы: ID > ' . self::LEGACY_AVAILABLE_BLOCK_MIN_ID,
+            'legacy_filter'=>'Блоки старой базы: ID > ' . self::LEGACY_AVAILABLE_BLOCK_MIN_ID,
         ];
     }
 }
