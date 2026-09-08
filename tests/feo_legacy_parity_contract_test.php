@@ -53,7 +53,8 @@ $layout = (string)file_get_contents($root . '/app/View/layouts/main.php');
 
 $ok(str_contains($source, "TABLE_NAME='feo'"), 'legacy source is fixed to legacy feo table');
 $ok(str_contains($source, 'LEGACY_AVAILABLE_BLOCK_MIN_ID = 128'), 'legacy comparison boundary is explicit');
-$ok(str_contains($source, 'FROM `status_blocks`') && str_contains($source, "id > ? AND status_type = 'dostupno'"), 'legacy pool comes only from available status blocks newer than 128');
+$ok(str_contains($source, 'FROM `status_blocks`') && str_contains($source, 'WHERE id > ?'), 'legacy pool comes only from status blocks newer than 128');
+$ok(!str_contains($source, "status_type = 'dostupno'"), 'legacy block selection must not add an unrequested status_type filter');
 $ok(str_contains($source, "['zayavka_id', 'Заявка, ID', 'Заявка ID', 'request_id']"), 'legacy request ID requires explicit semantic column aliases');
 $ok(!str_contains($source, "['id',") && !str_contains($source, "'idColumn'=>'id'"), 'generic legacy id must never be guessed as request ID');
 $ok(str_contains($source, 'WasteTripLegacySourceService::connectionFromEnvironment()'), 'existing legacy connection contract is reused');
