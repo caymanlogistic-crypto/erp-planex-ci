@@ -410,10 +410,13 @@ q('[data-placement-reconcile]')?.addEventListener('click',async()=>{
 function parityBlockText(row){
   const currentId=Number(row?.source_block_id||0);
   const currentName=String(row?.source_block_name||'').trim();
-  if(currentId>0)return `#${currentId}${currentName?' · '+currentName:''} · актуальный источник`;
   const blocks=Array.isArray(row?.blocks)?row.blocks:[];
-  if(!blocks.length)return 'Не найдена в блоках ERP';
-  return blocks.map(b=>`#${Number(b.id||0)}${b.name?' · '+String(b.name):''} · ${b.block_type==='addition'?'добавление':'исключение'} · ${b.status==='applied'?'применяется':'отключён'}`).join('; ');
+  const legacyBlocks=Array.isArray(row?.legacy_block_ids)?row.legacy_block_ids.map(Number).filter(id=>id>0):[];
+  let erp='Не найдена в блоках ERP';
+  if(currentId>0)erp=`#${currentId}${currentName?' · '+currentName:''} · актуальный источник`;
+  else if(blocks.length)erp=blocks.map(b=>`#${Number(b.id||0)}${b.name?' · '+String(b.name):''} · ${b.block_type==='addition'?'добавление':'исключение'} · ${b.status==='applied'?'применяется':'отключён'}`).join('; ');
+  const legacy=legacyBlocks.length?legacyBlocks.map(id=>`#${id}`).join(', '):'—';
+  return `ERP: ${erp} · Старая база: ${legacy}`;
 }
 function parityMass(value){return value===null||value===undefined?'—':`${fmt(value)} кг`;}
 function parityChecked(value){
@@ -439,6 +442,7 @@ function renderLegacyParity(){
   const onlyLegacy=legacyParity.only_legacy_summary||{};
   const signed=v=>Number(v||0)>0?'+'+fmt(v):fmt(v);
   let html=`<div class="feo-placement-parity-grid"><div class="feo-placement-parity-card"><span>Количество доступных заявок</span><b>ERP ${Number(n.request_count||0)} · старая ${Number(l.request_count||0)} · Δ ${signed(d.request_count)}</b></div><div class="feo-placement-parity-card"><span>Общий вес доступных заявок</span><b>ERP ${fmt(n.total_mass_kg)} кг · старая ${fmt(l.total_mass_kg)} кг · Δ ${signed(d.total_mass_kg)} кг</b></div><div class="feo-placement-parity-card"><span>Требуют внимания</span><b>${Number(legacyParity.mismatch_count||0)} заявок · только ERP ${Number(onlyNew.request_count||0)} · только старая ${Number(onlyLegacy.request_count||0)} · вес отличается ${Number(legacyParity.mass_mismatch_count||0)}</b></div></div>`;
+  html+=`<div class="feo-placement-parity-section-note">${esc(legacyParity.legacy_filter||'Старая база: только доступные блоки с ID > 128.')}</div>`;
   html+=paritySection('Есть только в новой ERP',legacyParity.only_new,`${Number(onlyNew.request_count||0)} заявок · ${fmt(onlyNew.total_mass_kg)} кг`);
   html+=paritySection('Есть только в старой базе',legacyParity.only_legacy,`${Number(onlyLegacy.request_count||0)} заявок · ${fmt(onlyLegacy.total_mass_kg)} кг`);
   html+=paritySection('Одинаковый ID, но отличается вес',legacyParity.mass_mismatches,`${Number(legacyParity.mass_mismatch_count||0)} заявок`);

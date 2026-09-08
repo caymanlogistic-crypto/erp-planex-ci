@@ -30,6 +30,7 @@ try {
         $pdo->exec((string)file_get_contents($matches[0]));
     }
     $pdo->exec("CREATE TABLE feo (zayavka_id VARCHAR(64) NOT NULL, mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    $pdo->exec("CREATE TABLE status_blocks (id INT NOT NULL PRIMARY KEY, zayavki_ids TEXT NULL, status_type VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 
     $insertRequest = $pdo->prepare("INSERT INTO feo_requests(zayavka_id,mass_netto) VALUES(?,?)");
     foreach ([['100001',1.0],['100002',2.0],['100003',3.0]] as [$id,$mass]) $insertRequest->execute([$id,$mass]);
@@ -41,7 +42,11 @@ try {
         $insertCurrent->execute([$id]);
     }
     $legacyInsert = $pdo->prepare("INSERT INTO feo(zayavka_id,mass_netto) VALUES(?,?)");
-    foreach ([['100001',1.0],['100002',2.5],['100004',4.0]] as [$id,$mass]) $legacyInsert->execute([$id,$mass]);
+    foreach ([['100001',1.0],['100002',2.5],['100004',4.0],['777777',7.0],['888888',8.0]] as [$id,$mass]) $legacyInsert->execute([$id,$mass]);
+    $pdo->exec("INSERT INTO status_blocks(id,zayavki_ids,status_type) VALUES
+        (128,'777777','dostupno'),
+        (129,'100001,100002,100004','dostupno'),
+        (130,'888888','marshrut')");
 
     $state = (new FeoLegacyParityService())->state($pdo, $pdo);
     $ok($state['available'] === true, 'legacy parity must be available against supported schema');
@@ -51,9 +56,14 @@ try {
     $ok(array_column($state['mass_mismatches'], 'zayavka_id') === ['100002'], 'mass mismatch ID');
     $ok(($state['only_new'][0]['blocks'][0]['id'] ?? 0) === 1, 'ERP-only request exposes placement block history');
     $ok(($state['mass_mismatches'][0]['source_block_id'] ?? 0) === 1, 'mass mismatch exposes current source block');
+    $ok(($state['only_legacy'][0]['legacy_block_ids'] ?? []) === [129], 'legacy-only request exposes legacy available block');
+    $ok(($state['mass_mismatches'][0]['legacy_block_ids'] ?? []) === [129], 'mass mismatch exposes legacy available block');
+    $ok(!in_array('777777', array_column($state['only_legacy'], 'zayavka_id'), true), 'block id 128 is excluded by strict boundary');
+    $ok(!in_array('888888', array_column($state['only_legacy'], 'zayavka_id'), true), 'non-available block is excluded');
     $ok(abs((float)$state['delta']['total_mass_kg'] + 1500.0) < 0.001, 'aggregate weight delta is factual');
 
     $pdo->exec('DELETE FROM feo');
+    $pdo->exec("UPDATE status_blocks SET zayavki_ids='100001,100002,100003' WHERE id=129");
     foreach ([['100001',1.0],['100002',2.0],['100003',3.0]] as [$id,$mass]) $legacyInsert->execute([$id,$mass]);
     $equal = (new FeoLegacyParityService())->state($pdo, $pdo);
     $ok($equal['available'] === true && $equal['is_consistent'] === true && $equal['mismatch_count'] === 0, 'equal legacy and ERP pools pass');
