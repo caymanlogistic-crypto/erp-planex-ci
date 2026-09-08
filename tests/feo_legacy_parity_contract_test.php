@@ -72,5 +72,6 @@ $ok(str_contains($js, 'Есть только в новой ERP') && str_contains
 $ok(str_contains($js, 'parityBlockText') && str_contains($js, 'Блок / история'), 'popup shows block placement/history');
 $ok(str_contains($js, 'legacy_block_ids') && str_contains($js, 'Старая база:'), 'popup shows legacy block IDs for mismatches');
 $ok(str_contains($js, 'legacy_filter'), 'popup explains legacy ID > 128 filter');
+$ok(str_contains($js, 'Старая база: все блоки с ID > 128.') && !str_contains($js, 'только доступные блоки с ID > 128'), 'popup fallback copy matches the literal OWNER rule without a status-type implication');
 
 printf("FEO_LEGACY_PARITY_CONTRACT=PASS checks=%d\n", $pass);
