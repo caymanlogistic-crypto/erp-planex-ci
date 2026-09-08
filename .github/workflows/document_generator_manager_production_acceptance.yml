@@ -1,0 +1,274 @@
+name: Document Generator Manager Production Acceptance
+
+on:
+  push:
+    branches:
+      - chatgpt/docgen-prod-acceptance-rerun-20260908
+
+permissions:
+  contents: read
+
+concurrency:
+  group: document-generator-manager-production-acceptance
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  QA_BRANCH: chatgpt/docgen-prod-acceptance-rerun-20260908
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  SERVER_ROOT: /home/s/spugovxsim/planexp
+  RESULT_DIR: document_generator_manager_acceptance_result
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve exact canonical base
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "$QA_BRANCH"
+          git fetch --no-tags origin "+refs/heads/${CANONICAL_BRANCH}:refs/remotes/origin/${CANONICAL_BRANCH}"
+          canonical_sha="$(git rev-parse "refs/remotes/origin/${CANONICAL_BRANCH}")"
+          [[ "$canonical_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git merge-base HEAD "$canonical_sha")" = "$canonical_sha"
+          test "$(git rev-list --count "${canonical_sha}..HEAD")" -ge 1
+          test -z "$(git rev-list --merges "${canonical_sha}..HEAD")"
+          while IFS= read -r changed; do
+            case "$changed" in
+              .github/document-generator/qa_manager_access.php|.github/workflows/document_generator_manager_production_acceptance.yml) ;;
+              '') ;;
+              *) echo "QA branch contains forbidden path: $changed" >&2; exit 1 ;;
+            esac
+          done < <(git diff --name-only "${canonical_sha}..HEAD")
+          printf 'source_sha=%s\n' "$canonical_sha" >> "$GITHUB_OUTPUT"
+          printf 'SOURCE_SHA=%s\nCANONICAL_SHA=%s\nQA_COMMIT=%s\n' "$canonical_sha" "$canonical_sha" "$(git rev-parse HEAD)"
+
+      - name: Configure isolated SSH credentials
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/docgen_manager_qa"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/docgen_manager_qa" "$HOME/.ssh/known_hosts"
+
+      - name: Require exact deployed SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$SERVER_ROOT/deploy/P07_erpv2_deployed_commit.txt'")"
+          test "$marker" = "$SOURCE_SHA"
+          echo "EXACT_CANONICAL_DEPLOYED_SHA=$marker"
+
+      - name: Provision reversible manager fixture
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RESULT_DIR"
+          remote="/tmp/docgen_manager_access_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/document-generator/qa_manager_access.php "$SSH_USER@$SSH_HOST:$remote"
+          : > "$RESULT_DIR/stale_cleanup.txt"
+          for stale_run in 34161538112 34161992218 34162092890 34162536726; do
+            stale_out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$stale_run' /usr/bin/php8.5 '$remote' audit-empty")"
+            printf 'STALE_RUN=%s\n%s\n' "$stale_run" "$stale_out" | tee -a "$RESULT_DIR/stale_cleanup.txt"
+            printf '%s\n' "$stale_out" | grep -q '^QA_EMPTY_NAMESPACE=PASS$'
+            printf '%s\n' "$stale_out" | grep -q '^QA_RESIDUE=0$'
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '/tmp/docgen_manager_access_${stale_run}.php'"
+          done
+          echo 'PRIOR_FAILED_RUN_RESIDUE=0' | tee -a "$RESULT_DIR/stale_cleanup.txt"
+
+          out="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' create")"
+          printf '%s\n' "$out" | grep -q '^QA_MANAGER_FIXTURE_READY=YES$'
+          cred="$(printf '%s\n' "$out" | sed -n 's/^QA_CREDENTIALS_B64=//p')"
+          own="$(printf '%s\n' "$out" | sed -n 's/^QA_OWN_DOCUMENT_ID=//p')"
+          foreign="$(printf '%s\n' "$out" | sed -n 's/^QA_FOREIGN_DOCUMENT_ID=//p')"
+          own_sha="$(printf '%s\n' "$out" | sed -n 's/^QA_OWN_DOCUMENT_SHA256=//p')"
+          crew="$(printf '%s\n' "$out" | sed -n 's/^QA_CREW_ID=//p')"
+          templates="$(printf '%s\n' "$out" | sed -n 's/^QA_TEMPLATES_B64=//p')"
+          baseline="$(printf '%s\n' "$out" | sed -n 's/^QA_BASELINE_DOCUMENT_COUNT=//p')"
+          test -n "$cred"; [[ "$own" =~ ^[1-9][0-9]*$ ]]; [[ "$foreign" =~ ^[1-9][0-9]*$ ]]; [[ "$crew" =~ ^[1-9][0-9]*$ ]]; [[ "$baseline" =~ ^[1-9][0-9]*$ ]]
+          [[ "$own_sha" =~ ^[0-9a-f]{64}$ ]]; test -n "$templates"
+          echo "::add-mask::$cred"
+          python3 - "$cred" "$GITHUB_ENV" <<'PY'
+          import base64,json,sys
+          obj=json.loads(base64.b64decode(sys.argv[1]).decode())
+          for key in ('login','password'):
+              print(f"::add-mask::{obj[key]}")
+          with open(sys.argv[2],'a') as f:
+              f.write(f"QA_LOGIN={obj['login']}\nQA_PASSWORD={obj['password']}\n")
+          PY
+          {
+            echo "QA_OWN_DOCUMENT_ID=$own"
+            echo "QA_FOREIGN_DOCUMENT_ID=$foreign"
+            echo "QA_OWN_DOCUMENT_SHA256=$own_sha"
+            echo "QA_CREW_ID=$crew"
+            echo "QA_TEMPLATES_B64=$templates"
+            echo "QA_BASELINE_DOCUMENT_COUNT=$baseline"
+          } >> "$GITHUB_ENV"
+          {
+            echo "QA_MANAGER_FIXTURE_READY=YES"
+            echo "QA_BASELINE_DOCUMENT_COUNT=$baseline"
+            echo "QA_OWN_DOCUMENT_ID=$own"
+            echo "QA_FOREIGN_DOCUMENT_ID=$foreign"
+          } | tee "$RESULT_DIR/provision.txt"
+
+      - name: Run authenticated manager acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          cookie="/tmp/docgen_manager_cookie_${GITHUB_RUN_ID}.txt"
+          old_cookie="/tmp/docgen_manager_old_cookie_${GITHUB_RUN_ID}.txt"
+          login_html="/tmp/docgen_manager_login_${GITHUB_RUN_ID}.html"
+          route_html="/tmp/docgen_manager_route_${GITHUB_RUN_ID}.html"
+          generator_html="/tmp/docgen_manager_generator_${GITHUB_RUN_ID}.html"
+          history_html="/tmp/docgen_manager_history_${GITHUB_RUN_ID}.html"
+          own_file="/tmp/docgen_manager_own_${GITHUB_RUN_ID}.docx"
+          login_get="$(curl -sS -c "$cookie" -b "$cookie" -o "$login_html" -w '%{http_code}' https://plan-ex.ru/erpv2/login)"
+          test "$login_get" = 200
+          csrf="$(python3 - "$login_html" <<'PY'
+          import html,re,sys
+          body=open(sys.argv[1],encoding='utf-8').read()
+          match=re.search(r'<input[^>]+name=["\']_csrf_token["\'][^>]+value=["\']([^"\']+)["\']',body,re.I)
+          if not match:
+              raise SystemExit('login csrf token missing')
+          print(html.unescape(match.group(1)))
+          PY
+          )"
+          test -n "$csrf"
+          echo "::add-mask::$csrf"
+          login_meta="$(curl -sS -L -c "$cookie" -b "$cookie" -o "$login_html" -w '%{http_code}|%{url_effective}' --data-urlencode "_csrf_token=$csrf" --data-urlencode "login=$QA_LOGIN" --data-urlencode "password=$QA_PASSWORD" https://plan-ex.ru/erpv2/login)"
+          case "$login_meta" in 200\|*'/erpv2/company/'*) ;; *) echo "REAL_LOGIN_FAIL=$login_meta" >&2; exit 1;; esac
+          echo 'REAL_LOGIN=PASS' | tee "$RESULT_DIR/acceptance.txt"
+
+          curl -fsS -b "$cookie" https://plan-ex.ru/erpv2/company/route-executors -o "$route_html"
+          grep -Fq "data-route-executor-id=\"$QA_CREW_ID\"" "$route_html"
+          echo 'ROUTE_EXECUTOR_MANAGER_VISIBLE=PASS' | tee -a "$RESULT_DIR/acceptance.txt"
+
+          curl -fsS -b "$cookie" https://plan-ex.ru/erpv2/company/document-generator -o "$generator_html"
+          ! grep -Fq 'Нет доступных активных Исполнителей рейса.' "$generator_html"
+          python3 - "$generator_html" "$QA_CREW_ID" "$QA_TEMPLATES_B64" <<'PY'
+          import base64,json,re,sys
+          html=open(sys.argv[1],encoding='utf-8').read(); crew=sys.argv[2]
+          templates=json.loads(base64.b64decode(sys.argv[3]).decode())
+          exec_block=re.search(r'<select[^>]+id="docgen-executor"[^>]*>(.*?)</select>',html,re.S)
+          if not exec_block or not re.search(r'<option\s+value="'+re.escape(crew)+r'"(?:\s|>)',exec_block.group(1)):
+              raise SystemExit('manager executor missing from generator')
+          tpl_block=re.search(r'<select[^>]+id="docgen-template"[^>]*>(.*?)</select>',html,re.S)
+          if not tpl_block: raise SystemExit('template selector missing')
+          block=tpl_block.group(1)
+          for t in templates:
+              pattern=r'<option\s+value="'+str(int(t['id']))+r'"\s+data-document-type="'+re.escape(str(t['type']))+r'"'
+              if not re.search(pattern,block): raise SystemExit(f"active template missing: {t}")
+          print(f"ACTIVE_TEMPLATE_OPTIONS={len(templates)}")
+          PY
+          echo 'DOCUMENT_GENERATOR_EXECUTORS=PASS' | tee -a "$RESULT_DIR/acceptance.txt"
+          echo 'DOCUMENT_GENERATOR_ALL_ACTIVE_TEMPLATES=PASS' | tee -a "$RESULT_DIR/acceptance.txt"
+
+          curl -fsS -b "$cookie" https://plan-ex.ru/erpv2/company/document-generator/history -o "$history_html"
+          grep -Fq "/company/document-generator/generated/$QA_OWN_DOCUMENT_ID/download" "$history_html"
+          ! grep -Fq "/company/document-generator/generated/$QA_FOREIGN_DOCUMENT_ID/download" "$history_html"
+          echo 'DOCUMENT_HISTORY_CREATOR_ONLY=PASS' | tee -a "$RESULT_DIR/acceptance.txt"
+
+          own_http="$(curl -sS -b "$cookie" -o "$own_file" -w '%{http_code}' "https://plan-ex.ru/erpv2/company/document-generator/generated/$QA_OWN_DOCUMENT_ID/download")"
+          test "$own_http" = 200
+          test "$(sha256sum "$own_file" | awk '{print $1}')" = "$QA_OWN_DOCUMENT_SHA256"
+          foreign_http="$(curl -sS -b "$cookie" -o /dev/null -w '%{http_code}' "https://plan-ex.ru/erpv2/company/document-generator/generated/$QA_FOREIGN_DOCUMENT_ID/download")"
+          test "$foreign_http" = 404
+          echo 'OWN_DOCUMENT_DOWNLOAD=PASS' | tee -a "$RESULT_DIR/acceptance.txt"
+          echo 'FOREIGN_DOCUMENT_DIRECT_DOWNLOAD=404_PASS' | tee -a "$RESULT_DIR/acceptance.txt"
+
+          cp "$cookie" "$old_cookie"
+          logout_http="$(curl -sS -b "$cookie" -c "$cookie" -o /dev/null -w '%{http_code}' --data-urlencode "_csrf_token=$csrf" https://plan-ex.ru/erpv2/logout)"
+          case "$logout_http" in 302|303) ;; *) echo "LOGOUT_HTTP_UNEXPECTED=$logout_http" >&2; exit 1;; esac
+          old_http="$(curl -sS -b "$old_cookie" -o /dev/null -w '%{http_code}' https://plan-ex.ru/erpv2/company/document-generator)"
+          test "$old_http" != 200
+          echo 'QA_SESSION_LOGOUT=PASS' | tee -a "$RESULT_DIR/acceptance.txt"
+          echo 'PRODUCTION_MANAGER_DOCUMENT_GENERATOR_ACCEPTANCE=PASS' | tee -a "$RESULT_DIR/acceptance.txt"
+          rm -f "$cookie" "$old_cookie" "$login_html" "$route_html" "$generator_html" "$history_html" "$own_file"
+
+      - name: Cleanup QA identity and document
+        if: always()
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$RESULT_DIR"
+          cookie="/tmp/docgen_manager_cookie_${GITHUB_RUN_ID}.txt"
+          if [ -s "$cookie" ]; then
+            cleanup_html="/tmp/docgen_manager_cleanup_${GITHUB_RUN_ID}.html"
+            curl -sSL -b "$cookie" -c "$cookie" https://plan-ex.ru/erpv2/company/document-generator -o "$cleanup_html" || true
+            cleanup_csrf="$(python3 - "$cleanup_html" <<'PY' 2>/dev/null || true
+          import html,re,sys
+          body=open(sys.argv[1],encoding='utf-8').read()
+          match=re.search(r'<input[^>]+name=["\']_csrf_token["\'][^>]+value=["\']([^"\']+)["\']',body,re.I)
+          print(html.unescape(match.group(1)) if match else '')
+          PY
+            )"
+            if [ -n "$cleanup_csrf" ]; then
+              curl -sS -b "$cookie" -c "$cookie" -o /dev/null --data-urlencode "_csrf_token=$cleanup_csrf" https://plan-ex.ru/erpv2/logout || true
+            fi
+            rm -f "$cleanup_html"
+          fi
+          remote="/tmp/docgen_manager_access_${GITHUB_RUN_ID}.php"
+          test -f .github/document-generator/qa_manager_access.php
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/document-generator/qa_manager_access.php "$SSH_USER@$SSH_HOST:$remote"
+          set +e
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' cleanup" | tee "$RESULT_DIR/cleanup.txt"
+          cleanup_rc=${PIPESTATUS[0]}
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/docgen_manager_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$remote'" || true
+          set -e
+          test "$cleanup_rc" = 0
+          grep -q '^QA_RESIDUE=0$' "$RESULT_DIR/cleanup.txt"
+          if grep -q '^QA_EARLY_SETUP_STATE_ABSENT=PASS$' "$RESULT_DIR/cleanup.txt"; then
+            echo 'EARLY_SETUP_CLEANUP=PASS' | tee -a "$RESULT_DIR/cleanup.txt"
+          else
+            grep -q '^FOREIGN_DOCUMENT_PRESERVED=PASS$' "$RESULT_DIR/cleanup.txt"
+            grep -q '^ACTIVE_TEMPLATES_PRESERVED=PASS$' "$RESULT_DIR/cleanup.txt"
+            grep -q '^BASELINE_DOCUMENT_COUNT_RESTORED=PASS$' "$RESULT_DIR/cleanup.txt"
+            grep -q '^CROSS_COMPANY_LEAKAGE=NO$' "$RESULT_DIR/cleanup.txt"
+          fi
+          rm -f "$cookie" "/tmp/docgen_manager_old_cookie_${GITHUB_RUN_ID}.txt" "/tmp/docgen_manager_login_${GITHUB_RUN_ID}.html" "/tmp/docgen_manager_route_${GITHUB_RUN_ID}.html" "/tmp/docgen_manager_generator_${GITHUB_RUN_ID}.html" "/tmp/docgen_manager_history_${GITHUB_RUN_ID}.html" "/tmp/docgen_manager_own_${GITHUB_RUN_ID}.docx"
+
+      - name: Require complete acceptance evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          for marker in REAL_LOGIN=PASS ROUTE_EXECUTOR_MANAGER_VISIBLE=PASS DOCUMENT_GENERATOR_EXECUTORS=PASS DOCUMENT_GENERATOR_ALL_ACTIVE_TEMPLATES=PASS DOCUMENT_HISTORY_CREATOR_ONLY=PASS OWN_DOCUMENT_DOWNLOAD=PASS FOREIGN_DOCUMENT_DIRECT_DOWNLOAD=404_PASS QA_SESSION_LOGOUT=PASS PRODUCTION_MANAGER_DOCUMENT_GENERATOR_ACCEPTANCE=PASS; do grep -q "^${marker}$" "$RESULT_DIR/acceptance.txt"; done
+          for marker in FOREIGN_DOCUMENT_PRESERVED=PASS ACTIVE_TEMPLATES_PRESERVED=PASS BASELINE_DOCUMENT_COUNT_RESTORED=PASS CROSS_COMPANY_LEAKAGE=NO QA_RESIDUE=0; do grep -q "^${marker}$" "$RESULT_DIR/cleanup.txt"; done
+          grep -q '^PRIOR_FAILED_RUN_RESIDUE=0$' "$RESULT_DIR/stale_cleanup.txt"
+          echo 'DOCUMENT_GENERATOR_MANAGER_PRODUCTION_GATE=PASS' | tee "$RESULT_DIR/final.txt"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: document-generator-manager-acceptance-${{ steps.source.outputs.source_sha }}
+          path: ${{ env.RESULT_DIR }}/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Cleanup SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/docgen_manager_qa"
