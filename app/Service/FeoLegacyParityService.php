@@ -12,6 +12,7 @@ use Throwable;
 final class FeoLegacyParityService
 {
     private const MASS_TOLERANCE_KG = 0.0005;
+    private const LEGACY_AVAILABLE_BLOCK_MIN_ID = 128;
 
     /** @var array<string,array<string,mixed>> */
     private static array $requestCache = [];
@@ -62,6 +63,7 @@ final class FeoLegacyParityService
             $comparison['available'] = true;
             $comparison['source_error'] = false;
             $comparison['message'] = '';
+            $comparison['legacy_filter'] = 'Доступные блоки старой базы: ID > ' . self::LEGACY_AVAILABLE_BLOCK_MIN_ID;
             $comparison['checked_at'] = date(DATE_ATOM);
             return $this->cache($cacheKey, $comparison);
         } catch (Throwable) {
@@ -106,6 +108,7 @@ final class FeoLegacyParityService
             $legacy[$id] = [
                 'zayavka_id'=>$id,
                 'mass_kg'=>round(((float)($row['mass_netto'] ?? 0)) * 1000, 3),
+                'legacy_block_ids'=>array_values(array_unique(array_map('intval', (array)($row['legacy_block_ids'] ?? [])))),
             ];
         }
         ksort($legacy, SORT_STRING);
@@ -132,6 +135,7 @@ final class FeoLegacyParityService
                 'mass_delta_kg'=>-$row['mass_kg'],
                 'source_block_id'=>null,
                 'source_block_name'=>'',
+                'legacy_block_ids'=>$row['legacy_block_ids'],
             ];
         }
 
@@ -148,6 +152,7 @@ final class FeoLegacyParityService
                 'mass_delta_kg'=>round($newMass - $legacyMass, 3),
                 'source_block_id'=>$row['source_block_id'],
                 'source_block_name'=>$row['source_block_name'],
+                'legacy_block_ids'=>$legacy[$id]['legacy_block_ids'],
             ];
         }
 
@@ -210,16 +215,58 @@ final class FeoLegacyParityService
         return null;
     }
 
-    /** @return list<array{zayavka_id:string,mass_netto:mixed}> */
+    /** @return list<array{zayavka_id:string,mass_netto:mixed,legacy_block_ids:list<int>}> */
     private function legacyRows(PDO $pdo, string $idColumn, string $massColumn): array
     {
+        $blocks = $pdo->prepare("SELECT id,zayavki_ids
+                                   FROM `status_blocks`
+                                  WHERE id > ? AND status_type = 'dostupno'
+                               ORDER BY id");
+        $blocks->execute([self::LEGACY_AVAILABLE_BLOCK_MIN_ID]);
+
+        $blockIdsByRequest = [];
+        foreach ($blocks->fetchAll(PDO::FETCH_ASSOC) as $block) {
+            $blockId = (int)($block['id'] ?? 0);
+            foreach (preg_split('/[,;\s]+/u', (string)($block['zayavki_ids'] ?? ''), -1, PREG_SPLIT_NO_EMPTY) ?: [] as $rawId) {
+                $requestId = trim((string)$rawId);
+                if ($requestId === '') continue;
+                $blockIdsByRequest[$requestId][] = $blockId;
+            }
+        }
+        if ($blockIdsByRequest === []) return [];
+
+        foreach ($blockIdsByRequest as &$ids) {
+            $ids = array_values(array_unique(array_map('intval', $ids)));
+            sort($ids, SORT_NUMERIC);
+        }
+        unset($ids);
+
         $id = $this->quoteIdentifier($idColumn);
         $mass = $this->quoteIdentifier($massColumn);
-        $sql = "SELECT TRIM(CAST({$id} AS CHAR)) zayavka_id, {$mass} mass_netto
-                  FROM `feo`
-                 WHERE {$id} IS NOT NULL AND TRIM(CAST({$id} AS CHAR))<>''
-              ORDER BY {$id}";
-        return $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+        $rows = [];
+        $requestIds = array_keys($blockIdsByRequest);
+        $found = [];
+        foreach (array_chunk($requestIds, 800) as $chunk) {
+            $marks = implode(',', array_fill(0, count($chunk), '?'));
+            $sql = "SELECT TRIM(CAST({$id} AS CHAR)) zayavka_id, {$mass} mass_netto
+                      FROM `feo`
+                     WHERE {$id} IN ({$marks})
+                  ORDER BY {$id}";
+            $q = $pdo->prepare($sql);
+            $q->execute($chunk);
+            foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $requestId = trim((string)($row['zayavka_id'] ?? ''));
+                if ($requestId === '') continue;
+                $row['legacy_block_ids'] = $blockIdsByRequest[$requestId] ?? [];
+                $rows[] = $row;
+                $found[$requestId] = true;
+            }
+        }
+        $missing = array_values(array_diff($requestIds, array_keys($found)));
+        if ($missing !== []) {
+            throw new \RuntimeException('Legacy status block references request IDs missing from feo.');
+        }
+        return $rows;
     }
 
     /** @return list<string> */
@@ -308,6 +355,7 @@ final class FeoLegacyParityService
             'only_legacy_summary'=>['request_count'=>0,'total_mass_kg'=>0.0],
             'mass_mismatches'=>[],
             'mass_mismatch_count'=>0,
+            'legacy_filter'=>'Доступные блоки старой базы: ID > ' . self::LEGACY_AVAILABLE_BLOCK_MIN_ID,
         ];
     }
 }

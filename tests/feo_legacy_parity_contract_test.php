@@ -20,8 +20,8 @@ $state = $service->compareRows([
     ['zayavka_id'=>'100003','mass_kg'=>3000.0,'source_block_id'=>3,'source_block_name'=>'C'],
 ], [
     ['zayavka_id'=>'100001','mass_netto'=>1.0],
-    ['zayavka_id'=>'100002','mass_netto'=>2.5],
-    ['zayavka_id'=>'100004','mass_netto'=>4.0],
+    ['zayavka_id'=>'100002','mass_netto'=>2.5,'legacy_block_ids'=>[129]],
+    ['zayavka_id'=>'100004','mass_netto'=>4.0,'legacy_block_ids'=>[131]],
 ]);
 
 $ok($state['mismatch_count'] === 3, 'three request-level discrepancies must be counted');
@@ -31,6 +31,8 @@ $ok(abs((float)$state['legacy']['total_mass_kg'] - 7500.0) < 0.001, 'legacy tota
 $ok(array_column($state['only_new'], 'zayavka_id') === ['100003'], 'only ERP request is identified');
 $ok(array_column($state['only_legacy'], 'zayavka_id') === ['100004'], 'only legacy request is identified');
 $ok(array_column($state['mass_mismatches'], 'zayavka_id') === ['100002'], 'same-ID mass mismatch is identified');
+$ok(($state['only_legacy'][0]['legacy_block_ids'] ?? []) === [131], 'legacy-only request keeps legacy block identity');
+$ok(($state['mass_mismatches'][0]['legacy_block_ids'] ?? []) === [129], 'mass mismatch keeps legacy block identity');
 $ok($state['only_new_summary']['request_count'] === 1 && abs((float)$state['only_new_summary']['total_mass_kg'] - 3000.0) < 0.001, 'only ERP summary');
 $ok($state['only_legacy_summary']['request_count'] === 1 && abs((float)$state['only_legacy_summary']['total_mass_kg'] - 4000.0) < 0.001, 'only legacy summary');
 $ok($state['is_consistent'] === false, 'mismatch state is not consistent');
@@ -50,6 +52,8 @@ $nav = (string)file_get_contents($root . '/app/Service/NavigationCounterService.
 $layout = (string)file_get_contents($root . '/app/View/layouts/main.php');
 
 $ok(str_contains($source, "TABLE_NAME='feo'"), 'legacy source is fixed to legacy feo table');
+$ok(str_contains($source, 'LEGACY_AVAILABLE_BLOCK_MIN_ID = 128'), 'legacy comparison boundary is explicit');
+$ok(str_contains($source, 'FROM `status_blocks`') && str_contains($source, "id > ? AND status_type = 'dostupno'"), 'legacy pool comes only from available status blocks newer than 128');
 $ok(str_contains($source, "['zayavka_id', 'Заявка, ID', 'Заявка ID', 'request_id']"), 'legacy request ID requires explicit semantic column aliases');
 $ok(!str_contains($source, "['id',") && !str_contains($source, "'idColumn'=>'id'"), 'generic legacy id must never be guessed as request ID');
 $ok(str_contains($source, 'WasteTripLegacySourceService::connectionFromEnvironment()'), 'existing legacy connection contract is reused');
@@ -65,5 +69,7 @@ $ok(str_contains($view, 'legacyParity: <?= json_encode($legacyParity'), 'server 
 $ok(str_contains($js, 'renderLegacyParity') && str_contains($js, "openModal('feo-placement-parity-modal')"), 'system popup is rendered through existing modal flow');
 $ok(str_contains($js, 'Есть только в новой ERP') && str_contains($js, 'Есть только в старой базе') && str_contains($js, 'Одинаковый ID, но отличается вес'), 'popup has all discrepancy sections');
 $ok(str_contains($js, 'parityBlockText') && str_contains($js, 'Блок / история'), 'popup shows block placement/history');
+$ok(str_contains($js, 'legacy_block_ids') && str_contains($js, 'Старая база:'), 'popup shows legacy block IDs for mismatches');
+$ok(str_contains($js, 'legacy_filter'), 'popup explains legacy ID > 128 filter');
 
 printf("FEO_LEGACY_PARITY_CONTRACT=PASS checks=%d\n", $pass);
