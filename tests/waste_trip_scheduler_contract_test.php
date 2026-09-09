@@ -21,7 +21,7 @@ $ci = (string) file_get_contents($ciPath);
 $required = [
     'name: Waste Trips Legacy Sync Schedule',
     'schedule:',
-    "cron: '0-59/5 * * * *'",
+    "cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'",
     'workflow_dispatch:',
     'contents: read',
     'statuses: read',
@@ -73,7 +73,7 @@ if (preg_match('/^\s+push\s*:/m', $workflow) === 1 || preg_match('/^\s+pull_requ
     exit(1);
 }
 
-if (substr_count($workflow, "cron: '0-59/5 * * * *'") !== 1) {
+if (substr_count($workflow, "cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'") !== 1) {
     fwrite(STDERR, "Scheduler cadence must be exactly one five-minute cron entry\n");
     exit(1);
 }
@@ -87,7 +87,7 @@ if (substr_count($workflow, $oldEquality) !== 1 || !str_contains($workflow, $sen
 
 $ciRequired = [
     "approved_automatic = {'waste_trips_sync_schedule.yml'}",
-    "cron: '0-59/5 * * * *'",
+    "cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'",
     'group: waste-trips-legacy-sync-production',
     'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
     'test "$canonical" = "$SOURCE_SHA"',

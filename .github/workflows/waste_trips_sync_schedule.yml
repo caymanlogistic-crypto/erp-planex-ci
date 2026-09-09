@@ -2,8 +2,8 @@ name: Waste Trips Legacy Sync Schedule
 
 on:
   schedule:
-    # Same five-minute cadence as */5; explicit range intentionally refreshes the scheduled-workflow actor after repository cutover.
-    - cron: '0-59/5 * * * *'
+    # Same five-minute cadence as */5; explicit minute list intentionally binds the scheduled workflow to the authenticated repository owner after cutover.
+    - cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'
   workflow_dispatch:
 
 permissions:
