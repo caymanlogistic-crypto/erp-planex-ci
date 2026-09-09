@@ -15,6 +15,7 @@ concurrency:
 
 env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  REPOSITORY_OWNER: ${{ github.repository_owner }}
 
 jobs:
   authorize-and-dispatch:
@@ -38,7 +39,7 @@ jobs:
           test "$GITHUB_SHA" = "$canonical_sha"
 
           case "$GITHUB_ACTOR" in
-            planexerp|chatgpt-codex-connector|chatgpt-connector) ;;
+            "$REPOSITORY_OWNER"|chatgpt-codex-connector|chatgpt-connector) ;;
             *) echo "::error::Unauthorized actor: $GITHUB_ACTOR"; exit 1 ;;
           esac
 

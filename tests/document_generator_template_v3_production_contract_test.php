@@ -35,5 +35,6 @@ $versionPos=strpos($script,'DocumentGeneratorService::createTemplateVersionFromF
 $boundPos=strpos($script,'Staged production v3 SHA does not match bound planned SHA');
 if($applyPos===false||$versionPos===false||$boundPos===false||!($applyPos<$boundPos&&$boundPos<$versionPos))$fail('staged candidate SHA must fail closed before canonical versioning write');
 foreach(['contract_vehicle_lease_crew_v3.docx','87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2']as$n)$has($trait,$n,'built-in v3 contract '.$n);
-foreach(['/tmp/erp-ci-runs.json','/tmp/document-generator-runs.json','/tmp/document-generator-google-vehicle-runs.json','document_generator_google_vehicle_regression.yml','template/document-generator-v3-agent']as$n)$has($agent,$n,'v3 agent gate '.$n);
+foreach(['/tmp/erp-ci-runs.json','/tmp/document-generator-runs.json','/tmp/document-generator-google-vehicle-runs.json','document_generator_google_vehicle_regression.yml','template/document-generator-v3-agent','REPOSITORY_OWNER: ${{ github.repository_owner }}','"$REPOSITORY_OWNER"|chatgpt-codex-connector|chatgpt-connector']as$n)$has($agent,$n,'v3 agent gate '.$n);
+if(str_contains($agent,'planexerp|'))$fail('v3 request must not hardcode former repository owner');
 echo "DOCUMENT_GENERATOR_TEMPLATE_V3_PRODUCTION_CONTRACT=PASS\n";

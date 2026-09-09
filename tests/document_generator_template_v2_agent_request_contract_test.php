@@ -18,7 +18,8 @@ foreach([
     ['contents: read','read-only contents permission'],
     ['chatgpt/production-stabilization-20260802','canonical branch'],
     ['test "$GITHUB_SHA" = "$canonical_sha"','exact canonical source'],
-    ['planexerp|chatgpt-codex-connector|chatgpt-connector','authorized actors'],
+    ['REPOSITORY_OWNER: ${{ github.repository_owner }}','dynamic repository owner'],
+    ['"$REPOSITORY_OWNER"|chatgpt-codex-connector|chatgpt-connector','authorized actors'],
     ['actions/workflows/ci.yml/runs?','exact ERP CI query'],
     ['document_generator_regression.yml/runs?','exact Document Generator CI query'],
     ['/tmp/erp-ci-runs.json','bounded ERP CI JSON file'],
@@ -31,6 +32,7 @@ foreach([
 ] as [$needle,$message]) $has($request,$needle,$message);
 
 $ok(!str_contains($request,'RUNS_JSON='),'large Actions JSON must not be passed through environment');
+$ok(!str_contains($request,'planexerp|'),'request workflow must not hardcode former repository owner');
 $ok(!str_contains($request,'ERPV2_SSH_PRIVATE_KEY'),'request workflow must not have SSH private key');
 $ok(!str_contains($request,'public_html/erpv2'),'request workflow must not write production');
 $ok(!str_contains($request,'document_generator_template_v2.php'),'request workflow must not run production script directly');
