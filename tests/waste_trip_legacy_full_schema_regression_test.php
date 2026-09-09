@@ -70,10 +70,23 @@ require_once $root.'/app/Service/WasteTripLegacyPrefillService.php';
 
 $fail=static function(string $message):never{fwrite(STDERR,"FAIL: {$message}\n");exit(1);};
 $ok=static function(bool $value,string $message)use($fail):void{if(!$value)$fail($message);};
-$host=(string)getenv('PLANEX_SCHEMA_DB_HOST');$port=(int)getenv('PLANEX_SCHEMA_DB_PORT');$user=(string)getenv('PLANEX_SCHEMA_DB_USER');$pass=(string)getenv('PLANEX_SCHEMA_DB_PASSWORD');$db=(string)getenv('PLANEX_TEST_FIXED_DB');
-$ok($host!==''&&$user!==''&&$db!=='','fixed runner DB environment is required');
-$dsn="mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4";
+if(!extension_loaded('pdo_mysql')){fwrite(STDERR,"pdo_mysql required\n");exit(2);}
+$host=(string)(getenv('PLANEX_SCHEMA_DB_HOST')?:'127.0.0.1');
+$port=(int)(getenv('PLANEX_SCHEMA_DB_PORT')?:3306);
+$user=(string)(getenv('PLANEX_SCHEMA_DB_USER')?:'planex_ci');
+$pass=(string)(getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'planex_ci');
+$fixedDb=trim((string)(getenv('PLANEX_TEST_FIXED_DB')?:''));
+$fixed=$fixedDb!=='';
+if($fixed){
+    $allow=array_values(array_filter(array_map('trim',explode(',',(string)(getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')?:'')))));
+    $ok((string)(getenv('APP_ENV')?:'')==='test','fixed DB requires APP_ENV=test');
+    $ok(in_array($fixedDb,$allow,true),'fixed DB not allowlisted');
+}
 $options=[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false];
+$admin=new PDO("mysql:host={$host};port={$port};charset=utf8mb4",$user,$pass,$options);
+$db=$fixed?$fixedDb:'planex_waste_full_schema_'.getmypid();
+if(!$fixed){$admin->exec("DROP DATABASE IF EXISTS `{$db}`;CREATE DATABASE `{$db}` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");}
+$dsn="mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4";
 $pdo=new StageFailPdo($dsn,$user,$pass,$options);
 $legacy=new PDO($dsn,$user,$pass,$options);
 $incidentLog=sys_get_temp_dir().'/waste_trip_full_schema_incidents_'.getmypid().'.jsonl';
@@ -173,6 +186,7 @@ try{
     RegulatedDataScopeService::$technicalFailure=null;LinearRouteService::$technicalFailure=false;
     if($pdo->inTransaction())$pdo->rollBack();
     $pdo->failBegin=false;$pdo->failCommit=false;$pdo->failPrepareContains=null;
-    cleanCompanyPoolDatabase($pdo);@unlink($incidentLog);putenv('PLANEX_WASTE_TRIP_INCIDENT_LOG');putenv('PLANEX_DEPLOYED_SHA');
+    if($fixed){cleanCompanyPoolDatabase($pdo);}else{$admin->exec("DROP DATABASE IF EXISTS `{$db}`");}
+    @unlink($incidentLog);putenv('PLANEX_WASTE_TRIP_INCIDENT_LOG');putenv('PLANEX_DEPLOYED_SHA');
 }
 }
