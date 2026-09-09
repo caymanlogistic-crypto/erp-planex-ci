@@ -30,8 +30,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "f4cfe7bc1be54d9b2d71f53895700fd9c171fa15",
-      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/34266584031",
+      "verified_sha": "8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99/tests/roles_access_production_functional_acceptance_contract_test.php",
       "owning_paths": ["app/Security/**", "app/Service/AccessControlService.php", "app/Service/UserSyncService.php", "app/Service/AccountAuthenticationService.php", "app/Service/CompanyMembershipService.php", "app/Service/CompanyRoleService.php", "app/Service/CompanySwitchService.php", "app/Service/EntityAssignmentService.php", "app/Service/IdentityNormalizer.php", "app/Service/RegulatedDataScopeService.php", "app/Http/Controllers/Company/RolesAccessController.php", "app/Http/Routes/company_roles_access.php", "app/View/pages/company/roles_access.php", "public/assets/css/roles-access.css", "public/assets/js/roles-access.js", "public/assets/js/entity-assignments.js", "database/migrations/013_create_roles_access.sql", "database/migrations-local/131_create_roles_access_projection.sql", "tools/roles_access/**", "scripts/roles_access_migration_proof.php", "tests/roles_access*", "app/Service/LegacySessionIdentityUpgradeService.php", "app/Support/http_runtime.php", "public/index.php", ".github/roles-access/**", ".github/workflows/roles_access_*.yml", "app/Service/CompanyLandingPageService.php", "app/Service/EntityResponsibilityService.php", "app/Service/ResponsibleAssignmentService.php", "app/Http/Controllers/CoreLandingController.php", "app/Http/Controllers/Company/ResponsibleAssignmentController.php", "app/Http/Controllers/Company/ResponsibleAssignmentActions/**", "app/Http/Routes/company_responsible_assignments.php", "app/View/pages/company_responsible_assignments.php", "app/Http/Routes/core.php", "app/View/layouts/main.php", "database/migrations/014_add_role_default_page.sql", "database/migrations-local/132_split_assignment_and_responsibility.sql", "scripts/roles_access_apply_132.php", "scripts/roles_access_verify_132.php", "scripts/roles_access_013_schema_proof.php"],
       "navigation": "active",
       "machine_ownership_id": "security.access"
@@ -52,8 +52,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "f4cfe7bc1be54d9b2d71f53895700fd9c171fa15",
-      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/34266583976",
+      "verified_sha": "8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99/.github/workflows/waste_trips_sync_schedule.yml",
       "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql", "scripts/waste_trip*.php", "tests/waste_trip*.php", ".github/workflows/waste_trips*.yml"],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
@@ -63,8 +63,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "a8d93a3726245f6afcca31ca300b442491423e91",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/a8d93a3726245f6afcca31ca300b442491423e91/.github/workflows/ci.yml",
+      "verified_sha": "8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99/tools/runner/manifest.json",
       "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py", "tools/runner/**", "tests/runner_helpers_contract_test.py"],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
@@ -74,8 +74,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ed6488ce9c61cfadffa0adea6024a82f8adeef88",
-      "evidence": "https://github.com/planexerp/erp-planex/actions/runs/33956383877",
+      "verified_sha": "8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99/tools/runner/sync_runner_helpers.py",
       "owning_paths": ["tools/sentinelx/**", "tools/runner/**"],
       "navigation": "active",
       "machine_ownership_id": "control.sentinelx_runner"
