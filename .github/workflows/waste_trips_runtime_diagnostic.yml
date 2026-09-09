@@ -83,11 +83,31 @@ jobs:
           grep -q '^WASTE_TRIPS_RUNTIME_DIAGNOSTIC_BEGIN$' waste_trips_runtime_diagnostic.txt
           grep -q '^WASTE_TRIPS_RUNTIME_DIAGNOSTIC_END$' waste_trips_runtime_diagnostic.txt
 
+      - name: Run Legacy 244 read-only production precondition probe
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$marker" = "$SHA"
+          LIVE_ROOT="$SERVER_ROOT/$LIVE_DIR/erpv2"
+          cat scripts/waste_trip_244_readonly_probe.php | \
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5" | tee waste_trip_244_readonly.txt
+          grep -q '^WASTE_TRIP_244_READ_ONLY=' waste_trip_244_readonly.txt
+          grep -q '^WASTE_TRIP_244_READ_ONLY_PASS$' waste_trip_244_readonly.txt
+
       - name: Upload bounded diagnostic evidence
         uses: actions/upload-artifact@v4
         with:
           name: waste-trips-runtime-diagnostic-${{ github.sha }}
-          path: waste_trips_runtime_diagnostic.txt
+          path: |
+            waste_trips_runtime_diagnostic.txt
+            waste_trip_244_readonly.txt
           retention-days: 14
 
       - name: Cleanup local SSH material
