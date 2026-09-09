@@ -167,6 +167,33 @@ $requestIds = preg_split('/[\s,;]+/u', trim((string) ($flight['zayavki_ids'] ?? 
 $requestIds = array_values(array_unique(array_map('strval', $requestIds)));
 $prefill = WasteTripLegacySourceService::prefillState($tenant, $flight);
 
+$encodingFacts = static function (mixed $value): array {
+    if ($value === null) return ['is_null'=>true,'bytes'=>0,'utf8_valid'=>true,'sha256'=>null,'json_encodable'=>true,'json_error'=>null];
+    $raw = (string) $value;
+    $valid = function_exists('mb_check_encoding') ? mb_check_encoding($raw, 'UTF-8') : preg_match('//u', $raw) === 1;
+    try {
+        json_encode($raw, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+        $jsonOk = true; $jsonError = null;
+    } catch (JsonException $e) {
+        $jsonOk = false; $jsonError = $e->getMessage();
+    }
+    return ['is_null'=>false,'bytes'=>strlen($raw),'utf8_valid'=>$valid,'sha256'=>hash('sha256',$raw),'json_encodable'=>$jsonOk,'json_error'=>$jsonError];
+};
+$legacyEncoding = [
+    'comment' => $encodingFacts($flight['comment'] ?? null),
+    'zayavki_ids' => $encodingFacts($flight['zayavki_ids'] ?? null),
+];
+$prefillEncoding = [];
+foreach (['comment','planned_start_mode','planned_start_date','planned_start_date_from','planned_start_date_to','planned_finish_date','actual_start_date','actual_end_date'] as $key) {
+    $prefillEncoding[$key] = $encodingFacts($prefill[$key] ?? null);
+}
+try {
+    json_encode($prefill, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR);
+    $prefillJson = ['encodable'=>true,'error'=>null];
+} catch (JsonException $e) {
+    $prefillJson = ['encodable'=>false,'error'=>$e->getMessage()];
+}
+
 $feoRows = [];
 if ($requestIds !== []) {
     $marks = implode(',', array_fill(0, count($requestIds), '?'));
@@ -230,6 +257,9 @@ $out = [
         'planned_start_incomplete' => $prefill['planned_start_incomplete'],
     ],
     'manager_projection' => $projection,
+    'legacy_encoding' => $legacyEncoding,
+    'prefill_encoding' => $prefillEncoding,
+    'prefill_json' => $prefillJson,
     'users_login_unique' => $uniqueLogin,
     'legacy_collision_rows' => $collisionStmt->fetchAll(),
     'feo_rows' => $feoRows,
