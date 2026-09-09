@@ -4,11 +4,12 @@
 
 ## Каноническое состояние
 
-Repository: `planexerp/erp-planex`.
+Repository: `caymanlogistic-crypto/erp-planex-ci`.
 Default/canonical branch: `chatgpt/production-stabilization-20260802`.
 Production: `https://plan-ex.ru/erpv2/`.
 Legacy `/erp` — запрещено менять.
-Old `caymanlogistic-crypto/erp-planex` — read-only insurance only.
+Previous canonical `planexerp/erp-planex` — read-only insurance only; do not push.
+Old `caymanlogistic-crypto/erp-planex` — read-only insurance only; not canonical.
 
 ## Engineering flow
 

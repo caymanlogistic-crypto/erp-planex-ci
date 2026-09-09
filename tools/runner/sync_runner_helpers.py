@@ -17,7 +17,7 @@ TOOL_DIR = Path(__file__).resolve().parent
 MANIFEST_PATH = TOOL_DIR / "manifest.json"
 SCHEMA = "erp-planex-runner-helpers/v2"
 LEGACY_SCHEMA = "erp-planex-runner-helpers/v1"
-EXPECTED_REPOSITORY = "planexerp/erp-planex"
+EXPECTED_REPOSITORY = "caymanlogistic-crypto/erp-planex-ci"
 CANONICAL = "chatgpt/production-stabilization-20260802"
 EXPECTED_HELPERS = (
     "new-task", "task-db", "test-db-slot", "clean-test-db",
@@ -206,10 +206,9 @@ def _git(repo: Path, *args: str, check: bool = True, text: bool = True) -> subpr
 def _repo_identity_ok(url: str) -> bool:
     url = url.strip()
     allowed = {
-        "git@github-planex-runner:planexerp/erp-planex.git",
-        "git@github.com:planexerp/erp-planex.git",
-        "https://github.com/planexerp/erp-planex.git",
-        "https://github.com/planexerp/erp-planex",
+        "git@github.com:caymanlogistic-crypto/erp-planex-ci.git",
+        "https://github.com/caymanlogistic-crypto/erp-planex-ci.git",
+        "https://github.com/caymanlogistic-crypto/erp-planex-ci",
     }
     return url in allowed
 

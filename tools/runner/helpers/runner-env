@@ -5,7 +5,7 @@ export PLANEX_TEST_ROOT="$HOME/erp-planex-test"
 export PATH="$PLANEX_TEST_ROOT/tools/git/bin:$PLANEX_TEST_ROOT/bin:/usr/bin:/bin:$PATH"
 
 export GIT_TERMINAL_PROMPT=0
-export GIT_SSH_COMMAND="ssh -i $PLANEX_TEST_ROOT/.ssh/github_runner -o IdentitiesOnly=yes"
+export GIT_SSH_COMMAND="ssh -i $PLANEX_TEST_ROOT/.ssh/github_cayman_ci -o IdentitiesOnly=yes"
 
 export APP_ENV=test
 

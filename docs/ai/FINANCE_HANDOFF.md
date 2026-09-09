@@ -72,7 +72,7 @@ Use ERP PLANEX visual language: desktop-first, table-first, compact industrial d
 
 ## Development / production contract
 
-Repository: `planexerp/erp-planex`.
+Repository: `caymanlogistic-crypto/erp-planex-ci`.
 Canonical/default branch: `chatgpt/production-stabilization-20260802`.
 
 Engineering path:

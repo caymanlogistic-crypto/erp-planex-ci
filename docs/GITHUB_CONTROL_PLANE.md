@@ -2,11 +2,12 @@
 
 ## Canonical boundaries
 
-- Repository: `planexerp/erp-planex`
+- Repository: `caymanlogistic-crypto/erp-planex-ci`
 - Canonical branch: `chatgpt/production-stabilization-20260802`
 - Production target: `/erpv2`
 - Legacy `/erp`: never changed
-- Old repository: read-only insurance
+- Previous canonical `planexerp/erp-planex`: read-only insurance; do not push
+- Old `caymanlogistic-crypto/erp-planex`: read-only insurance; not canonical
 
 ## Authority
 

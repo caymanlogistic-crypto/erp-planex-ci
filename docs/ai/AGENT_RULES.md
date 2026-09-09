@@ -6,7 +6,7 @@ This file intentionally does not duplicate those full rule sets.
 
 Minimum non-negotiable reminders:
 
-- canonical repo: `planexerp/erp-planex`; canonical branch: `chatgpt/production-stabilization-20260802`;
+- canonical repo: `caymanlogistic-crypto/erp-planex-ci`; canonical branch: `chatgpt/production-stabilization-20260802`;
 - feature branch → PR → relevant aggregate CI → merge;
 - cache `START_HEAD`, branch/PR IDs and source/page identifiers; no repeated unchanged-state reads;
 - no direct canonical writes, verification PRs, empty/probe/checkpoint commits or duplicate CI;

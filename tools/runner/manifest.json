@@ -1,7 +1,7 @@
 {
   "schema": "erp-planex-runner-helpers/v2",
-  "version": "2026-09-05.2",
-  "canonical_repository": "planexerp/erp-planex",
+  "version": "2026-09-09.1",
+  "canonical_repository": "caymanlogistic-crypto/erp-planex-ci",
   "canonical_branch": "chatgpt/production-stabilization-20260802",
   "runner_root": "~/erp-planex-test",
   "destination": "bin",
@@ -51,7 +51,7 @@
       "type": "file",
       "managed": true,
       "source": "helpers/push-task",
-      "sha256": "62f815f507b4ab46859a5a075dfc3abb1e399054e607302a633cb1fb1e4e0ad4",
+      "sha256": "224b0c0c6b10efaa3ef0cb2bcbef8e468949b1b11f3a2a212df46f824011e263",
       "mode": "0700"
     },
     {
@@ -59,7 +59,7 @@
       "type": "file",
       "managed": true,
       "source": "helpers/runner-env",
-      "sha256": "4f24947a2ec8a7e84f4c3b0b6c75af0be72f96745b85dae7257e97c5713dde92",
+      "sha256": "2f194ac482e47bd5947dc9504354f396771de6b94221a833d15a1a730ada8298",
       "mode": "0700"
     },
     {

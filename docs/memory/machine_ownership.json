@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "repository": "planexerp/erp-planex",
+  "repository": "caymanlogistic-crypto/erp-planex-ci",
   "owners": [
     {"id":"control.deploy","description":"Production /erpv2 release control plane","owning_paths":[".github/workflows/erpv2_*deploy*.yml",".github/workflows/agent_deploy_request_contract.yml",".github/p07/**","tests/agent_deploy_request_contract_test.php","tests/p07_deploy_engine_contract_test.php","docs/GITHUB_CONTROL_PLANE.md"]},
     {"id":"control.ci","description":"Repository engineering, capability-aware preflight, persistent runner helper integrity and semantic-memory CI","owning_paths":[".github/workflows/ci.yml",".github/workflows/memory_integrity.yml",".github/workflows/erpv2_fast_release.yml","AGENTS.md","docs/GITHUB_CONTROL_PLANE.md","tools/ci_scope.py","tools/agent_preflight.py","tools/memory_integrity_check.py","tools/active_registry_coverage_check.py","tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/memory_integrity_checker_test.py","tests/active_registry_coverage_checker_test.py","tools/runner/**","tests/runner_helpers_contract_test.py"]},

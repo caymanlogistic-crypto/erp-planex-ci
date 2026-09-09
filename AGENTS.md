@@ -11,11 +11,12 @@ For every material ERP task:
 3. Determine MEMORY IMPACT from owning/changed paths and read only affected registry records.
 4. Reuse already resolved repository, branch, file/blob, Notion page/data-source and PR identifiers.
 
-Repository: `planexerp/erp-planex`.
+Repository: `caymanlogistic-crypto/erp-planex-ci`.
 Canonical branch: `chatgpt/production-stabilization-20260802`.
 Production: `/erpv2`.
 Legacy `/erp`: never touch.
-Old `caymanlogistic-crypto/erp-planex`: read-only insurance.
+Previous canonical `planexerp/erp-planex`: read-only insurance; do not push.
+Old `caymanlogistic-crypto/erp-planex`: read-only insurance; not canonical.
 
 ## Source precedence by dimension
 

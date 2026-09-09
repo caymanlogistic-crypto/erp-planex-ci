@@ -19,7 +19,7 @@ Normal install is intentionally stricter than source verification:
 python3 tools/runner/sync_runner_helpers.py install
 ```
 
-It is permitted only from a clean, attached checkout of `planexerp/erp-planex` on exact branch `chatgpt/production-stabilization-20260802`, after a fresh fetch, with local `HEAD == origin/<canonical>` and a second live remote-head check. Task branches, detached HEADs, dirty worktrees, stale canonical checkouts, wrong repositories and remote drift are refused with `RUNNER_INSTALL_REFUSED=...`.
+It is permitted only from a clean, attached checkout of `caymanlogistic-crypto/erp-planex-ci` on exact branch `chatgpt/production-stabilization-20260802`, after a fresh fetch, with local `HEAD == origin/<canonical>` and a second live remote-head check. Task branches, detached HEADs, dirty worktrees, stale canonical checkouts, wrong repositories and remote drift are refused with `RUNNER_INSTALL_REFUSED=...`.
 
 The live helper destination remains fixed at `~/erp-planex-test/bin`; source is staged under the runner state directory, atomically replaced, and then verified again.
 
