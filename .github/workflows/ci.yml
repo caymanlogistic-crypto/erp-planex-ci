@@ -358,7 +358,7 @@ jobs:
               automatic = any(trigger in text for trigger in ['\n  workflow_run:','\n  push:','\n  pull_request:','\n  schedule:'])
               if automatic and p.name in approved_automatic:
                   required = [
-                      "cron: '*/5 * * * *'",
+                      "cron: '0-59/5 * * * *'",
                       'workflow_dispatch:',
                       'contents: read',
                       'group: waste-trips-legacy-sync-production',
@@ -373,7 +373,7 @@ jobs:
                   forbidden = ['\n  workflow_run:', '\n  push:', '\n  pull_request:', 'Slitex2DB.php', '/fregat/', 'crontab ']
                   if (not manual or any(token not in text for token in required)
                           or any(token in text for token in forbidden)
-                          or text.count("cron: '*/5 * * * *'") != 1):
+                          or text.count("cron: '0-59/5 * * * *'") != 1):
                       violations.append(str(p))
                   continue
               if not manual or automatic:
