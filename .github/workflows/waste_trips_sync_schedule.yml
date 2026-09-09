@@ -1,10 +1,10 @@
-name: Waste Trips Legacy Sync Schedule
+name: Waste Trips Legacy Sync Manual
 
 on:
-  schedule:
-    # Same five-minute cadence as */5; explicit minute list intentionally binds the scheduled workflow to the authenticated repository owner after cutover.
-    - cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'
   workflow_dispatch:
+
+# Recurring Waste Trips synchronization is owned by the server-side cron configured in the hosting panel.
+# This GitHub workflow is manual-only and must never contain an automatic trigger.
 
 permissions:
   contents: read
