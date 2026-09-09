@@ -52,8 +52,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ed4c2bbbffc5d09d996be3006dea568fa24d8fd8",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed4c2bbbffc5d09d996be3006dea568fa24d8fd8/.github/workflows/waste_trips_sync_schedule.yml",
+      "verified_sha": "813ab3729b55a1716fdad8584e1a68437af96380",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/813ab3729b55a1716fdad8584e1a68437af96380/.github/workflows/waste_trips_sync_schedule.yml",
       "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql", "scripts/waste_trip*.php", "tests/waste_trip*.php", ".github/workflows/waste_trips*.yml"],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
@@ -63,8 +63,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ed4c2bbbffc5d09d996be3006dea568fa24d8fd8",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed4c2bbbffc5d09d996be3006dea568fa24d8fd8/.github/workflows/ci.yml",
+      "verified_sha": "813ab3729b55a1716fdad8584e1a68437af96380",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/813ab3729b55a1716fdad8584e1a68437af96380/.github/workflows/ci.yml",
       "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py", "tools/runner/**", "tests/runner_helpers_contract_test.py"],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
