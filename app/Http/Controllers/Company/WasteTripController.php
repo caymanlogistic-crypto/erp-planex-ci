@@ -6,6 +6,7 @@ use App\Core\Database;
 use App\Service\AccessControlService;
 use App\Service\EntityResponsibilityService;
 use App\Service\LinearRouteService;
+use App\Service\WasteTripIncidentService;
 use App\Service\WasteTripLegacyPrefillService;
 use App\Service\WasteTripLegacySourceService;
 use App\Service\WasteTripService;
@@ -106,7 +107,7 @@ final class WasteTripController
             $businessId=WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,$id,$input,$parsed['ids'],$context['sessionUser']);
             $_SESSION['waste_trip_success']='Legacy-рейс #'.$id.' создан как ERP-рейс #'.$businessId.'.';
         } catch(Throwable $e) {
-            $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Создание рейса не выполнено.',['operation'=>'legacy_materialize','legacy_id'=>$id,'stage'=>$stage]);
+            $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Создание рейса не выполнено.',['operation'=>'legacy_materialize','legacy_id'=>$id,'stage'=>$stage,'company_id'=>(int)($context['companyId']??0),'actor_user_id'=>(int)($context['sessionUser']['user_id']??0),'actor_membership_id'=>AccessControlService::effectiveMembershipId()??0,'actor_role'=>(string)($context['sessionUser']['role_code']??'')]);
             $_SESSION['waste_trip_old']=$_POST+['_legacy_id'=>$id];
         }
         header('Location: '.app_url('/company/trips/departures/legacy')); exit;
@@ -174,21 +175,8 @@ final class WasteTripController
     private function publicError(Throwable $e,string $fallback,array $context=[]): string
     {
         if($e instanceof RuntimeException&&!$e instanceof \PDOException)return$e->getMessage();
-        $incident=$this->wasteIncidentId();
-        $operation=preg_replace('/[^a-z0-9_-]+/i','_',trim((string)($context['operation']??'request')))?:'request';
-        $stage=preg_replace('/[^a-z0-9_-]+/i','_',trim((string)($context['stage']??'unknown')))?:'unknown';
-        $legacyId=max(0,(int)($context['legacy_id']??0));
-        $sqlState=$e instanceof \PDOException?(string)($e->errorInfo[0]??$e->getCode()):'';
-        $driverCode=$e instanceof \PDOException?(string)($e->errorInfo[1]??''):'';
-        $message=preg_replace('/[\r\n\t]+/',' ',trim($e->getMessage()))??'';
-        if(function_exists('mb_substr'))$message=mb_substr($message,0,1200,'UTF-8');else$message=substr($message,0,1200);
-        error_log('waste_trip_write_failure incident='.$incident.' operation='.$operation.' legacy_id='.$legacyId.' stage='.$stage.' exception='.get_class($e).' sqlstate='.$sqlState.' driver='.$driverCode.' message='.$message);
+        $incident=WasteTripIncidentService::record($e,$context);
         return $fallback.' Код ошибки: '.$incident.'.';
-    }
-    private function wasteIncidentId(): string
-    {
-        try{$suffix=strtoupper(bin2hex(random_bytes(3)));}catch(Throwable){$suffix=strtoupper(substr(hash('sha256',uniqid('',true)),0,6));}
-        return 'WT-'.gmdate('ymd-His').'-'.$suffix;
     }
     private function loadOptions(PDO $pdo,array $sessionUser,PDO $central,int $companyId): array
     {

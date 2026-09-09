@@ -7,6 +7,7 @@ on:
       - 'app/Http/Controllers/Company/WasteTripController.php'
       - 'app/Http/Routes/company_linear_trips.php'
       - 'app/Service/WasteTripService.php'
+      - 'app/Service/WasteTripIncidentService.php'
       - 'app/Service/WasteTripLegacySourceService.php'
       - 'app/Service/WasteTripLegacySyncService.php'
       - 'app/Service/WasteTripLegacyPrefillService.php'
@@ -15,6 +16,7 @@ on:
       - 'app/View/partials/company_waste_trip*.php'
       - 'database/migrations-local/130_waste_trip_legacy_linked_cutover.sql'
       - 'scripts/waste_trip_sync.php'
+      - 'scripts/waste_trip_legacy_readonly_probe.php'
       - 'scripts/waste_trips_*_130.php'
       - 'tests/waste_trip*.php'
       - '.github/workflows/waste_trips*.yml'
@@ -24,6 +26,7 @@ on:
       - 'app/Http/Controllers/Company/WasteTripController.php'
       - 'app/Http/Routes/company_linear_trips.php'
       - 'app/Service/WasteTripService.php'
+      - 'app/Service/WasteTripIncidentService.php'
       - 'app/Service/WasteTripLegacySourceService.php'
       - 'app/Service/WasteTripLegacySyncService.php'
       - 'app/Service/WasteTripLegacyPrefillService.php'
@@ -32,6 +35,7 @@ on:
       - 'app/View/partials/company_waste_trip*.php'
       - 'database/migrations-local/130_waste_trip_legacy_linked_cutover.sql'
       - 'scripts/waste_trip_sync.php'
+      - 'scripts/waste_trip_legacy_readonly_probe.php'
       - 'scripts/waste_trips_*_130.php'
       - 'tests/waste_trip*.php'
       - '.github/workflows/waste_trips*.yml'
@@ -59,6 +63,7 @@ jobs:
             app/Http/Controllers/Company/WasteTripController.php \
             app/Http/Routes/company_linear_trips.php \
             app/Service/WasteTripService.php \
+            app/Service/WasteTripIncidentService.php \
             app/Service/WasteTripLegacySourceService.php \
             app/Service/WasteTripLegacySyncService.php \
             app/Service/WasteTripLegacyPrefillService.php \
@@ -67,13 +72,17 @@ jobs:
             app/View/pages/company_waste_trip_legacy.php \
             app/View/partials/company_waste_trip_modal_view.php \
             app/View/partials/company_waste_trip_modal_edit.php \
-            scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php scripts/waste_trip_244_readonly_probe.php \
-            tests/waste_trip_regression_test.php tests/waste_trip_legacy_prefill_regression_test.php tests/waste_trip_manager_membership_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_runtime_diagnostic_contract_test.php tests/waste_trip_244_readonly_probe_contract_test.php tests/waste_trips_128_production_migration_contract_test.php tests/waste_trips_130_production_migration_contract_test.php
+            scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php scripts/waste_trip_244_readonly_probe.php scripts/waste_trip_legacy_readonly_probe.php \
+            tests/waste_trip_incident_service_test.php tests/waste_trip_legacy_full_schema_regression_test.php tests/waste_trip_legacy_manager_end_to_end_regression_test.php tests/waste_trip_legacy_readonly_probe_contract_test.php tests/waste_trip_regression_test.php tests/waste_trip_legacy_prefill_regression_test.php tests/waste_trip_manager_membership_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_runtime_diagnostic_contract_test.php tests/waste_trip_244_readonly_probe_contract_test.php tests/waste_trips_128_production_migration_contract_test.php tests/waste_trips_130_production_migration_contract_test.php
           do php -l "$f"; done
       - name: Static target contracts
         shell: bash
         run: |
           set -euo pipefail
+          php tests/waste_trip_incident_service_test.php | tee /tmp/incident.out
+          grep -Fqx 'WASTE_TRIP_INCIDENT_SERVICE=PASS' /tmp/incident.out
+          php tests/waste_trip_legacy_readonly_probe_contract_test.php | tee /tmp/legacy-probe.out
+          grep -Fqx 'WASTE_TRIP_LEGACY_READ_ONLY_PROBE_CONTRACT=PASS' /tmp/legacy-probe.out
           php tests/waste_trip_legacy_linked_contract_test.php | tee /tmp/legacy.out
           grep -Fqx 'WASTE_TRIP_LEGACY_LINKED=PASS' /tmp/legacy.out
           php tests/waste_trip_owner_layout_contract_test.php | tee /tmp/owner.out
@@ -107,3 +116,9 @@ jobs:
           grep -Fqx 'WASTE_TRIP_LEGACY_PREFILL_MYSQL=PASS' /tmp/prefill.out
           php tests/waste_trip_manager_membership_regression_test.php | tee /tmp/manager-membership.out
           grep -Fqx 'WASTE_TRIP_MANAGER_MEMBERSHIP_MYSQL=PASS' /tmp/manager-membership.out
+          php tests/waste_trip_legacy_full_schema_regression_test.php | tee /tmp/full-schema.out
+          grep -Fqx 'WASTE_TRIP_LEGACY_FULL_SCHEMA=PASS' /tmp/full-schema.out
+          php tests/waste_trip_legacy_manager_end_to_end_regression_test.php | tee /tmp/manager-e2e.out
+          grep -Fqx 'WASTE_TRIP_LEGACY_MANAGER_E2E=PASS' /tmp/manager-e2e.out
+          grep -Fqx 'WASTE_TRIP_LEGACY_MANAGER_E2E_MANAGER_INSERT=PASS' /tmp/manager-e2e.out
+          grep -Fqx 'WASTE_TRIP_LEGACY_MANAGER_E2E_LINKS=12' /tmp/manager-e2e.out
