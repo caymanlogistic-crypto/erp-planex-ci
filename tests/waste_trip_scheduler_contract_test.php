@@ -19,9 +19,7 @@ $workflow = (string) file_get_contents($workflowPath);
 $ci = (string) file_get_contents($ciPath);
 
 $required = [
-    'name: Waste Trips Legacy Sync Schedule',
-    'schedule:',
-    "cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'",
+    'name: Waste Trips Legacy Sync Manual',
     'workflow_dispatch:',
     'contents: read',
     'statuses: read',
@@ -55,6 +53,8 @@ foreach ($required as $needle) {
 }
 
 $forbidden = [
+    "\n  schedule:",
+    'cron:',
     'crontab ',
     'Slitex2DB.php',
     '/fregat/',
@@ -73,11 +73,6 @@ if (preg_match('/^\s+push\s*:/m', $workflow) === 1 || preg_match('/^\s+pull_requ
     exit(1);
 }
 
-if (substr_count($workflow, "cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'") !== 1) {
-    fwrite(STDERR, "Scheduler cadence must be exactly one five-minute cron entry\n");
-    exit(1);
-}
-
 $oldEquality = 'test "$marker" = "$SOURCE_SHA"';
 $sentinel = '# Legacy global-guard sentinel only: ' . $oldEquality;
 if (substr_count($workflow, $oldEquality) !== 1 || !str_contains($workflow, $sentinel)) {
@@ -86,14 +81,8 @@ if (substr_count($workflow, $oldEquality) !== 1 || !str_contains($workflow, $sen
 }
 
 $ciRequired = [
-    "approved_automatic = {'waste_trips_sync_schedule.yml'}",
-    "cron: '0,5,10,15,20,25,30,35,40,45,50,55 * * * *'",
-    'group: waste-trips-legacy-sync-production',
-    'CANONICAL_BRANCH: chatgpt/production-stabilization-20260802',
-    'test "$canonical" = "$SOURCE_SHA"',
-    'test "$marker" = "$SOURCE_SHA"',
-    'scripts/waste_trip_sync.php',
-    "grep -Fqx 'WASTE_TRIP_SYNC_OK' waste_trip_sync_schedule.txt",
+    "automatic = any(trigger in text for trigger in ['\\n  workflow_run:','\\n  push:','\\n  pull_request:','\\n  schedule:'])",
+    'if not manual or automatic:',
 ];
 foreach ($ciRequired as $needle) {
     if (!str_contains($ci, $needle)) {
@@ -102,12 +91,12 @@ foreach ($ciRequired as $needle) {
     }
 }
 
-if (substr_count($ci, "approved_automatic = {'waste_trips_sync_schedule.yml'}") !== 1) {
-    fwrite(STDERR, "Automatic production-write allowlist must contain exactly the Waste Trips scheduler declaration\n");
+if (str_contains($ci, 'approved_automatic')) {
+    fwrite(STDERR, "Automatic production-write allowlist must not exist\n");
     exit(1);
 }
-if (preg_match("/approved_automatic\\s*=\\s*\\{[^}]*,[^}]*\\}/", $ci) === 1) {
-    fwrite(STDERR, "Automatic production-write allowlist must not include another workflow\n");
+if (!str_contains($ci, 'if not manual or automatic:')) {
+    fwrite(STDERR, "CI must fail closed on every automatic production-write workflow\n");
     exit(1);
 }
 
