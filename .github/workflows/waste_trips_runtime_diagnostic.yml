@@ -35,6 +35,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git fetch origin "$GITHUB_REF_NAME" --depth=50
           git fetch origin "$CANONICAL_BRANCH" --depth=1
           canonical="$(git rev-parse FETCH_HEAD)"
           head="$(git rev-parse HEAD)"

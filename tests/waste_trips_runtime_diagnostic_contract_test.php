@@ -11,6 +11,7 @@ $ok=static function(bool$value,string$message)use($fail):void{if(!$value)$fail($
 $ok(str_contains($workflow,'qa/waste-trips-runtime-diagnostic-agent'),'diagnostic keeps dedicated QA trigger');
 $ok(str_contains($workflow,'workflow_dispatch:'),'diagnostic supports controlled manual read');
 $ok(str_contains($workflow,'TASK_DIAGNOSTIC_BASE_SHA'),'task diagnostic must pin the exact deployed base');
+$ok(str_contains($workflow,'git fetch origin "$GITHUB_REF_NAME" --depth=50'),'task diagnostic must fetch candidate ancestry before merge-base validation');
 $ok(str_contains($workflow,'git merge-base --is-ancestor "$TASK_DIAGNOSTIC_BASE_SHA" "$head"'),'task diagnostic candidate must descend from the pinned base');
 $ok(str_contains($workflow,'test "$marker" = "$EXPECTED_DEPLOYED_SHA"'),'diagnostic requires exact deployed marker');
 $ok(str_contains($workflow,'logs/waste_trip_incidents.jsonl'),'diagnostic reads durable Waste Trips incident file');
