@@ -4,7 +4,6 @@ on:
   push:
     branches:
       - qa/erpv2-web-runtime-diagnostic-20260902
-      - chatgpt/waste-trips-legacy-create-runtime-fix-20260909
 
 permissions:
   contents: read
@@ -13,7 +12,6 @@ env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
   SERVER_ROOT: /home/s/spugovxsim/planexp
   LIVE_DIR: public_html
-  TASK_DIAGNOSTIC_BASE_SHA: a211573f385d1ac19bdebef0bc1e807fc8132187
 
 jobs:
   diagnose:
@@ -24,25 +22,13 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Verify exact diagnostic source
+      - name: Verify exact canonical HEAD
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin "$GITHUB_REF_NAME" --depth=50
           git fetch origin "$CANONICAL_BRANCH" --depth=1
-          canonical="$(git rev-parse FETCH_HEAD)"
-          head="$(git rev-parse HEAD)"
-          case "$GITHUB_REF_NAME" in
-            qa/erpv2-web-runtime-diagnostic-20260902)
-              test "$head" = "$canonical"
-              ;;
-            chatgpt/waste-trips-legacy-create-runtime-fix-20260909)
-              test "$canonical" = "$TASK_DIAGNOSTIC_BASE_SHA"
-              git merge-base --is-ancestor "$TASK_DIAGNOSTIC_BASE_SHA" "$head"
-              ;;
-            *) exit 1 ;;
-          esac
-          echo "EXACT_CANONICAL_SHA=$canonical"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"
+          echo "EXACT_CANONICAL_SHA=$(git rev-parse HEAD)"
 
       - name: Configure isolated SSH credentials
         shell: bash
@@ -88,10 +74,6 @@ jobs:
           echo 'OPCACHE_VALIDATE_TIMESTAMPS=', ini_get('opcache.validate_timestamps'), PHP_EOL;
           echo 'OPCACHE_REVALIDATE_FREQ=', ini_get('opcache.revalidate_freq'), PHP_EOL;
           echo 'OPCACHE_RESET=', (function_exists('opcache_reset') && opcache_reset() ? '1' : '0'), PHP_EOL;
-          echo 'WEB_ERROR_LOG=', ini_get('error_log'), PHP_EOL;
-          echo 'WEB_LOG_ERRORS=', ini_get('log_errors'), PHP_EOL;
-          echo 'WEB_INI_LOADED=', (php_ini_loaded_file() ?: ''), PHP_EOL;
-          error_log('erpv2_waste_log_probe_${GITHUB_RUN_ID}');
           PHP
           LOCAL_STATIC="$(mktemp)"
           printf 'ERPV2_STATIC_DIAGNOSTIC=OK\n' > "$LOCAL_STATIC"
@@ -125,37 +107,10 @@ jobs:
           WEB_VERSION="$(sed -n 's/^PHP_VERSION=//p' "$PROBE_BODY" | head -n1)"
           WEB_SAPI="$(sed -n 's/^PHP_SAPI=//p' "$PROBE_BODY" | head -n1)"
           OPCACHE_RESET="$(sed -n 's/^OPCACHE_RESET=//p' "$PROBE_BODY" | head -n1)"
-          WEB_ERROR_LOG="$(sed -n 's/^WEB_ERROR_LOG=//p' "$PROBE_BODY" | head -n1)"
-          WEB_INI_LOADED="$(sed -n 's/^WEB_INI_LOADED=//p' "$PROBE_BODY" | head -n1)"
-          printf 'WEB_ERROR_LOG_PATH=%s\nWEB_INI_LOADED_PATH=%s\n' "$WEB_ERROR_LOG" "$WEB_INI_LOADED"
           rm -f "$PROBE_BODY"
 
           LOGIN_HTTP="$(curl -sS -L -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login || printf '000')"
           echo "LOGIN_HTTP_AFTER_WEB_OPCACHE_RESET=$LOGIN_HTTP"
-
-          echo 'WASTE_WEB_ERROR_EVIDENCE_BEGIN'
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/erpv2_runtime_diag_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
-            "SERVER_ROOT='$SERVER_ROOT' WEB_ERROR_LOG='$WEB_ERROR_LOG' MARKER='erpv2_waste_log_probe_${GITHUB_RUN_ID}' bash -se" <<'REMOTE'
-          set -euo pipefail
-          ACCOUNT_ROOT="$(dirname "$SERVER_ROOT")"
-          chosen=''
-          if [ -n "$WEB_ERROR_LOG" ] && [ "$WEB_ERROR_LOG" != 'syslog' ] && [ "${WEB_ERROR_LOG#/}" != "$WEB_ERROR_LOG" ] && [ -r "$WEB_ERROR_LOG" ]; then
-            case "$WEB_ERROR_LOG" in "$ACCOUNT_ROOT"/*) chosen="$WEB_ERROR_LOG" ;; esac
-          fi
-          if [ -z "$chosen" ]; then
-            while IFS= read -r candidate; do
-              if [ -r "$candidate" ] && grep -Fq "$MARKER" "$candidate" 2>/dev/null; then chosen="$candidate"; break; fi
-            done < <(find "$ACCOUNT_ROOT" -maxdepth 8 -type f               \( -iname 'error_log' -o -iname '*.log' -o -iname '*error*' \)               -mmin -5 -size -50M -print 2>/dev/null | head -n 120)
-          fi
-          if [ -n "$chosen" ]; then
-            printf 'WEB_ERROR_LOG_RESOLVED=%s\n' "$chosen"
-            grep -F 'WT-260909-173446-777F2F' "$chosen" 2>/dev/null | tail -n 10 || true
-            grep -F 'legacy_id=246' "$chosen" 2>/dev/null | grep 'waste_trip_write_failure' | tail -n 20 || true
-          else
-            echo 'WEB_ERROR_LOG_RESOLVED=NO'
-          fi
-          REMOTE
-          echo 'WASTE_WEB_ERROR_EVIDENCE_END'
 
           if [ "$STATIC_HTTP" != 200 ] || [ "$ASSET_HTTP" != 200 ] || [ "$PROBE_HTTP" != 200 ] || [ "$LOGIN_HTTP" != 200 ]; then
             echo '::group::ERPv2 bounded web-server diagnostic'

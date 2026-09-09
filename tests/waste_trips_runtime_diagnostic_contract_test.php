@@ -10,9 +10,9 @@ $ok=static function(bool$value,string$message)use($fail):void{if(!$value)$fail($
 
 $ok(str_contains($workflow,'qa/waste-trips-runtime-diagnostic-agent'),'diagnostic keeps dedicated QA trigger');
 $ok(str_contains($workflow,'workflow_dispatch:'),'diagnostic supports controlled manual read');
-$ok(str_contains($workflow,'TASK_DIAGNOSTIC_BASE_SHA'),'task diagnostic must pin the exact deployed base');
-$ok(str_contains($workflow,'git fetch origin "$GITHUB_REF_NAME" --depth=50'),'task diagnostic must fetch candidate ancestry before merge-base validation');
-$ok(str_contains($workflow,'git merge-base --is-ancestor "$TASK_DIAGNOSTIC_BASE_SHA" "$head"'),'task diagnostic candidate must descend from the pinned base');
+$ok(str_contains($workflow,'test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"'),'diagnostic requires exact canonical source');
+$ok(!str_contains($workflow,'TASK_DIAGNOSTIC_BASE_SHA'),'diagnostic must not retain task-pinned base SHA');
+$ok(!str_contains($workflow,'chatgpt/waste-trips-legacy-create-runtime-fix-20260909'),'diagnostic must not retain task branch trigger');
 $ok(str_contains($workflow,'test "$marker" = "$EXPECTED_DEPLOYED_SHA"'),'diagnostic requires exact deployed marker');
 $ok(str_contains($workflow,'logs/waste_trip_incidents.jsonl'),'diagnostic reads durable Waste Trips incident file');
 $ok(str_contains($workflow,'tail -n 250'),'durable read is bounded');
@@ -20,7 +20,9 @@ $ok(str_contains($workflow,"^WT-[0-9]{6}-[0-9]{6}-[A-F0-9]{6}$"),'exact incident
 $ok(!str_contains($workflow,'-iname \'error_log\''),'diagnostic no longer guesses PHP/Apache error logs');
 $ok(str_contains($workflow,'waste_trips_verify_130.php'),'diagnostic includes read-only schema snapshot');
 $ok(str_contains($workflow,'scripts/waste_trip_legacy_readonly_probe.php'),'diagnostic must run the exact Legacy read-only probe');
-$ok(str_contains($workflow,"PLANEX_WASTE_TRIP_LEGACY_ID='246'"),'task diagnostic must target Legacy 246');
+$ok(str_contains($workflow,'inputs.legacy_id'),'manual diagnostic must accept a selected Legacy id');
+$ok(str_contains($workflow,'inputs.company_id'),'manual diagnostic must accept a selected company id');
+$ok(!str_contains($workflow,"PLANEX_WASTE_TRIP_LEGACY_ID='246'"),'diagnostic must not hardcode task Legacy 246');
 foreach(['mysql -','--apply','curl -X POST','gh api --method POST']as$forbidden)$ok(!str_contains($workflow,$forbidden),'diagnostic must not contain production-write transport: '.$forbidden);
 
 foreach(['tenant_context','schema','request_parse','manager_resolution','legacy_connection','legacy_write']as$stage)$ok(str_contains($controller,"\$stage='".$stage."'")||str_contains($controller,"'stage'=>\$stage"),'controller diagnostic stage missing: '.$stage);

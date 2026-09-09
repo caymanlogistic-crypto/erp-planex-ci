@@ -4,12 +4,21 @@ on:
   push:
     branches:
       - qa/waste-trips-runtime-diagnostic-agent
-      - chatgpt/waste-trips-legacy-create-runtime-fix-20260909
   workflow_dispatch:
     inputs:
       incident_id:
         description: Optional exact WT incident id
         required: false
+        type: string
+      legacy_id:
+        description: Optional Legacy flight id for read-only probe
+        required: false
+        default: '244'
+        type: string
+      company_id:
+        description: Company id for read-only Legacy probe
+        required: false
+        default: '25'
         type: string
 
 permissions:
@@ -20,7 +29,6 @@ env:
   SERVER_ROOT: /home/s/spugovxsim/planexp
   LIVE_DIR: public_html
   DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
-  TASK_DIAGNOSTIC_BASE_SHA: a211573f385d1ac19bdebef0bc1e807fc8132187
 
 jobs:
   diagnose:
@@ -31,32 +39,14 @@ jobs:
         with:
           fetch-depth: 1
 
-      - name: Require exact diagnostic source and deployed base
+      - name: Require exact canonical source
         shell: bash
         run: |
           set -euo pipefail
-          git fetch origin "$GITHUB_REF_NAME" --depth=50
           git fetch origin "$CANONICAL_BRANCH" --depth=1
-          canonical="$(git rev-parse FETCH_HEAD)"
-          head="$(git rev-parse HEAD)"
-          case "$GITHUB_REF_NAME" in
-            qa/waste-trips-runtime-diagnostic-agent)
-              test "$head" = "$canonical"
-              expected_deployed="$head"
-              ;;
-            chatgpt/waste-trips-legacy-create-runtime-fix-20260909)
-              test "$canonical" = "$TASK_DIAGNOSTIC_BASE_SHA"
-              git merge-base --is-ancestor "$TASK_DIAGNOSTIC_BASE_SHA" "$head"
-              expected_deployed="$TASK_DIAGNOSTIC_BASE_SHA"
-              ;;
-            *)
-              echo "UNAPPROVED_DIAGNOSTIC_REF=$GITHUB_REF_NAME"
-              exit 1
-              ;;
-          esac
-          echo "EXPECTED_DEPLOYED_SHA=$expected_deployed" >> "$GITHUB_ENV"
-          echo "DIAGNOSTIC_HEAD=$head"
-          echo "EXACT_CANONICAL_SHA=$canonical"
+          test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"
+          echo "EXPECTED_DEPLOYED_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
+          echo "EXACT_CANONICAL_SHA=$(git rev-parse HEAD)"
 
       - name: Configure isolated read-only SSH channel
         shell: bash
@@ -125,7 +115,8 @@ jobs:
           grep -q '^WASTE_TRIP_244_READ_ONLY=' waste_trip_244_readonly.txt
           grep -q '^WASTE_TRIP_244_READ_ONLY_PASS$' waste_trip_244_readonly.txt
 
-      - name: Run exact Legacy read-only production probe
+      - name: Run selected Legacy read-only production probe
+        if: github.event_name == 'workflow_dispatch'
         shell: bash
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -133,10 +124,16 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         run: |
           set -euo pipefail
+          legacy_id='${{ inputs.legacy_id }}'
+          company_id='${{ inputs.company_id }}'
+          printf '%s' "$legacy_id" | grep -Eq '^[0-9]{3,10}$'
+          printf '%s' "$company_id" | grep -Eq '^[0-9]{1,10}$'
           marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
           test "$marker" = "$EXPECTED_DEPLOYED_SHA"
           LIVE_ROOT="$SERVER_ROOT/$LIVE_DIR/erpv2"
-          cat scripts/waste_trip_legacy_readonly_probe.php |             ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST"               "PLANEX_ROOT='$LIVE_ROOT' PLANEX_WASTE_TRIP_LEGACY_ID='246' PLANEX_WASTE_TRIP_COMPANY_ID='25' /usr/bin/php8.5" | tee waste_trip_legacy_readonly.txt
+          cat scripts/waste_trip_legacy_readonly_probe.php | \
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' PLANEX_WASTE_TRIP_LEGACY_ID='$legacy_id' PLANEX_WASTE_TRIP_COMPANY_ID='$company_id' /usr/bin/php8.5" | tee waste_trip_legacy_readonly.txt
           grep -q '^WASTE_TRIP_LEGACY_READ_ONLY=' waste_trip_legacy_readonly.txt
           grep -q '^WASTE_TRIP_LEGACY_READ_ONLY_PASS$' waste_trip_legacy_readonly.txt
 
