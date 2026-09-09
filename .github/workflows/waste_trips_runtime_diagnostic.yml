@@ -10,7 +10,8 @@ permissions:
 
 env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
-  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  SERVER_ROOT: /home/s/spugovxsim/planexp
+  LIVE_DIR: public_html
   DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
 
 jobs:
@@ -53,6 +54,7 @@ jobs:
           SHA="$(git rev-parse HEAD)"
           marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
           test "$marker" = "$SHA"
+          LIVE_ROOT="$SERVER_ROOT/$LIVE_DIR/erpv2"
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
             "LIVE_ROOT='$LIVE_ROOT' bash -se" <<'REMOTE' | tee waste_trips_runtime_diagnostic.txt
           set -euo pipefail
