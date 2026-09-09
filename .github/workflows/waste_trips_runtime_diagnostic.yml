@@ -1,0 +1,94 @@
+name: Waste Trips Runtime Diagnostic
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-runtime-diagnostic-agent
+
+permissions:
+  contents: read
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Require exact canonical source
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch origin "$CANONICAL_BRANCH" --depth=1
+          test "$(git rev-parse HEAD)" = "$(git rev-parse FETCH_HEAD)"
+          echo "EXACT_CANONICAL_SHA=$(git rev-parse HEAD)"
+
+      - name: Configure isolated read-only SSH channel
+        shell: bash
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/waste_runtime_diag"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/waste_runtime_diag" "$HOME/.ssh/known_hosts"
+
+      - name: Require exact deployed marker and collect bounded read-only evidence
+        shell: bash
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          SHA="$(git rev-parse HEAD)"
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$marker" = "$SHA"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_runtime_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "LIVE_ROOT='$LIVE_ROOT' bash -se" <<'REMOTE' | tee waste_trips_runtime_diagnostic.txt
+          set -euo pipefail
+          ACCOUNT_ROOT=/home/s/spugovxsim
+          echo 'WASTE_TRIPS_RUNTIME_DIAGNOSTIC_BEGIN'
+          printf 'deployed_marker='; cat /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+          echo '--- waste schema snapshot ---'
+          PLANEX_ROOT="$LIVE_ROOT" /usr/bin/php8.5 "$LIVE_ROOT/scripts/waste_trips_verify_130.php" 2>&1 || true
+          echo '--- bounded waste error evidence (last 24h candidates) ---'
+          php_log="$(/usr/bin/php8.5 -r 'echo ini_get("error_log");' 2>/dev/null || true)"
+          if [ -n "$php_log" ] && [ "$php_log" != syslog ] && [ -r "$php_log" ]; then
+            printf 'PHP_ERROR_LOG=%s\n' "$php_log"
+            grep -E 'waste_trip_write_failure|waste trip database error:|waste unexpected:' "$php_log" 2>/dev/null | tail -n 80 || true
+          fi
+          find "$ACCOUNT_ROOT" -maxdepth 6 -type f \( -iname 'error_log' -o -iname '*error*.log' -o -iname '*php*.log' -o -path '*/erpv2/logs/*' \) -mmin -1440 -print 2>/dev/null | head -n 20 | while IFS= read -r log_file; do
+            [ -r "$log_file" ] || continue
+            [ "$log_file" = "$php_log" ] && continue
+            matches="$(grep -E 'waste_trip_write_failure|waste trip database error:|waste unexpected:' "$log_file" 2>/dev/null | tail -n 40 || true)"
+            if [ -n "$matches" ]; then
+              printf 'WASTE_ERROR_LOG=%s\n' "$log_file"
+              printf '%s\n' "$matches"
+            fi
+          done
+          echo 'WASTE_TRIPS_RUNTIME_DIAGNOSTIC_END'
+          REMOTE
+          grep -q '^WASTE_TRIPS_RUNTIME_DIAGNOSTIC_BEGIN$' waste_trips_runtime_diagnostic.txt
+          grep -q '^WASTE_TRIPS_RUNTIME_DIAGNOSTIC_END$' waste_trips_runtime_diagnostic.txt
+
+      - name: Upload bounded diagnostic evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-runtime-diagnostic-${{ github.sha }}
+          path: waste_trips_runtime_diagnostic.txt
+          retention-days: 14
+
+      - name: Cleanup local SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/waste_runtime_diag"

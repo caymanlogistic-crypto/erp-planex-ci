@@ -108,15 +108,40 @@ final class WasteTripService
 
     public static function createLegacyPrefill(PDO $pdo,int $legacyId,array $input,array $requestBusinessIds,array $sessionUser): int
     {
-        RegulatedDataScopeService::assertCanCreate('waste_trip');
-        if($legacyId<WasteTripLegacySourceService::MIN_LEGACY_ID)throw new RuntimeException('Legacy ID должен быть больше 243.');
-        $data=self::normalizeInput($input);$errors=self::validateInput($data);$requestBusinessIds=array_values(array_unique(array_map('strval',$requestBusinessIds)));if($requestBusinessIds===[])$errors[]='Добавьте хотя бы одну существующую заявку ФЭО.';if($errors!==[])throw new RuntimeException(implode(' ',$errors));self::assertEntitiesVisible($pdo,$data,$sessionUser);
-        $pdo->beginTransaction();
+        $stage='access_scope';
         try{
+            RegulatedDataScopeService::assertCanCreate('waste_trip');
+            if($legacyId<WasteTripLegacySourceService::MIN_LEGACY_ID)throw new RuntimeException('Legacy ID должен быть больше 243.');
+            $stage='input_validation';
+            $data=self::normalizeInput($input);$errors=self::validateInput($data);$requestBusinessIds=array_values(array_unique(array_map('strval',$requestBusinessIds)));if($requestBusinessIds===[])$errors[]='Добавьте хотя бы одну существующую заявку ФЭО.';if($errors!==[])throw new RuntimeException(implode(' ',$errors));
+            $stage='entity_visibility';self::assertEntitiesVisible($pdo,$data,$sessionUser);
+            $stage='transaction_begin';$pdo->beginTransaction();
+            $stage='duplicate_lock';
             $dup=$pdo->prepare("SELECT id,business_id,source_system,legacy_flight_id FROM waste_trips WHERE business_id=? OR (legacy_flight_id=? AND source_system IN ('legacy_flights','legacy_prefill')) FOR UPDATE");$dup->execute([$legacyId,$legacyId]);$existing=$dup->fetch(PDO::FETCH_ASSOC);
             if($existing!==false){$sameLegacy=(int)($existing['legacy_flight_id']??0)===$legacyId&&in_array((string)($existing['source_system']??''),[WasteTripLegacySourceService::SOURCE_SYSTEM,WasteTripLegacySourceService::PREFILL_SOURCE_SYSTEM],true);if($sameLegacy)throw new RuntimeException('Этот legacy-рейс уже перенесён в ERP.');throw new RuntimeException('ERP-номер #'.$legacyId.' уже занят другим рейсом. Создание из старой БД заблокировано.');}
-            $resolved=self::resolveRequestsForClaim($pdo,$requestBusinessIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'));$tripId=self::insertTrip($pdo,$legacyId,$data,WasteTripLegacySourceService::PREFILL_SOURCE_SYSTEM,$legacyId,$sessionUser);self::insertRequestLinks($pdo,$tripId,$resolved);self::logAudit($pdo,$tripId,'create',null,['business_id'=>$legacyId,'source_system'=>WasteTripLegacySourceService::PREFILL_SOURCE_SYSTEM,'legacy_flight_id'=>$legacyId,'trip'=>$data,'request_ids'=>$requestBusinessIds],$sessionUser);$pdo->commit();return$legacyId;
-        }catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
+            $stage='request_resolution';$resolved=self::resolveRequestsForClaim($pdo,$requestBusinessIds,false);
+            $stage='claim_check';self::assertNoActiveClaims($pdo,array_column($resolved,'id'));
+            $stage='trip_insert';$tripId=self::insertTrip($pdo,$legacyId,$data,WasteTripLegacySourceService::PREFILL_SOURCE_SYSTEM,$legacyId,$sessionUser);
+            $stage='request_links';self::insertRequestLinks($pdo,$tripId,$resolved);
+            $stage='audit';self::logAudit($pdo,$tripId,'create',null,['business_id'=>$legacyId,'source_system'=>WasteTripLegacySourceService::PREFILL_SOURCE_SYSTEM,'legacy_flight_id'=>$legacyId,'trip'=>$data,'request_ids'=>$requestBusinessIds],$sessionUser);
+            $stage='commit';$pdo->commit();return$legacyId;
+        }catch(Throwable $e){
+            if($pdo->inTransaction())$pdo->rollBack();
+            if($e instanceof RuntimeException&&!$e instanceof \PDOException)throw$e;
+            throw self::legacyWriteFailure($legacyId,$stage,$e);
+        }
+    }
+
+    private static function legacyWriteFailure(int $legacyId,string $stage,Throwable $e): RuntimeException
+    {
+        try{$suffix=strtoupper(bin2hex(random_bytes(3)));}catch(Throwable){$suffix=strtoupper(substr(hash('sha256',uniqid('',true)),0,6));}
+        $incident='WT-'.gmdate('ymd-His').'-'.$suffix;
+        $sqlState=$e instanceof \PDOException?(string)($e->errorInfo[0]??$e->getCode()):'';
+        $driverCode=$e instanceof \PDOException?(string)($e->errorInfo[1]??''):'';
+        $message=preg_replace('/[\r\n\t]+/',' ',trim($e->getMessage()))??'';
+        if(function_exists('mb_substr'))$message=mb_substr($message,0,1200,'UTF-8');else$message=substr($message,0,1200);
+        error_log('waste_trip_write_failure incident='.$incident.' operation=legacy_prefill legacy_id='.$legacyId.' stage='.$stage.' exception='.get_class($e).' sqlstate='.$sqlState.' driver='.$driverCode.' message='.$message);
+        return new RuntimeException('Создание рейса не выполнено. Код ошибки: '.$incident.'.',0,$e);
     }
 
     public static function materializeLinked(PDO $pdo,int $legacyId,array $operationalInput,array $sourceState,array $sessionUser): int

@@ -92,16 +92,21 @@ final class WasteTripController
 
     public function materializeSubmit(string $legacyId): void
     {
-        requireRole(['company_owner','senior_logist','logist']); $context=$this->tenantContext(true); $id=(int)$legacyId;
+        requireRole(['company_owner','senior_logist','logist']); $stage='tenant_context'; $context=$this->tenantContext(true); $id=(int)$legacyId;
         try {
+            $stage='schema';
             $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
+            $stage='request_parse';
             $parsed=WasteTripService::parseRequestIds((string)($_POST['request_ids']??'')); $this->assertParsedRequests($parsed);
+            $stage='manager_resolution';
             $input=$this->resolveResponsibleInput($context,$_POST);
+            $stage='legacy_connection';
             $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if (!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена.');
+            $stage='legacy_write';
             $businessId=WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,$id,$input,$parsed['ids'],$context['sessionUser']);
             $_SESSION['waste_trip_success']='Legacy-рейс #'.$id.' создан как ERP-рейс #'.$businessId.'.';
         } catch(Throwable $e) {
-            $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Создание рейса не выполнено.');
+            $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Создание рейса не выполнено.',['operation'=>'legacy_materialize','legacy_id'=>$id,'stage'=>$stage]);
             $_SESSION['waste_trip_old']=$_POST+['_legacy_id'=>$id];
         }
         header('Location: '.app_url('/company/trips/departures/legacy')); exit;
@@ -166,8 +171,25 @@ final class WasteTripController
     { if(!WasteTripService::schemaReady($pdo))throw new RuntimeException('Схема Waste Trips не готова: требуется завершённый controlled cutover migration 130.'); }
     private function assertParsedRequests(array $parsed): void
     { if(($parsed['invalid']??[])!==[])throw new RuntimeException('Некорректные номера заявок: '.implode(', ',$parsed['invalid']).'.'); if(($parsed['duplicates']??[])!==[])throw new RuntimeException('В списке повторяются заявки: '.implode(', ',$parsed['duplicates']).'.'); }
-    private function publicError(Throwable $e,string $fallback): string
-    { if($e instanceof \PDOException){error_log('waste trip database error: '.$e->getMessage());return$fallback;} if($e instanceof RuntimeException)return$e->getMessage(); error_log('waste unexpected: '.$e->getMessage());return$fallback; }
+    private function publicError(Throwable $e,string $fallback,array $context=[]): string
+    {
+        if($e instanceof RuntimeException&&!$e instanceof \PDOException)return$e->getMessage();
+        $incident=$this->wasteIncidentId();
+        $operation=preg_replace('/[^a-z0-9_-]+/i','_',trim((string)($context['operation']??'request')))?:'request';
+        $stage=preg_replace('/[^a-z0-9_-]+/i','_',trim((string)($context['stage']??'unknown')))?:'unknown';
+        $legacyId=max(0,(int)($context['legacy_id']??0));
+        $sqlState=$e instanceof \PDOException?(string)($e->errorInfo[0]??$e->getCode()):'';
+        $driverCode=$e instanceof \PDOException?(string)($e->errorInfo[1]??''):'';
+        $message=preg_replace('/[\r\n\t]+/',' ',trim($e->getMessage()))??'';
+        if(function_exists('mb_substr'))$message=mb_substr($message,0,1200,'UTF-8');else$message=substr($message,0,1200);
+        error_log('waste_trip_write_failure incident='.$incident.' operation='.$operation.' legacy_id='.$legacyId.' stage='.$stage.' exception='.get_class($e).' sqlstate='.$sqlState.' driver='.$driverCode.' message='.$message);
+        return $fallback.' Код ошибки: '.$incident.'.';
+    }
+    private function wasteIncidentId(): string
+    {
+        try{$suffix=strtoupper(bin2hex(random_bytes(3)));}catch(Throwable){$suffix=strtoupper(substr(hash('sha256',uniqid('',true)),0,6));}
+        return 'WT-'.gmdate('ymd-His').'-'.$suffix;
+    }
     private function loadOptions(PDO $pdo,array $sessionUser,PDO $central,int $companyId): array
     {
         $clients=LinearRouteService::fetchVisibleClients($pdo,$sessionUser); $executors=LinearRouteService::fetchVisibleRouteExecutors($pdo,$sessionUser);
