@@ -15,6 +15,7 @@ concurrency:
 
 env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  REPOSITORY_OWNER: ${{ github.repository_owner }}
 
 jobs:
   authorize-and-dispatch:
@@ -35,7 +36,7 @@ jobs:
           canonical_sha="$(python3 -c 'import json; print(json.load(open("/tmp/canonical.json"))["commit"]["sha"])')"
           [[ "$canonical_sha" =~ ^[0-9a-f]{40}$ ]]
           test "$GITHUB_SHA" = "$canonical_sha"
-          case "$GITHUB_ACTOR" in planexerp|chatgpt-codex-connector|chatgpt-connector) ;; *) exit 1;; esac
+          case "$GITHUB_ACTOR" in "$REPOSITORY_OWNER"|chatgpt-codex-connector|chatgpt-connector) ;; *) exit 1;; esac
           curl -fsS "${auth[@]}" "$base/actions/workflows/ci.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/erp-ci-runs.json
           curl -fsS "${auth[@]}" "$base/actions/workflows/document_generator_regression.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/document-generator-runs.json
           curl -fsS "${auth[@]}" "$base/actions/workflows/document_generator_google_vehicle_regression.yml/runs?branch=$CANONICAL_BRANCH&event=push&status=success&per_page=100" -o /tmp/document-generator-google-vehicle-runs.json
