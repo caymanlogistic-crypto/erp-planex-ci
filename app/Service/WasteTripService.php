@@ -128,19 +128,18 @@ final class WasteTripService
         }catch(Throwable $e){
             if($pdo->inTransaction())$pdo->rollBack();
             if($e instanceof RuntimeException&&!$e instanceof \PDOException)throw$e;
-            throw self::legacyWriteFailure($legacyId,$stage,$e);
+            throw self::legacyWriteFailure($legacyId,$stage,$e,$sessionUser);
         }
     }
 
-    private static function legacyWriteFailure(int $legacyId,string $stage,Throwable $e): RuntimeException
+    private static function legacyWriteFailure(int $legacyId,string $stage,Throwable $e,array $sessionUser): RuntimeException
     {
-        try{$suffix=strtoupper(bin2hex(random_bytes(3)));}catch(Throwable){$suffix=strtoupper(substr(hash('sha256',uniqid('',true)),0,6));}
-        $incident='WT-'.gmdate('ymd-His').'-'.$suffix;
-        $sqlState=$e instanceof \PDOException?(string)($e->errorInfo[0]??$e->getCode()):'';
-        $driverCode=$e instanceof \PDOException?(string)($e->errorInfo[1]??''):'';
-        $message=preg_replace('/[\r\n\t]+/',' ',trim($e->getMessage()))??'';
-        if(function_exists('mb_substr'))$message=mb_substr($message,0,1200,'UTF-8');else$message=substr($message,0,1200);
-        error_log('waste_trip_write_failure incident='.$incident.' operation=legacy_prefill legacy_id='.$legacyId.' stage='.$stage.' exception='.get_class($e).' sqlstate='.$sqlState.' driver='.$driverCode.' message='.$message);
+        $incident=WasteTripIncidentService::record($e,[
+            'operation'=>'legacy_prefill','legacy_id'=>$legacyId,'stage'=>$stage,
+            'actor_user_id'=>(int)($sessionUser['user_id']??0),
+            'actor_membership_id'=>AccessControlService::effectiveMembershipId()??0,
+            'actor_role'=>(string)($sessionUser['role_code']??''),
+        ]);
         return new RuntimeException('Создание рейса не выполнено. Код ошибки: '.$incident.'.',0,$e);
     }
 

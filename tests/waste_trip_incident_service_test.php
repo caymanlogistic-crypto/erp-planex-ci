@@ -1,0 +1,28 @@
+<?php
+declare(strict_types=1);
+$root=dirname(__DIR__);
+require_once $root.'/bootstrap/app.php';
+require_once $root.'/app/Service/WasteTripIncidentService.php';
+use App\Service\WasteTripIncidentService;
+$fail=static function(string$m):never{fwrite(STDERR,"FAIL: {$m}\n");exit(1);};
+$ok=static function(bool$v,string$m)use($fail):void{if(!$v)$fail($m);};
+$path=sys_get_temp_dir().'/waste_trip_incidents_'.getmypid().'.jsonl';
+@unlink($path);
+putenv('PLANEX_WASTE_TRIP_INCIDENT_LOG='.$path);
+putenv('PLANEX_DEPLOYED_SHA='.str_repeat('a',40));
+$e=new PDOException('SQLSTATE[23000]: Integrity constraint violation: synthetic fixture');
+$e->errorInfo=['23000',1452,'fixture'];
+$id=WasteTripIncidentService::record($e,['operation'=>'legacy_prefill','legacy_id'=>246,'stage'=>'trip_insert','company_id'=>25,'actor_user_id'=>1,'actor_membership_id'=>2,'actor_role'=>'company_owner','request_method'=>'POST','request_path'=>'/erpv2/company/trips/departures/legacy/246?x=not_logged']);
+$ok((bool)preg_match('/^WT-[0-9]{6}-[0-9]{6}-[A-F0-9]{6}$/',$id),'incident id');
+$lines=file($path,FILE_IGNORE_NEW_LINES|FILE_SKIP_EMPTY_LINES)?:[];
+$ok(count($lines)===1,'one durable record');
+$r=json_decode($lines[0],true,512,JSON_THROW_ON_ERROR);
+foreach(['incident_id','timestamp_utc','operation','legacy_id','stage','exception_class','sqlstate','driver_code','message','deployed_sha'] as$key)$ok(array_key_exists($key,$r),'missing '.$key);
+$ok($r['incident_id']===$id&&$r['operation']==='legacy_prefill'&&$r['legacy_id']===246&&$r['stage']==='trip_insert','identity fields');
+$ok($r['sqlstate']==='23000'&&(string)$r['driver_code']==='1452','pdo metadata');
+$ok($r['deployed_sha']===str_repeat('a',40),'deployed sha');
+$ok($r['request_path']==='/erpv2/company/trips/departures/legacy/246','query string omitted');
+$ok(!str_contains($lines[0],'not_logged'),'query data must not be present');
+$ok(strlen((string)$r['message'])<=800,'message bound');
+@unlink($path);putenv('PLANEX_WASTE_TRIP_INCIDENT_LOG');putenv('PLANEX_DEPLOYED_SHA');
+echo "WASTE_TRIP_INCIDENT_SERVICE=PASS\n";

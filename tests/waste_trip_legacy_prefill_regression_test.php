@@ -16,6 +16,7 @@ use App\Service\WasteTripService;
 
 $root=dirname(__DIR__);
 require_once $root.'/app/Service/WasteTripLegacySourceService.php';
+require_once $root.'/app/Service/WasteTripIncidentService.php';
 require_once $root.'/app/Service/WasteTripService.php';
 require_once $root.'/app/Service/WasteTripLegacySyncService.php';
 require_once $root.'/app/Service/WasteTripLegacyPrefillService.php';
@@ -77,14 +78,15 @@ $prefillAfter=$pdo->query('SELECT comment,planned_start_date,planned_finish_date
 // legacy write and expose only a safe incident id while logging the exact failing stage.
 $pdo->exec("INSERT INTO feo_requests VALUES(5,'1005',1.5,'S','A','W','1');INSERT INTO feo_placement_current VALUES('1005')");
 $legacy->exec("INSERT INTO flights VALUES(302,'1005','diagnostic rollback','2026-09-08',NULL,NULL,NULL,NULL)");
-$diagnosticLog=sys_get_temp_dir().'/waste_trip_write_diag_'.getmypid().'.log';@unlink($diagnosticLog);$previousErrorLog=(string)ini_get('error_log');ini_set('error_log',$diagnosticLog);
+$diagnosticLog=sys_get_temp_dir().'/waste_trip_write_diag_'.getmypid().'.jsonl';@unlink($diagnosticLog);putenv('PLANEX_WASTE_TRIP_INCIDENT_LOG='.$diagnosticLog);
 $pdo->exec('DROP TABLE waste_trip_audit_log');$incidentMessage='';
-try{WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,302,$ops+['planned_start_mode'=>'exact','planned_start_date'=>'2026-09-08'],['1005'],$userCtx);}catch(RuntimeException $e){$incidentMessage=$e->getMessage();}finally{ini_set('error_log',$previousErrorLog);}
+try{WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,302,$ops+['planned_start_mode'=>'exact','planned_start_date'=>'2026-09-08'],['1005'],$userCtx);}catch(RuntimeException $e){$incidentMessage=$e->getMessage();}finally{putenv('PLANEX_WASTE_TRIP_INCIDENT_LOG');}
 $ok((bool)preg_match('/^Создание рейса не выполнено\. Код ошибки: WT-[0-9]{6}-[0-9]{6}-[A-F0-9]{6}\.$/',$incidentMessage),'PDO failure must expose only a safe Waste Trips incident id');
 $ok((int)$pdo->query('SELECT COUNT(*) FROM waste_trips WHERE business_id=302')->fetchColumn()===0,'failed diagnostic legacy write must roll back trip insert');
 $ok((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id WHERE wt.business_id=302")->fetchColumn()===0,'failed diagnostic legacy write must roll back request links');
-$diagnosticText=is_file($diagnosticLog)?(string)file_get_contents($diagnosticLog):'';@unlink($diagnosticLog);
-$ok(str_contains($diagnosticText,'waste_trip_write_failure incident=WT-')&&str_contains($diagnosticText,'operation=legacy_prefill legacy_id=302 stage=audit')&&str_contains($diagnosticText,'exception=PDOException')&&str_contains($diagnosticText,'sqlstate='),'diagnostic log must preserve incident, exact write stage and PDO metadata');
+$diagnosticText=is_file($diagnosticLog)?trim((string)file_get_contents($diagnosticLog)):'';@unlink($diagnosticLog);
+$diagnosticRow=$diagnosticText!==''?json_decode($diagnosticText,true,512,JSON_THROW_ON_ERROR):[];
+$ok(($diagnosticRow['operation']??null)==='legacy_prefill'&&(int)($diagnosticRow['legacy_id']??0)===302&&($diagnosticRow['stage']??null)==='audit'&&($diagnosticRow['exception_class']??null)==='PDOException'&&array_key_exists('sqlstate',$diagnosticRow),'diagnostic log must preserve incident, exact write stage and PDO metadata');
 
 echo "WASTE_TRIP_LEGACY_PREFILL_MYSQL=PASS\n";
 }finally{if($fixedMode){$cleanup=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);cleanCompanyPoolDatabase($cleanup);}else{$admin->exec("DROP DATABASE IF EXISTS `{$db}`;DROP DATABASE IF EXISTS `{$legacyDb}`");}}
