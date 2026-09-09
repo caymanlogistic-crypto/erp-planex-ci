@@ -145,7 +145,7 @@ jobs:
           if [ -z "$chosen" ]; then
             while IFS= read -r candidate; do
               if [ -r "$candidate" ] && grep -Fq "$MARKER" "$candidate" 2>/dev/null; then chosen="$candidate"; break; fi
-            done < <(find "$ACCOUNT_ROOT" -maxdepth 5 -type f -mmin -5 -size -20M -print 2>/dev/null | head -n 80)
+            done < <(find "$ACCOUNT_ROOT" -maxdepth 8 -type f               \( -iname 'error_log' -o -iname '*.log' -o -iname '*error*' \)               -mmin -5 -size -50M -print 2>/dev/null | head -n 120)
           fi
           if [ -n "$chosen" ]; then
             printf 'WEB_ERROR_LOG_RESOLVED=%s\n' "$chosen"

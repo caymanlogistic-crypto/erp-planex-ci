@@ -31,6 +31,7 @@ foreach ([
     'WEB_INI_LOADED=',
     'erpv2_waste_log_probe_${GITHUB_RUN_ID}',
     'WT-260909-173446-777F2F',
+    "-iname '*.log'",
     "function_exists('opcache_reset') && opcache_reset()",
     'https://plan-ex.ru/erpv2/${PROBE_NAME}?token=${TOKEN}',
     'LOGIN_HTTP_AFTER_WEB_OPCACHE_RESET=',
