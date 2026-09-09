@@ -4,11 +4,12 @@ Production PHP/MySQL multi-tenant ERP for PLANEX logistics operations.
 
 ## Canonical coordinates
 
-- Repository: `planexerp/erp-planex`
+- Repository: `caymanlogistic-crypto/erp-planex-ci`
 - Canonical branch: `chatgpt/production-stabilization-20260802`
 - Production runtime: `https://plan-ex.ru/erpv2/`
 - Legacy `/erp`: separate and never modified
-- Old `caymanlogistic-crypto/erp-planex`: read-only insurance
+- Previous canonical `planexerp/erp-planex`: read-only insurance; do not push
+- Old `caymanlogistic-crypto/erp-planex`: read-only insurance; not canonical
 
 ## Start here
 

@@ -12,10 +12,11 @@
 
 ## Режим работы
 
-- Repository: `planexerp/erp-planex`
+- Repository: `caymanlogistic-crypto/erp-planex-ci`
 - Canonical/default branch: `chatgpt/production-stabilization-20260802`
 - Agent-driven deploy control-plane introduced at: `6e28266556e3342eff1a697633b2c7041f091c56`
-- Old `caymanlogistic-crypto/erp-planex`: read-only insurance
+- Previous canonical `planexerp/erp-planex`: read-only insurance; do not push
+- Old `caymanlogistic-crypto/erp-planex`: read-only insurance; not canonical
 - Production `/erpv2`: agent-driven exact-SHA deploy allowed only through guarded deploy-ref flow after canonical CI PASS
 - Deploy request ref: `deploy/erpv2-agent`
 - Legacy `/erp`: never touch

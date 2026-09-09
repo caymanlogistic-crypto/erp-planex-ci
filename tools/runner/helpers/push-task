@@ -8,7 +8,7 @@ import sys
 ROOT = Path.home() / "erp-planex-test"
 
 CANONICAL = "chatgpt/production-stabilization-20260802"
-WRITE_REMOTE = "git@github.com:planexerp/erp-planex.git"
+WRITE_REMOTE = "git@github.com:caymanlogistic-crypto/erp-planex-ci.git"
 
 
 def read_env(path):
@@ -164,7 +164,7 @@ print("=== VERIFY CURRENT CANONICAL ===")
 fetch_env = runtime_env()
 
 fetch_env["GIT_SSH_COMMAND"] = (
-    f"ssh -i {ROOT}/.ssh/github_runner "
+    f"ssh -i {ROOT}/.ssh/github_cayman_ci "
     "-o IdentitiesOnly=yes "
     "-o BatchMode=yes"
 )
@@ -209,7 +209,7 @@ if remote_canonical != start_head:
 push_env = runtime_env()
 
 push_env["GIT_SSH_COMMAND"] = (
-    f"ssh -i {ROOT}/.ssh/github_push "
+    f"ssh -i {ROOT}/.ssh/github_cayman_ci "
     "-o IdentitiesOnly=yes "
     "-o BatchMode=yes"
 )

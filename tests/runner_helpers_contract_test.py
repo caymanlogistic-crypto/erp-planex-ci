@@ -18,8 +18,8 @@ spec.loader.exec_module(m)
 
 manifest = m.load_manifest()
 assert manifest["schema"] == "erp-planex-runner-helpers/v2"
-assert manifest["version"] == "2026-09-05.2"
-assert manifest["canonical_repository"] == "planexerp/erp-planex"
+assert manifest["version"] == "2026-09-09.1"
+assert manifest["canonical_repository"] == "caymanlogistic-crypto/erp-planex-ci"
 assert manifest["canonical_branch"] == m.CANONICAL
 assert tuple(row["name"] for row in manifest["entries"]) == m.EXPECTED_NAMES
 assert tuple(row["name"] for row in m.managed_rows(manifest)) == m.EXPECTED_HELPERS
@@ -185,7 +185,7 @@ with tempfile.TemporaryDirectory(prefix="runner-git-contract-") as td:
         second = git(repo, "rev-parse", "HEAD").stdout.strip()
         git(repo, "push", "origin", m.CANONICAL)
         rb_manifest, rb_payloads = m.validate_rollback_target(repo, first)
-        assert rb_manifest["version"] == "2026-09-05.2"
+        assert rb_manifest["version"] == "2026-09-09.1"
         assert set(rb_payloads) == set(m.EXPECTED_HELPERS)
 
         # Force a remote-drift result after the fresh fetch without mutating the remote.

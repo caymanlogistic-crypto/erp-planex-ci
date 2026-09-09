@@ -20,7 +20,7 @@ env:
 
 jobs:
   sync:
-    if: ${{ github.repository == 'planexerp/erp-planex' }}
+    if: ${{ github.repository == 'caymanlogistic-crypto/erp-planex-ci' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:

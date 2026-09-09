@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "snapshot_date": "2026-08-23",
-  "repository": "planexerp/erp-planex",
+  "repository": "caymanlogistic-crypto/erp-planex-ci",
   "required_registry_keys": ["module","screen","route","service","business_rule","data_entity","integration","test_contract"],
   "required_governance_fields": ["canonical_id","semantic_class","truth_status","machine_ownership_id"],
   "health_metrics": ["missing_governance_fields","duplicate_canonical_id","unresolved_machine_ownership","critical_needs_reverify","critical_stale_verified","critical_legacy_only_verified","missing_critical_evidence"],
