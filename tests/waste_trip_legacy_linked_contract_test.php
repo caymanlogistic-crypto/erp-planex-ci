@@ -4,6 +4,12 @@ $root=dirname(__DIR__);$files=[
 'app/Service/WasteTripLegacySourceService.php','app/Service/WasteTripLegacySyncService.php','app/Service/WasteTripLegacyPrefillService.php','app/Service/WasteTripService.php','app/Http/Controllers/Company/WasteTripController.php','app/Http/Routes/company_linear_trips.php','app/View/pages/company_waste_trip_legacy.php','app/View/pages/company_waste_trips.php','app/View/partials/company_waste_trip_modal_edit.php'];
 $fail=static function(string$m):never{fwrite(STDERR,"FAIL: {$m}\n");exit(1);};foreach($files as$f)if(!is_file($root.'/'.$f))$fail('missing '.$f);
 $all='';foreach($files as$f)$all.="\n".(string)file_get_contents($root.'/'.$f);
+$routes=(string)file_get_contents($root.'/app/Http/Routes/company_linear_trips.php');
+$routeBootstrapEnd=strpos($routes,'$controller =');if($routeBootstrapEnd===false)$fail('route bootstrap boundary missing');
+$routeBootstrap=substr($routes,0,$routeBootstrapEnd);
+if(!function_exists('base_path')){function base_path(string $path=''):string{return dirname(__DIR__).($path!==''?'/'.$path:'');}}
+try{eval('?>'.$routeBootstrap);}catch(Throwable $e){$fail('route bootstrap execution failed: '.$e->getMessage());}
+if(!class_exists(\App\Service\WasteTripLegacyPrefillService::class,false))$fail('route bootstrap must load WasteTripLegacyPrefillService before controller dispatch');
 foreach(['WasteTripLegacyImportService','importIndex','importSubmit','mapLegacyStatus','company_waste_trip_import.php','CRITICAL LEGACY NAMESPACE VIOLATION','assertNamespaceSafe','assertBusinessIdWithinHighWater']as$needle)if(str_contains($all,$needle))$fail('obsolete legacy namespace/import architecture remains: '.$needle);
 $service=(string)file_get_contents($root.'/app/Service/WasteTripService.php');foreach(['FOR UPDATE','legacy_high_water_at_cutover','assertLegacyOwnedMutationAbsent','syncLegacyOwnedState','DELETE FROM waste_trip_requests','last_issued_business_id','legacy_last_checked_at IS NULL','ERP_BUSINESS_ID_START = 400','LEGACY_RANGE_WARNING_THRESHOLD = 390','Legacy ID range approaching ERP range start (400)','hasFlightId($legacyPdo,$next)',"source_system='legacy_flights'"]as$n)if(!str_contains($service,$n))$fail('service contract missing '.$n);
 if(str_contains($service,'max((int)$state[\'legacy_high_water_at_cutover\']'))$fail('allocator must not use cutover high-water as runtime floor/ceiling');
