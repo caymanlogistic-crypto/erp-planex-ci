@@ -170,6 +170,7 @@ $ok('search paste normalizes using the same FEO mapping', str_contains($js, "blo
 $ok('block search result opens block detail without redundant status column', !str_contains($js, 'statusHtml(block.status)') && str_contains($js, 'data-placement-search-block-id'));
 $ok('disabled block delete uses danger styling and active blocks have no delete action', str_contains($js, "else html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Включить блок</button><button type=\"button\" class=\"btn btn-danger\" data-placement-delete>Удалить блок</button>`") && str_contains($js, "if(b.status==='applied')html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Отключить блок</button>`"));
 $ok('block table has no actions column', !str_contains($view, '<th>Действия</th>'));
+$ok('block table renders date and status as separate columns', str_contains($view, '<th style="width:11%">Дата</th><th style="width:7%">Статус</th>') && !str_contains($view, 'Дата / статус') && str_contains($view, 'colspan="8"'));
 
 $manifest = json_decode($read($root . '/.github/agent_db_migration_request.json'), true);
 $workflow = $read($root . '/.github/workflows/feo_123_production_migration.yml');
