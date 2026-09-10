@@ -61,7 +61,7 @@ try {
     $pdo->exec("CREATE TABLE status_blocks (id INT NOT NULL PRIMARY KEY, zayavki_ids TEXT NULL, status_type VARCHAR(32) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $legacy=$pdo->prepare('INSERT INTO feo(zayavka_id,mass_netto) VALUES(?,?)');
     foreach ([['100001',1.0],['100002',2.5],['100005',5.0],['999999',9.0]] as [$id,$mass]) $legacy->execute([$id,$mass]);
-    $pdo->exec("INSERT INTO status_blocks(id,zayavki_ids,status_type) VALUES (105,'999999','dostupno'),(106,'100001,100002,100005','dostupno')");
+    $pdo->exec("INSERT INTO status_blocks(id,zayavki_ids,status_type) VALUES (109,'999999','dostupno'),(110,'100001,100002,100005','dostupno')");
 
     $pdo->exec("INSERT INTO feo_request_cost_blocks(id,pricing_type,snapshot_request_count,snapshot_total_mass_kg,total_cost) VALUES(1,'agreement',1,999.000,100.00)");
     $pdo->exec("INSERT INTO feo_request_cost_block_requests(block_id,zayavka_id,snapshot_mass_kg,position_no) VALUES(1,'100001',999.000,1)");

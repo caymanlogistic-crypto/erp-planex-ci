@@ -442,7 +442,7 @@ function renderLegacyParity(){
   const onlyLegacy=legacyParity.only_legacy_summary||{};
   const signed=v=>Number(v||0)>0?'+'+fmt(v):fmt(v);
   let html=`<div class="feo-placement-parity-grid"><div class="feo-placement-parity-card"><span>Количество доступных заявок</span><b>ERP ${Number(n.request_count||0)} · старая ${Number(l.request_count||0)} · Δ ${signed(d.request_count)}</b></div><div class="feo-placement-parity-card"><span>Общий вес доступных заявок</span><b>ERP ${fmt(n.total_mass_kg)} кг · старая ${fmt(l.total_mass_kg)} кг · Δ ${signed(d.total_mass_kg)} кг</b></div><div class="feo-placement-parity-card"><span>Требуют внимания</span><b>${Number(legacyParity.mismatch_count||0)} заявок · только ERP ${Number(onlyNew.request_count||0)} · только старая ${Number(onlyLegacy.request_count||0)} · вес отличается ${Number(legacyParity.mass_mismatch_count||0)}</b></div></div>`;
-  html+=`<div class="feo-placement-parity-section-note">${esc(legacyParity.legacy_filter||'Старая база: все блоки с ID > 105.')}</div>`;
+  html+=`<div class="feo-placement-parity-section-note">${esc(legacyParity.legacy_filter||'Старая база: все блоки с ID > 109.')}</div>`;
   html+=paritySection('Есть только в новой ERP',legacyParity.only_new,`${Number(onlyNew.request_count||0)} заявок · ${fmt(onlyNew.total_mass_kg)} кг`);
   html+=paritySection('Есть только в старой базе',legacyParity.only_legacy,`${Number(onlyLegacy.request_count||0)} заявок · ${fmt(onlyLegacy.total_mass_kg)} кг`);
   html+=paritySection('Одинаковый ID, но отличается вес',legacyParity.mass_mismatches,`${Number(legacyParity.mass_mismatch_count||0)} заявок`);
