@@ -158,7 +158,7 @@ $fmtMass = static function ($value): string {
   <div class="feo-placement-block-search-results is-hidden" data-placement-block-search-results></div>
   <div class="table-scroll">
     <table class="table feo-placement-table">
-      <thead><tr><th style="width:7%">ID</th><th style="width:18%">Название</th><th style="width:10%">Тип</th><th style="width:8%">Заявок</th><th style="width:10%">Масса, кг</th><th style="width:29%">Источник</th><th style="width:18%">Дата / статус</th></tr></thead>
+      <thead><tr><th style="width:7%">ID</th><th style="width:18%">Название</th><th style="width:10%">Тип</th><th style="width:8%">Заявок</th><th style="width:10%">Масса, кг</th><th style="width:29%">Источник</th><th style="width:11%">Дата</th><th style="width:7%">Статус</th></tr></thead>
       <tbody>
       <?php foreach ($blocks as $block): ?>
         <?php
@@ -179,10 +179,11 @@ $fmtMass = static function ($value): string {
           <td><?= (int)($block['request_count'] ?? 0) ?></td>
           <td><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></td>
           <td<?= $sourceType === 'manual' ? ' class="feo-placement-source-cell"' : '' ?> title="<?= e($sourceText) ?>"><?= e($sourceText) ?></td>
-          <td><?= e($fmtDateTime($block['created_at'] ?? null)) ?> · <span class="feo-placement-status <?= $statusApplied ? 'feo-placement-status--applied' : 'feo-placement-status--disabled' ?>"><?= $statusApplied ? 'Применяется' : 'Отключён' ?></span></td>
+          <td><?= e($fmtDateTime($block['created_at'] ?? null)) ?></td>
+          <td><span class="feo-placement-status <?= $statusApplied ? 'feo-placement-status--applied' : 'feo-placement-status--disabled' ?>"><?= $statusApplied ? 'Применяется' : 'Отключён' ?></span></td>
         </tr>
       <?php endforeach; ?>
-      <?php if (!$blocks): ?><tr><td colspan="7" class="text-muted">Блоки ещё не созданы.</td></tr><?php endif; ?>
+      <?php if (!$blocks): ?><tr><td colspan="8" class="text-muted">Блоки ещё не созданы.</td></tr><?php endif; ?>
       </tbody>
     </table>
   </div>
