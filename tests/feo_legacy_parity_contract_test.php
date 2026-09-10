@@ -54,8 +54,8 @@ $layout = (string)file_get_contents($root . '/app/View/layouts/main.php');
 
 $ok(str_contains($source, "TABLE_NAME='feo'"), 'legacy source is fixed to legacy feo table');
 $ok(str_contains($source, 'LEGACY_AVAILABLE_BLOCK_MIN_ID = 109'), 'legacy comparison boundary is explicit');
-$ok(str_contains($source, 'FROM `status_blocks`') && str_contains($source, 'WHERE id > ?'), 'legacy pool comes only from status blocks newer than 109');
-$ok(!str_contains($source, "status_type = 'dostupno'"), 'legacy block selection must not add an unrequested status_type filter');
+$ok(str_contains($source, 'FROM `status_blocks`') && str_contains($source, "WHERE id > ? AND status_type = 'dostupno'"), 'legacy pool comes only from available status blocks newer than 109');
+$ok(str_contains($source, "status_type = 'dostupno'"), 'legacy block selection matches the old-system available-request filter');
 $ok(str_contains($source, "['zayavka_id', 'Заявка, ID', 'Заявка ID', 'request_id']"), 'legacy request ID requires explicit semantic column aliases');
 $ok(!str_contains($source, "['id',") && !str_contains($source, "'idColumn'=>'id'"), 'generic legacy id must never be guessed as request ID');
 $ok(str_contains($source, 'WasteTripLegacySourceService::connectionFromEnvironment()'), 'existing legacy connection contract is reused');
@@ -74,6 +74,6 @@ $ok(str_contains($js, 'Есть только в новой ERP') && str_contains
 $ok(str_contains($js, 'parityBlockText') && str_contains($js, 'Блок / история'), 'popup shows block placement/history');
 $ok(str_contains($js, 'legacy_block_ids') && str_contains($js, 'Старая база:'), 'popup shows legacy block IDs for mismatches');
 $ok(str_contains($js, 'legacy_filter'), 'popup explains legacy ID > 109 filter');
-$ok(str_contains($js, 'Старая база: все блоки с ID > 109.') && !str_contains($js, 'только доступные блоки с ID > 109'), 'popup fallback copy matches the literal OWNER rule without a status-type implication');
+$ok(str_contains($js, 'Старая база: только доступные блоки (dostupno) с ID > 109.'), 'popup fallback copy matches the old-system available-request filter');
 
 printf("FEO_LEGACY_PARITY_CONTRACT=PASS checks=%d\n", $pass);

@@ -51,22 +51,20 @@ try {
 
     $state = (new FeoLegacyParityService())->state($pdo, $pdo);
     $ok($state['available'] === true, 'legacy parity must be available against supported schema');
-    $ok($state['mismatch_count'] === 4, 'request-level mismatch count must include three unique IDs and one mass mismatch');
+    $ok($state['mismatch_count'] === 3, 'request-level mismatch count must include two unique IDs and one mass mismatch');
     $ok(array_column($state['only_new'], 'zayavka_id') === ['100003'], 'ERP-only ID');
-    $ok(array_column($state['only_legacy'], 'zayavka_id') === ['100004','888888'], 'all block IDs above 109 participate regardless of status_type');
+    $ok(array_column($state['only_legacy'], 'zayavka_id') === ['100004'], 'only available legacy blocks participate');
     $ok(array_column($state['mass_mismatches'], 'zayavka_id') === ['100002'], 'mass mismatch ID');
     $ok(($state['only_new'][0]['blocks'][0]['id'] ?? 0) === 1, 'ERP-only request exposes placement block history');
     $ok(($state['mass_mismatches'][0]['source_block_id'] ?? 0) === 1, 'mass mismatch exposes current source block');
     $ok(($state['only_legacy'][0]['legacy_block_ids'] ?? []) === [110], 'legacy-only request exposes legacy available block');
     $ok(($state['mass_mismatches'][0]['legacy_block_ids'] ?? []) === [110], 'mass mismatch exposes legacy available block');
     $ok(!in_array('777777', array_column($state['only_legacy'], 'zayavka_id'), true), 'block id 109 is excluded by strict boundary');
-    $ok(in_array('888888', array_column($state['only_legacy'], 'zayavka_id'), true), 'block id 130 is included even when status_type is not dostupno');
-    $ok(($state['only_legacy'][1]['legacy_block_ids'] ?? []) === [130], 'legacy block id 130 is preserved in diagnostics');
-    $ok(abs((float)$state['delta']['total_mass_kg'] + 9500.0) < 0.001, 'aggregate weight delta is factual');
+    $ok(!in_array('888888', array_column($state['only_legacy'], 'zayavka_id'), true), 'non-available block is excluded even when its ID is above 109');
+    $ok(abs((float)$state['delta']['total_mass_kg'] + 1500.0) < 0.001, 'aggregate weight delta is factual');
 
     $pdo->exec('DELETE FROM feo');
     $pdo->exec("UPDATE status_blocks SET zayavki_ids='100001,100002,100003' WHERE id=110");
-    $pdo->exec("UPDATE status_blocks SET zayavki_ids='' WHERE id=130");
     foreach ([['100001',1.0],['100002',2.0],['100003',3.0]] as [$id,$mass]) $legacyInsert->execute([$id,$mass]);
     $equal = (new FeoLegacyParityService())->state($pdo, $pdo);
     $ok($equal['available'] === true && $equal['is_consistent'] === true && $equal['mismatch_count'] === 0, 'equal legacy and ERP pools pass');
