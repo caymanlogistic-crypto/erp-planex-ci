@@ -8,10 +8,13 @@ final class FinanceEmployeePaymentService
 {
     public const IDENTITY_TENANT_USER = 'TENANT_USER';
     public const IDENTITY_COMPANY_USER = 'COMPANY_USER';
+    public const IDENTITY_MEMBERSHIP = 'MEMBERSHIP';
 
     public static function fetchActiveEmployees(PDO $localPdo, PDO $centralPdo, int $companyId): array
     {
         $employees = [];
+        $knownMemberships = [];
+        $knownLogins = [];
 
         $ownerStmt = $centralPdo->prepare("SELECT id, full_name, login, role, status
                                              FROM company_users
@@ -20,14 +23,47 @@ final class FinanceEmployeePaymentService
         $ownerStmt->execute([$companyId]);
         foreach ($ownerStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $employees[] = self::directoryRow(self::IDENTITY_COMPANY_USER, $row, 'role');
+            $login = mb_strtolower(trim((string)($row['login'] ?? '')));
+            if ($login !== '') $knownLogins[$login] = true;
         }
 
-        $tenantStmt = $localPdo->query("SELECT id, full_name, login, role_code, status
+        $tenantStmt = $localPdo->query("SELECT id, membership_id, full_name, login, role_code, status
                                          FROM users
                                         WHERE status = 'active' AND deleted_at IS NULL
                                         ORDER BY full_name ASC, id ASC");
         foreach ($tenantStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $employees[] = self::directoryRow(self::IDENTITY_TENANT_USER, $row, 'role_code');
+            $membershipId = (int)($row['membership_id'] ?? 0);
+            if ($membershipId > 0) $knownMemberships[$membershipId] = true;
+            $login = mb_strtolower(trim((string)($row['login'] ?? '')));
+            if ($login !== '') $knownLogins[$login] = true;
+        }
+
+        $membershipStmt = $centralPdo->prepare(
+            "SELECT m.id AS membership_id, a.full_name, a.login, r.system_key AS role_code
+               FROM company_memberships m
+               JOIN user_accounts a ON a.id = m.account_id
+               JOIN company_roles r ON r.id = m.role_id AND r.company_id = m.company_id
+              WHERE m.company_id = ?
+                AND m.status = 'active'
+                AND a.status = 'active'
+              ORDER BY a.full_name ASC, m.id ASC"
+        );
+        $membershipStmt->execute([$companyId]);
+        foreach ($membershipStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $membershipId = (int)($row['membership_id'] ?? 0);
+            $login = mb_strtolower(trim((string)($row['login'] ?? '')));
+            if ($membershipId <= 0 || isset($knownMemberships[$membershipId]) || ($login !== '' && isset($knownLogins[$login]))) continue;
+            $employees[] = [
+                'ref' => self::makeEmployeeRef(self::IDENTITY_MEMBERSHIP, $membershipId),
+                'identity_type' => self::IDENTITY_MEMBERSHIP,
+                'identity_id' => $membershipId,
+                'id' => $membershipId,
+                'full_name' => (string)($row['full_name'] ?? ''),
+                'login' => (string)($row['login'] ?? ''),
+                'role_code' => (string)($row['role_code'] ?? ''),
+                'status' => 'active',
+            ];
         }
 
         usort($employees, static fn(array $a, array $b): int => [mb_strtolower($a['full_name']), $a['ref']] <=> [mb_strtolower($b['full_name']), $b['ref']]);
@@ -45,6 +81,23 @@ final class FinanceEmployeePaymentService
             $row = $stmt->fetch(PDO::FETCH_ASSOC);
             if (!$row) throw new \InvalidArgumentException('Сотрудник не найден или его аккаунт неактивен.');
             return self::directoryRow($type, $row, 'role');
+        }
+
+        if ($type === self::IDENTITY_MEMBERSHIP) {
+            $stmt = $centralPdo->prepare(
+                "SELECT m.id, a.full_name, a.login, r.system_key AS role_code, m.status
+                   FROM company_memberships m
+                   JOIN user_accounts a ON a.id = m.account_id
+                   JOIN company_roles r ON r.id = m.role_id AND r.company_id = m.company_id
+                  WHERE m.id = ?
+                    AND m.company_id = ?
+                    AND m.status = 'active'
+                    AND a.status = 'active'"
+            );
+            $stmt->execute([$id, $companyId]);
+            $row = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$row) throw new \InvalidArgumentException('Сотрудник не найден или его аккаунт неактивен.');
+            return self::directoryRow($type, $row, 'role_code');
         }
 
         $stmt = $localPdo->prepare("SELECT id, full_name, login, role_code, status
@@ -280,13 +333,13 @@ final class FinanceEmployeePaymentService
 
     public static function makeEmployeeRef(string $type,int $id):string
     {
-        if(!in_array($type,[self::IDENTITY_TENANT_USER,self::IDENTITY_COMPANY_USER],true)||$id<=0)throw new \InvalidArgumentException('Некорректный идентификатор сотрудника.');
+        if(!in_array($type,[self::IDENTITY_TENANT_USER,self::IDENTITY_COMPANY_USER,self::IDENTITY_MEMBERSHIP],true)||$id<=0)throw new \InvalidArgumentException('Некорректный идентификатор сотрудника.');
         return $type.':'.$id;
     }
 
     public static function parseEmployeeRef(string $ref):array
     {
-        if(!preg_match('/^(TENANT_USER|COMPANY_USER):(\d+)$/D',trim($ref),$m)||(int)$m[2]<=0)throw new \InvalidArgumentException('Выберите сотрудника.');
+        if(!preg_match('/^(TENANT_USER|COMPANY_USER|MEMBERSHIP):(\d+)$/D',trim($ref),$m)||(int)$m[2]<=0)throw new \InvalidArgumentException('Выберите сотрудника.');
         return [$m[1],(int)$m[2]];
     }
 
@@ -307,7 +360,7 @@ final class FinanceEmployeePaymentService
 
     private static function assertDirectoryEmployee(array $employee):void
     {
-        if(empty($employee['ref'])||empty($employee['full_name'])||!in_array($employee['identity_type']??'',[self::IDENTITY_TENANT_USER,self::IDENTITY_COMPANY_USER],true)||(int)($employee['identity_id']??0)<=0)throw new \InvalidArgumentException('Сотрудник не найден или его аккаунт неактивен.');
+        if(empty($employee['ref'])||empty($employee['full_name'])||!in_array($employee['identity_type']??'',[self::IDENTITY_TENANT_USER,self::IDENTITY_COMPANY_USER,self::IDENTITY_MEMBERSHIP],true)||(int)($employee['identity_id']??0)<=0)throw new \InvalidArgumentException('Сотрудник не найден или его аккаунт неактивен.');
     }
 
     private static function assertMovementType(string $movementType):void{if(!in_array($movementType,['PAYMENT','RETURN'],true))throw new \InvalidArgumentException('Тип операции должен быть PAYMENT или RETURN.');}

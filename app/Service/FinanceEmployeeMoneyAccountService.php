@@ -133,7 +133,7 @@ final class FinanceEmployeeMoneyAccountService
         $type = trim((string)($employee['identity_type'] ?? ''));
         $id = (int)($employee['identity_id'] ?? 0);
         $name = trim((string)($employee['full_name'] ?? ''));
-        if (!in_array($type, [FinanceEmployeePaymentService::IDENTITY_TENANT_USER, FinanceEmployeePaymentService::IDENTITY_COMPANY_USER], true)
+        if (!in_array($type, [FinanceEmployeePaymentService::IDENTITY_TENANT_USER, FinanceEmployeePaymentService::IDENTITY_COMPANY_USER, FinanceEmployeePaymentService::IDENTITY_MEMBERSHIP], true)
             || $id <= 0
             || $name === '') {
             throw new \InvalidArgumentException('Некорректный сотрудник для финансового счёта.');

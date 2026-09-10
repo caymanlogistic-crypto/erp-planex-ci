@@ -142,7 +142,7 @@ final class FinanceEmployeePersonalExpenseController
 
     private function parseEmployeeRef(string $ref): array
     {
-        if (!preg_match('/^(TENANT_USER|COMPANY_USER):(\d+)$/D', trim($ref), $m) || (int)$m[2] <= 0) {
+        if (!preg_match('/^(TENANT_USER|COMPANY_USER|MEMBERSHIP):(\d+)$/D', trim($ref), $m) || (int)$m[2] <= 0) {
             throw new \InvalidArgumentException('Выберите сотрудника.');
         }
         return [$m[1], (int)$m[2]];
