@@ -103,7 +103,10 @@ $activeDocumentChildren = static function (string $sidebarHtml): int {
     return count($matches[0] ?? []);
 };
 
-$ownerRoot = $sidebar($render('company_owner', '/company/document-generator'));
+$ownerRootHtml = $render('company_owner', '/company/document-generator');
+$ownerRoot = $sidebar($ownerRootHtml);
+$assert(str_contains($ownerRootHtml, '<main class="content content--wide-workspace">'), 'create page uses the standard wide workspace content layout');
+$assert(str_contains($ownerRootHtml, '<div class="workspace-shell-1690">'), 'create page uses the standard centered workspace shell');
 $assert(str_contains($ownerRoot, '<span class="nav-label">Генератор договоров</span>'), 'company_owner sees parent group');
 $assert($linkState($ownerRoot, '/company/document-generator', 'Создать документ') === true, 'root activates create child');
 $assert($linkState($ownerRoot, '/company/document-generator/history', 'История документов') === false, 'root does not activate history');
@@ -111,14 +114,20 @@ $assert($linkState($ownerRoot, '/company/document-generator/templates', 'Шаб�
 $assert($parentOpen($ownerRoot), 'parent group is open on root');
 $assert($activeDocumentChildren($ownerRoot) === 1, 'root has exactly one active document-generator child');
 
-$ownerHistory = $sidebar($render('company_owner', '/company/document-generator/history'));
+$ownerHistoryHtml = $render('company_owner', '/company/document-generator/history');
+$ownerHistory = $sidebar($ownerHistoryHtml);
+$assert(str_contains($ownerHistoryHtml, '<main class="content content--wide-workspace">'), 'history page uses the standard wide workspace content layout');
+$assert(str_contains($ownerHistoryHtml, '<div class="workspace-shell-1690">'), 'history page uses the standard centered workspace shell');
 $assert($linkState($ownerHistory, '/company/document-generator', 'Создать документ') === false, 'history does not activate create');
 $assert($linkState($ownerHistory, '/company/document-generator/history', 'История документов') === true, 'history activates history child');
 $assert($linkState($ownerHistory, '/company/document-generator/templates', 'Шаблоны договоров') === false, 'history does not activate templates');
 $assert($parentOpen($ownerHistory), 'parent group is open on history');
 $assert($activeDocumentChildren($ownerHistory) === 1, 'history has exactly one active child');
 
-$ownerTemplates = $sidebar($render('company_owner', '/company/document-generator/templates'));
+$ownerTemplatesHtml = $render('company_owner', '/company/document-generator/templates');
+$ownerTemplates = $sidebar($ownerTemplatesHtml);
+$assert(str_contains($ownerTemplatesHtml, '<main class="content content--wide-workspace">'), 'templates page uses the standard wide workspace content layout');
+$assert(str_contains($ownerTemplatesHtml, '<div class="workspace-shell-1690">'), 'templates page uses the standard centered workspace shell');
 $assert($linkState($ownerTemplates, '/company/document-generator', 'Создать документ') === false, 'templates does not activate create');
 $assert($linkState($ownerTemplates, '/company/document-generator/history', 'История документов') === false, 'templates does not activate history');
 $assert($linkState($ownerTemplates, '/company/document-generator/templates', 'Шаблоны договоров') === true, 'templates activates templates child');
