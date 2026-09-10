@@ -35,7 +35,8 @@ $fmtMass = static function ($value): string {
 .feo-placement-source-cell{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-overflow:clip!important}
 .feo-placement-table tbody tr[data-placement-block-id]{cursor:pointer}
 .feo-placement-table tbody tr[data-placement-block-id]:hover{background:var(--accent-bg)}
-.feo-placement-table tbody tr[data-placement-block-type="exclusion"],.feo-placement-table tbody tr[data-placement-block-type="exclusion"]:hover{background:var(--danger-bg)}
+.feo-placement-table tbody tr[data-placement-block-type="exclusion"]{background:var(--danger-bg)}
+.feo-placement-table tbody tr[data-placement-block-type="exclusion"]:hover,.feo-placement-table tbody tr[data-placement-block-type="exclusion"]:hover>td{background:var(--badge-danger-bg,var(--danger-field))!important}
 .feo-placement-status{font-weight:700}
 .feo-placement-status--applied{color:var(--success,#2f7d32)}
 .feo-placement-status--disabled{color:var(--danger,#b42318)}
