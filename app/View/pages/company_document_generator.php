@@ -10,7 +10,7 @@ $showContract=$selectedDocumentType==='vehicle_lease_crew';
 $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 ?>
 <style>
-.docgen-form-width{max-width:980px}
+.docgen-form-width{max-width:1200px}
 .docgen-request-input{min-height:92px;max-height:160px;resize:vertical}
 .docgen-form-actions{justify-content:flex-end}
 .docgen-preview-modal{width:min(700px,calc(100vw - 32px));max-width:700px}
@@ -43,7 +43,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
     <input type="hidden" name="_csrf" value="<?= e($csrfToken) ?>">
 
     <div class="panel mb-3">
-        <div class="panel-head"><strong>Основное</strong></div>
+        <div class="panel-head"><h3 class="panel-head-title">Основное</h3></div>
         <div class="panel-body">
             <div class="form-grid-2">
                 <div class="field">
@@ -74,7 +74,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
     </div>
 
     <div class="panel mb-3 <?= $showContract ? '' : 'is-hidden' ?>" data-docgen-section="vehicle_lease_crew">
-        <div class="panel-head"><strong>Параметры договора</strong></div>
+        <div class="panel-head"><h3 class="panel-head-title">Параметры договора</h3></div>
         <div class="panel-body">
             <div class="form-grid-2">
                 <div class="field"><label class="field-label">Дата договора</label><input type="date" name="contract_date" value="<?= e($old['contract_date']) ?>" class="field-input"></div>
@@ -89,7 +89,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
     </div>
 
     <div class="panel mb-3 <?= $showWaybill ? '' : 'is-hidden' ?>" data-docgen-section="waybill_driver_assignment">
-        <div class="panel-head"><strong>Параметры путевого листа</strong></div>
+        <div class="panel-head"><h3 class="panel-head-title">Параметры путевого листа</h3></div>
         <div class="panel-body">
             <div class="form-grid-2">
                 <div class="field"><label class="field-label">Номер путевого листа</label><input type="text" name="waybill_number" value="<?= e($old['waybill_number']) ?>" class="field-input"></div>
@@ -268,7 +268,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
         panel.className='panel';
         const head=document.createElement('div');
         head.className='panel-head';
-        head.innerHTML='<strong>Результат проверки</strong>';
+        head.innerHTML='<h3 class="panel-head-title">Результат проверки</h3>';
         const panelBody=document.createElement('div');
         panelBody.className='panel-body';
         Array.from(body.childNodes).forEach((node)=>panelBody.appendChild(node.cloneNode(true)));

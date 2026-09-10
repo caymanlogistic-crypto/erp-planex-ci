@@ -25,7 +25,7 @@ $bootstrapWarnings = \App\Service\DocumentGeneratorService::builtInTemplateWarni
 <?php endforeach; ?>
 
 <div class="panel mb-4">
-    <div class="panel-head"><strong>Загрузить шаблон договора / новую версию</strong></div>
+    <div class="panel-head"><h3 class="panel-head-title">Загрузить шаблон договора / новую версию</h3></div>
     <div class="panel-body">
         <form method="post" enctype="multipart/form-data" action="<?= app_url('/company/document-generator/templates/upload') ?>">
             <input type="hidden" name="_csrf" value="<?= e($csrfToken) ?>">
@@ -52,41 +52,45 @@ $bootstrapWarnings = \App\Service\DocumentGeneratorService::builtInTemplateWarni
 </div>
 
 <?php foreach ($templates as $template): ?>
-<div class="panel mb-4">
-    <div class="panel-head">
-        <strong><?= e((string)$template['name']) ?></strong>
-        <span class="text-muted"><?= e($documentTypes[(string)$template['document_type']] ?? (string)$template['document_type']) ?></span>
-    </div>
-    <div class="panel-body">
-        <div class="form-actions mb-3">
+<?php $templateVersions = $versionsByTemplate[(int)$template['id']] ?? []; ?>
+<div class="table-card table-card--standard mb-4">
+    <div class="table-toolbar">
+        <div class="found-label">
+            <b><?= e((string)$template['name']) ?></b>
+            <span><?= e($documentTypes[(string)$template['document_type']] ?? (string)$template['document_type']) ?> · <?= count($templateVersions) ?> версий</span>
+        </div>
+        <div class="toolbar-right">
             <form method="post" action="<?= app_url('/company/document-generator/templates/' . (int)$template['id'] . '/status') ?>">
                 <input type="hidden" name="_csrf" value="<?= e($csrfToken) ?>">
                 <input type="hidden" name="active" value="<?= ($template['status'] ?? '') === 'active' ? '0' : '1' ?>">
                 <button class="btn btn-ghost" type="submit"><?= ($template['status'] ?? '') === 'active' ? 'Деактивировать' : 'Активировать' ?></button>
             </form>
         </div>
-        <div class="table-scroll">
-            <table class="table">
-                <thead><tr><th>Версия</th><th>Файл</th><th>SHA-256</th><th>Создана</th><th></th></tr></thead>
-                <tbody>
-                <?php foreach ($versionsByTemplate[(int)$template['id']] ?? [] as $version): ?>
-                    <tr>
-                        <td>v<?= (int)$version['version_no'] ?> <?= (int)$template['active_version_id'] === (int)$version['id'] ? '· активная' : '' ?></td>
-                        <td><?= e((string)$version['original_name']) ?></td>
-                        <td><code><?= e(substr((string)$version['sha256'], 0, 16)) ?>…</code></td>
-                        <td><?= e((string)$version['created_at']) ?></td>
-                        <td class="text-right"><a class="btn btn-ghost" href="<?= app_url('/company/document-generator/templates/' . (int)$template['id'] . '/versions/' . (int)$version['id'] . '/download') ?>">Скачать</a></td>
-                    </tr>
-                <?php endforeach; ?>
-                </tbody>
-            </table>
-        </div>
+    </div>
+    <div class="table-scroll">
+        <table class="table">
+            <thead><tr><th>Версия</th><th>Файл</th><th>SHA-256</th><th>Создана</th><th></th></tr></thead>
+            <tbody>
+            <?php foreach ($templateVersions as $version): ?>
+                <tr>
+                    <td>v<?= (int)$version['version_no'] ?> <?= (int)$template['active_version_id'] === (int)$version['id'] ? '· активная' : '' ?></td>
+                    <td><?= e((string)$version['original_name']) ?></td>
+                    <td><code><?= e(substr((string)$version['sha256'], 0, 16)) ?>…</code></td>
+                    <td><?= e((string)$version['created_at']) ?></td>
+                    <td class="text-right"><a class="btn btn-ghost" href="<?= app_url('/company/document-generator/templates/' . (int)$template['id'] . '/versions/' . (int)$version['id'] . '/download') ?>">Скачать</a></td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+    </div>
+    <div class="table-footer">
+        <span class="footer-label">Версий: <b><?= count($templateVersions) ?></b><?= ($template['status'] ?? '') === 'active' ? ' · шаблон активен' : ' · шаблон неактивен' ?></span>
     </div>
 </div>
 <?php endforeach; ?>
 
 <div class="panel">
-    <div class="panel-head"><strong>Доступные переменные</strong></div>
+    <div class="panel-head"><h3 class="panel-head-title">Доступные переменные</h3></div>
     <div class="panel-body">
         <div class="text-muted mb-2">Юридический текст хранится только в DOCX. Переменные можно вставлять в Word; строка с <code>{{request.*}}</code> является повторяемой.</div>
         <div class="table-scroll"><table class="table"><tbody>
