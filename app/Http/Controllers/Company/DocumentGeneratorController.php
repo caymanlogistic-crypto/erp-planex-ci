@@ -7,6 +7,7 @@ use App\Service\AccessControlService;
 use App\Service\DocumentGeneratorService;
 use App\Service\DocumentService;
 use App\Service\DocumentTemplateService;
+use App\Service\UserSyncService;
 use PDO;
 use RuntimeException;
 use Throwable;
@@ -293,11 +294,21 @@ final class DocumentGeneratorController
         if (($company['status'] ?? '') !== 'active') throw new RuntimeException('Генератор договоров недоступен для неактивной компании.');
         $localDb = new Database(companyDatabaseConfig($this->config, $company));
         $localPdo = $localDb->connection();
-        $userId = DocumentGeneratorService::resolveActorTenantUserId(
-            $localPdo,
-            AccessControlService::effectiveMembershipId(),
-            (int)($_SESSION['user_id'] ?? 0)
-        );
+        $membershipId = AccessControlService::effectiveMembershipId();
+        if (($membershipId ?? 0) > 0) {
+            $userId = (new UserSyncService($this->config))->resolveMembershipTenantUserId(
+                $pdo,
+                $localPdo,
+                $companyId,
+                (int)$membershipId
+            );
+        } else {
+            $userId = DocumentGeneratorService::resolveActorTenantUserId(
+                $localPdo,
+                null,
+                (int)($_SESSION['user_id'] ?? 0)
+            );
+        }
         return [$company, $localPdo, $companyId, $userId, (string)($_SESSION['role_code'] ?? '')];
     }
 
