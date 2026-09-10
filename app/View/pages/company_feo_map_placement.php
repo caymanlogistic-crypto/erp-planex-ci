@@ -20,12 +20,14 @@ $fmtMass = static function ($value): string {
 .feo-placement-hide-disabled{display:flex;align-items:center;gap:6px;min-height:30px;white-space:nowrap;font-size:11px;color:var(--text);cursor:pointer}
 .feo-placement-hide-disabled input[type="checkbox"]{width:15px;height:15px;margin:0;accent-color:var(--accent)}
 .feo-placement-table-card:has([data-placement-hide-disabled]:checked) .feo-placement-table tbody tr[data-placement-block-status="disabled"]{display:none}
-.feo-placement-toolbar .feo-placement-block-search-input{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden}
-.feo-placement-block-search-results{padding:8px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
+.feo-placement-toolbar .feo-placement-block-search-input{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden;line-height:calc(var(--toolbar-h) - 2px);padding:0 9px}
+.feo-placement-block-search-results{padding:8px 0 0;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-placement-block-search-results.is-hidden{display:none}
-.feo-placement-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px}
-.feo-placement-search-table{width:100%;table-layout:fixed;min-width:0!important}
-.feo-placement-search-table th,.feo-placement-search-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feo-placement-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px;padding:0 8px}
+.feo-placement-search-table{width:100%;table-layout:auto;min-width:0!important;margin:0}
+.feo-placement-search-table th,.feo-placement-search-table td{vertical-align:middle}
+.feo-placement-search-col--request,.feo-placement-search-col--date,.feo-placement-search-col--type{width:1%;white-space:nowrap}
+.feo-placement-search-col--block{width:auto;white-space:normal;overflow-wrap:anywhere;word-break:normal}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]{cursor:pointer}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]:hover{background:var(--accent-bg)}
 .feo-placement-table{width:100%;table-layout:fixed;min-width:0!important}

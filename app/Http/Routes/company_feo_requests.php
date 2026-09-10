@@ -66,7 +66,7 @@ $feoPlacementMemberships = static function (\PDO $pdo, array $ids, bool $activeO
     foreach (array_chunk($ids, 800) as $chunk) {
         if ($chunk === []) continue;
         $marks = implode(',', array_fill(0, count($chunk), '?'));
-        $sql = "SELECT br.zayavka_id,b.id block_id,b.name,b.block_type,b.status
+        $sql = "SELECT br.zayavka_id,b.id block_id,b.name,b.block_type,b.status,b.created_at
                   FROM feo_placement_block_requests br
                   JOIN feo_placement_blocks b ON b.id=br.block_id
                  WHERE br.zayavka_id IN ({$marks})";
@@ -81,6 +81,7 @@ $feoPlacementMemberships = static function (\PDO $pdo, array $ids, bool $activeO
                 'name'=>(string)($row['name'] ?? ''),
                 'block_type'=>(string)$row['block_type'],
                 'status'=>(string)$row['status'],
+                'created_at'=>(string)($row['created_at'] ?? ''),
             ];
         }
     }

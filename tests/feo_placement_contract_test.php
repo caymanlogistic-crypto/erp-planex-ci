@@ -38,7 +38,7 @@ $ok(
 $ok(
     'map-placement search desktop width overrides generic 200px toolbar search and is tripled',
     str_contains($view, '.feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0}')
-    && str_contains($view, '.feo-placement-toolbar .feo-placement-block-search-input{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden}')
+    && str_contains($view, '.feo-placement-toolbar .feo-placement-block-search-input{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden;line-height:calc(var(--toolbar-h) - 2px);padding:0 9px}')
 );
 $ok(
     'map-placement search remains responsive without page overflow',
@@ -110,6 +110,11 @@ $ok(
     && str_contains($route, '$memberships = $feoPlacementMemberships($pdo, $ids, false, true);')
 );
 $ok(
+    'search history exposes block creation timestamp as operation date',
+    str_contains($route, 'b.status,b.created_at')
+    && str_contains($route, "'created_at'=>(string)(\$row['created_at'] ?? '')")
+);
+$ok(
     'search result preserves each normalized requested id',
     str_contains($route, 'foreach ($ids as $id)')
     && str_contains($route, "'zayavka_id'=>\$id")
@@ -137,13 +142,28 @@ $ok(
 );
 $ok(
     'request id is rendered in every history row',
-    str_contains($js, '<td><b>${esc(item.zayavka_id)}</b></td>')
+    str_contains($js, '<td class="feo-placement-search-col--request"><b>${esc(item.zayavka_id)}</b></td>')
     && !str_contains($js, 'index===0?')
 );
+$ok(
+    'search results use exactly the four requested columns with block taking remaining width',
+    str_contains($js, '>ЗАЯВКА</th><th class="feo-placement-search-col--date">ДАТА ОПЕРАЦИИ</th><th class="feo-placement-search-col--block">БЛОК</th><th class="feo-placement-search-col--type">ТИП</th>')
+    && !str_contains($js, '>Статус блока</th>')
+    && !str_contains($js, '>Актуальный состав</th>')
+    && str_contains($view, '.feo-placement-search-col--request,.feo-placement-search-col--date,.feo-placement-search-col--type{width:1%;white-space:nowrap}')
+    && str_contains($view, '.feo-placement-search-col--block{width:auto;white-space:normal;overflow-wrap:anywhere;word-break:normal}')
+);
+$ok('search result table has no side or bottom padding', str_contains($view, '.feo-placement-block-search-results{padding:8px 0 0;'));
+$ok('search textarea content is vertically centered', str_contains($view, 'line-height:calc(var(--toolbar-h) - 2px);padding:0 9px'));
 $ok(
     'search explicitly shows missing registry and no-block states',
     str_contains($js, 'Нет в реестре ФЭО')
     && str_contains($js, 'Не входит ни в один блок')
+);
+$ok(
+    'block detail popup keeps upper summary and omits request listing table',
+    str_contains($js, '<div class="feo-placement-detail-meta">')
+    && !str_contains($js, '<div class="feo-placement-list"><table class="table">')
 );
 $ok(
     'existing block double-click behavior remains',

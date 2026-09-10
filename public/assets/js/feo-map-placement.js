@@ -354,7 +354,7 @@ async function openBlock(id){
       ? (reqs.map(r=>String(r.zayavka_id)).join(', ')||'—')
       : (b.source_filename||String(b.source_type||'').toUpperCase()||'—');
     q('[data-placement-detail-title]').textContent=`Блок #${b.id}${b.name?' · '+b.name:''}`;
-    if(body)body.innerHTML=`<div class="feo-placement-detail-meta"><div><span>Тип</span><b>${b.block_type==='addition'?'Добавление':'Исключение'}</b></div><div><span>Статус</span><b>${statusHtml(b.status)}</b></div><div><span>Состав</span><b>${b.request_count} заявок · ${fmt(b.total_mass_kg)} кг</b></div><div><span>Источник</span><b>${esc(sourceText)}</b></div></div><div class="feo-placement-list"><table class="table"><thead><tr><th style="width:34%">ID заявки</th><th style="width:28%">Масса, кг</th><th style="width:38%">Состояние</th></tr></thead><tbody>${reqs.map(r=>`<tr><td>${esc(r.zayavka_id)}</td><td>${fmt(r.mass_kg)}</td><td>${r.missing?'Не найдена в основном реестре':'OK'}</td></tr>`).join('')}</tbody></table></div>`;
+    if(body)body.innerHTML=`<div class="feo-placement-detail-meta"><div><span>Тип</span><b>${b.block_type==='addition'?'Добавление':'Исключение'}</b></div><div><span>Статус</span><b>${statusHtml(b.status)}</b></div><div><span>Состав</span><b>${b.request_count} заявок · ${fmt(b.total_mass_kg)} кг</b></div><div><span>Источник</span><b>${esc(sourceText)}</b></div></div>`;
     if(actions){
       let html='';
       if(b.source_file_key)html+=`<a class="btn btn-secondary" href="${base}/blocks/${b.id}/download">Скачать исходный файл</a>`;
@@ -476,6 +476,12 @@ function clearBlockSearch(){
     blockSearchResults.innerHTML='';
   }
 }
+function formatBlockOperationDate(value){
+  const raw=String(value||'').trim();
+  if(!raw)return '—';
+  const m=raw.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  return m?`${m[3]}.${m[2]}.${m[1]} ${m[4]}:${m[5]}`:raw;
+}
 function renderBlockSearch(data){
   if(!blockSearchResults)return;
   const results=Array.isArray(data.results)?data.results:[];
@@ -483,20 +489,16 @@ function renderBlockSearch(data){
   results.forEach(item=>{
     const blocks=Array.isArray(item.blocks)?item.blocks:[];
     if(blocks.length){
-      const currentState=!item.exists_in_feo
-        ? 'Нет в реестре ФЭО'
-        : item.is_current
-          ? '<span class="feo-placement-status feo-placement-status--applied">В актуальном составе</span>'
-          : 'Не в актуальном составе';
       blocks.forEach(block=>{
-        rows.push(`<tr data-placement-search-block-id="${block.id}"><td><b>${esc(item.zayavka_id)}</b></td><td>#${block.id}${block.name?' · '+esc(block.name):''}</td><td>${block.block_type==='addition'?'Добавление':'Исключение'}</td><td>${statusHtml(block.status)}</td><td>${currentState}</td></tr>`);
+        rows.push(`<tr data-placement-search-block-id="${block.id}"><td class="feo-placement-search-col--request"><b>${esc(item.zayavka_id)}</b></td><td class="feo-placement-search-col--date">${esc(formatBlockOperationDate(block.created_at))}</td><td class="feo-placement-search-col--block">#${block.id}${block.name?' · '+esc(block.name):''}</td><td class="feo-placement-search-col--type">${block.block_type==='addition'?'Добавление':'Исключение'}</td></tr>`);
       });
     }else{
-      rows.push(`<tr><td><b>${esc(item.zayavka_id)}</b></td><td>Не входит ни в один блок</td><td>—</td><td>—</td><td>${item.exists_in_feo?(item.is_current?'В актуальном составе':'Не в актуальном составе'):'Нет в реестре ФЭО'}</td></tr>`);
+      const blockText=item.exists_in_feo?'Не входит ни в один блок':'Нет в реестре ФЭО · не входит ни в один блок';
+      rows.push(`<tr><td class="feo-placement-search-col--request"><b>${esc(item.zayavka_id)}</b></td><td class="feo-placement-search-col--date">—</td><td class="feo-placement-search-col--block">${blockText}</td><td class="feo-placement-search-col--type">—</td></tr>`);
     }
   });
   const duplicateNote=Array.isArray(data.duplicates)&&data.duplicates.length?` Повторы во вводе удалены: ${esc(data.duplicates.join(', '))}.`:'';
-  blockSearchResults.innerHTML=`<div class="feo-placement-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной клик по строке откроет блок.</div><table class="table feo-placement-search-table"><thead><tr><th style="width:14%">Заявка</th><th style="width:32%">Блок</th><th style="width:16%">Тип</th><th style="width:18%">Статус блока</th><th style="width:20%">Актуальный состав</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  blockSearchResults.innerHTML=`<div class="feo-placement-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной клик по строке откроет блок.</div><table class="table feo-placement-search-table"><thead><tr><th class="feo-placement-search-col--request">ЗАЯВКА</th><th class="feo-placement-search-col--date">ДАТА ОПЕРАЦИИ</th><th class="feo-placement-search-col--block">БЛОК</th><th class="feo-placement-search-col--type">ТИП</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
   blockSearchResults.classList.remove('is-hidden');
   qa('[data-placement-search-block-id]',blockSearchResults).forEach(row=>row.addEventListener('dblclick',()=>openBlock(row.dataset.placementSearchBlockId)));
 }
