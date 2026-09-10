@@ -12,7 +12,7 @@ use Throwable;
 final class FeoLegacyParityService
 {
     private const MASS_TOLERANCE_KG = 0.0005;
-    private const LEGACY_AVAILABLE_BLOCK_MIN_ID = 128;
+    private const LEGACY_AVAILABLE_BLOCK_MIN_ID = 105;
 
     /** @var array<string,array<string,mixed>> */
     private static array $requestCache = [];

@@ -53,8 +53,8 @@ $nav = (string)file_get_contents($root . '/app/Service/NavigationCounterService.
 $layout = (string)file_get_contents($root . '/app/View/layouts/main.php');
 
 $ok(str_contains($source, "TABLE_NAME='feo'"), 'legacy source is fixed to legacy feo table');
-$ok(str_contains($source, 'LEGACY_AVAILABLE_BLOCK_MIN_ID = 128'), 'legacy comparison boundary is explicit');
-$ok(str_contains($source, 'FROM `status_blocks`') && str_contains($source, 'WHERE id > ?'), 'legacy pool comes only from status blocks newer than 128');
+$ok(str_contains($source, 'LEGACY_AVAILABLE_BLOCK_MIN_ID = 105'), 'legacy comparison boundary is explicit');
+$ok(str_contains($source, 'FROM `status_blocks`') && str_contains($source, 'WHERE id > ?'), 'legacy pool comes only from status blocks newer than 105');
 $ok(!str_contains($source, "status_type = 'dostupno'"), 'legacy block selection must not add an unrequested status_type filter');
 $ok(str_contains($source, "['zayavka_id', 'Заявка, ID', 'Заявка ID', 'request_id']"), 'legacy request ID requires explicit semantic column aliases');
 $ok(!str_contains($source, "['id',") && !str_contains($source, "'idColumn'=>'id'"), 'generic legacy id must never be guessed as request ID');
@@ -73,7 +73,7 @@ $ok(str_contains($js, 'renderLegacyParity') && str_contains($js, "openModal('feo
 $ok(str_contains($js, 'Есть только в новой ERP') && str_contains($js, 'Есть только в старой базе') && str_contains($js, 'Одинаковый ID, но отличается вес'), 'popup has all discrepancy sections');
 $ok(str_contains($js, 'parityBlockText') && str_contains($js, 'Блок / история'), 'popup shows block placement/history');
 $ok(str_contains($js, 'legacy_block_ids') && str_contains($js, 'Старая база:'), 'popup shows legacy block IDs for mismatches');
-$ok(str_contains($js, 'legacy_filter'), 'popup explains legacy ID > 128 filter');
-$ok(str_contains($js, 'Старая база: все блоки с ID > 128.') && !str_contains($js, 'только доступные блоки с ID > 128'), 'popup fallback copy matches the literal OWNER rule without a status-type implication');
+$ok(str_contains($js, 'legacy_filter'), 'popup explains legacy ID > 105 filter');
+$ok(str_contains($js, 'Старая база: все блоки с ID > 105.') && !str_contains($js, 'только доступные блоки с ID > 105'), 'popup fallback copy matches the literal OWNER rule without a status-type implication');
 
 printf("FEO_LEGACY_PARITY_CONTRACT=PASS checks=%d\n", $pass);
