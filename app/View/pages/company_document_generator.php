@@ -10,12 +10,10 @@ $showContract=$selectedDocumentType==='vehicle_lease_crew';
 $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 ?>
 <style>
-.docgen-form-width{max-width:1200px}
 .docgen-request-input{min-height:92px;max-height:160px;resize:vertical}
 .docgen-form-actions{justify-content:flex-end}
 .docgen-preview-modal{width:min(700px,calc(100vw - 32px));max-width:700px}
 .docgen-error-list{margin:0;padding-left:20px}
-@media(max-width:900px){.docgen-form-width{max-width:none}}
 </style>
 <div class="page-head">
     <div class="page-head-left">
@@ -30,7 +28,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
     </div>
 </div>
 
-<?php if ($formError): ?><div class="notice danger docgen-form-width"><?= e($formError) ?></div><?php endif; ?>
+<?php if ($formError): ?><div class="notice danger"><?= e($formError) ?></div><?php endif; ?>
 
 <?php if (!$company): ?>
 <div class="notice warn">Компания недоступна.</div>
@@ -39,7 +37,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 <?php elseif ($executors === []): ?>
 <div class="notice warn">Нет доступных активных Исполнителей рейса.</div>
 <?php else: ?>
-<form id="document-generator-form" class="docgen-form-width" method="post" action="<?= app_url('/company/document-generator/preview') ?>" data-docgen-form novalidate>
+<form id="document-generator-form" method="post" action="<?= app_url('/company/document-generator/preview') ?>" data-docgen-form novalidate>
     <input type="hidden" name="_csrf" value="<?= e($csrfToken) ?>">
 
     <div class="panel mb-3">

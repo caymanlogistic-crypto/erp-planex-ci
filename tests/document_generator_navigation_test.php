@@ -107,6 +107,7 @@ $ownerRootHtml = $render('company_owner', '/company/document-generator');
 $ownerRoot = $sidebar($ownerRootHtml);
 $assert(str_contains($ownerRootHtml, '<main class="content content--wide-workspace">'), 'create page uses the standard wide workspace content layout');
 $assert(str_contains($ownerRootHtml, '<div class="workspace-shell-1690">'), 'create page uses the standard centered workspace shell');
+$assert(!str_contains($ownerRootHtml, 'docgen-form-width'), 'create page does not impose a custom narrow form width inside the standard workspace');
 $assert(str_contains($ownerRoot, '<span class="nav-label">Генератор договоров</span>'), 'company_owner sees parent group');
 $assert($linkState($ownerRoot, '/company/document-generator', 'Создать документ') === true, 'root activates create child');
 $assert($linkState($ownerRoot, '/company/document-generator/history', 'История документов') === false, 'root does not activate history');
