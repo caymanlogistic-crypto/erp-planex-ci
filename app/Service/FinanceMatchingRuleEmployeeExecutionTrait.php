@@ -28,7 +28,7 @@ trait FinanceMatchingRuleEmployeeExecutionTrait
         if ($bankTxId <= 0 || $employeeId <= 0 || $employeeName === '' || $cfu === null || $dds === null) {
             throw new \RuntimeException('Правило взаиморасчёта с сотрудником заполнено не полностью.');
         }
-        if (!in_array($employeeType, [FinanceEmployeePaymentService::IDENTITY_TENANT_USER, FinanceEmployeePaymentService::IDENTITY_COMPANY_USER], true)) {
+        if (!in_array($employeeType, [FinanceEmployeePaymentService::IDENTITY_TENANT_USER, FinanceEmployeePaymentService::IDENTITY_COMPANY_USER, FinanceEmployeePaymentService::IDENTITY_MEMBERSHIP], true)) {
             throw new \RuntimeException('Некорректный тип сотрудника в правиле.');
         }
 
