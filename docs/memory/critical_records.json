@@ -41,8 +41,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "28802950e1a17fc16c6605f375b23da101e780c8",
-      "evidence": "https://github.com/planexerp/erp-planex/blob/28802950e1a17fc16c6605f375b23da101e780c8/app/Service/FinanceMatchingRuleService.php",
+      "verified_sha": "42a91f90b327eb857df3b4f010a0bd45a5635afc",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/42a91f90b327eb857df3b4f010a0bd45a5635afc/app/Service/FinanceMatchingRuleValidationTrait.php",
       "owning_paths": ["app/Service/FinanceMatchingRule*.php", "app/Http/Controllers/Company/BankFinanceActions/**", "database/migrations-local/055_create_finance_matching_rules.sql", "tests/finance_*matching*"],
       "navigation": "active",
       "machine_ownership_id": "finance.matching"
