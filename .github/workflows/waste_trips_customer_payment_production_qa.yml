@@ -10,9 +10,10 @@ permissions:
   statuses: read
 
 env:
-  TARGET_SHA: abdbaa8c87f3e294edb42acf4265ba7f490e65a5
+  MIGRATION_SHA: abdbaa8c87f3e294edb42acf4265ba7f490e65a5
   LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
   DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
 
 jobs:
   production-qa:
@@ -31,18 +32,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git merge-base --is-ancestor "$TARGET_SHA" HEAD
+          git merge-base --is-ancestor "$MIGRATION_SHA" HEAD
           curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status" > /tmp/status.json
-          TARGET_SHA="$TARGET_SHA" python3 - <<'PY'
+            "$API_URL/repos/$REPOSITORY/commits/$MIGRATION_SHA/status" > /tmp/status.json
+          MIGRATION_SHA="$MIGRATION_SHA" python3 - <<'PY'
           import json,os
           data=json.load(open('/tmp/status.json'))
           latest={}
           for row in data.get('statuses',[]): latest.setdefault(row.get('context'),row)
-          for ctx in ('erpv2/deploy','erpv2/migration134'):
-              if latest.get(ctx,{}).get('state')!='success': raise SystemExit(f'{ctx} is not success')
-          print('WASTE_QA_DEPLOY_AND_MIGRATION_GATE=PASS')
-          print('WASTE_QA_TARGET_SHA='+os.environ['TARGET_SHA'])
+          if latest.get('erpv2/migration134',{}).get('state')!='success': raise SystemExit('erpv2/migration134 is not success')
+          print('WASTE_QA_MIGRATION_GATE=PASS')
+          print('WASTE_QA_MIGRATION_SHA='+os.environ['MIGRATION_SHA'])
           PY
 
       - uses: actions/setup-node@v4
@@ -74,12 +74,30 @@ jobs:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
         shell: bash
         run: |
           set -euo pipefail
           SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
           SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
-          test "$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")" = "$TARGET_SHA"
+          LIVE_SHA="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          [[ "$LIVE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch -q --no-tags origin "$LIVE_SHA"
+          git merge-base --is-ancestor "$MIGRATION_SHA" "$LIVE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$LIVE_SHA/status" > /tmp/live-status.json
+          LIVE_SHA="$LIVE_SHA" python3 - <<'PY'
+          import json,os
+          data=json.load(open('/tmp/live-status.json'))
+          latest={}
+          for row in data.get('statuses',[]): latest.setdefault(row.get('context'),row)
+          if latest.get('erpv2/deploy',{}).get('state')!='success': raise SystemExit('erpv2/deploy is not success on live SHA')
+          print('WASTE_QA_LIVE_DEPLOY_GATE=PASS')
+          print('WASTE_QA_LIVE_SHA='+os.environ['LIVE_SHA'])
+          PY
+          echo "QA_LIVE_SHA=$LIVE_SHA" >> "$GITHUB_ENV"
           REMOTE="/tmp/waste_payment_roles_qa_${GITHUB_RUN_ID}.php"
           "${SSH[@]}" "$SSH_USER@$SSH_HOST" "rm -f '/tmp/waste_payment_qa_session_34704666296.php' '/tmp/waste_payment_qa_session_34704801187.php' '$REMOTE'"
           "${SCP[@]}" .github/roles-access/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
@@ -152,7 +170,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: waste-trips-customer-payment-production-${{ env.TARGET_SHA }}
+          name: waste-trips-customer-payment-production-${{ env.MIGRATION_SHA }}
           path: artifacts/
           if-no-files-found: error
           retention-days: 30
