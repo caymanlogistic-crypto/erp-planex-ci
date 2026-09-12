@@ -66,6 +66,13 @@ def main() -> int:
         assert result["pass"] is True
         assert result["metrics"]["changed_owning_paths_after_verification"] == 0
 
+        # Rendered record owning_paths are compatibility metadata. Even though
+        # unrelated.txt changed, the machine owner still scopes this record to
+        # owned.txt, so the record remains valid.
+        result = check(repo, manifest(base, "unrelated.txt"), 0)
+        assert result["pass"] is True
+        assert result["metrics"]["changed_owning_paths_after_verification"] == 0
+
         (repo / "owned.txt").write_text("v2\n", encoding="utf-8")
         commit(repo, "owned drift")
         result = check(repo, manifest(base), 1)
@@ -73,10 +80,26 @@ def main() -> int:
         assert "changed_owning_paths_after_verification" in codes
         assert "critical_stale_verified" in codes
 
+        # Machine ownership remains authoritative even when rendered metadata
+        # points elsewhere: an owned.txt change must still invalidate.
+        result = check(repo, manifest(base, "unrelated.txt"), 1)
+        codes = {i["code"] for i in result["issues"]}
+        assert "changed_owning_paths_after_verification" in codes
+        assert "critical_stale_verified" in codes
+
         result = check(repo, manifest("OWNER-2026-08-23"), 1)
         assert "invalid_verified_sha" in {i["code"] for i in result["issues"]}
 
-        result = check(repo, manifest(base, "database/migrations-local/042–076"), 1)
+        current = run(["git", "rev-parse", "HEAD"], repo).stdout.strip()
+        # A fragile-looking rendered path is not machine syntax when the
+        # canonical Machine Ownership ID resolves to a safe scope.
+        result = check(repo, manifest(current, "database/migrations-local/042–076"), 0)
+        assert result["metrics"]["fragile_migration_scopes"] == 0
+
+        # Fragile ranges are still forbidden in the normative machine
+        # ownership vocabulary itself.
+        fragile_owners = {"owners":[{"id":"test.owner","owning_paths":["database/migrations-local/042–076"]}]}
+        result = check(repo, manifest(current), 1, owners=fragile_owners)
         assert "fragile_migration_scope" in {i["code"] for i in result["issues"]}
 
         dup = manifest(base)
