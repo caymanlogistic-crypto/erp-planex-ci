@@ -1,0 +1,212 @@
+name: MAX Messaging Production Acceptance
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact current canonical SHA already migrated and deployed to /erpv2'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  RESULT_DIR: max_messaging_acceptance_result
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+
+      - name: Validate exact canonical deployed SHA and prerequisite statuses
+        env:
+          SHA: ${{ inputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SHA"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/max_acceptance_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/max_acceptance_key" "$HOME/.ssh/known_hosts"
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/max_acceptance_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$marker" = "$SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/commits/$SHA/status" > /tmp/status.json
+          python3 - <<'PY'
+          import json
+          rows=json.load(open('/tmp/status.json')).get('statuses',[])
+          def latest(context):
+              return next((r for r in rows if r.get('context')==context),None)
+          for context in ('erpv2/deploy','erpv2/migration133'):
+              row=latest(context)
+              if not row or row.get('state')!='success': raise SystemExit(f'{context} success status missing')
+          print('MAX_ACCEPTANCE_DEPLOY_STATUS=PASS')
+          print('MAX_ACCEPTANCE_MIGRATION_STATUS=PASS')
+          PY
+          php -l scripts/max_messaging_verify_133.php
+          php -l .github/max-messaging/qa_identity.php
+          node --check .github/max-messaging/production_acceptance.js
+          echo "MAX_ACCEPTANCE_EXACT_SHA=$SHA"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Install Playwright Chromium
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Read back production migration 133
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="/tmp/max_verify133_acceptance_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/max_acceptance_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/max_messaging_verify_133.php "$SSH_USER@$SSH_HOST:$remote"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/max_acceptance_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$remote'" | tee max_133_production_readback.txt
+          grep -q '^MAX_133_READ_ONLY_OK$' max_133_production_readback.txt
+          python3 - <<'PY'
+          import json,re
+          m=re.search(r'^MAX_133_SNAPSHOT=(.+)$',open('max_133_production_readback.txt').read(),re.M)
+          if not m: raise SystemExit('MAX production migration snapshot missing')
+          d=json.loads(m.group(1)); schema=['max_bots_table','max_chats_table','max_message_logs_table','token_encrypted_column','webhook_secret_column','chat_id_column','message_source_column','chat_unique','chat_bot_fk','log_bot_fk','log_chat_fk']
+          if not d['tenants']: raise SystemExit('no active tenants in MAX migration readback')
+          for t in d['tenants']:
+              if t['migration_133']!=1 or not all(t[k]==1 for k in schema): raise SystemExit(f"company {t['company_id']}: MAX migration 133 incomplete")
+          print('MAX_PRODUCTION_MIGRATION_READBACK=PASS')
+          PY
+
+      - name: Provision minimal temporary MAX QA identities
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="/tmp/max_identity_${GITHUB_RUN_ID}.php"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/max_acceptance_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/max-messaging/qa_identity.php "$SSH_USER@$SSH_HOST:$remote"
+          provision="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/max_acceptance_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' create")"
+          cred="$(printf '%s\n' "$provision" | sed -n 's/^MAX_QA_CREDENTIALS_B64=//p')"
+          company="$(printf '%s\n' "$provision" | sed -n 's/^MAX_QA_COMPANY_ID=//p')"
+          test -n "$cred"
+          [[ "$company" =~ ^[1-9][0-9]*$ ]]
+          printf '%s\n' "$provision" | grep -q '^MAX_QA_IDENTITY_CREATED=YES$'
+          echo "::add-mask::$cred"
+          echo "MAX_QA_CREDENTIALS_B64=$cred" >> "$GITHUB_ENV"
+          echo "MAX_QA_COMPANY_ID=$company" >> "$GITHUB_ENV"
+          echo 'MAX_QA_IDENTITY_PROVISIONED=YES'
+
+      - name: Run exact-SHA authenticated MAX acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${MAX_QA_CREDENTIALS_B64:-}"
+          node .github/max-messaging/production_acceptance.js | tee max_messaging_production_acceptance.txt
+          for marker in \
+            MAX_REAL_OWNER_LOGIN=PASS \
+            MAX_SETTINGS_OWNER=200_PASS \
+            MAX_MESSAGES_OWNER=200_PASS \
+            MAX_REAL_MEMBER_LOGIN=PASS \
+            MAX_SETTINGS_MEMBER=403_PASS \
+            MAX_MESSAGES_MEMBER=403_PASS \
+            MAX_AUTHORIZATION_BOUNDARY=PASS \
+            MAX_PRODUCTION_FUNCTIONAL_ACCEPTANCE=PASS; do
+            grep -q "^${marker}$" max_messaging_production_acceptance.txt
+          done
+
+      - name: Cleanup temporary MAX QA identities
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote="/tmp/max_identity_${GITHUB_RUN_ID}.php"
+          if [ -f "$HOME/.ssh/max_acceptance_key" ]; then
+            scp -P "$SSH_PORT" -i "$HOME/.ssh/max_acceptance_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/max-messaging/qa_identity.php "$SSH_USER@$SSH_HOST:$remote"
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/max_acceptance_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' QA_RUN_ID='$GITHUB_RUN_ID' /usr/bin/php8.5 '$remote' cleanup" | tee max_messaging_identity_cleanup.txt
+            grep -q '^MAX_QA_ACCOUNT_RESIDUE=0$' max_messaging_identity_cleanup.txt
+            grep -q '^MAX_QA_ROLE_RESIDUE=0$' max_messaging_identity_cleanup.txt
+            grep -q '^MAX_QA_TENANT_PROJECTION_RESIDUE=0$' max_messaging_identity_cleanup.txt
+            grep -q '^MAX_QA_RESIDUE=0$' max_messaging_identity_cleanup.txt
+          fi
+
+      - name: Upload production acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: max_messaging_production_acceptance_${{ inputs.source_sha }}
+          path: |
+            max_133_production_readback.txt
+            max_messaging_production_acceptance.txt
+            max_messaging_identity_cleanup.txt
+            max_messaging_acceptance_result/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Publish final acceptance status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$JOB_STATUS" = success ]; then state=success; desc='MAX messaging production acceptance verified'; else state=failure; desc='MAX messaging production acceptance failed'; fi
+          python3 - "$state" "$desc" > /tmp/payload.json <<'PY'
+          import json,sys
+          print(json.dumps({'state':sys.argv[1],'context':'erpv2/max-messaging-acceptance','description':sys.argv[2]}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/statuses/$SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Cleanup SSH temporary files
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          if [ -f "$HOME/.ssh/max_acceptance_key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/max_acceptance_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '/tmp/max_verify133_acceptance_${GITHUB_RUN_ID}.php' '/tmp/max_identity_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/max_acceptance_key"

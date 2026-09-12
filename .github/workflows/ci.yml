@@ -166,6 +166,30 @@ jobs:
           PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
             php tests/roles_access_write_path_mysql_test.php
 
+      - name: MAX messaging regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          php tests/max_integration_contract_test.php
+          php tests/max_messaging_133_production_migration_contract_test.php
+          php tests/max_messaging_production_acceptance_contract_test.php
+          php tests/agent_db_migration_request_contract_test.php
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE USER IF NOT EXISTS 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          ALTER USER 'planex_ci'@'127.0.0.1' IDENTIFIED BY 'planex_ci';
+          CREATE DATABASE IF NOT EXISTS `spugovxsim_test2` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+          GRANT ALL PRIVILEGES ON `spugovxsim_test2`.* TO 'planex_ci'@'127.0.0.1';
+          FLUSH PRIVILEGES;
+          SQL
+          PLANEX_SCHEMA_DB_HOST=127.0.0.1 \
+          PLANEX_SCHEMA_DB_PORT=3306 \
+          PLANEX_SCHEMA_DB_USER=planex_ci \
+          PLANEX_SCHEMA_DB_PASSWORD=planex_ci \
+          PLANEX_TEST_FIXED_DB=spugovxsim_test2 \
+          PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
+            php tests/max_integration_mysql_test.php
+
       - name: Changed Python syntax
         if: steps.changes.outputs.python == 'true'
         shell: bash
