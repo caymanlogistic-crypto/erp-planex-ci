@@ -39,6 +39,7 @@ try {
     $rows = (new FeoPlacementAuthorService($pdo))->decorate($pdo, 25, $blocks);
     $ok(($rows[0]['created_by_display_name'] ?? '') === 'Владимир С.', 'tenant creator short name mismatch');
     $ok(($rows[0]['created_by_login'] ?? '') === 'Spugov', 'tenant creator login mismatch');
+    $ok(FeoPlacementAuthorService::shortName('Спугов Владимир Вдамимирович', 'spugov') === 'Владимир С.', 'surname-first creator short name mismatch');
     $ok(($rows[1]['created_by_display_name'] ?? '') === 'Анна И.', 'company owner creator mismatch');
     $ok(($rows[2]['created_by_display_name'] ?? '') === 'Пётр С.', 'global account creator mismatch');
     $ok(($rows[3]['created_by_display_name'] ?? '') === '—', 'unknown creator must fail closed to dash');

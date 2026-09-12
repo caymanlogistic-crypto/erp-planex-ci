@@ -164,14 +164,18 @@ jobs:
               if not m: raise SystemExit(path+' snapshot missing')
               return json.loads(m.group(1))
           before,after=snap('feo_author_before.txt'),snap('feo_author_after.txt')
-          stable=['target_company_id','target_db','spugov_user_id','spugov_login','spugov_role','block_count','block_request_count','current_request_count','placement_semantic_hash']
+          stable=['target_company_id','target_db','spugov_user_id','spugov_identity_type','spugov_display_name','spugov_login','spugov_role','block_count','historical_boundary','block_request_count','current_request_count','placement_semantic_hash']
           for key in stable:
               if before[key]!=after[key]: raise SystemExit(f'invariant changed: {key}: {before[key]} -> {after[key]}')
           if after['spugov_login'].lower()!='spugov': raise SystemExit('resolved creator is not Spugov')
-          if not after['marker'] or after['marker_checksum_ok'] is not True: raise SystemExit('backfill marker missing or invalid')
-          if not isinstance(after['marker_boundary'],int) or after['marker_boundary']<=0: raise SystemExit('invalid backfill boundary')
-          if after['historical_author_mismatch_count']!=0: raise SystemExit('historical blocks are not fully attributed to Spugov')
-          if before['marker'] is None and after['marker_boundary']!=before['block_max_id']: raise SystemExit('first-run boundary does not match pre-backfill block max id')
+          if after['spugov_identity_type']!='central_company_user': raise SystemExit('Spugov identity is not central company user')
+          if after['spugov_role']!='company_owner': raise SystemExit('Spugov role is not company_owner')
+          if after['spugov_display_name']!='Владимир С.': raise SystemExit('Spugov display name mismatch')
+          if not after['marker'] or after['marker_checksum_ok'] is not True: raise SystemExit('corrective backfill marker missing or invalid')
+          if not isinstance(after['marker_boundary'],int) or after['marker_boundary']<=0: raise SystemExit('invalid corrective backfill boundary')
+          if after['marker_boundary']!=after['historical_boundary']: raise SystemExit('corrective boundary changed historical scope')
+          if after['historical_author_mismatch_count']!=0: raise SystemExit('historical blocks are not fully attributed to central Spugov')
+          if after['ui_author_mismatch_count']!=0: raise SystemExit('historical blocks do not render as Spugov / Владимир С.')
           print('FEO_AUTHOR_BACKFILL_INVARIANTS_PASS=YES')
           print('FEO_AUTHOR_BACKFILL_SCOPE=CREATOR_FIELDS_ONLY')
           PY
