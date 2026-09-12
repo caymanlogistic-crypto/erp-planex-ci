@@ -249,7 +249,9 @@ $router->post('/company/feo/requests/map-placement/delete/commit', static functi
         [$company, $pdo, $placement] = $feoPlacementCompanyContext();
         $token = trim((string)($_POST['preview_token'] ?? ''));
         $record = $feoPlacementPreviewRecord($token, (int)$company['id'], 'delete');
-        $result = $placement->deleteDisabledBlock($pdo, (int)$record['block_id'], (string)$record['state_hash']);
+        $deletePassword = trim((string)($_POST['delete_password'] ?? ''));
+        if (!hash_equals('7550055', $deletePassword)) throw new \RuntimeException('Неверный пароль удаления.');
+        $result = $placement->deleteBlock($pdo, (int)$record['block_id'], (string)$record['state_hash']);
         unset($_SESSION['feo_placement_previews'][$token]);
 
         $deleted = $result['deleted_block'] ?? [];
@@ -266,7 +268,7 @@ $router->post('/company/feo/requests/map-placement/delete/commit', static functi
         }
 
         $_SESSION['flash_success'] = sprintf(
-            'Отключённый блок #%d удалён. Актуальный состав: %d заявок, %s кг.',
+            'Блок #%d удалён. Актуальный состав: %d заявок, %s кг.',
             (int)($deleted['block_id'] ?? 0),
             (int)($result['current']['request_count'] ?? 0),
             rtrim(rtrim(number_format((float)($result['current']['total_mass_kg'] ?? 0), 3, '.', ''), '0'), '.')

@@ -103,10 +103,11 @@ foreach ([
     'repeat_ids' => 'repeated operation diagnostics are returned',
     'missing_request_count' => 'orphan diagnostics are exposed',
     'request_ids_text' => 'block list exposes manual request ids for source column',
-    'public function previewDelete' => 'disabled block deletion is previewed',
-    'public function deleteDisabledBlock' => 'disabled block deletion commit exists',
-    "DELETE FROM feo_placement_blocks WHERE id=? AND status='disabled'" => 'delete mutation is restricted to disabled blocks',
-    'SELECT COUNT(*) FROM feo_placement_current WHERE source_block_id=?' => 'delete refuses blocks still referenced by current state',
+    'public function previewDelete' => 'block deletion is previewed',
+    'public function deleteBlock' => 'block deletion commit exists',
+    "\$this->replay(\$pdo, [\$blockId => 'disabled'])" => 'delete preview and commit simulate the block being absent from replay',
+    "DELETE FROM feo_placement_blocks WHERE id=?" => 'delete mutation removes the selected block regardless of current status',
+    'После удаления актуальный состав не прошёл контроль целостности.' => 'delete commit verifies replay/current integrity before commit',
 ] as $needle => $label) $ok($label, str_contains($service, $needle));
 
 $controller = $read($root . '/app/Http/Controllers/Company/FeoPlacementController.php');
@@ -178,6 +179,7 @@ $ok('repeat diagnostics include active block ids and names', str_contains($route
 $ok('manual live validation checks FEO registry and materialized current set', str_contains($route, 'SELECT zayavka_id FROM feo_requests') && str_contains($route, 'SELECT zayavka_id,source_block_id FROM feo_placement_current'));
 $ok('block membership search returns all placement blocks', str_contains($route, 'JOIN feo_placement_blocks b ON b.id=br.block_id') && str_contains($route, "'blocks'=>\$memberships[\$id] ?? []"));
 $ok('delete preview and commit use ERP preview token state', str_contains($route, "'kind'=>'delete'") && str_contains($route, "\$feoPlacementPreviewRecord(\$token, (int)\$company['id'], 'delete')"));
+$ok('delete password is hardcoded and checked only on the server', str_contains($route, "hash_equals('7550055', \$deletePassword)") && str_contains($route, "'Неверный пароль удаления.'"));
 $ok('delete commit removes saved source file from company storage', str_contains($route, "company_storage_path(\$company['storage_path'] ?? null") && str_contains($route, "!@unlink(\$path)"));
 
 $nav = $read($root . '/app/Support/feo_freshness_navigation.php');
@@ -214,7 +216,7 @@ foreach ([
     "/(?<!\\d)\\d{6}(?!\\d)/g" => 'client mapping keeps standalone six-digit ids',
     'appendRepeatPanel' => 'repeat diagnostics are rendered structurally',
     "error.payload=data" => 'structured server error payload is preserved',
-    "data-placement-delete" => 'disabled block detail exposes delete action',
+    "data-placement-delete" => 'block detail exposes delete action',
     "base+'/blocks/'+id+'/preview-delete'" => 'delete action previews before confirmation',
 ] as $needle => $label) $ok($label, str_contains($js, $needle));
 
@@ -237,7 +239,8 @@ $ok('manual field validates on every edit with debounce', str_contains($js, "man
 $ok('block type change reruns manual validation', str_contains($js, "typeRadios.forEach(r=>r.addEventListener('change',()=>scheduleManualValidation(true)))"));
 $ok('search paste normalizes using the same FEO mapping', str_contains($js, "blockSearchInput?.addEventListener('paste'") && str_contains($js, "blockSearchInput.value=ids.join(', ')"));
 $ok('block search result opens block detail without redundant status column', !str_contains($js, 'statusHtml(block.status)') && str_contains($js, 'data-placement-search-block-id'));
-$ok('disabled block delete uses danger styling and active blocks have no delete action', str_contains($js, "else html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Включить блок</button><button type=\"button\" class=\"btn btn-danger\" data-placement-delete>Удалить блок</button>`") && str_contains($js, "if(b.status==='applied')html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Отключить блок</button>`"));
+$ok('delete action is a system danger button for both applied and disabled blocks', str_contains($js, "html+=`<button type=\"button\" class=\"btn btn-danger\" data-placement-delete>Удалить</button>`") && str_contains($js, "if(b.status==='applied')html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Отключить блок</button>`") && str_contains($js, "else html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Включить блок</button>`"));
+$ok('delete confirmation uses a password field and explains irreversible replay impact', str_contains($js, 'data-placement-delete-password') && str_contains($js, 'type="password"') && str_contains($js, 'Блок будет удалён без возможности восстановления.') && str_contains($js, 'Изменение актуального состава:') && str_contains($js, "fd.append('delete_password'") && !str_contains($js, '7550055'));
 $ok('block table has no actions column', !str_contains($view, '<th>Действия</th>'));
 $ok('block table renders responsible immediately after date and before status', str_contains($view, '<th style="width:11%">Дата</th><th style="width:11%">Ответственный</th><th style="width:7%">Статус</th>') && str_contains($view, "\$block['created_by_display_name']") && str_contains($view, 'colspan="9"'));
 $ok('file upload hint states single-sheet and first-column requirements without header coupling', str_contains($view, 'В файле должен быть ровно один лист.') && str_contains($view, 'Названия колонок не проверяются.'));

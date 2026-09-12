@@ -253,22 +253,22 @@ final class FeoPlacementService
     {
         $block = $this->block($pdo, $blockId);
         if (!$block) throw new \RuntimeException('Блок не найден.');
-        if (($block['status'] ?? '') !== 'disabled') throw new \RuntimeException('Удалить можно только отключённый блок.');
-        $q = $pdo->prepare('SELECT COUNT(*) FROM feo_placement_current WHERE source_block_id=?');
-        $q->execute([$blockId]);
-        if ((int)$q->fetchColumn() > 0) throw new \RuntimeException('Отключённый блок всё ещё связан с актуальным составом. Сначала пересчитайте состав.');
+        $before = $this->currentSet($pdo);
+        $after = $this->replay($pdo, [$blockId => 'disabled']);
         return [
             'block_id' => $blockId,
             'name' => (string)($block['name'] ?? ''),
+            'current_status' => (string)($block['status'] ?? ''),
             'request_count' => (int)$block['request_count'],
             'total_mass_kg' => (float)$block['total_mass_kg'],
             'source_filename' => $block['source_filename'] ?? null,
             'source_file_key' => $block['source_file_key'] ?? null,
+            'effect' => $this->delta($pdo, $before, $after),
             'state_hash' => $this->stateHash($pdo),
         ];
     }
 
-    public function deleteDisabledBlock(PDO $pdo, int $blockId, string $expectedStateHash): array
+    public function deleteBlock(PDO $pdo, int $blockId, string $expectedStateHash): array
     {
         $lock = $this->acquireLock($pdo);
         try {
@@ -276,16 +276,19 @@ final class FeoPlacementService
             if (!hash_equals($expectedStateHash, $this->stateHash($pdo))) throw new \RuntimeException('Состав изменился после подтверждения. Повторите удаление.');
             $q = $pdo->prepare('SELECT id,status FROM feo_placement_blocks WHERE id=? FOR UPDATE');
             $q->execute([$blockId]);
-            $row = $q->fetch(PDO::FETCH_ASSOC) ?: null;
-            if (!$row) throw new \RuntimeException('Блок не найден.');
-            if (($row['status'] ?? '') !== 'disabled') throw new \RuntimeException('Удалить можно только отключённый блок.');
-            $q = $pdo->prepare('SELECT COUNT(*) FROM feo_placement_current WHERE source_block_id=?');
-            $q->execute([$blockId]);
-            if ((int)$q->fetchColumn() > 0) throw new \RuntimeException('Отключённый блок всё ещё связан с актуальным составом. Сначала пересчитайте состав.');
+            if (!$q->fetch(PDO::FETCH_ASSOC)) throw new \RuntimeException('Блок не найден.');
+
             $preview = $this->previewDelete($pdo, $blockId);
-            $q = $pdo->prepare("DELETE FROM feo_placement_blocks WHERE id=? AND status='disabled'");
+            $after = $this->replay($pdo, [$blockId => 'disabled']);
+            $this->replaceCurrent($pdo, $after);
+
+            $q = $pdo->prepare('DELETE FROM feo_placement_blocks WHERE id=?');
             $q->execute([$blockId]);
-            if ($q->rowCount() !== 1) throw new \RuntimeException('Не удалось удалить отключённый блок.');
+            if ($q->rowCount() !== 1) throw new \RuntimeException('Не удалось удалить блок.');
+
+            if ($this->currentSet($pdo) !== $this->replay($pdo)) {
+                throw new \RuntimeException('После удаления актуальный состав не прошёл контроль целостности.');
+            }
             $current = $this->currentSummary($pdo);
             $pdo->commit();
             return ['deleted_block' => $preview, 'current' => $current];
