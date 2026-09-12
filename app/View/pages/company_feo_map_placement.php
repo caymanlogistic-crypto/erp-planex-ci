@@ -159,7 +159,7 @@ $fmtMass = static function ($value): string {
   <div class="feo-placement-block-search-results is-hidden" data-placement-block-search-results></div>
   <div class="table-scroll">
     <table class="table feo-placement-table">
-      <thead><tr><th style="width:7%">ID</th><th style="width:18%">Название</th><th style="width:10%">Тип</th><th style="width:8%">Заявок</th><th style="width:10%">Масса, кг</th><th style="width:29%">Источник</th><th style="width:11%">Дата</th><th style="width:7%">Статус</th></tr></thead>
+      <thead><tr><th style="width:6%">ID</th><th style="width:16%">Название</th><th style="width:9%">Тип</th><th style="width:7%">Заявок</th><th style="width:9%">Масса, кг</th><th style="width:24%">Источник</th><th style="width:11%">Дата</th><th style="width:11%">Ответственный</th><th style="width:7%">Статус</th></tr></thead>
       <tbody>
       <?php foreach ($blocks as $block): ?>
         <?php
@@ -181,10 +181,11 @@ $fmtMass = static function ($value): string {
           <td><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></td>
           <td<?= $sourceType === 'manual' ? ' class="feo-placement-source-cell"' : '' ?> title="<?= e($sourceText) ?>"><?= e($sourceText) ?></td>
           <td><?= e($fmtDateTime($block['created_at'] ?? null)) ?></td>
+          <td title="<?= e((string)($block['created_by_login'] ?? '')) ?>"><?= e((string)($block['created_by_display_name'] ?? '—')) ?></td>
           <td><span class="feo-placement-status <?= $statusApplied ? 'feo-placement-status--applied' : 'feo-placement-status--disabled' ?>"><?= $statusApplied ? 'Применяется' : 'Отключён' ?></span></td>
         </tr>
       <?php endforeach; ?>
-      <?php if (!$blocks): ?><tr><td colspan="8" class="text-muted">Блоки ещё не созданы.</td></tr><?php endif; ?>
+      <?php if (!$blocks): ?><tr><td colspan="9" class="text-muted">Блоки ещё не созданы.</td></tr><?php endif; ?>
       </tbody>
     </table>
   </div>
@@ -207,7 +208,7 @@ $fmtMass = static function ($value): string {
             <div class="field-hint">Можно вставить сразу несколько заявок, после вставки список можно вручную дополнять и редактировать.</div>
             <div class="notice is-hidden feo-placement-live-validation" data-placement-live-validation></div>
           </div>
-          <div class="field feo-placement-wide feo-placement-source-file" data-placement-file><label class="field-label">Файл XLS / XLSX</label><input class="field-input" type="file" name="source_file" accept=".xls,.xlsx"><div class="field-hint">Система читает только первый столбец и отбирает самостоятельные последовательности ровно из 6 цифр.</div></div>
+          <div class="field feo-placement-wide feo-placement-source-file" data-placement-file><label class="field-label">Файл XLS / XLSX</label><input class="field-input" type="file" name="source_file" accept=".xls,.xlsx"><div class="field-hint">В файле должен быть ровно один лист. Система читает только первый столбец; в нём должен быть хотя бы один самостоятельный шестизначный номер заявки. Названия колонок не проверяются.</div></div>
         </div>
       </form>
       <div class="notice warn is-hidden" data-placement-create-error></div>
