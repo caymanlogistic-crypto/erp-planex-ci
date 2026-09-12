@@ -264,21 +264,34 @@ function confirmOperation(kind,token,preview,meta={}){
   if(err)err.classList.add('is-hidden');
   if(submit)submit.className=kind==='delete'?'btn btn-danger':'btn btn-primary';
   if(title){
-    title.textContent=kind==='create'?'Применить блок?':kind==='status'?'Изменить статус блока?':kind==='delete'?'Удалить отключённый блок?':'Пересчитать актуальный состав?';
+    title.textContent=kind==='create'?'Применить блок?':kind==='status'?'Изменить статус блока?':kind==='delete'?'Удалить блок?':'Пересчитать актуальный состав?';
   }
   if(copy){
     let html='';
     if(kind==='create'){
       html+=`<div><b>${preview.block_type==='addition'?'Добавление':'Исключение'}:</b> ${preview.selected_count} заявок общей массой <b>${fmt(preview.selected_mass_kg)} кг</b>.</div>`;
     }else if(kind==='delete'){
-      html+=`<div><b>Блок #${preview.block_id}${preview.name?' · '+esc(preview.name):''}</b> будет удалён без возможности восстановления.</div>`;
-      html+=`<div>Состав блока: <b>${preview.request_count} заявок · ${fmt(preview.total_mass_kg)} кг</b>. Актуальный состав не изменится.</div>`;
-      if(preview.source_filename)html+=`<div>Исходный файл <b>${esc(preview.source_filename)}</b> также будет удалён из хранилища.</div>`;
+      const applied=preview.current_status==='applied';
+      html+=`<div class="driver-delete-confirm-body"><div class="driver-delete-confirm-head"><div class="modal-icon is-danger" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2L16.5 15H1.5L9 2Z" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"></path><path d="M9 7V11M9 13V13.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"></path></svg></div><div class="driver-delete-confirm-title">Блок будет удалён без возможности восстановления.</div></div>`;
+      html+=`<div class="driver-delete-confirm-text"><b>Блок #${preview.block_id}${preview.name?' · '+esc(preview.name):''}</b> · ${preview.request_count} заявок · ${fmt(preview.total_mass_kg)} кг.</div>`;
+      if(applied)html+=`<div class="driver-delete-confirm-text">Блок сейчас применяется. Перед удалением ERP атомарно пересчитает актуальный состав так, как будто этого блока не было.</div>`;
+      html+=`<div class="feo-placement-confirm-effect"><b>Изменение актуального состава:</b> ${esc(effectText(preview.effect))}.</div>`;
+      if(preview.source_filename)html+=`<div class="driver-delete-confirm-text">Исходный файл <b>${esc(preview.source_filename)}</b> также будет удалён из хранилища.</div>`;
+      html+=`<div class="driver-delete-confirm-text">Для подтверждения введите пароль удаления.</div><div class="field driver-delete-confirm-field"><input type="password" class="field-input" data-placement-delete-password autocomplete="off" placeholder="Пароль удаления"></div></div>`;
     }else{
       if(kind==='status')html+=`<div>Блок #${preview.block_id}: ${preview.target_status==='applied'?'включить в расчёт':'отключить из расчёта'}.</div>`;
       html+=`<div class="feo-placement-confirm-effect"><b>После операции:</b> ${esc(effectText(preview.effect))}.</div>`;
     }
     copy.innerHTML=html;
+    const passwordInput=q('[data-placement-delete-password]',copy);
+    if(submit){
+      submit.textContent=kind==='delete'?'Удалить':'Подтвердить';
+      submit.disabled=kind==='delete';
+      if(passwordInput){
+        passwordInput.addEventListener('input',()=>{ submit.disabled=passwordInput.value.trim()===''; });
+        window.setTimeout(()=>passwordInput.focus(),0);
+      }
+    }
   }
   closeModal('feo-placement-create-modal');
   closeModal('feo-placement-detail-modal');
@@ -326,6 +339,10 @@ q('[data-placement-confirm-submit]')?.addEventListener('click',async()=>{
     const fd=new FormData();
     fd.append('_csrf',csrf);
     fd.append('preview_token',pending.token);
+    if(pending.kind==='delete'){
+      const passwordInput=q('[data-placement-delete-password]');
+      fd.append('delete_password',passwordInput?.value||'');
+    }
     const url=pending.kind==='create'?base+'/commit':pending.kind==='status'?base+'/status/commit':pending.kind==='delete'?base+'/delete/commit':base+'/reconcile/commit';
     await json(url,{method:'POST',body:fd});
     location.reload();
@@ -358,8 +375,9 @@ async function openBlock(id){
     if(actions){
       let html='';
       if(b.source_file_key)html+=`<a class="btn btn-secondary" href="${base}/blocks/${b.id}/download">Скачать исходный файл</a>`;
+      html+=`<button type="button" class="btn btn-danger" data-placement-delete>Удалить</button>`;
       if(b.status==='applied')html+=`<button type="button" class="btn btn-primary" data-placement-toggle>Отключить блок</button>`;
-      else html+=`<button type="button" class="btn btn-primary" data-placement-toggle>Включить блок</button><button type="button" class="btn btn-danger" data-placement-delete>Удалить блок</button>`;
+      else html+=`<button type="button" class="btn btn-primary" data-placement-toggle>Включить блок</button>`;
       actions.innerHTML=html;
       q('[data-placement-toggle]',actions)?.addEventListener('click',()=>previewStatus(b.id,b.status==='applied'?'disabled':'applied'));
       q('[data-placement-delete]',actions)?.addEventListener('click',()=>previewDelete(b.id));

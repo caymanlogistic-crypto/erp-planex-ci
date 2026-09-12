@@ -25,6 +25,7 @@ on:
       - 'tests/feo_placement_author_backfill_contract_test.php'
       - 'tests/feo_placement_author_backfill_agent_request_contract_test.php'
       - 'tests/feo_placement_author_mysql_test.php'
+      - 'tests/feo_placement_delete_mysql_test.php'
       - 'tests/feo_legacy_parity_contract_test.php'
       - 'tests/feo_legacy_parity_mysql_test.php'
       - 'tests/feo_navigation_badges_mysql_test.php'
@@ -57,6 +58,7 @@ on:
       - 'tests/feo_placement_author_backfill_contract_test.php'
       - 'tests/feo_placement_author_backfill_agent_request_contract_test.php'
       - 'tests/feo_placement_author_mysql_test.php'
+      - 'tests/feo_placement_delete_mysql_test.php'
       - 'tests/feo_legacy_parity_contract_test.php'
       - 'tests/feo_legacy_parity_mysql_test.php'
       - 'tests/feo_navigation_badges_mysql_test.php'
@@ -107,6 +109,7 @@ jobs:
           php -l tests/feo_placement_author_backfill_contract_test.php
           php -l tests/feo_placement_author_backfill_agent_request_contract_test.php
           php -l tests/feo_placement_author_mysql_test.php
+          php -l tests/feo_placement_delete_mysql_test.php
           php -l tests/feo_legacy_parity_contract_test.php
           php -l tests/feo_legacy_parity_mysql_test.php
           php -l tests/feo_navigation_badges_mysql_test.php
@@ -157,6 +160,14 @@ jobs:
           PLANEX_TEST_FIXED_DB=spugovxsim_test2 \
           PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
             php tests/feo_placement_author_mysql_test.php
+          APP_ENV=test \
+          PLANEX_SCHEMA_DB_HOST=127.0.0.1 \
+          PLANEX_SCHEMA_DB_PORT=3306 \
+          PLANEX_SCHEMA_DB_USER=planex_ci \
+          PLANEX_SCHEMA_DB_PASSWORD=planex_ci \
+          PLANEX_TEST_FIXED_DB=spugovxsim_test2 \
+          PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
+            php tests/feo_placement_delete_mysql_test.php
 
       - name: Migration 123 static contract
         shell: bash
