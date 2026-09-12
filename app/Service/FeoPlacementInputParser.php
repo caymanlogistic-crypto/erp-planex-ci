@@ -32,10 +32,14 @@ final class FeoPlacementInputParser
             'xls' => $this->readXlsFirstColumn($path),
             default => throw new \RuntimeException('Допустимы только файлы XLS и XLSX.'),
         };
-        if ($cells === []) {
-            throw new \RuntimeException('В первом столбце файла не найдено данных.');
+        try {
+            return $this->extractFromCells($cells);
+        } catch (\RuntimeException $e) {
+            if ($e->getMessage() === 'Не найдено самостоятельных шестизначных номеров заявок.') {
+                throw new \RuntimeException('В первом столбце не найден ни один номер заявки.');
+            }
+            throw $e;
         }
-        return $this->extractFromCells($cells);
     }
 
     public function extractFromCells(array $cells): array
@@ -148,8 +152,10 @@ final class FeoPlacementInputParser
         $workbook = $this->xml((string)$zip->getFromName('xl/workbook.xml'), 'workbook');
         $workbook->registerXPathNamespace('m', self::MAIN_NS);
         $workbook->registerXPathNamespace('r', self::REL_NS);
-        $sheet = ($workbook->xpath('//m:sheets/m:sheet') ?: [])[0] ?? null;
-        if ($sheet === null) throw new \RuntimeException('XLSX не содержит листов.');
+        $sheets = $workbook->xpath('//m:sheets/m:sheet') ?: [];
+        if ($sheets === []) throw new \RuntimeException('XLSX не содержит листов.');
+        if (count($sheets) !== 1) throw new \RuntimeException('В файле должен быть ровно один лист.');
+        $sheet = $sheets[0];
         $attrs = $sheet->attributes(self::REL_NS);
         $rid = (string)($attrs['id'] ?? '');
         if ($rid === '') throw new \RuntimeException('Не удалось определить первый лист XLSX.');
@@ -307,6 +313,11 @@ final class FeoPlacementInputParser
             $records[] = [$id, substr($stream, $off, $size)];
             $off += $size;
         }
+        $sheetCount = 0;
+        foreach ($records as [$recordId]) if ($recordId === 0x0085) $sheetCount++;
+        if ($sheetCount === 0) throw new \RuntimeException('XLS не содержит листов.');
+        if ($sheetCount !== 1) throw new \RuntimeException('В файле должен быть ровно один лист.');
+
         $sst = $this->biffSharedStrings($records);
         $cells = [];
         $inSheet = false;

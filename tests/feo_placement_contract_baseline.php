@@ -3,7 +3,9 @@
 declare(strict_types=1);
 
 require_once __DIR__ . '/../app/Service/FeoPlacementInputParser.php';
+require_once __DIR__ . '/../app/Service/FeoPlacementAuthorService.php';
 
+use App\Service\FeoPlacementAuthorService;
 use App\Service\FeoPlacementInputParser;
 
 $pass = 0; $fail = 0;
@@ -27,6 +29,63 @@ $ok('seven-digit values are rejected', $strict);
 $fromCells = $parser->extractFromCells(['308710','abc 299726 xyz','1234567','308710']);
 $ok('file cell parser keeps standalone six digits only', $fromCells['ids'] === ['308710','299726']);
 $ok('file cell parser reports duplicate ids', $fromCells['duplicates'] === ['308710']);
+$ok('responsible short name uses first name and surname initial', FeoPlacementAuthorService::shortName('Владимир Спугов', 'Spugov') === 'Владимир С.');
+$ok('responsible short name skips patronymic and uses last token as surname', FeoPlacementAuthorService::shortName('Владимир Владимирович Спугов', 'Spugov') === 'Владимир С.');
+$ok('responsible short name falls back to login', FeoPlacementAuthorService::shortName('', 'Spugov') === 'Spugov');
+
+$makeXlsx = static function (array $sheets): string {
+    $path = tempnam(sys_get_temp_dir(), 'feo-placement-xlsx-');
+    if ($path === false) throw new RuntimeException('cannot allocate temporary XLSX fixture');
+    $zip = new ZipArchive();
+    if ($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('cannot create XLSX fixture');
+    $sheetTags = [];
+    $relTags = [];
+    foreach (array_values($sheets) as $index => $sheet) {
+        $number = $index + 1;
+        $state = !empty($sheet['hidden']) ? ' state="hidden"' : '';
+        $sheetTags[] = '<sheet name="Sheet' . $number . '" sheetId="' . $number . '"' . $state . ' r:id="rId' . $number . '"/>';
+        $relTags[] = '<Relationship Id="rId' . $number . '" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet' . $number . '.xml"/>';
+        $rowTags = [];
+        foreach (array_values((array)($sheet['rows'] ?? [])) as $rowIndex => $row) {
+            $cells = [];
+            foreach ((array)$row as $column => $value) {
+                $column = strtoupper((string)$column);
+                if (!preg_match('/^[A-Z]+$/D', $column)) continue;
+                $ref = $column . ($rowIndex + 1);
+                $text = htmlspecialchars((string)$value, ENT_QUOTES | ENT_XML1, 'UTF-8');
+                $cells[] = '<c r="' . $ref . '" t="inlineStr"><is><t>' . $text . '</t></is></c>';
+            }
+            $rowTags[] = '<row r="' . ($rowIndex + 1) . '">' . implode('', $cells) . '</row>';
+        }
+        $zip->addFromString('xl/worksheets/sheet' . $number . '.xml', '<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>' . implode('', $rowTags) . '</sheetData></worksheet>');
+    }
+    $zip->addFromString('[Content_Types].xml', '<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>');
+    $zip->addFromString('xl/workbook.xml', '<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>' . implode('', $sheetTags) . '</sheets></workbook>');
+    $zip->addFromString('xl/_rels/workbook.xml.rels', '<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' . implode('', $relTags) . '</Relationships>');
+    $zip->close();
+    return $path;
+};
+
+$xlsx = $makeXlsx([['rows'=>[['A'=>'Номер заявки','B'=>'Неважный заголовок'],['A'=>'308710','B'=>'299726']]]]);
+try { $xlsxParsed = $parser->parseFile($xlsx, 'single.xlsx'); } finally { @unlink($xlsx); }
+$ok('single-sheet XLSX accepts a header and reads only first column', $xlsxParsed['ids'] === ['308710']);
+
+$xlsx = $makeXlsx([['rows'=>[['A'=>'308710']]],['rows'=>[['A'=>'299726']]]]);
+try { $parser->parseFile($xlsx, 'two-sheets.xlsx'); $multiSheetRejected = false; } catch (RuntimeException $e) { $multiSheetRejected = $e->getMessage() === 'В файле должен быть ровно один лист.'; } finally { @unlink($xlsx); }
+$ok('XLSX with more than one worksheet is rejected before import', $multiSheetRejected);
+
+$xlsx = $makeXlsx([['rows'=>[['A'=>'308710']]],['hidden'=>true,'rows'=>[['A'=>'299726']]]]);
+try { $parser->parseFile($xlsx, 'hidden-second-sheet.xlsx'); $hiddenSheetRejected = false; } catch (RuntimeException $e) { $hiddenSheetRejected = $e->getMessage() === 'В файле должен быть ровно один лист.'; } finally { @unlink($xlsx); }
+$ok('hidden second XLSX worksheet still counts as a second tab', $hiddenSheetRejected);
+
+$xlsx = $makeXlsx([['rows'=>[['A'=>'Номер заявки','B'=>'308710'],['A'=>'нет номера','B'=>'299726']]]]);
+try { $parser->parseFile($xlsx, 'no-first-column-id.xlsx'); $firstColumnRejected = false; } catch (RuntimeException $e) { $firstColumnRejected = $e->getMessage() === 'В первом столбце не найден ни один номер заявки.'; } finally { @unlink($xlsx); }
+$ok('XLSX requires at least one request number specifically in first column', $firstColumnRejected);
+
+$biffMethod = (new ReflectionClass($parser))->getMethod('biffFirstColumn');
+$twoBoundSheets = pack('vv', 0x0085, 0) . pack('vv', 0x0085, 0);
+try { $biffMethod->invoke($parser, $twoBoundSheets); $xlsMultiSheetRejected = false; } catch (ReflectionException) { $xlsMultiSheetRejected = false; } catch (RuntimeException $e) { $xlsMultiSheetRejected = $e->getMessage() === 'В файле должен быть ровно один лист.'; }
+$ok('binary XLS with more than one workbook tab is rejected', $xlsMultiSheetRejected);
 
 $service = $read($root . '/app/Service/FeoPlacementService.php');
 foreach ([
@@ -51,6 +110,7 @@ foreach ([
 ] as $needle => $label) $ok($label, str_contains($service, $needle));
 
 $controller = $read($root . '/app/Http/Controllers/Company/FeoPlacementController.php');
+$authorService = $read($root . '/app/Service/FeoPlacementAuthorService.php');
 $route = $read($root . '/app/Http/Routes/company_feo_requests.php');
 $ok(
     'FEO placement access is registry-page based without a legacy role allowlist',
@@ -72,6 +132,11 @@ foreach ([
     'company_storage_path' => 'source files use company storage',
     'source_file_key' => 'saved source file key is persisted',
 ] as $needle => $label) $ok($label, str_contains($controller, $needle));
+$ok('block creator is taken only from authenticated session at commit time', str_contains($controller, "\$actorId = (int)(\$_SESSION['user_id'] ?? 0)") && str_contains($controller, "'created_by_user_id'=>\$actorId") && !str_contains($controller, "\$_POST['created_by_user_id']"));
+$ok('block creation fails closed when authenticated creator cannot be resolved', str_contains($controller, "if (\$actorId <= 0) throw new \\RuntimeException('Не удалось определить пользователя, создающего блок."));
+$ok('block list is decorated with immutable creator identity for display', str_contains($controller, 'new FeoPlacementAuthorService') && str_contains($controller, "->decorate(\$pdo, (int)\$company['id'], \$state['blocks'])"));
+$ok('author directory distinguishes owner, tenant and global-account identities', str_contains($authorService, "\$role === 'company_owner'") && str_contains($authorService, "elseif (\$role === '')") && str_contains($authorService, 'SELECT id,full_name,login FROM users') && str_contains($authorService, 'SELECT id,full_name,login FROM company_users') && str_contains($authorService, 'SELECT id,full_name,login FROM user_accounts'));
+$ok('status changes do not overwrite immutable block creator', !preg_match('/UPDATE feo_placement_blocks SET[^\n]*created_by_/i', $service));
 
 $fileParser = $read($root . '/app/Service/FeoPlacementInputParser.php');
 foreach ([
@@ -80,6 +145,10 @@ foreach ([
     "hex2bin('D0CF11E0A1B11AE1')" => 'binary OLE XLS signature is validated',
     'oleWorkbookStream' => 'XLS Compound File stream parser exists',
     'biffFirstColumn' => 'XLS BIFF first-column parser exists',
+    "count(\$sheets) !== 1" => 'XLSX requires exactly one workbook sheet including hidden sheets',
+    "\$recordId === 0x0085" => 'binary XLS counts BoundSheet tabs before reading first column',
+    "if (\$sheetCount !== 1)" => 'binary XLS requires exactly one workbook tab',
+    'В первом столбце не найден ни один номер заявки.' => 'file import fails when first column has no request number',
     "preg_match_all('/(?<!\\d)\\d{6}(?!\\d)/u'" => 'file parser uses exact six-digit semantics',
 ] as $needle => $label) $ok($label, str_contains($fileParser, $needle));
 
@@ -170,7 +239,8 @@ $ok('search paste normalizes using the same FEO mapping', str_contains($js, "blo
 $ok('block search result opens block detail without redundant status column', !str_contains($js, 'statusHtml(block.status)') && str_contains($js, 'data-placement-search-block-id'));
 $ok('disabled block delete uses danger styling and active blocks have no delete action', str_contains($js, "else html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Включить блок</button><button type=\"button\" class=\"btn btn-danger\" data-placement-delete>Удалить блок</button>`") && str_contains($js, "if(b.status==='applied')html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Отключить блок</button>`"));
 $ok('block table has no actions column', !str_contains($view, '<th>Действия</th>'));
-$ok('block table renders date and status as separate columns', str_contains($view, '<th style="width:11%">Дата</th><th style="width:7%">Статус</th>') && !str_contains($view, 'Дата / статус') && str_contains($view, 'colspan="8"'));
+$ok('block table renders responsible immediately after date and before status', str_contains($view, '<th style="width:11%">Дата</th><th style="width:11%">Ответственный</th><th style="width:7%">Статус</th>') && str_contains($view, "\$block['created_by_display_name']") && str_contains($view, 'colspan="9"'));
+$ok('file upload hint states single-sheet and first-column requirements without header coupling', str_contains($view, 'В файле должен быть ровно один лист.') && str_contains($view, 'Названия колонок не проверяются.'));
 
 $manifest = json_decode($read($root . '/.github/agent_db_migration_request.json'), true);
 $workflow = $read($root . '/.github/workflows/feo_123_production_migration.yml');

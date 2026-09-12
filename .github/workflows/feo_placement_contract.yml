@@ -8,6 +8,7 @@ on:
       - 'app/Http/Controllers/Company/FeoPlacementController.php'
       - 'app/Http/Routes/company_feo_requests.php'
       - 'app/Service/FeoPlacementInputParser.php'
+      - 'app/Service/FeoPlacementAuthorService.php'
       - 'app/Service/FeoPlacementService.php'
       - 'app/Service/FeoLegacyParityService.php'
       - 'app/Service/NavigationCounterService.php'
@@ -18,12 +19,17 @@ on:
       - 'database/migrations-local/123_create_feo_map_placement.sql'
       - 'scripts/feo_apply_123.php'
       - 'scripts/feo_verify_123.php'
+      - 'scripts/feo_placement_author_backfill.php'
+      - 'scripts/feo_placement_author_verify.php'
       - 'tests/feo_placement_contract_test.php'
+      - 'tests/feo_placement_author_backfill_contract_test.php'
+      - 'tests/feo_placement_author_mysql_test.php'
       - 'tests/feo_legacy_parity_contract_test.php'
       - 'tests/feo_legacy_parity_mysql_test.php'
       - 'tests/feo_navigation_badges_mysql_test.php'
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/feo_123_production_migration.yml'
+      - '.github/workflows/feo_placement_author_backfill_production.yml'
       - '.github/workflows/feo_placement_contract.yml'
   push:
     branches:
@@ -32,6 +38,7 @@ on:
       - 'app/Http/Controllers/Company/FeoPlacementController.php'
       - 'app/Http/Routes/company_feo_requests.php'
       - 'app/Service/FeoPlacementInputParser.php'
+      - 'app/Service/FeoPlacementAuthorService.php'
       - 'app/Service/FeoPlacementService.php'
       - 'app/Service/FeoLegacyParityService.php'
       - 'app/Service/NavigationCounterService.php'
@@ -42,12 +49,17 @@ on:
       - 'database/migrations-local/123_create_feo_map_placement.sql'
       - 'scripts/feo_apply_123.php'
       - 'scripts/feo_verify_123.php'
+      - 'scripts/feo_placement_author_backfill.php'
+      - 'scripts/feo_placement_author_verify.php'
       - 'tests/feo_placement_contract_test.php'
+      - 'tests/feo_placement_author_backfill_contract_test.php'
+      - 'tests/feo_placement_author_mysql_test.php'
       - 'tests/feo_legacy_parity_contract_test.php'
       - 'tests/feo_legacy_parity_mysql_test.php'
       - 'tests/feo_navigation_badges_mysql_test.php'
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/feo_123_production_migration.yml'
+      - '.github/workflows/feo_placement_author_backfill_production.yml'
       - '.github/workflows/feo_placement_contract.yml'
   workflow_dispatch:
 
@@ -77,6 +89,7 @@ jobs:
           set -euo pipefail
           php -l app/Http/Controllers/Company/FeoPlacementController.php
           php -l app/Service/FeoPlacementInputParser.php
+          php -l app/Service/FeoPlacementAuthorService.php
           php -l app/Service/FeoPlacementService.php
           php -l app/Service/FeoLegacyParityService.php
           php -l app/Service/NavigationCounterService.php
@@ -84,7 +97,11 @@ jobs:
           php -l app/View/pages/company_feo_map_placement.php
           php -l scripts/feo_apply_123.php
           php -l scripts/feo_verify_123.php
+          php -l scripts/feo_placement_author_backfill.php
+          php -l scripts/feo_placement_author_verify.php
           php -l tests/feo_placement_contract_test.php
+          php -l tests/feo_placement_author_backfill_contract_test.php
+          php -l tests/feo_placement_author_mysql_test.php
           php -l tests/feo_legacy_parity_contract_test.php
           php -l tests/feo_legacy_parity_mysql_test.php
           php -l tests/feo_navigation_badges_mysql_test.php
@@ -95,6 +112,7 @@ jobs:
       - name: Placement regression contract
         run: |
           php tests/feo_placement_contract_test.php
+          php tests/feo_placement_author_backfill_contract_test.php
           php tests/feo_legacy_parity_contract_test.php
 
       - name: Legacy parity MySQL regression
@@ -125,6 +143,14 @@ jobs:
           PLANEX_TEST_FIXED_DB=spugovxsim_test2 \
           PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
             php tests/feo_navigation_badges_mysql_test.php
+          APP_ENV=test \
+          PLANEX_SCHEMA_DB_HOST=127.0.0.1 \
+          PLANEX_SCHEMA_DB_PORT=3306 \
+          PLANEX_SCHEMA_DB_USER=planex_ci \
+          PLANEX_SCHEMA_DB_PASSWORD=planex_ci \
+          PLANEX_TEST_FIXED_DB=spugovxsim_test2 \
+          PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
+            php tests/feo_placement_author_mysql_test.php
 
       - name: Migration 123 static contract
         shell: bash
