@@ -15,6 +15,11 @@ on:
       - 'scripts/feo_verify_125.php'
       - 'tests/feo_125_production_migration_contract_test.php'
       - 'database/migrations-local/125_create_feo_map_utilizers.sql'
+      - '.github/workflows/waste_trips_134_production_migration.yml'
+      - 'scripts/waste_trips_apply_134.php'
+      - 'scripts/waste_trips_verify_134.php'
+      - 'tests/waste_trips_134_production_migration_contract_test.php'
+      - 'database/migrations-local/134_create_waste_trip_customer_payments.sql'
       - 'tests/agent_db_migration_request_contract_test.php'
 
 permissions:
@@ -35,3 +40,7 @@ jobs:
       - run: php -l scripts/feo_verify_125.php
       - run: php -l tests/feo_125_production_migration_contract_test.php
       - run: php tests/feo_125_production_migration_contract_test.php
+      - run: php -l scripts/waste_trips_apply_134.php
+      - run: php -l scripts/waste_trips_verify_134.php
+      - run: php -l tests/waste_trips_134_production_migration_contract_test.php
+      - run: php tests/waste_trips_134_production_migration_contract_test.php

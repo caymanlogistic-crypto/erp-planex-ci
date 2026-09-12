@@ -78,8 +78,8 @@ jobs:
             app/View/partials/company_waste_trip_modal_view.php \
             app/View/partials/company_waste_trip_modal_edit.php \
             app/View/partials/company_waste_trip_customer_payments.php \
-            scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php scripts/waste_trip_244_readonly_probe.php scripts/waste_trip_legacy_readonly_probe.php \
-            tests/waste_trip_incident_service_test.php tests/waste_trip_customer_payment_regression_test.php tests/waste_trip_legacy_full_schema_regression_test.php tests/waste_trip_legacy_manager_end_to_end_regression_test.php tests/waste_trip_legacy_readonly_probe_contract_test.php tests/waste_trip_regression_test.php tests/waste_trip_legacy_prefill_regression_test.php tests/waste_trip_manager_membership_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_runtime_diagnostic_contract_test.php tests/waste_trip_244_readonly_probe_contract_test.php tests/waste_trips_128_production_migration_contract_test.php tests/waste_trips_130_production_migration_contract_test.php
+            scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php scripts/waste_trips_apply_134.php scripts/waste_trips_verify_134.php scripts/waste_trip_244_readonly_probe.php scripts/waste_trip_legacy_readonly_probe.php \
+            tests/waste_trip_incident_service_test.php tests/waste_trip_customer_payment_regression_test.php tests/waste_trip_legacy_full_schema_regression_test.php tests/waste_trip_legacy_manager_end_to_end_regression_test.php tests/waste_trip_legacy_readonly_probe_contract_test.php tests/waste_trip_regression_test.php tests/waste_trip_legacy_prefill_regression_test.php tests/waste_trip_manager_membership_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_runtime_diagnostic_contract_test.php tests/waste_trip_244_readonly_probe_contract_test.php tests/waste_trips_128_production_migration_contract_test.php tests/waste_trips_130_production_migration_contract_test.php tests/waste_trips_134_production_migration_contract_test.php
           do php -l "$f"; done
       - name: Static target contracts
         shell: bash
@@ -101,6 +101,8 @@ jobs:
           grep -Fqx 'WASTE_TRIP_244_READ_ONLY_PROBE_CONTRACT=PASS' /tmp/read-only-244.out
           php tests/waste_trips_130_production_migration_contract_test.php | tee /tmp/m130.out
           grep -Fqx 'WASTE_TRIPS_130_PRODUCTION_MIGRATION=PASS' /tmp/m130.out
+          php tests/waste_trips_134_production_migration_contract_test.php | tee /tmp/m134.out
+          grep -Fqx 'WASTE_TRIPS_134_PRODUCTION_MIGRATION_CONTRACT=PASS' /tmp/m134.out
       - name: Start isolated MySQL
         shell: bash
         run: |
