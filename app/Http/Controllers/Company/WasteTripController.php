@@ -9,6 +9,7 @@ use App\Service\LinearRouteService;
 use App\Service\WasteTripIncidentService;
 use App\Service\WasteTripLegacyPrefillService;
 use App\Service\WasteTripLegacySourceService;
+use App\Service\WasteTripCustomerPaymentService;
 use App\Service\WasteTripService;
 use App\Service\UserSyncService;
 use PDO;
@@ -25,14 +26,15 @@ final class WasteTripController
         $context = $this->tenantContext(false);
         $company = $context['company']; $localPdo = $context['localPdo']; $sessionUser = $context['sessionUser']; $central=$context['central']; $companyId=(int)$context['companyId'];
         $currentMembershipId=AccessControlService::effectiveMembershipId()??0;
+        $isFinanceRealm=(string)($sessionUser['role_code']??'')==='company_owner';
         $pageTitle='Перевозка отходов'; $pageContext='Рейсы › Перевозка отходов'; $dbError=$context['error'];
         $trips=$clients=$routeExecutors=$responsibleUsers=$utilizers=[];
         $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; $old=$_SESSION['waste_trip_old']??[];
         unset($_SESSION['waste_trip_error'],$_SESSION['waste_trip_success'],$_SESSION['waste_trip_old']);
         if ($company!==null && $localPdo instanceof PDO && $dbError===null) {
-            if (!WasteTripService::schemaReady($localPdo)) $dbError='Модуль ожидает завершённый controlled cutover migration 130.';
+            if (!WasteTripService::schemaReady($localPdo)) $dbError='Модуль ожидает актуальную схему Waste Trips, включая migration 134.';
             else try {
-                $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','q'=>$_GET['q']??'']);
+                $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','q'=>$_GET['q']??''],$isFinanceRealm);
                 $trips=array_values(array_filter($trips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
                 [$clients,$routeExecutors,$responsibleUsers,$utilizers]=$this->loadOptions($localPdo,$sessionUser,$central,$companyId);
                 $pageContext.=' › Компания: '.(string)$company['name'];
@@ -49,8 +51,9 @@ final class WasteTripController
             $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
             $parsed=WasteTripService::parseRequestIds((string)($_POST['request_ids']??'')); $this->assertParsedRequests($parsed);
             $input=$this->resolveResponsibleInput($context,$_POST);
+            $customerPayments=$this->customerPaymentsForSession($_POST,$context['sessionUser']);
             $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if(!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена: проверка ID-коллизий недоступна.');
-            $businessId=WasteTripService::createIndependent($pdo,$legacy,$input,$parsed['ids'],$context['sessionUser']);
+            $businessId=WasteTripService::createIndependent($pdo,$legacy,$input,$parsed['ids'],$context['sessionUser'],$customerPayments);
             $_SESSION['waste_trip_success']='Рейс #'.$businessId.' создан.';
             header('Location: '.app_url('/company/trips/departures'));
         } catch(Throwable $e) {
@@ -74,7 +77,7 @@ final class WasteTripController
     public function legacyIndex(): void
     {
         requireRole(['company_owner','senior_logist','logist']); $context=$this->tenantContext(false);
-        $company=$context['company'];$localPdo=$context['localPdo'];$sessionUser=$context['sessionUser'];$central=$context['central'];$companyId=(int)$context['companyId'];$currentMembershipId=AccessControlService::effectiveMembershipId()??0;
+        $company=$context['company'];$localPdo=$context['localPdo'];$sessionUser=$context['sessionUser'];$central=$context['central'];$companyId=(int)$context['companyId'];$currentMembershipId=AccessControlService::effectiveMembershipId()??0;$isFinanceRealm=(string)($sessionUser['role_code']??'')==='company_owner';
         $clients=$routeExecutors=$responsibleUsers=$utilizers=[];
         $pageTitle='Рейсы из старой БД'; $pageContext='Рейсы › Перевозка отходов › Рейсы из старой БД'; $legacyRows=[]; $legacyError=$context['error']; $legacyWarning=null;
         if($company!==null&&$localPdo instanceof PDO&&$central instanceof PDO&&$legacyError===null){
@@ -101,10 +104,12 @@ final class WasteTripController
             $parsed=WasteTripService::parseRequestIds((string)($_POST['request_ids']??'')); $this->assertParsedRequests($parsed);
             $stage='manager_resolution';
             $input=$this->resolveResponsibleInput($context,$_POST);
+            $stage='customer_payments';
+            $customerPayments=$this->customerPaymentsForSession($_POST,$context['sessionUser']);
             $stage='legacy_connection';
             $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if (!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена.');
             $stage='legacy_write';
-            $businessId=WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,$id,$input,$parsed['ids'],$context['sessionUser']);
+            $businessId=WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,$id,$input,$parsed['ids'],$context['sessionUser'],$customerPayments);
             $_SESSION['waste_trip_success']='Legacy-рейс #'.$id.' создан как ERP-рейс #'.$businessId.'.';
         } catch(Throwable $e) {
             $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Создание рейса не выполнено.',['operation'=>'legacy_materialize','legacy_id'=>$id,'stage'=>$stage,'company_id'=>(int)($context['companyId']??0),'actor_user_id'=>(int)($context['sessionUser']['user_id']??0),'actor_membership_id'=>AccessControlService::effectiveMembershipId()??0,'actor_role'=>(string)($context['sessionUser']['role_code']??'')]);
@@ -116,7 +121,7 @@ final class WasteTripController
     public function modalView(string $id): void
     {
         requireRole(['company_owner','senior_logist','logist']); $context=$this->tenantContext(false); $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
-        $trip=WasteTripService::fetchTrip($pdo,(int)$id); if ($trip===null){http_response_code(404);echo '<div class="notice warn">Рейс не найден.</div>';return;}
+        $isFinanceRealm=(string)($context['sessionUser']['role_code']??'')==='company_owner';$trip=WasteTripService::fetchTrip($pdo,(int)$id,$isFinanceRealm); if ($trip===null){http_response_code(404);echo '<div class="notice warn">Рейс не найден.</div>';return;}
         if(!WasteTripService::canAccessTrip($pdo,$trip,$context['sessionUser'])){http_response_code(403);echo '<div class="notice warn">У вас нет доступа к этому рейсу.</div>';return;}
         header('Content-Type: text/html; charset=utf-8'); require base_path('app/View/partials/company_waste_trip_modal_view.php');
     }
@@ -124,7 +129,7 @@ final class WasteTripController
     public function modalEditForm(string $id): void
     {
         requireRole(['company_owner','senior_logist','logist']); $context=$this->tenantContext(false); $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
-        $trip=WasteTripService::fetchTrip($pdo,(int)$id); if ($trip===null){http_response_code(404);echo '<div class="notice warn">Рейс не найден.</div>';return;}
+        $isFinanceRealm=(string)($context['sessionUser']['role_code']??'')==='company_owner';$trip=WasteTripService::fetchTrip($pdo,(int)$id,$isFinanceRealm); if ($trip===null){http_response_code(404);echo '<div class="notice warn">Рейс не найден.</div>';return;}
         if(!WasteTripService::canAccessTrip($pdo,$trip,$context['sessionUser'])){http_response_code(403);echo '<div class="notice warn">У вас нет доступа к этому рейсу.</div>';return;}
         [$clients,$routeExecutors,$responsibleUsers,$utilizers]=$this->loadOptions($pdo,$context['sessionUser'],$context['central'],(int)$context['companyId']);
         $editOld=[];$editOldId=(int)($_SESSION['waste_trip_edit_id']??0);if($editOldId===(int)$id&&is_array($_SESSION['waste_trip_edit_old']??null)){$editOld=$_SESSION['waste_trip_edit_old'];unset($_SESSION['waste_trip_edit_id'],$_SESSION['waste_trip_edit_old']);}
@@ -139,7 +144,8 @@ final class WasteTripController
             $parsed=['ids'=>[],'invalid'=>[],'duplicates'=>[]];
             if(array_key_exists('request_ids',$_POST)){ $parsed=WasteTripService::parseRequestIds((string)$_POST['request_ids']); $this->assertParsedRequests($parsed); }
             $input=$this->resolveResponsibleInput($context,$_POST);
-            WasteTripService::update($pdo,(int)$id,$input,$parsed['ids'],(int)($_POST['lock_version']??0),$context['sessionUser']);
+            $customerPayments=$this->customerPaymentsForSession($_POST,$context['sessionUser']);
+            WasteTripService::update($pdo,(int)$id,$input,$parsed['ids'],(int)($_POST['lock_version']??0),$context['sessionUser'],$customerPayments);
             $_SESSION['waste_trip_success']='Рейс сохранён.';
             $redirect='/company/trips/departures?open_trip='.(int)$id;
         } catch(Throwable $e) { $_SESSION['waste_trip_error']=$this->publicError($e,'Не удалось сохранить рейс.');$_SESSION['waste_trip_edit_old']=$_POST;$_SESSION['waste_trip_edit_id']=(int)$id;$redirect='/company/trips/departures?open_edit='.(int)$id; }
@@ -184,6 +190,12 @@ final class WasteTripController
         if($executors!==[]){$ids=array_values(array_filter(array_map(static fn(array $r):int=>(int)($r['id']??0),$executors)));if($ids!==[]){$m=implode(',',array_fill(0,count($ids),'?'));$s=$pdo->prepare("SELECT cd.crew_id,GROUP_CONCAT(d.full_name ORDER BY cd.position SEPARATOR ' / ') AS driver_names FROM crew_drivers cd JOIN drivers d ON d.id=cd.driver_id WHERE cd.crew_id IN ({$m}) GROUP BY cd.crew_id");$s->execute($ids);$map=[];foreach($s->fetchAll(PDO::FETCH_ASSOC)as$r)$map[(int)$r['crew_id']]=trim((string)$r['driver_names']);foreach($executors as&$e){$cid=(int)($e['id']??0);if(($map[$cid]??'')!=='')$e['driver_name']=$map[$cid];}unset($e);}}
         $responsibleUsers=EntityResponsibilityService::eligibleRecipients($central,$pdo,$companyId);
         return[$clients,$executors,$responsibleUsers,WasteTripService::fetchActiveUtilizers($pdo)];
+    }
+
+    private function customerPaymentsForSession(array $post,array $sessionUser): ?array
+    {
+        if((string)($sessionUser['role_code']??'')!=='company_owner')return null;
+        return WasteTripCustomerPaymentService::parseRows((array)($post['customer_payments']??[]),true);
     }
 
     private function resolveResponsibleInput(array $context,array $input): array

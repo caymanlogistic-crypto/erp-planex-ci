@@ -19,8 +19,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9778ab65f486edfa075a454947f98b264c24ed8e",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9778ab65f486edfa075a454947f98b264c24ed8e/database/migrations-local/133_create_max_integration.sql",
+      "verified_sha": "c8f74a7402bd59289a2824aece78bc6b7a97bcaf",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c8f74a7402bd59289a2824aece78bc6b7a97bcaf/docs/database/TENANT_SCHEMA.md",
       "owning_paths": ["database/migrations-local/**", "app/Service/LocalMigrationService.php", "tools/database/generate_schema_docs.php", "docs/database/TENANT_SCHEMA*.md"],
       "navigation": "active",
       "machine_ownership_id": "data.tenant_schema"
@@ -52,8 +52,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "fb35948d6c6e14a0605e15b2770de00e312b96c2",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/actions/runs/34409165425",
+      "verified_sha": "78996a5727f853d9a58671ce75281dadddac7097",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/78996a5727f853d9a58671ce75281dadddac7097/app/Service/WasteTripCustomerPaymentService.php",
       "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql", "scripts/waste_trip*.php", "tests/waste_trip*.php", ".github/workflows/waste_trips*.yml"],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
