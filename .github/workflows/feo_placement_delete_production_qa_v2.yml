@@ -1,0 +1,166 @@
+name: FEO Placement Delete Production QA V2
+
+on:
+  push:
+    branches:
+      - qa/feo-placement-delete-production-20260912
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  TARGET_SHA: 45fc3d541a27e7dc613f201ac9d26dfe7af98abb
+
+jobs:
+  production-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+
+      - name: Verify deployed lineage and create temporary real owner session
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git cat-file -e "$TARGET_SHA^{commit}"
+          git show "$TARGET_SHA:public/assets/js/feo-map-placement.js" | grep -Fq 'data-placement-delete>Удалить</button>'
+          git show "$TARGET_SHA:app/Http/Routes/company_feo_requests.php" | grep -Fq "hash_equals('7550055', \$deletePassword)"
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/feo_delete_qa"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/feo_delete_qa" "$HOME/.ssh/known_hosts"
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_delete_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/feo_delete_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          DEPLOYED_SHA="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" 'cat "$HOME/planexp/deploy/P07_erpv2_deployed_commit.txt"')"
+          [[ "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git fetch origin chatgpt/production-stabilization-20260802 --depth=100
+          git cat-file -e "$DEPLOYED_SHA^{commit}"
+          git merge-base --is-ancestor "$TARGET_SHA" "$DEPLOYED_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$DEPLOYED_SHA/status" > /tmp/deploy-status.json
+          python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/deploy-status.json',encoding='utf-8'))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('actual deployed SHA lacks erpv2/deploy=success')
+          print('FEO_DELETE_DEPLOY_LINEAGE=PASS')
+          PY
+          REMOTE="/tmp/feo_delete_qa_session_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" .github/roles-access/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$REMOTE' create-legacy-owner")"
+          JSON="${OUT#ROLES_QA_SESSION=}"
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          sid=str(obj['sid']); cookie=str(obj['cookie'])
+          print(f'::add-mask::{sid}')
+          with open(sys.argv[2],'a',encoding='utf-8') as f:
+              f.write(f'QA_COOKIE_NAME={cookie}\nQA_OWNER_SESSION_ID={sid}\n')
+          PY
+          echo "DEPLOYED_SHA=$DEPLOYED_SHA" >> "$GITHUB_ENV"
+          echo "QA_REMOTE_HELPER=$REMOTE" >> "$GITHUB_ENV"
+          echo 'FEO_DELETE_OWNER_SESSION=PASS'
+
+      - name: Browser QA delete popup without committing deletion
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > feo-delete-qa.js <<'JS'
+          const { chromium } = require('playwright');
+          const assert = (v,m) => { if(!v) throw new Error(m); };
+          (async()=>{
+            const browser=await chromium.launch({headless:true});
+            const context=await browser.newContext({viewport:{width:1600,height:1000}});
+            await context.addCookies([{name:process.env.QA_COOKIE_NAME,value:process.env.QA_OWNER_SESSION_ID,domain:'plan-ex.ru',path:'/',secure:true,httpOnly:true,sameSite:'Lax'}]);
+            const page=await context.newPage();
+            const errors=[]; page.on('pageerror',e=>errors.push(String(e)));
+            const response=await page.goto('https://plan-ex.ru/erpv2/company/feo/requests/map-placement',{waitUntil:'networkidle',timeout:60000});
+            assert(response && response.status()===200,'map-placement HTTP != 200');
+            const row=page.locator('tr[data-placement-block-id][data-placement-block-status="applied"]').first();
+            await row.waitFor({state:'visible',timeout:15000});
+            const blockId=await row.getAttribute('data-placement-block-id');
+            assert(blockId,'no applied block id');
+            await row.dblclick();
+            const deleteBtn=page.locator('#feo-placement-detail-modal [data-placement-delete]');
+            await deleteBtn.waitFor({state:'visible',timeout:15000});
+            assert((await deleteBtn.innerText()).trim()==='Удалить','delete button text mismatch');
+            assert((await deleteBtn.getAttribute('class')||'').includes('btn-danger'),'delete button is not danger-styled');
+            await deleteBtn.click();
+            const modal=page.locator('#feo-placement-confirm-modal');
+            const password=modal.locator('[data-placement-delete-password]');
+            await password.waitFor({state:'visible',timeout:15000});
+            const title=(await modal.locator('[data-placement-confirm-title]').innerText()).trim();
+            assert(title==='Удалить блок?','delete confirm title mismatch: '+title);
+            const copy=await modal.locator('[data-placement-confirm-copy]').innerText();
+            assert(copy.includes('без возможности восстановления'),'irreversible warning missing');
+            assert(copy.includes('Блок сейчас применяется'),'applied-block warning missing');
+            assert(copy.includes('Изменение актуального состава'),'current-state effect missing');
+            assert(copy.includes('пароль удаления'),'password instruction missing');
+            assert((await password.getAttribute('type'))==='password','delete input type is not password');
+            const submit=modal.locator('[data-placement-confirm-submit]');
+            assert((await submit.innerText()).trim()==='Удалить','confirm button text mismatch');
+            assert(await submit.isDisabled(),'delete confirm must be disabled before password entry');
+            await password.fill('qa-nonempty-do-not-submit');
+            assert(!(await submit.isDisabled()),'delete confirm did not enable after password entry');
+            // Never click the final confirm button in production QA.
+            await modal.locator('[data-close-modal="feo-placement-confirm-modal"]').filter({hasText:'Отмена'}).click();
+            assert(errors.length===0,'page errors: '+errors.join(' | '));
+            console.log('FEO_DELETE_BLOCK_ID='+blockId);
+            console.log('FEO_DELETE_BUTTON=PASS');
+            console.log('FEO_DELETE_WARNING_MODAL=PASS');
+            console.log('FEO_DELETE_PASSWORD_FIELD=PASS');
+            console.log('FEO_DELETE_NO_PRODUCTION_MUTATION=PASS');
+            await context.close(); await browser.close();
+          })().catch(e=>{console.error(e&&e.stack||e);process.exit(1);});
+          JS
+          node feo-delete-qa.js
+
+      - name: Cleanup temporary owner session and prove old SID unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          STATUS=0
+          if [ -z "${QA_OWNER_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ] || [ -z "${QA_REMOTE_HELPER:-}" ]; then
+            STATUS=1
+          else
+            OUT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_delete_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$QA_REMOTE_HELPER' delete '$QA_OWNER_SESSION_ID'")" || STATUS=1
+            [ "$OUT" = 'ROLES_QA_SESSION_DELETED' ] || STATUS=1
+            OLD_HTTP="$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" \
+              https://plan-ex.ru/erpv2/company/feo/requests/map-placement || true)"
+            [ "$OLD_HTTP" != 200 ] || STATUS=1
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_delete_qa" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '$QA_REMOTE_HELPER' && test ! -e '$QA_REMOTE_HELPER'" || STATUS=1
+          fi
+          rm -f "$HOME/.ssh/feo_delete_qa" feo-delete-qa.js
+          [ "$STATUS" -eq 0 ] && echo 'FEO_DELETE_QA_SESSION_CLEANUP=PASS'
+          exit "$STATUS"
