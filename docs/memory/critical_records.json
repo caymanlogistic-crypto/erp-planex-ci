@@ -52,8 +52,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c8f74a7402bd59289a2824aece78bc6b7a97bcaf",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c8f74a7402bd59289a2824aece78bc6b7a97bcaf/tests/waste_trip_customer_payment_regression_test.php",
+      "verified_sha": "78996a5727f853d9a58671ce75281dadddac7097",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/78996a5727f853d9a58671ce75281dadddac7097/app/Service/WasteTripCustomerPaymentService.php",
       "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql", "scripts/waste_trip*.php", "tests/waste_trip*.php", ".github/workflows/waste_trips*.yml"],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
