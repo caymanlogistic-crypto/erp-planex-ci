@@ -48,6 +48,7 @@ $index = (string)file_get_contents($root . '/public/index.php');
 $layout = (string)file_get_contents($root . '/app/View/layouts/main.php');
 $appCss = (string)file_get_contents($root . '/public/assets/css/app.css');
 $maxCss = (string)file_get_contents($root . '/public/assets/css/max-messaging.css');
+$maxJs = (string)file_get_contents($root . '/public/assets/js/max-messaging-settings.js');
 $workspaceCss = (string)file_get_contents($root . '/public/assets/css/workspace-benchmark.css');
 
 foreach (['`max_bots`','`max_chats`','`max_message_logs`','`token_encrypted`','`webhook_secret_encrypted`'] as $token) $ok(str_contains($migration, $token), 'MAX migration missing ' . $token);
@@ -79,11 +80,19 @@ $ok(str_contains($layout, "'/company/max/settings',"), 'MAX settings must use th
 $ok(str_contains($workspaceCss, '.workspace-shell-1690{width:min(1690px,calc(100% - 12px));max-width:1690px'), 'System wide workspace must remain exactly 1690px max width.');
 $ok(str_contains($appCss, "@import url('./max-messaging.css');"), 'MAX messaging stylesheet must be loaded by the system bundle.');
 $ok(substr_count($settingsView, 'class="panel max-settings-shell"') === 1, 'MAX settings must render one system information box.');
-$ok(substr_count($settingsView, 'class="max-settings-section"') === 4, 'MAX settings system box must contain four compact functional sections.');
-$ok(substr_count($settingsView, 'class="checkbox-item"') >= 4 && substr_count($settingsView, 'class="checkbox-mark"') >= 4, 'MAX settings must use system checkboxes instead of native browser blue checkboxes.');
+$ok(substr_count($settingsView, 'data-max-tab="') === 3 && str_contains($settingsView, 'data-max-panel="overview"') && str_contains($settingsView, 'data-max-panel="settings"') && str_contains($settingsView, 'data-max-panel="journal"'), 'MAX settings must expose Overview / Settings / Journal system tabs.');
+$ok(str_contains($settingsView, 'ux-summary-strip') && str_contains($settingsView, '$maxHealthLabel') && str_contains($settingsView, '$maxLastSendAt'), 'MAX overview must derive compact live summary from current data.');
+$ok(str_contains($settingsView, 'onclick="openModal(\'max-bot-add-modal\')"') && str_contains($settingsView, 'onclick="openModal(\'max-chat-add-modal\')"'), 'MAX add forms must stay hidden behind system modals.');
+$ok(str_contains($settingsView, 'data-max-toggle="max-bot-detail-') && str_contains($settingsView, 'data-max-toggle="max-chat-detail-'), 'MAX technical bot/chat details must be collapsed by default.');
+$ok(str_contains($settingsView, 'data-max-toggle="max-bot-token-form-') && !str_contains($settingsView, 'Заменить токен</label>'), 'MAX replacement token field must be hidden until explicitly requested.');
+$ok(substr_count($settingsView, 'class="checkbox-item"') >= 3 && substr_count($settingsView, 'class="checkbox-mark"') >= 3, 'MAX settings must use system checkboxes instead of native browser blue checkboxes.');
 $ok(!str_contains($settingsView, '<label class="checkbox-label"><input type="checkbox"'), 'MAX settings must not use legacy native checkbox markup.');
 $ok(!str_contains($settingsView, 'style="'), 'MAX settings must not rely on page-local inline layout styles.');
-$ok(str_contains($maxCss, '.max-settings-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr))') && str_contains($maxCss, '.max-settings-section+.max-settings-section{border-top:1px solid var(--line-soft)}'), 'MAX settings compact grid/section layout contract missing.');
+$ok(str_contains($settingsView, '$maxPreview(') && str_contains($settingsView, 'max-log-detail-modal') && str_contains($settingsView, 'Raw payload'), 'MAX journal must show readable previews while retaining full diagnostics in a system modal.');
+$ok(str_contains($settingsView, 'data-max-log-source') && str_contains($settingsView, 'data-max-log-chat') && str_contains($settingsView, 'data-max-log-status') && str_contains($settingsView, 'data-max-log-search'), 'MAX journal compact client-side filters missing.');
+$ok(str_contains($settingsView, "max-messaging-settings.js") && str_contains($maxJs, "sessionStorage.setItem") && str_contains($maxJs, "readableText") && str_contains($maxJs, "filterLogs"), 'MAX settings tab/detail/log interaction contract missing.');
+$ok(str_contains($maxCss, '.max-settings-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr))') && str_contains($maxCss, '.max-compact-row{display:grid') && str_contains($maxCss, '.max-log-preview{'), 'MAX settings compact layout contract missing.');
+$ok(str_contains($settingsView, 'toast-stack') && !str_contains($settingsView, 'notice success max-settings-notice'), 'MAX settings flash feedback must use the existing system toast surface.');
 $ok(str_contains($messagesView, 'chat_ids[]') && str_contains($messagesView, 'maxlength="4000"'), 'Manual MAX composer must support multiple groups and API text limit.');
 
 echo "MAX_API_V2_CONTRACT=PASS\n";
