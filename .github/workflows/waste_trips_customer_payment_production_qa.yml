@@ -80,31 +80,31 @@ jobs:
           SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
           SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
           test "$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")" = "$TARGET_SHA"
-          REMOTE="/tmp/waste_payment_qa_session_${GITHUB_RUN_ID}.php"
-          # Clean the one known helper residue from the previous failed QA run; no business data is touched.
-          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "rm -f '/tmp/waste_payment_qa_session_34704666296.php' '$REMOTE'"
-          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "test -f '$LIVE_ROOT/.env' && test -f '$LIVE_ROOT/app/Support/helpers.php' && test -f '$LIVE_ROOT/app/Support/environment.php'"
-          "${SCP[@]}" .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          REMOTE="/tmp/waste_payment_roles_qa_${GITHUB_RUN_ID}.php"
+          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "rm -f '/tmp/waste_payment_qa_session_34704666296.php' '/tmp/waste_payment_qa_session_34704801187.php' '$REMOTE'"
+          "${SCP[@]}" .github/roles-access/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
           "${SSH[@]}" "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 -l '$REMOTE' >/dev/null"
           set +e
-          OUT="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' create company_owner" 2>qa-session-create.err)"
+          OUT="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' create-legacy-owner" 2>qa-session-create.err)"
           RC=$?
           set -e
           if [ "$RC" -ne 0 ]; then
-            echo "QA_SESSION_CREATE_REMOTE_RC=$RC"
+            echo "ROLES_QA_SESSION_CREATE_RC=$RC"
             sed -E 's#/home/[^ ]+#/home/[redacted]#g' qa-session-create.err | tail -20
             exit "$RC"
           fi
-          JSON="${OUT#QA_SESSION=}"
+          case "$OUT" in ROLES_QA_SESSION=*) ;; *) echo 'ROLES_QA_SESSION_OUTPUT_INVALID'; exit 1 ;; esac
+          JSON="${OUT#ROLES_QA_SESSION=}"
           python3 - "$JSON" "$GITHUB_ENV" <<'PY'
           import json,sys
           obj=json.loads(sys.argv[1])
-          for key in ('sid','csrf'): print(f'::add-mask::{obj[key]}')
+          print(f"::add-mask::{obj['sid']}")
           with open(sys.argv[2],'a') as f:
               f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
               f.write(f"QA_OWNER_SESSION_ID={obj['sid']}\n")
+              f.write(f"QA_OWNER_COMPANY_ID={obj['company_id']}\n")
+          if obj['mode'] != 'create-legacy-owner': raise SystemExit('unexpected QA owner session mode')
           PY
-          echo 'WASTE_QA_DEPLOY_MARKER_EXACT=YES'
           echo 'WASTE_QA_OWNER_SESSION_CREATED=YES'
 
       - name: Read-only browser acceptance
@@ -127,16 +127,16 @@ jobs:
           set -u -o pipefail
           mkdir -p artifacts
           STATUS=0
-          REMOTE="/tmp/waste_payment_qa_session_${GITHUB_RUN_ID}.php"
+          REMOTE="/tmp/waste_payment_roles_qa_${GITHUB_RUN_ID}.php"
           if [ -f "$HOME/.ssh/waste_payment_qa_key" ]; then
             if [ -n "${QA_OWNER_SESSION_ID:-}" ] && [ -n "${QA_COOKIE_NAME:-}" ]; then
               OUT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
                 "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' delete '$QA_OWNER_SESSION_ID'")" || STATUS=1
-              [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+              [ "$OUT" = 'ROLES_QA_SESSION_DELETED' ] || STATUS=1
               HTTP="$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" https://plan-ex.ru/erpv2/company/trips/departures || true)"
               [ "$HTTP" != '200' ] || STATUS=1
             fi
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST"               "rm -f '$REMOTE' '/tmp/waste_payment_qa_session_34704666296.php' && test ! -e '$REMOTE' && test ! -e '/tmp/waste_payment_qa_session_34704666296.php'" || STATUS=1
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST"               "rm -f '$REMOTE' '/tmp/waste_payment_qa_session_34704666296.php' '/tmp/waste_payment_qa_session_34704801187.php' && test ! -e '$REMOTE' && test ! -e '/tmp/waste_payment_qa_session_34704666296.php' && test ! -e '/tmp/waste_payment_qa_session_34704801187.php'" || STATUS=1
           else
             STATUS=1
           fi

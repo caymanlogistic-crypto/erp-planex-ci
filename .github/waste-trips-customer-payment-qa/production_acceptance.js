@@ -57,8 +57,8 @@ const saveEvidence = () => fs.writeFileSync('artifacts/waste-trips-customer-paym
   ok(headers.map(x => x.trim()).includes('СТАВКА ЗАКАЗЧИКА'), 'СТАВКА ЗАКАЗЧИКА column missing');
   ok(headers.length === 11, `registry expected 11 columns, got ${headers.length}`);
   ok(rowCount > 0, 'company 25 has no Waste Trip row for modal acceptance');
-  ok(await page.locator('.waste-registry tbody td:nth-child(6)').count() > 0, 'customer cells missing');
-  ok(await page.locator('.waste-registry tbody td:nth-child(7)').count() > 0, 'customer rate cells missing');
+  ok(await page.locator('.waste-registry tbody td:nth-child(3)').count() > 0, 'customer cells missing');
+  ok(await page.locator('.waste-registry tbody td:nth-child(8)').count() > 0, 'customer rate cells missing');
 
   await createTrigger.click({ timeout: 10000 });
   await page.locator('#waste-trip-create-modal').waitFor({ state: 'visible', timeout: 10000 });
@@ -68,7 +68,7 @@ const saveEvidence = () => fs.writeFileSync('artifacts/waste-trips-customer-paym
     title: (await create.locator('.modal-title').textContent() || '').trim(),
     client_present: await create.locator('select[name="client_id"]').count(),
     payment_block_present: await create.locator('.waste-customer-payment-block').count(),
-    payment_title: (await create.locator('.linear-trip-block-title').textContent() || '').trim(),
+    payment_title: (await create.locator('.waste-customer-payment-block .linear-trip-block-title').textContent() || '').trim(),
     initial_payment_rows: await paymentRows.count(),
     amount_fields: await create.locator('input[name^="customer_payments"][name$="[amount]"]').count(),
     method_fields: await create.locator('select[name^="customer_payments"][name$="[payment_method]"]').count(),
