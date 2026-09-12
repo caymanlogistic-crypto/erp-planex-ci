@@ -92,6 +92,7 @@ $ok(str_contains($settingsView, '$maxPreview(') && str_contains($settingsView, '
 $ok(str_contains($settingsView, 'data-max-log-source') && str_contains($settingsView, 'data-max-log-chat') && str_contains($settingsView, 'data-max-log-status') && str_contains($settingsView, 'data-max-log-search'), 'MAX journal compact client-side filters missing.');
 $ok(str_contains($settingsView, "max-messaging-settings.js") && str_contains($maxJs, "sessionStorage.setItem") && str_contains($maxJs, "readableText") && str_contains($maxJs, "filterLogs"), 'MAX settings tab/detail/log interaction contract missing.');
 $ok(str_contains($maxCss, '.max-settings-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr))') && str_contains($maxCss, '.max-compact-row{display:grid') && str_contains($maxCss, '.max-log-preview{'), 'MAX settings compact layout contract missing.');
+$ok(str_contains($maxCss, '.max-overview-status-grid .table-card.table-card--toolbar-only{grid-template-rows:36px auto}'), 'MAX overview bot/group tables must keep natural row height despite later generic table-card CSS.');
 $ok(str_contains($settingsView, 'toast-stack') && !str_contains($settingsView, 'notice success max-settings-notice'), 'MAX settings flash feedback must use the existing system toast surface.');
 $ok(str_contains($messagesView, 'chat_ids[]') && str_contains($messagesView, 'maxlength="4000"'), 'Manual MAX composer must support multiple groups and API text limit.');
 
