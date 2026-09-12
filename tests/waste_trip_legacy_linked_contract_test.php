@@ -24,5 +24,6 @@ $edit=(string)file_get_contents($root.'/app/View/partials/company_waste_trip_mod
 $page=(string)file_get_contents($root.'/app/View/pages/company_waste_trips.php');if(!str_contains($page,'name="responsible_membership_id"')||!str_contains($page,'$oldResponsibleMembership'))$fail('main create manager membership/restoration semantics missing');$head=preg_match('/<thead><tr>(.*?)<\/tr><\/thead>/s',$page,$m)?$m[1]:'';if(substr_count($head,'<th>')!==11)$fail('main registry must have exactly 11 columns');
 foreach(['waste-request-list','waste-request-id','flex-wrap:wrap','th:nth-child(9),.waste-registry td:nth-child(9)','white-space:normal!important','min-width:0!important','$openTripId','loadModal(\'view\'']as$n)if(!str_contains($page,$n))$fail('registry/open-trip contract missing '.$n);
 if(str_contains($page,'text-overflow:ellipsis'))$fail('request registry must not ellipsize IDs');
-if(!str_contains($page,"closeModal('waste-trip-view-modal');loadModal('edit'"))$fail('modal stack handoff missing');
+if(str_contains($page,"closeModal('waste-trip-view-modal');loadModal('edit'"))$fail('edit must not close the shared Waste Trip modal before switching modes');
+if(!str_contains($page,"loadModal('edit',b.dataset.wasteOpenEdit)")||str_contains($page,'id="waste-trip-edit-modal"'))$fail('shared modal view/edit handoff missing');
 echo "WASTE_TRIP_LEGACY_LINKED=PASS\n";
