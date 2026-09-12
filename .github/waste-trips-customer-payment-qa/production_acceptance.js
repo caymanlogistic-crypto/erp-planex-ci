@@ -7,16 +7,17 @@ const sid = process.env.QA_OWNER_SESSION_ID;
 const sourceSha = process.env.TARGET_SHA || '';
 if (!cookieName || !sid) throw new Error('QA session env missing');
 
+fs.mkdirSync('artifacts', { recursive: true });
 const failures = [];
-const evidence = { source_sha: sourceSha, registry: {}, create: {}, view: {}, edit: {}, runtime: {} };
+const evidence = { source_sha: sourceSha, screen: {}, registry: {}, create: {}, view: {}, edit: {}, runtime: {} };
 const consoleErrors = [];
 const pageErrors = [];
 const serverErrors = [];
 const ok = (v, m) => { if (!v) failures.push(m); };
 const hasText = (s, x) => String(s || '').includes(x);
+const saveEvidence = () => fs.writeFileSync('artifacts/waste-trips-customer-payment-production-qa.json', JSON.stringify(evidence, null, 2));
 
 (async () => {
-  fs.mkdirSync('artifacts', { recursive: true });
   const browser = await chromium.launch({ headless: true });
   const context = await browser.newContext({ ignoreHTTPSErrors: false, viewport: { width: 1440, height: 1000 } });
   await context.addCookies([{ name: cookieName, value: sid, domain: 'plan-ex.ru', path: '/', secure: true, httpOnly: true, sameSite: 'Lax' }]);
@@ -26,9 +27,27 @@ const hasText = (s, x) => String(s || '').includes(x);
   page.on('response', r => { if (r.status() >= 500) serverErrors.push({ status: r.status(), url: r.url() }); });
 
   const response = await page.goto(BASE + '/company/trips/departures', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForTimeout(700);
+  const bodyText = (await page.locator('body').innerText()).replace(/\s+/g, ' ').trim();
+  const pageTitle = (await page.locator('.page-title').first().textContent().catch(() => '') || '').trim();
+  const createTrigger = page.locator('button[onclick*="waste-trip-create-modal"]');
+  evidence.screen = {
+    http_status: response ? response.status() : null,
+    final_url: page.url(),
+    page_title: pageTitle,
+    create_trigger_count: await createTrigger.count(),
+    body_excerpt: bodyText.slice(0, 1200),
+  };
   ok(response && response.status() === 200, 'departures registry HTTP != 200');
   ok(!page.url().includes('/login'), 'departures registry redirected to login');
-  await page.waitForTimeout(700);
+  ok(pageTitle === 'Перевозка отходов', `unexpected page title: ${pageTitle || '(empty)'}`);
+  ok(evidence.screen.create_trigger_count === 1, `create trigger count=${evidence.screen.create_trigger_count}`);
+  if (failures.length) {
+    evidence.runtime = { console_errors: consoleErrors, page_errors: pageErrors, http_5xx: serverErrors };
+    saveEvidence();
+    await page.screenshot({ path: 'artifacts/waste-trips-screen-diagnostic.png', fullPage: true });
+    throw new Error('screen precondition failed: ' + failures.join(' | ') + ' | body=' + bodyText.slice(0, 700));
+  }
 
   const headers = await page.locator('.waste-registry thead th').allTextContents();
   const rows = page.locator('.waste-registry tbody tr[data-waste-view]');
@@ -41,7 +60,7 @@ const hasText = (s, x) => String(s || '').includes(x);
   ok(await page.locator('.waste-registry tbody td:nth-child(6)').count() > 0, 'customer cells missing');
   ok(await page.locator('.waste-registry tbody td:nth-child(7)').count() > 0, 'customer rate cells missing');
 
-  await page.getByRole('button', { name: 'Создать рейс' }).click();
+  await createTrigger.click({ timeout: 10000 });
   await page.locator('#waste-trip-create-modal').waitFor({ state: 'visible', timeout: 10000 });
   const create = page.locator('#waste-trip-create-modal');
   const paymentRows = create.locator('[data-payment-container="customer_payments"] [data-payment-row]');
@@ -111,7 +130,7 @@ const hasText = (s, x) => String(s || '').includes(x);
   evidence.runtime = { console_errors: consoleErrors, page_errors: pageErrors, http_5xx: serverErrors };
   ok(pageErrors.length === 0, `page errors: ${pageErrors.join(' | ')}`);
   ok(serverErrors.length === 0, `HTTP 5xx: ${JSON.stringify(serverErrors)}`);
-  fs.writeFileSync('artifacts/waste-trips-customer-payment-production-qa.json', JSON.stringify(evidence, null, 2));
+  saveEvidence();
   await browser.close();
 
   if (failures.length) {
@@ -122,7 +141,9 @@ const hasText = (s, x) => String(s || '').includes(x);
   console.log('WASTE_TRIPS_CUSTOMER_PAYMENT_PROD_QA=PASS');
   console.log('WASTE_TRIPS_PRODUCTION_READ_ONLY=YES');
   console.log(JSON.stringify(evidence));
-})().catch(err => {
+})().catch(async err => {
+  evidence.runtime = { console_errors: consoleErrors, page_errors: pageErrors, http_5xx: serverErrors };
+  try { saveEvidence(); } catch (_) {}
   console.error(err && err.stack || err);
   process.exit(1);
 });
