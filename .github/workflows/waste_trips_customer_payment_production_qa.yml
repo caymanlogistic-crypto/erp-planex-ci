@@ -1,0 +1,143 @@
+name: Waste Trips Customer Payment Production QA
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-customer-payment-prod-20260912
+
+permissions:
+  contents: read
+  statuses: read
+
+env:
+  TARGET_SHA: abdbaa8c87f3e294edb42acf4265ba7f490e65a5
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  production-qa:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate QA lineage and production gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$TARGET_SHA" HEAD
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$TARGET_SHA/status" > /tmp/status.json
+          TARGET_SHA="$TARGET_SHA" python3 - <<'PY'
+          import json,os
+          data=json.load(open('/tmp/status.json'))
+          latest={}
+          for row in data.get('statuses',[]): latest.setdefault(row.get('context'),row)
+          for ctx in ('erpv2/deploy','erpv2/migration134'):
+              if latest.get(ctx,{}).get('state')!='success': raise SystemExit(f'{ctx} is not success')
+          print('WASTE_QA_DEPLOY_AND_MIGRATION_GATE=PASS')
+          print('WASTE_QA_TARGET_SHA='+os.environ['TARGET_SHA'])
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.54.2
+          npx playwright install --with-deps chromium
+          node --check .github/waste-trips-customer-payment-qa/production_acceptance.js
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/waste_payment_qa_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/waste_payment_qa_key" "$HOME/.ssh/known_hosts"
+
+      - name: Verify deployed marker and create temporary owner QA session
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          test "$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")" = "$TARGET_SHA"
+          REMOTE="/tmp/waste_payment_qa_session_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          OUT="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' create company_owner")"
+          JSON="${OUT#QA_SESSION=}"
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          for key in ('sid','csrf'): print(f'::add-mask::{obj[key]}')
+          with open(sys.argv[2],'a') as f:
+              f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
+              f.write(f"QA_OWNER_SESSION_ID={obj['sid']}\n")
+          PY
+          echo 'WASTE_QA_DEPLOY_MARKER_EXACT=YES'
+          echo 'WASTE_QA_OWNER_SESSION_CREATED=YES'
+
+      - name: Read-only browser acceptance
+        shell: bash
+        run: |
+          set -euo pipefail
+          node .github/waste-trips-customer-payment-qa/production_acceptance.js | tee artifacts/waste-trips-customer-payment-console.txt
+          grep -q '^WASTE_TRIPS_CUSTOMER_PAYMENT_PROD_QA=PASS$' artifacts/waste-trips-customer-payment-console.txt
+          grep -q '^WASTE_TRIPS_PRODUCTION_READ_ONLY=YES$' artifacts/waste-trips-customer-payment-console.txt
+
+      - name: Cleanup QA session and prove residue zero
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          mkdir -p artifacts
+          STATUS=0
+          REMOTE="/tmp/waste_payment_qa_session_${GITHUB_RUN_ID}.php"
+          if [ -f "$HOME/.ssh/waste_payment_qa_key" ] && [ -n "${QA_OWNER_SESSION_ID:-}" ] && [ -n "${QA_COOKIE_NAME:-}" ]; then
+            OUT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' delete '$QA_OWNER_SESSION_ID'")" || STATUS=1
+            [ "$OUT" = 'QA_SESSION_DELETED' ] || STATUS=1
+            HTTP="$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" https://plan-ex.ru/erpv2/company/trips/departures || true)"
+            [ "$HTTP" != '200' ] || STATUS=1
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_payment_qa_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" "rm -f '$REMOTE' && test ! -e '$REMOTE'" || STATUS=1
+          else
+            STATUS=1
+          fi
+          rm -f "$HOME/.ssh/waste_payment_qa_key"
+          if [ "$STATUS" -eq 0 ]; then
+            echo 'WASTE_TRIPS_QA_RESIDUE=0' | tee artifacts/waste-trips-qa-cleanup.txt
+          else
+            echo 'WASTE_TRIPS_QA_RESIDUE=FAIL' | tee artifacts/waste-trips-qa-cleanup.txt
+          fi
+          exit "$STATUS"
+
+      - name: Upload production QA evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trips-customer-payment-production-${{ env.TARGET_SHA }}
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 30
