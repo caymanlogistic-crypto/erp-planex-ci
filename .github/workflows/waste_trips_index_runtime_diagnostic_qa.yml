@@ -40,7 +40,7 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/waste_index_diag" "$HOME/.ssh/known_hosts"
 
-      - name: Collect exact bounded registry exception
+      - name: Isolate exact read-only registry stage
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -51,22 +51,46 @@ jobs:
           SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_index_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
           marker="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
           test "$marker" = "$BASE_SHA"
-          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "LIVE_ROOT='$LIVE_ROOT' bash -se" <<'REMOTE' | tee waste_index_runtime.txt
-          set -euo pipefail
-          echo 'WASTE_INDEX_DIAGNOSTIC_BEGIN'
-          log_path="$(/usr/bin/php8.5 -r 'echo ini_get("error_log");' 2>/dev/null || true)"
-          tmp="$(mktemp)"
-          if [ -n "$log_path" ] && [ -r "$log_path" ]; then printf '%s\n' "$log_path" >> "$tmp"; fi
-          find /home/s/spugovxsim -maxdepth 5 -type f \( -iname 'error_log' -o -iname '*error*.log' -o -iname '*php*.log' \) -mmin -180 -print 2>/dev/null >> "$tmp" || true
-          sort -u "$tmp" | head -20 | while IFS= read -r f; do
-            tail -n 800 "$f" 2>/dev/null | grep -F 'waste trips index failed:' | tail -n 30 || true
-          done
-          rm -f "$tmp"
-          echo 'WASTE_INDEX_DIAGNOSTIC_END'
-          REMOTE
-          grep -q '^WASTE_INDEX_DIAGNOSTIC_BEGIN$' waste_index_runtime.txt
-          grep -q '^WASTE_INDEX_DIAGNOSTIC_END$' waste_index_runtime.txt
-          grep -F 'waste trips index failed:' waste_index_runtime.txt | tail -n 1
+          cat <<'PHP' | "${SSH[@]}" "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5" | tee waste_index_runtime.txt
+          <?php
+          declare(strict_types=1);
+          $root=rtrim((string)getenv('PLANEX_ROOT'),'/');
+          if($root===''||!is_file($root.'/bootstrap/app.php')) throw new RuntimeException('PLANEX_ROOT invalid');
+          $config=require $root.'/bootstrap/app.php';
+          require_once $root.'/app/Support/crypto_helper.php';
+          require_once $root.'/app/Support/company_database.php';
+          $opt=[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC,PDO::ATTR_EMULATE_PREPARES=>false];
+          $cc=$config['database'];
+          $central=new PDO('mysql:host='.$cc['host'].';port='.($cc['port']??3306).';dbname='.$cc['database'].';charset=utf8mb4',$cc['username'],$cc['password'],$opt);
+          $central->exec('SET SESSION TRANSACTION READ ONLY');
+          $q=$central->prepare("SELECT id,name,status,db_identifier,db_host,db_port,db_username,db_password FROM companies WHERE id=25 AND status='active' LIMIT 1");
+          $q->execute(); $company=$q->fetch(); if(!is_array($company)) throw new RuntimeException('company 25 unavailable');
+          $tc=companyDatabaseConfig($config,$company);
+          $tenant=new PDO('mysql:host='.$tc['host'].';port='.($tc['port']??3306).';dbname='.$tc['database'].';charset=utf8mb4',$tc['username'],$tc['password'],$opt);
+          $tenant->exec('SET SESSION TRANSACTION READ ONLY');
+          $_SESSION=['role_code'=>'company_owner','user_id'=>1,'company_id'=>25];
+          $sessionUser=['role_code'=>'company_owner','user_id'=>1];
+          echo "WASTE_INDEX_STAGE_DIAGNOSTIC_BEGIN\n";
+          $run=static function(string $name, callable $fn): mixed {
+              try { $v=$fn(); $count=is_array($v)?count($v):(is_bool($v)?($v?1:0):$v); echo 'STAGE='.$name.' PASS='.json_encode($count,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES).PHP_EOL; return $v; }
+              catch(Throwable $e){ echo 'STAGE='.$name.' FAIL_CLASS='.get_class($e).' FAIL_CODE='.(string)$e->getCode().' FAIL_MESSAGE='.str_replace(["\r","\n"],' ',(string)$e->getMessage()).PHP_EOL; return null; }
+          };
+          $run('schema_ready',fn()=>App\Service\WasteTripService::schemaReady($tenant));
+          $trips=$run('fetch_trips_finance',fn()=>App\Service\WasteTripService::fetchTrips($tenant,[],true));
+          $run('customer_payment_count',fn()=>(int)$tenant->query('SELECT COUNT(*) FROM waste_trip_customer_payments')->fetchColumn());
+          if(is_array($trips)) $run('customer_payment_batch',fn()=>App\Service\WasteTripCustomerPaymentService::fetchForTrips($tenant,array_column($trips,'id')));
+          $run('visible_clients',fn()=>App\Service\LinearRouteService::fetchVisibleClients($tenant,$sessionUser));
+          $run('visible_executors',fn()=>App\Service\LinearRouteService::fetchVisibleRouteExecutors($tenant,$sessionUser));
+          $run('responsible_recipients',fn()=>App\Service\EntityResponsibilityService::eligibleRecipients($central,$tenant,25));
+          $run('active_utilizers',fn()=>App\Service\WasteTripService::fetchActiveUtilizers($tenant));
+          echo "WASTE_INDEX_STAGE_DIAGNOSTIC_END\n";
+          PHP
+          grep -q '^WASTE_INDEX_STAGE_DIAGNOSTIC_BEGIN$' waste_index_runtime.txt
+          grep -q '^WASTE_INDEX_STAGE_DIAGNOSTIC_END$' waste_index_runtime.txt
+          if grep -q ' FAIL_' waste_index_runtime.txt; then
+            grep ' FAIL_' waste_index_runtime.txt
+            exit 2
+          fi
 
       - name: Upload evidence
         if: always()
