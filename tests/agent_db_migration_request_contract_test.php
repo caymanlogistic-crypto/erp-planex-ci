@@ -3,7 +3,7 @@ $root = dirname(__DIR__);
 $workflow = file_get_contents($root . '/.github/workflows/erpv2_agent_db_migration_request.yml');
 $manifest = json_decode((string) file_get_contents($root . '/.github/agent_db_migration_request.json'), true);
 if (!is_string($workflow) || !is_array($manifest)) { fwrite(STDERR, "missing workflow/manifest\n"); exit(1); }
-$needles = ['migrate/erpv2-agent','actions: write','Validate exact canonical HEAD','Wait for exact canonical ERP PLANEX CI','Validate migration manifest and target workflow','Reconfirm canonical HEAD immediately before dispatch','Dispatch approved task-specific migration workflow',"'ref': os.environ['CANONICAL_BRANCH']"];
+$needles = ['migrate/erpv2-agent','actions: write','CANONICAL_CI_WORKFLOW: ci.yml','Validate exact canonical HEAD','Wait for exact canonical ERP PLANEX CI','read_state workflow_dispatch','AGENT_DB_MIGRATION_CANONICAL_CI_DISPATCHED=YES','actions/workflows/$CANONICAL_CI_WORKFLOW/dispatches','Validate migration manifest and target workflow','Reconfirm canonical HEAD immediately before dispatch','Dispatch approved task-specific migration workflow',"'ref': os.environ['CANONICAL_BRANCH']"];
 foreach ($needles as $needle) if (strpos($workflow,$needle)===false) { fwrite(STDERR,"missing contract token: $needle\n"); exit(1); }
 foreach (["\n  workflow_run:","\n  pull_request:","\n  schedule:"] as $forbidden) if(strpos($workflow,$forbidden)!==false){fwrite(STDERR,"forbidden request trigger: $forbidden\n");exit(1);}
 $required = ['migration_id','workflow','source_sha_input','confirmation_input','confirmation_value'];
