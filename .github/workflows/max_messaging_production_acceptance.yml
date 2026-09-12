@@ -7,6 +7,9 @@ on:
         description: 'Exact current canonical SHA already migrated and deployed to /erpv2'
         required: true
         type: string
+  push:
+    branches:
+      - qa/max-messaging-acceptance-agent
 
 permissions:
   contents: read
@@ -19,6 +22,8 @@ concurrency:
 
 env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  QA_TRIGGER_BRANCH: qa/max-messaging-acceptance-agent
+  SOURCE_SHA: ${{ github.event_name == 'workflow_dispatch' && inputs.source_sha || github.sha }}
   LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
   DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
   RESULT_DIR: max_messaging_acceptance_result
@@ -30,12 +35,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.source_sha }}
+          ref: ${{ env.SOURCE_SHA }}
           fetch-depth: 1
 
       - name: Validate exact canonical deployed SHA and prerequisite statuses
         env:
-          SHA: ${{ inputs.source_sha }}
+          SHA: ${{ env.SOURCE_SHA }}
+          EVENT_NAME: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
           API_URL: ${{ github.api_url }}
@@ -48,6 +55,11 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$SHA" =~ ^[0-9a-f]{40}$ ]]
+          if [ "$EVENT_NAME" = push ]; then
+            test "$REF_NAME" = "$QA_TRIGGER_BRANCH"
+          else
+            test "$EVENT_NAME" = workflow_dispatch
+          fi
           test "$(git rev-parse HEAD)" = "$SHA"
           test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SHA"
           install -d -m 700 "$HOME/.ssh"
@@ -170,7 +182,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: max_messaging_production_acceptance_${{ inputs.source_sha }}
+          name: max_messaging_production_acceptance_${{ env.SOURCE_SHA }}
           path: |
             max_133_production_readback.txt
             max_messaging_production_acceptance.txt
@@ -183,7 +195,7 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ github.token }}
-          SHA: ${{ inputs.source_sha }}
+          SHA: ${{ env.SOURCE_SHA }}
           REPOSITORY: ${{ github.repository }}
           API_URL: ${{ github.api_url }}
           JOB_STATUS: ${{ job.status }}

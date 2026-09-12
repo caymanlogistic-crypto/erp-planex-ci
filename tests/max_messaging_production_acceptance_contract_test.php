@@ -8,9 +8,10 @@ $identity=(string)file_get_contents($root.'/.github/max-messaging/qa_identity.ph
 $browser=(string)file_get_contents($root.'/.github/max-messaging/production_acceptance.js');
 $ok=static function(bool $v,string $m):void{if(!$v)throw new RuntimeException($m);};
 
-$ok(str_contains($workflow,"\n  workflow_dispatch:"),'MAX acceptance must be manual workflow_dispatch');
-foreach(["\n  push:","\n  workflow_run:","\n  pull_request:","\n  schedule:"]as$f)$ok(!str_contains($workflow,$f),'MAX acceptance has forbidden trigger '.$f);
-foreach(['Exact current canonical SHA already migrated and deployed','test "$marker" = "$SHA"','erpv2/deploy','erpv2/migration133','Read back production migration 133','Provision minimal temporary MAX QA identities','Run exact-SHA authenticated MAX acceptance','MAX_QA_RESIDUE=0','erpv2/max-messaging-acceptance','playwright@1.54.2']as$t)$ok(str_contains($workflow,$t),'MAX acceptance workflow missing '.$t);
+$ok(str_contains($workflow,"\n  workflow_dispatch:"),'MAX acceptance must retain manual workflow_dispatch');
+$ok(str_contains($workflow,"\n  push:\n    branches:\n      - qa/max-messaging-acceptance-agent"),'MAX acceptance must expose only the dedicated agent push trigger');
+foreach(["\n  workflow_run:","\n  pull_request:","\n  schedule:"]as$f)$ok(!str_contains($workflow,$f),'MAX acceptance has forbidden trigger '.$f);
+foreach(['Exact current canonical SHA already migrated and deployed','QA_TRIGGER_BRANCH: qa/max-messaging-acceptance-agent','SOURCE_SHA: ${{ github.event_name == \'workflow_dispatch\' && inputs.source_sha || github.sha }}','test "$REF_NAME" = "$QA_TRIGGER_BRANCH"','test "$marker" = "$SHA"','erpv2/deploy','erpv2/migration133','Read back production migration 133','Provision minimal temporary MAX QA identities','Run exact-SHA authenticated MAX acceptance','MAX_QA_RESIDUE=0','erpv2/max-messaging-acceptance','playwright@1.54.2']as$t)$ok(str_contains($workflow,$t),'MAX acceptance workflow missing '.$t);
 $ok(str_contains($workflow,'group: erpv2-controlled-deploy'),'MAX acceptance must serialize against deploy/migration');
 $ok(str_contains($workflow,'::add-mask::$cred'),'MAX acceptance credentials must be masked');
 foreach(['random_bytes','CompanyMembershipService','CompanyRoleService','UserSyncService','PageRegistry','grantablePageKeys','company.dashboard','max_bots','max_chats','max_message_logs','MAX_QA_IDENTITY_CREATED=YES','MAX_QA_ACCOUNT_RESIDUE=0','MAX_QA_ROLE_RESIDUE=0','MAX_QA_TENANT_PROJECTION_RESIDUE=0','MAX_QA_RESIDUE=0']as$t)$ok(str_contains($identity,$t),'MAX QA identity missing '.$t);
