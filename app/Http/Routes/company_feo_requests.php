@@ -5,6 +5,7 @@ require_once base_path('app/Service/FeoRequestService.php');
 require_once base_path('app/Service/FeoRequestInteractionService.php');
 require_once base_path('app/Service/FeoPlacementInputParser.php');
 require_once base_path('app/Service/FeoPlacementService.php');
+require_once base_path('app/Service/FeoPlacementAuthorService.php');
 require_once base_path('app/Service/FeoLegacyParityService.php');
 require_once base_path('app/Http/Controllers/Company/FeoRequestsController.php');
 require_once base_path('app/Http/Controllers/Company/FeoPlacementController.php');
