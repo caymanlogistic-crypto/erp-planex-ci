@@ -46,6 +46,9 @@ $settingsView = (string)file_get_contents($root . '/app/View/pages/company_max_s
 $messagesView = (string)file_get_contents($root . '/app/View/pages/company_max_messages.php');
 $index = (string)file_get_contents($root . '/public/index.php');
 $layout = (string)file_get_contents($root . '/app/View/layouts/main.php');
+$appCss = (string)file_get_contents($root . '/public/assets/css/app.css');
+$maxCss = (string)file_get_contents($root . '/public/assets/css/max-messaging.css');
+$workspaceCss = (string)file_get_contents($root . '/public/assets/css/workspace-benchmark.css');
 
 foreach (['`max_bots`','`max_chats`','`max_message_logs`','`token_encrypted`','`webhook_secret_encrypted`'] as $token) $ok(str_contains($migration, $token), 'MAX migration missing ' . $token);
 $ok(!preg_match('/`token`\s+(?:VARCHAR|TEXT|MEDIUMTEXT)/i', $migration), 'MAX token must not have a plaintext DB column.');
@@ -72,6 +75,15 @@ $ok(str_contains($layout, '/company/max/messages') && str_contains($layout, '/co
 
 $ok(str_contains($settingsView, 'type="password"') && str_contains($settingsView, 'Тестовая отправка'), 'MAX settings must mask token input and provide test send.');
 $ok(str_contains($settingsView, 'С июня 2026') && !str_contains($settingsView, 'Получить все группы'), 'MAX settings must not promise deprecated GET /chats discovery.');
+$ok(str_contains($layout, "'/company/max/settings',"), 'MAX settings must use the same wide workspace contract as Clients.');
+$ok(str_contains($workspaceCss, '.workspace-shell-1690{width:min(1690px,calc(100% - 12px));max-width:1690px'), 'System wide workspace must remain exactly 1690px max width.');
+$ok(str_contains($appCss, "@import url('./max-messaging.css');"), 'MAX messaging stylesheet must be loaded by the system bundle.');
+$ok(substr_count($settingsView, 'class="panel max-settings-shell"') === 1, 'MAX settings must render one system information box.');
+$ok(substr_count($settingsView, 'class="max-settings-section"') === 4, 'MAX settings system box must contain four compact functional sections.');
+$ok(substr_count($settingsView, 'class="checkbox-item"') >= 4 && substr_count($settingsView, 'class="checkbox-mark"') >= 4, 'MAX settings must use system checkboxes instead of native browser blue checkboxes.');
+$ok(!str_contains($settingsView, '<label class="checkbox-label"><input type="checkbox"'), 'MAX settings must not use legacy native checkbox markup.');
+$ok(!str_contains($settingsView, 'style="'), 'MAX settings must not rely on page-local inline layout styles.');
+$ok(str_contains($maxCss, '.max-settings-grid{display:grid;grid-template-columns:repeat(12,minmax(0,1fr))') && str_contains($maxCss, '.max-settings-section+.max-settings-section{border-top:1px solid var(--line-soft)}'), 'MAX settings compact grid/section layout contract missing.');
 $ok(str_contains($messagesView, 'chat_ids[]') && str_contains($messagesView, 'maxlength="4000"'), 'Manual MAX composer must support multiple groups and API text limit.');
 
 echo "MAX_API_V2_CONTRACT=PASS\n";
