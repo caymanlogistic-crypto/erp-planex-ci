@@ -1,7 +1,7 @@
 {
-  "migration_id": "133",
-  "workflow": "max_messaging_133_production_migration.yml",
+  "migration_id": "134",
+  "workflow": "waste_trips_134_production_migration.yml",
   "source_sha_input": "source_sha",
   "confirmation_input": "confirm_migration",
-  "confirmation_value": "APPLY_MAX_MESSAGING_133"
+  "confirmation_value": "APPLY_WASTE_TRIPS_134"
 }
