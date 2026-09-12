@@ -91,11 +91,24 @@ const saveEvidence = () => fs.writeFileSync('artifacts/waste-trips-customer-paym
   await page.screenshot({ path: 'artifacts/waste-trips-create-payment.png', fullPage: true });
   await page.evaluate(() => window.closeModal && window.closeModal('waste-trip-create-modal'));
 
-  const firstRow = rows.first();
-  const tripId = await firstRow.getAttribute('data-waste-view');
-  ok(!!tripId, 'first trip internal id missing');
-  if (tripId) {
-    await firstRow.click();
+  let editableRow = null;
+  let editableStatus = '';
+  for (let i = 0; i < rowCount; i++) {
+    const candidate = rows.nth(i);
+    const statusText = ((await candidate.locator('td').nth(4).textContent()) || '').replace(/\s+/g, ' ').trim();
+    if (statusText !== 'Груз сдан' && statusText !== 'Отменён') {
+      editableRow = candidate;
+      editableStatus = statusText;
+      break;
+    }
+  }
+  ok(!!editableRow, 'no editable Waste Trip row available for edit-flow acceptance');
+  const tripId = editableRow ? await editableRow.getAttribute('data-waste-view') : null;
+  ok(!!tripId, 'editable trip internal id missing');
+  evidence.registry.editable_trip_id = tripId;
+  evidence.registry.editable_trip_status = editableStatus;
+  if (tripId && editableRow) {
+    await editableRow.click();
     await page.locator('#waste-trip-view-modal').waitFor({ state: 'visible', timeout: 10000 });
     await page.waitForTimeout(600);
     const viewBody = page.locator('#waste-trip-view-body');
