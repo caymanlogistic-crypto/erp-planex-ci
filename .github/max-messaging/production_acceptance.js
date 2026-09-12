@@ -38,15 +38,17 @@ async function login(browser, credential) {
     mark('MAX_REAL_OWNER_LOGIN=PASS');
     let response = await owner.page.goto(base + '/company/max/settings', { waitUntil: 'domcontentloaded', timeout: 60000 });
     must(response && response.status() === 200, 'owner MAX settings did not return 200');
-    must((await owner.page.locator('body').innerText()).includes('MAX — интеграция'), 'MAX settings title missing');
-    must((await owner.page.locator('body').innerText()).includes('Тестовая отправка'), 'MAX test-send block missing');
+    must(appPath(owner.page.url()) === '/company/max/settings', `owner MAX settings final path=${appPath(owner.page.url())}`);
+    must(await owner.page.locator('h1.page-title').filter({ hasText: 'MAX — интеграция' }).count() === 1, 'MAX settings h1 missing');
+    must(await owner.page.locator('h3.panel-head-title').filter({ hasText: 'Тестовая отправка' }).count() >= 1, 'MAX test-send block missing');
     must(await owner.page.locator('input[type="password"][name="token"]').count() >= 1, 'masked MAX token input missing');
     mark('MAX_SETTINGS_OWNER=200_PASS');
     await owner.page.screenshot({ path: `${out}/owner-max-settings.png`, fullPage: true });
 
     response = await owner.page.goto(base + '/company/max/messages', { waitUntil: 'domcontentloaded', timeout: 60000 });
     must(response && response.status() === 200, 'owner MAX messages did not return 200');
-    must((await owner.page.locator('body').innerText()).includes('Сообщения MAX'), 'MAX messages title missing');
+    must(appPath(owner.page.url()) === '/company/max/messages', `owner MAX messages final path=${appPath(owner.page.url())}`);
+    must(await owner.page.locator('h1.page-title').filter({ hasText: 'Сообщения MAX' }).count() === 1, 'MAX messages h1 missing');
     mark('MAX_MESSAGES_OWNER=200_PASS');
     await owner.page.screenshot({ path: `${out}/owner-max-messages.png`, fullPage: true });
     await owner.context.close();
