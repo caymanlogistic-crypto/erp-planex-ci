@@ -4,7 +4,7 @@ const fs = require('fs');
 const BASE = 'https://plan-ex.ru/erpv2';
 const cookieName = process.env.QA_COOKIE_NAME;
 const sid = process.env.QA_OWNER_SESSION_ID;
-const sourceSha = process.env.TARGET_SHA || '';
+const sourceSha = process.env.QA_LIVE_SHA || process.env.MIGRATION_SHA || '';
 if (!cookieName || !sid) throw new Error('QA session env missing');
 
 fs.mkdirSync('artifacts', { recursive: true });
@@ -57,8 +57,8 @@ const saveEvidence = () => fs.writeFileSync('artifacts/waste-trips-customer-paym
   ok(headers.map(x => x.trim()).includes('СТАВКА ЗАКАЗЧИКА'), 'СТАВКА ЗАКАЗЧИКА column missing');
   ok(headers.length === 11, `registry expected 11 columns, got ${headers.length}`);
   ok(rowCount > 0, 'company 25 has no Waste Trip row for modal acceptance');
-  ok(await page.locator('.waste-registry tbody td:nth-child(3)').count() > 0, 'customer cells missing');
-  ok(await page.locator('.waste-registry tbody td:nth-child(8)').count() > 0, 'customer rate cells missing');
+  ok(await page.locator('.waste-registry tbody td:nth-child(6)').count() > 0, 'customer cells missing');
+  ok(await page.locator('.waste-registry tbody td:nth-child(7)').count() > 0, 'customer rate cells missing');
 
   await createTrigger.click({ timeout: 10000 });
   await page.locator('#waste-trip-create-modal').waitFor({ state: 'visible', timeout: 10000 });
