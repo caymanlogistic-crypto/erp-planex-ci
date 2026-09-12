@@ -63,8 +63,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "bcc708b8d9546bbb0109ca417acc9678b6fba98a",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/bcc708b8d9546bbb0109ca417acc9678b6fba98a/.github/workflows/ci.yml",
+      "verified_sha": "3716f83f1b4bf8221c20d1ab0975e91de6fa2d76",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/3716f83f1b4bf8221c20d1ab0975e91de6fa2d76/tools/memory_integrity_check.py",
       "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py", "tools/runner/**", "tests/runner_helpers_contract_test.py"],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
