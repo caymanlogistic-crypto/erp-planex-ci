@@ -1,6 +1,7 @@
 @import url('./app-base.css');
 @import url('./focus-trace-reset.css');
 @import url('./workspace-benchmark.css');
+@import url('./max-messaging.css');
 
 /* System-wide select rendering: use the browser's native control only.
    Custom SVG chevrons caused repeated brown marks in opened option lists. */
