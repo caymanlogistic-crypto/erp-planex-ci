@@ -1,0 +1,83 @@
+name: Waste Trips Index Runtime Diagnostic QA
+
+on:
+  push:
+    branches:
+      - qa/waste-trips-index-diagnostic-20260912
+
+permissions:
+  contents: read
+
+env:
+  BASE_SHA: 3777ff4d607f7ca6c4d059f392be21a7e94820d1
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate diagnostic lineage
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$BASE_SHA" HEAD
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/waste_index_diag"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/waste_index_diag" "$HOME/.ssh/known_hosts"
+
+      - name: Collect exact bounded registry exception
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_index_diag" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          marker="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$marker" = "$BASE_SHA"
+          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "LIVE_ROOT='$LIVE_ROOT' bash -se" <<'REMOTE' | tee waste_index_runtime.txt
+          set -euo pipefail
+          echo 'WASTE_INDEX_DIAGNOSTIC_BEGIN'
+          log_path="$(/usr/bin/php8.5 -r 'echo ini_get("error_log");' 2>/dev/null || true)"
+          tmp="$(mktemp)"
+          if [ -n "$log_path" ] && [ -r "$log_path" ]; then printf '%s\n' "$log_path" >> "$tmp"; fi
+          find /home/s/spugovxsim -maxdepth 5 -type f \( -iname 'error_log' -o -iname '*error*.log' -o -iname '*php*.log' \) -mmin -180 -print 2>/dev/null >> "$tmp" || true
+          sort -u "$tmp" | head -20 | while IFS= read -r f; do
+            tail -n 800 "$f" 2>/dev/null | grep -F 'waste trips index failed:' | tail -n 30 || true
+          done
+          rm -f "$tmp"
+          echo 'WASTE_INDEX_DIAGNOSTIC_END'
+          REMOTE
+          grep -q '^WASTE_INDEX_DIAGNOSTIC_BEGIN$' waste_index_runtime.txt
+          grep -q '^WASTE_INDEX_DIAGNOSTIC_END$' waste_index_runtime.txt
+          grep -F 'waste trips index failed:' waste_index_runtime.txt | tail -n 1
+
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-index-runtime-${{ env.BASE_SHA }}
+          path: waste_index_runtime.txt
+          if-no-files-found: warn
+          retention-days: 7
+
+      - name: Cleanup local SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/waste_index_diag"
