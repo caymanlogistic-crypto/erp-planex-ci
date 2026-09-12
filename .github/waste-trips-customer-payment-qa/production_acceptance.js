@@ -30,7 +30,7 @@ const saveEvidence = () => fs.writeFileSync('artifacts/waste-trips-customer-paym
   await page.waitForTimeout(700);
   const bodyText = (await page.locator('body').innerText()).replace(/\s+/g, ' ').trim();
   const pageTitle = (await page.locator('.page-title').first().textContent().catch(() => '') || '').trim();
-  const createTrigger = page.getByRole('button', { name: 'Создать рейс', exact: true });
+  const createTrigger = page.locator('.page-head-actions > button[onclick="openModal(\'waste-trip-create-modal\')"]');
   evidence.screen = {
     http_status: response ? response.status() : null,
     final_url: page.url(),
