@@ -144,7 +144,7 @@ jobs:
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_author_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
             "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/feo_author_backfill_${GITHUB_RUN_ID}.php'" | tee feo_author_apply.txt
           grep -q '^FEO_AUTHOR_BACKFILL_OK ' feo_author_apply.txt
-          grep -q ' login=Spugov ' feo_author_apply.txt
+          grep -qi ' login=spugov ' feo_author_apply.txt
 
       - name: Snapshot AFTER and verify invariants
         env:
