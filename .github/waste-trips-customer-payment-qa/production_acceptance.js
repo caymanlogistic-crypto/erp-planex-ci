@@ -111,20 +111,43 @@ const saveEvidence = () => fs.writeFileSync('artifacts/waste-trips-customer-paym
     ok(evidence.view.has_rate_state, 'view popup customer rate state missing');
     await page.screenshot({ path: 'artifacts/waste-trips-view-payment.png', fullPage: true });
 
-    const editResponse = await context.request.get(`${BASE}/company/trips/departures/${encodeURIComponent(tripId)}/modal-edit`, { headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-    const editHtml = await editResponse.text();
+    const editButton = page.locator('#waste-trip-view-modal [data-waste-open-edit]').first();
+    ok(await editButton.count() === 1, 'standard Редактировать action missing in view footer');
+    ok((await editButton.textContent() || '').trim() === 'Редактировать', 'view edit action label must be Редактировать');
+    ok(await editButton.evaluate(el => el.classList.contains('btn') && el.classList.contains('btn-primary')), 'view edit action must use btn btn-primary design-system classes');
+    await editButton.click();
+    await page.locator('#waste-trip-view-modal #waste-trip-edit-form').waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForTimeout(300);
+    const sharedModal = page.locator('#waste-trip-view-modal');
+    const editForm = sharedModal.locator('#waste-trip-edit-form');
+    const editTitle = (await sharedModal.locator('#waste-trip-view-title').textContent() || '').trim();
     evidence.edit = {
-      status: editResponse.status(),
-      has_customer: editHtml.includes('name="client_id"'),
-      has_payment_title: editHtml.includes('Оплата заказчика'),
-      has_amount: /customer_payments\[0\]\[amount\]/.test(editHtml),
-      has_method: /customer_payments\[0\]\[payment_method\]/.test(editHtml),
-      has_vat: /customer_payments\[0\]\[vat_rate\]/.test(editHtml),
-      has_condition: /customer_payments\[0\]\[condition_type\]/.test(editHtml),
+      same_modal_visible: await sharedModal.isVisible(),
+      separate_edit_modal_count: await page.locator('#waste-trip-edit-modal').count(),
+      title: editTitle,
+      has_customer: await editForm.locator('select[name="client_id"]').count() === 1,
+      has_payment_title: hasText(await editForm.textContent(), 'Оплата заказчика'),
+      has_amount: await editForm.locator('input[name^="customer_payments"][name$="[amount]"]').count() > 0,
+      has_method: await editForm.locator('select[name^="customer_payments"][name$="[payment_method]"]').count() > 0,
+      has_vat: await editForm.locator('select[name^="customer_payments"][name$="[vat_rate]"]').count() > 0,
+      has_condition: await editForm.locator('select[name^="customer_payments"][name$="[condition_type]"]').count() > 0,
+      cancel_label: (await editForm.locator('[data-waste-cancel-edit]').textContent() || '').trim(),
+      cancel_is_ghost: await editForm.locator('[data-waste-cancel-edit]').evaluate(el => el.classList.contains('btn') && el.classList.contains('btn-ghost')),
+      save_label: (await editForm.locator('button[type="submit"]').textContent() || '').trim(),
+      save_is_primary: await editForm.locator('button[type="submit"]').evaluate(el => el.classList.contains('btn') && el.classList.contains('btn-primary')),
     };
-    ok(evidence.edit.status === 200, `edit modal HTTP ${evidence.edit.status}`);
+    ok(evidence.edit.same_modal_visible, 'edit mode left the standard Waste Trip modal');
+    ok(evidence.edit.separate_edit_modal_count === 0, 'separate invented edit modal exists');
+    ok(/^Редактирование рейса #/.test(evidence.edit.title), `unexpected edit title: ${evidence.edit.title}`);
     ok(evidence.edit.has_customer, 'edit customer selector missing');
     ok(evidence.edit.has_payment_title && evidence.edit.has_amount && evidence.edit.has_method && evidence.edit.has_vat && evidence.edit.has_condition, 'edit customer payment controls incomplete');
+    ok(evidence.edit.cancel_label === 'Отмена' && evidence.edit.cancel_is_ghost, 'edit cancel must be standard btn btn-ghost Отмена');
+    ok(evidence.edit.save_label === 'Сохранить' && evidence.edit.save_is_primary, 'edit save must be standard btn btn-primary Сохранить');
+    await editForm.locator('[data-waste-cancel-edit]').click();
+    await page.locator('#waste-trip-view-modal [data-waste-open-edit]').waitFor({ state: 'visible', timeout: 10000 });
+    await page.waitForTimeout(250);
+    evidence.edit.cancel_returned_to_view = /^Рейс #/.test((await page.locator('#waste-trip-view-title').textContent() || '').trim());
+    ok(evidence.edit.cancel_returned_to_view, 'Отмена did not return to trip view in the same modal');
   }
 
   evidence.runtime = { console_errors: consoleErrors, page_errors: pageErrors, http_5xx: serverErrors };
