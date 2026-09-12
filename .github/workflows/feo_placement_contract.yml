@@ -23,6 +23,7 @@ on:
       - 'scripts/feo_placement_author_verify.php'
       - 'tests/feo_placement_contract_test.php'
       - 'tests/feo_placement_author_backfill_contract_test.php'
+      - 'tests/feo_placement_author_backfill_agent_request_contract_test.php'
       - 'tests/feo_placement_author_mysql_test.php'
       - 'tests/feo_legacy_parity_contract_test.php'
       - 'tests/feo_legacy_parity_mysql_test.php'
@@ -30,6 +31,7 @@ on:
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/feo_123_production_migration.yml'
       - '.github/workflows/feo_placement_author_backfill_production.yml'
+      - '.github/workflows/feo_placement_author_backfill_agent_request.yml'
       - '.github/workflows/feo_placement_contract.yml'
   push:
     branches:
@@ -53,6 +55,7 @@ on:
       - 'scripts/feo_placement_author_verify.php'
       - 'tests/feo_placement_contract_test.php'
       - 'tests/feo_placement_author_backfill_contract_test.php'
+      - 'tests/feo_placement_author_backfill_agent_request_contract_test.php'
       - 'tests/feo_placement_author_mysql_test.php'
       - 'tests/feo_legacy_parity_contract_test.php'
       - 'tests/feo_legacy_parity_mysql_test.php'
@@ -60,6 +63,7 @@ on:
       - '.github/agent_db_migration_request.json'
       - '.github/workflows/feo_123_production_migration.yml'
       - '.github/workflows/feo_placement_author_backfill_production.yml'
+      - '.github/workflows/feo_placement_author_backfill_agent_request.yml'
       - '.github/workflows/feo_placement_contract.yml'
   workflow_dispatch:
 
@@ -101,6 +105,7 @@ jobs:
           php -l scripts/feo_placement_author_verify.php
           php -l tests/feo_placement_contract_test.php
           php -l tests/feo_placement_author_backfill_contract_test.php
+          php -l tests/feo_placement_author_backfill_agent_request_contract_test.php
           php -l tests/feo_placement_author_mysql_test.php
           php -l tests/feo_legacy_parity_contract_test.php
           php -l tests/feo_legacy_parity_mysql_test.php
@@ -113,6 +118,7 @@ jobs:
         run: |
           php tests/feo_placement_contract_test.php
           php tests/feo_placement_author_backfill_contract_test.php
+          php tests/feo_placement_author_backfill_agent_request_contract_test.php
           php tests/feo_legacy_parity_contract_test.php
 
       - name: Legacy parity MySQL regression
