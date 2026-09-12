@@ -60,8 +60,23 @@ final class FeoPlacementAuthorService
         if (count($parts) < 2) return $parts[0] ?? (trim($fallbackLogin) !== '' ? trim($fallbackLogin) : '—');
         $first = (string)$parts[0];
         $surname = (string)$parts[count($parts) - 1];
+        if (count($parts) >= 3) {
+            $second = (string)$parts[1];
+            $last = (string)$parts[count($parts) - 1];
+            // ERP data contains both «Имя Отчество Фамилия» and
+            // «Фамилия Имя Отчество». Detect the latter by patronymic suffix.
+            if (self::looksLikePatronymic($last) && !self::looksLikePatronymic($second)) {
+                $first = $second;
+                $surname = (string)$parts[0];
+            }
+        }
         $initial = function_exists('mb_substr') ? mb_substr($surname, 0, 1, 'UTF-8') : substr($surname, 0, 1);
         return $initial === '' ? $first : $first . ' ' . $initial . '.';
+    }
+
+    private static function looksLikePatronymic(string $value): bool
+    {
+        return preg_match('/(?:ич|вна|чна|оглы|кызы)$/iu', trim($value)) === 1;
     }
 
     /** @param list<int|string> $ids @return array<int,array{full_name:string,login:string}> */
