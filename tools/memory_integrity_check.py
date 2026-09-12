@@ -44,16 +44,22 @@ def issue(issues: list[dict[str, str]], record_id: str, code: str, detail: str) 
     issues.append({"canonical_id": record_id, "code": code, "detail": detail})
 
 
-def ownership_ids(ownership_manifest: dict | None) -> set[str]:
+def ownership_scopes(ownership_manifest: dict | None) -> dict[str, list[str]]:
     if ownership_manifest is None:
-        return set()
+        return {}
     owners = ownership_manifest.get("owners")
     if not isinstance(owners, list):
         raise ValueError("ownership manifest owners must be a list")
-    ids = [str(x.get("id", "")).strip() for x in owners]
-    if any(not x for x in ids) or len(ids) != len(set(ids)):
-        raise ValueError("ownership manifest ids must be unique and non-empty")
-    return set(ids)
+    scopes: dict[str, list[str]] = {}
+    for owner in owners:
+        owner_id = str(owner.get("id", "")).strip()
+        paths = owner.get("owning_paths")
+        if not owner_id or owner_id in scopes:
+            raise ValueError("ownership manifest ids must be unique and non-empty")
+        if not isinstance(paths, list) or not paths or any(not isinstance(p, str) or not p.strip() for p in paths):
+            raise ValueError(f"ownership manifest owning_paths invalid for {owner_id or '<missing>'}")
+        scopes[owner_id] = [p.strip() for p in paths]
+    return scopes
 
 
 def validate_manifest(manifest: dict, head: str, ownership_manifest: dict | None = None) -> tuple[list[dict[str, str]], dict[str, int]]:
@@ -61,7 +67,8 @@ def validate_manifest(manifest: dict, head: str, ownership_manifest: dict | None
     records = manifest.get("records")
     if not isinstance(records, list):
         return ([{"canonical_id": "<manifest>", "code": "invalid_manifest", "detail": "records must be a list"}], {})
-    known_owners = ownership_ids(ownership_manifest)
+    owner_scopes = ownership_scopes(ownership_manifest)
+    known_owners = set(owner_scopes)
 
     ids = [str(r.get("canonical_id", "")).strip() for r in records]
     for cid, count in Counter(ids).items():
@@ -102,6 +109,12 @@ def validate_manifest(manifest: dict, head: str, ownership_manifest: dict | None
             issue(issues, cid, "unknown_machine_ownership", machine_owner)
             metrics["unresolved_machine_ownership"] += 1
 
+        # The Machine Ownership ID is the normative drift boundary. Rendered
+        # record owning_paths are human/compatibility context only (Memory
+        # Governance contract §9) and must not drive git pathspec evaluation
+        # when a canonical ownership manifest is available.
+        machine_paths = owner_scopes.get(machine_owner, paths) if owner_scopes else paths
+
         if criticality == "CRITICAL" and truth_status == "NEEDS_REVERIFY":
             issue(issues, cid, "critical_needs_reverify", "critical record cannot remain NEEDS_REVERIFY at terminal state")
             metrics["critical_needs_reverify"] += 1
@@ -109,7 +122,7 @@ def validate_manifest(manifest: dict, head: str, ownership_manifest: dict | None
             issue(issues, cid, "legacy_only_verified", "legacy implementation must not be current VERIFIED truth")
             metrics["legacy_only_verified"] += 1
 
-        for path in paths:
+        for path in machine_paths:
             if FRAGILE_MIGRATION_RANGE_RE.search(path):
                 issue(issues, cid, "fragile_migration_scope", path)
                 metrics["fragile_migration_scopes"] += 1
@@ -137,8 +150,8 @@ def validate_manifest(manifest: dict, head: str, ownership_manifest: dict | None
             continue
 
         implementation_like = semantic_class in {"IMPLEMENTATION", "LEGACY_IMPLEMENTATION"}
-        if criticality == "CRITICAL" and implementation_like and not paths:
-            issue(issues, cid, "orphan_critical_record", "critical implementation record has no owning_paths")
+        if criticality == "CRITICAL" and implementation_like and not machine_paths:
+            issue(issues, cid, "orphan_critical_record", "critical implementation record has no machine ownership scope")
             metrics["orphan_critical_records"] += 1
 
         if truth_status == "VERIFIED" and implementation_like:
@@ -153,9 +166,9 @@ def validate_manifest(manifest: dict, head: str, ownership_manifest: dict | None
             if criticality == "CRITICAL" and not evidence:
                 issue(issues, cid, "critical_missing_evidence", "critical VERIFIED implementation has no evidence")
                 metrics["critical_missing_evidence"] += 1
-            if paths:
+            if machine_paths:
                 try:
-                    changed = owning_paths_changed(verified_sha, head, paths)
+                    changed = owning_paths_changed(verified_sha, head, machine_paths)
                 except RuntimeError as exc:
                     issue(issues, cid, "git_diff_error", str(exc))
                     continue
