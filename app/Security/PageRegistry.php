@@ -63,6 +63,7 @@ final class PageRegistry
             self::definition('company.documents.create', 'Создать документ', 'Операции', 'Генератор договоров', 110, '/company/document-generator'),
             self::definition('company.documents.history', 'История документов', 'Операции', 'Генератор договоров', 120, '/company/document-generator/history'),
             self::definition('company.documents.templates', 'Шаблоны договоров', 'Операции', 'Генератор договоров', 130, '/company/document-generator/templates'),
+            self::definition('company.max_messages', 'Сообщения MAX', 'Операции', '', 140, '/company/max/messages', grantable: false, ownerOnly: true),
             self::definition('company.contractors', 'Подрядчики', 'Справочники', '', 200, '/company/contractors'),
             self::definition('company.drivers', 'Водители', 'Справочники', '', 210, '/company/drivers'),
             self::definition('company.vehicle_units', 'ТС', 'Справочники', '', 220, '/company/vehicles', navVisible: false, grantable: false),
@@ -84,6 +85,7 @@ final class PageRegistry
             self::definition('company.production_calendar', 'Производственный календарь', 'Прочее', '', 500, '/company/misc/production-calendar', grantable: false, ownerOnly: true, badgeProvider: 'production_calendar_warning'),
             self::definition('company.roles_access', 'Роли и доступы', 'Настройки', '', 510, '/company/roles-access', grantable: false, ownerOnly: true),
             self::definition('company.responsible_assignments', 'Переназначение ответственности', 'Настройки', '', 520, '/company/responsible-assignments', landingEligible: false, grantable: false, ownerOnly: true),
+            self::definition('company.max_settings', 'MAX — интеграция', 'Настройки', '', 530, '/company/max/settings', landingEligible: false, grantable: false, ownerOnly: true),
         ];
     }
 
