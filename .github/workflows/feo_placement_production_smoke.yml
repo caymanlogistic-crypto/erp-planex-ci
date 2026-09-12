@@ -1,0 +1,158 @@
+name: FEO Placement Production Smoke
+
+on:
+  push:
+    branches:
+      - qa/feo-placement-production-smoke-r2-20260912
+
+permissions:
+  contents: read
+  statuses: read
+
+jobs:
+  production-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate isolated QA wrapper and FEO hotfix ancestry
+        shell: bash
+        run: |
+          set -euo pipefail
+          PARENT_SHA="$(git rev-parse HEAD^)"
+          test "$(git diff --name-only "$PARENT_SHA" "$GITHUB_SHA" | wc -l)" -eq 1
+          test "$(git diff --name-only "$PARENT_SHA" "$GITHUB_SHA")" = '.github/workflows/feo_placement_production_smoke.yml'
+          git show "$PARENT_SHA:app/Http/Routes/company_feo_requests.php" | \
+            grep -Fq "require_once base_path('app/Service/FeoPlacementAuthorService.php');"
+          echo "PARENT_SHA=$PARENT_SHA" >> "$GITHUB_ENV"
+          echo 'FEO_PLACEMENT_HOTFIX_ANCESTRY=PASS'
+
+      - name: Configure isolated SSH credentials
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/feo_placement_smoke_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/feo_placement_smoke_key" "$HOME/.ssh/known_hosts"
+
+      - name: Resolve actual deployed SHA and require successful deploy
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_placement_smoke_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          DEPLOYED_SHA="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" 'cat "$HOME/planexp/deploy/P07_erpv2_deployed_commit.txt"')"
+          [[ "$DEPLOYED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "$DEPLOYED_SHA^{commit}"
+          git merge-base --is-ancestor "$DEPLOYED_SHA" "$PARENT_SHA"
+          state=''
+          for attempt in $(seq 1 12); do
+            curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              "$API_URL/repos/$REPOSITORY/commits/$DEPLOYED_SHA/status" > /tmp/deploy-status.json
+            state="$(python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/deploy-status.json',encoding='utf-8'))
+          rows=[x for x in data.get('statuses',[]) if x.get('context')=='erpv2/deploy']
+          print(rows[0].get('state','') if rows else '')
+          PY
+            )"
+            [ "$state" = success ] && break
+            [ "$state" = failure ] || [ "$state" = error ] || sleep 10
+          done
+          test "$state" = success
+          echo "DEPLOYED_SHA=$DEPLOYED_SHA" >> "$GITHUB_ENV"
+          echo "QA_REMOTE_HELPER=/tmp/feo_placement_smoke_session_${GITHUB_RUN_ID}.php" >> "$GITHUB_ENV"
+          echo "FEO_PLACEMENT_DEPLOYED_SHA=$DEPLOYED_SHA"
+          echo 'FEO_PLACEMENT_EXACT_DEPLOY_STATUS=PASS'
+
+      - name: Create temporary real owner session
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_placement_smoke_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/feo_placement_smoke_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          "${SCP[@]}" .github/roles-access/qa_session.php "$SSH_USER@$SSH_HOST:$QA_REMOTE_HELPER"
+          OUT="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$QA_REMOTE_HELPER' create-legacy-owner")"
+          JSON="${OUT#ROLES_QA_SESSION=}"
+          python3 - "$JSON" "$GITHUB_ENV" <<'PY'
+          import json,sys
+          obj=json.loads(sys.argv[1])
+          sid=str(obj['sid']); cookie=str(obj['cookie'])
+          print(f'::add-mask::{sid}')
+          with open(sys.argv[2],'a',encoding='utf-8') as f:
+              f.write(f'QA_COOKIE_NAME={cookie}\nQA_OWNER_SESSION_ID={sid}\n')
+          PY
+          echo 'FEO_PLACEMENT_REAL_OWNER_SESSION=PASS'
+
+      - name: Authenticated production smoke on map-placement
+        shell: bash
+        run: |
+          set -euo pipefail
+          HTTP="$(curl -sS -D /tmp/feo-placement-headers.txt -o /tmp/feo-placement.html -w '%{http_code}' \
+            -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" \
+            https://plan-ex.ru/erpv2/company/feo/requests/map-placement)"
+          test "$HTTP" = 200
+          python3 - <<'PY'
+          from pathlib import Path
+          html=Path('/tmp/feo-placement.html').read_text(encoding='utf-8',errors='replace')
+          forbidden=(
+              'Class "App\\Service\\FeoPlacementAuthorService" not found',
+              'Class &quot;App\\Service\\FeoPlacementAuthorService&quot; not found',
+          )
+          if any(x in html for x in forbidden):
+              raise SystemExit('FeoPlacementAuthorService class-load error is still present')
+          for needle in ('Размещение на карте','Ответственный','Владимир С.'):
+              if needle not in html:
+                  raise SystemExit(f'map-placement acceptance text missing: {needle}')
+          responsible_count=html.count('>Владимир С.</td>')
+          if responsible_count < 32:
+              raise SystemExit(f'expected at least 32 historical Владимир С. rows, got {responsible_count}')
+          print(f'FEO_PLACEMENT_HISTORICAL_AUTHOR_ROWS={responsible_count}')
+          print('FEO_PLACEMENT_HTTP_200=PASS')
+          print('FEO_PLACEMENT_CLASS_LOAD=PASS')
+          print('FEO_PLACEMENT_RESPONSIBLE_COLUMN=PASS')
+          print('FEO_PLACEMENT_PRODUCTION_SMOKE=PASS')
+          PY
+
+      - name: Cleanup temporary owner session and prove it is unusable
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u -o pipefail
+          STATUS=0
+          if [ -z "${QA_OWNER_SESSION_ID:-}" ] || [ -z "${QA_COOKIE_NAME:-}" ] || [ -z "${QA_REMOTE_HELPER:-}" ]; then
+            STATUS=1
+          else
+            OUT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_placement_smoke_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "PLANEX_ROOT=\"\$HOME/planexp/public_html/erpv2\" /usr/bin/php8.5 '$QA_REMOTE_HELPER' delete '$QA_OWNER_SESSION_ID'")" || STATUS=1
+            [ "$OUT" = 'ROLES_QA_SESSION_DELETED' ] || STATUS=1
+            OLD_HTTP="$(curl -sS -o /dev/null -w '%{http_code}' -H "Cookie: ${QA_COOKIE_NAME}=${QA_OWNER_SESSION_ID}" \
+              https://plan-ex.ru/erpv2/company/feo/requests/map-placement || true)"
+            [ "$OLD_HTTP" != 200 ] || STATUS=1
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_placement_smoke_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '$QA_REMOTE_HELPER' && test ! -e '$QA_REMOTE_HELPER'" || STATUS=1
+          fi
+          rm -f "$HOME/.ssh/feo_placement_smoke_key" /tmp/feo-placement.html /tmp/feo-placement-headers.txt
+          [ "$STATUS" -eq 0 ] && echo 'FEO_PLACEMENT_QA_SESSION_CLEANUP=PASS'
+          exit "$STATUS"
