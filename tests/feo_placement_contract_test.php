@@ -98,6 +98,14 @@ $ok(
 $ok('invalid input produces no ids', $parser->extractRequestIds('нет заявок 12345 1234567') === []);
 
 $route = $read($root . '/app/Http/Routes/company_feo_requests.php');
+$authorRequire = "require_once base_path('app/Service/FeoPlacementAuthorService.php');";
+$placementControllerRequire = "require_once base_path('app/Http/Controllers/Company/FeoPlacementController.php');";
+$ok(
+    'placement route loads author service before placement controller',
+    str_contains($route, $authorRequire)
+    && str_contains($route, $placementControllerRequire)
+    && strpos($route, $authorRequire) < strpos($route, $placementControllerRequire)
+);
 $ok(
     'search backend reuses canonical FEO request parser',
     str_contains($route, 'new \\App\\Service\\FeoRequestInteractionService()')
