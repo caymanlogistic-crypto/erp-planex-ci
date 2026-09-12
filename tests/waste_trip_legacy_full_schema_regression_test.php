@@ -129,12 +129,12 @@ try{
     cleanCompanyPoolDatabase($pdo);
     LocalMigrationService::apply($pdo);
     $latest=(string)$pdo->query('SELECT migration FROM schema_migrations ORDER BY id DESC LIMIT 1')->fetchColumn();
-    $ok($latest==='132_split_assignment_and_responsibility.sql','full canonical migration chain must reach 132');
-    foreach(['waste_trips','waste_trip_requests','waste_trip_audit_log','waste_trip_namespace_state','feo_requests','clients','users','crews','feo_utilizers']as$table){
+    $ok($latest===WasteTripService::CUSTOMER_PAYMENTS_MIGRATION,'full canonical migration chain must reach Waste Trips customer payments migration');
+    foreach(['waste_trips','waste_trip_requests','waste_trip_customer_payments','waste_trip_audit_log','waste_trip_namespace_state','feo_requests','clients','users','crews','feo_utilizers']as$table){
         $s=$pdo->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');$s->execute([$table]);$ok((int)$s->fetchColumn()===1,'canonical table missing: '.$table);
     }
-    $fk=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME IN ('waste_trips','waste_trip_requests','waste_trip_audit_log')")->fetchColumn();
-    $ok($fk===7,'expected canonical Waste Trips FK set');
+    $fk=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE CONSTRAINT_SCHEMA=DATABASE() AND TABLE_NAME IN ('waste_trips','waste_trip_requests','waste_trip_customer_payments','waste_trip_audit_log')")->fetchColumn();
+    $ok($fk===8,'expected canonical Waste Trips FK set');
     $unique=(int)$pdo->query("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='waste_trips' AND INDEX_NAME='uk_waste_trip_business_id' AND NON_UNIQUE=0")->fetchColumn();$ok($unique===1,'business id unique contract missing');
     $ok((int)$pdo->getAttribute(PDO::ATTR_EMULATE_PREPARES)===0,'native prepares required');
 
