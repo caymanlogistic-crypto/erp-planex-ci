@@ -2,6 +2,7 @@
 
 require_once base_path('app/Service/WasteTripLegacySourceService.php');
 require_once base_path('app/Service/WasteTripIncidentService.php');
+require_once base_path('app/Service/WasteTripCustomerPaymentService.php');
 require_once base_path('app/Service/WasteTripService.php');
 require_once base_path('app/Service/WasteTripLegacyPrefillService.php');
 require_once base_path('app/Service/WasteTripLegacySyncService.php');

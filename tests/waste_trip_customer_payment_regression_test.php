@@ -25,6 +25,7 @@ $page = (string) file_get_contents($root . '/app/View/pages/company_waste_trips.
 $legacyPage = (string) file_get_contents($root . '/app/View/pages/company_waste_trip_legacy.php');
 $viewModal = (string) file_get_contents($root . '/app/View/partials/company_waste_trip_modal_view.php');
 $paymentPartial = (string) file_get_contents($root . '/app/View/partials/company_waste_trip_customer_payments.php');
+$routeBootstrap = (string) file_get_contents($root . '/app/Http/Routes/company_linear_trips.php');
 
 foreach ([
     'CREATE TABLE IF NOT EXISTS `waste_trip_customer_payments`',
@@ -46,6 +47,10 @@ foreach (['Условия оплаты заказчика', 'WasteTripCustomerPa
 foreach (['data-payment-container="customer_payments"', 'data-add-payment-row="customer_payments"', 'Срок оплаты', 'Способ оплаты', 'НДС'] as $needle) {
     $ok(str_contains($paymentPartial, $needle), 'shared payment form missing ' . $needle);
 }
+$ok(
+    str_contains($routeBootstrap, "require_once base_path('app/Service/WasteTripCustomerPaymentService.php');"),
+    'Waste Trip route bootstrap must load customer payment service before owner registry finance access'
+);
 
 $validRows = [[
     'amount' => '125 000',
