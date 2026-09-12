@@ -25,8 +25,6 @@ if ($mode === 'delete') {
 require_once $root . '/app/Core/Database.php';
 require_once $root . '/app/Service/IdentityNormalizer.php';
 require_once $root . '/app/Service/AccountAuthenticationService.php';
-require_once $root . '/app/Support/crypto_helper.php';
-require_once $root . '/app/Support/company_database.php';
 $config = require $root . '/bootstrap/app.php';
 $pdo = (new App\Core\Database($config['database']))->connection();
 
@@ -91,7 +89,7 @@ if ($mode === 'diagnose-credentials') {
 }
 
 $stmt = $pdo->query(
-    "SELECT m.legacy_source_id legacy_user_id,a.full_name,c.id company_id,c.name company_name,c.*
+    "SELECT m.legacy_source_id legacy_user_id,a.full_name,c.id company_id,c.name company_name
      FROM company_memberships m
      JOIN user_accounts a ON a.id=m.account_id
      JOIN company_roles r ON r.id=m.role_id AND r.company_id=m.company_id
@@ -101,35 +99,11 @@ $stmt = $pdo->query(
        AND m.legacy_source='central_company_user' AND m.legacy_source_id IS NOT NULL
        AND r.system_key='company_owner' AND ar.state='ready'
        AND ar.verified_at IS NOT NULL AND ar.activated_at IS NOT NULL
-     ORDER BY c.id,m.id"
+     ORDER BY c.id,m.id LIMIT 1"
 );
-$owners = $stmt->fetchAll(PDO::FETCH_ASSOC);
-if ($owners === []) { fwrite(STDERR, "no ready owner legacy provenance\n"); exit(1); }
-if (!in_array($mode, ['create-legacy-owner','create-editable-waste-owner','create-invalid-owner'], true)) { fwrite(STDERR, "unknown mode\n"); exit(1); }
-$owner = $owners[0];
-if ($mode === 'create-editable-waste-owner') {
-    $owner = null;
-    $seenCompanies = [];
-    foreach ($owners as $candidate) {
-        $companyId = (int) ($candidate['company_id'] ?? $candidate['id'] ?? 0);
-        if ($companyId <= 0 || isset($seenCompanies[$companyId])) continue;
-        $seenCompanies[$companyId] = true;
-        try {
-            $local = (new App\Core\Database(companyDatabaseConfig($config, $candidate)))->connection();
-            $table = $local->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='waste_trips'");
-            if ((int) $table->fetchColumn() !== 1) continue;
-            $count = (int) $local->query("SELECT COUNT(*) FROM waste_trips WHERE status NOT IN ('completed','cancelled')")->fetchColumn();
-            if ($count > 0) {
-                $candidate['company_id'] = $companyId;
-                $owner = $candidate;
-                break;
-            }
-        } catch (Throwable) {
-            continue;
-        }
-    }
-    if (!$owner) { fwrite(STDERR, "no ready owner company with editable waste trip\n"); exit(1); }
-}
+$owner = $stmt->fetch(PDO::FETCH_ASSOC);
+if (!$owner) { fwrite(STDERR, "no ready owner legacy provenance\n"); exit(1); }
+if (!in_array($mode, ['create-legacy-owner','create-invalid-owner'], true)) { fwrite(STDERR, "unknown mode\n"); exit(1); }
 
 $sid = bin2hex(random_bytes(24));
 $csrf = bin2hex(random_bytes(32));
@@ -140,7 +114,7 @@ $_SESSION = [
     'role_code' => 'company_owner',
     'user_name' => (string) $owner['full_name'],
     'company_id' => (int) $owner['company_id'],
-    'company_name' => (string) ($owner['company_name'] ?? $owner['name'] ?? ''),
+    'company_name' => (string) $owner['company_name'],
     '_csrf_token' => $csrf,
     'user' => [
         'user_id' => $mode === 'create-invalid-owner' ? 2147483647 : (int) $owner['legacy_user_id'],

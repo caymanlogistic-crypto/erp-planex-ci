@@ -96,7 +96,7 @@ const saveEvidence = () => fs.writeFileSync('artifacts/waste-trips-customer-paym
   for (let i = 0; i < rowCount; i++) {
     const candidate = rows.nth(i);
     const statusText = ((await candidate.locator('td').nth(4).textContent()) || '').replace(/\s+/g, ' ').trim();
-    if (statusText !== 'Груз сдан' && statusText !== 'Отменён') {
+    if (statusText !== 'Отменён') {
       editableRow = candidate;
       editableStatus = statusText;
       break;

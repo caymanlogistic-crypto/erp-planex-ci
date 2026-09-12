@@ -103,7 +103,7 @@ jobs:
           "${SCP[@]}" .github/roles-access/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
           "${SSH[@]}" "$SSH_USER@$SSH_HOST" "/usr/bin/php8.5 -l '$REMOTE' >/dev/null"
           set +e
-          OUT="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' create-editable-waste-owner" 2>qa-session-create.err)"
+          OUT="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '$REMOTE' create-legacy-owner" 2>qa-session-create.err)"
           RC=$?
           set -e
           if [ "$RC" -ne 0 ]; then
@@ -121,7 +121,7 @@ jobs:
               f.write(f"QA_COOKIE_NAME={obj['cookie']}\n")
               f.write(f"QA_OWNER_SESSION_ID={obj['sid']}\n")
               f.write(f"QA_OWNER_COMPANY_ID={obj['company_id']}\n")
-          if obj['mode'] != 'create-editable-waste-owner': raise SystemExit('unexpected QA owner session mode')
+          if obj['mode'] != 'create-legacy-owner': raise SystemExit('unexpected QA owner session mode')
           PY
           echo 'WASTE_QA_OWNER_SESSION_CREATED=YES'
 
