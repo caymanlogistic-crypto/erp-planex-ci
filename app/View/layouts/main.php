@@ -55,6 +55,8 @@ $driversActive = str_starts_with($requestPath, '/company/drivers');
 $vehicleSetsActive = str_starts_with($requestPath, '/company/vehicle-sets');
 $logistsActive = str_starts_with($requestPath, '/company/logists');
 $responsibleAssignmentsActive = str_starts_with($requestPath, '/company/responsible-assignments');
+$maxMessagesActive = str_starts_with($requestPath, '/company/max/messages');
+$maxSettingsActive = str_starts_with($requestPath, '/company/max/settings');
 $financeActive = str_starts_with($requestPath, '/company/finance');
 $bankAccountsActive = str_starts_with($requestPath, '/company/finance/bank-accounts') || str_starts_with($requestPath, '/company/finance/settings/matching-rules');
 $closingDocumentsActive = str_starts_with($requestPath, '/company/finance/closing-documents');
@@ -429,6 +431,10 @@ if (empty($topbarCrumbs)) {
                     <a class="nav-sub-item<?= $documentGeneratorHistoryActive ? ' is-active' : '' ?>" href="<?= app_url('/company/document-generator/history') ?>"><span>История документов</span></a>
                     <a class="nav-sub-item<?= $documentGeneratorTemplatesActive ? ' is-active' : '' ?>" href="<?= app_url('/company/document-generator/templates') ?>"><span>Шаблоны договоров</span></a>
                 </div>
+                <a class="nav-item<?= $maxMessagesActive ? ' is-active' : '' ?>" href="<?= app_url('/company/max/messages') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2 3.5h12v8H7l-3.5 2v-2H2v-8Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M5 7h6M5 9h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                    <span class="nav-label">Сообщения MAX</span>
+                </a>
                 <div class="nav-item is-parent<?= $directoriesOpen ? ' is-open' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
                         <rect x="1.5" y="5" width="13" height="9.5" rx="1" stroke="currentColor" stroke-width="1.4"/>
@@ -582,6 +588,10 @@ if (empty($topbarCrumbs)) {
                         <path d="M4 10L6 12L10 8" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                     <span class="nav-label">Переназначение</span>
+                </a>
+                <a class="nav-item<?= $maxSettingsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/max/settings') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M3 3h10v10H3V3Z" stroke="currentColor" stroke-width="1.4"/><path d="M5 6h6M5 8h6M5 10h4" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                    <span class="nav-label">MAX — интеграция</span>
                 </a>
             </div>
 
