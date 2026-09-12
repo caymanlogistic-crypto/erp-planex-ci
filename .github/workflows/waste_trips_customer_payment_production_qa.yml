@@ -16,6 +16,7 @@ env:
 
 jobs:
   production-qa:
+    if: ${{ github.event.head_commit.message == 'qa: run corrected Waste Trips production acceptance' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
@@ -99,6 +100,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p artifacts
           node .github/waste-trips-customer-payment-qa/production_acceptance.js | tee artifacts/waste-trips-customer-payment-console.txt
           grep -q '^WASTE_TRIPS_CUSTOMER_PAYMENT_PROD_QA=PASS$' artifacts/waste-trips-customer-payment-console.txt
           grep -q '^WASTE_TRIPS_PRODUCTION_READ_ONLY=YES$' artifacts/waste-trips-customer-payment-console.txt
