@@ -6,8 +6,8 @@ trait DocumentGeneratorDataTrait
 {
     private static function normalizeParameters(string $type, array $params): array
     {
-        if ($type==='vehicle_lease_crew') {
-            return [
+        if ($type==='vehicle_lease_crew' || $type==='client_sublease_crew') {
+            $out = [
                 'contract_date'=>trim((string)($params['contract_date'] ?? '')),
                 'start_date'=>trim((string)($params['start_date'] ?? '')),
                 'start_time'=>trim((string)($params['start_time'] ?? '')),
@@ -15,6 +15,11 @@ trait DocumentGeneratorDataTrait
                 'price'=>trim((string)($params['price'] ?? '')),
                 'vat_mode'=>trim((string)($params['vat_mode'] ?? 'без НДС')),
             ];
+            if ($type==='client_sublease_crew') {
+                $out['contract_number']=trim((string)($params['contract_number'] ?? ''));
+                $out['payment_terms']=trim((string)($params['payment_terms'] ?? ''));
+            }
+            return $out;
         }
         return [
             'waybill_number'=>trim((string)($params['waybill_number'] ?? '')),
@@ -29,7 +34,7 @@ trait DocumentGeneratorDataTrait
             if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/',$value,$m)) return false;
             return checkdate((int)$m[2],(int)$m[3],(int)$m[1]);
         };
-        if ($type==='vehicle_lease_crew') {
+        if ($type==='vehicle_lease_crew' || $type==='client_sublease_crew') {
             foreach (['contract_date'=>'дату договора','start_date'=>'дату начала аренды','finish_date'=>'плановую дату завершения'] as $field=>$label) {
                 $value=trim((string)($params[$field] ?? ''));
                 if (!$validDate($value)) $errors[]='Укажите корректную ' . $label . '.';
@@ -39,6 +44,10 @@ trait DocumentGeneratorDataTrait
             $price=str_replace(["\u{00A0}",' '],'',str_replace(',','.',trim((string)($params['price'] ?? ''))));
             if ($price==='' || !is_numeric($price) || (float)$price<0) $errors[]='Укажите корректную стоимость договора.';
             if (trim((string)($params['vat_mode'] ?? ''))==='') $errors[]='Укажите режим НДС.';
+            if ($type==='client_sublease_crew') {
+                if (!preg_match('/^\d{2}-\d+$/',trim((string)($params['contract_number'] ?? '')))) $errors[]='Номер договора клиента должен иметь формат ГГ-ID рейса.';
+                if (trim((string)($params['payment_terms'] ?? ''))==='') $errors[]='Не определены условия оплаты заказчика по рейсу.';
+            }
         } elseif ($type==='waybill_driver_assignment') {
             if (trim((string)($params['waybill_number'] ?? ''))==='') $errors[]='Укажите номер путевого листа.';
             if (!$validDate(trim((string)($params['waybill_date'] ?? '')))) $errors[]='Укажите корректную дату путевого листа.';
@@ -89,23 +98,115 @@ trait DocumentGeneratorDataTrait
 
     private static function buildFixedValues(array $snapshot): array
     {
-        $c=$snapshot['company'];$e=$snapshot['executor'];$d=$snapshot['driver'];$v=$snapshot['vehicle'];$t=$snapshot['trailer'];$p=$snapshot['parameters'];$s=$snapshot['requests_summary'] ?? [];
+        $c=is_array($snapshot['company'] ?? null)?$snapshot['company']:[];
+        $e=is_array($snapshot['executor'] ?? null)?$snapshot['executor']:[];
+        $d=is_array($snapshot['driver'] ?? null)?$snapshot['driver']:[];
+        $v=is_array($snapshot['vehicle'] ?? null)?$snapshot['vehicle']:[];
+        $t=is_array($snapshot['trailer'] ?? null)?$snapshot['trailer']:[];
+        $p=is_array($snapshot['parameters'] ?? null)?$snapshot['parameters']:[];
+        $s=is_array($snapshot['requests_summary'] ?? null)?$snapshot['requests_summary']:[];
+        $client=is_array($snapshot['client'] ?? null)?$snapshot['client']:[];
+        $service=is_array($snapshot['service'] ?? null)?$snapshot['service']:[];
+        $trip=is_array($snapshot['trip'] ?? null)?$snapshot['trip']:[];
+        $document=is_array($snapshot['document'] ?? null)?$snapshot['document']:[];
+        $number=trim((string)($document['number'] ?? $p['contract_number'] ?? ''));
+        $contractDate=(string)($p['contract_date'] ?? '');
+        $serviceAmountRaw=(string)($service['amount'] ?? $p['price'] ?? '');
         $price=self::formatMoneyText((string)($p['price'] ?? ''));
+        $companyKpp=trim((string)($c['kpp'] ?? ''));
+        $companyOgrn=trim((string)($c['ogrn'] ?? ''));
+        $clientKpp=trim((string)($client['kpp'] ?? ''));
+        $clientOgrn=trim((string)($client['ogrn'] ?? ''));
+        $clientOgrnPrefix=strlen($clientOgrn)===15?'ОГРНИП: ':'ОГРН: ';
         return [
-            'contract.number'=>(string)($snapshot['document']['number'] ?? ''),'contract.date'=>self::formatRuDate((string)($p['contract_date'] ?? '')),'contract.start_date'=>self::formatRuDate((string)($p['start_date'] ?? '')),'contract.start_time'=>self::optionalDisplay($p['start_time'] ?? ''),'contract.finish_date'=>self::formatRuDate((string)($p['finish_date'] ?? '')),'contract.price'=>$price,'contract.vat_mode'=>(string)($p['vat_mode'] ?? ''),
-            'waybill.number'=>(string)($p['waybill_number'] ?? ''),'waybill.date'=>self::formatRuDate((string)($p['waybill_date'] ?? '')),
-            'company.name'=>$c['name'],'company.inn'=>$c['inn'],'company.kpp_line'=>$c['kpp']!==''?'КПП: '.$c['kpp']:'','company.ogrn_line'=>$c['ogrn']!==''?'ОГРН: '.$c['ogrn']:'','company.legal_address'=>$c['legal_address'],'company.physical_address'=>self::optionalDisplay($c['physical_address'] ?? ''),'company.bank_name'=>$c['bank_name'],'company.bank_account'=>$c['bank_account'],'company.bank_corr_account'=>$c['bank_corr_account'],'company.bank_bik'=>$c['bank_bik'],'company.contact_phone'=>self::optionalDisplay($c['contact_phone'] ?? ''),'company.contact_email'=>self::optionalDisplay($c['contact_email'] ?? ''),'company.director_full_name'=>$c['director_full_name'],'company.director_position'=>$c['director_position'],'company.signature_name'=>self::signatureName($c['director_full_name']),
-            'executor.name'=>$e['name'],'executor.inn'=>$e['inn'],'executor.kpp_line'=>$e['kpp']!==''?'КПП: '.$e['kpp']:'','executor.ogrn_line'=>$e['ogrn']!==''?((strlen($e['ogrn'])===15?'ОГРНИП: ':'ОГРН: ').$e['ogrn']):'','executor.legal_address'=>$e['legal_address'],'executor.physical_address'=>$e['physical_address'],'executor.bank_name'=>$e['bank_name'],'executor.bank_account'=>$e['bank_account'],'executor.bank_corr_account'=>$e['bank_corr_account'],'executor.bank_bik'=>$e['bank_bik'],'executor.bank_inn'=>'—','executor.director_full_name'=>$e['director_full_name'],'executor.director_position'=>$e['director_position'],'executor.signature_name'=>$e['signature_name'],
-            'driver.full_name'=>$d['full_name'],'driver.passport'=>$d['passport'],'driver.license'=>$d['license'],'driver.signature_name'=>$d['signature_name'],
-            'vehicle.label'=>(string)($v['label'] ?? 'Транспортное средство'),'vehicle.model'=>$v['model'],'vehicle.plate'=>$v['plate'],'vehicle.vin'=>(string)($v['vin'] ?? ''),
-            'trailer.label'=>(string)($t['label'] ?? ''),'trailer.model'=>(string)($t['model'] ?? ''),'trailer.plate'=>(string)($t['plate'] ?? ''),'trailer.vin'=>(string)($t['vin'] ?? ''),'trailer.display'=>(string)($t['display'] ?? ''),
-            'requests.count'=>(string)($s['count'] ?? count($snapshot['requests'] ?? [])),'requests.total_mass_kg'=>self::formatMassKg((float)($s['total_mass_kg'] ?? 0)),'requests.unload_address'=>(string)($s['unload_address'] ?? ''),
+            'contract.number'=>$number,
+            'contract.date'=>self::formatRuDate($contractDate),
+            'contract.date_plain'=>self::formatRuDatePlain($contractDate),
+            'contract.start_date'=>self::formatRuDate((string)($p['start_date'] ?? '')),
+            'contract.start_time'=>self::optionalDisplay($p['start_time'] ?? ''),
+            'contract.finish_date'=>self::formatRuDate((string)($p['finish_date'] ?? '')),
+            'contract.price'=>$price,
+            'contract.vat_mode'=>(string)($p['vat_mode'] ?? ''),
+            'contract.payment_terms'=>(string)($p['payment_terms'] ?? ''),
+            'invoice.number'=>$number,
+            'invoice.date'=>self::formatRuDatePlain($contractDate),
+            'act.number'=>$number,
+            'act.date'=>self::formatRuDatePlain($contractDate),
+            'waybill.number'=>(string)($p['waybill_number'] ?? ''),
+            'waybill.date'=>self::formatRuDate((string)($p['waybill_date'] ?? '')),
+            'company.name'=>(string)($c['name'] ?? ''),
+            'company.inn'=>(string)($c['inn'] ?? ''),
+            'company.kpp'=>$companyKpp,
+            'company.kpp_line'=>$companyKpp!==''?'КПП: '.$companyKpp:'',
+            'company.ogrn_line'=>$companyOgrn!==''?'ОГРН: '.$companyOgrn:'',
+            'company.legal_address'=>(string)($c['legal_address'] ?? ''),
+            'company.physical_address'=>self::optionalDisplay($c['physical_address'] ?? ''),
+            'company.bank_name'=>(string)($c['bank_name'] ?? ''),
+            'company.bank_account'=>(string)($c['bank_account'] ?? ''),
+            'company.bank_corr_account'=>(string)($c['bank_corr_account'] ?? ''),
+            'company.bank_bik'=>(string)($c['bank_bik'] ?? ''),
+            'company.contact_phone'=>self::optionalDisplay($c['contact_phone'] ?? ''),
+            'company.contact_email'=>self::optionalDisplay($c['contact_email'] ?? ''),
+            'company.director_full_name'=>(string)($c['director_full_name'] ?? ''),
+            'company.director_position'=>(string)($c['director_position'] ?? ''),
+            'company.signature_name'=>self::signatureName((string)($c['director_full_name'] ?? '')),
+            'company.summary'=>self::partySummary($c),
+            'client.name'=>(string)($client['name'] ?? ''),
+            'client.inn'=>(string)($client['inn'] ?? ''),
+            'client.kpp'=>$clientKpp,
+            'client.kpp_line'=>$clientKpp!==''?'КПП: '.$clientKpp:'',
+            'client.ogrn_line'=>$clientOgrn!==''?$clientOgrnPrefix.$clientOgrn:'',
+            'client.legal_address'=>(string)($client['legal_address'] ?? ''),
+            'client.physical_address'=>self::optionalDisplay($client['physical_address'] ?? ''),
+            'client.bank_name'=>(string)($client['bank_name'] ?? ''),
+            'client.bank_account'=>(string)($client['bank_account'] ?? ''),
+            'client.bank_corr_account'=>(string)($client['bank_corr_account'] ?? ''),
+            'client.bank_bik'=>(string)($client['bank_bik'] ?? ''),
+            'client.director_full_name'=>(string)($client['director_full_name'] ?? ''),
+            'client.director_position'=>(string)($client['director_position'] ?? ''),
+            'client.signature_name'=>(string)($client['signature_name'] ?? ''),
+            'client.summary'=>self::partySummary($client),
+            'executor.name'=>(string)($e['name'] ?? ''),
+            'executor.inn'=>(string)($e['inn'] ?? ''),
+            'executor.kpp_line'=>trim((string)($e['kpp'] ?? ''))!==''?'КПП: '.(string)$e['kpp']:'',
+            'executor.ogrn_line'=>trim((string)($e['ogrn'] ?? ''))!==''?((strlen((string)$e['ogrn'])===15?'ОГРНИП: ':'ОГРН: ').(string)$e['ogrn']):'',
+            'executor.legal_address'=>(string)($e['legal_address'] ?? ''),
+            'executor.physical_address'=>(string)($e['physical_address'] ?? ''),
+            'executor.bank_name'=>(string)($e['bank_name'] ?? ''),
+            'executor.bank_account'=>(string)($e['bank_account'] ?? ''),
+            'executor.bank_corr_account'=>(string)($e['bank_corr_account'] ?? ''),
+            'executor.bank_bik'=>(string)($e['bank_bik'] ?? ''),
+            'executor.bank_inn'=>'—',
+            'executor.director_full_name'=>(string)($e['director_full_name'] ?? ''),
+            'executor.director_position'=>(string)($e['director_position'] ?? ''),
+            'executor.signature_name'=>(string)($e['signature_name'] ?? ''),
+            'driver.full_name'=>(string)($d['full_name'] ?? ''),
+            'driver.passport'=>(string)($d['passport'] ?? ''),
+            'driver.license'=>(string)($d['license'] ?? ''),
+            'driver.signature_name'=>(string)($d['signature_name'] ?? ''),
+            'vehicle.label'=>(string)($v['label'] ?? 'Транспортное средство'),
+            'vehicle.model'=>(string)($v['model'] ?? ''),
+            'vehicle.plate'=>(string)($v['plate'] ?? ''),
+            'vehicle.vin'=>(string)($v['vin'] ?? ''),
+            'trailer.label'=>(string)($t['label'] ?? ''),
+            'trailer.model'=>(string)($t['model'] ?? ''),
+            'trailer.plate'=>(string)($t['plate'] ?? ''),
+            'trailer.vin'=>(string)($t['vin'] ?? ''),
+            'trailer.display'=>(string)($t['display'] ?? ''),
+            'service.description'=>(string)($service['description'] ?? ''),
+            'service.amount'=>self::formatMoneyAccounting($serviceAmountRaw),
+            'service.amount_words'=>self::moneyToWordsRu($serviceAmountRaw),
+            'service.vat_mode'=>(string)($service['vat_mode'] ?? $p['vat_mode'] ?? ''),
+            'trip.business_id'=>(string)($trip['business_id'] ?? ''),
+            'requests.count'=>(string)($s['count'] ?? count($snapshot['requests'] ?? [])),
+            'requests.total_mass_kg'=>self::formatMassKg((float)($s['total_mass_kg'] ?? 0)),
+            'requests.unload_address'=>(string)($s['unload_address'] ?? ''),
         ];
     }
 
     private static function validateFixedPlaceholders(array $placeholders, array $values, array $snapshot): array
     {
-        $optional=['contract.start_time','company.physical_address','company.contact_phone','company.contact_email','executor.kpp_line','executor.ogrn_line','executor.physical_address','executor.bank_inn','vehicle.vin','trailer.label','trailer.model','trailer.plate','trailer.vin','trailer.display'];
+        $optional=['contract.start_time','company.physical_address','company.contact_phone','company.contact_email','client.physical_address','client.kpp_line','client.ogrn_line','executor.kpp_line','executor.ogrn_line','executor.physical_address','executor.bank_inn','vehicle.vin','trailer.label','trailer.model','trailer.plate','trailer.vin','trailer.display'];
         $requestPrefixes=['request.'];
         $errors=[];
         foreach ($placeholders as $name) {
@@ -119,6 +220,11 @@ trait DocumentGeneratorDataTrait
         $company=$snapshot['company'];
         if (in_array('company.kpp_line',$placeholders,true) && trim((string)$company['kpp'])==='') $errors[]='У компании не заполнен КПП.';
         if (in_array('company.ogrn_line',$placeholders,true) && trim((string)$company['ogrn'])==='') $errors[]='У компании не заполнен ОГРН.';
+        $client=is_array($snapshot['client'] ?? null)?$snapshot['client']:[];
+        if ($client!==[] && strlen(preg_replace('/\D/','',(string)($client['inn'] ?? '')) ?? '')===10) {
+            if (in_array('client.kpp_line',$placeholders,true) && trim((string)($client['kpp'] ?? ''))==='') $errors[]='У клиента-юрлица не заполнен КПП.';
+            if (in_array('client.ogrn_line',$placeholders,true) && trim((string)($client['ogrn'] ?? ''))==='') $errors[]='У клиента-юрлица не заполнен ОГРН.';
+        }
         $executor=$snapshot['executor'];
         if (strlen(preg_replace('/\D/','',(string)$executor['inn']) ?? '')===10) {
             if (in_array('executor.kpp_line',$placeholders,true) && trim((string)$executor['kpp'])==='') $errors[]='У Арендодателя-юрлица не заполнен КПП.';
@@ -150,10 +256,12 @@ trait DocumentGeneratorDataTrait
     private static function missingPlaceholderMessage(string $name): string
     {
         if (str_starts_with($name,'company.')) return 'Не заполнен обязательный реквизит компании.';
+        if (str_starts_with($name,'client.')) return 'Не заполнен обязательный реквизит клиента.';
         if (str_starts_with($name,'executor.')) return 'Не заполнен обязательный реквизит Подрядчика.';
         if (str_starts_with($name,'driver.')) return 'Не заполнен обязательный реквизит водителя.';
         if (str_starts_with($name,'vehicle.') || str_starts_with($name,'trailer.')) return 'Не заполнены обязательные данные транспорта.';
         if (str_starts_with($name,'contract.')) return 'Не заполнен обязательный параметр договора.';
+        if (str_starts_with($name,'invoice.') || str_starts_with($name,'act.') || str_starts_with($name,'service.')) return 'Не заполнены обязательные данные клиентского документа.';
         if (str_starts_with($name,'waybill.')) return 'Не заполнен обязательный параметр путевого листа.';
         if (str_starts_with($name,'requests.')) return 'Не заполнены обязательные данные заявок ФЭО.';
         return 'Не заполнены обязательные данные документа.';
@@ -218,6 +326,85 @@ trait DocumentGeneratorDataTrait
         $number=(float)$normalized;
         $decimals=abs($number-round($number))<0.00001 ? 0 : 2;
         return number_format($number,$decimals,',',' ');
+    }
+
+    private static function formatRuDatePlain(string $date): string
+    {
+        if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/',$date,$m)) return '';
+        $months=['01'=>'января','02'=>'февраля','03'=>'марта','04'=>'апреля','05'=>'мая','06'=>'июня','07'=>'июля','08'=>'августа','09'=>'сентября','10'=>'октября','11'=>'ноября','12'=>'декабря'];
+        if (!checkdate((int)$m[2],(int)$m[3],(int)$m[1])) return '';
+        return ((int)$m[3]) . ' ' . ($months[$m[2]] ?? $m[2]) . ' ' . $m[1];
+    }
+
+    private static function formatMoneyAccounting(string $value): string
+    {
+        $normalized=str_replace(["\u{00A0}",' '],'',str_replace(',','.',$value));
+        if ($normalized==='' || !is_numeric($normalized)) return $value;
+        return number_format((float)$normalized,2,'.',' ');
+    }
+
+    private static function partySummary(array $party): string
+    {
+        $parts=[];
+        $name=trim((string)($party['name'] ?? ''));
+        if ($name!=='') $parts[]=$name;
+        $inn=trim((string)($party['inn'] ?? ''));
+        if ($inn!=='') $parts[]='ИНН '.$inn;
+        $kpp=trim((string)($party['kpp'] ?? ''));
+        if ($kpp!=='') $parts[]='КПП '.$kpp;
+        $address=trim((string)($party['legal_address'] ?? ''));
+        if ($address!=='') $parts[]=$address;
+        return implode(', ',$parts);
+    }
+
+    private static function moneyToWordsRu(string $value): string
+    {
+        $normalized=str_replace(["\u{00A0}",' '],'',str_replace(',','.',$value));
+        if ($normalized==='' || !is_numeric($normalized)) return '';
+        $cents=(int)round(((float)$normalized)*100);
+        if ($cents<0) return '';
+        $rub=intdiv($cents,100);
+        $kop=$cents%100;
+        $words=self::integerToWordsRu($rub);
+        $words=$words===''?'ноль':$words;
+        $first=function_exists('mb_substr')?mb_strtoupper(mb_substr($words,0,1,'UTF-8'),'UTF-8'):strtoupper(substr($words,0,1));
+        $rest=function_exists('mb_substr')?mb_substr($words,1,null,'UTF-8'):substr($words,1);
+        return $first.$rest.' '.self::ruPlural($rub,'рубль','рубля','рублей').' '.str_pad((string)$kop,2,'0',STR_PAD_LEFT).' '.self::ruPlural($kop,'копейка','копейки','копеек');
+    }
+
+    private static function integerToWordsRu(int $number): string
+    {
+        if ($number===0) return 'ноль';
+        $unitsMale=['','один','два','три','четыре','пять','шесть','семь','восемь','девять'];
+        $unitsFemale=['','одна','две','три','четыре','пять','шесть','семь','восемь','девять'];
+        $teens=[10=>'десять',11=>'одиннадцать',12=>'двенадцать',13=>'тринадцать',14=>'четырнадцать',15=>'пятнадцать',16=>'шестнадцать',17=>'семнадцать',18=>'восемнадцать',19=>'девятнадцать'];
+        $tens=[2=>'двадцать',3=>'тридцать',4=>'сорок',5=>'пятьдесят',6=>'шестьдесят',7=>'семьдесят',8=>'восемьдесят',9=>'девяносто'];
+        $hundreds=[1=>'сто',2=>'двести',3=>'триста',4=>'четыреста',5=>'пятьсот',6=>'шестьсот',7=>'семьсот',8=>'восемьсот',9=>'девятьсот'];
+        $groups=[3=>['миллиард','миллиарда','миллиардов',false],2=>['миллион','миллиона','миллионов',false],1=>['тысяча','тысячи','тысяч',true],0=>['','','',false]];
+        $chunks=[];
+        foreach ([3,2,1,0] as $group) {
+            $div=1000**$group;
+            $chunk=intdiv($number,$div)%1000;
+            if ($chunk===0) continue;
+            $parts=[];
+            $h=intdiv($chunk,100); if ($h>0) $parts[]=$hundreds[$h];
+            $last=$chunk%100;
+            if ($last>=10 && $last<=19) $parts[]=$teens[$last];
+            else {
+                $ten=intdiv($last,10); if ($ten>=2) $parts[]=$tens[$ten];
+                $unit=$last%10; if ($unit>0) $parts[]=($groups[$group][3]?$unitsFemale:$unitsMale)[$unit];
+            }
+            if ($group>0) $parts[]=self::ruPlural($chunk,$groups[$group][0],$groups[$group][1],$groups[$group][2]);
+            $chunks[]=implode(' ',$parts);
+        }
+        return implode(' ',$chunks);
+    }
+
+    private static function ruPlural(int $number, string $one, string $few, string $many): string
+    {
+        $n=abs($number)%100;
+        if ($n>=11 && $n<=19) return $many;
+        return match ($n%10) {1=>$one,2,3,4=>$few,default=>$many};
     }
 
     private static function signatureName(string $fullName): string

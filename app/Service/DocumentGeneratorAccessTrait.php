@@ -152,8 +152,12 @@ trait DocumentGeneratorAccessTrait
             'requests'=>array_values($requests),
             'parameters'=>$normalized,
             'document'=>[
-                'number'=>$documentType==='waybill_driver_assignment' ? (string)($normalized['waybill_number'] ?? '') : '',
-                'number_mode'=>$documentType==='vehicle_lease_crew' ? 'automatic' : 'manual',
+                'number'=>$documentType==='waybill_driver_assignment'
+                    ? (string)($normalized['waybill_number'] ?? '')
+                    : ($documentType==='client_sublease_crew' ? (string)($normalized['contract_number'] ?? '') : ''),
+                'number_mode'=>$documentType==='vehicle_lease_crew'
+                    ? 'automatic'
+                    : ($documentType==='client_sublease_crew' ? 'trip_based' : 'manual'),
             ],
             'template'=>['id'=>(int)$template['template_id'],'version_id'=>(int)$template['version_id'],'version_no'=>(int)$template['version_no'],'name'=>(string)$template['template_name'],'document_type'=>$documentType,'sha256'=>(string)$template['sha256']],
         ];

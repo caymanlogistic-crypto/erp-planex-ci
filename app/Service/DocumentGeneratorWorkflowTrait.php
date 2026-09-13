@@ -18,7 +18,8 @@ trait DocumentGeneratorWorkflowTrait
         int $crewId,
         string $requestInput,
         array $params,
-        ?GoogleSheetsRequestContactService $contactService = null
+        ?GoogleSheetsRequestContactService $contactService = null,
+        array $context = []
     ): array {
         if (!self::runtimeSchemaReady($localPdo)) {
             return self::failed(['Схема генератора договоров не обновлена. Требуется штатная tenant migration 129.']);
@@ -62,6 +63,10 @@ trait DocumentGeneratorWorkflowTrait
         $totalKg = round($totalKg,3);
         $unload = count($groups)===1 ? (string)array_key_first($groups) : '';
         $snapshot = self::buildSnapshot($company,$executor,$ordered,$params,$template);
+        foreach ($context as $key=>$value) {
+            if (!is_string($key) || $key==='') continue;
+            $snapshot[$key]=$value;
+        }
         $snapshot['integrations']['google_sheets_contacts'] = [
             'available'=>(bool)($googleContacts['available'] ?? false),
             'warning'=>(string)($googleContacts['warning'] ?? ''),
