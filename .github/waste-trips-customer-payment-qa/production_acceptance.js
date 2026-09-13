@@ -33,11 +33,12 @@ const save = () => fs.writeFileSync('artifacts/waste-trips-carrier-finance-produ
   ok((await page.locator('.page-title').first().textContent().catch(() => '') || '').trim() === 'Перевозка отходов', 'unexpected departures title');
 
   const headers = (await page.locator('.waste-registry thead th').allTextContents()).map(x => x.trim());
+  const headerKeys = headers.map(x => x.toUpperCase());
   const rows = page.locator('.waste-registry tbody tr[data-waste-view]');
   const rowCount = await rows.count();
   evidence.registry = { headers, row_count: rowCount };
   ok(headers.length === 12, `registry expected 12 columns, got ${headers.length}`);
-  for (const h of ['ЗАКАЗЧИК','СТАВКА ЗАКАЗЧИКА','ИСПОЛНИТЕЛЬ РЕЙСА','СТАВКА ПЕРЕВОЗЧИКА']) ok(headers.includes(h), `registry column missing: ${h}`);
+  for (const h of ['ЗАКАЗЧИК','СТАВКА ЗАКАЗЧИКА','ИСПОЛНИТЕЛЬ РЕЙСА','СТАВКА ПЕРЕВОЗЧИКА']) ok(headerKeys.includes(h), `registry column missing: ${h}`);
   ok(rowCount > 0, 'no Waste Trip rows for acceptance');
 
   const createTrigger = page.locator('.page-head-actions > button[onclick="openModal(\'waste-trip-create-modal\')"]');
