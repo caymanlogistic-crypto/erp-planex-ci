@@ -16,7 +16,7 @@ final class FinancePaymentCalendarService
         if (!FinanceObligationService::schemaReady($localPdo)) {
             return [];
         }
-        FinanceObligationService::syncAllLinearRoutes($localPdo);
+        FinanceObligationService::syncAllOperationalObligations($localPdo);
 
         $sql = "SELECT o.id AS source_id,
                        'obligation' AS source_type,
@@ -73,6 +73,7 @@ final class FinancePaymentCalendarService
         $stmt = $localPdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        FinanceObligationService::enrichParentLabels($localPdo, $rows);
         $result = [];
         foreach ($rows as $row) {
             $status = (string)($row['obligation_status'] ?? '');

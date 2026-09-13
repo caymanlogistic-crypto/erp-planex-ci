@@ -180,6 +180,10 @@ final class FinanceSettlementCascadeService
                 && (string)($obligation['source_type'] ?? '') === 'LINEAR_ROUTE_SERVICE_PAYMENT'
                 && (string)($obligation['source_parent_type'] ?? '') === 'LINEAR_ROUTE'
                 && (int)($obligation['source_parent_id'] ?? 0) > 0;
+            $isWasteTrip = $obligation !== null
+                && (string)($obligation['source_parent_type'] ?? '') === 'WASTE_TRIP'
+                && in_array((string)($obligation['source_type'] ?? ''), ['WASTE_TRIP_CUSTOMER_PAYMENT','WASTE_TRIP_CARRIER_PAYMENT'], true)
+                && (int)($obligation['source_parent_id'] ?? 0) > 0;
 
             if (($allocation['invoice_id'] ?? null) !== null) {
                 self::recalculateInvoice($pdo, (int)$allocation['invoice_id'], $userId, $roleCode);
@@ -188,6 +192,8 @@ final class FinanceSettlementCascadeService
                 self::recalculateRoutePayment($pdo, (int)$allocation['linear_route_payment_id'], $userId, $roleCode);
             } elseif ($isAdditionalService) {
                 LinearTripServiceFinanceService::syncRoute($pdo, (int)$obligation['source_parent_id']);
+            } elseif ($isWasteTrip) {
+                FinanceObligationService::syncWasteTrip($pdo, (int)$obligation['source_parent_id']);
             } elseif (($allocation['linear_route_id'] ?? null) !== null) {
                 foreach (self::getRoutePaymentsForRoute($pdo, (int)$allocation['linear_route_id']) as $payment) {
                     self::recalculateRoutePayment($pdo, (int)$payment['id'], $userId, $roleCode);

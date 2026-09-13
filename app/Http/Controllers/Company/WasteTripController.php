@@ -10,6 +10,7 @@ use App\Service\WasteTripIncidentService;
 use App\Service\WasteTripLegacyPrefillService;
 use App\Service\WasteTripLegacySourceService;
 use App\Service\WasteTripCustomerPaymentService;
+use App\Service\WasteTripCarrierPaymentService;
 use App\Service\WasteTripService;
 use App\Service\UserSyncService;
 use PDO;
@@ -52,8 +53,9 @@ final class WasteTripController
             $parsed=WasteTripService::parseRequestIds((string)($_POST['request_ids']??'')); $this->assertParsedRequests($parsed);
             $input=$this->resolveResponsibleInput($context,$_POST);
             $customerPayments=$this->customerPaymentsForSession($_POST,$context['sessionUser']);
+            $carrierPayments=$this->carrierPaymentsForSession($_POST,$context['sessionUser']);
             $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if(!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена: проверка ID-коллизий недоступна.');
-            $businessId=WasteTripService::createIndependent($pdo,$legacy,$input,$parsed['ids'],$context['sessionUser'],$customerPayments);
+            $businessId=WasteTripService::createIndependent($pdo,$legacy,$input,$parsed['ids'],$context['sessionUser'],$customerPayments,$carrierPayments);
             $_SESSION['waste_trip_success']='Рейс #'.$businessId.' создан.';
             header('Location: '.app_url('/company/trips/departures'));
         } catch(Throwable $e) {
@@ -106,10 +108,12 @@ final class WasteTripController
             $input=$this->resolveResponsibleInput($context,$_POST);
             $stage='customer_payments';
             $customerPayments=$this->customerPaymentsForSession($_POST,$context['sessionUser']);
+            $stage='carrier_payments';
+            $carrierPayments=$this->carrierPaymentsForSession($_POST,$context['sessionUser']);
             $stage='legacy_connection';
             $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if (!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена.');
             $stage='legacy_write';
-            $businessId=WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,$id,$input,$parsed['ids'],$context['sessionUser'],$customerPayments);
+            $businessId=WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,$id,$input,$parsed['ids'],$context['sessionUser'],$customerPayments,$carrierPayments);
             $_SESSION['waste_trip_success']='Legacy-рейс #'.$id.' создан как ERP-рейс #'.$businessId.'.';
         } catch(Throwable $e) {
             $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Создание рейса не выполнено.',['operation'=>'legacy_materialize','legacy_id'=>$id,'stage'=>$stage,'company_id'=>(int)($context['companyId']??0),'actor_user_id'=>(int)($context['sessionUser']['user_id']??0),'actor_membership_id'=>AccessControlService::effectiveMembershipId()??0,'actor_role'=>(string)($context['sessionUser']['role_code']??'')]);
@@ -145,7 +149,8 @@ final class WasteTripController
             if(array_key_exists('request_ids',$_POST)){ $parsed=WasteTripService::parseRequestIds((string)$_POST['request_ids']); $this->assertParsedRequests($parsed); }
             $input=$this->resolveResponsibleInput($context,$_POST);
             $customerPayments=$this->customerPaymentsForSession($_POST,$context['sessionUser']);
-            WasteTripService::update($pdo,(int)$id,$input,$parsed['ids'],(int)($_POST['lock_version']??0),$context['sessionUser'],$customerPayments);
+            $carrierPayments=$this->carrierPaymentsForSession($_POST,$context['sessionUser']);
+            WasteTripService::update($pdo,(int)$id,$input,$parsed['ids'],(int)($_POST['lock_version']??0),$context['sessionUser'],$customerPayments,$carrierPayments);
             $_SESSION['waste_trip_success']='Рейс сохранён.';
             $redirect='/company/trips/departures?open_trip='.(int)$id;
         } catch(Throwable $e) { $_SESSION['waste_trip_error']=$this->publicError($e,'Не удалось сохранить рейс.');$_SESSION['waste_trip_edit_old']=$_POST;$_SESSION['waste_trip_edit_id']=(int)$id;$redirect='/company/trips/departures?open_edit='.(int)$id; }
@@ -196,6 +201,15 @@ final class WasteTripController
     {
         if((string)($sessionUser['role_code']??'')!=='company_owner')return null;
         return WasteTripCustomerPaymentService::parseRows((array)($post['customer_payments']??[]),true);
+    }
+
+
+    private function carrierPaymentsForSession(array $post,array $sessionUser): ?array
+    {
+        if((string)($sessionUser['role_code']??'')!=='company_owner')return null;
+        $rows=WasteTripCarrierPaymentService::parseRows((array)($post['carrier_payments']??[]),false);
+        if($rows!==[]&&(int)($post['route_executor_id']??0)<=0)throw new RuntimeException('Для ставки перевозчика выберите исполнителя рейса.');
+        return $rows;
     }
 
     private function resolveResponsibleInput(array $context,array $input): array

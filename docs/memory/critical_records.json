@@ -10,7 +10,16 @@
       "criticality": "CRITICAL",
       "verified_sha": "92a29c048dd900890742b99e3d3c6ef57f72f836",
       "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/92a29c048dd900890742b99e3d3c6ef57f72f836/.github/workflows/erpv2_agent_deploy_request.yml",
-      "owning_paths": [".github/workflows/erpv2_agent_deploy_request.yml", ".github/workflows/erpv2_controlled_deploy.yml", ".github/workflows/erpv2_web_runtime_diagnostic.yml", ".github/workflows/agent_deploy_request_contract.yml", ".github/p07/P07_deploy_erpv2.sh", "tests/agent_deploy_request_contract_test.php", "tests/p07_deploy_engine_contract_test.php", "tests/erpv2_web_runtime_diagnostic_contract_test.php"],
+      "owning_paths": [
+        ".github/workflows/erpv2_agent_deploy_request.yml",
+        ".github/workflows/erpv2_controlled_deploy.yml",
+        ".github/workflows/erpv2_web_runtime_diagnostic.yml",
+        ".github/workflows/agent_deploy_request_contract.yml",
+        ".github/p07/P07_deploy_erpv2.sh",
+        "tests/agent_deploy_request_contract_test.php",
+        "tests/p07_deploy_engine_contract_test.php",
+        "tests/erpv2_web_runtime_diagnostic_contract_test.php"
+      ],
       "navigation": "active",
       "machine_ownership_id": "control.deploy"
     },
@@ -19,9 +28,14 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c8f74a7402bd59289a2824aece78bc6b7a97bcaf",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c8f74a7402bd59289a2824aece78bc6b7a97bcaf/docs/database/TENANT_SCHEMA.md",
-      "owning_paths": ["database/migrations-local/**", "app/Service/LocalMigrationService.php", "tools/database/generate_schema_docs.php", "docs/database/TENANT_SCHEMA*.md"],
+      "verified_sha": "c6591b6a581bdd16fcc220fe0fe5c226b281549b",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c6591b6a581bdd16fcc220fe0fe5c226b281549b/docs/database/TENANT_SCHEMA.md",
+      "owning_paths": [
+        "database/migrations-local/**",
+        "app/Service/LocalMigrationService.php",
+        "tools/database/generate_schema_docs.php",
+        "docs/database/TENANT_SCHEMA*.md"
+      ],
       "navigation": "active",
       "machine_ownership_id": "data.tenant_schema"
     },
@@ -32,7 +46,49 @@
       "criticality": "CRITICAL",
       "verified_sha": "92a29c048dd900890742b99e3d3c6ef57f72f836",
       "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/92a29c048dd900890742b99e3d3c6ef57f72f836/tests/roles_access_route_registry_test.py",
-      "owning_paths": ["app/Security/**", "app/Service/AccessControlService.php", "app/Service/UserSyncService.php", "app/Service/AccountAuthenticationService.php", "app/Service/CompanyMembershipService.php", "app/Service/CompanyRoleService.php", "app/Service/CompanySwitchService.php", "app/Service/EntityAssignmentService.php", "app/Service/IdentityNormalizer.php", "app/Service/RegulatedDataScopeService.php", "app/Http/Controllers/Company/RolesAccessController.php", "app/Http/Routes/company_roles_access.php", "app/View/pages/company/roles_access.php", "public/assets/css/roles-access.css", "public/assets/js/roles-access.js", "public/assets/js/entity-assignments.js", "database/migrations/013_create_roles_access.sql", "database/migrations-local/131_create_roles_access_projection.sql", "tools/roles_access/**", "scripts/roles_access_migration_proof.php", "tests/roles_access*", "app/Service/LegacySessionIdentityUpgradeService.php", "app/Support/http_runtime.php", "public/index.php", ".github/roles-access/**", ".github/workflows/roles_access_*.yml", "app/Service/CompanyLandingPageService.php", "app/Service/EntityResponsibilityService.php", "app/Service/ResponsibleAssignmentService.php", "app/Http/Controllers/CoreLandingController.php", "app/Http/Controllers/Company/ResponsibleAssignmentController.php", "app/Http/Controllers/Company/ResponsibleAssignmentActions/**", "app/Http/Routes/company_responsible_assignments.php", "app/View/pages/company_responsible_assignments.php", "app/Http/Routes/core.php", "app/View/layouts/main.php", "database/migrations/014_add_role_default_page.sql", "database/migrations-local/132_split_assignment_and_responsibility.sql", "scripts/roles_access_apply_132.php", "scripts/roles_access_verify_132.php", "scripts/roles_access_013_schema_proof.php"],
+      "owning_paths": [
+        "app/Security/**",
+        "app/Service/AccessControlService.php",
+        "app/Service/UserSyncService.php",
+        "app/Service/AccountAuthenticationService.php",
+        "app/Service/CompanyMembershipService.php",
+        "app/Service/CompanyRoleService.php",
+        "app/Service/CompanySwitchService.php",
+        "app/Service/EntityAssignmentService.php",
+        "app/Service/IdentityNormalizer.php",
+        "app/Service/RegulatedDataScopeService.php",
+        "app/Http/Controllers/Company/RolesAccessController.php",
+        "app/Http/Routes/company_roles_access.php",
+        "app/View/pages/company/roles_access.php",
+        "public/assets/css/roles-access.css",
+        "public/assets/js/roles-access.js",
+        "public/assets/js/entity-assignments.js",
+        "database/migrations/013_create_roles_access.sql",
+        "database/migrations-local/131_create_roles_access_projection.sql",
+        "tools/roles_access/**",
+        "scripts/roles_access_migration_proof.php",
+        "tests/roles_access*",
+        "app/Service/LegacySessionIdentityUpgradeService.php",
+        "app/Support/http_runtime.php",
+        "public/index.php",
+        ".github/roles-access/**",
+        ".github/workflows/roles_access_*.yml",
+        "app/Service/CompanyLandingPageService.php",
+        "app/Service/EntityResponsibilityService.php",
+        "app/Service/ResponsibleAssignmentService.php",
+        "app/Http/Controllers/CoreLandingController.php",
+        "app/Http/Controllers/Company/ResponsibleAssignmentController.php",
+        "app/Http/Controllers/Company/ResponsibleAssignmentActions/**",
+        "app/Http/Routes/company_responsible_assignments.php",
+        "app/View/pages/company_responsible_assignments.php",
+        "app/Http/Routes/core.php",
+        "app/View/layouts/main.php",
+        "database/migrations/014_add_role_default_page.sql",
+        "database/migrations-local/132_split_assignment_and_responsibility.sql",
+        "scripts/roles_access_apply_132.php",
+        "scripts/roles_access_verify_132.php",
+        "scripts/roles_access_013_schema_proof.php"
+      ],
       "navigation": "active",
       "machine_ownership_id": "security.access"
     },
@@ -41,9 +97,14 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "42a91f90b327eb857df3b4f010a0bd45a5635afc",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/42a91f90b327eb857df3b4f010a0bd45a5635afc/app/Service/FinanceMatchingRuleValidationTrait.php",
-      "owning_paths": ["app/Service/FinanceMatchingRule*.php", "app/Http/Controllers/Company/BankFinanceActions/**", "database/migrations-local/055_create_finance_matching_rules.sql", "tests/finance_*matching*"],
+      "verified_sha": "c6591b6a581bdd16fcc220fe0fe5c226b281549b",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c6591b6a581bdd16fcc220fe0fe5c226b281549b/app/Service/FinanceMatchingRuleValidationTrait.php",
+      "owning_paths": [
+        "app/Service/FinanceMatchingRule*.php",
+        "app/Http/Controllers/Company/BankFinanceActions/**",
+        "database/migrations-local/055_create_finance_matching_rules.sql",
+        "tests/finance_*matching*"
+      ],
       "navigation": "active",
       "machine_ownership_id": "finance.matching"
     },
@@ -52,9 +113,20 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "eae2f5c1a3b8b4cbc6057845f4a77d33283b05ec",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/eae2f5c1a3b8b4cbc6057845f4a77d33283b05ec/app/View/partials/company_waste_trip_modal_view.php",
-      "owning_paths": ["app/Service/WasteTrip*.php", "app/Http/Controllers/Company/WasteTripController.php", "app/Http/Routes/company_linear_trips.php", "app/View/pages/company_waste_trip*.php", "app/View/partials/company_waste_trip*.php", "database/migrations-local/128_create_waste_trips.sql", "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql", "scripts/waste_trip*.php", "tests/waste_trip*.php", ".github/workflows/waste_trips*.yml"],
+      "verified_sha": "ed007724f20e84ca9120bd870532da1706cf9d6b",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed007724f20e84ca9120bd870532da1706cf9d6b/tests/waste_trip_legacy_manager_end_to_end_regression_test.php",
+      "owning_paths": [
+        "app/Service/WasteTrip*.php",
+        "app/Http/Controllers/Company/WasteTripController.php",
+        "app/Http/Routes/company_linear_trips.php",
+        "app/View/pages/company_waste_trip*.php",
+        "app/View/partials/company_waste_trip*.php",
+        "database/migrations-local/128_create_waste_trips.sql",
+        "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql",
+        "scripts/waste_trip*.php",
+        "tests/waste_trip*.php",
+        ".github/workflows/waste_trips*.yml"
+      ],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
     },
@@ -65,7 +137,18 @@
       "criticality": "CRITICAL",
       "verified_sha": "3716f83f1b4bf8221c20d1ab0975e91de6fa2d76",
       "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/3716f83f1b4bf8221c20d1ab0975e91de6fa2d76/tools/memory_integrity_check.py",
-      "owning_paths": [".github/workflows/ci.yml", ".github/workflows/erpv2_fast_release.yml", "AGENTS.md", "docs/GITHUB_CONTROL_PLANE.md", "tools/ci_scope.py", "tools/agent_preflight.py", "tests/ci_scope_test.py", "tests/agent_preflight_test.py", "tools/runner/**", "tests/runner_helpers_contract_test.py"],
+      "owning_paths": [
+        ".github/workflows/ci.yml",
+        ".github/workflows/erpv2_fast_release.yml",
+        "AGENTS.md",
+        "docs/GITHUB_CONTROL_PLANE.md",
+        "tools/ci_scope.py",
+        "tools/agent_preflight.py",
+        "tests/ci_scope_test.py",
+        "tests/agent_preflight_test.py",
+        "tools/runner/**",
+        "tests/runner_helpers_contract_test.py"
+      ],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
     },
@@ -76,7 +159,10 @@
       "criticality": "CRITICAL",
       "verified_sha": "8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99",
       "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/8b5c6f7d5d06695e1dfcf68eabebd6e37ce9bf99/tools/runner/sync_runner_helpers.py",
-      "owning_paths": ["tools/sentinelx/**", "tools/runner/**"],
+      "owning_paths": [
+        "tools/sentinelx/**",
+        "tools/runner/**"
+      ],
       "navigation": "active",
       "machine_ownership_id": "control.sentinelx_runner"
     },
@@ -91,7 +177,13 @@
       "navigation": "active",
       "machine_ownership_id": "policy.owner",
       "active_policy_key": "deploy.standing_authorization",
-      "decision": {"id":"OWNER-2026-08-20-DEPLOY","date":"2026-08-20","source":"https://app.notion.com/p/3c5a64edce3281a5b127f18520d69e67?pvs=204","supersedes":"per-release OWNER click requirement from 2026-08-19 deploy policy only","implementation_status":"IMPLEMENTED"}
+      "decision": {
+        "id": "OWNER-2026-08-20-DEPLOY",
+        "date": "2026-08-20",
+        "source": "https://app.notion.com/p/3c5a64edce3281a5b127f18520d69e67?pvs=204",
+        "supersedes": "per-release OWNER click requirement from 2026-08-19 deploy policy only",
+        "implementation_status": "IMPLEMENTED"
+      }
     }
   ]
 }

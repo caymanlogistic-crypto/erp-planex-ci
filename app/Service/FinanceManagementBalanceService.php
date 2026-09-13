@@ -13,7 +13,7 @@ final class FinanceManagementBalanceService
 
     public static function computeBalance(PDO $localPdo, string $asOfDate): array
     {
-        FinanceObligationService::syncAllLinearRoutes($localPdo);
+        FinanceObligationService::syncAllOperationalObligations($localPdo);
 
         $moneyAccounts = self::fetchMoneyAccountBalances($localPdo, $asOfDate);
         $receivables = self::fetchReceivables($localPdo, $asOfDate);
@@ -138,15 +138,18 @@ final class FinanceManagementBalanceService
 
     private static function obligationBalanceRow(array $obligation, string $group): array
     {
-        $routeId = (string)($obligation['source_parent_type'] ?? '') === 'LINEAR_ROUTE'
-            ? (int)($obligation['source_parent_id'] ?? 0)
-            : 0;
+        $parentType=(string)($obligation['source_parent_type']??'');
+        $routeId = $parentType === 'LINEAR_ROUTE' ? (int)($obligation['source_parent_id'] ?? 0) : 0;
         $isService = (string)($obligation['source_type'] ?? '') === 'LINEAR_ROUTE_SERVICE_PAYMENT';
 
         if ($routeId > 0) {
             $name = ($isService ? 'Доп. услуга по рейсу #' : 'Платёж по рейсу #') . $routeId;
             $source = $isService ? 'Дополнительная услуга рейса' : 'План платежа рейса';
             $url = app_url('/company/trips/linear');
+        } elseif ($parentType==='WASTE_TRIP') {
+            $name=(string)($obligation['parent_label']??('Перевозка отходов #'.(int)($obligation['source_parent_id']??0)));
+            $source='Финансовые условия перевозки отходов';
+            $url=app_url('/company/trips/departures');
         } else {
             $name = 'Платёжное обязательство #' . (int)$obligation['id'];
             $source = 'Платёжное обязательство';

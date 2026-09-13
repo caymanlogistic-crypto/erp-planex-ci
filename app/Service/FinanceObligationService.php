@@ -46,6 +46,162 @@ final class FinanceObligationService
         return ['routes' => count($routeIds), 'obligations' => $count];
     }
 
+    public static function syncAllOperationalObligations(PDO $pdo): array
+    {
+        $linear = self::syncAllLinearRoutes($pdo);
+        $waste = self::syncAllWasteTrips($pdo);
+        return [
+            'routes' => (int)($linear['routes'] ?? 0),
+            'waste_trips' => (int)($waste['waste_trips'] ?? 0),
+            'obligations' => (int)($linear['obligations'] ?? 0) + (int)($waste['obligations'] ?? 0),
+        ];
+    }
+
+    public static function syncAllWasteTrips(PDO $pdo): array
+    {
+        if (!self::schemaReady($pdo)
+            || !self::tableExists($pdo, 'waste_trips')
+            || !self::tableExists($pdo, 'waste_trip_customer_payments')
+            || !self::tableExists($pdo, 'waste_trip_carrier_payments')) {
+            return ['waste_trips' => 0, 'obligations' => 0];
+        }
+        $tripIds = $pdo->query('SELECT id FROM waste_trips ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
+        $count = 0;
+        foreach ($tripIds as $tripId) {
+            $count += self::syncWasteTrip($pdo, (int)$tripId);
+        }
+        return ['waste_trips' => count($tripIds), 'obligations' => $count];
+    }
+
+    public static function syncWasteTrip(PDO $pdo, int $tripId): int
+    {
+        if ($tripId <= 0 || !self::schemaReady($pdo)
+            || !self::tableExists($pdo, 'waste_trip_customer_payments')
+            || !self::tableExists($pdo, 'waste_trip_carrier_payments')) {
+            return 0;
+        }
+        $stmt = $pdo->prepare(
+            "SELECT wt.*,
+                    c.name AS client_name,c.inn AS client_inn,
+                    ct.id AS carrier_contractor_id,ct.name AS carrier_name,ct.inn AS carrier_inn
+               FROM waste_trips wt
+               JOIN clients c ON c.id=wt.client_id
+          LEFT JOIN crews cr ON cr.id=wt.route_executor_id
+          LEFT JOIN contractors ct ON ct.id=cr.contractor_id
+              WHERE wt.id=? LIMIT 1"
+        );
+        $stmt->execute([$tripId]);
+        $trip = $stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$trip) return 0;
+
+        $payments = [];
+        foreach ([
+            ['table'=>'waste_trip_customer_payments','party_role'=>'customer','source_type'=>'WASTE_TRIP_CUSTOMER_PAYMENT'],
+            ['table'=>'waste_trip_carrier_payments','party_role'=>'carrier','source_type'=>'WASTE_TRIP_CARRIER_PAYMENT'],
+        ] as $spec) {
+            $rows = $pdo->prepare("SELECT * FROM {$spec['table']} WHERE waste_trip_id=? ORDER BY sort_order,id");
+            $rows->execute([$tripId]);
+            foreach ($rows->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $row['_party_role']=$spec['party_role'];
+                $row['_source_type']=$spec['source_type'];
+                $payments[]=$row;
+            }
+        }
+
+        $activeKeys = [];
+        if ((string)($trip['status'] ?? '') !== 'cancelled') {
+            foreach ($payments as $payment) {
+                $role = (string)$payment['_party_role'];
+                $counterparty = $role === 'customer'
+                    ? ['type'=>'client','id'=>(int)$trip['client_id'],'name'=>(string)$trip['client_name'],'inn'=>(string)($trip['client_inn']??'')]
+                    : (((int)($trip['carrier_contractor_id']??0) > 0)
+                        ? ['type'=>'contractor','id'=>(int)$trip['carrier_contractor_id'],'name'=>(string)$trip['carrier_name'],'inn'=>(string)($trip['carrier_inn']??'')]
+                        : null);
+                if ($counterparty === null) continue;
+                $sourceKey = implode(':',['WASTE_TRIP',$tripId,$role,$counterparty['type'],$counterparty['id'],(int)($payment['sort_order']??1)]);
+                $activeKeys[] = $sourceKey;
+                $conditionType = trim((string)($payment['condition_type'] ?? ''));
+                $daysCount = $payment['days_count'] !== null ? (int)$payment['days_count'] : null;
+                $daysKind = trim((string)($payment['days_kind'] ?? 'calendar')) ?: 'calendar';
+                $specificDueDate = self::validDateOrNull($payment['specific_due_date'] ?? null);
+                $dateContext = [
+                    'planned_loading_date' => self::validDateOrNull($trip['planned_start_date'] ?? null) ?? self::validDateOrNull($trip['planned_start_date_from'] ?? null),
+                    'planned_unloading_date' => self::validDateOrNull($trip['planned_finish_date'] ?? null),
+                    'actual_loading_date' => self::validDateOrNull($trip['actual_start_date'] ?? null),
+                    'actual_unloading_date' => self::validDateOrNull($trip['actual_end_date'] ?? null),
+                    'closing_documents_received_date' => null,
+                ];
+                $resolved = self::resolveDates($pdo,$dateContext,$conditionType,$daysCount,$daysKind,$specificDueDate);
+                $amount = self::money((string)($payment['amount'] ?? '0.00'));
+                $paidAmount = self::paidAmountForSourceKey($pdo,$sourceKey);
+                $status = self::computeStatus($amount,$paidAmount,$resolved['due_date'],$resolved['state']);
+                $existing = self::findBySourceKey($pdo,$sourceKey);
+                $values = [
+                    (int)$payment['id'],$tripId,$role === 'carrier' ? self::DIRECTION_PAYABLE : self::DIRECTION_RECEIVABLE,$role,
+                    $counterparty['type'],$counterparty['id'],$counterparty['name'],$counterparty['inn'],$amount,
+                    $conditionType !== '' ? $conditionType : null,$daysCount,$daysKind,$specificDueDate,
+                    $resolved['event_date'],$resolved['forecast_due_date'],$resolved['due_date'],$paidAmount,$status,
+                    (int)($payment['updated_by_user_id']??0) ?: null,(string)($payment['updated_by_role']??'') ?: 'system',
+                ];
+                if ($existing) {
+                    $upd=$pdo->prepare(
+                        "UPDATE finance_obligations SET source_type=?,source_id=?,source_parent_type='WASTE_TRIP',source_parent_id=?,direction=?,party_role=?,
+                         counterparty_entity_type=?,counterparty_entity_id=?,counterparty_name=?,counterparty_inn=?,amount=?,condition_type=?,days_count=?,days_kind=?,specific_due_date=?,
+                         event_date=?,forecast_due_date=?,due_date=?,paid_amount=?,status=?,cancelled_at=NULL,updated_by_user_id=?,updated_by_role=?,updated_at=NOW() WHERE id=?"
+                    );
+                    $upd->execute(array_merge([(string)$payment['_source_type']],$values,[(int)$existing['id']]));
+                } else {
+                    $ins=$pdo->prepare(
+                        "INSERT INTO finance_obligations
+                         (source_type,source_key,source_id,source_parent_type,source_parent_id,direction,party_role,counterparty_entity_type,counterparty_entity_id,counterparty_name,counterparty_inn,
+                          amount,condition_type,days_count,days_kind,specific_due_date,event_date,forecast_due_date,due_date,paid_amount,status,created_by_user_id,created_by_role,updated_by_user_id,updated_by_role)
+                         VALUES (?,?,?,'WASTE_TRIP',?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)"
+                    );
+                    $ins->execute([
+                        (string)$payment['_source_type'],$sourceKey,(int)$payment['id'],$tripId,
+                        $role === 'carrier' ? self::DIRECTION_PAYABLE : self::DIRECTION_RECEIVABLE,$role,
+                        $counterparty['type'],$counterparty['id'],$counterparty['name'],$counterparty['inn'],$amount,
+                        $conditionType !== '' ? $conditionType : null,$daysCount,$daysKind,$specificDueDate,
+                        $resolved['event_date'],$resolved['forecast_due_date'],$resolved['due_date'],$paidAmount,$status,
+                        (int)($payment['created_by_user_id']??0) ?: null,(string)($payment['created_by_role']??'') ?: 'system',
+                        (int)($payment['updated_by_user_id']??0) ?: null,(string)($payment['updated_by_role']??'') ?: 'system',
+                    ]);
+                }
+            }
+        }
+
+        $stale=$pdo->prepare("SELECT id,source_key FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=? AND source_type IN ('WASTE_TRIP_CUSTOMER_PAYMENT','WASTE_TRIP_CARRIER_PAYMENT') AND cancelled_at IS NULL");
+        $stale->execute([$tripId]);
+        foreach ($stale->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            if (!in_array((string)$row['source_key'],$activeKeys,true)) {
+                $pdo->prepare("UPDATE finance_obligations SET status='cancelled',cancelled_at=NOW(),updated_at=NOW() WHERE id=?")->execute([(int)$row['id']]);
+            }
+        }
+        return count($activeKeys);
+    }
+
+    public static function enrichParentLabels(PDO $pdo, array &$rows): void
+    {
+        $wasteIds=[];
+        foreach ($rows as $row) if ((string)($row['source_parent_type']??'')==='WASTE_TRIP') $wasteIds[]=(int)($row['source_parent_id']??0);
+        $wasteIds=array_values(array_unique(array_filter($wasteIds)));
+        $wasteMap=[];
+        if ($wasteIds!==[] && self::tableExists($pdo,'waste_trips')) {
+            $marks=implode(',',array_fill(0,count($wasteIds),'?'));
+            $stmt=$pdo->prepare("SELECT id,business_id FROM waste_trips WHERE id IN ({$marks})");
+            $stmt->execute($wasteIds);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) $wasteMap[(int)$row['id']]=(int)$row['business_id'];
+        }
+        foreach ($rows as &$row) {
+            $type=(string)($row['source_parent_type']??'');$id=(int)($row['source_parent_id']??0);
+            $row['parent_label']=$type==='WASTE_TRIP'
+                ? 'Перевозка отходов #'.($wasteMap[$id]??$id)
+                : ($type==='LINEAR_ROUTE' ? 'Рейс #'.$id : ($type!=='' ? $type.' #'.$id : 'Платёжное обязательство'));
+            $row['route_label']=$row['parent_label'];
+        }
+        unset($row);
+    }
+
     public static function syncLinearRoute(PDO $pdo, int $routeId): int
     {
         if ($routeId <= 0 || !self::schemaReady($pdo)) {
@@ -195,7 +351,7 @@ final class FinanceObligationService
         if (!self::schemaReady($pdo)) {
             return [];
         }
-        self::syncAllLinearRoutes($pdo);
+        self::syncAllOperationalObligations($pdo);
         $direction = strtoupper($invoiceDirection) === FinanceInvoiceService::DIRECTION_INCOMING
             ? self::DIRECTION_PAYABLE
             : self::DIRECTION_RECEIVABLE;
@@ -220,6 +376,7 @@ final class FinanceObligationService
         $stmt = $pdo->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        self::enrichParentLabels($pdo,$rows);
         foreach ($rows as &$row) {
             $row['available_to_invoice'] = self::subMoney((string)$row['amount'], (string)$row['linked_other_amount']);
             $row['condition_label'] = DateCalculationService::CONDITION_LABELS[(string)($row['condition_type'] ?? '')] ?? 'Условие оплаты';
@@ -234,7 +391,7 @@ final class FinanceObligationService
         if (!self::schemaReady($pdo)) {
             throw new RuntimeException('Схема платёжных обязательств не установлена.');
         }
-        self::syncAllLinearRoutes($pdo);
+        self::syncAllOperationalObligations($pdo);
 
         $ownsTransaction = !$pdo->inTransaction();
         if ($ownsTransaction) {
@@ -398,7 +555,9 @@ final class FinanceObligationService
               WHERE l.invoice_id=? ORDER BY l.id"
         );
         $stmt->execute([$invoiceId]);
-        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rows=$stmt->fetchAll(PDO::FETCH_ASSOC);
+        self::enrichParentLabels($pdo,$rows);
+        return $rows;
     }
 
     public static function autoAllocateIncomingCustomerReceipts(PDO $pdo, array $user): array
@@ -406,7 +565,7 @@ final class FinanceObligationService
         if (!self::schemaReady($pdo)) {
             return ['operations' => 0, 'allocations' => 0, 'amount' => '0.00'];
         }
-        self::syncAllLinearRoutes($pdo);
+        self::syncAllOperationalObligations($pdo);
 
         $ops = $pdo->query(
             "SELECT fo.*,
@@ -476,7 +635,7 @@ final class FinanceObligationService
                 $total = self::addMoney($total, $opRemaining);
             }
         }
-        self::syncAllLinearRoutes($pdo);
+        self::syncAllOperationalObligations($pdo);
         return ['operations' => $matchedOps, 'allocations' => $allocationCount, 'amount' => $total];
     }
 
@@ -485,7 +644,7 @@ final class FinanceObligationService
         if (!self::schemaReady($pdo)) {
             return ['rows' => [], 'summary' => self::emptyReceivablesSummary()];
         }
-        self::syncAllLinearRoutes($pdo);
+        self::syncAllOperationalObligations($pdo);
         $stmt = $pdo->query(
             "SELECT o.*,
                     COALESCE((SELECT SUM(l.amount) FROM finance_invoice_links l JOIN finance_invoices i ON i.id=l.invoice_id WHERE l.obligation_id=o.id AND i.status<>'cancelled'),0) AS invoiced_amount,
@@ -495,6 +654,7 @@ final class FinanceObligationService
               ORDER BY CASE WHEN o.due_date IS NULL THEN 1 ELSE 0 END,o.due_date,o.id"
         );
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        self::enrichParentLabels($pdo,$rows);
         $summary = self::emptyReceivablesSummary();
         $today = new DateTimeImmutable('today');
         foreach ($rows as &$row) {

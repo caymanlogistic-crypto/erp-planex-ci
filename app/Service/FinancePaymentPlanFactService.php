@@ -193,13 +193,12 @@ final class FinancePaymentPlanFactService
                 continue;
             }
 
-            $routeId = (string)($obligation['source_parent_type'] ?? '') === 'LINEAR_ROUTE'
-                ? (int)($obligation['source_parent_id'] ?? 0)
-                : 0;
+            $parentType=(string)($obligation['source_parent_type']??'');
+            $routeId = $parentType === 'LINEAR_ROUTE' ? (int)($obligation['source_parent_id'] ?? 0) : 0;
             $isService = (string)($obligation['source_type'] ?? '') === 'LINEAR_ROUTE_SERVICE_PAYMENT';
             $sourceLabel = $routeId > 0
                 ? ($isService ? 'Доп. услуга · Рейс #' . $routeId : 'Рейс #' . $routeId)
-                : 'Платёжное обязательство';
+                : (string)($obligation['parent_label'] ?? 'Платёжное обязательство');
 
             $result[] = [
                 'source_id' => (int)$obligation['id'],
@@ -207,7 +206,7 @@ final class FinancePaymentPlanFactService
                 'side' => (string)$obligation['direction'] === FinanceObligationService::DIRECTION_RECEIVABLE ? 'INCOME' : 'EXPENSE',
                 'source_label' => $sourceLabel,
                 'counterparty' => (string)($obligation['counterparty_name'] ?? '—'),
-                'route_label' => $routeId > 0 ? 'Рейс #' . $routeId : null,
+                'route_label' => $routeId > 0 ? 'Рейс #' . $routeId : (($parentType==='WASTE_TRIP') ? (string)($obligation['parent_label']??'') : null),
                 'planned_amount' => (string)$obligation['uninvoiced_amount'],
                 'planned_date' => $plannedDate,
                 'paid_amount' => (string)$obligation['uninvoiced_paid_amount'],

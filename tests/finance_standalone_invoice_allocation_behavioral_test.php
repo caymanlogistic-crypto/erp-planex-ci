@@ -94,7 +94,7 @@ $userCtx=['user_id'=>1,'role_code'=>'company_owner'];
 
 // A normal invoice created without obligation selection is a valid standalone settlement class.
 $pdo->exec("INSERT INTO finance_invoices(direction,number,invoice_date,counterparty_entity_type,counterparty_entity_id,counterparty_name,counterparty_inn,amount,planned_payment_date,status)
-           VALUES('INCOMING','STANDALONE-90','2026-08-27','contractor',50,'Standalone Supplier','7755000005',90,'2026-09-05','received')");
+           VALUES('INCOMING','STANDALONE-90','2026-08-27','contractor',50,'Standalone Supplier','7755000005',90,'2099-09-05','received')");
 standaloneCheck((int)$pdo->query("SELECT COUNT(*) FROM finance_invoice_links WHERE invoice_id=1")->fetchColumn()===0,'standalone invoice has no invoice links');
 
 $pdo->exec("INSERT INTO finance_operations(operation_date,operation_type,counterparty_entity_type,counterparty_entity_id,counterparty_name,counterparty_inn,amount,status) VALUES

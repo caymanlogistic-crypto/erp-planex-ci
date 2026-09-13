@@ -7,6 +7,7 @@ namespace App\Service {
         public static function isVisibleEntity(\PDO $p,string $t,int $id,array $u,string $k):bool{return$id>0;}
         public static function fetchVisibleRouteExecutors(\PDO $p,array $u):array{return[['id'=>1]];}
     }
+    final class FinanceObligationService { public static function syncWasteTrip(\PDO $pdo,int $tripId):int{return 0;} }
 }
 namespace {
 use App\Service\WasteTripLegacyPrefillService;

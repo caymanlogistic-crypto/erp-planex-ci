@@ -25,7 +25,7 @@ final class FinanceCarrierBankAutoSettlementService
             return ['operations' => 0, 'allocations' => 0, 'amount' => '0.00'];
         }
 
-        FinanceObligationService::syncAllLinearRoutes($pdo);
+        FinanceObligationService::syncAllOperationalObligations($pdo);
 
         $ops = $pdo->query(
             "SELECT fo.*,
@@ -158,7 +158,7 @@ final class FinanceCarrierBankAutoSettlementService
             }
         }
 
-        FinanceObligationService::syncAllLinearRoutes($pdo);
+        FinanceObligationService::syncAllOperationalObligations($pdo);
         return ['operations' => $matchedOps, 'allocations' => $allocationCount, 'amount' => $total];
     }
 

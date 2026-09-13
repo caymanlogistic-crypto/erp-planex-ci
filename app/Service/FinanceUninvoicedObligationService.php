@@ -20,7 +20,7 @@ final class FinanceUninvoicedObligationService
             return [];
         }
         if ($sync) {
-            FinanceObligationService::syncAllLinearRoutes($pdo);
+            FinanceObligationService::syncAllOperationalObligations($pdo);
         }
 
         $stmt = $pdo->query(
@@ -97,6 +97,7 @@ final class FinanceUninvoicedObligationService
             $result[] = $row;
         }
 
+        FinanceObligationService::enrichParentLabels($pdo,$result);
         return $result;
     }
 
