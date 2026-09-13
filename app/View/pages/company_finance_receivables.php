@@ -41,7 +41,7 @@ $money = static fn(mixed $v): string => FinanceInvoiceService::formatAmount((str
             ?>
                 <tr>
                     <td><strong><?= e((string)($row['counterparty_name'] ?? '—')) ?></strong><?php if (!empty($row['counterparty_inn'])): ?><div class="receivables-muted">ИНН <?= e((string)$row['counterparty_inn']) ?></div><?php endif; ?></td>
-                    <td><strong>Рейс #<?= (int)($row['source_parent_id'] ?? 0) ?></strong><div class="receivables-muted"><?= e((string)($row['condition_label'] ?? '—')) ?></div></td>
+                    <td><strong><?= e((string)($row['parent_label'] ?? ('Рейс #'.(int)($row['source_parent_id'] ?? 0)))) ?></strong><div class="receivables-muted"><?= e((string)($row['condition_label'] ?? '—')) ?></div></td>
                     <td><?= e((string)($row['invoice_numbers'] ?: '—')) ?></td>
                     <td><?= e((string)($row['due_date'] ?? $row['forecast_due_date'] ?? '—')) ?></td>
                     <td class="<?= $overdueDays>0?'receivables-overdue':($status==='paid'?'receivables-paid':'') ?>"><?= e(FinanceObligationService::statusLabel($status)) ?></td>

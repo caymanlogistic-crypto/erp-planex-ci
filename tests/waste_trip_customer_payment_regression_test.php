@@ -37,7 +37,7 @@ foreach ([
 foreach (['customerPaymentsForSession', "==='company_owner'", 'WasteTripCustomerPaymentService::parseRows', '$isFinanceRealm'] as $needle) {
     $ok(str_contains($controller, $needle), 'finance role gate missing ' . $needle);
 }
-foreach (['ЗАКАЗЧИК', 'СТАВКА ЗАКАЗЧИКА', 'customer_payments', 'company_waste_trip_customer_payments.php'] as $needle) {
+foreach (['ЗАКАЗЧИК', 'СТАВКА ЗАКАЗЧИКА', 'СТАВКА ПЕРЕВОЗЧИКА', 'customer_payments', 'company_waste_trip_customer_payments.php', 'company_waste_trip_carrier_payments.php'] as $needle) {
     $ok(str_contains($page, $needle), 'registry/create UI missing ' . $needle);
 }
 $ok(str_contains($legacyPage, 'company_waste_trip_customer_payments.php'), 'legacy-prefill create must use the same customer payment block');

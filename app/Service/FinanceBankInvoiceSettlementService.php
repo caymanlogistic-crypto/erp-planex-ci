@@ -14,7 +14,7 @@ final class FinanceBankInvoiceSettlementService
             return null;
         }
 
-        FinanceObligationService::syncAllLinearRoutes($pdo);
+        FinanceObligationService::syncAllOperationalObligations($pdo);
         $row = self::fetchBankOperation($pdo, $bankTransactionId, false);
         if ($row === null || !in_array((string)$row['operation_type'], ['INCOME', 'EXPENSE'], true)) {
             return null;
@@ -53,7 +53,7 @@ final class FinanceBankInvoiceSettlementService
         if ($bankTransactionId <= 0 || !FinanceObligationService::schemaReady($pdo)) {
             throw new RuntimeException('Схема расчётов по счетам недоступна.');
         }
-        FinanceObligationService::syncAllLinearRoutes($pdo);
+        FinanceObligationService::syncAllOperationalObligations($pdo);
 
         $ownsTransaction = !$pdo->inTransaction();
         if ($ownsTransaction) {
@@ -123,7 +123,7 @@ final class FinanceBankInvoiceSettlementService
                 $pdo->commit();
             }
 
-            FinanceObligationService::syncAllLinearRoutes($pdo);
+            FinanceObligationService::syncAllOperationalObligations($pdo);
             $afterRemaining = FinanceAllocationService::getOperationRemainingAmount(
                 $pdo,
                 (int)$bankOperation['operation_id'],

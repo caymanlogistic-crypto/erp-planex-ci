@@ -20,7 +20,7 @@ try {
 
     $localPdo = (new Database(companyDatabaseConfig($config, $company)))->connection();
     applyLocalMigrations($localPdo);
-    FinanceObligationService::syncAllLinearRoutes($localPdo);
+    FinanceObligationService::syncAllOperationalObligations($localPdo);
 
     $invoiceId = (int)$id;
     $invoice = FinanceInvoiceService::fetchInvoiceById($localPdo, $invoiceId);

@@ -33,7 +33,7 @@ try {
     }
     $localPdo = (new Database(companyDatabaseConfig($config, $company)))->connection();
     applyLocalMigrations($localPdo);
-    FinanceObligationService::syncAllLinearRoutes($localPdo);
+    FinanceObligationService::syncAllOperationalObligations($localPdo);
 
     $user = $_SESSION['user'] ?? [];
     $userId = (int)($user['user_id'] ?? 0);

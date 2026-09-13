@@ -53,7 +53,7 @@
         $auto = ['operations'=>0,'allocations'=>0,'amount'=>'0.00'];
         if (($result['status'] ?? '') !== 'error') {
             try {
-                \App\Service\FinanceObligationService::syncAllLinearRoutes($localPdo);
+                \App\Service\FinanceObligationService::syncAllOperationalObligations($localPdo);
                 $auto = \App\Service\FinanceObligationService::autoAllocateIncomingCustomerReceipts($localPdo, $_SESSION['user'] ?? []);
             } catch (\Throwable $autoError) {
                 $_SESSION['flash_info'] = 'Выписка загружена. Автоматическое разнесение требует проверки: ' . $autoError->getMessage();

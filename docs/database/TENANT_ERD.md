@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `916ac93891dd760e445b00eb2cafe645b9dfe5fda2d41915f2eacf2e87280178`
+**Schema fingerprint:** `0bfa3a792a1876b1d6b00b02804f40432a97efe1be014414eea312c980d8e57a`
 
 ## Architecture overview
 
@@ -139,6 +139,7 @@ erDiagram
   T_max_bots ||--o{ T_max_message_logs : "fk_max_message_logs_bot"
   T_max_chats ||--o{ T_max_message_logs : "fk_max_message_logs_chat"
   T_waste_trips ||--o{ T_waste_trip_audit_log : "fk_waste_trip_audit_trip"
+  T_waste_trips ||--o{ T_waste_trip_carrier_payments : "fk_waste_trip_carrier_payments_trip"
   T_waste_trips ||--o{ T_waste_trip_customer_payments : "fk_waste_trip_customer_payments_trip"
   T_feo_requests ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_feo"
   T_waste_trips ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_trip"
@@ -148,7 +149,7 @@ erDiagram
   T_feo_utilizers ||--o{ T_waste_trips : "fk_waste_trips_utilizer"
 ```
 
-Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `max_bots`, `max_chats`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_customer_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
+Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `max_bots`, `max_chats`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
 
 ## System / Migration metadata
 

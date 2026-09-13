@@ -45,7 +45,7 @@ try {
         $pageContext = 'Финансы › Счета › Компания: ' . $company['name'];
         $localPdo = (new Database(companyDatabaseConfig($config, $company)))->connection();
         applyLocalMigrations($localPdo);
-        FinanceObligationService::syncAllLinearRoutes($localPdo);
+        FinanceObligationService::syncAllOperationalObligations($localPdo);
 
         $user = $_SESSION['user'] ?? [];
         $allowedDirection = in_array($direction, [FinanceInvoiceService::DIRECTION_OUTGOING, FinanceInvoiceService::DIRECTION_INCOMING], true)

@@ -47,6 +47,7 @@ try {
         return [
             'id' => (int)$row['id'],
             'route_id' => (int)$row['source_parent_id'],
+            'route_label' => (string)($row['parent_label'] ?? ('Рейс #' . (int)$row['source_parent_id'])),
             'counterparty' => (string)$row['counterparty_name'],
             'condition' => (string)$row['condition_label'],
             'due_date' => $due,

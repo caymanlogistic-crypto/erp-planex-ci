@@ -16,14 +16,14 @@ final class FinancePaymentCalendarService
         if (!FinanceObligationService::schemaReady($localPdo)) {
             return [];
         }
-        FinanceObligationService::syncAllLinearRoutes($localPdo);
+        FinanceObligationService::syncAllOperationalObligations($localPdo);
 
         $sql = "SELECT o.id AS source_id,
                        'obligation' AS source_type,
                        CASE o.direction WHEN 'RECEIVABLE' THEN 'INCOME' ELSE 'EXPENSE' END AS direction,
                        'Платёжное обязательство' AS source_label,
                        o.counterparty_name AS counterparty,
-                       CASE WHEN o.source_parent_type='LINEAR_ROUTE' THEN CONCAT('Рейс #',o.source_parent_id) ELSE o.source_parent_type END AS route_label,
+                       CASE WHEN o.source_parent_type='LINEAR_ROUTE' THEN CONCAT('Рейс #',o.source_parent_id) WHEN o.source_parent_type='WASTE_TRIP' THEN CONCAT('Перевозка отходов #',COALESCE(wt.business_id,o.source_parent_id)) ELSE o.source_parent_type END AS route_label,
                        o.amount AS amount,
                        o.paid_amount AS paid,
                        (o.amount-o.paid_amount) AS remaining,
@@ -37,6 +37,7 @@ final class FinancePaymentCalendarService
                                   WHERE l.obligation_id=o.id AND i.status<>'cancelled'),'') AS invoice_numbers
                   FROM finance_obligations o
              LEFT JOIN linear_routes lr ON o.source_parent_type='LINEAR_ROUTE' AND lr.id=o.source_parent_id
+             LEFT JOIN waste_trips wt ON o.source_parent_type='WASTE_TRIP' AND wt.id=o.source_parent_id
                  WHERE o.cancelled_at IS NULL
                    AND o.status<>'paid'
                    AND o.amount>o.paid_amount";

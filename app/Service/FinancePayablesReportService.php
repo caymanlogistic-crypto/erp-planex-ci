@@ -16,7 +16,7 @@ final class FinancePayablesReportService
             return $empty;
         }
 
-        FinanceObligationService::syncAllLinearRoutes($pdo);
+        FinanceObligationService::syncAllOperationalObligations($pdo);
 
         try {
             $stmt = $pdo->query(
@@ -89,6 +89,7 @@ final class FinancePayablesReportService
             }
         }
 
+        FinanceObligationService::enrichParentLabels($pdo,$rows);
         $summary = self::emptySummary();
         $today = new DateTimeImmutable('today');
         foreach ($rows as &$row) {

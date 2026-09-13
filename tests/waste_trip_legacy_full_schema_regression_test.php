@@ -129,7 +129,7 @@ try{
     cleanCompanyPoolDatabase($pdo);
     LocalMigrationService::apply($pdo);
     $latest=(string)$pdo->query('SELECT migration FROM schema_migrations ORDER BY id DESC LIMIT 1')->fetchColumn();
-    $ok($latest===WasteTripService::CUSTOMER_PAYMENTS_MIGRATION,'full canonical migration chain must reach Waste Trips customer payments migration');
+    $ok($latest===WasteTripService::CARRIER_PAYMENTS_MIGRATION,'full canonical migration chain must reach Waste Trips carrier payments migration');
     foreach(['waste_trips','waste_trip_requests','waste_trip_customer_payments','waste_trip_audit_log','waste_trip_namespace_state','feo_requests','clients','users','crews','feo_utilizers']as$table){
         $s=$pdo->prepare('SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=?');$s->execute([$table]);$ok((int)$s->fetchColumn()===1,'canonical table missing: '.$table);
     }

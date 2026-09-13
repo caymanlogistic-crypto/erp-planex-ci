@@ -13,7 +13,7 @@ final class FinanceDashboardService
 
     public static function computeDashboard(PDO $localPdo): array
     {
-        FinanceObligationService::syncAllLinearRoutes($localPdo);
+        FinanceObligationService::syncAllOperationalObligations($localPdo);
         $uninvoicedObligations = FinanceUninvoicedObligationService::fetchOpen($localPdo, false);
 
         $bankAccounts = self::fetchBankAccountBalances($localPdo);

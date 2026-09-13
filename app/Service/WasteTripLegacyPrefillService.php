@@ -9,7 +9,7 @@ final class WasteTripLegacyPrefillService
 {
     public const SOURCE_SYSTEM = 'legacy_prefill';
 
-    public static function createFromLegacyPrefill(PDO $legacyPdo, PDO $pdo, int $legacyId, array $input, array $requestBusinessIds, array $sessionUser, ?array $customerPayments = null): int
+    public static function createFromLegacyPrefill(PDO $legacyPdo, PDO $pdo, int $legacyId, array $input, array $requestBusinessIds, array $sessionUser, ?array $customerPayments = null, ?array $carrierPayments = null): int
     {
         if ($legacyId < WasteTripLegacySourceService::MIN_LEGACY_ID) {
             throw new RuntimeException('Legacy ID должен быть больше 243.');
@@ -18,6 +18,6 @@ final class WasteTripLegacyPrefillService
             throw new RuntimeException('Legacy-рейс #' . $legacyId . ' не найден.');
         }
 
-        return WasteTripService::createLegacyPrefill($pdo, $legacyId, $input, $requestBusinessIds, $sessionUser, $customerPayments);
+        return WasteTripService::createLegacyPrefill($pdo, $legacyId, $input, $requestBusinessIds, $sessionUser, $customerPayments, $carrierPayments);
     }
 }
