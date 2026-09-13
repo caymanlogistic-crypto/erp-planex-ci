@@ -6,6 +6,7 @@ $root = dirname(__DIR__);
 $view = (string)file_get_contents($root . '/app/View/pages/company_document_generator.php');
 $workflow = (string)file_get_contents($root . '/.github/workflows/document_generator_production_browser_qa.yml');
 $qa = (string)file_get_contents($root . '/.github/document-generator/production_check_qa.js');
+$qaSession = (string)file_get_contents($root . '/.github/document-generator/qa_session.php');
 
 $assertions = 0;
 $assert = static function (bool $condition, string $message) use (&$assertions): void {
@@ -47,7 +48,11 @@ $assert(str_contains($view, 'class="notice danger mb-3"'), 'no-JS server preview
 
 $assert(str_contains($workflow, 'qa/document-generator-check-production-20260903'), 'production browser QA has isolated exact-SHA trigger branch');
 $assert(str_contains($workflow, 'erpv2/deploy'), 'production browser QA requires exact deploy success');
-$assert(str_contains($workflow, '.github/feo-map-stage1/qa_session.php'), 'production browser QA reuses canonical temporary authenticated-session helper');
+$assert(str_contains($workflow, '.github/document-generator/qa_session.php'), 'production browser QA uses current account-based temporary authenticated-session helper');
+$assert(str_contains($qaSession, "r.system_key='company_owner'"), 'temporary QA session resolves a current active company-owner membership');
+$assert(str_contains($qaSession, "'account_id' => \$accountId"), 'temporary QA session carries current global account identity');
+$assert(str_contains($qaSession, "'user' => ["), 'temporary QA session mirrors canonical nested compatibility identity');
+$assert(!str_contains($qaSession, "'role_code' => 'company_owner'"), 'temporary QA session does not grant authority through legacy role metadata');
 $assert(str_contains($workflow, 'node .github/document-generator/production_check_qa.js'), 'production browser QA runs executable Playwright scenario');
 $assert(str_contains($qa, "mark('EMPTY_FORM')"), 'production browser QA covers empty form');
 $assert(str_contains($qa, "mark('PARTIAL_FORM')"), 'production browser QA covers partial form');

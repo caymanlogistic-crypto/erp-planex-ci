@@ -68,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           REMOTE="/tmp/document_generator_qa_session_${GITHUB_RUN_ID}.php"
-          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/feo-map-stage1/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes .github/document-generator/qa_session.php "$SSH_USER@$SSH_HOST:$REMOTE"
           OUT=$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
             "PLANEX_ROOT=\"\$HOME/planexp/${LIVE_DIR}/erpv2\" /usr/bin/php8.5 '$REMOTE' create company_owner")
           JSON=${OUT#QA_SESSION=}
