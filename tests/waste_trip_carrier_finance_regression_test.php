@@ -86,7 +86,7 @@ try{
     $dash=FinanceDashboardService::computeDashboard($pdo);$ok((float)$dash['expected_inflow']>=100000.0&&(float)$dash['expected_outflow']>=70000.0,'Waste rates must feed finance dashboard expected flows');
 
     // Planned dates are forecast only. Without the factual event there must be no factual due date or overdue status.
-    $pdo->exec("UPDATE waste_trips SET status='planned',actual_start_date=NULL,actual_end_date=NULL WHERE id={$tripId}");
+    $pdo->exec("UPDATE waste_trips SET status='searching_executor',actual_start_date=NULL,actual_end_date=NULL WHERE id={$tripId}");
     FinanceObligationService::syncWasteTrip($pdo,$tripId);
     $waiting=$pdo->query("SELECT id,direction,forecast_due_date,due_date,status FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND cancelled_at IS NULL ORDER BY direction")->fetchAll(PDO::FETCH_ASSOC);
     $waitingBy=[];foreach($waiting as$r)$waitingBy[(string)$r['direction']]=$r;
