@@ -186,7 +186,7 @@ final class FinanceObligationService
         foreach ($rows as $row) if ((string)($row['source_parent_type']??'')==='WASTE_TRIP') $wasteIds[]=(int)($row['source_parent_id']??0);
         $wasteIds=array_values(array_unique(array_filter($wasteIds)));
         $wasteMap=[];
-        if ($wasteIds!==[]) {
+        if ($wasteIds!==[] && self::tableExists($pdo,'waste_trips')) {
             $marks=implode(',',array_fill(0,count($wasteIds),'?'));
             $stmt=$pdo->prepare("SELECT id,business_id FROM waste_trips WHERE id IN ({$marks})");
             $stmt->execute($wasteIds);
