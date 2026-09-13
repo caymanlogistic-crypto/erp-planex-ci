@@ -41,15 +41,35 @@ final class DocumentGeneratorController
             [$company, $localPdo, $companyId, $userId, $role] = $this->companyContext();
             $this->requireSchema($localPdo);
             DocumentGeneratorService::seedDefaultTemplates($localPdo, $companyId, 0, 'system');
-            $prepared = DocumentGeneratorService::prepare(
+            $mode = $this->generatorMode($_POST);
+            if ($mode === 'client_package') {
+                $prepared = DocumentGeneratorService::prepareClientPackage(
+                    $localPdo,
+                    $company,
+                    $companyId,
+                    $userId,
+                    $role,
+                    (int)($_POST['client_id'] ?? 0),
+                    (int)($_POST['trip_id'] ?? 0),
+                    (string)($_POST['package_date'] ?? '')
+                );
+                if (!($prepared['ok'] ?? false)) {
+                    $this->renderGenerator(true, 'Формирование комплекта заблокировано: исправьте ошибки проверки.');
+                    return;
+                }
+                $ids = DocumentGeneratorService::generateClientPackage($localPdo, $companyId, $userId, $role, $prepared);
+                $_SESSION['document_generator_flash'] = 'Комплект клиенту сформирован: договор, счёт и акт сохранены в истории.';
+                redirect_to('/company/document-generator/history?created_package=' . implode(',', array_map('intval', array_values($ids))));
+            }
+
+            $prepared = DocumentGeneratorService::prepareFromTrip(
                 $localPdo,
                 $company,
                 $companyId,
                 $userId,
                 $role,
                 (int)($_POST['template_id'] ?? 0),
-                (int)($_POST['crew_id'] ?? 0),
-                (string)($_POST['request_input'] ?? ''),
+                (int)($_POST['trip_id'] ?? 0),
                 $this->paramsFromRequest($_POST)
             );
             if (!($prepared['ok'] ?? false)) {
@@ -227,25 +247,36 @@ final class DocumentGeneratorController
         $pageTitle = 'Создать документ';
         $pageContext = 'Генератор договоров';
         $templates = [];
-        $executors = [];
+        $trips = [];
+        $clients = [];
         $preview = null;
         $formError = $forcedError;
         $old = $this->formState($_POST);
+        $canGenerateClientPackage = false;
         try {
             [$company, $localPdo, $companyId, $userId, $role] = $this->companyContext();
             $this->requireSchema($localPdo);
             DocumentGeneratorService::seedDefaultTemplates($localPdo, $companyId, 0, 'system');
-            $templates = DocumentGeneratorService::listTemplates($localPdo, true);
-            $executors = DocumentGeneratorService::listAccessibleExecutors($localPdo, $userId, $role);
+            $allTemplates = DocumentGeneratorService::listTemplates($localPdo, true);
+            $templates = array_values(array_filter($allTemplates, static fn(array $row): bool => in_array((string)($row['document_type'] ?? ''), ['vehicle_lease_crew','waybill_driver_assignment'], true)));
+            $canGenerateClientPackage = DocumentGeneratorService::canGenerateClientPackage($role);
+            $trips = DocumentGeneratorService::listDocumentTrips($localPdo, $canGenerateClientPackage);
+            if ($canGenerateClientPackage) $clients = DocumentGeneratorService::listDocumentClients($localPdo, $userId, $role);
 
             if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['from'])) {
                 $generated = DocumentGeneratorService::getAccessibleGenerated($localPdo, (int)$_GET['from'], $userId, $role);
                 if ($generated) {
                     $seed = DocumentGeneratorService::copySeedFromGenerated($generated);
+                    $snapshot = json_decode((string)($generated['snapshot_json'] ?? ''), true);
+                    $snapshot = is_array($snapshot) ? $snapshot : [];
+                    $docType = (string)($generated['document_type'] ?? '');
+                    $packageType = in_array($docType, ['client_sublease_crew','client_invoice','client_act'], true);
                     $old = $this->formState([
+                        'generator_mode' => $packageType ? 'client_package' : 'carrier',
                         'template_id' => $seed['template_id'] ?? 0,
-                        'crew_id' => $seed['crew_id'] ?? 0,
-                        'request_input' => $seed['request_input'] ?? '',
+                        'trip_id' => (int)($snapshot['trip']['id'] ?? 0),
+                        'client_id' => (int)($snapshot['client']['id'] ?? 0),
+                        'package_date' => (string)($generated['document_date'] ?? ''),
                         ...($seed['params'] ?? []),
                     ]);
                 }
@@ -254,19 +285,32 @@ final class DocumentGeneratorController
             if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 if (trim((string)$old['contract_date']) === '') $old['contract_date'] = date('Y-m-d');
                 if (trim((string)$old['waybill_date']) === '') $old['waybill_date'] = date('Y-m-d');
+                if (trim((string)$old['package_date']) === '') $old['package_date'] = date('Y-m-d');
             }
             if ($doPreview) {
-                $preview = DocumentGeneratorService::prepare(
-                    $localPdo,
-                    $company,
-                    $companyId,
-                    $userId,
-                    $role,
-                    (int)$old['template_id'],
-                    (int)$old['crew_id'],
-                    (string)$old['request_input'],
-                    $this->paramsFromRequest($old)
-                );
+                if ($old['generator_mode'] === 'client_package') {
+                    $preview = DocumentGeneratorService::prepareClientPackage(
+                        $localPdo,
+                        $company,
+                        $companyId,
+                        $userId,
+                        $role,
+                        (int)$old['client_id'],
+                        (int)$old['trip_id'],
+                        (string)$old['package_date']
+                    );
+                } else {
+                    $preview = DocumentGeneratorService::prepareFromTrip(
+                        $localPdo,
+                        $company,
+                        $companyId,
+                        $userId,
+                        $role,
+                        (int)$old['template_id'],
+                        (int)$old['trip_id'],
+                        $this->paramsFromRequest($old)
+                    );
+                }
             }
         } catch (Throwable $e) {
             $company = $company ?? null;
@@ -349,6 +393,7 @@ final class DocumentGeneratorController
             'finish_date' => (string)($source['finish_date'] ?? ''),
             'price' => (string)($source['price'] ?? ''),
             'vat_mode' => (string)($source['vat_mode'] ?? 'без НДС'),
+            'payment_terms' => (string)($source['payment_terms'] ?? ''),
             'executor_bank_inn' => (string)($source['executor_bank_inn'] ?? ''),
             'waybill_number' => (string)($source['waybill_number'] ?? ''),
             'waybill_date' => (string)($source['waybill_date'] ?? ''),
@@ -359,11 +404,18 @@ final class DocumentGeneratorController
     {
         $params = $this->paramsFromRequest($source);
         return [
+            'generator_mode' => $this->generatorMode($source),
             'template_id' => (int)($source['template_id'] ?? 0),
-            'crew_id' => (int)($source['crew_id'] ?? 0),
-            'request_input' => (string)($source['request_input'] ?? ''),
+            'trip_id' => (int)($source['trip_id'] ?? 0),
+            'client_id' => (int)($source['client_id'] ?? 0),
+            'package_date' => (string)($source['package_date'] ?? ''),
             ...$params,
         ];
+    }
+
+    private function generatorMode(array $source): string
+    {
+        return (string)($source['generator_mode'] ?? '') === 'client_package' ? 'client_package' : 'carrier';
     }
 
     private function sendDocx(string $path, string $name): never

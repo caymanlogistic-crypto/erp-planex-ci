@@ -41,6 +41,9 @@ trait DocumentGeneratorTemplateTrait
             $defaults = [
                 'vehicle_lease_crew' => ['Договор-заявка аренды ТС с экипажем', 'contract_vehicle_lease_crew_v3.docx'],
                 'waybill_driver_assignment' => ['Приложение к путевому листу / задание водителю', 'waybill_driver_assignment_v1.docx'],
+                'client_sublease_crew' => ['Договор субаренды транспортного средства с экипажем', 'client_sublease_contract_v1.docx'],
+                'client_invoice' => ['Счёт клиенту', 'client_invoice_v1.docx'],
+                'client_act' => ['Акт клиенту', 'client_act_v1.docx'],
             ];
             foreach ($defaults as $type => [$name, $filename]) {
                 $stmt = $pdo->prepare('SELECT id FROM document_templates WHERE document_type=? ORDER BY id LIMIT 1');
@@ -84,6 +87,9 @@ trait DocumentGeneratorTemplateTrait
             'contract_vehicle_lease_crew_v2.docx' => '7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa',
             'contract_vehicle_lease_crew_v3.docx' => '87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',
             'waybill_driver_assignment_v1.docx' => '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
+            'client_sublease_contract_v1.docx' => '01ebdc8bb56beb11b20abc787bd6067c7ae3379274e1143cf3e4cf1258f7230c',
+            'client_invoice_v1.docx' => '10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
+            'client_act_v1.docx' => '246b3394254d58a22d6ea492f9db56b2efcabef56d43de495766c2c902c6a1f9',
         ];
         if (!isset($expected[$filename])) {
             throw new RuntimeException('Неизвестный встроенный DOCX-шаблон: ' . $filename);
@@ -130,6 +136,21 @@ trait DocumentGeneratorTemplateTrait
         if ($activeOnly) $sql .= " WHERE t.status='active' AND t.active_version_id IS NOT NULL";
         $sql .= ' ORDER BY t.document_type,t.name,t.id';
         return $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private static function getUniqueActiveTemplateByType(PDO $pdo, string $documentType): array
+    {
+        $stmt = $pdo->prepare("SELECT t.id template_id,t.name template_name,t.document_type,t.status template_status,t.active_version_id,
+                                     v.id version_id,v.version_no,v.original_name,v.stored_path,v.file_size,v.sha256,v.placeholders_json,v.created_at
+                                FROM document_templates t
+                                JOIN document_template_versions v ON v.id=t.active_version_id AND v.template_id=t.id
+                               WHERE t.document_type=? AND t.status='active'
+                               ORDER BY t.id");
+        $stmt->execute([$documentType]);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        if ($rows === []) throw new RuntimeException('Нет активного шаблона: ' . (DocumentTemplateService::documentTypes()[$documentType] ?? $documentType) . '.');
+        if (count($rows) !== 1) throw new RuntimeException('Для типа документа должен быть ровно один активный шаблон: ' . (DocumentTemplateService::documentTypes()[$documentType] ?? $documentType) . '.');
+        return $rows[0];
     }
 
     public static function listTemplateVersions(PDO $pdo, int $templateId): array
@@ -194,7 +215,14 @@ trait DocumentGeneratorTemplateTrait
         if ($name === '') throw new RuntimeException('Укажите название шаблона.');
         $validation = DocumentTemplateService::validateDocxFile($sourcePath);
         if (!($validation['ok'] ?? false)) throw new RuntimeException(implode(' ', $validation['errors'] ?? ['Некорректный DOCX.']));
-        if (($validation['repeat_rows'] ?? 0) !== 1) throw new RuntimeException('Для текущих типов документов шаблон должен содержать одну repeat-строку {{request.*}}.');
+        $repeatRows = (int)($validation['repeat_rows'] ?? 0);
+        $expectedRepeatRows = in_array($documentType, ['client_invoice','client_act'], true) ? 0 : 1;
+        if ($repeatRows !== $expectedRepeatRows) {
+            $message = $expectedRepeatRows === 1
+                ? 'Для выбранного типа документа шаблон должен содержать одну repeat-строку {{request.*}}.'
+                : 'Для выбранного типа документа repeat-строка {{request.*}} не используется.';
+            throw new RuntimeException($message);
+        }
 
         $pdo->beginTransaction();
         $storedPath = null;

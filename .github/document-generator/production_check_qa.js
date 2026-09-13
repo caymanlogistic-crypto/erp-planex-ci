@@ -33,20 +33,14 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
     const form = page.locator('[data-docgen-form]');
     await form.waitFor({ state: 'visible' });
 
-    const candidatesPayload = await page.evaluate(async () => {
-      const response = await fetch('/erpv2/company/feo/requests/data?offset=0&limit=80', { credentials: 'same-origin' });
-      if (!response.ok) throw new Error('FEO data HTTP ' + response.status);
-      return response.json();
-    });
-    const requestIds = Array.from(new Set((candidatesPayload.rows || []).map((row) => String(row.zayavka_id || '')).filter((id) => /^\d{6}$/.test(id))));
-    assert(requestIds.length > 0, 'production FEO registry returned no six-digit candidate IDs');
-
+    const mode = page.locator('[data-docgen-mode]');
+    await mode.selectOption('carrier');
     const templates = await page.locator('[data-docgen-template] option').evaluateAll((options) => options.map((option) => ({ value: option.value, type: option.dataset.documentType || '' })));
     const contractTemplate = templates.find((item) => item.type === 'vehicle_lease_crew');
     const waybillTemplate = templates.find((item) => item.type === 'waybill_driver_assignment');
-    assert(contractTemplate && waybillTemplate, 'both canonical document types must be active for QA');
-    const executorValues = await page.locator('select[name="crew_id"] option').evaluateAll((options) => options.map((o) => o.value).filter(Boolean));
-    assert(executorValues.length > 0, 'no active route executors are available for QA');
+    assert(contractTemplate && waybillTemplate, 'both canonical carrier document types must be active for QA');
+    const tripValues = await page.locator('[data-docgen-carrier-trip] option').evaluateAll((options) => options.map((o) => o.value).filter(Boolean));
+    assert(tripValues.length > 0, 'no Waste Trips are available for document-generator QA');
 
     const result = page.locator('[data-docgen-check-result]');
     const checkButton = page.locator('[data-docgen-check]');
@@ -59,8 +53,9 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
       }
       throw new Error(`Timed out waiting for ${description}`);
     };
+    const enabledNamed = (name) => page.locator(`[name="${name}"]:not([disabled])`).first();
     const set = async (name, value) => {
-      const el = page.locator(`[name="${name}"]`);
+      const el = enabledNamed(name);
       const tag = await el.evaluate((node) => node.tagName.toLowerCase());
       if (tag === 'select') await el.selectOption(String(value)); else await el.fill(String(value));
     };
@@ -71,22 +66,20 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
     };
 
     await page.locator('[data-docgen-template]').selectOption(contractTemplate.value);
-    await set('crew_id', '');
-    await set('request_input', '');
+    await set('trip_id', '');
     await set('contract_date', '');
     await set('start_date', '');
     await set('finish_date', '');
     await set('price', '');
     await set('vat_mode', '');
-    assert(await check() === 'error', 'empty form must fail visibly');
+    assert(await check() === 'error', 'empty carrier form must fail visibly');
     const emptyText = await result.innerText();
-    for (const expected of ['Не выбран исполнитель рейса.', 'Не указаны заявки ФЭО.', 'Не указана дата начала.', 'Не указана стоимость.']) assert(emptyText.includes(expected), `empty form missing message: ${expected}`);
-    for (const name of ['crew_id', 'request_input', 'start_date', 'price']) assert(await page.locator(`[name="${name}"]`).evaluate((node) => node.closest('.field')?.classList.contains('is-error') === true), `empty form field not highlighted: ${name}`);
+    for (const expected of ['Не выбран рейс.', 'Не указана дата начала.', 'Не указана стоимость.']) assert(emptyText.includes(expected), `empty form missing message: ${expected}`);
+    for (const name of ['trip_id', 'start_date', 'price']) assert(await enabledNamed(name).evaluate((node) => node.closest('.field')?.classList.contains('is-error') === true), `empty form field not highlighted: ${name}`);
     assert(!(await checkButton.isDisabled()), 'check button remained disabled after client validation');
     mark('EMPTY_FORM');
 
-    await set('crew_id', executorValues[0]);
-    await set('request_input', requestIds[0]);
+    await set('trip_id', tripValues[0]);
     await set('contract_date', ymd(today));
     await set('start_date', '');
     await set('finish_date', '');
@@ -101,50 +94,61 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
     await set('start_date', ymd(today));
     await set('finish_date', ymd(tomorrow));
     await set('price', '1');
-    await set('request_input', '999999');
     await page.route('**/company/document-generator/preview', async (route) => { await new Promise((resolve) => setTimeout(resolve, 400)); await route.continue(); }, { times: 1 });
     const loadingClick = checkButton.click();
     await page.waitForTimeout(60);
     assert(await checkButton.isDisabled(), 'check button must be disabled while preview request is active');
     assert((await checkButton.innerText()).includes('Проверяем'), 'check button must show loading label');
+    assert((await result.getAttribute('data-docgen-state')) === 'checking', 'result must expose checking state during request');
     await loadingClick;
-    await waitForResultState((state) => state !== 'checking', 'loading-state completion');
+    await waitForResultState((state) => Boolean(state) && state !== 'checking', 'loading-state completion');
     assert(!(await checkButton.isDisabled()), 'check button must recover after request completion');
     mark('LOADING_STATE');
 
     await page.route('**/company/document-generator/preview', (route) => route.abort('failed'), { times: 1 });
-    await set('request_input', requestIds[0]);
     await checkButton.click();
     await waitForResultState((state) => state === 'error', 'network failure feedback');
     assert((await result.innerText()).includes('Не удалось выполнить проверку'), 'network failure must show standard generic error');
     mark('HTTP_JS_FAILURE');
 
-    let validPair = null;
-    outer: for (const crew of executorValues.slice(0, 8)) {
-      await set('crew_id', crew);
-      for (const requestId of requestIds.slice(0, 40)) {
-        await set('request_input', requestId);
-        await set('contract_date', ymd(today));
-        await set('start_date', ymd(today));
-        await set('finish_date', ymd(tomorrow));
-        await set('price', '1');
-        await set('vat_mode', 'без НДС');
-        if (await check() === 'success') { validPair = { crew, requestId }; break outer; }
-      }
+    let validTrip = null;
+    for (const tripId of tripValues.slice(0, 80)) {
+      await set('trip_id', tripId);
+      await set('contract_date', ymd(today));
+      await set('start_date', ymd(today));
+      await set('finish_date', ymd(tomorrow));
+      await set('price', '1');
+      await set('vat_mode', 'без НДС');
+      if (await check() === 'success') { validTrip = tripId; break; }
     }
-    assert(validPair, 'no production executor/FEO combination passed canonical contract preview');
+    assert(validTrip, 'no production Waste Trip passed canonical carrier contract preview');
     assert(await result.locator('.notice.success').isVisible(), 'successful contract preview lacks standard success notice');
-    assert(await result.locator('button[formaction*="/company/document-generator/generate"]').isVisible(), 'successful preview lacks DOCX generation button');
-    mark('CORRECT_CONTRACT_PREVIEW');
+    assert(await result.locator('[data-docgen-generate]').isVisible(), 'successful preview lacks DOCX generation button');
+    mark('CORRECT_CONTRACT_PREVIEW', { trip_id: Number(validTrip) });
+
+    const packageOption = page.locator('[data-docgen-mode] option[value="client_package"]');
+    if (await packageOption.count()) {
+      await mode.selectOption('client_package');
+      const packageTripOptions = await page.locator('[data-docgen-client-trip] option[data-client-id]').evaluateAll((options) => options.map((o) => ({ value: o.value, clientId: o.dataset.clientId || '' })).filter((x) => x.value && x.clientId));
+      let packagePreview = null;
+      for (const item of packageTripOptions.slice(0, 80)) {
+        await set('client_id', item.clientId);
+        await set('trip_id', item.value);
+        await set('package_date', ymd(today));
+        if (await check() === 'success') { packagePreview = item; break; }
+      }
+      if (packagePreview) mark('CLIENT_PACKAGE_PREVIEW', { trip_id: Number(packagePreview.value), client_id: Number(packagePreview.clientId) });
+      else console.log('CLIENT_PACKAGE_PREVIEW=SKIP no eligible current production trip');
+      await mode.selectOption('carrier');
+    }
 
     await page.locator('[data-docgen-template]').selectOption(waybillTemplate.value);
-    await set('crew_id', validPair.crew);
-    await set('request_input', validPair.requestId);
+    await set('trip_id', validTrip);
     const qaNumber = `QA-UX-${runId}`;
     await set('waybill_number', qaNumber);
     await set('waybill_date', ymd(today));
-    assert(await check() === 'success', 'waybill preview did not pass before DOCX generation');
-    const generate = result.locator('button[formaction*="/company/document-generator/generate"]');
+    assert(await check() === 'success', 'waybill_driver_assignment preview did not pass before DOCX generation');
+    const generate = result.locator('[data-docgen-generate]');
     await Promise.all([
       page.waitForURL(/\/company\/document-generator\/history\?created=\d+/, { waitUntil: 'domcontentloaded' }),
       generate.click()
@@ -159,7 +163,7 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
     assert(downloadResponse.status() === 200, `generated DOCX download HTTP ${downloadResponse.status()}`);
     const bytes = await downloadResponse.body();
     assert(bytes.length > 1000 && bytes[0] === 0x50 && bytes[1] === 0x4b, 'generated DOCX is not a valid non-empty ZIP/DOCX payload');
-    mark('DOCX_GENERATION', { document_id: Number(documentId), qa_waybill_number: qaNumber, bytes: bytes.length });
+    mark('DOCX_GENERATION', { document_id: Number(documentId), qa_waybill_number: qaNumber, trip_id: Number(validTrip), bytes: bytes.length });
 
     fs.writeFileSync(path.join('artifacts', 'document-generator-production-qa.json'), JSON.stringify(evidence, null, 2));
   } finally {
