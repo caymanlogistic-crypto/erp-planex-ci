@@ -27,6 +27,7 @@ namespace App\Service {
         }
         public static function fetchVisibleRouteExecutors(\PDO $pdo,array $user): array { return [['id'=>1]]; }
     }
+    final class FinanceObligationService { public static function syncWasteTrip(\PDO $pdo,int $tripId):int{return 0;} }
 }
 
 namespace {
