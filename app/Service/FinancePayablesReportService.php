@@ -102,7 +102,7 @@ final class FinancePayablesReportService
 
             $summary['total'] = self::addMoney($summary['total'], $remaining);
             $days = 0;
-            $due = self::validDate($row['due_date'] ?? null) ?? self::validDate($row['forecast_due_date'] ?? null);
+            $due = self::validDate($row['due_date'] ?? null);
             if ($due !== null && self::compareMoney($remaining, '0.00') > 0) {
                 $dueDate = new DateTimeImmutable($due);
                 if ($dueDate < $today) {

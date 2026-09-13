@@ -98,20 +98,21 @@ final class FinancePaymentPlanFactService
         $paidAmount = self::money((string)($source['paid_amount'] ?? '0.00'));
         $remaining = self::stringSubPositive($plannedAmount, $paidAmount);
         $plannedDate = self::validDate($source['planned_date'] ?? null);
+        $overdueDate = self::validDate($source['overdue_date'] ?? null);
 
         $status = 'planned';
         if (!self::isPositiveAmount($remaining)) {
             $remaining = '0.00';
             $status = 'paid';
-        } elseif ($plannedDate !== null && $plannedDate < $today) {
+        } elseif ($overdueDate !== null && $overdueDate < $today) {
             $status = 'overdue';
         } elseif (self::isPositiveAmount($paidAmount)) {
             $status = 'partial';
         }
 
         $overdueDays = 0;
-        if ($remaining !== '0.00' && self::isPositiveAmount($remaining) && $plannedDate !== null && $plannedDate < $today) {
-            $overdueDays = (int)((strtotime($today) - strtotime($plannedDate)) / 86400);
+        if ($remaining !== '0.00' && self::isPositiveAmount($remaining) && $overdueDate !== null && $overdueDate < $today) {
+            $overdueDays = (int)((strtotime($today) - strtotime($overdueDate)) / 86400);
         }
 
         $actualClosedDate = null;
@@ -151,6 +152,19 @@ final class FinancePaymentPlanFactService
                     NULL AS route_label,
                     fi.amount AS planned_amount,
                     COALESCE(fi.planned_payment_date, fi.invoice_date) AS planned_date,
+                    CASE
+                        WHEN EXISTS (
+                            SELECT 1 FROM finance_invoice_links fil0
+                             WHERE fil0.invoice_id=fi.id AND fil0.obligation_id IS NOT NULL
+                        ) THEN (
+                            SELECT MIN(o.due_date)
+                              FROM finance_invoice_links fil
+                              JOIN finance_obligations o ON o.id=fil.obligation_id AND o.cancelled_at IS NULL
+                             WHERE fil.invoice_id=fi.id
+                               AND o.status IN ('overdue','overdue_partial')
+                        )
+                        ELSE fi.planned_payment_date
+                    END AS overdue_date,
                     CASE
                         WHEN (SELECT COUNT(*) FROM finance_operation_allocations foa2 WHERE foa2.invoice_id = fi.id AND foa2.cancelled_at IS NULL) > 0
                         THEN (SELECT SUM(foa3.amount) FROM finance_operation_allocations foa3 WHERE foa3.invoice_id = fi.id AND foa3.cancelled_at IS NULL)
@@ -209,6 +223,7 @@ final class FinancePaymentPlanFactService
                 'route_label' => $routeId > 0 ? 'Рейс #' . $routeId : (($parentType==='WASTE_TRIP') ? (string)($obligation['parent_label']??'') : null),
                 'planned_amount' => (string)$obligation['uninvoiced_amount'],
                 'planned_date' => $plannedDate,
+                'overdue_date' => $obligation['due_date'] ?? null,
                 'paid_amount' => (string)$obligation['uninvoiced_paid_amount'],
                 'max_allocation_date' => $obligation['max_direct_paid_date'] ?? null,
                 'paid_at' => null,
@@ -230,12 +245,12 @@ final class FinancePaymentPlanFactService
             $plannedAmount = self::money((string)($row['planned_amount'] ?? '0.00'));
             $paidAmount = self::money((string)($row['paid_amount'] ?? '0.00'));
             $remaining = self::stringSubPositive($plannedAmount, $paidAmount);
-            $plannedDate = self::validDate($row['planned_date'] ?? null);
+            $overdueDate = self::validDate($row['overdue_date'] ?? null);
 
             $status = 'planned';
             if (!self::isPositiveAmount($remaining)) {
                 $status = 'paid';
-            } elseif ($plannedDate !== null && $plannedDate < $today) {
+            } elseif ($overdueDate !== null && $overdueDate < $today) {
                 $status = 'overdue';
             } elseif (self::isPositiveAmount($paidAmount)) {
                 $status = 'partial';
