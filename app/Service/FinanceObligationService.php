@@ -748,13 +748,13 @@ final class FinanceObligationService
             case DateCalculationService::CONDITION_SPECIFIC_DATE:
                 return ['event_date' => $specificDueDate, 'forecast_due_date' => $specificDueDate, 'due_date' => $specificDueDate, 'state' => $specificDueDate ? 'ok' : 'waiting_event'];
             case DateCalculationService::CONDITION_START_DAY:
-                $forecastBase = $plannedStart; $actualBase = $actualStart ?? $plannedStart; break;
+                $forecastBase = $plannedStart; $actualBase = $actualStart; break;
             case DateCalculationService::CONDITION_AFTER_START:
-                $forecastBase = $plannedStart; $actualBase = $actualStart ?? $plannedStart; break;
+                $forecastBase = $plannedStart; $actualBase = $actualStart; break;
             case DateCalculationService::CONDITION_END_DAY:
-                $forecastBase = $plannedEnd; $actualBase = $actualEnd ?? $plannedEnd; break;
+                $forecastBase = $plannedEnd; $actualBase = $actualEnd; break;
             case DateCalculationService::CONDITION_AFTER_END:
-                $forecastBase = $plannedEnd; $actualBase = $actualEnd ?? $plannedEnd; break;
+                $forecastBase = $plannedEnd; $actualBase = $actualEnd; break;
             case DateCalculationService::CONDITION_AFTER_DOCUMENTS:
                 if ($docsDate === null) {
                     return ['event_date' => null, 'forecast_due_date' => null, 'due_date' => null, 'state' => 'waiting_event'];
@@ -762,6 +762,15 @@ final class FinanceObligationService
                 $actualBase = $docsDate; break;
             default:
                 return ['event_date' => null, 'forecast_due_date' => null, 'due_date' => null, 'state' => 'waiting_event'];
+        }
+
+        if ($actualBase === null && in_array($conditionType, [
+            DateCalculationService::CONDITION_START_DAY,
+            DateCalculationService::CONDITION_AFTER_START,
+            DateCalculationService::CONDITION_END_DAY,
+            DateCalculationService::CONDITION_AFTER_END,
+        ], true)) {
+            $state = 'waiting_event';
         }
 
         $requiresDays = in_array($conditionType, [DateCalculationService::CONDITION_AFTER_START, DateCalculationService::CONDITION_AFTER_END, DateCalculationService::CONDITION_AFTER_DOCUMENTS], true);

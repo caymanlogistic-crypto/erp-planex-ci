@@ -6,6 +6,8 @@ use App\Service\FinanceManagementBalanceService;
 use App\Service\FinanceObligationService;
 use App\Service\FinancePayablesReportService;
 use App\Service\FinancePaymentCalendarService;
+use App\Service\FinanceInvoicePaymentTimelineService;
+use App\Service\ProductionCalendarService;
 use App\Service\FinancePaymentPlanFactService;
 use App\Service\FinanceUninvoicedObligationService;
 use App\Service\LocalMigrationService;
@@ -15,7 +17,7 @@ use App\Service\WasteTripCustomerPaymentService;
 $root=dirname(__DIR__);
 require_once $root.'/bootstrap/app.php';
 require_once $root.'/app/Support/company_database.php';
-foreach (['LocalMigrationService','DateCalculationService','ProductionCalendarService','RoutePaymentStatusService','FinanceAuditLogService','FinanceInvoiceService','FinanceOperationService','FinanceBalanceService','LinearRouteService','LinearTripServiceFinanceService','FinanceObligationService','FinanceUninvoicedObligationService','FinancePayablesReportService','FinanceDashboardService','FinancePaymentCalendarService','FinancePaymentPlanFactService','FinanceManagementBalanceService','WasteTripCustomerPaymentService','WasteTripCarrierPaymentService'] as $class) require_once $root.'/app/Service/'.$class.'.php';
+foreach (['LocalMigrationService','DateCalculationService','ProductionCalendarService','RoutePaymentStatusService','FinanceAuditLogService','FinanceInvoiceService','FinanceInvoicePaymentTimelineService','FinanceOperationService','FinanceBalanceService','LinearRouteService','LinearTripServiceFinanceService','FinanceObligationService','FinanceUninvoicedObligationService','FinancePayablesReportService','FinanceDashboardService','FinancePaymentCalendarService','FinancePaymentPlanFactService','FinanceManagementBalanceService','WasteTripCustomerPaymentService','WasteTripCarrierPaymentService'] as $class) require_once $root.'/app/Service/'.$class.'.php';
 
 $fail=static function(string $m):never{fwrite(STDERR,"FAIL: {$m}\n");exit(1);};
 $ok=static function(bool $v,string $m)use($fail):void{if(!$v)$fail($m);};
@@ -82,6 +84,45 @@ try{
     $plan=FinancePaymentPlanFactService::fetchPlanFactData($pdo);$ok(count(array_filter($plan,fn($r)=>str_contains((string)($r['source_label']??''),'Перевозка отходов #500')))===2,'Waste rates must be visible in plan-fact');
     $balance=FinanceManagementBalanceService::computeBalance($pdo,'2026-09-30');$ok(count(array_filter(array_merge($balance['receivables'],$balance['payables']),fn($r)=>str_contains((string)($r['name']??''),'Перевозка отходов #500')))===2,'Waste rates must be visible in management balance');
     $dash=FinanceDashboardService::computeDashboard($pdo);$ok((float)$dash['expected_inflow']>=100000.0&&(float)$dash['expected_outflow']>=70000.0,'Waste rates must feed finance dashboard expected flows');
+
+    // Planned dates are forecast only. Without the factual event there must be no factual due date or overdue status.
+    $pdo->exec("UPDATE waste_trips SET status='planned',actual_start_date=NULL,actual_end_date=NULL WHERE id={$tripId}");
+    FinanceObligationService::syncWasteTrip($pdo,$tripId);
+    $waiting=$pdo->query("SELECT id,direction,forecast_due_date,due_date,status FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND cancelled_at IS NULL ORDER BY direction")->fetchAll(PDO::FETCH_ASSOC);
+    $waitingBy=[];foreach($waiting as$r)$waitingBy[(string)$r['direction']]=$r;
+    $ok((string)($waitingBy['RECEIVABLE']['forecast_due_date']??'')==='2026-09-08'&&($waitingBy['RECEIVABLE']['due_date']??null)===null&&(string)($waitingBy['RECEIVABLE']['status']??'')==='waiting_event','past customer forecast without actual unload must remain waiting_event');
+    $ok((string)($waitingBy['PAYABLE']['forecast_due_date']??'')==='2026-09-13'&&($waitingBy['PAYABLE']['due_date']??null)===null&&(string)($waitingBy['PAYABLE']['status']??'')==='waiting_event','carrier forecast without actual unload must remain waiting_event');
+    $waitingReceivables=FinanceObligationService::receivablesReport($pdo);$waitingPayables=FinancePayablesReportService::build($pdo);
+    $ok((float)$waitingReceivables['summary']['overdue']===0.0,'forecast-only Waste receivable must not enter overdue summary');
+    $ok((float)$waitingPayables['summary']['overdue']===0.0,'forecast-only Waste payable must not enter overdue summary');
+    $waitingDash=FinanceDashboardService::computeDashboard($pdo);
+    $ok((float)$waitingDash['overdue_receivables']===0.0&&(float)$waitingDash['overdue_payables']===0.0,'forecast-only Waste obligations must not enter dashboard overdue totals');
+
+    // A real invoice linked to the waiting Waste obligation must stay non-overdue even when its forecast is already in the past.
+    $invoiceId=\App\Service\FinanceInvoiceService::createInvoice($pdo,[
+        'direction'=>'OUTGOING','number'=>'WASTE-WAIT-500','invoice_date'=>'2026-09-13',
+        'counterparty_entity_type'=>'client','counterparty_entity_id'=>$clientId,'counterparty_name'=>'Waste Customer','counterparty_inn'=>'7701000001',
+        'amount'=>'100000.00','vat_rate'=>null,'basis'=>'Waste Trip #500','planned_payment_date'=>null,'comment'=>null,'status'=>'issued',
+    ],$userId,'company_owner');
+    FinanceObligationService::replaceInvoiceLinks($pdo,$invoiceId,[['obligation_id'=>(int)$waitingBy['RECEIVABLE']['id'],'amount'=>'100000.00']],$actor);
+    $timelineMap=FinanceInvoicePaymentTimelineService::buildForInvoices($pdo,[$invoiceId]);$timeline=$timelineMap[$invoiceId]??[];$invoicePlans=$timeline['plans']??[];
+    $ok(count($invoicePlans)===1,'waiting Waste invoice must expose exactly one payment stage');
+    $deadline=FinanceInvoicePaymentTimelineService::deadlineState($invoicePlans[0],new DateTimeImmutable('2026-09-13'));
+    $ok($deadline['due_date']===null&&$deadline['forecast_due_date']==='2026-09-08'&&$deadline['waiting_event']===true&&$deadline['overdue_days']===0,'linked invoice must not promote past forecast to overdue deadline');
+    $planRows=FinancePaymentPlanFactService::fetchPlanFactData($pdo);$invoicePlan=null;foreach($planRows as$r){if(($r['source_type']??'')==='invoice'&&(int)($r['source_id']??0)===$invoiceId){$invoicePlan=$r;break;}}
+    $ok($invoicePlan!==null&&($invoicePlan['status']??'')!=='overdue'&&(int)($invoicePlan['overdue_days']??0)===0,'linked waiting Waste invoice must stay non-overdue in plan/fact');
+    $waitingDashLinked=FinanceDashboardService::computeDashboard($pdo);
+    $ok((float)$waitingDashLinked['overdue_receivables']===0.0,'linked waiting Waste invoice must not enter dashboard overdue receivables');
+
+    // Working-day offsets must use the official production calendar, including public holidays.
+    ProductionCalendarService::seedOfficial2026($pdo);
+    $workingCustomer=WasteTripCustomerPaymentService::parseRows([['amount'=>'100000','payment_method'=>'cashless','vat_rate'=>'','condition_type'=>'after_end','days_count'=>'2','days_kind'=>'working','specific_due_date'=>'','condition_comment'=>'']],true);
+    WasteTripCustomerPaymentService::store($pdo,$tripId,$workingCustomer,$actor);
+    $pdo->exec("UPDATE waste_trips SET status='completed',actual_start_date='2026-11-02',actual_end_date='2026-11-02',planned_start_date='2026-11-02',planned_finish_date='2026-11-02' WHERE id={$tripId}");
+    FinanceObligationService::syncWasteTrip($pdo,$tripId);
+    $workingDue=(string)$pdo->query("SELECT due_date FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND direction='RECEIVABLE' AND cancelled_at IS NULL LIMIT 1")->fetchColumn();
+    $ok($workingDue==='2026-11-05','two working days after 2026-11-02 must skip 2026-11-04 public holiday');
+
     $pdo->exec("UPDATE waste_trips SET status='cancelled' WHERE id={$tripId}");FinanceObligationService::syncWasteTrip($pdo,$tripId);
     $ok((int)$pdo->query("SELECT COUNT(*) FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND cancelled_at IS NULL")->fetchColumn()===0,'cancelled Waste Trip must expose no active finance obligations');
     $ok((int)$pdo->query("SELECT COUNT(*) FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND cancelled_at IS NOT NULL")->fetchColumn()===2,'cancelled Waste Trip must retain two cancelled obligation audit rows');

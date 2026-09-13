@@ -151,6 +151,43 @@ final class FinanceInvoicePaymentTimelineService
         return $result;
     }
 
+    /**
+     * Deadline semantics for an invoice payment stage.
+     * Forecast dates are display/planning data only. Overdue starts only after
+     * a factual due_date exists and that date is before today.
+     *
+     * @return array{display_date:?string,due_date:?string,forecast_due_date:?string,waiting_event:bool,overdue_days:int,due_today:bool}
+     */
+    public static function deadlineState(array $plan, ?DateTimeImmutable $today = null): array
+    {
+        $today ??= new DateTimeImmutable('today');
+        $due = self::validDate($plan['due_date'] ?? null);
+        $forecast = self::validDate($plan['forecast_due_date'] ?? null);
+        $display = $due ?? $forecast;
+        $obligationStatus = (string)($plan['status'] ?? '');
+        $waitingEvent = $due === null || in_array($obligationStatus, ['waiting_event', 'calendar_missing'], true);
+        $overdueDays = 0;
+        $dueToday = false;
+
+        if (!$waitingEvent && $due !== null) {
+            $dueDate = new DateTimeImmutable($due);
+            if ($today > $dueDate) {
+                $overdueDays = (int)$dueDate->diff($today)->format('%a');
+            } elseif ($today == $dueDate) {
+                $dueToday = true;
+            }
+        }
+
+        return [
+            'display_date' => $display,
+            'due_date' => $due,
+            'forecast_due_date' => $forecast,
+            'waiting_event' => $waitingEvent,
+            'overdue_days' => $overdueDays,
+            'due_today' => $dueToday,
+        ];
+    }
+
     /** @param int[] $ids */
     private static function fetchPlans(PDO $pdo, array $ids): array
     {

@@ -6,6 +6,11 @@ use App\Service\FinanceObligationService;
 $rows = $report['rows'] ?? [];
 $summary = $report['summary'] ?? [];
 $money = static fn(mixed $v): string => FinanceInvoiceService::formatAmount((string)($v ?? '0.00')) . ' ₽';
+$fmtDate = static function (mixed $value): string {
+    $value = trim((string)$value);
+    $date = DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+    return $date !== false && $date->format('Y-m-d') === $value ? $date->format('d.m.Y') : '—';
+};
 ?>
 <style>
 .receivables-page{display:block;min-height:0}.receivables-toolbar{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}.receivables-toolbar__actions{display:flex;gap:8px;flex-wrap:wrap}.receivables-summary{display:grid;grid-template-columns:repeat(6,minmax(130px,1fr));gap:8px;margin-bottom:12px}.receivables-stat{border:1px solid var(--border,#d3cec3);background:var(--surface,#fff);padding:10px 12px;min-height:66px}.receivables-stat__label{font-size:11px;color:var(--muted,#746f66);text-transform:uppercase}.receivables-stat__value{font-size:18px;font-weight:700;margin-top:5px}.receivables-stat--danger .receivables-stat__value{color:var(--danger,#992e26)}.receivables-table-wrap{overflow:auto;border:1px solid var(--border,#d3cec3);background:var(--surface,#fff)}.receivables-table{width:100%;border-collapse:collapse;min-width:1100px}.receivables-table th,.receivables-table td{padding:8px 9px;border-bottom:1px solid var(--border,#e3dfd6);text-align:left;vertical-align:top}.receivables-table th{font-size:11px;text-transform:uppercase;color:var(--muted,#746f66);background:var(--surface-2,#f4f1eb);position:sticky;top:0}.receivables-table td.num,.receivables-table th.num{text-align:right;white-space:nowrap}.receivables-overdue{color:var(--danger,#992e26);font-weight:700}.receivables-paid{color:var(--success,#1f6b43);font-weight:700}.receivables-muted{color:var(--muted,#746f66)}@media(max-width:1200px){.receivables-summary{grid-template-columns:repeat(3,minmax(140px,1fr))}}@media(max-width:720px){.receivables-summary{grid-template-columns:repeat(2,minmax(130px,1fr))}.receivables-toolbar{align-items:flex-start;flex-direction:column}}
@@ -37,13 +42,13 @@ $money = static fn(mixed $v): string => FinanceInvoiceService::formatAmount((str
             <?php if (!$rows): ?>
                 <tr><td colspan="10" class="receivables-muted" style="text-align:center;padding:24px;">Дебиторских обязательств пока нет.</td></tr>
             <?php else: foreach ($rows as $row):
-                $overdueDays=(int)($row['overdue_days']??0); $status=(string)($row['status']??'');
+                $overdueDays=(int)($row['overdue_days']??0); $status=(string)($row['status']??''); $due=trim((string)($row['due_date']??'')); $forecast=trim((string)($row['forecast_due_date']??'')); $deadlineText=$due!==''?$fmtDate($due):($forecast!==''?'Прогноз '.$fmtDate($forecast):'—');
             ?>
                 <tr>
                     <td><strong><?= e((string)($row['counterparty_name'] ?? '—')) ?></strong><?php if (!empty($row['counterparty_inn'])): ?><div class="receivables-muted">ИНН <?= e((string)$row['counterparty_inn']) ?></div><?php endif; ?></td>
                     <td><strong><?= e((string)($row['parent_label'] ?? ('Рейс #'.(int)($row['source_parent_id'] ?? 0)))) ?></strong><div class="receivables-muted"><?= e((string)($row['condition_label'] ?? '—')) ?></div></td>
                     <td><?= e((string)($row['invoice_numbers'] ?: '—')) ?></td>
-                    <td><?= e((string)($row['due_date'] ?? $row['forecast_due_date'] ?? '—')) ?></td>
+                    <td><?= e($deadlineText) ?></td>
                     <td class="<?= $overdueDays>0?'receivables-overdue':($status==='paid'?'receivables-paid':'') ?>"><?= e(FinanceObligationService::statusLabel($status)) ?></td>
                     <td class="num"><?= e($money($row['amount'] ?? 0)) ?></td>
                     <td class="num"><?= e($money($row['invoiced_amount'] ?? 0)) ?></td>

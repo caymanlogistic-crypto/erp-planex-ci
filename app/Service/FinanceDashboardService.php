@@ -97,8 +97,8 @@ final class FinanceDashboardService
             if ((string)($obligation['direction'] ?? '') !== $obligationDirection) {
                 continue;
             }
-            $dueDate = trim((string)($obligation['effective_due_date'] ?? ''));
-            if ($dueDate !== '' && $dueDate < $today) {
+            $status = (string)($obligation['status'] ?? '');
+            if (in_array($status, [FinanceObligationService::STATUS_OVERDUE, FinanceObligationService::STATUS_OVERDUE_PARTIAL], true)) {
                 $total = self::add($total, (string)$obligation['uninvoiced_remaining_amount']);
             }
         }
@@ -124,7 +124,23 @@ final class FinanceDashboardService
                    ),0))>0";
         $params = [$direction];
         if ($overdueBefore !== null) {
-            $sql .= ' AND COALESCE(fi.planned_payment_date,fi.invoice_date)<?';
+            $sql .= " AND (
+                EXISTS (
+                    SELECT 1
+                      FROM finance_invoice_links fil
+                      JOIN finance_obligations o ON o.id=fil.obligation_id AND o.cancelled_at IS NULL
+                     WHERE fil.invoice_id=fi.id
+                       AND o.status IN ('overdue','overdue_partial')
+                )
+                OR (
+                    NOT EXISTS (
+                        SELECT 1 FROM finance_invoice_links fil0
+                         WHERE fil0.invoice_id=fi.id AND fil0.obligation_id IS NOT NULL
+                    )
+                    AND fi.planned_payment_date IS NOT NULL
+                    AND fi.planned_payment_date<?
+                )
+            )";
             $params[] = $overdueBefore;
         }
         $stmt = $localPdo->prepare($sql);

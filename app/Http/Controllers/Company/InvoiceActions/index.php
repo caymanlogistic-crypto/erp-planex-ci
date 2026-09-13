@@ -68,9 +68,9 @@ try {
                 $summaryStmt = $localPdo->prepare(
                     "SELECT l.invoice_id,
                             COUNT(DISTINCT l.obligation_id) AS obligation_count,
-                            COUNT(DISTINCT CASE WHEN COALESCE(o.due_date,o.forecast_due_date) IS NOT NULL THEN l.obligation_id END) AS resolved_count,
-                            MIN(COALESCE(o.due_date,o.forecast_due_date)) AS due_min,
-                            MAX(COALESCE(o.due_date,o.forecast_due_date)) AS due_max,
+                            COUNT(DISTINCT CASE WHEN o.due_date IS NOT NULL THEN l.obligation_id END) AS resolved_count,
+                            MIN(o.due_date) AS due_min,
+                            MAX(o.due_date) AS due_max,
                             MAX(CASE WHEN o.status IN ('overdue','overdue_partial') THEN 1 ELSE 0 END) AS has_overdue
                        FROM finance_invoice_links l
                        JOIN finance_obligations o ON o.id=l.obligation_id AND o.cancelled_at IS NULL

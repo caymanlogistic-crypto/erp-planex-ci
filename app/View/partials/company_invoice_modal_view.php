@@ -22,7 +22,7 @@ $resolvedDueDates = [];
 $hasUnresolvedDue = false;
 foreach ($links ?? [] as $link) {
     if (in_array((string)($link['obligation_status'] ?? ''), ['overdue', 'overdue_partial'], true)) $hasOverdue = true;
-    $due = trim((string)($link['due_date'] ?? $link['forecast_due_date'] ?? ''));
+    $due = trim((string)($link['due_date'] ?? ''));
     if ($due === '') $hasUnresolvedDue = true; else $resolvedDueDates[$due] = true;
 }
 if (!in_array($effectiveStatus, ['cancelled', 'paid'], true) && $hasOverdue) {
@@ -56,8 +56,8 @@ else $deadlineText = 'Несколько сроков';
         <?php if (!empty($invoice['basis'])): ?><div class="driver-view-row driver-view-row-wide"><div class="driver-view-cell driver-view-cell-label">Основание</div><div class="driver-view-cell driver-view-cell-value"><?= e($invoice['basis']) ?></div></div><?php endif; ?>
         <?php if (!empty($invoice['comment'])): ?><div class="driver-view-row driver-view-row-wide"><div class="driver-view-cell driver-view-cell-label">Комментарий</div><div class="driver-view-cell driver-view-cell-value"><?= e($invoice['comment']) ?></div></div><?php endif; ?>
         <?php if (!empty($links)): ?><div class="driver-view-row driver-view-row-wide"><div class="driver-view-cell driver-view-cell-label">Платёжные обязательства</div><div class="driver-view-cell driver-view-cell-value">
-            <?php foreach ($links as $link): $condition = DateCalculationService::CONDITION_LABELS[(string)($link['condition_type'] ?? '')] ?? 'Условие оплаты'; $due = trim((string)($link['due_date'] ?? $link['forecast_due_date'] ?? '')); ?>
-            <div class="driver-view-inline-row"><div><strong><?= e((string)($link['parent_label'] ?? ('Рейс #'.(int)($link['source_parent_id'] ?? $link['linear_route_id'] ?? 0)))) ?></strong> · <?= e($condition) ?> · <?= $due !== '' ? e($fmtDate($due)) : 'ожидается событие' ?> · <?= e(FinanceInvoiceService::formatAmount($link['amount'] ?? null)) ?> ₽</div></div>
+            <?php foreach ($links as $link): $condition = DateCalculationService::CONDITION_LABELS[(string)($link['condition_type'] ?? '')] ?? 'Условие оплаты'; $due = trim((string)($link['due_date'] ?? '')); $forecast = trim((string)($link['forecast_due_date'] ?? '')); $deadline = $due !== '' ? $fmtDate($due) : ($forecast !== '' ? 'прогноз ' . $fmtDate($forecast) : 'ожидается событие'); ?>
+            <div class="driver-view-inline-row"><div><strong><?= e((string)($link['parent_label'] ?? ('Рейс #'.(int)($link['source_parent_id'] ?? $link['linear_route_id'] ?? 0)))) ?></strong> · <?= e($condition) ?> · <?= e($deadline) ?> · <?= e(FinanceInvoiceService::formatAmount($link['amount'] ?? null)) ?> ₽</div></div>
             <?php endforeach; ?>
         </div></div><?php endif; ?>
     </div></div>

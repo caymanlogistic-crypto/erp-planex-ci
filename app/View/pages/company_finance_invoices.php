@@ -1,5 +1,6 @@
 <?php
 
+use App\Service\FinanceInvoicePaymentTimelineService;
 use App\Service\FinanceInvoiceService;
 
 $fmtDate = static function (mixed $value): string {
@@ -149,12 +150,13 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
                         }
 
                         sort($actualDates);
-                        $expectedDate = trim((string)($plan['expected_date'] ?? ''));
-                        $dueDate = null;
-                        if ($expectedDate !== '') {
-                            $candidateDue = DateTimeImmutable::createFromFormat('!Y-m-d', $expectedDate);
-                            if ($candidateDue !== false && $candidateDue->format('Y-m-d') === $expectedDate) $dueDate = $candidateDue;
-                        }
+                        $deadline = FinanceInvoicePaymentTimelineService::deadlineState($plan, $today);
+                        $displayDate = $deadline['display_date'] !== null
+                            ? new DateTimeImmutable((string)$deadline['display_date'])
+                            : null;
+                        $actualDueDate = $deadline['due_date'] !== null
+                            ? new DateTimeImmutable((string)$deadline['due_date'])
+                            : null;
 
                         $title = '';
                         foreach (['payment_event_label', 'condition_label', 'payment_condition_label', 'event_label', 'due_label'] as $labelKey) {
@@ -164,7 +166,7 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
                         if ($title === '') $title = ($stageIndex + 1) . ' платёж';
 
                         $isPaid = $plannedCents > 0 && $remainingCents <= 0;
-                        $isOverdueRemaining = !$isPaid && $remainingCents > 0 && $dueDate !== null && $today > $dueDate;
+                        $isOverdueRemaining = !$isPaid && $remainingCents > 0 && (int)$deadline['overdue_days'] > 0;
                         $statusText = '';
                         $statusClass = 'badge badge-neutral';
                         if ($isPaid) {
@@ -172,25 +174,28 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
                             $statusClass = 'badge badge-ok';
                         } elseif ($paidCents > 0) {
                             if ($isOverdueRemaining) {
-                                $days = (int)$dueDate->diff($today)->format('%a');
-                                $statusText = 'Частично · просрочка ' . $days . ' дн.';
+                                $statusText = 'Частично · просрочка ' . (int)$deadline['overdue_days'] . ' дн.';
+                                $statusClass = 'badge badge-warning';
+                            } elseif ((bool)$deadline['waiting_event']) {
+                                $statusText = 'Частично · ожидается событие';
                                 $statusClass = 'badge badge-warning';
                             } else {
                                 $statusText = 'Частично';
                                 $statusClass = 'badge badge-warning';
                             }
-                        } elseif ($dueDate === null) {
+                        } elseif ((bool)$deadline['waiting_event']) {
                             $statusText = 'Ожидается событие';
                             $statusClass = 'badge badge-neutral';
-                        } elseif ($today > $dueDate) {
-                            $days = (int)$dueDate->diff($today)->format('%a');
-                            $statusText = 'Просрочка ' . $days . ' дн.';
+                        } elseif ($isOverdueRemaining) {
+                            $statusText = 'Просрочка ' . (int)$deadline['overdue_days'] . ' дн.';
                             $statusClass = 'badge badge-danger';
-                        } elseif ($today == $dueDate) {
+                        } elseif ((bool)$deadline['due_today']) {
                             $statusText = 'Ожидается сегодня';
                             $statusClass = 'badge badge-neutral';
                         } else {
-                            $statusText = 'Ожидается до ' . $dueDate->format('d.m');
+                            $statusText = $actualDueDate !== null
+                                ? 'Ожидается до ' . $actualDueDate->format('d.m')
+                                : 'Ожидается событие';
                             $statusClass = 'badge badge-neutral';
                         }
 
@@ -201,7 +206,8 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
                             'planned' => $plannedCents,
                             'paid' => $paidCents,
                             'remaining' => $remainingCents,
-                            'expected_date' => $dueDate?->format('Y-m-d'),
+                            'expected_date' => $displayDate?->format('Y-m-d'),
+                            'is_waiting_event' => (bool)$deadline['waiting_event'],
                             'status_text' => $statusText,
                             'status_class' => $statusClass,
                             'is_paid' => $isPaid,
@@ -243,7 +249,7 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
                                     <div class="invoice-stage-line"><span>План:</span><strong><?= e($fmtMoney($centsToMoney($stage['planned']))) ?></strong></div>
                                     <div class="invoice-stage-line"><span><?= ($inv['direction'] ?? '') === FinanceInvoiceService::DIRECTION_OUTGOING ? 'Получено:' : 'Оплачено:' ?></span><strong><?= e($fmtMoney($centsToMoney($stage['paid']))) ?></strong></div>
                                     <?php if ($stage['remaining'] > 0 && ($stage['paid'] > 0 || $stage['is_overdue_remaining'])): ?><div class="invoice-stage-line<?= $stage['is_overdue_remaining'] ? ' is-overdue-remaining' : '' ?>"><span>Остаток:</span><strong><?= e($fmtMoney($centsToMoney($stage['remaining']))) ?></strong></div><?php endif; ?>
-                                    <div class="invoice-stage-line"><span>Срок:</span><strong><?= e($stage['expected_date'] !== null ? $fmtDate($stage['expected_date']) : 'по событию') ?></strong></div>
+                                    <div class="invoice-stage-line"><span><?= $stage['is_waiting_event'] ? 'Прогноз:' : 'Срок:' ?></span><strong><?= e($stage['expected_date'] !== null ? $fmtDate($stage['expected_date']) : 'по событию') ?></strong></div>
                                     <div class="invoice-stage-status"><span class="<?= e($stage['status_class']) ?>"><span class="dot"></span><?= e($stage['status_text']) ?></span></div>
                                 </div>
                                 <?php endforeach; ?>
