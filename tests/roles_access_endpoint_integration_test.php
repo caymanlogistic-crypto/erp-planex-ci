@@ -102,10 +102,23 @@ endpointExpect(str_contains($documents, 'RegulatedDataScopeService::canAccess'),
 
 $vehicleRoutes = (string) file_get_contents($root . '/app/Http/Routes/company_vehicle_sets.php');
 $vehicleActions = implode('', array_map('file_get_contents', glob($root . '/app/Http/Controllers/Company/VehicleSetActions/*.php') ?: []));
+$vehicleEditView = (string) file_get_contents($root . '/app/View/partials/company_vehicle_set_modal_edit.php');
+$vehicleEditSubmit = (string) file_get_contents($root . '/app/Http/Controllers/Company/VehicleSetActions/modal_edit_submit.php');
 endpointExpect(str_contains($vehicleRoutes, "canAccess(\$pdo, 'vehicle_unit', 'vehicle_units'"), 'VehicleSet must filter canonical vehicle_unit');
 endpointExpect(str_contains($vehicleActions, "assertCanCreate('vehicle_unit')"), 'VehicleSet create must enforce vehicle_unit scope');
 endpointExpect(str_contains($vehicleActions, "autoAssignCreator(\$VSC_lpdo,'vehicle_unit'"), 'VehicleSet create must auto-assign created vehicle units');
 endpointExpect(!str_contains($vehicleActions, "entity_type='vehicle_set'"), 'VehicleSet must not use legacy grants or a new data-scope');
+endpointExpect(str_contains($vehicleEditView, '<select name="set_type"'), 'VehicleSet edit must expose set_type selector');
+endpointExpect(!str_contains($vehicleEditView, '<input type="hidden" name="set_type"'), 'VehicleSet edit must not lock set_type in a hidden field');
+endpointExpect(str_contains($vehicleEditView, "setType.addEventListener('change'"), 'VehicleSet edit type selector must update dependent panels');
+endpointExpect(str_contains($vehicleEditView, "capacityRow.classList.toggle('is-hidden'"), 'VehicleSet edit type selector must update capacity/volume visibility');
+endpointExpect(str_contains($vehicleEditSubmit, "\$_POST['set_type']"), 'VehicleSet edit submit must use posted set_type');
+endpointExpect(str_contains($vehicleEditSubmit, 'UPDATE vehicle_sets SET set_type=?,secondary_vehicle_unit_id=?'), 'VehicleSet edit submit must persist set_type topology');
+endpointExpect(str_contains($vehicleEditSubmit, 'unit_type=:unit_type'), 'VehicleSet edit submit must align vehicle unit types');
+endpointExpect(str_contains($vehicleEditSubmit, 'INSERT INTO vehicle_units'), 'VehicleSet edit must create a missing secondary vehicle unit when required');
+endpointExpect(str_contains($vehicleEditSubmit, 'created_by_membership_id'), 'VehicleSet edit-created secondary unit must preserve creator membership');
+endpointExpect(str_contains($vehicleEditSubmit, 'EntityAssignmentService::autoAssignCreator'), 'VehicleSet edit-created secondary unit must preserve creator assignment');
+endpointExpect(!str_contains($vehicleEditSubmit, 'DELETE FROM vehicle_units'), 'VehicleSet type change must not delete detached vehicle units');
 
 $routeExecutorActions = implode('', array_map('file_get_contents', glob($root . '/app/Http/Controllers/Company/RouteExecutorActions/*.php') ?: []));
 $routeExecutorService = (string) file_get_contents($root . '/app/Service/RouteExecutorService.php');

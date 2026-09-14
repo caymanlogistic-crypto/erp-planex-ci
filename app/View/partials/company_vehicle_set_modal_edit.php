@@ -1,7 +1,7 @@
 <?php
 $vehicleSetRules = vehicleSetTypeRules();
 $currentSetType = (string) ($old['set_type'] ?? ($vehicleSet['set_type'] ?? 'single'));
-$currentRule = $vehicleSetRules[$currentSetType] ?? ($vehicleSetRules['single'] ?? ['units' => []]);
+$currentRule = $vehicleSetRules[$currentSetType] ?? ['units' => []];
 $docsByRole = $docsByRole ?? ['primary' => [], 'secondary' => []];
 $unitDefaults = [
     'plate_number' => '',
@@ -87,7 +87,6 @@ $badgeMeta = static function (array $doc): array {
 ?>
 <div class="modal-body driver-modal-body">
   <form id="vehicle-set-edit-form" method="post" action="/company/vehicle-sets/<?= (int) $vehicleSet['id'] ?>/modal-edit" class="vehicle-set-form vehicle-set-edit-form" enctype="multipart/form-data" novalidate>
-    <input type="hidden" name="set_type" value="<?= e($currentSetType) ?>" data-vehicle-set-type>
     <input type="hidden" name="status" value="<?= e((string) ($old['status'] ?? $vehicleSet['status'] ?? 'active')) ?>">
     <div class="vehicle-set-card-stack">
       <?php if ($formError): ?>
@@ -100,6 +99,19 @@ $badgeMeta = static function (array $doc): array {
         </div>
       </div>
       <?php endif; ?>
+
+      <div class="vehicle-set-form-card vehicle-set-type-card">
+        <div class="field<?= !empty($errors['set_type']) ? ' is-error' : '' ?>">
+          <label class="field-label" for="vehicle_set_edit_type_select">Тип <span class="req">*</span></label>
+          <select name="set_type" id="vehicle_set_edit_type_select" class="field-input" data-vehicle-set-type>
+            <option value="">— Выберите тип —</option>
+            <?php foreach ($vehicleSetRules as $ruleCode => $ruleMeta): ?>
+              <option value="<?= e((string) $ruleCode) ?>" <?= $currentSetType === $ruleCode ? 'selected' : '' ?>><?= e((string) ($ruleMeta['label'] ?? $ruleCode)) ?></option>
+            <?php endforeach; ?>
+          </select>
+          <div class="field-msg"><?= e((string) ($errors['set_type'] ?? '')) ?></div>
+        </div>
+      </div>
 
       <div class="vehicle-set-card-list">
         <?php foreach (['primary', 'secondary'] as $role): ?>
@@ -281,6 +293,8 @@ $badgeMeta = static function (array $doc): array {
             if (docsPanel) docsPanel.classList.toggle('is-hidden', !visible);
             var capacity = form.querySelector('[data-role-capacity="' + role + '"]');
             var volume = form.querySelector('[data-role-volume="' + role + '"]');
+            var capacityRow = panel ? panel.querySelector('[data-capacity-row]') : null;
+            if (capacityRow) capacityRow.classList.toggle('is-hidden', !roleRule || (!roleRule.show_capacity && !roleRule.show_volume));
             if (capacity) capacity.classList.toggle('is-hidden', !roleRule || !roleRule.show_capacity);
             if (volume) volume.classList.toggle('is-hidden', !roleRule || !roleRule.show_volume);
             if (visible && panel) {
@@ -402,6 +416,7 @@ $badgeMeta = static function (array $doc): array {
         var rule = getRule();
 
         if (!rule) {
+            setFieldError(setType, 'Выберите тип транспорта');
             valid = false;
         }
 
@@ -432,7 +447,10 @@ $badgeMeta = static function (array $doc): array {
     });
 
     if (setType) {
-        setType.addEventListener('change', togglePanels);
+        setType.addEventListener('change', function () {
+            clearFieldError(setType);
+            togglePanels();
+        });
     }
     togglePanels();
 })();
