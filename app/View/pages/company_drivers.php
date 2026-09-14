@@ -1,6 +1,36 @@
 <?php
 require_once base_path('app/View/components/view_formatters.php');
 ?>
+<style>
+.drivers-table-card,
+.drivers-table-card > .table-scroll {
+    min-width: 0;
+    max-width: 100%;
+}
+.drivers-table-card > .table-scroll {
+    overflow-x: hidden;
+}
+.drivers-table-card .drivers-table {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    table-layout: fixed;
+}
+.drivers-table-card .drivers-table th,
+.drivers-table-card .drivers-table td {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+.drivers-table-card .drivers-table th:nth-child(1) { width: 4%; }
+.drivers-table-card .drivers-table th:nth-child(2) { width: 16%; }
+.drivers-table-card .drivers-table th:nth-child(3) { width: 11%; }
+.drivers-table-card .drivers-table th:nth-child(4) { width: 12%; }
+.drivers-table-card .drivers-table th:nth-child(5) { width: 24%; }
+.drivers-table-card .drivers-table th:nth-child(6) { width: 13%; }
+.drivers-table-card .drivers-table th:nth-child(7) { width: 13%; }
+.drivers-table-card .drivers-table th:nth-child(8) { width: 7%; }
+</style>
 <?php if ($company === null): ?>
 
 <div class="notice warn">
@@ -97,7 +127,7 @@ function driver_table_limit_text(string $text, int $limit = 150): string {
     </div>
 </div>
 
-<div class="table-card table-card--standard" data-erp-grid>
+<div class="table-card table-card--standard drivers-table-card" data-erp-grid>
     <div class="table-toolbar">
         <div class="found-label">Найдено: <b><?= count($drivers) ?></b> водителей</div>
         <div class="toolbar-right">
@@ -112,7 +142,7 @@ function driver_table_limit_text(string $text, int $limit = 150): string {
         </div>
     </div>
     <div class="table-scroll">
-        <table class="table">
+        <table class="table drivers-table">
             <thead>
                 <tr>
                     <th class="col-id">ID</th>
@@ -164,7 +194,7 @@ function driver_table_limit_text(string $text, int $limit = 150): string {
 
                         if (!empty($passportParts)):
                             $fullPassport = implode(' ', $passportParts);
-                            $passportText = driver_table_limit_text($fullPassport, 150);
+                            $passportText = driver_table_limit_text($fullPassport, 55);
                             echo '<span title="' . e($fullPassport) . '">' . e($passportText) . '</span>';
                         else:
                             echo '—';
