@@ -17,15 +17,17 @@ try {
     if (!$canEdit) { http_response_code(403); echo '<div class="notice warn">У вас нет права редактировать эту запись.</div>'; exit; }
 
     $rules = vehicleSetTypeRules();
-    $setType = (string) ($vs['set_type'] ?? 'single');
+    $setType = trim((string) ($_POST['set_type'] ?? ''));
     $rule = $rules[$setType] ?? null;
-    if (!$rule) throw new RuntimeException('Неизвестный тип комплекта.');
 
     $postedUnits = isset($_POST['units']) && is_array($_POST['units']) ? $_POST['units'] : [];
     $errors = [];
+    if (!$rule) {
+        $errors['set_type'] = 'Выберите тип транспорта';
+    }
     $unitPayload = [];
     foreach (['primary', 'secondary'] as $role) {
-        $roleRule = $rule['units'][$role] ?? null;
+        $roleRule = is_array($rule) ? ($rule['units'][$role] ?? null) : null;
         if (!$roleRule) continue;
         $source = isset($postedUnits[$role]) && is_array($postedUnits[$role]) ? $postedUnits[$role] : [];
         $payload = [
@@ -90,20 +92,31 @@ try {
         exit;
     }
 
+    $unitIdsByRole = [
+        'primary' => (int) ($vs['primary_vehicle_unit_id'] ?? 0),
+        'secondary' => (int) ($vs['secondary_vehicle_unit_id'] ?? 0),
+    ];
+    if ($unitIdsByRole['primary'] <= 0) {
+        throw new RuntimeException('Основная транспортная единица не найдена.');
+    }
+    $newUnitCreatorMembershipId = 0;
+    if (isset($rule['units']['secondary']) && $unitIdsByRole['secondary'] <= 0) {
+        $newUnitCreatorMembershipId = \App\Service\RegulatedDataScopeService::assertCanCreate('vehicle_unit');
+    }
+
     $localPdo->beginTransaction();
     try {
         $status = trim((string) ($_POST['status'] ?? $vs['status'] ?? 'active'));
         if (!in_array($status, ['active', 'inactive'], true)) $status = 'active';
         $comments = trim((string) ($_POST['comments'] ?? ''));
-        $localPdo->prepare('UPDATE vehicle_sets SET status=?,comments=?,updated_by_user_id=?,updated_by_role=? WHERE id=?')
-            ->execute([$status, $comments !== '' ? $comments : null, $userId, $roleCode, (int) $id]);
 
-        $updateUnit = $localPdo->prepare('UPDATE vehicle_units SET brand=:brand,model=:model,plate_number=:plate_number,vin=:vin,diagnostic_card_number=:diagnostic_card_number,diagnostic_card_date=:diagnostic_card_date,capacity_tons=:capacity_tons,volume_m3=:volume_m3,status=:status,updated_by_user_id=:uid,updated_by_role=:role WHERE id=:id');
+        $updateUnit = $localPdo->prepare('UPDATE vehicle_units SET unit_type=:unit_type,brand=:brand,model=:model,plate_number=:plate_number,vin=:vin,diagnostic_card_number=:diagnostic_card_number,diagnostic_card_date=:diagnostic_card_date,capacity_tons=:capacity_tons,volume_m3=:volume_m3,status=:status,updated_by_user_id=:uid,updated_by_role=:role WHERE id=:id');
+        $insertUnit = null;
         foreach ($unitPayload as $role => $payload) {
-            $unitId = $role === 'primary' ? (int) ($vs['primary_vehicle_unit_id'] ?? 0) : (int) ($vs['secondary_vehicle_unit_id'] ?? 0);
-            if ($unitId <= 0) continue;
             $roleRule = $rule['units'][$role] ?? [];
-            $updateUnit->execute([
+            $unitId = (int) ($unitIdsByRole[$role] ?? 0);
+            $unitParams = [
+                ':unit_type' => (string) ($roleRule['unit_type'] ?? ''),
                 ':brand' => $payload['brand'],
                 ':model' => $payload['model'],
                 ':plate_number' => $payload['plate_number'],
@@ -115,13 +128,42 @@ try {
                 ':status' => $status,
                 ':uid' => $userId,
                 ':role' => $roleCode,
-                ':id' => $unitId,
-            ]);
+            ];
+            if ($unitId > 0) {
+                $updateUnit->execute($unitParams + [':id' => $unitId]);
+                continue;
+            }
+            if ($role !== 'secondary') {
+                throw new RuntimeException('Основная транспортная единица не найдена.');
+            }
+            if ($insertUnit === null) {
+                $insertUnit = $localPdo->prepare('INSERT INTO vehicle_units(plate_number,brand,model,unit_type,vin,capacity_tons,volume_m3,diagnostic_card_number,diagnostic_card_date,status,comments,created_by_user_id,created_by_membership_id,created_by_role) VALUES(:plate_number,:brand,:model,:unit_type,:vin,:capacity_tons,:volume_m3,:diagnostic_card_number,:diagnostic_card_date,:status,NULL,:uid,:membership_id,:role)');
+            }
+            $insertUnit->execute($unitParams + [':membership_id' => $newUnitCreatorMembershipId > 0 ? $newUnitCreatorMembershipId : null]);
+            $unitId = (int) $localPdo->lastInsertId();
+            \App\Service\EntityAssignmentService::autoAssignCreator(
+                $localPdo,
+                'vehicle_unit',
+                $unitId,
+                $newUnitCreatorMembershipId > 0 ? $newUnitCreatorMembershipId : null
+            );
+            $unitIdsByRole[$role] = $unitId;
         }
+
+        $secondaryUnitId = isset($rule['units']['secondary'])
+            ? ((int) ($unitIdsByRole['secondary'] ?? 0) ?: null)
+            : null;
+        $localPdo->prepare('UPDATE vehicle_sets SET set_type=?,secondary_vehicle_unit_id=?,status=?,comments=?,updated_by_user_id=?,updated_by_role=? WHERE id=?')
+            ->execute([$setType, $secondaryUnitId, $status, $comments !== '' ? $comments : null, $userId, $roleCode, (int) $id]);
         $localPdo->commit();
     } catch (Throwable $e) {
         if ($localPdo->inTransaction()) $localPdo->rollBack();
         throw $e;
+    }
+
+    $vs = $service->getVehicleSetById($localPdo, (int) $id);
+    if (!$vs) {
+        throw new RuntimeException('Транспорт не найден после сохранения.');
     }
 
     require_once base_path('app/Support/legal_entity_document_upload.php');
