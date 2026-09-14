@@ -126,7 +126,17 @@ trait DocumentGeneratorAccessTrait
         if ($driverLicense!=='' && $licenseDate!=='') $driverLicense .= ', выдано ' . $licenseDate . ' г.';
 
         $contractorName=(string)($executor['contractor_name'] ?? '');
-        $contractorSignatory=trim((string)($executor['contractor_director_full_name'] ?? '')) ?: $contractorName;
+        $contractorType=trim((string)($executor['contractor_type'] ?? ''));
+        $isIndividualEntrepreneur=in_array($contractorType,['individual','individual_entrepreneur'],true);
+        $contractorDirectorFullName=trim((string)($executor['contractor_director_full_name'] ?? ''));
+        if ($contractorDirectorFullName==='' && $isIndividualEntrepreneur) {
+            $contractorDirectorFullName=trim((string)(preg_replace('/^\s*(?:ИП|Индивидуальный\s+предприниматель)\s+/ui','',$contractorName) ?? $contractorName));
+        }
+        $contractorDirectorPosition=trim((string)($executor['contractor_director_position'] ?? ''));
+        if ($contractorDirectorPosition==='' && $isIndividualEntrepreneur) {
+            $contractorDirectorPosition='Индивидуальный предприниматель';
+        }
+        $contractorSignatory=$contractorDirectorFullName!=='' ? $contractorDirectorFullName : $contractorName;
         $documentType=(string)$template['document_type'];
         $normalized=self::normalizeParameters($documentType,$params);
         return [
@@ -135,7 +145,7 @@ trait DocumentGeneratorAccessTrait
                 'legal_address'=>(string)($company['legal_address'] ?? ''),'physical_address'=>(string)($company['physical_address'] ?? ''),'bank_name'=>(string)($company['bank_name'] ?? ''),'bank_account'=>(string)($company['bank_account'] ?? ''),'bank_corr_account'=>(string)($company['bank_corr_account'] ?? ''),'bank_bik'=>(string)($company['bank_bik'] ?? ''),'contact_phone'=>(string)($company['contact_phone'] ?? ''),'contact_email'=>(string)($company['contact_email'] ?? ''),'director_full_name'=>(string)($company['director_full_name'] ?? ''),'director_position'=>(string)($company['director_position'] ?? ''),
             ],
             'executor'=>[
-                'crew_id'=>(int)($executor['crew_id'] ?? 0),'contractor_id'=>(int)($executor['contractor_id'] ?? 0),'name'=>$contractorName,'inn'=>(string)($executor['contractor_inn'] ?? ''),'kpp'=>(string)($executor['contractor_kpp'] ?? ''),'ogrn'=>(string)($executor['contractor_ogrn'] ?? ''),'contractor_type'=>(string)($executor['contractor_type'] ?? ''),'legal_address'=>(string)($executor['contractor_legal_address'] ?? ''),'physical_address'=>(string)($executor['contractor_physical_address'] ?? ''),'bank_name'=>(string)($executor['contractor_bank_name'] ?? ''),'bank_account'=>(string)($executor['contractor_bank_account'] ?? ''),'bank_corr_account'=>(string)($executor['contractor_bank_corr_account'] ?? ''),'bank_bik'=>(string)($executor['contractor_bank_bik'] ?? ''),'director_full_name'=>(string)($executor['contractor_director_full_name'] ?? ''),'director_position'=>(string)($executor['contractor_director_position'] ?? ''),'signature_name'=>self::signatureName($contractorSignatory),
+                'crew_id'=>(int)($executor['crew_id'] ?? 0),'contractor_id'=>(int)($executor['contractor_id'] ?? 0),'name'=>$contractorName,'inn'=>(string)($executor['contractor_inn'] ?? ''),'kpp'=>(string)($executor['contractor_kpp'] ?? ''),'ogrn'=>(string)($executor['contractor_ogrn'] ?? ''),'contractor_type'=>$contractorType,'legal_address'=>(string)($executor['contractor_legal_address'] ?? ''),'physical_address'=>(string)($executor['contractor_physical_address'] ?? ''),'bank_name'=>(string)($executor['contractor_bank_name'] ?? ''),'bank_account'=>(string)($executor['contractor_bank_account'] ?? ''),'bank_corr_account'=>(string)($executor['contractor_bank_corr_account'] ?? ''),'bank_bik'=>(string)($executor['contractor_bank_bik'] ?? ''),'director_full_name'=>$contractorDirectorFullName,'director_position'=>$contractorDirectorPosition,'signature_name'=>self::signatureName($contractorSignatory),
             ],
             'driver'=>[
                 'id'=>(int)($executor['driver_id'] ?? 0),'full_name'=>(string)($executor['driver_full_name'] ?? ''),'passport_number'=>(string)($executor['passport_number'] ?? ''),'passport_issued_by'=>(string)($executor['passport_issued_by'] ?? ''),'passport_issue_date'=>(string)($executor['passport_issue_date'] ?? ''),'passport'=>$driverPassport,'license_number'=>(string)($executor['license_number'] ?? ''),'license_issue_date'=>(string)($executor['license_issue_date'] ?? ''),'license'=>$driverLicense,'signature_name'=>self::signatureName((string)($executor['driver_full_name'] ?? '')),

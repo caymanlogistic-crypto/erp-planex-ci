@@ -215,7 +215,7 @@ trait DocumentGeneratorDataTrait
             if($isRequest)continue;
             if ($name==='contract.number' && (string)($snapshot['document']['number_mode'] ?? '')==='automatic') continue;
             if (!array_key_exists($name,$values)) { $errors[]='В выбранном шаблоне используется неподдерживаемое поле. Обратитесь к руководителю.'; continue; }
-            if (trim((string)$values[$name])==='') $errors[]=self::missingPlaceholderMessage($name);
+            if (trim((string)$values[$name])==='') $errors[]=self::missingPlaceholderMessage($name,$snapshot);
         }
         $company=$snapshot['company'];
         if (in_array('company.kpp_line',$placeholders,true) && trim((string)$company['kpp'])==='') $errors[]='У компании не заполнен КПП.';
@@ -253,18 +253,46 @@ trait DocumentGeneratorDataTrait
         return array_values(array_unique($errors));
     }
 
-    private static function missingPlaceholderMessage(string $name): string
+    private static function missingPlaceholderMessage(string $name, array $snapshot = []): string
     {
-        if (str_starts_with($name,'company.')) return 'Не заполнен обязательный реквизит компании.';
-        if (str_starts_with($name,'client.')) return 'Не заполнен обязательный реквизит клиента.';
-        if (str_starts_with($name,'executor.')) return 'Не заполнен обязательный реквизит Подрядчика.';
-        if (str_starts_with($name,'driver.')) return 'Не заполнен обязательный реквизит водителя.';
-        if (str_starts_with($name,'vehicle.') || str_starts_with($name,'trailer.')) return 'Не заполнены обязательные данные транспорта.';
-        if (str_starts_with($name,'contract.')) return 'Не заполнен обязательный параметр договора.';
-        if (str_starts_with($name,'invoice.') || str_starts_with($name,'act.') || str_starts_with($name,'service.')) return 'Не заполнены обязательные данные клиентского документа.';
-        if (str_starts_with($name,'waybill.')) return 'Не заполнен обязательный параметр путевого листа.';
-        if (str_starts_with($name,'requests.')) return 'Не заполнены обязательные данные заявок ФЭО.';
-        return 'Не заполнены обязательные данные документа.';
+        $labels = [
+            'company.name'=>'Наименование компании','company.inn'=>'ИНН компании','company.legal_address'=>'Юридический адрес компании',
+            'company.bank_name'=>'Банк компании','company.bank_account'=>'Расчётный счёт компании','company.bank_corr_account'=>'Корреспондентский счёт компании','company.bank_bik'=>'БИК банка компании',
+            'company.director_full_name'=>'ФИО руководителя компании','company.director_position'=>'Должность руководителя компании','company.signature_name'=>'ФИО подписанта компании',
+            'client.name'=>'Наименование клиента','client.inn'=>'ИНН клиента','client.legal_address'=>'Юридический адрес клиента',
+            'client.bank_name'=>'Банк клиента','client.bank_account'=>'Расчётный счёт клиента','client.bank_corr_account'=>'Корреспондентский счёт клиента','client.bank_bik'=>'БИК банка клиента',
+            'client.director_full_name'=>'ФИО руководителя клиента','client.director_position'=>'Должность руководителя клиента','client.signature_name'=>'ФИО подписанта клиента',
+            'executor.name'=>'Наименование перевозчика','executor.inn'=>'ИНН','executor.legal_address'=>'Юридический адрес',
+            'executor.bank_name'=>'Банк','executor.bank_account'=>'Расчётный счёт','executor.bank_corr_account'=>'Корреспондентский счёт','executor.bank_bik'=>'БИК банка',
+            'executor.director_full_name'=>'ФИО подписанта','executor.director_position'=>'Должность подписанта','executor.signature_name'=>'ФИО подписанта',
+            'driver.full_name'=>'ФИО водителя','driver.passport'=>'Паспортные данные водителя','driver.license'=>'Водительское удостоверение',
+            'vehicle.label'=>'Тип транспортного средства','vehicle.model'=>'Марка/модель транспортного средства','vehicle.plate'=>'Государственный номер транспортного средства','vehicle.vin'=>'VIN транспортного средства',
+            'trailer.label'=>'Тип прицепа/полуприцепа','trailer.model'=>'Марка/модель прицепа/полуприцепа','trailer.plate'=>'Государственный номер прицепа/полуприцепа','trailer.vin'=>'VIN прицепа/полуприцепа','trailer.display'=>'Данные прицепа/полуприцепа',
+            'contract.date'=>'Дата договора','contract.start_date'=>'Дата начала аренды','contract.finish_date'=>'Плановая дата завершения','contract.price'=>'Стоимость','contract.vat_mode'=>'Режим НДС','contract.payment_terms'=>'Условия оплаты',
+            'invoice.number'=>'Номер счёта','invoice.date'=>'Дата счёта','act.number'=>'Номер акта','act.date'=>'Дата акта','service.description'=>'Описание услуги','service.amount'=>'Сумма услуги','service.amount_words'=>'Сумма прописью','service.vat_mode'=>'Режим НДС',
+            'waybill.number'=>'Номер путевого листа','waybill.date'=>'Дата путевого листа','requests.count'=>'Количество заявок','requests.total_mass_kg'=>'Общая масса заявок','requests.unload_address'=>'Адрес выгрузки',
+        ];
+        $label=$labels[$name] ?? $name;
+        if (str_starts_with($name,'executor.')) {
+            $executor=is_array($snapshot['executor'] ?? null)?$snapshot['executor']:[];
+            $executorName=trim((string)($executor['name'] ?? ''));
+            $subject=$executorName!=='' ? 'У перевозчика «'.$executorName.'»' : 'У выбранного перевозчика';
+            return $subject . ': не заполнено поле «' . $label . '». Заполните его в карточке перевозчика.';
+        }
+        if (str_starts_with($name,'client.')) {
+            $client=is_array($snapshot['client'] ?? null)?$snapshot['client']:[];
+            $clientName=trim((string)($client['name'] ?? ''));
+            $subject=$clientName!=='' ? 'У клиента «'.$clientName.'»' : 'У выбранного клиента';
+            return $subject . ': не заполнено поле «' . $label . '». Заполните его в карточке клиента.';
+        }
+        if (str_starts_with($name,'company.')) return 'В реквизитах ПЛАНЭКС не заполнено поле «' . $label . '».';
+        if (str_starts_with($name,'driver.')) return 'Не заполнено поле «' . $label . '». Заполните его в карточке водителя.';
+        if (str_starts_with($name,'vehicle.') || str_starts_with($name,'trailer.')) return 'Не заполнено поле «' . $label . '». Заполните его в карточке транспорта.';
+        if (str_starts_with($name,'contract.')) return 'Не заполнен параметр договора «' . $label . '».';
+        if (str_starts_with($name,'invoice.') || str_starts_with($name,'act.') || str_starts_with($name,'service.')) return 'Не заполнено поле клиентского документа «' . $label . '».';
+        if (str_starts_with($name,'waybill.')) return 'Не заполнен параметр путевого листа «' . $label . '».';
+        if (str_starts_with($name,'requests.')) return 'Не заполнены данные заявок ФЭО: «' . $label . '».';
+        return 'Не заполнено обязательное поле документа «' . $label . '».';
     }
 
     private static function validateRequestRows(array $rows, array $placeholders): array
