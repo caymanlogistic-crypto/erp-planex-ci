@@ -159,7 +159,7 @@ $fmtMass = static function ($value): string {
   <div class="feo-placement-block-search-results is-hidden" data-placement-block-search-results></div>
   <div class="table-scroll">
     <table class="table feo-placement-table">
-      <thead><tr><th style="width:6%">ID</th><th style="width:16%">Название</th><th style="width:9%">Тип</th><th style="width:7%">Заявок</th><th style="width:9%">Масса, кг</th><th style="width:24%">Источник</th><th style="width:11%">Дата</th><th style="width:11%">Ответственный</th><th style="width:7%">Статус</th></tr></thead>
+      <thead><tr><th style="width:6%">ID</th><th style="width:16%">Название</th><th style="width:9%">Тип</th><th style="width:7%">Заявок</th><th style="width:9%">Масса, кг</th><th style="width:24%">Источник</th><th style="width:11%">Дата</th><th style="width:11%">Ответств.</th><th style="width:7%">Статус</th></tr></thead>
       <tbody>
       <?php foreach ($blocks as $block): ?>
         <?php
