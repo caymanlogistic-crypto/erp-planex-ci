@@ -32,10 +32,11 @@ final class FinanceEmployeePaymentService
                                         WHERE status = 'active' AND deleted_at IS NULL
                                         ORDER BY full_name ASC, id ASC");
         foreach ($tenantStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $login = mb_strtolower(trim((string)($row['login'] ?? '')));
+            if ($login !== '' && isset($knownLogins[$login])) continue;
             $employees[] = self::directoryRow(self::IDENTITY_TENANT_USER, $row, 'role_code');
             $membershipId = (int)($row['membership_id'] ?? 0);
             if ($membershipId > 0) $knownMemberships[$membershipId] = true;
-            $login = mb_strtolower(trim((string)($row['login'] ?? '')));
             if ($login !== '') $knownLogins[$login] = true;
         }
 
