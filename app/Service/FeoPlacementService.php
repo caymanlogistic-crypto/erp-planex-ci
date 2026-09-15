@@ -169,7 +169,7 @@ final class FeoPlacementService
         ];
     }
 
-    public function createBlock(PDO $pdo, array $payload, string $expectedStateHash): array
+    public function createBlock(PDO $pdo, array $payload, string $expectedStateHash, ?callable $onCreated = null): array
     {
         $ids = array_values(array_unique(array_map('strval', (array)($payload['ids'] ?? []))));
         if ($ids === []) throw new \RuntimeException('Состав блока пуст.');
@@ -196,6 +196,9 @@ final class FeoPlacementService
             $expected = $this->replay($pdo);
             $this->replaceCurrent($pdo, $expected);
             $afterSummary = $this->currentSummary($pdo);
+            $result = ['block_id' => $blockId, 'preview' => $preview, 'current' => $afterSummary];
+            // Persist integrations atomically, but never call an external API under this lock.
+            if ($onCreated !== null) $onCreated($result);
             $pdo->commit();
             return ['block_id' => $blockId, 'preview' => $preview, 'current' => $afterSummary];
         } catch (\Throwable $e) {

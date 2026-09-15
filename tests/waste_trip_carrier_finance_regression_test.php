@@ -48,7 +48,12 @@ if($fixedMode){$pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charse
 try{
     LocalMigrationService::apply($pdo);
     $latest=(string)$pdo->query('SELECT migration FROM schema_migrations ORDER BY migration DESC LIMIT 1')->fetchColumn();
-    $ok($latest==='136_waste_trip_synchronization.sql','canonical migration chain must reach 136');
+    $canonicalMigrations=glob($root.'/database/migrations-local/*.sql');
+    sort($canonicalMigrations,SORT_STRING);
+    $ok($latest===basename(end($canonicalMigrations)),'canonical migration chain must reach its current head');
+    $carrierMigration=$pdo->prepare('SELECT checksum FROM schema_migrations WHERE migration = ?');
+    $carrierMigration->execute(['135_create_waste_trip_carrier_payments.sql']);
+    $ok($carrierMigration->fetchColumn()===hash('sha256',$migration),'migration 135 must remain applied with its canonical checksum');
     $pdo->exec("INSERT INTO users(full_name,login,password_hash,role_code,status) VALUES ('Owner','owner-fixture','x','company_owner','active')");$userId=(int)$pdo->lastInsertId();
     $pdo->exec("INSERT INTO clients(name,inn,status) VALUES ('Waste Customer','7701000001','active')");$clientId=(int)$pdo->lastInsertId();
     $pdo->exec("INSERT INTO contractors(name,inn,status) VALUES ('Waste Carrier','7702000002','active')");$contractorId=(int)$pdo->lastInsertId();

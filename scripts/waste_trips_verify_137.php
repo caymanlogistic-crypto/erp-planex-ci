@@ -19,11 +19,11 @@ foreach($companies as $company){
     $pdo=new PDO('mysql:host='.$cfg['host'].';port='.($cfg['port']??3306).';dbname='.$cfg['database'].';charset=utf8mb4',$cfg['username'],$cfg['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
     $pdo->exec('SET SESSION TRANSACTION READ ONLY');
     if((string)$pdo->query('SELECT DATABASE()')->fetchColumn()!==(string)$company['db_identifier'])throw new RuntimeException('Tenant identity mismatch');
-    $journal=$pdo->query("SELECT migration,checksum FROM schema_migrations WHERE migration IN ('135_create_waste_trip_carrier_payments.sql','136_waste_trip_synchronization.sql')")->fetchAll(PDO::FETCH_KEY_PAIR);
+    $journal=$pdo->query("SELECT migration,checksum FROM schema_migrations WHERE migration IN ('136_create_max_event_notifications.sql','137_waste_trip_synchronization.sql')")->fetchAll(PDO::FETCH_KEY_PAIR);
     $column=$pdo->query("SELECT IS_NULLABLE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='waste_trips' AND COLUMN_NAME='deleted_at'")->fetchColumn();
     $status=$pdo->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='waste_trips' AND COLUMN_NAME='status'")->fetchColumn();
     $index=$pdo->query("SELECT COUNT(*) FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='waste_trips' AND INDEX_NAME='idx_waste_trips_deleted'")->fetchColumn();
-    $row=['company_id'=>(int)$company['id'],'migration_135'=>isset($journal['135_create_waste_trip_carrier_payments.sql'])?1:0,'migration_136'=>isset($journal['136_waste_trip_synchronization.sql'])?1:0,'migration_136_checksum'=>$journal['136_waste_trip_synchronization.sql']??null,'deleted_column'=>$column==='YES'?1:0,'planned_status'=>str_contains((string)$status,"'planned_route'")?1:0,'trip_index'=>(int)$index===2?1:0];
+    $row=['company_id'=>(int)$company['id'],'migration_136'=>isset($journal['136_create_max_event_notifications.sql'])?1:0,'migration_137'=>isset($journal['137_waste_trip_synchronization.sql'])?1:0,'migration_137_checksum'=>$journal['137_waste_trip_synchronization.sql']??null,'deleted_column'=>$column==='YES'?1:0,'planned_status'=>str_contains((string)$status,"'planned_route'")?1:0,'trip_index'=>(int)$index===2?1:0];
     // Hash existing operational data, excluding only the newly added NULL column.
     foreach(['waste_trips','waste_trip_requests','waste_trip_customer_payments','waste_trip_carrier_payments','waste_trip_audit_log','finance_obligations','finance_operation_allocations'] as $table){
         $rows=$pdo->query('SELECT * FROM `'.$table.'` ORDER BY id');$hash=hash_init('sha256');$count=0;
@@ -32,4 +32,4 @@ foreach($companies as $company){
     }
     $snapshot['tenants'][]=$row;
 }
-echo 'WASTE_136_SNAPSHOT='.json_encode($snapshot,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)."\nWASTE_136_READ_ONLY_OK\n";
+echo 'WASTE_137_SNAPSHOT='.json_encode($snapshot,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR)."\nWASTE_137_READ_ONLY_OK\n";

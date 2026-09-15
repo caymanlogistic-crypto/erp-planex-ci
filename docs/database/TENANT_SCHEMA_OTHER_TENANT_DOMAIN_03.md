@@ -2,7 +2,66 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `e8e789dd44ae480a649243a3480605b0a9d5f96983ef15883dad4e406731f1ee`
+**Schema fingerprint:** `48f9938095ea9929bf6ff0af2e961aada5cef2adb1437f47af0957fa922165b5`
+
+## `max_event_deliveries`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `event_key` | `varchar(100)` | NO | NULL | — | `MUL` |
+| `entity_key` | `varchar(100)` | NO | NULL | — | — |
+| `chat_config_id` | `bigint unsigned` | NO | NULL | — | — |
+| `bot_id` | `bigint unsigned` | NO | NULL | — | — |
+| `external_chat_id` | `varchar(32)` | NO | NULL | — | — |
+| `message_text` | `text` | NO | NULL | — | — |
+| `message_format` | `enum('plain','html','markdown')` | NO | `plain` | — | — |
+| `notify` | `tinyint(1)` | NO | `1` | — | — |
+| `initiated_by_user_id` | `bigint unsigned` | YES | NULL | — | — |
+| `status` | `enum('pending','sending','sent','failed')` | NO | `pending` | — | `MUL` |
+| `attempts` | `int unsigned` | NO | `0` | — | — |
+| `error_message` | `varchar(2000)` | YES | NULL | — | — |
+| `max_message_id` | `varchar(128)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_max_event_delivery_status` (`status`, `id`)
+- **UNIQUE** `uk_max_event_entity` (`event_key`, `entity_key`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `max_event_rules`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `event_key` | `varchar(100)` | NO | NULL | — | `PRI` |
+| `is_enabled` | `tinyint(1)` | NO | `0` | — | — |
+| `chat_config_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
+| `message_template` | `text` | NO | NULL | — | — |
+| `message_format` | `enum('plain','html','markdown')` | NO | `plain` | — | — |
+| `notify` | `tinyint(1)` | NO | `1` | — | — |
+| `updated_by_user_id` | `bigint unsigned` | YES | NULL | — | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`event_key`)
+- **INDEX** `fk_max_event_rule_chat` (`chat_config_id`)
+
+### Physical foreign keys
+
+- `fk_max_event_rule_chat`: (`chat_config_id`) → `max_chats`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
 
 ## `max_message_logs`
 
@@ -181,66 +240,3 @@
 
 - `fk_waste_trip_requests_feo`: (`feo_request_id`) → `feo_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 - `fk_waste_trip_requests_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-
-## `waste_trips`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `business_id` | `bigint unsigned` | NO | NULL | — | `UNI` |
-| `client_id` | `int unsigned` | NO | NULL | — | `MUL` |
-| `route_executor_id` | `int unsigned` | YES | NULL | — | `MUL` |
-| `responsible_user_id` | `int unsigned` | NO | NULL | — | `MUL` |
-| `destination_type` | `enum('utilizer','warehouse')` | NO | NULL | — | — |
-| `utilizer_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
-| `status` | `enum('planned_route','searching_executor','executor_assigned','in_progress','completed','cancelled')` | NO | `searching_executor` | — | `MUL` |
-| `planned_start_mode` | `enum('exact','range','unspecified')` | NO | `unspecified` | — | — |
-| `planned_start_date` | `date` | YES | NULL | — | `MUL` |
-| `planned_start_date_from` | `date` | YES | NULL | — | — |
-| `planned_start_date_to` | `date` | YES | NULL | — | — |
-| `planned_finish_date` | `date` | YES | NULL | — | — |
-| `actual_start_date` | `date` | YES | NULL | — | — |
-| `actual_end_date` | `date` | YES | NULL | — | — |
-| `comment` | `varchar(500)` | YES | NULL | — | — |
-| `cancellation_reason` | `varchar(500)` | YES | NULL | — | — |
-| `cancelled_at` | `datetime` | YES | NULL | — | — |
-| `cancelled_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `cancelled_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `source_system` | `varchar(50)` | YES | NULL | — | `MUL` |
-| `legacy_flight_id` | `bigint unsigned` | YES | NULL | — | — |
-| `legacy_sync_error` | `varchar(1000)` | YES | NULL | — | — |
-| `legacy_last_checked_at` | `datetime` | YES | NULL | — | — |
-| `legacy_last_success_at` | `datetime` | YES | NULL | — | — |
-| `lock_version` | `int unsigned` | NO | `1` | — | — |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_by_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
-| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-| `deleted_at` | `datetime` | YES | NULL | — | `MUL` |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_waste_trips_client` (`client_id`, `id`)
-- **INDEX** `idx_waste_trips_creator_membership` (`created_by_membership_id`)
-- **INDEX** `idx_waste_trips_dates` (`planned_start_date`, `planned_start_date_from`, `planned_start_date_to`)
-- **INDEX** `idx_waste_trips_deleted` (`deleted_at`, `business_id`)
-- **INDEX** `idx_waste_trips_executor` (`route_executor_id`, `id`)
-- **INDEX** `idx_waste_trips_responsible` (`responsible_user_id`, `id`)
-- **INDEX** `idx_waste_trips_status` (`status`, `id`)
-- **INDEX** `idx_waste_trips_utilizer` (`utilizer_id`, `id`)
-- **UNIQUE** `uk_waste_trip_business_id` (`business_id`)
-- **UNIQUE** `uk_waste_trip_legacy_identity` (`source_system`, `legacy_flight_id`)
-
-### Physical foreign keys
-
-- `fk_waste_trips_client`: (`client_id`) → `clients`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-- `fk_waste_trips_executor`: (`route_executor_id`) → `crews`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-- `fk_waste_trips_responsible`: (`responsible_user_id`) → `users`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-- `fk_waste_trips_utilizer`: (`utilizer_id`) → `feo_utilizers`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT

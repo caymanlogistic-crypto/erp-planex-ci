@@ -2,6 +2,14 @@
 
 `tools/runner/` is the only Git-authoritative source for the persistent test-runner helpers deployed to `~/erp-planex-test/bin`.
 
+For Windows/local WSL tasks, use [the local preflight publishing manual](../../docs/LOCAL_PREFLIGHT_PUBLISHING.md).
+`preflight-task --local run` produces signed evidence after a complete local run;
+`preflight-task --local import` validates it without running server tests.
+`push-task` revalidates imported evidence and pushes the exact verified commit.
+The supporting `local_preflight.py` module is Git-authoritative and SHA256-pinned
+by both helpers; installed helpers load it from the persistent canonical checkout.
+Keep that checkout synchronized when installing/updating or rolling back helpers.
+
 ## Exact live inventory
 
 `manifest.json` schema `erp-planex-runner-helpers/v2` declares the complete allowed directory inventory, not only the managed files:

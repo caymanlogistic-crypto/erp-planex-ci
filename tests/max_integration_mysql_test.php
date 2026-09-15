@@ -115,3 +115,7 @@ try {
     $pdo->exec('DROP TABLE IF EXISTS `max_message_logs`,`max_chats`,`max_bots`');
     $pdo->exec('SET FOREIGN_KEY_CHECKS=1');
 }
+
+// Event regressions share this existing mandatory MAX CI gate and guarded DB.
+(static function (): void { require __DIR__ . '/max_event_notifications_mysql_test.php'; })();
+(static function (): void { require __DIR__ . '/max_events_migration_mysql_test.php'; })();

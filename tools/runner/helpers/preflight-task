@@ -5,9 +5,35 @@ import os
 import subprocess
 import sys
 import time
+import hashlib
+import types
 
 ROOT = Path.home() / "erp-planex-test"
 CANONICAL = "chatgpt/production-stabilization-20260802"
+LOCAL_EVIDENCE_SHA256 = "01c33260151a22c6acd4d28b98f61bc7c35ba4329ffd771a5625036602f34349"
+
+
+def local_evidence_module():
+    here = Path(__file__).resolve()
+    path = (here.parent.parent / "local_preflight.py" if here.parent.name == "helpers"
+            else ROOT / "repo/tools/runner/local_preflight.py")
+    source = path.read_bytes().replace(b"\r\n", b"\n")
+    if hashlib.sha256(source).hexdigest() != LOCAL_EVIDENCE_SHA256:
+        raise RuntimeError("LOCAL_EVIDENCE_MODULE_HASH_MISMATCH")
+    module = types.ModuleType("local_preflight_evidence")
+    module.__file__ = str(path)
+    exec(compile(source, str(path), "exec"), module.__dict__)
+    return module
+
+
+if sys.argv[1:2] == ["--local"]:
+    try:
+        module = local_evidence_module()
+        sys.argv = [sys.argv[0]] + sys.argv[2:]
+        sys.exit(module.main())
+    except (OSError, RuntimeError) as exc:
+        print("PREFLIGHT_TASK_BLOCK=" + str(exc))
+        sys.exit(14)
 
 
 def read_env(path):

@@ -13,7 +13,7 @@ final class WasteTripSynchronizationService
     {
         if (($actor['role_code'] ?? '') !== 'company_owner') throw new RuntimeException('Синхронизация доступна руководителю компании.');
         RegulatedDataScopeService::assertCanCreate('waste_trip');
-        if (!WasteTripService::schemaReady($tenant)) throw new RuntimeException('Для синхронизации требуется актуальная схема рейсов (136).');
+        if (!WasteTripService::schemaReady($tenant)) throw new RuntimeException('Для синхронизации требуется актуальная схема рейсов (137).');
         if ($companyId <= 0) throw new RuntimeException('Компания не выбрана.');
         $name = (string)$tenant->query('SELECT DATABASE()')->fetchColumn();
         $lockName = 'erp_waste_trip_legacy_sync_' . substr(hash('sha256', $name), 0, 24);

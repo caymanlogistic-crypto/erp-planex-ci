@@ -17,7 +17,7 @@ final class WasteTripService
     public const CUTOVER_MIGRATION = '130_waste_trip_legacy_linked_cutover.sql';
     public const CUSTOMER_PAYMENTS_MIGRATION = '134_create_waste_trip_customer_payments.sql';
     public const CARRIER_PAYMENTS_MIGRATION = '135_create_waste_trip_carrier_payments.sql';
-    public const SYNCHRONIZATION_MIGRATION = '136_waste_trip_synchronization.sql';
+    public const SYNCHRONIZATION_MIGRATION = '137_waste_trip_synchronization.sql';
     public const ERP_BUSINESS_ID_START = 400;
     public const LEGACY_RANGE_WARNING_THRESHOLD = 390;
     public const LEGACY_RANGE_WARNING = 'Legacy ID range approaching ERP range start (400)';

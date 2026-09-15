@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import importlib.util
+import re
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -62,6 +63,16 @@ assert "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in planned
 tenant_scopes = p.ci.classify(["database/migrations-local/100_x.sql"])
 tenant_plan = p.plan("CRITICAL", ["database/migrations-local/100_x.sql"], tenant_scopes)
 assert "TENANT_SCHEMA_PROVISIONING_AND_GENERATED_DRIFT" in tenant_plan
+assert "MAX_REGRESSIONS" in tenant_plan
+assert "WASTE_TRIPS_REGRESSIONS" in tenant_plan
+for path, check in [
+    ("app/Service/MaxEventNotificationService.php", "MAX_REGRESSIONS"),
+    ("tests/waste_trip_carrier_finance_regression_test.php", "WASTE_TRIPS_REGRESSIONS"),
+    ("app/Http/Routes/company_max_messaging.php", "ROLES_ROUTE_REGISTRY"),
+]:
+    assert check in p.plan("CRITICAL", [path], p.ci.classify([path]))
+assert "tests/max_integration_mysql_test.php" in p.MAX_TESTS
+assert "tests/waste_trip_carrier_finance_regression_test.php" in p.WASTE_TESTS
 
 # Capability-aware contract 1: real MySQL capability => tenant is LOCAL_REQUIRED.
 local, remote, missing = p.check_execution_classes(tenant_plan, caps())
@@ -137,6 +148,13 @@ assert "tools/ci_scope.py" not in fast.split("Checkout exact FAST head after sco
 
 # Contract 4/10: REMOTE tenant gate remains path-triggered and existing commands remain intact in GitHub CI.
 ci_text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
+# CI must provide the same guarded test environment as local preflight.
+max_step = ci_text.split("- name: MAX messaging regressions", 1)[1].split("- name:", 1)[0]
+assert "APP_ENV: test" in max_step
+assert "PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2" in max_step
+assert set(re.findall(r"php (tests/[a-z0-9_]+\.php)", max_step)) == set(p.MAX_TESTS)
+waste_steps = (ROOT / ".github/workflows/waste_trips_regression.yml").read_text(encoding="utf-8").split("- name: Static target contracts", 1)[1]
+assert set(re.findall(r"php (tests/[a-z0-9_]+\.php)", waste_steps)) == set(p.WASTE_TESTS)
 for token in [
     "tests/tenant_schema_provisioning_contract_test.php",
     "PLANEX_SCHEMA_CANDIDATE_DIR=/tmp/planex-tenant-schema-docs php tools/database/generate_schema_docs.php --check",

@@ -15,7 +15,7 @@ on:
       - 'app/Service/WasteTripLegacySyncService.php'
       - 'app/Service/WasteTripSynchronizationService.php'
       - 'app/Service/WasteTripLegacyMappingService.php'
-      - 'database/migrations-local/136_waste_trip_synchronization.sql'
+      - 'database/migrations-local/137_waste_trip_synchronization.sql'
       - 'app/Service/UserSyncService.php'
       - 'app/View/pages/company_waste_trip*.php'
       - 'app/View/partials/company_waste_trip*.php'
@@ -41,7 +41,7 @@ on:
       - 'app/Service/WasteTripLegacySyncService.php'
       - 'app/Service/WasteTripSynchronizationService.php'
       - 'app/Service/WasteTripLegacyMappingService.php'
-      - 'database/migrations-local/136_waste_trip_synchronization.sql'
+      - 'database/migrations-local/137_waste_trip_synchronization.sql'
       - 'app/Service/UserSyncService.php'
       - 'app/View/pages/company_waste_trip*.php'
       - 'app/View/partials/company_waste_trip*.php'
@@ -74,8 +74,8 @@ jobs:
         run: |
           set -euo pipefail
           for f in \
-            scripts/waste_trips_apply_136.php scripts/waste_trips_verify_136.php \
-            tests/waste_trip_legacy_mapping_test.php tests/waste_trip_synchronization_mysql_test.php tests/waste_trips_136_migration_mysql_test.php tests/waste_trips_136_production_migration_contract_test.php \
+            scripts/waste_trips_apply_137.php scripts/waste_trips_verify_137.php \
+            tests/waste_trip_legacy_mapping_test.php tests/waste_trip_synchronization_mysql_test.php tests/waste_trips_137_migration_mysql_test.php tests/waste_trips_137_production_migration_contract_test.php \
             app/Http/Controllers/Company/WasteTripController.php \
             app/Http/Routes/company_linear_trips.php \
             app/Service/WasteTripService.php \
@@ -119,7 +119,7 @@ jobs:
           grep -Fqx 'WASTE_TRIPS_134_PRODUCTION_MIGRATION_CONTRACT=PASS' /tmp/m134.out
           php tests/waste_trips_135_production_migration_contract_test.php | tee /tmp/m135.out
           grep -Fqx 'WASTE_TRIPS_135_PRODUCTION_MIGRATION_CONTRACT=PASS' /tmp/m135.out
-          php tests/waste_trips_136_production_migration_contract_test.php
+          php tests/waste_trips_137_production_migration_contract_test.php
       - name: Start isolated MySQL
         shell: bash
         run: |
@@ -149,5 +149,5 @@ jobs:
           grep -Fqx 'WASTE_TRIP_LEGACY_MAPPING=PASS' /tmp/mapping.out
           php tests/waste_trip_synchronization_mysql_test.php | tee /tmp/synchronization.out
           grep -Fqx 'WASTE_TRIP_SYNCHRONIZATION_MYSQL=PASS' /tmp/synchronization.out
-          php tests/waste_trips_136_migration_mysql_test.php | tee /tmp/m136-mysql.out
-          grep -Fqx 'WASTE_TRIPS_136_MIGRATION_MYSQL=PASS' /tmp/m136-mysql.out
+          php tests/waste_trips_137_migration_mysql_test.php | tee /tmp/m137-mysql.out
+          grep -Fqx 'WASTE_TRIPS_137_MIGRATION_MYSQL=PASS' /tmp/m137-mysql.out

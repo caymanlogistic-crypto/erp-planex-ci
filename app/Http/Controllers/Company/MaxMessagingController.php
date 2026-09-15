@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
 use App\Service\MaxMessagingService;
+use App\Service\MaxEventCatalog;
+use App\Service\MaxEventNotificationService;
 use JsonException;
 use PDO;
 use RuntimeException;
@@ -28,6 +30,18 @@ final class MaxMessagingController
         $chats = $service->listChats();
         $activeChats = $service->activeChats();
         $logs = $service->recentLogs(50);
+        $events = new MaxEventNotificationService($pdo);
+        $eventsReady = $events->ready();
+        $eventRules = $events->rules();
+        $draft = $_SESSION['max_event_draft'] ?? null;
+        unset($_SESSION['max_event_draft']);
+        if (is_array($draft)) {
+            foreach ($eventRules as &$rule) {
+                if ($rule['event_key'] === ($draft['event_key'] ?? '')) $rule = array_replace($rule, ['is_enabled' => 0, 'notify' => 0], $draft);
+            }
+            unset($rule);
+        }
+        $eventDeliveries = $events->recentDeliveries();
         $webhookUrls = [];
         foreach ($bots as $bot) {
             $webhookUrls[(int)$bot['id']] = $this->webhookUrl((int)$company['id'], (int)$bot['id']);
@@ -164,6 +178,51 @@ final class MaxMessagingController
             $this->error('Тестовая отправка MAX не выполнена: ' . $e->getMessage());
         }
         redirect_to(self::SETTINGS_PATH);
+    }
+
+    public function saveEvent(): void
+    {
+        requireRole(['company_owner']);
+        verifyCsrfRequest();
+        try {
+            [, $pdo] = $this->tenant(true);
+            (new MaxEventNotificationService($pdo))->saveRule($_POST, $this->userId());
+            unset($_SESSION['max_event_draft']);
+            $this->success('Настройки события сохранены. Они действуют для новых блоков.');
+        } catch (Throwable $e) {
+            $_SESSION['max_event_draft'] = array_intersect_key($_POST, array_flip(['event_key','is_enabled','chat_config_id','message_template','message_format','notify']));
+            $this->error($e->getMessage());
+        }
+        redirect_to(self::SETTINGS_PATH . '#max-events');
+    }
+
+    public function previewEvent(): void
+    {
+        requireRole(['company_owner']);
+        verifyCsrfRequest();
+        try {
+            $this->tenant(false);
+            $key = (string)($_POST['event_key'] ?? '');
+            $text = MaxEventCatalog::render($key, (string)($_POST['message_template'] ?? ''), (string)($_POST['message_format'] ?? 'plain'), MaxEventCatalog::example($key));
+            jsonResponse(['success' => true, 'text' => $text]);
+        } catch (Throwable $e) {
+            jsonResponse(['success' => false, 'message' => $e->getMessage()], 422);
+        }
+    }
+
+    public function retryEvent(string $id): void
+    {
+        requireRole(['company_owner']);
+        verifyCsrfRequest();
+        try {
+            [, $pdo] = $this->tenant(true);
+            $row = (new MaxEventNotificationService($pdo))->dispatch((int)$id, true);
+            if ($row['status'] !== 'sent') throw new RuntimeException($row['error_message'] ?: 'Отправка уже выполняется. Проверьте результат позже.');
+            $this->success('Уведомление отправлено в MAX.');
+        } catch (Throwable $e) {
+            $this->error($e->getMessage());
+        }
+        redirect_to(self::SETTINGS_PATH . '#max-events');
     }
 
     public function composer(): void

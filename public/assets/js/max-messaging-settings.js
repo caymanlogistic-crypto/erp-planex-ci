@@ -3,7 +3,7 @@
     var root = document.querySelector('[data-max-settings-root]');
     if (!root) return;
     var storageKey = 'erp.max.settings.activeTab';
-    var allowedTabs = ['overview', 'settings', 'journal'];
+    var allowedTabs = ['overview', 'settings', 'events', 'journal'];
 
     function setTab(tab, remember) {
         if (allowedTabs.indexOf(tab) === -1) tab = 'overview';
@@ -30,6 +30,39 @@
         } catch (e) {}
     }
     setTab(initial, false);
+
+    root.querySelectorAll('[data-max-event-form]').forEach(function (form) {
+        var template = form.querySelector('[name="message_template"]');
+        form.querySelectorAll('[data-max-insert]').forEach(function (button) {
+            button.addEventListener('click', function () {
+                template.setRangeText(button.getAttribute('data-max-insert'), template.selectionStart, template.selectionEnd, 'end');
+                template.focus();
+            });
+        });
+        form.querySelector('[data-max-event-default]').addEventListener('click', function (event) {
+            template.value = event.currentTarget.getAttribute('data-max-event-default');
+            template.focus();
+        });
+        var previewButton = form.querySelector('[data-max-event-preview]');
+        previewButton.addEventListener('click', async function () {
+            previewButton.disabled = true;
+            var output = form.querySelector('[data-max-event-preview-text]');
+            form.querySelector('[data-max-event-preview-wrap]').hidden = false;
+            output.textContent = 'Подготовка примера…';
+            try {
+                var response = await fetch(form.dataset.previewUrl, {method: 'POST', body: new FormData(form), credentials: 'same-origin', headers: {'Accept': 'application/json'}});
+                var result = await response.json();
+                if (!response.ok || !result.success) throw new Error(result.message || 'Не удалось подготовить пример.');
+                output.textContent = result.text;
+            } catch (error) { output.textContent = error.message || 'Ошибка предпросмотра.'; }
+            finally { previewButton.disabled = false; }
+        });
+    });
+    root.querySelectorAll('[data-max-event-retry]').forEach(function (form) {
+        form.addEventListener('submit', function (event) {
+            if (!window.confirm('Отправить сохранённое уведомление? Если предыдущая попытка завершилась без ответа MAX, проверьте чат, чтобы избежать дубля.')) event.preventDefault();
+        });
+    });
 
     root.querySelectorAll('[data-max-tab]').forEach(function (link) {
         link.addEventListener('click', function (event) {

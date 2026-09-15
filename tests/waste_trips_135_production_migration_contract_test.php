@@ -11,6 +11,12 @@ $manifest=json_decode((string)file_get_contents($root.'/.github/agent_db_migrati
 $ok=static function(bool $v,string $m):void{if(!$v)throw new RuntimeException($m);};
 
 $ok(is_array($manifest),'migration request manifest invalid');
+// The shared selector advances for later migrations. Preserve the 135 workflow
+// contract independently; validate its selector mapping whenever 135 is selected.
+if (($manifest['migration_id']??'')==='135') {
+    $ok(($manifest['workflow']??'')==='waste_trips_135_production_migration.yml','agent migration workflow target mismatch');
+    $ok(($manifest['confirmation_value']??'')==='APPLY_WASTE_TRIPS_135','agent migration confirmation mismatch');
+}
 $ok(str_contains($workflow,"\n  workflow_dispatch:"),'Waste Trips 135 migration must be workflow_dispatch');
 foreach(["\n  push:","\n  workflow_run:","\n  pull_request:","\n  schedule:"]as$f)$ok(!str_contains($workflow,$f),'Waste Trips 135 migration has forbidden trigger '.$f);
 foreach(['APPLY_WASTE_TRIPS_135','Validate exact canonical source and tooling','Require successful exact canonical ERP PLANEX CI','Require deployed marker as successful canonical ancestor','WASTE_135_DEPLOYED_ANCESTOR_PASS','Snapshot BEFORE','Apply tenant migration 135','Snapshot AFTER and verify invariants','WASTE_135_INVARIANTS_PASS=YES','WASTE_135_BUSINESS_DATA_MUTATION=0','WASTE_135_DEPLOY_MARKER_UNCHANGED=YES','erpv2/migration135','waste_trips_apply_135.php','waste_trips_verify_135.php','135_create_waste_trip_carrier_payments.sql']as$t)$ok(str_contains($workflow,$t),'Waste Trips 135 workflow missing '.$t);

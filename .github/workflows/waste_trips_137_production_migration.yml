@@ -1,14 +1,14 @@
-name: Waste Trips 136 Production Migration
+name: Waste Trips 137 Production Migration
 
 on:
   workflow_dispatch:
     inputs:
       source_sha:
-        description: 'Exact canonical SHA containing Waste Trips synchronization migration 136 tooling'
+        description: 'Exact canonical SHA containing Waste Trips synchronization migration 137 tooling'
         required: true
         type: string
       confirm_migration:
-        description: 'Type APPLY_WASTE_TRIPS_136 to authorize tenant migration 136'
+        description: 'Type APPLY_WASTE_TRIPS_137 to authorize tenant migration 137'
         required: true
         type: string
 
@@ -27,8 +27,8 @@ env:
   CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
 
 jobs:
-  migrate-136:
-    if: ${{ inputs.confirm_migration == 'APPLY_WASTE_TRIPS_136' }}
+  migrate-137:
+    if: ${{ inputs.confirm_migration == 'APPLY_WASTE_TRIPS_137' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -46,12 +46,12 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
-          php -l scripts/waste_trips_apply_136.php
-          php -l scripts/waste_trips_verify_136.php
-          php -l tests/waste_trips_136_production_migration_contract_test.php
-          php tests/waste_trips_136_production_migration_contract_test.php
+          php -l scripts/waste_trips_apply_137.php
+          php -l scripts/waste_trips_verify_137.php
+          php -l tests/waste_trips_137_production_migration_contract_test.php
+          php tests/waste_trips_137_production_migration_contract_test.php
           php tests/agent_db_migration_request_contract_test.php
-          test -s database/migrations-local/136_waste_trip_synchronization.sql
+          test -s database/migrations-local/137_waste_trip_synchronization.sql
 
       - name: Require successful exact canonical ERP PLANEX CI
         env:
@@ -70,7 +70,7 @@ jobs:
           if not rows: raise SystemExit('exact canonical ERP PLANEX CI run missing')
           run=max(rows,key=lambda r:r.get('run_number',0))
           if run.get('status')!='completed' or run.get('conclusion')!='success': raise SystemExit(f"exact canonical ERP PLANEX CI not successful: {run.get('id')} {run.get('status')} {run.get('conclusion')}")
-          print(f"WASTE_136_CANONICAL_CI_PASS run={run.get('id')}")
+          print(f"WASTE_137_CANONICAL_CI_PASS run={run.get('id')}")
           PY
 
       - name: Publish pending status
@@ -84,7 +84,7 @@ jobs:
           set -euo pipefail
           python3 - > /tmp/payload.json <<'PY'
           import json
-          print(json.dumps({'state':'pending','context':'erpv2/migration136','description':'Waste Trips synchronization tenant migration 136 in progress'}))
+          print(json.dumps({'state':'pending','context':'erpv2/migration137','description':'Waste Trips synchronization tenant migration 137 in progress'}))
           PY
           curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
 
@@ -96,10 +96,10 @@ jobs:
         run: |
           set -euo pipefail
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/waste_136_key"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/waste_137_key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/waste_136_key" "$HOME/.ssh/known_hosts"
-          SSH_CONTROL_DIR="/tmp/waste136_mux_${GITHUB_RUN_ID}"
+          chmod 600 "$HOME/.ssh/waste_137_key" "$HOME/.ssh/known_hosts"
+          SSH_CONTROL_DIR="/tmp/waste137_mux_${GITHUB_RUN_ID}"
           install -d -m 700 "$SSH_CONTROL_DIR"
           SSH_CONTROL_PATH="$SSH_CONTROL_DIR/%C"
           test "${#SSH_CONTROL_PATH}" -lt 90
@@ -117,8 +117,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_136_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
-          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/waste_136_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_137_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/waste_137_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
           DEPLOYED="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
           [[ "$DEPLOYED" =~ ^[0-9a-f]{40}$ ]]
           test "$DEPLOYED" != "$SOURCE_SHA"
@@ -128,12 +128,12 @@ jobs:
           import json,os
           rows=[s for s in json.load(open('/tmp/deployed-status.json')).get('statuses',[]) if s.get('context')=='erpv2/deploy']
           if not rows or rows[0].get('state')!='success': raise SystemExit('deployed marker lacks successful erpv2/deploy status')
-          print('WASTE_136_DEPLOYED_ANCESTOR_PASS='+os.environ['DEPLOYED'])
+          print('WASTE_137_DEPLOYED_ANCESTOR_PASS='+os.environ['DEPLOYED'])
           PY
           printf 'DEPLOYED_BEFORE=%s\n' "$DEPLOYED" >> "$GITHUB_ENV"
-          "${SCP[@]}" scripts/waste_trips_apply_136.php "$SSH_USER@$SSH_HOST:/tmp/waste_apply136_${GITHUB_RUN_ID}.php"
-          "${SCP[@]}" scripts/waste_trips_verify_136.php "$SSH_USER@$SSH_HOST:/tmp/waste_verify136_${GITHUB_RUN_ID}.php"
-          "${SCP[@]}" database/migrations-local/136_waste_trip_synchronization.sql "$SSH_USER@$SSH_HOST:/tmp/waste_136_${GITHUB_RUN_ID}.sql"
+          "${SCP[@]}" scripts/waste_trips_apply_137.php "$SSH_USER@$SSH_HOST:/tmp/waste_apply137_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" scripts/waste_trips_verify_137.php "$SSH_USER@$SSH_HOST:/tmp/waste_verify137_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" database/migrations-local/137_waste_trip_synchronization.sql "$SSH_USER@$SSH_HOST:/tmp/waste_137_${GITHUB_RUN_ID}.sql"
 
       - name: Snapshot BEFORE
         env:
@@ -143,22 +143,22 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_136_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/waste_verify136_${GITHUB_RUN_ID}.php'" | tee waste_136_before.txt
-          grep -q '^WASTE_136_READ_ONLY_OK$' waste_136_before.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_137_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/waste_verify137_${GITHUB_RUN_ID}.php'" | tee waste_137_before.txt
+          grep -q '^WASTE_137_READ_ONLY_OK$' waste_137_before.txt
           python3 - <<'PY'
           import json,re
-          m=re.search(r'^WASTE_136_SNAPSHOT=(.+)$',open('waste_136_before.txt').read(),re.M)
-          if not m: raise SystemExit('Waste Trips 136 before snapshot missing')
+          m=re.search(r'^WASTE_137_SNAPSHOT=(.+)$',open('waste_137_before.txt').read(),re.M)
+          if not m: raise SystemExit('Waste Trips 137 before snapshot missing')
           d=json.loads(m.group(1))
           for t in d['tenants']:
-              if t['migration_135']!=1: raise SystemExit(f"company {t['company_id']}: migration 135 prerequisite missing")
-              if t['migration_136']==0 and t['deleted_column']!=0: raise SystemExit('Unjournaled 136 schema')
-              if t['migration_136']==1 and not all(t[k]==1 for k in ['deleted_column','planned_status','trip_index']): raise SystemExit('Incomplete 136 schema')
-          print('WASTE_136_BEFORE_PASS=YES')
+              if t['migration_136']!=1: raise SystemExit(f"company {t['company_id']}: migration 136 prerequisite missing")
+              if t['migration_137']==0 and t['deleted_column']!=0: raise SystemExit('Unjournaled 137 schema')
+              if t['migration_137']==1 and not all(t[k]==1 for k in ['deleted_column','planned_status','trip_index']): raise SystemExit('Incomplete 137 schema')
+          print('WASTE_137_BEFORE_PASS=YES')
           PY
 
-      - name: Apply tenant migration 136
+      - name: Apply tenant migration 137
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -166,9 +166,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_136_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TENANT_MIGRATION_PATH='/tmp/waste_136_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/waste_apply136_${GITHUB_RUN_ID}.php'" | tee waste_136_apply.txt
-          grep -q '^WASTE_136_OK ' waste_136_apply.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_137_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TENANT_MIGRATION_PATH='/tmp/waste_137_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/waste_apply137_${GITHUB_RUN_ID}.php'" | tee waste_137_apply.txt
+          grep -q '^WASTE_137_OK ' waste_137_apply.txt
 
       - name: Snapshot AFTER and verify invariants
         env:
@@ -178,27 +178,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_136_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/waste_verify136_${GITHUB_RUN_ID}.php'" | tee waste_136_after.txt
-          grep -q '^WASTE_136_READ_ONLY_OK$' waste_136_after.txt
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_137_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/waste_verify137_${GITHUB_RUN_ID}.php'" | tee waste_137_after.txt
+          grep -q '^WASTE_137_READ_ONLY_OK$' waste_137_after.txt
           python3 - <<'PY'
           import hashlib,json,re
           def snap(path):
-              m=re.search(r'^WASTE_136_SNAPSHOT=(.+)$',open(path).read(),re.M)
+              m=re.search(r'^WASTE_137_SNAPSHOT=(.+)$',open(path).read(),re.M)
               if not m: raise SystemExit(path+' snapshot missing')
               return json.loads(m.group(1))
-          before,after=snap('waste_136_before.txt'),snap('waste_136_after.txt')
-          expected=hashlib.sha256(open('database/migrations-local/136_waste_trip_synchronization.sql','rb').read()).hexdigest()
+          before,after=snap('waste_137_before.txt'),snap('waste_137_after.txt')
+          expected=hashlib.sha256(open('database/migrations-local/137_waste_trip_synchronization.sql','rb').read()).hexdigest()
           if before['central']!=after['central']: raise SystemExit('central/active tenant invariant changed')
           b={x['company_id']:x for x in before['tenants']};a={x['company_id']:x for x in after['tenants']}
           if set(b)!=set(a): raise SystemExit('active tenant set changed')
           for cid,row in a.items():
-              if row['migration_135']!=1 or row['migration_136']!=1: raise SystemExit('Migration journal incomplete')
-              if row['migration_136_checksum']!=expected: raise SystemExit('Migration checksum mismatch')
+              if row['migration_136']!=1 or row['migration_137']!=1: raise SystemExit('Migration journal incomplete')
+              if row['migration_137_checksum']!=expected: raise SystemExit('Migration checksum mismatch')
               if not all(row[k]==1 for k in ['deleted_column','planned_status','trip_index']): raise SystemExit('Migration schema incomplete')
               if row['data']!=b[cid]['data']: raise SystemExit(f'company {cid}: operational data changed during schema migration')
-          print('WASTE_136_INVARIANTS_PASS=YES')
-          print('WASTE_136_BUSINESS_DATA_MUTATION=0')
+          print('WASTE_137_INVARIANTS_PASS=YES')
+          print('WASTE_137_BUSINESS_DATA_MUTATION=0')
           PY
 
       - name: HTTP acceptance before deploy and marker unchanged
@@ -210,20 +210,20 @@ jobs:
         run: |
           set -euo pipefail
           test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
-          CURRENT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_136_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          CURRENT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_137_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
           test "$CURRENT" = "$DEPLOYED_BEFORE"
-          echo 'WASTE_136_PREDEPLOY_HTTP_PASS=YES'
-          echo 'WASTE_136_DEPLOY_MARKER_UNCHANGED=YES'
+          echo 'WASTE_137_PREDEPLOY_HTTP_PASS=YES'
+          echo 'WASTE_137_DEPLOY_MARKER_UNCHANGED=YES'
 
       - name: Upload migration evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: waste_trips_136_production_migration_${{ inputs.source_sha }}
+          name: waste_trips_137_production_migration_${{ inputs.source_sha }}
           path: |
-            waste_136_before.txt
-            waste_136_apply.txt
-            waste_136_after.txt
+            waste_137_before.txt
+            waste_137_apply.txt
+            waste_137_after.txt
           if-no-files-found: ignore
           retention-days: 30
 
@@ -238,10 +238,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          if [ "$JOB_STATUS" = success ]; then state=success; desc='Waste Trips synchronization migration 136 verified'; else state=failure; desc='Waste Trips synchronization migration 136 failed'; fi
+          if [ "$JOB_STATUS" = success ]; then state=success; desc='Waste Trips synchronization migration 137 verified'; else state=failure; desc='Waste Trips synchronization migration 137 failed'; fi
           python3 - "$state" "$desc" > /tmp/payload.json <<'PY'
           import json,sys
-          print(json.dumps({'state':sys.argv[1],'context':'erpv2/migration136','description':sys.argv[2]}))
+          print(json.dumps({'state':sys.argv[1],'context':'erpv2/migration137','description':sys.argv[2]}))
           PY
           curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
 
@@ -253,9 +253,9 @@ jobs:
           SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         shell: bash
         run: |
-          if [ -f "$HOME/.ssh/waste_136_key" ]; then
-            ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_136_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
-              "rm -f '/tmp/waste_apply136_${GITHUB_RUN_ID}.php' '/tmp/waste_verify136_${GITHUB_RUN_ID}.php' '/tmp/waste_136_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
+          if [ -f "$HOME/.ssh/waste_137_key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_137_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+              "rm -f '/tmp/waste_apply137_${GITHUB_RUN_ID}.php' '/tmp/waste_verify137_${GITHUB_RUN_ID}.php' '/tmp/waste_137_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
           fi
-          rm -f "$HOME/.ssh/waste_136_key"
+          rm -f "$HOME/.ssh/waste_137_key"
           rm -rf "${SSH_CONTROL_DIR:-}"
