@@ -4,11 +4,27 @@ from pathlib import Path
 import os
 import subprocess
 import sys
+import hashlib
+import types
 
 ROOT = Path.home() / "erp-planex-test"
 
 CANONICAL = "chatgpt/production-stabilization-20260802"
 WRITE_REMOTE = "git@github.com:caymanlogistic-crypto/erp-planex-ci.git"
+LOCAL_EVIDENCE_SHA256 = "01c33260151a22c6acd4d28b98f61bc7c35ba4329ffd771a5625036602f34349"
+
+
+def verify_local_evidence(task_id, proof):
+    here = Path(__file__).resolve()
+    path = (here.parent.parent / "local_preflight.py" if here.parent.name == "helpers"
+            else ROOT / "repo/tools/runner/local_preflight.py")
+    source = path.read_bytes().replace(b"\r\n", b"\n")
+    if hashlib.sha256(source).hexdigest() != LOCAL_EVIDENCE_SHA256:
+        raise RuntimeError("LOCAL_EVIDENCE_MODULE_HASH_MISMATCH")
+    module = types.ModuleType("local_preflight_evidence")
+    module.__file__ = str(path)
+    exec(compile(source, str(path), "exec"), module.__dict__)
+    module.verify_imported(task_id, proof)
 
 
 def read_env(path):
@@ -158,6 +174,13 @@ if proof.get("RESULT") != "PASS":
     print("PUSH_TASK_BLOCK=PREFLIGHT_NOT_PASS")
     sys.exit(16)
 
+if "PROOF_KIND" in proof:
+    try:
+        verify_local_evidence(task_id, proof)
+    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+        print("PUSH_TASK_BLOCK=LOCAL_EVIDENCE:" + str(exc))
+        sys.exit(20)
+
 
 print("=== VERIFY CURRENT CANONICAL ===")
 
@@ -223,10 +246,14 @@ command = [
 if dry_run:
     command.append("--dry-run")
 
+if git(worktree, "rev-parse", "HEAD") != candidate_head or git(worktree, "status", "--porcelain"):
+    print("PUSH_TASK_BLOCK=WORKTREE_CHANGED_BEFORE_PUSH")
+    sys.exit(21)
+
 command.extend(
     [
         WRITE_REMOTE,
-        f"HEAD:refs/heads/{branch}",
+        f"{candidate_head}:refs/heads/{branch}",
     ]
 )
 
