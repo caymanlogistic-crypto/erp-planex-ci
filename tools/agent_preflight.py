@@ -23,9 +23,9 @@ WASTE_TESTS=["tests/"+name+".php" for name in (
     "waste_trip_244_readonly_probe_contract_test", "waste_trips_130_production_migration_contract_test",
     "waste_trips_134_production_migration_contract_test", "waste_trips_135_production_migration_contract_test",
     "waste_trip_customer_payment_regression_test", "waste_trip_carrier_finance_regression_test",
-    "waste_trip_regression_test", "waste_trip_legacy_prefill_regression_test",
-    "waste_trip_manager_membership_regression_test", "waste_trip_legacy_full_schema_regression_test",
-    "waste_trip_legacy_manager_end_to_end_regression_test",
+    "waste_trip_regression_test", "waste_trip_manager_membership_regression_test",
+    "waste_trip_legacy_mapping_test", "waste_trip_synchronization_mysql_test",
+    "waste_trips_137_production_migration_contract_test", "waste_trips_137_migration_mysql_test",
 )]
 class PreflightEnvironmentError(RuntimeError): pass
 
