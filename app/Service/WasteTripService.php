@@ -174,7 +174,7 @@ final class WasteTripService
     }
 
     public static function markLegacySyncError(PDO $pdo,int $tripId,string $message): void
-    { $message=self::nullableText($message,1000)??'Unknown legacy sync error';$stmt=$pdo->prepare("UPDATE waste_trips SET legacy_sync_error=?,legacy_last_checked_at=NOW() WHERE id=? AND source_system='legacy_flights'");$stmt->execute([$message,$tripId]); }
+    { $message=self::nullableText($message,1000)??'Unknown legacy sync error';$stmt=$pdo->prepare("UPDATE waste_trips SET legacy_sync_error=?,legacy_last_checked_at=NOW() WHERE id=? AND source_system IN ('legacy_flights','legacy_prefill')");$stmt->execute([$message,$tripId]); }
 
     public static function legacyRangeWarningForMax(int $legacyMax): ?string
     { return $legacyMax >= self::LEGACY_RANGE_WARNING_THRESHOLD ? self::LEGACY_RANGE_WARNING : null; }
@@ -183,7 +183,7 @@ final class WasteTripService
     { $legacyMax=WasteTripLegacySourceService::maxLegacyId($legacyPdo);return['legacy_max_id'=>$legacyMax,'warning'=>self::legacyRangeWarningForMax($legacyMax)]; }
 
     public static function linkedTripsForSync(PDO $pdo,int $limit=500): array
-    { $limit=max(1,min(500,$limit));return$pdo->query("SELECT id,business_id,legacy_flight_id FROM waste_trips WHERE source_system='legacy_flights' ORDER BY (legacy_last_checked_at IS NULL) DESC, legacy_last_checked_at ASC, id ASC LIMIT {$limit}")->fetchAll(PDO::FETCH_ASSOC); }
+    { $limit=max(1,min(500,$limit));return$pdo->query("SELECT id,business_id,legacy_flight_id FROM waste_trips WHERE source_system IN ('legacy_flights','legacy_prefill') AND legacy_flight_id IS NOT NULL ORDER BY (legacy_last_checked_at IS NULL) DESC, legacy_last_checked_at ASC, id ASC LIMIT {$limit}")->fetchAll(PDO::FETCH_ASSOC); }
 
     public static function previewSelection(PDO $pdo,array $businessIds,bool $requireCurrentPlacement=true): array
     {
@@ -226,7 +226,7 @@ final class WasteTripService
         $stmt=$pdo->prepare('UPDATE waste_trip_namespace_state SET last_issued_business_id=?,updated_at=NOW() WHERE singleton_id=1 AND last_issued_business_id=?');$stmt->execute([$next,$previous]);if($stmt->rowCount()!==1)throw new RuntimeException('Конфликт выдачи business ID. Повторите операцию.');return$next;
     }
     private static function namespaceState(PDO $pdo,bool $forUpdate): array { $sql='SELECT legacy_high_water_at_cutover,last_issued_business_id,cutover_completed_at FROM waste_trip_namespace_state WHERE singleton_id=1'.($forUpdate?' FOR UPDATE':'');$row=$pdo->query($sql)->fetch(PDO::FETCH_ASSOC);if(!$row||empty($row['cutover_completed_at']))throw new RuntimeException('Waste Trips cutover не завершён.');return$row; }
-    private static function isLegacyLinked(array $trip): bool { return($trip['source_system']??null)===WasteTripLegacySourceService::SOURCE_SYSTEM&&(int)($trip['legacy_flight_id']??0)>0; }
+    private static function isLegacyLinked(array $trip): bool { return in_array((string)($trip['source_system']??''),[WasteTripLegacySourceService::SOURCE_SYSTEM,WasteTripLegacySourceService::PREFILL_SOURCE_SYSTEM],true)&&(int)($trip['legacy_flight_id']??0)>0; }
     private static function assertLegacyOwnedMutationAbsent(array $input): void { $present=[];foreach(self::LEGACY_OWNED_INPUT_KEYS as$key)if(array_key_exists($key,$input))$present[]=$key;if($present!==[])throw new RuntimeException('Legacy-owned поля нельзя изменять из ERP: '.implode(', ',$present).'.'); }
     private static function assertCanAccessTrip(PDO $pdo,array $trip,array $sessionUser): void { if(!self::canAccessTrip($pdo,$trip,$sessionUser))throw new RuntimeException('У вас нет доступа к этому рейсу.'); }
 
