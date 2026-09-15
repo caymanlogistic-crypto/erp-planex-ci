@@ -3,6 +3,8 @@
 require_once base_path('app/Support/crypto_helper.php');
 require_once base_path('app/Service/MaxApiClient.php');
 require_once base_path('app/Service/MaxMessagingService.php');
+require_once base_path('app/Service/MaxEventCatalog.php');
+require_once base_path('app/Service/MaxEventNotificationService.php');
 require_once base_path('app/Http/Controllers/Company/MaxMessagingController.php');
 
 $maxMessagingController = new \App\Http\Controllers\Company\MaxMessagingController($config, $db);
@@ -17,6 +19,9 @@ $router->post('/company/max/settings/chats/save', [$maxMessagingController, 'sav
 $router->post('/company/max/settings/chats/{id}/active', [$maxMessagingController, 'setChatActive'], $maxSettingsPage);
 $router->post('/company/max/settings/chats/{id}/verify', [$maxMessagingController, 'verifyChat'], $maxSettingsPage);
 $router->post('/company/max/settings/test-send', [$maxMessagingController, 'testSend'], $maxSettingsPage);
+$router->post('/company/max/settings/events/save', [$maxMessagingController, 'saveEvent'], $maxSettingsPage);
+$router->post('/company/max/settings/events/preview', [$maxMessagingController, 'previewEvent'], $maxSettingsPage);
+$router->post('/company/max/settings/events/deliveries/{id}/retry', [$maxMessagingController, 'retryEvent'], $maxSettingsPage);
 
 $router->get('/company/max/messages', [$maxMessagingController, 'composer'], $maxMessagesPage);
 $router->post('/company/max/messages/send', [$maxMessagingController, 'sendManual'], $maxMessagesPage);

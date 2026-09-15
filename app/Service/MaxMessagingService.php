@@ -253,13 +253,16 @@ final class MaxMessagingService
         }
     }
 
-    public function sendToChat(int $chatConfigId, string $text, string $format, bool $notify, string $source, ?int $userId): array
+    public function sendToChat(int $chatConfigId, string $text, string $format, bool $notify, string $source, ?int $userId, ?array $expectedDestination = null): array
     {
         if (!in_array($source, ['test', 'manual', 'event'], true)) {
             throw new RuntimeException('Неизвестный источник MAX-сообщения.');
         }
         $chat = $this->requireChat($chatConfigId);
         $bot = $this->requireBotRaw((int)$chat['bot_id']);
+        if ($expectedDestination !== null && ((int)$bot['id'] !== (int)$expectedDestination['bot_id'] || (string)$chat['chat_id'] !== (string)$expectedDestination['external_chat_id'])) {
+            throw new RuntimeException('Адрес чата MAX изменился после создания уведомления.');
+        }
         if (empty($chat['is_active']) || (string)$chat['max_status'] !== 'active' || empty($bot['is_active'])) {
             throw new RuntimeException('Выбранная группа или бот MAX неактивны.');
         }

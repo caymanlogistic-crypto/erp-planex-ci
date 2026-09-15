@@ -106,6 +106,7 @@ $maxLogJson = json_encode($logs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         <nav class="ux-segmented max-settings-tabs" aria-label="Раздел MAX">
             <a href="#max-overview" class="is-active" data-max-tab="overview" aria-controls="max-overview">Обзор</a>
             <a href="#max-settings" data-max-tab="settings" aria-controls="max-settings">Настройки</a>
+            <a href="#max-events" data-max-tab="events" aria-controls="max-events">События</a>
             <a href="#max-journal" data-max-tab="journal" aria-controls="max-journal">Журнал</a>
         </nav>
     </div>
@@ -284,6 +285,7 @@ $maxLogJson = json_encode($logs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
         </div>
     </section>
 
+    <?php require base_path('app/View/pages/company_max_events.php'); ?>
     <section id="max-journal" class="max-tab-panel" data-max-panel="journal" hidden>
         <div class="table-card table-card--standard max-log-table-card">
             <div class="table-toolbar max-log-toolbar">
