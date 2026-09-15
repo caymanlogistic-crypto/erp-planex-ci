@@ -9,6 +9,7 @@ if ($root === '' || !is_file($root . '/.env') || !is_file($root . '/bootstrap/ap
 $config = require $root . '/bootstrap/app.php';
 require_once $root . '/app/Support/crypto_helper.php';
 require_once $root . '/app/Support/company_database.php';
+require_once $root . '/app/Service/FeoPlacementAuthorService.php';
 
 $targetLogin = 'Spugov';
 $targetRole = 'company_owner';
@@ -16,6 +17,10 @@ $v1MarkerPrefix = 'feo_placement_author_backfill_20260912_max_';
 $v1Checksum = hash('sha256', 'feo-placement-author-backfill-v1|login=Spugov|scope=existing-blocks-only');
 $v2MarkerPrefix = 'feo_placement_author_backfill_20260912_v2_max_';
 $v2Checksum = hash('sha256', 'feo-placement-author-backfill-v2|login=Spugov|identity=central_company_user|role=company_owner|scope=existing-v1-boundary');
+$v3MarkerPrefix = 'feo_placement_author_backfill_20260915_v3_max_';
+$v3Checksum = hash('sha256', 'feo-placement-author-backfill-v3|login=Spugov|identity=central_company_user|role=company_owner|scope=owner-all-existing-20260915');
+$expectedBoundary = filter_var(getenv('FEO_AUTHOR_EXPECTED_BOUNDARY'), FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+if ($expectedBoundary === false) throw new RuntimeException('FEO_AUTHOR_EXPECTED_BOUNDARY from the read-only snapshot is required');
 
 $connect = static function(array $cfg): PDO {
     return new PDO(
@@ -74,7 +79,7 @@ $target = $candidates[0];
 $company = $target['company'];
 $owner = $target['owner'];
 $pdo = $connect($target['cfg']);
-$lockName = 'planex_feo_author_backfill_' . substr(hash('sha256', (string)$company['db_identifier']), 0, 20);
+$lockName = 'planex_feo_placement_' . substr(hash('sha256', (string)$company['db_identifier']), 0, 20);
 $lock = $pdo->prepare('SELECT GET_LOCK(?,10)');
 $lock->execute([$lockName]);
 if ((int)$lock->fetchColumn() !== 1) throw new RuntimeException('Tenant backfill lock failed for company ' . $company['id']);
@@ -87,31 +92,36 @@ try {
     $owners = $ownerQ->fetchAll(PDO::FETCH_ASSOC);
     if (count($owners) !== 1 || (string)($owners[0]['status'] ?? '') !== 'active') throw new RuntimeException('Central Spugov company_owner identity changed during backfill preflight');
     $owner = $owners[0];
+    if (\App\Service\FeoPlacementAuthorService::shortName((string)$owner['full_name'], (string)$owner['login']) !== 'Владимир С.') {
+        throw new RuntimeException('Spugov display identity does not match the authorized creator');
+    }
 
-    $v2Marker = $singleMarker($pdo, $v2MarkerPrefix);
-    $v1Marker = $singleMarker($pdo, $v1MarkerPrefix);
+    $v3Marker = $singleMarker($pdo, $v3MarkerPrefix);
+    // Preserve and validate both earlier one-time operations; neither limits
+    // the OWNER-authorized all-existing-blocks correction on 2026-09-15.
+    foreach ([[$v1MarkerPrefix,$v1Checksum],[$v2MarkerPrefix,$v2Checksum]] as [$prefix,$checksum]) {
+        $oldMarker = $singleMarker($pdo, $prefix);
+        if ($oldMarker !== null) $markerBoundary($oldMarker, $prefix, $checksum);
+    }
     $state = 'existing';
     $updated = 0;
 
-    if ($v2Marker !== null) {
-        $boundary = $markerBoundary($v2Marker, $v2MarkerPrefix, $v2Checksum);
-        $marker = (string)$v2Marker['migration'];
+    if ($v3Marker !== null) {
+        $boundary = $markerBoundary($v3Marker, $v3MarkerPrefix, $v3Checksum);
+        if ($boundary !== $expectedBoundary) throw new RuntimeException('Backfill boundary differs from snapshot');
+        $marker = (string)$v3Marker['migration'];
     } else {
-        if ($v1Marker !== null) {
-            $boundary = $markerBoundary($v1Marker, $v1MarkerPrefix, $v1Checksum);
-            $state = 'corrected';
-        } else {
-            $boundary = (int)$pdo->query('SELECT COALESCE(MAX(id),0) FROM feo_placement_blocks')->fetchColumn();
-            if ($boundary <= 0) throw new RuntimeException('No placement blocks found at backfill commit');
-            $state = 'applied';
-        }
+        $maxId = (int)$pdo->query('SELECT COALESCE(MAX(id),0) FROM feo_placement_blocks')->fetchColumn();
+        if ($expectedBoundary > $maxId) throw new RuntimeException('Backfill snapshot boundary no longer exists');
+        $boundary = $expectedBoundary;
+        $state = 'applied';
 
-        $update = $pdo->prepare('UPDATE feo_placement_blocks SET created_by_user_id=?,created_by_role=? WHERE id<=?');
+        $update = $pdo->prepare('UPDATE feo_placement_blocks SET created_by_user_id=?,created_by_role=?,updated_at=updated_at WHERE id<=?');
         $update->execute([(int)$owner['id'], $targetRole, $boundary]);
         $updated = $update->rowCount();
-        $marker = $v2MarkerPrefix . $boundary;
+        $marker = $v3MarkerPrefix . $boundary;
         $insert = $pdo->prepare('INSERT INTO schema_migrations(migration,checksum) VALUES(?,?)');
-        $insert->execute([$marker, $v2Checksum]);
+        $insert->execute([$marker, $v3Checksum]);
     }
 
     $check = $pdo->prepare("SELECT COUNT(*) FROM feo_placement_blocks WHERE id<=? AND (created_by_user_id<>? OR created_by_user_id IS NULL OR COALESCE(created_by_role,'')<>?)");
@@ -130,7 +140,7 @@ try {
         (string)$owner['login'],
         $updated,
         $marker,
-        $v2Checksum
+        $v3Checksum
     );
 } catch (Throwable $e) {
     if ($pdo->inTransaction()) $pdo->rollBack();

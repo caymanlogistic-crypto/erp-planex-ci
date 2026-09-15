@@ -132,6 +132,14 @@ jobs:
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_author_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
             "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/feo_author_verify_${GITHUB_RUN_ID}.php'" | tee feo_author_before.txt
           grep -q '^FEO_AUTHOR_BACKFILL_READ_ONLY_OK$' feo_author_before.txt
+          python3 - <<'PY' >> "$GITHUB_ENV"
+          import json,re
+          text=open('feo_author_before.txt',encoding='utf-8').read()
+          snap=json.loads(re.search(r'^FEO_AUTHOR_BACKFILL_SNAPSHOT=(.+)$',text,re.M).group(1))
+          boundary=snap['historical_boundary']
+          if not isinstance(boundary,int) or boundary<=0: raise SystemExit('invalid snapshot boundary')
+          print(f'FEO_AUTHOR_EXPECTED_BOUNDARY={boundary}')
+          PY
 
       - name: Apply one-time existing-block backfill
         env:
@@ -142,7 +150,7 @@ jobs:
         run: |
           set -euo pipefail
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_author_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/feo_author_backfill_${GITHUB_RUN_ID}.php'" | tee feo_author_apply.txt
+            "PLANEX_ROOT='$LIVE_ROOT' FEO_AUTHOR_EXPECTED_BOUNDARY='$FEO_AUTHOR_EXPECTED_BOUNDARY' /usr/bin/php8.5 '/tmp/feo_author_backfill_${GITHUB_RUN_ID}.php'" | tee feo_author_apply.txt
           grep -q '^FEO_AUTHOR_BACKFILL_OK ' feo_author_apply.txt
           grep -qi ' login=spugov ' feo_author_apply.txt
 

@@ -17,6 +17,8 @@ $v1MarkerPrefix = 'feo_placement_author_backfill_20260912_max_';
 $v1Checksum = hash('sha256', 'feo-placement-author-backfill-v1|login=Spugov|scope=existing-blocks-only');
 $v2MarkerPrefix = 'feo_placement_author_backfill_20260912_v2_max_';
 $v2Checksum = hash('sha256', 'feo-placement-author-backfill-v2|login=Spugov|identity=central_company_user|role=company_owner|scope=existing-v1-boundary');
+$v3MarkerPrefix = 'feo_placement_author_backfill_20260915_v3_max_';
+$v3Checksum = hash('sha256', 'feo-placement-author-backfill-v3|login=Spugov|identity=central_company_user|role=company_owner|scope=owner-all-existing-20260915');
 
 $connect = static function(array $cfg): PDO {
     return new PDO(
@@ -76,11 +78,12 @@ $owner = $target['owner'];
 $pdo = $connect($target['cfg']);
 
 [$legacyMarker, $legacyBoundary, $legacyChecksumOk] = $markerInfo($singleMarker($pdo, $v1MarkerPrefix), $v1MarkerPrefix, $v1Checksum);
-[$marker, $boundary, $markerChecksumOk] = $markerInfo($singleMarker($pdo, $v2MarkerPrefix), $v2MarkerPrefix, $v2Checksum);
+[$v2Marker, $v2Boundary, $v2ChecksumOk] = $markerInfo($singleMarker($pdo, $v2MarkerPrefix), $v2MarkerPrefix, $v2Checksum);
+[$marker, $boundary, $markerChecksumOk] = $markerInfo($singleMarker($pdo, $v3MarkerPrefix), $v3MarkerPrefix, $v3Checksum);
 
-$blocks = $pdo->query('SELECT id,name,block_type,status,source_type,source_filename,source_file_key,created_at FROM feo_placement_blocks ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+$blocks = $pdo->query('SELECT id,name,block_type,status,source_type,source_filename,source_file_key,created_at,updated_at FROM feo_placement_blocks ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
 $blockMaxId = $blocks === [] ? 0 : max(array_map(static fn(array $row): int => (int)$row['id'], $blocks));
-$historicalBoundary = $boundary ?? $legacyBoundary ?? $blockMaxId;
+$historicalBoundary = $boundary ?? $blockMaxId;
 $members = $tableExists($pdo, 'feo_placement_block_requests') ? $pdo->query('SELECT block_id,zayavka_id,position_no FROM feo_placement_block_requests ORDER BY block_id,position_no,id')->fetchAll(PDO::FETCH_ASSOC) : [];
 $current = $tableExists($pdo, 'feo_placement_current') ? $pdo->query('SELECT zayavka_id,source_block_id FROM feo_placement_current ORDER BY zayavka_id')->fetchAll(PDO::FETCH_ASSOC) : [];
 $semanticHash = hash('sha256', json_encode([$blocks,$members,$current], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_THROW_ON_ERROR));
@@ -126,6 +129,9 @@ $snapshot = [
     'legacy_marker'=>$legacyMarker,
     'legacy_marker_boundary'=>$legacyBoundary,
     'legacy_marker_checksum_ok'=>$legacyChecksumOk,
+    'v2_marker'=>$v2Marker,
+    'v2_marker_boundary'=>$v2Boundary,
+    'v2_marker_checksum_ok'=>$v2ChecksumOk,
     'marker'=>$marker,
     'marker_boundary'=>$boundary,
     'marker_checksum_ok'=>$markerChecksumOk,
