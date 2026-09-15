@@ -43,6 +43,8 @@ foreach ([
 ] as $needle) {
     $ok(str_contains($script, $needle), 'Script contract missing: ' . $needle);
 }
+$ok(str_contains($script, 'finance_operation_allocations WHERE operation_id=?'), 'Allocation downstream guard must use canonical operation_id column');
+$ok(!str_contains($script, 'finance_operation_allocations WHERE finance_operation_id=?'), 'Allocation downstream guard must not use nonexistent finance_operation_id column');
 
 $ok(str_contains($production, 'workflow_dispatch:'), 'Production reconciliation must be manual-only');
 $ok(!preg_match('/^\s*(push|pull_request|schedule|workflow_run)\s*:/m', $production), 'Production reconciliation has an automatic trigger');
