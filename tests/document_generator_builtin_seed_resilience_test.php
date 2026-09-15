@@ -2,6 +2,7 @@
 if (PHP_SAPI !== 'cli') { http_response_code(404); exit; }
 $root=dirname(__DIR__);
 require_once $root.'/bootstrap/app.php';
+require_once $root.'/app/Support/company_database.php';
 require_once $root.'/app/Service/DocumentService.php';
 require_once $root.'/app/Service/DocumentTemplateService.php';
 require_once $root.'/app/Service/DocumentGeneratorService.php';
@@ -16,11 +17,14 @@ $port=(int)(getenv('PLANEX_SCHEMA_DB_PORT')?:3306);
 $user=getenv('PLANEX_SCHEMA_DB_USER')?:'planex_ci';
 $pass=getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'planex_ci';
 $admin=new PDO("mysql:host=$host;port=$port;charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
-$db='planex_docgen_seed_'.getmypid().'_'.bin2hex(random_bytes(2));
-$qd='`'.$db.'`';
+$fixedDb=trim((string)getenv('PLANEX_TEST_FIXED_DB'));$ownsDatabase=$fixedDb==='';
+$fixedAllow=array_filter(array_map('trim',explode(',',(string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST'))));
+if(!$ownsDatabase&&(getenv('APP_ENV')!=='test'||!in_array($fixedDb,$fixedAllow,true)))$fail('guarded fixed DB required');
+$db=$ownsDatabase?'planex_docgen_seed_'.getmypid().'_'.bin2hex(random_bytes(2)):$fixedDb;
+$qd=companyDbQuoteIdentifier($db);
 $cid=88901;
 $store=storage_path("companies/$cid/document-generator");
-$admin->exec("CREATE DATABASE $qd CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+if($ownsDatabase)$admin->exec("CREATE DATABASE $qd CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
 
 $rm=function(string $p)use(&$rm){if(!file_exists($p))return;if(!is_dir($p)||is_link($p)){@unlink($p);return;}foreach(array_diff(scandir($p)?:[],['.','..'])as$n)$rm($p.DIRECTORY_SEPARATOR.$n);@rmdir($p);};
 $parts=function(string $name)use($root,$fail){$p=glob($root.'/resources/document-templates/'.$name.'.b64.part*')?:[];sort($p,SORT_STRING);if($p===[])$fail('parts '.$name);return$p;};
@@ -30,6 +34,7 @@ $restore=function(array $s)use($rm){[$dir,$dst]=$s;foreach($dst as$p){$src=$dir.
 
 try{
     $pdo=new PDO("mysql:host=$host;port=$port;dbname=$db;charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
+    if(!$ownsDatabase)cleanCompanyPoolDatabase($pdo);
     $pdo->exec('CREATE TABLE crews(id INT UNSIGNED PRIMARY KEY) ENGINE=InnoDB');
     $pdo->exec('INSERT INTO crews VALUES(1)');
     foreach(preg_split('/;\s*(?:\R|$)/',(string)file_get_contents($root.'/database/migrations-local/127_create_document_generator.sql'))?:[]as$s){$s=trim($s);if($s!=='')$pdo->exec($s);}
@@ -99,4 +104,4 @@ try{
     App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
     $eq((int)$pdo->query("SELECT COUNT(*) FROM document_templates WHERE document_type='client_act'")->fetchColumn(),1,'G client act recovered');$eq(count($rows()),5,'G all built-ins recovered');$eq(count($warnings()),0,'G warnings cleared');$renderSaved('client_act');
     echo "SEED_CASE_G=PASS\nDOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS\n";
-}finally{$rm($store);try{$admin->exec("DROP DATABASE IF EXISTS $qd");}catch(Throwable){}}
+}finally{$rm($store);try{if($ownsDatabase)$admin->exec("DROP DATABASE IF EXISTS $qd");elseif(isset($pdo))cleanCompanyPoolDatabase($pdo);}catch(Throwable){}}

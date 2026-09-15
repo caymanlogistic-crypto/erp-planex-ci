@@ -27,6 +27,12 @@ WASTE_TESTS=["tests/"+name+".php" for name in (
     "waste_trip_legacy_mapping_test", "waste_trip_synchronization_mysql_test",
     "waste_trips_137_production_migration_contract_test", "waste_trips_137_migration_mysql_test",
 )]
+DOCGEN_TESTS=["tests/"+name+".php" for name in (
+    "document_generator_navigation_test", "document_generator_regression_test",
+    "document_generator_concurrency_test", "document_generator_129_production_migration_contract_test",
+    "document_generator_template_v2_production_contract_test", "document_generator_template_v3_production_contract_test",
+    "document_generator_builtin_seed_resilience_test", "document_generator_deploy_artifact_test",
+)]
 class PreflightEnvironmentError(RuntimeError): pass
 
 def caprun(cmd,env=None): return subprocess.run(cmd,cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -65,6 +71,9 @@ def plan(cls,paths,scopes):
         out.append("MAX_REGRESSIONS")
     if scopes["tenant_schema"] or any(re.search(r"(?:/WasteTrip|/waste_trip|/company_waste_trip)", p) for p in paths):
         out.append("WASTE_TRIPS_REGRESSIONS")
+    # Document generation consumes WasteTripService and its tenant schema.
+    if scopes["tenant_schema"] or any(re.search(r"(?:/WasteTrip|/waste_trip|/Document|/document_generator|/company_document_generator|resources/document-templates/)", p) for p in paths):
+        out.append("DOCUMENT_GENERATOR_REGRESSIONS")
     if any(p.startswith("app/Http/Routes/") or p.startswith("tests/roles_access_") for p in paths):
         out.append("ROLES_ROUTE_REGISTRY")
     if scopes["control_plane"]: out.append("CONTROL_PLANE_PREFLIGHT_CONTRACTS")
@@ -165,11 +174,12 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
     if "MIGRATION_INTEGRITY" in want: migration_integrity(results)
     if "MIGRATION_NORMALIZATION" in want: migrations_normalized(results)
     if TENANT in want: tenant_check(results)
-    for check, tests in [("MAX_REGRESSIONS",MAX_TESTS),("WASTE_TRIPS_REGRESSIONS",WASTE_TESTS)]:
+    for check, tests in [("MAX_REGRESSIONS",MAX_TESTS),("WASTE_TRIPS_REGRESSIONS",WASTE_TESTS),("DOCUMENT_GENERATOR_REGRESSIONS",DOCGEN_TESTS)]:
         if check in want:
             env=os.environ.copy(); env["APP_ENV"]="test"
             # Never let a caller's skip switch turn required MySQL coverage green.
             env.pop("PLANEX_SKIP_MYSQL",None)
+            if check == "DOCUMENT_GENERATOR_REGRESSIONS": env["PLANEX_DOCGEN_REQUIRE_RUNTIME"]="1"
             for t in tests: need(t); cmdcheck(results,check,["php",t],env)
     if "ROLES_ROUTE_REGISTRY" in want:
         cmdcheck(results,"ROLES_ROUTE_REGISTRY",["python3","tests/roles_access_route_registry_test.py"])
