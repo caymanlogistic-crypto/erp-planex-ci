@@ -187,7 +187,7 @@ $snapshot = static function (PDO $pdo) use ($transactionId, $marker, $closingRow
 
     $bankAllocationCount = 0;
     if ($tableExists($pdo, 'finance_operation_allocations')) {
-        $q = $pdo->prepare('SELECT COUNT(*) FROM finance_operation_allocations WHERE finance_operation_id=?');
+        $q = $pdo->prepare('SELECT COUNT(*) FROM finance_operation_allocations WHERE operation_id=?');
         $q->execute([(int)$bankOp['id']]);
         $bankAllocationCount = (int)$q->fetchColumn();
     }
