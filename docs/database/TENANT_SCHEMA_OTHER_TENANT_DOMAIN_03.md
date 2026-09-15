@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `0bfa3a792a1876b1d6b00b02804f40432a97efe1be014414eea312c980d8e57a`
+**Schema fingerprint:** `e8e789dd44ae480a649243a3480605b0a9d5f96983ef15883dad4e406731f1ee`
 
 ## `max_message_logs`
 
@@ -196,7 +196,7 @@
 | `responsible_user_id` | `int unsigned` | NO | NULL | — | `MUL` |
 | `destination_type` | `enum('utilizer','warehouse')` | NO | NULL | — | — |
 | `utilizer_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
-| `status` | `enum('searching_executor','executor_assigned','in_progress','completed','cancelled')` | NO | `searching_executor` | — | `MUL` |
+| `status` | `enum('planned_route','searching_executor','executor_assigned','in_progress','completed','cancelled')` | NO | `searching_executor` | — | `MUL` |
 | `planned_start_mode` | `enum('exact','range','unspecified')` | NO | `unspecified` | — | — |
 | `planned_start_date` | `date` | YES | NULL | — | `MUL` |
 | `planned_start_date_from` | `date` | YES | NULL | — | — |
@@ -222,6 +222,7 @@
 | `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
 | `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 | `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+| `deleted_at` | `datetime` | YES | NULL | — | `MUL` |
 
 ### Indexes / constraints
 
@@ -229,6 +230,7 @@
 - **INDEX** `idx_waste_trips_client` (`client_id`, `id`)
 - **INDEX** `idx_waste_trips_creator_membership` (`created_by_membership_id`)
 - **INDEX** `idx_waste_trips_dates` (`planned_start_date`, `planned_start_date_from`, `planned_start_date_to`)
+- **INDEX** `idx_waste_trips_deleted` (`deleted_at`, `business_id`)
 - **INDEX** `idx_waste_trips_executor` (`route_executor_id`, `id`)
 - **INDEX** `idx_waste_trips_responsible` (`responsible_user_id`, `id`)
 - **INDEX** `idx_waste_trips_status` (`status`, `id`)

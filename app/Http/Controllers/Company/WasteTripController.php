@@ -7,7 +7,7 @@ use App\Service\AccessControlService;
 use App\Service\EntityResponsibilityService;
 use App\Service\LinearRouteService;
 use App\Service\WasteTripIncidentService;
-use App\Service\WasteTripLegacyPrefillService;
+use App\Service\WasteTripSynchronizationService;
 use App\Service\WasteTripLegacySourceService;
 use App\Service\WasteTripCustomerPaymentService;
 use App\Service\WasteTripCarrierPaymentService;
@@ -30,10 +30,11 @@ final class WasteTripController
         $isFinanceRealm=(string)($sessionUser['role_code']??'')==='company_owner';
         $pageTitle='Перевозка отходов'; $pageContext='Рейсы › Перевозка отходов'; $dbError=$context['error'];
         $trips=$clients=$routeExecutors=$responsibleUsers=$utilizers=[];
+        $syncResult=$_SESSION['waste_trip_sync_result']??null; unset($_SESSION['waste_trip_sync_result']);
         $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; $old=$_SESSION['waste_trip_old']??[];
         unset($_SESSION['waste_trip_error'],$_SESSION['waste_trip_success'],$_SESSION['waste_trip_old']);
         if ($company!==null && $localPdo instanceof PDO && $dbError===null) {
-            if (!WasteTripService::schemaReady($localPdo)) $dbError='Модуль ожидает актуальную схему Waste Trips, включая migration 134.';
+            if (!WasteTripService::schemaReady($localPdo)) $dbError='Модуль ожидает обновление схемы рейсов (136).';
             else try {
                 $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','q'=>$_GET['q']??''],$isFinanceRealm);
                 $trips=array_values(array_filter($trips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
@@ -70,56 +71,26 @@ final class WasteTripController
         try {
             $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
             $parsed=WasteTripService::parseRequestIds((string)($_POST['request_ids']??'')); $this->assertParsedRequests($parsed);
-            $legacyScope=(string)($_POST['preview_scope']??'')==='legacy';
-            $preview=WasteTripService::previewSelection($pdo,$parsed['ids'],!$legacyScope); $preview['success']=$preview['missing']===[]&&$preview['occupied']===[]&&$preview['found_count']>0;
+
+            $preview=WasteTripService::previewSelection($pdo,$parsed['ids']); $preview['success']=$preview['missing']===[]&&$preview['occupied']===[]&&$preview['found_count']>0;
             echo json_encode($preview,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
         } catch(Throwable $e) { http_response_code(422); echo json_encode(['success'=>false,'message'=>$this->publicError($e,'Не удалось проверить заявки.')],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES); }
     }
 
-    public function legacyIndex(): void
+    public function synchronizeSubmit(): void
     {
-        requireRole(['company_owner','senior_logist','logist']); $context=$this->tenantContext(false);
-        $company=$context['company'];$localPdo=$context['localPdo'];$sessionUser=$context['sessionUser'];$central=$context['central'];$companyId=(int)$context['companyId'];$currentMembershipId=AccessControlService::effectiveMembershipId()??0;$isFinanceRealm=(string)($sessionUser['role_code']??'')==='company_owner';
-        $clients=$routeExecutors=$responsibleUsers=$utilizers=[];
-        $pageTitle='Рейсы из старой БД'; $pageContext='Рейсы › Перевозка отходов › Рейсы из старой БД'; $legacyRows=[]; $legacyError=$context['error']; $legacyWarning=null;
-        if($company!==null&&$localPdo instanceof PDO&&$central instanceof PDO&&$legacyError===null){
-            try {
-                $this->assertSchemaReady($localPdo);[$clients,$routeExecutors,$responsibleUsers,$utilizers]=$this->loadOptions($localPdo,$sessionUser,$central,$companyId);
-                $legacyPdo=WasteTripLegacySourceService::connectionFromEnvironment();
-                if (!$legacyPdo instanceof PDO) $legacyError='Legacy flights DB не настроена.';
-                else { $diagnostic=WasteTripService::legacyRangeDiagnostic($legacyPdo); $legacyWarning=$diagnostic['warning']; $legacyRows=WasteTripLegacySourceService::listCatalog($legacyPdo,$localPdo,300); }
-            } catch(Throwable $e) { error_log('waste legacy catalog failed: '.$e->getMessage()); $legacyError=$this->publicError($e,'Не удалось загрузить рейсы из старой БД.'); }
-        }
-        $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; $old=$_SESSION['waste_trip_old']??[];
-        unset($_SESSION['waste_trip_error'],$_SESSION['waste_trip_success'],$_SESSION['waste_trip_old']);
-        ob_start(); require base_path('app/View/pages/company_waste_trip_legacy.php'); $content=(string)ob_get_clean();
-        $config=$this->config; $db=$this->db; require base_path('app/View/layouts/main.php');
-    }
-
-    public function materializeSubmit(string $legacyId): void
-    {
-        requireRole(['company_owner','senior_logist','logist']); $stage='tenant_context'; $context=$this->tenantContext(true); $id=(int)$legacyId;
+        requireRole(['company_owner']);
+        $context = $this->tenantContext(false);
         try {
-            $stage='schema';
-            $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
-            $stage='request_parse';
-            $parsed=WasteTripService::parseRequestIds((string)($_POST['request_ids']??'')); $this->assertParsedRequests($parsed);
-            $stage='manager_resolution';
-            $input=$this->resolveResponsibleInput($context,$_POST);
-            $stage='customer_payments';
-            $customerPayments=$this->customerPaymentsForSession($_POST,$context['sessionUser']);
-            $stage='carrier_payments';
-            $carrierPayments=$this->carrierPaymentsForSession($_POST,$context['sessionUser']);
-            $stage='legacy_connection';
-            $legacy=WasteTripLegacySourceService::connectionFromEnvironment(); if (!$legacy instanceof PDO) throw new RuntimeException('Legacy flights DB не настроена.');
-            $stage='legacy_write';
-            $businessId=WasteTripLegacyPrefillService::createFromLegacyPrefill($legacy,$pdo,$id,$input,$parsed['ids'],$context['sessionUser'],$customerPayments,$carrierPayments);
-            $_SESSION['waste_trip_success']='Legacy-рейс #'.$id.' создан как ERP-рейс #'.$businessId.'.';
-        } catch(Throwable $e) {
-            $_SESSION['waste_trip_error']='Legacy #'.$id.': '.$this->publicError($e,'Создание рейса не выполнено.',['operation'=>'legacy_materialize','legacy_id'=>$id,'stage'=>$stage,'company_id'=>(int)($context['companyId']??0),'actor_user_id'=>(int)($context['sessionUser']['user_id']??0),'actor_membership_id'=>AccessControlService::effectiveMembershipId()??0,'actor_role'=>(string)($context['sessionUser']['role_code']??'')]);
-            $_SESSION['waste_trip_old']=$_POST+['_legacy_id'=>$id];
+            $pdo = $this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
+            $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
+            if (!$legacy instanceof PDO) throw new RuntimeException('Подключение к старой БД не настроено.');
+            $result = WasteTripSynchronizationService::run($legacy,$pdo,$context['central'],(int)$context['companyId'],$context['sessionUser']);
+            $_SESSION['waste_trip_sync_result'] = $result;
+        } catch (Throwable $error) {
+            $_SESSION['waste_trip_error'] = $this->publicError($error,'Синхронизация не выполнена.');
         }
-        header('Location: '.app_url('/company/trips/departures/legacy')); exit;
+        header('Location: '.app_url('/company/trips/departures')); exit;
     }
 
     public function modalView(string $id): void
@@ -180,7 +151,7 @@ final class WasteTripController
     private function requireTenantPdo(array $context): PDO
     { if(!($context['localPdo']??null) instanceof PDO)throw new RuntimeException((string)($context['error']??'База данных компании недоступна.')); return $context['localPdo']; }
     private function assertSchemaReady(PDO $pdo): void
-    { if(!WasteTripService::schemaReady($pdo))throw new RuntimeException('Схема Waste Trips не готова: требуется завершённый controlled cutover migration 130.'); }
+    { if(!WasteTripService::schemaReady($pdo))throw new RuntimeException('Схема рейсов не готова: требуется обновление 136.'); }
     private function assertParsedRequests(array $parsed): void
     { if(($parsed['invalid']??[])!==[])throw new RuntimeException('Некорректные номера заявок: '.implode(', ',$parsed['invalid']).'.'); if(($parsed['duplicates']??[])!==[])throw new RuntimeException('В списке повторяются заявки: '.implode(', ',$parsed['duplicates']).'.'); }
     private function publicError(Throwable $e,string $fallback,array $context=[]): string

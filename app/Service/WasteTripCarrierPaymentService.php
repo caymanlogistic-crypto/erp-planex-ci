@@ -152,6 +152,42 @@ final class WasteTripCarrierPaymentService
         return number_format(intdiv($cents, 100), 0, ',', ' ') . ' ₽';
     }
 
+    /** One source total; existing single-payment terms stay owned by ERP. */
+    public static function synchronizeCost(PDO $pdo, int $tripId, ?string $amount, ?string $terms, array $actor): void
+    {
+        if (!$pdo->inTransaction()) throw new RuntimeException('Ставка синхронизируется в транзакции рейса.');
+        $old = self::fetchForTrip($pdo,$tripId);
+        $cents = static fn(string $value): int => (int)str_replace('.', '', $value);
+        $total = array_sum(array_map(static fn(array $row): int => $cents((string)$row['amount']), $old));
+        // Retain an existing installment schedule when it already equals the source total.
+        if ($amount !== null && $old !== [] && $total === $cents($amount)) return;
+        if ($amount === null) {
+            $pdo->prepare('DELETE FROM waste_trip_carrier_payments WHERE waste_trip_id=?')->execute([$tripId]);
+        } elseif (count($old) === 1) {
+            $pdo->prepare('UPDATE waste_trip_carrier_payments SET amount=?,updated_by_user_id=?,updated_by_role=? WHERE id=?')->execute([$amount,$actor['user_id'],$actor['role_code'],$old[0]['id']]);
+        } else {
+            // An aggregate source price has no installment dates or tax/payment method.
+            // Keep the first row identity/sort key; audit retains the former schedule.
+            $first = $old[0] ?? null;
+            if ($first !== null) {
+                $removedIds = array_map('intval',array_column(array_slice($old,1),'id'));
+                $marks = implode(',',array_fill(0,count($removedIds),'?'));
+                $linked = $pdo->prepare("SELECT COUNT(*) FROM finance_obligations o WHERE o.source_type='WASTE_TRIP_CARRIER_PAYMENT' AND o.source_parent_type='WASTE_TRIP' AND o.source_parent_id=? AND o.source_id IN ({$marks}) AND (
+                    EXISTS(SELECT 1 FROM finance_operation_allocations a JOIN finance_operations op ON op.id=a.operation_id WHERE a.obligation_id=o.id AND a.cancelled_at IS NULL AND op.status='POSTED')
+                    OR EXISTS(SELECT 1 FROM finance_invoice_links l WHERE l.obligation_id=o.id))");
+                $linked->execute(array_merge([$tripId],$removedIds));
+                if ((int)$linked->fetchColumn() > 0) throw new RuntimeException('Ставка отличается от старой БД, а разбивка оплаты связана со счетами или проведёнными платежами. Требуется согласовать разбивку оплаты.');
+                $pdo->prepare("UPDATE waste_trip_carrier_payments SET amount=?,payment_type='',payment_method='',vat_rate=NULL,condition_type='',days_count=NULL,days_kind=NULL,specific_due_date=NULL,condition_comment=?,updated_by_user_id=?,updated_by_role=? WHERE id=?")
+                    ->execute([$amount,$terms,$actor['user_id'],$actor['role_code'],$first['id']]);
+                $pdo->prepare('DELETE FROM waste_trip_carrier_payments WHERE waste_trip_id=? AND id<>?')->execute([$tripId,$first['id']]);
+            } else {
+                $pdo->prepare("INSERT INTO waste_trip_carrier_payments (waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type,condition_comment,created_by_user_id,created_by_role,updated_by_user_id,updated_by_role) VALUES (?,1,?,'','','',?,?,?,?,?)")
+                    ->execute([$tripId,$amount,$terms,$actor['user_id'],$actor['role_code'],$actor['user_id'],$actor['role_code']]);
+            }
+        }
+        LinearRouteService::logFinanceAudit($pdo,'waste_trip',$tripId,'carrier_payments_update',['payments'=>$old],['payments'=>self::fetchForTrip($pdo,$tripId),'source'=>'legacy_sync'],(int)$actor['user_id'],(string)$actor['role_code']);
+    }
+
     public static function detail(array $payment): string
     {
         $parts = [number_format((float) ($payment['amount'] ?? 0), 0, ',', ' ') . ' ₽'];
