@@ -5,7 +5,9 @@ require_once base_path('app/Service/WasteTripIncidentService.php');
 require_once base_path('app/Service/WasteTripCustomerPaymentService.php');
 require_once base_path('app/Service/WasteTripCarrierPaymentService.php');
 require_once base_path('app/Service/WasteTripService.php');
-require_once base_path('app/Service/WasteTripLegacyPrefillService.php');
+require_once base_path('app/Service/FeoUtilizerService.php');
+require_once base_path('app/Service/WasteTripLegacyMappingService.php');
+require_once base_path('app/Service/WasteTripSynchronizationService.php');
 require_once base_path('app/Service/WasteTripLegacySyncService.php');
 require_once base_path('app/Http/Controllers/Company/LinearTripController.php');
 require_once base_path('app/Http/Controllers/Company/WasteTripController.php');
@@ -25,9 +27,9 @@ $router->get('/company/trips/linear/cargo-types', [$controller, 'cargoTypes'], '
 $router->get('/company/trips/departures', [$wasteTripController, 'index'], 'company.trips.waste');
 $router->post('/company/trips/departures/preview', [$wasteTripController, 'previewSelection'], 'company.trips.waste');
 $router->post('/company/trips/departures/create', [$wasteTripController, 'createSubmit'], 'company.trips.waste');
-$router->get('/company/trips/departures/legacy', [$wasteTripController, 'legacyIndex'], 'company.trips.waste');
-$router->post('/company/trips/departures/legacy/{legacyId}/materialize', [$wasteTripController, 'materializeSubmit'], 'company.trips.waste');
 $router->get('/company/trips/departures/{id}/modal-view', [$wasteTripController, 'modalView'], 'company.trips.waste');
 $router->get('/company/trips/departures/{id}/modal-edit', [$wasteTripController, 'modalEditForm'], 'company.trips.waste');
 $router->post('/company/trips/departures/{id}/modal-edit', [$wasteTripController, 'modalEditSubmit'], 'company.trips.waste');
 $router->post('/company/trips/departures/{id}/cancel', [$wasteTripController, 'cancelSubmit'], 'company.trips.waste');
+
+$router->post('/company/trips/departures/synchronize', [$wasteTripController, 'synchronizeSubmit'], 'company.trips.waste');

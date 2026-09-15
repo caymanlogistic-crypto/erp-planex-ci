@@ -6,6 +6,8 @@ on:
       - chatgpt/production-stabilization-20260802
     paths:
       - 'app/Service/ContractorService.php'
+      - 'app/Service/WasteTrip*.php'
+      - 'database/migrations-local/*waste_trip*.sql'
       - 'app/Service/DocumentGenerator*.php'
       - 'app/Service/DocumentNumberSequenceService.php'
       - 'app/Service/DocumentTemplateService.php'
@@ -45,6 +47,8 @@ on:
       - chatgpt/production-stabilization-20260802
     paths:
       - 'app/Service/ContractorService.php'
+      - 'app/Service/WasteTrip*.php'
+      - 'database/migrations-local/*waste_trip*.sql'
       - 'app/Service/DocumentGenerator*.php'
       - 'app/Service/DocumentNumberSequenceService.php'
       - 'app/Service/DocumentTemplateService.php'
@@ -199,6 +203,7 @@ jobs:
             DOCUMENT_GENERATOR_WAYBILL_DOCX=PASS \
             DOCUMENT_GENERATOR_HISTORY_SNAPSHOT=PASS \
             DOCUMENT_GENERATOR_TRIP_SOURCE=PASS \
+            DOCUMENT_GENERATOR_DELETED_TRIP=PASS \
             DOCUMENT_GENERATOR_CLIENT_PACKAGE=PASS \
             DOCUMENT_GENERATOR_CLIENT_PACKAGE_DOCX=PASS \
             DOCUMENT_GENERATOR_CLIENT_PACKAGE_IMMUTABLE=PASS \

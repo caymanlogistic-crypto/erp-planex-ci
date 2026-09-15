@@ -9,6 +9,7 @@ if (PHP_SAPI !== 'cli') {
 
 $repoRoot = getenv('PLANEX_REPO_ROOT') ?: dirname(__DIR__);
 require_once $repoRoot . '/app/Service/DocumentNumberSequenceService.php';
+require_once $repoRoot . '/app/Support/company_database.php';
 
 use App\Service\DocumentNumberSequenceService;
 
@@ -40,9 +41,15 @@ $admin = new PDO($dsn, $user, $pass, [
     PDO::ATTR_EMULATE_PREPARES => false,
 ]);
 
-$db = 'planex_docgen_race_' . getmypid() . '_' . bin2hex(random_bytes(3));
-$quotedDb = '`' . $db . '`';
-$admin->exec("CREATE DATABASE {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
+$fixedDb = trim((string)getenv('PLANEX_TEST_FIXED_DB'));
+$ownsDatabase = $fixedDb === '';
+$fixedAllow = array_filter(array_map('trim', explode(',', (string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST'))));
+if (!$ownsDatabase && (getenv('APP_ENV') !== 'test' || !in_array($fixedDb, $fixedAllow, true))) {
+    $fail('guarded fixed DB required');
+}
+$db = $ownsDatabase ? 'planex_docgen_race_' . getmypid() . '_' . bin2hex(random_bytes(3)) : $fixedDb;
+$quotedDb = companyDbQuoteIdentifier($db);
+if ($ownsDatabase) $admin->exec("CREATE DATABASE {$quotedDb} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci");
 $tmp = sys_get_temp_dir() . '/planex_docgen_race_' . getmypid() . '_' . bin2hex(random_bytes(4));
 mkdir($tmp, 0700, true);
 
@@ -61,6 +68,7 @@ try {
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_EMULATE_PREPARES => false,
     ]);
+    if (!$ownsDatabase) cleanCompanyPoolDatabase($pdo);
     $pdo->exec("CREATE TABLE document_number_sequences (
         sequence_key VARCHAR(64) NOT NULL PRIMARY KEY,
         prefix VARCHAR(16) NOT NULL,
@@ -142,7 +150,8 @@ PHPCHILD;
 } finally {
     $cleanup($tmp);
     try {
-        $admin->exec("DROP DATABASE IF EXISTS {$quotedDb}");
+        if ($ownsDatabase) $admin->exec("DROP DATABASE IF EXISTS {$quotedDb}");
+        elseif (isset($pdo)) cleanCompanyPoolDatabase($pdo);
     } catch (Throwable) {
     }
 }

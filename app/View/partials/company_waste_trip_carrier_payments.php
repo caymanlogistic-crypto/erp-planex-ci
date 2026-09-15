@@ -45,6 +45,7 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
                     <div class="field">
                         <label class="field-label">Способ оплаты <span class="req">*</span></label>
                         <select name="<?= e($fieldBase) ?>[payment_method]" class="field-input">
+                            <?php if($paymentMethod===''||$paymentMethod==='unknown'):?><option value="unknown" selected>Не указан</option><?php endif;?>
                             <?php foreach (LinearRouteService::PAYMENT_METHODS as $value => $label): ?>
                                 <option value="<?= e($value) ?>" <?= $paymentMethod === $value ? 'selected' : '' ?>><?= e($label) ?></option>
                             <?php endforeach; ?>
@@ -54,8 +55,9 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
                     <div class="field">
                         <label class="field-label">НДС <span class="req">*</span></label>
                         <select name="<?= e($fieldBase) ?>[vat_rate]" class="field-input">
+                            <?php if(($payment['payment_type']??null)===''||$vatRate==='unknown'):?><option value="unknown" selected>Не указан</option><?php endif;?>
                             <?php foreach ($vatRateOptions as $value): ?>
-                                <option value="<?= e($value) ?>" <?= $vatRate === $value ? 'selected' : '' ?>><?= e($value === '' ? 'Без НДС' : 'НДС ' . $value . '%') ?></option>
+                                <option value="<?= e($value) ?>" <?= $vatRate === $value && ($payment['payment_type']??null)!=='' ? 'selected' : '' ?>><?= e($value === '' ? 'Без НДС' : 'НДС ' . $value . '%') ?></option>
                             <?php endforeach; ?>
                         </select>
                         <div class="field-msg"></div>

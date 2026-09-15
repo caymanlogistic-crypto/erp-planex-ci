@@ -22,7 +22,6 @@ $ok = static function (bool $value, string $message) use ($fail): void {
 $migration = (string) file_get_contents($root . '/database/migrations-local/134_create_waste_trip_customer_payments.sql');
 $controller = (string) file_get_contents($root . '/app/Http/Controllers/Company/WasteTripController.php');
 $page = (string) file_get_contents($root . '/app/View/pages/company_waste_trips.php');
-$legacyPage = (string) file_get_contents($root . '/app/View/pages/company_waste_trip_legacy.php');
 $viewModal = (string) file_get_contents($root . '/app/View/partials/company_waste_trip_modal_view.php');
 $paymentPartial = (string) file_get_contents($root . '/app/View/partials/company_waste_trip_customer_payments.php');
 $routeBootstrap = (string) file_get_contents($root . '/app/Http/Routes/company_linear_trips.php');
@@ -40,7 +39,6 @@ foreach (['customerPaymentsForSession', "==='company_owner'", 'WasteTripCustomer
 foreach (['ЗАКАЗЧИК', 'СТАВКА ЗАКАЗЧИКА', 'СТАВКА ПЕРЕВОЗЧИКА', 'customer_payments', 'company_waste_trip_customer_payments.php', 'company_waste_trip_carrier_payments.php'] as $needle) {
     $ok(str_contains($page, $needle), 'registry/create UI missing ' . $needle);
 }
-$ok(str_contains($legacyPage, 'company_waste_trip_customer_payments.php'), 'legacy-prefill create must use the same customer payment block');
 foreach (['Условия оплаты заказчика', 'WasteTripCustomerPaymentService::total', 'WasteTripCustomerPaymentService::detail'] as $needle) {
     $ok(str_contains($viewModal, $needle), 'view modal finance block missing ' . $needle);
 }
