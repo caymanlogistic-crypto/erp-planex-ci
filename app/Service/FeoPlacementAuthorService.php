@@ -10,6 +10,20 @@ final class FeoPlacementAuthorService
     {
     }
 
+    /** @return array{created_by_user_id:int,created_by_role:?string} */
+    public static function creatorFromSession(array $session): array
+    {
+        // The runtime refreshes role_code for legacy UI even for global accounts.
+        // It is not the ID namespace: account_id is the authoritative discriminator.
+        $accountId = (int)($session['account_id'] ?? 0);
+        $id = $accountId > 0 ? $accountId : (int)($session['user_id'] ?? 0);
+        if ($id <= 0) throw new \RuntimeException('Не удалось определить пользователя, создающего блок. Войдите в систему повторно.');
+        return [
+            'created_by_user_id' => $id,
+            'created_by_role' => $accountId > 0 ? null : (trim((string)($session['role_code'] ?? '')) ?: null),
+        ];
+    }
+
     /**
      * @param list<array<string,mixed>> $blocks
      * @return list<array<string,mixed>>

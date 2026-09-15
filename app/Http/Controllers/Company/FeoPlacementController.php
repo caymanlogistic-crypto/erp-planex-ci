@@ -134,13 +134,11 @@ final class FeoPlacementController
                 if (!rename($temp, $finalPath)) throw new \RuntimeException('Не удалось сохранить исходный файл блока.');
                 @chmod($finalPath, 0600);
             }
-            $actorId = (int)($_SESSION['user_id'] ?? 0);
-            if ($actorId <= 0) throw new \RuntimeException('Не удалось определить пользователя, создающего блок. Войдите в систему повторно.');
+            $creator = FeoPlacementAuthorService::creatorFromSession($_SESSION);
             $result = $this->placement->createBlock($pdo, [
                 'name'=>$preview['name'],'block_type'=>$preview['block_type'],'ids'=>$preview['ids'],
                 'source_type'=>$preview['source_type'],'source_filename'=>$preview['source_filename'],'source_file_key'=>$fileKey,
-                'created_by_user_id'=>$actorId,'created_by_role'=>(string)($_SESSION['role_code'] ?? ''),
-            ], (string)$preview['state_hash']);
+            ] + $creator, (string)$preview['state_hash']);
             unset($_SESSION['feo_placement_previews'][$token]);
             $_SESSION['flash_success'] = sprintf('Блок #%d применён. Актуальный состав: %d заявок, %s кг.', (int)$result['block_id'], (int)$result['current']['request_count'], $this->massText((float)$result['current']['total_mass_kg']));
             jsonResponse(['success'=>true] + $result);
