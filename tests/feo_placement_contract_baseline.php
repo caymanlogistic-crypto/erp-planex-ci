@@ -133,8 +133,8 @@ foreach ([
     'company_storage_path' => 'source files use company storage',
     'source_file_key' => 'saved source file key is persisted',
 ] as $needle => $label) $ok($label, str_contains($controller, $needle));
-$ok('block creator is taken only from authenticated session at commit time', str_contains($controller, "\$actorId = (int)(\$_SESSION['user_id'] ?? 0)") && str_contains($controller, "'created_by_user_id'=>\$actorId") && !str_contains($controller, "\$_POST['created_by_user_id']"));
-$ok('block creation fails closed when authenticated creator cannot be resolved', str_contains($controller, "if (\$actorId <= 0) throw new \\RuntimeException('Не удалось определить пользователя, создающего блок."));
+$ok('block creator is taken only from authenticated session at commit time', str_contains($controller, 'FeoPlacementAuthorService::creatorFromSession($_SESSION)') && str_contains($controller, '] + $creator,') && !str_contains($controller, "\$_POST['created_by_user_id']"));
+$ok('block creation fails closed when authenticated creator cannot be resolved', str_contains($authorService, "if (\$id <= 0) throw new \\RuntimeException('Не удалось определить пользователя, создающего блок."));
 $ok('block list is decorated with immutable creator identity for display', str_contains($controller, 'new FeoPlacementAuthorService') && str_contains($controller, "->decorate(\$pdo, (int)\$company['id'], \$state['blocks'])"));
 $ok('author directory distinguishes owner, tenant and global-account identities', str_contains($authorService, "\$role === 'company_owner'") && str_contains($authorService, "elseif (\$role === '')") && str_contains($authorService, 'SELECT id,full_name,login FROM users') && str_contains($authorService, 'SELECT id,full_name,login FROM company_users') && str_contains($authorService, 'SELECT id,full_name,login FROM user_accounts'));
 $ok('status changes do not overwrite immutable block creator', !preg_match('/UPDATE feo_placement_blocks SET[^\n]*created_by_/i', $service));
