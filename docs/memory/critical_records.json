@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c6591b6a581bdd16fcc220fe0fe5c226b281549b",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c6591b6a581bdd16fcc220fe0fe5c226b281549b/docs/database/TENANT_SCHEMA.md",
+      "verified_sha": "d0e88ecbb541312fca6464a9c10edc7832cc2e72",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d0e88ecbb541312fca6464a9c10edc7832cc2e72/docs/database/TENANT_SCHEMA.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
@@ -113,19 +113,19 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "334dd17f28f9753d7814e51fc87519ccb7aade15",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/334dd17f28f9753d7814e51fc87519ccb7aade15/tests/waste_trip_carrier_finance_regression_test.php",
+      "verified_sha": "d0e88ecbb541312fca6464a9c10edc7832cc2e72",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d0e88ecbb541312fca6464a9c10edc7832cc2e72/tests/waste_trip_synchronization_mysql_test.php",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
         "app/Http/Routes/company_linear_trips.php",
         "app/View/pages/company_waste_trip*.php",
         "app/View/partials/company_waste_trip*.php",
-        "database/migrations-local/128_create_waste_trips.sql",
-        "database/migrations-local/130_waste_trip_legacy_linked_cutover.sql",
         "scripts/waste_trip*.php",
         "tests/waste_trip*.php",
-        ".github/workflows/waste_trips*.yml"
+        ".github/workflows/waste_trips*.yml",
+        "database/migrations-local/*waste_trip*.sql",
+        "docs/WASTE_TRIP_SYNCHRONIZATION.md"
       ],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
