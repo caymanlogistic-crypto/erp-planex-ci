@@ -73,6 +73,75 @@ try {
     try { FeoPlacementAuthorService::creatorFromSession([]); } catch (RuntimeException) { $rejected = true; }
     $ok($rejected, 'missing session identity must reject creation');
 
+    // Execute the actual guarded backfill scripts against the disposable DB.
+    // Old journals must not cap the new OWNER-authorized scope at their boundary.
+    $pdo->exec("ALTER TABLE company_users ADD role VARCHAR(30) NOT NULL DEFAULT 'company_owner', ADD status VARCHAR(20) NOT NULL DEFAULT 'active'");
+    $pdo->exec("UPDATE company_users SET full_name='Спугов Владимир Владимирович',login='Spugov' WHERE id=20");
+    $pdo->exec("CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(100),db_host VARCHAR(255),db_port INT,db_username VARCHAR(255),db_password VARCHAR(1024))");
+    $companyInsert = $pdo->prepare("INSERT INTO companies VALUES(25,'Test','active',?,NULL,NULL,NULL,NULL)");
+    $companyInsert->execute([$dbName]);
+    $pdo->exec('CREATE TABLE schema_migrations(migration VARCHAR(255) PRIMARY KEY,checksum VARCHAR(64) NOT NULL)');
+    $journal = $pdo->prepare('INSERT INTO schema_migrations VALUES(?,?)');
+    $journal->execute(['feo_placement_author_backfill_20260912_max_2',hash('sha256','feo-placement-author-backfill-v1|login=Spugov|scope=existing-blocks-only')]);
+    $journal->execute(['feo_placement_author_backfill_20260912_v2_max_2',hash('sha256','feo-placement-author-backfill-v2|login=Spugov|identity=central_company_user|role=company_owner|scope=existing-v1-boundary')]);
+    $pdo->exec("UPDATE feo_placement_blocks SET updated_at='2020-01-01 00:00:00'");
+    $fixture = BASE_PATH . '/storage/tmp/feo-author-test-' . bin2hex(random_bytes(8));
+    $fixtureFiles = [];
+    $oldRoot = getenv('PLANEX_ROOT');
+    $oldBoundary = getenv('FEO_AUTHOR_EXPECTED_BOUNDARY');
+    try {
+        foreach (['bootstrap','app/Support','app/Service'] as $dir) mkdir($fixture . '/' . $dir, 0700, true);
+        foreach (['app/Support/crypto_helper.php','app/Support/company_database.php','app/Service/FeoPlacementAuthorService.php'] as $file) {
+            copy(BASE_PATH . '/' . $file, $fixture . '/' . $file);
+            $fixtureFiles[] = $fixture . '/' . $file;
+        }
+        file_put_contents($fixture . '/.env', '');
+        $fixtureFiles[] = $fixture . '/.env';
+        $bootstrap = '<?php require ' . var_export(BASE_PATH . '/bootstrap/app.php', true) . ';' . <<<'PHP'
+return ['database'=>[
+    'host'=>getenv('PLANEX_SCHEMA_DB_HOST'),'port'=>getenv('PLANEX_SCHEMA_DB_PORT'),
+    'database'=>getenv('PLANEX_TEST_FIXED_DB'),'username'=>getenv('PLANEX_SCHEMA_DB_USER'),
+    'password'=>getenv('PLANEX_SCHEMA_DB_PASSWORD'),
+]];
+PHP;
+        file_put_contents($fixture . '/bootstrap/app.php', $bootstrap);
+        $fixtureFiles[] = $fixture . '/bootstrap/app.php';
+        putenv('PLANEX_ROOT=' . $fixture);
+        $runScript = static function (string $script, bool $success = true) use ($ok): string {
+            $lines = [];
+            exec(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(BASE_PATH . '/scripts/' . $script) . ' 2>&1', $lines, $code);
+            $ok(($code === 0) === $success, $script . ' unexpected exit ' . $code . ': ' . implode("\n", $lines));
+            return implode("\n", $lines);
+        };
+        $snapshot = static function (string $output): array {
+            if (!preg_match('/^FEO_AUTHOR_BACKFILL_SNAPSHOT=(.+)$/m', $output, $match)) throw new RuntimeException('Snapshot missing');
+            return json_decode($match[1], true, 512, JSON_THROW_ON_ERROR);
+        };
+        $before = $snapshot($runScript('feo_placement_author_verify.php'));
+        $ok($before['historical_boundary'] === 4, 'new scope must include all existing blocks beyond v2');
+        putenv('FEO_AUTHOR_EXPECTED_BOUNDARY');
+        $runScript('feo_placement_author_backfill.php', false);
+        $ok((int)$pdo->query('SELECT COUNT(*) FROM schema_migrations')->fetchColumn() === 2, 'missing boundary must not write journal');
+        putenv('FEO_AUTHOR_EXPECTED_BOUNDARY=4');
+        $runScript('feo_placement_author_backfill.php');
+        $after = $snapshot($runScript('feo_placement_author_verify.php'));
+        $ok($after['placement_semantic_hash'] === $before['placement_semantic_hash'], 'backfill changed block business fields, timestamps, membership or current state');
+        $ok($after['historical_author_mismatch_count'] === 0 && $after['ui_author_mismatch_count'] === 0, 'all snapshot blocks must render as Spugov');
+        $ok($after['marker_boundary'] === 4 && $after['v2_marker_boundary'] === 2 && $after['legacy_marker_boundary'] === 2, 'new journal must preserve v1/v2 boundaries');
+        $pdo->exec("INSERT INTO feo_placement_blocks(id,block_type,created_by_user_id,created_by_role) VALUES(5,'addition',30,NULL)");
+        $retry = $runScript('feo_placement_author_backfill.php');
+        $ok(str_contains($retry, 'state=existing') && str_contains($retry, 'updated=0'), 'v3 repeat must be idempotent');
+        $ok((int)$pdo->query('SELECT created_by_user_id FROM feo_placement_blocks WHERE id=5')->fetchColumn() === 30, 'future blocks must keep their real creator');
+        $pdo->exec("UPDATE schema_migrations SET checksum=REPEAT('0',64) WHERE migration='feo_placement_author_backfill_20260915_v3_max_4'");
+        $runScript('feo_placement_author_backfill.php', false);
+        $ok((int)$pdo->query('SELECT created_by_user_id FROM feo_placement_blocks WHERE id=5')->fetchColumn() === 30, 'invalid journal must reject without changing authors');
+    } finally {
+        putenv($oldRoot === false ? 'PLANEX_ROOT' : 'PLANEX_ROOT=' . $oldRoot);
+        putenv($oldBoundary === false ? 'FEO_AUTHOR_EXPECTED_BOUNDARY' : 'FEO_AUTHOR_EXPECTED_BOUNDARY=' . $oldBoundary);
+        foreach ($fixtureFiles as $file) if (is_file($file)) unlink($file);
+        foreach (['app/Support','app/Service','app','bootstrap',''] as $dir) if (is_dir($fixture . '/' . $dir)) rmdir($fixture . '/' . $dir);
+    }
+
     echo "FEO_PLACEMENT_AUTHOR_MYSQL=PASS\n";
 } finally {
     cleanCompanyPoolDatabase($pdo);
