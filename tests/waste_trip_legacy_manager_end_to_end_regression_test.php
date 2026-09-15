@@ -71,7 +71,9 @@ $incidentLog=sys_get_temp_dir().'/waste_trip_manager_e2e_'.getmypid().'.jsonl';
 try{
     LocalMigrationService::apply($tenant);
     $latest=(string)$tenant->query('SELECT migration FROM schema_migrations ORDER BY id DESC LIMIT 1')->fetchColumn();
-    $ok($latest===WasteTripService::CARRIER_PAYMENTS_MIGRATION,'tenant must use full canonical schema');
+    $canonicalMigrations=glob($root.'/database/migrations-local/*.sql');
+    sort($canonicalMigrations,SORT_STRING);
+    $ok($latest===basename(end($canonicalMigrations)),'tenant must use full canonical schema');
 
     $central->exec("CREATE TABLE user_accounts(id BIGINT UNSIGNED PRIMARY KEY,full_name VARCHAR(255) NOT NULL,login VARCHAR(100) NOT NULL,email VARCHAR(255) NULL,phone VARCHAR(50) NULL,password_hash VARCHAR(255) NOT NULL,status VARCHAR(20) NOT NULL);
 CREATE TABLE company_roles(id BIGINT UNSIGNED PRIMARY KEY,company_id INT UNSIGNED NOT NULL,system_key VARCHAR(50) NULL);

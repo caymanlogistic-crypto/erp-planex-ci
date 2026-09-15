@@ -18,7 +18,7 @@ spec.loader.exec_module(m)
 
 manifest = m.load_manifest()
 assert manifest["schema"] == "erp-planex-runner-helpers/v2"
-assert manifest["version"] == "2026-09-09.1"
+assert manifest["version"] == "2026-09-15.1"
 assert manifest["canonical_repository"] == "caymanlogistic-crypto/erp-planex-ci"
 assert manifest["canonical_branch"] == m.CANONICAL
 assert tuple(row["name"] for row in manifest["entries"]) == m.EXPECTED_NAMES
@@ -105,6 +105,9 @@ for name in ("preflight-task", "push-task"):
 clean = (helpers / "clean-test-db").read_text(encoding="utf-8")
 new_task = (helpers / "new-task").read_text(encoding="utf-8")
 push_task = (helpers / "push-task").read_text(encoding="utf-8")
+local_module_hash = m.sha256_bytes((ROOT / "tools/runner/local_preflight.py").read_bytes().replace(b"\r\n", b"\n"))
+for name in ("preflight-task", "push-task"):
+    assert 'LOCAL_EVIDENCE_SHA256 = "' + local_module_hash + '"' in (helpers / name).read_text(encoding="utf-8")
 assert '"$ROOT/bin/php" <<\'PHP\'' in clean
 assert "\nphp <<'PHP'" not in clean
 assert 'CANONICAL="chatgpt/production-stabilization-20260802"' in new_task
@@ -185,7 +188,7 @@ with tempfile.TemporaryDirectory(prefix="runner-git-contract-") as td:
         second = git(repo, "rev-parse", "HEAD").stdout.strip()
         git(repo, "push", "origin", m.CANONICAL)
         rb_manifest, rb_payloads = m.validate_rollback_target(repo, first)
-        assert rb_manifest["version"] == "2026-09-09.1"
+        assert rb_manifest["version"] == "2026-09-15.1"
         assert set(rb_payloads) == set(m.EXPECTED_HELPERS)
 
         # Force a remote-drift result after the fresh fetch without mutating the remote.
@@ -212,4 +215,5 @@ with tempfile.TemporaryDirectory(prefix="runner-git-contract-") as td:
     finally:
         m._repo_identity_ok = real_identity
 
+subprocess.run(["python3", str(ROOT / "tests/local_preflight_evidence_test.py")], check=True)
 print("runner_helpers_contract_test: PASS")

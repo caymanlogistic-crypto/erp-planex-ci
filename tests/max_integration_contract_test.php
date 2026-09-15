@@ -80,7 +80,7 @@ $ok(str_contains($layout, "'/company/max/settings',"), 'MAX settings must use th
 $ok(str_contains($workspaceCss, '.workspace-shell-1690{width:min(1690px,calc(100% - 12px));max-width:1690px'), 'System wide workspace must remain exactly 1690px max width.');
 $ok(str_contains($appCss, "@import url('./max-messaging.css');"), 'MAX messaging stylesheet must be loaded by the system bundle.');
 $ok(substr_count($settingsView, 'class="panel max-settings-shell"') === 1, 'MAX settings must render one system information box.');
-$ok(substr_count($settingsView, 'data-max-tab="') === 3 && str_contains($settingsView, 'data-max-panel="overview"') && str_contains($settingsView, 'data-max-panel="settings"') && str_contains($settingsView, 'data-max-panel="journal"'), 'MAX settings must expose Overview / Settings / Journal system tabs.');
+$ok(substr_count($settingsView, 'data-max-tab="') === 4 && str_contains($settingsView, 'data-max-tab="events"') && str_contains($settingsView, 'data-max-panel="overview"') && str_contains($settingsView, 'data-max-panel="settings"') && str_contains($settingsView, 'data-max-panel="journal"'), 'MAX settings must expose Overview / Settings / Events / Journal system tabs.');
 $ok(str_contains($settingsView, 'ux-summary-strip') && str_contains($settingsView, '$maxHealthLabel') && str_contains($settingsView, '$maxLastSendAt'), 'MAX overview must derive compact live summary from current data.');
 $ok(str_contains($settingsView, 'onclick="openModal(\'max-bot-add-modal\')"') && str_contains($settingsView, 'onclick="openModal(\'max-chat-add-modal\')"'), 'MAX add forms must stay hidden behind system modals.');
 $ok(str_contains($settingsView, 'data-max-toggle="max-bot-detail-') && str_contains($settingsView, 'data-max-toggle="max-chat-detail-'), 'MAX technical bot/chat details must be collapsed by default.');
@@ -101,3 +101,4 @@ echo "MAX_SECRET_STORAGE_CONTRACT=PASS\n";
 echo "MAX_WEBHOOK_CONTRACT=PASS\n";
 echo "MAX_OWNER_UI_CONTRACT=PASS\n";
 echo "MAX_MESSAGE_LOG_CONTRACT=PASS\n";
+(static function (): void { require __DIR__ . '/max_events_136_production_migration_contract_test.php'; })();

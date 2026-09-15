@@ -15,6 +15,18 @@ TENANT="TENANT_SCHEMA_PROVISIONING_AND_GENERATED_DRIFT"
 REMOTE_REQUIRED_ALLOWLIST={TENANT:frozenset({"PDO_MYSQL_AVAILABLE","MYSQL_SERVER_REACHABLE"})}
 CAPABILITY_KEYS=("PHP_AVAILABLE","PDO_MYSQL_AVAILABLE","MYSQL_CLIENT_AVAILABLE","MYSQL_SERVER_REACHABLE")
 FINANCE_TESTS=["tests/finance_invoice_ui_contract_test.php","tests/finance_manual_facts_regression_test.php","tests/finance_employee_personal_expense_event_regression_test.php","tests/finance_invoice_cash_employee_regression_test.php","tests/finance_cash_employee_invoice_lifecycle_regression_test.php","tests/finance_carrier_payables_regression_test.php"]
+MAX_TESTS=["tests/max_integration_contract_test.php","tests/max_messaging_133_production_migration_contract_test.php","tests/max_messaging_production_acceptance_contract_test.php","tests/agent_db_migration_request_contract_test.php","tests/max_integration_mysql_test.php"]
+WASTE_TESTS=["tests/"+name+".php" for name in (
+    "waste_trip_incident_service_test", "waste_trip_legacy_readonly_probe_contract_test",
+    "waste_trip_legacy_linked_contract_test", "waste_trip_owner_layout_contract_test",
+    "waste_trip_scheduler_contract_test", "waste_trips_runtime_diagnostic_contract_test",
+    "waste_trip_244_readonly_probe_contract_test", "waste_trips_130_production_migration_contract_test",
+    "waste_trips_134_production_migration_contract_test", "waste_trips_135_production_migration_contract_test",
+    "waste_trip_customer_payment_regression_test", "waste_trip_carrier_finance_regression_test",
+    "waste_trip_regression_test", "waste_trip_legacy_prefill_regression_test",
+    "waste_trip_manager_membership_regression_test", "waste_trip_legacy_full_schema_regression_test",
+    "waste_trip_legacy_manager_end_to_end_regression_test",
+)]
 class PreflightEnvironmentError(RuntimeError): pass
 
 def caprun(cmd,env=None): return subprocess.run(cmd,cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -47,6 +59,14 @@ def plan(cls,paths,scopes):
     for scope,check in mapping:
         if scopes[scope]: out.append(check)
     out += ["DYNAMIC_IDENTIFIER_SAFETY","ARCHITECTURE_GUARD"]
+    # These domains consume the complete tenant migration chain. A new unrelated
+    # migration must still exercise their integration fixtures before publication.
+    if scopes["tenant_schema"] or any(re.search(r"(?:/Max|/max_|/company_max|/max-messaging)", p) for p in paths):
+        out.append("MAX_REGRESSIONS")
+    if scopes["tenant_schema"] or any(re.search(r"(?:/WasteTrip|/waste_trip|/company_waste_trip)", p) for p in paths):
+        out.append("WASTE_TRIPS_REGRESSIONS")
+    if any(p.startswith("app/Http/Routes/") or p.startswith("tests/roles_access_") for p in paths):
+        out.append("ROLES_ROUTE_REGISTRY")
     if scopes["control_plane"]: out.append("CONTROL_PLANE_PREFLIGHT_CONTRACTS")
     if cls=="CRITICAL" and scopes["memory"]: out += ["MEMORY_INTEGRITY_CONTRACTS","ACTIVE_REGISTRY_CONTRACTS"]
     return out
@@ -145,6 +165,14 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
     if "MIGRATION_INTEGRITY" in want: migration_integrity(results)
     if "MIGRATION_NORMALIZATION" in want: migrations_normalized(results)
     if TENANT in want: tenant_check(results)
+    for check, tests in [("MAX_REGRESSIONS",MAX_TESTS),("WASTE_TRIPS_REGRESSIONS",WASTE_TESTS)]:
+        if check in want:
+            env=os.environ.copy(); env["APP_ENV"]="test"
+            # Never let a caller's skip switch turn required MySQL coverage green.
+            env.pop("PLANEX_SKIP_MYSQL",None)
+            for t in tests: need(t); cmdcheck(results,check,["php",t],env)
+    if "ROLES_ROUTE_REGISTRY" in want:
+        cmdcheck(results,"ROLES_ROUTE_REGISTRY",["python3","tests/roles_access_route_registry_test.py"])
     if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",["python3","tools/dynamic_table_safety_audit.py"])
     if "ARCHITECTURE_GUARD" in want: need("tools/architecture_guard.php"); cmdcheck(results,"ARCHITECTURE_GUARD",["php","tools/architecture_guard.php"])
     if "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in want:

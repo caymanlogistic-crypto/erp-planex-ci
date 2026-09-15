@@ -8,6 +8,7 @@ use App\Service\FeoPlacementAuthorService;
 use App\Service\FeoPlacementInputParser;
 use App\Service\FeoPlacementService;
 use App\Service\FeoRequestService;
+use App\Service\MaxEventNotificationService;
 
 final class FeoPlacementController
 {
@@ -135,12 +136,38 @@ final class FeoPlacementController
                 @chmod($finalPath, 0600);
             }
             $creator = FeoPlacementAuthorService::creatorFromSession($_SESSION);
+            $notifications = new MaxEventNotificationService($pdo);
+            $deliveryId = null;
             $result = $this->placement->createBlock($pdo, [
                 'name'=>$preview['name'],'block_type'=>$preview['block_type'],'ids'=>$preview['ids'],
                 'source_type'=>$preview['source_type'],'source_filename'=>$preview['source_filename'],'source_file_key'=>$fileKey,
-            ] + $creator, (string)$preview['state_hash']);
+            ] + $creator, (string)$preview['state_hash'], function (array $created) use ($notifications, &$deliveryId, $company, $pdo, $creator, $preview): void {
+                $author = (new FeoPlacementAuthorService($this->db->connection()))->decorate($pdo, (int)$company['id'], [$creator])[0];
+                $deliveryId = $notifications->enqueue('feo.placement.block_created', (string)$created['block_id'], [
+                    'block_id' => (string)$created['block_id'],
+                    'block_name' => trim((string)$preview['name']) ?: 'Без названия',
+                    'block_type' => $preview['block_type'] === 'addition' ? 'Добавление' : 'Исключение',
+                    'request_count' => (string)$created['preview']['selected_count'],
+                    'mass_kg' => $this->massText((float)$created['preview']['selected_mass_kg']),
+                    'author' => $author['created_by_display_name'],
+                    'company' => (string)$company['name'],
+                    'created_at' => date('d.m.Y H:i'),
+                    'current_count' => (string)$created['current']['request_count'],
+                    'current_mass_kg' => $this->massText((float)$created['current']['total_mass_kg']),
+                ], (int)$creator['created_by_user_id']);
+            });
+            $finalPath = null; // The source now belongs to the committed block.
             unset($_SESSION['feo_placement_previews'][$token]);
             $_SESSION['flash_success'] = sprintf('Блок #%d применён. Актуальный состав: %d заявок, %s кг.', (int)$result['block_id'], (int)$result['current']['request_count'], $this->massText((float)$result['current']['total_mass_kg']));
+            if ($deliveryId !== null) {
+                try {
+                    $delivery = $notifications->dispatch($deliveryId);
+                    if ($delivery['status'] !== 'sent') $_SESSION['flash_error'] = 'Блок сохранён. Уведомление MAX не отправлено; подробности — в настройках MAX, вкладка «События».';
+                } catch (\Throwable $notificationError) {
+                    error_log('MAX delivery #' . $deliveryId . ': ' . $notificationError->getMessage());
+                    $_SESSION['flash_error'] = 'Блок сохранён. Проверьте отправку уведомления в настройках MAX.';
+                }
+            }
             jsonResponse(['success'=>true] + $result);
         } catch (\Throwable $e) {
             if ($finalPath && is_file($finalPath)) @unlink($finalPath);
