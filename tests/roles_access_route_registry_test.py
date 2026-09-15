@@ -37,7 +37,10 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 320, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 323, f"company route inventory drift: {len(company_routes)}"
+max_routes = (ROOT / "app/Http/Routes/company_max_messaging.php").read_text()
+for action in ("saveEvent", "previewEvent", "retryEvent"):
+    assert f"[$maxMessagingController, '{action}'], $maxSettingsPage" in max_routes, action
 assert unmapped == [("app/Http/Routes/company_contractor_assignments.php", "/company/contractor-assignments/{id}/assign")], unmapped
 contractor_source = (ROOT / unmapped[0][0]).read_text()
 assert "entity_access_grants" in contractor_source and "company.roles_access" not in contractor_source
@@ -55,4 +58,4 @@ activation = index_source[index_source.index("if ($rolesAccessEnabled)"):index_s
 assert "catch (" not in activation
 for route_file in ("company_document_generator.php", "company_switch.php", "company_roles_access.php"):
     assert route_file in index_source
-print("roles access complete route registry: PASS (320 routes; 1 retired legacy writer)")
+print("roles access complete route registry: PASS (323 routes; 1 retired legacy writer)")
