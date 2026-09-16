@@ -8,6 +8,7 @@
 .waste-registry .waste-profit { width: 1%; white-space: nowrap !important; }
 .waste-description-text { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .waste-registry .registry-date { white-space: nowrap; }
+.waste-registry .waste-count, .waste-registry .waste-weight { text-align: right; }
 .waste-registry .registry-executor { min-width: 145px; white-space: normal; overflow-wrap: anywhere; }
 .waste-registry .registry-rate { min-width: 110px; white-space: normal; }
 .waste-registry tbody tr td.waste-executor-unmatched { background: var(--warning-bg); color: var(--warning-text); }
