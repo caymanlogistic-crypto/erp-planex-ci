@@ -11,7 +11,7 @@
 .waste-registry .registry-executor { min-width: 145px; white-space: normal; overflow-wrap: anywhere; }
 .waste-registry .registry-rate { min-width: 110px; white-space: normal; }
 .waste-registry tbody tr td.waste-executor-unmatched { background: var(--warning-bg); color: var(--warning-text); }
-.waste-registry .waste-status { font-weight: 600; }
+.waste-registry .waste-status { font-weight: 600; text-align: center; vertical-align: middle; }
 .waste-registry tbody tr td.status-planned_route { background: var(--flight-planned-bg); color: var(--flight-planned-text); }
 .waste-registry tbody tr td.status-found { background: var(--flight-found-bg); color: var(--flight-found-text); }
 .waste-registry tbody tr td.status-started { background: var(--flight-started-bg); color: var(--flight-started-text); }
