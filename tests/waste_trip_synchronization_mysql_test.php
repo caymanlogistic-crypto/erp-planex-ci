@@ -194,7 +194,7 @@ try {
     $pdo->exec('UPDATE status_blocks SET cost=8000');$run();
     check($pdo->query("SELECT amount FROM waste_trip_general_payments WHERE waste_trip_id=$other")->fetchColumn()==='3000.00','General amount continuously synchronized');
     // A real cutover preserves former sale/cost amounts, clears the new manual cost,
-    // is idempotent, and refuses any invoice/payment-linked historical conversion.
+    // is idempotent, and preserves invoice/payment-linked historical settlements.
     $pdo->exec("INSERT INTO waste_trips(business_id,client_id,responsible_user_id,destination_type,status,financial_model_version) VALUES(900,13,1,'warehouse','planned_route',1)");
     $oldId=(int)$pdo->lastInsertId();
     $terms=['amount'=>'2000.00','payment_type'=>'cash','payment_method'=>'cash','vat_rate'=>null,'condition_type'=>'after_end','days_count'=>12,'days_kind'=>'calendar','specific_due_date'=>null,'condition_comment'=>null];
@@ -205,9 +205,40 @@ try {
     check($pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$oldId")->fetchColumn()==='900.00','Old cost becomes sale');
     check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_carrier_payments WHERE waste_trip_id=$oldId")->fetchColumn()===0,'New manual cost blank');
     check(\App\Service\WasteTripFinancialTransitionService::transition($pdo,$actor)===0,'Cutover idempotent');
-    $pdo->exec("UPDATE waste_trips SET financial_model_version=1 WHERE id=$id");
-    reject(static fn()=>\App\Service\WasteTripFinancialTransitionService::transition($pdo,$actor),'Paid historical rows must block cutover');
-    check((int)$pdo->query("SELECT financial_model_version FROM waste_trips WHERE id=$id")->fetchColumn()===1,'Failed cutover rolls back');
+    $pdo->exec("UPDATE waste_trips SET financial_model_version=1 WHERE id=$id; DELETE FROM waste_trip_general_payments WHERE waste_trip_id=$id");
+    $originalPayments=\App\Service\WasteTripCustomerPaymentService::fetchForTrip($pdo,$id);
+    $financialRows=static fn()=>$pdo->query("SELECT * FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id ORDER BY id")->fetchAll();
+    $originalObligations=$financialRows();
+    check(\App\Service\WasteTripFinancialTransitionService::transition($pdo,$actor)===1,'Paid historical rows preserve settlements during cutover');
+    check((int)$pdo->query("SELECT financial_model_version FROM waste_trips WHERE id=$id")->fetchColumn()===3,'Historical settlement mode');
+    check($financialRows()===$originalObligations,'All original obligation fields preserved at cutover');
+    $historical=['id'=>$id,'financial_model_version'=>3];
+    check(Trips::financialCustomerPayments($pdo,$historical)===$originalPayments,'Original source IDs and terms retained for documents');
+    $count=count($originalObligations);
+    $pdo->exec("UPDATE waste_trips SET deleted_at=NULL,status='completed' WHERE id=$id");
+    $pdo->beginTransaction();
+    \App\Service\WasteTripCustomerPaymentService::synchronizeCost($pdo,$id,null,null,$actor);
+    \App\Service\WasteTripGeneralPaymentService::synchronizeCost($pdo,$id,'999.00',$actor);
+    $pdo->commit();
+    \App\Service\FinanceObligationService::syncWasteTrip($pdo,$id);
+    $afterDisplay=$financialRows();
+    check(count($afterDisplay)===$count,'Informational changes create no duplicate debt');
+    foreach($afterDisplay as $index=>$row)foreach(['id','source_id','source_key','direction','amount','condition_type','days_count','due_date','cancelled_at'] as $field)
+        check($row[$field]===$originalObligations[$index][$field],'Historical obligation remains unchanged: '.$field);
+    // Payment cascade still operates on preserved obligations, including cancellation.
+    $activeObligation=(int)$obligation['id'];
+    $pdo->exec("UPDATE finance_obligations SET cancelled_at=NULL WHERE id=$activeObligation;
+        INSERT INTO finance_operations(id,operation_type,status,source,money_account_id,operation_date,amount) VALUES(2,'INCOME','POSTED','MANUAL',1,'2026-09-02',5);
+        INSERT INTO finance_operation_allocations(operation_id,obligation_id,amount,allocation_date) VALUES(2,$activeObligation,5,'2026-09-02')");
+    $newAllocation=(int)$pdo->lastInsertId();
+    \App\Service\FinanceSettlementCascadeService::cascadeAfterAllocationCreate($pdo,$newAllocation);
+    check($pdo->query("SELECT paid_amount FROM finance_obligations WHERE id=$activeObligation")->fetchColumn()==='6.00','Subsequent payment settles preserved obligation');
+    $pdo->exec("UPDATE finance_operation_allocations SET cancelled_at=NOW() WHERE id=$newAllocation");
+    \App\Service\FinanceSettlementCascadeService::cascadeAfterAllocationCancel($pdo,$newAllocation);
+    check($pdo->query("SELECT paid_amount FROM finance_obligations WHERE id=$activeObligation")->fetchColumn()==='1.00','Cancellation recomputes preserved settlement');
+    $pdo->exec("UPDATE waste_trips SET deleted_at=NOW(),status='cancelled' WHERE id=$id");
+    \App\Service\FinanceObligationService::syncWasteTrip($pdo,$id);
+    check($pdo->query("SELECT cancelled_at FROM finance_obligations WHERE id=$activeObligation")->fetchColumn()===null,'Source removal does not cancel real historical debt');
     $prices=\App\Service\WasteTripLegacyPriceService::calculate([['zayavki_ids'=>'1,2,3','cost'=>'100.50'],['zayavki_ids'=>'1','cost'=>'10.00']],['1'=>1,'2'=>3,'3'=>2]);
     check($prices===['1'=>2600,'3'=>3300,'2'=>5150],'Legacy whole-ruble shares, heaviest remainder and additive blocks');
     check(\App\Service\WasteTripLegacyPriceService::flightTotal(['1','999'],$prices)===null,'Incomplete pricing never implies a partial total');

@@ -15,12 +15,18 @@ final class WasteTripFinancialTransitionService
         $pdo->beginTransaction();
         try {
             $trips = $pdo->query('SELECT id FROM waste_trips WHERE financial_model_version=1 ORDER BY id FOR UPDATE')->fetchAll(PDO::FETCH_COLUMN);
+            $preserved = [];
             foreach ($trips as $tripId) {
+                // Invoice creation/settlement also locks the obligation: keep the decision
+                // and conversion in the same transaction as those financial writers.
+                $lock = $pdo->prepare("SELECT id FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=? FOR UPDATE");
+                $lock->execute([$tripId]);
+                $lock->fetchAll(PDO::FETCH_COLUMN);
                 $q = $pdo->prepare("SELECT o.id FROM finance_obligations o WHERE o.source_parent_type='WASTE_TRIP' AND o.source_parent_id=? AND (
                     EXISTS(SELECT 1 FROM finance_invoice_links l WHERE l.obligation_id=o.id)
                     OR EXISTS(SELECT 1 FROM finance_operation_allocations a JOIN finance_operations op ON op.id=a.operation_id WHERE a.obligation_id=o.id AND a.cancelled_at IS NULL AND op.status='POSTED')) LIMIT 1 FOR UPDATE");
                 $q->execute([$tripId]);
-                if ($q->fetchColumn() !== false) throw new RuntimeException('Рейс '.$tripId.' связан со счетами или проведёнными оплатами. Автоматический перенос финансов запрещён.');
+                $preserved[(int)$tripId] = $q->fetchColumn() !== false;
                 if (WasteTripGeneralPaymentService::fetchForTrip($pdo,(int)$tripId) !== []) throw new RuntimeException('Обнаружен незавершённый переход финансов рейса '.$tripId.'.');
             }
             foreach ($trips as $tripId) {
@@ -37,11 +43,14 @@ final class WasteTripFinancialTransitionService
                 WasteTripGeneralPaymentService::store($pdo,$tripId,$defaults($customer),$actor);
                 WasteTripCustomerPaymentService::store($pdo,$tripId,$defaults($carrier),$actor);
                 WasteTripCarrierPaymentService::store($pdo,$tripId,[],$actor);
-                $pdo->prepare('UPDATE waste_trips SET financial_model_version=2,lock_version=lock_version+1 WHERE id=?')->execute([$tripId]);
-                FinanceObligationService::syncWasteTrip($pdo,$tripId);
+                // v3 displays the new amounts but retains the original settlements.
+                // Original payment rows, including IDs, are preserved in the audit below.
+                $version = $preserved[$tripId] ? 3 : 2;
+                $pdo->prepare('UPDATE waste_trips SET financial_model_version=?,lock_version=lock_version+1 WHERE id=?')->execute([$version,$tripId]);
+                if ($version === 2) FinanceObligationService::syncWasteTrip($pdo,$tripId);
                 $pdo->prepare("INSERT INTO waste_trip_audit_log(waste_trip_id,action,before_json,after_json,actor_user_id,actor_role) VALUES (?,'update',?,?,?,?)")->execute([
                     $tripId,json_encode(['financial_model_version'=>1,'customer_payments'=>$customer,'carrier_payments'=>$carrier],JSON_THROW_ON_ERROR),
-                    json_encode(['financial_model_version'=>2,'general_payments'=>$defaults($customer),'customer_payments'=>$defaults($carrier),'carrier_payments'=>[]],JSON_THROW_ON_ERROR),
+                    json_encode(['financial_model_version'=>$version,'settlements_preserved'=>$preserved[$tripId],'general_payments'=>$defaults($customer),'customer_payments'=>$defaults($carrier),'carrier_payments'=>[]],JSON_THROW_ON_ERROR),
                     (int)$actor['user_id']?:null,$actor['role_code'],
                 ]);
             }

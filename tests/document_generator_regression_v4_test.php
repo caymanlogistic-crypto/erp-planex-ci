@@ -173,6 +173,24 @@ $duplicate=false;try{App\Service\DocumentGeneratorService::generateClientPackage
 $frozen=(string)$packageRows['client_invoice']['snapshot_json'];$pdo->exec("UPDATE clients SET name='ИЗМЕНЁННЫЙ КЛИЕНТ' WHERE id=1");$oldPackage=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$packageIds['client_invoice']);$eq((string)$oldPackage['snapshot_json'],$frozen,'client package immutable snapshot');
 echo "DOCUMENT_GENERATOR_TRIP_SOURCE=PASS\nDOCUMENT_GENERATOR_CLIENT_PACKAGE=PASS\nDOCUMENT_GENERATOR_CLIENT_PACKAGE_DOCX=PASS\nDOCUMENT_GENERATOR_CLIENT_PACKAGE_IMMUTABLE=PASS\n";
 
+// Preserved settlements must use the original contract, not the current display amounts.
+$pdo->exec("CREATE TABLE waste_trip_audit_log(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,waste_trip_id BIGINT UNSIGNED,action VARCHAR(32),before_json JSON,after_json JSON)");
+$historical=$pdo->query('SELECT * FROM waste_trip_customer_payments WHERE waste_trip_id=77 ORDER BY sort_order,id')->fetchAll(PDO::FETCH_ASSOC);
+$historical[0]['amount']='275000.00';$historical[0]['days_count']=11;
+$pdo->prepare("INSERT INTO waste_trip_audit_log(waste_trip_id,action,before_json,after_json) VALUES(77,'update',?,?)")->execute([json_encode(['financial_model_version'=>1,'customer_payments'=>$historical],JSON_THROW_ON_ERROR),json_encode(['financial_model_version'=>3,'settlements_preserved'=>true],JSON_THROW_ON_ERROR)]);
+$pdo->exec('UPDATE waste_trips SET financial_model_version=3 WHERE id=77');
+$preserved=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,77,'2026-09-09');
+$ok($preserved['ok']??false,'preserved contract package prepares');
+$eq((string)$preserved['package_amount'],'275000.00','preserved contract amount independent of current sale 230000 and general 900000');
+$has((string)$preserved['snapshot']['parameters']['payment_terms'],'11 календарных','preserved contract terms');
+$preservedTrips=App\Service\DocumentGeneratorService::listDocumentTrips($pdo,true);
+$preservedTrip=array_values(array_filter($preservedTrips,static fn(array $t):bool=>(int)$t['id']===77))[0];
+$eq((string)$preservedTrip['_customer_amount'],'275000.00','document selector uses same historical contract');
+$pdo->exec('DELETE FROM waste_trip_audit_log WHERE waste_trip_id=77');
+$missingAudit=false;try{App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,77,'2026-09-09');}catch(RuntimeException $e){$missingAudit=str_contains($e->getMessage(),'сохранённые финансовые условия');}
+$ok($missingAudit,'missing historical contract fails closed');
+echo "DOCUMENT_GENERATOR_PRESERVED_SETTLEMENTS=PASS\n";
+
 $ad=trim((string)(getenv('PLANEX_DOCGEN_ARTIFACT_DIR')?:''));if($ad!==''){if(!str_starts_with($ad,DIRECTORY_SEPARATOR))$ad=$root.'/'.$ad;if(!is_dir($ad))mkdir($ad,0775,true);foreach(['contract_vehicle_lease_crew_regression.docx'=>$path1,'waybill_driver_assignment_regression.docx'=>$wpath]as$n=>$s){$t=rtrim($ad,DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$n;$ok(copy($s,$t),'artifact '.$n);}}
 echo "DOCUMENT_GENERATOR_REGRESSION=PASS\n";
 }finally{App\Security\AccessRuntime::clear();foreach($files as$f)@unlink($f);$rm($store);try{if($ownsDatabase)$admin->exec("DROP DATABASE IF EXISTS $qd");elseif(isset($pdo)&&$pdo instanceof PDO)cleanCompanyPoolDatabase($pdo);}catch(Throwable){}}

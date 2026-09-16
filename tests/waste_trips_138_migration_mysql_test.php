@@ -27,7 +27,18 @@ try {
         INSERT INTO clients(id,name,inn,status) VALUES(1,'Fixture','7700000000','active');
         INSERT INTO waste_trips(id,business_id,client_id,responsible_user_id,destination_type,status) VALUES(1,226,1,1,'warehouse','planned_route');
         INSERT INTO waste_trip_customer_payments(waste_trip_id,amount,payment_type,payment_method,condition_type,days_count,days_kind) VALUES(1,2000,'cash','cash','after_end',15,'calendar');
-        INSERT INTO waste_trip_carrier_payments(waste_trip_id,amount,payment_type,payment_method,condition_type) VALUES(1,900,'','','')");
+        INSERT INTO waste_trip_carrier_payments(waste_trip_id,amount,payment_type,payment_method,condition_type) VALUES(1,900,'','','');
+        INSERT INTO waste_trips(id,business_id,client_id,responsible_user_id,destination_type,status) VALUES(2,244,1,1,'warehouse','completed');
+        INSERT INTO waste_trip_customer_payments(waste_trip_id,amount,payment_type,payment_method,condition_type,days_count,days_kind) VALUES(2,275000,'cash','cash','after_end',11,'working');
+        INSERT INTO waste_trip_carrier_payments(waste_trip_id,amount,payment_type,payment_method,condition_type) VALUES(2,230000,'','','');
+        INSERT INTO finance_obligations(id,source_type,source_key,source_id,source_parent_type,source_parent_id,direction,party_role,amount,paid_amount,status,condition_type,days_count,days_kind,due_date) VALUES
+        (1,'WASTE_TRIP_CUSTOMER_PAYMENT','WASTE_TRIP:2:customer:client:1:1',2,'WASTE_TRIP',2,'RECEIVABLE','customer',275000,275000,'paid','after_end',11,'working','2026-09-09'),
+        (2,'WASTE_TRIP_CARRIER_PAYMENT','WASTE_TRIP:2:carrier:contractor:1:1',2,'WASTE_TRIP',2,'PAYABLE','carrier',180000,0,'planned','after_end',7,'calendar','2026-09-09');
+        INSERT INTO finance_invoices(id,direction,number,invoice_date,amount,paid_amount,status) VALUES(1,'OUTGOING','26-106','2026-09-09',275000,275000,'paid'),(2,'INCOMING','121','2026-09-05',180000,0,'received');
+        INSERT INTO finance_invoice_links(invoice_id,obligation_id,amount) VALUES(1,1,275000),(2,2,180000);
+        INSERT INTO finance_money_accounts(id,type,name) VALUES(1,'CASH','Fixture');
+        INSERT INTO finance_operations(id,operation_type,status,source,money_account_id,operation_date,amount) VALUES(1,'INCOME','POSTED','MANUAL',1,'2026-09-09',275000);
+        INSERT INTO finance_operation_allocations(operation_id,invoice_id,obligation_id,amount,allocation_date) VALUES(1,1,1,275000,'2026-09-09')");
     $pdo->prepare("INSERT INTO companies VALUES(1,'active',?)")->execute([$db]);
     file_put_contents($fixture.'/.env',"# Synthetic migration test\n");
     file_put_contents($fixture.'/bootstrap/app.php', <<<'PHP'
@@ -46,6 +57,13 @@ PHP);
         [$code,$out,$err]=$run('waste_trips_verify_138.php');verify138($code===0,'Read-only snapshot: '.$err);
         verify138(preg_match('/^WASTE_138_SNAPSHOT=(.+)$/m',$out,$matches)===1,'Snapshot output');return json_decode($matches[1],true,512,JSON_THROW_ON_ERROR);
     };
+    $compare=static function(array $before,array $after,bool $expected=true)use($root,$fixture):void {
+        foreach(['before'=>$before,'after'=>$after] as $name=>$value)file_put_contents($fixture.'/'.$name.'.txt','WASTE_138_SNAPSHOT='.json_encode($value,JSON_THROW_ON_ERROR));
+        $proc=proc_open(['python3',$root.'/scripts/waste_trips_compare_138.py',$fixture.'/before.txt',$fixture.'/after.txt',$root.'/database/migrations-local/138_waste_trip_general_payments.sql'],[1=>['pipe','w'],2=>['pipe','w']],$pipes);
+        $out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);$code=proc_close($proc);
+        verify138(($code===0)===$expected,'Snapshot comparison: '.$out.$err);
+    };
+    $files[]='before.txt';$files[]='after.txt';
     putenv('PLANEX_WASTE_138_TOOLING='.$root.'/app/Service');
     putenv('PLANEX_CONFIRM_WASTE_138=APPLY_WASTE_TRIPS_138_AND_TRANSFER_AMOUNTS');
     $before=$snapshot();verify138($before['tenants'][0]['migration_138']===0,'Before 138');
@@ -53,11 +71,26 @@ PHP);
     putenv('PLANEX_CONFIRM_WASTE_138=APPLY_WASTE_TRIPS_138_AND_TRANSFER_AMOUNTS');
     [$code,$out,$err]=$run('waste_trips_apply_138.php');verify138($code===0&&str_contains($out,'WASTE_138_OK'),'Apply 138: '.$err);
     $after=$snapshot();verify138($after['tenants'][0]['migration_138']===1&&$after['tenants'][0]['general_table']===1,'Schema applied');
+    $compare($before,$after);
+    verify138($after['tenants'][0]['protected_obligations']===$before['tenants'][0]['protected_obligations'],'Invoices retain exact original contractual obligations');
+    verify138((int)$after['tenants'][0]['model_versions'][2]===3,'Protected trip uses historical settlements');
     verify138($before['tenants'][0]['data']===$after['tenants'][0]['data'],'Operational data and facts unchanged');
     verify138($after['tenants'][0]['payments']['general'][0]['amount']==='2000.00' && (int)$after['tenants'][0]['payments']['general'][0]['days_count']===15,'Old sale preserved as general with manual terms');
     verify138($after['tenants'][0]['payments']['customer'][0]['amount']==='900.00' && (int)$after['tenants'][0]['payments']['customer'][0]['days_count']===3,'Old cost now sale with default terms');
     verify138($after['tenants'][0]['payments']['carrier']===[],'Manual cost starts empty');
     [$code,$out,$err]=$run('waste_trips_apply_138.php');verify138($code===0&&str_contains($out,'WASTE_138_OK'),'Idempotent apply: '.$err);
+    $compare($after,$snapshot());
+    // Resume an already-applied schema with pending business data, as on production.
+    $pdo->exec("INSERT INTO waste_trips(id,business_id,client_id,responsible_user_id,destination_type,status,financial_model_version) VALUES(3,250,1,1,'warehouse','planned_route',1);
+        INSERT INTO waste_trip_customer_payments(waste_trip_id,amount,payment_type,condition_type) VALUES(3,3000,'','');
+        INSERT INTO waste_trip_carrier_payments(waste_trip_id,amount,payment_type,condition_type) VALUES(3,1700,'','')");
+    $resumeBefore=$snapshot();
+    [$code,$out,$err]=$run('waste_trips_apply_138.php');verify138($code===0,'Resume partial migration: '.$err);
+    $resumeAfter=$snapshot();$compare($resumeBefore,$resumeAfter);
+    $tampered=$resumeAfter;$tampered['tenants'][0]['payments']['customer'][2]['amount']='1701.00';
+    $compare($resumeBefore,$tampered,false);
+    $tampered=$resumeAfter;$tampered['tenants'][0]['protected_obligations'][0]['amount']='230000.00';
+    $compare($resumeBefore,$tampered,false);
     $pdo->exec("UPDATE schema_migrations SET checksum=REPEAT('0',64) WHERE migration='138_waste_trip_general_payments.sql'");
     [$code,,$err]=$run('waste_trips_apply_138.php');verify138($code!==0&&str_contains($err,'checksum mismatch'),'Checksum drift rejected');
     echo "WASTE_TRIPS_138_MIGRATION_MYSQL=PASS\n";
