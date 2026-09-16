@@ -9,7 +9,7 @@ $openEditId=max(0,(int)($_GET['open_edit']??0));
 $oldResponsibleMembership=(int)($old['responsible_membership_id']??($currentMembershipId??0));
 $selectedStatus=WasteTripService::displayStatus(trim((string)($_GET['status']??''))); $searchQuery=trim((string)($_GET['q']??''));
 $fmtDate=static fn($v):string=>trim((string)$v)!==''?ui_date((string)$v):'—';
-$fmtKg=static fn($v):string=>number_format((float)$v,3,',',' ');
+$fmtKg=static fn($v):string=>number_format((float)$v,0,',',' ');
 $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_start_date']))return$fmtDate($t['planned_start_date']);if(!empty($t['planned_start_date_from'])&&!empty($t['planned_start_date_to']))return$fmtDate($t['planned_start_date_from']).'–'.$fmtDate($t['planned_start_date_to']);if(!empty($t['planned_start_date_from']))return'с '.$fmtDate($t['planned_start_date_from']);if(!empty($t['planned_start_date_to']))return'до '.$fmtDate($t['planned_start_date_to']);return'—';};
 
 ?>
@@ -54,9 +54,11 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
         <?php if($vehicle!==''):?><span class="registry-executor-line registry-executor-secondary"><?=e($vehicle)?></span><?php endif;?>
     <?php endif;?></td>
     <td class="waste-count"><?=(int)($trip['request_count']??0)?></td>
-    <td class="col-mono waste-weight"><?=e($fmtKg($trip['snapshot_total_mass_kg']??0))?></td>
+    <td class="waste-weight"><?=e($fmtKg($trip['snapshot_total_mass_kg']??0))?></td>
     <td class="waste-manager" title="<?=e((string)($trip['responsible_name']??''))?>"><?=e(Registry::manager((string)($trip['responsible_name']??'')))?></td>
-    <?php foreach([$generalPayments,$customerPayments,$carrierPayments] as $sideIndex=>$payments):?><td class="registry-rate">
+    <?php foreach([$generalPayments,$customerPayments,$carrierPayments] as $sideIndex=>$payments):
+        $payments=array_values(array_filter($payments,static fn(array $payment):bool=>trim((string)($payment['amount']??''))!==''));
+    ?><td class="registry-rate">
         <?php if($payments!==[]):?><span class="registry-rate-total"><?=e(WasteTripCustomerPaymentService::total($payments))?></span>
             <?php foreach($payments as $payment):?><span class="registry-payment-line"><?=e(WasteTripCustomerPaymentService::detail($payment))?></span><?php endforeach;?>
         <?php else:?><span class="registry-empty">—</span><?php endif;?>
@@ -79,7 +81,7 @@ function syncDestination(root){var s=root.querySelector('[data-waste-destination
 function syncPlan(root){var m=root.querySelector('[data-waste-plan-mode]');if(!m)return;var e=root.querySelector('[data-waste-plan-exact]'),f=root.querySelector('[data-waste-plan-from]'),t=root.querySelector('[data-waste-plan-to]');var exact=m.value==='exact',range=m.value==='range';if(e){e.style.display=exact?'block':'none';e.required=exact;}if(f){f.style.display=range?'block':'none';f.required=range;}if(t){t.style.display=range?'block':'none';t.required=range;}}
 async function preview(form){var r=form.querySelector('[data-waste-preview-result]'),b=form.querySelector('[data-waste-create-submit]');if(r)r.textContent='Проверка...';if(b)b.disabled=true;try{var x=await fetch('<?=app_url('/company/trips/departures/preview')?>',{method:'POST',body:new FormData(form),credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}}),p=await x.json();if(!x.ok||!p.success){if(r)r.textContent=p.message||('Не найдены: '+(p.missing||[]).join(', ')+'; заняты: '+Object.keys(p.occupied||{}).join(', '));return;}if(r)r.textContent='Найдено '+p.found_count+'/'+p.input_count+', '+Number(p.total_mass_kg||0).toLocaleString('ru-RU')+' кг, конфликтов нет.';if(b)b.disabled=false;}catch(e){if(r)r.textContent='Ошибка проверки.';}}
 async function loadModal(kind,id){var modal='waste-trip-view-modal',body=document.getElementById('waste-trip-view-body');body.innerHTML='<div class="modal-body">Загрузка...</div>';openModal(modal);try{var x=await fetch('<?=app_url('/company/trips/departures')?>/'+encodeURIComponent(id)+'/modal-'+kind,{credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});body.innerHTML=await x.text();if(!x.ok)return;var title=body.querySelector('[data-waste-modal-title]');if(title)document.getElementById('waste-trip-view-title').textContent=title.dataset.wasteModalTitle;wireForm(body);}catch(e){body.innerHTML='<div class="modal-body"><div class="notice warn">Не удалось загрузить рейс.</div></div>';}}
-document.querySelectorAll('.waste-row[data-waste-view]').forEach(function(row){var open=function(){loadModal('view',row.dataset.wasteView)};row.addEventListener('click',open);row.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});});
+document.querySelectorAll('.waste-row[data-waste-view]').forEach(function(row){var open=function(){loadModal('view',row.dataset.wasteView)};row.addEventListener('dblclick',open);row.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open();}});});
 document.addEventListener('click',function(e){var b=e.target.closest('[data-waste-open-edit]');if(b){loadModal('edit',b.dataset.wasteOpenEdit);return;}var c=e.target.closest('[data-waste-cancel-edit]');if(c)loadModal('view',c.dataset.wasteCancelEdit);});
 function wireForm(root){var f=root.matches&&root.matches('form[data-linear-trip-form]')?root:root.querySelector('form[data-linear-trip-form]');if(!f)return;if(typeof window.initLinearTripForm==='function')window.initLinearTripForm(f);syncDestination(f);syncPlan(f);var d=f.querySelector('[data-waste-destination]');if(d&&!d.dataset.wasteBound){d.dataset.wasteBound='1';d.addEventListener('change',function(){syncDestination(f)});}var p=f.querySelector('[data-waste-plan-mode]');if(p&&!p.dataset.wasteBound){p.dataset.wasteBound='1';p.addEventListener('change',function(){syncPlan(f)});}var v=f.querySelector('[data-waste-preview]');if(v&&!v.dataset.wasteBound){v.dataset.wasteBound='1';v.addEventListener('click',function(){preview(f)});}var ids=f.querySelector('[data-waste-request-ids]');if(ids&&!ids.dataset.wasteBound){ids.dataset.wasteBound='1';ids.addEventListener('input',function(){var b=f.querySelector('[data-waste-create-submit]');if(b)b.disabled=true;});}}
 document.querySelectorAll('form').forEach(wireForm);
