@@ -26,7 +26,7 @@ foreach(['CREATE TABLE IF NOT EXISTS `waste_trip_carrier_payments`','`amount` DE
 $carrierPartial=(string)file_get_contents($root.'/app/View/partials/company_waste_trip_carrier_payments.php');
 foreach(['Оплата перевозчику','data-payment-container="carrier_payments"','data-add-payment-row="carrier_payments"','Срок оплаты','НДС'] as$n)$ok(str_contains($carrierPartial,$n),'carrier UI missing '.$n);
 $page=(string)file_get_contents($root.'/app/View/pages/company_waste_trips.php');
-$ok(str_contains($page,'СТАВКА ПЕРЕВОЗЧИКА'),'registry carrier rate column missing');
+$ok(str_contains($page,'СЕБЕС, РУБ'),'registry carrier rate column missing');
 $view=(string)file_get_contents($root.'/app/View/partials/company_waste_trip_modal_view.php');
 $ok(str_contains($view,'Условия оплаты перевозчику'),'view carrier finance section missing');
 $finance=(string)file_get_contents($root.'/app/Service/FinanceObligationService.php');

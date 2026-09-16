@@ -13,8 +13,7 @@ final class WasteTripLegacyMappingService
     public static function status(string $legacy): string
     {
         return match ($legacy) {
-            'planned_route' => WasteTripService::STATUS_PLANNED,
-            'search', 'attention' => WasteTripService::STATUS_SEARCHING,
+            'planned_route', 'search', 'attention' => WasteTripService::STATUS_PLANNED,
             'found' => WasteTripService::STATUS_ASSIGNED,
             'started' => WasteTripService::STATUS_IN_PROGRESS,
             'completed' => WasteTripService::STATUS_COMPLETED,

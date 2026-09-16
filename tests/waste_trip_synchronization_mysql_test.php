@@ -92,6 +92,11 @@ try {
     check($trip['planned_start_date_from']==='2026-09-01'&&$trip['planned_start_date_to']===null,'Open range');
     check((int)$pdo->query("SELECT membership_id FROM users WHERE id={$trip['responsible_user_id']}")->fetchColumn()===10,'Central membership projection, not legacy numeric ID');
     check((int)$pdo->query('SELECT COUNT(*) FROM waste_trip_requests')->fetchColumn()===3,'Duplicate membership retained');
+    $filtered=Trips::fetchTrips($pdo,['q'=>'700002']);
+    check(count($filtered)===1&&(int)$filtered[0]['request_count']===2&&(float)$filtered[0]['snapshot_total_mass_kg']===4000.0,'Search by one request keeps full trip count and mass');
+    $pdo->exec("UPDATE waste_trips SET status='searching_executor' WHERE business_id=226");
+    $planned=Trips::fetchTrips($pdo,['status'=>'planned_route']);
+    check(count($planned)===1&&(int)$planned[0]['business_id']===226,'Planned filter includes historical searching alias');
     $payment=$pdo->query("SELECT * FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetch();
     $obligation=$pdo->query("SELECT * FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND direction='PAYABLE'")->fetch();
     check($payment['amount']==='1000.00'&&$payment['payment_method']===''&&$obligation['due_date']===null,'Cost with unknown terms');

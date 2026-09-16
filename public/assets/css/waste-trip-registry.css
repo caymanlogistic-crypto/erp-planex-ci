@@ -1,0 +1,20 @@
+.waste-table-scroll { overflow-x: auto; max-width: 100%; }
+.waste-registry { width: 100% !important; table-layout: auto; }
+.waste-registry th, .waste-registry td { padding: 6px 8px; vertical-align: top; }
+.waste-registry th { white-space: nowrap; }
+.waste-registry .registry-id, .waste-registry .waste-description,
+.waste-registry .waste-status, .waste-registry .waste-count,
+.waste-registry .waste-weight, .waste-registry .waste-manager,
+.waste-registry .waste-profit { width: 1%; white-space: nowrap !important; }
+.waste-description-text { display: block; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.waste-registry .registry-date { white-space: nowrap; }
+.waste-registry .registry-executor { min-width: 145px; white-space: normal; overflow-wrap: anywhere; }
+.waste-registry .registry-rate { min-width: 110px; white-space: normal; }
+.waste-registry tbody tr td.waste-executor-unmatched { background: var(--warning-bg); color: var(--warning-text); }
+.waste-registry .waste-status { font-weight: 600; }
+.waste-registry tbody tr td.status-planned_route { background: var(--flight-planned-bg); color: var(--flight-planned-text); }
+.waste-registry tbody tr td.status-found { background: var(--flight-found-bg); color: var(--flight-found-text); }
+.waste-registry tbody tr td.status-started { background: var(--flight-started-bg); color: var(--flight-started-text); }
+.waste-registry tbody tr td.status-completed { background: var(--flight-completed-bg); color: var(--flight-completed-text); }
+.waste-row { cursor: pointer; }
+.waste-row:hover { background: var(--surface-hover, #f8fafc); }

@@ -6,8 +6,7 @@ foreach(['index','synchronizeSubmit']as$m){if(!str_contains($source,'public func
 if(str_contains($source,'importIndex')||str_contains($source,'importSubmit'))$fail('old import controller actions remain');
 foreach(['index']as$m){$start=strpos($source,'public function '.$m.'(');$next=strpos($source,"\n    public function ",$start+20);$body=substr($source,$start,$next===false?null:$next-$start);if(!str_contains($body,"require base_path('app/View/layouts/main.php');")||!str_contains($body,'$config=$this->config;')||!str_contains($body,'$db=$this->db;'))$fail($m.' main layout bindings missing');}
 if(str_contains($routes,"/company/trips/departures/import"))$fail('old import route remains');
-foreach(['waste-request-list','flex-wrap:wrap','overflow-wrap:anywhere','word-break:break-word','max-width:0','text-overflow:clip!important']as$n)if(!str_contains($page,$n))$fail('registry wrap contract missing '.$n);
-if(str_contains($page,'white-space:nowrap')||str_contains($page,'text-overflow:ellipsis'))$fail('registry contains nowrap/ellipsis that can hide request list');
+if(!str_contains($page, 'waste-count')||!str_contains($page, 'Registry::executorUnmatched'))$fail('registry count/mismatch contract missing');
 if(substr_count($page,'id="waste-trip-view-modal"')!==1||str_contains($page,'id="waste-trip-edit-modal"'))$fail('Waste Trip edit must reuse the standard view modal shell');
 if(!str_contains($page,"data-waste-cancel-edit")||!str_contains($page,"loadModal('view',c.dataset.wasteCancelEdit)"))$fail('edit cancel must return to Waste Trip view in the same modal');
 if(!str_contains($page,"root.querySelector('form[data-linear-trip-form]')")||!str_contains($page,'window.initLinearTripForm(f)'))$fail('dynamically loaded edit form must initialize the existing Linear Trips form UX');
@@ -19,3 +18,5 @@ echo "WASTE_TRIP_OWNER_LAYOUT=PASS\n";
 
 if(!str_contains($page,'Синхронизация рейсов со старой БД')||!str_contains($page,"app_url('/company/trips/departures/synchronize')")||!str_contains($page,'csrfField()'))$fail('sync button and CSRF required');
 if(str_contains($routes,'departures/legacy')||str_contains($source,'materializeSubmit')||str_contains($source,'legacyIndex'))$fail('manual import remains');
+
+require __DIR__.'/waste_trip_registry_render_test.php';

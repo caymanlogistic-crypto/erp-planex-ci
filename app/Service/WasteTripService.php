@@ -24,8 +24,8 @@ final class WasteTripService
 
     public const STATUS_LABELS = [
         self::STATUS_PLANNED => 'Планируемый',
-        self::STATUS_SEARCHING => 'Поиск исполнителя',
-        self::STATUS_ASSIGNED => 'Исполнитель назначен',
+        self::STATUS_SEARCHING => 'Планируемый',
+        self::STATUS_ASSIGNED => 'Сформированный',
         self::STATUS_IN_PROGRESS => 'Вывоз начался',
         self::STATUS_COMPLETED => 'Груз сдан',
         self::STATUS_CANCELLED => 'Отменён',
@@ -73,6 +73,24 @@ final class WasteTripService
         } catch (Throwable) { return false; }
     }
 
+    public const STATUS_OPTIONS = [
+        self::STATUS_PLANNED => 'Планируемый',
+        self::STATUS_ASSIGNED => 'Сформированный',
+        self::STATUS_IN_PROGRESS => 'Вывоз начался',
+        self::STATUS_COMPLETED => 'Груз сдан',
+    ];
+
+    public static function displayStatus(string $status): string { return $status === self::STATUS_SEARCHING ? self::STATUS_PLANNED : $status; }
+    public static function statusCellClass(string $status): string
+    {
+        return match (self::displayStatus($status)) {
+            self::STATUS_PLANNED => 'status-planned_route',
+            self::STATUS_ASSIGNED => 'status-found',
+            self::STATUS_IN_PROGRESS => 'status-started',
+            self::STATUS_COMPLETED => 'status-completed',
+            default => '',
+        };
+    }
     public static function statusLabel(string $status): string { return self::STATUS_LABELS[$status] ?? $status; }
     public static function statusBadgeClass(string $status): string
     {
@@ -213,7 +231,7 @@ final class WasteTripService
 
     public static function normalizeInput(array $input): array
     {
-        return['client_id'=>(int)($input['client_id']??0),'route_executor_id'=>(int)($input['route_executor_id']??0)?:null,'responsible_user_id'=>(int)($input['responsible_user_id']??0),'destination_type'=>trim((string)($input['destination_type']??'')),'utilizer_id'=>(int)($input['utilizer_id']??0)?:null,'status'=>trim((string)($input['status']??self::STATUS_SEARCHING)),'planned_start_mode'=>trim((string)($input['planned_start_mode']??'')),'planned_start_date'=>self::normalizeDate($input['planned_start_date']??null),'planned_start_date_from'=>self::normalizeDate($input['planned_start_date_from']??null),'planned_start_date_to'=>self::normalizeDate($input['planned_start_date_to']??null),'planned_finish_date'=>self::normalizeDate($input['planned_finish_date']??null),'actual_start_date'=>self::normalizeDate($input['actual_start_date']??null),'actual_end_date'=>self::normalizeDate($input['actual_end_date']??null),'comment'=>self::nullableText($input['comment']??null,500),'cancellation_reason'=>self::nullableText($input['cancellation_reason']??null,500)];
+        return['client_id'=>(int)($input['client_id']??0),'route_executor_id'=>(int)($input['route_executor_id']??0)?:null,'responsible_user_id'=>(int)($input['responsible_user_id']??0),'destination_type'=>trim((string)($input['destination_type']??'')),'utilizer_id'=>(int)($input['utilizer_id']??0)?:null,'status'=>trim((string)($input['status']??self::STATUS_PLANNED)),'planned_start_mode'=>trim((string)($input['planned_start_mode']??'')),'planned_start_date'=>self::normalizeDate($input['planned_start_date']??null),'planned_start_date_from'=>self::normalizeDate($input['planned_start_date_from']??null),'planned_start_date_to'=>self::normalizeDate($input['planned_start_date_to']??null),'planned_finish_date'=>self::normalizeDate($input['planned_finish_date']??null),'actual_start_date'=>self::normalizeDate($input['actual_start_date']??null),'actual_end_date'=>self::normalizeDate($input['actual_end_date']??null),'comment'=>self::nullableText($input['comment']??null,500),'cancellation_reason'=>self::nullableText($input['cancellation_reason']??null,500)];
     }
 
     public static function validateInput(array $data,bool $allowUnspecifiedPlan=false,bool $allowHistoricalUnmappedExecutor=false,bool $allowOpenRange=false,bool $allowUnmappedUtilizer=false): array
@@ -280,7 +298,7 @@ final class WasteTripService
 
     public static function fetchTrips(PDO $pdo,array $filters=[],bool $includeFinance=false): array
     {
-        $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');$where=[$access['sql'],'wt.deleted_at IS NULL'];$params=$access['params'];$status=trim((string)($filters['status']??''));if($status!==''&&isset(self::STATUS_LABELS[$status])){$where[]='wt.status=?';$params[]=$status;}$q=trim((string)($filters['q']??''));if($q!==''){$term='%'.$q.'%';$where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR wt.comment LIKE ? OR c.name LIKE ? OR u.full_name LIKE ? OR ct.name LIKE ? OR fr.zayavka_id LIKE ? OR wt.status LIKE ?)';for($i=0;$i<7;$i++)$params[]=$term;}
+        $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');$where=[$access['sql'],'wt.deleted_at IS NULL'];$params=$access['params'];$status=trim((string)($filters['status']??''));if($status!==''&&isset(self::STATUS_LABELS[$status])){if(in_array($status,[self::STATUS_PLANNED,self::STATUS_SEARCHING],true)){$where[]="wt.status IN ('planned_route','searching_executor')";}else{$where[]='wt.status=?';$params[]=$status;}}$q=trim((string)($filters['q']??''));if($q!==''){$term='%'.$q.'%';$where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR wt.comment LIKE ? OR c.name LIKE ? OR u.full_name LIKE ? OR ct.name LIKE ? OR EXISTS (SELECT 1 FROM waste_trip_requests sqr JOIN feo_requests sqf ON sqf.id=sqr.feo_request_id WHERE sqr.waste_trip_id=wt.id AND sqf.zayavka_id LIKE ?) OR wt.status LIKE ?)';for($i=0;$i<7;$i++)$params[]=$term;}
         $sql="SELECT wt.*,c.name AS client_name,u.full_name AS responsible_name,u.membership_id AS responsible_membership_id,fu.short_name AS utilizer_short_name,fu.full_name AS utilizer_full_name,ct.name AS executor_contractor_name,GROUP_CONCAT(DISTINCT fr.zayavka_id ORDER BY wtr.position_no,wtr.id SEPARATOR ', ') AS request_ids,COUNT(DISTINCT wtr.id) AS request_count,COALESCE(SUM(wtr.snapshot_mass_kg),0) AS snapshot_total_mass_kg FROM waste_trips wt JOIN clients c ON c.id=wt.client_id JOIN users u ON u.id=wt.responsible_user_id LEFT JOIN feo_utilizers fu ON fu.id=wt.utilizer_id LEFT JOIN crews cr ON cr.id=wt.route_executor_id LEFT JOIN contractors ct ON ct.id=cr.contractor_id LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE ".implode(' AND ',$where).' GROUP BY wt.id,c.name,u.full_name,u.membership_id,fu.short_name,fu.full_name,ct.name ORDER BY wt.business_id DESC LIMIT 500';$stmt=$pdo->prepare($sql);$stmt->execute($params);$trips=$stmt->fetchAll(PDO::FETCH_ASSOC);self::enrichExecutorDisplay($pdo,$trips);if($includeFinance){$ids=array_column($trips,'id');$customerGrouped=WasteTripCustomerPaymentService::fetchForTrips($pdo,$ids);$carrierGrouped=WasteTripCarrierPaymentService::fetchForTrips($pdo,$ids);foreach($trips as&$trip){$id=(int)$trip['id'];$trip['customer_payments']=$customerGrouped[$id]??[];$trip['carrier_payments']=$carrierGrouped[$id]??[];}unset($trip);}return$trips;
     }
 
