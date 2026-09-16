@@ -22,7 +22,7 @@
         headActions.appendChild(invoiceOpen);
     }
     if(personalOpen)headActions.appendChild(personalOpen);
-    report.dataset.employeeActionMatrix='client-receipt,transfer,invoice-payment,personal-expense';
+    report.dataset.employeeActionMatrix='client-receipt,transfer,invoice-payment,personal-expense,company-funded-expense';
 })();
 </script>
 <?php require base_path('app/View/partials/company_finance_employee_ledger_editor.php'); ?>

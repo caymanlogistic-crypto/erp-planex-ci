@@ -5,6 +5,7 @@ require_once base_path('app/Service/FinanceEmployeeInvoicePaymentEventService.ph
 require_once base_path('app/Service/FinanceEmployeePersonalExpenseEventService.php');
 require_once base_path('app/Service/FinanceEmployeeMoneyAccountService.php');
 require_once base_path('app/Service/FinanceEmployeeBankSettlementService.php');
+require_once base_path('app/Service/FinanceEmployeeCompanyFundedExpenseService.php');
 require_once base_path('app/Service/FinanceEmployeeDirectTransferService.php');
 require_once base_path('app/Service/FinanceEmployeeDirectTransferEditService.php');
 require_once base_path('app/Service/FinanceEmployeeDirectExpenseService.php');
@@ -22,14 +23,14 @@ $employeePaymentsPage = 'company.finance.employee_payments';
 
 $router->get('/company/finance/employee-payments', [$controller, 'index'], $employeePaymentsPage);
 
-// Retired generic form: the workspace exposes exactly four business operations.
+// Retired generic form: the workspace exposes explicit business operations only.
 $router->get('/company/finance/employee-payments/create', static function (): void {
-    $_SESSION['employee_payments_success'] = 'Выберите операцию: получено от клиента, передача сотруднику, оплата счёта или прочий расход.';
+    $_SESSION['employee_payments_success'] = 'Выберите нужную финансовую операцию сотрудника.';
     redirect_to('/company/finance/employee-payments');
 }, $employeePaymentsPage);
 $router->post('/company/finance/employee-payments/create', static function (): void {
     verifyCsrfRequest();
-    $_SESSION['employee_payments_error'] = 'Устаревший универсальный способ отключён. Используйте одну из четырёх бизнес-операций.';
+    $_SESSION['employee_payments_error'] = 'Устаревший универсальный способ отключён. Используйте отдельную бизнес-операцию.';
     redirect_to('/company/finance/employee-payments');
 }, $employeePaymentsPage);
 
@@ -55,6 +56,9 @@ $router->post('/company/finance/employee-payments/transfer/delete', static funct
 
 $router->get('/company/finance/employee-payments/employee/{type}/{id}', [$controller, 'employeeDetail'], $employeePaymentsPage);
 $router->post('/company/finance/employee-payments/movements/{id}/reassign', [$controller, 'reassignMovement'], $employeePaymentsPage);
+
+$router->post('/company/finance/employee-payments/company-funded-expense/create', [$controller, 'companyFundedCreate'], $employeePaymentsPage);
+$router->post('/company/finance/employee-payments/company-funded-expense/unmark', [$controller, 'companyFundedUnmark'], $employeePaymentsPage);
 
 $router->post('/company/finance/employee-payments/bank-link', static function () use ($config, $db): void {
     require base_path('app/Http/Controllers/Company/FinanceEmployeeDirectActions/bank_link.php');

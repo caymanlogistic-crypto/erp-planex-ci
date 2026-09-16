@@ -34,6 +34,7 @@ $payloadForRow = static function(array $row) use ($clientEditByMovement,$directT
         $e=$personalEditByMovement[$mid];
         return ['kind'=>'personal','event_id'=>(int)$e['id']];
     }
+    if(strtoupper((string)($row['source_type']??''))==='COMPANY_FUNDED') return ['kind'=>'company_funded','movement_id'=>$mid];
     if(isset($directTransferByMovement[$mid])) return ['kind'=>'transfer','data'=>$directTransferByMovement[$mid]];
     if(!empty($row['employee_transfer'])) return ['kind'=>'transfer','data'=>$row['employee_transfer']];
     return null;
@@ -171,6 +172,7 @@ foreach($editorMonths as $rows){foreach($rows as $row)$orderedPayloads[]=$payloa
      else if(p.kind==='transfer')openTransfer(p);
      else if(p.kind==='invoice')openInvoice(p);
      else if(p.kind==='personal')openPersonal(p).catch(error=>{console.error(error);alert(error.message||'Не удалось открыть прочий расход.');});
+     else if(p.kind==='company_funded'&&window.employeeCompanyFundedUnmark)window.employeeCompanyFundedUnmark(p.movement_id);
    });
  });
  document.querySelectorAll('.employee-report-table').forEach(table=>{

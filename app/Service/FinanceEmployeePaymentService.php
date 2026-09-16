@@ -14,7 +14,7 @@ final class FinanceEmployeePaymentService
     {
         $employees = [];
         $knownMemberships = [];
-        $knownLogins = [];
+        $knownPeople = [];
 
         $ownerStmt = $centralPdo->prepare("SELECT id, full_name, login, role, status
                                              FROM company_users
@@ -23,8 +23,7 @@ final class FinanceEmployeePaymentService
         $ownerStmt->execute([$companyId]);
         foreach ($ownerStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $employees[] = self::directoryRow(self::IDENTITY_COMPANY_USER, $row, 'role');
-            $login = mb_strtolower(trim((string)($row['login'] ?? '')));
-            if ($login !== '') $knownLogins[$login] = true;
+            $knownPeople[self::directoryPersonKey($row)] = true;
         }
 
         $tenantStmt = $localPdo->query("SELECT id, membership_id, full_name, login, role_code, status
@@ -32,12 +31,12 @@ final class FinanceEmployeePaymentService
                                         WHERE status = 'active' AND deleted_at IS NULL
                                         ORDER BY full_name ASC, id ASC");
         foreach ($tenantStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
-            $login = mb_strtolower(trim((string)($row['login'] ?? '')));
-            if ($login !== '' && isset($knownLogins[$login])) continue;
+            $personKey = self::directoryPersonKey($row);
+            if (isset($knownPeople[$personKey])) continue;
             $employees[] = self::directoryRow(self::IDENTITY_TENANT_USER, $row, 'role_code');
             $membershipId = (int)($row['membership_id'] ?? 0);
             if ($membershipId > 0) $knownMemberships[$membershipId] = true;
-            if ($login !== '') $knownLogins[$login] = true;
+            $knownPeople[$personKey] = true;
         }
 
         $membershipStmt = $centralPdo->prepare(
@@ -53,8 +52,8 @@ final class FinanceEmployeePaymentService
         $membershipStmt->execute([$companyId]);
         foreach ($membershipStmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
             $membershipId = (int)($row['membership_id'] ?? 0);
-            $login = mb_strtolower(trim((string)($row['login'] ?? '')));
-            if ($membershipId <= 0 || isset($knownMemberships[$membershipId]) || ($login !== '' && isset($knownLogins[$login]))) continue;
+            $personKey = self::directoryPersonKey($row);
+            if ($membershipId <= 0 || isset($knownMemberships[$membershipId]) || isset($knownPeople[$personKey])) continue;
             $employees[] = [
                 'ref' => self::makeEmployeeRef(self::IDENTITY_MEMBERSHIP, $membershipId),
                 'identity_type' => self::IDENTITY_MEMBERSHIP,
@@ -71,6 +70,13 @@ final class FinanceEmployeePaymentService
         return $employees;
     }
 
+    private static function directoryPersonKey(array $row): string
+    {
+        $login = mb_strtolower(trim((string)($row['login'] ?? '')));
+        $name = mb_strtolower(trim((string)($row['full_name'] ?? '')));
+        $name = preg_replace('/\s+/u', ' ', $name) ?? $name;
+        return $login . '|' . $name;
+    }
     public static function resolveActiveEmployee(PDO $localPdo, PDO $centralPdo, int $companyId, string $ref): array
     {
         [$type, $id] = self::parseEmployeeRef($ref);
@@ -121,7 +127,7 @@ final class FinanceEmployeePaymentService
             $params[':employee_identity_type'] = $type;
             $params[':employee_identity_id'] = $id;
         }
-        if (!empty($filters['source_type']) && in_array($filters['source_type'], ['BANK','CASH'], true)) {
+        if (!empty($filters['source_type']) && in_array($filters['source_type'], ['BANK','CASH','COMPANY_FUNDED'], true)) {
             $where[] = 'fem.source_type = :source_type';
             $params[':source_type'] = $filters['source_type'];
         }
@@ -171,7 +177,7 @@ final class FinanceEmployeePaymentService
                                 FROM finance_employee_movements fem
                                 JOIN finance_operations fo ON fo.id = fem.finance_operation_id
                            LEFT JOIN finance_money_accounts fma ON fma.id = fo.money_account_id
-                           LEFT JOIN bank_transactions bt ON bt.id = fem.bank_transaction_id
+                           LEFT JOIN bank_transactions bt ON bt.id = CASE WHEN fem.source_type='COMPANY_FUNDED' THEN fo.bank_transaction_id ELSE fem.bank_transaction_id END
                                WHERE fem.employee_identity_type = ? AND fem.employee_identity_id = ?
                             ORDER BY fo.operation_date ASC, fem.id ASC");
         $stmt->execute([$type, $id]);
@@ -199,10 +205,12 @@ final class FinanceEmployeePaymentService
                                 FROM bank_transactions bt
                                 JOIN bank_accounts ba ON ba.id = bt.account_id
                                 JOIN finance_operations fo ON fo.bank_transaction_id = bt.id AND fo.status = 'POSTED'
-                           LEFT JOIN finance_employee_movements fem ON fem.bank_transaction_id = bt.id
                                WHERE {$amountCondition}
                                  AND COALESCE(bt.is_internal_transfer,0)=0
-                                 AND fem.id IS NULL
+                                 AND NOT EXISTS (
+                                     SELECT 1 FROM finance_employee_movements fem
+                                      WHERE fem.bank_transaction_id = bt.id OR fem.finance_operation_id = fo.id
+                                 )
                             ORDER BY bt.operation_date DESC, bt.id DESC
                                LIMIT :limit");
         $stmt->bindValue(':limit', max(1, min(500, $limit)), PDO::PARAM_INT);

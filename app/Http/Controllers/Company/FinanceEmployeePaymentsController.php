@@ -7,6 +7,7 @@ use App\Service\FinanceCashInvoiceEventService;
 use App\Service\FinanceCashService;
 use App\Service\FinanceEmployeeInvoicePaymentEventService;
 use App\Service\FinanceEmployeePaymentService;
+use App\Service\FinanceEmployeeCompanyFundedExpenseService;
 use App\Service\FinanceEmployeePersonalExpenseEventService;
 use App\Service\FinanceEmployeeTransferService;
 use PDO;
@@ -34,6 +35,7 @@ final class FinanceEmployeePaymentsController
         $employeeInvoicePayments = [];
         $employeePersonalExpenses = [];
         $carrierInvoices = [];
+        $companyFundedCandidates = [];
         if ($selectedRef !== '') {
             try {
                 $selectedEmployee = FinanceEmployeePaymentService::resolveActiveEmployee($pdo, $central, (int)$company['id'], $selectedRef);
@@ -53,6 +55,7 @@ final class FinanceEmployeePaymentsController
                 $employeeInvoicePayments = FinanceEmployeeInvoicePaymentEventService::fetchForEmployee($pdo, $selectedRef);
                 $employeePersonalExpenses = FinanceEmployeePersonalExpenseEventService::fetchForEmployee($pdo, $selectedRef);
                 $carrierInvoices = FinanceCashInvoiceEventService::fetchCarrierInvoices($pdo);
+                $companyFundedCandidates = FinanceEmployeeCompanyFundedExpenseService::fetchCandidates($pdo);
             }
         }
 
@@ -70,6 +73,7 @@ final class FinanceEmployeePaymentsController
         ob_start();
         require base_path('app/View/pages/company_finance_employee_payments.php');
         require base_path('app/View/partials/company_finance_employee_invoice_tools.php');
+        require base_path('app/View/partials/company_finance_employee_company_funded_expense.php');
         require base_path('app/View/partials/company_finance_employee_unified_ledger_ui.php');
         $content = ob_get_clean();
         $config = $this->config;
@@ -266,6 +270,46 @@ final class FinanceEmployeePaymentsController
             $_SESSION['bank_finance_error'] = $e->getMessage();
         }
         redirect_to('/company/finance/bank-accounts');
+    }
+
+    public function companyFundedCreate(): void
+    {
+        verifyCsrfRequest();
+        $employeeRef = trim((string)($_POST['employee_ref'] ?? ''));
+        try {
+            [$company, $pdo, $central] = $this->tenant();
+            $employee = FinanceEmployeePaymentService::resolveActiveEmployee($pdo, $central, (int)$company['id'], $employeeRef);
+            $result = FinanceEmployeeCompanyFundedExpenseService::mark(
+                $pdo,
+                (int)($_POST['bank_transaction_id'] ?? 0),
+                $employee,
+                ['id'=>(int)($_SESSION['user_id']??0),'role'=>(string)($_SESSION['role_code']??'company_owner')],
+                (string)($_POST['comment'] ?? '')
+            );
+            $_SESSION['employee_payments_success'] = 'Расход компании отражён за сотрудником: '
+                . FinanceEmployeePaymentService::formatMoney($result['amount']) . ' ₽.';
+        } catch (\Throwable $e) {
+            $_SESSION['employee_payments_error'] = $e->getMessage();
+        }
+        $this->redirectToEmployeePayments($employeeRef);
+    }
+
+    public function companyFundedUnmark(): void
+    {
+        verifyCsrfRequest();
+        $employeeRef = trim((string)($_POST['employee_ref'] ?? ''));
+        try {
+            [, $pdo] = $this->tenant();
+            FinanceEmployeeCompanyFundedExpenseService::unmark(
+                $pdo,
+                (int)($_POST['movement_id'] ?? 0),
+                ['id'=>(int)($_SESSION['user_id']??0),'role'=>(string)($_SESSION['role_code']??'company_owner')]
+            );
+            $_SESSION['employee_payments_success'] = 'Отметка «оплачено компанией за сотрудника» снята. Банковский платёж не изменён.';
+        } catch (\Throwable $e) {
+            $_SESSION['employee_payments_error'] = $e->getMessage();
+        }
+        $this->redirectToEmployeePayments($employeeRef);
     }
 
     private function redirectToEmployeePayments(string $employeeRef): void
