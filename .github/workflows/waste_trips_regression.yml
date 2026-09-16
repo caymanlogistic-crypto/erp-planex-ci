@@ -149,7 +149,8 @@ jobs:
           grep -Fqx 'WASTE_TRIP_LEGACY_MAPPING=PASS' /tmp/mapping.out
           php tests/waste_trip_synchronization_mysql_test.php | tee /tmp/synchronization.out
           grep -Fqx 'WASTE_TRIP_SYNCHRONIZATION_MYSQL=PASS' /tmp/synchronization.out
-          php tests/waste_trips_137_migration_mysql_test.php
-          php tests/waste_trips_138_production_migration_contract_test.php
-          php tests/waste_trips_138_migration_mysql_test.php | tee /tmp/m137-mysql.out
+          php tests/waste_trips_137_migration_mysql_test.php | tee /tmp/m137-mysql.out
           grep -Fqx 'WASTE_TRIPS_137_MIGRATION_MYSQL=PASS' /tmp/m137-mysql.out
+          php tests/waste_trips_138_production_migration_contract_test.php
+          php tests/waste_trips_138_migration_mysql_test.php | tee /tmp/m138-mysql.out
+          grep -Fqx 'WASTE_TRIPS_138_MIGRATION_MYSQL=PASS' /tmp/m138-mysql.out
