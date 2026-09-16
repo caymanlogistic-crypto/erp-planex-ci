@@ -2,12 +2,14 @@
 require_once __DIR__.'/../app/Service/FinanceAuditLogService.php';
 require_once __DIR__.'/../app/Service/FinanceCashService.php';
 require_once __DIR__.'/../app/Service/FinanceEmployeePaymentService.php';
+require_once __DIR__.'/../app/Service/FinanceEmployeeCompanyFundedExpenseService.php';
 use App\Service\FinanceEmployeePaymentService as S;
+use App\Service\FinanceEmployeeCompanyFundedExpenseService as CF;
 
 function ok(bool $v,string $m):void{if(!$v)throw new RuntimeException('FAIL: '.$m);}
 function throws(callable $fn,string $needle,string $m):void{try{$fn();}catch(Throwable $e){ok(str_contains($e->getMessage(),$needle),$m.' / '.$e->getMessage());return;}throw new RuntimeException('FAIL: '.$m.' / exception expected');}
 
-$pdo=new PDO('mysql:host='.(getenv('EMPLOYEE_PAYMENTS_DB_HOST')?:'127.0.0.1').';port='.(getenv('EMPLOYEE_PAYMENTS_DB_PORT')?:'3306').';dbname='.(getenv('EMPLOYEE_PAYMENTS_DB_NAME')?:'erp_employee_payments_test').';charset=utf8mb4',getenv('EMPLOYEE_PAYMENTS_DB_USER')?:'root',getenv('EMPLOYEE_PAYMENTS_DB_PASSWORD')?:'root',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+$pdo=new PDO('mysql:host='.(getenv('EMPLOYEE_PAYMENTS_DB_HOST')?:getenv('PLANEX_SCHEMA_DB_HOST')?:'127.0.0.1').';port='.(getenv('EMPLOYEE_PAYMENTS_DB_PORT')?:getenv('PLANEX_SCHEMA_DB_PORT')?:'3306').';dbname='.(getenv('EMPLOYEE_PAYMENTS_DB_NAME')?:getenv('PLANEX_TEST_FIXED_DB')?:'erp_employee_payments_test').';charset=utf8mb4',getenv('EMPLOYEE_PAYMENTS_DB_USER')?:getenv('PLANEX_SCHEMA_DB_USER')?:'root',getenv('EMPLOYEE_PAYMENTS_DB_PASSWORD')?:getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'root',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');foreach(['finance_employee_movements','finance_audit_log','finance_operations','bank_transactions','bank_accounts','finance_money_accounts','company_memberships','company_roles','user_accounts','company_users','users'] as $t)$pdo->exec("DROP TABLE IF EXISTS `$t`");$pdo->exec('SET FOREIGN_KEY_CHECKS=1');
 $pdo->exec("CREATE TABLE company_users(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,company_id INT UNSIGNED NOT NULL,full_name VARCHAR(255) NOT NULL,login VARCHAR(100) NOT NULL,role VARCHAR(50) NOT NULL,status VARCHAR(20) NOT NULL) ENGINE=InnoDB");
 $pdo->exec("CREATE TABLE user_accounts(id INT UNSIGNED PRIMARY KEY,full_name VARCHAR(255) NOT NULL,login VARCHAR(255) NOT NULL,status VARCHAR(20) NOT NULL) ENGINE=InnoDB");
@@ -38,6 +40,11 @@ $owner=S::resolveActiveEmployee($pdo,$pdo,1,'COMPANY_USER:100');$legacyOwnerProj
 ok($membershipEmployee['full_name']==='Сидоров Михаил'&&$membershipEmployee['identity_type']==='MEMBERSHIP','membership-only employee resolves for financial operations');
 throws(fn()=>S::resolveActiveEmployee($pdo,$pdo,1,'COMPANY_USER:101'),'неактивен','foreign company user rejected');throws(fn()=>S::resolveActiveEmployee($pdo,$pdo,2,'MEMBERSHIP:501'),'неактивен','membership from another company rejected');
 
+$pdo->exec("INSERT INTO company_users(id,company_id,full_name,login,role,status) VALUES(103,1,'Дежурный сотрудник','shared.finance','logist','active'); INSERT INTO users(id,membership_id,full_name,login,role_code,status,deleted_at) VALUES(7,NULL,'Шибанов','shared.finance','logist','active',NULL)");
+$collisionDirectory=S::fetchActiveEmployees($pdo,$pdo,1);$collisionNames=array_column($collisionDirectory,'full_name');
+ok(in_array('Шибанов',$collisionNames,true),'distinct employee is not hidden by a legacy login collision');ok(in_array('Дежурный сотрудник',$collisionNames,true),'legacy employee with same login remains visible');
+$pdo->exec("DELETE FROM users WHERE id=7; DELETE FROM company_users WHERE id=103");
+
 $p=S::createCashMovement($pdo,['movement_type'=>'PAYMENT','money_account_id'=>1,'amount'=>'100,10','operation_date'=>'2026-08-15','purpose'=>'Подотчёт'],$actor,$owner);
 $r=S::createCashMovement($pdo,['movement_type'=>'RETURN','money_account_id'=>1,'amount'=>'0,20','operation_date'=>'2026-08-15','purpose'=>'Возврат'],$actor,$owner);
 $m=S::createCashMovement($pdo,['movement_type'=>'PAYMENT','money_account_id'=>1,'amount'=>'10.00','operation_date'=>'2026-08-15','purpose'=>'Membership employee'],$actor,$membershipEmployee);ok($pdo->query('SELECT employee_identity_type FROM finance_employee_movements WHERE id='.(int)$m['movement_id'])->fetchColumn()==='MEMBERSHIP','membership-only employee movement persists stable identity');ok($pdo->query('SELECT employee_user_id FROM finance_employee_movements WHERE id='.(int)$m['movement_id'])->fetchColumn()===null,'membership-only employee does not create fake tenant user');
@@ -46,6 +53,14 @@ throws(fn()=>S::createCashMovement($pdo,['movement_type'=>'PAYMENT','money_accou
 
 $pdo->exec("INSERT INTO bank_transactions(id,account_id,operation_date,document_number,counterparty_name,counterparty_inn,debit_amount,credit_amount,purpose,is_internal_transfer) VALUES(10,1,'2026-08-15','10','Иванов','7700000001',250,0,'Выплата',0),(11,1,'2026-08-15','11','Иванов','7700000001',0,50,'Возврат',0),(12,1,'2026-08-15','12','Внутренний',NULL,75,0,'Банк в кассу',1),(13,1,'2026-08-15','13','Петров','7700000002',10,0,'Выплата',0)");
 $pdo->exec("INSERT INTO finance_operations(id,operation_type,status,source,money_account_id,transfer_direction,operation_date,amount,currency,purpose,bank_transaction_id,posted_at) VALUES(10,'EXPENSE','POSTED','BANK_STATEMENT',2,NULL,'2026-08-15',250,'RUR','Выплата',10,NOW()),(11,'INCOME','POSTED','BANK_STATEMENT',2,NULL,'2026-08-15',50,'RUR','Возврат',11,NOW()),(12,'TRANSFER','POSTED','TRANSFER',2,'out','2026-08-15',75,'RUR','Банк в кассу',12,NOW()),(13,'EXPENSE','POSTED','BANK_STATEMENT',2,NULL,'2026-08-15',10,'RUR','Выплата',13,NOW())");
+
+$cfIds=array_map('intval',array_column(CF::fetchCandidates($pdo,500),'id'));ok(in_array(13,$cfIds,true),'ordinary outgoing bank payment is available for company-funded employee expense');
+$cf=CF::mark($pdo,13,$owner,$actor,'Юридические услуги');$cfRow=$pdo->query('SELECT * FROM finance_employee_movements WHERE id='.(int)$cf['movement_id'])->fetch(PDO::FETCH_ASSOC);
+ok(($cfRow['movement_type']??'')==='PAYMENT','company-funded expense increases employee accountability balance');ok(($cfRow['source_type']??'')==='COMPANY_FUNDED','company-funded source type persisted');ok($cfRow['bank_transaction_id']===null,'company-funded movement must not become BANK employee settlement');ok((int)$cfRow['finance_operation_id']===13,'existing bank finance operation is reused without second money leg');
+$cfLedger=S::fetchEmployeeLedger($pdo,'COMPANY_USER:100');$cfLedgerRows=array_values(array_filter($cfLedger,fn(array $r):bool=>(int)$r['id']===(int)$cf['movement_id']));ok(count($cfLedgerRows)===1&&(int)$cfLedgerRows[0]['bank_transaction_id']===13,'employee ledger resolves underlying bank payment for display only');
+$scope=(int)$pdo->query('SELECT COUNT(*) FROM bank_transactions bt WHERE bt.id=13 AND COALESCE(bt.is_internal_transfer,0)=0 AND NOT EXISTS (SELECT 1 FROM finance_employee_movements fem WHERE fem.bank_transaction_id=bt.id)')->fetchColumn();ok($scope===1,'closing-documents scope is preserved because bank_transaction_id stays NULL on employee movement');ok((string)$pdo->query('SELECT source FROM finance_operations WHERE id=13')->fetchColumn()==='BANK_STATEMENT','bank finance operation source remains unchanged');
+$cfIdsAfter=array_map('intval',array_column(CF::fetchCandidates($pdo,500),'id'));ok(!in_array(13,$cfIdsAfter,true),'already marked payment is not offered twice');
+CF::unmark($pdo,(int)$cf['movement_id'],$actor);ok((int)$pdo->query('SELECT COUNT(*) FROM finance_employee_movements WHERE id='.(int)$cf['movement_id'])->fetchColumn()===0,'unmark removes only employee attribution');ok((int)$pdo->query("SELECT COUNT(*) FROM finance_operations WHERE id=13 AND status='POSTED' AND source='BANK_STATEMENT'")->fetchColumn()===1,'unmark keeps original bank money operation intact');
 $b=S::linkBankTransaction($pdo,['movement_type'=>'PAYMENT','bank_transaction_id'=>10],$actor,$owner);ok($b['finance_operation_id']===10,'BANK payment reuses operation');
 throws(fn()=>S::linkBankTransaction($pdo,['movement_type'=>'PAYMENT','bank_transaction_id'=>10],$actor,$logist),'уже связана','duplicate bank link rejected');
 throws(fn()=>S::linkBankTransaction($pdo,['movement_type'=>'PAYMENT','bank_transaction_id'=>11],$actor,$owner),'не соответствует','wrong bank direction rejected');

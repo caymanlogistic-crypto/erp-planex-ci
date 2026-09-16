@@ -47,6 +47,7 @@ $describeRow = static function (array $row) use ($invoiceByMovement, $personalBy
     $movement = strtoupper((string)($row['movement_type'] ?? ''));
     $basis = trim((string)($row['purpose'] ?? '')) ?: trim((string)($row['note'] ?? ''));
     if ($source === 'CLIENT') return ['Получено от клиента', 'Клиент', $basis ?: 'Оплата клиента'];
+    if ($source === 'COMPANY_FUNDED') return ['Оплачено компанией за сотрудника', 'Компания', $basis ?: 'Расход сотрудника, оплаченный компанией'];
     if (!empty($row['employee_transfer'])) return [$movement === 'PAYMENT' ? 'Получено от сотрудника' : 'Передал сотруднику', 'Сотрудник', $basis ?: 'Передача между сотрудниками'];
     if ($source === 'BANK') return [$movement === 'PAYMENT' ? 'Получено с расчётного счёта' : 'Передано на расчётный счёт', 'Расчётный счёт', $basis ?: 'Взаиморасчёт с компанией'];
     return [$movement === 'PAYMENT' ? 'Историческое поступление' : 'Исторический расход', 'Средства компании', $basis ?: 'Историческая операция'];
