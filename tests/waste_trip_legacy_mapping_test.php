@@ -47,3 +47,6 @@ $check(Mapping::manager('Гладских', 'Карина', [['membership_id'=>2
 $check(Mapping::customer([['id'=>13,'name'=>'ООО "МГ ЛОГИСТИК"'],['id'=>4,'name'=>'МГ Логистик Восток']]) === 13, 'Customer exact normalized name');
 $check(Mapping::customer([['id'=>13,'name'=>'ООО «МГ ЛОГИСТИК»'],['id'=>14,'name'=>'МГ логистик']]) === null, 'Ambiguous customer');
 echo "WASTE_TRIP_LEGACY_MAPPING=PASS\n";
+
+foreach(['planned_route'=>'planned_route','search'=>'planned_route','attention'=>'planned_route','found'=>'executor_assigned','started'=>'in_progress','completed'=>'completed'] as $source=>$target)$check(Mapping::status($source)===$target,'Approved status mapping '.$source);
+$check(Mapping::executor(['driver_id'=>null],[])===['id'=>null,'warning'=>null],'No source executor means no warning');
