@@ -28,7 +28,7 @@ $assert(Registry::cents([['amount'=>'10.01'],['amount'=>'20.02']])===3003,'Integ
 $assert(count(Trips::STATUS_OPTIONS)===4 && Trips::displayStatus('searching_executor')==='planned_route','Four selectable statuses and old alias');
 $render=static function(bool $finance) use($legacy): string {
     $company=['status'=>'active'];$dbError=null;$formSuccess=null;$formError=null;$old=[];$clients=[];$responsibleUsers=[];$routeExecutors=[];$utilizers=[];$isFinanceRealm=$finance;
-    $base=$legacy+['id'=>1,'business_id'=>250,'comment'=>str_repeat('Длинное описание <script> ',20),'status'=>'searching_executor','actual_start_date'=>null,'planned_start_date'=>'2026-01-02','actual_end_date'=>null,'planned_finish_date'=>null,'responsible_name'=>'Сидоров Владимир Петрович','request_count'=>22,'snapshot_total_mass_kg'=>1500.25,'customer_payments'=>[['amount'=>'100.00','condition_type'=>'on_loading']],'carrier_payments'=>[['amount'=>'120.00','condition_type'=>'']]];
+    $base=$legacy+['id'=>1,'business_id'=>250,'comment'=>str_repeat('Длинное описание <script> ',20),'status'=>'searching_executor','actual_start_date'=>null,'planned_start_date'=>'2026-01-02','actual_end_date'=>null,'planned_finish_date'=>null,'responsible_name'=>'Сидоров Владимир Петрович','request_count'=>22,'snapshot_total_mass_kg'=>1500.25,'general_payments'=>[['amount'=>'200.00','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],'customer_payments'=>[['amount'=>'100.00','condition_type'=>'on_loading']],'carrier_payments'=>[['amount'=>'120.00','condition_type'=>'']]];
     $trips=[$base,array_replace($base,['id'=>2,'business_id'=>251,'status'=>'executor_assigned','legacy_sync_error'=>'Исполнитель не найден по фамилии и госномеру.']),array_replace($base,['id'=>3,'business_id'=>252,'status'=>'in_progress','actual_start_date'=>'2026-01-03','route_executor_id'=>7,'executor_contractor_name'=>'ООО Перевозчик','executor_driver_names'=>'Иванов Иван Петрович','executor_vehicle_label'=>'MAN А123ВС77']),array_replace($base,['id'=>4,'business_id'=>253,'status'=>'completed','actual_start_date'=>'2026-01-03','actual_end_date'=>'2026-01-04'])];
     ob_start();require base_path('app/View/pages/company_waste_trips.php');return ob_get_clean();
 };
@@ -36,6 +36,10 @@ $html=$render(true);
 $dom=new DOMDocument();@$dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);$xp=new DOMXPath($dom);
 $assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th')->length===12,'Twelve registry columns');
 $assert($xp->query('//tr[@data-waste-view="1"]/td')->length===12,'Twelve data columns');
+$assert(str_contains($html,'ГЕН. ЗАКАЗЧИК') && !str_contains($html,'ДОХОДНОСТЬ'),'Three amounts replace profitability');
+$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[10]')->item(0)->textContent,'200 ₽'),'General amount separate from sale');
+$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[11]')->item(0)->textContent,'100 ₽'),'Sale column');
+$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[12]')->item(0)->textContent,'120 ₽'),'Manual cost column');
 $assert($xp->query('//td[contains(@class,"waste-executor-unmatched")]')->length===1,'Only unmatched row yellow');
 $assert($xp->query('//tr[@data-waste-view="1"]/td[7]')->item(0)->textContent==='22','Request count');
 $assert(trim($xp->query('//tr[@data-waste-view="1"]/td[8]')->item(0)->textContent)==='1 500,250','Total mass');
@@ -44,4 +48,11 @@ $assert(!str_contains($xp->query('//tr[@data-waste-view="3"]/td[3]')->item(0)->t
 $assert(!str_contains($html,'<script> Длинное'),'Escape legacy text');
 $assert(!str_contains($render(false),'100 ₽')&&!str_contains($render(false),'-20,0 %'),'Finance stays hidden for non-finance roles');
 if($out=getenv('WASTE_REGISTRY_RENDER_OUTPUT'))file_put_contents($out,$html);
+if($out=getenv('WASTE_EDIT_RENDER_OUTPUT')) {
+    $trip=['id'=>1,'business_id'=>250,'legacy_flight_id'=>250,'source_system'=>'legacy_sync','status'=>'planned_route','lock_version'=>1,'requests'=>[],
+        'general_payments'=>[['amount'=>'1500.00','payment_type'=>'','payment_method'=>'','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],
+        'customer_payments'=>[['amount'=>'1000.00','payment_type'=>'','payment_method'=>'','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']], 'carrier_payments'=>[]];
+    $isFinanceRealm=true;$clients=[];$responsibleUsers=[];$routeExecutors=[];$utilizers=[];
+    ob_start();require base_path('app/View/partials/company_waste_trip_modal_edit.php');file_put_contents($out,ob_get_clean());
+}
 echo "WASTE_TRIP_REGISTRY_RENDER=PASS\n";

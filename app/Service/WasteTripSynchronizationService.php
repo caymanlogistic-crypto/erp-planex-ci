@@ -13,7 +13,7 @@ final class WasteTripSynchronizationService
     {
         if (($actor['role_code'] ?? '') !== 'company_owner') throw new RuntimeException('Синхронизация доступна руководителю компании.');
         RegulatedDataScopeService::assertCanCreate('waste_trip');
-        if (!WasteTripService::schemaReady($tenant)) throw new RuntimeException('Для синхронизации требуется актуальная схема рейсов (137).');
+        if (!WasteTripService::schemaReady($tenant)) throw new RuntimeException('Для синхронизации требуется актуальная схема рейсов (138).');
         if ($companyId <= 0) throw new RuntimeException('Компания не выбрана.');
         $name = (string)$tenant->query('SELECT DATABASE()')->fetchColumn();
         $lockName = 'erp_waste_trip_legacy_sync_' . substr(hash('sha256', $name), 0, 24);
@@ -23,6 +23,9 @@ final class WasteTripSynchronizationService
         try {
             // No pagination/LIMIT: deletion may use only a completely fetched source set.
             // A connection/query/fetch failure escapes before any tenant mutations.
+            $ownsSnapshot = !$legacy->inTransaction();
+            if ($ownsSnapshot) $legacy->beginTransaction();
+            try {
             $flights = $legacy->query(
                 'SELECT f.id,f.zayavki_ids,f.comment,f.status,f.cost,f.payment_terms,f.driver_id,
                  f.planned_start_date,f.planned_start_date_from,f.planned_start_date_to,
@@ -32,6 +35,12 @@ final class WasteTripSynchronizationService
                  FROM flights f LEFT JOIN drivers d ON d.id=f.driver_id
                  LEFT JOIN users u ON u.id=f.assigned_manager_id WHERE f.id > 225 ORDER BY f.id'
             )->fetchAll(PDO::FETCH_ASSOC);
+            $prices = WasteTripLegacyPriceService::fetchPrices($legacy);
+            if ($ownsSnapshot) $legacy->commit();
+            } catch (Throwable $error) {
+                if ($ownsSnapshot && $legacy->inTransaction()) $legacy->rollBack();
+                throw $error;
+            }
             $ids = [];
             foreach ($flights as $flight) {
                 $id = filter_var($flight['id'], FILTER_VALIDATE_INT);
@@ -58,6 +67,7 @@ final class WasteTripSynchronizationService
                 $id = (int)$flight['id'];
                 try {
                     $state = WasteTripLegacyMappingService::state($flight);
+                    $state['general_amount'] = WasteTripLegacyPriceService::flightTotal($state['request_ids'], $prices);
                     $state['client_id'] = $clientId;
                     $membershipId = WasteTripLegacyMappingService::manager((string)$flight['manager_surname'], (string)$flight['manager_first_name'], $memberships);
                     if ($membershipId === null) throw new RuntimeException('Менеджер не найден однозначно в новой ERP: '.trim($flight['manager_surname'].' '.$flight['manager_first_name']).'.');

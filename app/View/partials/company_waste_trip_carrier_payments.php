@@ -8,9 +8,9 @@ if ($paymentRows === []) {
         'amount' => '',
         'payment_method' => 'cashless',
         'vat_rate' => '',
-        'condition_type' => '',
-        'days_count' => '',
-        'days_kind' => '',
+        'condition_type' => 'after_end',
+        'days_count' => '7',
+        'days_kind' => 'calendar',
         'specific_due_date' => '',
         'condition_comment' => '',
     ]];
@@ -21,12 +21,12 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
     <div class="linear-trip-payment-card">
         <div class="linear-trip-block-head">
             <div>
-                <div class="linear-trip-block-title">Оплата перевозчику</div>
-                <div class="field-msg">Ставка и срок оплаты перевозчику — как в линейных рейсах.</div>
+                <div class="linear-trip-block-title">Себес · оплата подрядчику</div>
+                <div class="field-msg">Сумма вводится вручную. По умолчанию — 7 дней после выгрузки.</div>
             </div>
             <button type="button" class="btn btn-ghost" data-add-payment-row="carrier_payments">+ Добавить оплату</button>
         </div>
-        <div class="linear-trip-payment-rows" data-payment-container="carrier_payments">
+        <div class="linear-trip-payment-rows" data-payment-container="carrier_payments" data-default-days="7">
             <?php foreach ($paymentRows as $paymentIndex => $payment): ?>
                 <?php
                 $fieldBase = 'carrier_payments[' . $paymentIndex . ']';

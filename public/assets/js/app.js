@@ -2092,6 +2092,7 @@ document.addEventListener('click', function (e) {
         }
 
         bindPaymentContainer(form.querySelector('[data-payment-container="customer_payments"]'), 'customer_payments');
+        bindPaymentContainer(form.querySelector('[data-payment-container="general_payments"]'), 'general_payments');
         bindPaymentContainer(form.querySelector('[data-payment-container="carrier_payments"]'), 'carrier_payments');
 
         form.querySelectorAll('[data-add-payment-row]').forEach(function (btn) {
@@ -2099,7 +2100,15 @@ document.addEventListener('click', function (e) {
                 var scope = btn.getAttribute('data-add-payment-row');
                 var container = form.querySelector('[data-payment-container="' + scope + '"]');
                 if (!container) return;
-                container.appendChild(buildPaymentRow(scope));
+                var paymentRow = buildPaymentRow(scope);
+                var defaultDays = container.getAttribute('data-default-days');
+                if (defaultDays) {
+                    paymentRow.querySelector('[name$="[condition_type]"]').value = 'after_end';
+                    paymentRow.querySelector('[name$="[days_count]"]').value = defaultDays;
+                    paymentRow.querySelector('[name$="[days_kind]"]').value = 'calendar';
+                    syncDueFields(paymentRow);
+                }
+                container.appendChild(paymentRow);
                 renumberPaymentRows(container, scope);
             });
         });

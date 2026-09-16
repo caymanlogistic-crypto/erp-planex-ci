@@ -15,6 +15,8 @@ final class WasteTripCarrierPaymentService
             if (!is_array($row)) continue;
 
             $amountRaw = trim((string) ($row['amount'] ?? ''));
+            if ($amountRaw === '') continue;
+            $row += ['condition_type'=>'after_end','days_count'=>7,'days_kind'=>'calendar'];
             $paymentMethod = trim((string) ($row['payment_method'] ?? ''));
             $vatRateRaw = trim((string) ($row['vat_rate'] ?? ''));
             $conditionType = trim((string) ($row['condition_type'] ?? ''));
@@ -27,10 +29,10 @@ final class WasteTripCarrierPaymentService
 
             $amount = LinearRouteService::parseAmount($amountRaw);
             if ($amount === null) $errors[] = 'Укажите корректную сумму оплаты перевозчика.';
-            if (!in_array($paymentMethod, ['', 'cashless', 'cash'], true)) $errors[] = 'Выберите способ оплаты перевозчика.';
+            if (!in_array($paymentMethod, ['', 'unknown', 'cashless', 'cash'], true)) $errors[] = 'Выберите способ оплаты перевозчика.';
 
             $vatRate = null;
-            if ($vatRateRaw !== '') {
+            if ($vatRateRaw !== '' && $vatRateRaw !== 'unknown') {
                 if (in_array($vatRateRaw, ['0', '5', '7', '20', '22'], true)) $vatRate = $vatRateRaw;
                 else $errors[] = 'Выберите корректную ставку НДС для оплаты перевозчика.';
             }
@@ -61,8 +63,8 @@ final class WasteTripCarrierPaymentService
 
             $result[] = [
                 'amount' => $amount,
-                'payment_type' => LinearRouteService::legacyPaymentTypeFromMethodAndVat($paymentMethod !== '' ? $paymentMethod : 'cashless', $vatRate),
-                'payment_method' => $paymentMethod !== '' ? $paymentMethod : 'cashless',
+                'payment_type' => $paymentMethod === 'unknown' || $vatRateRaw === 'unknown' ? '' : LinearRouteService::legacyPaymentTypeFromMethodAndVat($paymentMethod !== '' ? $paymentMethod : 'cashless', $vatRate),
+                'payment_method' => $paymentMethod === 'unknown' ? '' : ($paymentMethod !== '' ? $paymentMethod : 'cashless'),
                 'vat_rate' => $vatRate,
                 'condition_type' => $conditionType,
                 'days_count' => $daysCount,
@@ -150,42 +152,6 @@ final class WasteTripCarrierPaymentService
             $cents += ((int) $whole * 100) + (int) str_pad(substr($fraction, 0, 2), 2, '0');
         }
         return number_format(intdiv($cents, 100), 0, ',', ' ') . ' ₽';
-    }
-
-    /** One source total; existing single-payment terms stay owned by ERP. */
-    public static function synchronizeCost(PDO $pdo, int $tripId, ?string $amount, ?string $terms, array $actor): void
-    {
-        if (!$pdo->inTransaction()) throw new RuntimeException('Ставка синхронизируется в транзакции рейса.');
-        $old = self::fetchForTrip($pdo,$tripId);
-        $cents = static fn(string $value): int => (int)str_replace('.', '', $value);
-        $total = array_sum(array_map(static fn(array $row): int => $cents((string)$row['amount']), $old));
-        // Retain an existing installment schedule when it already equals the source total.
-        if ($amount !== null && $old !== [] && $total === $cents($amount)) return;
-        if ($amount === null) {
-            $pdo->prepare('DELETE FROM waste_trip_carrier_payments WHERE waste_trip_id=?')->execute([$tripId]);
-        } elseif (count($old) === 1) {
-            $pdo->prepare('UPDATE waste_trip_carrier_payments SET amount=?,updated_by_user_id=?,updated_by_role=? WHERE id=?')->execute([$amount,$actor['user_id'],$actor['role_code'],$old[0]['id']]);
-        } else {
-            // An aggregate source price has no installment dates or tax/payment method.
-            // Keep the first row identity/sort key; audit retains the former schedule.
-            $first = $old[0] ?? null;
-            if ($first !== null) {
-                $removedIds = array_map('intval',array_column(array_slice($old,1),'id'));
-                $marks = implode(',',array_fill(0,count($removedIds),'?'));
-                $linked = $pdo->prepare("SELECT COUNT(*) FROM finance_obligations o WHERE o.source_type='WASTE_TRIP_CARRIER_PAYMENT' AND o.source_parent_type='WASTE_TRIP' AND o.source_parent_id=? AND o.source_id IN ({$marks}) AND (
-                    EXISTS(SELECT 1 FROM finance_operation_allocations a JOIN finance_operations op ON op.id=a.operation_id WHERE a.obligation_id=o.id AND a.cancelled_at IS NULL AND op.status='POSTED')
-                    OR EXISTS(SELECT 1 FROM finance_invoice_links l WHERE l.obligation_id=o.id))");
-                $linked->execute(array_merge([$tripId],$removedIds));
-                if ((int)$linked->fetchColumn() > 0) throw new RuntimeException('Ставка отличается от старой БД, а разбивка оплаты связана со счетами или проведёнными платежами. Требуется согласовать разбивку оплаты.');
-                $pdo->prepare("UPDATE waste_trip_carrier_payments SET amount=?,payment_type='',payment_method='',vat_rate=NULL,condition_type='',days_count=NULL,days_kind=NULL,specific_due_date=NULL,condition_comment=?,updated_by_user_id=?,updated_by_role=? WHERE id=?")
-                    ->execute([$amount,$terms,$actor['user_id'],$actor['role_code'],$first['id']]);
-                $pdo->prepare('DELETE FROM waste_trip_carrier_payments WHERE waste_trip_id=? AND id<>?')->execute([$tripId,$first['id']]);
-            } else {
-                $pdo->prepare("INSERT INTO waste_trip_carrier_payments (waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type,condition_comment,created_by_user_id,created_by_role,updated_by_user_id,updated_by_role) VALUES (?,1,?,'','','',?,?,?,?,?)")
-                    ->execute([$tripId,$amount,$terms,$actor['user_id'],$actor['role_code'],$actor['user_id'],$actor['role_code']]);
-            }
-        }
-        LinearRouteService::logFinanceAudit($pdo,'waste_trip',$tripId,'carrier_payments_update',['payments'=>$old],['payments'=>self::fetchForTrip($pdo,$tripId),'source'=>'legacy_sync'],(int)$actor['user_id'],(string)$actor['role_code']);
     }
 
     public static function detail(array $payment): string

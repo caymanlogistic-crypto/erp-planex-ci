@@ -8,6 +8,7 @@ require_once __DIR__ . '/RouteExecutorService.php';
 require_once __DIR__ . '/DateCalculationService.php';
 require_once __DIR__ . '/LinearRouteService.php';
 require_once __DIR__ . '/RegulatedDataScopeService.php';
+require_once __DIR__ . '/WasteTripGeneralPaymentService.php';
 require_once __DIR__ . '/WasteTripCustomerPaymentService.php';
 require_once __DIR__ . '/WasteTripCarrierPaymentService.php';
 require_once __DIR__ . '/WasteTripService.php';

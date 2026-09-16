@@ -39,7 +39,7 @@ foreach (['customerPaymentsForSession', "==='company_owner'", 'WasteTripCustomer
 foreach (['ПРОДАЖА', 'СЕБЕС, РУБ', 'customer_payments', 'company_waste_trip_customer_payments.php', 'company_waste_trip_carrier_payments.php'] as $needle) {
     $ok(str_contains($page, $needle), 'registry/create UI missing ' . $needle);
 }
-foreach (['Условия оплаты заказчика', 'WasteTripCustomerPaymentService::total', 'WasteTripCustomerPaymentService::detail'] as $needle) {
+foreach (['Продажа · оплата клиента', 'WasteTripCustomerPaymentService::total', 'WasteTripCustomerPaymentService::detail'] as $needle) {
     $ok(str_contains($viewModal, $needle), 'view modal finance block missing ' . $needle);
 }
 foreach (['data-payment-container="customer_payments"', 'data-add-payment-row="customer_payments"', 'Срок оплаты', 'Способ оплаты', 'НДС'] as $needle) {

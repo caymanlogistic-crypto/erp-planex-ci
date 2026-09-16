@@ -21,7 +21,7 @@ try {
     if($fixed!=='')cleanCompanyPoolDatabase($pdo);
     App\Service\LocalMigrationService::apply($pdo);
     $pdo->exec("ALTER TABLE waste_trips DROP INDEX idx_waste_trips_deleted, DROP COLUMN deleted_at, MODIFY status ENUM('searching_executor','executor_assigned','in_progress','completed','cancelled') NOT NULL DEFAULT 'searching_executor';
-        DELETE FROM schema_migrations WHERE migration='137_waste_trip_synchronization.sql';
+        DELETE FROM schema_migrations WHERE migration>='137_';
         CREATE TABLE companies(id INT PRIMARY KEY,status VARCHAR(20),db_identifier VARCHAR(100))");
     $pdo->prepare("INSERT INTO companies VALUES(1,'active',?)")->execute([$db]);
     file_put_contents($fixture.'/.env',"# Synthetic migration test\n");

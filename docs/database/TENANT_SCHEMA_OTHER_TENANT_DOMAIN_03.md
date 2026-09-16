@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `48f9938095ea9929bf6ff0af2e961aada5cef2adb1437f47af0957fa922165b5`
+**Schema fingerprint:** `7cbb4285849a75ae9bd59457b99673be3c984436d076c96fedf187e1eff6c1a5`
 
 ## `max_event_deliveries`
 
@@ -167,7 +167,7 @@
 | `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
 | `sort_order` | `int unsigned` | NO | `1` | — | — |
-| `amount` | `decimal(12,2)` | NO | NULL | — | — |
+| `amount` | `decimal(12,2)` | YES | NULL | — | — |
 | `payment_type` | `varchar(50)` | NO | NULL | — | — |
 | `payment_method` | `varchar(20)` | NO | `cashless` | — | — |
 | `vat_rate` | `decimal(5,2)` | YES | NULL | — | — |
@@ -192,6 +192,41 @@
 
 - `fk_waste_trip_customer_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
+## `waste_trip_general_payments`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `sort_order` | `int unsigned` | NO | `1` | — | — |
+| `amount` | `decimal(12,2)` | YES | NULL | — | — |
+| `payment_type` | `varchar(50)` | NO | NULL | — | — |
+| `payment_method` | `varchar(20)` | NO | `cashless` | — | — |
+| `vat_rate` | `decimal(5,2)` | YES | NULL | — | — |
+| `condition_type` | `varchar(50)` | NO | NULL | — | — |
+| `days_count` | `int` | YES | NULL | — | — |
+| `days_kind` | `varchar(10)` | YES | NULL | — | — |
+| `specific_due_date` | `date` | YES | NULL | — | — |
+| `condition_comment` | `text` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_waste_trip_general_payments_trip` (`waste_trip_id`, `sort_order`, `id`)
+
+### Physical foreign keys
+
+- `fk_waste_trip_general_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+
 ## `waste_trip_namespace_state`
 
 **Domain:** Other tenant domain<br>
@@ -214,29 +249,3 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
-
-## `waste_trip_requests`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `feo_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `snapshot_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
-| `position_no` | `int unsigned` | NO | `0` | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_waste_trip_requests_position` (`waste_trip_id`, `position_no`, `id`)
-- **INDEX** `idx_waste_trip_requests_request` (`feo_request_id`, `waste_trip_id`)
-- **UNIQUE** `uk_waste_trip_request` (`waste_trip_id`, `feo_request_id`)
-
-### Physical foreign keys
-
-- `fk_waste_trip_requests_feo`: (`feo_request_id`) → `feo_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-- `fk_waste_trip_requests_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT

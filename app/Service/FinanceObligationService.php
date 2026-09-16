@@ -92,7 +92,7 @@ final class FinanceObligationService
         );
         $stmt->execute([$tripId]);
         $trip = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$trip) return 0;
+        if (!$trip || (isset($trip['financial_model_version']) && (int)$trip['financial_model_version'] !== 2)) return 0;
 
         $payments = [];
         foreach ([
@@ -111,6 +111,7 @@ final class FinanceObligationService
         $activeKeys = [];
         if ((string)($trip['status'] ?? '') !== 'cancelled') {
             foreach ($payments as $payment) {
+                if ($payment['amount'] === null) continue;
                 $role = (string)$payment['_party_role'];
                 $counterparty = $role === 'customer'
                     ? ['type'=>'client','id'=>(int)$trip['client_id'],'name'=>(string)$trip['client_name'],'inn'=>(string)($trip['client_inn']??'')]
