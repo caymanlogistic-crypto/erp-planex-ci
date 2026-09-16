@@ -29,7 +29,13 @@ foreach($companies as $company){
         while($value=$rows->fetch(PDO::FETCH_ASSOC)){if($table==='waste_trips')unset($value['financial_model_version'],$value['lock_version'],$value['updated_at']);hash_update($hash,json_encode($value,JSON_THROW_ON_ERROR));$count++;}
         $row['data'][$table]=['count'=>$count,'sha256'=>hash_final($hash)];
     }
-    $row['model_pending']=$column===false?null:(int)$pdo->query('SELECT COUNT(*) FROM waste_trips WHERE financial_model_version<>2')->fetchColumn();
+    $row['model_pending']=$column===false?null:(int)$pdo->query('SELECT COUNT(*) FROM waste_trips WHERE financial_model_version NOT IN (2,3)')->fetchColumn();
+    $row['model_versions']=$pdo->query('SELECT id,'.($column===false?'1':'financial_model_version').' AS version FROM waste_trips ORDER BY id')->fetchAll(PDO::FETCH_KEY_PAIR);
+    $row['protected_obligations']=$pdo->query("SELECT o.* FROM finance_obligations o WHERE o.source_parent_type='WASTE_TRIP' AND EXISTS (
+        SELECT 1 FROM finance_obligations p WHERE p.source_parent_type='WASTE_TRIP' AND p.source_parent_id=o.source_parent_id AND (
+            EXISTS(SELECT 1 FROM finance_invoice_links l WHERE l.obligation_id=p.id)
+            OR EXISTS(SELECT 1 FROM finance_operation_allocations a JOIN finance_operations op ON op.id=a.operation_id WHERE a.obligation_id=p.id AND a.cancelled_at IS NULL AND op.status='POSTED')
+        )) ORDER BY o.id")->fetchAll(PDO::FETCH_ASSOC);
     $row['payments']=[];
     foreach(['customer','carrier','general'] as $side){
         if($side==='general'&&!$hasGeneral){$row['payments'][$side]=[];continue;}

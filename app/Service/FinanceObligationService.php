@@ -92,6 +92,9 @@ final class FinanceObligationService
         );
         $stmt->execute([$tripId]);
         $trip = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($trip && (int)($trip['financial_model_version'] ?? 2) === 3) {
+            return self::refreshPreservedWasteTripSettlements($pdo, $tripId);
+        }
         if (!$trip || (isset($trip['financial_model_version']) && (int)$trip['financial_model_version'] !== 2)) return 0;
 
         $payments = [];
@@ -179,6 +182,25 @@ final class FinanceObligationService
             }
         }
         return count($activeKeys);
+    }
+
+    /** Historical contractual amounts/terms stay fixed; subsequent real payments still settle them. */
+    private static function refreshPreservedWasteTripSettlements(PDO $pdo, int $tripId): int
+    {
+        $query = $pdo->prepare("SELECT * FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=? AND cancelled_at IS NULL");
+        $query->execute([$tripId]);
+        $rows = $query->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as $row) {
+            $paid = self::paidAmountForSourceKey($pdo, (string)$row['source_key']);
+            $state = $row['due_date'] === null ? 'waiting_event' : 'ready';
+            if ($row['status'] === self::STATUS_CALENDAR_MISSING) $state = 'calendar_missing';
+            $status = self::computeStatus((string)$row['amount'], $paid, $row['due_date'], $state);
+            if ($paid !== $row['paid_amount'] || $status !== $row['status']) {
+                $pdo->prepare('UPDATE finance_obligations SET paid_amount=?,status=?,updated_at=NOW() WHERE id=?')
+                    ->execute([$paid,$status,(int)$row['id']]);
+            }
+        }
+        return count($rows);
     }
 
     public static function enrichParentLabels(PDO $pdo, array &$rows): void

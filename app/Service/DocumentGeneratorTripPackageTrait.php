@@ -29,7 +29,7 @@ trait DocumentGeneratorTripPackageTrait
                 && (int)($trip['request_count'] ?? 0) > 0;
             $trip['_document_period'] = self::tripPeriodLabel($trip);
             $trip['_customer_amount'] = $includeFinance
-                ? self::sumPaymentRows((array)($trip['customer_payments'] ?? []))
+                ? self::sumPaymentRows(WasteTripService::financialCustomerPayments($pdo, $trip))
                 : null;
             $out[] = $trip;
         }
@@ -114,7 +114,7 @@ trait DocumentGeneratorTripPackageTrait
         $crewId = (int)($trip['route_executor_id'] ?? 0);
         if ($crewId <= 0) return self::failed(['В выбранном рейсе не назначен Исполнитель рейса.']);
 
-        $payments = (array)($trip['customer_payments'] ?? []);
+        $payments = WasteTripService::financialCustomerPayments($pdo, $trip);
         $amount = self::sumPaymentRows($payments);
         if ($amount === null || (float)$amount <= 0) {
             return self::failed(['В выбранном рейсе не заполнена положительная ставка заказчика.']);

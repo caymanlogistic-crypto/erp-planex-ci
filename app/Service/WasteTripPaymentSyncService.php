@@ -42,6 +42,11 @@ final class WasteTripPaymentSyncService
     private static function assertUnlinked(PDO $pdo, int $tripId, array $ids): void
     {
         if ($ids === []) return;
+        $model = $pdo->prepare('SELECT financial_model_version FROM waste_trips WHERE id=?');
+        $model->execute([$tripId]);
+        // The original financial schedule is retained in the cutover audit for v3.
+        // Current display rows never own the preserved invoices/allocations.
+        if ((int)$model->fetchColumn() === 3) return;
         $marks = implode(',', array_fill(0, count($ids), '?'));
         $q = $pdo->prepare("SELECT COUNT(*) FROM finance_obligations o WHERE o.source_type='WASTE_TRIP_CUSTOMER_PAYMENT' AND o.source_parent_type='WASTE_TRIP' AND o.source_parent_id=? AND o.source_id IN ({$marks}) AND (
             EXISTS(SELECT 1 FROM finance_operation_allocations a JOIN finance_operations op ON op.id=a.operation_id WHERE a.obligation_id=o.id AND a.cancelled_at IS NULL AND op.status='POSTED')

@@ -183,34 +183,7 @@ jobs:
           ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_138_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
             "PLANEX_ROOT='$LIVE_ROOT' /usr/bin/php8.5 '/tmp/waste_verify138_${GITHUB_RUN_ID}.php'" | tee waste_138_after.txt
           grep -q '^WASTE_138_READ_ONLY_OK$' waste_138_after.txt
-          python3 - <<'PY'
-          import hashlib,json,re
-          def snap(path):
-              m=re.search(r'^WASTE_138_SNAPSHOT=(.+)$',open(path).read(),re.M)
-              if not m: raise SystemExit(path+' snapshot missing')
-              return json.loads(m.group(1))
-          before,after=snap('waste_138_before.txt'),snap('waste_138_after.txt')
-          expected=hashlib.sha256(open('database/migrations-local/138_waste_trip_general_payments.sql','rb').read()).hexdigest()
-          if before['central']!=after['central']: raise SystemExit('central/active tenant invariant changed')
-          b={x['company_id']:x for x in before['tenants']};a={x['company_id']:x for x in after['tenants']}
-          if set(b)!=set(a): raise SystemExit('active tenant set changed')
-          for cid,row in a.items():
-              if row['migration_137']!=1 or row['migration_138']!=1: raise SystemExit('Migration journal incomplete')
-              if row['migration_138_checksum']!=expected: raise SystemExit('Migration checksum mismatch')
-              if not all(row[k]==1 for k in ['general_table','model_column','customer_nullable']): raise SystemExit('Migration schema incomplete')
-              if row['data']!=b[cid]['data']: raise SystemExit(f'company {cid}: operational data or posted facts changed')
-              if row['model_pending']!=0 or str(row['model_default'])!='2': raise SystemExit('financial transition incomplete')
-              if b[cid]['migration_138']==0:
-                  def defaults(rows):
-                      for r in rows:
-                          if not r['condition_type']: r.update(condition_type='after_end',days_count=3,days_kind='calendar')
-                      return rows
-                  if row['payments']['general']!=defaults(b[cid]['payments']['customer']): raise SystemExit('general amount transfer mismatch')
-                  if row['payments']['customer']!=defaults(b[cid]['payments']['carrier']): raise SystemExit('sale amount transfer mismatch')
-                  if row['payments']['carrier']: raise SystemExit('new manual cost must start empty')
-          print('WASTE_138_INVARIANTS_PASS=YES')
-          print('WASTE_138_AMOUNT_TRANSFER_VERIFIED=YES')
-          PY
+          python3 scripts/waste_trips_compare_138.py waste_138_before.txt waste_138_after.txt database/migrations-local/138_waste_trip_general_payments.sql
 
       - name: HTTP acceptance before deploy and marker unchanged
         env:

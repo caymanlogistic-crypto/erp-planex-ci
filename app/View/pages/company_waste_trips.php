@@ -56,10 +56,11 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
     <td class="waste-count"><?=(int)($trip['request_count']??0)?></td>
     <td class="col-mono waste-weight"><?=e($fmtKg($trip['snapshot_total_mass_kg']??0))?></td>
     <td class="waste-manager" title="<?=e((string)($trip['responsible_name']??''))?>"><?=e(Registry::manager((string)($trip['responsible_name']??'')))?></td>
-    <?php foreach([$generalPayments,$customerPayments,$carrierPayments] as $payments):?><td class="registry-rate">
+    <?php foreach([$generalPayments,$customerPayments,$carrierPayments] as $sideIndex=>$payments):?><td class="registry-rate">
         <?php if($payments!==[]):?><span class="registry-rate-total"><?=e(WasteTripCustomerPaymentService::total($payments))?></span>
             <?php foreach($payments as $payment):?><span class="registry-payment-line"><?=e(WasteTripCustomerPaymentService::detail($payment))?></span><?php endforeach;?>
         <?php else:?><span class="registry-empty">—</span><?php endif;?>
+    <?php if($isFinanceRealm && $sideIndex===1 && WasteTripService::hasPreservedSettlements($trip)):?><span class="registry-payment-line" title="<?=e(WasteTripService::PRESERVED_SETTLEMENTS_NOTICE)?>">Расчёты по прежним условиям</span><?php endif;?>
     </td><?php endforeach;?>
 </tr>
 <?php endforeach;?></tbody></table></div></div><?php endif;?>

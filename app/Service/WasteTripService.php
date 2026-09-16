@@ -19,6 +19,27 @@ final class WasteTripService
     public const CARRIER_PAYMENTS_MIGRATION = '135_create_waste_trip_carrier_payments.sql';
     public const SYNCHRONIZATION_MIGRATION = '137_waste_trip_synchronization.sql';
     public const GENERAL_PAYMENTS_MIGRATION = '138_waste_trip_general_payments.sql';
+    public const PRESERVED_SETTLEMENTS_NOTICE = 'По этому рейсу сохранены прежние взаиморасчёты: счета, оплаты, суммы и сроки обязательств. Три суммы в карточке справочные и не изменяют задолженность. Документы клиенту используют сохранённые условия.';
+
+    public static function hasPreservedSettlements(array $trip): bool
+    {
+        return (int)($trip['financial_model_version'] ?? 2) === 3;
+    }
+
+    /** The cutover audit retains the original schedule and its source row identities. */
+    public static function financialCustomerPayments(PDO $pdo, array $trip): array
+    {
+        if (!self::hasPreservedSettlements($trip)) return (array)($trip['customer_payments'] ?? []);
+        $query = $pdo->prepare("SELECT before_json,after_json FROM waste_trip_audit_log WHERE waste_trip_id=? AND action='update' ORDER BY id");
+        $query->execute([(int)$trip['id']]);
+        while ($row = $query->fetch(PDO::FETCH_ASSOC)) {
+            $after = json_decode((string)$row['after_json'], true, 512, JSON_THROW_ON_ERROR);
+            if (($after['settlements_preserved'] ?? false) !== true) continue;
+            $before = json_decode((string)$row['before_json'], true, 512, JSON_THROW_ON_ERROR);
+            if (isset($before['customer_payments']) && is_array($before['customer_payments'])) return $before['customer_payments'];
+        }
+        throw new RuntimeException('Не найдены сохранённые финансовые условия рейса.');
+    }
     public const ERP_BUSINESS_ID_START = 400;
     public const LEGACY_RANGE_WARNING_THRESHOLD = 390;
     public const LEGACY_RANGE_WARNING = 'Legacy ID range approaching ERP range start (400)';
@@ -179,7 +200,7 @@ final class WasteTripService
             $stage = 'request_links';
             self::insertRequestLinks($pdo, $tripId, $resolved);
             $stage = 'source_amounts';
-            if ($trip !== null && (int)$trip['financial_model_version'] !== 2) throw new RuntimeException('Требуется переход на три финансовые суммы.');
+            if ($trip !== null && !in_array((int)$trip['financial_model_version'], [2,3], true)) throw new RuntimeException('Требуется переход на три финансовые суммы.');
             WasteTripGeneralPaymentService::synchronizeCost($pdo,$tripId,$state['general_amount'],$actor);
             WasteTripCustomerPaymentService::synchronizeCost($pdo,$tripId,$state['carrier_cost'],$state['payment_terms'],$actor);
             $warnings = array_filter([$state['executor_warning'] ?? null, $data['destination_type']==='utilizer' && $data['utilizer_id']===null ? 'Утилизатор не определён однозначно по заявкам ФЭО.' : null]);
@@ -268,7 +289,7 @@ final class WasteTripService
     public static function update(PDO $pdo,int $tripId,array $input,array $requestBusinessIds,int $expectedVersion,array $sessionUser,?array $customerPayments=null,?array $carrierPayments=null,?array $generalPayments=null): void
     {
         if($tripId<=0||$expectedVersion<=0)throw new RuntimeException('Некорректная версия рейса. Обновите страницу и повторите действие.');$pdo->beginTransaction();
-        try{$trip=self::fetchTripForUpdate($pdo,$tripId);if($trip===null)throw new RuntimeException('Рейс не найден.');self::assertCanAccessTrip($pdo,$trip,$sessionUser);if((int)$trip['lock_version']!==$expectedVersion)throw new RuntimeException('Рейс уже был изменён другим пользователем. Обновите страницу.');if((int)($trip['financial_model_version']??2)!==2)throw new RuntimeException('Требуется переход на три финансовые суммы.');if(self::isSynchronizableLegacyTrip($trip)){self::assertSourceAmountUnchanged($generalPayments,WasteTripGeneralPaymentService::fetchForTrip($pdo,$tripId));self::assertSourceAmountUnchanged($customerPayments,WasteTripCustomerPaymentService::fetchForTrip($pdo,$tripId));}$linked=self::isLegacyLinked($trip);if($linked)self::assertLegacyOwnedMutationAbsent($input);$existingLinks=self::fetchRequestLinks($pdo,$tripId,true);$existingIds=array_map(static fn(array $r):string=>(string)$r['zayavka_id'],$existingLinks);
+        try{$trip=self::fetchTripForUpdate($pdo,$tripId);if($trip===null)throw new RuntimeException('Рейс не найден.');self::assertCanAccessTrip($pdo,$trip,$sessionUser);if((int)$trip['lock_version']!==$expectedVersion)throw new RuntimeException('Рейс уже был изменён другим пользователем. Обновите страницу.');if(!in_array((int)($trip['financial_model_version']??2),[2,3],true))throw new RuntimeException('Требуется переход на три финансовые суммы.');if(self::isSynchronizableLegacyTrip($trip)){self::assertSourceAmountUnchanged($generalPayments,WasteTripGeneralPaymentService::fetchForTrip($pdo,$tripId));self::assertSourceAmountUnchanged($customerPayments,WasteTripCustomerPaymentService::fetchForTrip($pdo,$tripId));}$linked=self::isLegacyLinked($trip);if($linked)self::assertLegacyOwnedMutationAbsent($input);$existingLinks=self::fetchRequestLinks($pdo,$tripId,true);$existingIds=array_map(static fn(array $r):string=>(string)$r['zayavka_id'],$existingLinks);
             if($linked){$requestBusinessIds=$existingIds;$data=self::normalizeInput(array_merge($input,['planned_start_mode'=>$trip['planned_start_mode'],'planned_start_date'=>$trip['planned_start_date'],'planned_start_date_from'=>$trip['planned_start_date_from'],'planned_start_date_to'=>$trip['planned_start_date_to'],'planned_finish_date'=>$trip['planned_finish_date'],'actual_start_date'=>$trip['actual_start_date'],'actual_end_date'=>$trip['actual_end_date'],'comment'=>$trip['comment']]));}else{if($requestBusinessIds===[])throw new RuntimeException('Добавьте хотя бы одну заявку ФЭО.');$data=self::normalizeInput($input);}
             $errors=self::validateInput($data,$linked&&$trip['planned_start_mode']==='unspecified',$linked&&empty($trip['route_executor_id']),($trip['source_system']??'')==='legacy_sync',($trip['source_system']??'')==='legacy_sync'&&empty($trip['utilizer_id']));if($errors!==[])throw new RuntimeException(implode(' ',$errors));self::assertEntitiesVisible($pdo,$data,$sessionUser);self::assertTransition((string)$trip['status'],$data['status']);
             if(!$linked&&$existingIds!==array_values($requestBusinessIds)){if(in_array((string)$trip['status'],[self::STATUS_COMPLETED,self::STATUS_CANCELLED],true))throw new RuntimeException('Состав завершённого или отменённого рейса менять нельзя.');if((string)$trip['status']===self::STATUS_IN_PROGRESS&&(($sessionUser['role_code']??'')!=='company_owner'||(string)($input['confirm_composition_correction']??'')!=='1'))throw new RuntimeException('После начала вывоза изменение состава разрешено только руководителю с явным подтверждением корректировки.');$resolved=self::resolveRequestsForClaim($pdo,$requestBusinessIds,true);self::assertNoActiveClaims($pdo,array_column($resolved,'id'),$tripId);$pdo->prepare('DELETE FROM waste_trip_requests WHERE waste_trip_id=?')->execute([$tripId]);self::insertRequestLinks($pdo,$tripId,$resolved);}
