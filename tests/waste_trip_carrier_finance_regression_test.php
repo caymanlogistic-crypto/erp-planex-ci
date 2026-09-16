@@ -24,11 +24,11 @@ $ok=static function(bool $v,string $m)use($fail):void{if(!$v)$fail($m);};
 $migration=(string)file_get_contents($root.'/database/migrations-local/135_create_waste_trip_carrier_payments.sql');
 foreach(['CREATE TABLE IF NOT EXISTS `waste_trip_carrier_payments`','`amount` DECIMAL(12,2) NOT NULL','fk_waste_trip_carrier_payments_trip','ON DELETE RESTRICT'] as $n)$ok(str_contains($migration,$n),'migration 135 missing '.$n);
 $carrierPartial=(string)file_get_contents($root.'/app/View/partials/company_waste_trip_carrier_payments.php');
-foreach(['Оплата перевозчику','data-payment-container="carrier_payments"','data-add-payment-row="carrier_payments"','Срок оплаты','НДС'] as$n)$ok(str_contains($carrierPartial,$n),'carrier UI missing '.$n);
+foreach(['Себес · оплата подрядчику','data-payment-container="carrier_payments"','data-add-payment-row="carrier_payments"','Срок оплаты','НДС'] as$n)$ok(str_contains($carrierPartial,$n),'carrier UI missing '.$n);
 $page=(string)file_get_contents($root.'/app/View/pages/company_waste_trips.php');
 $ok(str_contains($page,'СЕБЕС, РУБ'),'registry carrier rate column missing');
 $view=(string)file_get_contents($root.'/app/View/partials/company_waste_trip_modal_view.php');
-$ok(str_contains($view,'Условия оплаты перевозчику'),'view carrier finance section missing');
+$ok(str_contains($view,'Себес · оплата подрядчику'),'view carrier finance section missing');
 $finance=(string)file_get_contents($root.'/app/Service/FinanceObligationService.php');
 foreach(['WASTE_TRIP_CUSTOMER_PAYMENT','WASTE_TRIP_CARRIER_PAYMENT','syncAllOperationalObligations','syncWasteTrip','Перевозка отходов #'] as$n)$ok(str_contains($finance,$n),'finance projection missing '.$n);
 

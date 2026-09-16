@@ -8,9 +8,9 @@ if ($paymentRows === []) {
         'amount' => '',
         'payment_method' => 'cashless',
         'vat_rate' => '',
-        'condition_type' => '',
-        'days_count' => '',
-        'days_kind' => '',
+        'condition_type' => 'after_end',
+        'days_count' => '3',
+        'days_kind' => 'calendar',
         'specific_due_date' => '',
         'condition_comment' => '',
     ]];
@@ -21,12 +21,12 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
     <div class="linear-trip-payment-card">
         <div class="linear-trip-block-head">
             <div>
-                <div class="linear-trip-block-title">Оплата заказчика</div>
-                <div class="field-msg">Ставка и срок оплаты — как в линейных рейсах.</div>
+                <div class="linear-trip-block-title">Продажа · оплата клиента</div>
+                <div class="field-msg">Сумма для взаиморасчётов с клиентом. По умолчанию — 3 дня после выгрузки.</div>
             </div>
-            <button type="button" class="btn btn-ghost" data-add-payment-row="customer_payments">+ Добавить оплату</button>
+            <?php if(empty($sourceAmountsLocked)):?><button type="button" class="btn btn-ghost" data-add-payment-row="customer_payments">+ Добавить оплату</button><?php endif;?>
         </div>
-        <div class="linear-trip-payment-rows" data-payment-container="customer_payments">
+        <div class="linear-trip-payment-rows" data-payment-container="customer_payments" data-default-days="3">
             <?php foreach ($paymentRows as $paymentIndex => $payment): ?>
                 <?php
                 $fieldBase = 'customer_payments[' . $paymentIndex . ']';
@@ -39,12 +39,13 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
                 <div class="linear-trip-payment-row" data-payment-row>
                     <div class="field">
                         <label class="field-label">Сумма <span class="req">*</span></label>
-                        <input type="text" name="<?= e($fieldBase) ?>[amount]" value="<?= e((string) ($payment['amount'] ?? '')) ?>" class="field-input" inputmode="numeric" placeholder="125000">
+                        <input type="text" name="<?= e($fieldBase) ?>[amount]" value="<?= e((string) ($payment['amount'] ?? '')) ?>" class="field-input" inputmode="numeric" placeholder="125000" <?=!empty($sourceAmountsLocked)?'readonly':''?>>
                         <div class="field-msg"></div>
                     </div>
                     <div class="field">
                         <label class="field-label">Способ оплаты <span class="req">*</span></label>
                         <select name="<?= e($fieldBase) ?>[payment_method]" class="field-input">
+                            <?php if($paymentMethod===''||$paymentMethod==='unknown'):?><option value="unknown" selected>Не указан</option><?php endif;?>
                             <?php foreach (LinearRouteService::PAYMENT_METHODS as $value => $label): ?>
                                 <option value="<?= e($value) ?>" <?= $paymentMethod === $value ? 'selected' : '' ?>><?= e($label) ?></option>
                             <?php endforeach; ?>
@@ -54,8 +55,9 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
                     <div class="field">
                         <label class="field-label">НДС <span class="req">*</span></label>
                         <select name="<?= e($fieldBase) ?>[vat_rate]" class="field-input">
+                            <?php if(($payment['payment_type']??null)===''||$vatRate==='unknown'):?><option value="unknown" selected>Не указан</option><?php endif;?>
                             <?php foreach ($vatRateOptions as $value): ?>
-                                <option value="<?= e($value) ?>" <?= $vatRate === $value ? 'selected' : '' ?>><?= e($value === '' ? 'Без НДС' : 'НДС ' . $value . '%') ?></option>
+                                <option value="<?= e($value) ?>" <?= $vatRate === $value && ($payment['payment_type']??null)!=='' ? 'selected' : '' ?>><?= e($value === '' ? 'Без НДС' : 'НДС ' . $value . '%') ?></option>
                             <?php endforeach; ?>
                         </select>
                         <div class="field-msg"></div>
@@ -95,7 +97,7 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
                         <input type="text" name="<?= e($fieldBase) ?>[condition_comment]" value="<?= e((string) ($payment['condition_comment'] ?? '')) ?>" class="field-input" placeholder="Опциональный комментарий">
                         <div class="field-msg"></div>
                     </div>
-                    <button type="button" class="linear-trip-row-remove<?= count($paymentRows) > 1 ? '' : ' is-hidden' ?>" data-remove-payment-row aria-label="Удалить оплату">×</button>
+                    <button type="button" class="linear-trip-row-remove<?= count($paymentRows) > 1 && empty($sourceAmountsLocked) ? '' : ' is-hidden' ?>" data-remove-payment-row aria-label="Удалить оплату">×</button>
                 </div>
             <?php endforeach; ?>
         </div>

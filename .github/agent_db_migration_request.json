@@ -1,7 +1,7 @@
 {
-  "migration_id": "137",
-  "workflow": "waste_trips_137_production_migration.yml",
+  "migration_id": "138",
+  "workflow": "waste_trips_138_production_migration.yml",
   "source_sha_input": "source_sha",
   "confirmation_input": "confirm_migration",
-  "confirmation_value": "APPLY_WASTE_TRIPS_137"
+  "confirmation_value": "APPLY_WASTE_TRIPS_138_AND_TRANSFER_AMOUNTS"
 }

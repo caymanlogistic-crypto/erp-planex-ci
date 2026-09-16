@@ -31,6 +31,9 @@ function reject(callable $call,string $message): void { try{$call();}catch(Throw
 // One allowlisted disposable schema supports isolated legacy tables through a test adapter.
 class LegacyFixturePDO extends PDO {
     public bool $failRead=false;
+    public function prepare(string $query,array $options=[]): PDOStatement|false {
+        return parent::prepare(str_replace('FROM feo WHERE','FROM feo_requests WHERE',$query),$options);
+    }
     public function query(string $query,?int $fetchMode=null,mixed ...$args): PDOStatement|false {
         if($this->failRead)throw new PDOException('Synthetic source failure');
         $query=str_replace(['FROM flights f','JOIN users u','JOIN drivers d'],['FROM fixture_flights f','JOIN fixture_managers u','JOIN fixture_drivers d'],$query);
@@ -73,6 +76,8 @@ try {
         INSERT INTO user_accounts VALUES(3,'Сидоров Михаил','sidorov',NULL,NULL,'hash','active'),(4,'Гладких Карина Артуровна','karina',NULL,NULL,'hash','active');
         INSERT INTO company_roles VALUES(1,25,NULL),(2,26,NULL);
         INSERT INTO company_memberships VALUES(10,3,25,1,'active'),(20,4,25,1,'active'),(30,3,26,2,'active');
+        CREATE TABLE status_blocks(id INT PRIMARY KEY,status_type VARCHAR(40),zayavki_ids TEXT,cost DECIMAL(12,2));
+        INSERT INTO status_blocks VALUES(1,'marshrut','700001,700002',4000);
         CREATE TABLE fixture_managers(id INT PRIMARY KEY,`Фамилия` VARCHAR(100),`Имя` VARCHAR(100));
         INSERT INTO fixture_managers VALUES(3,'Сидоров','Другой'),(4,'Гладских','Карина');
         CREATE TABLE fixture_drivers(id INT PRIMARY KEY,full_name VARCHAR(255),vehicle_make_plate VARCHAR(255));
@@ -97,11 +102,17 @@ try {
     $pdo->exec("UPDATE waste_trips SET status='searching_executor' WHERE business_id=226");
     $planned=Trips::fetchTrips($pdo,['status'=>'planned_route']);
     check(count($planned)===1&&(int)$planned[0]['business_id']===226,'Planned filter includes historical searching alias');
-    $payment=$pdo->query("SELECT * FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetch();
-    $obligation=$pdo->query("SELECT * FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND direction='PAYABLE'")->fetch();
-    check($payment['amount']==='1000.00'&&$payment['payment_method']===''&&$obligation['due_date']===null,'Cost with unknown terms');
+    $payment=$pdo->query("SELECT * FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetch();
+    $obligation=$pdo->query("SELECT * FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND direction='RECEIVABLE'")->fetch();
+    check($payment['amount']==='1000.00'&&$payment['payment_method']===''&&$obligation['due_date']===null,'Sale with default terms waits for factual unload');
+    check($pdo->query("SELECT amount FROM waste_trip_general_payments WHERE waste_trip_id=$id")->fetchColumn()==='1500.00','General amount from weight share');
+    check((int)$payment['days_count']===3 && $payment['condition_type']==='after_end','Three-day default sale');
+    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_carrier_payments")->fetchColumn()===0,'Sync never creates carrier costs');
+    $pdo->exec("INSERT INTO waste_trip_carrier_payments(waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type,days_count,days_kind) VALUES($id,1,700,'cash','cash','after_end',7,'calendar');
+        UPDATE waste_trip_customer_payments SET days_count=11 WHERE waste_trip_id=$id;
+        UPDATE waste_trip_general_payments SET days_count=5 WHERE waste_trip_id=$id");
     $pdo->exec("INSERT INTO finance_money_accounts(id,type,name) VALUES(1,'CASH','Synthetic cash');
-        INSERT INTO finance_operations(id,operation_type,status,source,money_account_id,operation_date,amount) VALUES(1,'EXPENSE','POSTED','MANUAL',1,'2026-09-01',1);
+        INSERT INTO finance_operations(id,operation_type,status,source,money_account_id,operation_date,amount) VALUES(1,'INCOME','POSTED','MANUAL',1,'2026-09-01',1);
         INSERT INTO finance_operation_allocations(operation_id,obligation_id,amount,allocation_date) VALUES(1,{$obligation['id']},1,'2026-09-01')");
     $repeat=$run();check($repeat['updated']===2&&$repeat['created']===0,'Repeat upsert');
     check((int)$pdo->query("SELECT id FROM waste_trips WHERE business_id=226")->fetchColumn()===$id,'Stable trip identity');
@@ -113,37 +124,41 @@ try {
         check($pdo->query("SELECT source_system FROM waste_trips WHERE id=$id")->fetchColumn()==='legacy_sync','Adopted synchronization provenance');
     }
     // Equal totals preserve all installments; changing a paid later installment fails atomically.
-    $pdo->exec("UPDATE waste_trip_carrier_payments SET amount=600 WHERE waste_trip_id=$id;
-        INSERT INTO waste_trip_carrier_payments(waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type) VALUES($id,2,400,'cash','cash','')");
+    $pdo->exec("UPDATE waste_trip_customer_payments SET amount=600 WHERE waste_trip_id=$id;
+        INSERT INTO waste_trip_customer_payments(waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type) VALUES($id,2,400,'cash','cash','')");
     $schedule=$run();check($schedule['failed']===0,'Equal installment total preserved');
-    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetchColumn()===2,'Same total keeps installments');
-    $secondObligation=(int)$pdo->query("SELECT o.id FROM finance_obligations o JOIN waste_trip_carrier_payments p ON p.id=o.source_id WHERE o.source_type='WASTE_TRIP_CARRIER_PAYMENT' AND o.source_parent_id=$id AND p.sort_order=2 AND o.cancelled_at IS NULL")->fetchColumn();
+    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()===2,'Same total keeps installments');
+    $secondObligation=(int)$pdo->query("SELECT o.id FROM finance_obligations o JOIN waste_trip_customer_payments p ON p.id=o.source_id WHERE o.source_type='WASTE_TRIP_CUSTOMER_PAYMENT' AND o.source_parent_id=$id AND p.sort_order=2 AND o.cancelled_at IS NULL")->fetchColumn();
     check($secondObligation>0,'Second installment obligation exists');
     $pdo->exec("INSERT INTO finance_operation_allocations(operation_id,obligation_id,amount,allocation_date) VALUES(1,$secondObligation,1,'2026-09-01'); UPDATE fixture_flights SET cost=900 WHERE id=226");
     $guarded=$run();check($guarded['failed']===1,'Paid installment prevents destructive consolidation');
-    check((int)$pdo->query("SELECT SUM(amount) FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetchColumn()===1000,'Failed consolidation preserves entire schedule');
+    check((int)$pdo->query("SELECT SUM(amount) FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()===1000,'Failed consolidation preserves entire schedule');
     $pdo->exec("UPDATE finance_operation_allocations SET cancelled_at=NOW() WHERE obligation_id=$secondObligation");
     $consolidated=$run();check($consolidated['failed']===0,'Unpaid aggregate can synchronize');
-    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetchColumn()===1,'Consolidated aggregate');
+    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()===1,'Consolidated aggregate');
     $pdo->exec("UPDATE fixture_flights SET cost=1,comment='Changed',status='completed',actual_start_date='2026-09-01',actual_end_date='2026-09-02' WHERE id=226");
     $result=$run();check($result['failed']===0,'Update: '.json_encode($result));
-    check($pdo->query("SELECT amount FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetchColumn()==='1.00','Literal cost 1');
-    check((int)$pdo->query("SELECT id FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND cancelled_at IS NULL")->fetchColumn()===(int)$obligation['id'],'Stable payable identity');
+    check($pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()==='1.00','Literal cost 1');
+    check($pdo->query("SELECT amount FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetchColumn()==='700.00','Manual carrier cost never overwritten');
+    check((int)$pdo->query("SELECT days_count FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()===11,'Manual sale terms survive source changes');
+    check((int)$pdo->query("SELECT days_count FROM waste_trip_general_payments WHERE waste_trip_id=$id")->fetchColumn()===5,'Manual general terms survive sync');
+    check($pdo->query("SELECT due_date FROM finance_obligations WHERE id={$obligation['id']}")->fetchColumn()==='2026-09-13','Sale uses factual unloading plus manual offset');
+    check((int)$pdo->query("SELECT id FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND direction='RECEIVABLE' AND cancelled_at IS NULL")->fetchColumn()===(int)$obligation['id'],'Stable payable identity');
     check($pdo->query("SELECT paid_amount FROM finance_obligations WHERE id={$obligation['id']}")->fetchColumn()==='1.00','Posted payment retained through rate update');
     $pdo->exec('UPDATE fixture_flights SET cost=2 WHERE id=226');
-    foreach(['INSERT INTO waste_trip_requests','UPDATE waste_trip_carrier_payments SET amount','INSERT INTO waste_trip_audit_log'] as $failure) {
+    foreach(['INSERT INTO waste_trip_requests','UPDATE waste_trip_customer_payments SET amount','INSERT INTO waste_trip_audit_log'] as $failure) {
         $pdo->failAt=$failure;
         $failed=$run();
         $pdo->failAt=null;
         check($failed['failed']>=1,'Injected stage failure expected: '.$failure);
-        check($pdo->query("SELECT amount FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetchColumn()==='1.00','Stage rollback kept prior rate');
+        check($pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()==='1.00','Stage rollback kept prior rate');
         check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_requests WHERE waste_trip_id=$id")->fetchColumn()===1,'Stage rollback kept composition');
     }
     $pdo->exec('UPDATE fixture_flights SET cost=1 WHERE id=226');
     // A bad source row does not silently trim composition or partially change its cost/status.
     $pdo->exec("UPDATE fixture_flights SET zayavki_ids='999999',cost=400 WHERE id=226");
     $bad=$run();check($bad['failed']===1,'Missing FEO must fail one row');
-    check($pdo->query("SELECT amount FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetchColumn()==='1.00','Row rollback');
+    check($pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()==='1.00','Row rollback');
     $pdo->exec("UPDATE fixture_flights SET zayavki_ids='700001' WHERE id=226");
     $legacy->failRead=true;reject($run,'Source failure expected');$legacy->failRead=false;
     check((int)$pdo->query('SELECT COUNT(*) FROM waste_trips WHERE deleted_at IS NOT NULL')->fetchColumn()===0,'Source failure must not delete');
@@ -167,6 +182,40 @@ try {
     $pdo->exec("INSERT INTO fixture_flights(id,zayavki_ids,status,assigned_manager_id,unload_type) VALUES(500,'700001','planned_route',3,'SKLAD'),(501,'700001','planned_route',3,'SKLAD')");
     $collision=$run();check($collision['failed']===1&&$collision['created']===1,'Independent ID collision blocks only that source row; no ceiling at 400');
     check($pdo->query('SELECT source_system FROM waste_trips WHERE business_id=500')->fetchColumn()===null,'Independent identity never adopted');
+    // Source NULL is unknown, not zero; terms survive disappearance and return.
+    $other=(int)$pdo->query('SELECT id FROM waste_trips WHERE business_id=501')->fetchColumn();
+    $pdo->exec("UPDATE waste_trip_customer_payments SET days_count=9 WHERE waste_trip_id=$other; UPDATE fixture_flights SET cost=77 WHERE id=501");
+    $run();
+    $pdo->exec('UPDATE fixture_flights SET cost=NULL WHERE id=501');$run();
+    check($pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$other")->fetchColumn()===null,'NULL source is not zero');
+    $pdo->exec('UPDATE fixture_flights SET cost=0 WHERE id=501');$run();
+    $zero=$pdo->query("SELECT amount,days_count FROM waste_trip_customer_payments WHERE waste_trip_id=$other")->fetch();
+    check($zero['amount']==='0.00'&&(int)$zero['days_count']===9,'Zero source restores with manually changed terms');
+    $pdo->exec('UPDATE status_blocks SET cost=8000');$run();
+    check($pdo->query("SELECT amount FROM waste_trip_general_payments WHERE waste_trip_id=$other")->fetchColumn()==='3000.00','General amount continuously synchronized');
+    // A real cutover preserves former sale/cost amounts, clears the new manual cost,
+    // is idempotent, and refuses any invoice/payment-linked historical conversion.
+    $pdo->exec("INSERT INTO waste_trips(business_id,client_id,responsible_user_id,destination_type,status,financial_model_version) VALUES(900,13,1,'warehouse','planned_route',1)");
+    $oldId=(int)$pdo->lastInsertId();
+    $terms=['amount'=>'2000.00','payment_type'=>'cash','payment_method'=>'cash','vat_rate'=>null,'condition_type'=>'after_end','days_count'=>12,'days_kind'=>'calendar','specific_due_date'=>null,'condition_comment'=>null];
+    \App\Service\WasteTripCustomerPaymentService::store($pdo,$oldId,[$terms],$actor);
+    \App\Service\WasteTripCarrierPaymentService::store($pdo,$oldId,[array_replace($terms,['amount'=>'900.00','days_count'=>3])],$actor);
+    check(\App\Service\WasteTripFinancialTransitionService::transition($pdo,$actor)===1,'Exactly old rows transition');
+    check($pdo->query("SELECT amount FROM waste_trip_general_payments WHERE waste_trip_id=$oldId")->fetchColumn()==='2000.00','Old sale becomes general');
+    check($pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$oldId")->fetchColumn()==='900.00','Old cost becomes sale');
+    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_carrier_payments WHERE waste_trip_id=$oldId")->fetchColumn()===0,'New manual cost blank');
+    check(\App\Service\WasteTripFinancialTransitionService::transition($pdo,$actor)===0,'Cutover idempotent');
+    $pdo->exec("UPDATE waste_trips SET financial_model_version=1 WHERE id=$id");
+    reject(static fn()=>\App\Service\WasteTripFinancialTransitionService::transition($pdo,$actor),'Paid historical rows must block cutover');
+    check((int)$pdo->query("SELECT financial_model_version FROM waste_trips WHERE id=$id")->fetchColumn()===1,'Failed cutover rolls back');
+    $prices=\App\Service\WasteTripLegacyPriceService::calculate([['zayavki_ids'=>'1,2,3','cost'=>'100.50'],['zayavki_ids'=>'1','cost'=>'10.00']],['1'=>1,'2'=>3,'3'=>2]);
+    check($prices===['1'=>2600,'3'=>3300,'2'=>5150],'Legacy whole-ruble shares, heaviest remainder and additive blocks');
+    check(\App\Service\WasteTripLegacyPriceService::flightTotal(['1','999'],$prices)===null,'Incomplete pricing never implies a partial total');
+    $guard=new \ReflectionMethod(Trips::class,'assertSourceAmountUnchanged');
+    $guard->invoke(null,[['amount'=>null]],[]);
+    $guard->invoke(null,[['amount'=>'42.00']],[['amount'=>'42.00']]);
+    reject(static fn()=>$guard->invoke(null,[['amount'=>'43.00']],[['amount'=>'42.00']]),'Source amount cannot be changed manually');
+    reject(static fn()=>$guard->invoke(null,[],[['amount'=>'42.00']]),'Source amount cannot be removed manually');
     echo "WASTE_TRIP_SYNCHRONIZATION_MYSQL=PASS\n";
 } finally {
     if($pdo->inTransaction())$pdo->rollBack();

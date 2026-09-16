@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `48f9938095ea9929bf6ff0af2e961aada5cef2adb1437f47af0957fa922165b5`
+**Schema fingerprint:** `7cbb4285849a75ae9bd59457b99673be3c984436d076c96fedf187e1eff6c1a5`
 
 ## Architecture overview
 
@@ -142,6 +142,7 @@ erDiagram
   T_waste_trips ||--o{ T_waste_trip_audit_log : "fk_waste_trip_audit_trip"
   T_waste_trips ||--o{ T_waste_trip_carrier_payments : "fk_waste_trip_carrier_payments_trip"
   T_waste_trips ||--o{ T_waste_trip_customer_payments : "fk_waste_trip_customer_payments_trip"
+  T_waste_trips ||--o{ T_waste_trip_general_payments : "fk_waste_trip_general_payments_trip"
   T_feo_requests ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_feo"
   T_waste_trips ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_trip"
   T_clients ||--o{ T_waste_trips : "fk_waste_trips_client"
@@ -150,7 +151,7 @@ erDiagram
   T_feo_utilizers ||--o{ T_waste_trips : "fk_waste_trips_utilizer"
 ```
 
-Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
+Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
 
 ## System / Migration metadata
 

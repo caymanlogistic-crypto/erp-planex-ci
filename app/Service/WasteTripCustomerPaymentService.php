@@ -7,7 +7,7 @@ use RuntimeException;
 
 final class WasteTripCustomerPaymentService
 {
-    public static function parseRows(array $rows, bool $required = true): array
+    public static function parseRows(array $rows, bool $required = true, bool $allowUnknownAmount = false): array
     {
         $result = [];
         $errors = [];
@@ -15,6 +15,8 @@ final class WasteTripCustomerPaymentService
             if (!is_array($row)) continue;
 
             $amountRaw = trim((string) ($row['amount'] ?? ''));
+            if ($amountRaw === '' && !$allowUnknownAmount) continue;
+            $row += ['condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar'];
             $paymentMethod = trim((string) ($row['payment_method'] ?? ''));
             $vatRateRaw = trim((string) ($row['vat_rate'] ?? ''));
             $conditionType = trim((string) ($row['condition_type'] ?? ''));
@@ -26,11 +28,11 @@ final class WasteTripCustomerPaymentService
             if ($amountRaw === '' && $paymentMethod === '' && $conditionType === '' && $daysCountRaw === '' && $daysKind === '' && $specificDueDateRaw === '' && $conditionComment === '') continue;
 
             $amount = LinearRouteService::parseAmount($amountRaw);
-            if ($amount === null) $errors[] = 'Укажите корректную сумму оплаты заказчика.';
-            if (!in_array($paymentMethod, ['', 'cashless', 'cash'], true)) $errors[] = 'Выберите способ оплаты заказчика.';
+            if ($amount === null && !($allowUnknownAmount && $amountRaw === '')) $errors[] = 'Укажите корректную сумму оплаты заказчика.';
+            if (!in_array($paymentMethod, ['', 'unknown', 'cashless', 'cash'], true)) $errors[] = 'Выберите способ оплаты заказчика.';
 
             $vatRate = null;
-            if ($vatRateRaw !== '') {
+            if ($vatRateRaw !== '' && $vatRateRaw !== 'unknown') {
                 if (in_array($vatRateRaw, ['0', '5', '7', '20', '22'], true)) $vatRate = $vatRateRaw;
                 else $errors[] = 'Выберите корректную ставку НДС для оплаты заказчика.';
             }
@@ -61,8 +63,8 @@ final class WasteTripCustomerPaymentService
 
             $result[] = [
                 'amount' => $amount,
-                'payment_type' => LinearRouteService::legacyPaymentTypeFromMethodAndVat($paymentMethod !== '' ? $paymentMethod : 'cashless', $vatRate),
-                'payment_method' => $paymentMethod !== '' ? $paymentMethod : 'cashless',
+                'payment_type' => $paymentMethod === 'unknown' || $vatRateRaw === 'unknown' ? '' : LinearRouteService::legacyPaymentTypeFromMethodAndVat($paymentMethod !== '' ? $paymentMethod : 'cashless', $vatRate),
+                'payment_method' => $paymentMethod === 'unknown' ? '' : ($paymentMethod !== '' ? $paymentMethod : 'cashless'),
                 'vat_rate' => $vatRate,
                 'condition_type' => $conditionType,
                 'days_count' => $daysCount,
@@ -142,6 +144,7 @@ final class WasteTripCustomerPaymentService
 
     public static function total(array $payments): string
     {
+        if ($payments === [] || count(array_filter($payments, static fn(array $p): bool => $p['amount'] !== null && $p['amount'] !== '')) === 0) return '—';
         $cents = 0;
         foreach ($payments as $payment) {
             $amount = LinearRouteService::parseAmount((string) ($payment['amount'] ?? ''));
@@ -152,9 +155,14 @@ final class WasteTripCustomerPaymentService
         return number_format(intdiv($cents, 100), 0, ',', ' ') . ' ₽';
     }
 
+    public static function synchronizeCost(PDO $pdo, int $tripId, ?string $amount, ?string $terms, array $actor): void
+    {
+        WasteTripPaymentSyncService::synchronize($pdo, $tripId, 'customer', $amount, $terms, $actor);
+    }
+
     public static function detail(array $payment): string
     {
-        $parts = [number_format((float) ($payment['amount'] ?? 0), 0, ',', ' ') . ' ₽'];
+        $parts = [$payment['amount'] === null ? '—' : number_format((float) $payment['amount'], 0, ',', ' ') . ' ₽'];
         $condition = LinearRouteService::conditionTypeLabel($payment['condition_type'] ?? null);
         if ($condition !== '' && $condition !== '—') $parts[] = $condition;
         $daysCount = (int) ($payment['days_count'] ?? 0);

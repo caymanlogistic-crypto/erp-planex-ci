@@ -26,6 +26,7 @@ WASTE_TESTS=["tests/"+name+".php" for name in (
     "waste_trip_regression_test", "waste_trip_manager_membership_regression_test",
     "waste_trip_legacy_mapping_test", "waste_trip_synchronization_mysql_test",
     "waste_trips_137_production_migration_contract_test", "waste_trips_137_migration_mysql_test",
+    "waste_trips_138_production_migration_contract_test", "waste_trips_138_migration_mysql_test",
 )]
 DOCGEN_TESTS=["tests/"+name+".php" for name in (
     "document_generator_navigation_test", "document_generator_regression_test",
