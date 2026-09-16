@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "d705beb8fb9797923e8377215b26d62bcee38f3a",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d705beb8fb9797923e8377215b26d62bcee38f3a/docs/database/TENANT_SCHEMA.md",
+      "verified_sha": "237c462e384746b2da1c9cb240565e8908d2aaca",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/237c462e384746b2da1c9cb240565e8908d2aaca/docs/database/TENANT_SCHEMA.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
@@ -113,8 +113,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "a07c3e5735c6cbb4eb35321e2070a9f384fb2823",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/a07c3e5735c6cbb4eb35321e2070a9f384fb2823/docs/WASTE_TRIP_SYNCHRONIZATION.md",
+      "verified_sha": "237c462e384746b2da1c9cb240565e8908d2aaca",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/237c462e384746b2da1c9cb240565e8908d2aaca/docs/WASTE_TRIP_SYNCHRONIZATION.md",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -136,8 +136,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9fb35e208ee147b8c715baef6192ef34708caa63",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9fb35e208ee147b8c715baef6192ef34708caa63/tests/agent_preflight_test.py",
+      "verified_sha": "237c462e384746b2da1c9cb240565e8908d2aaca",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/237c462e384746b2da1c9cb240565e8908d2aaca/tests/agent_preflight_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
