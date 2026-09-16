@@ -113,8 +113,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "d705beb8fb9797923e8377215b26d62bcee38f3a",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d705beb8fb9797923e8377215b26d62bcee38f3a/tests/waste_trip_synchronization_mysql_test.php",
+      "verified_sha": "abbfa8074fa005a8ca445d401472290339123a2e",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/abbfa8074fa005a8ca445d401472290339123a2e/docs/WASTE_TRIP_SYNCHRONIZATION.md",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -125,7 +125,8 @@
         "tests/waste_trip*.php",
         ".github/workflows/waste_trips*.yml",
         "database/migrations-local/*waste_trip*.sql",
-        "docs/WASTE_TRIP_SYNCHRONIZATION.md"
+        "docs/WASTE_TRIP_SYNCHRONIZATION.md",
+        "public/assets/css/waste-trip-registry.css"
       ],
       "navigation": "active",
       "machine_ownership_id": "operations.waste_trips"
