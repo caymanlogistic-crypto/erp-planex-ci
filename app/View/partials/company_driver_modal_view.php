@@ -164,11 +164,6 @@ $licenseView = trim(implode(' ', array_filter([
       <?php endif; ?>
     </div>
   </div>
-  <?php
-  $assignmentEntityType = 'driver';
-  $assignmentEntityId = (int) ($driver['id'] ?? 0);
-  require base_path('app/View/partials/company_entity_assignment_block.php');
-  ?>
 </div>
 
 <div class="modal-foot is-spaced">
