@@ -27,9 +27,9 @@ try {
     $pdo->exec("CREATE TABLE users(id INT UNSIGNED PRIMARY KEY,full_name VARCHAR(255) NOT NULL,login VARCHAR(100) NOT NULL,role_code VARCHAR(50) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE company_users(id INT UNSIGNED PRIMARY KEY,company_id INT UNSIGNED NOT NULL,full_name VARCHAR(255) NOT NULL,login VARCHAR(100) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE user_accounts(id BIGINT UNSIGNED PRIMARY KEY,full_name VARCHAR(255) NOT NULL,login VARCHAR(100) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
-    $pdo->exec("INSERT INTO users VALUES(10,'Владимир Владимирович Спугов','Spugov','logist'),(11,'Мария Петрова','maria','senior_logist')");
-    $pdo->exec("INSERT INTO company_users VALUES(20,25,'Анна Иванова','owner')");
-    $pdo->exec("INSERT INTO user_accounts VALUES(30,'Пётр Сидоров','global.user')");
+    $pdo->exec("INSERT INTO users VALUES(10,'Спугов Владимир Владимирович','Spugov','logist'),(11,'Петрова Мария','maria','senior_logist')");
+    $pdo->exec("INSERT INTO company_users VALUES(20,25,'Иванова Анна','owner')");
+    $pdo->exec("INSERT INTO user_accounts VALUES(30,'Сидоров Пётр','global.user')");
 
     $blocks = [
         ['id'=>1,'created_by_user_id'=>10,'created_by_role'=>'logist'],
@@ -45,9 +45,38 @@ try {
     $ok(($rows[2]['created_by_display_name'] ?? '') === 'Пётр С.', 'global account creator mismatch');
     $ok(($rows[3]['created_by_display_name'] ?? '') === '—', 'unknown creator must fail closed to dash');
 
+    // All creator directories obey the same surname-first profile contract.
+    $names = [
+        ['Гладких Карина Артуровна', 'Карина Г.'],
+        ['Глухова Светлана', 'Светлана Г.'],
+        ['Сидоров Михаил', 'Михаил С.'],
+        ['Спугов Владимир Владимирович', 'Владимир С.'],
+        ['Шибанов Антон', 'Антон Ш.'],
+    ];
+    $insertTenant = $pdo->prepare('INSERT INTO users VALUES(?,?,?,?)');
+    $insertOwner = $pdo->prepare('INSERT INTO company_users VALUES(?,?,?,?)');
+    $insertAccount = $pdo->prepare('INSERT INTO user_accounts VALUES(?,?,?)');
+    $nameBlocks = [];
+    $expectedNames = [];
+    foreach ($names as $index => [$fullName, $displayName]) {
+        $id = 100 + $index;
+        $insertTenant->execute([$id, $fullName, 'tenant.' . $id, 'logist']);
+        $insertOwner->execute([$id, 25, $fullName, 'owner.' . $id]);
+        $insertAccount->execute([$id, $fullName, 'account.' . $id]);
+        foreach (['logist' => 'tenant.', 'company_owner' => 'owner.', '' => 'account.'] as $role => $loginPrefix) {
+            $nameBlocks[] = ['created_by_user_id' => $id, 'created_by_role' => $role];
+            $expectedNames[] = [$displayName, $loginPrefix . $id];
+        }
+    }
+    $nameRows = (new FeoPlacementAuthorService($pdo))->decorate($pdo, 25, $nameBlocks);
+    foreach ($expectedNames as $index => [$displayName, $login]) {
+        $ok($nameRows[$index]['created_by_display_name'] === $displayName, 'surname-first directory display mismatch: ' . $login);
+        $ok($nameRows[$index]['created_by_login'] === $login, 'creator namespace mismatch: ' . $login);
+    }
+
     // Real runtime sessions carry a global account ID AND a legacy UI role.
     // Colliding legacy IDs must never turn that role into an identity namespace.
-    $pdo->exec("INSERT INTO user_accounts VALUES(20,'Спугов Владимир Владимирович','spugov.global'),(10,'Елена Орлова','elena.global')");
+    $pdo->exec("INSERT INTO user_accounts VALUES(20,'Спугов Владимир Владимирович','spugov.global'),(10,'Орлова Елена','elena.global')");
     $pdo->exec("CREATE TABLE feo_requests(zayavka_id VARCHAR(64) PRIMARY KEY,mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $migration = (string)file_get_contents(BASE_PATH . '/database/migrations-local/123_create_feo_map_placement.sql');
     foreach (array_filter(array_map('trim', preg_split('/;\s*(?:\R|$)/', $migration) ?: [])) as $statement) $pdo->exec($statement);
