@@ -30,8 +30,9 @@ $fmtMass = static function ($value): string {
 .feo-placement-search-col--block{width:auto;white-space:normal;overflow-wrap:anywhere;word-break:normal}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]{cursor:pointer}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]:hover{background:var(--accent-bg)}
-.feo-placement-table{width:100%;table-layout:fixed;min-width:0!important}
+.feo-placement-table-card .feo-placement-table{width:100%;table-layout:fixed;min-width:0!important}
 .feo-placement-table th,.feo-placement-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.feo-placement-table .feo-placement-name-cell{white-space:normal;overflow-wrap:anywhere;word-break:normal;text-overflow:clip}
 .feo-placement-source-cell{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-overflow:clip!important}
 .feo-placement-table tbody tr[data-placement-block-id]{cursor:pointer}
 .feo-placement-table tbody tr[data-placement-block-id]:hover{background:var(--accent-bg)}
@@ -175,7 +176,7 @@ $fmtMass = static function ($value): string {
         ?>
         <tr data-placement-block-id="<?= (int)$block['id'] ?>" data-placement-block-status="<?= $statusApplied ? 'applied' : 'disabled' ?>" data-placement-block-type="<?= e((string)($block['block_type'] ?? '')) ?>">
           <td>#<?= (int)$block['id'] ?></td>
-          <td><?= e((string)($block['name'] ?: '—')) ?></td>
+          <td class="feo-placement-name-cell"><?= e((string)($block['name'] ?: '—')) ?></td>
           <td><?= ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение' ?></td>
           <td><?= (int)($block['request_count'] ?? 0) ?></td>
           <td><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></td>
