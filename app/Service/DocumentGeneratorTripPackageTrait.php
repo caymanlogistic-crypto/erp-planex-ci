@@ -321,7 +321,8 @@ trait DocumentGeneratorTripPackageTrait
         if (!LinearRouteService::isVisibleEntity($pdo, 'clients', $clientId, ['user_id'=>$userId,'role_code'=>$role], 'client')) {
             throw new RuntimeException('Клиент недоступен или неактивен.');
         }
-        $stmt = $pdo->prepare("SELECT id,name,inn,kpp,ogrn,legal_address,physical_address,contact_phone,contact_email,director_full_name,director_position,bank_account,bank_name,bank_bik,bank_corr_account FROM clients WHERE id=? AND status='active' AND deleted_at IS NULL LIMIT 1");
+        // Migration 033 removed legacy client contact columns. Contacts are optional for documents.
+        $stmt = $pdo->prepare("SELECT id,name,inn,kpp,ogrn,legal_address,physical_address,director_full_name,director_position,bank_account,bank_name,bank_bik,bank_corr_account FROM clients WHERE id=? AND status='active' AND deleted_at IS NULL LIMIT 1");
         $stmt->execute([$clientId]);
         $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
         if (!$row) throw new RuntimeException('Клиент не найден.');
