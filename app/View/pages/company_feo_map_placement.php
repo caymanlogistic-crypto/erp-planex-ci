@@ -30,9 +30,9 @@ $fmtMass = static function ($value): string {
 .feo-placement-search-col--block{width:auto;white-space:normal;overflow-wrap:anywhere;word-break:normal}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]{cursor:pointer}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]:hover{background:var(--accent-bg)}
-.feo-placement-table-card .feo-placement-table{width:100%;table-layout:fixed;min-width:0!important}
+.feo-placement-table-card .feo-placement-table{width:100%;table-layout:auto;min-width:0!important}
 .feo-placement-table th,.feo-placement-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.feo-placement-table .feo-placement-name-cell{white-space:normal;overflow-wrap:anywhere;word-break:normal;text-overflow:clip}
+.feo-placement-table .feo-placement-name-cell,.feo-placement-table td:nth-child(6){max-width:0;white-space:normal;overflow-wrap:anywhere;word-break:normal;text-overflow:clip}
 .feo-placement-source-cell{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-overflow:clip!important}
 .feo-placement-table tbody tr[data-placement-block-id]{cursor:pointer}
 .feo-placement-table tbody tr[data-placement-block-id]:hover{background:var(--accent-bg)}
@@ -160,7 +160,7 @@ $fmtMass = static function ($value): string {
   <div class="feo-placement-block-search-results is-hidden" data-placement-block-search-results></div>
   <div class="table-scroll">
     <table class="table feo-placement-table">
-      <thead><tr><th style="width:6%">ID</th><th style="width:16%">Название</th><th style="width:9%">Тип</th><th style="width:7%">Заявок</th><th style="width:9%">Масса, кг</th><th style="width:24%">Источник</th><th style="width:11%">Дата</th><th style="width:11%">Ответств.</th><th style="width:7%">Статус</th></tr></thead>
+      <thead><tr><th style="width:1%">ID</th><th>Название</th><th style="width:9%">Тип</th><th style="width:1%">Заявок</th><th style="width:1%">Масса, кг</th><th style="width:24%">Источник</th><th style="width:1%">Дата</th><th style="width:1%">Ответств.</th><th style="width:1%">Статус</th></tr></thead>
       <tbody>
       <?php foreach ($blocks as $block): ?>
         <?php
