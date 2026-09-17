@@ -29,8 +29,23 @@ $ok('seven-digit values are rejected', $strict);
 $fromCells = $parser->extractFromCells(['308710','abc 299726 xyz','1234567','308710']);
 $ok('file cell parser keeps standalone six digits only', $fromCells['ids'] === ['308710','299726']);
 $ok('file cell parser reports duplicate ids', $fromCells['duplicates'] === ['308710']);
-$ok('responsible short name uses first name and surname initial', FeoPlacementAuthorService::shortName('Владимир Спугов', 'Spugov') === 'Владимир С.');
-$ok('responsible short name skips patronymic and uses last token as surname', FeoPlacementAuthorService::shortName('Владимир Владимирович Спугов', 'Spugov') === 'Владимир С.');
+$ok('responsible short name uses surname-first full name', FeoPlacementAuthorService::shortName('Спугов Владимир', 'Spugov') === 'Владимир С.');
+$ok('responsible short name ignores optional patronymic', FeoPlacementAuthorService::shortName('Спугов Владимир Владимирович', 'Spugov') === 'Владимир С.');
+foreach ([
+    'Гладких Карина Артуровна' => 'Карина Г.',
+    'Глухова Светлана' => 'Светлана Г.',
+    'Сидоров Михаил' => 'Михаил С.',
+    'Шибанов Антон' => 'Антон Ш.',
+    'Дюма Александр' => 'Александр Д.',
+    'Ильич Антон' => 'Антон И.',
+    'Петров-Сидоров Антон-Михаил' => 'Антон-Михаил П.',
+    'Ли Ян необычное отчество' => 'Ян Л.',
+    "\u{00A0}Спугов\t Владимир\nВладимирович\u{00A0}" => 'Владимир С.',
+    'Спугов' => 'Спугов',
+] as $fullName => $expectedName) {
+    $ok('canonical responsible name: ' . $fullName, FeoPlacementAuthorService::shortName($fullName) === $expectedName);
+}
+$ok('missing responsible name and login use dash', FeoPlacementAuthorService::shortName(" \t\u{00A0}", ' ') === '—');
 $ok('responsible short name falls back to login', FeoPlacementAuthorService::shortName('', 'Spugov') === 'Spugov');
 
 $makeXlsx = static function (array $sheets): string {
