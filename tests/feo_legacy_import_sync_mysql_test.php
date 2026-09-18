@@ -36,7 +36,7 @@ try {
     $fixtureDdl=(string)$pdo->query('SHOW CREATE TABLE feo_requests')->fetchColumn(1);
     $fixtureDdl=preg_replace('/,\n\s+CONSTRAINT[^\n]+/', '', $fixtureDdl);
     $legacyPdo->exec(str_replace('CREATE TABLE `feo_requests`', 'CREATE TABLE `feo`', $fixtureDdl));
-    $legacyPdo->exec("ALTER TABLE feo DROP COLUMN current_import_id, MODIFY zayavka_id VARCHAR(20), MODIFY mass_netto DECIMAL(10,3), MODIFY mno_region VARCHAR(100), MODIFY created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, MODIFY updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, ADD legacy_note TEXT NULL");
+    $legacyPdo->exec("ALTER TABLE feo DROP COLUMN current_import_id, MODIFY zayavka_id VARCHAR(20), MODIFY mass_netto DECIMAL(10,3), MODIFY mno_region VARCHAR(100), MODIFY zakaz_s_op_status VARCHAR(50), MODIFY kol_vo_mest TINYINT, MODIFY mass_brutto DECIMAL(5,2) UNSIGNED, MODIFY polnoe_naim_zakazchika TINYTEXT, MODIFY created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, MODIFY updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, ADD legacy_note TEXT NULL");
     putenv('FEO_LEGACY_SYNC_TENANT_DATABASE=' . $db);
     putenv('FEO_LEGACY_SYNC_DATABASE=' . $legacyDb);
     $legacyPdo->exec("INSERT INTO feo(zayavka_id,mass_netto,legacy_note,created_at,updated_at) VALUES ('100002',77.000,'Старое примечание','2020-01-01','2020-02-02'),('999999',999.000,'Не трогать','2021-01-01','2021-02-02')");
@@ -82,10 +82,45 @@ try {
     $service->deleteLatestImport($pdo,$skip['import_id'],[]);
 
     $beforeHistory = $history(); $beforeRequests = $requests(); $beforeLegacy = $snapshot();
-    $reject(fn()=>$apply([$row('200001'),$row('200002','1.2345')]),'Precision loss rejected after an earlier row');
+    $reject(fn()=>$apply([$row('200001'),$row('200002','invalid')]),'Invalid number rejected after an earlier row');
     $ok($history()===$beforeHistory && $requests()===$beforeRequests && $snapshot()===$beforeLegacy,'Failed apply atomic across both tables and journal');
-    $long = $row('200003'); $long['mno_region']=str_repeat('Я',101);
-    $reject(fn()=>$apply([$long]),'Legacy text truncation blocked');
+    $long = $row('200003','1.2345'); $long['mno_region']=str_repeat('Я',101);
+    $long['zakaz_s_op_status']='Ожидает подписания акта приема-передачи отходообразователем';
+    $long['kol_vo_mest']=300; $long['mass_brutto']='1000.9999';
+    $long['polnoe_naim_zakazchika']=str_repeat('Я',130);
+    $negative=$row('200007','-1.2349'); $negative['kol_vo_mest']=-300; $negative['mass_brutto']='-1.23';
+    $overflow=$row('200008','10000000'); $underflow=$row('200009','-10000000');
+    $zero=$row('200010','-0.0009');
+    $existing=$row('100002','2.9999'); $existing['zakaz_s_op_status']=$long['zakaz_s_op_status'];
+    $fit=$apply([$long,$negative,$overflow,$underflow,$zero,$existing]);
+    $fitted=$snapshot(); $tenantFitted=$requests();
+    $byId=array_column($fitted,null,'zayavka_id'); $tenantById=array_column($tenantFitted,null,'zayavka_id');
+    $ok($byId['200003']['zakaz_s_op_status']===mb_substr($long['zakaz_s_op_status'],0,50),'Reported long status fits old VARCHAR(50)');
+    $ok($tenantById['200003']['zakaz_s_op_status']===$long['zakaz_s_op_status'],'Tenant keeps full status');
+    $ok($byId['200003']['mno_region']===str_repeat('Я',100) && $tenantById['200003']['mno_region']===$long['mno_region'],'All text fields fit by characters, tenant unchanged');
+    $ok($byId['200003']['polnoe_naim_zakazchika']===str_repeat('Я',127) && mb_check_encoding($byId['200003']['polnoe_naim_zakazchika'],'UTF-8'),'TEXT byte capacity preserves whole UTF-8 characters');
+    $ok($byId['200003']['mass_netto']==='1.234' && $byId['200007']['mass_netto']==='-1.234' && $byId['200010']['mass_netto']==='0.000','Decimal excess digits truncate toward zero without rounding');
+    $ok($tenantById['200003']['mass_netto']==='1.2345','Tenant retains full decimal precision');
+    $ok($byId['200008']['mass_netto']==='9999999.999' && $byId['200009']['mass_netto']==='-9999999.999','Decimal range clips to signed endpoints');
+    $ok((string)$byId['200003']['kol_vo_mest']==='127' && (string)$byId['200007']['kol_vo_mest']==='-128','Integer range clips to signed endpoints');
+    $ok($byId['200003']['mass_brutto']==='999.99' && $byId['200007']['mass_brutto']==='0.00','Unsigned decimal clips at both endpoints');
+    $ok($byId['100002']['zakaz_s_op_status']===mb_substr($long['zakaz_s_op_status'],0,50),'Existing legacy updates use the same fitting rule');
+    $service->rollbackLatest($pdo,$fit['import_id'],[]);
+    $ok($snapshot()===$beforeLegacy && $requests()===$beforeRequests,'Fitted import rollback restores exact independent before images');
+    $service->restoreRolledBackImport($pdo,$fit['import_id'],[]);
+    $tenantValues=static function(array $rows): array {
+        $result=[];
+        foreach ($rows as $r) $result[$r['zayavka_id']]=array_intersect_key($r,array_flip(FeoXlsxParser::fields()));
+        ksort($result); return $result;
+    };
+    $ok($snapshot()===$fitted && $tenantValues($requests())===$tenantValues($tenantFitted),'Restore replays exact legacy snapshot and all full tenant business fields');
+    $service->deleteLatestImport($pdo,$fit['import_id'],[]);
+    $ok($snapshot()===$beforeLegacy && $requests()===$beforeRequests,'Deleting fitted import restores both databases');
+
+    $legacyPdo->exec('ALTER TABLE feo MODIFY kol_vo_mest TINYINT UNSIGNED');
+    $unsigned=$apply([$long,$negative]);
+    $ok((int)$legacyPdo->query("SELECT kol_vo_mest FROM feo WHERE zayavka_id='200003'")->fetchColumn()===255 && (int)$legacyPdo->query("SELECT kol_vo_mest FROM feo WHERE zayavka_id='200007'")->fetchColumn()===0,'Unsigned integer clips at both endpoints');
+    $service->deleteLatestImport($pdo,$unsigned['import_id'],[]);
     $legacyPdo->exec("CREATE TRIGGER legacy_write_test BEFORE INSERT ON feo FOR EACH ROW SET NEW.legacy_note='trigger'");
     $reject(fn()=>$apply([$row('200004')]),'Triggers rejected');
     $legacyPdo->exec('DROP TRIGGER legacy_write_test');

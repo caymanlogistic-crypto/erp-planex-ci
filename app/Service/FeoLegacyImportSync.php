@@ -81,7 +81,7 @@ final class FeoLegacyImportSync
         $fk = $this->pdo->prepare("SELECT COUNT(*) FROM information_schema.REFERENTIAL_CONSTRAINTS WHERE UNIQUE_CONSTRAINT_SCHEMA=? AND REFERENCED_TABLE_NAME='feo' AND (DELETE_RULE IN ('CASCADE','SET NULL') OR UPDATE_RULE IN ('CASCADE','SET NULL'))");
         $fk->execute([$this->database]);
         if ((int)$fk->fetchColumn() !== 0) throw new RuntimeException('Каскадные связи старой таблицы feo не поддерживаются.');
-        $cols = $this->pdo->prepare('SELECT COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,NUMERIC_PRECISION,NUMERIC_SCALE,EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=\'feo\' ORDER BY ORDINAL_POSITION');
+        $cols = $this->pdo->prepare('SELECT COLUMN_NAME,DATA_TYPE,COLUMN_TYPE,CHARACTER_MAXIMUM_LENGTH,CHARACTER_OCTET_LENGTH,NUMERIC_PRECISION,NUMERIC_SCALE,EXTRA FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=? AND TABLE_NAME=\'feo\' ORDER BY ORDINAL_POSITION');
         $cols->execute([$this->database]);
         foreach ($cols->fetchAll(PDO::FETCH_ASSOC) as $column) {
             if (preg_match('/(?:VIRTUAL|STORED) GENERATED/i', (string)$column['EXTRA'])) throw new RuntimeException('Вычисляемые поля старой feo не поддерживаются.');
@@ -109,6 +109,8 @@ final class FeoLegacyImportSync
             if ($before !== null && in_array($field, $excludedFields, true)) continue;
             $values[$field] = $this->compatibleValue($field, $row[$field] ?? null, $id);
         }
+        // The identity must still address the same request in both journals/databases.
+        if ((string)$values['zayavka_id'] !== $id) throw new RuntimeException('Номер заявки ' . $id . ' не помещается в старой базе без изменения её идентификатора.');
         if ($before === null) {
             $this->insert($values);
         } else {
@@ -205,29 +207,55 @@ final class FeoLegacyImportSync
         return ($a === null ? null : (string)$a) === ($b === null ? null : (string)$b);
     }
 
-    /** Reject silent truncation/rounding: the legacy schema has smaller numeric/text columns. */
+    /** OWNER: fit legacy values to its schema; the tenant row keeps its original values. */
     private function compatibleValue(string $field, mixed $value, string $id): mixed
     {
         if ($value === null) return null;
         $meta = $this->columns[$field];
         $text = (string)$value;
-        if (in_array($meta['DATA_TYPE'], ['int','bigint','smallint','tinyint','mediumint'], true)) {
+        $type = $meta['DATA_TYPE'];
+        $unsigned = stripos((string)$meta['COLUMN_TYPE'], 'unsigned') !== false;
+        $integerLimits = [
+            'tinyint'=>['128','127','255'], 'smallint'=>['32768','32767','65535'],
+            'mediumint'=>['8388608','8388607','16777215'], 'int'=>['2147483648','2147483647','4294967295'],
+            'bigint'=>['9223372036854775808','9223372036854775807','18446744073709551615'],
+        ];
+        if (isset($integerLimits[$type])) {
             if (!preg_match('/^-?\d+$/D', $text)) throw new RuntimeException("Некорректное целое {$field} заявки {$id}.");
-            return (string)(int)$text;
+            $negative = str_starts_with($text, '-');
+            $digits = ltrim(ltrim($text, '-'), '0') ?: '0';
+            if ($unsigned && $negative) return '0';
+            $limit = $integerLimits[$type][$unsigned ? 2 : ($negative ? 0 : 1)];
+            if ($this->exceedsUnsigned($digits, $limit)) $digits = $limit;
+            return ($negative && $digits !== '0' ? '-' : '') . $digits;
         }
-        if ($meta['CHARACTER_MAXIMUM_LENGTH'] !== null && mb_strlen($text, 'UTF-8') > (int)$meta['CHARACTER_MAXIMUM_LENGTH']) {
-            throw new RuntimeException("Заявка {$id}: поле {$field} длиннее допустимого в старой базе.");
+        if ($meta['CHARACTER_MAXIMUM_LENGTH'] !== null) {
+            $text = mb_substr($text, 0, (int)$meta['CHARACTER_MAXIMUM_LENGTH'], 'UTF-8');
+            // TEXT capacity is in bytes; never split a UTF-8 character at the boundary.
+            if (in_array($type, ['tinytext','text','mediumtext','longtext'], true)) {
+                $text = mb_strcut($text, 0, (int)$meta['CHARACTER_OCTET_LENGTH'], 'UTF-8');
+            }
+            if ($type === 'char') $text = rtrim($text, ' ');
         }
-        if (in_array($meta['DATA_TYPE'], ['decimal','numeric'], true)) {
+        if (in_array($type, ['decimal','numeric'], true)) {
             if (!preg_match('/^(-?)(\d+)(?:\.(\d+))?$/D', $text, $m)) throw new RuntimeException("Некорректное число {$field} заявки {$id}.");
             $scale = (int)$meta['NUMERIC_SCALE'];
-            $integer = ltrim($m[2], '0');
-            $fraction = rtrim($m[3] ?? '', '0');
-            if (strlen($integer) > (int)$meta['NUMERIC_PRECISION'] - $scale || strlen($fraction) > $scale) {
-                throw new RuntimeException("Заявка {$id}: число {$field} нельзя сохранить в старой базе без потери точности.");
+            $integer = ltrim($m[2], '0') ?: '0';
+            $fraction = str_pad(substr($m[3] ?? '', 0, $scale), $scale, '0');
+            $limit = str_repeat('9', (int)$meta['NUMERIC_PRECISION'] - $scale) ?: '0';
+            if ($unsigned && $m[1] === '-') {
+                $integer = '0'; $fraction = str_repeat('0', $scale);
+            } elseif ($this->exceedsUnsigned($integer, $limit)) {
+                $integer = $limit; $fraction = str_repeat('9', $scale);
             }
-            return $m[1] . ($integer === '' ? '0' : $integer) . ($scale ? '.' . str_pad($fraction, $scale, '0') : '');
+            $sign = $m[1] === '-' && !$unsigned && trim($integer . $fraction, '0') !== '' ? '-' : '';
+            return $sign . $integer . ($scale ? '.' . $fraction : '');
         }
         return $text;
+    }
+
+    private function exceedsUnsigned(string $value, string $limit): bool
+    {
+        return strlen($value) > strlen($limit) || (strlen($value) === strlen($limit) && strcmp($value, $limit) > 0);
     }
 }
