@@ -137,8 +137,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "a3140d9cffd0bd801ce7bddd52c9ce74325e1ce2",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/a3140d9cffd0bd801ce7bddd52c9ce74325e1ce2/tests/agent_preflight_test.py",
+      "verified_sha": "7cde6855cbeee3397df719a92b9950425453857c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/7cde6855cbeee3397df719a92b9950425453857c/tests/agent_preflight_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -213,6 +213,31 @@
         "supersedes": "per-release OWNER click requirement from 2026-08-19 deploy policy only",
         "implementation_status": "IMPLEMENTED"
       }
+    },
+    {
+      "canonical_id": "operations.feo_imports",
+      "semantic_class": "IMPLEMENTATION",
+      "truth_status": "VERIFIED",
+      "criticality": "CRITICAL",
+      "verified_sha": "7cde6855cbeee3397df719a92b9950425453857c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/7cde6855cbeee3397df719a92b9950425453857c/tests/feo_legacy_import_sync_mysql_test.php",
+      "owning_paths": [
+        "app/Service/FeoRequestService.php",
+        "app/Service/FeoLegacyImportSync.php",
+        "app/Service/FeoXlsxParser.php",
+        "app/Http/Controllers/Company/FeoRequestsController.php",
+        "app/View/pages/company_feo_requests.php",
+        "tests/feo_legacy*",
+        "tests/feo_import*",
+        "tests/feo_xlsx_parser_format_test.php",
+        "tests/feo_requests_contract_test.php",
+        "tests/fixtures/feo_import_render.php",
+        "scripts/feo_legacy_sync_configure.php",
+        ".github/workflows/feo_legacy_import_sync_configuration.yml",
+        "docs/FEO_IMPORT_LEGACY_SYNC.md"
+      ],
+      "navigation": "active",
+      "machine_ownership_id": "operations.feo_imports"
     }
   ]
 }
