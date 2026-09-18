@@ -69,6 +69,20 @@ try {
   await page.goto(url+'/coordinates'); await page.locator('[name=address]').fill('Москва');
   await page.locator('[data-geocode]').click(); await page.locator('[data-geo-result]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-geo-lon]').innerText(),'37.123');
+  assert.equal(await page.locator('[data-geo-quality]').evaluate(e=>e.classList.contains('alert-warning')),true);
+  destination.address='Россия, Кемеровская область — Кузбасс, посёлок городского типа Инской, микрорайон Технологический, 13';
+  destination.precision='exact'; destination.quality='Точное совпадение дома';
+  for (const width of [1920,1366,800,390]) {
+    await page.setViewportSize({width,height:900}); await page.goto(url+'/coordinates');
+    await page.locator('[name=address]').fill('Кемеровская область, пгт Инской, микрорайон Технологический, 13');
+    await page.locator('[data-geocode]').click(); await page.locator('[data-geo-result]').waitFor({state:'visible'});
+    assert.equal(await page.locator('[data-geo-quality]').evaluate(e=>e.classList.contains('alert-success')),true);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Coordinates overflow '+width);
+    const geometry=await page.locator('[data-geo-lat]').evaluate(e=>({font:parseFloat(getComputedStyle(e).fontSize),radius:parseFloat(getComputedStyle(e).borderRadius)}));
+    assert.ok(geometry.font<=13 && geometry.radius<=2,'System field geometry');
+    if(screenshotDir) await page.screenshot({path:path.join(screenshotDir,`coordinates-${width}.png`),fullPage:true});
+  }
+
   await page.locator('[name=address]').fill('Новый запрос');
   assert.equal(await page.locator('[data-geo-result]').isVisible(),false,'Edited address invalidates geocoder result');
   for (const route of ['/', '/coordinates']) {

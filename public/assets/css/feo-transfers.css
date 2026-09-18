@@ -1,24 +1,26 @@
-.feo-transfers{--transfer-accent:var(--primary,#1e7461)}
-.feo-transfers [hidden]{display:none!important}
-.transfer-dialog{width:min(1050px,calc(100vw - 32px));max-height:90vh;border:1px solid var(--line-soft,#dce2e9);border-radius:14px;padding:0;background:var(--surface,#fff);color:var(--text-main,#243042);box-shadow:0 24px 80px #14283833}
-.transfer-dialog::backdrop{background:#12202e80}
-.transfer-dialog-head{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding:20px 24px;border-bottom:1px solid var(--line-soft,#dce2e9);background:var(--surface-form,#f8fafb)}
-.transfer-dialog-head h2{margin:0;font-size:20px}.transfer-dialog-head p{margin:6px 0 0}
-.transfer-dialog-head{position:sticky;top:0;z-index:2}
-.transfer-form,.transfer-detail-body{padding:24px}.transfer-form>.field,.transfer-form>div,.transfer-form>fieldset{margin-bottom:18px}
-.transfer-form .field-label{display:block;margin-bottom:7px}.transfer-form textarea{width:100%;resize:vertical;min-height:110px}
-.transfer-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px}.transfer-grid .field{min-width:0}
-.transfer-modes{display:flex;gap:24px;border:0;padding:0}.transfer-modes legend{font-weight:600;margin-bottom:10px}.transfer-modes label{display:flex;gap:8px;align-items:center}
-.transfer-modes input[type=radio]{appearance:auto;width:16px;height:16px;min-width:16px;min-height:16px;flex:0 0 16px;margin:0;padding:0;accent-color:var(--transfer-accent)}
-.transfer-modes label{width:auto;max-width:none;white-space:nowrap;font-weight:400}
-.transfer-address-search{display:flex;gap:10px}.transfer-address-search input{flex:1;min-width:0}.transfer-address-search .btn{white-space:nowrap}
-.transfer-geo-result{margin-top:16px;padding:20px;background:var(--surface-form,#f6f8fa);border:1px solid var(--line-soft,#dce2e9);border-radius:10px}.transfer-geo-result>strong{display:block;margin-top:6px}
-.transfer-coordinates{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:18px}.transfer-coordinates>div{padding:12px;border-radius:8px;background:var(--surface,#fff)}.transfer-coordinates span{display:block;color:var(--text-muted,#637080);font-size:12px}.transfer-coordinates b{font:600 21px/1.5 monospace;overflow-wrap:anywhere}
-.transfer-quality{font-size:12px;color:var(--warning,#936400);margin-top:6px}.transfer-quality.is-exact{color:var(--success,#238363)}
-.transfer-preview{border-top:1px solid var(--line-soft,#dce2e9);padding-top:16px}.transfer-preview .table-scroll{max-height:300px;overflow:auto}.transfer-preview td{white-space:normal;min-width:140px;overflow-wrap:anywhere}
-.transfer-empty{text-align:center;padding:50px 20px;color:var(--text-muted,#637080)}.transfer-empty b{color:var(--text-main,#243042);font-size:17px}.transfer-empty p{white-space:normal}
-.transfer-history td{vertical-align:top}.transfer-history .transfer-location{white-space:normal;min-width:210px;max-width:390px;overflow-wrap:anywhere}.transfer-history .muted{font-size:12px;margin-top:6px}.transfer-history .inline-actions{flex-wrap:wrap;gap:6px}
-.transfer-settings{margin:20px 0;padding:16px;background:var(--surface-form,#f8fafb);border:1px solid var(--line-soft,#dce2e9);border-radius:10px}.transfer-settings summary{cursor:pointer;font-size:13px}.transfer-settings form{margin-top:18px;max-width:750px}
-.transfer-pagination{display:flex;gap:10px;padding:12px}.transfer-detail-body .table-scroll{max-height:50vh;overflow:auto}.transfer-detail-body td{white-space:normal;overflow-wrap:anywhere;min-width:120px}.transfer-detail-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px}.transfer-detail-meta p{margin:0}.transfer-detail-meta b{display:block}
-.transfer-confirm-actions{display:flex;justify-content:flex-end;gap:10px;margin-top:20px}
-@media(max-width:700px){.transfer-grid,.transfer-coordinates,.transfer-detail-meta{grid-template-columns:1fr}.transfer-form,.transfer-detail-body,.transfer-dialog-head{padding:16px}.transfer-address-search{flex-direction:column}.transfer-modes{flex-wrap:wrap;gap:12px}.transfer-dialog{width:calc(100vw - 16px)}.transfer-history{min-width:850px}}
+/* Layout only; surfaces, fields, alerts and dialogs use the ERP component classes. */
+.feo-transfers [hidden],.transfer-dialog:not([open]){display:none!important}
+.transfer-dialog{width:min(820px,calc(100vw - 32px));padding:0;transform:none}
+.transfer-dialog::backdrop{background:rgba(10,9,8,.58)}
+.transfer-dialog-head p{margin-top:4px;font-size:11px}
+.transfer-form{padding:16px;margin:0}.transfer-form.panel{width:100%;max-width:none;border:1px solid var(--line-soft)}
+.transfer-form>.field,.transfer-form>div,.transfer-form>fieldset{margin-bottom:12px}
+.transfer-form>[data-address-destination]:last-of-type{margin-bottom:0}
+.transfer-form textarea{resize:vertical;min-height:110px}
+.transfer-grid .field{min-width:0}
+.transfer-modes{display:flex;flex-wrap:wrap;gap:12px;border:0;padding:0}.transfer-modes legend{font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px}.transfer-modes label{display:flex;gap:6px;align-items:center;width:auto;max-width:none;font-weight:400}
+.transfer-modes input[type=radio]{appearance:auto;width:14px;height:14px;min-width:14px;min-height:14px;flex:0 0 14px;margin:0;padding:0;accent-color:var(--accent)}
+.transfer-address-search{display:flex;align-items:center;gap:8px}.transfer-address-search input{flex:1;min-width:0}.transfer-address-search .btn{white-space:nowrap}
+.transfer-geo-result{display:grid;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line-soft)}
+.transfer-geo-result .inline-actions{display:flex;flex-wrap:wrap;gap:6px}
+.transfer-coordinates{max-width:600px}.transfer-coordinates .field{min-width:0}
+.feo-transfers .transfer-readonly{display:block;background:var(--surface-muted);border-color:var(--line-hair);color:var(--text-muted);box-shadow:none;line-height:1.5;padding:5px 9px;overflow-wrap:anywhere;cursor:text}
+.transfer-quality{font-size:11px;color:var(--warning);margin-top:4px}.transfer-quality.is-exact{color:var(--success)}
+.transfer-preview{border-top:1px solid var(--line-soft);padding-top:12px}.transfer-preview>h3{font-size:13px;margin-bottom:8px}.transfer-preview .table-scroll{max-height:300px;overflow:auto}.transfer-preview td{white-space:normal;min-width:140px;overflow-wrap:anywhere}.transfer-preview>p{margin:8px 0}
+.transfer-empty{text-align:center;padding:32px 16px;color:var(--text-muted)}.transfer-empty b{color:var(--text-main);font-size:13px}.transfer-empty p{white-space:normal;margin:8px 0}
+.transfer-history td{vertical-align:top}.transfer-history .transfer-location{white-space:normal;min-width:210px;max-width:390px;overflow-wrap:anywhere}.transfer-history .muted{font-size:11px;margin-top:4px}.transfer-history .inline-actions{flex-wrap:wrap;gap:6px}
+.transfer-settings{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}.transfer-settings summary{cursor:pointer;font-size:12px}
+.transfer-pagination{display:flex;gap:8px;padding:10px}.transfer-detail-body .table-scroll{max-height:50vh;overflow:auto}.transfer-detail-body td{white-space:normal;overflow-wrap:anywhere;min-width:120px}.transfer-detail-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.transfer-detail-meta p{margin:0}.transfer-detail-meta b{display:block}
+.transfer-confirm-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
+.feo-transfers>[data-page-message]:not([hidden]){margin-bottom:8px}
+@media(max-width:700px){.transfer-grid,.transfer-coordinates,.transfer-detail-meta{grid-template-columns:1fr}.transfer-address-search{flex-direction:column;align-items:stretch}.transfer-dialog{width:calc(100vw - 16px)}.transfer-history{min-width:850px}}

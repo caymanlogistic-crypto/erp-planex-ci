@@ -7,7 +7,7 @@
   const csrf = () => form.querySelector('[name="_csrf_token"]').value;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const error = message => { const box = find('[data-form-error]'); box.textContent = message; box.hidden = !message; };
-  const pageMessage = (message, warn = false) => { const box = find('[data-page-message]'); box.textContent = message; box.className = `notice ${warn ? 'warn' : 'success'}`; box.hidden = false; };
+  const pageMessage = (message, warn = false) => { const box = find('[data-page-message]'); box.textContent = message; box.className = `form-alert ${warn ? 'alert-warning' : 'alert-success'}`; box.hidden = false; };
   const invalidate = () => { revision++; previewToken = ''; find('[data-preview-result]').hidden = true; };
   async function request(url, data = null) {
     const options = {headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin'};
@@ -40,7 +40,7 @@
     find('[data-geo-address]').textContent = geoResult.address;
     find('[data-geo-lat]').textContent = geoResult.latitude; find('[data-geo-lon]').textContent = geoResult.longitude;
     find('[data-geo-quality]').textContent = `Качество координат: ${geoResult.quality}`;
-    find('[data-geo-quality]').className = `transfer-quality ${geoResult.precision === 'exact' ? 'is-exact' : ''}`;
+    find('[data-geo-quality]').className = `form-alert ${geoResult.precision === 'exact' ? 'alert-success' : 'alert-warning'}`;
     find('[data-map-link]').href = `https://yandex.ru/maps/?pt=${encodeURIComponent(geoResult.longitude)},${encodeURIComponent(geoResult.latitude)}&z=17&l=map`;
     find('[data-geo-result]').hidden = false;
   }));
@@ -75,7 +75,7 @@
   }));
   root.querySelectorAll('[data-revert]').forEach(button => button.addEventListener('click',() => {
     const id = button.dataset.revert; const body = find('[data-detail-body]');
-    body.innerHTML = `<p>Вернуть все заявки пакета <strong>#${escape(id)}</strong> к адресам и координатам до этого переноса?</p><p class="muted">Если заявки перенесены более поздним пакетом, возврат остановится. История сохранится.</p><div class="notice warn" data-revert-error hidden role="alert"></div><div class="transfer-confirm-actions"><button class="btn btn-secondary" type="button" data-cancel-revert>Отмена</button><button class="btn btn-primary" type="button" data-confirm-revert>Вернуть весь пакет</button></div>`;
+    body.innerHTML = `<p>Вернуть все заявки пакета <strong>#${escape(id)}</strong> к адресам и координатам до этого переноса?</p><p class="muted">Если заявки перенесены более поздним пакетом, возврат остановится. История сохранится.</p><div class="form-alert alert-warning" data-revert-error hidden role="alert"></div><div class="transfer-confirm-actions"><button class="btn btn-secondary" type="button" data-cancel-revert>Отмена</button><button class="btn btn-primary" type="button" data-confirm-revert>Вернуть весь пакет</button></div>`;
     find('[data-cancel-revert]').onclick = () => detailDialog.close();
     find('[data-confirm-revert]').onclick = e => action(e.currentTarget,async () => { const result = await request(`${root.dataset.base}/${id}/revert`,new FormData()); completed(result,'возвращён'); },message => { find('[data-revert-error]').textContent = message; find('[data-revert-error]').hidden = false; });
     detailDialog.showModal();
