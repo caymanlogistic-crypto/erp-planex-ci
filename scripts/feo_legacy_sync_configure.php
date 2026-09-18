@@ -2,12 +2,17 @@
 declare(strict_types=1);
 
 /** Preserve every existing environment byte; never replace an existing destination. */
-function feoLegacySyncEnvironment(string $original, string $tenant, string $legacy): string
+function feoLegacySyncEnvironment(string $original, string $tenant, string $legacy, string $connection = ''): string
 {
     foreach ([$tenant,$legacy] as $db) if (!preg_match('/^[A-Za-z0-9_]{1,64}$/D', $db)) throw new RuntimeException('Invalid database identifier');
     if ($tenant === $legacy) throw new RuntimeException('Production legacy and tenant schemas must be different');
     $result = $original;
-    foreach (['FEO_LEGACY_SYNC_TENANT_DATABASE'=>$tenant,'FEO_LEGACY_SYNC_DATABASE'=>$legacy] as $key=>$value) {
+    $entries=['FEO_LEGACY_SYNC_TENANT_DATABASE'=>$tenant,'FEO_LEGACY_SYNC_DATABASE'=>$legacy];
+    if ($connection !== '') {
+        if (!preg_match('/^[A-Za-z0-9+\/=]+$/D',$connection)) throw new RuntimeException('Invalid protected connection encoding');
+        $entries['FEO_LEGACY_SYNC_CONNECTION_B64']=$connection;
+    }
+    foreach ($entries as $key=>$value) {
         preg_match_all('/^\s*' . preg_quote($key, '/') . '\s*=([^\r\n]*)/m', $original, $matches);
         if (count($matches[1]) > 1) throw new RuntimeException('Duplicate FEO sync environment entry');
         if ($matches[1] !== []) {
@@ -27,6 +32,7 @@ function feoLegacySyncLoadDependencies(string $root): void
     require_once $root . '/app/Core/Database.php';
     require_once $root . '/app/Service/FeoXlsxParser.php';
     require_once $root . '/app/Service/FeoLegacyImportSync.php';
+    require_once $root . '/app/Service/FeoImportTransaction.php';
 }
 
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
@@ -54,13 +60,29 @@ if ($tenant !== $company['db_identifier']) throw new RuntimeException('Tenant id
 $legacy = trim((string)getenv('FEO_SYNC_LEGACY_DATABASE'));
 $environment = file_get_contents($root . '/.env');
 if ($environment === false) throw new RuntimeException('Cannot read application environment');
-$updated = feoLegacySyncEnvironment($environment, $tenant, $legacy);
+$connectionMode=(string)(getenv('FEO_SYNC_CONNECTION_MODE') ?: 'shared');
+if (!in_array($connectionMode,['shared','separate'],true)) throw new RuntimeException('Invalid connection mode');
+$connection='';
+if ($connectionMode==='separate') {
+    // The GitHub secret arrives only via SSH stdin, never a shell argument or uploaded public file.
+    $raw=stream_get_contents(STDIN,65537);
+    if ($raw===false || strlen($raw)>65536) throw new RuntimeException('Protected connection missing or too large');
+    $credentials=json_decode($raw,true,16);
+    if (!is_array($credentials) || !is_string($credentials['host']??null) || !preg_match('/^[a-zA-Z0-9_.-]+$/D',$credentials['host'])
+        || !is_string($credentials['username']??null) || $credentials['username']==='' || !is_string($credentials['password']??null)) throw new RuntimeException('Protected connection invalid');
+    $connection=base64_encode(json_encode($credentials,JSON_THROW_ON_ERROR));
+    $_ENV['FEO_LEGACY_SYNC_CONNECTION_B64']=$connection; $_SERVER['FEO_LEGACY_SYNC_CONNECTION_B64']=$connection; putenv('FEO_LEGACY_SYNC_CONNECTION_B64='.$connection);
+}
+$updated = feoLegacySyncEnvironment($environment, $tenant, $legacy, $connection);
 foreach (['FEO_LEGACY_SYNC_TENANT_DATABASE'=>$tenant,'FEO_LEGACY_SYNC_DATABASE'=>$legacy] as $key=>$value) { $_ENV[$key]=$value; $_SERVER[$key]=$value; putenv($key.'='.$value); }
-$pdo->beginTransaction();
+$transaction=null;
 try {
-    $sync = App\Service\FeoLegacyImportSync::forTenant($pdo);
+    $transaction=App\Service\FeoImportTransaction::begin($pdo);
+    $sync = $transaction->sync();
     if (!$sync) throw new RuntimeException('Tenant binding failed');
     $sync->validate(); // Metadata and grants only; never perform probe INSERT/UPDATE/DELETE.
+    $transaction->commit(); // Read-only readiness also proves XA PREPARE/COMMIT and durable journal capability.
+    unset($transaction);
     if ($mode === 'activate' && $updated !== $environment) {
         $handle = fopen($root . '/.env', 'rb');
         if (!$handle || !flock($handle, LOCK_EX)) throw new RuntimeException('Environment lock unavailable');
@@ -81,7 +103,6 @@ try {
             if ($written !== strlen($updated) || !rename($temporary,$root.'/.env')) throw new RuntimeException('Cannot install environment candidate');
         } finally { if ($temporary && is_file($temporary)) unlink($temporary); flock($handle,LOCK_UN); fclose($handle); }
     }
-    $pdo->rollBack(); // No business data or schema was changed.
-    echo json_encode(['mode'=>$mode,'company_id'=>$companyId,'tenant_database'=>$tenant,'legacy_database'=>$legacy,'ready'=>true,'business_data_unchanged'=>true,'schema_unchanged'=>true],JSON_THROW_ON_ERROR) . "\n";
+    echo json_encode(['mode'=>$mode,'connection_mode'=>$connectionMode,'company_id'=>$companyId,'tenant_database'=>$tenant,'legacy_database'=>$legacy,'ready'=>true,'business_data_unchanged'=>true,'schema_unchanged'=>true],JSON_THROW_ON_ERROR) . "\n";
     echo "FEO_IMPORT_SYNC_CONFIGURATION_PASS\n";
-} catch (Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
+} catch (Throwable $e) { ($transaction??null)?->rollback(); throw $e; }

@@ -16,7 +16,7 @@ if (getenv('APP_ENV') !== 'test' || !preg_match('/^[a-zA-Z0-9_]+$/D', $db) || !i
 $pdo = new PDO('mysql:host=' . getenv('PLANEX_SCHEMA_DB_HOST') . ';port=' . (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306) . ';dbname=' . $db . ';charset=utf8mb4', getenv('PLANEX_SCHEMA_DB_USER'), getenv('PLANEX_SCHEMA_DB_PASSWORD'), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
 $legacyDb = trim((string)getenv('PLANEX_TEST_LEGACY_DB')) ?: $db;
 if (!preg_match('/^[a-zA-Z0-9_]+$/D', $legacyDb) || !in_array($legacyDb, $allowed, true)) throw new RuntimeException('Isolated legacy test database required.');
-$legacyPdo = $legacyDb === $db ? $pdo : new PDO('mysql:host=' . getenv('PLANEX_SCHEMA_DB_HOST') . ';port=' . (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306) . ';dbname=' . $legacyDb . ';charset=utf8mb4', getenv('PLANEX_SCHEMA_DB_USER'), getenv('PLANEX_SCHEMA_DB_PASSWORD'), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
+$legacyPdo = $legacyDb === $db ? $pdo : new PDO('mysql:host=' . getenv('PLANEX_SCHEMA_DB_HOST') . ';port=' . (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306) . ';dbname=' . $legacyDb . ';charset=utf8mb4', getenv('PLANEX_TEST_LEGACY_USER') ?: getenv('PLANEX_SCHEMA_DB_USER'), getenv('PLANEX_TEST_LEGACY_PASSWORD') ?: getenv('PLANEX_SCHEMA_DB_PASSWORD'), [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
 $count = 0;
 $ok = static function(bool $value, string $message) use (&$count): void { if (!$value) throw new RuntimeException($message); $count++; };
 $reject = static function(callable $f, string $message) use ($ok): void { try { $f(); } catch (Throwable $e) { $ok(true, $message); return; } $ok(false, $message); };
@@ -33,7 +33,9 @@ cleanCompanyPoolDatabase($pdo);
     if ($legacyDb !== $db) cleanCompanyPoolDatabase($legacyPdo);
 try {
     $pdo->exec(file_get_contents(BASE_PATH . '/database/migrations-local/122_create_feo_requests.sql'));
-    $legacyPdo->exec('CREATE TABLE feo LIKE `' . $db . '`.feo_requests');
+    $fixtureDdl=(string)$pdo->query('SHOW CREATE TABLE feo_requests')->fetchColumn(1);
+    $fixtureDdl=preg_replace('/,\n\s+CONSTRAINT[^\n]+/', '', $fixtureDdl);
+    $legacyPdo->exec(str_replace('CREATE TABLE `feo_requests`', 'CREATE TABLE `feo`', $fixtureDdl));
     $legacyPdo->exec("ALTER TABLE feo DROP COLUMN current_import_id, MODIFY zayavka_id VARCHAR(20), MODIFY mass_netto DECIMAL(10,3), MODIFY mno_region VARCHAR(100), MODIFY created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP, MODIFY updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP, ADD legacy_note TEXT NULL");
     putenv('FEO_LEGACY_SYNC_TENANT_DATABASE=' . $db);
     putenv('FEO_LEGACY_SYNC_DATABASE=' . $legacyDb);

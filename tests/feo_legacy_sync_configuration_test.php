@@ -19,6 +19,10 @@ $configured=feoLegacySyncEnvironment($original,'test_tenant','test_legacy');
 $ok(str_starts_with($configured,$original),'Existing environment bytes preserved');
 $ok(substr_count($configured,'FEO_LEGACY_SYNC_DATABASE=')===1,'Exactly one legacy destination');
 $ok(feoLegacySyncEnvironment($configured,'test_tenant','test_legacy')===$configured,'Configuration idempotent');
+$encoded=base64_encode(json_encode(['host'=>'localhost','username'=>'synthetic','password'=>'synthetic-secret']));
+$separate=feoLegacySyncEnvironment($configured,'test_tenant','test_legacy',$encoded);
+$ok(str_contains($separate,'FEO_LEGACY_SYNC_CONNECTION_B64='.$encoded),'Separate credentials installed only in environment');
+$ok(feoLegacySyncEnvironment($separate,'test_tenant','test_legacy',$encoded)===$separate,'Separate credentials idempotent');
 foreach ([['test_tenant','other_legacy'],['invalid;db','test_legacy'],['test_tenant','test_tenant']] as [$tenant,$legacy]) {
     $thrown=false; try { feoLegacySyncEnvironment($configured,$tenant,$legacy); } catch (RuntimeException) { $thrown=true; }
     $ok($thrown,'Wrong or changed destination rejected');

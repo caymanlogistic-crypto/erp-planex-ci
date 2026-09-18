@@ -206,6 +206,7 @@ jobs:
           set -euo pipefail
           php tests/feo_transfers_contract_test.php
           php tests/feo_legacy_import_sync_mysql_test.php
+          php tests/feo_legacy_xa_mysql_test.php
           php tests/feo_legacy_sync_configuration_test.php
           php tests/feo_xlsx_parser_format_test.php
           php tests/feo_import_modal_regression_test.php
