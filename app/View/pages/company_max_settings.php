@@ -63,6 +63,7 @@ $maxLastSendAt = (string)($logs[0]['created_at'] ?? '');
 $maxRecentLogs = array_slice($logs, 0, 8);
 $maxLogJson = json_encode($logs, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT);
 ?>
+<link rel="stylesheet" href="<?= app_url('/assets/css/max-messaging.css') ?>?v=<?= filemtime(base_path('public/assets/css/max-messaging.css')) ?>">
 <div class="page-head">
     <div class="page-head-left">
         <h1 class="page-title">MAX — интеграция</h1>
