@@ -192,7 +192,25 @@ jobs:
           PLANEX_TEST_FIXED_DB_ALLOWLIST=spugovxsim_test2 \
             php tests/max_integration_mysql_test.php
 
-      - name: Changed Python syntax
+      - name: FEO transfers and access regressions
+        shell: bash
+        env:
+          APP_ENV: test
+          PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+          PLANEX_SCHEMA_DB_PORT: 3306
+          PLANEX_SCHEMA_DB_USER: planex_ci
+          PLANEX_SCHEMA_DB_PASSWORD: planex_ci
+          PLANEX_TEST_FIXED_DB: spugovxsim_test2
+          PLANEX_TEST_FIXED_DB_ALLOWLIST: spugovxsim_test2
+        run: |
+          set -euo pipefail
+          php tests/feo_transfers_contract_test.php
+          php tests/feo_transfers_mysql_test.php
+          php tests/feo_transfers_access_mysql_test.php
+          php tests/feo_transfers_139_production_migration_contract_test.php
+          php tests/feo_transfers_139_migration_mysql_test.php
+
+      - name: Changed Python syntax checks
         if: steps.changes.outputs.python == 'true'
         shell: bash
         run: |

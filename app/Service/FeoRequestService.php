@@ -2,6 +2,8 @@
 
 namespace App\Service;
 
+require_once __DIR__ . '/FeoLocationOverrideService.php';
+
 use App\Core\Database;
 use PDO;
 
@@ -199,6 +201,7 @@ final class FeoRequestService
 
     public function analyze(PDO $pdo, array $rows, string $fileHash): array
     {
+        $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
         $existingRows = $pdo->query('SELECT * FROM feo_requests')->fetchAll(PDO::FETCH_ASSOC);
         $existing = [];
         foreach ($existingRows as $row) {
@@ -209,6 +212,7 @@ final class FeoRequestService
         $incomingIds = [];
         foreach ($rows as $row) {
             $id = (string)$row['zayavka_id'];
+            if (isset($locationOverrides[$id], $existing[$id])) $row = FeoLocationOverrideService::preserve($row, $existing[$id]);
             $incomingIds[$id] = true;
             if (!isset($existing[$id])) {
                 $stats['new_count']++;
@@ -241,6 +245,7 @@ final class FeoRequestService
             }
 
             $pdo->beginTransaction();
+            $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
             $userId = (int)($actor['user_id'] ?? 0) ?: null;
             $role = (string)($actor['role_code'] ?? '');
             $insertImport = $pdo->prepare('INSERT INTO feo_imports (filename,file_hash,created_by_user_id,created_by_role) VALUES (?,?,?,?)');
@@ -272,6 +277,7 @@ final class FeoRequestService
                 }
 
                 $before = $this->businessRow($beforeDb);
+                if (isset($locationOverrides[$id])) $row = FeoLocationOverrideService::preserve($row, $before);
                 if ($this->sameBusinessRow($before, $row)) {
                     $stats['unchanged_count']++;
                     continue;
@@ -337,6 +343,7 @@ final class FeoRequestService
         $lockName = $this->acquireLock($pdo, 'возврата');
         try {
             $pdo->beginTransaction();
+            $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
             $candidateId = $this->restoreCandidateId($pdo, true);
             if ($candidateId === null || $candidateId !== $importId) {
                 throw new \RuntimeException('Вернуть можно только следующую откатанную загрузку в строгой последовательности ФЭО.');
@@ -377,6 +384,10 @@ final class FeoRequestService
                 if ($current === null) throw new \RuntimeException("Заявка {$id} отсутствует; безопасный возврат остановлен.");
                 $before = json_decode((string)$change['before_json'], true);
                 if (!is_array($before)) throw new \RuntimeException('Повреждён журнал возврата ФЭО.');
+                if (isset($locationOverrides[$id])) {
+                    $before = FeoLocationOverrideService::preserve($before, $current);
+                    $after = FeoLocationOverrideService::preserve($after, $current);
+                }
                 $expectedPrevious = $change['previous_import_id'] !== null ? (int)$change['previous_import_id'] : null;
                 $currentPrevious = $current['current_import_id'] !== null ? (int)$current['current_import_id'] : null;
                 if ($currentPrevious !== $expectedPrevious || !$this->sameBusinessRow($current, $before)) {
@@ -453,6 +464,7 @@ final class FeoRequestService
     private function rollbackAppliedImportInTransaction(PDO $pdo, int $importId, array $actor): array
     {
         if (!$pdo->inTransaction()) throw new \RuntimeException('Откат ФЭО должен выполняться внутри транзакции.');
+        $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
         $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id DESC');
         $changesStmt->execute([$importId]);
         $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
@@ -466,6 +478,7 @@ final class FeoRequestService
         foreach ($changes as $change) {
             $id = (string)$change['zayavka_id'];
             if (($change['action'] ?? '') === 'insert') {
+                if (isset($locationOverrides[$id])) throw new \RuntimeException("Заявка {$id} перенесена. Сначала верните пакет переноса, затем откатывайте загрузку.");
                 $delete->execute([$id,$importId]);
                 if ($delete->rowCount() !== 1) throw new \RuntimeException("Заявка {$id} была изменена после загрузки; безопасный откат остановлен.");
                 $deleted++;
@@ -473,6 +486,13 @@ final class FeoRequestService
             }
             $before = json_decode((string)$change['before_json'], true);
             if (!is_array($before)) throw new \RuntimeException('Повреждён журнал отката ФЭО.');
+            if (isset($locationOverrides[$id])) {
+                $location = $pdo->prepare('SELECT mno_adres_pogruzki,mno_sh,mno_d FROM feo_requests WHERE zayavka_id=? FOR UPDATE');
+                $location->execute([$id]);
+                $currentLocation = $location->fetch(PDO::FETCH_ASSOC);
+                if (!$currentLocation) throw new \RuntimeException("Заявка {$id} отсутствует.");
+                $before = FeoLocationOverrideService::preserve($before, $currentLocation);
+            }
             $values = array_map(static fn(string $f) => $before[$f] ?? null, $restoreFields);
             if ($change['previous_import_id'] !== null) {
                 $restoreWithImport->execute([...$values,(int)$change['previous_import_id'],$id,$importId]);

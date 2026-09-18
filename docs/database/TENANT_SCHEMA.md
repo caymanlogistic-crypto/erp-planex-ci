@@ -4,7 +4,7 @@
 
 **Physical source of truth:** `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7cbb4285849a75ae9bd59457b99673be3c984436d076c96fedf187e1eff6c1a5`
+**Schema fingerprint:** `92bbb6b41fe685179434ecfe1c7a714712033ccc770931279c51293c7956b6b6`
 
 Foreign keys below are **DB-enforced physical relations only**. Logical/application relations are intentionally not inferred: if the database has no FK, this catalog will not invent one. Use owning application code/Notion semantic records for logical relations.
 
@@ -17,7 +17,7 @@ Introducing migration is not inferred from final `information_schema`, because l
 - **Documents**: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`
 - **Finance**: `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`, `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_closing_document_manual_statuses`, `finance_closing_document_requirement_exceptions`, `finance_dds_categories`, `finance_employee_invoice_payments`, `finance_employee_money_accounts`, `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`, `finance_invoices`, `finance_matching_results`, `finance_matching_rules`, `finance_money_accounts`, `finance_obligations`, `finance_operation_allocations`, `finance_operations`
 - **Operations / Routes**: `cargo_types`, `linear_route_financial_terms`, `linear_route_payments`, `linear_route_points`, `linear_route_principals`, `linear_route_service_payments`, `linear_route_services`, `linear_routes`, `production_calendar_days`, `production_calendar_years`
-- **Other tenant domain**: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
+- **Other tenant domain**: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
 - **System / Migration metadata**: `schema_migrations`
 - **Transport**: `crew_drivers`, `crews`, `driver_phones`, `driver_vehicle_blocks`, `drivers`, `vehicle_sets`, `vehicle_units`
 
@@ -35,9 +35,9 @@ Each linked file below is generated from the same disposable-MySQL `information_
 - [Finance — part 5](TENANT_SCHEMA_FINANCE_05.md): `finance_operation_allocations`, `finance_operations`
 - [Operations / Routes — part 1](TENANT_SCHEMA_OPERATIONS_ROUTES_01.md): `cargo_types`, `linear_route_financial_terms`, `linear_route_payments`, `linear_route_points`, `linear_route_principals`, `linear_route_service_payments`
 - [Operations / Routes — part 2](TENANT_SCHEMA_OPERATIONS_ROUTES_02.md): `linear_route_services`, `linear_routes`, `production_calendar_days`, `production_calendar_years`
-- [Other tenant domain — part 1](TENANT_SCHEMA_OTHER_TENANT_DOMAIN_01.md): `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`
-- [Other tenant domain — part 2](TENANT_SCHEMA_OTHER_TENANT_DOMAIN_02.md): `feo_requests`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `max_bots`, `max_chats`
-- [Other tenant domain — part 3](TENANT_SCHEMA_OTHER_TENANT_DOMAIN_03.md): `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`
-- [Other tenant domain — part 4](TENANT_SCHEMA_OTHER_TENANT_DOMAIN_04.md): `waste_trip_requests`, `waste_trips`
+- [Other tenant domain — part 1](TENANT_SCHEMA_OTHER_TENANT_DOMAIN_01.md): `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`
+- [Other tenant domain — part 2](TENANT_SCHEMA_OTHER_TENANT_DOMAIN_02.md): `feo_requests`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`
+- [Other tenant domain — part 3](TENANT_SCHEMA_OTHER_TENANT_DOMAIN_03.md): `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`
+- [Other tenant domain — part 4](TENANT_SCHEMA_OTHER_TENANT_DOMAIN_04.md): `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
 - [System / Migration metadata](TENANT_SCHEMA_SYSTEM_MIGRATION_METADATA.md): `schema_migrations`
 - [Transport](TENANT_SCHEMA_TRANSPORT.md): `crew_drivers`, `crews`, `driver_phones`, `driver_vehicle_blocks`, `drivers`, `vehicle_sets`, `vehicle_units`

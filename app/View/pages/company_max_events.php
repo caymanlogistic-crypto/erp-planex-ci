@@ -10,6 +10,8 @@ $eventStatusLabels = ['pending' => 'Ожидает отправки', 'sending' 
         <p class="notice notice-warning">Настройки событий ещё не подключены. Боты, чаты и ручная отправка доступны.</p>
     <?php else: ?>
         <?php foreach ($eventRules as $event): ?>
+        <details class="max-event-card" <?= !empty($event['is_enabled']) ? 'open' : '' ?>>
+        <summary><strong><?= e($event['title']) ?></strong><span class="badge <?= !empty($event['is_enabled']) ? 'badge-ok' : 'badge-neutral' ?>"><?= !empty($event['is_enabled']) ? 'Включено' : 'Отключено' ?></span></summary>
         <form method="post" action="<?= app_url('/company/max/settings/events/save') ?>" class="max-event-form" data-max-tab-form="events" data-max-event-form data-preview-url="<?= app_url('/company/max/settings/events/preview') ?>">
             <?= csrfField() ?>
             <input type="hidden" name="event_key" value="<?= e($event['event_key']) ?>">
@@ -48,6 +50,7 @@ $eventStatusLabels = ['pending' => 'Ожидает отправки', 'sending' 
                 </div>
             </div>
         </form>
+        </details>
         <?php endforeach; ?>
         <div class="max-section-heading"><h3>Отправки по событиям</h3><span class="muted">Последние 100</span></div>
         <p class="muted">Повтор использует сохранённый текст и чат. Если MAX не ответил, сообщение могло дойти: перед повтором проверьте чат.</p>
