@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9ca58f59c0d12adc7286e6bdb67f608b22cb79b4",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9ca58f59c0d12adc7286e6bdb67f608b22cb79b4/docs/database/TENANT_SCHEMA.md",
+      "verified_sha": "e5faf816a71794a63aa6d0a9da0e5e0de4ef58ff",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/e5faf816a71794a63aa6d0a9da0e5e0de4ef58ff/docs/database/TENANT_SCHEMA.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "2cd51ff51498dab5b6075e0f8de648f7f1dd9e6a",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2cd51ff51498dab5b6075e0f8de648f7f1dd9e6a/tests/roles_access_route_registry_test.py",
+      "verified_sha": "e5faf816a71794a63aa6d0a9da0e5e0de4ef58ff",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/e5faf816a71794a63aa6d0a9da0e5e0de4ef58ff/tests/roles_access_route_registry_test.py",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -137,8 +137,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9ca58f59c0d12adc7286e6bdb67f608b22cb79b4",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9ca58f59c0d12adc7286e6bdb67f608b22cb79b4/tests/agent_preflight_test.py",
+      "verified_sha": "e5faf816a71794a63aa6d0a9da0e5e0de4ef58ff",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/e5faf816a71794a63aa6d0a9da0e5e0de4ef58ff/tests/agent_preflight_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -169,6 +169,29 @@
       ],
       "navigation": "active",
       "machine_ownership_id": "control.sentinelx_runner"
+    },
+    {
+      "canonical_id": "operations.feo_transfers",
+      "semantic_class": "IMPLEMENTATION",
+      "truth_status": "VERIFIED",
+      "criticality": "CRITICAL",
+      "verified_sha": "e5faf816a71794a63aa6d0a9da0e5e0de4ef58ff",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/e5faf816a71794a63aa6d0a9da0e5e0de4ef58ff/docs/FEO_TRANSFERS.md",
+      "owning_paths": [
+        "app/Service/FeoTransferService.php",
+        "app/Service/FeoLocationOverrideService.php",
+        "app/Service/YandexGeocodingService.php",
+        "app/Http/Controllers/Company/FeoTransferController.php",
+        "app/Http/Routes/company_feo_transfers.php",
+        "app/View/pages/company_feo_transfers.php",
+        "public/assets/css/feo-transfers.css",
+        "public/assets/js/feo-transfers.js",
+        "tests/feo_transfers*",
+        "tests/fixtures/feo_transfers_render.php",
+        "docs/FEO_TRANSFERS.md"
+      ],
+      "navigation": "active",
+      "machine_ownership_id": "operations.feo_transfers"
     },
     {
       "canonical_id": "policy.deploy.standing_authorization",
