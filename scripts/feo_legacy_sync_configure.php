@@ -19,6 +19,16 @@ function feoLegacySyncEnvironment(string $original, string $tenant, string $lega
     return $result;
 }
 
+/** Shared by the CLI entry point and its encrypted-company-credential regression. */
+function feoLegacySyncLoadDependencies(string $root): void
+{
+    require_once $root . '/app/Support/crypto_helper.php';
+    require_once $root . '/app/Support/company_database.php';
+    require_once $root . '/app/Core/Database.php';
+    require_once $root . '/app/Service/FeoXlsxParser.php';
+    require_once $root . '/app/Service/FeoLegacyImportSync.php';
+}
+
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
 if (PHP_SAPI !== 'cli') throw new RuntimeException('CLI only');
 $mode = (string)getenv('FEO_SYNC_CONFIGURE_MODE');
@@ -26,10 +36,7 @@ if (!in_array($mode, ['check','activate'], true) || getenv('FEO_SYNC_CONFIRM') !
 $root = rtrim((string)getenv('PLANEX_ROOT'), '/');
 if (!is_file($root . '/bootstrap/app.php') || !is_file($root . '/.env') || is_link($root . '/.env')) throw new RuntimeException('Invalid application root');
 $config = require $root . '/bootstrap/app.php';
-require_once $root . '/app/Support/company_database.php';
-require_once $root . '/app/Core/Database.php';
-require_once $root . '/app/Service/FeoXlsxParser.php';
-require_once $root . '/app/Service/FeoLegacyImportSync.php';
+feoLegacySyncLoadDependencies($root);
 $central = (new App\Core\Database($config['database']))->connection();
 $companyId = (int)getenv('FEO_SYNC_COMPANY_ID');
 if ($companyId <= 0) {

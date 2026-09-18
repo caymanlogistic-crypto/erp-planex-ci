@@ -3,6 +3,17 @@ declare(strict_types=1);
 require_once dirname(__DIR__).'/scripts/feo_legacy_sync_configure.php';
 $count=0;
 $ok=static function(bool $value,string $message) use (&$count): void { if (!$value) throw new RuntimeException($message); $count++; };
+feoLegacySyncLoadDependencies(dirname(__DIR__));
+$previousKey = getenv('APP_ENCRYPTION_KEY');
+putenv('APP_ENCRYPTION_KEY=synthetic-feo-sync-bootstrap-test');
+try {
+    $plain = 'synthetic-tenant-password';
+    $encrypted = cryptoEncrypt($plain);
+    $resolved = companyDatabaseConfig(['database'=>['database'=>'central','password'=>'unused']], ['db_identifier'=>'test_tenant','db_password'=>$encrypted]);
+    $ok($resolved['database']==='test_tenant' && $resolved['password']===$plain, 'CLI dependencies resolve encrypted tenant credentials');
+    $resolved = companyDatabaseConfig(['database'=>['database'=>'test_tenant']], ['db_password'=>$plain]);
+    $ok($resolved['password']===$plain, 'Legacy plaintext credential compatibility preserved');
+} finally { putenv($previousKey === false ? 'APP_ENCRYPTION_KEY' : 'APP_ENCRYPTION_KEY='.$previousKey); }
 $original="# synthetic configuration\r\nAPP_ENV=production\r\nUNRELATED=preserve-exactly\r\n";
 $configured=feoLegacySyncEnvironment($original,'test_tenant','test_legacy');
 $ok(str_starts_with($configured,$original),'Existing environment bytes preserved');
