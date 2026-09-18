@@ -72,7 +72,7 @@ def plan(cls,paths,scopes):
     for scope,check in mapping:
         if scopes[scope]: out.append(check)
     out += ["DYNAMIC_IDENTIFIER_SAFETY","ARCHITECTURE_GUARD"]
-    if scopes["tenant_schema"] or any(re.search(r"(?:/Feo(?:Transfer|Request|Location)|/YandexGeocoding|/feo_transfers|/company_feo_transfers|/feo-transfers|/MaxEventCatalog)", p) for p in paths):
+    if scopes["tenant_schema"] or any(re.search(r"(?:/Feo(?:Transfer|Request|Location|LegacyImport|Xlsx)|/YandexGeocoding|/feo_(?:transfers|legacy|import|xlsx)|/company_feo_(?:transfers|requests)|/feo-transfers|/MaxEventCatalog)", p) for p in paths):
         out.append("FEO_TRANSFER_REGRESSIONS")
     # These domains consume the complete tenant migration chain. A new unrelated
     # migration must still exercise their integration fixtures before publication.
