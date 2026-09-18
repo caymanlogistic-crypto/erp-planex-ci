@@ -35,7 +35,10 @@ try {
     $pdo->exec("UPDATE feo_requests SET mno_sh='38.3' WHERE zayavka_id='100003'");
     $reject(fn()=>$s->create($pdo,$p,$actor,hash('sha256','stale'),'Тест',''),'Preview destination drift rejects');
     $ok((int)$pdo->query('SELECT COUNT(*) FROM feo_transfer_batches')->fetchColumn()===0,'No partial batch');
-    $pdo->exec("UPDATE feo_requests SET mno_sh='38.2' WHERE zayavka_id='100003'");
+    $pdo->exec("UPDATE feo_requests SET mno_sh='38.2',updated_at='2020-01-02 03:04:05' WHERE zayavka_id='100003'");
+    // The deliberate destination-drift setup is outside the transaction under test.
+    // Its updated_at legitimately differs; snapshot the actual state before the failing operation.
+    $original=$pdo->query('SELECT * FROM feo_requests ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
     $p=$s->preview($pdo,$ids,'request','100003');
     $reject(fn()=>$s->create($pdo,$p,$actor,hash('sha256','rollback'),'Тест','',static function(){throw new RuntimeException('Event storage failed');}),'Transactional callback failure');
     $ok((int)$pdo->query('SELECT COUNT(*) FROM feo_transfer_outbox')->fetchColumn()===0,'Rollback removes outbox');
