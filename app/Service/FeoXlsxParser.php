@@ -75,8 +75,17 @@ final class FeoXlsxParser
         return array_values(self::fieldMap());
     }
 
-    public function parse(string $filePath): array
+    public static function coordinateFormat(string $format): string
     {
+        if (!in_array($format, ['new', 'old'], true)) {
+            throw new \RuntimeException('Выберите новый или старый формат координат.');
+        }
+        return $format;
+    }
+
+    public function parse(string $filePath, string $coordinateFormat = 'old'): array
+    {
+        self::coordinateFormat($coordinateFormat);
         if (!is_file($filePath) || !is_readable($filePath)) {
             throw new \RuntimeException('XLSX-файл недоступен для чтения.');
         }
@@ -145,6 +154,11 @@ final class FeoXlsxParser
             }
             $seen[$id] = true;
             $record['zayavka_id'] = $id;
+            // Historical storage is longitude in mno_sh and latitude in mno_d.
+            // Normalize the file once; map, transfer and rollback semantics stay unchanged.
+            if ($coordinateFormat === 'new') {
+                [$record['mno_sh'], $record['mno_d']] = [$record['mno_d'], $record['mno_sh']];
+            }
             $result[] = $record;
         }
 

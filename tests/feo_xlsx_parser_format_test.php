@@ -30,7 +30,7 @@ $column = static function (int $number): string {
     return $out;
 };
 
-$build = static function (array $headers) use ($xml, $column): string {
+$build = static function (array $headers, array $values = []) use ($xml, $column): string {
     $tmp = tempnam(sys_get_temp_dir(), 'feo_xlsx_');
     if ($tmp === false) throw new RuntimeException('tempnam failed');
     @unlink($tmp);
@@ -50,7 +50,13 @@ $build = static function (array $headers) use ($xml, $column): string {
         $ref = $column($i + 1) . '1';
         $sheet .= '<c r="' . $ref . '" t="s"><v>' . $i . '</v></c>';
     }
-    $sheet .= '</row><row r="2"><c r="A2" t="s"><v>' . count($headers) . '</v></c><c r="B2" t="s"><v>' . (count($headers) + 1) . '</v></c></row></sheetData></worksheet>';
+    $sheet .= '</row><row r="2"><c r="A2" t="s"><v>' . count($headers) . '</v></c><c r="B2" t="s"><v>' . (count($headers) + 1) . '</v></c>';
+    foreach ($values as $header => $value) {
+        $i = array_search($header, $headers, true);
+        if ($i === false || $i < 2) throw new RuntimeException('Invalid synthetic column');
+        $sheet .= '<c r="' . $column($i + 1) . '2" t="inlineStr"><is><t>' . $xml((string)$value) . '</t></is></c>';
+    }
+    $sheet .= '</row></sheetData></worksheet>';
 
     $zip = new ZipArchive();
     if ($zip->open($path, ZipArchive::CREATE | ZipArchive::OVERWRITE) !== true) throw new RuntimeException('zip create failed');
@@ -84,6 +90,23 @@ try {
     $ok('sharedStrings XLSX parses', count($rows) === 1);
     $ok('sharedStrings request id preserved', ($rows[0]['zayavka_id'] ?? null) === '900001');
 } finally { @unlink($valid); }
+
+$coordinates = $build($headers, ['МНО_Координаты (Ш)'=>'53.745021','МНО_Координаты (Д)'=>'86.842704','МНО, Регион'=>'Кемеровская область']);
+try {
+    $old = $parser->parse($coordinates, 'old')[0];
+    $new = $parser->parse($coordinates, 'new')[0];
+    $ok('new format normalizes latitude/longitude to historical storage', $new['mno_sh']==='86.842704' && $new['mno_d']==='53.745021');
+    $ok('old format preserves source coordinate columns', $old['mno_sh']==='53.745021' && $old['mno_d']==='86.842704');
+    unset($new['mno_sh'],$new['mno_d'],$old['mno_sh'],$old['mno_d']);
+    $ok('format affects no other field', $new===$old);
+    try { $parser->parse($coordinates, 'guess'); $ok('unknown format rejected', false); }
+    catch (RuntimeException $e) { $ok('unknown format rejected', str_contains($e->getMessage(), 'формат координат')); }
+} finally { @unlink($coordinates); }
+$partial = $build($headers, ['МНО_Координаты (Ш)'=>'55']);
+try {
+    $parsed = $parser->parse($partial,'new')[0];
+    $ok('missing coordinate is preserved as null without guessing', $parsed['mno_sh']===null && $parsed['mno_d']==='55');
+} finally { @unlink($partial); }
 
 $renamedHeaders = $headers;
 $renamedHeaders[array_search('МНО, Регион', $renamedHeaders, true)] = 'Регион МНО';

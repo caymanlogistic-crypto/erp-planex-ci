@@ -1,0 +1,22 @@
+<?php
+declare(strict_types=1);
+require_once dirname(__DIR__).'/scripts/feo_legacy_sync_configure.php';
+$count=0;
+$ok=static function(bool $value,string $message) use (&$count): void { if (!$value) throw new RuntimeException($message); $count++; };
+$original="# synthetic configuration\r\nAPP_ENV=production\r\nUNRELATED=preserve-exactly\r\n";
+$configured=feoLegacySyncEnvironment($original,'test_tenant','test_legacy');
+$ok(str_starts_with($configured,$original),'Existing environment bytes preserved');
+$ok(substr_count($configured,'FEO_LEGACY_SYNC_DATABASE=')===1,'Exactly one legacy destination');
+$ok(feoLegacySyncEnvironment($configured,'test_tenant','test_legacy')===$configured,'Configuration idempotent');
+foreach ([['test_tenant','other_legacy'],['invalid;db','test_legacy'],['test_tenant','test_tenant']] as [$tenant,$legacy]) {
+    $thrown=false; try { feoLegacySyncEnvironment($configured,$tenant,$legacy); } catch (RuntimeException) { $thrown=true; }
+    $ok($thrown,'Wrong or changed destination rejected');
+}
+$thrown=false; try { feoLegacySyncEnvironment($configured."FEO_LEGACY_SYNC_DATABASE=test_legacy\n",'test_tenant','test_legacy'); } catch (RuntimeException) {$thrown=true;}
+$ok($thrown,'Duplicate keys rejected');
+$source=file_get_contents(dirname(__DIR__).'/scripts/feo_legacy_sync_configure.php');
+$workflow=file_get_contents(dirname(__DIR__).'/.github/workflows/feo_legacy_import_sync_configuration.yml');
+foreach (['if (PHP_SAPI !== \'cli\')',"'check','activate'",'$sync->validate()',"flock(\$handle, LOCK_EX)",'business_data_unchanged'] as $needle) $ok(str_contains($source,$needle),'Configuration guard: '.$needle);
+$ok(!preg_match('/\b(?:INSERT INTO|UPDATE feo|DELETE FROM|GRANT |ALTER TABLE|CREATE TABLE)\b/i',$source),'Configuration never writes business data, schema or grants');
+foreach (['CONFIGURE_FEO_IMPORT_SYNC','StrictHostKeyChecking=yes','erpv2-controlled-deploy','Exact canonical CI PASS required','Successful deployed SHA required','FEO_SYNC_COMPANY_ID',"\"\$COMPANY_ID\" -gt 0"] as $needle) $ok(str_contains($workflow,$needle),'Workflow guard: '.$needle);
+echo "FEO_LEGACY_SYNC_CONFIGURATION: {$count} passed\n";

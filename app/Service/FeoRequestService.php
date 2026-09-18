@@ -3,6 +3,7 @@
 namespace App\Service;
 
 require_once __DIR__ . '/FeoLocationOverrideService.php';
+require_once __DIR__ . '/FeoLegacyImportSync.php';
 
 use App\Core\Database;
 use PDO;
@@ -232,7 +233,7 @@ final class FeoRequestService
         return $stats;
     }
 
-    public function applyImport(PDO $pdo, array $rows, string $filename, string $fileHash, array $actor): array
+    public function applyImport(PDO $pdo, array $rows, string $filename, string $fileHash, array $actor, bool $overwriteExisting = true): array
     {
         if ($rows === []) throw new \RuntimeException('Нет заявок для импорта.');
         $lockName = $this->acquireLock($pdo, 'импорта');
@@ -245,6 +246,8 @@ final class FeoRequestService
             }
 
             $pdo->beginTransaction();
+            $legacySync = FeoLegacyImportSync::forTenant($pdo);
+            $legacySync?->validate();
             $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
             $userId = (int)($actor['user_id'] ?? 0) ?: null;
             $role = (string)($actor['role_code'] ?? '');
@@ -271,12 +274,14 @@ final class FeoRequestService
                 if ($beforeDb === null) {
                     $values = array_map(static fn(string $f) => $row[$f] ?? null, $fields);
                     $insertRequest->execute([...$values, $importId]);
-                    $insertChange->execute([$importId, $id, 'insert', null, null, $this->encodeRow($row)]);
+                    $legacyJournal = $legacySync?->apply($row, $overwriteExisting);
+                    $insertChange->execute([$importId, $id, 'insert', null, null, $this->encodeRow($row, $legacyJournal)]);
                     $stats['new_count']++;
                     continue;
                 }
 
                 $before = $this->businessRow($beforeDb);
+                if (!$overwriteExisting) $row = $before;
                 if (isset($locationOverrides[$id])) $row = FeoLocationOverrideService::preserve($row, $before);
                 if ($this->sameBusinessRow($before, $row)) {
                     $stats['unchanged_count']++;
@@ -286,13 +291,15 @@ final class FeoRequestService
                 $updateFields = array_values(array_filter($fields, static fn(string $f): bool => $f !== 'zayavka_id'));
                 $values = array_map(static fn(string $f) => $row[$f] ?? null, $updateFields);
                 $updateRequest->execute([...$values, $importId, $id]);
+                $legacyJournal = $legacySync?->apply($row, $overwriteExisting,
+                    isset($locationOverrides[$id]) ? ['mno_adres_pogruzki','mno_sh','mno_d'] : []);
                 $insertChange->execute([
                     $importId,
                     $id,
                     'update',
                     $beforeDb['current_import_id'] !== null ? (int)$beforeDb['current_import_id'] : null,
                     $this->encodeRow($before),
-                    $this->encodeRow($row),
+                    $this->encodeRow($row, $legacyJournal),
                 ]);
                 $stats['updated_count']++;
             }
@@ -307,7 +314,7 @@ final class FeoRequestService
             $updateImport = $pdo->prepare('UPDATE feo_imports SET rows_total=?,unique_requests=?,new_count=?,updated_count=?,unchanged_count=?,missing_count=? WHERE id=?');
             $updateImport->execute([$stats['rows_total'],$stats['unique_requests'],$stats['new_count'],$stats['updated_count'],$stats['unchanged_count'],$stats['missing_count'],$importId]);
             $pdo->commit();
-            return ['import_id' => $importId] + $stats;
+            return ['import_id' => $importId, 'legacy_synced' => $legacySync !== null] + $stats;
         } catch (\Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $e;
@@ -355,6 +362,7 @@ final class FeoRequestService
             $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id ASC');
             $changesStmt->execute([$importId]);
             $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
+            $legacySync = $this->syncForChanges($pdo, $changes);
             $fields = FeoXlsxParser::fields();
             $insertCols = implode(',', array_map(static fn(string $f): string => '`' . $f . '`', $fields));
             $insertPlaceholders = implode(',', array_fill(0, count($fields), '?'));
@@ -370,6 +378,9 @@ final class FeoRequestService
                 $id = (string)$change['zayavka_id'];
                 $after = json_decode((string)$change['after_json'], true);
                 if (!is_array($after)) throw new \RuntimeException('Повреждён журнал возврата ФЭО.');
+                if (isset($after[FeoLegacyImportSync::JOURNAL_KEY])) {
+                    $legacySync->replay($after[FeoLegacyImportSync::JOURNAL_KEY], $id, true);
+                }
                 $find->execute([$id]);
                 $current = $find->fetch(PDO::FETCH_ASSOC) ?: null;
 
@@ -468,6 +479,7 @@ final class FeoRequestService
         $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id DESC');
         $changesStmt->execute([$importId]);
         $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
+        $legacySync = $this->syncForChanges($pdo, $changes);
         $fields = FeoXlsxParser::fields();
         $restoreFields = array_values(array_filter($fields, static fn(string $f): bool => $f !== 'zayavka_id'));
         $restoreSql = implode(',', array_map(static fn(string $f): string => '`' . $f . '`=?', $restoreFields));
@@ -477,6 +489,10 @@ final class FeoRequestService
         $deleted = 0; $restored = 0;
         foreach ($changes as $change) {
             $id = (string)$change['zayavka_id'];
+            $after = json_decode((string)$change['after_json'], true, 512, JSON_THROW_ON_ERROR);
+            if (isset($after[FeoLegacyImportSync::JOURNAL_KEY])) {
+                $legacySync->replay($after[FeoLegacyImportSync::JOURNAL_KEY], $id, false);
+            }
             if (($change['action'] ?? '') === 'insert') {
                 if (isset($locationOverrides[$id])) throw new \RuntimeException("Заявка {$id} перенесена. Сначала верните пакет переноса, затем откатывайте загрузку.");
                 $delete->execute([$id,$importId]);
@@ -543,9 +559,25 @@ final class FeoRequestService
         return $this->encodeRow($this->businessRow($a)) === $this->encodeRow($this->businessRow($b));
     }
 
-    private function encodeRow(array $row): string
+    private function syncForChanges(PDO $pdo, array $changes): ?FeoLegacyImportSync
     {
-        $json = json_encode($this->businessRow($row), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        foreach ($changes as $change) {
+            $after = json_decode((string)$change['after_json'], true, 512, JSON_THROW_ON_ERROR);
+            if (array_key_exists(FeoLegacyImportSync::JOURNAL_KEY, $after)) {
+                $sync = FeoLegacyImportSync::forTenant($pdo);
+                if ($sync === null) throw new \RuntimeException('Для этой загрузки требуется подключение синхронизации со старой базой.');
+                $sync->validate();
+                return $sync;
+            }
+        }
+        return null;
+    }
+
+    private function encodeRow(array $row, ?array $legacyJournal = null): string
+    {
+        $snapshot = $this->businessRow($row);
+        if ($legacyJournal !== null) $snapshot[FeoLegacyImportSync::JOURNAL_KEY] = $legacyJournal;
+        $json = json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
         if (!is_string($json)) throw new \RuntimeException('Не удалось сериализовать данные ФЭО.');
         return $json;
     }
