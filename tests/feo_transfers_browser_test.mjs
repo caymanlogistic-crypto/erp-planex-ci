@@ -69,14 +69,14 @@ try {
   await page.goto(url+'/coordinates'); await page.locator('[name=address]').fill('Москва');
   await page.locator('[data-geocode]').click(); await page.locator('[data-geo-result]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-geo-lon]').innerText(),'37.123');
-  assert.equal(await page.locator('[data-geo-quality]').evaluate(e=>e.classList.contains('alert-warning')),true);
+  assert.equal(await page.locator('[data-geo-quality-badge]').innerText(),'Низкое');
   destination.address='Россия, Кемеровская область — Кузбасс, посёлок городского типа Инской, микрорайон Технологический, 13';
   destination.precision='exact'; destination.quality='Точное совпадение дома';
   for (const width of [1920,1366,800,390]) {
     await page.setViewportSize({width,height:900}); await page.goto(url+'/coordinates');
     await page.locator('[name=address]').fill('Кемеровская область, пгт Инской, микрорайон Технологический, 13');
     await page.locator('[data-geocode]').click(); await page.locator('[data-geo-result]').waitFor({state:'visible'});
-    assert.equal(await page.locator('[data-geo-quality]').evaluate(e=>e.classList.contains('alert-success')),true);
+    assert.equal(await page.locator('[data-geo-quality-badge]').innerText(),'Точное');
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Coordinates overflow '+width);
     const geometry=await page.locator('[data-geo-lat]').evaluate(e=>({font:parseFloat(getComputedStyle(e).fontSize),radius:parseFloat(getComputedStyle(e).borderRadius)}));
     assert.ok(geometry.font<=13 && geometry.radius<=2,'System field geometry');
@@ -85,6 +85,25 @@ try {
 
   await page.locator('[name=address]').fill('Новый запрос');
   assert.equal(await page.locator('[data-geo-result]').isVisible(),false,'Edited address invalidates geocoder result');
+  const qualityColors=new Set();
+  for (const [precision,label,description] of [
+    ['exact','Точное','Найден запрошенный дом'],['number','Хорошее','корпус или строение отличаются'],
+    ['near','Среднее','другой дом'],['range','Приблизительное','примерное положение'],
+    ['street','Низкое','Найдена улица'],['other','Очень низкое','общий объект'],
+    ['__proto__','Не определено','не сообщил точность']
+  ]) {
+    destination.precision=precision;
+    await page.setViewportSize({width:1366,height:900}); await page.goto(url+'/coordinates');
+    await page.locator('[name=address]').fill('Москва'); await page.locator('[data-geocode]').click();
+    await page.locator('[data-geo-result]').waitFor({state:'visible'});
+    assert.equal(await page.locator('[data-geo-quality-badge]').innerText(),label);
+    assert.ok((await page.locator('[data-geo-quality-description]').innerText()).includes(description));
+    if(precision!=='__proto__') qualityColors.add(await page.locator('[data-geo-quality-badge]').evaluate(e=>getComputedStyle(e).backgroundColor));
+    if(screenshotDir) await page.screenshot({path:path.join(screenshotDir,`quality-${precision}.png`),fullPage:true});
+    await page.setViewportSize({width:390,height:900});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Quality row overflow '+precision);
+  }
+  assert.equal(qualityColors.size,6,'Distinct muted system colors for six categories');
   for (const route of ['/', '/coordinates']) {
     await page.goto(url+route);
     assert.equal(await page.locator('[data-geo-settings], [name=api_key]').count(),0,'No settings on FEO page');
