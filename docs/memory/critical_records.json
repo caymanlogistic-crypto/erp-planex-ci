@@ -219,8 +219,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "7cde6855cbeee3397df719a92b9950425453857c",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/7cde6855cbeee3397df719a92b9950425453857c/tests/feo_legacy_import_sync_mysql_test.php",
+      "verified_sha": "262002b8618c95c7b380dde583e1365818901808",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/262002b8618c95c7b380dde583e1365818901808/tests/feo_legacy_sync_configuration_test.php",
       "owning_paths": [
         "app/Service/FeoRequestService.php",
         "app/Service/FeoLegacyImportSync.php",
