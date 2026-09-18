@@ -8,6 +8,36 @@ final class FinanceEmployeeCompanyFundedExpenseService
 {
     public const SOURCE_TYPE = 'COMPANY_FUNDED';
 
+    /** Read existing attributions through their original bank operation, including historical marks. */
+    public static function bankAttributions(PDO $pdo, ?int $bankTransactionId = null): array
+    {
+        try {
+            $stmt = $pdo->prepare("SELECT fo.bank_transaction_id, fo.amount, fem.id AS movement_id,
+                                         fem.employee_name_snapshot AS employee_name,
+                                         fem.employee_identity_type, fem.employee_identity_id
+                                    FROM finance_employee_movements fem
+                                    JOIN finance_operations fo ON fo.id=fem.finance_operation_id
+                                    JOIN bank_transactions bt ON bt.id=fo.bank_transaction_id
+                                   WHERE fem.source_type='COMPANY_FUNDED' AND fem.movement_type='PAYMENT'
+                                     AND fem.bank_transaction_id IS NULL
+                                     AND fo.status='POSTED' AND fo.operation_type='EXPENSE' AND fo.source='BANK_STATEMENT'
+                                     AND bt.debit_amount>0 AND COALESCE(bt.credit_amount,0)=0
+                                     AND fo.amount=bt.debit_amount AND COALESCE(bt.is_internal_transfer,0)=0"
+                . ($bankTransactionId !== null ? ' AND bt.id=?' : ''));
+            $stmt->execute($bankTransactionId !== null ? [$bankTransactionId] : []);
+            $result = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $row) {
+                $row['employee_ref'] = $row['employee_identity_type'] . ':' . $row['employee_identity_id'];
+                $result[(int)$row['bank_transaction_id']] = $row;
+            }
+            return $result;
+        } catch (\PDOException $e) {
+            // Older tenants may not yet have the employee ledger. Other database errors must surface.
+            if ($e->getCode() === '42S02') return [];
+            throw $e;
+        }
+    }
+
     public static function fetchCandidates(PDO $pdo, int $limit = 200): array
     {
         $limit = max(1, min(500, $limit));

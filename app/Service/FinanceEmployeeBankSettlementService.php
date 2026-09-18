@@ -60,6 +60,12 @@ final class FinanceEmployeeBankSettlementService
                 throw new RuntimeException('Банковская операция уже оформлена как внутренний перевод.');
             }
 
+            $attributed = $pdo->prepare("SELECT id FROM finance_employee_movements WHERE finance_operation_id=? AND source_type='COMPANY_FUNDED' LIMIT 1");
+            $attributed->execute([(int)$row['finance_operation_id']]);
+            if ($attributed->fetchColumn()) {
+                throw new RuntimeException('Платёж уже учтён как оплаченный компанией за сотрудника. Сначала отмените привязку во взаиморасчётах.');
+            }
+
             $originalType = strtoupper((string)$row['operation_type']);
             if (!in_array($originalType, ['INCOME', 'EXPENSE'], true)) {
                 throw new RuntimeException('Взаиморасчёт с сотрудником можно создать только из банковского поступления или списания.');

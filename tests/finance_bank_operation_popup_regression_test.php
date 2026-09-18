@@ -44,7 +44,7 @@ ok(str_contains($popup,'правило не найдено в текущем р�
 ok(str_contains($filters,'.bank-row-manual>td')&&str_contains($filters,'#eff8ed'),'manual rows have soft green whole-row background');
 ok(str_contains($filters,'.bank-row-unallocated>td')&&str_contains($filters,'#fff0ed'),'problem rows preserve red background');
 ok(str_contains($filters,"status==='MANUAL'")&&str_contains($filters,"status==='AUTO'"),'row class derives from persisted classification status after refresh');
-ok(str_contains($filters,"status==='MANUAL'?'bank-row-manual'")||str_contains($filters,"status==='MANUAL' ? 'bank-row-manual'")||str_contains($filters,"'MANUAL'?'bank-row-manual'"),'MANUAL receives dedicated row class');
+ok(str_contains($filters,"if(status==='MANUAL') row.classList.add('bank-row-manual')"),'MANUAL receives dedicated row class');
 $tx=['id'=>10,'account_id'=>2,'credit_amount'=>'0.00','debit_amount'=>'1500.00','counterparty_inn'=>'7701234567','purpose'=>'Оплата услуг'];
 $base=['active'=>1,'deleted_at'=>null,'priority'=>500,'direction'=>'EXPENSE','bank_account_id'=>2,'counterparty_inn'=>'7701234567','purpose_contains'=>'Оплата','action_type'=>'categorize','auto_apply'=>1];
 $a=$base;$a['id']=101;$b=$base;$b['id']=102;$conflict=S::selectBestMatchingRule([$a,$b],$tx);ok(!empty($conflict['conflict']),'equal maximum priority remains conflict');

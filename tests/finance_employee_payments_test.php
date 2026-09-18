@@ -60,8 +60,14 @@ ok(($cfRow['movement_type']??'')==='PAYMENT','company-funded expense increases e
 $cfLedger=S::fetchEmployeeLedger($pdo,'COMPANY_USER:100');$cfLedgerRows=array_values(array_filter($cfLedger,fn(array $r):bool=>(int)$r['id']===(int)$cf['movement_id']));ok(count($cfLedgerRows)===1&&(int)$cfLedgerRows[0]['bank_transaction_id']===13,'employee ledger resolves underlying bank payment for display only');
 $scope=(int)$pdo->query('SELECT COUNT(*) FROM bank_transactions bt WHERE bt.id=13 AND COALESCE(bt.is_internal_transfer,0)=0 AND NOT EXISTS (SELECT 1 FROM finance_employee_movements fem WHERE fem.bank_transaction_id=bt.id)')->fetchColumn();ok($scope===1,'closing-documents scope is preserved because bank_transaction_id stays NULL on employee movement');ok((string)$pdo->query('SELECT source FROM finance_operations WHERE id=13')->fetchColumn()==='BANK_STATEMENT','bank finance operation source remains unchanged');
 $cfIdsAfter=array_map('intval',array_column(CF::fetchCandidates($pdo,500),'id'));ok(!in_array(13,$cfIdsAfter,true),'already marked payment is not offered twice');
+$attributed=CF::bankAttributions($pdo,13);
+ok($attributed[13]['employee_ref']==='COMPANY_USER:100'&&$attributed[13]['amount']==='10.00','new company-funded mark is immediately readable from bank register');
+require_once __DIR__.'/../app/Service/FinanceEmployeeBankSettlementService.php';
+$pdo->exec('ALTER TABLE finance_operations ADD cash_flow_center_id INT NULL');
+throws(fn()=>\App\Service\FinanceEmployeeBankSettlementService::settleBankTransaction($pdo,13,$owner,$actor),'уже учтён','company-funded expense cannot be converted to a second employee transfer');
 CF::unmark($pdo,(int)$cf['movement_id'],$actor);ok((int)$pdo->query('SELECT COUNT(*) FROM finance_employee_movements WHERE id='.(int)$cf['movement_id'])->fetchColumn()===0,'unmark removes only employee attribution');ok((int)$pdo->query("SELECT COUNT(*) FROM finance_operations WHERE id=13 AND status='POSTED' AND source='BANK_STATEMENT'")->fetchColumn()===1,'unmark keeps original bank money operation intact');
 $b=S::linkBankTransaction($pdo,['movement_type'=>'PAYMENT','bank_transaction_id'=>10],$actor,$owner);ok($b['finance_operation_id']===10,'BANK payment reuses operation');
+ok(CF::bankAttributions($pdo,13)===[],'unmark immediately removes bank attribution');
 throws(fn()=>S::linkBankTransaction($pdo,['movement_type'=>'PAYMENT','bank_transaction_id'=>10],$actor,$logist),'уже связана','duplicate bank link rejected');
 throws(fn()=>S::linkBankTransaction($pdo,['movement_type'=>'PAYMENT','bank_transaction_id'=>11],$actor,$owner),'не соответствует','wrong bank direction rejected');
 throws(fn()=>S::linkBankTransaction($pdo,['movement_type'=>'PAYMENT','bank_transaction_id'=>12],$actor,$owner),'Внутренний перевод','internal transfer rejected');

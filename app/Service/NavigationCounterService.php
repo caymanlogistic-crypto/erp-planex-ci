@@ -6,6 +6,8 @@ use App\Core\Database;
 use PDO;
 use Throwable;
 
+require_once __DIR__.'/FinanceEmployeeCompanyFundedExpenseService.php';
+
 final class NavigationCounterService
 {
     /** @var array<string,array<string,int>> */
@@ -53,6 +55,17 @@ final class NavigationCounterService
             )->fetchColumn());
         } catch (Throwable) {
             $counters['bank_attention'] = 0;
+        }
+
+        try {
+            $attributedIds = array_keys(FinanceEmployeeCompanyFundedExpenseService::bankAttributions($tenant));
+            if ($attributedIds !== []) {
+                $ids = implode(',', array_map('intval', $attributedIds));
+                $resolved = (int)$tenant->query("SELECT COUNT(*) FROM bank_transactions WHERE id IN ($ids) AND classification_status IN ('UNALLOCATED','NEEDS_REVIEW') AND COALESCE(is_internal_transfer,0)=0")->fetchColumn();
+                $counters['bank_attention'] = max(0, $counters['bank_attention'] - $resolved);
+            }
+        } catch (Throwable) {
+            // Missing employee schema must not suppress the original bank warning count.
         }
 
         try {
