@@ -81,6 +81,7 @@ try {
     for(const width of [1920,1366,800,390]) {
         await page.setViewportSize({width,height:900});await go();
         assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+2),false);
+        assert.equal(await page.locator('[data-max-event-edit="0"]').evaluate(e=>e.getBoundingClientRect().right<=e.parentElement.getBoundingClientRect().right-9),true,'Action fits its cell');
         await screenshot('events-'+width);
         await page.locator('[data-max-event-edit="0"]').click();
         assert.equal(await modal.locator('.modal').evaluate(e=>parseFloat(getComputedStyle(e).borderRadius)),2);
