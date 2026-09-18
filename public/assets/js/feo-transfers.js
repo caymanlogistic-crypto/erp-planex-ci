@@ -86,10 +86,7 @@
     detailDialog.showModal();
   },message => pageMessage(message,true))));
   find('[data-history-search]')?.addEventListener('input',e => { const query = e.target.value.trim().toLocaleLowerCase('ru'); root.querySelectorAll('[data-batch-row]').forEach(row => { row.hidden = !row.textContent.toLocaleLowerCase('ru').includes(query); }); });
-  find('[data-geo-settings]')?.addEventListener('submit',e => {
-    e.preventDefault(); const settings = e.target;
-    action(settings.querySelector('button'),async () => { await request(`${root.dataset.geoBase}/settings`,new FormData(settings)); settings.reset(); pageMessage('Ключ Яндекс Геокодера сохранён.'); },message => pageMessage(message,true));
-  });
+
   const saved = sessionStorage.getItem('feo-transfer-result');
   if (saved) { sessionStorage.removeItem('feo-transfer-result'); try { const r = JSON.parse(saved); pageMessage(r.message,r.warning); } catch {} }
 })();

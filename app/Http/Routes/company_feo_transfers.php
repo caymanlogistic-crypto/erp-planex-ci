@@ -13,4 +13,9 @@ $router->post('/company/feo/requests/transfers/{id}/revert',[$feoTransferControl
 $router->get('/company/feo/requests/transfers/{id}/export',[$feoTransferController,'export'],$feoTransfersPage);
 $router->get('/company/feo/requests/coordinates',[$feoTransferController,'coordinates'],$feoCoordinatesPage);
 $router->post('/company/feo/requests/coordinates/geocode',[$feoTransferController,'geocode'],[$feoCoordinatesPage,$feoTransfersPage]);
-$router->post('/company/feo/requests/coordinates/settings',[$feoTransferController,'saveKey'],'company.roles_access');
+require_once base_path('app/Http/Controllers/Company/ServiceKeysController.php');
+$serviceKeysController=new \App\Http\Controllers\Company\ServiceKeysController($config,$db);
+$router->get('/company/settings/services',[$serviceKeysController,'index'],'company.service_keys');
+$router->post('/company/settings/services/yandex',[$serviceKeysController,'saveYandex'],'company.service_keys');
+// Compatibility for an already-open page; the same owner-only gate protects both routes.
+$router->post('/company/feo/requests/coordinates/settings',[$serviceKeysController,'saveYandex'],'company.service_keys');

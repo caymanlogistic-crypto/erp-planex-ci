@@ -52,19 +52,6 @@ final class FeoTransferController
         });
     }
 
-    public function saveKey(): void
-    {
-        $this->respond(function (): array {
-            if (!AccessRuntime::current()->isSystemOwner()) throw new RuntimeException('Настройка доступна только руководителю.');
-            [, $pdo]=$this->context();
-            $key=trim((string)($_POST['api_key']??''));
-            if (!preg_match('/^[a-zA-Z0-9_-]{20,200}$/D',$key)) throw new RuntimeException('Укажите корректный ключ Яндекс Геокодера.');
-            $q=$pdo->prepare('INSERT INTO geocoding_settings(id,api_key_encrypted) VALUES(1,?) ON DUPLICATE KEY UPDATE api_key_encrypted=VALUES(api_key_encrypted)');
-            $q->execute([cryptoEncrypt($key)]);
-            return [];
-        });
-    }
-
     public function preview(): void
     {
         $this->respond(function (): array {

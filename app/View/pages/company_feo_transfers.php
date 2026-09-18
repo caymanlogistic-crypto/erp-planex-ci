@@ -12,7 +12,7 @@ $geoBase=app_url('/company/feo/requests/coordinates');
   </div>
   <div class="notice" data-page-message role="status" hidden></div>
   <?php if ($dbError): ?><div class="notice warn"><?= e($dbError) ?></div><?php else: ?>
-  <?php if (!$keyConfigured): ?><div class="notice warn">Геокодер пока не настроен. <?= $isOwner?'Укажите ключ Яндекса в настройках ниже.':'Обратитесь к руководителю для настройки Яндекс Геокодера.' ?> Перенос к другой заявке доступен.</div><?php endif; ?>
+  <?php if (!$keyConfigured): ?><div class="notice warn">Геокодер пока не настроен. <?php if ($isOwner): ?>Укажите ключ в <a href="<?= e(app_url('/company/settings/services')) ?>">Настройки → Ключи и сервисы</a>.<?php else: ?>Обратитесь к руководителю для настройки Яндекс Геокодера.<?php endif; ?><?php if (!$coordinatesOnly): ?> Перенос к другой заявке доступен.<?php endif; ?></div><?php endif; ?>
 
   <?php if (!$coordinatesOnly): ?>
   <div class="table-card table-card--standard">
@@ -52,7 +52,6 @@ $geoBase=app_url('/company/feo/requests/coordinates');
     <section data-preview-result class="transfer-preview" hidden aria-live="polite"><h3>Проверьте изменения</h3><div class="notice warn" data-preview-summary></div><div class="table-scroll"><table class="table"><thead><tr><th>Заявка</th><th>Было</th><th>Станет</th></tr></thead><tbody data-preview-rows></tbody></table></div><p class="muted">Будут изменены только адрес и координаты. Качество координат будет указано в уведомлении MAX, если событие включено.</p><button class="btn btn-primary" type="button" data-commit>Создать пакет и перенести заявки</button></section>
   </form>
   <?php if (!$coordinatesOnly): ?></dialog><?php endif; ?>
-  <?php if ($isOwner): ?><details class="transfer-settings"><summary>Настройка Яндекс Геокодера · <?= $keyConfigured?'ключ сохранён':'ключ не задан' ?></summary><form data-geo-settings><?= csrfField() ?><label class="field-label" for="geo-api-key">API-ключ Яндекс Геокодера</label><div class="transfer-address-search"><input class="field-input" type="password" id="geo-api-key" name="api_key" autocomplete="new-password" required placeholder="<?= $keyConfigured?'Новый ключ для замены':'Введите API-ключ' ?>"><button class="btn btn-secondary" type="submit">Сохранить ключ</button></div><p class="muted">Ключ хранится зашифрованно и используется на сервере. Настройка доступна только руководителю.</p></form></details><?php endif; ?>
   <dialog class="transfer-dialog" data-detail-dialog aria-labelledby="transfer-detail-title"><div class="transfer-dialog-head"><h2 id="transfer-detail-title">История пакета</h2><button class="btn btn-secondary btn-sm" type="button" data-close-dialog aria-label="Закрыть">✕</button></div><div data-detail-body class="transfer-detail-body"></div></dialog>
   <?php endif; ?>
 </div>
