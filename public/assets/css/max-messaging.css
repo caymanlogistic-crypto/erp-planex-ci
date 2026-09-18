@@ -40,14 +40,25 @@
 .max-modal-checkbox{margin-top:10px}.max-toast-stack{z-index:2200}
 @media(max-width:1180px){.max-settings-grid{grid-template-columns:repeat(6,minmax(0,1fr))}.max-span-2{grid-column:span 2}.max-span-3,.max-span-5{grid-column:span 3}.max-span-12{grid-column:span 6}.max-compact-row{grid-template-columns:minmax(200px,1fr) auto auto}.max-compact-actions{grid-column:1/-1;justify-content:flex-start}.max-log-toolbar{height:auto;min-height:36px}.max-log-toolbar .toolbar-right{flex-wrap:wrap;padding:4px 0}}
 @media(max-width:860px){.max-tab-panel{padding:8px}.max-overview-status-grid{grid-template-columns:1fr}.max-settings-grid{grid-template-columns:1fr}.max-span-2,.max-span-3,.max-span-5,.max-span-12{grid-column:1}.max-compact-row{grid-template-columns:1fr}.max-compact-actions{grid-column:auto}.max-inline-edit{grid-template-columns:1fr}.max-log-toolbar{display:block;padding:6px 8px}.max-log-toolbar .toolbar-right{margin-top:6px;display:grid;grid-template-columns:1fr 1fr}.max-log-toolbar .toolbar-select,.max-log-toolbar .toolbar-search{width:100%;min-width:0}.max-summary-main{gap:6px 10px}}
-.max-event-form{padding:16px 0;border-bottom:1px solid var(--border-color,#e5e7eb);margin-bottom:16px}
-.max-event-editor{display:grid;grid-template-columns:minmax(220px,1fr) minmax(0,2fr);gap:20px}
-.max-event-variables{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
-.max-event-preview{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;max-width:100%;margin:8px 0}
-@media(max-width:760px){.max-event-editor{grid-template-columns:1fr}}
-/* Each event keeps its editor collapsed until needed as the catalogue grows. */
-.max-event-card{border:1px solid var(--line-soft,#dce2e9);border-radius:10px;margin:12px 0;background:var(--surface,#fff)}
-.max-event-card>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;cursor:pointer;list-style:revert}
-.max-event-card>summary::before{content:'▸';color:var(--text-muted,#697586)}
-.max-event-card[open]>summary::before{content:'▾'}
-.max-event-card>summary strong{flex:1}.max-event-card .max-event-form{margin:0;border:0;border-top:1px solid var(--line-soft,#dce2e9);border-radius:0}
+/* Event catalogue reuses ERP table, fields, badges and modal; only layout is scoped. */
+.max-settings-shell .max-events-catalog{grid-template-rows:auto auto auto;margin-top:10px}
+.max-events-catalog .max-events-toolbar{height:auto;display:flex;align-items:end;flex-wrap:wrap;gap:8px;padding:10px}
+.max-events-toolbar .field{margin:0;flex:0 1 190px;min-width:0}.max-events-toolbar .max-events-search{flex:1 1 240px}
+.max-events-catalog .max-events-table{min-width:750px;table-layout:fixed}
+.max-events-table th:first-child{width:42%}.max-events-table th:nth-child(2){width:140px}.max-events-table th:nth-child(4){width:120px}.max-events-table th:last-child{width:124px}
+.max-settings-shell .max-events-table td{padding-top:8px;padding-bottom:8px;white-space:normal;overflow-wrap:anywhere}
+.max-event-row-description{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:3px;font-size:11px;line-height:1.4;color:var(--text-muted)}
+.max-events-pagination{min-height:36px;padding:6px 10px;gap:8px;flex-wrap:wrap}.max-events-pagination .pages{align-items:center;gap:8px}
+.max-event-overlay .max-event-form{width:min(820px,calc(100vw - 24px));margin:0}
+.max-event-form .modal-body{display:grid;gap:12px}.max-event-form .modal-body p{margin:0;font-size:12px}
+.max-event-editor{display:grid;grid-template-columns:minmax(190px,1fr) minmax(0,2fr);gap:16px}
+.max-event-options,.max-event-template{display:flex;flex-direction:column;gap:10px;min-width:0}.max-event-options .field,.max-event-template .field{margin:0}
+.max-event-variables{display:flex;align-items:end;gap:6px}.max-event-variables .field{flex:1;min-width:0}
+.max-event-form .modal-foot{flex-wrap:wrap}.max-event-form [data-max-event-dirty]{margin-right:auto}
+.max-event-preview{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;max-width:100%;margin:8px 0;max-height:220px;overflow:auto}
+.max-event-delivery-head{margin-top:20px}
+@media(max-width:620px){.max-event-editor{grid-template-columns:1fr}.max-events-toolbar .field{flex:1 1 100%}.max-event-form .modal-body{padding:12px}}
+
+.max-event-overlay[hidden]{display:none}
+
+#max-events [hidden],.max-event-overlay [hidden]{display:none!important}
