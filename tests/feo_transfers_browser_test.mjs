@@ -9,9 +9,9 @@ const require = createRequire(import.meta.url);
 const {chromium} = require('playwright');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const render = mode => execFileSync(process.env.PLANEX_PHP || 'php',[path.join(root,'tests/fixtures/feo_transfers_render.php'),mode],{encoding:'utf8'});
-const html = render('transfers'), coordinates = render('coordinates');
+const html = render('transfers'), coordinates = render('coordinates'), services=render('services'), emptyServices=render('services-empty');
 const server = http.createServer((req,res) => {
-  if (req.url === '/' || req.url === '/coordinates') { res.setHeader('Content-Type','text/html; charset=utf-8'); return res.end(req.url === '/' ? html : coordinates); }
+  if (['/','/coordinates','/services','/services-empty'].includes(req.url)) { res.setHeader('Content-Type','text/html; charset=utf-8'); return res.end(req.url === '/' ? html : req.url === '/coordinates' ? coordinates : req.url === '/services' ? services : emptyServices); }
   const file = path.resolve(root,'public','.'+req.url.split('?')[0]);
   if (!file.startsWith(path.join(root,'public')+path.sep) || !fs.existsSync(file)) { res.statusCode=404; return res.end(); }
   res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'application/octet-stream');
@@ -71,6 +71,37 @@ try {
   assert.equal(await page.locator('[data-geo-lon]').innerText(),'37.123');
   await page.locator('[name=address]').fill('Новый запрос');
   assert.equal(await page.locator('[data-geo-result]').isVisible(),false,'Edited address invalidates geocoder result');
+  for (const route of ['/', '/coordinates']) {
+    await page.goto(url+route);
+    assert.equal(await page.locator('[data-geo-settings], [name=api_key]').count(),0,'No settings on FEO page');
+  }
+  let saveCalls=0,failSave=false;
+  await page.route('**/company/settings/services/yandex',async route=>{
+    saveCalls++; await route.fulfill({status:failSave?422:200,contentType:'application/json',body:JSON.stringify(failSave?{success:false,message:'Ключ не сохранён'}:{success:true})});
+  });
+  for (const width of [1366,800,390]) {
+    await page.setViewportSize({width,height:900}); await page.goto(url+'/services');
+    assert.equal(await page.locator('[data-key-form]').isVisible(),false);
+    await page.locator('[data-key-edit]').click();
+    assert.equal(await page.locator('[name=api_key]').getAttribute('type'),'password');
+    await page.locator('[name=api_key]').fill('synthetic-test-api-key-123');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Settings overflow '+width);
+    if(screenshotDir) await page.screenshot({path:path.join(screenshotDir,`service-keys-${width}.png`),fullPage:true});
+    await page.locator('[data-key-cancel]').click();
+    assert.equal(await page.locator('[name=api_key]').inputValue(),'');
+    assert.equal(saveCalls,0,'Cancel never writes');
+  }
+  await page.goto(url+'/services-empty');
+  assert.equal(await page.locator('[data-key-form]').isVisible(),true);
+  await page.locator('[name=api_key]').fill('synthetic-test-api-key-123');
+  failSave=true; await page.locator('[data-key-form] [type=submit]').click();
+  await page.locator('[data-key-message].alert-error').waitFor({state:'visible'});
+  assert.equal(await page.locator('[data-key-form]').isVisible(),true,'Failed save stays editable');
+  failSave=false; await page.locator('[data-key-form] [type=submit]').click();
+  await page.locator('[data-key-message].alert-success').waitFor({state:'visible'});
+  assert.equal(await page.locator('[data-key-status]').innerText(),'Ключ сохранён');
+  assert.equal(await page.locator('[name=api_key]').inputValue(),'','Secret cleared after save');
+  assert.equal(await page.locator('[data-key-form]').isVisible(),false);
   assert.deepEqual(errors,[]);
   console.log(`FEO_TRANSFER_BROWSER=PASS synthetic API UI fixture; 1920/1366/800/390, preview invalidation, quality, XSS, create, revert conflict, coordinates; previews=${previewCalls}`);
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }

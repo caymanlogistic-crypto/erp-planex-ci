@@ -4,6 +4,8 @@ require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Support/company_database.php';
 require_once BASE_PATH.'/app/Support/http_runtime.php';
 require_once BASE_PATH.'/app/Core/Database.php';
+require_once BASE_PATH.'/app/Support/crypto_helper.php';
+putenv('APP_ENCRYPTION_KEY=synthetic-service-keys-test-secret');
 ob_start();
 require __DIR__.'/roles_access_session_auth_mysql_test.php';
 try {
@@ -23,7 +25,7 @@ try {
         $_POST=$post; http_response_code(200); ob_start(); $router->dispatch($method,$path); $body=ob_get_clean();
         return ['status'=>http_response_code(),'body'=>json_decode($body,true),'raw'=>$body];
     };
-    foreach ([['GET','/company/feo/requests/transfers'],['POST','/company/feo/requests/transfers/preview'],['POST','/company/feo/requests/transfers/create'],['GET','/company/feo/requests/transfers/1/json'],['POST','/company/feo/requests/transfers/1/revert'],['GET','/company/feo/requests/transfers/1/export'],['GET','/company/feo/requests/coordinates'],['POST','/company/feo/requests/coordinates/geocode'],['POST','/company/feo/requests/coordinates/settings']] as [$method,$path]) $ok($call($method,$path)['status']===403,'Direct URL denied: '.$path);
+    foreach ([['GET','/company/settings/services'],['POST','/company/settings/services/yandex'],['GET','/company/feo/requests/transfers'],['POST','/company/feo/requests/transfers/preview'],['POST','/company/feo/requests/transfers/create'],['GET','/company/feo/requests/transfers/1/json'],['POST','/company/feo/requests/transfers/1/revert'],['GET','/company/feo/requests/transfers/1/export'],['GET','/company/feo/requests/coordinates'],['POST','/company/feo/requests/coordinates/geocode'],['POST','/company/feo/requests/coordinates/settings']] as [$method,$path]) $ok($call($method,$path)['status']===403,'Direct URL denied: '.$path);
     $pdo->exec("INSERT INTO role_page_permissions(role_id,page_key,is_allowed) VALUES(2,'company.feo.transfers',1)");
     $r=$call('POST','/company/feo/requests/transfers/preview',['mode'=>'request','request_ids'=>'100001','source_request_id'=>'100002']);
     $ok($r['status']===200 && $r['body']['success'],'Role-granted preview');
@@ -45,5 +47,20 @@ try {
     $pdo->exec("UPDATE membership_page_overrides SET effect='deny' WHERE membership_id=13 AND page_key='company.feo.transfers'");
     $ok($call('POST','/company/feo/requests/transfers/preview')['status']===403,'Coordinate-only user cannot transfer');
     $ok($call('POST','/company/feo/requests/coordinates/geocode',['address'=>''])['status']===422,'Coordinate-only user can reach geocoder validation');
+    // Personal allow must never elevate a member to secret administration.
+    $pdo->exec("INSERT INTO membership_page_overrides(membership_id,page_key,effect) VALUES(13,'company.service_keys','allow')");
+    $ok($call('POST','/company/settings/services/yandex',['api_key'=>'synthetic-valid-key-123456'])['status']===403,'Owner-only settings cannot be delegated');
+    $_SESSION=['account_id'=>101,'user_id'=>101,'company_id'=>7];
+    $secret='synthetic-valid-key-123456';
+    $r=$call('POST','/company/settings/services/yandex',['api_key'=>$secret]);
+    $ok($r['status']===200 && $r['body']['success'],'Owner saves through new endpoint: '.$r['raw']);
+    $stored=$pdo->query('SELECT api_key_encrypted FROM geocoding_settings WHERE id=1')->fetchColumn();
+    $ok($stored!==$secret && cryptoDecrypt($stored)===$secret,'Existing encrypted storage retained');
+    $ok(!str_contains($r['raw'],$secret),'No secret in response');
+    $ok($call('POST','/company/settings/services/yandex',['api_key'=>'invalid'])['status']===422,'Invalid key rejected');
+    $ok($pdo->query('SELECT api_key_encrypted FROM geocoding_settings WHERE id=1')->fetchColumn()===$stored,'Invalid input preserves previous key');
+    $ok($call('POST','/company/feo/requests/coordinates/settings',['api_key'=>'synthetic-replacement-key-123'])['body']['success'],'Old open-page endpoint has same owner guard');
+    $_SESSION['company_id']=99;
+    $ok($call('POST','/company/settings/services/yandex',['api_key'=>$secret])['status']===403,'Foreign company cannot change key');
     ob_end_clean(); echo "FEO_TRANSFER_ACCESS_MYSQL=PASS role/personal access direct URL revocation tenant isolation real controller create/revert\n";
 } finally { cleanCompanyPoolDatabase($pdo); }

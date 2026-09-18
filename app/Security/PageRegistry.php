@@ -88,6 +88,7 @@ final class PageRegistry
             self::definition('company.roles_access', 'Роли и доступы', 'Настройки', '', 510, '/company/roles-access', grantable: false, ownerOnly: true),
             self::definition('company.responsible_assignments', 'Переназначение ответственности', 'Настройки', '', 520, '/company/responsible-assignments', landingEligible: false, grantable: false, ownerOnly: true),
             self::definition('company.max_settings', 'MAX — интеграция', 'Настройки', '', 530, '/company/max/settings', landingEligible: false, grantable: false, ownerOnly: true),
+            self::definition('company.service_keys', 'Ключи и сервисы', 'Настройки', '', 540, '/company/settings/services', landingEligible: false, grantable: false, ownerOnly: true),
         ];
     }
 
