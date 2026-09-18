@@ -27,6 +27,7 @@ final class FeoRequestsController
         $company = null;
         $dbError = null;
         $imports = [];
+        $legacySyncConfigured = false;
         $freshness = ['is_problem'=>true,'has_active_import'=>false,'latest_at'=>null,'latest_filename'=>null,'age_days'=>null];
         $successFlash = $_SESSION['flash_success'] ?? null;
         $errorFlash = $_SESSION['flash_error'] ?? null;
@@ -36,6 +37,7 @@ final class FeoRequestsController
             [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО ещё не инициализирован в базе компании.');
             $imports = $this->service->listImports($pdo);
+            $legacySyncConfigured = \App\Service\FeoLegacyImportSync::forTenant($pdo) !== null;
             $freshness = $this->service->freshnessState($pdo);
         } catch (\Throwable $e) {
             $dbError = $e->getMessage();
@@ -130,7 +132,8 @@ final class FeoRequestsController
             if (strtolower(pathinfo($name, PATHINFO_EXTENSION)) !== 'xlsx') throw new \RuntimeException('Допустим только формат XLSX.');
 
             $overwriteExisting = !empty($_POST['overwrite_existing']);
-            $rows = $this->parser->parse($tmp);
+            $coordinateFormat = FeoXlsxParser::coordinateFormat((string)($_POST['coordinate_format'] ?? 'new'));
+            $rows = $this->parser->parse($tmp, $coordinateFormat);
             $hash = hash_file('sha256', $tmp);
             if (!is_string($hash) || $hash === '') throw new \RuntimeException('Не удалось вычислить контрольную сумму файла.');
             $prepared = $this->interaction->prepareImportRows($pdo, $rows, $overwriteExisting);
@@ -152,6 +155,7 @@ final class FeoRequestsController
                 'hash'=>$hash,
                 'created_at'=>time(),
                 'overwrite_existing'=>$overwriteExisting,
+                'coordinate_format'=>$coordinateFormat,
             ];
             jsonResponse(['success'=>true,'token'=>$token,'filename'=>$name,'overwrite_existing'=>$overwriteExisting,'stats'=>$stats]);
         } catch (\Throwable $e) {
@@ -174,9 +178,11 @@ final class FeoRequestsController
             if (!is_string($hash) || !hash_equals((string)$preview['hash'], $hash)) throw new \RuntimeException('Контрольная сумма файла изменилась.');
 
             $overwriteExisting = !empty($preview['overwrite_existing']);
-            $rows = $this->parser->parse($path);
+            // Older previews predate the selector and were parsed in the old format.
+            $coordinateFormat = FeoXlsxParser::coordinateFormat((string)($preview['coordinate_format'] ?? 'old'));
+            $rows = $this->parser->parse($path, $coordinateFormat);
             $prepared = $this->interaction->prepareImportRows($pdo, $rows, $overwriteExisting);
-            $result = $this->service->applyImport($pdo, $prepared['rows'], (string)$preview['filename'], $hash, $_SESSION);
+            $result = $this->service->applyImport($pdo, $prepared['rows'], (string)$preview['filename'], $hash, $_SESSION, $overwriteExisting);
             $result['skipped_existing_count'] = (int)$prepared['skipped_existing_count'];
             $result['unchanged_count'] = max(0, (int)$result['unchanged_count'] - $result['skipped_existing_count']);
             @unlink($path);
@@ -190,6 +196,9 @@ final class FeoRequestsController
                 (int)$result['unchanged_count'],
                 (int)$result['missing_count']
             );
+            $_SESSION['flash_success'] .= !empty($result['legacy_synced'])
+                ? ' Изменения синхронизированы со старой базой.'
+                : ' Синхронизация со старой базой для этой компании не настроена.';
         } catch (\Throwable $e) {
             $_SESSION['flash_error'] = 'Импорт ФЭО не выполнен: ' . $e->getMessage();
         }

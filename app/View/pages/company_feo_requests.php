@@ -37,6 +37,9 @@ $fmtDateTime = static function ($value): string {
 .feo-import-modal{width:820px;max-width:calc(100vw - 32px)}
 .feo-import-modal .modal-body{padding:18px 20px 16px}
 .feo-import-form{display:grid;gap:12px}
+.feo-coordinate-format{display:flex;flex-wrap:wrap;gap:12px 24px;margin:0;padding:10px 12px;border:1px solid var(--border-color,#d8d4ca);border-radius:6px}
+.feo-coordinate-format label{display:flex;align-items:center;gap:7px;cursor:pointer}
+.feo-coordinate-format input{width:16px;height:16px;margin:0;flex:none}
 .feo-import-file{margin:0}.feo-import-file .field-label{margin-bottom:6px}.feo-import-file .field-input{width:100%;margin:0}
 .feo-import-help{margin-top:5px;color:var(--text-muted);font-size:11px;line-height:1.4}
 .feo-overwrite-option{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:start;gap:10px;margin:0;padding:11px 12px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:12px;line-height:1.35;cursor:pointer}
@@ -115,6 +118,8 @@ $fmtDateTime = static function ($value): string {
         <div class="modal-body">
             <form id="feo-analyze-form" class="feo-import-form" action="<?= app_url('/company/feo/requests/import/analyze') ?>" method="post" enctype="multipart/form-data">
                 <?= csrfField() ?>
+                <fieldset class="feo-coordinate-format"><legend class="field-label">Формат файла</legend><label><input type="radio" name="coordinate_format" value="new" checked> Новый формат</label><label><input type="radio" name="coordinate_format" value="old"> Старый формат</label></fieldset>
+                <div class="feo-import-help"><?= !empty($legacySyncConfigured) ? 'Изменения этой загрузки и её откат применяются также в старой базе.' : 'Синхронизация со старой базой для этой компании не настроена.' ?></div>
                 <div class="field feo-import-file"><label class="field-label">Файл XLSX</label><input class="field-input" type="file" name="feo_xlsx" accept=".xlsx" required><div class="feo-import-help">После выбора ERP автоматически проверит формат и покажет, сколько заявок будет добавлено или изменено.</div></div>
                 <label class="feo-overwrite-option"><input type="checkbox" name="overwrite_existing" value="1"><span><b>Перезаписывать существующие заявки</b><small>Оставьте выключенным, если нужно только добавить отсутствующие заявки. Существующие записи останутся без изменений.</small></span></label>
                 <div class="feo-import-state" data-feo-import-state>Файл не выбран.</div>
@@ -301,6 +306,7 @@ $fmtDateTime = static function ($value): string {
   var analyzeForm=document.getElementById('feo-analyze-form');
   if(analyzeForm){
     var fileInput=analyzeForm.querySelector('input[name="feo_xlsx"]'),overwriteInput=analyzeForm.querySelector('input[name="overwrite_existing"]'),importState=document.querySelector('[data-feo-import-state]');
+    var formatInputs=analyzeForm.querySelectorAll('input[name="coordinate_format"]');
     var analysisGeneration=0;
     function setImportState(text,state){importState.textContent=text;importState.classList.remove('is-checking','is-ok','is-error');if(state)importState.classList.add(state);}
     async function analyzeSelectedFile(){
@@ -309,9 +315,11 @@ $fmtDateTime = static function ($value): string {
       if(!fileInput.files||!fileInput.files.length){setImportState('Файл не выбран.','');return;}
       var payload=new FormData(analyzeForm);
       setImportState('Проверяем файл…','is-checking');fileInput.disabled=true;overwriteInput.disabled=true;
-      try{var response=await fetch(analyzeForm.action,{method:'POST',body:payload,credentials:'same-origin'}),data=await response.json();if(generation!==analysisGeneration)return;if(!response.ok||!data.success)throw new Error(data.message||'Ошибка анализа файла');Object.keys(data.stats||{}).forEach(function(key){var el=result.querySelector('[data-stat="'+key+'"]');if(el)el.textContent=data.stats[key];});document.getElementById('feo-preview-token').value=data.token||'';result.classList.remove('is-hidden');if(data.stats&&data.stats.duplicate_file){duplicate.classList.remove('is-hidden');setImportState('Файл уже был применён.','is-error');}else{commit.classList.remove('is-hidden');setImportState('Файл проверен. Можно загрузить.','is-ok');}}catch(err){if(generation!==analysisGeneration)return;error.textContent=err.message||String(err);error.classList.remove('is-hidden');setImportState('Проверка не пройдена.','is-error');}finally{if(generation===analysisGeneration){fileInput.disabled=false;overwriteInput.disabled=false;}}
+      formatInputs.forEach(function(input){input.disabled=true;});
+      try{var response=await fetch(analyzeForm.action,{method:'POST',body:payload,credentials:'same-origin'}),data=await response.json();if(generation!==analysisGeneration)return;if(!response.ok||!data.success)throw new Error(data.message||'Ошибка анализа файла');Object.keys(data.stats||{}).forEach(function(key){var el=result.querySelector('[data-stat="'+key+'"]');if(el)el.textContent=data.stats[key];});document.getElementById('feo-preview-token').value=data.token||'';result.classList.remove('is-hidden');if(data.stats&&data.stats.duplicate_file){duplicate.classList.remove('is-hidden');setImportState('Файл уже был применён.','is-error');}else{commit.classList.remove('is-hidden');setImportState('Файл проверен. Можно загрузить.','is-ok');}}catch(err){if(generation!==analysisGeneration)return;error.textContent=err.message||String(err);error.classList.remove('is-hidden');setImportState('Проверка не пройдена.','is-error');}finally{if(generation===analysisGeneration){fileInput.disabled=false;overwriteInput.disabled=false;formatInputs.forEach(function(input){input.disabled=false;});}}
     }
     fileInput.addEventListener('change',analyzeSelectedFile);overwriteInput.addEventListener('change',analyzeSelectedFile);
+    formatInputs.forEach(function(input){input.addEventListener('change',analyzeSelectedFile);});
   }
 
   var actionConfig={
