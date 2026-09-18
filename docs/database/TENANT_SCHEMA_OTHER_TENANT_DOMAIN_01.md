@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7cbb4285849a75ae9bd59457b99673be3c984436d076c96fedf187e1eff6c1a5`
+**Schema fingerprint:** `92bbb6b41fe685179434ecfe1c7a714712033ccc770931279c51293c7956b6b6`
 
 ## `entity_responsibilities`
 
@@ -86,6 +86,25 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
+
+## `feo_location_overrides`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `zayavka_id` | `varchar(64)` | NO | NULL | — | `PRI` |
+| `batch_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`zayavka_id`)
+- **INDEX** `fk_feo_location_batch` (`batch_id`)
+
+### Physical foreign keys
+
+- `fk_feo_location_batch`: (`batch_id`) → `feo_transfer_batches`.`id` ON UPDATE NO ACTION ON DELETE NO ACTION
 
 ## `feo_placement_block_requests`
 

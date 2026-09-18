@@ -2,7 +2,68 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7cbb4285849a75ae9bd59457b99673be3c984436d076c96fedf187e1eff6c1a5`
+**Schema fingerprint:** `92bbb6b41fe685179434ecfe1c7a714712033ccc770931279c51293c7956b6b6`
+
+## `max_bots`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `name` | `varchar(120)` | NO | NULL | — | — |
+| `token_encrypted` | `mediumtext` | NO | NULL | — | — |
+| `bot_user_id` | `varchar(32)` | YES | NULL | — | — |
+| `bot_first_name` | `varchar(255)` | YES | NULL | — | — |
+| `bot_username` | `varchar(255)` | YES | NULL | — | — |
+| `webhook_secret_encrypted` | `mediumtext` | NO | NULL | — | — |
+| `webhook_status` | `enum('not_configured','active','error')` | NO | `not_configured` | — | — |
+| `webhook_last_error` | `varchar(1000)` | YES | NULL | — | — |
+| `verified_at` | `datetime` | YES | NULL | — | — |
+| `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_max_bots_active` (`is_active`, `id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `max_chats`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `bot_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `chat_id` | `varchar(32)` | NO | NULL | — | — |
+| `name` | `varchar(160)` | NO | NULL | — | — |
+| `max_title` | `varchar(255)` | YES | NULL | — | — |
+| `chat_type` | `enum('chat','channel','dialog','unknown')` | NO | `unknown` | — | — |
+| `max_status` | `enum('active','removed','left','closed','unknown')` | NO | `unknown` | — | — |
+| `purpose` | `varchar(500)` | YES | NULL | — | — |
+| `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
+| `discovered_via` | `enum('manual','webhook')` | NO | `manual` | — | — |
+| `last_verified_at` | `datetime` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_max_chats_active` (`is_active`, `bot_id`, `id`)
+- **UNIQUE** `uk_max_chat_per_bot` (`bot_id`, `chat_id`)
+
+### Physical foreign keys
+
+- `fk_max_chats_bot`: (`bot_id`) → `max_bots`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
 
 ## `max_event_deliveries`
 
@@ -191,61 +252,3 @@
 ### Physical foreign keys
 
 - `fk_waste_trip_customer_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-
-## `waste_trip_general_payments`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `sort_order` | `int unsigned` | NO | `1` | — | — |
-| `amount` | `decimal(12,2)` | YES | NULL | — | — |
-| `payment_type` | `varchar(50)` | NO | NULL | — | — |
-| `payment_method` | `varchar(20)` | NO | `cashless` | — | — |
-| `vat_rate` | `decimal(5,2)` | YES | NULL | — | — |
-| `condition_type` | `varchar(50)` | NO | NULL | — | — |
-| `days_count` | `int` | YES | NULL | — | — |
-| `days_kind` | `varchar(10)` | YES | NULL | — | — |
-| `specific_due_date` | `date` | YES | NULL | — | — |
-| `condition_comment` | `text` | YES | NULL | — | — |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_waste_trip_general_payments_trip` (`waste_trip_id`, `sort_order`, `id`)
-
-### Physical foreign keys
-
-- `fk_waste_trip_general_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-
-## `waste_trip_namespace_state`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `singleton_id` | `tinyint unsigned` | NO | NULL | — | `PRI` |
-| `legacy_high_water_at_cutover` | `bigint unsigned` | NO | NULL | — | — |
-| `last_issued_business_id` | `bigint unsigned` | NO | NULL | — | — |
-| `cutover_started_at` | `datetime` | YES | NULL | — | — |
-| `cutover_completed_at` | `datetime` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`singleton_id`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.

@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7cbb4285849a75ae9bd59457b99673be3c984436d076c96fedf187e1eff6c1a5`
+**Schema fingerprint:** `92bbb6b41fe685179434ecfe1c7a714712033ccc770931279c51293c7956b6b6`
 
 ## `feo_requests`
 
@@ -72,6 +72,87 @@
 ### Physical foreign keys
 
 - `fk_feo_requests_current_import`: (`current_import_id`) → `feo_imports`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
+
+## `feo_transfer_batches`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `name` | `varchar(180)` | NO | NULL | — | — |
+| `mode` | `varchar(20)` | NO | NULL | — | — |
+| `source_request_id` | `varchar(64)` | YES | NULL | — | — |
+| `destination_json` | `longtext` | NO | NULL | — | — |
+| `comment` | `text` | YES | NULL | — | — |
+| `request_count` | `int unsigned` | NO | NULL | — | — |
+| `status` | `varchar(20)` | NO | `applied` | — | — |
+| `operation_key` | `char(64)` | NO | NULL | — | `UNI` |
+| `created_by_user_id` | `bigint unsigned` | NO | NULL | — | — |
+| `created_by_role` | `varchar(30)` | YES | NULL | — | — |
+| `created_by_name` | `varchar(255)` | NO | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `reverted_by_user_id` | `bigint unsigned` | YES | NULL | — | — |
+| `reverted_by_name` | `varchar(255)` | YES | NULL | — | — |
+| `reverted_at` | `datetime` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **UNIQUE** `uk_feo_transfer_operation` (`operation_key`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `feo_transfer_items`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `batch_id` | `bigint unsigned` | NO | NULL | — | `PRI` |
+| `zayavka_id` | `varchar(64)` | NO | NULL | — | `PRI` |
+| `request_row_id` | `bigint unsigned` | NO | NULL | — | — |
+| `before_json` | `longtext` | NO | NULL | — | — |
+| `after_json` | `longtext` | NO | NULL | — | — |
+| `previous_batch_id` | `bigint unsigned` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`batch_id`, `zayavka_id`)
+- **INDEX** `idx_feo_transfer_request` (`zayavka_id`, `batch_id`)
+
+### Physical foreign keys
+
+- `fk_feo_transfer_batch`: (`batch_id`) → `feo_transfer_batches`.`id` ON UPDATE NO ACTION ON DELETE NO ACTION
+
+## `feo_transfer_outbox`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `batch_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `operation` | `varchar(20)` | NO | NULL | — | — |
+| `payload_json` | `longtext` | NO | NULL | — | — |
+| `status` | `varchar(30)` | NO | `awaiting_connector` | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `sent_at` | `datetime` | YES | NULL | — | — |
+| `last_error` | `text` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **UNIQUE** `uk_feo_transfer_outbox` (`batch_id`, `operation`)
+
+### Physical foreign keys
+
+- `fk_feo_transfer_outbox_batch`: (`batch_id`) → `feo_transfer_batches`.`id` ON UPDATE NO ACTION ON DELETE NO ACTION
 
 ## `feo_utilizer_aliases`
 
@@ -163,63 +244,21 @@
 
 - None enforced by MySQL.
 
-## `max_bots`
+## `geocoding_settings`
 
 **Domain:** Other tenant domain<br>
 **Purpose:** Physical tenant table; semantics follow owning application module.
 
 | Column | Type | Null | Default | Extra | Key |
 |---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `name` | `varchar(120)` | NO | NULL | — | — |
-| `token_encrypted` | `mediumtext` | NO | NULL | — | — |
-| `bot_user_id` | `varchar(32)` | YES | NULL | — | — |
-| `bot_first_name` | `varchar(255)` | YES | NULL | — | — |
-| `bot_username` | `varchar(255)` | YES | NULL | — | — |
-| `webhook_secret_encrypted` | `mediumtext` | NO | NULL | — | — |
-| `webhook_status` | `enum('not_configured','active','error')` | NO | `not_configured` | — | — |
-| `webhook_last_error` | `varchar(1000)` | YES | NULL | — | — |
-| `verified_at` | `datetime` | YES | NULL | — | — |
-| `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `id` | `tinyint unsigned` | NO | NULL | — | `PRI` |
+| `api_key_encrypted` | `text` | NO | NULL | — | — |
 | `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 
 ### Indexes / constraints
 
 - **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_max_bots_active` (`is_active`, `id`)
 
 ### Physical foreign keys
 
 - None enforced by MySQL.
-
-## `max_chats`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `bot_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `chat_id` | `varchar(32)` | NO | NULL | — | — |
-| `name` | `varchar(160)` | NO | NULL | — | — |
-| `max_title` | `varchar(255)` | YES | NULL | — | — |
-| `chat_type` | `enum('chat','channel','dialog','unknown')` | NO | `unknown` | — | — |
-| `max_status` | `enum('active','removed','left','closed','unknown')` | NO | `unknown` | — | — |
-| `purpose` | `varchar(500)` | YES | NULL | — | — |
-| `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
-| `discovered_via` | `enum('manual','webhook')` | NO | `manual` | — | — |
-| `last_verified_at` | `datetime` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_max_chats_active` (`is_active`, `bot_id`, `id`)
-- **UNIQUE** `uk_max_chat_per_bot` (`bot_id`, `chat_id`)
-
-### Physical foreign keys
-
-- `fk_max_chats_bot`: (`bot_id`) → `max_bots`.`id` ON UPDATE NO ACTION ON DELETE CASCADE

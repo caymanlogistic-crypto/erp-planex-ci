@@ -2,6 +2,8 @@
 
 namespace App\Service;
 
+require_once __DIR__ . '/FeoLocationOverrideService.php';
+
 use PDO;
 
 final class FeoRequestInteractionService
@@ -116,6 +118,14 @@ final class FeoRequestInteractionService
             $find->execute([$id]);
             $current = $find->fetch(PDO::FETCH_ASSOC) ?: null;
             if (!$current) throw new \RuntimeException('Заявка ФЭО не найдена.');
+            $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
+            if (isset($locationOverrides[(string)$current['zayavka_id']])) {
+                foreach (FeoLocationOverrideService::FIELDS as $field) {
+                    if (array_key_exists($field, $input) && (string)$this->normalizeEditableValue($field, $input[$field]) !== (string)$current[$field]) {
+                        throw new \RuntimeException('Место погрузки изменено пакетом переноса. Используйте «Перенос заявок» или верните пакет.');
+                    }
+                }
+            }
 
             $allowed = array_values(array_filter(FeoXlsxParser::fields(), static fn(string $field): bool => $field !== 'zayavka_id'));
             $assignments = [];

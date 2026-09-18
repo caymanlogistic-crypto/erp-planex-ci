@@ -45,3 +45,9 @@
 .max-event-variables{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 12px}
 .max-event-preview{white-space:pre-wrap;overflow-wrap:anywhere;font:inherit;max-width:100%;margin:8px 0}
 @media(max-width:760px){.max-event-editor{grid-template-columns:1fr}}
+/* Each event keeps its editor collapsed until needed as the catalogue grows. */
+.max-event-card{border:1px solid var(--line-soft,#dce2e9);border-radius:10px;margin:12px 0;background:var(--surface,#fff)}
+.max-event-card>summary{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px;cursor:pointer;list-style:revert}
+.max-event-card>summary::before{content:'▸';color:var(--text-muted,#697586)}
+.max-event-card[open]>summary::before{content:'▾'}
+.max-event-card>summary strong{flex:1}.max-event-card .max-event-form{margin:0;border:0;border-top:1px solid var(--line-soft,#dce2e9);border-radius:0}

@@ -27,7 +27,26 @@ final class MaxEventCatalog
                     'current_mass_kg' => ['Масса актуального состава, кг', '100 000,000'],
                 ],
             ],
+        ] + self::transferEvents();
+    }
+
+    private static function transferEvents(): array
+    {
+        $variables = [
+            'batch_id'=>['Номер пакета','18'], 'batch_name'=>['Название пакета','Перенос на склад'],
+            'request_count'=>['Число заявок','12'], 'address'=>['Адрес назначения','Москва, улица Примерная, 1'],
+            'quality'=>['Качество координат','Только улица, дом не определён'],
+            'author'=>['Автор','Владимир С.'], 'company'=>['Компания','Пример компании'],
+            'created_at'=>['Дата и время','18.09.2026 15:30'], 'comment'=>['Комментарий','Изменение места погрузки'],
         ];
+        $events=[];
+        foreach (['created'=>['ФЭО — создан пакет переноса','Создан пакет переноса'], 'reverted'=>['ФЭО — возвращён пакет переноса','Возвращён пакет переноса']] as $action=>$labels) {
+            $events['feo.transfer.'.$action]=['title'=>$labels[0],
+                'description'=>'После успешного '.($action==='created'?'переноса':'возврата').' всего пакета. Качество координат обязательно присутствует в сообщении.',
+                'template'=>$labels[1]." №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}",
+                'variables'=>$variables];
+        }
+        return $events;
     }
 
     public static function event(string $key): array
@@ -43,6 +62,7 @@ final class MaxEventCatalog
     public static function render(string $key, string $template, string $format, array $values): string
     {
         $event = self::event($key);
+        if (str_starts_with($key, 'feo.transfer.') && !preg_match('/\{\{\s*quality\s*\}\}/', $template)) throw new RuntimeException('Добавьте в шаблон качество координат: {{quality}}.');
         if (!in_array($format, ['plain', 'html', 'markdown'], true)) throw new RuntimeException('Неизвестный формат MAX.');
         if (trim($template) === '' || mb_strlen($template) > 4000) throw new RuntimeException('Шаблон должен содержать от 1 до 4000 символов.');
         $literal = preg_replace('/\{\{\s*([^{}]+?)\s*\}\}/u', '', $template);

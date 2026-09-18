@@ -2,7 +2,65 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7cbb4285849a75ae9bd59457b99673be3c984436d076c96fedf187e1eff6c1a5`
+**Schema fingerprint:** `92bbb6b41fe685179434ecfe1c7a714712033ccc770931279c51293c7956b6b6`
+
+## `waste_trip_general_payments`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `sort_order` | `int unsigned` | NO | `1` | — | — |
+| `amount` | `decimal(12,2)` | YES | NULL | — | — |
+| `payment_type` | `varchar(50)` | NO | NULL | — | — |
+| `payment_method` | `varchar(20)` | NO | `cashless` | — | — |
+| `vat_rate` | `decimal(5,2)` | YES | NULL | — | — |
+| `condition_type` | `varchar(50)` | NO | NULL | — | — |
+| `days_count` | `int` | YES | NULL | — | — |
+| `days_kind` | `varchar(10)` | YES | NULL | — | — |
+| `specific_due_date` | `date` | YES | NULL | — | — |
+| `condition_comment` | `text` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_waste_trip_general_payments_trip` (`waste_trip_id`, `sort_order`, `id`)
+
+### Physical foreign keys
+
+- `fk_waste_trip_general_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+
+## `waste_trip_namespace_state`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `singleton_id` | `tinyint unsigned` | NO | NULL | — | `PRI` |
+| `legacy_high_water_at_cutover` | `bigint unsigned` | NO | NULL | — | — |
+| `last_issued_business_id` | `bigint unsigned` | NO | NULL | — | — |
+| `cutover_started_at` | `datetime` | YES | NULL | — | — |
+| `cutover_completed_at` | `datetime` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`singleton_id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `waste_trip_requests`
 

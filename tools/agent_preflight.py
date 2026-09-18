@@ -16,6 +16,10 @@ REMOTE_REQUIRED_ALLOWLIST={TENANT:frozenset({"PDO_MYSQL_AVAILABLE","MYSQL_SERVER
 CAPABILITY_KEYS=("PHP_AVAILABLE","PDO_MYSQL_AVAILABLE","MYSQL_CLIENT_AVAILABLE","MYSQL_SERVER_REACHABLE")
 FINANCE_TESTS=["tests/finance_invoice_ui_contract_test.php","tests/finance_manual_facts_regression_test.php","tests/finance_employee_personal_expense_event_regression_test.php","tests/finance_invoice_cash_employee_regression_test.php","tests/finance_cash_employee_invoice_lifecycle_regression_test.php","tests/finance_carrier_payables_regression_test.php"]
 MAX_TESTS=["tests/max_integration_contract_test.php","tests/max_messaging_133_production_migration_contract_test.php","tests/max_messaging_production_acceptance_contract_test.php","tests/agent_db_migration_request_contract_test.php","tests/max_integration_mysql_test.php"]
+FEO_TRANSFER_TESTS=["tests/"+name+".php" for name in (
+    "feo_transfers_contract_test", "feo_transfers_mysql_test", "feo_transfers_access_mysql_test",
+    "feo_transfers_139_production_migration_contract_test", "feo_transfers_139_migration_mysql_test",
+)]
 WASTE_TESTS=["tests/"+name+".php" for name in (
     "waste_trip_incident_service_test", "waste_trip_legacy_readonly_probe_contract_test",
     "waste_trip_legacy_linked_contract_test", "waste_trip_owner_layout_contract_test",
@@ -66,6 +70,8 @@ def plan(cls,paths,scopes):
     for scope,check in mapping:
         if scopes[scope]: out.append(check)
     out += ["DYNAMIC_IDENTIFIER_SAFETY","ARCHITECTURE_GUARD"]
+    if scopes["tenant_schema"] or any(re.search(r"(?:/Feo(?:Transfer|Request|Location)|/YandexGeocoding|/feo_transfers|/company_feo_transfers|/feo-transfers|/MaxEventCatalog)", p) for p in paths):
+        out.append("FEO_TRANSFER_REGRESSIONS")
     # These domains consume the complete tenant migration chain. A new unrelated
     # migration must still exercise their integration fixtures before publication.
     if scopes["tenant_schema"] or any(re.search(r"(?:/Max|/max_|/company_max|/max-messaging)", p) for p in paths):
@@ -175,7 +181,7 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
     if "MIGRATION_INTEGRITY" in want: migration_integrity(results)
     if "MIGRATION_NORMALIZATION" in want: migrations_normalized(results)
     if TENANT in want: tenant_check(results)
-    for check, tests in [("MAX_REGRESSIONS",MAX_TESTS),("WASTE_TRIPS_REGRESSIONS",WASTE_TESTS),("DOCUMENT_GENERATOR_REGRESSIONS",DOCGEN_TESTS)]:
+    for check, tests in [("FEO_TRANSFER_REGRESSIONS",FEO_TRANSFER_TESTS),("MAX_REGRESSIONS",MAX_TESTS),("WASTE_TRIPS_REGRESSIONS",WASTE_TESTS),("DOCUMENT_GENERATOR_REGRESSIONS",DOCGEN_TESTS)]:
         if check in want:
             env=os.environ.copy(); env["APP_ENV"]="test"
             # Never let a caller's skip switch turn required MySQL coverage green.
