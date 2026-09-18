@@ -38,8 +38,8 @@ $fmtDateTime = static function ($value): string {
 .feo-import-modal .modal-body{padding:18px 20px 16px}
 .feo-import-form{display:grid;gap:12px}
 .feo-coordinate-format{display:flex;flex-wrap:wrap;gap:12px 24px;margin:0;padding:10px 12px;border:1px solid var(--border-color,#d8d4ca);border-radius:6px}
-.feo-coordinate-format label{display:flex;align-items:center;gap:6px;font-family:inherit;font-size:12px;font-weight:400;line-height:1.2;color:var(--text-main,#131210);cursor:pointer}
-.feo-coordinate-format input[type="radio"]{appearance:auto;width:14px;height:14px;min-width:14px;min-height:14px;margin:0;padding:0;flex:0 0 14px;accent-color:var(--accent,#7c4718)}
+.feo-coordinate-format label{display:flex;align-items:center;gap:7px;cursor:pointer}
+.feo-coordinate-format input{width:16px;height:16px;margin:0;flex:none}
 .feo-import-file{margin:0}.feo-import-file .field-label{margin-bottom:6px}.feo-import-file .field-input{width:100%;margin:0}
 .feo-import-help{margin-top:5px;color:var(--text-muted);font-size:11px;line-height:1.4}
 .feo-overwrite-option{display:grid;grid-template-columns:20px minmax(0,1fr);align-items:start;gap:10px;margin:0;padding:11px 12px;border:1px solid var(--line-soft);background:var(--surface-form);font-size:12px;line-height:1.35;cursor:pointer}

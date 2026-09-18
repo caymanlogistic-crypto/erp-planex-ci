@@ -21,6 +21,27 @@ select:not([multiple]) {
     accent-color: var(--accent, #7c4718);
 }
 
+/* FEO import format uses the same compact radio styling as ERP forms. */
+#feo-import-modal .feo-coordinate-format label {
+    gap: 6px;
+    font-family: var(--font-base);
+    font-size: 12px;
+    font-weight: 400;
+    line-height: 1.2;
+    color: var(--text-main, #131210);
+}
+#feo-import-modal .feo-coordinate-format input[type="radio"] {
+    appearance: auto;
+    width: 14px;
+    height: 14px;
+    min-width: 14px;
+    min-height: 14px;
+    margin: 0;
+    padding: 0;
+    flex: 0 0 14px;
+    accent-color: var(--accent, #7c4718);
+}
+
 /* Production calendar is a composite card, not the 4-row table grid.
    Override the generic .table-card layout so all 12 months stay in normal flow. */
 .production-calendar > .table-card {
