@@ -158,6 +158,7 @@ $script = <<<'HTML'
     return classify.replace(/\/classify(?:\?.*)?$/,'/settlement');
   }
   async function tryOpenSettlement(row){
+    if(row.dataset.companyFunded==='1')return false;
     var url=settlementUrl(row);if(!url)return false;
     var response=await fetch(url,{headers:{'X-Requested-With':'XMLHttpRequest'}});
     if(response.status===404)return false;

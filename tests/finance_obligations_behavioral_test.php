@@ -15,7 +15,7 @@ require_once __DIR__.'/../app/Service/FinanceObligationService.php';
 use App\Service\FinanceObligationService;
 
 function ok(bool $v,string $m):void{if(!$v)throw new RuntimeException('FAIL: '.$m);}
-$pdo=new PDO('mysql:host=127.0.0.1;port=3306;dbname=erp_obligations_test;charset=utf8mb4','root','root',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
+$pdo=new PDO('mysql:host='.(getenv('PLANEX_SCHEMA_DB_HOST')?:'127.0.0.1').';port='.(getenv('PLANEX_SCHEMA_DB_PORT')?:'3306').';dbname='.(getenv('PLANEX_TEST_FIXED_DB')?:'erp_obligations_test').';charset=utf8mb4',getenv('PLANEX_SCHEMA_DB_USER')?:'root',getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'root',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 $pdo->exec('SET FOREIGN_KEY_CHECKS=0');
 foreach(['finance_operation_allocations','finance_invoice_links','finance_obligations','finance_operations','finance_invoices','finance_audit_log','production_calendar_days','production_calendar_years','linear_route_payments','linear_route_principals','linear_routes','clients','contractors'] as $t)$pdo->exec("DROP TABLE IF EXISTS `$t`");
 $pdo->exec('SET FOREIGN_KEY_CHECKS=1');

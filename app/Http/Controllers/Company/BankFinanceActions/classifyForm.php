@@ -10,6 +10,7 @@ try{
  $bankAccounts=$local->query('SELECT id,account_number,bank_name FROM bank_accounts ORDER BY bank_name,account_number')->fetchAll(PDO::FETCH_ASSOC);
  $employeeUsers=\App\Service\FinanceEmployeePaymentService::fetchActiveEmployees($local,$central,$companyId);
  $employeeMovement=\App\Service\FinanceEmployeePaymentService::findByBankTransaction($local,(int)$bankTransactionId);
+ $companyFundedAttribution=\App\Service\FinanceEmployeeCompanyFundedExpenseService::bankAttributions($local,(int)$bankTransactionId)[(int)$bankTransactionId]??null;
  $classificationRule=null;$classificationRuleId=(int)($tx['classification_rule_id']??0);if($classificationRuleId>0){$classificationRule=\App\Service\FinanceMatchingRuleService::findRule($local,$classificationRuleId);}
  require base_path('app/View/partials/company_bank_transaction_classify_form.php');
 }catch(Throwable $e){http_response_code(422);echo '<div class="form-alert alert-error">'.e($e->getMessage()).'</div>';}

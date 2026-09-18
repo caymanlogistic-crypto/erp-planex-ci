@@ -81,6 +81,16 @@ try {
         throw new RuntimeException('Cash attention must fail closed when finance_cash_resolutions is absent.');
     }
 
+    $pdo->exec('ALTER TABLE bank_transactions ADD debit_amount DECIMAL(15,2) DEFAULT 0, ADD credit_amount DECIMAL(15,2) DEFAULT 0');
+    $pdo->exec("ALTER TABLE finance_operations ADD bank_transaction_id INT NULL, ADD amount DECIMAL(15,2) DEFAULT 0, ADD source VARCHAR(30)");
+    $pdo->exec("CREATE TABLE finance_employee_movements(id INT PRIMARY KEY, finance_operation_id INT, bank_transaction_id INT NULL, source_type VARCHAR(20), movement_type VARCHAR(20), employee_identity_type VARCHAR(20), employee_identity_id INT, employee_name_snapshot VARCHAR(255))");
+    $pdo->exec("UPDATE bank_transactions SET debit_amount=50000 WHERE id=1");
+    $pdo->exec("INSERT INTO finance_operations(id,money_account_id,status,operation_type,bank_transaction_id,amount,source) VALUES(2,1,'POSTED','EXPENSE',1,50000,'BANK_STATEMENT')");
+    $pdo->exec("INSERT INTO finance_employee_movements VALUES(1,2,NULL,'COMPANY_FUNDED','PAYMENT','COMPANY_USER',100,'Спугов')");
+    $company['id']=78;
+    $attributedCounters=App\Service\NavigationCounterService::forCompany($config,$centralDb,78,$company);
+    if ($attributedCounters['bank_attention']!==1) throw new RuntimeException('Employee-attributed bank payment must not remain in attention badge.');
+
     echo "NAVIGATION_COUNTER_ISOLATION_OK bank=2 cash=0\n";
 } finally {
     cleanCompanyPoolDatabase($pdo);

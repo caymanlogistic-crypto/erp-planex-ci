@@ -25,7 +25,14 @@ $ruleConditionText=$ruleConditionParts!==[]?implode(' · ',$ruleConditionParts):
 .tx-rule-settings{display:none;margin-top:12px;padding:11px 12px;border:1px solid var(--line-soft);background:var(--surface-strong)}.tx-allocation-form:has(input[name="distribution_mode"][value="rule"]:checked) .tx-rule-settings{display:block}.tx-rule-settings .tx-classify-meta{margin-bottom:10px}.tx-employee-target.is-hidden{display:none}.tx-classify-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin:14px -18px 0;padding:10px 18px;border-top:1px solid var(--line-soft);background:var(--surface-strong)}.tx-classify-actions .tx-return-rules{margin-right:auto}
 @media(max-width:760px){.tx-classify-mode{flex-direction:column}.tx-classify-fields,.tx-rule-grid{grid-template-columns:1fr}}
 </style>
-<?php if(!empty($tx['is_internal_transfer'])): ?>
+<?php if(!empty($companyFundedAttribution)): ?>
+<div class="form-alert alert-info" data-company-funded-attribution>
+ <strong>Разнесено вручную · Оплачено компанией за сотрудника</strong><br>
+ <?= e($companyFundedAttribution['employee_name']) ?> · <?= e(number_format((float)$companyFundedAttribution['amount'],2,',',' ')) ?> ₽<br>
+ Платёж учтён во взаиморасчётах с сотрудником. Оплата контрагенту и закрывающие документы сохранены.
+ <a href="<?= e(app_url('/company/finance/employee-payments').'?employee_ref='.rawurlencode((string)$companyFundedAttribution['employee_ref'])) ?>">Открыть взаиморасчёты</a>
+</div>
+<?php elseif(!empty($tx['is_internal_transfer'])): ?>
 <div class="form-alert alert-info">
  <?php if(!empty($employeeMovement)): ?>Эта банковская операция уже отражена напрямую как взаиморасчёт BANK ↔ EMPLOYEE<?= $classificationStatus==='MANUAL'?' и зафиксирована вручную.':'.' ?><?php else: ?>Эта банковская операция уже оформлена как внутренний перевод и повторно не разносится.<?php endif; ?>
  <?php if($ruleId>0): ?>

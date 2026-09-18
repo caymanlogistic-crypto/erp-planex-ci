@@ -98,13 +98,20 @@ if(($company['status']??'')==='active'&&$dbError===null){
         $rowTagEnd=strpos($content,'>',$rowStart);
         if($rowTagEnd===false)continue;
         $classifyUrl=e(app_url('/company/finance/bank-transactions/'.$id.'/classify'));
-        $content=substr_replace($content,' data-classify-url="'.$classifyUrl.'"',$rowTagEnd,0);
+        $content=substr_replace($content,' data-classify-url="'.$classifyUrl.'"'.(!empty($tx['company_funded_attribution'])?' data-company-funded="1"':''),$rowTagEnd,0);
         $rowEnd=strpos($content,'</tr>',$rowStart);
         if($rowEnd===false)continue;
         $status=(string)($tx['classification_status']??'UNALLOCATED');
         $dds=trim((string)($tx['dds_category_name']??''));
+        $attribution=$tx['company_funded_attribution']??null;
         $cells='<td>'.e($tx['cash_flow_center_name']?:'—').'</td>';
         $cells.='<td>'.e($dds!==''?$dds:'—').'</td>';
+        if($attribution!==null){
+            $employeeUrl=app_url('/company/finance/employee-payments').'?employee_ref='.rawurlencode((string)$attribution['employee_ref']);
+            $cells='<td>'.e($tx['cash_flow_center_name']?:'Взаиморасчёты с сотрудниками');
+            $cells.='<div class="field-note"><a href="'.e($employeeUrl).'">'.e($attribution['employee_name']).'</a></div></td>';
+            $cells.='<td>'.e($dds!==''?$dds:'Оплачено компанией').'<div class="field-note">Учтено за сотрудником: '.e(number_format((float)$attribution['amount'],2,',',' ')).' ₽</div></td>';
+        }
         $cells.='<td><span class="'.e(\App\Service\FinanceMatchingRuleService::classificationBadgeClass($status)).'"><span class="dot"></span>'.e(\App\Service\FinanceMatchingRuleService::classificationStatusLabel($status)).'</span>';
         if(!empty($tx['is_internal_transfer'])){$cells.='<div class="field-note">Внутренний перевод</div>';}
         $cells.='</td>';
