@@ -4,6 +4,16 @@
   const find = s => root.querySelector(s), form = find('[data-transfer-form]'); if (!form) return;
   const createDialog = find('[data-create-dialog]'), detailDialog = find('[data-detail-dialog]');
   let geoToken = '', geoResult = null, previewToken = '', revision = 0, busy = false;
+  // Product labels describe matching categories, not a distance-error guarantee.
+  const qualityLevels = {
+    exact: ['Точное', 'Найден запрошенный дом, включая указанный корпус или строение.'],
+    number: ['Хорошее', 'Номер дома совпал, но корпус или строение отличаются. Проверьте нужное здание.'],
+    near: ['Среднее', 'Найден другой дом с близким номером. Нужный дом не подтверждён.'],
+    range: ['Приблизительное', 'Определено примерное положение дома. Точная точка здания не подтверждена.'],
+    street: ['Низкое', 'Найдена улица, конкретный дом не определён.'],
+    other: ['Очень низкое', 'Найден населённый пункт, район или другой общий объект. Улица и дом не определены.'],
+  };
+
   const csrf = () => form.querySelector('[name="_csrf_token"]').value;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const error = message => { const box = find('[data-form-error]'); box.textContent = message; box.hidden = !message; };
@@ -39,8 +49,11 @@
     geoToken = result.geo_token; geoResult = result.result;
     find('[data-geo-address]').textContent = geoResult.address;
     find('[data-geo-lat]').textContent = geoResult.latitude; find('[data-geo-lon]').textContent = geoResult.longitude;
-    find('[data-geo-quality]').textContent = `Качество координат: ${geoResult.quality}`;
-    find('[data-geo-quality]').className = `form-alert ${geoResult.precision === 'exact' ? 'alert-success' : 'alert-warning'}`;
+    const precision = Object.hasOwn(qualityLevels, geoResult.precision) ? geoResult.precision : 'unknown';
+    const quality = qualityLevels[precision] || ['Не определено', 'Яндекс не сообщил точность найденного адреса.'];
+    find('[data-geo-quality-badge]').textContent = quality[0];
+    find('[data-geo-quality-badge]').className = `badge transfer-quality-badge quality-${precision}`;
+    find('[data-geo-quality-description]').textContent = quality[1];
     find('[data-map-link]').href = `https://yandex.ru/maps/?pt=${encodeURIComponent(geoResult.longitude)},${encodeURIComponent(geoResult.latitude)}&z=17&l=map`;
     find('[data-geo-result]').hidden = false;
   }));

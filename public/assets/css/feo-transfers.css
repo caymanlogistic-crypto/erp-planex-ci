@@ -24,3 +24,15 @@
 .transfer-confirm-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
 .feo-transfers>[data-page-message]:not([hidden]){margin-bottom:8px}
 @media(max-width:700px){.transfer-grid,.transfer-coordinates,.transfer-detail-meta{grid-template-columns:1fr}.transfer-address-search{flex-direction:column;align-items:stretch}.transfer-dialog{width:calc(100vw - 16px)}.transfer-history{min-width:850px}}
+
+/* Six product quality categories, using existing muted ERP palette tokens. */
+.transfer-quality-result{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 10px;font-size:12px;line-height:1.5;color:var(--text-muted)}
+.transfer-quality-result [data-geo-quality-description]{flex:1 1 260px;min-width:0}
+.transfer-quality-badge{flex:0 0 auto}
+.transfer-quality-badge.quality-exact{background:var(--badge-ok-bg);border-color:var(--badge-ok-edge);color:var(--badge-ok-edge)}
+.transfer-quality-badge.quality-number{background:var(--success-bg);border-color:var(--chart-7);color:var(--success-text)}
+.transfer-quality-badge.quality-near{background:var(--badge-warning-bg);border-color:var(--badge-warning-edge);color:var(--badge-warning-edge)}
+.transfer-quality-badge.quality-range{background:var(--accent-bg);border-color:var(--accent-line);color:var(--accent-deep)}
+.transfer-quality-badge.quality-street{background:var(--badge-danger-bg);border-color:var(--badge-danger-edge);color:var(--badge-danger-edge)}
+.transfer-quality-badge.quality-other{background:var(--badge-danger-edge);border-color:var(--badge-danger-edge);color:var(--inverse)}
+.transfer-quality-badge.quality-unknown{background:var(--badge-archived-bg);border-color:var(--badge-archived-edge);color:var(--badge-archived-edge)}
