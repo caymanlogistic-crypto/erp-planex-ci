@@ -1261,6 +1261,23 @@ body { overflow:hidden; background:var(--app-bg); font-family:var(--font); font-
 .page-title { text-wrap:balance; }
 .page-summary { max-width:920px; }
 
+/* Employee actions can wrap; the header must contain every toolbar row. */
+.employee-report > .page-head {
+  height:auto;
+  padding:12px 14px;
+  gap:12px 20px;
+  flex-wrap:wrap;
+}
+.employee-report > .page-head > .page-head-left {
+  flex:1 1 360px;
+  min-width:0;
+}
+.employee-report > .page-head > .page-head-right {
+  flex:0 1 auto;
+  max-width:100%;
+  justify-content:flex-start;
+}
+
 .field-input:focus,
 .field-select:focus,
 .field-textarea:focus {
