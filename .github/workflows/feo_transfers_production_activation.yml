@@ -1,0 +1,127 @@
+name: FEO Transfers Production Activation
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact canonical SHA already deployed with migration139
+        required: true
+        type: string
+      confirm_activation:
+        description: Type CONFIGURE_FEO_TRANSFERS
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  activate:
+    if: ${{ inputs.confirm_activation == 'CONFIGURE_FEO_TRANSFERS' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 1
+      - name: Validate exact canonical source and CI
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/ci.json
+          python3 - <<'PY'
+          import json,os
+          rows=[r for r in json.load(open('/tmp/ci.json'))['workflow_runs'] if r['head_sha']==os.environ['SOURCE_SHA'] and r['head_branch']==os.environ['CANONICAL_BRANCH']]
+          if not rows or max(rows,key=lambda r:r['run_number'])['conclusion']!='success': raise SystemExit('Exact canonical CI PASS required')
+          PY
+          php -l scripts/feo_transfers_activate.php
+          php tests/feo_transfers_activation_contract_test.php
+      - name: Configure isolated transport and require deployed SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+          KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$KEY" > "$HOME/.ssh/feo_activation"
+          printf '%s\n' "$HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/feo_activation" "$HOME/.ssh/known_hosts"
+          marker="$(ssh -p "$PORT" -i "$HOME/.ssh/feo_activation" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "cat '$DEPLOY_MARKER'")"
+          test "$marker" = "$SOURCE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/commits/$SOURCE_SHA/status" > /tmp/deploy.json
+          python3 - <<'PY'
+          import json
+          rows=[s for s in json.load(open('/tmp/deploy.json'))['statuses'] if s['context']=='erpv2/deploy']
+          if not rows or rows[0]['state']!='success': raise SystemExit('Successful deployed SHA required')
+          PY
+      - name: Configure empty geocoder settings and reuse existing placement routing
+        shell: bash
+        env:
+          YANDEX_KEY: ${{ secrets.FEO_TRANSFER_YANDEX_KEY }}
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          set -euo pipefail
+          test -n "$YANDEX_KEY"
+          remote="/tmp/feo_activation_${GITHUB_RUN_ID}.php"
+          scp -P "$PORT" -i "$HOME/.ssh/feo_activation" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/feo_transfers_activate.php "$USER@$HOST:$remote"
+          printf '%s' "$YANDEX_KEY" | ssh -p "$PORT" -i "$HOME/.ssh/feo_activation" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' FEO_ACTIVATION_CONFIRM=CONFIGURE_FEO_TRANSFERS /usr/bin/php8.5 '$remote'" | tee feo_activation.txt
+          grep -q '^FEO_ACTIVATION_PASS$' feo_activation.txt
+          test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+      - name: Upload redacted activation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feo_transfers_activation_${{ inputs.source_sha }}
+          path: feo_activation.txt
+          if-no-files-found: ignore
+          retention-days: 30
+      - name: Publish activation status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          if [ "$JOB_STATUS" = success ]; then state=success; else state=failure; fi
+          gh api -X POST "repos/$GITHUB_REPOSITORY/statuses/$SOURCE_SHA" -f state="$state" -f context=erpv2/feo-activation -f description='FEO geocoder configuration and routing readiness checked' >/dev/null
+      - name: Cleanup transport
+        if: always()
+        shell: bash
+        env:
+          HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          USER: ${{ secrets.ERPV2_SSH_USER }}
+        run: |
+          if [ -f "$HOME/.ssh/feo_activation" ]; then
+            ssh -p "$PORT" -i "$HOME/.ssh/feo_activation" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" "rm -f '/tmp/feo_activation_${GITHUB_RUN_ID}.php'" || true
+          fi
+          rm -f "$HOME/.ssh/feo_activation"
