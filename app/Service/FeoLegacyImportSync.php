@@ -12,7 +12,7 @@ final class FeoLegacyImportSync
     private array $columns = [];
     private string $table;
 
-    private function __construct(private readonly PDO $pdo, private readonly string $database)
+    private function __construct(private readonly PDO $pdo, private readonly string $database, private readonly PDO $tenantPdo)
     {
         $this->table = '`' . $database . '`.`feo`';
     }
@@ -26,18 +26,36 @@ final class FeoLegacyImportSync
             throw new RuntimeException('Настройка синхронизации ФЭО неполна: нужны базы компании и старой системы.');
         }
         if ((string)$pdo->query('SELECT DATABASE()')->fetchColumn() !== $tenant) return null;
-        return new self($pdo, $legacy);
+        $connection = trim((string)env('FEO_LEGACY_SYNC_CONNECTION_B64', ''));
+        if ($connection === '') return new self($pdo, $legacy, $pdo);
+        try {
+            $c = json_decode((string)base64_decode($connection, true), true, 16, JSON_THROW_ON_ERROR);
+            if (!is_array($c) || !is_string($c['host'] ?? null) || !preg_match('/^[a-zA-Z0-9_.-]+$/D', $c['host'])
+                || !is_string($c['username'] ?? null) || $c['username'] === '' || !is_string($c['password'] ?? null)) throw new RuntimeException();
+            $port = (int)($c['port'] ?? 3306);
+            if ($port < 1 || $port > 65535) throw new RuntimeException();
+            $legacyPdo = new PDO('mysql:host='.$c['host'].';port='.$port.';dbname='.$legacy.';charset=utf8mb4', $c['username'], $c['password'],
+                [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES=>false, PDO::ATTR_TIMEOUT=>10]);
+        } catch (\Throwable $e) {
+            // Never expose connection JSON/password or PDO exception arguments to the UI/log.
+            throw new RuntimeException('Не удалось открыть отдельное подключение к старой БД ФЭО. Проверьте защищённую настройку доступа.');
+        }
+        return new self($legacyPdo, $legacy, $pdo);
     }
+
+    public function connection(): PDO { return $this->pdo; }
 
     public function validate(): void
     {
         if (!$this->pdo->inTransaction()) throw new RuntimeException('Синхронизация ФЭО требует общей транзакции.');
         // Take a metadata lock before inspecting engines/triggers and before any legacy write.
         $this->pdo->query('SELECT id FROM ' . $this->table . ' LIMIT 0 FOR UPDATE');
-        $engines = $this->pdo->prepare("SELECT TABLE_SCHEMA,TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE (TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('feo_requests','feo_imports','feo_import_changes')) OR (TABLE_SCHEMA=? AND TABLE_NAME='feo')");
+        $engines = $this->pdo->prepare("SELECT TABLE_SCHEMA,TABLE_NAME,ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=? AND TABLE_NAME='feo'");
         $engines->execute([$this->database]);
         $tables = $engines->fetchAll(PDO::FETCH_ASSOC);
-        if (count($tables) !== 4) throw new RuntimeException('Не найдены все таблицы синхронизации ФЭО.');
+        $tenantTables = $this->tenantPdo->query("SELECT ENGINE FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('feo_requests','feo_imports','feo_import_changes')")->fetchAll(PDO::FETCH_ASSOC);
+        if (count($tables) !== 1 || count($tenantTables) !== 3) throw new RuntimeException('Не найдены все таблицы синхронизации ФЭО.');
+        $tables = array_merge($tables, $tenantTables);
         foreach ($tables as $table) {
             if (strcasecmp((string)$table['ENGINE'], 'InnoDB') !== 0) throw new RuntimeException('Обе базы ФЭО должны использовать InnoDB.');
         }

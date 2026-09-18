@@ -4,6 +4,7 @@ namespace App\Service;
 
 require_once __DIR__ . '/FeoLocationOverrideService.php';
 require_once __DIR__ . '/FeoLegacyImportSync.php';
+require_once __DIR__ . '/FeoImportTransaction.php';
 
 use App\Core\Database;
 use PDO;
@@ -153,6 +154,7 @@ final class FeoRequestService
 
     public function freshnessState(PDO $pdo): array
     {
+        $this->recoverPendingImport($pdo);
         $stmt = $pdo->query(
             "SELECT filename,created_at,TIMESTAMPDIFF(DAY,created_at,NOW()) AS age_days,"
             . "CASE WHEN created_at < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END AS is_stale "
@@ -180,6 +182,7 @@ final class FeoRequestService
 
     public function listImports(PDO $pdo, int $limit = 40): array
     {
+        $this->recoverPendingImport($pdo);
         $stmt = $pdo->query('SELECT * FROM feo_imports ORDER BY id DESC LIMIT ' . max(1, min(100, $limit)));
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $latestImportId = isset($rows[0]['id']) ? (int)$rows[0]['id'] : null;
@@ -239,14 +242,14 @@ final class FeoRequestService
         $lockName = $this->acquireLock($pdo, 'импорта');
 
         try {
+            $transaction = FeoImportTransaction::begin($pdo);
             $dup = $pdo->prepare("SELECT COUNT(*) FROM feo_imports WHERE file_hash = ? AND status = 'applied'");
             $dup->execute([$fileHash]);
             if ((int)$dup->fetchColumn() > 0) {
                 throw new \RuntimeException('Этот файл уже применён и не был откатан.');
             }
 
-            $pdo->beginTransaction();
-            $legacySync = FeoLegacyImportSync::forTenant($pdo);
+            $legacySync = $transaction->sync();
             $legacySync?->validate();
             $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
             $userId = (int)($actor['user_id'] ?? 0) ?: null;
@@ -313,10 +316,10 @@ final class FeoRequestService
 
             $updateImport = $pdo->prepare('UPDATE feo_imports SET rows_total=?,unique_requests=?,new_count=?,updated_count=?,unchanged_count=?,missing_count=? WHERE id=?');
             $updateImport->execute([$stats['rows_total'],$stats['unique_requests'],$stats['new_count'],$stats['updated_count'],$stats['unchanged_count'],$stats['missing_count'],$importId]);
-            $pdo->commit();
+            $transaction->commit();
             return ['import_id' => $importId, 'legacy_synced' => $legacySync !== null] + $stats;
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            ($transaction ?? null)?->rollback();
             throw $e;
         } finally {
             $this->releaseLock($pdo, $lockName);
@@ -328,16 +331,16 @@ final class FeoRequestService
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
         $lockName = $this->acquireLock($pdo, 'отката');
         try {
-            $pdo->beginTransaction();
+            $transaction = FeoImportTransaction::begin($pdo);
             $latest = $pdo->query("SELECT * FROM feo_imports WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE")->fetch(PDO::FETCH_ASSOC);
             if (!$latest || (int)$latest['id'] !== $importId) {
                 throw new \RuntimeException('Откатывать можно только последнюю активную загрузку ФЭО.');
             }
-            $result = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor);
-            $pdo->commit();
+            $result = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor, $transaction);
+            $transaction->commit();
             return $result;
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            ($transaction ?? null)?->rollback();
             throw $e;
         } finally {
             $this->releaseLock($pdo, $lockName);
@@ -349,7 +352,7 @@ final class FeoRequestService
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
         $lockName = $this->acquireLock($pdo, 'возврата');
         try {
-            $pdo->beginTransaction();
+            $transaction = FeoImportTransaction::begin($pdo);
             $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
             $candidateId = $this->restoreCandidateId($pdo, true);
             if ($candidateId === null || $candidateId !== $importId) {
@@ -362,7 +365,7 @@ final class FeoRequestService
             $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id ASC');
             $changesStmt->execute([$importId]);
             $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
-            $legacySync = $this->syncForChanges($pdo, $changes);
+            $legacySync = $this->syncForChanges($transaction, $changes);
             $fields = FeoXlsxParser::fields();
             $insertCols = implode(',', array_map(static fn(string $f): string => '`' . $f . '`', $fields));
             $insertPlaceholders = implode(',', array_fill(0, count($fields), '?'));
@@ -412,10 +415,10 @@ final class FeoRequestService
             $mark = $pdo->prepare("UPDATE feo_imports SET status='applied',rolled_back_by_user_id=NULL,rolled_back_by_role=NULL,rolled_back_at=NULL WHERE id=? AND status='rolled_back'");
             $mark->execute([$importId]);
             if ($mark->rowCount() !== 1) throw new \RuntimeException('Не удалось вернуть загрузку ФЭО.');
-            $pdo->commit();
+            $transaction->commit();
             return ['import_id'=>$importId,'inserted'=>$inserted,'updated'=>$updated];
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            ($transaction ?? null)?->rollback();
             throw $e;
         } finally {
             $this->releaseLock($pdo, $lockName);
@@ -427,7 +430,7 @@ final class FeoRequestService
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
         $lockName = $this->acquireLock($pdo, 'удаления');
         try {
-            $pdo->beginTransaction();
+            $transaction = FeoImportTransaction::begin($pdo);
             $latest = $pdo->query('SELECT * FROM feo_imports ORDER BY id DESC LIMIT 1 FOR UPDATE')->fetch(PDO::FETCH_ASSOC);
             if (!$latest || (int)$latest['id'] !== $importId) {
                 throw new \RuntimeException('Полностью удалять загрузки ФЭО можно только строго с последней записи истории.');
@@ -437,7 +440,7 @@ final class FeoRequestService
             if ($wasApplied) {
                 $latestApplied = $pdo->query("SELECT id FROM feo_imports WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE")->fetchColumn();
                 if ((int)$latestApplied !== $importId) throw new \RuntimeException('Активную загрузку можно удалить только после более новых активных загрузок.');
-                $rollback = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor);
+                $rollback = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor, $transaction);
             }
             $currentRefs = $pdo->prepare('SELECT COUNT(*) FROM feo_requests WHERE current_import_id=?');
             $currentRefs->execute([$importId]);
@@ -448,10 +451,10 @@ final class FeoRequestService
             $delete = $pdo->prepare('DELETE FROM feo_imports WHERE id=?');
             $delete->execute([$importId]);
             if ($delete->rowCount() !== 1) throw new \RuntimeException('Не удалось удалить загрузку ФЭО.');
-            $pdo->commit();
+            $transaction->commit();
             return ['import_id'=>$importId,'was_applied'=>$wasApplied,'deleted'=>(int)$rollback['deleted'],'restored'=>(int)$rollback['restored']];
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            ($transaction ?? null)?->rollback();
             throw $e;
         } finally {
             $this->releaseLock($pdo, $lockName);
@@ -472,14 +475,14 @@ final class FeoRequestService
         return null;
     }
 
-    private function rollbackAppliedImportInTransaction(PDO $pdo, int $importId, array $actor): array
+    private function rollbackAppliedImportInTransaction(PDO $pdo, int $importId, array $actor, FeoImportTransaction $transaction): array
     {
         if (!$pdo->inTransaction()) throw new \RuntimeException('Откат ФЭО должен выполняться внутри транзакции.');
         $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
         $changesStmt = $pdo->prepare('SELECT * FROM feo_import_changes WHERE import_id=? ORDER BY id DESC');
         $changesStmt->execute([$importId]);
         $changes = $changesStmt->fetchAll(PDO::FETCH_ASSOC);
-        $legacySync = $this->syncForChanges($pdo, $changes);
+        $legacySync = $this->syncForChanges($transaction, $changes);
         $fields = FeoXlsxParser::fields();
         $restoreFields = array_values(array_filter($fields, static fn(string $f): bool => $f !== 'zayavka_id'));
         $restoreSql = implode(',', array_map(static fn(string $f): string => '`' . $f . '`=?', $restoreFields));
@@ -528,6 +531,14 @@ final class FeoRequestService
         return ['deleted'=>$deleted,'restored'=>$restored,'import_id'=>$importId];
     }
 
+    private function recoverPendingImport(PDO $pdo): void
+    {
+        if (!FeoImportTransaction::pending($pdo)) return;
+        $lockName=$this->acquireLock($pdo, 'восстановления');
+        try { FeoImportTransaction::recoverPending($pdo); }
+        finally { $this->releaseLock($pdo,$lockName); }
+    }
+
     private function acquireLock(PDO $pdo, string $operation): string
     {
         $lockName = 'planex_feo_' . substr(hash('sha256', (string)$pdo->query('SELECT DATABASE()')->fetchColumn()), 0, 24);
@@ -559,12 +570,12 @@ final class FeoRequestService
         return $this->encodeRow($this->businessRow($a)) === $this->encodeRow($this->businessRow($b));
     }
 
-    private function syncForChanges(PDO $pdo, array $changes): ?FeoLegacyImportSync
+    private function syncForChanges(FeoImportTransaction $transaction, array $changes): ?FeoLegacyImportSync
     {
         foreach ($changes as $change) {
             $after = json_decode((string)$change['after_json'], true, 512, JSON_THROW_ON_ERROR);
             if (array_key_exists(FeoLegacyImportSync::JOURNAL_KEY, $after)) {
-                $sync = FeoLegacyImportSync::forTenant($pdo);
+                $sync = $transaction->sync();
                 if ($sync === null) throw new \RuntimeException('Для этой загрузки требуется подключение синхронизации со старой базой.');
                 $sync->validate();
                 return $sync;

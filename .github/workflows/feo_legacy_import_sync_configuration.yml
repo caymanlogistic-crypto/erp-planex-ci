@@ -23,6 +23,12 @@ on:
         required: true
         type: string
         default: '0'
+      connection_mode:
+        description: Shared tenant account or protected separate legacy credentials
+        required: true
+        type: choice
+        options: [shared, separate]
+        default: shared
       legacy_database:
         description: Exact legacy schema on the same MySQL server
         required: true
@@ -103,16 +109,20 @@ jobs:
           MODE: ${{ inputs.mode }}
           COMPANY_ID: ${{ inputs.company_id }}
           LEGACY_DATABASE: ${{ inputs.legacy_database }}
+          CONNECTION_MODE: ${{ inputs.connection_mode }}
+          LEGACY_CONNECTION: ${{ secrets.FEO_LEGACY_SYNC_CONNECTION }}
         run: |
           set -euo pipefail
           [[ "$MODE" = check || "$MODE" = activate ]]
           [[ "$COMPANY_ID" =~ ^[0-9]+$ ]]
           [[ "$LEGACY_DATABASE" =~ ^[A-Za-z0-9_]{1,64}$ ]]
+          [[ "$CONNECTION_MODE" = shared || "$CONNECTION_MODE" = separate ]]
+          if [ "$CONNECTION_MODE" = separate ]; then test -n "$LEGACY_CONNECTION"; fi
           if [ "$MODE" = activate ]; then test "$COMPANY_ID" -gt 0; fi
           remote="/tmp/feo_import_sync_configuration_${GITHUB_RUN_ID}.php"
           scp -P "$PORT" -i "$HOME/.ssh/feo_import_sync_configuration" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/feo_legacy_sync_configure.php "$USER@$HOST:$remote"
-          ssh -p "$PORT" -i "$HOME/.ssh/feo_import_sync_configuration" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' FEO_SYNC_CONFIRM=CONFIGURE_FEO_IMPORT_SYNC FEO_SYNC_CONFIGURE_MODE='$MODE' FEO_SYNC_COMPANY_ID='$COMPANY_ID' FEO_SYNC_LEGACY_DATABASE='$LEGACY_DATABASE' /usr/bin/php8.5 '$remote'" | tee feo_import_sync_configuration.txt
+          printf '%s' "$LEGACY_CONNECTION" | ssh -p "$PORT" -i "$HOME/.ssh/feo_import_sync_configuration" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' FEO_SYNC_CONFIRM=CONFIGURE_FEO_IMPORT_SYNC FEO_SYNC_CONFIGURE_MODE='$MODE' FEO_SYNC_COMPANY_ID='$COMPANY_ID' FEO_SYNC_LEGACY_DATABASE='$LEGACY_DATABASE' FEO_SYNC_CONNECTION_MODE='$CONNECTION_MODE' /usr/bin/php8.5 '$remote'" | tee feo_import_sync_configuration.txt
           if [ "$COMPANY_ID" -gt 0 ]; then grep -q '^FEO_IMPORT_SYNC_CONFIGURATION_PASS$' feo_import_sync_configuration.txt; fi
           test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
       - name: Upload redacted activation evidence
