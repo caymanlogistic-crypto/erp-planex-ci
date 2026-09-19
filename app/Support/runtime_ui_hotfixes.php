@@ -75,34 +75,8 @@ if (PHP_SAPI !== 'cli') {
         ];
         $html = str_replace(array_keys($financeVocabulary), array_values($financeVocabulary), $html);
 
-        // Preserve the canonical sidebar label «Касса»; finance content vocabulary may
-        // still normalize historical wording, but navigation is excluded below.
-
-        // Low-frequency company utilities live in a separate MISC section rather
-        // than in the operational logistics directories.
-        if (($_SESSION['role_code'] ?? '') === 'company_owner' && !str_contains($html, '<span class="nav-label">Производственный календарь</span>')) {
-            $calendarActive = str_starts_with(current_app_path(), '/company/misc/production-calendar') ? ' is-active' : '';
-            $calendarHref = e(app_url('/company/misc/production-calendar'));
-            $warningYear = null;
-            try {
-                $companyId = (int)(getSessionCompanyId() ?? 0);
-                if ($companyId > 0) {
-                    $centralDb = new \App\Core\Database($config['database']);
-                    $warningYear = \App\Service\ProductionCalendarService::warningYearForCompany($config, $centralDb, $companyId);
-                }
-            } catch (\Throwable) {
-                $warningYear = (int)date('n') === 12 ? ((int)date('Y') + 1) : null;
-            }
-            $warningBadge = $warningYear
-                ? '<span class="nav-count is-alert" title="Не загружен производственный календарь на ' . (int)$warningYear . ' год">!</span>'
-                : '';
-            $miscGroup = '<div class="nav-group pc-misc-nav-group">' .
-                '<div class="nav-section-label">ПРОЧЕЕ</div>' .
-                '<a class="nav-item' . $calendarActive . '" href="' . $calendarHref . '">' .
-                '<svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="2" y="3.5" width="12" height="10.5" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M2 6.5H14M5 2V5M11 2V5" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/><path d="M5 9H6M8 9H9M11 9H12M5 11.5H6M8 11.5H9" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>' .
-                '<span class="nav-label">Производственный календарь</span>' . $warningBadge . '</a></div>';
-            $html = str_replace('</aside>', $miscGroup . '</aside>', $html);
-        }
+        // Finance content vocabulary still normalizes historical wording. Sidebar
+        // visibility is owned by PageRegistry; hidden legacy pages are not rewritten here.
 
         // ERPv2 lives below /erpv2. A few legacy partials still emit root-relative
         // document links; scope the compatibility rewrite to ERPv2 so /erp is untouched.

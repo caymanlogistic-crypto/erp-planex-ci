@@ -72,7 +72,7 @@ $ok(str_contains($routes, "/chats/{id}/active") && str_contains($service, 'setCh
 $ok(str_contains($routes, "post('/max/webhook/{companyId}/{botId}'") && !str_contains($routes, "post('/max/webhook/{companyId}/{botId}', [\$maxMessagingController, 'webhook'],"), 'Webhook must be public at Router level and authenticate with MAX secret.');
 $ok(str_contains($registry, "'company.max_messages'") && str_contains($registry, "'company.max_settings'") && substr_count($registry, 'ownerOnly: true') >= 4, 'MAX PageRegistry owner-only entries missing.');
 $ok(str_contains($index, "company_max_messaging.php"), 'MAX routes must be registered in front controller.');
-$ok(str_contains($layout, '/company/max/messages') && str_contains($layout, '/company/max/settings'), 'Owner fallback navigation must expose MAX pages.');
+$ok(!str_contains($layout, '<span class="nav-label">Сообщения MAX</span>') && str_contains($layout, '/company/max/settings'), 'Owner fallback navigation must expose MAX settings without duplicate MAX messages item.');
 
 $ok(str_contains($settingsView, 'type="password"') && str_contains($settingsView, 'Тестовая отправка'), 'MAX settings must mask token input and provide test send.');
 $ok(str_contains($settingsView, 'С июня 2026') && !str_contains($settingsView, 'Получить все группы'), 'MAX settings must not promise deprecated GET /chats discovery.');

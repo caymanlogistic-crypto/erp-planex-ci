@@ -13,8 +13,14 @@ require_once $root . '/app/Service/CompanyLandingPageService.php';
 $registry = new App\Security\PageRegistry();
 $cash = $registry->page('company.finance.cash');
 $ok(is_array($cash), 'cash page missing');
-$ok(($cash['nav_visible'] ?? false) === true, 'cash must be visible');
-$ok(($cash['badge_provider'] ?? '') === 'cash_attention', 'cash badge provider missing');
+$ok(($cash['nav_visible'] ?? true) === false, 'cash must be hidden from navigation');
+$ok($registry->isGrantable('company.finance.cash'), 'cash compatibility permission must remain manageable');
+$ok(($cash['badge_provider'] ?? '') === 'cash_attention', 'cash badge provider metadata missing');
+
+$operations = $registry->page('company.finance.operations');
+$ok(is_array($operations), 'operations page missing');
+$ok(($operations['nav_visible'] ?? true) === false, 'operations must be hidden from navigation');
+$ok($registry->isGrantable('company.finance.operations'), 'operations permission must remain manageable');
 
 $responsibility = $registry->page('company.responsible_assignments');
 $ok(is_array($responsibility), 'responsibility page missing from canonical registry');
@@ -25,7 +31,10 @@ $ok(($responsibility['nav_visible'] ?? false) === true, 'responsibility tool mus
 $ok(!in_array('company.responsible_assignments', $registry->grantablePageKeys(), true), 'owner-only tool leaked into role matrix');
 
 $owner = App\Security\EffectiveAccess::systemOwner(11, 7, $registry->pageKeys());
-$landing = new App\Service\CompanyLandingPageService(new PDO('sqlite::memory:'), $registry);
+$landingReflection = new ReflectionClass(App\Service\CompanyLandingPageService::class);
+$landing = $landingReflection->newInstanceWithoutConstructor();
+$registryProperty = $landingReflection->getProperty('registry');
+$registryProperty->setValue($landing, $registry);
 $ok($landing->pathForAccess($owner) === '/company/dashboard', 'owner landing must explicitly resolve to dashboard');
 
 $m132 = (string)file_get_contents($root . '/database/migrations-local/132_split_assignment_and_responsibility.sql');
@@ -51,7 +60,7 @@ $ok(!str_contains($hotfix, 'normalizeFinanceNavigation(root,base);'), 'legacy JS
 $ok(!preg_match('~preg_replace\([^;]+/company/finance/cash~s', $hotfix), 'hotfix still replaces cash navigation');
 
 echo "AUDIT_BLOCKERS_CONTRACT=PASS\n";
-echo "CASH_NAV_VISIBLE=PASS\n";
+echo "HIDDEN_FINANCE_PERMISSIONS_MANAGEABLE=PASS\n";
 echo "OWNER_DEFAULT_LANDING=PASS\n";
 echo "RESPONSIBILITY_TOOL_CANONICAL=PASS\n";
 echo "MIGRATION_132_NO_PROVENANCE_GUESS=PASS\n";

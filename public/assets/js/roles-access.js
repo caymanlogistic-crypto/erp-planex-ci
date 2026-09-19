@@ -212,12 +212,13 @@
                     var groupId = 'access-group-' + Math.random().toString(36).slice(2);
                     var controls = pages.map(function (page) {
                         var key = page.key, current = values[key];
+                        var menuNote = page.nav_visible === false ? '<span class="roles-access__tree-page-note">Скрыто из меню</span>' : '';
                         if (mode === 'role') {
-                            return '<label class="roles-access__tree-page roles-access__tree-page--role"><input type="checkbox" data-page-key="' + esc(key) + '" data-group="' + groupId + '"' + (current ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span>' + esc(page.label) + '</span></label>';
+                            return '<label class="roles-access__tree-page roles-access__tree-page--role"><input type="checkbox" data-page-key="' + esc(key) + '" data-group="' + groupId + '"' + (current ? ' checked' : '') + (disabled ? ' disabled' : '') + '><span class="roles-access__tree-page-label">' + esc(page.label) + menuNote + '</span></label>';
                         }
                         var inherited = effective[key] ? 'разрешено' : 'закрыто';
                         var chosen = current == null ? 'inherit' : current;
-                        return '<div class="roles-access__tree-page roles-access__tree-page--member"><span class="roles-access__tree-page-name">' + esc(page.label) + '</span>' +
+                        return '<div class="roles-access__tree-page roles-access__tree-page--member"><span class="roles-access__tree-page-name">' + esc(page.label) + menuNote + '</span>' +
                             '<div class="roles-access__tri" role="radiogroup" aria-label="Доступ: ' + esc(page.label) + '" data-page-key="' + esc(key) + '" data-value="' + esc(chosen) + '" data-inherited="' + esc(inherited) + '">' +
                             '<button type="button" class="roles-access__tri-btn' + (chosen === 'inherit' ? ' is-active' : '') + '" data-page-choice="inherit" title="По роли: ' + esc(inherited) + '"' + (disabled ? ' disabled' : '') + '>По роли</button>' +
                             '<button type="button" class="roles-access__tri-btn is-allow' + (chosen === 'allow' ? ' is-active' : '') + '" data-page-choice="allow"' + (disabled ? ' disabled' : '') + '>Разрешить</button>' +

@@ -9,7 +9,8 @@ $paths = [
     'view' => __DIR__ . '/../app/View/pages/company_production_calendar.php',
     'entrypoint' => __DIR__ . '/../public/index.php',
     'deps' => __DIR__ . '/../app/Support/entrypoint_dependencies.php',
-    'hotfix' => __DIR__ . '/../app/Support/runtime_ui_hotfixes.php',
+    'registry' => __DIR__ . '/../app/Security/PageRegistry.php',
+    'layout' => __DIR__ . '/../app/View/layouts/main.php',
     'migration' => __DIR__ . '/../database/migrations-local/070_production_calendar.sql',
     'runner' => __DIR__ . '/../scripts/p90_apply_production_calendar_migration.php',
 ];
@@ -37,10 +38,11 @@ $assert(str_contains($content['entrypoint'], "company_production_calendar.php"),
 $assert(str_contains($content['route'], '/company/misc/production-calendar'), 'calendar route must be registered in MISC namespace');
 $assert(str_contains($content['controller'], "requireRole(['company_owner'])"), 'calendar management must be owner-only');
 
-$assert(str_contains($content['hotfix'], 'nav-section-label') && str_contains($content['hotfix'], 'ПРОЧЕЕ'), 'sidebar must contain separate MISC group');
-$assert(str_contains($content['hotfix'], 'Производственный календарь'), 'sidebar must contain production calendar item');
-$assert(str_contains($content['hotfix'], 'nav-count is-alert'), 'sidebar reminder must use standard red alert badge');
-$assert(str_contains($content['hotfix'], 'warningYearForCompany'), 'sidebar reminder must be driven by calendar readiness');
+$assert(str_contains($content['registry'], "'company.production_calendar'") && str_contains($content['registry'], "'Настройки'"), 'calendar must belong to Settings in PageRegistry');
+$assert(str_contains($content['registry'], "badgeProvider: 'production_calendar_warning'") && str_contains($content['registry'], 'ownerOnly: true'), 'calendar must stay owner-only with registry-owned warning badge');
+$assert(!str_contains($content['registry'], "'Производственный календарь', 'Прочее'"), 'legacy MISC section must be removed from PageRegistry');
+$assert(str_contains($content['layout'], '<div class="nav-section-label">НАСТРОЙКИ</div>') && str_contains($content['layout'], '<span class="nav-label">Производственный календарь</span>'), 'owner fallback must render calendar inside Settings');
+$assert(str_contains($content['layout'], 'productionCalendarWarningCount') && str_contains($content['layout'], 'nav-count is-alert'), 'owner fallback reminder must use the registry counter and standard alert badge');
 
 $assert(str_contains($content['view'], 'Двойной щелчок по дню — редактировать'), 'day editing must be discoverable');
 $assert(str_contains($content['view'], "addEventListener('dblclick'"), 'double click must open day editor');
