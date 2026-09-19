@@ -38,6 +38,9 @@ try {
     $chat2=$messaging->saveChat(['bot_id'=>$bot,'chat_id'=>'-9002','name'=>'Other','is_active'=>1]);
     $events = new MaxEventNotificationService($pdo,$messaging);
     $key='feo.placement.block_created'; $values=MaxEventCatalog::example($key);
+    $legacyDefault="Создан блок ФЭО №{{block_id}}: {{block_name}}\nТип: {{block_type}}\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг\nОтветственный: {{author}}\nКомпания: {{company}}\n{{created_at}}";
+    $ok(MaxEventCatalog::currentTemplate($key,$legacyDefault)===MaxEventCatalog::event($key)['template'],'Legacy default must upgrade to current main template');
+    $ok(MaxEventCatalog::currentTemplate($key,'CUSTOM {{block_id}}')==='CUSTOM {{block_id}}','Custom template must remain custom');
     $rule=['event_key'=>$key,'is_enabled'=>1,'chat_config_id'=>$chat,'message_template'=>'Блок {{block_id}} {{author}}','message_format'=>'plain','notify'=>1];
     $ok((int)$events->rules()[0]['is_enabled']===0,'Events must be opt-in');
     $rejects(fn()=>$events->saveRule(array_replace($rule,['event_key'=>'unknown']),77));

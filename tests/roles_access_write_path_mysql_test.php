@@ -75,6 +75,7 @@ try {
     $pdo->exec("CREATE TABLE companies (id INT UNSIGNED NOT NULL PRIMARY KEY,name VARCHAR(255) NOT NULL,status VARCHAR(20) NOT NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations/013_create_roles_access.sql'));
     $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations/014_add_role_default_page.sql'));
+    $pdo->exec((string) file_get_contents(BASE_PATH . '/database/migrations/015_add_user_accounts_max_user_id.sql'));
     $pdo->exec("INSERT INTO companies(id,name,status) VALUES(7,'QA One','active'),(8,'QA Two','active')");
     $hash = str_repeat('a', 64);
     $ready = $pdo->prepare("INSERT INTO company_access_readiness(company_id,state,before_sha256,after_sha256,comparison_sha256,verified_at,activated_at) VALUES(?,'ready',?,?,?,NOW(),NOW())");
@@ -158,7 +159,7 @@ try {
     $throws(fn() => $roleService->delete(7, 1), 'Системную роль нельзя', 'protected owner delete guard failed');
 
     // MEMBERSHIP: isolated creation/removal plus personal overrides/readback.
-    $added = $membershipService->add(7, $roleId, 'QA Membership', 'qa_membership', 'TempPass!123', null, null, 'active');
+    $added = $membershipService->add(7, $roleId, 'QA Membership', 'qa_membership', 'TempPass!123', null, null, 'active', '712345678901234567', true);
     $tempMembershipId = (int) $added['membership_id'];
     $membershipService->save(7, $tempMembershipId, $roleId, 'active', [
         'company.clients' => 'deny',
@@ -171,6 +172,7 @@ try {
     $savedMember = null;
     foreach ($members as $candidate) if ((int) $candidate['id'] === $tempMembershipId) $savedMember = $candidate;
     $ok(is_array($savedMember), 'membership create/readback failed');
+    $ok(($savedMember['max_user_id'] ?? null) === '712345678901234567', 'MAX ID create/readback failed');
     $ok(($savedMember['page_overrides']['company.clients'] ?? '') === 'deny', 'personal page deny readback failed');
     $ok(($savedMember['page_overrides']['company.finance.dashboard'] ?? '') === 'allow', 'finance page override readback failed');
     $ok(($savedMember['data_scope_overrides']['client'] ?? '') === 'all', 'personal client scope readback failed');
@@ -186,7 +188,10 @@ try {
     $landingService = new CompanyLandingPageService($pdo, $registry);
     $ok($landingService->pathForAccount($tempAccountId, 7) === '/company/finance/dashboard', 'ordinary role default landing not resolved');
     $ok($landingService->pathForAccess(EffectiveAccess::systemOwner(11, 7, $pageKeys)) === '/company/dashboard', 'owner landing is not fixed to dashboard');
-    $membershipService->save(7, $tempMembershipId, $roleId, 'active', ['company.clients' => 'allow'], ['client' => 'own'], $grantablePageKeys);
+    $membershipService->save(7, $tempMembershipId, $roleId, 'active', ['company.clients' => 'allow'], ['client' => 'own'], $grantablePageKeys, '798765432109876543', true);
+    $ok($pdo->query("SELECT max_user_id FROM user_accounts WHERE id={$tempAccountId}")->fetchColumn() === '798765432109876543', 'MAX ID edit failed');
+    $membershipService->save(7, $tempMembershipId, $roleId, 'active', ['company.clients' => 'allow'], ['client' => 'own'], $grantablePageKeys, '', true);
+    $ok($pdo->query("SELECT max_user_id FROM user_accounts WHERE id={$tempAccountId}")->fetchColumn() === null, 'MAX ID nullable clear failed');
     $access = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
     $ok($access->canAccessPage('company.clients') && $access->dataScope('client') === 'own', 'next-request override update was cached');
 

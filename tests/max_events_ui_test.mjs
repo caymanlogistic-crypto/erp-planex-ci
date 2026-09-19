@@ -52,7 +52,7 @@ try {
     assert.equal(await modal.locator('[data-max-event-preview-wrap]').isVisible(),false);
     await close(false);assert.equal(await modal.isVisible(),true);
     page.once('dialog',d=>d.accept());await modal.locator('[data-max-event-default]').click();
-    assert.ok((await template.inputValue()).includes('{{author}}'));
+    assert.ok((await template.inputValue()).includes('{{action_title}}'));
     await modal.getByRole('button',{name:'Отмена',exact:true}).click();
     assert.equal(await modal.isVisible(),false);
     assert.equal(await page.locator('[data-max-event-edit="0"]').evaluate(e=>e===document.activeElement),true);

@@ -23,10 +23,12 @@ final class MaxEventNotificationService
         }
         $out = [];
         foreach (MaxEventCatalog::all() as $key => $event) {
-            $out[] = ($saved[$key] ?? [
+            $row = ($saved[$key] ?? [
                 'event_key' => $key, 'is_enabled' => 0, 'chat_config_id' => null,
                 'message_template' => $event['template'], 'message_format' => 'plain', 'notify' => 1,
             ]) + $event;
+            $row['message_template'] = MaxEventCatalog::currentTemplate($key, (string)$row['message_template']);
+            $out[] = $row;
         }
         return $out;
     }
@@ -65,7 +67,8 @@ final class MaxEventNotificationService
         $error = null;
         $text = '';
         try {
-            $text = MaxEventCatalog::render($key, $rule['message_template'], $rule['message_format'], $values);
+            $template = MaxEventCatalog::currentTemplate($key, (string)$rule['message_template']);
+            $text = MaxEventCatalog::render($key, $template, $rule['message_format'], $values);
             if (!$chat || !$this->chatActive($chat)) throw new RuntimeException('Чат или бот отключён. Проверьте настройки MAX.');
         } catch (Throwable $e) {
             $error = $e->getMessage();
@@ -73,6 +76,46 @@ final class MaxEventNotificationService
         $stmt = $this->pdo->prepare('INSERT INTO max_event_deliveries (event_key,entity_key,chat_config_id,bot_id,external_chat_id,message_text,message_format,notify,initiated_by_user_id,status,error_message) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)');
         $stmt->execute([$key, $entityKey, (int)$rule['chat_config_id'], (int)($chat['bot_id'] ?? 0), (string)($chat['chat_id'] ?? ''), $text, $rule['message_format'], (int)$rule['notify'], $userId, $error === null ? 'pending' : 'failed', $error]);
         return (int)$this->pdo->lastInsertId();
+    }
+
+    /** Save a pre-rendered delivery inside the same business transaction. */
+    public function enqueuePrepared(
+        string $key,
+        string $entityKey,
+        string $text,
+        string $format,
+        ?int $userId,
+        ?string $error = null
+    ): ?int {
+        MaxEventCatalog::event($key);
+        if (!$this->ready()) return null;
+        if (!$this->pdo->inTransaction()) throw new RuntimeException('Событие MAX должно сохраняться вместе с операцией.');
+        if ($entityKey === '' || strlen($entityKey) > 100) throw new RuntimeException('Некорректный идентификатор события.');
+        if (!in_array($format, ['plain','html','markdown'], true)) throw new RuntimeException('Неизвестный формат MAX.');
+        if ($error === null && (trim($text) === '' || mb_strlen($text, 'UTF-8') > 4000)) {
+            throw new RuntimeException('Готовое сообщение должно содержать от 1 до 4000 символов.');
+        }
+        $q = $this->pdo->prepare('SELECT * FROM max_event_rules WHERE event_key=? AND is_enabled=1');
+        $q->execute([$key]);
+        $rule = $q->fetch(PDO::FETCH_ASSOC);
+        if (!$rule) return null;
+        $chat = $this->chat((int)$rule['chat_config_id']);
+        if (!$chat) throw new RuntimeException('Чат события MAX не найден.');
+        if ($error === null && !$this->chatActive($chat)) $error = 'Чат или бот отключён. Проверьте настройки MAX.';
+        $stmt = $this->pdo->prepare('INSERT INTO max_event_deliveries (event_key,entity_key,chat_config_id,bot_id,external_chat_id,message_text,message_format,notify,initiated_by_user_id,status,error_message) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)');
+        $stmt->execute([$key,$entityKey,(int)$rule['chat_config_id'],(int)$chat['bot_id'],(string)$chat['chat_id'],$text,$format,(int)$rule['notify'],$userId,$error===null?'pending':'failed',$error]);
+        return (int)$this->pdo->lastInsertId();
+    }
+
+    public function failPending(array $ids, string $error): void
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $ids), static fn(int $id): bool => $id > 0)));
+        if ($ids === []) return;
+        foreach (array_chunk($ids, 500) as $chunk) {
+            $marks = implode(',', array_fill(0, count($chunk), '?'));
+            $q = $this->pdo->prepare("UPDATE max_event_deliveries SET status='failed',error_message=?,updated_at=NOW() WHERE status='pending' AND id IN (" . $marks . ")");
+            $q->execute(array_merge([mb_substr($error, 0, 2000)], $chunk));
+        }
     }
 
     /** Claim once before HTTP. A timeout is not automatically retried (MAX may have accepted it). */
@@ -84,6 +127,19 @@ final class MaxEventNotificationService
         $delivery = $q->fetch(PDO::FETCH_ASSOC);
         if (!$delivery) throw new RuntimeException('Уведомление не найдено.');
         if ($delivery['status'] === 'sent') return $delivery;
+        if (preg_match('/^b([1-9][0-9]*):/', (string)$delivery['entity_key'], $match) === 1) {
+            $main = $this->pdo->prepare('SELECT status FROM max_event_deliveries WHERE event_key=? AND entity_key=?');
+            $main->execute([$delivery['event_key'], $match[1]]);
+            if ($main->fetchColumn() !== 'sent') {
+                $error = 'Основное уведомление блока не доставлено. Сначала повторите его отправку.';
+                $this->pdo->prepare("UPDATE max_event_deliveries SET status='failed',error_message=?,updated_at=NOW() WHERE id=? AND status<>'sent'")
+                    ->execute([$error, $id]);
+                $q->execute([$id]);
+                return $q->fetch(PDO::FETCH_ASSOC);
+            }
+        }
+        // Diagnostic deliveries (for example, a missing responsible MAX ID) deliberately have no sendable body.
+        if (trim((string)$delivery['message_text']) === '') return $delivery;
         if ($retry) {
             // Do not reclaim an active request. Stale claims require explicit owner retry.
             $reset = $this->pdo->prepare("UPDATE max_event_deliveries SET status='pending' WHERE id=? AND (status='failed' OR (status='sending' AND updated_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE)))");
@@ -114,6 +170,21 @@ final class MaxEventNotificationService
         }
         $q->execute([$id]);
         return $q->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /** Retry/send supplemental deliveries only after the main block delivery is sent. */
+    public function dispatchBlockSupplementals(int $blockId, bool $retry = false): array
+    {
+        if ($blockId <= 0) return [];
+        $q = $this->pdo->prepare(
+            "SELECT id FROM max_event_deliveries
+             WHERE event_key='feo.placement.block_created' AND entity_key LIKE ?
+             ORDER BY id"
+        );
+        $q->execute(['b' . $blockId . ':%']);
+        $out = [];
+        foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $id) $out[] = $this->dispatch((int)$id, $retry);
+        return $out;
     }
 
     public function recentDeliveries(): array

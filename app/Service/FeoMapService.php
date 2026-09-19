@@ -73,7 +73,7 @@ final class FeoMapService
 
             $state = 'available';
             $utilizerKey = $utilizerId ? 'utilizer:' . (int)$utilizerId : $classStatus;
-            $coordKey = sprintf('%.7F|%.7F', $coords['lat'], $coords['lng']);
+            $coordKey = self::coordinateKey($coords);
             $key = $coordKey . '|' . $state . '|' . $utilizerKey;
             if (!isset($groups[$key])) {
                 $groups[$key] = [
@@ -129,7 +129,7 @@ final class FeoMapService
 
         $sameCoordinates = [];
         foreach ($markers as $i => $marker) {
-            $coordKey = sprintf('%.7F|%.7F', (float)$marker['canonical_lat'], (float)$marker['canonical_lng']);
+            $coordKey = self::coordinateKey(['status'=>'ok','lat'=>(float)$marker['canonical_lat'],'lng'=>(float)$marker['canonical_lng']]);
             $sameCoordinates[$coordKey][] = $i;
         }
         foreach ($sameCoordinates as $indexes) {
@@ -164,6 +164,12 @@ final class FeoMapService
             return ['status'=>'invalid','lat'=>null,'lng'=>null];
         }
         return ['status'=>'ok','lat'=>$lat,'lng'=>$lng];
+    }
+
+    public static function coordinateKey(array $coords): string
+    {
+        if (($coords['status'] ?? '') !== 'ok') throw new \InvalidArgumentException('Для ключа точки нужны корректные координаты.');
+        return sprintf('%.7F|%.7F', (float)$coords['lat'], (float)$coords['lng']);
     }
 
     private static function layers(array $markers): array

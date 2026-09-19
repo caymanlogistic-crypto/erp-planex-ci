@@ -7,19 +7,23 @@ use RuntimeException;
 /** Registered ERP events: adding an event does not require a new settings screen. */
 final class MaxEventCatalog
 {
+    private const LEGACY_FEO_TEMPLATE = "Создан блок ФЭО №{{block_id}}: {{block_name}}\nТип: {{block_type}}\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг\nОтветственный: {{author}}\nКомпания: {{company}}\n{{created_at}}";
+    private const FEO_TEMPLATE = "{{action_title}}:\n\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг";
+
     public static function all(): array
     {
         return [
             'feo.placement.block_created' => [
                 'title' => 'ФЭО — создан блок размещения',
                 'description' => 'После сохранения нового блока «Добавление» или «Исключение».',
-                'template' => "Создан блок ФЭО №{{block_id}}: {{block_name}}\nТип: {{block_type}}\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг\nОтветственный: {{author}}\nКомпания: {{company}}\n{{created_at}}",
+                'template' => self::FEO_TEMPLATE,
                 'variables' => [
+                    'action_title' => ['Заголовок действия', 'ДОБАВЛЕНО НА КАРТУ'],
                     'block_id' => ['Номер блока', '42'],
                     'block_name' => ['Название блока', 'Размещение 15 сентября'],
                     'block_type' => ['Тип блока', 'Добавление'],
                     'request_count' => ['Число заявок в блоке', '12'],
-                    'mass_kg' => ['Масса блока, кг', '25 400,000'],
+                    'mass_kg' => ['Масса блока, кг', '25 400'],
                     'author' => ['Ответственный', 'Владимир С.'],
                     'company' => ['Название компании', 'Пример компании'],
                     'created_at' => ['Дата и время создания', '15.09.2026 15:30'],
@@ -57,6 +61,12 @@ final class MaxEventCatalog
     public static function example(string $key): array
     {
         return array_map(static fn(array $v): string => $v[1], self::event($key)['variables']);
+    }
+
+    public static function currentTemplate(string $key, string $stored): string
+    {
+        if ($key === 'feo.placement.block_created' && $stored === self::LEGACY_FEO_TEMPLATE) return self::FEO_TEMPLATE;
+        return $stored;
     }
 
     public static function render(string $key, string $template, string $format, array $values): string
