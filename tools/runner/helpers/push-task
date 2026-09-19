@@ -174,12 +174,15 @@ if proof.get("RESULT") != "PASS":
     print("PUSH_TASK_BLOCK=PREFLIGHT_NOT_PASS")
     sys.exit(16)
 
-if "PROOF_KIND" in proof:
-    try:
-        verify_local_evidence(task_id, proof)
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
-        print("PUSH_TASK_BLOCK=LOCAL_EVIDENCE:" + str(exc))
-        sys.exit(20)
+if proof.get("PROOF_KIND") != "LOCAL_SIGNED_V1":
+    print("PUSH_TASK_BLOCK=LOCAL_SIGNED_PROOF_REQUIRED")
+    sys.exit(20)
+
+try:
+    verify_local_evidence(task_id, proof)
+except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as exc:
+    print("PUSH_TASK_BLOCK=LOCAL_EVIDENCE:" + str(exc))
+    sys.exit(22)
 
 
 print("=== VERIFY CURRENT CANONICAL ===")

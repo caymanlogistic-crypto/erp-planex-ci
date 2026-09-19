@@ -107,10 +107,11 @@ except p.PreflightEnvironmentError:
 else:
     raise AssertionError("missing PHP must be LOCAL_PREFLIGHT_ENV_ERROR, not REMOTE_REQUIRED")
 
-# Contract 6: fail state cannot become PASS_WITH_REMOTE_GATES (main checks local results first).
+# Contract 6: normal LOCAL execution must fail closed when any remote gate would be required.
 source = (ROOT / "tools/agent_preflight.py").read_text(encoding="utf-8")
-assert 'if any(value != "PASS" for value in results.values())' in source
-assert source.index('print("LOCAL_PREFLIGHT_FAIL")') < source.index('print("LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES")')
+assert 'LOCAL_PREFLIGHT_REMOTE_GATES_FORBIDDEN' in source
+assert 'print("LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES")' not in source
+assert source.index('if remote:') < source.index('results=execute_local_required')
 
 # Contract 8: Memory Integrity is never allowlisted REMOTE_REQUIRED.
 assert "MEMORY_INTEGRITY_CONTRACTS" not in p.REMOTE_REQUIRED_ALLOWLIST
