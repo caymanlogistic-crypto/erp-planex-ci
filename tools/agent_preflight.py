@@ -215,9 +215,13 @@ def main():
             print("LOCAL_REQUIRED_CHECKS=[]\nLOCAL_REQUIRED_RESULTS=[]\nREMOTE_REQUIRED_CHECKS=[]\nMISSING_CAPABILITIES=[]\nCLASS_ESCALATION_REQUIRED=CRITICAL\nCHECKS_EXECUTED=[]\nLOCAL_PREFLIGHT_FAIL"); return 1
         local,remote,missing=check_execution_classes(planned,caps); print("LOCAL_REQUIRED_CHECKS="+jsonish(local)); print("REMOTE_REQUIRED_CHECKS="+jsonish(remote)); print("MISSING_CAPABILITIES="+jsonish(missing))
         if x.plan: print("LOCAL_REQUIRED_RESULTS=[]\nCHECKS_EXECUTED=[]\nPREFLIGHT_PLAN_ONLY"); return 0
+        if remote:
+            print("LOCAL_REQUIRED_RESULTS=[]")
+            print("CHECKS_EXECUTED=[]")
+            print("LOCAL_PREFLIGHT_REMOTE_GATES_FORBIDDEN")
+            return 2
         results=execute_local_required(x.cls,x.head,paths,scopes,rows,lines,local); ordered=[{"check":n,"result":results[n]} for n in local]; print("LOCAL_REQUIRED_RESULTS="+jsonish(ordered)); print("CHECKS_EXECUTED="+jsonish(local))
         if any(value != "PASS" for value in results.values()): print("LOCAL_PREFLIGHT_FAIL"); return 1
-        if remote: print("LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES"); return 0
         print("LOCAL_PREFLIGHT_PASS"); return 0
     except PreflightEnvironmentError as e: print(f"PREFLIGHT_ENV_REASON={e}\nLOCAL_PREFLIGHT_ENV_ERROR"); return 2
     except (OSError,subprocess.SubprocessError,RuntimeError,ValueError) as e: print(f"PREFLIGHT_ENV_REASON={type(e).__name__}: {e}\nLOCAL_PREFLIGHT_ENV_ERROR"); return 2

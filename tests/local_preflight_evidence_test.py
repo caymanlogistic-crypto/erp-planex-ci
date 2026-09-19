@@ -171,9 +171,26 @@ with tempfile.TemporaryDirectory(prefix="local-evidence-contract-") as td:
     result = run("python3", str(bin_dir / "push-task"), "task", "--dry-run", env=env)
     assert "PUSH_TASK_DRY_RUN=PASS" in result
     assert head + ":refs/heads/chatgpt/evidence-test" in pushed.read_text()
+
+    # Unsigned/legacy proof is never sufficient for publication.
+    proof_path = tasks / "task.preflight.env"
+    signed_proof = proof_path.read_bytes()
+    proof_path.write_text(
+        f"TASK_ID=task\nCLASS=CRITICAL\nBRANCH=chatgpt/evidence-test\n"
+        f"START_HEAD={base}\nCANDIDATE_HEAD={head}\nRESULT=PASS\n"
+    )
+    pushed.unlink()
+    result = subprocess.run(
+        ["python3", str(bin_dir / "push-task"), "task", "--dry-run"],
+        env=env, capture_output=True, text=True,
+    )
+    assert result.returncode != 0 and "LOCAL_SIGNED_PROOF_REQUIRED" in result.stdout
+    assert not pushed.exists()
+    proof_path.write_bytes(signed_proof)
+
     archive = root / "state/local-preflight-archive/task" / proof["RECEIPT_SHA256"]
     (archive / "preflight.log").write_text("tampered")
-    pushed.unlink()
+    pushed.unlink(missing_ok=True)
     result = subprocess.run(["python3", str(bin_dir / "push-task"), "task"], env=env, capture_output=True, text=True)
     assert result.returncode != 0 and "LOG_DIGEST_MISMATCH" in result.stdout
     assert not pushed.exists()
