@@ -182,9 +182,11 @@ policy = (ROOT / ".github/workflows/erpv2_agent_deploy_policy.yml").read_text(en
 assert "python3 tools/ci_scope.py" in policy
 assert '--github-output "$GITHUB_OUTPUT"' in policy
 assert "Control-plane preflight regression contracts" in policy
-assert "START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS|LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT" in policy
+assert "START_HEAD → WORK_BRANCH → LOCAL_SIGNED_PREFLIGHT_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT" in policy
 assert "Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate" in policy
-assert "LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES" in policy
+assert "Normal development is LOCAL:" in policy
+assert "SentinelX begins only after `LOCAL_SIGNED_PREFLIGHT_PASS`" in policy
+assert "Parallel LOCAL agents / shared-machine safety" in policy
 assert "PREFLIGHT_COVERAGE_DEFECT" in policy
 assert "missing incremental CI safeguard: git diff --name-only --diff-filter=ACMR HEAD^1 HEAD" not in policy
 
