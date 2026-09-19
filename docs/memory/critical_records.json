@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "709bf22135bfd2ac0e138c591c531dbd52e327ca",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/709bf22135bfd2ac0e138c591c531dbd52e327ca/tests/feo_transfers_access_mysql_test.php",
+      "verified_sha": "6c7873e0841901a97b7d47cd702fa0d956cd6015",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/6c7873e0841901a97b7d47cd702fa0d956cd6015/tests/menu_navigation_structure_contract_test.php",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
