@@ -137,8 +137,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "daa3042aafa78d8e8459a39b093caddd23234fd4",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/daa3042aafa78d8e8459a39b093caddd23234fd4/tests/agent_preflight_test.py",
+      "verified_sha": "dbd8bf1e553e922bbc1ad180192c92319c8e1a85",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/dbd8bf1e553e922bbc1ad180192c92319c8e1a85/tests/agent_preflight_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -161,8 +161,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "303f20648a3af07e16353f4effb24fc7a0381ba7",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/303f20648a3af07e16353f4effb24fc7a0381ba7/tools/runner/local_preflight.py",
+      "verified_sha": "dbd8bf1e553e922bbc1ad180192c92319c8e1a85",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/dbd8bf1e553e922bbc1ad180192c92319c8e1a85/tests/runner_helpers_contract_test.py",
       "owning_paths": [
         "tools/sentinelx/**",
         "tools/runner/**"
