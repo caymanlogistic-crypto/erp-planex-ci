@@ -31,14 +31,14 @@ Forbidden: placeholder/probe writes, empty/checkpoint commits, dummy files and t
 
 Stable lifecycle:
 
-`START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS|LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES → FEATURE_HEAD → PR → CI aggregate → MERGED_SHA → MEMORY PASS → optional deploy`.
+`START_HEAD → WORK_BRANCH → LOCAL_SIGNED_PREFLIGHT_PASS → FEATURE_HEAD → PR → CI aggregate → MERGED_SHA → MEMORY PASS → optional deploy`.
 
 GitHub Actions remains an independent verification layer. Agents aggregate all required terminal results for one feature SHA before remediation; a failed aggregate is fixed as one local batch and must pass local preflight again before a corrective push. Normal remote push budget is one initial push, with at most one corrective push for STANDARD/CRITICAL before a `PREFLIGHT_COVERAGE_DEFECT` investigation is required.
 
 
-Capability-aware execution is fail-closed: every planned check is exactly `LOCAL_REQUIRED` or `REMOTE_REQUIRED`. `REMOTE_REQUIRED` is not optional and cannot be chosen ad hoc by an agent; the allowlist is executable code with regression coverage. Tenant schema provisioning/generated-schema equivalence is the only initial allowlisted integration gate and becomes remote-only solely when a working PDO MySQL + reachable MySQL capability is unavailable. PHP/JS/Python syntax, architecture guard, dynamic identifier safety, memory integrity, scope/parity tests and infrastructure-independent control-plane contracts remain local.
+The normal OWNER workflow is fail-closed and LOCAL: all pre-push application, DB, browser, memory and control-plane checks must run on Windows/local WSL. Missing capability is repaired locally or blocks publication; it is not deferred to SentinelX/remote runner.
 
-`LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES` authorizes the same single initial push as a full local PASS, but the listed remote gates must execute through the existing path-triggered GitHub workflows for that exact feature SHA before merge.
+SentinelX begins only after a fresh full signed local PASS. Its role is limited to signed evidence import, exact candidate transport and the existing guarded publishing helpers. It is not an application test or preflight execution environment for LOCAL tasks.
 
 The privileged FAST `pull_request_target` boundary is intentionally **not** refactored to execute PR-head helper code before validation/checkout. Its exact-base, whitelist, size, deletion and UI-presence checks stay non-PR-controlled and are parity-tested against local FAST policy.
 
@@ -63,7 +63,7 @@ The guarded workflow already performs exact-SHA/CI/HEAD machine checks. Agents s
 
 `.github/workflows/erpv2_controlled_deploy.yml` is the standard `/erpv2` production write engine. It is exact-SHA `workflow_dispatch` and proves production marker/artifact/runtime safety evidence. FAST and standard request mechanisms gate/dispatch it; they do not replicate SSH deployment logic.
 
-Merge != deploy. Deploy != migration.
+Merge != deploy. Deploy != migration. A docs/memory-only canonical merge does not justify a repeat application deploy when the production runtime tree did not change.
 
 ## Production database policy
 

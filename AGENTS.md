@@ -34,11 +34,11 @@ OWNER target and current implementation can legitimately differ when the record 
 
 Maintain one task state machine:
 
-`START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS|LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT`
+`START_HEAD → WORK_BRANCH → LOCAL_SIGNED_PREFLIGHT_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT`
 
 For CRITICAL DB/schema work that impacts repository memory, finalize locally in two phases:
 
-`IMPLEMENTATION_SHA → REPOSITORY_MEMORY_SHA → LOCAL_PREFLIGHT_PASS|LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES → one initial push`.
+`IMPLEMENTATION_SHA → REPOSITORY_MEMORY_SHA → LOCAL_SIGNED_PREFLIGHT_PASS → one initial push`.
 
 `IMPLEMENTATION_SHA` must be a real commit containing the finished implementation/generated artifacts. Repository-memory `Verified SHA` must reference that existing implementation commit, never a future PR/merge/latest/current SHA.
 
@@ -72,19 +72,27 @@ Use `--plan` to inspect deterministic changed scope and the calculated check pla
 
 Rules:
 
-- Work locally/in a checkout and batch multi-file changes there. Local logical commits are allowed; do not create one remote commit/push per file.
-- Normal multi-file work is `local edit → local tests → local commit(s) → LOCAL_PREFLIGHT_PASS → one initial push`.
-- If local git is genuinely unavailable and Git Data API is required, create blobs/tree/commit chain first and update the feature branch ref once; sequential remote `update_file` commits are not the normal editing mechanism.
-- A required check may not be silently skipped. Each planned check is exactly `LOCAL_REQUIRED` or `REMOTE_REQUIRED`. `REMOTE_REQUIRED` is restricted to the executable allowlist in `tools/agent_preflight.py` and remains a mandatory GitHub gate after the one initial push.
-- `LOCAL_PREFLIGHT_PASS` means all required checks ran locally and passed with no remote-only integration gates. `LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES` means every `LOCAL_REQUIRED` check passed and only explicitly allowlisted infrastructure checks were deferred to mandatory existing GitHub gates.
-- Currently tenant schema provisioning/generated-schema equivalence may become `REMOTE_REQUIRED` only when PDO MySQL / reachable MySQL capability is absent. If those capabilities exist it is `LOCAL_REQUIRED` and runs before push. Missing non-allowlisted capability remains `LOCAL_PREFLIGHT_ENV_ERROR`.
-- GitHub CI remains required after local PASS; local preflight never replaces, disables or weakens repository CI/workflows.
+- Normal development is LOCAL: edit, debug, DB/browser tests, memory checks and pre-push preflight run on Windows/local WSL. SentinelX is not a DEV/DEBUG/TEST fallback.
+- Work in a task checkout and batch multi-file changes there. Local logical commits are allowed; do not create one remote commit/push per file.
+- Normal multi-file work is `local edit → local tests → repository memory drift check → local commit(s) → signed full local PASS → one initial push`.
+- A required check may not be silently skipped or deferred to the remote runner. Missing local capability is repaired locally or blocks publication.
+- GitHub CI remains required after local PASS; local verification never replaces, disables or weakens repository CI/workflows.
+- SentinelX begins only after `LOCAL_SIGNED_PREFLIGHT_PASS`, for signed evidence import, candidate transport and existing guarded publication operations.
+
+## Parallel LOCAL agents / shared-machine safety
+
+- One task owns one `TASK_ID`, branch, worktree, evidence directory and process set. `source` is never an implementation workspace.
+- Before changing a shared process/port, prove ownership from PID, command line and task/worktree metadata. Never kill by process name.
+- Port 8016 is single-owner local state; a foreign `php-server.json` is not permission to stop it. Use a task-local free port/server when required.
+- Mutable local MySQL slot 2 is serialized by its existing lock/wrapper. Never bypass the lock or clean another task; persistent slots 3–4 are not cleanup targets.
+- Do not reset/delete another task's branch/worktree/evidence or change global RDC/runtime configuration to solve a task-local issue.
+- MEMORY drift/integrity is checked before publication so task-owned repository memory is repaired in the same change whenever possible.
 
 ## GitHub CI aggregate / failure handling
 
 - Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate. While they are running, do not react to the first red job with a new push.
 - After all required checks for that SHA are terminal, if PASS continue to merge. If FAIL, enumerate **all** failed required workflows/jobs, read logs only for those failures, and build one remediation set.
-- Apply the complete remediation set locally, rerun the full relevant local preflight, and only after a successful local result (`LOCAL_PREFLIGHT_PASS` or `LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES`) make a corrective push; every remote-required gate must then pass on that corrective SHA as well.
+- Apply the complete remediation set locally, rerun the full relevant local checks and fresh signed preflight, and only after `LOCAL_SIGNED_PREFLIGHT_PASS` make a corrective push.
 - The forbidden normal loop is `fix job A → push → fix job B → push → fix job C → push`.
 
 ### Remote push budget (operational SLO)
