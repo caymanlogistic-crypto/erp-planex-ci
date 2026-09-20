@@ -15,7 +15,10 @@ final class MaxEventCatalog
         return [
             'feo.placement.block_created' => [
                 'title' => 'ФЭО — создан блок размещения',
-                'description' => 'После сохранения нового блока «Добавление» или «Исключение».',
+                'description' => 'После сохранения нового блока «Добавление» или «Исключение». Системное обязательное сообщение.',
+                'system_required' => true,
+                'template_editable' => false,
+                'format_editable' => false,
                 'template' => self::FEO_TEMPLATE,
                 'variables' => [
                     'action_title' => ['Заголовок действия', 'ДОБАВЛЕНО НА КАРТУ'],
@@ -65,13 +68,25 @@ final class MaxEventCatalog
 
     public static function currentTemplate(string $key, string $stored): string
     {
-        if ($key === 'feo.placement.block_created' && $stored === self::LEGACY_FEO_TEMPLATE) return self::FEO_TEMPLATE;
+        if ($key === 'feo.placement.block_created') return self::FEO_TEMPLATE;
         return $stored;
+    }
+
+    public static function isSystemRequired(string $key): bool
+    {
+        return !empty(self::event($key)['system_required']);
+    }
+
+    public static function systemFormat(string $key, string $stored): string
+    {
+        return self::isSystemRequired($key) ? 'plain' : $stored;
     }
 
     public static function render(string $key, string $template, string $format, array $values): string
     {
         $event = self::event($key);
+        $template = self::currentTemplate($key, $template);
+        $format = self::systemFormat($key, $format);
         if (str_starts_with($key, 'feo.transfer.') && !preg_match('/\{\{\s*quality\s*\}\}/', $template)) throw new RuntimeException('Добавьте в шаблон качество координат: {{quality}}.');
         if (!in_array($format, ['plain', 'html', 'markdown'], true)) throw new RuntimeException('Неизвестный формат MAX.');
         if (trim($template) === '' || mb_strlen($template) > 4000) throw new RuntimeException('Шаблон должен содержать от 1 до 4000 символов.');

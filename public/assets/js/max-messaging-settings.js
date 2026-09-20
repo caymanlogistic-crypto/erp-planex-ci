@@ -67,6 +67,14 @@
                 form.elements[name].value = activeEvent[name] == null ? '' : String(activeEvent[name]);
             });
             ['is_enabled', 'notify'].forEach(function (name) { form.elements[name].checked = String(activeEvent[name]) === '1'; });
+            var systemRequired = Boolean(activeEvent.system_required);
+            form.elements.is_enabled.checked = systemRequired || form.elements.is_enabled.checked;
+            form.elements.is_enabled.disabled = systemRequired;
+            form.elements.message_template.disabled = systemRequired || activeEvent.template_editable === false;
+            form.elements.message_format.disabled = systemRequired || activeEvent.format_editable === false;
+            form.querySelector('[data-max-system-required-note]').hidden = !systemRequired;
+            form.querySelector('[data-max-event-default]').hidden = systemRequired;
+            form.querySelector('[data-max-insert]').disabled = systemRequired;
             overlay.querySelector('#max-event-edit-title').textContent = activeEvent.title;
             form.querySelector('[data-max-event-description]').textContent = activeEvent.description;
             form.querySelector('[data-max-event-save-error]').hidden = catalog.draftKey !== activeEvent.event_key;
@@ -79,7 +87,7 @@
             overlay.hidden = false;
             overlay.classList.add('is-open');
             overlay.setAttribute('aria-hidden', 'false');
-            form.elements.is_enabled.focus();
+            (systemRequired ? form.elements.chat_config_id : form.elements.is_enabled).focus();
         }
         function closeEvent() {
             if (isDirty() && !window.confirm('Закрыть без сохранения изменений?')) return;
@@ -180,7 +188,7 @@
     }
     root.querySelectorAll('[data-max-event-retry]').forEach(function (form) {
         form.addEventListener('submit', function (event) {
-            if (!window.confirm('Отправить сохранённое уведомление? Если предыдущая попытка завершилась без ответа MAX, проверьте чат, чтобы избежать дубля.')) event.preventDefault();
+            if (!window.confirm('Повторить уведомление? Адресные FEO-уведомления будут пересобраны по текущему ответственному и MAX ID. Если предыдущая попытка завершилась без ответа MAX, сначала проверьте чат, чтобы избежать дубля.')) event.preventDefault();
         });
     });
 

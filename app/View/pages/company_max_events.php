@@ -28,8 +28,9 @@ $eventStatusLabels = ['pending' => 'Ожидает отправки', 'sending' 
                     $eventChat = $eventChats[(int)$event['chat_config_id']] ?? null;
                     $chatAvailable = $eventChat && !empty($eventChat['is_active']) && !empty($eventChat['bot_is_active']) && $eventChat['max_status'] === 'active';
                     $isDraft = $eventDraftKey === $event['event_key'];
+                    $systemRequired = !empty($event['system_required']);
                     $eventState = $isDraft || (!empty($event['is_enabled']) && !$chatAvailable) ? 'attention' : (!empty($event['is_enabled']) ? 'enabled' : 'disabled');
-                    $stateLabel = $isDraft ? 'Не сохранено' : ($eventState === 'attention' ? 'Проверьте чат' : ($eventState === 'enabled' ? 'Включено' : 'Отключено'));
+                    $stateLabel = $isDraft ? 'Не сохранено' : ($eventState === 'attention' ? 'Проверьте чат' : ($systemRequired ? 'Системное' : ($eventState === 'enabled' ? 'Включено' : 'Отключено')));
                     $chatLabel = $eventChat ? $eventChat['name'] : 'Не выбран';
                 ?>
                     <tr data-max-event-row data-event-state="<?= $eventState ?>" data-event-chat="<?= $eventChat ? (int)$eventChat['id'] : 'none' ?>" data-event-search="<?= e(mb_strtolower($event['title'].' '.$event['description'].' '.$chatLabel)) ?>">
@@ -55,6 +56,7 @@ $eventStatusLabels = ['pending' => 'Ожидает отправки', 'sending' 
                     <div class="max-event-editor">
                         <div class="max-event-options">
                             <label class="checkbox-item"><input type="checkbox" name="is_enabled" value="1"><span class="checkbox-mark" aria-hidden="true"></span><span class="checkbox-label">Отправлять уведомления</span></label>
+                            <p class="field-msg" data-max-system-required-note hidden>Системное событие: основное FEO-сообщение отправляется всегда. Можно выбрать чат и Push, но отключить событие или изменить его обязательный текст нельзя.</p>
                             <label class="field"><span class="field-label">Чат для отправки</span><select class="field-select" name="chat_config_id"><option value="">Выберите чат</option>
                             <?php foreach ($chats as $chat): $chatEnabled = !empty($chat['is_active']) && !empty($chat['bot_is_active']) && $chat['max_status'] === 'active'; ?>
                                 <option value="<?= (int)$chat['id'] ?>"><?= e($chat['name'].' · '.$chat['bot_name'].($chatEnabled ? '' : ' (неактивен)')) ?></option>
@@ -78,7 +80,7 @@ $eventStatusLabels = ['pending' => 'Ожидает отправки', 'sending' 
         </div>
         <script type="application/json" id="max-event-catalog-data"><?= json_encode(['rules' => array_values($eventRules), 'draftKey' => $eventDraftKey], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?></script>
         <div class="max-section-inline-head max-event-delivery-head"><h3 class="section-title">Отправки по событиям</h3><span class="muted">Последние 100</span></div>
-        <p class="muted">Повтор использует сохранённый текст и чат. Если MAX не ответил, сообщение могло дойти: перед повтором проверьте чат.</p>
+        <p class="muted">Для адресных FEO-уведомлений повтор заново проверяет текущего ответственного, MAX ID и профильное имя в MAX, сохраняя тот же логический ключ доставки. Для остальных событий используется сохранённый текст и чат. Если MAX не ответил, перед повтором проверьте чат.</p>
         <div class="max-table-wrap"><div class="table-scroll"><table class="table">
             <thead><tr><th>Время / событие</th><th>Чат</th><th>Сообщение</th><th>Результат</th><th>Действия</th></tr></thead>
             <tbody>

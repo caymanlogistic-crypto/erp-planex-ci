@@ -40,6 +40,34 @@ final class FeoPlacementRouteNotificationService
             : $this->additionIntents($selected, $active);
     }
 
+    public function intentForDelivery(
+        PDO $tenant,
+        PDO $central,
+        int $companyId,
+        int $blockId,
+        string $kind,
+        int $routeId,
+        int $part
+    ): ?array {
+        if ($blockId <= 0 || $routeId <= 0 || $part <= 0) return null;
+        if (!in_array($kind, ['same_point','nearby','active_exclusion'], true)) return null;
+        $block = (new FeoPlacementService())->block($tenant, $blockId);
+        if (!is_array($block) || (string)($block['status'] ?? '') !== 'applied') return null;
+        $requestIds = array_values(array_filter(array_map(
+            static fn(array $row): string => trim((string)($row['zayavka_id'] ?? '')),
+            (array)($block['requests'] ?? [])
+        ), static fn(string $id): bool => $id !== ''));
+        if ($requestIds === []) return null;
+        foreach ($this->intents($tenant, $central, $companyId, (string)$block['block_type'], $requestIds) as $intent) {
+            if ((string)$intent['kind'] === $kind
+                && (int)$intent['route_id'] === $routeId
+                && (int)$intent['part'] === $part) {
+                return $intent;
+            }
+        }
+        return null;
+    }
+
     public static function isActiveStatus(string $status): bool
     {
         return in_array($status, self::ACTIVE_STATUSES, true);

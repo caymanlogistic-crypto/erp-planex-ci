@@ -30,6 +30,17 @@ final class MaxApiClient
         return $this->request('GET', '/chats/' . rawurlencode($chatId));
     }
 
+    public function getChatMember(string $chatId, string $userId): array
+    {
+        $chatId = $this->normalizeChatId($chatId);
+        $userId = $this->normalizeUserId($userId);
+        $result = $this->request('GET', '/chats/' . rawurlencode($chatId) . '/members', ['user_ids' => [$userId]]);
+        foreach ((array)($result['members'] ?? []) as $member) {
+            if (is_array($member) && (string)($member['user_id'] ?? '') === $userId) return $member;
+        }
+        throw new RuntimeException('Пользователь MAX ' . $userId . ' не найден в выбранном чате.');
+    }
+
     public function sendMessage(string $chatId, string $text, string $format = 'plain', bool $notify = true): array
     {
         $chatId = $this->normalizeChatId($chatId);
@@ -82,11 +93,28 @@ final class MaxApiClient
         return $chatId;
     }
 
+    private function normalizeUserId(string $userId): string
+    {
+        $userId = trim($userId);
+        if (preg_match('/^[1-9][0-9]{0,18}$/D', $userId) !== 1
+            || (strlen($userId) === 19 && strcmp($userId, '9223372036854775807') > 0)) {
+            throw new RuntimeException('user_id MAX должен быть положительным int64.');
+        }
+        return $userId;
+    }
+
     private function request(string $method, string $path, array $query = [], ?array $body = null): array
     {
         $url = self::BASE_URL . $path;
         if ($query !== []) {
-            $url .= '?' . http_build_query($query, '', '&', PHP_QUERY_RFC3986);
+            $parts = [];
+            foreach ($query as $name => $value) {
+                foreach (is_array($value) ? $value : [$value] as $item) {
+                    if (!is_scalar($item)) throw new RuntimeException('Некорректный query-параметр MAX.');
+                    $parts[] = rawurlencode((string)$name) . '=' . rawurlencode((string)$item);
+                }
+            }
+            $url .= '?' . implode('&', $parts);
         }
 
         if ($this->transport !== null) {

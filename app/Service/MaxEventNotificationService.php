@@ -28,6 +28,11 @@ final class MaxEventNotificationService
                 'message_template' => $event['template'], 'message_format' => 'plain', 'notify' => 1,
             ]) + $event;
             $row['message_template'] = MaxEventCatalog::currentTemplate($key, (string)$row['message_template']);
+            if (MaxEventCatalog::isSystemRequired($key)) {
+                $row['is_enabled'] = 1;
+                $row['message_format'] = MaxEventCatalog::systemFormat($key, (string)$row['message_format']);
+                $row['system_required'] = true;
+            }
             $out[] = $row;
         }
         return $out;
@@ -37,12 +42,16 @@ final class MaxEventNotificationService
     {
         if (!$this->ready()) throw new RuntimeException('Настройки событий ещё не подключены.');
         $key = (string)($data['event_key'] ?? '');
-        $template = trim((string)($data['message_template'] ?? ''));
-        $format = (string)($data['message_format'] ?? 'plain');
+        $event = MaxEventCatalog::event($key);
+        $systemRequired = MaxEventCatalog::isSystemRequired($key);
+        $template = $systemRequired ? (string)$event['template'] : trim((string)($data['message_template'] ?? ''));
+        $format = $systemRequired ? 'plain' : (string)($data['message_format'] ?? 'plain');
         MaxEventCatalog::render($key, $template, $format, MaxEventCatalog::example($key));
-        $enabled = !empty($data['is_enabled']);
+        $enabled = $systemRequired || !empty($data['is_enabled']);
         $chatId = max(0, (int)($data['chat_config_id'] ?? 0));
-        if ($enabled && $chatId === 0) throw new RuntimeException('Для включения события выберите чат.');
+        if ($enabled && $chatId === 0) {
+            throw new RuntimeException($systemRequired ? 'Для системного события ФЭО выберите чат MAX.' : 'Для включения события выберите чат.');
+        }
         if ($chatId > 0) {
             $chat = $this->chat($chatId);
             if ($chat === null) throw new RuntimeException('Чат этой компании не найден.');
@@ -59,22 +68,21 @@ final class MaxEventNotificationService
         if (!$this->ready()) return null; // Safe code rollout before separately authorized migration.
         if (!$this->pdo->inTransaction()) throw new RuntimeException('Событие MAX должно сохраняться вместе с операцией.');
         if ($entityKey === '' || strlen($entityKey) > 100) throw new RuntimeException('Некорректный идентификатор события.');
-        $q = $this->pdo->prepare('SELECT * FROM max_event_rules WHERE event_key=? AND is_enabled=1');
-        $q->execute([$key]);
-        $rule = $q->fetch(PDO::FETCH_ASSOC);
+        $rule = $this->ruleForEvent($key);
         if (!$rule) return null;
         $chat = $this->chat((int)$rule['chat_config_id']);
         $error = null;
         $text = '';
+        $format = MaxEventCatalog::systemFormat($key, (string)$rule['message_format']);
         try {
             $template = MaxEventCatalog::currentTemplate($key, (string)$rule['message_template']);
-            $text = MaxEventCatalog::render($key, $template, $rule['message_format'], $values);
+            $text = MaxEventCatalog::render($key, $template, $format, $values);
             if (!$chat || !$this->chatActive($chat)) throw new RuntimeException('Чат или бот отключён. Проверьте настройки MAX.');
         } catch (Throwable $e) {
             $error = $e->getMessage();
         }
         $stmt = $this->pdo->prepare('INSERT INTO max_event_deliveries (event_key,entity_key,chat_config_id,bot_id,external_chat_id,message_text,message_format,notify,initiated_by_user_id,status,error_message) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)');
-        $stmt->execute([$key, $entityKey, (int)$rule['chat_config_id'], (int)($chat['bot_id'] ?? 0), (string)($chat['chat_id'] ?? ''), $text, $rule['message_format'], (int)$rule['notify'], $userId, $error === null ? 'pending' : 'failed', $error]);
+        $stmt->execute([$key, $entityKey, (int)$rule['chat_config_id'], (int)($chat['bot_id'] ?? 0), (string)($chat['chat_id'] ?? ''), $text, $format, (int)$rule['notify'], $userId, $error === null ? 'pending' : 'failed', $error]);
         return (int)$this->pdo->lastInsertId();
     }
 
@@ -95,9 +103,7 @@ final class MaxEventNotificationService
         if ($error === null && (trim($text) === '' || mb_strlen($text, 'UTF-8') > 4000)) {
             throw new RuntimeException('Готовое сообщение должно содержать от 1 до 4000 символов.');
         }
-        $q = $this->pdo->prepare('SELECT * FROM max_event_rules WHERE event_key=? AND is_enabled=1');
-        $q->execute([$key]);
-        $rule = $q->fetch(PDO::FETCH_ASSOC);
+        $rule = $this->ruleForEvent($key);
         if (!$rule) return null;
         $chat = $this->chat((int)$rule['chat_config_id']);
         if (!$chat) throw new RuntimeException('Чат события MAX не найден.');
@@ -151,13 +157,23 @@ final class MaxEventNotificationService
         try {
             $rule = $this->pdo->prepare('SELECT is_enabled FROM max_event_rules WHERE event_key=?');
             $rule->execute([$delivery['event_key']]);
-            if (!(bool)$rule->fetchColumn()) throw new RuntimeException('Отправка этого события отключена.');
+            $enabled = (bool)$rule->fetchColumn();
+            if (!MaxEventCatalog::isSystemRequired((string)$delivery['event_key']) && !$enabled) {
+                throw new RuntimeException('Отправка этого события отключена.');
+            }
             $chat = $this->chat((int)$delivery['chat_config_id']);
             if (!$chat || (int)$chat['bot_id'] !== (int)$delivery['bot_id'] || (string)$chat['chat_id'] !== (string)$delivery['external_chat_id']) {
                 throw new RuntimeException('Адрес сохранённого чата изменился. Отправка по старому событию остановлена.');
             }
-            $result = ($this->messaging ?? new MaxMessagingService($this->pdo))->sendToChat(
-                (int)$delivery['chat_config_id'], $delivery['message_text'], $delivery['message_format'], (bool)$delivery['notify'], 'event',
+            $messaging = $this->messaging ?? new MaxMessagingService($this->pdo);
+            $messageText = $this->canonicalizeFeoMentions($messaging, $delivery, (string)$delivery['message_text']);
+            if ($messageText !== (string)$delivery['message_text']) {
+                $this->pdo->prepare("UPDATE max_event_deliveries SET message_text=? WHERE id=? AND status='sending'")
+                    ->execute([$messageText, $id]);
+                $delivery['message_text'] = $messageText;
+            }
+            $result = $messaging->sendToChat(
+                (int)$delivery['chat_config_id'], $messageText, $delivery['message_format'], (bool)$delivery['notify'], 'event',
                 $delivery['initiated_by_user_id'] !== null ? (int)$delivery['initiated_by_user_id'] : null,
                 ['bot_id' => $delivery['bot_id'], 'external_chat_id' => $delivery['external_chat_id']]
             );
@@ -172,9 +188,56 @@ final class MaxEventNotificationService
         return $q->fetch(PDO::FETCH_ASSOC);
     }
 
-    /** Retry/send supplemental deliveries only after the main block delivery is sent. */
-    public function dispatchBlockSupplementals(int $blockId, bool $retry = false): array
+    public function rebuildFeoSupplementalForRetry(int $id, PDO $central, int $companyId): array
     {
+        $q = $this->pdo->prepare('SELECT * FROM max_event_deliveries WHERE id=?');
+        $q->execute([$id]);
+        $delivery = $q->fetch(PDO::FETCH_ASSOC);
+        if (!$delivery) throw new RuntimeException('Уведомление не найдено.');
+        if ($delivery['status'] === 'sent' || (string)$delivery['event_key'] !== 'feo.placement.block_created') return $delivery;
+        if ($delivery['status'] === 'sending') {
+            $stale = $this->pdo->prepare('SELECT updated_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE) FROM max_event_deliveries WHERE id=?');
+            $stale->execute([$id]);
+            if (!(bool)$stale->fetchColumn()) return $delivery;
+        }
+        if (preg_match('/^b([1-9][0-9]*):(same_point|nearby|active_exclusion):r([1-9][0-9]*):p([1-9][0-9]*)$/D', (string)$delivery['entity_key'], $m) !== 1) {
+            return $delivery;
+        }
+
+        $intent = (new FeoPlacementRouteNotificationService())->intentForDelivery(
+            $this->pdo,
+            $central,
+            $companyId,
+            (int)$m[1],
+            (string)$m[2],
+            (int)$m[3],
+            (int)$m[4]
+        );
+        if ($intent === null) {
+            $this->pdo->prepare("UPDATE max_event_deliveries SET message_text='',status='failed',error_message=?,updated_at=NOW() WHERE id=? AND status<>'sent' AND (status<>'sending' OR updated_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE))")
+                ->execute(['Адресное уведомление больше не актуально для текущего состояния рейса.', $id]);
+        } else {
+            $error = isset($intent['error']) ? (string)$intent['error'] : null;
+            $this->pdo->prepare("UPDATE max_event_deliveries SET message_text=?,message_format=?,status=?,error_message=?,updated_at=NOW() WHERE id=? AND status<>'sent' AND (status<>'sending' OR updated_at < DATE_SUB(NOW(), INTERVAL 5 MINUTE))")
+                ->execute([
+                    (string)$intent['text'],
+                    (string)$intent['format'],
+                    $error === null ? 'pending' : 'failed',
+                    $error,
+                    $id,
+                ]);
+        }
+        $q->execute([$id]);
+        return $q->fetch(PDO::FETCH_ASSOC);
+    }
+
+    /** Retry/send supplemental deliveries only after the main block delivery is sent. */
+    public function dispatchBlockSupplementals(
+        int $blockId,
+        bool $retry = false,
+        ?PDO $central = null,
+        ?int $companyId = null
+    ): array {
         if ($blockId <= 0) return [];
         $q = $this->pdo->prepare(
             "SELECT id FROM max_event_deliveries
@@ -183,14 +246,83 @@ final class MaxEventNotificationService
         );
         $q->execute(['b' . $blockId . ':%']);
         $out = [];
-        foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $id) $out[] = $this->dispatch((int)$id, $retry);
+        foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $id) {
+            $id = (int)$id;
+            if ($retry && $central !== null && $companyId !== null) {
+                $this->rebuildFeoSupplementalForRetry($id, $central, $companyId);
+            }
+            $out[] = $this->dispatch($id, $retry);
+        }
         return $out;
+    }
+
+    public function delivery(int $id): ?array
+    {
+        if (!$this->ready() || $id <= 0) return null;
+        $q = $this->pdo->prepare('SELECT * FROM max_event_deliveries WHERE id=?');
+        $q->execute([$id]);
+        return $q->fetch(PDO::FETCH_ASSOC) ?: null;
     }
 
     public function recentDeliveries(): array
     {
         if (!$this->ready()) return [];
         return $this->pdo->query('SELECT d.*,c.name AS chat_name FROM max_event_deliveries d LEFT JOIN max_chats c ON c.id=d.chat_config_id ORDER BY d.id DESC LIMIT 100')->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private function ruleForEvent(string $key): ?array
+    {
+        if (MaxEventCatalog::isSystemRequired($key)) {
+            $q = $this->pdo->prepare('SELECT * FROM max_event_rules WHERE event_key=?');
+            $q->execute([$key]);
+            $rule = $q->fetch(PDO::FETCH_ASSOC) ?: null;
+            if ($rule === null || (int)($rule['chat_config_id'] ?? 0) <= 0) {
+                throw new RuntimeException('Системное событие ФЭО не настроено: выберите чат MAX.');
+            }
+            return $rule;
+        }
+        $q = $this->pdo->prepare('SELECT * FROM max_event_rules WHERE event_key=? AND is_enabled=1');
+        $q->execute([$key]);
+        return $q->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    private function canonicalizeFeoMentions(MaxMessagingService $messaging, array $delivery, string $text): string
+    {
+        if ((string)$delivery['event_key'] !== 'feo.placement.block_created'
+            || preg_match('/^b[1-9][0-9]*:/D', (string)$delivery['entity_key']) !== 1
+            || !str_contains($text, 'max://user/')) {
+            return $text;
+        }
+
+        $cache = [];
+        $result = preg_replace_callback(
+            '/\[[^\]]*\]\(max:\/\/user\/([1-9][0-9]{0,18})\)/u',
+            function (array $m) use (&$cache, $messaging, $delivery): string {
+                $userId = (string)$m[1];
+                if (!isset($cache[$userId])) {
+                    $member = $messaging->resolveChatMember(
+                        (int)$delivery['chat_config_id'],
+                        $userId,
+                        ['bot_id' => $delivery['bot_id'], 'external_chat_id' => $delivery['external_chat_id']]
+                    );
+                    $name = trim((string)($member['first_name'] ?? ''));
+                    $last = trim((string)($member['last_name'] ?? ''));
+                    if ($last !== '') $name .= ($name !== '' ? ' ' : '') . $last;
+                    if ($name === '') throw new RuntimeException('MAX не вернул имя пользователя ' . $userId . '.');
+                    $cache[$userId] = self::markdownLabel($name);
+                }
+                return '[' . $cache[$userId] . '](max://user/' . $userId . ')';
+            },
+            $text
+        );
+        if ($result === null) throw new RuntimeException('Не удалось подготовить MAX mention.');
+        return $result;
+    }
+
+    private static function markdownLabel(string $value): string
+    {
+        $value = str_replace(chr(96), '\\' . chr(96), $value);
+        return preg_replace('/([\\\\*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $value) ?? $value;
     }
 
     private function chat(int $id): ?array

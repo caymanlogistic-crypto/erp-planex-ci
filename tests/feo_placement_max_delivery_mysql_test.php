@@ -29,6 +29,7 @@ try{
     $failNeedle=null;
     $messaging=new MaxMessagingService($pdo,static function(string $token) use (&$sent,&$failNeedle):MaxApiClient{
         return new MaxApiClient($token,static function(string $method,string $url,?array $body) use (&$sent,&$failNeedle):array{
+            if(str_contains($url,'/members?user_ids=123456')) return ['members'=>[['user_id'=>123456,'first_name'=>'Иван','last_name'=>'Иванов']]];
             if(str_contains($url,'/chats/')) return ['type'=>'chat','status'=>'active','title'=>'QA'];
             $text=(string)($body['text']??'');
             $sent[]=['text'=>$text,'format'=>$body['format']??'plain'];
@@ -58,7 +59,7 @@ try{
 
     $pdo->beginTransaction();
     $main=$events->enqueue($key,'42',$values,77);
-    $supp=$events->enqueuePrepared($key,'b42:nearby:r7:p1','[Иван Иванов](max://user/123456) nearby','markdown',77);
+    $supp=$events->enqueuePrepared($key,'b42:nearby:r7:p1','[ERP Alias](max://user/123456) nearby','markdown',77);
     $same=$events->enqueuePrepared($key,'b42:nearby:r7:p1','DIFFERENT','markdown',77);
     $pdo->commit();
     $ok($main>0&&$supp>0&&$same===$supp,'prepared delivery idempotency');
@@ -74,7 +75,8 @@ try{
     $ok(count($dependent)===1&&$dependent[0]['status']==='sent','supplemental retry after main');
     $ok(count($sent)===$before+2,'main+supplemental send count');
     $ok(str_starts_with($sent[$before]['text'],'ДОБАВЛЕНО НА КАРТУ:'),'main must be first');
-    $ok(str_contains($sent[$before+1]['text'],'max://user/123456'),'supplemental mention payload');
+    $ok(str_contains($sent[$before+1]['text'],'[Иван Иванов](max://user/123456)'),'supplemental must use current MAX profile name');
+    $ok(!str_contains($sent[$before+1]['text'],'ERP Alias'),'ERP display name must not survive real mention dispatch');
     $ok($sent[$before+1]['format']==='markdown','mention must use markdown');
     // Missing MAX ID or other recipient diagnostics are durable and never fake-send.
     $pdo->beginTransaction();
