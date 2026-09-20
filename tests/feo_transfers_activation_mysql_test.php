@@ -27,7 +27,7 @@ try {
     $bot=(int)$pdo->lastInsertId();
     $pdo->prepare("INSERT INTO max_chats(bot_id,chat_id,name,max_status,is_active) VALUES(?,'-9001','Placement','active',1)")->execute([$bot]);
     $chat=(int)$pdo->lastInsertId(); $events=new App\Service\MaxEventNotificationService($pdo);
-    $events->saveRule(['event_key'=>'feo.placement.block_created','is_enabled'=>1,'chat_config_id'=>$chat,'message_template'=>'{{block_id}}','message_format'=>'plain','notify'=>0],null);
+    $events->saveRule(['event_key'=>'feo.placement.block_created','is_enabled'=>1,'chat_config_id'=>$chat,'message_template'=>App\Service\MaxFeoMessageTemplates::defaults()['main'],'message_format'=>'plain','notify'=>0],null);
     $result=activateFeoTransfers($pdo,str_repeat('b',36),static function(string $actual) use($key,$ok,$probe): array {$ok($actual===$key,'Existing owner key preserved');return $probe($actual);});
     foreach ($result['events'] as $event=>$state) {
         $ok($state['enabled'] && (int)$state['chat_config_id']===$chat,'Copy exact current-company placement routing');

@@ -27,6 +27,10 @@ final class MaxEventNotificationService
                 'event_key' => $key, 'is_enabled' => 0, 'chat_config_id' => null,
                 'message_template' => $event['template'], 'message_format' => 'plain', 'notify' => 1,
             ]) + $event;
+            if ($key === 'feo.placement.block_created') {
+                $row['feo_templates'] = MaxFeoMessageTemplates::decode((string)$row['message_template']);
+                $row['message_template'] = $row['feo_templates']['main'];
+            }
             $row['message_template'] = MaxEventCatalog::currentTemplate($key, (string)$row['message_template']);
             if (MaxEventCatalog::isSystemRequired($key)) {
                 $row['is_enabled'] = 1;
@@ -44,8 +48,18 @@ final class MaxEventNotificationService
         $key = (string)($data['event_key'] ?? '');
         $event = MaxEventCatalog::event($key);
         $systemRequired = MaxEventCatalog::isSystemRequired($key);
-        $template = $systemRequired ? (string)$event['template'] : trim((string)($data['message_template'] ?? ''));
-        $format = $systemRequired ? 'plain' : (string)($data['message_format'] ?? 'plain');
+        $template = trim((string)($data['message_template'] ?? ''));
+        if ($key === 'feo.placement.block_created') {
+            if (isset($data['feo_templates'])) {
+                $templates = MaxFeoMessageTemplates::fromInput($data['feo_templates']);
+            } else {
+                $templates = MaxFeoMessageTemplates::load($this->pdo);
+                if ($template !== '') $templates['main'] = $template;
+            }
+            foreach (array_keys(MaxFeoMessageTemplates::definitions()) as $kind) MaxFeoMessageTemplates::preview($templates,$kind);
+            $template = MaxFeoMessageTemplates::encode($templates);
+        }
+        $format = MaxEventCatalog::systemFormat($key, (string)($data['message_format'] ?? 'plain'));
         MaxEventCatalog::render($key, $template, $format, MaxEventCatalog::example($key));
         $enabled = $systemRequired || !empty($data['is_enabled']);
         $chatId = max(0, (int)($data['chat_config_id'] ?? 0));
@@ -295,9 +309,10 @@ final class MaxEventNotificationService
         }
 
         $cache = [];
+        $compact = str_contains($text, '[Менеджер](max://user/');
         $result = preg_replace_callback(
             '/\[[^\]]*\]\(max:\/\/user\/([1-9][0-9]{0,18})\)/u',
-            function (array $m) use (&$cache, $messaging, $delivery): string {
+            function (array $m) use (&$cache, $messaging, $delivery, $compact): string {
                 $userId = (string)$m[1];
                 if (!isset($cache[$userId])) {
                     $member = $messaging->resolveChatMember(
@@ -307,7 +322,7 @@ final class MaxEventNotificationService
                     );
                     $name = trim((string)($member['first_name'] ?? ''));
                     $last = trim((string)($member['last_name'] ?? ''));
-                    if ($last !== '') $name .= ($name !== '' ? ' ' : '') . $last;
+                    if ($last !== '' && (!$compact || $name === '')) $name .= ($name !== '' ? ' ' : '') . $last;
                     if ($name === '') throw new RuntimeException('MAX не вернул имя пользователя ' . $userId . '.');
                     $cache[$userId] = self::markdownLabel($name);
                 }

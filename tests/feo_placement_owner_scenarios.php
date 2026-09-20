@@ -104,11 +104,11 @@ return static function (PDO $pdo, bool $withMaxIds): void {
         $ok($events->dispatch((int)$main)['status']==='sent','T'.$number.' main sent');
         foreach ($supp as $id) $ok($events->dispatch((int)$id,true)['status']==='sent','T'.$number.' supplemental sent');
         $ok(count($sent)-$start===1+count($expected),'T'.$number.' exact message count');
-        $heading = $type==='addition'?'ДОБАВЛЕНО НА КАРТУ':'СНЯТИЕ ЗАЯВОК';
-        $ok($sent[$start]['text']===$heading.":\n\nЗаявок: ".count($ids).', масса: '.$routes::massText((float)$mass).' кг','T'.$number.' main text');
+        $heading = $type==='addition'?'✅ **ДОБАВЛЕНО НА КАРТУ**':'❌ **СНЯТО С КАРТЫ**';
+        $ok($sent[$start]['text']===$heading."\n".App\Service\MaxEventCatalog::requestCountText(count($ids)).' · '.$routes::massText((float)$mass).' кг','T'.$number.' main text');
         foreach (array_slice($sent,$start+1) as $message) {
             $ok($withMaxIds
-                ? str_contains($message['text'],'[MAX ') && str_contains($message['text'],'](max://user/')
+                ? str_contains($message['text'],'[MAX]') && str_contains($message['text'],'](max://user/')
                 : !str_contains($message['text'],'max://user/') && !str_contains($message['text'],'ERP '),
                 'T'.$number.' optional profile mention');
             foreach ($ids as $id) $ok(substr_count($message['text'],$id)<=1,'T'.$number.' duplicate request pair');
@@ -116,10 +116,12 @@ return static function (PDO $pdo, bool $withMaxIds): void {
         if ($number===4 || $number===5) {
             foreach ($ids as $id) $ok(str_contains($sent[$start+1]['text'],$id),'T'.$number.' grouped request missing');
         }
+        if ($number===4) $ok(str_contains($sent[$start+1]['text'],'**294002, 308396**'),'T4 all active IDs in the second point');
+        if ($number===8) $ok(str_contains($sent[$start+1]['text'],'**312411, 313751**'),'T8 both active IDs grouped in one point');
         if ($number===5) $ok(str_contains($sent[$start+1]['text'],'3 327 кг'),'T5 group mass');
         if ($number===7) {
-            $ok(str_contains($sent[$start+1]['text'],'Всего: 3, масса: 364 кг'),'T7 first group');
-            $ok(str_contains($sent[$start+2]['text'],'Всего: 2, масса: 444 кг'),'T7 second group');
+            $ok(str_contains($sent[$start+1]['text'],'3 заявки · 364 кг'),'T7 first group');
+            $ok(str_contains($sent[$start+2]['text'],'2 заявки · 444 кг'),'T7 second group');
         }
         $messageCount = count($sent);
         if ($number===1 && !$withMaxIds) {
@@ -139,4 +141,41 @@ return static function (PDO $pdo, bool $withMaxIds): void {
     }
     $ok(count($sent)===17,'all eight scenarios produce exactly 17 messages');
     $ok($memberLookups===($withMaxIds?9:0),'unaddressed delivery must not perform MAX member lookup');
+    // Editing through the same rule service must affect real enqueue/dispatch,
+    // including nested point/row text; changing settings never sends by itself.
+    $rule=$pdo->query("SELECT * FROM max_event_rules WHERE event_key='feo.placement.block_created'")->fetch(PDO::FETCH_ASSOC);
+    $templates=App\Service\MaxFeoMessageTemplates::defaults();
+    foreach($templates as $kind=>&$text)$text='EDITED-'.$kind."\n".$text;
+    unset($text);
+    $before=count($sent);
+    $events->saveRule(['event_key'=>$key,'chat_config_id'=>$rule['chat_config_id'],'notify'=>1,
+        'feo_templates'=>json_encode($templates,JSON_UNESCAPED_UNICODE)],77);
+    $ok(count($sent)===$before,'template settings must not send');
+    $saved=App\Service\MaxFeoMessageTemplates::load($pdo);
+    $ok($saved===$templates,'all edited templates persist across reload');
+    $freshRoutes=new App\Service\FeoPlacementRouteNotificationService();
+    foreach([['addition',['248516'],'same_point'],['addition',['302489'],'nearby'],['exclusion',['247370'],'active_exclusion']] as [$type,$ids,$kind]){
+        $intent=$freshRoutes->intents($pdo,$pdo,7,$type,$ids)[0];
+        $ok(str_starts_with($intent['text'],'EDITED-'.$kind),'runtime must use saved '.$kind.' template');
+        if($kind==='same_point')$ok(str_contains($intent['text'],'EDITED-point')&&str_contains($intent['text'],'EDITED-addition_row'),'nested point/row text is editable');
+    }
+    $preview=$placement->previewCreate($pdo,['248516'],'addition');
+    $outbox=[];
+    $created=$placement->createBlock($pdo,['name'=>'Editable template acceptance','ids'=>['248516'],'block_type'=>'addition'],$preview['state_hash'],
+        static function(array $row)use($events,$freshRoutes,$pdo,$key,&$outbox):void{
+            $outbox[]=$events->enqueue($key,(string)$row['block_id'],['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>'1','mass_kg'=>'60'],77);
+            foreach($freshRoutes->intents($pdo,$pdo,7,'addition',['248516']) as $intent){
+                $entity=sprintf('b%d:%s:r%d:p%d',$row['block_id'],$intent['kind'],$intent['route_id'],$intent['part']);
+                $outbox[]=$events->enqueuePrepared($key,$entity,$intent['text'],$intent['format'],77,$intent['error']??null);
+            }
+        });
+    foreach($outbox as $id)$ok($events->dispatch($id)['status']==='sent','edited template dispatch');
+    $ok(str_starts_with($sent[$before]['text'],'EDITED-main')&&str_starts_with($sent[$before+1]['text'],'EDITED-same_point'),'transport receives saved templates');
+    $ok($sent[$before]['format']==='markdown'&&$sent[$before+1]['format']==='markdown','bold formatting reaches MAX');
+    $disable=$placement->previewStatusChange($pdo,(int)$created['block_id'],'disabled');
+    $placement->changeStatus($pdo,(int)$created['block_id'],'disabled',$disable['state_hash']);
+    $ok($snapshot()===$baseline,'editable template test restores exact baseline');
+    $events->saveRule(['event_key'=>$key,'chat_config_id'=>$rule['chat_config_id'],'notify'=>1,
+        'feo_templates'=>json_encode(App\Service\MaxFeoMessageTemplates::defaults(),JSON_UNESCAPED_UNICODE)],77);
+    echo "FEO_EDITABLE_TEMPLATES_MYSQL=PASS\n";
 };

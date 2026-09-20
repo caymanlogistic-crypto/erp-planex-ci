@@ -31,7 +31,7 @@ foreach (['FeoMapService','WasteTripService','FeoPlacementRouteNotificationServi
             $text = $messages[0]['text'];
             $assert(!str_contains($text,'max://') && !str_contains($text,'ERP Имя'), $kind.' no address');
             $assert(str_contains($text,'123456') && str_contains($text,'60 кг') && str_contains($text,'253'), $kind.' complete business information');
-            $assert(preg_match('/^[ЗДС]/u',$text) === 1, $kind.' readable neutral opening');
+            $assert(preg_match('/^(‼️|⚠️) /u',$text) === 1, $kind.' readable neutral opening');
         }
     }
     $unlinked = $route;
@@ -47,6 +47,6 @@ foreach (['FeoMapService','WasteTripService','FeoPlacementRouteNotificationServi
     }
     $route['account']['max_user_id'] = ' 123 ';
     $messages = $service->additionIntents($selected, [$route]);
-    $assert(str_starts_with($messages[0]['text'],'[ERP Имя](max://user/123), заявки'), 'valid ID preserves addressed wording');
+    $assert(str_starts_with($messages[0]['text'],'‼️ [Менеджер](max://user/123) · **ДОБАВИТЬ В РЕЙС** ‼️'), 'valid ID preserves addressed wording');
     echo "MAX_FEO_OPTIONAL_ADDRESSING_CONTRACT=PASS\n";
 })();
