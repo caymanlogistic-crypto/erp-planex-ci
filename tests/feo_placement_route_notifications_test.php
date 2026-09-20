@@ -79,6 +79,21 @@ $oneRoute = $service->additionIntents(
 );
 $ok(count($oneRoute)===1 && $oneRoute[0]['kind']==='nearby','multiple requests -> one route grouping');
 $ok(str_contains($oneRoute[0]['text'],'310001') && str_contains($oneRoute[0]['text'],'310002'),'grouped request IDs');
+$ok(str_contains($oneRoute[0]['text'],'Всего: 2, масса: 300 кг'),'nearby group total');
+
+foreach ([[4999.999,1],[5000.0,1],[5000.001,0]] as [$meters,$expected]) {
+    $boundary = $service->additionIntents(
+        ['310003'=>$new('310003',1,0,30)],
+        [$active(3,'210003',rad2deg($meters/6371000),30)]
+    );
+    $ok(count($boundary)===$expected,'nearby classification at '.$meters.' metres');
+}
+foreach ([[66,179.99,66,-179.99],[89.999,0,89.999,180]] as [$lat1,$lng1,$lat2,$lng2]) {
+    $near = $service->additionIntents(
+        ['310004'=>$new('310004',1,$lat1,$lng1)],[$active(3,'210004',$lat2,$lng2)]
+    );
+    $ok(count($near)===1 && $near[0]['kind']==='nearby','antimeridian/polar proximity');
+}
 
 $multiRoute = $service->additionIntents(
     ['320001'=>$new('320001',100,55.02,37)],

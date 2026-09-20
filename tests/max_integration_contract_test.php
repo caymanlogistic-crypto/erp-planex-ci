@@ -106,3 +106,8 @@ echo "MAX_WEBHOOK_CONTRACT=PASS\n";
 echo "MAX_OWNER_UI_CONTRACT=PASS\n";
 echo "MAX_MESSAGE_LOG_CONTRACT=PASS\n";
 (static function (): void { require __DIR__ . '/max_events_136_production_migration_contract_test.php'; })();
+(static function (): void {
+    passthru(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/feo_placement_runtime_bootstrap_test.php'), $status);
+    if ($status !== 0) throw new RuntimeException('Placement route bootstrap failed in a clean process.');
+    require __DIR__ . '/feo_placement_route_notifications_test.php';
+})();

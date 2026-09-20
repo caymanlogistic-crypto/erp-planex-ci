@@ -121,3 +121,4 @@ try {
 (static function (): void { require __DIR__ . '/max_events_migration_mysql_test.php'; })();
 (static function (): void { require __DIR__ . '/feo_placement_max_delivery_mysql_test.php'; })();
 (static function (): void { require __DIR__ . '/feo_placement_max_retry_rebuild_mysql_test.php'; })();
+(static function (): void { require __DIR__ . '/feo_placement_route_notifications_mysql_test.php'; })();
