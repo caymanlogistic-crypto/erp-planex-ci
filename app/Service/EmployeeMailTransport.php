@@ -6,7 +6,7 @@ namespace App\Service;
 require_once __DIR__.'/EmployeeMailSettingsService.php';
 
 /** Authentication only, using saved SSL settings and public network endpoints. */
-final class EmployeeMailTransport
+class EmployeeMailTransport
 {
     public function check(#[\SensitiveParameter] array $credentials): array
     {
@@ -37,7 +37,7 @@ final class EmployeeMailTransport
         return $result;
     }
 
-    private function connect(string $host,int $port)
+    protected function connect(string $host,int $port)
     {
         $addresses=gethostbynamel($host);
         if (!$addresses) throw new \RuntimeException('MAIL_DNS_FAILED');
@@ -53,7 +53,7 @@ final class EmployeeMailTransport
         return $socket;
     }
 
-    private function smtpLogin(#[\SensitiveParameter] array $credentials)
+    protected function smtpLogin(#[\SensitiveParameter] array $credentials)
     {
         $socket=$this->connect($credentials['settings']['smtp_host'],(int)$credentials['settings']['smtp_port']);
         try {
@@ -66,7 +66,7 @@ final class EmployeeMailTransport
         } catch (\Throwable $e) { fclose($socket); throw $e; }
     }
 
-    private function expect($socket,int $code): void
+    protected function expect($socket,int $code): void
     {
         for ($i=0;$i<100;$i++) {
             $line=$this->line($socket);
@@ -76,14 +76,14 @@ final class EmployeeMailTransport
         throw new \RuntimeException('MAIL_RESPONSE_LIMIT');
     }
 
-    private function line($socket): string
+    protected function line($socket): string
     {
         $line=fgets($socket,8192);
         if ($line===false || !str_ends_with($line,"\n")) throw new \RuntimeException('MAIL_READ_FAILED');
         return $line;
     }
 
-    private function write($socket,#[\SensitiveParameter] string $data): void
+    protected function write($socket,#[\SensitiveParameter] string $data): void
     {
         while ($data!=='') {
             $n=fwrite($socket,$data);

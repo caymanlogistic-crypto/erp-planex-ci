@@ -4,7 +4,7 @@
 
 **Physical source of truth:** `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `92bbb6b41fe685179434ecfe1c7a714712033ccc770931279c51293c7956b6b6`
+**Schema fingerprint:** `332351ec162c13c5a77ce3635ed766c469095894d20062a921e757a840abc2a0`
 
 Foreign keys below are **DB-enforced physical relations only**. Logical/application relations are intentionally not inferred: if the database has no FK, this catalog will not invent one. Use owning application code/Notion semantic records for logical relations.
 
@@ -14,7 +14,7 @@ Introducing migration is not inferred from final `information_schema`, because l
 
 - **Access / Security**: `entity_access_grants`, `legacy_access_projections`, `users`
 - **CRM**: `client_contacts`, `clients`, `contractor_assignment_history`, `contractor_contacts`, `contractor_tax_history`, `contractors`, `entity_assignments`, `responsible_assignment_history`
-- **Documents**: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`
+- **Documents**: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`, `trip_document_events`, `trip_document_incoming`, `trip_document_mail`, `trip_document_mailboxes`, `trip_document_previews`, `trip_document_requests`
 - **Finance**: `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`, `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_closing_document_manual_statuses`, `finance_closing_document_requirement_exceptions`, `finance_dds_categories`, `finance_employee_invoice_payments`, `finance_employee_money_accounts`, `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`, `finance_invoices`, `finance_matching_results`, `finance_matching_rules`, `finance_money_accounts`, `finance_obligations`, `finance_operation_allocations`, `finance_operations`
 - **Operations / Routes**: `cargo_types`, `linear_route_financial_terms`, `linear_route_payments`, `linear_route_points`, `linear_route_principals`, `linear_route_service_payments`, `linear_route_services`, `linear_routes`, `production_calendar_days`, `production_calendar_years`
 - **Other tenant domain**: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
@@ -27,7 +27,8 @@ Each linked file below is generated from the same disposable-MySQL `information_
 
 - [Access / Security](TENANT_SCHEMA_ACCESS_SECURITY.md): `entity_access_grants`, `legacy_access_projections`, `users`
 - [CRM](TENANT_SCHEMA_CRM.md): `client_contacts`, `clients`, `contractor_assignment_history`, `contractor_contacts`, `contractor_tax_history`, `contractors`, `entity_assignments`, `responsible_assignment_history`
-- [Documents](TENANT_SCHEMA_DOCUMENTS.md): `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`
+- [Documents — part 1](TENANT_SCHEMA_DOCUMENTS_01.md): `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`, `trip_document_events`
+- [Documents — part 2](TENANT_SCHEMA_DOCUMENTS_02.md): `trip_document_incoming`, `trip_document_mail`, `trip_document_mailboxes`, `trip_document_previews`, `trip_document_requests`
 - [Finance — part 1](TENANT_SCHEMA_FINANCE_01.md): `bank_accounts`, `bank_daily_balances`, `bank_import_balances`, `bank_import_transactions`, `bank_statement_imports`, `bank_statement_settings`, `bank_transactions`, `finance_audit_log`, `finance_cash_flow_center_dds_categories`, `finance_cash_flow_centers`
 - [Finance — part 2](TENANT_SCHEMA_FINANCE_02.md): `finance_cash_resolutions`, `finance_cash_route_receipts`, `finance_closing_counterparties`, `finance_closing_document_exceptions`, `finance_closing_document_links`, `finance_closing_document_manual_statuses`, `finance_closing_document_requirement_exceptions`, `finance_dds_categories`
 - [Finance — part 3](TENANT_SCHEMA_FINANCE_03.md): `finance_employee_invoice_payments`, `finance_employee_money_accounts`, `finance_employee_movements`, `finance_employee_personal_expenses`, `finance_invoice_links`

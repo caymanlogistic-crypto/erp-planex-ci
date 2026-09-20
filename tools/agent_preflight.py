@@ -87,6 +87,8 @@ def plan(cls,paths,scopes):
         out.append("ROLES_ROUTE_REGISTRY")
     if any(re.search(r"(?:EmployeeMail|employee_mail|central_016|016_create_employee_mail|roles-access\.js|ServiceKeysController|company_service_keys|service-keys\.js)", p) for p in paths):
         out.append("EMPLOYEE_MAIL_REGRESSIONS")
+    if scopes["tenant_schema"] or any(re.search(r"(?:TripDocument|DocumentMail|trip_document|trip-documents|document_mail|EmployeeMail|MaxEvent)",p) for p in paths):
+        out.append("TRIP_DOCUMENT_REGRESSIONS")
     if scopes["control_plane"]: out.append("CONTROL_PLANE_PREFLIGHT_CONTRACTS")
     if cls=="CRITICAL" and scopes["memory"]: out += ["MEMORY_INTEGRITY_CONTRACTS","ACTIVE_REGISTRY_CONTRACTS"]
     return out
@@ -200,6 +202,10 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
         for t in ["tests/employee_mail_contract_test.php", "tests/employee_mail_profiles_mysql_test.php", "tests/employee_mail_migration_mysql_test.php"]:
             need(t); cmdcheck(results,"EMPLOYEE_MAIL_REGRESSIONS",["php",t],env)
         cmdcheck(results,"EMPLOYEE_MAIL_REGRESSIONS",["node","tests/employee_mail_browser_test.mjs"],env)
+    if "TRIP_DOCUMENT_REGRESSIONS" in want:
+        env=os.environ.copy();env["APP_ENV"]="test"
+        for t in ["tests/document_mail_transport_test.php","tests/trip_document_collection_mysql_test.php","tests/trip_document_140_production_migration_contract_test.php","tests/trip_document_140_migration_mysql_test.php"]:
+            need(t);cmdcheck(results,"TRIP_DOCUMENT_REGRESSIONS",["php",t],env)
     if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",["python3","tools/dynamic_table_safety_audit.py"])
     if "ARCHITECTURE_GUARD" in want: need("tools/architecture_guard.php"); cmdcheck(results,"ARCHITECTURE_GUARD",["php","tools/architecture_guard.php"])
     if "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in want:

@@ -1,8 +1,8 @@
-# ERP PLANEX — Tenant Physical Schema — Documents
+# ERP PLANEX — Tenant Physical Schema — Documents — Part 1
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `92bbb6b41fe685179434ecfe1c7a714712033ccc770931279c51293c7956b6b6`
+**Schema fingerprint:** `332351ec162c13c5a77ce3635ed766c469095894d20062a921e757a840abc2a0`
 
 ## `document_number_sequences`
 
@@ -229,3 +229,30 @@
 - `fk_generated_documents_route_executor`: (`route_executor_id`) → `crews`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
 - `fk_generated_documents_template`: (`template_id`) → `document_templates`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
 - `fk_generated_documents_template_version`: (`template_version_id`) → `document_template_versions`.`id` ON UPDATE CASCADE ON DELETE RESTRICT
+
+## `trip_document_events`
+
+**Domain:** Documents<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `event_key` | `varchar(120)` | NO | NULL | — | — |
+| `action` | `varchar(80)` | NO | NULL | — | — |
+| `description` | `varchar(1000)` | NO | NULL | — | — |
+| `context_json` | `longtext` | YES | NULL | — | — |
+| `actor_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `max_delivery_id` | `bigint unsigned` | YES | NULL | — | — |
+| `max_error` | `varchar(500)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **UNIQUE** `uq_document_event` (`request_id`, `event_key`)
+
+### Physical foreign keys
+
+- `fk_document_event_request`: (`request_id`) → `trip_document_requests`.`id` ON UPDATE NO ACTION ON DELETE NO ACTION

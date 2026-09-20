@@ -1,0 +1,41 @@
+name: Trip Document Collection Regression
+on:
+  push:
+    branches: ['chatgpt/**']
+    paths: ['app/Service/TripDocument*','app/Service/DocumentMail*','app/Service/EmployeeMail*','app/Service/MaxEvent*','app/Http/Controllers/Company/TripDocumentController.php','app/Http/Routes/company_trip_documents.php','app/View/pages/company_trip_documents.php','app/View/partials/trip_document*','public/assets/js/trip-documents.js','database/migrations-local/**','scripts/trip_document*','tests/trip_document*','tests/document_mail*','.github/workflows/trip_document*']
+  pull_request:
+    paths: ['app/Service/TripDocument*','app/Service/DocumentMail*','app/Service/EmployeeMail*','app/Service/MaxEvent*','app/Http/Controllers/Company/TripDocumentController.php','app/Http/Routes/company_trip_documents.php','app/View/pages/company_trip_documents.php','app/View/partials/trip_document*','public/assets/js/trip-documents.js','database/migrations-local/**','scripts/trip_document*','tests/trip_document*','tests/document_mail*','.github/workflows/trip_document*']
+permissions:
+  contents: read
+jobs:
+  trip-documents:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: spugovxsim_test2
+        ports: ['3306:3306']
+        options: --health-cmd="mysqladmin ping -ptest" --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      APP_ENV: test
+      PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+      PLANEX_SCHEMA_DB_PORT: '3306'
+      PLANEX_SCHEMA_DB_USER: root
+      PLANEX_SCHEMA_DB_PASSWORD: test
+      PLANEX_TEST_FIXED_DB: spugovxsim_test2
+      PLANEX_TEST_FIXED_DB_ALLOWLIST: spugovxsim_test2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, mbstring, openssl
+      - name: Test collection, MIME/SMTP/IMAP and controlled migration without real mail or MAX
+        run: |
+          php tests/document_mail_transport_test.php
+          php tests/trip_document_collection_mysql_test.php
+          php tests/trip_document_140_production_migration_contract_test.php
+          php tests/trip_document_140_migration_mysql_test.php

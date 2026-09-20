@@ -1,5 +1,4 @@
 <?php
-
 /**
  * ERP PLANEX — Entry Point
  *
@@ -147,4 +146,5 @@ require_once base_path('app/Http/Routes/company_finance_dashboard.php');
 require_once base_path('app/Http/Routes/company_finance_matching_rules.php');
 require_once base_path('app/Http/Routes/company_production_calendar.php');
 require_once base_path('app/Http/Routes/company_max_messaging.php');
+require_once base_path('app/Http/Routes/company_trip_documents.php');
 $router->dispatch($_SERVER['REQUEST_METHOD'], $_SERVER['REQUEST_URI']);

@@ -31,6 +31,7 @@
     {"id":"operations.core","description":"Company operations dashboard/core","owning_paths":["app/View/pages/company_dashboard.php"]},
     {"id":"platform.core","description":"Core application routes and shared platform surface","owning_paths":["app/Http/Routes/core.php","bootstrap/**","config/**"]},
     {"id":"platform.legacy_redirects","description":"Legacy URL redirect compatibility","owning_paths":["app/Http/Routes/**"]},
-    {"id":"erp.core","description":"Compatibility ownership for broad current ERP records pending finer decomposition","owning_paths":["app/**","bootstrap/**","config/**","public/**"]}
+    {"id":"erp.core","description":"Compatibility ownership for broad current ERP records pending finer decomposition","owning_paths":["app/**","bootstrap/**","config/**","public/**"]},
+    {"id":"operations.document_collection","description":"Waste trip document requests, mail ingestion, two package stages, ERP/MAX attention and scheduler","owning_paths":["app/Service/TripDocument*.php","app/Service/DocumentMail*.php","app/Http/Controllers/Company/TripDocumentController.php","app/Http/Routes/company_trip_documents.php","app/View/pages/company_trip_documents.php","app/View/partials/trip_document*.php","public/assets/js/trip-documents.js","public/assets/css/trip-documents.css","scripts/trip_document*","tests/trip_document*","tests/document_mail*",".github/workflows/trip_document*","docs/TRIP_DOCUMENT_COLLECTION.md"]}
   ]
 }

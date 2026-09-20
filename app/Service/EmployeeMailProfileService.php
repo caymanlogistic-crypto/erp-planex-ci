@@ -180,12 +180,25 @@ final class EmployeeMailProfileService
         return ['profile_id'=>(int)$profile['id'],'account_id'=>$accountId,'company_id'=>$this->tenantCompanyId,'legal_entity_id'=>$legalEntityId,'email'=>$profile['email']];
     }
 
+    /** Receiving a package requires an explicitly bound address, not mailbox credentials. */
+    public function resolveRecipient(int $accountId, int $legalEntityId): array
+    {
+        $this->assertMember($accountId,$this->tenantCompanyId);
+        $entity=$this->legalEntity($legalEntityId);
+        $profile=$this->publicProfile($accountId,$legalEntityId);
+        $email=strtolower(trim((string)($profile['email']??'')));
+        if (!filter_var($email,FILTER_VALIDATE_EMAIL) || substr(strrchr($email,'@')?:'',1)!==$entity['email_domain']) {
+            throw new \DomainException('У получателя не указан рабочий адрес выбранного юридического лица. Заполните его в карточке сотрудника.');
+        }
+        return ['profile_id'=>(int)$profile['id'],'account_id'=>$accountId,'company_id'=>$this->tenantCompanyId,'legal_entity_id'=>$legalEntityId,'email'=>$email,'version'=>(int)$profile['version']];
+    }
+
     public function resolveEnvelope(int $senderAccountId, int $legalEntityId, ?int $ccAccountId=null, array $employeeAccountIds=[]): array
     {
         $sender=$this->resolve($senderAccountId,$legalEntityId);
-        $cc=$ccAccountId!==null ? [$this->resolve($ccAccountId,$legalEntityId)['email']] : [];
+        $cc=$ccAccountId!==null ? [$this->resolveRecipient($ccAccountId,$legalEntityId)['email']] : [];
         $recipients=[];
-        foreach (array_unique($employeeAccountIds) as $accountId) $recipients[]=$this->resolve((int)$accountId,$legalEntityId)['email'];
+        foreach (array_unique($employeeAccountIds) as $accountId) $recipients[]=$this->resolveRecipient((int)$accountId,$legalEntityId)['email'];
         return ['sender'=>$sender,'cc'=>$cc,'employees'=>array_values(array_unique($recipients))];
     }
 
