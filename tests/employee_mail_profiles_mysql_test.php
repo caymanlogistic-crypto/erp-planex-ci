@@ -98,8 +98,9 @@ try {
     $ok(count($s->listForEmployee(1,$created['account_id']))===2,'New/blocked employee mail missing');
     $q=$pdo->prepare('SELECT email FROM user_accounts WHERE id=?');$q->execute([$created['account_id']]);
     $ok($q->fetchColumn()==='identity@example.test','Main email overwritten by work mail');
-    $pdo->exec('DELETE FROM employee_mail_profiles WHERE account_id='.(int)$created['account_id']);
-    $pdo->exec('DELETE FROM company_memberships WHERE account_id='.(int)$created['account_id']);
+    $members->remove(1,$created['membership_id']);
+    $ok((int)$pdo->query('SELECT COUNT(*) FROM employee_mail_profiles WHERE account_id='.(int)$created['account_id'])->fetchColumn()===0,'Removing membership left mail credentials');
+    $ok((int)$pdo->query('SELECT COUNT(*) FROM user_accounts WHERE id='.(int)$created['account_id'])->fetchColumn()===1,'Removing membership removed identity');
     $pdo->exec('DELETE FROM user_accounts WHERE id='.(int)$created['account_id']);
     // Setup matches existing records by INN and account identity, without creating users.
     $pdo->exec('DELETE FROM employee_mail_profiles');$pdo->exec('DELETE FROM employee_mail_legal_entities');

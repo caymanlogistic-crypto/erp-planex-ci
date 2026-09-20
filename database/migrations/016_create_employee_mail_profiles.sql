@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS employee_mail_profiles (
     UNIQUE KEY uk_employee_mail_account_entity (account_id,company_id,legal_entity_id),
     UNIQUE KEY uk_employee_mail_email (email),
     CONSTRAINT fk_employee_mail_membership FOREIGN KEY (account_id,company_id)
-        REFERENCES company_memberships (account_id,company_id) ON DELETE RESTRICT,
+        REFERENCES company_memberships (account_id,company_id) ON DELETE CASCADE,
     CONSTRAINT fk_employee_mail_legal_entity FOREIGN KEY (legal_entity_id,company_id)
         REFERENCES employee_mail_legal_entities (id,company_id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
