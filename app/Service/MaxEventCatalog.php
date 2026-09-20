@@ -4,11 +4,13 @@ namespace App\Service;
 
 use RuntimeException;
 
+require_once __DIR__ . '/MaxFeoMessageTemplates.php';
+
 /** Registered ERP events: adding an event does not require a new settings screen. */
 final class MaxEventCatalog
 {
     private const LEGACY_FEO_TEMPLATE = "Создан блок ФЭО №{{block_id}}: {{block_name}}\nТип: {{block_type}}\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг\nОтветственный: {{author}}\nКомпания: {{company}}\n{{created_at}}";
-    private const FEO_TEMPLATE = "{{action_title}}:\n\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг";
+    private const FEO_TEMPLATE = "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг";
 
     public static function all(): array
     {
@@ -17,11 +19,16 @@ final class MaxEventCatalog
                 'title' => 'ФЭО — создан блок размещения',
                 'description' => 'После сохранения нового блока «Добавление» или «Исключение». Системное обязательное сообщение.',
                 'system_required' => true,
-                'template_editable' => false,
+                'template_editable' => true,
                 'format_editable' => false,
                 'template' => self::FEO_TEMPLATE,
+                'feo_template_definitions' => MaxFeoMessageTemplates::definitions(),
+                'feo_templates' => MaxFeoMessageTemplates::defaults(),
                 'variables' => [
                     'action_title' => ['Заголовок действия', 'ДОБАВЛЕНО НА КАРТУ'],
+                    'action_icon' => ['Знак действия', '✅'],
+                    'request_word' => ['Склонение количества', 'заявок'],
+                    'count_label' => ['Количество заявок', '12 заявок'],
                     'block_id' => ['Номер блока', '42'],
                     'block_name' => ['Название блока', 'Размещение 15 сентября'],
                     'block_type' => ['Тип блока', 'Добавление'],
@@ -83,7 +90,10 @@ final class MaxEventCatalog
 
     public static function currentTemplate(string $key, string $stored): string
     {
-        if ($key === 'feo.placement.block_created') return self::FEO_TEMPLATE;
+        if ($key === 'feo.placement.block_created') {
+            if (str_starts_with(ltrim($stored), '{"feo_templates_version"')) return MaxFeoMessageTemplates::decode($stored)['main'];
+            if ($stored === '' || $stored === self::LEGACY_FEO_TEMPLATE || $stored === "{{action_title}}:\n\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг") return self::FEO_TEMPLATE;
+        }
         return $stored;
     }
 
@@ -94,7 +104,15 @@ final class MaxEventCatalog
 
     public static function systemFormat(string $key, string $stored): string
     {
-        return self::isSystemRequired($key) ? 'plain' : $stored;
+        return self::isSystemRequired($key) ? 'markdown' : $stored;
+    }
+
+    public static function requestCountText(int $count): string
+    {
+        $tail = $count % 100;
+        $word = $tail >= 11 && $tail <= 14 ? 'заявок'
+            : match ($count % 10) { 1 => 'заявка', 2, 3, 4 => 'заявки', default => 'заявок' };
+        return $count . ' ' . $word;
     }
 
     public static function render(string $key, string $template, string $format, array $values): string
@@ -102,6 +120,13 @@ final class MaxEventCatalog
         $event = self::event($key);
         $template = self::currentTemplate($key, $template);
         $format = self::systemFormat($key, $format);
+        if ($key === 'feo.placement.block_created') {
+            $exclusion = in_array((string)($values['action_title'] ?? ''), ['СНЯТИЕ ЗАЯВОК', 'СНЯТО С КАРТЫ'], true);
+            $values['action_icon'] = $exclusion ? '❌' : '✅';
+            $values['action_title'] = $exclusion ? 'СНЯТО С КАРТЫ' : 'ДОБАВЛЕНО НА КАРТУ';
+            $values['request_word'] = explode(' ', self::requestCountText((int)($values['request_count'] ?? 0)), 2)[1];
+            $values['count_label'] = self::requestCountText((int)($values['request_count'] ?? 0));
+        }
         if (str_starts_with($key, 'feo.transfer.') && !preg_match('/\{\{\s*quality\s*\}\}/', $template)) throw new RuntimeException('Добавьте в шаблон качество координат: {{quality}}.');
         if (!in_array($format, ['plain', 'html', 'markdown'], true)) throw new RuntimeException('Неизвестный формат MAX.');
         if (trim($template) === '' || mb_strlen($template) > 4000) throw new RuntimeException('Шаблон должен содержать от 1 до 4000 символов.');

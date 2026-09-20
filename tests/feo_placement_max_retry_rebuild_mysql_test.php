@@ -88,7 +88,7 @@ try {
     $key='feo.placement.block_created';
     $events->saveRule([
         'event_key'=>$key,'chat_config_id'=>$chat,'notify'=>1,
-        'message_template'=>'IGNORED','message_format'=>'html','is_enabled'=>0,
+        'message_template'=>MaxEventCatalog::event($key)['template'],'message_format'=>'html','is_enabled'=>0,
     ],77);
 
     $placement=new FeoPlacementService();
@@ -118,7 +118,7 @@ try {
     );
     $ok($mainId>0&&$suppId>0,'main/supplemental delivery IDs');
     $diag=$pdo->query('SELECT * FROM max_event_deliveries WHERE id='.(int)$suppId)->fetch(PDO::FETCH_ASSOC);
-    $ok($diag['status']==='pending'&&str_starts_with($diag['message_text'],'Заявки из нового блока')&&!str_contains($diag['message_text'],'max://user/'),'missing MAX ID ready for delivery');
+    $ok($diag['status']==='pending'&&str_starts_with($diag['message_text'],'‼️ **ДОБАВИТЬ В РЕЙС** ‼️')&&!str_contains($diag['message_text'],'max://user/'),'missing MAX ID ready for delivery');
     // Historical rows created before optional addressing must recover even if the ID is still empty.
     $pdo->exec("UPDATE max_event_deliveries SET status='failed',message_text='',error_message='Не заполнен MAX ID' WHERE id=".(int)$suppId);
     $legacy=$events->rebuildFeoSupplementalForRetry((int)$suppId,$pdo,7);
@@ -127,7 +127,7 @@ try {
 
     $main=$events->dispatch((int)$mainId);
     $ok($main['status']==='sent','main must send before recovery');
-    $ok(count($sent)===1&&str_starts_with($sent[0]['text'],'ДОБАВЛЕНО НА КАРТУ:'),'main send ordering');
+    $ok(count($sent)===1&&str_starts_with($sent[0]['text'],'✅ **ДОБАВЛЕНО НА КАРТУ**'),'main send ordering');
 
     $pdo->exec("UPDATE user_accounts SET max_user_id='111111' WHERE id=10");
     $pdo->exec("UPDATE user_accounts SET max_user_id='222222' WHERE id=10");
@@ -142,12 +142,12 @@ try {
     $sentRow=$events->dispatch((int)$suppId,true);
     $ok($sentRow['status']==='sent','rebuilt supplemental must send');
     $ok(count($sent)===2,'exactly main + one supplemental send');
-    $ok(str_contains($sent[1]['text'],'[Мария Менеджер](max://user/222222)'),'MAX profile name must be used in real mention payload');
+    $ok(str_contains($sent[1]['text'],'[Мария](max://user/222222)'),'MAX profile name must be used in real mention payload');
     $ok(!str_contains($sent[1]['text'],'ERP Имя'),'ERP name must not be used as MAX mention display text');
     $ok(count($memberUrls)===1&&str_contains($memberUrls[0],'user_ids=222222'),'profile lookup must use latest MAX ID');
     $after=$pdo->query('SELECT * FROM max_event_deliveries WHERE id='.(int)$suppId)->fetch(PDO::FETCH_ASSOC);
     $ok((int)$after['attempts']===1,'rebuilt supplemental must have one HTTP attempt');
-    $ok(str_contains((string)$after['message_text'],'[Мария Менеджер](max://user/222222)'),'canonical MAX profile name must be persisted');
+    $ok(str_contains((string)$after['message_text'],'[Мария](max://user/222222)'),'canonical MAX profile name must be persisted');
 
     $before=count($sent);
     $again=$events->rebuildFeoSupplementalForRetry((int)$suppId,$pdo,7);

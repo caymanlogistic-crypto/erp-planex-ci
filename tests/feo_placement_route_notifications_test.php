@@ -79,7 +79,7 @@ $oneRoute = $service->additionIntents(
 );
 $ok(count($oneRoute)===1 && $oneRoute[0]['kind']==='nearby','multiple requests -> one route grouping');
 $ok(str_contains($oneRoute[0]['text'],'310001') && str_contains($oneRoute[0]['text'],'310002'),'grouped request IDs');
-$ok(str_contains($oneRoute[0]['text'],'Всего: 2, масса: 300 кг'),'nearby group total');
+$ok(str_contains($oneRoute[0]['text'],'2 заявки · 300 кг'),'nearby group total');
 
 foreach ([[4999.999,1],[5000.0,1],[5000.001,0]] as [$meters,$expected]) {
     $boundary = $service->additionIntents(
@@ -112,7 +112,7 @@ $missingMax = $service->additionIntents(
     [$active(7,'240001',55,37,'')]
 );
 $ok(count($missingMax)===1 && $missingMax[0]['error']===null,'missing MAX ID must not block delivery');
-$ok(str_starts_with($missingMax[0]['text'],'Заявки из нового блока') && !str_contains($missingMax[0]['text'],'max://user/'),'missing MAX ID neutral wording');
+$ok(str_starts_with($missingMax[0]['text'],'‼️ **ДОБАВИТЬ В РЕЙС** ‼️') && !str_contains($missingMax[0]['text'],'max://user/'),'missing MAX ID neutral wording');
 
 $many = [];
 for ($i=1;$i<=450;$i++) {

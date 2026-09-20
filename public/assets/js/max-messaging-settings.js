@@ -43,7 +43,30 @@
         var previewWrap = form.querySelector('[data-max-event-preview-wrap]');
         var previewButton = form.querySelector('[data-max-event-preview]');
         var activeEvent = null, opener = null, baseline = '', submitting = false, previewRequest = null, previewRevision = 0;
-        function snapshot() { return JSON.stringify(Array.from(new FormData(form).entries())); }
+        var feoTemplates = null, feoKind = 'main';
+        var feoSelector = form.elements.feo_template_kind;
+        function syncFeo() {
+            if (!feoTemplates) return;
+            feoTemplates[feoKind] = template.value;
+            form.elements.feo_templates.value = JSON.stringify(feoTemplates);
+        }
+        function setVariables(variables) {
+            variable.replaceChildren();
+            Object.keys(variables).forEach(function (key) {
+                var label = Array.isArray(variables[key]) ? variables[key][0] : variables[key];
+                variable.add(new Option(label, '{{' + key + '}}'));
+            });
+        }
+        feoSelector.addEventListener('change', function () {
+            syncFeo();
+            feoKind = feoSelector.value;
+            template.value = feoTemplates[feoKind];
+            setVariables(activeEvent.feo_template_definitions[feoKind].variables);
+            changed();
+        });
+        function snapshot() { return JSON.stringify(Array.from(new FormData(form).entries()).filter(function (entry) {
+            return !feoTemplates || (entry[0] !== 'message_template' && entry[0] !== 'feo_template_kind');
+        })); }
         function isDirty() { return activeEvent && snapshot() !== baseline; }
         function invalidatePreview() {
             previewRevision++;
@@ -53,6 +76,7 @@
             previewButton.disabled = false;
         }
         function changed() {
+            syncFeo();
             invalidatePreview();
             form.elements.chat_config_id.required = form.elements.is_enabled.checked;
             form.querySelector('[data-max-event-dirty]').hidden = !isDirty();
@@ -70,18 +94,34 @@
             var systemRequired = Boolean(activeEvent.system_required);
             form.elements.is_enabled.checked = systemRequired || form.elements.is_enabled.checked;
             form.elements.is_enabled.disabled = systemRequired;
-            form.elements.message_template.disabled = systemRequired || activeEvent.template_editable === false;
-            form.elements.message_format.disabled = systemRequired || activeEvent.format_editable === false;
+            form.elements.message_template.disabled = activeEvent.template_editable === false;
+            form.elements.message_format.disabled = activeEvent.format_editable === false;
             form.querySelector('[data-max-system-required-note]').hidden = !systemRequired;
-            form.querySelector('[data-max-event-default]').hidden = systemRequired;
-            form.querySelector('[data-max-insert]').disabled = systemRequired;
+            form.querySelector('[data-max-event-default]').hidden = activeEvent.template_editable === false;
+            form.querySelector('[data-max-insert]').disabled = activeEvent.template_editable === false;
             overlay.querySelector('#max-event-edit-title').textContent = activeEvent.title;
             form.querySelector('[data-max-event-description]').textContent = activeEvent.description;
             form.querySelector('[data-max-event-save-error]').hidden = catalog.draftKey !== activeEvent.event_key;
-            variable.replaceChildren();
-            Object.keys(activeEvent.variables).forEach(function (key) {
-                variable.add(new Option(activeEvent.variables[key][0], '{{' + key + '}}'));
-            });
+            feoTemplates = null;
+            feoSelector.replaceChildren();
+            var definitions = activeEvent.feo_template_definitions;
+            form.querySelector('[data-max-feo-template-selector]').hidden = !definitions;
+            form.elements.feo_templates.disabled = !definitions;
+            feoSelector.disabled = !definitions;
+            if (definitions) {
+                var supplied = activeEvent.feo_templates;
+                if (typeof supplied === 'string') { try { supplied = JSON.parse(supplied); } catch (e) { supplied = null; } }
+                feoTemplates = {};
+                Object.keys(definitions).forEach(function (kind) {
+                    feoTemplates[kind] = supplied && typeof supplied[kind] === 'string' ? supplied[kind] : definitions[kind].template;
+                    feoSelector.add(new Option(definitions[kind].title, kind));
+                });
+                feoKind = definitions[activeEvent.feo_template_kind] ? activeEvent.feo_template_kind : 'main';
+                feoSelector.value = feoKind;
+                template.value = feoTemplates[feoKind];
+                setVariables(definitions[feoKind].variables);
+                syncFeo();
+            } else setVariables(activeEvent.variables);
             baseline = snapshot();
             changed();
             overlay.hidden = false;
@@ -105,6 +145,7 @@
         form.addEventListener('input', changed);
         form.addEventListener('change', changed);
         form.addEventListener('submit', function () {
+            syncFeo();
             submitting = true;
             try { window.sessionStorage.setItem(storageKey, 'events'); } catch (e) {}
             form.querySelector('[type="submit"]').disabled = true;
@@ -130,8 +171,9 @@
             changed(); template.focus();
         });
         form.querySelector('[data-max-event-default]').addEventListener('click', function () {
-            if (template.value !== activeEvent.template && !window.confirm('Заменить текущий текст стандартным шаблоном? Изменения вступят в силу после сохранения.')) return;
-            template.value = activeEvent.template; changed(); template.focus();
+            var standard = feoTemplates ? activeEvent.feo_template_definitions[feoKind].template : activeEvent.template;
+            if (template.value !== standard && !window.confirm('Заменить текущий текст стандартным шаблоном? Изменения вступят в силу после сохранения.')) return;
+            template.value = standard; changed(); template.focus();
         });
         previewButton.addEventListener('click', async function () {
             invalidatePreview();

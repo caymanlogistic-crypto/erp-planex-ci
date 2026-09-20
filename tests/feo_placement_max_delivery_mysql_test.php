@@ -51,11 +51,11 @@ try{
     $values['request_count']='4';
     $values['mass_kg']='45 402';
     $additionText=MaxEventCatalog::render($key,MaxEventCatalog::event($key)['template'],'plain',$values);
-    $ok($additionText==="ДОБАВЛЕНО НА КАРТУ:\n\nЗаявок: 4, масса: 45 402 кг",'addition main format');
+    $ok($additionText==="✅ **ДОБАВЛЕНО НА КАРТУ**\n4 заявки · 45 402 кг",'addition main format');
     $exclusionValues=$values;
     $exclusionValues['action_title']='СНЯТИЕ ЗАЯВОК';
     $exclusionText=MaxEventCatalog::render($key,MaxEventCatalog::event($key)['template'],'plain',$exclusionValues);
-    $ok($exclusionText==="СНЯТИЕ ЗАЯВОК:\n\nЗаявок: 4, масса: 45 402 кг",'exclusion main format');
+    $ok($exclusionText==="❌ **СНЯТО С КАРТЫ**\n4 заявки · 45 402 кг",'exclusion main format');
 
     $pdo->beginTransaction();
     $main=$events->enqueue($key,'42',$values,77);
@@ -74,7 +74,7 @@ try{
     $dependent=$events->dispatchBlockSupplementals(42,true);
     $ok(count($dependent)===1&&$dependent[0]['status']==='sent','supplemental retry after main');
     $ok(count($sent)===$before+2,'main+supplemental send count');
-    $ok(str_starts_with($sent[$before]['text'],'ДОБАВЛЕНО НА КАРТУ:'),'main must be first');
+    $ok(str_starts_with($sent[$before]['text'],'✅ **ДОБАВЛЕНО НА КАРТУ**'),'main must be first');
     $ok(str_contains($sent[$before+1]['text'],'[Иван Иванов](max://user/123456)'),'supplemental must use current MAX profile name');
     $ok(!str_contains($sent[$before+1]['text'],'ERP Alias'),'ERP display name must not survive real mention dispatch');
     $ok($sent[$before+1]['format']==='markdown','mention must use markdown');
