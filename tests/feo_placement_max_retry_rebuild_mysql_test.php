@@ -118,7 +118,11 @@ try {
     );
     $ok($mainId>0&&$suppId>0,'main/supplemental delivery IDs');
     $diag=$pdo->query('SELECT * FROM max_event_deliveries WHERE id='.(int)$suppId)->fetch(PDO::FETCH_ASSOC);
-    $ok($diag['status']==='failed'&&$diag['message_text']===''&&str_contains((string)$diag['error_message'],'Не заполнен MAX ID'),'missing MAX ID diagnostic');
+    $ok($diag['status']==='pending'&&str_starts_with($diag['message_text'],'Заявки из нового блока')&&!str_contains($diag['message_text'],'max://user/'),'missing MAX ID ready for delivery');
+    // Historical rows created before optional addressing must recover even if the ID is still empty.
+    $pdo->exec("UPDATE max_event_deliveries SET status='failed',message_text='',error_message='Не заполнен MAX ID' WHERE id=".(int)$suppId);
+    $legacy=$events->rebuildFeoSupplementalForRetry((int)$suppId,$pdo,7);
+    $ok((int)$legacy['id']===(int)$suppId&&$legacy['status']==='pending'&&$legacy['message_text']===$diag['message_text'],'legacy missing ID retry rebuilds complete unaddressed text');
     $ok((int)$pdo->query("SELECT COUNT(*) FROM max_event_deliveries WHERE event_key='feo.placement.block_created' AND entity_key=".$pdo->quote($entityKey))->fetchColumn()===1,'one logical supplemental row');
 
     $main=$events->dispatch((int)$mainId);
@@ -129,7 +133,7 @@ try {
     $pdo->exec("UPDATE user_accounts SET max_user_id='222222' WHERE id=10");
     $pdo->exec("UPDATE max_event_deliveries SET status='sending',updated_at=NOW() WHERE id=".(int)$suppId);
     $activeClaim=$events->rebuildFeoSupplementalForRetry((int)$suppId,$pdo,7);
-    $ok($activeClaim['status']==='sending'&&$activeClaim['message_text']==='','fresh sending claim must not be rebuilt or reclaimed');
+    $ok($activeClaim['status']==='sending'&&$activeClaim['message_text']===$diag['message_text'],'fresh sending claim must not be rebuilt or reclaimed');
     $pdo->exec("UPDATE max_event_deliveries SET status='failed',updated_at=NOW() WHERE id=".(int)$suppId);
     $rebuilt=$events->rebuildFeoSupplementalForRetry((int)$suppId,$pdo,7);
     $ok((int)$rebuilt['id']===(int)$suppId,'rebuild must keep delivery ID');
@@ -153,7 +157,9 @@ try {
     $ok((int)$pdo->query("SELECT COUNT(*) FROM max_event_deliveries WHERE event_key='feo.placement.block_created' AND entity_key=".$pdo->quote($entityKey))->fetchColumn()===1,'retry must not create duplicate delivery');
 
     echo "FEO_PLACEMENT_MAX_RETRY_REBUILD_MYSQL=PASS\n";
-    (require __DIR__ . '/feo_placement_owner_scenarios.php')($pdo);
+    $ownerScenarios = require __DIR__ . '/feo_placement_owner_scenarios.php';
+    $ownerScenarios($pdo, false);
+    $ownerScenarios($pdo, true);
 } finally {
     if($pdo->inTransaction())$pdo->rollBack();
     cleanCompanyPoolDatabase($pdo);
