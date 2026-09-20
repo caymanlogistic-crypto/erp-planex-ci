@@ -39,17 +39,29 @@ try {
     $events = new MaxEventNotificationService($pdo,$messaging);
     $key='feo.placement.block_created'; $values=MaxEventCatalog::example($key);
     $legacyDefault="Создан блок ФЭО №{{block_id}}: {{block_name}}\nТип: {{block_type}}\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг\nОтветственный: {{author}}\nКомпания: {{company}}\n{{created_at}}";
-    $ok(MaxEventCatalog::currentTemplate($key,$legacyDefault)===MaxEventCatalog::event($key)['template'],'Legacy default must upgrade to current main template');
-    $ok(MaxEventCatalog::currentTemplate($key,'CUSTOM {{block_id}}')==='CUSTOM {{block_id}}','Custom template must remain custom');
-    $rule=['event_key'=>$key,'is_enabled'=>1,'chat_config_id'=>$chat,'message_template'=>'Блок {{block_id}} {{author}}','message_format'=>'plain','notify'=>1];
-    $ok((int)$events->rules()[0]['is_enabled']===0,'Events must be opt-in');
+    $canonicalTemplate=MaxEventCatalog::event($key)['template'];
+    $ok(MaxEventCatalog::currentTemplate($key,$legacyDefault)===$canonicalTemplate,'Legacy default must upgrade to current main template');
+    $ok(MaxEventCatalog::currentTemplate($key,'CUSTOM {{block_id}}')===$canonicalTemplate,'System FEO template must ignore stored custom text');
+    $rule=['event_key'=>$key,'is_enabled'=>0,'chat_config_id'=>$chat,'message_template'=>'CUSTOM {{block_id}}','message_format'=>'html','notify'=>1];
+    $firstRule=$events->rules()[0];
+    $ok((int)$firstRule['is_enabled']===1 && !empty($firstRule['system_required']),'FEO placement event must be system-required');
     $rejects(fn()=>$events->saveRule(array_replace($rule,['event_key'=>'unknown']),77));
     $rejects(fn()=>$events->saveRule(array_replace($rule,['chat_config_id'=>999999]),77));
-    $rejects(fn()=>$events->saveRule(array_replace($rule,['message_template'=>'{{unknown}}']),77));
-    $rejects(fn()=>$events->saveRule(array_replace($rule,['message_template'=>str_repeat('x',4001)]),77));
-    $ok(MaxEventCatalog::render($key,'{{author}}','html',array_replace($values,['author'=>'<b>A&B</b>']))==='&lt;b&gt;A&amp;B&lt;/b&gt;','HTML variables must be escaped');
-    $ok(MaxEventCatalog::render($key,'{{author}}','markdown',array_replace($values,['author'=>'*A*']))==='\\*A\\*','Markdown variables must be escaped');
     $events->saveRule($rule,77);
+    $stored=$pdo->query("SELECT is_enabled,message_template,message_format FROM max_event_rules WHERE event_key='feo.placement.block_created'")->fetch(PDO::FETCH_ASSOC);
+    $ok((int)$stored['is_enabled']===1,'System FEO event cannot be disabled');
+    $ok((string)$stored['message_template']===$canonicalTemplate,'System FEO template must be canonical');
+    $ok((string)$stored['message_format']==='plain','System FEO main format must be plain');
+    $additionValues=array_replace($values,['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>'4','mass_kg'=>'45 402']);
+    $exclusionValues=array_replace($values,['action_title'=>'СНЯТИЕ ЗАЯВОК','request_count'=>'4','mass_kg'=>'45 402']);
+    $ok(MaxEventCatalog::render($key,'REMOVED','html',$additionValues)==="ДОБАВЛЕНО НА КАРТУ:\n\nЗаявок: 4, масса: 45 402 кг",'Exact mandatory addition main text');
+    $ok(MaxEventCatalog::render($key,'REMOVED','markdown',$exclusionValues)==="СНЯТИЕ ЗАЯВОК:\n\nЗаявок: 4, масса: 45 402 кг",'Exact mandatory exclusion main text');
+    $transferKey='feo.transfer.created';
+    $transferValues=MaxEventCatalog::example($transferKey);
+    $htmlEscaped=MaxEventCatalog::render($transferKey,'{{author}} {{quality}}','html',array_replace($transferValues,['author'=>'<b>A&B</b>']));
+    $markdownEscaped=MaxEventCatalog::render($transferKey,'{{author}} {{quality}}','markdown',array_replace($transferValues,['author'=>'*A*']));
+    $ok(str_starts_with($htmlEscaped,'&lt;b&gt;A&amp;B&lt;/b&gt; '),'HTML variables must be escaped');
+    $ok(str_starts_with($markdownEscaped,'\\*A\\* '),'Markdown variables must be escaped');
     $pdo->exec("CREATE TABLE feo_requests(zayavka_id VARCHAR(64) PRIMARY KEY,mass_netto DECIMAL(18,6)) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec(file_get_contents(BASE_PATH . '/database/migrations-local/123_create_feo_map_placement.sql'));
     $pdo->exec("INSERT INTO feo_requests VALUES('10001',1.5)");
@@ -57,13 +69,20 @@ try {
     foreach (['addition','exclusion'] as $type) {
         $preview=$placement->previewCreate($pdo,['10001'],$type);
         $deliveryId=null;
-        $created=$placement->createBlock($pdo,['ids'=>['10001'],'block_type'=>$type,'created_by_user_id'=>77],$preview['state_hash'],function(array $row) use ($events,$key,$values,&$deliveryId): void {
-            $deliveryId=$events->enqueue($key,(string)$row['block_id'],array_replace($values,['block_id'=>(string)$row['block_id']]),77);
+        $created=$placement->createBlock($pdo,['ids'=>['10001'],'block_type'=>$type,'created_by_user_id'=>77],$preview['state_hash'],function(array $row) use ($events,$key,$values,$type,&$deliveryId): void {
+            $deliveryId=$events->enqueue($key,(string)$row['block_id'],array_replace($values,[
+                'block_id'=>(string)$row['block_id'],
+                'action_title'=>$type==='addition'?'ДОБАВЛЕНО НА КАРТУ':'СНЯТИЕ ЗАЯВОК',
+                'request_count'=>'1',
+                'mass_kg'=>'1 500',
+            ]),77);
         });
         $ok($deliveryId>0,'Both block types must enqueue');
         $before=$sends;
         $sent=$events->dispatch($deliveryId);
         $ok($sent['status']==='sent' && $sends===$before+1,'New block notification failed');
+        $expectedMain=($type==='addition'?'ДОБАВЛЕНО НА КАРТУ':'СНЯТИЕ ЗАЯВОК').":\n\nЗаявок: 1, масса: 1 500 кг";
+        $ok($sent['message_text']===$expectedMain && $sent['message_format']==='plain','Exact system main payload mismatch');
         $events->dispatch($deliveryId,true);
         $ok($sends===$before+1,'Sent delivery duplicated');
         $pdo->beginTransaction();
@@ -86,11 +105,15 @@ try {
     $snapshot=$enqueue('snapshot');
     $events->saveRule(array_replace($rule,['chat_config_id'=>$chat2,'message_template'=>'Changed']),77);
     $row=$events->dispatch($snapshot);
-    $ok((int)$row['chat_config_id']===$chat && str_starts_with($row['message_text'],'Блок'),'Config edits must not redirect old events');
+    $ok((int)$row['chat_config_id']===$chat && str_starts_with($row['message_text'],'ДОБАВЛЕНО НА КАРТУ:'),'Config edits must not redirect or rewrite old system events');
     $events->saveRule($rule,77);
-    $pending=$enqueue('disabled'); $events->saveRule(array_replace($rule,['is_enabled'=>0]),77);
-    $before=$sends; $ok($events->dispatch($pending)['status']==='failed' && $sends===$before,'Disabled event must stop pending delivery');
-    $ok($enqueue('off')===null,'Disabled rule must not enqueue');
+    $pending=$enqueue('required-disabled');
+    $pdo->exec("UPDATE max_event_rules SET is_enabled=0 WHERE event_key='feo.placement.block_created'");
+    $before=$sends;
+    $requiredSent=$events->dispatch($pending);
+    $ok($requiredSent['status']==='sent' && $sends===$before+1,'System FEO event must ignore legacy disabled flag');
+    $off=$enqueue('required-off');
+    $ok($off>0,'System FEO event must enqueue even when legacy is_enabled=0');
     $events->saveRule($rule,77);
     $pending=$enqueue('race');
     $pdo->exec("UPDATE max_event_deliveries SET status='sending',updated_at=NOW() WHERE id=".$pending);

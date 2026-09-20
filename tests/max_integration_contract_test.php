@@ -15,6 +15,7 @@ $calls = [];
 $client = new MaxApiClient('secret-token-for-test', static function (string $method, string $url, ?array $body, array $headers) use (&$calls): array {
     $calls[] = compact('method', 'url', 'body', 'headers');
     if (str_ends_with($url, '/me')) return ['user_id' => 42, 'first_name' => 'PLANEX', 'username' => 'planex_bot', 'is_bot' => true];
+    if (str_contains($url, '/members?user_ids=123456')) return ['members' => [['user_id' => 123456, 'first_name' => 'Иван', 'last_name' => 'Иванов']]];
     if (str_contains($url, '/chats/')) return ['chat_id' => '-100500', 'type' => 'chat', 'status' => 'active', 'title' => 'Руководство'];
     if (str_contains($url, '/subscriptions')) return ['success' => true];
     return ['message' => ['body' => ['mid' => 'mid-1']]];
@@ -22,20 +23,23 @@ $client = new MaxApiClient('secret-token-for-test', static function (string $met
 
 $client->getMe();
 $client->getChat('-100500');
+$member = $client->getChatMember('-100500', '123456');
 $client->sendMessage('-100500', 'Проверка', 'markdown', false);
 $client->createSubscription('https://plan-ex.ru/erpv2/max/webhook/1/2', 'Secret_12345');
 
 $ok(MaxApiClient::BASE_URL === 'https://platform-api2.max.ru', 'MAX client must use platform-api2.max.ru.');
-$ok(count($calls) === 4, 'MAX client transport calls missing.');
+$ok(count($calls) === 5, 'MAX client transport calls missing.');
+$ok(($member['first_name'] ?? '') === 'Иван' && ($member['last_name'] ?? '') === 'Иванов', 'MAX member profile lookup failed.');
+$ok(str_contains($calls[2]['url'], '/chats/-100500/members?user_ids=123456'), 'MAX member lookup must use filtered GET /chats/{chatId}/members.');
 foreach ($calls as $call) {
     $ok(in_array('Authorization: secret-token-for-test', $call['headers'], true), 'MAX token must be sent in Authorization header.');
     $ok(!str_contains($call['url'], 'access_token='), 'MAX token must never be sent in query string.');
 }
-$ok($calls[2]['method'] === 'POST' && str_contains($calls[2]['url'], '/messages?chat_id=-100500'), 'Message must target chat_id through POST /messages.');
-$ok(($calls[2]['body']['text'] ?? '') === 'Проверка' && ($calls[2]['body']['format'] ?? '') === 'markdown' && ($calls[2]['body']['notify'] ?? true) === false, 'Message body contract invalid.');
-$ok($calls[3]['method'] === 'POST' && str_ends_with($calls[3]['url'], '/subscriptions'), 'Webhook must use POST /subscriptions.');
-$ok(($calls[3]['body']['secret'] ?? '') === 'Secret_12345', 'Webhook secret must be sent to MAX.');
-foreach (['bot_added','bot_removed','chat_title_changed'] as $event) $ok(in_array($event, $calls[3]['body']['update_types'] ?? [], true), 'Webhook update type missing: ' . $event);
+$ok($calls[3]['method'] === 'POST' && str_contains($calls[3]['url'], '/messages?chat_id=-100500'), 'Message must target chat_id through POST /messages.');
+$ok(($calls[3]['body']['text'] ?? '') === 'Проверка' && ($calls[3]['body']['format'] ?? '') === 'markdown' && ($calls[3]['body']['notify'] ?? true) === false, 'Message body contract invalid.');
+$ok($calls[4]['method'] === 'POST' && str_ends_with($calls[4]['url'], '/subscriptions'), 'Webhook must use POST /subscriptions.');
+$ok(($calls[4]['body']['secret'] ?? '') === 'Secret_12345', 'Webhook secret must be sent to MAX.');
+foreach (['bot_added','bot_removed','chat_title_changed'] as $event) $ok(in_array($event, $calls[4]['body']['update_types'] ?? [], true), 'Webhook update type missing: ' . $event);
 
 $migration = (string)file_get_contents($root . '/database/migrations-local/133_create_max_integration.sql');
 $service = (string)file_get_contents($root . '/app/Service/MaxMessagingService.php');

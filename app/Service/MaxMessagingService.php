@@ -234,6 +234,18 @@ final class MaxMessagingService
         return $remote;
     }
 
+    public function resolveChatMember(int $chatConfigId, string $userId, ?array $expectedDestination = null): array
+    {
+        $chat = $this->requireChat($chatConfigId);
+        $bot = $this->requireBotRaw((int)$chat['bot_id']);
+        if ($expectedDestination !== null
+            && ((int)$bot['id'] !== (int)$expectedDestination['bot_id']
+                || (string)$chat['chat_id'] !== (string)$expectedDestination['external_chat_id'])) {
+            throw new RuntimeException('Адрес чата MAX изменился после создания уведомления.');
+        }
+        return $this->clientForBot($bot)->getChatMember((string)$chat['chat_id'], $userId);
+    }
+
     public function configureWebhook(int $botId, string $url): array
     {
         $bot = $this->requireBotRaw($botId);
