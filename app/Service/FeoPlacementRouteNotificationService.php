@@ -131,7 +131,8 @@ final class FeoPlacementRouteNotificationService
                     (float)$coords['lat'], (float)$coords['lng'],
                     (float)$existingCoords['lat'], (float)$existingCoords['lng']
                 );
-                if ($distance > self::MAX_DISTANCE_METERS) continue;
+                // Include the exact boundary despite floating-point roundoff (one micrometre).
+                if ($distance > self::MAX_DISTANCE_METERS + 0.000001) continue;
                 $routeId = (int)$existing['route_id'];
                 $nearbyGroups[$routeId]['route'] = $existing;
                 $nearbyGroups[$routeId]['requests'][(string)$requestId] = $new;
@@ -251,9 +252,9 @@ final class FeoPlacementRouteNotificationService
     {
         $latA = (float)$a['lat'];
         $latB = (float)$b['lat'];
-        if (abs($latA - $latB) > 0.05) return false;
-        $cos = max(0.05, cos(deg2rad(($latA + $latB) / 2)));
-        return abs((float)$a['lng'] - (float)$b['lng']) <= 0.05 / $cos;
+        // Latitude is a conservative bound at every longitude, including the
+        // antimeridian and poles. Haversine performs the final radius check.
+        return abs($latA - $latB) <= 0.05;
     }
 
     /** @return list<array<string,mixed>> */
@@ -277,6 +278,8 @@ final class FeoPlacementRouteNotificationService
         $error = $this->managerError($route);
         if ($error !== null) return [$this->failedIntent('nearby', $route, $error)];
         $header = $this->mention($route) . ', добавленные заявки находятся вблизи (не более 5 км) заявок рейса ' . $this->routeLabel($route) . '.';
+        $mass = array_sum(array_map(static fn(array $row): float => (float)$row['mass_kg'], $requests));
+        $header .= ' Всего: ' . count($requests) . ', масса: ' . self::massText($mass) . ' кг.';
         $lines = array_map(static fn(array $row): string =>
             self::md((string)$row['zayavka_id']) . ' — ' . self::massText((float)$row['mass_kg']) . ' кг', $requests);
         return $this->chunkMessages('nearby', $route, $header, $lines, 'Просим проверить возможность добавления в рейс.');

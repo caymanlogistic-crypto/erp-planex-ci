@@ -153,6 +153,7 @@ try {
     $ok((int)$pdo->query("SELECT COUNT(*) FROM max_event_deliveries WHERE event_key='feo.placement.block_created' AND entity_key=".$pdo->quote($entityKey))->fetchColumn()===1,'retry must not create duplicate delivery');
 
     echo "FEO_PLACEMENT_MAX_RETRY_REBUILD_MYSQL=PASS\n";
+    (require __DIR__ . '/feo_placement_owner_scenarios.php')($pdo);
 } finally {
     if($pdo->inTransaction())$pdo->rollBack();
     cleanCompanyPoolDatabase($pdo);
