@@ -85,6 +85,8 @@ def plan(cls,paths,scopes):
         out.append("DOCUMENT_GENERATOR_REGRESSIONS")
     if any(p.startswith("app/Http/Routes/") or p.startswith("tests/roles_access_") for p in paths):
         out.append("ROLES_ROUTE_REGISTRY")
+    if any(re.search(r"(?:EmployeeMail|employee_mail|central_016|016_create_employee_mail|roles-access\.js)", p) for p in paths):
+        out.append("EMPLOYEE_MAIL_REGRESSIONS")
     if scopes["control_plane"]: out.append("CONTROL_PLANE_PREFLIGHT_CONTRACTS")
     if cls=="CRITICAL" and scopes["memory"]: out += ["MEMORY_INTEGRITY_CONTRACTS","ACTIVE_REGISTRY_CONTRACTS"]
     return out
@@ -192,6 +194,12 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
             for t in tests: need(t); cmdcheck(results,check,["php",t],env)
     if "ROLES_ROUTE_REGISTRY" in want:
         cmdcheck(results,"ROLES_ROUTE_REGISTRY",["python3","tests/roles_access_route_registry_test.py"])
+    if "EMPLOYEE_MAIL_REGRESSIONS" in want:
+        env = os.environ.copy(); env["APP_ENV"] = "test"
+        env.pop("PLANEX_SKIP_MYSQL", None)
+        for t in ["tests/employee_mail_contract_test.php", "tests/employee_mail_profiles_mysql_test.php", "tests/employee_mail_migration_mysql_test.php"]:
+            need(t); cmdcheck(results,"EMPLOYEE_MAIL_REGRESSIONS",["php",t],env)
+        cmdcheck(results,"EMPLOYEE_MAIL_REGRESSIONS",["node","tests/employee_mail_browser_test.mjs"],env)
     if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",["python3","tools/dynamic_table_safety_audit.py"])
     if "ARCHITECTURE_GUARD" in want: need("tools/architecture_guard.php"); cmdcheck(results,"ARCHITECTURE_GUARD",["php","tools/architecture_guard.php"])
     if "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in want:
