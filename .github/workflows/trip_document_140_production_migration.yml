@@ -208,7 +208,7 @@ jobs:
           echo 'DOCUMENT_140_PREDEPLOY_HTTP_PASS=YES'
           echo 'DOCUMENT_140_DEPLOY_MARKER_UNCHANGED=YES'
 
-      - name: Install and verify document worker scheduler
+      - name: Verify hosting-panel document worker scheduler
         env:
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -219,8 +219,10 @@ jobs:
           SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/document_140_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
           "${SSH[@]}" "$SSH_USER@$SSH_HOST" "cd '$LIVE_ROOT' && APP_PUBLIC_URL=https://plan-ex.ru/erpv2 /usr/bin/php8.5 scripts/trip_document_worker.php --company=25 --check" | tee document_140_scheduler.txt
           grep -Fqx 'DOCUMENT_WORKER_READY=YES' document_140_scheduler.txt
-          CRON_LINE="* * * * * cd $LIVE_ROOT && APP_PUBLIC_URL=https://plan-ex.ru/erpv2 /usr/bin/php8.5 scripts/trip_document_worker.php --company=25 >> logs/trip_documents.log 2>&1 # ERP PLANEX trip_documents_25"
-          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "set -e; command -v crontab >/dev/null; test -d '$LIVE_ROOT/logs'; tmp=\$(mktemp); (crontab -l 2>/dev/null || true) | grep -Fv '# ERP PLANEX trip_documents_25' > \"\$tmp\" || true; printf '%s\\n' '$CRON_LINE' >> \"\$tmp\"; crontab \"\$tmp\"; rm -f \"\$tmp\"; crontab -l | grep -Fqx '$CRON_LINE'; started=\$(date +%s); for attempt in \$(seq 1 18); do stamp=\$(stat -c %Y '$LIVE_ROOT/storage/runtime/trip_documents_25.json' 2>/dev/null || echo 0); if [ \"\$stamp\" -ge \"\$started\" ]; then echo DOCUMENT_SCHEDULER_TICK=PASS; exit 0; fi; sleep 5; done; echo DOCUMENT_SCHEDULER_TICK=FAIL; exit 1" | tee -a document_140_scheduler.txt
+          # SpaceWeb owns cron in its hosting panel; SSH crontab cannot access its spool.
+          # This gate observes a NEW scheduler tick and never runs the worker itself.
+          echo 'DOCUMENT_SCHEDULER_MANAGED_BY=hosting-panel' | tee -a document_140_scheduler.txt
+          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "set -e; test -d '$LIVE_ROOT/logs'; started=\$(date +%s); for attempt in \$(seq 1 18); do stamp=\$(stat -c %Y '$LIVE_ROOT/storage/runtime/trip_documents_25.json' 2>/dev/null || echo 0); if [ \"\$stamp\" -gt \"\$started\" ]; then echo DOCUMENT_SCHEDULER_TICK=PASS; exit 0; fi; sleep 5; done; echo DOCUMENT_SCHEDULER_TICK=FAIL; echo 'Configure the one-minute trip_document_worker.php --company=25 task in the hosting panel'; exit 1" | tee -a document_140_scheduler.txt
           grep -Fqx 'DOCUMENT_SCHEDULER_TICK=PASS' document_140_scheduler.txt
 
       - name: Upload migration evidence
