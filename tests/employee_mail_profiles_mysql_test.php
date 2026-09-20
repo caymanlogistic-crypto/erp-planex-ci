@@ -62,6 +62,45 @@ try {
     $ok(!$s->publicProfile(2,1)['has_password'],'Email change reused old password');
     $pdo->exec("UPDATE company_memberships SET status='blocked' WHERE account_id=3 AND company_id=1");
     $fails(fn()=>$s->resolve(3,1));
+    // Stored settings drive credentials, and settings changes invalidate old/racing checks.
+    $pdo->exec("UPDATE company_memberships SET status='active' WHERE account_id=3 AND company_id=1");
+    $settingsService=new App\Service\EmployeeMailSettingsService($pdo,1);
+    $fails(fn()=>$settingsService->save(2,App\Service\EmployeeMailSettingsService::DEFAULTS));
+    foreach (['imap_host'=>'127.0.0.1','smtp_port'=>0,'encryption'=>'NONE'] as $key=>$value) {
+        $fails(fn()=>$settingsService->save(1,array_replace(App\Service\EmployeeMailSettingsService::DEFAULTS,[$key=>$value])));
+    }
+    $savedSettings=$settingsService->save(1,array_replace(App\Service\EmployeeMailSettingsService::DEFAULTS,['smtp_host'=>'smtp.example.com','smtp_port'=>1465]));
+    $ok($s->credentials(3,1)['settings']===$savedSettings,'Transport did not receive stored settings');
+    $ok($s->publicProfile(3,1)['connection_status']==='unverified','Settings retained connected state');
+    $fails(fn()=>$s->check(1,3,1,static function(array $credentials) use($settingsService):array {
+        $settingsService->save(1,App\Service\EmployeeMailSettingsService::DEFAULTS);
+        return ['imap'=>true,'smtp'=>true];
+    }));
+    // General employee save and both profiles share a rollback boundary.
+    require_once BASE_PATH.'/app/Service/IdentityNormalizer.php';
+    require_once BASE_PATH.'/app/Service/CompanyRoleService.php';
+    require_once BASE_PATH.'/app/Service/CompanyMembershipService.php';
+    $members=new App\Service\CompanyMembershipService($pdo);
+    $pdo->beginTransaction();
+    try {
+        $created=$members->add(1,11,'New employee','new-mail-user','synthetic-account-password','identity@example.test');
+        $s->saveBatch(1,$created['account_id'],[
+            ['legal_entity_id'=>1,'email'=>'new-user@one.test','password'=>'synthetic-one'],
+            ['legal_entity_id'=>2,'email'=>'wrong@one.test','password'=>'synthetic-two'],
+        ]);
+        throw new RuntimeException('Invalid second mailbox accepted');
+    } catch (InvalidArgumentException) { $pdo->rollBack(); }
+    $ok((int)$pdo->query("SELECT COUNT(*) FROM user_accounts WHERE login='new-mail-user'")->fetchColumn()===0,'Failed mail left a partial employee');
+    $pdo->beginTransaction();
+    $created=$members->add(1,11,'New employee','new-mail-user','synthetic-account-password','identity@example.test',null,'blocked');
+    $s->saveBatch(1,$created['account_id'],[['legal_entity_id'=>1,'email'=>'new-user@one.test','password'=>'synthetic-one'],['legal_entity_id'=>2,'email'=>'new-user@two.test','password'=>'']]);
+    $pdo->commit();
+    $ok(count($s->listForEmployee(1,$created['account_id']))===2,'New/blocked employee mail missing');
+    $q=$pdo->prepare('SELECT email FROM user_accounts WHERE id=?');$q->execute([$created['account_id']]);
+    $ok($q->fetchColumn()==='identity@example.test','Main email overwritten by work mail');
+    $pdo->exec('DELETE FROM employee_mail_profiles WHERE account_id='.(int)$created['account_id']);
+    $pdo->exec('DELETE FROM company_memberships WHERE account_id='.(int)$created['account_id']);
+    $pdo->exec('DELETE FROM user_accounts WHERE id='.(int)$created['account_id']);
     // Setup matches existing records by INN and account identity, without creating users.
     $pdo->exec('DELETE FROM employee_mail_profiles');$pdo->exec('DELETE FROM employee_mail_legal_entities');
     $pdo->exec("UPDATE companies SET inn='5406854242' WHERE id=1");

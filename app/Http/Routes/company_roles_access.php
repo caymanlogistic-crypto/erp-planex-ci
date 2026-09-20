@@ -24,3 +24,4 @@ $employeeMailController = new \App\Http\Controllers\Company\EmployeeMailControll
 $router->get('/company/roles-access/memberships/{id}/work-mail', [$employeeMailController, 'profiles'], $rolesAccessPage);
 $router->post('/company/roles-access/memberships/{id}/work-mail/save', [$employeeMailController, 'save'], $rolesAccessPage);
 $router->post('/company/roles-access/memberships/{id}/work-mail/check', [$employeeMailController, 'check'], $rolesAccessPage);
+$router->get('/company/roles-access/work-mail/template', [$employeeMailController, 'template'], $rolesAccessPage);

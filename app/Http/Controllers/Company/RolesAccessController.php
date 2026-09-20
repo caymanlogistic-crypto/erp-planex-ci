@@ -7,6 +7,7 @@ use App\Security\AccessRuntime;
 use App\Security\PageRegistry;
 use App\Service\CompanyMembershipService;
 use App\Service\CompanyRoleService;
+use App\Service\EmployeeMailProfileService;
 
 final class RolesAccessController
 {
@@ -48,19 +49,19 @@ final class RolesAccessController
 
     public function snapshot(): void
     {
-        $this->execute(fn (array $payload, int $companyId): array => $this->snapshotPayload($companyId));
+        $this->execute(fn (#[\SensitiveParameter] array $payload, int $companyId): array => $this->snapshotPayload($companyId));
     }
 
     public function createRole(): void
     {
-        $this->execute(function (array $payload, int $companyId): array {
+        $this->execute(function (#[\SensitiveParameter] array $payload, int $companyId): array {
             return ['role' => (new CompanyRoleService($this->db->connection()))->create($companyId, (string) ($payload['name'] ?? ''))];
         }, 201);
     }
 
     public function copyRole(string $id): void
     {
-        $this->execute(function (array $payload, int $companyId) use ($id): array {
+        $this->execute(function (#[\SensitiveParameter] array $payload, int $companyId) use ($id): array {
             $service = new CompanyRoleService($this->db->connection());
             return ['role' => $service->copy($companyId, $this->positiveId($id), (string) ($payload['name'] ?? ''), (new PageRegistry())->grantablePageKeys())];
         }, 201);
@@ -68,7 +69,7 @@ final class RolesAccessController
 
     public function saveRole(string $id): void
     {
-        $this->execute(function (array $payload, int $companyId) use ($id): array {
+        $this->execute(function (#[\SensitiveParameter] array $payload, int $companyId) use ($id): array {
             $registry = new PageRegistry();
             (new CompanyRoleService($this->db->connection()))->save(
                 $companyId,
@@ -89,7 +90,7 @@ final class RolesAccessController
 
     public function deleteRole(string $id): void
     {
-        $this->execute(function (array $payload, int $companyId) use ($id): array {
+        $this->execute(function (#[\SensitiveParameter] array $payload, int $companyId) use ($id): array {
             (new CompanyRoleService($this->db->connection()))->delete($companyId, $this->positiveId($id));
             return ['deleted' => true];
         });
@@ -97,7 +98,7 @@ final class RolesAccessController
 
     public function addMembership(): void
     {
-        $this->execute(function (array $payload, int $companyId): array {
+        $this->execute(function (#[\SensitiveParameter] array $payload, int $companyId): array {
             $result = (new CompanyMembershipService($this->db->connection()))->add(
                 $companyId,
                 $this->positiveId($payload['role_id'] ?? 0),
@@ -110,13 +111,18 @@ final class RolesAccessController
                 isset($payload['max_user_id']) ? (string)$payload['max_user_id'] : null,
                 array_key_exists('max_user_id', $payload),
             );
+            $this->saveWorkMail($payload,$companyId,(int)$result['account_id']);
             return ['membership' => $result];
         }, 201);
     }
 
     public function saveMembership(string $id): void
     {
-        $this->execute(function (array $payload, int $companyId) use ($id): array {
+        $this->execute(function (#[\SensitiveParameter] array $payload, int $companyId) use ($id): array {
+            $q=$this->db->connection()->prepare('SELECT account_id FROM company_memberships WHERE id=? AND company_id=?');
+            $q->execute([$this->positiveId($id),$companyId]);
+            $accountId=(int)$q->fetchColumn();
+            $this->saveWorkMail($payload,$companyId,$accountId);
             $registry = new PageRegistry();
             (new CompanyMembershipService($this->db->connection()))->save(
                 $companyId,
@@ -135,7 +141,7 @@ final class RolesAccessController
 
     public function removeMembership(string $id): void
     {
-        $this->execute(function (array $payload, int $companyId) use ($id): array {
+        $this->execute(function (#[\SensitiveParameter] array $payload, int $companyId) use ($id): array {
             (new CompanyMembershipService($this->db->connection()))->remove($companyId, $this->positiveId($id));
             return ['removed' => true];
         });
@@ -155,12 +161,31 @@ final class RolesAccessController
         }
         try {
             $payload = array_replace($_POST, requestJsonBody());
-            jsonResponse(['ok' => true] + $operation($payload, $companyId), $successStatus);
+            $transaction=array_key_exists('work_mail',$payload);
+            if ($transaction) $this->db->connection()->beginTransaction();
+            $result=$operation($payload,$companyId);
+            if ($transaction) $this->db->connection()->commit();
+            jsonResponse(['ok' => true] + $result, $successStatus);
         } catch (\InvalidArgumentException $e) {
+            if ($this->db->connection()->inTransaction()) $this->db->connection()->rollBack();
             jsonResponse(['ok' => false, 'error' => $e->getMessage()], 422);
         } catch (\DomainException $e) {
+            if ($this->db->connection()->inTransaction()) $this->db->connection()->rollBack();
             jsonResponse(['ok' => false, 'error' => $e->getMessage()], 409);
+        } catch (\Throwable) {
+            if ($this->db->connection()->inTransaction()) $this->db->connection()->rollBack();
+            jsonResponse(['ok'=>false,'error'=>'Не удалось сохранить данные. Изменения не внесены. Попробуйте ещё раз.'],500);
         }
+    }
+
+    private function saveWorkMail(#[\SensitiveParameter] array $payload,int $companyId,int $accountId): void
+    {
+        if (!array_key_exists('work_mail',$payload)) return;
+        if (!is_array($payload['work_mail'])) throw new \InvalidArgumentException('Некорректные данные рабочей почты.');
+        $pdo=$this->db->connection();
+        $q=$pdo->prepare('SELECT account_id FROM company_memberships WHERE id=? AND company_id=?');
+        $q->execute([AccessRuntime::current()->membershipId(),$companyId]);
+        (new EmployeeMailProfileService($pdo,$companyId))->saveBatch((int)$q->fetchColumn(),$accountId,$payload['work_mail']);
     }
 
     /** @return array<string,mixed> */

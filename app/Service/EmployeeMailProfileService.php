@@ -7,6 +7,7 @@ use PDO;
 
 require_once __DIR__ . '/../Support/crypto_helper.php';
 require_once __DIR__ . '/EmployeeMailTransport.php';
+require_once __DIR__ . '/EmployeeMailSettingsService.php';
 
 /** Central account + existing legal company, independent of the identity email. */
 final class EmployeeMailProfileService
@@ -20,15 +21,14 @@ final class EmployeeMailProfileService
 
     public function settings(): array
     {
-        $q=$this->pdo->prepare('SELECT imap_host,imap_port,smtp_host,smtp_port,encryption FROM employee_mail_settings WHERE company_id=?');$q->execute([$this->tenantCompanyId]);
-        $row=$q->fetch(PDO::FETCH_ASSOC);
-        if (!$row || $row['imap_host']!==EmployeeMailTransport::IMAP_HOST || (int)$row['imap_port']!==993 || $row['smtp_host']!==EmployeeMailTransport::SMTP_HOST || (int)$row['smtp_port']!==465 || $row['encryption']!=='SSL') throw new \DomainException('Общие настройки рабочей почты Spaceweb не заполнены.');
+        $row=(new EmployeeMailSettingsService($this->pdo,$this->tenantCompanyId))->read();
+        if (!$row) throw new \DomainException('Заполните общие настройки рабочей почты в разделе «Ключи и сервисы».');
         return $row;
     }
 
-    public function assertMember(int $accountId, int $companyId): void
+    public function assertMember(int $accountId, int $companyId, bool $requireActive=true): void
     {
-        $q = $this->pdo->prepare("SELECT m.id FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id JOIN companies c ON c.id=m.company_id WHERE m.account_id=? AND m.company_id=? AND m.status='active' AND a.status='active' AND c.status='active'");
+        $q = $this->pdo->prepare("SELECT m.id FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id JOIN companies c ON c.id=m.company_id WHERE m.account_id=? AND m.company_id=? AND c.status='active'".($requireActive ? " AND m.status='active' AND a.status='active'" : ''));
         $q->execute([$accountId, $companyId]);
         if (!$q->fetchColumn()) throw new \DomainException('Нет активного сотрудника в выбранном юридическом лице.');
     }
@@ -54,7 +54,7 @@ final class EmployeeMailProfileService
     public function listForEmployee(int $actorAccountId, int $accountId): array
     {
         $this->assertOwner($actorAccountId,$this->tenantCompanyId);
-        $this->assertMember($accountId,$this->tenantCompanyId);
+        if ($accountId>0) $this->assertMember($accountId,$this->tenantCompanyId,false);
         if (!$this->ready()) return [];
         $q=$this->pdo->prepare('SELECT id FROM employee_mail_legal_entities WHERE company_id=? ORDER BY id');
         $q->execute([$this->tenantCompanyId]);
@@ -62,7 +62,7 @@ final class EmployeeMailProfileService
         foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $id) {
             $entity=$this->legalEntity((int)$id);
             $profile=$this->publicProfile($accountId,(int)$id);
-            $rows[]=['legal_entity_id'=>(int)$id,'company_id'=>$this->tenantCompanyId,'company_name'=>$entity['company_name'],'code'=>$entity['code'],'email_domain'=>$entity['email_domain'],'schema_ready'=>true,'imap_host'=>EmployeeMailTransport::IMAP_HOST,'imap_port'=>993,'smtp_host'=>EmployeeMailTransport::SMTP_HOST,'smtp_port'=>465,'encryption'=>'SSL']+($profile??['email'=>'','has_password'=>false,'connection_status'=>'incomplete','checked_at'=>null,'version'=>0]);
+            $rows[]=['legal_entity_id'=>(int)$id,'company_id'=>$this->tenantCompanyId,'company_name'=>$entity['company_name'],'code'=>$entity['code'],'email_domain'=>$entity['email_domain'],'schema_ready'=>true]+($profile??['email'=>'','has_password'=>false,'connection_status'=>'incomplete','checked_at'=>null,'version'=>0]);
         }
         return $rows;
     }
@@ -77,7 +77,7 @@ final class EmployeeMailProfileService
     public function save(int $actorAccountId, int $accountId, int $legalEntityId, #[\SensitiveParameter] array $input): array
     {
         $this->assertOwner($actorAccountId,$this->tenantCompanyId);
-        $this->assertMember($accountId,$this->tenantCompanyId);
+        $this->assertMember($accountId,$this->tenantCompanyId,false);
         $entity=$this->legalEntity($legalEntityId);
         if (!$this->ready()) throw new \DomainException('Рабочая почта ожидает обновления структуры базы данных.');
         $email = strtolower(trim((string)($input['email'] ?? '')));
@@ -86,7 +86,8 @@ final class EmployeeMailProfileService
         $password = (string)($input['password'] ?? '');
         if (strlen($password)>512 || preg_match('/[\r\n\x00]/',$password)) throw new \InvalidArgumentException('Некорректный пароль почты.');
         if (preg_match('/^[XХхx]{4,}$/u',$password)) throw new \InvalidArgumentException('Вместо заглушки оставьте пароль пустым: подключение будет незавершённым.');
-        $this->pdo->beginTransaction();
+        $ownsTransaction=!$this->pdo->inTransaction();
+        if ($ownsTransaction) $this->pdo->beginTransaction();
         try {
             $q=$this->pdo->prepare('SELECT * FROM employee_mail_profiles WHERE account_id=? AND company_id=? AND legal_entity_id=? FOR UPDATE');
             $q->execute([$accountId,$this->tenantCompanyId,$legalEntityId]);
@@ -109,19 +110,40 @@ final class EmployeeMailProfileService
                 $q=$this->pdo->prepare('INSERT INTO employee_mail_profiles(account_id,company_id,legal_entity_id,email,password_encrypted,connection_status,checked_at) VALUES(?,?,?,?,?,?,?)');
                 $q->execute([$accountId,$this->tenantCompanyId,$legalEntityId,$email,$encrypted,$status,$checked]);
             }
-            $this->pdo->commit();
+            if ($ownsTransaction) $this->pdo->commit();
         } catch (\Throwable $e) {
-            if ($this->pdo->inTransaction()) $this->pdo->rollBack();
+            if ($ownsTransaction && $this->pdo->inTransaction()) $this->pdo->rollBack();
             if ($e instanceof \PDOException) throw new \DomainException('Не удалось сохранить профиль. Проверьте, что адрес не занят.');
             throw $e;
         }
         return $this->publicProfile($accountId,$legalEntityId);
     }
 
+    /** Participates in the enclosing employee transaction; never leaves a partial card. */
+    public function saveBatch(int $actorAccountId,int $accountId,#[\SensitiveParameter] array $profiles): void
+    {
+        if (count($profiles)>2) throw new \InvalidArgumentException('У сотрудника предусмотрено два рабочих ящика.');
+        $seen=[];
+        foreach ($profiles as $profile) {
+            if (!is_array($profile)) throw new \InvalidArgumentException('Некорректный почтовый профиль.');
+            $id=filter_var($profile['legal_entity_id']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
+            if (!$id || isset($seen[$id])) throw new \InvalidArgumentException('Юридическое лицо почты указано неверно или повторяется.');
+            $seen[$id]=true;
+            $this->legalEntity((int)$id);
+            if (trim((string)($profile['email']??''))==='' && empty($profile['password']) && (int)($profile['version']??0)===0) continue;
+            $this->save($actorAccountId,$accountId,(int)$id,$profile);
+        }
+    }
+
     /** Credentials are only consumed by transport; callers must never log this result. */
     public function credentials(int $accountId, int $legalEntityId): array
     {
-        $this->settings();
+        $ownsTransaction=!$this->pdo->inTransaction();
+        if ($ownsTransaction) $this->pdo->beginTransaction();
+        try {
+        $lock=$this->pdo->prepare('SELECT id FROM companies WHERE id=? FOR UPDATE');
+        $lock->execute([$this->tenantCompanyId]);
+        $settings=$this->settings();
         $this->assertMember($accountId,$this->tenantCompanyId);
         $entity=$this->legalEntity($legalEntityId);
         $q=$this->pdo->prepare('SELECT id,email,password_encrypted,version FROM employee_mail_profiles WHERE account_id=? AND company_id=? AND legal_entity_id=?');
@@ -132,7 +154,13 @@ final class EmployeeMailProfileService
         catch (\Throwable) { throw new \DomainException('Не удалось расшифровать пароль рабочей почты. Проверьте ключ шифрования сервера.'); }
         unset($row['password_encrypted']);
         $row['password']=$password;
+        $row['settings']=$settings;
+        if ($ownsTransaction) $this->pdo->commit();
         return $row;
+        } catch (\Throwable $e) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $e;
+        }
     }
 
     /** Future document requests must persist company_id, legal_entity_id, sender profile id and email
@@ -152,10 +180,10 @@ final class EmployeeMailProfileService
         return ['profile_id'=>(int)$profile['id'],'account_id'=>$accountId,'company_id'=>$this->tenantCompanyId,'legal_entity_id'=>$legalEntityId,'email'=>$profile['email']];
     }
 
-    public function resolveEnvelope(int $senderAccountId, int $legalEntityId, ?int $assistantAccountId=null, array $employeeAccountIds=[]): array
+    public function resolveEnvelope(int $senderAccountId, int $legalEntityId, ?int $ccAccountId=null, array $employeeAccountIds=[]): array
     {
         $sender=$this->resolve($senderAccountId,$legalEntityId);
-        $cc=$assistantAccountId!==null ? [$this->resolve($assistantAccountId,$legalEntityId)['email']] : [];
+        $cc=$ccAccountId!==null ? [$this->resolve($ccAccountId,$legalEntityId)['email']] : [];
         $recipients=[];
         foreach (array_unique($employeeAccountIds) as $accountId) $recipients[]=$this->resolve((int)$accountId,$legalEntityId)['email'];
         return ['sender'=>$sender,'cc'=>$cc,'employees'=>array_values(array_unique($recipients))];

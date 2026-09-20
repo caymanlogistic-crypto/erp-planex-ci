@@ -134,7 +134,7 @@ final class CompanyMembershipService
         int $roleId,
         string $fullName,
         string $login,
-        ?string $plainPassword,
+        #[\SensitiveParameter] ?string $plainPassword,
         ?string $email = null,
         ?string $phone = null,
         string $status = 'active',
@@ -157,7 +157,8 @@ final class CompanyMembershipService
         $maxReady = $this->maxUserIdReady();
         if ($maxUserIdProvided && $maxUserId !== null && !$maxReady) throw new \DomainException('Поле MAX ID ещё не подключено миграцией базы.');
 
-        $this->pdo->beginTransaction();
+        $ownsTransaction=!$this->pdo->inTransaction();
+        if ($ownsTransaction) $this->pdo->beginTransaction();
         try {
             $this->assertRoleBelongsToCompany($companyId, $roleId);
             $accountStmt = $this->pdo->prepare(
@@ -214,7 +215,7 @@ final class CompanyMembershipService
             );
             $insertMembership->execute([$accountId, $companyId, $roleId, $status]);
             $membershipId = (int) $this->pdo->lastInsertId();
-            $this->pdo->commit();
+            if ($ownsTransaction) $this->pdo->commit();
 
             return [
                 'account_id' => $accountId,
@@ -222,7 +223,7 @@ final class CompanyMembershipService
                 'account_created' => $accountCreated,
             ];
         } catch (\Throwable $e) {
-            if ($this->pdo->inTransaction()) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e;
@@ -256,7 +257,8 @@ final class CompanyMembershipService
                 throw new \InvalidArgumentException('Неизвестная или системная персональная страница.');
             }
         }
-        $this->pdo->beginTransaction();
+        $ownsTransaction=!$this->pdo->inTransaction();
+        if ($ownsTransaction) $this->pdo->beginTransaction();
         try {
             $membership = $this->lockMembership($companyId, $membershipId);
             if ($maxReady && $maxUserIdProvided && $maxUserId !== null) {
@@ -284,9 +286,9 @@ final class CompanyMembershipService
 
             $this->replacePageOverrides($membershipId, $pageOverrides);
             $this->replaceDataScopeOverrides($membershipId, $dataScopeOverrides);
-            $this->pdo->commit();
+            if ($ownsTransaction) $this->pdo->commit();
         } catch (\Throwable $e) {
-            if ($this->pdo->inTransaction()) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) {
                 $this->pdo->rollBack();
             }
             throw $e;

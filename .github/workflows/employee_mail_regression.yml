@@ -2,9 +2,9 @@ name: Employee Mail Regression
 on:
   push:
     branches: ['chatgpt/**']
-    paths: ['app/Service/EmployeeMail*','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','database/migrations/016_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','.github/workflows/employee_mail*']
+    paths: ['app/Service/EmployeeMail*','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','public/assets/css/roles-access.css','app/Service/CompanyMembershipService.php','app/Http/Controllers/Company/RolesAccessController.php','app/Http/Controllers/Company/ServiceKeysController.php','app/View/pages/company_service_keys.php','public/assets/js/service-keys.js','tests/fixtures/feo_transfers_render.php','database/migrations/016_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','.github/workflows/employee_mail*']
   pull_request:
-    paths: ['app/Service/EmployeeMail*','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','database/migrations/016_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','.github/workflows/employee_mail*']
+    paths: ['app/Service/EmployeeMail*','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','public/assets/css/roles-access.css','app/Service/CompanyMembershipService.php','app/Http/Controllers/Company/RolesAccessController.php','app/Http/Controllers/Company/ServiceKeysController.php','app/View/pages/company_service_keys.php','public/assets/js/service-keys.js','tests/fixtures/feo_transfers_render.php','database/migrations/016_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','.github/workflows/employee_mail*']
 permissions:
   contents: read
 jobs:

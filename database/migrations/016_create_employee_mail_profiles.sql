@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS employee_mail_settings (
     encryption VARCHAR(10) NOT NULL DEFAULT 'SSL',
     PRIMARY KEY (company_id),
     CONSTRAINT fk_employee_mail_settings_company FOREIGN KEY (company_id) REFERENCES companies(id) ON DELETE RESTRICT,
-    CONSTRAINT chk_employee_mail_provider CHECK (imap_host='imap.spaceweb.ru' AND imap_port=993 AND smtp_host='smtp.spaceweb.ru' AND smtp_port=465 AND encryption='SSL')
+    CONSTRAINT chk_employee_mail_provider CHECK (imap_port>0 AND smtp_port>0 AND encryption='SSL')
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS employee_mail_legal_entities (

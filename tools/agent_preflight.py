@@ -85,7 +85,7 @@ def plan(cls,paths,scopes):
         out.append("DOCUMENT_GENERATOR_REGRESSIONS")
     if any(p.startswith("app/Http/Routes/") or p.startswith("tests/roles_access_") for p in paths):
         out.append("ROLES_ROUTE_REGISTRY")
-    if any(re.search(r"(?:EmployeeMail|employee_mail|central_016|016_create_employee_mail|roles-access\.js)", p) for p in paths):
+    if any(re.search(r"(?:EmployeeMail|employee_mail|central_016|016_create_employee_mail|roles-access\.js|ServiceKeysController|company_service_keys|service-keys\.js)", p) for p in paths):
         out.append("EMPLOYEE_MAIL_REGRESSIONS")
     if scopes["control_plane"]: out.append("CONTROL_PLANE_PREFLIGHT_CONTRACTS")
     if cls=="CRITICAL" and scopes["memory"]: out += ["MEMORY_INTEGRITY_CONTRACTS","ACTIVE_REGISTRY_CONTRACTS"]

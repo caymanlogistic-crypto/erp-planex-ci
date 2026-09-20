@@ -43,7 +43,7 @@
         var safeMessage = '';
         if (status === 419) safeMessage = 'Сессия устарела. Обновите страницу и повторите.';
         else if (status === 403) safeMessage = payload.message || 'Недостаточно прав для выполнения операции.';
-        else if (status === 422) safeMessage = payload.message || 'Проверьте выбранные данные и повторите.';
+        else if (status === 422) safeMessage = payload.message || payload.error || 'Проверьте выбранные данные и повторите.';
         else if (status >= 500) safeMessage = 'Не удалось сохранить изменения из-за ошибки сервера. Повторите позже.';
         else safeMessage = payload.message || payload.error || fallback || 'Не удалось выполнить операцию.';
         var error = new Error(safeMessage);
@@ -172,7 +172,8 @@
         lastFocus = document.activeElement;
         modalTitle.textContent = config.title;
         modalSubtitle.textContent = config.subtitle || '';
-        modalBody.innerHTML = config.body;
+        modalBody.innerHTML = '<div class="notice warn is-hidden" data-modal-error role="alert"></div>' + config.body;
+        modalSave.disabled = false;
         modalSecondary.innerHTML = config.secondary || '';
         modalSave.classList.toggle('is-hidden', config.readonly === true);
         submitHandler = config.submit || null;
@@ -200,7 +201,7 @@
         event.preventDefault();
         if (!submitHandler || modalSave.disabled) return;
         modalSave.disabled = true; modalSave.textContent = 'Сохранение…';
-        Promise.resolve(submitHandler()).catch(function (error) { announce(error.message, 'error'); })
+        Promise.resolve().then(function () { return submitHandler(); }).catch(function (error) { var box=modalBody.querySelector('[data-modal-error]'); box.textContent=error.message; box.classList.remove('is-hidden'); box.scrollIntoView({block:'nearest'}); })
             .finally(function () { modalSave.disabled = false; modalSave.textContent = 'Сохранить'; });
     });
 
@@ -393,7 +394,7 @@
             submit:function () {
                 return jsonRequest('/company/roles-access/memberships/' + Number(membership.id) + '/save', {method:'POST',body:{
                     role_id:Number(modalBody.querySelector('[data-member-role]').value), status:modalBody.querySelector('[data-member-status]').value,
-                    max_user_id:modalBody.querySelector('[data-member-max-id]').value.trim(),
+                    max_user_id:modalBody.querySelector('[data-member-max-id]').value.trim(), work_mail:collectWorkMail(),
                     page_overrides:collectPageValues('member'), data_scope_overrides:collectScopeValues()
                 }}).then(function () { closeModal(); return refreshSnapshot('Пользователь сохранён.'); });
             }});
@@ -410,52 +411,49 @@
         });
     }
 
+    function collectWorkMail() {
+        var container=modalBody.querySelector('[data-work-mail-content]');
+        if (!container || container.dataset.loaded !== 'true') throw new Error('Дождитесь загрузки рабочей почты. Если загрузка не удалась, откройте карточку заново.');
+        return Array.from(container.querySelectorAll('[data-mail-row]')).map(function (row) {
+            return {legal_entity_id:Number(row.dataset.entityId),version:Number(row.dataset.version),email:row.querySelector('[data-mail-email]').value.trim(),password:row.querySelector('[data-mail-password]').value,clear_password:row.querySelector('[data-mail-clear]').checked};
+        });
+    }
+
     function loadWorkMail(container, membershipId) {
-        var endpoint = '/company/roles-access/memberships/' + Number(membershipId) + '/work-mail';
+        var endpoint = membershipId ? '/company/roles-access/memberships/' + Number(membershipId) + '/work-mail' : '/company/roles-access/work-mail/template';
         var statusLabels = {incomplete:'Подключение не завершено',unverified:'Подключение не проверено',connected:'IMAP и SMTP подключены',failed:'Ошибка подключения'};
         jsonRequest(endpoint).then(function (data) {
             if (!container.isConnected) return;
-            container.innerHTML = '<p class="roles-access-modal__help">Для каждого юридического лица используется свой ящик. Общие настройки Spaceweb: IMAP — imap.spaceweb.ru:993, SSL; SMTP — smtp.spaceweb.ru:465, SSL. Логин — полный email. Основной email сотрудника сохраняется.</p>';
+            container.innerHTML = '<p class="roles-access-modal__help">Изменения почты сохраняются общей кнопкой «Сохранить». Пустое поле пароля сохраняет прежний пароль.</p>';
             (data.profiles || []).forEach(function (profile) {
                 var row = document.createElement('div');
-                row.className = 'roles-access-modal__section';
-                row.innerHTML = '<h4>' + esc(profile.company_name) + '</h4><div class="roles-access-modal__identity">' +
-                    '<label class="field"><span class="field-label">Рабочий email</span><input type="email" class="field-input" data-mail-email maxlength="254" autocomplete="off" value="' + esc(profile.email) + '"></label>' +
-                    '<label class="field"><span class="field-label">Пароль почтового ящика</span><input type="password" class="field-input" data-mail-password autocomplete="new-password" maxlength="512" placeholder="' + (profile.has_password ? 'Сохранён. Оставьте пустым, чтобы не менять' : 'Не задан') + '"></label></div>' +
-                    '<label><input type="checkbox" data-mail-clear> Удалить сохранённый пароль</label>' +
-                    '<p data-mail-status role="status"></p><div class="modal-foot-actions"><button type="button" class="btn btn-ghost" data-mail-save>Сохранить почту</button><button type="button" class="btn btn-ghost" data-mail-check>Проверить IMAP/SMTP</button></div>';
+                row.className = 'roles-access__mail-row'; row.dataset.mailRow=''; row.dataset.entityId=profile.legal_entity_id; row.dataset.version=profile.version;
+                row.innerHTML = '<h4 class="roles-access-modal__section-head">' + esc(profile.company_name) + '</h4><div class="roles-access__mail-fields">' +
+                    '<label class="field"><span class="field-label">Рабочий email</span><input type="email" class="field-input" data-mail-email maxlength="254" autocomplete="off" placeholder="@'+esc(profile.email_domain||'')+'" value="' + esc(profile.email) + '"></label>' +
+                    '<label class="field"><span class="field-label">Пароль почтового ящика</span><input type="password" class="field-input" data-mail-password autocomplete="new-password" maxlength="512" placeholder="' + (profile.has_password ? 'Сохранён' : 'Не задан') + '"></label></div>' +
+                    '<div class="roles-access__mail-actions"><label class="roles-access__mail-clear"><input type="checkbox" data-mail-clear> Удалить пароль</label><button type="button" class="btn btn-ghost" data-mail-check>Проверить подключение</button></div><div class="roles-access-modal__help" data-mail-status role="status"></div>';
                 container.appendChild(row);
-                var status = row.querySelector('[data-mail-status]');
-                var save = row.querySelector('[data-mail-save]');
-                var check = row.querySelector('[data-mail-check]');
-                var email = row.querySelector('[data-mail-email]');
-                var password = row.querySelector('[data-mail-password]');
-                var clear = row.querySelector('[data-mail-clear]');
+                var status = row.querySelector('[data-mail-status]'), check = row.querySelector('[data-mail-check]');
+                var email = row.querySelector('[data-mail-email]'), password = row.querySelector('[data-mail-password]'), clear = row.querySelector('[data-mail-clear]');
                 function refresh(message) {
                     status.textContent = message || statusLabels[profile.connection_status] || '';
-                    save.disabled = !profile.schema_ready;
-                    check.disabled = !profile.schema_ready || !profile.has_password;
+                    check.disabled = !membershipId || !profile.has_password;
                 }
-                refresh(profile.schema_ready ? '' : 'Рабочая почта ожидает обновления структуры базы данных.');
-                function mutate(kind) {
-                    if (kind === 'check' && (email.value.trim().toLowerCase() !== profile.email || password.value || clear.checked)) {
-                        status.textContent = 'Сначала сохраните изменённые настройки почты.'; return;
+                refresh();
+                check.addEventListener('click',function () {
+                    if (email.value.trim().toLowerCase() !== profile.email || password.value || clear.checked) {
+                        status.textContent = 'Сначала нажмите общую кнопку «Сохранить», затем откройте карточку для проверки.'; return;
                     }
-                    save.disabled = check.disabled = true;
-                    status.textContent = kind === 'check' ? 'Проверяем вход в IMAP и SMTP без отправки писем…' : 'Сохраняем…';
-                    var body = {legal_entity_id:Number(profile.legal_entity_id)};
-                    if (kind === 'save') Object.assign(body,{email:email.value,password:password.value,clear_password:clear.checked,version:Number(profile.version)});
-                    jsonRequest(endpoint + '/' + kind, {method:'POST',body:body}).then(function (result) {
-                        Object.assign(profile,result.profile);
-                        password.value = ''; clear.checked = false; email.value = profile.email;
-                        password.placeholder = profile.has_password ? 'Сохранён. Оставьте пустым, чтобы не менять' : 'Не задан';
-                        refresh(result.message || 'Почта сохранена. ' + statusLabels[profile.connection_status]);
-                    }).catch(function (error) { password.value = ''; refresh(error.message); });
-                }
-                save.addEventListener('click',function () { mutate('save'); });
-                check.addEventListener('click',function () { mutate('check'); });
+                    check.disabled = true; modalSave.disabled=true;
+                    status.textContent = 'Проверяем IMAP и SMTP без отправки писем…';
+                    jsonRequest(endpoint + '/check', {method:'POST',body:{legal_entity_id:Number(profile.legal_entity_id)}}).then(function (result) {
+                        Object.assign(profile,result.profile); row.dataset.version=profile.version;
+                        refresh(result.message);
+                    }).catch(function (error) { refresh(error.message); }).finally(function () { modalSave.disabled=false; });
+                });
             });
-            if (!(data.profiles || []).length) container.textContent = 'Нет доступных юридических лиц для настройки почты сотрудника.';
+            container.dataset.loaded='true';
+            if (!(data.profiles || []).length) container.textContent = 'Почтовые компании ещё не настроены.';
         }).catch(function (error) { if (container.isConnected) container.textContent = error.message; });
     }
 
@@ -466,10 +464,12 @@
             '<label class="field"><span class="field-label">Пароль</span><input type="password" class="field-input" data-new-password autocomplete="new-password"></label><label class="field"><span class="field-label">Email</span><input type="email" class="field-input" data-new-email></label>' +
             '<label class="field"><span class="field-label">Телефон</span><input class="field-input" data-new-phone></label><label class="field"><span class="field-label">MAX ID</span><input class="field-input" inputmode="numeric" maxlength="19" data-new-max-id placeholder="Необязательно"></label><label class="field"><span class="field-label">Статус</span><select class="field-select" data-new-status><option value="active">Активен</option><option value="blocked">Отключён</option></select></label>' +
             '<label class="field is-wide"><span class="field-label">Роль</span><select class="field-select" data-new-role>' + roles + '</select></label></div></section>';
+        body += '<section class="roles-access-modal__section" data-work-mail><h3 class="roles-access-modal__section-head">Рабочая почта</h3><div data-work-mail-content>Загрузка почтовых профилей…</div></section>';
         openModal({title:'Добавить пользователя',subtitle:'Новая или существующая глобальная учётная запись',body:body,submit:function () {
-            return jsonRequest('/company/roles-access/memberships', {method:'POST',body:{full_name:modalBody.querySelector('[data-new-full-name]').value,login:modalBody.querySelector('[data-new-login]').value,password:modalBody.querySelector('[data-new-password]').value,email:modalBody.querySelector('[data-new-email]').value,phone:modalBody.querySelector('[data-new-phone]').value,max_user_id:modalBody.querySelector('[data-new-max-id]').value.trim(),role_id:Number(modalBody.querySelector('[data-new-role]').value),status:modalBody.querySelector('[data-new-status]').value}})
+            return jsonRequest('/company/roles-access/memberships', {method:'POST',body:{work_mail:collectWorkMail(),full_name:modalBody.querySelector('[data-new-full-name]').value,login:modalBody.querySelector('[data-new-login]').value,password:modalBody.querySelector('[data-new-password]').value,email:modalBody.querySelector('[data-new-email]').value,phone:modalBody.querySelector('[data-new-phone]').value,max_user_id:modalBody.querySelector('[data-new-max-id]').value.trim(),role_id:Number(modalBody.querySelector('[data-new-role]').value),status:modalBody.querySelector('[data-new-status]').value}})
                 .then(function () { closeModal(); return refreshSnapshot('Пользователь добавлен.'); });
         }});
+        loadWorkMail(modalBody.querySelector('[data-work-mail-content]'),null);
     }
 
     function loadAssignmentMatrix(force) {

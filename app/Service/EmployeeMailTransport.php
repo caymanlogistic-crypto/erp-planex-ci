@@ -3,17 +3,17 @@ declare(strict_types=1);
 
 namespace App\Service;
 
-/** Fixed Spaceweb endpoints prevent settings from becoming an SSRF proxy. */
+require_once __DIR__.'/EmployeeMailSettingsService.php';
+
+/** Authentication only, using saved SSL settings and public network endpoints. */
 final class EmployeeMailTransport
 {
-    public const IMAP_HOST='imap.spaceweb.ru';
-    public const SMTP_HOST='smtp.spaceweb.ru';
-
     public function check(#[\SensitiveParameter] array $credentials): array
     {
+        $settings=EmployeeMailSettingsService::validate($credentials['settings']??[]);
         $result=['imap'=>false,'smtp'=>false];
         try {
-            $socket=$this->connect(self::IMAP_HOST,993);
+            $socket=$this->connect($settings['imap_host'],$settings['imap_port']);
             try {
                 $greeting=$this->line($socket);
                 if (!str_starts_with($greeting,'* OK')) throw new \RuntimeException('IMAP_GREETING');
@@ -39,8 +39,15 @@ final class EmployeeMailTransport
 
     private function connect(string $host,int $port)
     {
+        $addresses=gethostbynamel($host);
+        if (!$addresses) throw new \RuntimeException('MAIL_DNS_FAILED');
+        foreach ($addresses as $address) {
+            if (!filter_var($address,FILTER_VALIDATE_IP,FILTER_FLAG_IPV4 | FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) throw new \RuntimeException('MAIL_HOST_NOT_PUBLIC');
+        }
+        // Pin the validated address; TLS still validates the original server name.
+        $address=$addresses[0];
         $context=stream_context_create(['ssl'=>['verify_peer'=>true,'verify_peer_name'=>true,'allow_self_signed'=>false,'peer_name'=>$host,'SNI_enabled'=>true,'crypto_method'=>STREAM_CRYPTO_METHOD_TLSv1_2_CLIENT | STREAM_CRYPTO_METHOD_TLSv1_3_CLIENT]]);
-        $socket=@stream_socket_client('ssl://'.$host.':'.$port,$errno,$error,15,STREAM_CLIENT_CONNECT,$context);
+        $socket=@stream_socket_client('ssl://'.$address.':'.$port,$errno,$error,15,STREAM_CLIENT_CONNECT,$context);
         if (!$socket) throw new \RuntimeException('MAIL_CONNECT_FAILED');
         stream_set_timeout($socket,15);
         return $socket;
@@ -48,7 +55,7 @@ final class EmployeeMailTransport
 
     private function smtpLogin(#[\SensitiveParameter] array $credentials)
     {
-        $socket=$this->connect(self::SMTP_HOST,465);
+        $socket=$this->connect($credentials['settings']['smtp_host'],(int)$credentials['settings']['smtp_port']);
         try {
             $this->expect($socket,220);
             $this->write($socket,"EHLO planex.local\r\n"); $this->expect($socket,250);
