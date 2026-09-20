@@ -1,0 +1,293 @@
+name: Central User MAX ID 015 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact current canonical SHA already deployed to /erpv2'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_CENTRAL_015_MAX_USER_ID to authorize central migration 015'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  RESULT_DIR: central_015_production_migration_result
+
+jobs:
+  migrate-015:
+    if: ${{ inputs.confirm_migration == 'APPLY_CENTRAL_015_MAX_USER_ID' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Validate exact canonical source and migration tooling
+        id: source
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          canonical_sha="$(git ls-remote origin "refs/heads/${CANONICAL_BRANCH}" | awk '{print $1}')"
+          test -n "$canonical_sha"
+          test "$SOURCE_SHA" = "$canonical_sha"
+          php -l scripts/central_015_production_migrate.php
+          php -l tests/central_015_production_migration_contract_test.php
+          php tests/central_015_production_migration_contract_test.php
+          test -s database/migrations/015_add_user_accounts_max_user_id.sql
+          migration_sha="$(sha256sum database/migrations/015_add_user_accounts_max_user_id.sql | awk '{print $1}')"
+          [[ "$migration_sha" =~ ^[0-9a-f]{64}$ ]]
+          printf 'source_sha=%s\nmigration_sha=%s\n' "$SOURCE_SHA" "$migration_sha" >> "$GITHUB_OUTPUT"
+          printf 'CENTRAL_015_SOURCE_SHA=%s\nCENTRAL_015_MIGRATION_SHA256=%s\n' "$SOURCE_SHA" "$migration_sha"
+
+      - name: Require successful exact canonical ERP PLANEX CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28"             "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/ci-runs.json
+          SOURCE_SHA="$SOURCE_SHA" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/ci-runs.json', encoding='utf-8'))
+          source=os.environ['SOURCE_SHA']; branch=os.environ['CANONICAL_BRANCH']
+          rows=[r for r in data.get('workflow_runs',[]) if r.get('head_sha')==source and r.get('head_branch')==branch and r.get('event')=='push']
+          if not rows: raise SystemExit('exact canonical ERP PLANEX CI run missing')
+          run=max(rows,key=lambda r:r.get('run_number',0))
+          if run.get('status')!='completed' or run.get('conclusion')!='success':
+              raise SystemExit(f"exact canonical ERP PLANEX CI not successful: {run.get('id')} {run.get('status')} {run.get('conclusion')}")
+          print(f"CENTRAL_015_CANONICAL_CI_PASS={run.get('id')}")
+          PY
+
+      - name: Publish pending migration status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - > /tmp/payload.json <<'PY'
+          import json
+          print(json.dumps({'state':'pending','context':'erpv2/migration015','description':'Central user MAX ID migration 015 in progress'}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28"             "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Configure isolated SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/central_015_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/central_015_key" "$HOME/.ssh/known_hosts"
+          SSH_CONTROL_DIR="/tmp/central015_mux_${GITHUB_RUN_ID}"
+          install -d -m 700 "$SSH_CONTROL_DIR"
+          SSH_CONTROL_PATH="$SSH_CONTROL_DIR/%C"
+          test "${#SSH_CONTROL_PATH}" -lt 90
+          printf 'SSH_CONTROL_DIR=%s\nSSH_CONTROL_PATH=%s\n' "$SSH_CONTROL_DIR" "$SSH_CONTROL_PATH" >> "$GITHUB_ENV"
+
+      - name: Require deployed marker as successful canonical ancestor
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes             -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH"             "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          [[ "$marker" =~ ^[0-9a-f]{40}$ ]]
+          test "$marker" != "$SOURCE_SHA"
+          git merge-base --is-ancestor "$marker" "$SOURCE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28"             "$API_URL/repos/$REPOSITORY/commits/$marker/status" > /tmp/deployed-status.json
+          DEPLOYED_SHA="$marker" python3 - <<'PY'
+          import json, os
+          data=json.load(open('/tmp/deployed-status.json', encoding='utf-8'))
+          rows=[s for s in data.get('statuses',[]) if s.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('deployed marker lacks successful erpv2/deploy status')
+          print('CENTRAL_015_DEPLOY_STATUS_PASS='+os.environ['DEPLOYED_SHA'])
+          PY
+          printf 'DEPLOYED_SHA=%s\n' "$marker" >> "$GITHUB_ENV"
+          printf 'CENTRAL_015_DEPLOYED_MARKER=%s\n' "$marker"
+
+      - name: Upload exact migration tooling
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes             -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
+          "${SCP[@]}" scripts/central_015_production_migrate.php "$SSH_USER@$SSH_HOST:/tmp/central_015_migrate_${GITHUB_RUN_ID}.php"
+      - name: Snapshot BEFORE and require clean migration state
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          MIGRATION_SHA: ${{ steps.source.outputs.migration_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes             -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST"             "PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOYED_SHA='$DEPLOYED_SHA' PLANEX_MIGRATION_SHA256='$MIGRATION_SHA'              /usr/bin/php8.5 '/tmp/central_015_migrate_${GITHUB_RUN_ID}.php' inspect" | tee central_015_before.txt
+          grep -Eq '^CENTRAL_015_INSPECT=(READY|ALREADY_APPLIED)$' central_015_before.txt
+          if grep -q '^CENTRAL_015_INSPECT=READY$' central_015_before.txt; then
+            echo 'CENTRAL_015_WAS_ABSENT=YES' >> "$GITHUB_ENV"
+          else
+            echo 'CENTRAL_015_WAS_ABSENT=NO' >> "$GITHUB_ENV"
+          fi
+
+      - name: Apply central migration 015
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          MIGRATION_SHA: ${{ steps.source.outputs.migration_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes             -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST"             "PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOYED_SHA='$DEPLOYED_SHA' PLANEX_MIGRATION_SHA256='$MIGRATION_SHA'              PLANEX_CONFIRM_015='APPLY_CENTRAL_015_MAX_USER_ID'              /usr/bin/php8.5 '/tmp/central_015_migrate_${GITHUB_RUN_ID}.php' apply" | tee central_015_apply.txt
+          grep -Eq '^CENTRAL_015_APPLY=(PASS|EXISTING)$' central_015_apply.txt
+
+      - name: Snapshot AFTER and verify invariants
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          MIGRATION_SHA: ${{ steps.source.outputs.migration_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes             -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST"             "PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOYED_SHA='$DEPLOYED_SHA' PLANEX_MIGRATION_SHA256='$MIGRATION_SHA'              /usr/bin/php8.5 '/tmp/central_015_migrate_${GITHUB_RUN_ID}.php' inspect" | tee central_015_after.txt
+          grep -q '^CENTRAL_015_INSPECT=ALREADY_APPLIED$' central_015_after.txt
+          CENTRAL_015_WAS_ABSENT="${CENTRAL_015_WAS_ABSENT:-NO}" python3 - <<'PY'
+          import os,re
+          def fields(path):
+              out={}
+              for line in open(path,encoding='utf-8'):
+                  m=re.match(r'^(CENTRAL_015_[A-Z0-9_]+)=(.*)$',line.rstrip())
+                  if m: out[m.group(1)]=m.group(2)
+              return out
+          before,after=fields('central_015_before.txt'),fields('central_015_after.txt')
+          for key in ('CENTRAL_015_MARKER','CENTRAL_015_CHECKSUM','CENTRAL_015_ROWS','CENTRAL_015_IDENTITY_HASH'):
+              if before.get(key)!=after.get(key):
+                  raise SystemExit(f'invariant changed: {key}: {before.get(key)} -> {after.get(key)}')
+          if after.get('CENTRAL_015_JOURNALED')!='YES' or after.get('CENTRAL_015_COLUMN')!='YES' or after.get('CENTRAL_015_INDEX')!='YES':
+              raise SystemExit('migration 015 schema/journal readback incomplete')
+          if os.environ.get('CENTRAL_015_WAS_ABSENT')=='YES':
+              if before.get('CENTRAL_015_JOURNALED')!='NO' or before.get('CENTRAL_015_COLUMN')!='NO' or before.get('CENTRAL_015_INDEX')!='NO':
+                  raise SystemExit('pre-015 state was not clean')
+              if after.get('CENTRAL_015_MAX_ID_NONNULL')!='0':
+                  raise SystemExit('migration invented MAX IDs')
+          print('CENTRAL_015_INVARIANTS_PASS=YES')
+          PY
+
+      - name: HTTP acceptance after migration
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+          echo 'CENTRAL_015_HTTP_LOGIN=200'
+
+      - name: Roll back fresh 015 only after post-apply failure
+        if: ${{ failure() && env.CENTRAL_015_WAS_ABSENT == 'YES' }}
+        env:
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          MIGRATION_SHA: ${{ steps.source.outputs.migration_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          current="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes             -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$current" = "$DEPLOYED_SHA"
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes             -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST"             "PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOYED_SHA='$DEPLOYED_SHA' PLANEX_MIGRATION_SHA256='$MIGRATION_SHA'              PLANEX_CONFIRM_015='ROLLBACK_CENTRAL_015_MAX_USER_ID'              /usr/bin/php8.5 '/tmp/central_015_migrate_${GITHUB_RUN_ID}.php' rollback" | tee central_015_rollback.txt
+          grep -q '^CENTRAL_015_ROLLBACK=PASS$' central_015_rollback.txt
+
+      - name: Upload sanitized migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: central_015_production_migration_${{ inputs.source_sha }}
+          path: |
+            central_015_before.txt
+            central_015_apply.txt
+            central_015_after.txt
+            central_015_rollback.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish final migration status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ steps.source.outputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$JOB_STATUS" = success ]; then
+            state=success
+            desc='Central user MAX ID migration 015 verified'
+          else
+            state=failure
+            desc='Central user MAX ID migration 015 failed'
+          fi
+          STATE="$state" DESC="$desc" python3 - > /tmp/payload.json <<'PY'
+          import json,os
+          print(json.dumps({'state':os.environ['STATE'],'context':'erpv2/migration015','description':os.environ['DESC']}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28"             "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Cleanup temporary migration tooling
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -u
+          if [ -f "$HOME/.ssh/central_015_key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes               -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST"               "rm -f '/tmp/central_015_migrate_${GITHUB_RUN_ID}.php'" 2>/dev/null || true
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/central_015_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes               -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" -O exit "$SSH_USER@$SSH_HOST" 2>/dev/null || true
+          fi
+          rm -rf "${SSH_CONTROL_DIR:-}" 2>/dev/null || true
+          rm -f "$HOME/.ssh/central_015_key"
