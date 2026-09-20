@@ -7,6 +7,7 @@ use App\Service\FeoLegacyParityService;
 use App\Service\FeoPlacementAuthorService;
 use App\Service\FeoPlacementInputParser;
 use App\Service\FeoPlacementService;
+use App\Service\FeoPlacementRouteNotificationService;
 use App\Service\FeoRequestService;
 use App\Service\MaxEventNotificationService;
 
@@ -138,32 +139,90 @@ final class FeoPlacementController
             $creator = FeoPlacementAuthorService::creatorFromSession($_SESSION);
             $notifications = new MaxEventNotificationService($pdo);
             $deliveryId = null;
+            $supplementalIds = [];
+            $notificationPreparationError = null;
+            $centralPdo = $this->db->connection();
+            $routeNotifications = new FeoPlacementRouteNotificationService();
             $result = $this->placement->createBlock($pdo, [
                 'name'=>$preview['name'],'block_type'=>$preview['block_type'],'ids'=>$preview['ids'],
                 'source_type'=>$preview['source_type'],'source_filename'=>$preview['source_filename'],'source_file_key'=>$fileKey,
-            ] + $creator, (string)$preview['state_hash'], function (array $created) use ($notifications, &$deliveryId, $company, $pdo, $creator, $preview): void {
-                $author = (new FeoPlacementAuthorService($this->db->connection()))->decorate($pdo, (int)$company['id'], [$creator])[0];
-                $deliveryId = $notifications->enqueue('feo.placement.block_created', (string)$created['block_id'], [
-                    'block_id' => (string)$created['block_id'],
-                    'block_name' => trim((string)$preview['name']) ?: 'Без названия',
-                    'block_type' => $preview['block_type'] === 'addition' ? 'Добавление' : 'Исключение',
-                    'request_count' => (string)$created['preview']['selected_count'],
-                    'mass_kg' => $this->massText((float)$created['preview']['selected_mass_kg']),
-                    'author' => $author['created_by_display_name'],
-                    'company' => (string)$company['name'],
-                    'created_at' => date('d.m.Y H:i'),
-                    'current_count' => (string)$created['current']['request_count'],
-                    'current_mass_kg' => $this->massText((float)$created['current']['total_mass_kg']),
-                ], (int)$creator['created_by_user_id']);
+            ] + $creator, (string)$preview['state_hash'], function (array $created) use (
+                $notifications, &$deliveryId, &$supplementalIds, &$notificationPreparationError,
+                $company, $pdo, $centralPdo, $creator, $preview, $routeNotifications
+            ): void {
+                try {
+                    $author = (new FeoPlacementAuthorService($centralPdo))->decorate($pdo, (int)$company['id'], [$creator])[0];
+                    $deliveryId = $notifications->enqueue('feo.placement.block_created', (string)$created['block_id'], [
+                        'action_title' => $preview['block_type'] === 'addition' ? 'ДОБАВЛЕНО НА КАРТУ' : 'СНЯТИЕ ЗАЯВОК',
+                        'block_id' => (string)$created['block_id'],
+                        'block_name' => trim((string)$preview['name']) ?: 'Без названия',
+                        'block_type' => $preview['block_type'] === 'addition' ? 'Добавление' : 'Исключение',
+                        'request_count' => (string)$created['preview']['selected_count'],
+                        'mass_kg' => FeoPlacementRouteNotificationService::massText((float)$created['preview']['selected_mass_kg']),
+                        'author' => $author['created_by_display_name'],
+                        'company' => (string)$company['name'],
+                        'created_at' => date('d.m.Y H:i'),
+                        'current_count' => (string)$created['current']['request_count'],
+                        'current_mass_kg' => FeoPlacementRouteNotificationService::massText((float)$created['current']['total_mass_kg']),
+                    ], (int)$creator['created_by_user_id']);
+                    if ($deliveryId === null) return;
+
+                    $intents = $routeNotifications->intents(
+                        $pdo, $centralPdo, (int)$company['id'], (string)$preview['block_type'], (array)$preview['ids']
+                    );
+                    foreach ($intents as $intent) {
+                        $entityKey = sprintf(
+                            'b%d:%s:r%d:p%d',
+                            (int)$created['block_id'], (string)$intent['kind'], (int)$intent['route_id'], (int)$intent['part']
+                        );
+                        $id = $notifications->enqueuePrepared(
+                            'feo.placement.block_created', $entityKey, (string)$intent['text'],
+                            (string)$intent['format'], (int)$creator['created_by_user_id'],
+                            isset($intent['error']) ? (string)$intent['error'] : null
+                        );
+                        if ($id !== null) $supplementalIds[] = $id;
+                    }
+                } catch (\Throwable $notificationError) {
+                    $notificationPreparationError = $notificationError->getMessage();
+                    error_log('MAX FEO preparation: ' . $notificationPreparationError);
+                    try {
+                        $diagnosticId = $notifications->enqueuePrepared(
+                            'feo.placement.block_created',
+                            sprintf('b%d:analysis:r0:p1', (int)$created['block_id']),
+                            '',
+                            'markdown',
+                            (int)$creator['created_by_user_id'],
+                            'Не удалось подготовить адресные уведомления: ' . mb_substr($notificationPreparationError, 0, 1500)
+                        );
+                        if ($diagnosticId !== null) $supplementalIds[] = $diagnosticId;
+                    } catch (\Throwable $diagnosticError) {
+                        error_log('MAX FEO diagnostic: ' . $diagnosticError->getMessage());
+                    }
+                }
             });
             $finalPath = null; // The source now belongs to the committed block.
             unset($_SESSION['feo_placement_previews'][$token]);
             $_SESSION['flash_success'] = sprintf('Блок #%d применён. Актуальный состав: %d заявок, %s кг.', (int)$result['block_id'], (int)$result['current']['request_count'], $this->massText((float)$result['current']['total_mass_kg']));
-            if ($deliveryId !== null) {
+            if ($notificationPreparationError !== null) {
+                $_SESSION['flash_error'] = 'Блок сохранён. Не удалось подготовить MAX-уведомления; проверьте журнал приложения и настройки MAX.';
+            } elseif ($deliveryId !== null) {
                 try {
                     $delivery = $notifications->dispatch($deliveryId);
-                    if ($delivery['status'] !== 'sent') $_SESSION['flash_error'] = 'Блок сохранён. Уведомление MAX не отправлено; подробности — в настройках MAX, вкладка «События».';
+                    if ($delivery['status'] === 'sent') {
+                        $supplementalFailed = false;
+                        foreach ($supplementalIds as $supplementalId) {
+                            $supplemental = $notifications->dispatch($supplementalId);
+                            if (($supplemental['status'] ?? '') !== 'sent') $supplementalFailed = true;
+                        }
+                        if ($supplementalFailed) {
+                            $_SESSION['flash_error'] = 'Блок сохранён. Часть адресных уведомлений MAX не доставлена; подробности — в настройках MAX, вкладка «События».';
+                        }
+                    } else {
+                        $notifications->failPending($supplementalIds, 'Основное уведомление блока не доставлено. Сначала повторите его отправку.');
+                        $_SESSION['flash_error'] = 'Блок сохранён. Основное уведомление MAX не доставлено; адресные уведомления не отправлялись.';
+                    }
                 } catch (\Throwable $notificationError) {
+                    $notifications->failPending($supplementalIds, 'Основное уведомление блока не доставлено. Сначала повторите его отправку.');
                     error_log('MAX delivery #' . $deliveryId . ': ' . $notificationError->getMessage());
                     $_SESSION['flash_error'] = 'Блок сохранён. Проверьте отправку уведомления в настройках MAX.';
                 }

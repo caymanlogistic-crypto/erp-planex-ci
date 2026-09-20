@@ -216,8 +216,14 @@ final class MaxMessagingController
         verifyCsrfRequest();
         try {
             [, $pdo] = $this->tenant(true);
-            $row = (new MaxEventNotificationService($pdo))->dispatch((int)$id, true);
+            $events = new MaxEventNotificationService($pdo);
+            $row = $events->dispatch((int)$id, true);
             if ($row['status'] !== 'sent') throw new RuntimeException($row['error_message'] ?: 'Отправка уже выполняется. Проверьте результат позже.');
+            if ($row['event_key'] === 'feo.placement.block_created' && preg_match('/^[1-9][0-9]*$/D', (string)$row['entity_key']) === 1) {
+                $supplementals = $events->dispatchBlockSupplementals((int)$row['entity_key'], true);
+                $failed = array_filter($supplementals, static fn(array $delivery): bool => ($delivery['status'] ?? '') !== 'sent');
+                if ($failed !== []) $this->error('Основное уведомление отправлено, но часть адресных уведомлений требует внимания.');
+            }
             $this->success('Уведомление отправлено в MAX.');
         } catch (Throwable $e) {
             $this->error($e->getMessage());

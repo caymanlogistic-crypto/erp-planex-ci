@@ -107,6 +107,8 @@ final class RolesAccessController
                 isset($payload['email']) ? (string) $payload['email'] : null,
                 isset($payload['phone']) ? (string) $payload['phone'] : null,
                 (string) ($payload['status'] ?? 'active'),
+                isset($payload['max_user_id']) ? (string)$payload['max_user_id'] : null,
+                array_key_exists('max_user_id', $payload),
             );
             return ['membership' => $result];
         }, 201);
@@ -124,6 +126,8 @@ final class RolesAccessController
                 is_array($payload['page_overrides'] ?? null) ? $payload['page_overrides'] : [],
                 is_array($payload['data_scope_overrides'] ?? null) ? $payload['data_scope_overrides'] : [],
                 $registry->grantablePageKeys(),
+                isset($payload['max_user_id']) ? (string)$payload['max_user_id'] : null,
+                array_key_exists('max_user_id', $payload),
             );
             return ['saved' => true];
         });

@@ -22,8 +22,9 @@ final class CompanyMembershipService
      */
     public function listForCompany(int $companyId, array $pageKeys = [], ?array $roles = null): array
     {
+        $maxSelect = $this->maxUserIdReady() ? 'a.max_user_id' : 'NULL AS max_user_id';
         $stmt = $this->pdo->prepare(
-            'SELECT m.id, m.account_id, a.full_name, a.login, a.email, a.phone,
+            'SELECT m.id, m.account_id, a.full_name, a.login, a.email, a.phone, ' . $maxSelect . ',
                     m.status, m.role_id, r.name AS role_name, r.system_key AS role_system_key
              FROM company_memberships m
              JOIN user_accounts a ON a.id = m.account_id
@@ -136,7 +137,9 @@ final class CompanyMembershipService
         ?string $plainPassword,
         ?string $email = null,
         ?string $phone = null,
-        string $status = 'active'
+        string $status = 'active',
+        ?string $maxUserId = null,
+        bool $maxUserIdProvided = false
     ): array {
         $login = trim($login);
         $fullName = trim($fullName);
@@ -150,39 +153,50 @@ final class CompanyMembershipService
         if (!in_array($status, self::STATUSES, true)) {
             throw new \InvalidArgumentException('Некорректный статус membership.');
         }
+        $maxUserId = $maxUserIdProvided ? $this->normalizeMaxUserId($maxUserId) : null;
+        $maxReady = $this->maxUserIdReady();
+        if ($maxUserIdProvided && $maxUserId !== null && !$maxReady) throw new \DomainException('Поле MAX ID ещё не подключено миграцией базы.');
 
         $this->pdo->beginTransaction();
         try {
             $this->assertRoleBelongsToCompany($companyId, $roleId);
             $accountStmt = $this->pdo->prepare(
-                'SELECT id, full_name, login, email, phone, password_hash FROM user_accounts WHERE normalized_login = ? FOR UPDATE'
+                'SELECT id, full_name, login, email, phone, password_hash, ' . ($maxReady ? 'max_user_id' : 'NULL AS max_user_id') . ' FROM user_accounts WHERE normalized_login = ? FOR UPDATE'
             );
             $accountStmt->execute([$normalizedLogin]);
             $account = $accountStmt->fetch(PDO::FETCH_ASSOC);
             $accountCreated = false;
+            if ($maxReady && $maxUserId !== null) {
+                $this->assertMaxUserIdAvailable($maxUserId, $account ? (int)$account['id'] : null);
+            }
 
             if (!$account) {
                 if ($plainPassword === null || $plainPassword === '') {
                     throw new \InvalidArgumentException('Для новой учётной записи требуется пароль.');
                 }
-                $insertAccount = $this->pdo->prepare(
-                    'INSERT INTO user_accounts
-                     (full_name, login, normalized_login, email, phone, password_hash, status, created_at, updated_at)
-                     VALUES (:full_name, :login, :normalized_login, :email, :phone, :password_hash, \'active\', NOW(), NOW())'
-                );
-                $insertAccount->execute([
+                $columns = 'full_name, login, normalized_login, email, phone, password_hash' . ($maxReady ? ', max_user_id' : '') . ', status, created_at, updated_at';
+                $values = ':full_name, :login, :normalized_login, :email, :phone, :password_hash' . ($maxReady ? ', :max_user_id' : '') . ", 'active', NOW(), NOW()";
+                $insertAccount = $this->pdo->prepare('INSERT INTO user_accounts (' . $columns . ') VALUES (' . $values . ')');
+                $params = [
                     ':full_name' => trim($fullName),
                     ':login' => $login,
                     ':normalized_login' => $normalizedLogin,
                     ':email' => $email !== null && trim($email) !== '' ? trim($email) : null,
                     ':phone' => $phone !== null && trim($phone) !== '' ? trim($phone) : null,
                     ':password_hash' => password_hash($plainPassword, PASSWORD_DEFAULT),
-                ]);
+                ];
+                if ($maxReady) $params[':max_user_id'] = $maxUserId;
+                $insertAccount->execute($params);
                 $accountId = (int) $this->pdo->lastInsertId();
                 $accountCreated = true;
             } else {
                 $accountId = (int) $account['id'];
                 $this->assertCompatibleExistingIdentity($account, $fullName, $email, $phone, $plainPassword);
+                if ($maxReady && $maxUserIdProvided && $maxUserId !== null) {
+                    $storedMax = trim((string)($account['max_user_id'] ?? ''));
+                    if ($storedMax !== '' && $storedMax !== $maxUserId) throw new \DomainException('Учётная запись существует, но MAX ID отличается. Требуется разрешить конфликт identity.');
+                    if ($storedMax === '') $this->pdo->prepare('UPDATE user_accounts SET max_user_id=?,updated_at=NOW() WHERE id=?')->execute([$maxUserId,$accountId]);
+                }
             }
 
             $existing = $this->pdo->prepare(
@@ -223,11 +237,16 @@ final class CompanyMembershipService
         string $status,
         array $pageOverrides,
         array $dataScopeOverrides,
-        array $allowedPageKeys = []
+        array $allowedPageKeys = [],
+        ?string $maxUserId = null,
+        bool $maxUserIdProvided = false
     ): void {
         if (!in_array($status, self::STATUSES, true)) {
             throw new \InvalidArgumentException('Некорректный статус membership.');
         }
+        $maxUserId = $maxUserIdProvided ? $this->normalizeMaxUserId($maxUserId) : null;
+        $maxReady = $this->maxUserIdReady();
+        if ($maxUserIdProvided && $maxUserId !== null && !$maxReady) throw new \DomainException('Поле MAX ID ещё не подключено миграцией базы.');
         $allowedPageKeyMap = array_fill_keys(array_values(array_unique(array_map('strval', $allowedPageKeys))), true);
         if ($pageOverrides !== [] && $allowedPageKeyMap === []) {
             throw new \InvalidArgumentException('Для сохранения персональных страниц нужен snapshot текущего Page Registry.');
@@ -240,6 +259,9 @@ final class CompanyMembershipService
         $this->pdo->beginTransaction();
         try {
             $membership = $this->lockMembership($companyId, $membershipId);
+            if ($maxReady && $maxUserIdProvided && $maxUserId !== null) {
+                $this->assertMaxUserIdAvailable($maxUserId, (int)$membership['account_id']);
+            }
             $targetRole = $this->lockRole($companyId, $roleId);
             $currentOwner = ($membership['role_system_key'] ?? null) === CompanyRoleService::OWNER_SYSTEM_KEY;
             $targetOwner = ($targetRole['system_key'] ?? null) === CompanyRoleService::OWNER_SYSTEM_KEY;
@@ -255,6 +277,10 @@ final class CompanyMembershipService
                  WHERE id = ? AND company_id = ?'
             );
             $update->execute([$roleId, $status, $membershipId, $companyId]);
+            if ($maxReady && $maxUserIdProvided) {
+                $this->pdo->prepare('UPDATE user_accounts SET max_user_id=?,updated_at=NOW() WHERE id=?')
+                    ->execute([$maxUserId, (int)$membership['account_id']]);
+            }
 
             $this->replacePageOverrides($membershipId, $pageOverrides);
             $this->replaceDataScopeOverrides($membershipId, $dataScopeOverrides);
@@ -380,6 +406,43 @@ final class CompanyMembershipService
             }
             $insert->execute([$membershipId, $entityType, $scope]);
         }
+    }
+
+    private function maxUserIdReady(): bool
+    {
+        try {
+            return (int)$this->pdo->query(
+                "SELECT COUNT(*) FROM information_schema.COLUMNS
+                 WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='user_accounts' AND COLUMN_NAME='max_user_id'"
+            )->fetchColumn() === 1;
+        } catch (\Throwable) {
+            return false;
+        }
+    }
+
+    private function normalizeMaxUserId(?string $value): ?string
+    {
+        $value = trim((string)$value);
+        if ($value === '') return null;
+        if (preg_match('/^[1-9][0-9]{0,18}$/D', $value) !== 1
+            || (strlen($value) === 19 && strcmp($value, '9223372036854775807') > 0)) {
+            throw new \InvalidArgumentException('MAX ID должен быть положительным int64-идентификатором.');
+        }
+        return $value;
+    }
+
+    private function assertMaxUserIdAvailable(string $maxUserId, ?int $accountId = null): void
+    {
+        $sql = 'SELECT id FROM user_accounts WHERE max_user_id=?';
+        $params = [$maxUserId];
+        if ($accountId !== null) {
+            $sql .= ' AND id<>?';
+            $params[] = $accountId;
+        }
+        $sql .= ' LIMIT 1 FOR UPDATE';
+        $q = $this->pdo->prepare($sql);
+        $q->execute($params);
+        if ($q->fetchColumn() !== false) throw new \DomainException('Этот MAX ID уже используется другой учётной записью.');
     }
 
     /** @param array<string,mixed> $account */
