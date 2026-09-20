@@ -5,8 +5,16 @@ namespace App\Service;
 use PDO;
 use RuntimeException;
 
+require_once __DIR__ . '/MaxEventCatalog.php';
+
 final class FeoPlacementRouteNotificationService
 {
+    private array $templates;
+
+    public function __construct(?array $templates = null)
+    {
+        $this->templates = $templates === null ? MaxFeoMessageTemplates::defaults() : MaxFeoMessageTemplates::validate($templates);
+    }
     public const MAX_DISTANCE_METERS = 5000.0;
     public const ACTIVE_STATUSES = [
         WasteTripService::STATUS_PLANNED,
@@ -18,6 +26,7 @@ final class FeoPlacementRouteNotificationService
     /** @return list<array<string,mixed>> */
     public function intents(PDO $tenant, PDO $central, int $companyId, string $blockType, array $businessIds): array
     {
+        $this->templates = MaxFeoMessageTemplates::load($tenant);
         $businessIds = array_values(array_unique(array_filter(array_map(
             static fn(mixed $id): string => trim((string)$id), $businessIds
         ), static fn(string $id): bool => $id !== '')));
@@ -107,13 +116,9 @@ final class FeoPlacementRouteNotificationService
                 if (FeoMapService::coordinateKey($existingCoords) !== $newKey) continue;
                 $routeId = (int)$existing['route_id'];
                 $sameByRequest[(string)$requestId] = true;
-                $key = $requestId . '|' . $routeId;
-                $candidate = ['new'=>$new, 'active'=>$existing];
-                if (!isset($sameGroups[$routeId]['pairs'][$key])
-                    || strnatcmp((string)$existing['zayavka_id'], (string)$sameGroups[$routeId]['pairs'][$key]['active']['zayavka_id']) < 0) {
-                    $sameGroups[$routeId]['route'] = $existing;
-                    $sameGroups[$routeId]['pairs'][$key] = $candidate;
-                }
+                $sameGroups[$routeId]['route'] = $existing;
+                $sameGroups[$routeId]['points'][$newKey]['requests'][(string)$requestId] = $new;
+                $sameGroups[$routeId]['points'][$newKey]['active'][(string)$existing['zayavka_id']] = true;
             }
         }
 
@@ -143,10 +148,14 @@ final class FeoPlacementRouteNotificationService
         ksort($nearbyGroups, SORT_NUMERIC);
         $intents = [];
         foreach ($sameGroups as $group) {
-            uasort($group['pairs'], static fn(array $a, array $b): int =>
-                strnatcmp((string)$a['new']['zayavka_id'], (string)$b['new']['zayavka_id'])
-            );
-            array_push($intents, ...$this->samePointMessages($group['route'], array_values($group['pairs'])));
+            foreach ($group['points'] as &$point) {
+                uksort($point['requests'], 'strnatcmp');
+                uksort($point['active'], 'strnatcmp');
+            }
+            unset($point);
+            uasort($group['points'], static fn(array $a, array $b): int =>
+                strnatcmp((string)array_key_first($a['requests']), (string)array_key_first($b['requests'])));
+            array_push($intents, ...$this->samePointMessages($group['route'], array_values($group['points'])));
         }
         foreach ($nearbyGroups as $group) {
             uksort($group['requests'], 'strnatcmp');
@@ -258,18 +267,40 @@ final class FeoPlacementRouteNotificationService
     }
 
     /** @return list<array<string,mixed>> */
-    private function samePointMessages(array $route, array $pairs): array
+    private function samePointMessages(array $route, array $points): array
     {
         $error = $this->managerError($route);
         if ($error !== null) return [$this->failedIntent('same_point', $route, $error)];
-        $header = $this->addressMessage($route, 'Заявки из нового блока находятся в той же точке, что активные заявки рейса ' . $this->routeLabel($route) . '.');
-        $lines = [];
-        foreach ($pairs as $pair) {
-            $lines[] = 'Новая ' . self::md((string)$pair['new']['zayavka_id'])
-                . ' — ' . self::massText((float)$pair['new']['mass_kg']) . ' кг; активная '
-                . self::md((string)$pair['active']['zayavka_id']) . '.';
+        $blocks = []; $requests = [];
+        foreach ($points as $index => $point) {
+            $requests += $point['requests'];
+            // Bounded active-ID lines keep Markdown balanced even for very large points.
+            $activeIds = array_map(self::md(...), array_map('strval', array_keys($point['active'])));
+            $rows = array_map(fn(array $row): string => $this->requestLine('addition_row',$row), array_values($point['requests']));
+            $block = MaxFeoMessageTemplates::render($this->templates,'point',['active_ids'=>implode(', ',$activeIds),'requests'=>implode("\n",$rows)]);
+            if (mb_strlen($block, 'UTF-8') <= 2400) {
+                $blocks[] = $block;
+                continue;
+            }
+            // A point spanning messages gets a stable label on every fragment: never
+            // leave continuation requests looking as if they belonged to another point.
+            // Keep each editable point template intact. Active IDs and requests are
+            // partitioned, never truncated; the point label links its continuations.
+            $activeParts = array_chunk($activeIds,60);
+            $rowParts = [];$current=[];
+            foreach($rows as $line){
+                if($current!==[] && mb_strlen(implode("\n",[...$current,$line]),'UTF-8')>1200){$rowParts[]=$current;$current=[];}
+                $current[]=$line;
+            }
+            if($current!==[])$rowParts[]=$current;
+            for($part=0;$part<max(count($activeParts),count($rowParts));$part++) {
+                $blocks[] = '**Точка '.($index+1).'**'.($part>0?' (продолжение)':'')."\n"
+                    . MaxFeoMessageTemplates::render($this->templates,'point',[
+                        'active_ids'=>isset($activeParts[$part])?implode(', ',$activeParts[$part]):'см. начало точки',
+                        'requests'=>isset($rowParts[$part])?implode("\n",$rowParts[$part]):'новые заявки — в предыдущих частях точки']);
+            }
         }
-        return $this->chunkMessages('same_point', $route, $header, $lines, 'Эти заявки необходимо также включить в рейс.');
+        return $this->chunkMessages('same_point', $route, $blocks, array_values($requests), "\n\n");
     }
 
     /** @return list<array<string,mixed>> */
@@ -277,12 +308,8 @@ final class FeoPlacementRouteNotificationService
     {
         $error = $this->managerError($route);
         if ($error !== null) return [$this->failedIntent('nearby', $route, $error)];
-        $header = $this->addressMessage($route, 'Добавленные заявки находятся вблизи (не более 5 км) заявок рейса ' . $this->routeLabel($route) . '.');
-        $mass = array_sum(array_map(static fn(array $row): float => (float)$row['mass_kg'], $requests));
-        $header .= ' Всего: ' . count($requests) . ', масса: ' . self::massText($mass) . ' кг.';
-        $lines = array_map(static fn(array $row): string =>
-            self::md((string)$row['zayavka_id']) . ' — ' . self::massText((float)$row['mass_kg']) . ' кг', $requests);
-        return $this->chunkMessages('nearby', $route, $header, $lines, 'Просим проверить возможность добавления в рейс.');
+        $lines = array_map(fn(array $row): string => $this->requestLine('nearby_row',$row), $requests);
+        return $this->chunkMessages('nearby', $route, $lines, $requests);
     }
 
     /** @return list<array<string,mixed>> */
@@ -290,13 +317,14 @@ final class FeoPlacementRouteNotificationService
     {
         $error = $this->managerError($route);
         if ($error !== null) return [$this->failedIntent('active_exclusion', $route, $error)];
-        $count = count($requests);
-        $mass = array_sum(array_map(static fn(array $row): float => (float)$row['mass_kg'], $requests));
-        $header = $this->addressMessage($route, 'С карты сняты активные заявки рейса ' . $this->routeLabel($route)
-            . '. Всего: ' . $count . ', масса: ' . self::massText($mass) . ' кг.');
-        $lines = array_map(static fn(array $row): string =>
-            self::md((string)$row['zayavka_id']) . ' — ' . self::massText((float)$row['mass_kg']) . ' кг', $requests);
-        return $this->chunkMessages('active_exclusion', $route, $header, $lines, 'Проверьте состав рейса.');
+        $lines = array_map(fn(array $row): string => $this->requestLine('exclusion_row',$row), $requests);
+        return $this->chunkMessages('active_exclusion', $route, $lines, $requests);
+    }
+
+    private function requestLine(string $kind, array $row): string
+    {
+        return MaxFeoMessageTemplates::render($this->templates,$kind,[
+            'id'=>self::md((string)$row['zayavka_id']),'mass_kg'=>self::massText((float)$row['mass_kg'])]);
     }
 
     private function managerError(array $route): ?string
@@ -318,13 +346,13 @@ final class FeoPlacementRouteNotificationService
         return null;
     }
 
-    private function addressMessage(array $route, string $body): string
+    private function messageValues(array $route, array $requests): array
     {
         $maxId = trim((string)($route['account']['max_user_id'] ?? ''));
-        if ($maxId === '') return $body;
-        $account = $route['account'];
-        return '[' . self::md((string)$account['full_name']) . '](max://user/' . $maxId . '), '
-            . mb_strtolower(mb_substr($body, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($body, 1, null, 'UTF-8');
+        $address = $maxId === '' ? '' : '[Менеджер](max://user/' . $maxId . ') · ';
+        return ['manager'=>$address,'route'=>$this->routeLabel($route),
+            'count_label'=>MaxEventCatalog::requestCountText(count($requests)),
+            'mass_kg'=>self::massText(array_sum(array_column($requests,'mass_kg')))];
     }
 
     private function routeLabel(array $route): string
@@ -345,14 +373,17 @@ final class FeoPlacementRouteNotificationService
     }
 
     /** @return list<array<string,mixed>> */
-    private function chunkMessages(string $kind, array $route, string $header, array $lines, string $footer): array
+    private function chunkMessages(string $kind, array $route, array $lines, array $requests, string $separator = "\n"): array
     {
+        $values = $this->messageValues($route,$requests);
+        $render = fn(array $items): string => MaxFeoMessageTemplates::render($this->templates,$kind,$values+['items'=>implode($separator,$items)]);
         $chunks = [];
         $current = [];
         foreach ($lines as $line) {
             $candidate = [...$current, $line];
-            $text = $header . "\n\n" . implode("\n", $candidate) . "\n\n" . $footer;
-            if ($current !== [] && mb_strlen($text, 'UTF-8') > 3920) {
+            $text = $render($candidate);
+            // Leave room for the actual MAX profile label and the part counter.
+            if ($current !== [] && mb_strlen($text, 'UTF-8') > 3500) {
                 $chunks[] = $current;
                 $current = [$line];
             } else {
@@ -365,7 +396,7 @@ final class FeoPlacementRouteNotificationService
         foreach ($chunks as $index => $chunk) {
             $part = $index + 1;
             $partLabel = $total > 1 ? 'Часть ' . $part . '/' . $total . ".\n" : '';
-            $text = $partLabel . $header . "\n\n" . implode("\n", $chunk) . "\n\n" . $footer;
+            $text = $partLabel . $render($chunk);
             if (mb_strlen($text, 'UTF-8') > 4000) throw new RuntimeException('Адресное MAX-сообщение превышает 4000 символов.');
             $out[] = [
                 'kind'=>$kind, 'route_id'=>(int)$route['route_id'], 'part'=>$part,

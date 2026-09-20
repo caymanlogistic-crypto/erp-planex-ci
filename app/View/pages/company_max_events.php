@@ -56,7 +56,7 @@ $eventStatusLabels = ['pending' => 'Ожидает отправки', 'sending' 
                     <div class="max-event-editor">
                         <div class="max-event-options">
                             <label class="checkbox-item"><input type="checkbox" name="is_enabled" value="1"><span class="checkbox-mark" aria-hidden="true"></span><span class="checkbox-label">Отправлять уведомления</span></label>
-                            <p class="field-msg" data-max-system-required-note hidden>Системное событие: основное FEO-сообщение отправляется всегда. Можно выбрать чат и Push, но отключить событие или изменить его обязательный текст нельзя.</p>
+                            <p class="field-msg" data-max-system-required-note hidden>Сообщения ФЭО отправляются обязательно. Тексты и оформление можно менять; сохраните переменные заявок, рейса и итогов. Все варианты используют выбранный чат и Push.</p>
                             <label class="field"><span class="field-label">Чат для отправки</span><select class="field-select" name="chat_config_id"><option value="">Выберите чат</option>
                             <?php foreach ($chats as $chat): $chatEnabled = !empty($chat['is_active']) && !empty($chat['bot_is_active']) && $chat['max_status'] === 'active'; ?>
                                 <option value="<?= (int)$chat['id'] ?>"><?= e($chat['name'].' · '.$chat['bot_name'].($chatEnabled ? '' : ' (неактивен)')) ?></option>
@@ -67,6 +67,8 @@ $eventStatusLabels = ['pending' => 'Ожидает отправки', 'sending' 
                             <span class="field-msg">В каналах MAX Push включён всегда.</span>
                         </div>
                         <div class="max-event-template">
+                            <label class="field" data-max-feo-template-selector hidden><span class="field-label">Вариант шаблона</span><select class="field-select" name="feo_template_kind"></select></label>
+                            <input type="hidden" name="feo_templates" disabled>
                             <label class="field"><span class="field-label">Шаблон сообщения</span><textarea class="field-textarea" name="message_template" rows="8" maxlength="4000" required></textarea></label>
                             <div class="max-event-variables"><label class="field"><span class="field-label">Переменная</span><select class="field-select" data-max-event-variable></select></label><button type="button" class="btn btn-secondary" data-max-insert>Вставить</button></div>
                             <div class="max-detail-actions"><button class="btn btn-secondary btn-sm" type="button" data-max-event-preview>Предпросмотр</button><button class="btn btn-ghost btn-sm" type="button" data-max-event-default>Стандартный шаблон</button></div>
