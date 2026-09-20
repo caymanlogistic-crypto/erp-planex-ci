@@ -13,7 +13,7 @@ foreach(\App\Service\MaxEventCatalog::all() as $key=>$event) $eventRules[]=['eve
 $eventRules[0]['is_enabled']=1;
 $eventRules[1]['chat_config_id']=null;
 if (($argv[1] ?? '') === 'many') {
-    for ($i=4;$i<=43;$i++) $eventRules[] = array_replace($eventRules[0], ['event_key'=>'fixture.event.'.$i,'title'=>'Тестовое событие '.$i,'description'=>'Синтетический каталог для проверки масштаба.','is_enabled'=>$i%2]);
+    for ($i=count($eventRules)+1;$i<=43;$i++) $eventRules[] = array_replace($eventRules[0], ['event_key'=>'fixture.event.'.$i,'title'=>'Тестовое событие '.$i,'description'=>'Синтетический каталог для проверки масштаба.','is_enabled'=>$i%2]);
 }
 if (($argv[1] ?? '') === 'draft') {
     $draft=['event_key'=>$eventRules[1]['event_key']];

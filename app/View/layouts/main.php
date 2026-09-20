@@ -666,6 +666,7 @@ if (empty($topbarCrumbs)) {
         </aside>
 
         <main class="content<?= $wideWorkspaceActive ? ' content--wide-workspace' : '' ?>">
+            <?php require base_path('app/View/partials/trip_document_return.php'); ?>
             <?php if ($wideWorkspaceActive): ?>
             <div class="workspace-shell-1690">
                 <?= $content ?>

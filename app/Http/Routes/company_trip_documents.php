@@ -1,0 +1,22 @@
+<?php
+require_once base_path('app/Service/TripDocumentCollectionService.php');
+require_once base_path('app/Http/Controllers/Company/TripDocumentController.php');
+$tripDocumentController=new \App\Http\Controllers\Company\TripDocumentController($config,$db);
+$requestDocumentsPage='company.documents.request';
+$collectDocumentsPage='company.documents.collection';
+$router->get('/company/documents/request',[$tripDocumentController,'requestForm'],$requestDocumentsPage);
+$router->get('/company/documents/request/trip',[$tripDocumentController,'trip'],$requestDocumentsPage);
+$router->post('/company/documents/request/preview',[$tripDocumentController,'preview'],$requestDocumentsPage);
+$router->post('/company/documents/request/send',[$tripDocumentController,'send'],$requestDocumentsPage);
+$router->get('/company/documents/collection',[$tripDocumentController,'index'],$collectDocumentsPage);
+$router->get('/company/documents/collection/{id}',[$tripDocumentController,'show'],$collectDocumentsPage);
+$router->post('/company/documents/collection/{id}/review',[$tripDocumentController,'review'],$collectDocumentsPage);
+$router->post('/company/documents/collection/{id}/preview',[$tripDocumentController,'previewAction'],$collectDocumentsPage);
+$router->post('/company/documents/collection/{id}/send',[$tripDocumentController,'sendAction'],$collectDocumentsPage);
+$router->post('/company/documents/collection/{id}/bind',[$tripDocumentController,'bind'],$collectDocumentsPage);
+$router->post('/company/documents/collection/{id}/import',[$tripDocumentController,'import'],$collectDocumentsPage);
+$router->post('/company/documents/collection/{id}/executor',[$tripDocumentController,'executor'],$collectDocumentsPage);
+$router->post('/company/documents/collection/{id}/tax',[$tripDocumentController,'tax'],$collectDocumentsPage);
+$router->post('/company/documents/collection/{id}/resolve',[$tripDocumentController,'resolve'],$collectDocumentsPage);
+$router->get('/company/documents/collection/{id}/incoming/{incoming}/files/{index}',[$tripDocumentController,'download'],$collectDocumentsPage);
+$router->get('/company/documents/collection/{id}/outgoing/{mail}/files/{index}',[$tripDocumentController,'outgoingDownload'],$collectDocumentsPage);

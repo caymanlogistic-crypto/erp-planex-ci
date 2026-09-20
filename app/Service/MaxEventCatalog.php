@@ -34,7 +34,22 @@ final class MaxEventCatalog
                     'current_mass_kg' => ['Масса актуального состава, кг', '100 000,000'],
                 ],
             ],
-        ] + self::transferEvents();
+        ] + self::transferEvents() + self::documentEvents();
+    }
+
+    private static function documentEvents(): array
+    {
+        $variables=['trip'=>['Рейс','123'],'loading_dates'=>['Даты загрузки','21–22.09.2026'],
+            'responsible'=>['Ответственный логист','Иванов Иван'],'action'=>['Следующее действие','Проверьте ответ перевозчика'],
+            'url'=>['Запрос в ERP','https://plan-ex.ru/erpv2/company/documents/collection/123']];
+        $events=[];
+        foreach (['requested'=>'Отправлен запрос документов','reply'=>'Получен ответ перевозчика','reminder'=>'Пора проверить документы','mail_error'=>'Ошибка отправки письма','minimum'=>'Минимальный пакет собран','full'=>'Полный пакет собран'] as $key=>$title) {
+            $events['documents.'.$key]=['title'=>'Документы — '.$title,
+                'description'=>in_array($key,['minimum','full'],true)?'Общее уведомление о пакете документов на рейс.':'Уведомление помощнику логиста. Выберите группу ПЛ.',
+                'template'=>$title."\nРейс #{{trip}} · загрузка: {{loading_dates}}\nЛогист: {{responsible}}\n{{action}}\n{{url}}",
+                'variables'=>$variables];
+        }
+        return $events;
     }
 
     private static function transferEvents(): array

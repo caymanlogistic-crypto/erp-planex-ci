@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `92bbb6b41fe685179434ecfe1c7a714712033ccc770931279c51293c7956b6b6`
+**Schema fingerprint:** `332351ec162c13c5a77ce3635ed766c469095894d20062a921e757a840abc2a0`
 
 ## Architecture overview
 
@@ -80,9 +80,12 @@ erDiagram
   T_crews ||--o{ T_generated_documents : "fk_generated_documents_route_executor"
   T_document_templates ||--o{ T_generated_documents : "fk_generated_documents_template"
   T_document_template_versions ||--o{ T_generated_documents : "fk_generated_documents_template_version"
+  T_trip_document_requests ||--o{ T_trip_document_events : "fk_document_event_request"
+  T_trip_document_requests ||--o{ T_trip_document_incoming : "fk_document_incoming_request"
+  T_trip_document_requests ||--o{ T_trip_document_mail : "fk_document_mail_request"
 ```
 
-Tables: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`
+Tables: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`, `trip_document_events`, `trip_document_incoming`, `trip_document_mail`, `trip_document_mailboxes`, `trip_document_previews`, `trip_document_requests`
 
 ## Finance
 
