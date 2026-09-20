@@ -91,7 +91,7 @@ try {
     foreach ($excluded as $intent) $ok($intent['kind']==='active_exclusion','exclusion intent type');
     $pdo->exec("UPDATE user_accounts SET max_user_id=NULL WHERE id=102");
     $missing = $service->intents($pdo,$pdo,7,'addition',['800002']);
-    $ok(count($missing)===1 && $missing[0]['text']==='' && str_contains((string)$missing[0]['error'],'Не заполнен MAX ID'), 'missing MAX ID failed diagnostic');
+    $ok(count($missing)===1 && str_contains($missing[0]['text'],'800002') && $missing[0]['error']===null && !str_contains($missing[0]['text'],'max://user/'), 'missing MAX ID full unaddressed message');
 
     $pdo->exec("UPDATE user_accounts SET max_user_id='900002' WHERE id=102");
     $pdo->exec("UPDATE waste_trips SET deleted_at=NOW() WHERE id=3");

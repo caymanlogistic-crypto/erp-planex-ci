@@ -111,8 +111,8 @@ $missingMax = $service->additionIntents(
     ['340001'=>$new('340001',50,55,37)],
     [$active(7,'240001',55,37,'')]
 );
-$ok(count($missingMax)===1 && $missingMax[0]['error']!==null && $missingMax[0]['text']==='','missing MAX ID diagnostic');
-$ok(str_contains((string)$missingMax[0]['error'],'Не заполнен MAX ID'),'missing MAX ID wording');
+$ok(count($missingMax)===1 && $missingMax[0]['error']===null,'missing MAX ID must not block delivery');
+$ok(str_starts_with($missingMax[0]['text'],'Заявки из нового блока') && !str_contains($missingMax[0]['text'],'max://user/'),'missing MAX ID neutral wording');
 
 $many = [];
 for ($i=1;$i<=450;$i++) {

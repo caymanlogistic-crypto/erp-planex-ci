@@ -110,4 +110,5 @@ echo "MAX_MESSAGE_LOG_CONTRACT=PASS\n";
     passthru(escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__DIR__ . '/feo_placement_runtime_bootstrap_test.php'), $status);
     if ($status !== 0) throw new RuntimeException('Placement route bootstrap failed in a clean process.');
     require __DIR__ . '/feo_placement_route_notifications_test.php';
+    require __DIR__ . '/max_feo_no_id_contract_test.php';
 })();
