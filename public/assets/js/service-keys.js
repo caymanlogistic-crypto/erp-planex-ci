@@ -28,3 +28,22 @@
     } finally { submit.disabled = false; cancel.disabled = false; submit.textContent = 'Сохранить ключ'; message.hidden = false; }
   });
 })();
+
+(() => {
+  const form=document.querySelector('[data-mail-settings-form]');
+  if (!form) return;
+  const button=form.querySelector('[type=submit]'), message=form.querySelector('[data-mail-settings-message]');
+  form.addEventListener('submit',async event=>{
+    event.preventDefault(); if(button.disabled) return;
+    button.disabled=true; message.className='notice is-hidden';
+    try {
+      const response=await fetch(form.action,{method:'POST',body:new FormData(form),credentials:'same-origin',headers:{Accept:'application/json'}});
+      const result=await response.json();
+      if(!response.ok || !result.success) throw new Error(result.message||'Не удалось сохранить настройки почты.');
+      message.className='notice success'; message.textContent=result.message;
+      const status=document.querySelector('[data-mail-settings-status]');status.textContent='Настроено';status.className='badge badge-ok';
+    } catch(error) {
+      message.className='notice warn';message.textContent=error instanceof SyntaxError?'Сеанс завершён или сервер недоступен. Обновите страницу.':error.message;
+    } finally {button.disabled=false;}
+  });
+})();

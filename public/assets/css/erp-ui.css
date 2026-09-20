@@ -1774,3 +1774,5 @@ td.is-dash {
 .service-key-body{padding:20px}.service-key-body>p{color:var(--text-muted);line-height:1.6}.service-key-usage{margin:16px 0 20px;padding:12px 0;border-top:1px solid var(--line-hair);border-bottom:1px solid var(--line-hair)}.service-key-usage>span{font-size:11px;color:var(--text-faint)}.service-key-usage>p{margin-top:4px;font-weight:500}
 .service-key-body .field-input{width:100%}.service-key-body .field-msg{margin-top:6px;line-height:1.5}.service-key-body .form-alert{margin-bottom:16px}.service-key-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:16px}.service-key-footer{padding:12px 20px;background:var(--surface-form);border-top:1px solid var(--line-hair);color:var(--text-faint);font-size:11px;line-height:1.5}
 @media(max-width:600px){.service-key-head{flex-wrap:wrap;padding:14px 16px}.service-key-body{padding:16px}.service-key-footer{padding:12px 16px}}
+
+.service-mail-fields{display:grid;grid-template-columns:minmax(0,1fr) 86px;gap:10px}.service-mail-fields .field{min-width:0}

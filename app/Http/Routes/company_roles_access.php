@@ -17,3 +17,11 @@ $router->post('/company/roles-access/roles/{id}/delete', [$rolesAccessController
 $router->post('/company/roles-access/memberships', [$rolesAccessController, 'addMembership'], $rolesAccessPage);
 $router->post('/company/roles-access/memberships/{id}/save', [$rolesAccessController, 'saveMembership'], $rolesAccessPage);
 $router->post('/company/roles-access/memberships/{id}/remove', [$rolesAccessController, 'removeMembership'], $rolesAccessPage);
+
+require_once base_path('app/Service/EmployeeMailProfileService.php');
+require_once base_path('app/Http/Controllers/Company/EmployeeMailController.php');
+$employeeMailController = new \App\Http\Controllers\Company\EmployeeMailController($db);
+$router->get('/company/roles-access/memberships/{id}/work-mail', [$employeeMailController, 'profiles'], $rolesAccessPage);
+$router->post('/company/roles-access/memberships/{id}/work-mail/save', [$employeeMailController, 'save'], $rolesAccessPage);
+$router->post('/company/roles-access/memberships/{id}/work-mail/check', [$employeeMailController, 'check'], $rolesAccessPage);
+$router->get('/company/roles-access/work-mail/template', [$employeeMailController, 'template'], $rolesAccessPage);

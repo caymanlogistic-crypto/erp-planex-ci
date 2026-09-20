@@ -43,7 +43,7 @@
         var safeMessage = '';
         if (status === 419) safeMessage = 'Сессия устарела. Обновите страницу и повторите.';
         else if (status === 403) safeMessage = payload.message || 'Недостаточно прав для выполнения операции.';
-        else if (status === 422) safeMessage = payload.message || 'Проверьте выбранные данные и повторите.';
+        else if (status === 422) safeMessage = payload.message || payload.error || 'Проверьте выбранные данные и повторите.';
         else if (status >= 500) safeMessage = 'Не удалось сохранить изменения из-за ошибки сервера. Повторите позже.';
         else safeMessage = payload.message || payload.error || fallback || 'Не удалось выполнить операцию.';
         var error = new Error(safeMessage);
@@ -172,7 +172,8 @@
         lastFocus = document.activeElement;
         modalTitle.textContent = config.title;
         modalSubtitle.textContent = config.subtitle || '';
-        modalBody.innerHTML = config.body;
+        modalBody.innerHTML = '<div class="notice warn is-hidden" data-modal-error role="alert"></div>' + config.body;
+        modalSave.disabled = false;
         modalSecondary.innerHTML = config.secondary || '';
         modalSave.classList.toggle('is-hidden', config.readonly === true);
         submitHandler = config.submit || null;
@@ -181,6 +182,7 @@
         window.setTimeout(function () { (modalBody.querySelector('input:not([disabled]),select:not([disabled])') || modalDialog).focus(); }, 0);
     }
     function closeModal() {
+        modalBody.querySelectorAll('[data-mail-password]').forEach(function (input) { input.value = ''; });
         modal.classList.remove('is-open'); modal.setAttribute('aria-hidden', 'true');
         document.body.classList.remove('roles-access-modal-open'); submitHandler = null;
         if (lastFocus && document.contains(lastFocus)) lastFocus.focus();
@@ -199,7 +201,7 @@
         event.preventDefault();
         if (!submitHandler || modalSave.disabled) return;
         modalSave.disabled = true; modalSave.textContent = 'Сохранение…';
-        Promise.resolve(submitHandler()).catch(function (error) { announce(error.message, 'error'); })
+        Promise.resolve().then(function () { return submitHandler(); }).catch(function (error) { var box=modalBody.querySelector('[data-modal-error]'); box.textContent=error.message; box.classList.remove('is-hidden'); box.scrollIntoView({block:'nearest'}); })
             .finally(function () { modalSave.disabled = false; modalSave.textContent = 'Сохранить'; });
     });
 
@@ -386,16 +388,18 @@
             '<label class="field"><span class="field-label">Статус</span><select class="field-select" data-member-status><option value="active"' + (membership.status === 'active' ? ' selected' : '') + '>Активен</option><option value="blocked"' + (membership.status !== 'active' ? ' selected' : '') + '>Отключён</option></select></label></div><div class="notice info roles-access__warning is-hidden" data-role-change-warning>У пользователя есть персональные настройки. После смены роли они сохранятся.</div></section>' +
             '<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Персональные настройки страниц</h3><p class="roles-access-modal__help">«По роли» использует настройку основной роли. Персональное значение действует только для этого пользователя.</p>' + pageTreeHtml('member', membership.page_overrides || {}, roleById(membership.role_id).pages || {}, system) + '</section>' +
             '<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Персональные настройки данных</h3><p class="roles-access-modal__help">«По роли» использует настройку основной роли.</p>' + scopesHtml('member', membership.data_scope_overrides || {}, roleById(membership.role_id).data_scopes || {}, system) + '</section>';
+        body = body.replace('<section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Персональные настройки страниц', '<section class="roles-access-modal__section" data-work-mail><h3 class="roles-access-modal__section-head">Рабочая почта</h3><div data-work-mail-content>Загрузка почтовых профилей…</div></section><section class="roles-access-modal__section"><h3 class="roles-access-modal__section-head">Персональные настройки страниц');
         openModal({title:'Настройка пользователя',subtitle:membership.login || '',body:body,readonly:false,
             secondary: system ? '' : '<button type="button" class="btn btn-danger" data-membership-remove>Исключить из компании</button>',
             submit:function () {
                 return jsonRequest('/company/roles-access/memberships/' + Number(membership.id) + '/save', {method:'POST',body:{
                     role_id:Number(modalBody.querySelector('[data-member-role]').value), status:modalBody.querySelector('[data-member-status]').value,
-                    max_user_id:modalBody.querySelector('[data-member-max-id]').value.trim(),
+                    max_user_id:modalBody.querySelector('[data-member-max-id]').value.trim(), work_mail:collectWorkMail(),
                     page_overrides:collectPageValues('member'), data_scope_overrides:collectScopeValues()
                 }}).then(function () { closeModal(); return refreshSnapshot('Пользователь сохранён.'); });
             }});
         bindTreeAndScopeControls();
+        loadWorkMail(modalBody.querySelector('[data-work-mail-content]'), membership.id);
         modalBody.querySelector('[data-member-role]').addEventListener('change', function () {
             if (Number(membership.personal_settings_count || 0) > 0) modalBody.querySelector('[data-role-change-warning]').classList.remove('is-hidden');
         });
@@ -407,6 +411,52 @@
         });
     }
 
+    function collectWorkMail() {
+        var container=modalBody.querySelector('[data-work-mail-content]');
+        if (!container || container.dataset.loaded !== 'true') throw new Error('Дождитесь загрузки рабочей почты. Если загрузка не удалась, откройте карточку заново.');
+        return Array.from(container.querySelectorAll('[data-mail-row]')).map(function (row) {
+            return {legal_entity_id:Number(row.dataset.entityId),version:Number(row.dataset.version),email:row.querySelector('[data-mail-email]').value.trim(),password:row.querySelector('[data-mail-password]').value,clear_password:row.querySelector('[data-mail-clear]').checked};
+        });
+    }
+
+    function loadWorkMail(container, membershipId) {
+        var endpoint = membershipId ? '/company/roles-access/memberships/' + Number(membershipId) + '/work-mail' : '/company/roles-access/work-mail/template';
+        var statusLabels = {incomplete:'Подключение не завершено',unverified:'Подключение не проверено',connected:'IMAP и SMTP подключены',failed:'Ошибка подключения'};
+        jsonRequest(endpoint).then(function (data) {
+            if (!container.isConnected) return;
+            container.innerHTML = '<p class="roles-access-modal__help">Изменения почты сохраняются общей кнопкой «Сохранить». Пустое поле пароля сохраняет прежний пароль.</p>';
+            (data.profiles || []).forEach(function (profile) {
+                var row = document.createElement('div');
+                row.className = 'roles-access__mail-row'; row.dataset.mailRow=''; row.dataset.entityId=profile.legal_entity_id; row.dataset.version=profile.version;
+                row.innerHTML = '<h4 class="roles-access-modal__section-head">' + esc(profile.company_name) + '</h4><div class="roles-access__mail-fields">' +
+                    '<label class="field"><span class="field-label">Рабочий email</span><input type="email" class="field-input" data-mail-email maxlength="254" autocomplete="off" placeholder="@'+esc(profile.email_domain||'')+'" value="' + esc(profile.email) + '"></label>' +
+                    '<label class="field"><span class="field-label">Пароль почтового ящика</span><input type="password" class="field-input" data-mail-password autocomplete="new-password" maxlength="512" placeholder="' + (profile.has_password ? 'Сохранён' : 'Не задан') + '"></label></div>' +
+                    '<div class="roles-access__mail-actions"><label class="roles-access__mail-clear"><input type="checkbox" data-mail-clear> Удалить пароль</label><button type="button" class="btn btn-ghost" data-mail-check>Проверить подключение</button></div><div class="roles-access-modal__help" data-mail-status role="status"></div>';
+                container.appendChild(row);
+                var status = row.querySelector('[data-mail-status]'), check = row.querySelector('[data-mail-check]');
+                var email = row.querySelector('[data-mail-email]'), password = row.querySelector('[data-mail-password]'), clear = row.querySelector('[data-mail-clear]');
+                function refresh(message) {
+                    status.textContent = message || statusLabels[profile.connection_status] || '';
+                    check.disabled = !membershipId || !profile.has_password;
+                }
+                refresh();
+                check.addEventListener('click',function () {
+                    if (email.value.trim().toLowerCase() !== profile.email || password.value || clear.checked) {
+                        status.textContent = 'Сначала нажмите общую кнопку «Сохранить», затем откройте карточку для проверки.'; return;
+                    }
+                    check.disabled = true; modalSave.disabled=true;
+                    status.textContent = 'Проверяем IMAP и SMTP без отправки писем…';
+                    jsonRequest(endpoint + '/check', {method:'POST',body:{legal_entity_id:Number(profile.legal_entity_id)}}).then(function (result) {
+                        Object.assign(profile,result.profile); row.dataset.version=profile.version;
+                        refresh(result.message);
+                    }).catch(function (error) { refresh(error.message); }).finally(function () { modalSave.disabled=false; });
+                });
+            });
+            container.dataset.loaded='true';
+            if (!(data.profiles || []).length) container.textContent = 'Почтовые компании ещё не настроены.';
+        }).catch(function (error) { if (container.isConnected) container.textContent = error.message; });
+    }
+
     function openNewMembershipModal() {
         var roles = state.roles.map(function (role) { return '<option value="' + Number(role.id) + '">' + esc(role.name) + '</option>'; }).join('');
         var body = '<section class="roles-access-modal__section"><p class="roles-access-modal__help">Если логин уже существует, система добавит существующую учётную запись в эту компанию и не создаст дубль. Пароль для существующей учётной записи можно не вводить.</p><div class="roles-access-modal__identity">' +
@@ -414,10 +464,12 @@
             '<label class="field"><span class="field-label">Пароль</span><input type="password" class="field-input" data-new-password autocomplete="new-password"></label><label class="field"><span class="field-label">Email</span><input type="email" class="field-input" data-new-email></label>' +
             '<label class="field"><span class="field-label">Телефон</span><input class="field-input" data-new-phone></label><label class="field"><span class="field-label">MAX ID</span><input class="field-input" inputmode="numeric" maxlength="19" data-new-max-id placeholder="Необязательно"></label><label class="field"><span class="field-label">Статус</span><select class="field-select" data-new-status><option value="active">Активен</option><option value="blocked">Отключён</option></select></label>' +
             '<label class="field is-wide"><span class="field-label">Роль</span><select class="field-select" data-new-role>' + roles + '</select></label></div></section>';
+        body += '<section class="roles-access-modal__section" data-work-mail><h3 class="roles-access-modal__section-head">Рабочая почта</h3><div data-work-mail-content>Загрузка почтовых профилей…</div></section>';
         openModal({title:'Добавить пользователя',subtitle:'Новая или существующая глобальная учётная запись',body:body,submit:function () {
-            return jsonRequest('/company/roles-access/memberships', {method:'POST',body:{full_name:modalBody.querySelector('[data-new-full-name]').value,login:modalBody.querySelector('[data-new-login]').value,password:modalBody.querySelector('[data-new-password]').value,email:modalBody.querySelector('[data-new-email]').value,phone:modalBody.querySelector('[data-new-phone]').value,max_user_id:modalBody.querySelector('[data-new-max-id]').value.trim(),role_id:Number(modalBody.querySelector('[data-new-role]').value),status:modalBody.querySelector('[data-new-status]').value}})
+            return jsonRequest('/company/roles-access/memberships', {method:'POST',body:{work_mail:collectWorkMail(),full_name:modalBody.querySelector('[data-new-full-name]').value,login:modalBody.querySelector('[data-new-login]').value,password:modalBody.querySelector('[data-new-password]').value,email:modalBody.querySelector('[data-new-email]').value,phone:modalBody.querySelector('[data-new-phone]').value,max_user_id:modalBody.querySelector('[data-new-max-id]').value.trim(),role_id:Number(modalBody.querySelector('[data-new-role]').value),status:modalBody.querySelector('[data-new-status]').value}})
                 .then(function () { closeModal(); return refreshSnapshot('Пользователь добавлен.'); });
         }});
+        loadWorkMail(modalBody.querySelector('[data-work-mail-content]'),null);
     }
 
     function loadAssignmentMatrix(force) {

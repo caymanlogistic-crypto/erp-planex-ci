@@ -1,0 +1,49 @@
+name: Employee Mail Regression
+on:
+  push:
+    branches: ['chatgpt/**']
+    paths: ['app/Service/EmployeeMail*','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','public/assets/css/roles-access.css','app/Service/CompanyMembershipService.php','app/Http/Controllers/Company/RolesAccessController.php','app/Http/Controllers/Company/ServiceKeysController.php','app/View/pages/company_service_keys.php','public/assets/js/service-keys.js','tests/fixtures/feo_transfers_render.php','database/migrations/016_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','.github/workflows/employee_mail*']
+  pull_request:
+    paths: ['app/Service/EmployeeMail*','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','public/assets/css/roles-access.css','app/Service/CompanyMembershipService.php','app/Http/Controllers/Company/RolesAccessController.php','app/Http/Controllers/Company/ServiceKeysController.php','app/View/pages/company_service_keys.php','public/assets/js/service-keys.js','tests/fixtures/feo_transfers_render.php','database/migrations/016_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','.github/workflows/employee_mail*']
+permissions:
+  contents: read
+jobs:
+  employee-mail:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: spugovxsim_test2
+        ports: ['3306:3306']
+        options: --health-cmd="mysqladmin ping -ptest" --health-interval=5s --health-timeout=5s --health-retries=20
+    env:
+      APP_ENV: test
+      PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+      PLANEX_SCHEMA_DB_PORT: '3306'
+      PLANEX_SCHEMA_DB_USER: root
+      PLANEX_SCHEMA_DB_PASSWORD: test
+      PLANEX_TEST_FIXED_DB: spugovxsim_test2
+      PLANEX_TEST_FIXED_DB_ALLOWLIST: spugovxsim_test2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, mbstring, openssl
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated browser test dependencies
+        run: |
+          npm install --prefix /tmp/employee-mail-test playwright@1.58.2
+          /tmp/employee-mail-test/node_modules/.bin/playwright install --with-deps chromium
+          echo 'NODE_PATH=/tmp/employee-mail-test/node_modules' >> "$GITHUB_ENV"
+      - name: Test profiles and guarded schema migration without real mail
+        run: |
+          php tests/employee_mail_contract_test.php
+          php tests/employee_mail_profiles_mysql_test.php
+          php tests/employee_mail_migration_mysql_test.php
+          node tests/employee_mail_browser_test.mjs
