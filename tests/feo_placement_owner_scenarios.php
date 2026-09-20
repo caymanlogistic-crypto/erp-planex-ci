@@ -2,7 +2,7 @@
 declare(strict_types=1);
 
 // Invoked by the guarded Retry MySQL test, using its migrated, disposable DB.
-return static function (PDO $pdo): void {
+return static function (PDO $pdo, bool $withMaxIds): void {
     $ok = static function (bool $value, string $message): void {
         if (!$value) throw new RuntimeException($message);
     };
@@ -12,6 +12,9 @@ return static function (PDO $pdo): void {
         $pdo->exec('DELETE FROM `' . $table . '`');
     }
     $pdo->exec("INSERT INTO user_accounts VALUES (10,'ERP Сидоров',NULL),(11,'ERP Гладких','222222')");
+    $pdo->exec($withMaxIds
+        ? "UPDATE user_accounts SET max_user_id='111111' WHERE id=10"
+        : 'UPDATE user_accounts SET max_user_id=NULL');
     $pdo->exec("INSERT INTO company_memberships VALUES (20,10,7),(21,11,7)");
     $pdo->exec("INSERT INTO users VALUES (30,20,'ERP Сидоров'),(31,21,'ERP Гладких')");
     $trip = $pdo->prepare('INSERT INTO waste_trips(id,business_id,comment,status,responsible_user_id) VALUES(?,?,?, ?,?)');
@@ -45,10 +48,11 @@ return static function (PDO $pdo): void {
         $insert->execute([$id,(string)$id,$mass/1000,(string)$lat,(string)$lng]);
         if ($route) { $link->execute([$route,$id]); $baselineIds[] = (string)$id; }
     }
-    $sent = [];
-    $messaging = new App\Service\MaxMessagingService($pdo, static function (string $token) use (&$sent): App\Service\MaxApiClient {
-        return new App\Service\MaxApiClient($token, static function (string $method,string $url,?array $body) use (&$sent): array {
+    $sent = []; $memberLookups = 0;
+    $messaging = new App\Service\MaxMessagingService($pdo, static function (string $token) use (&$sent,&$memberLookups): App\Service\MaxApiClient {
+        return new App\Service\MaxApiClient($token, static function (string $method,string $url,?array $body) use (&$sent,&$memberLookups): array {
             if (str_contains($url,'/members?user_ids=')) {
+                $memberLookups++;
                 $id = str_contains($url,'user_ids=111111') ? 111111 : 222222;
                 return ['members'=>[['user_id'=>$id,'first_name'=>'MAX','last_name'=>(string)$id]]];
             }
@@ -98,19 +102,15 @@ return static function (PDO $pdo): void {
         $ok(count($snapshot())===count($baseline)+$sign*count($ids),'T'.$number.' available request count');
         $ok(abs((float)$created['current']['total_mass_kg']-($baselineMass+$sign*$mass))<0.001,'T'.$number.' available mass');
         $ok($events->dispatch((int)$main)['status']==='sent','T'.$number.' main sent');
-        if ($number===1) {
-            $failed = $events->dispatch((int)$supp[0]);
-            $ok($failed['status']==='failed' && str_contains($failed['error_message'],'Не заполнен MAX ID'),'T1 missing ID diagnostic');
-            $pdo->exec("UPDATE user_accounts SET max_user_id='111111' WHERE id=10");
-            $rebuilt = $events->rebuildFeoSupplementalForRetry((int)$supp[0],$pdo,7);
-            $ok((int)$rebuilt['id']===(int)$supp[0],'T1 Retry same delivery');
-        }
         foreach ($supp as $id) $ok($events->dispatch((int)$id,true)['status']==='sent','T'.$number.' supplemental sent');
         $ok(count($sent)-$start===1+count($expected),'T'.$number.' exact message count');
         $heading = $type==='addition'?'ДОБАВЛЕНО НА КАРТУ':'СНЯТИЕ ЗАЯВОК';
         $ok($sent[$start]['text']===$heading.":\n\nЗаявок: ".count($ids).', масса: '.$routes::massText((float)$mass).' кг','T'.$number.' main text');
         foreach (array_slice($sent,$start+1) as $message) {
-            $ok(str_contains($message['text'],'[MAX ') && str_contains($message['text'],'](max://user/'),'T'.$number.' profile mention');
+            $ok($withMaxIds
+                ? str_contains($message['text'],'[MAX ') && str_contains($message['text'],'](max://user/')
+                : !str_contains($message['text'],'max://user/') && !str_contains($message['text'],'ERP '),
+                'T'.$number.' optional profile mention');
             foreach ($ids as $id) $ok(substr_count($message['text'],$id)<=1,'T'.$number.' duplicate request pair');
         }
         if ($number===4 || $number===5) {
@@ -122,6 +122,12 @@ return static function (PDO $pdo): void {
             $ok(str_contains($sent[$start+2]['text'],'Всего: 2, масса: 444 кг'),'T7 second group');
         }
         $messageCount = count($sent);
+        if ($number===1 && !$withMaxIds) {
+            $pdo->exec("UPDATE user_accounts SET max_user_id='111111' WHERE id=10");
+            $terminal = $events->rebuildFeoSupplementalForRetry((int)$supp[0],$pdo,7);
+            $ok($terminal['status']==='sent' && !str_contains($terminal['message_text'],'max://user/'),'adding ID after delivery must not rewrite or resend');
+            $pdo->exec('UPDATE user_accounts SET max_user_id=NULL WHERE id=10');
+        }
         foreach (array_merge([$main],$supp) as $id) $events->dispatch((int)$id,true);
         $ok(count($sent)===$messageCount,'T'.$number.' sent retry duplicates');
         $deliveries = (int)$pdo->query('SELECT COUNT(*) FROM max_event_deliveries')->fetchColumn();
@@ -129,6 +135,8 @@ return static function (PDO $pdo): void {
         $placement->changeStatus($pdo,(int)$created['block_id'],'disabled',$disable['state_hash']);
         $ok($snapshot()===$baseline,'T'.$number.' full baseline restored, including source blocks');
         $ok((int)$pdo->query('SELECT COUNT(*) FROM max_event_deliveries')->fetchColumn()===$deliveries && count($sent)===$messageCount,'T'.$number.' disable must not notify');
-        echo 'FEO_OWNER_SCENARIO_'.$number."=PASS\n";
+        echo 'FEO_OWNER_SCENARIO_'.($withMaxIds?'MENTION_':'NO_ID_').$number."=PASS\n";
     }
+    $ok(count($sent)===17,'all eight scenarios produce exactly 17 messages');
+    $ok($memberLookups===($withMaxIds?9:0),'unaddressed delivery must not perform MAX member lookup');
 };

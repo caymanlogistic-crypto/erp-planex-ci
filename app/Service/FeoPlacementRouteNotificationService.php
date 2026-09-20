@@ -262,7 +262,7 @@ final class FeoPlacementRouteNotificationService
     {
         $error = $this->managerError($route);
         if ($error !== null) return [$this->failedIntent('same_point', $route, $error)];
-        $header = $this->mention($route) . ', заявки из нового блока находятся в той же точке, что активные заявки рейса ' . $this->routeLabel($route) . '.';
+        $header = $this->addressMessage($route, 'Заявки из нового блока находятся в той же точке, что активные заявки рейса ' . $this->routeLabel($route) . '.');
         $lines = [];
         foreach ($pairs as $pair) {
             $lines[] = 'Новая ' . self::md((string)$pair['new']['zayavka_id'])
@@ -277,7 +277,7 @@ final class FeoPlacementRouteNotificationService
     {
         $error = $this->managerError($route);
         if ($error !== null) return [$this->failedIntent('nearby', $route, $error)];
-        $header = $this->mention($route) . ', добавленные заявки находятся вблизи (не более 5 км) заявок рейса ' . $this->routeLabel($route) . '.';
+        $header = $this->addressMessage($route, 'Добавленные заявки находятся вблизи (не более 5 км) заявок рейса ' . $this->routeLabel($route) . '.');
         $mass = array_sum(array_map(static fn(array $row): float => (float)$row['mass_kg'], $requests));
         $header .= ' Всего: ' . count($requests) . ', масса: ' . self::massText($mass) . ' кг.';
         $lines = array_map(static fn(array $row): string =>
@@ -292,8 +292,8 @@ final class FeoPlacementRouteNotificationService
         if ($error !== null) return [$this->failedIntent('active_exclusion', $route, $error)];
         $count = count($requests);
         $mass = array_sum(array_map(static fn(array $row): float => (float)$row['mass_kg'], $requests));
-        $header = $this->mention($route) . ', с карты сняты активные заявки рейса ' . $this->routeLabel($route)
-            . '. Всего: ' . $count . ', масса: ' . self::massText($mass) . ' кг.';
+        $header = $this->addressMessage($route, 'С карты сняты активные заявки рейса ' . $this->routeLabel($route)
+            . '. Всего: ' . $count . ', масса: ' . self::massText($mass) . ' кг.');
         $lines = array_map(static fn(array $row): string =>
             self::md((string)$row['zayavka_id']) . ' — ' . self::massText((float)$row['mass_kg']) . ' кг', $requests);
         return $this->chunkMessages('active_exclusion', $route, $header, $lines, 'Проверьте состав рейса.');
@@ -301,6 +301,9 @@ final class FeoPlacementRouteNotificationService
 
     private function managerError(array $route): ?string
     {
+        $maxId = trim((string)($route['account']['max_user_id'] ?? ''));
+        // Addressing is optional: an unavailable manager identity must not hide route information.
+        if ($maxId === '') return null;
         $name = trim((string)($route['account']['full_name'] ?? $route['responsible_name'] ?? ''));
         if ((int)($route['membership_id'] ?? 0) <= 0) {
             return 'Не удалось связать ответственного менеджера ' . ($name ?: 'рейса') . ' с центральной учётной записью.';
@@ -308,8 +311,6 @@ final class FeoPlacementRouteNotificationService
         if (!is_array($route['account'] ?? null)) {
             return 'Не найдена центральная учётная запись ответственного менеджера ' . ($name ?: 'рейса') . '.';
         }
-        $maxId = trim((string)($route['account']['max_user_id'] ?? ''));
-        if ($maxId === '') return 'Не заполнен MAX ID ответственного менеджера ' . ($name ?: 'рейса') . '.';
         if (preg_match('/^[1-9][0-9]{0,18}$/D', $maxId) !== 1
             || (strlen($maxId) === 19 && strcmp($maxId, '9223372036854775807') > 0)) {
             return 'Некорректный MAX ID ответственного менеджера ' . ($name ?: 'рейса') . '.';
@@ -317,10 +318,13 @@ final class FeoPlacementRouteNotificationService
         return null;
     }
 
-    private function mention(array $route): string
+    private function addressMessage(array $route, string $body): string
     {
+        $maxId = trim((string)($route['account']['max_user_id'] ?? ''));
+        if ($maxId === '') return $body;
         $account = $route['account'];
-        return '[' . self::md((string)$account['full_name']) . '](max://user/' . (string)$account['max_user_id'] . ')';
+        return '[' . self::md((string)$account['full_name']) . '](max://user/' . $maxId . '), '
+            . mb_strtolower(mb_substr($body, 0, 1, 'UTF-8'), 'UTF-8') . mb_substr($body, 1, null, 'UTF-8');
     }
 
     private function routeLabel(array $route): string
