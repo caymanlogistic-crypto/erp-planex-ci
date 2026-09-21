@@ -41,6 +41,53 @@ final class MaxApiClient
         throw new RuntimeException('Пользователь MAX ' . $userId . ' не найден в выбранном чате.');
     }
 
+    /** @return list<array<string, mixed>> */
+    public function getChatMembers(string $chatId): array
+    {
+        $chatId = $this->normalizeChatId($chatId);
+        $membersById = [];
+        $marker = null;
+        $seenMarkers = [];
+
+        do {
+            $query = ['count' => 100];
+            if ($marker !== null) {
+                $query['marker'] = $marker;
+            }
+
+            $result = $this->request('GET', '/chats/' . rawurlencode($chatId) . '/members', $query);
+            foreach ((array)($result['members'] ?? []) as $member) {
+                if (!is_array($member)) {
+                    continue;
+                }
+                $userId = trim((string)($member['user_id'] ?? ''));
+                if ($userId === '') {
+                    throw new RuntimeException('MAX API вернул участника группы без user_id.');
+                }
+                $membersById[$userId] = $member;
+            }
+
+            $nextMarker = $result['marker'] ?? null;
+            if ($nextMarker === null || $nextMarker === '') {
+                break;
+            }
+            if (!is_int($nextMarker) && !is_string($nextMarker)) {
+                throw new RuntimeException('MAX API вернул некорректный маркер страницы участников.');
+            }
+            $nextMarker = trim((string)$nextMarker);
+            if (preg_match('/^-?[0-9]+$/D', $nextMarker) !== 1) {
+                throw new RuntimeException('MAX API вернул некорректный маркер страницы участников.');
+            }
+            if (isset($seenMarkers[$nextMarker])) {
+                throw new RuntimeException('MAX API повторил маркер страницы участников.');
+            }
+            $seenMarkers[$nextMarker] = true;
+            $marker = $nextMarker;
+        } while (true);
+
+        return array_values($membersById);
+    }
+
     public function sendMessage(string $chatId, string $text, string $format = 'plain', bool $notify = true): array
     {
         $chatId = $this->normalizeChatId($chatId);

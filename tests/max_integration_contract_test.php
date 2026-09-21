@@ -41,6 +41,32 @@ $ok($calls[4]['method'] === 'POST' && str_ends_with($calls[4]['url'], '/subscrip
 $ok(($calls[4]['body']['secret'] ?? '') === 'Secret_12345', 'Webhook secret must be sent to MAX.');
 foreach (['bot_added','bot_removed','chat_title_changed'] as $event) $ok(in_array($event, $calls[4]['body']['update_types'] ?? [], true), 'Webhook update type missing: ' . $event);
 
+$memberPageCalls = [];
+$memberClient = new MaxApiClient('member-list-token', static function (string $method, string $url, ?array $body, array $headers) use (&$memberPageCalls): array {
+    $memberPageCalls[] = compact('method', 'url', 'body', 'headers');
+    if (str_contains($url, 'marker=200')) {
+        return ['members' => [
+            ['user_id' => 102, 'first_name' => 'Пётр'],
+            ['user_id' => 103, 'first_name' => 'Анна'],
+        ], 'marker' => null];
+    }
+    return ['members' => [
+        ['user_id' => 101, 'first_name' => 'Иван'],
+        ['user_id' => 102, 'first_name' => 'Пётр'],
+    ], 'marker' => 200];
+});
+$allMembers = $memberClient->getChatMembers('-100500');
+$ok(count($memberPageCalls) === 2, 'MAX member list must follow pagination markers.');
+$ok(str_contains($memberPageCalls[0]['url'], '/members?count=100'), 'MAX member list must request the maximum supported page size.');
+$ok(str_contains($memberPageCalls[1]['url'], 'count=100&marker=200'), 'MAX member list must pass the next-page marker.');
+$ok(array_column($allMembers, 'user_id') === [101, 102, 103], 'MAX member list must deduplicate users across pages.');
+$ok(in_array('Authorization: member-list-token', $memberPageCalls[1]['headers'], true), 'MAX member list must keep token in the Authorization header.');
+
+$groupMembersScript = (string)file_get_contents($root . '/scripts/max_group_members.php');
+$ok(str_contains($groupMembersScript, "--group=\"ФРЕГАТ\"") && str_contains($groupMembersScript, "'ФРЕГАТ'"), 'MAX member CLI must default to the FREGAT group.');
+$ok(str_contains($groupMembersScript, 'cryptoDecrypt(') && !str_contains($groupMembersScript, 'token='), 'MAX member CLI must use encrypted application credentials without putting the token in arguments.');
+$ok(!preg_match('/\\b(?:INSERT|UPDATE|DELETE|REPLACE|ALTER|DROP|TRUNCATE)\\b/i', preg_replace('/HELP.*?HELP;/s', '', $groupMembersScript)), 'MAX member CLI must remain read-only.');
+
 $migration = (string)file_get_contents($root . '/database/migrations-local/133_create_max_integration.sql');
 $service = (string)file_get_contents($root . '/app/Service/MaxMessagingService.php');
 $controller = (string)file_get_contents($root . '/app/Http/Controllers/Company/MaxMessagingController.php');
