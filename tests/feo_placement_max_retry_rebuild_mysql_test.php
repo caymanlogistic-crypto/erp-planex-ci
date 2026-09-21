@@ -118,7 +118,7 @@ try {
     );
     $ok($mainId>0&&$suppId>0,'main/supplemental delivery IDs');
     $diag=$pdo->query('SELECT * FROM max_event_deliveries WHERE id='.(int)$suppId)->fetch(PDO::FETCH_ASSOC);
-    $ok($diag['status']==='pending'&&str_starts_with($diag['message_text'],'‼️ **ДОБАВИТЬ В РЕЙС** ‼️')&&!str_contains($diag['message_text'],'max://user/'),'missing MAX ID ready for delivery');
+    $ok($diag['status']==='pending'&&str_starts_with($diag['message_text'],'‼️ **НЕОБХОДИМО ДОБАВИТЬ В РЕЙС** ‼️')&&!str_contains($diag['message_text'],'max://user/'),'missing MAX ID ready for delivery');
     // Historical rows created before optional addressing must recover even if the ID is still empty.
     $pdo->exec("UPDATE max_event_deliveries SET status='failed',message_text='',error_message='Не заполнен MAX ID' WHERE id=".(int)$suppId);
     $legacy=$events->rebuildFeoSupplementalForRetry((int)$suppId,$pdo,7);

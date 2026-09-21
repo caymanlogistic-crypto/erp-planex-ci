@@ -112,7 +112,7 @@ $missingMax = $service->additionIntents(
     [$active(7,'240001',55,37,'')]
 );
 $ok(count($missingMax)===1 && $missingMax[0]['error']===null,'missing MAX ID must not block delivery');
-$ok(str_starts_with($missingMax[0]['text'],'‼️ **ДОБАВИТЬ В РЕЙС** ‼️') && !str_contains($missingMax[0]['text'],'max://user/'),'missing MAX ID neutral wording');
+$ok(str_starts_with($missingMax[0]['text'],'‼️ **НЕОБХОДИМО ДОБАВИТЬ В РЕЙС** ‼️') && !str_contains($missingMax[0]['text'],'max://user/'),'missing MAX ID neutral wording');
 
 $many = [];
 for ($i=1;$i<=450;$i++) {

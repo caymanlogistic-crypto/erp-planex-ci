@@ -26,16 +26,20 @@ foreach (['FeoMapService','WasteTripService','FeoPlacementRouteNotificationServi
     $ok(count($messages)===4,'40 requests: two same-point routes plus two nearby routes');
     $ok(array_column($messages,'route_id')===[253,258,279,281],'deterministic route order / global same-point priority');
     $first = $messages[0]['text'];
-    $ok(substr_count($first,'В точке:')===2,'two points must remain distinct in one route message');
-    $ok(str_contains($first,"В точке: **910001, 910002**\n\\+ 900001 — 100 кг"),'all active IDs precede the new requests in that point');
-    $ok(str_contains($first,"В точке: **910003, 910004**\n\\+ 900011 — 100 кг"),'second point membership');
-    $ok(str_contains($first,'**Итого добавить: 20 заявок · 11 000 кг**'),'route total counts each new request once');
+    $ok(substr_count($first,'**НОВЫЕ ЗАЯВКИ:**')===2,'two points must remain distinct in one route message');
+    $ok(str_contains($first,"**НОВЫЕ ЗАЯВКИ:**\n900001 — 100 кг")
+        &&str_contains($first,"**НАХОДЯТСЯ В ТОМ ЖЕ МЕСТЕ, ЧТО И ЗАЯВКИ, УЖЕ ВКЛЮЧЁННЫЕ В РЕЙС:**\n**910001, 910002**"),
+        'first point must label new and active route requests explicitly');
+    $ok(str_contains($first,"**НОВЫЕ ЗАЯВКИ:**\n900011 — 100 кг")
+        &&str_contains($first,"**910003, 910004**"),'second point membership');
+    $ok(str_contains($first,'**ИТОГО ДОБАВИТЬ:** 20 заявок · 11 000 кг'),'route total counts each new request once');
     $ok(!str_contains($first,'900021'),'another route must not leak');
     foreach (range(900001,900020) as $id) $ok(substr_count($first,(string)$id)===1,'same point cross-product duplication');
     foreach ([2,3] as $index) {
         $text=$messages[$index]['text'];
-        $ok(str_contains($text,'**РЯДОМ, ДО 5 КМ** ⚠️')&&str_ends_with($text,'⚠️ Рассмотрите добавление в рейс ⚠️'),'nearby markers');
-        $ok(str_contains($text,'**10 заявок · 5 500 кг**'),'nearby route total');
+        $ok(str_contains($text,'**НОВЫЕ ЗАЯВКИ РЯДОМ С РЕЙСОМ, ДО 5 КМ** ⚠️')
+            &&str_ends_with($text,'⚠️ **ПРОВЕРЬТЕ ВОЗМОЖНОСТЬ ДОБАВЛЕНИЯ В РЕЙС** ⚠️'),'nearby markers');
+        $ok(str_contains($text,'**НОВЫЕ ЗАЯВКИ:**')&&str_contains($text,'**ИТОГО:** 10 заявок · 5 500 кг'),'nearby route total');
         foreach (range(900031,900040) as $id) $ok(substr_count($text,(string)$id)===1,'nearby member missing/duplicated');
     }
     $ok($messages===$service->additionIntents(array_reverse($selected,true),array_reverse([...$routes,$routes[0]])),
@@ -43,8 +47,8 @@ foreach (['FeoMapService','WasteTripService','FeoPlacementRouteNotificationServi
 
     $excluded=$service->exclusionIntents(['910001'=>$request(910001,150,44),'910002'=>$request(910002,214,44)],$routes);
     $ok(count($excluded)===1,'exclusion remains grouped by route');
-    $ok(str_contains($excluded[0]['text'],'‼️ [Менеджер](max://user/111) · **СНЯТЫ С КАРТЫ** ‼️')
-        &&str_contains($excluded[0]['text'],"− **910001 — 150 кг**\n− **910002 — 214 кг**\n**2 заявки · 364 кг**\n‼️ Скорректируйте состав рейса ‼️"),'compact active removal');
+    $ok(str_contains($excluded[0]['text'],'‼️ [Менеджер](max://user/111) · **С КАРТЫ СНЯТЫ ЗАЯВКИ, УЖЕ ВКЛЮЧЁННЫЕ В РЕЙС** ‼️')
+        &&str_contains($excluded[0]['text'],"**СНЯТЫЕ ЗАЯВКИ:**\n**910001 — 150 кг**\n**910002 — 214 кг**\n\n**ИТОГО СНЯТО:** 2 заявки · 364 кг\n‼️ **ПРОВЕРЬТЕ И СКОРРЕКТИРУЙТЕ СОСТАВ РЕЙСА** ‼️"),'readable active removal');
 
     // One point exceeds one MAX message: preserve every old/new ID, balanced bold,
     // stable point context, and deterministic delivery parts without truncation.
@@ -69,8 +73,26 @@ foreach (['FeoMapService','WasteTripService','FeoPlacementRouteNotificationServi
     $key='feo.placement.block_created';
     foreach([1=>'1 заявка',2=>'2 заявки',5=>'5 заявок',11=>'11 заявок',21=>'21 заявка',40=>'40 заявок'] as $n=>$label){
         $text=App\Service\MaxEventCatalog::render($key,App\Service\MaxFeoMessageTemplates::defaults()['main'],'plain',['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>$n,'mass_kg'=>'22 000']);
-        $ok($text==="✅ **ДОБАВЛЕНО НА КАРТУ**\n".$label.' · 22 000 кг','compact main/count agreement');
+        $ok($text==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** ".$label."\n**ОБЩАЯ МАССА:** 22 000 кг",'readable main/count agreement');
     }
+    $legacy=['feo_templates_version'=>1,'templates'=>[
+        'main'=>"{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг",
+        'same_point'=>"‼️ {{manager}}**ДОБАВИТЬ В РЕЙС** ‼️\n**{{route}}**\n{{items}}\n**Итого добавить: {{count_label}} · {{mass_kg}} кг**",
+        'nearby'=>"⚠️ {{manager}}**РЯДОМ, ДО 5 КМ** ⚠️\n**{{route}}**\n{{items}}\n**{{count_label}} · {{mass_kg}} кг**\n⚠️ Рассмотрите добавление в рейс ⚠️",
+        'active_exclusion'=>"‼️ {{manager}}**СНЯТЫ С КАРТЫ** ‼️\n**{{route}}**\n{{items}}\n**{{count_label}} · {{mass_kg}} кг**\n‼️ Скорректируйте состав рейса ‼️",
+        'point'=>"В точке: **{{active_ids}}**\n{{requests}}",
+        'addition_row'=>'\\+ {{id}} — {{mass_kg}} кг','nearby_row'=>'{{id}} — {{mass_kg}} кг','exclusion_row'=>'− **{{id}} — {{mass_kg}} кг**',
+    ]];
+    $ok(App\Service\MaxFeoMessageTemplates::decode(json_encode($legacy,JSON_UNESCAPED_UNICODE))===App\Service\MaxFeoMessageTemplates::defaults(),
+        'saved standard v1 templates must upgrade to readable defaults');
+    $legacy['templates']['nearby']=str_replace('РЯДОМ, ДО 5 КМ','МОЙ ТЕКСТ',$legacy['templates']['nearby']);
+    $ok(str_contains(App\Service\MaxFeoMessageTemplates::decode(json_encode($legacy,JSON_UNESCAPED_UNICODE))['nearby'],'МОЙ ТЕКСТ'),
+        'edited v1 template must be preserved');
+    $ok(str_contains(App\Service\MaxFeoMessageTemplates::encode(App\Service\MaxFeoMessageTemplates::defaults()),'"feo_templates_version":2'),
+        'new template saves must use version 2');
+    $ok(str_contains(App\Service\MaxEventCatalog::currentTemplate('feo.placement.block_created',
+        "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг"),'**КОЛИЧЕСТВО:**'),
+        'legacy standalone main template must upgrade to readable default');
     foreach(['missing','unknown','duplicated','broken'] as $case){
         $templates=App\Service\MaxFeoMessageTemplates::defaults();
         $templates['point']=match($case){'missing'=>'{{requests}}','unknown'=>'{{active_ids}} {{requests}} {{unknown}}',

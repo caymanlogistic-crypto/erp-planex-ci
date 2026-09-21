@@ -105,7 +105,7 @@ return static function (PDO $pdo, bool $withMaxIds): void {
         foreach ($supp as $id) $ok($events->dispatch((int)$id,true)['status']==='sent','T'.$number.' supplemental sent');
         $ok(count($sent)-$start===1+count($expected),'T'.$number.' exact message count');
         $heading = $type==='addition'?'✅ **ДОБАВЛЕНО НА КАРТУ**':'❌ **СНЯТО С КАРТЫ**';
-        $ok($sent[$start]['text']===$heading."\n".App\Service\MaxEventCatalog::requestCountText(count($ids)).' · '.$routes::massText((float)$mass).' кг','T'.$number.' main text');
+        $ok($sent[$start]['text']===$heading."\n**КОЛИЧЕСТВО:** ".App\Service\MaxEventCatalog::requestCountText(count($ids))."\n**ОБЩАЯ МАССА:** ".$routes::massText((float)$mass).' кг','T'.$number.' main text');
         foreach (array_slice($sent,$start+1) as $message) {
             $ok($withMaxIds
                 ? str_contains($message['text'],'[MAX]') && str_contains($message['text'],'](max://user/')
