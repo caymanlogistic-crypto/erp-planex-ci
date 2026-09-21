@@ -28,6 +28,7 @@ $assert(str_contains($layout,"'/company/documents'"),'Document pages are not con
 $assert(str_contains($view,'table-card table-card--toolbar-only')&&str_contains($view,'class="table-toolbar"'),'Collection does not use the standard ERP table box.');
 $assert(str_contains($view,'data-trip-search')&&str_contains($view,'data-trip-options')&&str_contains($view,'data-trip-option'),'Trip picker is not a searchable field.');
 $assert(!str_contains($view,'Помощник назначается автоматически.')&&!str_contains($view,'Первая проверка через час после отправки.')&&!str_contains($js,'data-trip-summary')&&!str_contains($js,'data-no-promise'),'Removed request helper text is still rendered or referenced.');
+$assert(str_contains($css,'.trip-documents__check input')&&str_contains($css,'accent-color: var(--accent, #7c4718)'),'Promise checkbox must use the ERP system accent instead of the browser blue default.');
 $assert(!str_contains($view,"e('Отходы #"),'Legacy waste trip labels remain in the page.');
 $assert(str_contains($js,'const filterTrips=')&&str_contains($js,'.includes(query)')&&str_contains($js,"setCustomValidity('Выберите рейс из списка.')"),'Searchable trip filtering or validation is missing.');
 $assert(str_contains($css,'.table-card.table-card--toolbar-only')&&str_contains($css,'grid-template-rows: 36px auto'),'Collection rows can be clipped by the base four-row table grid.');
