@@ -122,6 +122,7 @@ $wideWorkspacePrefixes = [
     '/company/document-generator',
     '/company/trips/linear',
     '/company/trips/departures',
+    '/company/documents',
     '/company/route-executors',
     '/company/feo/requests',
     '/company/contractors',

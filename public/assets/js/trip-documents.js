@@ -112,7 +112,6 @@
     form.elements.has_promise.addEventListener('change',()=>{
         const active=form.elements.has_promise.checked;
         root.querySelector('[data-promise]').hidden=!active;
-        root.querySelector('[data-no-promise]').hidden=active;
         form.elements.promised_at.required=active;
     });
     form.elements.trip.addEventListener('change',async()=>{
@@ -123,7 +122,6 @@
         try {
             const trip=await api('/trip?type='+encodeURIComponent(type)+'&id='+encodeURIComponent(id));
             if (generation!==tripGeneration) return;
-            root.querySelector('[data-trip-summary]').textContent='Ответственный Л: '+trip.responsible+' · Загрузка: '+(trip.loading_dates||'не указана');
             contacts=trip.contacts;
             const select=root.querySelector('#dc-contact');select.replaceChildren(new Option('Ввести контакт',''));
             contacts.forEach((contact,i)=>select.add(new Option([contact.contact_person,contact.email].filter(Boolean).join(' · '),String(i))));
