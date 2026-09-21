@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Company;
 use App\Core\Database;
 use App\Security\AccessRuntime;
 use App\Service\TripDocumentCollectionService;
+use App\Service\TripDocumentData;
 use App\Service\RegulatedDataScopeService;
 use PDO;
 
@@ -39,9 +40,9 @@ final class TripDocumentController
                 $q=$service->central->prepare('SELECT id,name FROM employee_mail_legal_entities WHERE company_id=? ORDER BY id');$q->execute([$company['id']]);$entities=$q->fetchAll(PDO::FETCH_ASSOC);
                 {
                     $scope=RegulatedDataScopeService::condition('waste_trip','t.id','t.created_by_membership_id');
-                    $q=$service->tenant->prepare("SELECT t.id,t.business_id number FROM waste_trips t WHERE t.deleted_at IS NULL AND t.status NOT IN ('cancelled','completed','archived') AND {$scope['sql']} ORDER BY t.id DESC LIMIT 200");
+                    $q=$service->tenant->prepare("SELECT t.id,t.business_id number,t.comment,COALESCE(ct.name,'') contractor_name,COALESCE(NULLIF(GROUP_CONCAT(d.full_name ORDER BY cd.position SEPARATOR ' / '),''),fd.full_name,'') driver_names FROM waste_trips t LEFT JOIN crews c ON c.id=t.route_executor_id AND c.deleted_at IS NULL LEFT JOIN contractors ct ON ct.id=c.contractor_id AND ct.deleted_at IS NULL LEFT JOIN crew_drivers cd ON cd.crew_id=c.id LEFT JOIN drivers d ON d.id=cd.driver_id AND d.deleted_at IS NULL LEFT JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id AND dvb.deleted_at IS NULL LEFT JOIN drivers fd ON fd.id=dvb.driver_id AND fd.deleted_at IS NULL WHERE t.deleted_at IS NULL AND t.status NOT IN ('cancelled','completed','archived') AND {$scope['sql']} GROUP BY t.id,t.business_id,t.comment,ct.name,fd.full_name ORDER BY t.id DESC LIMIT 200");
                     $q->execute($scope['params']);
-                    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $trip) $trips[]=['type'=>'waste']+$trip;
+                    foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $trip) $trips[]=['type'=>'waste','label'=>TripDocumentData::tripLabel($trip)]+$trip;
                 }
             } elseif ($mode==='collection') $rows=$service->listing($actor);
             else {

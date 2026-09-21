@@ -29,6 +29,54 @@ final class TripDocumentData
         return match($type) {'waste'=>'waste_trips',default=>throw new \DomainException('Запрос документов доступен только для перевозки отходов.')};
     }
 
+    public static function shortPersonName(string $name): string
+    {
+        $parts=preg_split('/\s+/u',trim(preg_replace('/\s+/u',' ',$name)??$name))?:[];
+        if (!$parts) return '';
+        $surname=array_shift($parts);
+        $initials='';
+        foreach (array_slice($parts,0,2) as $part) {
+            if (preg_match_all('/([\p{L}])\./u',$part,$matches) && $matches[1]) {
+                foreach ($matches[1] as $letter) $initials.=mb_strtoupper($letter).'.';
+                continue;
+            }
+            $letter=mb_substr($part,0,1);
+            if ($letter!=='') $initials.=mb_strtoupper($letter).'.';
+        }
+        return trim($surname.($initials!==''?' '.$initials:''));
+    }
+
+    public static function shortPersonNames(string $names): string
+    {
+        $result=[];
+        foreach (preg_split('/\s*\/\s*/u',trim($names))?:[] as $name) {
+            $short=self::shortPersonName($name);
+            if ($short!=='') $result[]=$short;
+        }
+        return implode(' / ',$result);
+    }
+
+    public static function carrierDisplayName(string $name): string
+    {
+        $name=trim(preg_replace('/\s+/u',' ',$name)??$name);
+        if (preg_match('/^(?:Индивидуальный\s+предприниматель|ИП)\s+(.+)$/iu',$name,$match)) {
+            return 'ИП '.self::shortPersonName($match[1]);
+        }
+        return $name;
+    }
+
+    public static function tripLabel(array $trip): string
+    {
+        $label='#'.trim((string)($trip['number']??$trip['business_id']??$trip['id']??''));
+        $comment=trim((string)($trip['comment']??''));
+        if ($comment!=='') $label.=' '.$comment;
+        $details=array_values(array_filter([
+            self::shortPersonNames((string)($trip['driver_names']??'')),
+            self::carrierDisplayName((string)($trip['contractor_name']??'')),
+        ],static fn(string $value):bool=>$value!==''));
+        return $label.($details?' - '.implode(' - ',$details):'');
+    }
+
     public function packageRecipientByLogin(string $login): array
     {
         $member=$this->memberByLogin($login);
@@ -50,6 +98,21 @@ final class TripDocumentData
         $trip['responsible']=$responsible;
         $trip['number']=(string)$trip['business_id'];
         $trip['type']=$type;
+        $trip['contractor_name']='';
+        $trip['driver_names']='';
+        if ((int)($trip['route_executor_id']??0)>0) {
+            $q=$this->tenant->prepare("SELECT ct.name contractor_name,COALESCE(NULLIF(GROUP_CONCAT(d.full_name ORDER BY cd.position SEPARATOR ' / '),''),fd.full_name,'') driver_names FROM crews c LEFT JOIN contractors ct ON ct.id=c.contractor_id AND ct.deleted_at IS NULL LEFT JOIN crew_drivers cd ON cd.crew_id=c.id LEFT JOIN drivers d ON d.id=cd.driver_id AND d.deleted_at IS NULL LEFT JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id AND dvb.deleted_at IS NULL LEFT JOIN drivers fd ON fd.id=dvb.driver_id AND fd.deleted_at IS NULL WHERE c.id=? AND c.deleted_at IS NULL GROUP BY c.id,ct.name,fd.full_name");
+            $q->execute([(int)$trip['route_executor_id']]);
+            $executor=$q->fetch(PDO::FETCH_ASSOC)?:[];
+            $trip['contractor_name']=(string)($executor['contractor_name']??'');
+            $trip['driver_names']=(string)($executor['driver_names']??'');
+        }
+        if ($trip['contractor_name']==='' && (int)($trip['carrier_contractor_id']??0)>0) {
+            $q=$this->tenant->prepare('SELECT name FROM contractors WHERE id=? AND deleted_at IS NULL');
+            $q->execute([(int)$trip['carrier_contractor_id']]);
+            $trip['contractor_name']=(string)$q->fetchColumn();
+        }
+        $trip['label']=self::tripLabel($trip);
         $trip['loading_dates']=(string)($trip['planned_start_date']??'')?:trim(($trip['planned_start_date_from']??'').' — '.($trip['planned_start_date_to']??''),' —');
         $trip['points']=[];
         {
@@ -61,7 +124,7 @@ final class TripDocumentData
                 $trip['points'][]=['point_type'=>'unloading','address_text'=>(string)$q->fetchColumn()];
             } elseif ($trip['destination_type']==='warehouse') $trip['points'][]=['point_type'=>'unloading','address_text'=>'Склад'];
         }
-        return array_intersect_key($trip,array_flip(['id','type','number','status','route_executor_id','carrier_contractor_id','responsible','loading_dates','points']));
+        return array_intersect_key($trip,array_flip(['id','type','number','label','status','route_executor_id','carrier_contractor_id','responsible','loading_dates','points']));
     }
 
     public function cards(array $trip): array
