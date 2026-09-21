@@ -107,8 +107,10 @@
             var definitions = activeEvent.feo_template_definitions;
             form.querySelector('[data-max-feo-template-selector]').hidden = !definitions;
             form.elements.feo_templates.disabled = !definitions;
+            form.elements.feo_templates_version.disabled = !definitions;
             feoSelector.disabled = !definitions;
             if (definitions) {
+                if (activeEvent.feo_templates_version != null) form.elements.feo_templates_version.value = String(activeEvent.feo_templates_version);
                 var supplied = activeEvent.feo_templates;
                 if (typeof supplied === 'string') { try { supplied = JSON.parse(supplied); } catch (e) { supplied = null; } }
                 feoTemplates = {};

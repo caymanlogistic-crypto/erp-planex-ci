@@ -10,6 +10,8 @@ final class MaxFeoMessageTemplates
 {
     private const VERSION = 3;
 
+    public static function version(): int { return self::VERSION; }
+
     public static function definitions(): array
     {
         $route = ['manager'=>'Упоминание и разделитель (пусто без MAX ID)', 'route'=>'Номер и название рейса',
@@ -54,6 +56,23 @@ final class MaxFeoMessageTemplates
     {
         $templates = is_string($input) ? json_decode($input, true) : $input;
         if (!is_array($templates)) throw new RuntimeException('Не удалось прочитать шаблоны ФЭО.');
+        return self::validate($templates);
+    }
+
+    /**
+     * A page opened before a template schema deployment has no version field.
+     * Upgrade only the newly required main variable; current forms stay strict.
+     */
+    public static function fromSubmittedInput(mixed $input, mixed $version): array
+    {
+        $templates = is_string($input) ? json_decode($input, true) : $input;
+        if (!is_array($templates)) throw new RuntimeException('Не удалось прочитать шаблоны ФЭО.');
+        $submittedVersion = filter_var($version, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+        if (($submittedVersion === false || $submittedVersion < self::VERSION)
+            && isset($templates['main']) && is_string($templates['main'])
+            && !preg_match('/\{\{\s*request_ids\s*\}\}/u', $templates['main'])) {
+            $templates['main'] = rtrim($templates['main']) . "\n{{request_ids}}";
+        }
         return self::validate($templates);
     }
 

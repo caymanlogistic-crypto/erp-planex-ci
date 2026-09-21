@@ -69,6 +69,7 @@ $eventStatusLabels = ['pending' => 'Ожидает отправки', 'sending' 
                         <div class="max-event-template">
                             <label class="field" data-max-feo-template-selector hidden><span class="field-label">Вариант шаблона</span><select class="field-select" name="feo_template_kind"></select></label>
                             <input type="hidden" name="feo_templates" disabled>
+                            <input type="hidden" name="feo_templates_version" value="<?= \App\Service\MaxFeoMessageTemplates::version() ?>" disabled>
                             <label class="field"><span class="field-label">Шаблон сообщения</span><textarea class="field-textarea" name="message_template" rows="8" maxlength="4000" required></textarea></label>
                             <div class="max-event-variables"><label class="field"><span class="field-label">Переменная</span><select class="field-select" data-max-event-variable></select></label><button type="button" class="btn btn-secondary" data-max-insert>Вставить</button></div>
                             <div class="max-detail-actions"><button class="btn btn-secondary btn-sm" type="button" data-max-event-preview>Предпросмотр</button><button class="btn btn-ghost btn-sm" type="button" data-max-event-default>Стандартный шаблон</button></div>
