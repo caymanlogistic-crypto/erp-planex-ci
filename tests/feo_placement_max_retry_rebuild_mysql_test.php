@@ -103,6 +103,7 @@ try {
             $mainId=$events->enqueue($key,(string)$row['block_id'],[
                 'action_title'=>'ДОБАВЛЕНО НА КАРТУ','block_id'=>(string)$row['block_id'],
                 'block_name'=>'QA','block_type'=>'Добавление','request_count'=>'1','mass_kg'=>'50',
+                'request_ids'=>'600001',
                 'author'=>'QA','company'=>'QA','created_at'=>'20.09.2026 12:00',
                 'current_count'=>'1','current_mass_kg'=>'50',
             ],77);

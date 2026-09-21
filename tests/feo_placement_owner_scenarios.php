@@ -90,6 +90,7 @@ return static function (PDO $pdo, bool $withMaxIds): void {
                     'action_title'=>$type==='addition'?'ДОБАВЛЕНО НА КАРТУ':'СНЯТИЕ ЗАЯВОК',
                     'request_count'=>(string)$row['preview']['selected_count'],
                     'mass_kg'=>$routes::massText((float)$row['preview']['selected_mass_kg']),
+                    'request_ids'=>implode(', ',$ids),
                 ],77);
                 foreach ($routes->intents($pdo,$pdo,7,$type,$ids) as $intent) {
                     $actual[] = $intent['kind'].':'.$intent['route_id'];
@@ -105,7 +106,7 @@ return static function (PDO $pdo, bool $withMaxIds): void {
         foreach ($supp as $id) $ok($events->dispatch((int)$id,true)['status']==='sent','T'.$number.' supplemental sent');
         $ok(count($sent)-$start===1+count($expected),'T'.$number.' exact message count');
         $heading = $type==='addition'?'✅ **ДОБАВЛЕНО НА КАРТУ**':'❌ **СНЯТО С КАРТЫ**';
-        $ok($sent[$start]['text']===$heading."\n**КОЛИЧЕСТВО:** ".App\Service\MaxEventCatalog::requestCountText(count($ids))."\n**ОБЩАЯ МАССА:** ".$routes::massText((float)$mass).' кг','T'.$number.' main text');
+        $ok($sent[$start]['text']===$heading."\n**КОЛИЧЕСТВО:** ".App\Service\MaxEventCatalog::requestCountText(count($ids))."\n**ОБЩАЯ МАССА:** ".$routes::massText((float)$mass)." кг\n".implode(', ',$ids),'T'.$number.' main text with request IDs');
         foreach (array_slice($sent,$start+1) as $message) {
             $ok($withMaxIds
                 ? str_contains($message['text'],'[MAX]') && str_contains($message['text'],'](max://user/')
@@ -163,7 +164,7 @@ return static function (PDO $pdo, bool $withMaxIds): void {
     $outbox=[];
     $created=$placement->createBlock($pdo,['name'=>'Editable template acceptance','ids'=>['248516'],'block_type'=>'addition'],$preview['state_hash'],
         static function(array $row)use($events,$freshRoutes,$pdo,$key,&$outbox):void{
-            $outbox[]=$events->enqueue($key,(string)$row['block_id'],['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>'1','mass_kg'=>'60'],77);
+            $outbox[]=$events->enqueue($key,(string)$row['block_id'],['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>'1','mass_kg'=>'60','request_ids'=>'248516'],77);
             foreach($freshRoutes->intents($pdo,$pdo,7,'addition',['248516']) as $intent){
                 $entity=sprintf('b%d:%s:r%d:p%d',$row['block_id'],$intent['kind'],$intent['route_id'],$intent['part']);
                 $outbox[]=$events->enqueuePrepared($key,$entity,$intent['text'],$intent['format'],77,$intent['error']??null);

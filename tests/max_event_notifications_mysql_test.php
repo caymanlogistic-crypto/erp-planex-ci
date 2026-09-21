@@ -52,10 +52,10 @@ try {
     $ok((int)$stored['is_enabled']===1,'System FEO event cannot be disabled');
     $ok(\App\Service\MaxFeoMessageTemplates::decode((string)$stored['message_template'])['main']===$canonicalTemplate,'FEO template bundle must persist');
     $ok((string)$stored['message_format']==='markdown','System FEO main format must be markdown');
-    $additionValues=array_replace($values,['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>'4','mass_kg'=>'45 402']);
-    $exclusionValues=array_replace($values,['action_title'=>'СНЯТИЕ ЗАЯВОК','request_count'=>'4','mass_kg'=>'45 402']);
-    $ok(MaxEventCatalog::render($key,$canonicalTemplate,'html',$additionValues)==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг",'Exact default addition main text');
-    $ok(MaxEventCatalog::render($key,$canonicalTemplate,'markdown',$exclusionValues)==="❌ **СНЯТО С КАРТЫ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг",'Exact default exclusion main text');
+    $additionValues=array_replace($values,['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>'4','mass_kg'=>'45 402','request_ids'=>'123456, 123457, 456789, 876676']);
+    $exclusionValues=array_replace($values,['action_title'=>'СНЯТИЕ ЗАЯВОК','request_count'=>'4','mass_kg'=>'45 402','request_ids'=>'123456, 123457, 456789, 876676']);
+    $ok(MaxEventCatalog::render($key,$canonicalTemplate,'html',$additionValues)==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг\n123456, 123457, 456789, 876676",'Exact default addition main text with request IDs');
+    $ok(MaxEventCatalog::render($key,$canonicalTemplate,'markdown',$exclusionValues)==="❌ **СНЯТО С КАРТЫ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг\n123456, 123457, 456789, 876676",'Exact default exclusion main text with request IDs');
     $transferKey='feo.transfer.created';
     $transferValues=MaxEventCatalog::example($transferKey);
     $htmlEscaped=MaxEventCatalog::render($transferKey,'{{author}} {{quality}}','html',array_replace($transferValues,['author'=>'<b>A&B</b>']));
@@ -75,13 +75,14 @@ try {
                 'action_title'=>$type==='addition'?'ДОБАВЛЕНО НА КАРТУ':'СНЯТИЕ ЗАЯВОК',
                 'request_count'=>'1',
                 'mass_kg'=>'1 500',
+                'request_ids'=>'10001',
             ]),77);
         });
         $ok($deliveryId>0,'Both block types must enqueue');
         $before=$sends;
         $sent=$events->dispatch($deliveryId);
         $ok($sent['status']==='sent' && $sends===$before+1,'New block notification failed');
-        $expectedMain=($type==='addition'?'✅ **ДОБАВЛЕНО НА КАРТУ**':'❌ **СНЯТО С КАРТЫ**')."\n**КОЛИЧЕСТВО:** 1 заявка\n**ОБЩАЯ МАССА:** 1 500 кг";
+        $expectedMain=($type==='addition'?'✅ **ДОБАВЛЕНО НА КАРТУ**':'❌ **СНЯТО С КАРТЫ**')."\n**КОЛИЧЕСТВО:** 1 заявка\n**ОБЩАЯ МАССА:** 1 500 кг\n10001";
         $ok($sent['message_text']===$expectedMain && $sent['message_format']==='markdown','Exact system main payload mismatch');
         $events->dispatch($deliveryId,true);
         $ok($sends===$before+1,'Sent delivery duplicated');

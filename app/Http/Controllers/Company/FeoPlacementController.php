@@ -159,6 +159,7 @@ final class FeoPlacementController
                         'block_type' => $preview['block_type'] === 'addition' ? 'Добавление' : 'Исключение',
                         'request_count' => (string)$created['preview']['selected_count'],
                         'mass_kg' => FeoPlacementRouteNotificationService::massText((float)$created['preview']['selected_mass_kg']),
+                        'request_ids' => implode(', ', array_map('strval', (array)$preview['ids'])),
                         'author' => $author['created_by_display_name'],
                         'company' => (string)$company['name'],
                         'created_at' => date('d.m.Y H:i'),
