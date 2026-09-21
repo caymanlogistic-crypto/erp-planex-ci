@@ -193,11 +193,13 @@ trait DocumentGeneratorTripPackageTrait
         $prepared['package_templates'] = $templates;
         $prepared['client'] = $client;
         $prepared['trip'] = $trip;
+        $prepared['existing_package_documents'] = self::existingClientPackageDocuments($pdo, $packageNumber);
+        $prepared['package_exists'] = $prepared['existing_package_documents'] !== [];
         return $prepared;
     }
 
     /** @return array<string,int> */
-    public static function generateClientPackage(PDO $pdo, int $companyId, int $userId, string $role, array $prepared): array
+    public static function generateClientPackage(PDO $pdo, int $companyId, int $userId, string $role, array $prepared, bool $overwriteExisting = false): array
     {
         if (!($prepared['ok'] ?? false)) throw new RuntimeException('Комплект нельзя сформировать до устранения ошибок проверки.');
         if (!self::canGenerateClientPackage($role)) throw new RuntimeException('Комплект документов клиенту доступен только руководителю компании.');
@@ -228,15 +230,38 @@ trait DocumentGeneratorTripPackageTrait
         }
 
         $createdFiles = [];
+        $replacedFiles = [];
         $ids = [];
         $pdo->beginTransaction();
         try {
+            $existing = [];
             foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
-                $dup = $pdo->prepare('SELECT id FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
+                $dup = $pdo->prepare('SELECT * FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
                 $dup->execute([$type, $number]);
-                if ($dup->fetchColumn() !== false) {
-                    throw new RuntimeException('Документ ' . self::CLIENT_PACKAGE_TYPES[$type] . ' № ' . $number . ' уже сформирован.');
+                $row = $dup->fetch(PDO::FETCH_ASSOC) ?: null;
+                if ($row !== null) $existing[] = $row;
+            }
+            if ($existing !== [] && !$overwriteExisting) {
+                throw new RuntimeException('Комплект № ' . $number . ' уже был создан. Подтвердите перезапись комплекта.');
+            }
+            if ($existing !== []) {
+                foreach ($existing as $row) {
+                    $storedPath = (string)($row['stored_path'] ?? '');
+                    $expectedPrefix = 'companies/' . $companyId . '/document-generator/generated/';
+                    if ($storedPath === '' || !str_starts_with($storedPath, $expectedPrefix) || str_contains($storedPath, '..') || str_contains($storedPath, '\\')) {
+                        throw new RuntimeException('Путь ранее сформированного документа недопустим. Перезапись остановлена.');
+                    }
+                    $path = DocumentService::resolveStoredPath($companyId, $storedPath);
+                    if ($path !== null) {
+                        $shared = $pdo->prepare('SELECT id FROM generated_documents WHERE stored_path=? AND id<>? LIMIT 1');
+                        $shared->execute([$storedPath, (int)$row['id']]);
+                        if ($shared->fetchColumn() === false) $replacedFiles[] = $path;
+                    } elseif (file_exists(storage_path($storedPath)) || is_link(storage_path($storedPath))) {
+                        throw new RuntimeException('Путь ранее сформированного документа недопустим. Перезапись остановлена.');
+                    }
                 }
+                $delete = $pdo->prepare('DELETE FROM generated_documents WHERE id=?');
+                foreach ($existing as $row) $delete->execute([(int)$row['id']]);
             }
 
             foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
@@ -297,12 +322,28 @@ trait DocumentGeneratorTripPackageTrait
                 }
             }
             $pdo->commit();
+            foreach (array_unique($replacedFiles) as $file) {
+                if (is_file($file) && !unlink($file)) {
+                    error_log('Document generator overwrite: cannot remove replaced file ' . $file);
+                }
+            }
             return $ids;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             foreach ($createdFiles as $file) @unlink($file);
             throw $e;
         }
+    }
+
+    private static function existingClientPackageDocuments(PDO $pdo, string $number): array
+    {
+        $types = array_keys(self::CLIENT_PACKAGE_TYPES);
+        $placeholders = implode(',', array_fill(0, count($types), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT id,document_type,document_number,document_date,created_at FROM generated_documents WHERE document_type IN ({$placeholders}) AND document_number=? ORDER BY id"
+        );
+        $stmt->execute([...$types, $number]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     private static function loadDocumentTrip(PDO $pdo, int $tripId, bool $includeFinance): array

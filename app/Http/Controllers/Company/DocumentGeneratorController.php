@@ -57,8 +57,12 @@ final class DocumentGeneratorController
                     $this->renderGenerator(true, 'Формирование комплекта заблокировано: исправьте ошибки проверки.');
                     return;
                 }
-                $ids = DocumentGeneratorService::generateClientPackage($localPdo, $companyId, $userId, $role, $prepared);
-                $_SESSION['document_generator_flash'] = 'Комплект клиенту сформирован: договор, счёт и акт сохранены в истории.';
+                $overwriteExisting = (string)($_POST['overwrite_existing'] ?? '') === '1';
+                $didOverwrite = $overwriteExisting && ($prepared['package_exists'] ?? false);
+                $ids = DocumentGeneratorService::generateClientPackage($localPdo, $companyId, $userId, $role, $prepared, $overwriteExisting);
+                $_SESSION['document_generator_flash'] = $didOverwrite
+                    ? 'Комплект клиенту перезаписан: договор, счёт и акт обновлены в истории.'
+                    : 'Комплект клиенту сформирован: договор, счёт и акт сохранены в истории.';
                 redirect_to('/company/document-generator/history?created_package=' . implode(',', array_map('intval', array_values($ids))));
             }
 
