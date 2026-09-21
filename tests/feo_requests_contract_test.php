@@ -74,13 +74,15 @@ $ok('controller extracts six-digit IDs before legacy batch service', str_contain
 $ok('controller returns full filtered mass summary', str_contains($controller, "['total_mass_kg'] = \$this->interaction->filteredMassKg"));
 $ok('detail endpoint uses common editable payload', str_contains($controller, 'detailPayload($row)'));
 $ok('manual update endpoint exists', str_contains($controller, 'public function update(string $id): void'));
-$ok('manual update uses interaction service', str_contains($controller, 'updateRequest($pdo, (int)$id, $_POST)'));
+$ok('manual update uses interaction service', str_contains($controller, 'updateRequest($pdo, (int)$id, $_POST,'));
 $ok('import analysis reads explicit overwrite checkbox', str_contains($controller, "!empty(\$_POST['overwrite_existing'])"));
 $ok('analyze protects existing rows when overwrite is off', str_contains($controller, 'prepareImportRows($pdo, $rows, $overwriteExisting)'));
 $ok('commit re-applies protected import semantics from preview', substr_count($controller, 'prepareImportRows($pdo, $rows, $overwriteExisting)') >= 2);
 $ok('preview persists overwrite choice', str_contains($controller, "'overwrite_existing'=>\$overwriteExisting"));
 $ok('restore controller action exists', str_contains($controller, 'public function restoreImport(): void'));
-$ok('restore controller calls service', str_contains($controller, 'restoreRolledBackImport($pdo, $importId, $_SESSION)'));
+$ok('restore controller calls service', str_contains($controller, 'restoreRolledBackImport($pdo, $importId, $_SESSION,'));
+$ok('all request mutation paths enqueue weight notifications', substr_count($controller, '$notifications->enqueue(') === 5);
+$ok('weight notification dispatch runs after committed service calls', substr_count($controller, '$notifications->dispatch($pdo, $deliveryIds)') === 5);
 $ok('index exposes freshness', str_contains($controller, 'freshnessState($pdo)'));
 
 $route = $read($root . '/app/Http/Routes/company_feo_requests.php');

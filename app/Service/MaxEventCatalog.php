@@ -11,6 +11,8 @@ final class MaxEventCatalog
 {
     private const LEGACY_FEO_TEMPLATE = "Создан блок ФЭО №{{block_id}}: {{block_name}}\nТип: {{block_type}}\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг\nОтветственный: {{author}}\nКомпания: {{company}}\n{{created_at}}";
     private const FEO_TEMPLATE = "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг\n{{request_ids}}";
+    private const LEGACY_TRANSFER_CREATED_TEMPLATE = "Создан пакет переноса №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
+    private const LEGACY_TRANSFER_REVERTED_TEMPLATE = "Возвращён пакет переноса №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
 
     public static function all(): array
     {
@@ -42,7 +44,7 @@ final class MaxEventCatalog
                     'current_mass_kg' => ['Масса актуального состава, кг', '100 000,000'],
                 ],
             ],
-        ] + self::transferEvents() + self::documentEvents();
+        ] + self::transferEvents() + self::weightEvents() + self::documentEvents();
     }
 
     private static function documentEvents(): array
@@ -63,20 +65,45 @@ final class MaxEventCatalog
     private static function transferEvents(): array
     {
         $variables = [
-            'batch_id'=>['Номер пакета','18'], 'batch_name'=>['Название пакета','Перенос на склад'],
+            'batch_id'=>['Номер пакета','18'], 'batch_name'=>['Название пакета','Перемещение на склад'],
             'request_count'=>['Число заявок','12'], 'address'=>['Адрес назначения','Москва, улица Примерная, 1'],
             'quality'=>['Качество координат','Только улица, дом не определён'],
+            'request_ids'=>['Номера заявок','123456, 123457, 456789'],
+            'changes'=>['Изменения места','№123456: Старый адрес → Новый адрес'],
             'author'=>['Автор','Владимир С.'], 'company'=>['Компания','Пример компании'],
             'created_at'=>['Дата и время','18.09.2026 15:30'], 'comment'=>['Комментарий','Изменение места погрузки'],
         ];
         $events=[];
-        foreach (['created'=>['ФЭО — создан пакет переноса','Создан пакет переноса'], 'reverted'=>['ФЭО — возвращён пакет переноса','Возвращён пакет переноса']] as $action=>$labels) {
+        foreach (['created'=>['ФЭО — создан пакет перемещения','Создан пакет перемещения'], 'reverted'=>['ФЭО — возвращён пакет перемещения','Возвращён пакет перемещения']] as $action=>$labels) {
             $events['feo.transfer.'.$action]=['title'=>$labels[0],
-                'description'=>'После успешного '.($action==='created'?'переноса':'возврата').' всего пакета. Качество координат обязательно присутствует в сообщении.',
-                'template'=>$labels[1]." №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}",
+                'description'=>'После успешного '.($action==='created'?'перемещения':'возврата').' всего пакета. Качество координат обязательно присутствует в сообщении.',
+                'template'=>$labels[1]." №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}",
                 'variables'=>$variables];
         }
         return $events;
+    }
+
+    private static function weightEvents(): array
+    {
+        return [
+            'feo.request.weight_changed' => [
+                'title' => 'ФЭО — изменён вес заявок',
+                'description' => 'После фактического изменения массы существующих заявок вручную либо через применение, откат, возврат или удаление импорта.',
+                'template' => "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}",
+                'variables' => [
+                    'source'=>['Источник изменения','Импорт ФЭО #42'],
+                    'part'=>['Часть сообщения','Часть 1 из 2'],
+                    'request_count'=>['Число заявок','12'],
+                    'old_mass_kg'=>['Общая масса до изменения, кг','25 400'],
+                    'new_mass_kg'=>['Общая масса после изменения, кг','26 100'],
+                    'difference_kg'=>['Изменение общей массы, кг','+700'],
+                    'changes'=>['Заявки и изменение веса','№123456: 1 000 → 1 200 кг (+200 кг)'],
+                    'author'=>['Ответственный','Владимир С.'],
+                    'company'=>['Компания','Пример компании'],
+                    'created_at'=>['Дата и время','21.09.2026 15:30'],
+                ],
+            ],
+        ];
     }
 
     public static function event(string $key): array
@@ -98,6 +125,8 @@ final class MaxEventCatalog
                 || $stored === "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг"
                 || $stored === "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг") return self::FEO_TEMPLATE;
         }
+        if ($key === 'feo.transfer.created' && ($stored === '' || $stored === self::LEGACY_TRANSFER_CREATED_TEMPLATE)) return self::event($key)['template'];
+        if ($key === 'feo.transfer.reverted' && ($stored === '' || $stored === self::LEGACY_TRANSFER_REVERTED_TEMPLATE)) return self::event($key)['template'];
         return $stored;
     }
 

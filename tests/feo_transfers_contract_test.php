@@ -1,12 +1,13 @@
 <?php
 declare(strict_types=1);
 $root=dirname(__DIR__);
-foreach (['FeoLocationOverrideService','FeoTransferService','YandexGeocodingService','MaxEventCatalog'] as $c) require_once $root.'/app/Service/'.$c.'.php';
+foreach (['FeoLocationOverrideService','FeoTransferService','YandexGeocodingService','MaxEventCatalog','FeoWeightChangeNotificationService'] as $c) require_once $root.'/app/Service/'.$c.'.php';
 require_once $root.'/app/Security/PageRegistry.php';
 require_once $root.'/app/Security/EffectiveAccess.php';
 use App\Service\YandexGeocodingService;
 use App\Service\FeoTransferService;
 use App\Service\MaxEventCatalog;
+use App\Service\FeoWeightChangeNotificationService;
 function expectTransfer(bool $v,string $m): void { if (!$v) throw new RuntimeException($m); }
 function rejectTransfer(callable $fn): void { $caught=false; try{$fn();}catch(RuntimeException){$caught=true;} expectTransfer($caught,'Expected rejection'); }
 $parsed=FeoTransferService::parseIds("123456\n123457,123456;123458");
@@ -29,9 +30,16 @@ foreach (['created','reverted'] as $event) {
     rejectTransfer(fn()=>MaxEventCatalog::render($key,'No quality','plain',MaxEventCatalog::example($key)));
     $values=MaxEventCatalog::example($key); $values['address']='<script>alert(1)</script>';
     $text=MaxEventCatalog::render($key,MaxEventCatalog::event($key)['template'],'html',$values);
-    expectTransfer(str_contains($text,'&lt;script&gt;') && str_contains($text,$values['quality']),'Escaped MAX destination and mandatory quality');
+    expectTransfer(str_contains($text,'&lt;script&gt;') && str_contains($text,$values['quality']) && str_contains($text,$values['request_ids']),'Escaped detailed MAX destination and mandatory quality');
 }
+$legacy="Создан пакет переноса №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
+expectTransfer(MaxEventCatalog::currentTemplate('feo.transfer.created',$legacy)===MaxEventCatalog::event('feo.transfer.created')['template'],'Legacy transfer template upgrades to detailed default');
+$weight=FeoWeightChangeNotificationService::change(['zayavka_id'=>'123456','mass_netto'=>'1.250'],['zayavka_id'=>'123456','mass_netto'=>'1.750']);
+expectTransfer($weight!==null && $weight['before_kg']===1250.0 && $weight['after_kg']===1750.0 && $weight['difference_kg']===500.0,'Weight change uses kilograms');
+expectTransfer(FeoWeightChangeNotificationService::change(['zayavka_id'=>'123456','mass_netto'=>'1.250'],['zayavka_id'=>'123456','mass_netto'=>'1.2500'])===null,'Equivalent weight does not notify');
+expectTransfer(MaxEventCatalog::event('feo.request.weight_changed')['title']==='ФЭО — изменён вес заявок','Weight event registered in MAX catalog');
 $registry=new App\Security\PageRegistry();
+expectTransfer($registry->page('company.feo.transfers')['label']==='Перемещение заявок','Exact movement menu label');
 foreach (['company.feo.transfers','company.feo.coordinates'] as $key) {
     expectTransfer($registry->isGrantable($key),'New pages grantable');
     $denied=App\Security\EffectiveAccess::member(10,1,[$key=>false],[]);

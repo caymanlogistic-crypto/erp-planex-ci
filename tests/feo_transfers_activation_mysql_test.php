@@ -32,7 +32,8 @@ try {
     foreach ($result['events'] as $event=>$state) {
         $ok($state['enabled'] && (int)$state['chat_config_id']===$chat,'Copy exact current-company placement routing');
         $s=$pdo->prepare('SELECT * FROM max_event_rules WHERE event_key=?');$s->execute([$event]);$r=$s->fetch(PDO::FETCH_ASSOC);
-        $ok(str_contains($r['message_template'],'{{quality}}') && (int)$r['notify']===0,'Quality required and notify preference preserved');
+        $requiredVariable = $event === 'feo.request.weight_changed' ? '{{changes}}' : '{{quality}}';
+        $ok(str_contains($r['message_template'],$requiredVariable) && (int)$r['notify']===0,'Event template and notify preference preserved');
     }
     $pdo->exec("UPDATE max_event_rules SET is_enabled=0 WHERE event_key='feo.transfer.created'");
     $before=$pdo->query('SELECT * FROM max_event_rules ORDER BY event_key')->fetchAll(PDO::FETCH_ASSOC);

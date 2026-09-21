@@ -29,7 +29,7 @@ function activateFeoTransfers(PDO $pdo, string $providedKey, Closure $probe): ar
         $source = $pdo->query("SELECT r.* FROM max_event_rules r JOIN max_chats c ON c.id=r.chat_config_id JOIN max_bots b ON b.id=c.bot_id WHERE r.event_key='feo.placement.block_created' AND r.is_enabled=1 AND c.is_active=1 AND c.max_status='active' AND b.is_active=1 FOR UPDATE")->fetch(PDO::FETCH_ASSOC);
         $events = new App\Service\MaxEventNotificationService($pdo);
         $status = [];
-        foreach (['feo.transfer.created','feo.transfer.reverted'] as $event) {
+        foreach (['feo.transfer.created','feo.transfer.reverted','feo.request.weight_changed'] as $event) {
             $q = $pdo->prepare('SELECT is_enabled,chat_config_id FROM max_event_rules WHERE event_key=? FOR UPDATE'); $q->execute([$event]);
             $existing = $q->fetch(PDO::FETCH_ASSOC);
             if ($existing) { $status[$event] = ['state'=>'preserved','enabled'=>(bool)$existing['is_enabled'],'chat_config_id'=>$existing['chat_config_id']]; continue; }
