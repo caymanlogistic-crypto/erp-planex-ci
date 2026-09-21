@@ -112,7 +112,7 @@ trait DocumentGeneratorAccessTrait
         $secondaryPlate=trim((string)($executor['secondary_plate'] ?? ''));
         $secondaryVin=trim((string)($executor['secondary_vin'] ?? ''));
         $secondaryDisplay=$secondaryId>0
-            ? ' ' . $secondaryLabel . ': ' . $secondaryModel . ' гос. номер ' . $secondaryPlate . ' VIN ' . $secondaryVin
+            ? "\u{00A0}" . $secondaryLabel . ': ' . $secondaryModel . ' гос. номер ' . $secondaryPlate . ' VIN ' . $secondaryVin
             : '';
 
         $driverPassport=trim((string)($executor['passport_number'] ?? ''));
