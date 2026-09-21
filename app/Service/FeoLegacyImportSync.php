@@ -45,6 +45,8 @@ final class FeoLegacyImportSync
 
     public function connection(): PDO { return $this->pdo; }
 
+    public function database(): string { return $this->database; }
+
     public function validate(): void
     {
         if (!$this->pdo->inTransaction()) throw new RuntimeException('Синхронизация ФЭО требует общей транзакции.');

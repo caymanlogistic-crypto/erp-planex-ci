@@ -17,7 +17,7 @@ CAPABILITY_KEYS=("PHP_AVAILABLE","PDO_MYSQL_AVAILABLE","MYSQL_CLIENT_AVAILABLE",
 FINANCE_TESTS=["tests/finance_invoice_ui_contract_test.php","tests/finance_manual_facts_regression_test.php","tests/finance_employee_personal_expense_event_regression_test.php","tests/finance_invoice_cash_employee_regression_test.php","tests/finance_cash_employee_invoice_lifecycle_regression_test.php","tests/finance_carrier_payables_regression_test.php"]
 MAX_TESTS=["tests/max_integration_contract_test.php","tests/max_messaging_133_production_migration_contract_test.php","tests/max_messaging_production_acceptance_contract_test.php","tests/agent_db_migration_request_contract_test.php","tests/max_integration_mysql_test.php"]
 FEO_TRANSFER_TESTS=["tests/"+name+".php" for name in (
-    "feo_legacy_import_sync_mysql_test", "feo_legacy_xa_mysql_test", "feo_legacy_sync_configuration_test", "feo_xlsx_parser_format_test", "feo_import_modal_regression_test", "feo_requests_contract_test",
+    "feo_legacy_import_sync_mysql_test", "feo_legacy_xa_mysql_test", "feo_legacy_sync_configuration_test", "feo_placement_legacy_sync_mysql_test", "feo_placement_legacy_sync_xa_mysql_test", "feo_xlsx_parser_format_test", "feo_import_modal_regression_test", "feo_requests_contract_test",
     "feo_transfers_contract_test", "feo_transfers_mysql_test", "feo_transfers_access_mysql_test",
     "feo_transfers_139_production_migration_contract_test", "feo_transfers_139_migration_mysql_test",
     "feo_transfers_activation_contract_test", "feo_transfers_activation_mysql_test",

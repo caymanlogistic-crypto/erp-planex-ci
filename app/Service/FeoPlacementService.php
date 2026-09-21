@@ -4,6 +4,9 @@ namespace App\Service;
 
 use PDO;
 
+require_once __DIR__ . '/FeoImportTransaction.php';
+require_once __DIR__ . '/FeoLegacyPlacementSync.php';
+
 final class FeoPlacementService
 {
     private const TABLES = ['feo_placement_blocks','feo_placement_block_requests','feo_placement_current'];
@@ -184,10 +187,12 @@ final class FeoPlacementService
         $actorRole = trim((string)($payload['created_by_role'] ?? '')) ?: null;
 
         $lock = $this->acquireLock($pdo);
+        $transaction = null;
         try {
-            $pdo->beginTransaction();
+            $transaction = FeoImportTransaction::begin($pdo);
             if (!hash_equals($expectedStateHash, $this->stateHash($pdo))) throw new \RuntimeException('Состав изменился после предварительной проверки. Выполните проверку ещё раз.');
             $preview = $this->previewCreate($pdo, $ids, $type);
+            $before = $this->currentSet($pdo);
             $stmt = $pdo->prepare('INSERT INTO feo_placement_blocks(name,block_type,status,source_type,source_filename,source_file_key,created_by_user_id,created_by_role) VALUES(?,?,\'applied\',?,?,?,?,?)');
             $stmt->execute([$name !== '' ? $name : null, $type, $sourceType, $sourceFilename, $sourceFileKey, $actorId ?: null, $actorRole]);
             $blockId = (int)$pdo->lastInsertId();
@@ -196,13 +201,19 @@ final class FeoPlacementService
             $expected = $this->replay($pdo);
             $this->replaceCurrent($pdo, $expected);
             $afterSummary = $this->currentSummary($pdo);
-            $result = ['block_id' => $blockId, 'preview' => $preview, 'current' => $afterSummary];
+            $legacy = $this->mirrorLegacy($transaction, $pdo, $before, $expected, sprintf(
+                'блок #%d «%s» (%s)',
+                $blockId,
+                $name !== '' ? $name : 'Без названия',
+                $type === 'addition' ? 'добавление' : 'исключение'
+            ));
+            $result = ['block_id' => $blockId, 'preview' => $preview, 'current' => $afterSummary, 'legacy_sync' => $legacy];
             // Persist integrations atomically, but never call an external API under this lock.
             if ($onCreated !== null) $onCreated($result);
-            $pdo->commit();
-            return ['block_id' => $blockId, 'preview' => $preview, 'current' => $afterSummary];
+            $transaction->commit();
+            return $result;
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            $transaction?->rollback();
             throw $e;
         } finally {
             $this->releaseLock($pdo, $lock);
@@ -233,19 +244,29 @@ final class FeoPlacementService
     {
         $targetStatus = $this->normalizeStatus($targetStatus);
         $lock = $this->acquireLock($pdo);
+        $transaction = null;
         try {
-            $pdo->beginTransaction();
+            $transaction = FeoImportTransaction::begin($pdo);
             if (!hash_equals($expectedStateHash, $this->stateHash($pdo))) throw new \RuntimeException('Состав изменился после подтверждения. Повторите операцию.');
             $preview = $this->previewStatusChange($pdo, $blockId, $targetStatus);
+            $before = $this->currentSet($pdo);
             $q = $pdo->prepare('UPDATE feo_placement_blocks SET status=?,updated_at=CURRENT_TIMESTAMP WHERE id=?');
             $q->execute([$targetStatus, $blockId]);
             if ($q->rowCount() !== 1) throw new \RuntimeException('Не удалось изменить статус блока.');
-            $this->replaceCurrent($pdo, $this->replay($pdo));
+            $after = $this->replay($pdo);
+            $this->replaceCurrent($pdo, $after);
             $current = $this->currentSummary($pdo);
-            $pdo->commit();
-            return ['preview' => $preview, 'current' => $current];
+            $block = $this->block($pdo, $blockId);
+            $legacy = $this->mirrorLegacy($transaction, $pdo, $before, $after, sprintf(
+                'блок #%d «%s» %s',
+                $blockId,
+                trim((string)($block['name'] ?? '')) ?: 'Без названия',
+                $targetStatus === 'applied' ? 'включён' : 'отключён'
+            ));
+            $transaction->commit();
+            return ['preview' => $preview, 'current' => $current, 'legacy_sync' => $legacy];
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            $transaction?->rollback();
             throw $e;
         } finally {
             $this->releaseLock($pdo, $lock);
@@ -274,14 +295,16 @@ final class FeoPlacementService
     public function deleteBlock(PDO $pdo, int $blockId, string $expectedStateHash): array
     {
         $lock = $this->acquireLock($pdo);
+        $transaction = null;
         try {
-            $pdo->beginTransaction();
+            $transaction = FeoImportTransaction::begin($pdo);
             if (!hash_equals($expectedStateHash, $this->stateHash($pdo))) throw new \RuntimeException('Состав изменился после подтверждения. Повторите удаление.');
             $q = $pdo->prepare('SELECT id,status FROM feo_placement_blocks WHERE id=? FOR UPDATE');
             $q->execute([$blockId]);
             if (!$q->fetch(PDO::FETCH_ASSOC)) throw new \RuntimeException('Блок не найден.');
 
             $preview = $this->previewDelete($pdo, $blockId);
+            $before = $this->currentSet($pdo);
             $after = $this->replay($pdo, [$blockId => 'disabled']);
             $this->replaceCurrent($pdo, $after);
 
@@ -293,10 +316,15 @@ final class FeoPlacementService
                 throw new \RuntimeException('После удаления актуальный состав не прошёл контроль целостности.');
             }
             $current = $this->currentSummary($pdo);
-            $pdo->commit();
-            return ['deleted_block' => $preview, 'current' => $current];
+            $legacy = $this->mirrorLegacy($transaction, $pdo, $before, $after, sprintf(
+                'удалён блок #%d «%s»',
+                $blockId,
+                trim((string)($preview['name'] ?? '')) ?: 'Без названия'
+            ));
+            $transaction->commit();
+            return ['deleted_block' => $preview, 'current' => $current, 'legacy_sync' => $legacy];
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            $transaction?->rollback();
             throw $e;
         } finally {
             $this->releaseLock($pdo, $lock);
@@ -333,18 +361,20 @@ final class FeoPlacementService
     public function reconcile(PDO $pdo, string $expectedStateHash): array
     {
         $lock = $this->acquireLock($pdo);
+        $transaction = null;
         try {
-            $pdo->beginTransaction();
+            $transaction = FeoImportTransaction::begin($pdo);
             if (!hash_equals($expectedStateHash, $this->stateHash($pdo))) throw new \RuntimeException('Состав изменился после подтверждения. Повторите пересчёт.');
             $before = $this->currentSet($pdo);
             $after = $this->replay($pdo);
             $effect = $this->delta($pdo, $before, $after);
             $this->replaceCurrent($pdo, $after);
             $current = $this->currentSummary($pdo);
-            $pdo->commit();
-            return ['effect' => $effect, 'current' => $current];
+            $legacy = $this->mirrorLegacy($transaction, $pdo, $before, $after, 'пересчёт актуального состава');
+            $transaction->commit();
+            return ['effect' => $effect, 'current' => $current, 'legacy_sync' => $legacy];
         } catch (\Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            $transaction?->rollback();
             throw $e;
         } finally {
             $this->releaseLock($pdo, $lock);
@@ -355,6 +385,20 @@ final class FeoPlacementService
     {
         if (!in_array($type, ['addition','exclusion'], true)) throw new \RuntimeException('Выберите тип блока: добавление или исключение.');
         return $type;
+    }
+
+    /** @param array<string,int> $before @param array<string,int> $after */
+    private function mirrorLegacy(
+        FeoImportTransaction $transaction,
+        PDO $pdo,
+        array $before,
+        array $after,
+        string $context
+    ): array {
+        $mirror = FeoLegacyPlacementSync::fromTransaction($transaction, $pdo);
+        return $mirror === null
+            ? ['enabled'=>false,'added'=>0,'removed'=>0,'updated_blocks'=>0,'deleted_blocks'=>0,'created_block_id'=>null]
+            : $mirror->apply($before, $after, $context);
     }
 
     private function normalizeStatus(string $status): string

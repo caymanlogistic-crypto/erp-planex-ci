@@ -31,7 +31,7 @@ $thrown=false; try { feoLegacySyncEnvironment($configured."FEO_LEGACY_SYNC_DATAB
 $ok($thrown,'Duplicate keys rejected');
 $source=file_get_contents(dirname(__DIR__).'/scripts/feo_legacy_sync_configure.php');
 $workflow=file_get_contents(dirname(__DIR__).'/.github/workflows/feo_legacy_import_sync_configuration.yml');
-foreach (['if (PHP_SAPI !== \'cli\')',"'check','activate'",'$sync->validate()',"flock(\$handle, LOCK_EX)",'business_data_unchanged'] as $needle) $ok(str_contains($source,$needle),'Configuration guard: '.$needle);
+foreach (['if (PHP_SAPI !== \'cli\')',"'check','activate'",'$sync->validate()','FeoLegacyPlacementSync',"flock(\$handle, LOCK_EX)",'business_data_unchanged'] as $needle) $ok(str_contains($source,$needle),'Configuration guard: '.$needle);
 $ok(!preg_match('/\b(?:INSERT INTO|UPDATE feo|DELETE FROM|GRANT |ALTER TABLE|CREATE TABLE)\b/i',$source),'Configuration never writes business data, schema or grants');
 foreach (['CONFIGURE_FEO_IMPORT_SYNC','StrictHostKeyChecking=yes','erpv2-controlled-deploy','Exact canonical CI PASS required','Successful deployed SHA required','FEO_SYNC_COMPANY_ID',"\"\$COMPANY_ID\" -gt 0"] as $needle) $ok(str_contains($workflow,$needle),'Workflow guard: '.$needle);
 echo "FEO_LEGACY_SYNC_CONFIGURATION: {$count} passed\n";
