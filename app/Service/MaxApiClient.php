@@ -4,6 +4,8 @@ namespace App\Service;
 
 use RuntimeException;
 
+require_once __DIR__ . '/MaxChatMemberNotFoundException.php';
+
 final class MaxApiClient
 {
     public const BASE_URL = 'https://platform-api2.max.ru';
@@ -38,7 +40,7 @@ final class MaxApiClient
         foreach ((array)($result['members'] ?? []) as $member) {
             if (is_array($member) && (string)($member['user_id'] ?? '') === $userId) return $member;
         }
-        throw new RuntimeException('Пользователь MAX ' . $userId . ' не найден в выбранном чате.');
+        throw new MaxChatMemberNotFoundException('Пользователь MAX ' . $userId . ' не найден в выбранном чате.');
     }
 
     /** @return list<array<string, mixed>> */

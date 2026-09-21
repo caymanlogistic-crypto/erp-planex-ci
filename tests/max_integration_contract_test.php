@@ -6,6 +6,7 @@ $root = dirname(__DIR__);
 require_once $root . '/app/Service/MaxApiClient.php';
 
 use App\Service\MaxApiClient;
+use App\Service\MaxChatMemberNotFoundException;
 
 $ok = static function (bool $condition, string $message): void {
     if (!$condition) throw new RuntimeException($message);
@@ -40,6 +41,14 @@ $ok(($calls[3]['body']['text'] ?? '') === 'Проверка' && ($calls[3]['body
 $ok($calls[4]['method'] === 'POST' && str_ends_with($calls[4]['url'], '/subscriptions'), 'Webhook must use POST /subscriptions.');
 $ok(($calls[4]['body']['secret'] ?? '') === 'Secret_12345', 'Webhook secret must be sent to MAX.');
 foreach (['bot_added','bot_removed','chat_title_changed'] as $event) $ok(in_array($event, $calls[4]['body']['update_types'] ?? [], true), 'Webhook update type missing: ' . $event);
+
+$missingMember = new MaxApiClient('missing-member-token', static fn(): array => ['members' => []]);
+try {
+    $missingMember->getChatMember('-100500', '654321');
+    $ok(false, 'Missing MAX chat member must be reported.');
+} catch (MaxChatMemberNotFoundException $e) {
+    $ok(str_contains($e->getMessage(), '654321'), 'Missing MAX member diagnostic must include the requested ID.');
+}
 
 $memberPageCalls = [];
 $memberClient = new MaxApiClient('member-list-token', static function (string $method, string $url, ?array $body, array $headers) use (&$memberPageCalls): array {
