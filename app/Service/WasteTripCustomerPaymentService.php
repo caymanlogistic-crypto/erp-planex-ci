@@ -160,6 +160,14 @@ final class WasteTripCustomerPaymentService
         WasteTripPaymentSyncService::synchronize($pdo, $tripId, 'customer', $amount, $terms, $actor);
     }
 
+    /** The append-only trip audit retains this irreversible per-field ownership change. */
+    public static function amountSyncDisabled(PDO $pdo, int $tripId): bool
+    {
+        $query = $pdo->prepare("SELECT id FROM waste_trip_audit_log WHERE waste_trip_id=? AND action='update' AND JSON_UNQUOTE(JSON_EXTRACT(after_json, '$.customer_amount_sync_disabled'))='true' LIMIT 1");
+        $query->execute([$tripId]);
+        return $query->fetchColumn() !== false;
+    }
+
     public static function detail(array $payment): string
     {
         $parts = [$payment['amount'] === null ? '—' : number_format((float) $payment['amount'], 0, ',', ' ') . ' ₽'];

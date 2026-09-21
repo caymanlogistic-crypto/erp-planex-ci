@@ -215,7 +215,7 @@ try {
     $historical=['id'=>$id,'financial_model_version'=>3];
     check(Trips::financialCustomerPayments($pdo,$historical)===$originalPayments,'Original source IDs and terms retained for documents');
     $count=count($originalObligations);
-    $pdo->exec("UPDATE waste_trips SET deleted_at=NULL,status='completed' WHERE id=$id");
+    $pdo->exec("UPDATE waste_trips SET deleted_at=NULL,status='completed',actual_start_date='2026-09-01',actual_end_date='2026-09-02' WHERE id=$id");
     $pdo->beginTransaction();
     \App\Service\WasteTripCustomerPaymentService::synchronizeCost($pdo,$id,null,null,$actor);
     \App\Service\WasteTripGeneralPaymentService::synchronizeCost($pdo,$id,'999.00',$actor);
@@ -247,6 +247,59 @@ try {
     $guard->invoke(null,[['amount'=>'42.00']],[['amount'=>'42.00']]);
     reject(static fn()=>$guard->invoke(null,[['amount'=>'43.00']],[['amount'=>'42.00']]),'Source amount cannot be changed manually');
     reject(static fn()=>$guard->invoke(null,[],[['amount'=>'42.00']]),'Source amount cannot be removed manually');
+    // A successful manual sale edit transfers ownership of this amount only.
+    $saveSale=static function(int $tripId, ?string $amount, int $days=9, ?int $version=null) use($pdo,$actor): void {
+        $current=Trips::fetchTrip($pdo,$tripId);
+        $input=array_intersect_key($current,array_flip(['client_id','responsible_user_id','route_executor_id','destination_type','utilizer_id','status']));
+        $rows=\App\Service\WasteTripCustomerPaymentService::parseRows([['amount'=>$amount,'payment_method'=>'unknown','vat_rate'=>'unknown','days_count'=>$days]],true,true);
+        Trips::update($pdo,$tripId,$input,[], $version??(int)$current['lock_version'],$actor,$rows);
+    };
+    $disabled=static fn(int $tripId): bool=>\App\Service\WasteTripCustomerPaymentService::amountSyncDisabled($pdo,$tripId);
+    $sale=static fn(int $tripId)=>$pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$tripId")->fetchColumn();
+    $saveSale($other,'0',12);
+    check(!$disabled($other),'Equal normalized amount and changed terms keep synchronization enabled');
+    $pdo->exec('UPDATE fixture_flights SET cost=80 WHERE id=501');$run();
+    check($sale($other)==='80.00','Unchanged manual amount still follows source');
+    $stale=(int)Trips::fetchTrip($pdo,$other)['lock_version'];
+    $run();
+    reject(static fn()=>$saveSale($other,'95',12,$stale),'Stale form must fail');
+    check(!$disabled($other)&&$sale($other)==='80.00','Stale form does not disable sync');
+    Scope::$allowed=false;
+    reject(static fn()=>$saveSale($other,'95'),'Unauthorized edit must fail');
+    Scope::$allowed=true;
+    $pdo->failAt='INSERT INTO waste_trip_audit_log';
+    reject(static fn()=>$saveSale($other,'95'),'Audit failure must roll back manual amount');
+    $pdo->failAt=null;
+    check(!$disabled($other)&&$sale($other)==='80.00','Failed save rolls back value and ownership');
+    $saveSale($other,'95.50',12);
+    check($disabled($other)&&Trips::fetchTrip($pdo,$other,true)['customer_amount_sync_disabled']===true,'Committed edit and reopened form retain manual ownership');
+    $saveSale($other,'95.50',14);
+    $pdo->exec("UPDATE fixture_flights SET cost=96,comment='Other fields still sync',status='completed',actual_start_date='2026-09-01',actual_end_date='2026-09-02' WHERE id=501; UPDATE status_blocks SET cost=12000");
+    $run();
+    check($sale($other)==='95.50','Source cannot overwrite manually saved sale');
+    $updated=Trips::fetchTrip($pdo,$other,true);
+    check($updated['comment']==='Other fields still sync'&&$updated['status']==='completed'&&$updated['actual_end_date']==='2026-09-02','Other fields still follow source');
+    check($updated['general_payments'][0]['amount']==='4500.00','General amount still follows source');
+    check((int)$updated['customer_payments'][0]['days_count']===14,'Later term edit does not reset manual ownership');
+    check($pdo->query("SELECT amount FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$other AND direction='RECEIVABLE' AND cancelled_at IS NULL")->fetchColumn()==='95.50','Model 2 obligation follows manual sale');
+    foreach([null,'0','95.50','123'] as $sourceAmount) {
+        $pdo->beginTransaction();
+        \App\Service\WasteTripCustomerPaymentService::synchronizeCost($pdo,$other,$sourceAmount,null,$actor);
+        $pdo->commit();
+        check($sale($other)==='95.50','Unknown, zero, equal and changed source preserve override');
+    }
+    $saveSale($other,'0');$run();
+    check($sale($other)==='0.00'&&$disabled($other),'Manual zero is valid and remains protected');
+    $pdo->exec('DELETE FROM fixture_flights WHERE id=501');$run();
+    $pdo->exec("INSERT INTO fixture_flights(id,zayavki_ids,status,cost,assigned_manager_id,unload_type) VALUES(501,'700001','completed',123,3,'SKLAD')");$run();
+    check($sale($other)==='0.00'&&$disabled($other),'Source removal and restoration never reset override');
+    check(!$disabled($id),'Override belongs only to the edited trip');
+    $pdo->exec("UPDATE waste_trips SET deleted_at=NULL,status='completed' WHERE id=$id");
+    $preserved=Trips::financialCustomerPayments($pdo,$historical);
+    $saveSale($id,'321');
+    check($disabled($id)&&Trips::financialCustomerPayments($pdo,$historical)===$preserved,'Model 3 manual display edit preserves historical customer schedule');
+    check(count($financialRows())===$count,'Model 3 manual edit creates no extra obligations');
+    echo "WASTE_TRIP_MANUAL_SALE_SYNC=PASS\n";
     echo "WASTE_TRIP_SYNCHRONIZATION_MYSQL=PASS\n";
 } finally {
     if($pdo->inTransaction())$pdo->rollBack();

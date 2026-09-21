@@ -23,6 +23,9 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
             <div>
                 <div class="linear-trip-block-title">Продажа · оплата клиента</div>
                 <div class="field-msg">Сумма для взаиморасчётов с клиентом. По умолчанию — 3 дня после выгрузки.</div>
+                <?php if (!empty($sourceAmountsLocked)): ?>
+                    <div class="field-msg"><?= !empty($trip['customer_amount_sync_disabled']) ? 'Сумма задана вручную. Синхронизация суммы отключена.' : 'После изменения и сохранения сумма больше не будет обновляться из старой БД.' ?></div>
+                <?php endif; ?>
             </div>
             <?php if(empty($sourceAmountsLocked)):?><button type="button" class="btn btn-ghost" data-add-payment-row="customer_payments">+ Добавить оплату</button><?php endif;?>
         </div>
@@ -39,7 +42,7 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
                 <div class="linear-trip-payment-row" data-payment-row>
                     <div class="field">
                         <label class="field-label">Сумма <span class="req">*</span></label>
-                        <input type="text" name="<?= e($fieldBase) ?>[amount]" value="<?= e((string) ($payment['amount'] ?? '')) ?>" class="field-input" inputmode="numeric" placeholder="125000" <?=!empty($sourceAmountsLocked)?'readonly':''?>>
+                        <input type="text" name="<?= e($fieldBase) ?>[amount]" value="<?= e((string) ($payment['amount'] ?? '')) ?>" class="field-input" inputmode="numeric" placeholder="125000">
                         <div class="field-msg"></div>
                     </div>
                     <div class="field">

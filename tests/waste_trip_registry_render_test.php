@@ -53,11 +53,20 @@ $assert(!str_contains($render(false),'Расчёты по прежним усл�
 $assert(!str_contains($html,'<script> Длинное'),'Escape legacy text');
 $assert(!str_contains($render(false),'100 ₽')&&!str_contains($render(false),'-20,0 %'),'Finance stays hidden for non-finance roles');
 if($out=getenv('WASTE_REGISTRY_RENDER_OUTPUT'))file_put_contents($out,$html);
-if($out=getenv('WASTE_EDIT_RENDER_OUTPUT')) {
+$renderEdit=static function(bool $manual=false): string {
     $trip=['id'=>1,'business_id'=>250,'legacy_flight_id'=>250,'source_system'=>'legacy_sync','status'=>'planned_route','lock_version'=>1,'financial_model_version'=>3,'requests'=>[],
         'general_payments'=>[['amount'=>'1500.00','payment_type'=>'','payment_method'=>'','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],
         'customer_payments'=>[['amount'=>'1000.00','payment_type'=>'','payment_method'=>'','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']], 'carrier_payments'=>[]];
+    $trip['customer_amount_sync_disabled']=$manual;
     $isFinanceRealm=true;$clients=[];$responsibleUsers=[];$routeExecutors=[];$utilizers=[];
-    ob_start();require base_path('app/View/partials/company_waste_trip_modal_edit.php');file_put_contents($out,ob_get_clean());
-}
+    ob_start();require base_path('app/View/partials/company_waste_trip_modal_edit.php');return ob_get_clean();
+};
+$edit=$renderEdit();
+$editDom=new DOMDocument();@$editDom->loadHTML('<?xml encoding="utf-8" ?>'.$edit);$editXp=new DOMXPath($editDom);
+$saleInput=$editXp->query('//input[@name="customer_payments[0][amount]"]')->item(0);
+$assert($saleInput!==null&&!$saleInput->hasAttribute('readonly')&&!$saleInput->hasAttribute('disabled'),'Synced sale amount is editable');
+$assert($editXp->query('//input[@name="general_payments[0][amount]"]')->item(0)->hasAttribute('readonly'),'General amount remains source-owned');
+$assert(str_contains($edit,'После изменения и сохранения сумма больше не будет обновляться'),'Explain effect of saving manual sale');
+$assert(str_contains($renderEdit(true),'Синхронизация суммы отключена.'),'Show persisted manual ownership after reopening');
+if($out=getenv('WASTE_EDIT_RENDER_OUTPUT'))file_put_contents($out,$edit);
 echo "WASTE_TRIP_REGISTRY_RENDER=PASS\n";
