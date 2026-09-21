@@ -36,6 +36,10 @@ final class MaxMessagingController
         $draft = $_SESSION['max_event_draft'] ?? null;
         unset($_SESSION['max_event_draft']);
         if (is_array($draft)) {
+            if (($draft['event_key'] ?? '') === 'feo.placement.block_created'
+                && isset($draft['feo_templates']) && !isset($draft['feo_templates_version'])) {
+                $draft['feo_templates_version'] = 1;
+            }
             foreach ($eventRules as &$rule) {
                 if ($rule['event_key'] === ($draft['event_key'] ?? '')) $rule = array_replace($rule, ['is_enabled' => 0, 'notify' => 0], $draft);
             }
@@ -190,7 +194,7 @@ final class MaxMessagingController
             unset($_SESSION['max_event_draft']);
             $this->success('Настройки события сохранены. Они действуют для новых блоков.');
         } catch (Throwable $e) {
-            $_SESSION['max_event_draft'] = array_intersect_key($_POST, array_flip(['event_key','is_enabled','chat_config_id','message_template','message_format','notify','feo_templates','feo_template_kind']));
+            $_SESSION['max_event_draft'] = array_intersect_key($_POST, array_flip(['event_key','is_enabled','chat_config_id','message_template','message_format','notify','feo_templates','feo_templates_version','feo_template_kind']));
             $this->error($e->getMessage());
         }
         redirect_to(self::SETTINGS_PATH . '#max-events');
@@ -204,7 +208,7 @@ final class MaxMessagingController
             $this->tenant(false);
             $key = (string)($_POST['event_key'] ?? '');
             $text = $key === 'feo.placement.block_created' && isset($_POST['feo_templates'])
-                ? \App\Service\MaxFeoMessageTemplates::preview(\App\Service\MaxFeoMessageTemplates::fromInput($_POST['feo_templates']), (string)($_POST['feo_template_kind'] ?? 'main'))
+                ? \App\Service\MaxFeoMessageTemplates::preview(\App\Service\MaxFeoMessageTemplates::fromSubmittedInput($_POST['feo_templates'], $_POST['feo_templates_version'] ?? null), (string)($_POST['feo_template_kind'] ?? 'main'))
                 : MaxEventCatalog::render($key, (string)($_POST['message_template'] ?? ''), (string)($_POST['message_format'] ?? 'plain'), MaxEventCatalog::example($key));
             jsonResponse(['success' => true, 'text' => $text]);
         } catch (Throwable $e) {

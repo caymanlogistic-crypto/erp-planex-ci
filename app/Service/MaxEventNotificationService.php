@@ -31,6 +31,7 @@ final class MaxEventNotificationService
             ]) + $event;
             if ($key === 'feo.placement.block_created') {
                 $row['feo_templates'] = MaxFeoMessageTemplates::decode((string)$row['message_template']);
+                $row['feo_templates_version'] = MaxFeoMessageTemplates::version();
                 $row['message_template'] = $row['feo_templates']['main'];
             }
             $row['message_template'] = MaxEventCatalog::currentTemplate($key, (string)$row['message_template']);
@@ -53,7 +54,10 @@ final class MaxEventNotificationService
         $template = trim((string)($data['message_template'] ?? ''));
         if ($key === 'feo.placement.block_created') {
             if (isset($data['feo_templates'])) {
-                $templates = MaxFeoMessageTemplates::fromInput($data['feo_templates']);
+                $templates = MaxFeoMessageTemplates::fromSubmittedInput(
+                    $data['feo_templates'],
+                    $data['feo_templates_version'] ?? null
+                );
             } else {
                 $templates = MaxFeoMessageTemplates::load($this->pdo);
                 if ($template !== '') $templates['main'] = $template;
