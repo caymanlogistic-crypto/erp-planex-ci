@@ -178,8 +178,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "7c416859f053fd30e8e345ca0cf0e9328462c356",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/7c416859f053fd30e8e345ca0cf0e9328462c356/tests/feo_transfers_mysql_test.php",
+      "verified_sha": "b435ad0ba4eed5a447dc290cff4e8a1133e5612c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/b435ad0ba4eed5a447dc290cff4e8a1133e5612c/tests/feo_transfers_mysql_test.php",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",
@@ -222,8 +222,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "7c416859f053fd30e8e345ca0cf0e9328462c356",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/7c416859f053fd30e8e345ca0cf0e9328462c356/tests/feo_legacy_xa_mysql_test.php",
+      "verified_sha": "b435ad0ba4eed5a447dc290cff4e8a1133e5612c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/b435ad0ba4eed5a447dc290cff4e8a1133e5612c/tests/feo_legacy_xa_mysql_test.php",
       "owning_paths": [
         "app/Service/FeoRequestService.php",
         "app/Service/FeoRequestInteractionService.php",
