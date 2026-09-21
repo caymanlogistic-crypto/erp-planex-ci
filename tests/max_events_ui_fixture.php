@@ -5,7 +5,10 @@ require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Support/http_runtime.php';
 require_once BASE_PATH.'/app/Service/MaxEventCatalog.php';
 $_SESSION=['csrf_token'=>'fixture'];
-$bots=[];$chats=[['id'=>1,'name'=>'Руководство','bot_name'=>'PLANEX','bot_id'=>1,'bot_is_active'=>1,'is_active'=>1,'max_status'=>'active','chat_id'=>'-9001','chat_type'=>'chat','discovered_via'=>'manual','max_title'=>'Руководство','purpose'=>'']];
+$bots=[];$chats=[
+    ['id'=>1,'name'=>'ТЕСТОВЫЙ','bot_name'=>'PLANEX','bot_id'=>1,'bot_is_active'=>1,'is_active'=>1,'max_status'=>'active','chat_id'=>'-9001','chat_type'=>'chat','discovered_via'=>'manual','max_title'=>'ТЕСТОВЫЙ','purpose'=>''],
+    ['id'=>2,'name'=>'Фрегат','bot_name'=>'PLANEX','bot_id'=>1,'bot_is_active'=>1,'is_active'=>1,'max_status'=>'active','chat_id'=>'-9002','chat_type'=>'chat','discovered_via'=>'manual','max_title'=>'Фрегат','purpose'=>''],
+];
 $activeChats=$chats;$logs=[];$webhookUrls=[];$successFlash=null;$errorFlash=null;
 $eventsReady=true;$eventDeliveries=[];$eventRules=[];
 foreach(\App\Service\MaxEventCatalog::all() as $key=>$event) $eventRules[]=['event_key'=>$key,'is_enabled'=>0,'chat_config_id'=>1,'message_template'=>$event['template'],'message_format'=>\App\Service\MaxEventCatalog::systemFormat($key,'plain'),'notify'=>1]+$event;
@@ -29,5 +32,14 @@ if (($argv[1] ?? '') === 'feo-draft') {
     $eventRules[0]['feo_template_kind']='point';
     $eventRules[0]['message_template']=$templates['point'];
     $errorFlash='Сохраните переменную {{requests}}.';
+}
+if (($argv[1] ?? '') === 'legacy-feo-draft') {
+    $draft=['event_key'=>$eventRules[0]['event_key']];
+    $templates=\App\Service\MaxFeoMessageTemplates::defaults();
+    $templates['main']=str_replace("\n{{request_ids}}",'',$templates['main']);
+    $eventRules[0]['feo_templates']=$templates;
+    $eventRules[0]['feo_templates_version']=1;
+    $eventRules[0]['message_template']=$templates['main'];
+    $errorFlash='Выберите активный чат.';
 }
 ?><!doctype html><html lang="ru"><head><meta charset="utf-8"><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><style>body{height:auto;min-height:100vh;overflow:auto}</style></head><body><main class="workspace-shell-1690"><?php require BASE_PATH.'/app/View/pages/company_max_settings.php'; ?></main><script src="/assets/js/modal-shell.js"></script></body></html>

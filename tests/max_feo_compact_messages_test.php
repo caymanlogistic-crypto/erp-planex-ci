@@ -93,6 +93,13 @@ foreach (['FeoMapService','WasteTripService','FeoPlacementRouteNotificationServi
     $migratedV2=App\Service\MaxFeoMessageTemplates::decode(json_encode($v2,JSON_UNESCAPED_UNICODE));
     $ok($migratedV2['main']==="{{action_icon}} **{{action_title}} — МОЙ ЗАГОЛОВОК**\n{{count_label}} · {{mass_kg}} кг\n{{request_ids}}",
         'edited v2 main template must be preserved and gain required request IDs');
+    $legacyForm=$v2['templates'];
+    $legacyForm['main']="{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг";
+    $upgradedForm=App\Service\MaxFeoMessageTemplates::fromSubmittedInput(json_encode($legacyForm,JSON_UNESCAPED_UNICODE),null);
+    $ok(str_ends_with($upgradedForm['main'],"\n{{request_ids}}"),'form opened before v3 must upgrade during chat-only save');
+    $strictRejected=false;
+    try{App\Service\MaxFeoMessageTemplates::fromSubmittedInput($legacyForm,App\Service\MaxFeoMessageTemplates::version());}catch(RuntimeException){$strictRejected=true;}
+    $ok($strictRejected,'current form must reject deliberate removal of request IDs');
     $ok(str_contains(App\Service\MaxFeoMessageTemplates::encode(App\Service\MaxFeoMessageTemplates::defaults()),'"feo_templates_version":3'),
         'new template saves must use version 3');
     $ok(str_contains(App\Service\MaxEventCatalog::currentTemplate('feo.placement.block_created',

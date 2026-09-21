@@ -52,6 +52,15 @@ try {
     $ok((int)$stored['is_enabled']===1,'System FEO event cannot be disabled');
     $ok(\App\Service\MaxFeoMessageTemplates::decode((string)$stored['message_template'])['main']===$canonicalTemplate,'FEO template bundle must persist');
     $ok((string)$stored['message_format']==='markdown','System FEO main format must be markdown');
+    $legacyBrowserTemplates=\App\Service\MaxFeoMessageTemplates::defaults();
+    $legacyBrowserTemplates['main']="{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг";
+    $events->saveRule(array_replace($rule,['chat_config_id'=>$chat2,'feo_templates'=>json_encode($legacyBrowserTemplates,JSON_UNESCAPED_UNICODE)]),77);
+    $chatOnlyStored=$pdo->query("SELECT chat_config_id,message_template FROM max_event_rules WHERE event_key='feo.placement.block_created'")->fetch(PDO::FETCH_ASSOC);
+    $ok((int)$chatOnlyStored['chat_config_id']===$chat2,'Chat-only save from an old page must persist the selected chat');
+    $ok(str_ends_with(\App\Service\MaxFeoMessageTemplates::decode((string)$chatOnlyStored['message_template'])['main'],"\n{{request_ids}}"),'Chat-only save from an old page must upgrade the main template');
+    $rejects(fn()=>$events->saveRule(array_replace($rule,['chat_config_id'=>$chat,'feo_templates'=>$legacyBrowserTemplates,'feo_templates_version'=>\App\Service\MaxFeoMessageTemplates::version()]),77));
+    $ok((int)$pdo->query("SELECT chat_config_id FROM max_event_rules WHERE event_key='feo.placement.block_created'")->fetchColumn()===$chat2,'Invalid current template must not partially change the chat');
+    $events->saveRule($rule,77);
     $additionValues=array_replace($values,['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>'4','mass_kg'=>'45 402','request_ids'=>'123456, 123457, 456789, 876676']);
     $exclusionValues=array_replace($values,['action_title'=>'СНЯТИЕ ЗАЯВОК','request_count'=>'4','mass_kg'=>'45 402','request_ids'=>'123456, 123457, 456789, 876676']);
     $ok(MaxEventCatalog::render($key,$canonicalTemplate,'html',$additionValues)==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг\n123456, 123457, 456789, 876676",'Exact default addition main text with request IDs');
