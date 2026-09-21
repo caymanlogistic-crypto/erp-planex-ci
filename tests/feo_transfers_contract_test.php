@@ -34,6 +34,9 @@ foreach (['created','reverted'] as $event) {
 }
 $legacy="Создан пакет переноса №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
 expectTransfer(MaxEventCatalog::currentTemplate('feo.transfer.created',$legacy)===MaxEventCatalog::event('feo.transfer.created')['template'],'Legacy transfer template upgrades to detailed default');
+$previous="Создан пакет перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
+expectTransfer(MaxEventCatalog::currentTemplate('feo.transfer.created',$previous)===MaxEventCatalog::event('feo.transfer.created')['template'],'Previous movement template upgrades from package to block wording');
+expectTransfer(MaxEventCatalog::event('feo.transfer.created')['title']==='ФЭО — создан блок перемещения','Movement event uses block wording');
 $weight=FeoWeightChangeNotificationService::change(['zayavka_id'=>'123456','mass_netto'=>'1.250'],['zayavka_id'=>'123456','mass_netto'=>'1.750']);
 expectTransfer($weight!==null && $weight['before_kg']===1250.0 && $weight['after_kg']===1750.0 && $weight['difference_kg']===500.0,'Weight change uses kilograms');
 expectTransfer(FeoWeightChangeNotificationService::change(['zayavka_id'=>'123456','mass_netto'=>'1.250'],['zayavka_id'=>'123456','mass_netto'=>'1.2500'])===null,'Equivalent weight does not notify');

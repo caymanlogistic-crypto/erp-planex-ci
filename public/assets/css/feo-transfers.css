@@ -1,15 +1,22 @@
 /* Layout only; surfaces, fields, alerts and dialogs use the ERP component classes. */
 .feo-transfers [hidden],.transfer-dialog:not([open]){display:none!important}
-.transfer-dialog{width:min(820px,calc(100vw - 32px));padding:0;transform:none}
+.transfer-dialog{width:min(820px,calc(100vw - 32px));padding:0;transform:none;overflow:hidden}
 .transfer-dialog::backdrop{background:rgba(10,9,8,.58)}
-.transfer-dialog-head p{margin-top:4px;font-size:11px}
-.transfer-form{padding:16px;margin:0}.transfer-form.panel{width:100%;max-width:none;border:1px solid var(--line-soft)}
-.transfer-form>.field,.transfer-form>div,.transfer-form>fieldset{margin-bottom:12px}
-.transfer-form>[data-address-destination]:last-of-type{margin-bottom:0}
-.transfer-form textarea{resize:vertical;min-height:110px}
-.transfer-grid .field{min-width:0}
-.transfer-modes{display:flex;flex-wrap:wrap;gap:12px;border:0;padding:0}.transfer-modes legend{font-size:11px;font-weight:700;color:var(--text-muted);margin-bottom:6px}.transfer-modes label{display:flex;gap:6px;align-items:center;width:auto;max-width:none;font-weight:400}
-.transfer-modes input[type=radio]{appearance:auto;width:14px;height:14px;min-width:14px;min-height:14px;flex:0 0 14px;margin:0;padding:0;accent-color:var(--accent)}
+.transfer-form{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;margin:0}
+.transfer-form.panel{display:block;width:100%;max-width:none;padding:16px;border:1px solid var(--line-soft)}
+.transfer-form.panel>.field,.transfer-form.panel>div,.transfer-form.panel>fieldset{margin-bottom:12px}
+.transfer-form.panel>[data-address-destination]:last-of-type{margin-bottom:0}
+.transfer-form-body{padding:14px 16px 12px}
+.transfer-form-grid{display:grid;grid-template-columns:minmax(0,1fr) 280px;column-gap:14px;row-gap:9px;align-items:start}
+.transfer-form-grid>.field{margin:0;min-width:0}
+.transfer-wide{grid-column:1/-1;min-width:0}
+.transfer-form-grid .field-label{margin-bottom:4px}
+.transfer-modes{border:0;padding:0;min-width:0}
+.transfer-radio-row{display:flex;align-items:center;gap:18px;min-height:28px;padding:0;flex-wrap:wrap}
+.transfer-radio{display:inline-flex;align-items:center;gap:6px;width:auto;max-width:none;padding:0;border:0;background:transparent;font-size:12px;font-weight:600;line-height:1.2;white-space:nowrap;cursor:pointer}
+.transfer-radio input[type=radio]{-webkit-appearance:radio!important;appearance:auto!important;width:14px!important;height:14px!important;min-width:14px!important;min-height:14px!important;flex:0 0 14px;margin:0!important;padding:0!important;accent-color:var(--accent)}
+.transfer-request-ids{min-height:132px;max-height:220px;padding:7px 8px;line-height:1.35;resize:vertical}
+.transfer-form .modal-foot{min-height:42px;padding:7px 12px}
 .transfer-address-search{display:flex;align-items:center;gap:8px}.transfer-address-search input{flex:1;min-width:0}.transfer-address-search .btn{white-space:nowrap}
 .transfer-geo-result{display:grid;gap:12px;margin-top:16px;padding-top:16px;border-top:1px solid var(--line-soft)}
 .transfer-geo-result .inline-actions{display:flex;flex-wrap:wrap;gap:6px}
@@ -23,7 +30,7 @@
 .transfer-pagination{display:flex;gap:8px;padding:10px}.transfer-detail-body .table-scroll{max-height:50vh;overflow:auto}.transfer-detail-body td{white-space:normal;overflow-wrap:anywhere;min-width:120px}.transfer-detail-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.transfer-detail-meta p{margin:0}.transfer-detail-meta b{display:block}
 .transfer-confirm-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
 .feo-transfers>[data-page-message]:not([hidden]){margin-bottom:8px}
-@media(max-width:700px){.transfer-grid,.transfer-coordinates,.transfer-detail-meta{grid-template-columns:1fr}.transfer-address-search{flex-direction:column;align-items:stretch}.transfer-dialog{width:calc(100vw - 16px)}.transfer-history{min-width:850px}}
+@media(max-width:700px){.transfer-form-grid,.transfer-coordinates,.transfer-detail-meta{grid-template-columns:1fr}.transfer-wide{grid-column:auto}.transfer-address-search{flex-direction:column;align-items:stretch}.transfer-dialog{width:calc(100vw - 16px)}.transfer-history{min-width:850px}.transfer-form-body{padding:12px}.transfer-radio-row{gap:12px}}
 
 /* Six product quality categories, using existing muted ERP palette tokens. */
 .transfer-quality-result{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 10px;font-size:12px;line-height:1.5;color:var(--text-muted)}

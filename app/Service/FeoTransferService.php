@@ -19,7 +19,7 @@ final class FeoTransferService
         if (!$tokens) throw new RuntimeException('Введите номера заявок.');
         foreach ($tokens as $id) if (!preg_match('/^[0-9]{1,64}$/D', $id)) throw new RuntimeException('Вставьте только номера заявок, разделённые пробелом, запятой или новой строкой. Некорректное значение: ' . mb_substr($id,0,70));
         $ids = array_values(array_unique($tokens));
-        if (count($ids) > 1000) throw new RuntimeException('В одном пакете допускается до 1000 заявок.');
+        if (count($ids) > 1000) throw new RuntimeException('В одном блоке допускается до 1000 заявок.');
         sort($ids, SORT_STRING);
         return ['ids'=>$ids,'duplicates'=>count($tokens)-count($ids)];
     }
@@ -29,7 +29,7 @@ final class FeoTransferService
         if (!$this->ready($pdo)) throw new RuntimeException('Перемещение заявок ожидает обновления базы компании (139).');
         $ids = self::parseIds(implode("\n", $ids))['ids'];
         if (!in_array($mode,['request','address'],true)) throw new RuntimeException('Выберите способ перемещения.');
-        if ($mode === 'request' && in_array($sourceId,$ids,true)) throw new RuntimeException('Заявка назначения не должна входить в перемещаемый пакет.');
+        if ($mode === 'request' && in_array($sourceId,$ids,true)) throw new RuntimeException('Заявка с нужным адресом не должна входить в блок перемещения.');
         $lookupIds = $mode === 'request' ? array_values(array_unique([...$ids,$sourceId])) : $ids;
         sort($lookupIds,SORT_STRING);
         $marks = implode(',',array_fill(0,count($lookupIds),'?'));
@@ -38,7 +38,7 @@ final class FeoTransferService
         $found = [];
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $row) $found[(string)$row['zayavka_id']] = $row;
         $missing = array_values(array_diff($lookupIds,array_keys($found)));
-        if ($missing) throw new RuntimeException('Заявки не найдены: ' . implode(', ',array_slice($missing,0,30)) . '. Пакет не сохранён.');
+        if ($missing) throw new RuntimeException('Заявки не найдены: ' . implode(', ',array_slice($missing,0,30)) . '. Блок не сохранён.');
         $overrideQuery = $pdo->prepare("SELECT zayavka_id,batch_id FROM feo_location_overrides WHERE zayavka_id IN ($marks)" . ($lock ? ' FOR UPDATE' : ''));
         $overrideQuery->execute($lookupIds);
         $overrides = $overrideQuery->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -67,12 +67,12 @@ final class FeoTransferService
     {
         if (!preg_match('/^[a-f0-9]{64}$/D',$operationKey)) throw new RuntimeException('Некорректный ключ операции.');
         $name=trim($name); $comment=trim($comment);
-        if (mb_strlen($name)>180 || mb_strlen($comment)>2000) throw new RuntimeException('Сократите название или комментарий пакета.');
+        if (mb_strlen($name)>180 || mb_strlen($comment)>2000) throw new RuntimeException('Сократите название или комментарий блока.');
         return $this->transaction($pdo, function () use ($pdo,$preview,$actor,$operationKey,$name,$comment,$event): array {
             $q=$pdo->prepare('SELECT id FROM feo_transfer_batches WHERE operation_key=?'); $q->execute([$operationKey]);
             if ($id=$q->fetchColumn()) return ['batch_id'=>(int)$id,'already_applied'=>true];
             $fresh=$this->preview($pdo,array_column($preview['rows'],'zayavka_id'),$preview['mode'],(string)($preview['source_request_id']??''),$preview['destination'],true);
-            if (!hash_equals($preview['state_hash'],$fresh['state_hash'])) throw new RuntimeException('Адреса или история заявок изменились после проверки. Проверьте пакет заново.');
+            if (!hash_equals($preview['state_hash'],$fresh['state_hash'])) throw new RuntimeException('Адреса или история заявок изменились после проверки. Проверьте блок заново.');
             if ((int)($actor['created_by_user_id']??0)<=0) throw new RuntimeException('Не удалось определить автора перемещения.');
             $q=$pdo->prepare('INSERT INTO feo_transfer_batches(name,mode,source_request_id,destination_json,comment,request_count,operation_key,created_by_user_id,created_by_role,created_by_name) VALUES(?,?,?,?,?,?,?,?,?,?)');
             $q->execute([$name?:'Перемещение заявок',$fresh['mode'],$fresh['source_request_id'],$this->json($fresh['destination']),$comment,$fresh['count'],$operationKey,$actor['created_by_user_id'],$actor['created_by_role'],$actor['created_by_display_name']]);
@@ -100,14 +100,14 @@ final class FeoTransferService
         return $this->transaction($pdo,function () use ($pdo,$batchId,$actor,$event): array {
             $q=$pdo->prepare('SELECT * FROM feo_transfer_batches WHERE id=? FOR UPDATE'); $q->execute([$batchId]);
             $batch=$q->fetch(PDO::FETCH_ASSOC);
-            if (!$batch) throw new RuntimeException('Пакет не найден.');
+            if (!$batch) throw new RuntimeException('Блок не найден.');
             if ($batch['status']==='reverted') return ['batch_id'=>$batchId,'already_reverted'=>true];
             $items=$this->items($pdo,$batchId);
             $payload=[];
             foreach ($items as $item) {
                 $q=$pdo->prepare('SELECT r.id,r.mno_adres_pogruzki,r.mno_sh,r.mno_d,o.batch_id FROM feo_requests r LEFT JOIN feo_location_overrides o ON o.zayavka_id=r.zayavka_id WHERE r.zayavka_id=? FOR UPDATE');
                 $q->execute([$item['zayavka_id']]); $current=$q->fetch(PDO::FETCH_ASSOC);
-                if (!$current || (int)$current['id']!==(int)$item['request_row_id'] || (int)$current['batch_id']!==$batchId || $this->location($current)!==$item['after']) throw new RuntimeException('Заявка №'.$item['zayavka_id'].' удалена или перемещена позже. Возврат всего пакета остановлен. Сначала верните более поздний пакет.');
+                if (!$current || (int)$current['id']!==(int)$item['request_row_id'] || (int)$current['batch_id']!==$batchId || $this->location($current)!==$item['after']) throw new RuntimeException('Заявка №'.$item['zayavka_id'].' удалена или перемещена позже. Возврат всего блока остановлен. Сначала верните более поздний блок.');
                 $this->writeLocation($pdo,(int)$current['id'],$item['before']);
                 if ($item['previous_batch_id']!==null) {
                     $q=$pdo->prepare('UPDATE feo_location_overrides SET batch_id=? WHERE zayavka_id=?'); $q->execute([$item['previous_batch_id'],$item['zayavka_id']]);

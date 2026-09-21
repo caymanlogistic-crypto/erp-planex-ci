@@ -6,9 +6,9 @@ $geoBase=app_url('/company/feo/requests/coordinates');
 <div class="feo-transfers" data-feo-transfers data-base="<?= e($transferBase) ?>" data-geo-base="<?= e($geoBase) ?>">
   <div class="page-head">
     <div class="page-head-left"><h1 class="page-title"><?= e($pageTitle) ?></h1>
-      <div class="page-summary"><?= $coordinatesOnly?'Найдите адрес и узнайте, насколько точно определены координаты.':'Перемещайте заявки пакетами. Исходные адреса и координаты сохраняются в истории.' ?></div>
+      <div class="page-summary"><?= $coordinatesOnly?'Найдите адрес и узнайте, насколько точно определены координаты.':'Перемещайте заявки блоками. Исходные адреса и координаты сохраняются в истории.' ?></div>
     </div>
-    <?php if (!$coordinatesOnly && !$dbError): ?><div class="page-head-actions"><button class="btn btn-primary" type="button" data-open-transfer>Создать пакет</button></div><?php endif; ?>
+    <?php if (!$coordinatesOnly && !$dbError): ?><div class="page-head-actions"><button class="btn btn-primary" type="button" data-open-transfer>Создать блок</button></div><?php endif; ?>
   </div>
   <div class="form-alert" data-page-message role="status" hidden></div>
   <?php if ($dbError): ?><div class="form-alert alert-warning"><?= e($dbError) ?></div><?php else: ?>
@@ -16,46 +16,48 @@ $geoBase=app_url('/company/feo/requests/coordinates');
 
   <?php if (!$coordinatesOnly): ?>
   <div class="table-card table-card--standard">
-    <div class="table-toolbar"><div class="found-label">История пакетов <span class="muted">· страница <?= $page ?></span></div><input class="toolbar-search" type="search" data-history-search placeholder="Поиск на странице" aria-label="Поиск пакетов"></div>
+    <div class="table-toolbar"><div class="found-label">История блоков <span class="muted">· страница <?= $page ?></span></div><input class="toolbar-search" type="search" data-history-search placeholder="Поиск на странице" aria-label="Поиск блоков"></div>
     <div class="table-scroll"><table class="table transfer-history">
-      <thead><tr><th>Пакет / дата</th><th>Место назначения</th><th>Заявок</th><th>Автор</th><th>Состояние</th><th>Действия</th></tr></thead>
+      <thead><tr><th>Блок / дата</th><th>Место назначения</th><th>Заявок</th><th>Автор</th><th>Состояние</th><th>Действия</th></tr></thead>
       <tbody>
-      <?php if (!$batches): ?><tr><td colspan="6"><div class="transfer-empty"><b>Перемещений пока нет</b><p>Создайте пакет, добавьте номера заявок и выберите новое место погрузки.</p><button class="btn btn-primary" type="button" data-open-transfer>Создать первый пакет</button></div></td></tr><?php endif; ?>
+      <?php if (!$batches): ?><tr><td colspan="6"><div class="transfer-empty"><b>Перемещений пока нет</b><p>Создайте блок, добавьте номера заявок и выберите новое место погрузки.</p><button class="btn btn-primary" type="button" data-open-transfer>Создать первый блок</button></div></td></tr><?php endif; ?>
       <?php foreach ($batches as $batch): $destination=json_decode($batch['destination_json'],true); ?>
         <tr data-batch-row><td><strong>#<?= (int)$batch['id'] ?> · <?= e($batch['name']) ?></strong><div class="muted"><?= e($batch['created_at']) ?></div></td>
           <td class="transfer-location"><?= e($destination['address']??'') ?><div class="transfer-quality <?= ($destination['precision']??'')==='exact'?'is-exact':'' ?>"><?= e($destination['quality']??'Точность не подтверждена') ?></div></td>
           <td><?= (int)$batch['request_count'] ?></td><td><?= e($batch['created_by_name']) ?></td>
           <td><span class="badge <?= $batch['status']==='applied'?'badge-ok':'badge-neutral' ?>"><?= $batch['status']==='applied'?'Применён':'Возвращён' ?></span></td>
-          <td><div class="inline-actions"><button class="btn btn-secondary btn-sm" type="button" data-detail="<?= (int)$batch['id'] ?>">Подробнее</button><?php if ($batch['status']==='applied'): ?><button class="btn btn-secondary btn-sm" type="button" data-revert="<?= (int)$batch['id'] ?>">Вернуть пакет</button><?php endif; ?></div></td></tr>
+          <td><div class="inline-actions"><button class="btn btn-secondary btn-sm" type="button" data-detail="<?= (int)$batch['id'] ?>">Подробнее</button><?php if ($batch['status']==='applied'): ?><button class="btn btn-secondary btn-sm" type="button" data-revert="<?= (int)$batch['id'] ?>">Вернуть блок</button><?php endif; ?></div></td></tr>
       <?php endforeach; ?>
       </tbody>
     </table></div>
     <div class="transfer-pagination"><?php if ($page>1): ?><a class="btn btn-secondary btn-sm" href="<?= e($transferBase.'?page='.($page-1)) ?>">← Новее</a><?php endif; ?><?php if (count($batches)===50): ?><a class="btn btn-secondary btn-sm" href="<?= e($transferBase.'?page='.($page+1)) ?>">Ранее →</a><?php endif; ?></div>
   </div>
   <dialog class="modal modal-lg transfer-dialog" data-create-dialog aria-labelledby="transfer-create-title">
-    <div class="modal-head transfer-dialog-head"><div><h2 class="modal-title" id="transfer-create-title">Новый пакет перемещения</h2><p class="muted">1. Заявки → 2. Место назначения → 3. Проверка</p></div><button type="button" class="btn btn-secondary btn-sm" data-close-dialog aria-label="Закрыть">✕</button></div>
+    <div class="modal-head"><span class="modal-title" id="transfer-create-title">Новый блок перемещения</span><button type="button" class="modal-close" data-close-dialog aria-label="Закрыть">&times;</button></div>
   <?php endif; ?>
-  <form data-transfer-form class="transfer-form <?= $coordinatesOnly?'panel':'modal-body' ?>" <?= $coordinatesOnly?'data-coordinates-only':'' ?>>
+  <form data-transfer-form class="transfer-form <?= $coordinatesOnly?'panel':'' ?>" <?= $coordinatesOnly?'data-coordinates-only':'' ?>>
     <?= csrfField() ?>
+    <?php if (!$coordinatesOnly): ?><div class="modal-body transfer-form-body"><div class="transfer-form-grid"><?php endif; ?>
     <?php if (!$coordinatesOnly): ?>
-      <div class="form-grid-2 transfer-grid"><div class="field"><label class="field-label" for="transfer-name">Название пакета</label><input class="field-input" id="transfer-name" name="name" maxlength="180" placeholder="Например, перемещение на склад в Подольске"></div><div class="field"><label class="field-label" for="transfer-comment">Комментарий</label><input class="field-input" id="transfer-comment" name="comment" maxlength="2000" placeholder="Причина перемещения"></div></div>
-      <div class="field"><label class="field-label" for="transfer-ids">Номера заявок</label><textarea class="field-textarea" id="transfer-ids" name="request_ids" rows="4" required placeholder="123456&#10;123457&#10;123458"></textarea><span class="muted">Вставьте один номер или список из столбца Excel. До 1000 заявок; повторы будут объединены.</span></div>
-      <fieldset class="transfer-modes"><legend>Куда переместить</legend><label><input type="radio" name="mode" value="request" checked> К другой заявке</label><label><input type="radio" name="mode" value="address"> По адресу</label></fieldset>
-      <div data-request-destination class="field"><label class="field-label" for="transfer-source">Номер заявки назначения</label><input class="field-input" id="transfer-source" name="source_request_id" inputmode="numeric" placeholder="Номер заявки, откуда взять адрес и координаты"><span class="muted">Заявка назначения останется без изменений.</span></div>
+      <div class="field"><label class="field-label" for="transfer-name">Название, необязательно</label><input class="field-input" id="transfer-name" name="name" maxlength="180"></div>
+      <fieldset class="field transfer-modes"><legend class="field-label">Куда переместить</legend><div class="transfer-radio-row"><label class="transfer-radio"><input type="radio" name="mode" value="request" checked> К другой заявке</label><label class="transfer-radio"><input type="radio" name="mode" value="address"> По адресу</label></div></fieldset>
+      <div class="field transfer-wide"><label class="field-label" for="transfer-ids">Заявки</label><textarea class="field-input transfer-request-ids" id="transfer-ids" name="request_ids" rows="5" required placeholder="Вставьте любой текст с шестизначными ID. Для Excel/markdown-таблицы используется только первый столбец."></textarea></div>
+      <div data-request-destination class="field transfer-wide"><label class="field-label" for="transfer-source">Заявка с нужным адресом</label><input class="field-input" id="transfer-source" name="source_request_id" inputmode="numeric" placeholder="Введите номер заявки"></div>
     <?php endif; ?>
-    <div data-address-destination <?= $coordinatesOnly?'':'hidden' ?>>
+    <div data-address-destination class="<?= $coordinatesOnly?'':'transfer-wide' ?>" <?= $coordinatesOnly?'':'hidden' ?>>
       <div class="field"><label class="field-label" for="geo-address">Адрес места погрузки</label><div class="transfer-address-search"><input class="field-input" id="geo-address" name="address" maxlength="1000" placeholder="Регион, населённый пункт, улица, дом"><button class="btn btn-secondary" type="button" data-geocode>Определить координаты</button></div></div>
       <section class="transfer-geo-result" data-geo-result hidden aria-live="polite">
         <div class="field"><label class="field-label" for="geo-found-address">Найденный адрес</label><output class="field-input transfer-readonly" id="geo-found-address" data-geo-address></output></div>
         <div class="form-grid-2 transfer-coordinates"><div class="field"><label class="field-label" for="geo-latitude">Широта</label><output class="field-input transfer-readonly" id="geo-latitude" data-geo-lat></output></div><div class="field"><label class="field-label" for="geo-longitude">Долгота</label><output class="field-input transfer-readonly" id="geo-longitude" data-geo-lon></output></div></div>
         <div class="transfer-quality-result" data-geo-quality role="group" aria-label="Качество координат"><span class="badge badge-neutral" data-geo-quality-badge></span><span data-geo-quality-description></span></div><div class="inline-actions"><button class="btn btn-secondary btn-sm" type="button" data-copy-coordinates>Копировать координаты</button><a class="btn btn-secondary btn-sm" data-map-link target="_blank" rel="noopener noreferrer">Открыть на Яндекс Картах ↗</a></div></section>
     </div>
-    <div class="form-alert alert-warning" data-form-error role="alert" hidden></div>
-    <?php if (!$coordinatesOnly): ?><div class="transfer-form-actions"><button class="btn btn-primary" type="submit" data-preview>Проверить пакет</button></div><?php endif; ?>
-    <section data-preview-result class="transfer-preview" hidden aria-live="polite"><h3>Проверьте изменения</h3><div class="form-alert alert-warning" data-preview-summary></div><div class="table-scroll"><table class="table"><thead><tr><th>Заявка</th><th>Было</th><th>Станет</th></tr></thead><tbody data-preview-rows></tbody></table></div><p class="muted">Будут изменены только адрес и координаты. Качество координат будет указано в уведомлении MAX, если событие включено.</p><button class="btn btn-primary" type="button" data-commit>Создать пакет и переместить заявки</button></section>
+    <?php if (!$coordinatesOnly): ?><div class="field transfer-wide"><label class="field-label" for="transfer-comment">Комментарий, необязательно</label><input class="field-input" id="transfer-comment" name="comment" maxlength="2000"></div><?php endif; ?>
+    <div class="form-alert alert-warning <?= $coordinatesOnly?'':'transfer-wide' ?>" data-form-error role="alert" hidden></div>
+    <section data-preview-result class="transfer-preview <?= $coordinatesOnly?'':'transfer-wide' ?>" hidden aria-live="polite"><h3>Проверьте изменения</h3><div class="form-alert alert-warning" data-preview-summary></div><div class="table-scroll"><table class="table"><thead><tr><th>Заявка</th><th>Было</th><th>Станет</th></tr></thead><tbody data-preview-rows></tbody></table></div><p class="muted">Будут изменены только адрес и координаты. Качество координат будет указано в уведомлении MAX, если событие включено.</p><button class="btn btn-primary" type="button" data-commit>Создать блок и переместить заявки</button></section>
+    <?php if (!$coordinatesOnly): ?></div></div><div class="modal-foot is-spaced"><button class="btn btn-ghost" type="button" data-close-dialog>Отмена</button><button class="btn btn-primary" type="submit" data-preview>Проверить</button></div><?php endif; ?>
   </form>
   <?php if (!$coordinatesOnly): ?></dialog><?php endif; ?>
-  <dialog class="modal modal-lg transfer-dialog" data-detail-dialog aria-labelledby="transfer-detail-title"><div class="modal-head transfer-dialog-head"><h2 class="modal-title" id="transfer-detail-title">История пакета</h2><button class="btn btn-secondary btn-sm" type="button" data-close-dialog aria-label="Закрыть">✕</button></div><div data-detail-body class="modal-body transfer-detail-body"></div></dialog>
+  <dialog class="modal modal-lg transfer-dialog" data-detail-dialog aria-labelledby="transfer-detail-title"><div class="modal-head"><span class="modal-title" id="transfer-detail-title">История блока</span><button class="modal-close" type="button" data-close-dialog aria-label="Закрыть">&times;</button></div><div data-detail-body class="modal-body transfer-detail-body"></div></dialog>
   <?php endif; ?>
 </div>
 <script src="<?= app_url('/assets/js/feo-transfers.js') ?>?v=<?= filemtime(__DIR__.'/../../../public/assets/js/feo-transfers.js') ?>" defer></script>
