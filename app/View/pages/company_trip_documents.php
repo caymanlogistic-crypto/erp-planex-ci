@@ -21,7 +21,6 @@ $pageSummary=$mode==='request'
 <div class="field"><label class="field-label" for="dc-entity">Юридическое лицо</label><select id="dc-entity" name="legal_entity_id" class="field-input" required><option value="">Выберите</option><?php foreach ($entities as $entity): ?><option value="<?= (int)$entity['id'] ?>"><?= e($entity['name']) ?></option><?php endforeach; ?></select></div>
 <div class="field trip-documents__trip-picker" data-trip-picker><label class="field-label" for="dc-trip-search">Рейс</label><input id="dc-trip-search" class="field-input" type="text" autocomplete="off" placeholder="Начните вводить номер, название, водителя или перевозчика" data-trip-search role="combobox" aria-autocomplete="list" aria-controls="dc-trip-options" aria-expanded="false" required><input id="dc-trip" name="trip" type="hidden"><div id="dc-trip-options" class="trip-documents__trip-options" data-trip-options role="listbox" hidden><?php foreach ($trips as $row): ?><button type="button" role="option" data-trip-option data-trip-value="<?= e($row['type'].':'.$row['id']) ?>"><?= e($row['label']) ?></button><?php endforeach; ?><p class="text-muted" data-trip-empty hidden>Рейсы не найдены.</p></div><span class="field-msg">Выберите рейс из отфильтрованного списка.</span></div>
 </div>
-<p class="text-muted" data-trip-summary>Помощник назначается автоматически. Отправитель — почта ПЛ выбранного юрлица, ответственный логист — в копии.</p>
 <div class="field" data-contact-choice hidden><label class="field-label" for="dc-contact">Контакт перевозчика</label><select id="dc-contact" class="field-input"><option value="">Ввести контакт</option></select></div>
 <div class="trip-documents__fields trip-documents__fields--three">
 <div class="field"><label class="field-label" for="dc-name">Имя контакта</label><input id="dc-name" class="field-input" name="contact_name" required maxlength="255" autocomplete="name"></div>
@@ -30,7 +29,6 @@ $pageSummary=$mode==='request'
 </div>
 <label class="trip-documents__check"><input type="checkbox" name="has_promise" value="1"> Перевозчик обещал к…</label>
 <div class="field" data-promise hidden><label class="field-label" for="dc-promise">Дата и время обещания</label><input id="dc-promise" class="field-input" name="promised_at" type="datetime-local"></div>
-<p class="text-muted" data-no-promise>Срок не назван — ожидаем как можно быстрее. Первая проверка через час после отправки.</p>
 <div class="notice danger" role="alert" data-document-error hidden></div>
 <div class="form-actions"><button class="btn btn-primary" type="submit">Проверить письмо</button></div>
 </form>
