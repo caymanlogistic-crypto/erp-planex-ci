@@ -107,7 +107,7 @@ foreach ([
     'final class FeoPlacementService' => 'placement service exists',
     "SUM(COALESCE(r.mass_netto,0))*1000" => 'mass is authoritative from feo_requests.mass_netto',
     "SELECT GET_LOCK(?,10)" => 'mutations use tenant DB lock',
-    'beginTransaction()' => 'mutations are transactional',
+    'FeoImportTransaction::begin($pdo)' => 'mutations use the atomic tenant/legacy coordinator',
     'state_hash' => 'preview carries state hash',
     'hash_equals($expectedStateHash, $this->stateHash($pdo))' => 'commit rejects stale confirmation',
     'private function replay' => 'current set is replayed from blocks',
@@ -124,6 +124,19 @@ foreach ([
     "DELETE FROM feo_placement_blocks WHERE id=?" => 'delete mutation removes the selected block regardless of current status',
     'После удаления актуальный состав не прошёл контроль целостности.' => 'delete commit verifies replay/current integrity before commit',
 ] as $needle => $label) $ok($label, str_contains($service, $needle));
+
+$legacyMirror = $read($root . '/app/Service/FeoLegacyPlacementSync.php');
+$ok('every placement mutation invokes the legacy mirror', substr_count($service, '$this->mirrorLegacy(') === 4);
+foreach ([
+    "status_type='dostupno'" => 'legacy mirror changes only available blocks',
+    'LEGACY_AVAILABLE_BLOCK_MIN_ID = 109' => 'legacy mirror preserves historical blocks',
+    'FOR UPDATE' => 'legacy mirror locks rows used to derive its result',
+    'DELETE FROM ' => 'legacy mirror removes empty available blocks',
+    'INSERT INTO ' => 'legacy mirror creates an available block for restored requests',
+    "['SELECT','INSERT','UPDATE','DELETE','TRIGGER']" => 'legacy mirror fails closed without complete legacy grants',
+    '$this->assertMembership($added, 1)' => 'legacy mirror verifies additions exactly once',
+    '$this->assertMembership($removed, 0)' => 'legacy mirror verifies removals are absent',
+] as $needle => $label) $ok($label, str_contains($legacyMirror, $needle));
 
 $controller = $read($root . '/app/Http/Controllers/Company/FeoPlacementController.php');
 $authorService = $read($root . '/app/Service/FeoPlacementAuthorService.php');

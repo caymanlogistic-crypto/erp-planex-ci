@@ -33,6 +33,7 @@ function feoLegacySyncLoadDependencies(string $root): void
     require_once $root . '/app/Service/FeoXlsxParser.php';
     require_once $root . '/app/Service/FeoLegacyImportSync.php';
     require_once $root . '/app/Service/FeoImportTransaction.php';
+    require_once $root . '/app/Service/FeoLegacyPlacementSync.php';
 }
 
 if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
@@ -81,6 +82,7 @@ try {
     $sync = $transaction->sync();
     if (!$sync) throw new RuntimeException('Tenant binding failed');
     $sync->validate(); // Metadata and grants only; never perform probe INSERT/UPDATE/DELETE.
+    (new App\Service\FeoLegacyPlacementSync($sync->connection(), $sync->database(), $pdo))->validate();
     $transaction->commit(); // Read-only readiness also proves XA PREPARE/COMMIT and durable journal capability.
     unset($transaction);
     if ($mode === 'activate' && $updated !== $environment) {

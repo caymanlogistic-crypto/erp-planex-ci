@@ -196,5 +196,7 @@ assert "missing incremental CI safeguard: git diff --name-only --diff-filter=ACM
 for path in ["app/Service/FeoLegacyImportSync.php", "app/Service/FeoXlsxParser.php", "app/View/pages/company_feo_requests.php", "scripts/feo_legacy_sync_configure.php", "tests/feo_import_browser_test.mjs"]:
     assert "FEO_TRANSFER_REGRESSIONS" in p.plan("CRITICAL", [path], p.ci.classify([path]))
 assert "tests/feo_legacy_import_sync_mysql_test.php" in p.FEO_TRANSFER_TESTS
+assert "tests/feo_placement_legacy_sync_mysql_test.php" in p.FEO_TRANSFER_TESTS
+assert "tests/feo_placement_legacy_sync_xa_mysql_test.php" in p.FEO_TRANSFER_TESTS
 assert "tests/feo_xlsx_parser_format_test.php" in p.FEO_TRANSFER_TESTS
 print("agent_preflight_test: PASS")
