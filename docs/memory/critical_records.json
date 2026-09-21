@@ -140,8 +140,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "6f1cec3e0532c4be8871a52177923534ff3c39ef",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/6f1cec3e0532c4be8871a52177923534ff3c39ef/tests/agent_preflight_test.py",
+      "verified_sha": "47014e1f08ffb2bc03f29007e9cd7d46adc6e65e",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/47014e1f08ffb2bc03f29007e9cd7d46adc6e65e/tests/agent_preflight_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -222,8 +222,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "2c9701c150ebfcd8bbb1fe5e9265bf70422226c4",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2c9701c150ebfcd8bbb1fe5e9265bf70422226c4/tests/feo_legacy_xa_mysql_test.php",
+      "verified_sha": "47014e1f08ffb2bc03f29007e9cd7d46adc6e65e",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/47014e1f08ffb2bc03f29007e9cd7d46adc6e65e/tests/feo_legacy_xa_mysql_test.php",
       "owning_paths": [
         "app/Service/FeoRequestService.php",
         "app/Service/FeoLegacyImportSync.php",
