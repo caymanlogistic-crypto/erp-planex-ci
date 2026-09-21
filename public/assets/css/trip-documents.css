@@ -5,7 +5,7 @@
 .trip-documents__fields { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 12px; }
 .trip-documents__fields--three { grid-template-columns: repeat(3,minmax(0,1fr)); }
 .trip-documents__check { display: inline-flex; align-items: center; gap: 8px; margin: 8px 0; }
-.trip-documents__check input { width: 16px; height: 16px; margin: 0; }
+.trip-documents__check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent, #7c4718); }
 .trip-documents__trip-picker { position: relative; }
 .trip-documents__trip-options { position: absolute; z-index: 30; top: calc(100% - 13px); left: 0; right: 0; max-height: 240px; overflow-y: auto; border: 1px solid var(--line); background: var(--surface-strong); box-shadow: 0 5px 14px rgba(34,29,22,.14); }
 .trip-documents__trip-options button { display: block; width: 100%; padding: 8px 10px; border: 0; border-bottom: 1px solid var(--line-soft); background: transparent; color: var(--text-main); font: inherit; text-align: left; cursor: pointer; }
