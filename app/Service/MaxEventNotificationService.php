@@ -6,6 +6,8 @@ use PDO;
 use RuntimeException;
 use Throwable;
 
+require_once __DIR__ . '/MaxChatMemberNotFoundException.php';
+
 final class MaxEventNotificationService
 {
     public function __construct(private readonly PDO $pdo, private readonly ?MaxMessagingService $messaging = null) {}
@@ -311,22 +313,28 @@ final class MaxEventNotificationService
         $cache = [];
         $compact = str_contains($text, '[Менеджер](max://user/');
         $result = preg_replace_callback(
-            '/\[[^\]]*\]\(max:\/\/user\/([1-9][0-9]{0,18})\)/u',
+            '/\[[^\]]*\]\(max:\/\/user\/([1-9][0-9]{0,18})\)(\s*·\s*)?/u',
             function (array $m) use (&$cache, $messaging, $delivery, $compact): string {
                 $userId = (string)$m[1];
-                if (!isset($cache[$userId])) {
-                    $member = $messaging->resolveChatMember(
-                        (int)$delivery['chat_config_id'],
-                        $userId,
-                        ['bot_id' => $delivery['bot_id'], 'external_chat_id' => $delivery['external_chat_id']]
-                    );
+                if (!array_key_exists($userId, $cache)) {
+                    try {
+                        $member = $messaging->resolveChatMember(
+                            (int)$delivery['chat_config_id'],
+                            $userId,
+                            ['bot_id' => $delivery['bot_id'], 'external_chat_id' => $delivery['external_chat_id']]
+                        );
+                    } catch (MaxChatMemberNotFoundException) {
+                        $cache[$userId] = null;
+                        return '';
+                    }
                     $name = trim((string)($member['first_name'] ?? ''));
                     $last = trim((string)($member['last_name'] ?? ''));
                     if ($last !== '' && (!$compact || $name === '')) $name .= ($name !== '' ? ' ' : '') . $last;
                     if ($name === '') throw new RuntimeException('MAX не вернул имя пользователя ' . $userId . '.');
                     $cache[$userId] = self::markdownLabel($name);
                 }
-                return '[' . $cache[$userId] . '](max://user/' . $userId . ')';
+                if ($cache[$userId] === null) return '';
+                return '[' . $cache[$userId] . '](max://user/' . $userId . ')' . ($m[2] ?? '');
             },
             $text
         );

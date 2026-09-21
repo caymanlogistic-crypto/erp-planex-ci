@@ -30,6 +30,8 @@ try{
     $messaging=new MaxMessagingService($pdo,static function(string $token) use (&$sent,&$failNeedle):MaxApiClient{
         return new MaxApiClient($token,static function(string $method,string $url,?array $body) use (&$sent,&$failNeedle):array{
             if(str_contains($url,'/members?user_ids=123456')) return ['members'=>[['user_id'=>123456,'first_name'=>'Иван','last_name'=>'Иванов']]];
+            if(str_contains($url,'/members?user_ids=654321')) return ['members'=>[]];
+            if(str_contains($url,'/members?user_ids=999999')) throw new RuntimeException('simulated member lookup failure');
             if(str_contains($url,'/chats/')) return ['type'=>'chat','status'=>'active','title'=>'QA'];
             $text=(string)($body['text']??'');
             $sent[]=['text'=>$text,'format'=>$body['format']??'plain'];
@@ -78,6 +80,31 @@ try{
     $ok(str_contains($sent[$before+1]['text'],'[Иван Иванов](max://user/123456)'),'supplemental must use current MAX profile name');
     $ok(!str_contains($sent[$before+1]['text'],'ERP Alias'),'ERP display name must not survive real mention dispatch');
     $ok($sent[$before+1]['format']==='markdown','mention must use markdown');
+
+    // A configured manager who is absent from the selected chat must not block the group message.
+    $pdo->beginTransaction();
+    $main43=$events->enqueue($key,'43',$values,77);
+    $absent=$events->enqueuePrepared($key,'b43:same_point:r8:p1',"‼️ [Менеджер](max://user/654321) · **ДОБАВИТЬ В РЕЙС** ‼️\n**#253 Новороссийск**",'markdown',77);
+    $pdo->commit();
+    $events->dispatch($main43);
+    $absentRow=$events->dispatch($absent,true);
+    $ok($absentRow['status']==='sent','absent chat member must fall back to a group message');
+    $absentText=(string)$sent[array_key_last($sent)]['text'];
+    $ok(!str_contains($absentText,'max://user/')&&!str_contains($absentText,'Менеджер'),'fallback group message must not retain a fake mention');
+    $ok(!str_contains($absentText,' · ')&&str_contains($absentText,'**ДОБАВИТЬ В РЕЙС**'),'fallback must remove the mention separator and preserve business text');
+    $ok((string)$pdo->query("SELECT message_text FROM max_event_deliveries WHERE id=".$absent)->fetchColumn()===$absentText,'fallback text must be persisted exactly as sent');
+
+    // API/transport failures remain failures and must not be silently downgraded.
+    $pdo->beginTransaction();
+    $main45=$events->enqueue($key,'45',$values,77);
+    $lookupFailure=$events->enqueuePrepared($key,'b45:nearby:r11:p1','[Менеджер](max://user/999999) · lookup failure','markdown',77);
+    $pdo->commit();
+    $events->dispatch($main45);
+    $sentBeforeLookupFailure=count($sent);
+    $lookupFailureRow=$events->dispatch($lookupFailure,true);
+    $ok($lookupFailureRow['status']==='failed'&&count($sent)===$sentBeforeLookupFailure,'member lookup transport failure must remain failed');
+    $ok(str_contains((string)$lookupFailureRow['error_message'],'simulated member lookup failure'),'member lookup failure diagnostic missing');
+
     // Missing MAX ID or other recipient diagnostics are durable and never fake-send.
     $pdo->beginTransaction();
     $diag=$events->enqueuePrepared($key,'b42:same_point:r8:p1','','markdown',77,'Не заполнен MAX ID ответственного менеджера Иван Иванов.');
