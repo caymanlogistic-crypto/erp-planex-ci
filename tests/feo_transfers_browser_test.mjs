@@ -32,13 +32,15 @@ try {
     if(url.endsWith('/geocode')) result={success:true,geo_token:'fixture-geo',result:destination};
     else if(url.endsWith('/preview')) {previewCalls++; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination,rows:[{zayavka_id:'100001',mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
     else if(url.endsWith('/create')) {createCalls++; result={success:true,batch_id:19,notification:'failed'};}
-    else if(url.endsWith('/revert')) result={success:false,message:'Заявка перенесена позже. Возврат всего пакета остановлен.'};
+    else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего пакета остановлен.'};
     else result={success:true};
     await route.fulfill({status:result.success?200:422,contentType:'application/json',body:JSON.stringify(result)});
   });
   const url='http://127.0.0.1:'+server.address().port;
   for (const width of [1920,1366,800,390]) {
     await page.setViewportSize({width,height:900}); await page.goto(url);
+    assert.equal(await page.locator('.page-title').innerText(),'Перемещение заявок');
+    assert.equal(await page.getByText('Новый пакет перемещения',{exact:true}).count(),1);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Page overflow '+width);
     await page.locator('[data-open-transfer]').first().click();
     await page.locator('[name=request_ids]').fill('100001\n100002');

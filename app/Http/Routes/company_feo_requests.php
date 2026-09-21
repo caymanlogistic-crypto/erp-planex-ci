@@ -3,6 +3,7 @@
 require_once base_path('app/Service/FeoXlsxParser.php');
 require_once base_path('app/Service/FeoRequestService.php');
 require_once base_path('app/Service/FeoRequestInteractionService.php');
+require_once base_path('app/Service/FeoWeightChangeNotificationService.php');
 require_once base_path('app/Service/FeoPlacementInputParser.php');
 require_once base_path('app/Service/FeoPlacementService.php');
 require_once base_path('app/Service/FeoMapService.php');

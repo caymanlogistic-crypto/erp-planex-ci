@@ -6,13 +6,13 @@ $geoBase=app_url('/company/feo/requests/coordinates');
 <div class="feo-transfers" data-feo-transfers data-base="<?= e($transferBase) ?>" data-geo-base="<?= e($geoBase) ?>">
   <div class="page-head">
     <div class="page-head-left"><h1 class="page-title"><?= e($pageTitle) ?></h1>
-      <div class="page-summary"><?= $coordinatesOnly?'Найдите адрес и узнайте, насколько точно определены координаты.':'Переносите заявки пакетами. Исходные адреса и координаты сохраняются в истории.' ?></div>
+      <div class="page-summary"><?= $coordinatesOnly?'Найдите адрес и узнайте, насколько точно определены координаты.':'Перемещайте заявки пакетами. Исходные адреса и координаты сохраняются в истории.' ?></div>
     </div>
     <?php if (!$coordinatesOnly && !$dbError): ?><div class="page-head-actions"><button class="btn btn-primary" type="button" data-open-transfer>Создать пакет</button></div><?php endif; ?>
   </div>
   <div class="form-alert" data-page-message role="status" hidden></div>
   <?php if ($dbError): ?><div class="form-alert alert-warning"><?= e($dbError) ?></div><?php else: ?>
-  <?php if (!$keyConfigured): ?><div class="form-alert alert-warning">Геокодер пока не настроен. <?php if ($isOwner): ?>Укажите ключ в <a href="<?= e(app_url('/company/settings/services')) ?>">Настройки → Ключи и сервисы</a>.<?php else: ?>Обратитесь к руководителю для настройки Яндекс Геокодера.<?php endif; ?><?php if (!$coordinatesOnly): ?> Перенос к другой заявке доступен.<?php endif; ?></div><?php endif; ?>
+  <?php if (!$keyConfigured): ?><div class="form-alert alert-warning">Геокодер пока не настроен. <?php if ($isOwner): ?>Укажите ключ в <a href="<?= e(app_url('/company/settings/services')) ?>">Настройки → Ключи и сервисы</a>.<?php else: ?>Обратитесь к руководителю для настройки Яндекс Геокодера.<?php endif; ?><?php if (!$coordinatesOnly): ?> Перемещение к другой заявке доступно.<?php endif; ?></div><?php endif; ?>
 
   <?php if (!$coordinatesOnly): ?>
   <div class="table-card table-card--standard">
@@ -20,7 +20,7 @@ $geoBase=app_url('/company/feo/requests/coordinates');
     <div class="table-scroll"><table class="table transfer-history">
       <thead><tr><th>Пакет / дата</th><th>Место назначения</th><th>Заявок</th><th>Автор</th><th>Состояние</th><th>Действия</th></tr></thead>
       <tbody>
-      <?php if (!$batches): ?><tr><td colspan="6"><div class="transfer-empty"><b>Переносов пока нет</b><p>Создайте пакет, добавьте номера заявок и выберите новое место погрузки.</p><button class="btn btn-primary" type="button" data-open-transfer>Создать первый пакет</button></div></td></tr><?php endif; ?>
+      <?php if (!$batches): ?><tr><td colspan="6"><div class="transfer-empty"><b>Перемещений пока нет</b><p>Создайте пакет, добавьте номера заявок и выберите новое место погрузки.</p><button class="btn btn-primary" type="button" data-open-transfer>Создать первый пакет</button></div></td></tr><?php endif; ?>
       <?php foreach ($batches as $batch): $destination=json_decode($batch['destination_json'],true); ?>
         <tr data-batch-row><td><strong>#<?= (int)$batch['id'] ?> · <?= e($batch['name']) ?></strong><div class="muted"><?= e($batch['created_at']) ?></div></td>
           <td class="transfer-location"><?= e($destination['address']??'') ?><div class="transfer-quality <?= ($destination['precision']??'')==='exact'?'is-exact':'' ?>"><?= e($destination['quality']??'Точность не подтверждена') ?></div></td>
@@ -33,12 +33,12 @@ $geoBase=app_url('/company/feo/requests/coordinates');
     <div class="transfer-pagination"><?php if ($page>1): ?><a class="btn btn-secondary btn-sm" href="<?= e($transferBase.'?page='.($page-1)) ?>">← Новее</a><?php endif; ?><?php if (count($batches)===50): ?><a class="btn btn-secondary btn-sm" href="<?= e($transferBase.'?page='.($page+1)) ?>">Ранее →</a><?php endif; ?></div>
   </div>
   <dialog class="modal modal-lg transfer-dialog" data-create-dialog aria-labelledby="transfer-create-title">
-    <div class="modal-head transfer-dialog-head"><div><h2 class="modal-title" id="transfer-create-title">Новый пакет переноса</h2><p class="muted">1. Заявки → 2. Место назначения → 3. Проверка</p></div><button type="button" class="btn btn-secondary btn-sm" data-close-dialog aria-label="Закрыть">✕</button></div>
+    <div class="modal-head transfer-dialog-head"><div><h2 class="modal-title" id="transfer-create-title">Новый пакет перемещения</h2><p class="muted">1. Заявки → 2. Место назначения → 3. Проверка</p></div><button type="button" class="btn btn-secondary btn-sm" data-close-dialog aria-label="Закрыть">✕</button></div>
   <?php endif; ?>
   <form data-transfer-form class="transfer-form <?= $coordinatesOnly?'panel':'modal-body' ?>" <?= $coordinatesOnly?'data-coordinates-only':'' ?>>
     <?= csrfField() ?>
     <?php if (!$coordinatesOnly): ?>
-      <div class="form-grid-2 transfer-grid"><div class="field"><label class="field-label" for="transfer-name">Название пакета</label><input class="field-input" id="transfer-name" name="name" maxlength="180" placeholder="Например, перенос на склад в Подольске"></div><div class="field"><label class="field-label" for="transfer-comment">Комментарий</label><input class="field-input" id="transfer-comment" name="comment" maxlength="2000" placeholder="Причина переноса"></div></div>
+      <div class="form-grid-2 transfer-grid"><div class="field"><label class="field-label" for="transfer-name">Название пакета</label><input class="field-input" id="transfer-name" name="name" maxlength="180" placeholder="Например, перемещение на склад в Подольске"></div><div class="field"><label class="field-label" for="transfer-comment">Комментарий</label><input class="field-input" id="transfer-comment" name="comment" maxlength="2000" placeholder="Причина перемещения"></div></div>
       <div class="field"><label class="field-label" for="transfer-ids">Номера заявок</label><textarea class="field-textarea" id="transfer-ids" name="request_ids" rows="4" required placeholder="123456&#10;123457&#10;123458"></textarea><span class="muted">Вставьте один номер или список из столбца Excel. До 1000 заявок; повторы будут объединены.</span></div>
       <fieldset class="transfer-modes"><legend>Куда переместить</legend><label><input type="radio" name="mode" value="request" checked> К другой заявке</label><label><input type="radio" name="mode" value="address"> По адресу</label></fieldset>
       <div data-request-destination class="field"><label class="field-label" for="transfer-source">Номер заявки назначения</label><input class="field-input" id="transfer-source" name="source_request_id" inputmode="numeric" placeholder="Номер заявки, откуда взять адрес и координаты"><span class="muted">Заявка назначения останется без изменений.</span></div>
@@ -52,7 +52,7 @@ $geoBase=app_url('/company/feo/requests/coordinates');
     </div>
     <div class="form-alert alert-warning" data-form-error role="alert" hidden></div>
     <?php if (!$coordinatesOnly): ?><div class="transfer-form-actions"><button class="btn btn-primary" type="submit" data-preview>Проверить пакет</button></div><?php endif; ?>
-    <section data-preview-result class="transfer-preview" hidden aria-live="polite"><h3>Проверьте изменения</h3><div class="form-alert alert-warning" data-preview-summary></div><div class="table-scroll"><table class="table"><thead><tr><th>Заявка</th><th>Было</th><th>Станет</th></tr></thead><tbody data-preview-rows></tbody></table></div><p class="muted">Будут изменены только адрес и координаты. Качество координат будет указано в уведомлении MAX, если событие включено.</p><button class="btn btn-primary" type="button" data-commit>Создать пакет и перенести заявки</button></section>
+    <section data-preview-result class="transfer-preview" hidden aria-live="polite"><h3>Проверьте изменения</h3><div class="form-alert alert-warning" data-preview-summary></div><div class="table-scroll"><table class="table"><thead><tr><th>Заявка</th><th>Было</th><th>Станет</th></tr></thead><tbody data-preview-rows></tbody></table></div><p class="muted">Будут изменены только адрес и координаты. Качество координат будет указано в уведомлении MAX, если событие включено.</p><button class="btn btn-primary" type="button" data-commit>Создать пакет и переместить заявки</button></section>
   </form>
   <?php if (!$coordinatesOnly): ?></dialog><?php endif; ?>
   <dialog class="modal modal-lg transfer-dialog" data-detail-dialog aria-labelledby="transfer-detail-title"><div class="modal-head transfer-dialog-head"><h2 class="modal-title" id="transfer-detail-title">История пакета</h2><button class="btn btn-secondary btn-sm" type="button" data-close-dialog aria-label="Закрыть">✕</button></div><div data-detail-body class="modal-body transfer-detail-body"></div></dialog>

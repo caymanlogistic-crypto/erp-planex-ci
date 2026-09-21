@@ -4,13 +4,14 @@ declare(strict_types=1);
 require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Support/company_database.php';
 require_once BASE_PATH.'/app/Core/Database.php';
-foreach (['FeoXlsxParser','FeoRequestService','FeoRequestInteractionService','FeoLocationOverrideService','FeoTransferService','YandexGeocodingService','MaxEventCatalog','MaxEventNotificationService'] as $class) require_once BASE_PATH.'/app/Service/'.$class.'.php';
+foreach (['FeoXlsxParser','FeoRequestService','FeoRequestInteractionService','FeoLocationOverrideService','FeoTransferService','YandexGeocodingService','MaxEventCatalog','MaxEventNotificationService','FeoWeightChangeNotificationService'] as $class) require_once BASE_PATH.'/app/Service/'.$class.'.php';
 use App\Service\FeoTransferService;
 use App\Service\FeoRequestService;
 use App\Service\FeoRequestInteractionService;
 use App\Service\FeoXlsxParser;
 use App\Service\MaxEventCatalog;
 use App\Service\MaxEventNotificationService;
+use App\Service\FeoWeightChangeNotificationService;
 
 $db=trim((string)getenv('PLANEX_TEST_FIXED_DB'));
 $allow=array_filter(array_map('trim',explode(',',(string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST'))));
@@ -91,5 +92,56 @@ try {
         $ok($id>0,'MAX event enqueued');
     }
     $ok((int)$pdo->query('SELECT COUNT(*) FROM max_event_deliveries')->fetchColumn()===2,'Created and reverted notifications');
+
+    $weightEvent=MaxEventCatalog::event(FeoWeightChangeNotificationService::EVENT_KEY);
+    $events->saveRule(['event_key'=>FeoWeightChangeNotificationService::EVENT_KEY,'is_enabled'=>1,'chat_config_id'=>1,'message_template'=>$weightEvent['template'],'message_format'=>'plain'],11);
+    $weightNotifications=new FeoWeightChangeNotificationService();
+    $company=['name'=>'Тестовая компания'];
+    $weightActor=['created_by_user_id'=>11,'created_by_display_name'=>'Менеджер'];
+    $bulkChanges=[];
+    for($i=1;$i<=70;$i++) $bulkChanges[]=['request_id'=>str_pad((string)$i,64,'9',STR_PAD_LEFT),'before_kg'=>1000.0,'after_kg'=>1001.0,'difference_kg'=>1.0];
+    $pdo->beginTransaction();
+    $bulkIds=$weightNotifications->enqueue($pdo,$bulkChanges,'bulk:test','Проверка большого пакета',$company,$weightActor);
+    $pdo->commit();
+    $ok(count($bulkIds)>1,'Large weight batch splits into several MAX deliveries');
+    $bulkMarks=implode(',',array_fill(0,count($bulkIds),'?'));
+    $bulkQuery=$pdo->prepare("SELECT message_text FROM max_event_deliveries WHERE id IN ($bulkMarks)");
+    $bulkQuery->execute($bulkIds);
+    foreach($bulkQuery->fetchAll(PDO::FETCH_COLUMN) as $message) $ok(mb_strlen((string)$message)<=4000,'Every weight message fits MAX limit');
+    $pdo->prepare("DELETE FROM max_event_deliveries WHERE id IN ($bulkMarks)")->execute($bulkIds);
+    $targetId=(int)$pdo->query("SELECT id FROM feo_requests WHERE zayavka_id='100003'")->fetchColumn();
+    $reject(fn()=>$interaction->updateRequest($pdo,$targetId,['mass_netto'=>'91'],static function(): void { throw new RuntimeException('Synthetic event failure'); }),'Manual weight event failure rolls back request');
+    $ok((float)$pdo->query("SELECT mass_netto FROM feo_requests WHERE zayavka_id='100003'")->fetchColumn()===90.0,'Manual weight rollback is atomic');
+
+    $manualIds=[];
+    $interaction->updateRequest($pdo,$targetId,['mass_netto'=>'91'],function(array $changes) use($weightNotifications,$pdo,$company,$weightActor,&$manualIds): void {
+        $manualIds=$weightNotifications->enqueue($pdo,$changes,'manual:100003:test','Ручное редактирование заявки №100003',$company,$weightActor);
+    });
+    $ok(count($manualIds)===1,'Manual weight change queued in transaction');
+
+    $weightImportRow=array_fill_keys(FeoXlsxParser::fields(),null);
+    $weightImportRow=array_replace($weightImportRow,['zayavka_id'=>'100003','mno_adres_pogruzki'=>'Адрес назначения','mno_sh'=>'38.2','mno_d'=>'56.2','mass_netto'=>'92.0000','mno_region'=>'Образец']);
+    $importIds=[];
+    $weightImport=$requestService->applyImport($pdo,[$weightImportRow],'weight.xlsx',hash('sha256','weight-import'),['user_id'=>11,'role_code'=>'account'],true,
+        function(array $changes,int $importId) use($weightNotifications,$pdo,$company,$weightActor,&$importIds): void {
+            $importIds=array_merge($importIds,$weightNotifications->enqueue($pdo,$changes,'import:'.$importId.':apply','Применение импорта ФЭО #'.$importId,$company,$weightActor));
+        });
+    $requestService->rollbackLatest($pdo,$weightImport['import_id'],['user_id'=>11],
+        function(array $changes,int $importId) use($weightNotifications,$pdo,$company,$weightActor,&$importIds): void {
+            $importIds=array_merge($importIds,$weightNotifications->enqueue($pdo,$changes,'import:'.$importId.':rollback','Откат импорта ФЭО #'.$importId,$company,$weightActor));
+        });
+    $requestService->restoreRolledBackImport($pdo,$weightImport['import_id'],['user_id'=>11],
+        function(array $changes,int $importId) use($weightNotifications,$pdo,$company,$weightActor,&$importIds): void {
+            $importIds=array_merge($importIds,$weightNotifications->enqueue($pdo,$changes,'import:'.$importId.':restore','Возврат импорта ФЭО #'.$importId,$company,$weightActor));
+        });
+    $requestService->deleteLatestImport($pdo,$weightImport['import_id'],['user_id'=>11],
+        function(array $changes,int $importId) use($weightNotifications,$pdo,$company,$weightActor,&$importIds): void {
+            $importIds=array_merge($importIds,$weightNotifications->enqueue($pdo,$changes,'import:'.$importId.':delete','Удаление импорта ФЭО #'.$importId,$company,$weightActor));
+        });
+    $ok(count($importIds)===4,'Apply, rollback, restore and delete each queue one weight event');
+    $ok((float)$pdo->query("SELECT mass_netto FROM feo_requests WHERE zayavka_id='100003'")->fetchColumn()===91.0,'Deleting applied import restores pre-import weight');
+    $weightDeliveries=$pdo->query("SELECT entity_key,message_text FROM max_event_deliveries WHERE event_key='feo.request.weight_changed' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
+    $ok(count($weightDeliveries)===5,'All weight mutation paths create deliveries');
+    foreach ($weightDeliveries as $delivery) $ok(str_contains($delivery['message_text'],'№100003:') && str_contains($delivery['message_text'],'кг'),'Weight delivery contains request and kilogram delta');
     echo "FEO_TRANSFER_MYSQL=PASS ($count assertions)\n";
 } finally { cleanCompanyPoolDatabase($pdo); }

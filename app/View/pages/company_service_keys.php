@@ -9,7 +9,7 @@
       </header>
       <div class="service-key-body">
         <p>Определяет координаты по адресу и точность найденного места.</p>
-        <div class="service-key-usage"><span>Используется в ФЭО</span><p>Перенос заявок · Определение координат</p></div>
+        <div class="service-key-usage"><span>Используется в ФЭО</span><p>Перемещение заявок · Определение координат</p></div>
         <div class="form-alert alert-success" data-key-message role="status" hidden><div class="alert-body" data-key-message-text></div></div>
         <button type="button" class="btn btn-secondary" data-key-edit <?= $keyConfigured?'':'hidden' ?>>Заменить ключ</button>
         <form action="<?= e(app_url('/company/settings/services/yandex')) ?>" method="post" data-key-form <?= $keyConfigured?'hidden':'' ?>>

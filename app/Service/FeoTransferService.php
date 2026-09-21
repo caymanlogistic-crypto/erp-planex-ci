@@ -26,10 +26,10 @@ final class FeoTransferService
 
     public function preview(PDO $pdo, array $ids, string $mode, string $sourceId, ?array $geocoded = null, bool $lock = false): array
     {
-        if (!$this->ready($pdo)) throw new RuntimeException('Перенос заявок ожидает обновления базы компании (139).');
+        if (!$this->ready($pdo)) throw new RuntimeException('Перемещение заявок ожидает обновления базы компании (139).');
         $ids = self::parseIds(implode("\n", $ids))['ids'];
-        if (!in_array($mode,['request','address'],true)) throw new RuntimeException('Выберите способ переноса.');
-        if ($mode === 'request' && in_array($sourceId,$ids,true)) throw new RuntimeException('Заявка назначения не должна входить в переносимый пакет.');
+        if (!in_array($mode,['request','address'],true)) throw new RuntimeException('Выберите способ перемещения.');
+        if ($mode === 'request' && in_array($sourceId,$ids,true)) throw new RuntimeException('Заявка назначения не должна входить в перемещаемый пакет.');
         $lookupIds = $mode === 'request' ? array_values(array_unique([...$ids,$sourceId])) : $ids;
         sort($lookupIds,SORT_STRING);
         $marks = implode(',',array_fill(0,count($lookupIds),'?'));
@@ -73,9 +73,9 @@ final class FeoTransferService
             if ($id=$q->fetchColumn()) return ['batch_id'=>(int)$id,'already_applied'=>true];
             $fresh=$this->preview($pdo,array_column($preview['rows'],'zayavka_id'),$preview['mode'],(string)($preview['source_request_id']??''),$preview['destination'],true);
             if (!hash_equals($preview['state_hash'],$fresh['state_hash'])) throw new RuntimeException('Адреса или история заявок изменились после проверки. Проверьте пакет заново.');
-            if ((int)($actor['created_by_user_id']??0)<=0) throw new RuntimeException('Не удалось определить автора переноса.');
+            if ((int)($actor['created_by_user_id']??0)<=0) throw new RuntimeException('Не удалось определить автора перемещения.');
             $q=$pdo->prepare('INSERT INTO feo_transfer_batches(name,mode,source_request_id,destination_json,comment,request_count,operation_key,created_by_user_id,created_by_role,created_by_name) VALUES(?,?,?,?,?,?,?,?,?,?)');
-            $q->execute([$name?:'Перенос заявок',$fresh['mode'],$fresh['source_request_id'],$this->json($fresh['destination']),$comment,$fresh['count'],$operationKey,$actor['created_by_user_id'],$actor['created_by_role'],$actor['created_by_display_name']]);
+            $q->execute([$name?:'Перемещение заявок',$fresh['mode'],$fresh['source_request_id'],$this->json($fresh['destination']),$comment,$fresh['count'],$operationKey,$actor['created_by_user_id'],$actor['created_by_role'],$actor['created_by_display_name']]);
             $batchId=(int)$pdo->lastInsertId();
             $insert=$pdo->prepare('INSERT INTO feo_transfer_items(batch_id,zayavka_id,request_row_id,before_json,after_json,previous_batch_id) VALUES(?,?,?,?,?,?)');
             $override=$pdo->prepare('INSERT INTO feo_location_overrides(zayavka_id,batch_id) VALUES(?,?) ON DUPLICATE KEY UPDATE batch_id=VALUES(batch_id)');
@@ -90,7 +90,7 @@ final class FeoTransferService
             }
             $this->enqueueLegacy($pdo,$batchId,'transfer',$payload);
             $result=['batch_id'=>$batchId,'count'=>$fresh['count'],'destination'=>$fresh['destination']];
-            if ($event) $event($result);
+            if ($event) $event($result+['items'=>$payload]);
             return $result;
         });
     }
@@ -107,7 +107,7 @@ final class FeoTransferService
             foreach ($items as $item) {
                 $q=$pdo->prepare('SELECT r.id,r.mno_adres_pogruzki,r.mno_sh,r.mno_d,o.batch_id FROM feo_requests r LEFT JOIN feo_location_overrides o ON o.zayavka_id=r.zayavka_id WHERE r.zayavka_id=? FOR UPDATE');
                 $q->execute([$item['zayavka_id']]); $current=$q->fetch(PDO::FETCH_ASSOC);
-                if (!$current || (int)$current['id']!==(int)$item['request_row_id'] || (int)$current['batch_id']!==$batchId || $this->location($current)!==$item['after']) throw new RuntimeException('Заявка №'.$item['zayavka_id'].' удалена или перенесена позже. Возврат всего пакета остановлен. Сначала верните более поздний пакет.');
+                if (!$current || (int)$current['id']!==(int)$item['request_row_id'] || (int)$current['batch_id']!==$batchId || $this->location($current)!==$item['after']) throw new RuntimeException('Заявка №'.$item['zayavka_id'].' удалена или перемещена позже. Возврат всего пакета остановлен. Сначала верните более поздний пакет.');
                 $this->writeLocation($pdo,(int)$current['id'],$item['before']);
                 if ($item['previous_batch_id']!==null) {
                     $q=$pdo->prepare('UPDATE feo_location_overrides SET batch_id=? WHERE zayavka_id=?'); $q->execute([$item['previous_batch_id'],$item['zayavka_id']]);
@@ -120,7 +120,7 @@ final class FeoTransferService
             $q->execute([$actor['created_by_user_id'],$actor['created_by_display_name'],$batchId]);
             $this->enqueueLegacy($pdo,$batchId,'revert',$payload);
             $result=['batch_id'=>$batchId,'count'=>count($items),'name'=>$batch['name'],'destination'=>json_decode($batch['destination_json'],true)];
-            if ($event) $event($result);
+            if ($event) $event($result+['items'=>$payload]);
             return $result;
         });
     }
@@ -139,7 +139,7 @@ final class FeoTransferService
 
     private function transaction(PDO $pdo, callable $action): array
     {
-        if ($pdo->inTransaction()) throw new RuntimeException('Перенос должен выполняться отдельной операцией.');
+        if ($pdo->inTransaction()) throw new RuntimeException('Перемещение должно выполняться отдельной операцией.');
         $lock='planex_feo_'.substr(hash('sha256',(string)$pdo->query('SELECT DATABASE()')->fetchColumn()),0,24);
         $q=$pdo->prepare('SELECT GET_LOCK(?,10)'); $q->execute([$lock]);
         if ((int)$q->fetchColumn()!==1) throw new RuntimeException('Заявки сейчас изменяются. Повторите позже.');

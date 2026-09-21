@@ -35,7 +35,7 @@ try {
     const screenshot=async name=>{if(screenshotDir)await page.screenshot({path:resolve(screenshotDir,name+'.png'),fullPage:true});};
     await go();
     await screenshot('initial');
-    assert.equal(await page.locator('[data-max-event-row]:visible').count(),9);
+    assert.equal(await page.locator('[data-max-event-row]:visible').count(),10);
     assert.equal(await page.locator('[data-max-event-row]').filter({hasText:'Документы —'}).count(),6);
     assert.equal(await modal.isVisible(),false);
     assert.equal(await page.locator('.max-event-card').count(),0);

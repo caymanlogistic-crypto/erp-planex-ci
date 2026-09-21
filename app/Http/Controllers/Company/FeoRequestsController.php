@@ -3,9 +3,12 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Service\FeoPlacementAuthorService;
 use App\Service\FeoRequestInteractionService;
 use App\Service\FeoRequestService;
+use App\Service\FeoWeightChangeNotificationService;
 use App\Service\FeoXlsxParser;
+use PDO;
 
 final class FeoRequestsController
 {
@@ -105,10 +108,21 @@ final class FeoRequestsController
     public function update(string $id): void
     {
         try {
-            [, $pdo] = $this->companyContext();
+            [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
-            $row = $this->interaction->updateRequest($pdo, (int)$id, $_POST);
-            jsonResponse(['success'=>true,'message'=>'Заявка ФЭО сохранена.'] + $this->detailPayload($row));
+            $actor = $this->actor($pdo, (int)$company['id']);
+            $notifications = new FeoWeightChangeNotificationService();
+            $deliveryIds = [];
+            $operationKey = bin2hex(random_bytes(16));
+            $row = $this->interaction->updateRequest($pdo, (int)$id, $_POST,
+                function(array $changes) use ($notifications,$pdo,$company,$actor,$operationKey,&$deliveryIds): void {
+                    $deliveryIds = $notifications->enqueue($pdo,$changes,'manual:'.$operationKey,'Ручное редактирование заявки',$company,$actor);
+                });
+            $notification = $notifications->dispatch($pdo, $deliveryIds);
+            $message = $notification === 'failed'
+                ? 'Заявка ФЭО сохранена, но уведомление об изменении веса не отправлено. Проверьте журнал MAX.'
+                : 'Заявка ФЭО сохранена.';
+            jsonResponse(['success'=>true,'message'=>$message,'notification'=>$notification] + $this->detailPayload($row));
         } catch (\RuntimeException $e) {
             jsonResponse(['success'=>false,'message'=>$e->getMessage()], 422);
         } catch (\Throwable $e) {
@@ -182,7 +196,13 @@ final class FeoRequestsController
             $coordinateFormat = FeoXlsxParser::coordinateFormat((string)($preview['coordinate_format'] ?? 'old'));
             $rows = $this->parser->parse($path, $coordinateFormat);
             $prepared = $this->interaction->prepareImportRows($pdo, $rows, $overwriteExisting);
-            $result = $this->service->applyImport($pdo, $prepared['rows'], (string)$preview['filename'], $hash, $_SESSION, $overwriteExisting);
+            $actor = $this->actor($pdo, (int)$company['id']);
+            $notifications = new FeoWeightChangeNotificationService();
+            $deliveryIds = [];
+            $result = $this->service->applyImport($pdo, $prepared['rows'], (string)$preview['filename'], $hash, $_SESSION, $overwriteExisting,
+                function(array $changes, int $importId) use ($notifications,$pdo,$company,$actor,&$deliveryIds): void {
+                    $deliveryIds = $notifications->enqueue($pdo,$changes,'import:'.$importId.':apply','Импорт ФЭО #'.$importId,$company,$actor);
+                });
             $result['skipped_existing_count'] = (int)$prepared['skipped_existing_count'];
             $result['unchanged_count'] = max(0, (int)$result['unchanged_count'] - $result['skipped_existing_count']);
             @unlink($path);
@@ -199,6 +219,7 @@ final class FeoRequestsController
             $_SESSION['flash_success'] .= !empty($result['legacy_synced'])
                 ? ' Изменения синхронизированы со старой базой.'
                 : ' Синхронизация со старой базой для этой компании не настроена.';
+            $this->rememberNotificationFailure($notifications->dispatch($pdo, $deliveryIds));
         } catch (\Throwable $e) {
             $_SESSION['flash_error'] = 'Импорт ФЭО не выполнен: ' . $e->getMessage();
         }
@@ -208,11 +229,18 @@ final class FeoRequestsController
     public function rollbackImport(): void
     {
         try {
-            [, $pdo] = $this->companyContext();
+            [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
             $importId = (int)($_POST['import_id'] ?? 0);
-            $result = $this->service->rollbackLatest($pdo, $importId, $_SESSION);
+            $actor = $this->actor($pdo, (int)$company['id']);
+            $notifications = new FeoWeightChangeNotificationService();
+            $deliveryIds = [];
+            $result = $this->service->rollbackLatest($pdo, $importId, $_SESSION,
+                function(array $changes, int $changedImportId) use ($notifications,$pdo,$company,$actor,&$deliveryIds): void {
+                    $deliveryIds = $notifications->enqueue($pdo,$changes,'import:'.$changedImportId.':rollback','Откат импорта ФЭО #'.$changedImportId,$company,$actor);
+                });
             $_SESSION['flash_success'] = sprintf('Загрузка ФЭО #%d откатана. Удалено новых заявок: %d, восстановлено: %d. При необходимости её можно вернуть из истории загрузок.', $importId, (int)$result['deleted'], (int)$result['restored']);
+            $this->rememberNotificationFailure($notifications->dispatch($pdo, $deliveryIds));
         } catch (\Throwable $e) {
             $_SESSION['flash_error'] = 'Откат ФЭО не выполнен: ' . $e->getMessage();
         }
@@ -222,11 +250,18 @@ final class FeoRequestsController
     public function restoreImport(): void
     {
         try {
-            [, $pdo] = $this->companyContext();
+            [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
             $importId = (int)($_POST['import_id'] ?? 0);
-            $result = $this->service->restoreRolledBackImport($pdo, $importId, $_SESSION);
+            $actor = $this->actor($pdo, (int)$company['id']);
+            $notifications = new FeoWeightChangeNotificationService();
+            $deliveryIds = [];
+            $result = $this->service->restoreRolledBackImport($pdo, $importId, $_SESSION,
+                function(array $changes, int $changedImportId) use ($notifications,$pdo,$company,$actor,&$deliveryIds): void {
+                    $deliveryIds = $notifications->enqueue($pdo,$changes,'import:'.$changedImportId.':restore','Возврат импорта ФЭО #'.$changedImportId,$company,$actor);
+                });
             $_SESSION['flash_success'] = sprintf('Загрузка ФЭО #%d возвращена. Восстановлено новых заявок: %d, повторно применено обновлений: %d.', $importId, (int)$result['inserted'], (int)$result['updated']);
+            $this->rememberNotificationFailure($notifications->dispatch($pdo, $deliveryIds));
         } catch (\Throwable $e) {
             $_SESSION['flash_error'] = 'Возврат загрузки ФЭО не выполнен: ' . $e->getMessage();
         }
@@ -236,13 +271,20 @@ final class FeoRequestsController
     public function deleteImport(): void
     {
         try {
-            [, $pdo] = $this->companyContext();
+            [$company, $pdo] = $this->companyContext();
             if (!$this->service->moduleReady($pdo)) throw new \RuntimeException('Модуль ФЭО не инициализирован.');
             $importId = (int)($_POST['import_id'] ?? 0);
-            $result = $this->service->deleteLatestImport($pdo, $importId, $_SESSION);
+            $actor = $this->actor($pdo, (int)$company['id']);
+            $notifications = new FeoWeightChangeNotificationService();
+            $deliveryIds = [];
+            $result = $this->service->deleteLatestImport($pdo, $importId, $_SESSION,
+                function(array $changes, int $changedImportId) use ($notifications,$pdo,$company,$actor,&$deliveryIds): void {
+                    $deliveryIds = $notifications->enqueue($pdo,$changes,'import:'.$changedImportId.':delete','Удаление импорта ФЭО #'.$changedImportId,$company,$actor);
+                });
             $_SESSION['flash_success'] = !empty($result['was_applied'])
                 ? sprintf('Загрузка ФЭО #%d полностью удалена. Её изменения отменены: удалено новых заявок %d, восстановлено %d.', $importId, (int)$result['deleted'], (int)$result['restored'])
                 : sprintf('Откатанная загрузка ФЭО #%d полностью удалена из истории вместе с журналом изменений.', $importId);
+            $this->rememberNotificationFailure($notifications->dispatch($pdo, $deliveryIds));
         } catch (\Throwable $e) {
             $_SESSION['flash_error'] = 'Удаление загрузки ФЭО не выполнено: ' . $e->getMessage();
         }
@@ -271,6 +313,19 @@ final class FeoRequestsController
         if (!$company) throw new \RuntimeException('Компания не найдена.');
         if (($company['status'] ?? '') !== 'active') throw new \RuntimeException('Компания недоступна.');
         return [$company, $this->service->localPdo($company)];
+    }
+
+    private function actor(PDO $pdo, int $companyId): array
+    {
+        $actor = FeoPlacementAuthorService::creatorFromSession($_SESSION);
+        return (new FeoPlacementAuthorService($this->db->connection()))->decorate($pdo, $companyId, [$actor])[0];
+    }
+
+    private function rememberNotificationFailure(string $status): void
+    {
+        if ($status === 'failed') {
+            $_SESSION['flash_error'] = 'Изменения сохранены, но уведомление об изменении веса не отправлено. Проверьте журнал MAX.';
+        }
     }
 
     private function previewDir(int $companyId): string

@@ -3,6 +3,7 @@
 namespace App\Service;
 
 require_once __DIR__ . '/FeoLocationOverrideService.php';
+require_once __DIR__ . '/FeoWeightChangeNotificationService.php';
 
 use PDO;
 
@@ -108,7 +109,7 @@ final class FeoRequestInteractionService
         return ['rows' => $prepared, 'skipped_existing_count' => $skipped];
     }
 
-    public function updateRequest(PDO $pdo, int $id, array $input): array
+    public function updateRequest(PDO $pdo, int $id, array $input, ?callable $weightEvent = null): array
     {
         if ($id <= 0) throw new \RuntimeException('Некорректная заявка ФЭО.');
         $lockName = $this->acquireLock($pdo);
@@ -122,7 +123,7 @@ final class FeoRequestInteractionService
             if (isset($locationOverrides[(string)$current['zayavka_id']])) {
                 foreach (FeoLocationOverrideService::FIELDS as $field) {
                     if (array_key_exists($field, $input) && (string)$this->normalizeEditableValue($field, $input[$field]) !== (string)$current[$field]) {
-                        throw new \RuntimeException('Место погрузки изменено пакетом переноса. Используйте «Перенос заявок» или верните пакет.');
+                        throw new \RuntimeException('Место погрузки изменено пакетом перемещения. Используйте «Перемещение заявок» или верните пакет.');
                     }
                 }
             }
@@ -144,6 +145,8 @@ final class FeoRequestInteractionService
             $find->execute([$id]);
             $updated = $find->fetch(PDO::FETCH_ASSOC) ?: null;
             if (!$updated) throw new \RuntimeException('Не удалось прочитать сохранённую заявку ФЭО.');
+            $weightChange = FeoWeightChangeNotificationService::change($current, $updated);
+            if ($weightChange !== null && $weightEvent !== null) $weightEvent([$weightChange]);
             $pdo->commit();
             return $updated;
         } catch (\Throwable $e) {

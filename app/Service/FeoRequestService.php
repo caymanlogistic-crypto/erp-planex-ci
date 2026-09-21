@@ -5,6 +5,7 @@ namespace App\Service;
 require_once __DIR__ . '/FeoLocationOverrideService.php';
 require_once __DIR__ . '/FeoLegacyImportSync.php';
 require_once __DIR__ . '/FeoImportTransaction.php';
+require_once __DIR__ . '/FeoWeightChangeNotificationService.php';
 
 use App\Core\Database;
 use PDO;
@@ -236,7 +237,7 @@ final class FeoRequestService
         return $stats;
     }
 
-    public function applyImport(PDO $pdo, array $rows, string $filename, string $fileHash, array $actor, bool $overwriteExisting = true): array
+    public function applyImport(PDO $pdo, array $rows, string $filename, string $fileHash, array $actor, bool $overwriteExisting = true, ?callable $weightEvent = null): array
     {
         if ($rows === []) throw new \RuntimeException('Нет заявок для импорта.');
         $lockName = $this->acquireLock($pdo, 'импорта');
@@ -269,6 +270,7 @@ final class FeoRequestService
 
             $stats = ['rows_total' => count($rows), 'unique_requests' => count($rows), 'new_count' => 0, 'updated_count' => 0, 'unchanged_count' => 0, 'missing_count' => 0];
             $incomingIds = [];
+            $weightChanges = [];
             foreach ($rows as $row) {
                 $id = (string)$row['zayavka_id'];
                 $incomingIds[$id] = true;
@@ -304,6 +306,8 @@ final class FeoRequestService
                     $this->encodeRow($before),
                     $this->encodeRow($row, $legacyJournal),
                 ]);
+                $weightChange = FeoWeightChangeNotificationService::change($before, $row);
+                if ($weightChange !== null) $weightChanges[] = $weightChange;
                 $stats['updated_count']++;
             }
 
@@ -316,6 +320,7 @@ final class FeoRequestService
 
             $updateImport = $pdo->prepare('UPDATE feo_imports SET rows_total=?,unique_requests=?,new_count=?,updated_count=?,unchanged_count=?,missing_count=? WHERE id=?');
             $updateImport->execute([$stats['rows_total'],$stats['unique_requests'],$stats['new_count'],$stats['updated_count'],$stats['unchanged_count'],$stats['missing_count'],$importId]);
+            if ($weightChanges !== [] && $weightEvent !== null) $weightEvent($weightChanges, $importId);
             $transaction->commit();
             return ['import_id' => $importId, 'legacy_synced' => $legacySync !== null] + $stats;
         } catch (\Throwable $e) {
@@ -326,7 +331,7 @@ final class FeoRequestService
         }
     }
 
-    public function rollbackLatest(PDO $pdo, int $importId, array $actor): array
+    public function rollbackLatest(PDO $pdo, int $importId, array $actor, ?callable $weightEvent = null): array
     {
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
         $lockName = $this->acquireLock($pdo, 'отката');
@@ -336,7 +341,7 @@ final class FeoRequestService
             if (!$latest || (int)$latest['id'] !== $importId) {
                 throw new \RuntimeException('Откатывать можно только последнюю активную загрузку ФЭО.');
             }
-            $result = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor, $transaction);
+            $result = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor, $transaction, $weightEvent);
             $transaction->commit();
             return $result;
         } catch (\Throwable $e) {
@@ -347,7 +352,7 @@ final class FeoRequestService
         }
     }
 
-    public function restoreRolledBackImport(PDO $pdo, int $importId, array $actor): array
+    public function restoreRolledBackImport(PDO $pdo, int $importId, array $actor, ?callable $weightEvent = null): array
     {
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
         $lockName = $this->acquireLock($pdo, 'возврата');
@@ -377,6 +382,7 @@ final class FeoRequestService
 
             $inserted = 0;
             $updated = 0;
+            $weightChanges = [];
             foreach ($changes as $change) {
                 $id = (string)$change['zayavka_id'];
                 $after = json_decode((string)$change['after_json'], true);
@@ -409,12 +415,15 @@ final class FeoRequestService
                 }
                 $values = array_map(static fn(string $f) => $after[$f] ?? null, $updateFields);
                 $update->execute([...$values, $importId, $id]);
+                $weightChange = FeoWeightChangeNotificationService::change($current, $after);
+                if ($weightChange !== null) $weightChanges[] = $weightChange;
                 $updated++;
             }
 
             $mark = $pdo->prepare("UPDATE feo_imports SET status='applied',rolled_back_by_user_id=NULL,rolled_back_by_role=NULL,rolled_back_at=NULL WHERE id=? AND status='rolled_back'");
             $mark->execute([$importId]);
             if ($mark->rowCount() !== 1) throw new \RuntimeException('Не удалось вернуть загрузку ФЭО.');
+            if ($weightChanges !== [] && $weightEvent !== null) $weightEvent($weightChanges, $importId);
             $transaction->commit();
             return ['import_id'=>$importId,'inserted'=>$inserted,'updated'=>$updated];
         } catch (\Throwable $e) {
@@ -425,7 +434,7 @@ final class FeoRequestService
         }
     }
 
-    public function deleteLatestImport(PDO $pdo, int $importId, array $actor): array
+    public function deleteLatestImport(PDO $pdo, int $importId, array $actor, ?callable $weightEvent = null): array
     {
         if ($importId <= 0) throw new \RuntimeException('Некорректная загрузка.');
         $lockName = $this->acquireLock($pdo, 'удаления');
@@ -440,7 +449,7 @@ final class FeoRequestService
             if ($wasApplied) {
                 $latestApplied = $pdo->query("SELECT id FROM feo_imports WHERE status='applied' ORDER BY id DESC LIMIT 1 FOR UPDATE")->fetchColumn();
                 if ((int)$latestApplied !== $importId) throw new \RuntimeException('Активную загрузку можно удалить только после более новых активных загрузок.');
-                $rollback = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor, $transaction);
+                $rollback = $this->rollbackAppliedImportInTransaction($pdo, $importId, $actor, $transaction, $weightEvent);
             }
             $currentRefs = $pdo->prepare('SELECT COUNT(*) FROM feo_requests WHERE current_import_id=?');
             $currentRefs->execute([$importId]);
@@ -475,7 +484,7 @@ final class FeoRequestService
         return null;
     }
 
-    private function rollbackAppliedImportInTransaction(PDO $pdo, int $importId, array $actor, FeoImportTransaction $transaction): array
+    private function rollbackAppliedImportInTransaction(PDO $pdo, int $importId, array $actor, FeoImportTransaction $transaction, ?callable $weightEvent = null): array
     {
         if (!$pdo->inTransaction()) throw new \RuntimeException('Откат ФЭО должен выполняться внутри транзакции.');
         $locationOverrides = FeoLocationOverrideService::activeIds($pdo);
@@ -489,7 +498,7 @@ final class FeoRequestService
         $restoreWithImport = $pdo->prepare("UPDATE feo_requests SET {$restoreSql},current_import_id=? WHERE zayavka_id=? AND current_import_id=?");
         $restoreWithoutImport = $pdo->prepare("UPDATE feo_requests SET {$restoreSql},current_import_id=NULL WHERE zayavka_id=? AND current_import_id=?");
         $delete = $pdo->prepare('DELETE FROM feo_requests WHERE zayavka_id=? AND current_import_id=?');
-        $deleted = 0; $restored = 0;
+        $deleted = 0; $restored = 0; $weightChanges = [];
         foreach ($changes as $change) {
             $id = (string)$change['zayavka_id'];
             $after = json_decode((string)$change['after_json'], true, 512, JSON_THROW_ON_ERROR);
@@ -497,7 +506,7 @@ final class FeoRequestService
                 $legacySync->replay($after[FeoLegacyImportSync::JOURNAL_KEY], $id, false);
             }
             if (($change['action'] ?? '') === 'insert') {
-                if (isset($locationOverrides[$id])) throw new \RuntimeException("Заявка {$id} перенесена. Сначала верните пакет переноса, затем откатывайте загрузку.");
+                if (isset($locationOverrides[$id])) throw new \RuntimeException("Заявка {$id} перемещена. Сначала верните пакет перемещения, затем откатывайте загрузку.");
                 $delete->execute([$id,$importId]);
                 if ($delete->rowCount() !== 1) throw new \RuntimeException("Заявка {$id} была изменена после загрузки; безопасный откат остановлен.");
                 $deleted++;
@@ -512,6 +521,8 @@ final class FeoRequestService
                 if (!$currentLocation) throw new \RuntimeException("Заявка {$id} отсутствует.");
                 $before = FeoLocationOverrideService::preserve($before, $currentLocation);
             }
+            $weightChange = FeoWeightChangeNotificationService::change($after, $before);
+            if ($weightChange !== null) $weightChanges[] = $weightChange;
             $values = array_map(static fn(string $f) => $before[$f] ?? null, $restoreFields);
             if ($change['previous_import_id'] !== null) {
                 $restoreWithImport->execute([...$values,(int)$change['previous_import_id'],$id,$importId]);
@@ -528,6 +539,7 @@ final class FeoRequestService
         $mark = $pdo->prepare("UPDATE feo_imports SET status='rolled_back',rolled_back_by_user_id=?,rolled_back_by_role=?,rolled_back_at=NOW() WHERE id=? AND status='applied'");
         $mark->execute([$userId,$role !== '' ? $role : null,$importId]);
         if ($mark->rowCount() !== 1) throw new \RuntimeException('Не удалось зафиксировать откат загрузки ФЭО.');
+        if ($weightChanges !== [] && $weightEvent !== null) $weightEvent($weightChanges, $importId);
         return ['deleted'=>$deleted,'restored'=>$restored,'import_id'=>$importId];
     }
 

@@ -22,7 +22,7 @@ final class FeoTransferController
 
     private function page(bool $coordinatesOnly): void
     {
-        $pageTitle=$coordinatesOnly?'Определение координат':'Перенос заявок';
+        $pageTitle=$coordinatesOnly?'Определение координат':'Перемещение заявок';
         $pageContext='Заявки ФЭО › '.$pageTitle;
         $batches=[]; $dbError=null; $keyConfigured=false;
         $page=max(1,min(100000,(int)($_GET['page']??1)));
@@ -163,10 +163,28 @@ final class FeoTransferController
     }
     private function eventValues(array $result, string $name, string $comment, array $company, array $actor): array
     {
-        return ['batch_id'=>(string)$result['batch_id'],'batch_name'=>$name?:'Перенос заявок','request_count'=>(string)$result['count'],
+        $items=is_array($result['items']??null)?$result['items']:[];
+        $requestIds=array_values(array_map(static fn(array $item):string=>(string)($item['request_number']??''),$items));
+        $visibleIds=array_slice($requestIds,0,120);
+        $requestList=implode(', ',$visibleIds);
+        if (count($requestIds)>count($visibleIds)) $requestList.='; ещё '.(count($requestIds)-count($visibleIds));
+        $changes=[];
+        foreach (array_slice($items,0,15) as $item) {
+            $before=$this->shortAddress((string)($item['before']['mno_adres_pogruzki']??''));
+            $after=$this->shortAddress((string)($item['after']['mno_adres_pogruzki']??''));
+            $changes[]='№'.(string)($item['request_number']??'').' — '.$before.' → '.$after;
+        }
+        if (count($items)>count($changes)) $changes[]='… ещё '.(count($items)-count($changes)).' заявок; полный состав сохранён в пакете.';
+        return ['batch_id'=>(string)$result['batch_id'],'batch_name'=>$name?:'Перемещение заявок','request_count'=>(string)$result['count'],
+            'request_ids'=>$requestList?:'—','changes'=>$changes?implode("\n",$changes):'—',
             'address'=>mb_substr($result['destination']['address'],0,1000),'quality'=>$result['destination']['quality'],
             'author'=>$actor['created_by_display_name'],'company'=>$company['name'],'created_at'=>date('d.m.Y H:i'),
             'comment'=>mb_substr($comment,0,800)];
+    }
+    private function shortAddress(string $address): string
+    {
+        $address=trim(preg_replace('/\s+/u',' ',$address)??$address);
+        return $address===''?'без адреса':mb_substr($address,0,70).(mb_strlen($address)>70?'…':'');
     }
     private function dispatch(MaxEventNotificationService $events, ?int $deliveryId): string
     {
