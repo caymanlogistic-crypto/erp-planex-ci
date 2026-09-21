@@ -50,8 +50,8 @@ final class TripDocumentCollectionService
         $q->execute($all?[$this->companyId]:[$this->companyId,$actor,$actor]);
         $rows=$q->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as &$row) {
-            try {$trip=$this->data->trip($row['trip_type'],(int)$row['trip_id']); $row['trip_number']=$trip['number'];$row['responsible_name']=$trip['responsible']['full_name'];}
-            catch (\DomainException) {$row['trip_number']=$row['trip_id'];$row['responsible_name']='Сотрудник недоступен';}
+            try {$trip=$this->data->trip($row['trip_type'],(int)$row['trip_id']); $row['trip_number']=$trip['number'];$row['trip_label']=$trip['label'];$row['responsible_name']=$trip['responsible']['full_name'];}
+            catch (\DomainException) {$row['trip_number']=$row['trip_id'];$row['trip_label']='#'.$row['trip_id'];$row['responsible_name']='Сотрудник недоступен';}
         }
         return $rows;
     }

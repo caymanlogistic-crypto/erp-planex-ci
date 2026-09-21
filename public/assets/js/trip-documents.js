@@ -57,6 +57,9 @@
     if (!form) return;
     const base=root.dataset.requestBase,preview=root.querySelector('[data-document-preview]'),error=root.querySelector('[data-document-error]');
     const send=root.querySelector('[data-document-send]');
+    const tripPicker=root.querySelector('[data-trip-picker]'),tripSearch=root.querySelector('[data-trip-search]'),tripInput=form.elements.trip;
+    const tripResults=root.querySelector('[data-trip-options]'),tripEmpty=root.querySelector('[data-trip-empty]');
+    const tripOptions=[...root.querySelectorAll('[data-trip-option]')];
     let token=null,busy=false,contacts=[],tripGeneration=0,revision=0;
     const showError=message=>{error.textContent=message;error.hidden=false;};
     const invalidate=()=>{revision++;token=null;preview.hidden=true;};
@@ -69,6 +72,43 @@
         return result;
     }
     form.addEventListener('input',invalidate);
+    const closeTrips=()=>{tripResults.hidden=true;tripSearch.setAttribute('aria-expanded','false');tripOptions.forEach(item=>item.classList.remove('is-active'));};
+    const setTrip=value=>{
+        if(tripInput.value===value)return;
+        tripInput.value=value;
+        tripInput.dispatchEvent(new Event('change',{bubbles:true}));
+    };
+    const filterTrips=()=>{
+        const query=tripSearch.value.trim().toLocaleLowerCase('ru-RU');
+        let visible=0;
+        for(const item of tripOptions){const match=!query||item.textContent.trim().toLocaleLowerCase('ru-RU').includes(query);item.hidden=!match;if(match)visible++;item.classList.remove('is-active');}
+        tripEmpty.hidden=visible!==0;
+        tripResults.hidden=false;tripSearch.setAttribute('aria-expanded','true');
+        return visible;
+    };
+    const syncTrip=()=>{
+        const query=tripSearch.value.trim().toLocaleLowerCase('ru-RU');
+        const option=tripOptions.find(item=>item.textContent.trim().toLocaleLowerCase('ru-RU')===query);
+        setTrip(option?.dataset.tripValue||'');
+        tripSearch.setCustomValidity(query!==''&&!option?'Выберите рейс из списка.':'');
+    };
+    const chooseTrip=option=>{tripSearch.value=option.textContent.trim();tripSearch.setCustomValidity('');setTrip(option.dataset.tripValue||'');closeTrips();};
+    tripSearch.addEventListener('focus',filterTrips);
+    tripSearch.addEventListener('input',()=>{syncTrip();filterTrips();});
+    tripSearch.addEventListener('change',syncTrip);
+    tripOptions.forEach(option=>option.addEventListener('click',()=>chooseTrip(option)));
+    tripSearch.addEventListener('keydown',event=>{
+        const visible=tripOptions.filter(item=>!item.hidden);
+        if(event.key==='Escape'){closeTrips();return;}
+        if(!['ArrowDown','ArrowUp','Enter'].includes(event.key))return;
+        if(tripResults.hidden){filterTrips();event.preventDefault();return;}
+        const current=visible.findIndex(item=>item.classList.contains('is-active'));
+        if(event.key==='Enter'){if(current>=0){event.preventDefault();chooseTrip(visible[current]);}return;}
+        event.preventDefault();if(!visible.length)return;
+        const next=event.key==='ArrowDown'?(current+1)%visible.length:(current<=0?visible.length-1:current-1);
+        visible.forEach(item=>item.classList.remove('is-active'));visible[next].classList.add('is-active');visible[next].scrollIntoView({block:'nearest'});
+    });
+    document.addEventListener('click',event=>{if(!tripPicker.contains(event.target))closeTrips();});
     form.elements.has_promise.addEventListener('change',()=>{
         const active=form.elements.has_promise.checked;
         root.querySelector('[data-promise]').hidden=!active;
@@ -100,7 +140,7 @@
     }
     root.querySelector('#dc-contact').addEventListener('change',e=>{if(e.target.value!=='')fillContact(contacts[Number(e.target.value)]);});
     form.addEventListener('submit',async e=>{
-        e.preventDefault();if(busy)return;busy=true;error.hidden=true;
+        e.preventDefault();syncTrip();if(!tripInput.value){tripSearch.setCustomValidity('Выберите рейс из списка.');tripSearch.reportValidity();return;}if(busy)return;busy=true;error.hidden=true;
         const submit=form.querySelector('[type=submit]');submit.disabled=true;const previewRevision=revision;
         try {
             const data=new FormData(form),[type,id]=String(data.get('trip')).split(':');data.set('trip_type',type);data.set('trip_id',id);

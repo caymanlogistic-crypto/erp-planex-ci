@@ -2,9 +2,9 @@ name: Trip Document Collection Regression
 on:
   push:
     branches: ['chatgpt/**']
-    paths: ['app/Service/TripDocument*','app/Service/DocumentMail*','app/Service/EmployeeMail*','app/Service/MaxEvent*','app/Http/Controllers/Company/TripDocumentController.php','app/Http/Routes/company_trip_documents.php','app/View/pages/company_trip_documents.php','app/View/partials/trip_document*','public/assets/js/trip-documents.js','database/migrations-local/**','scripts/trip_document*','tests/trip_document*','tests/document_mail*','.github/workflows/trip_document*']
+    paths: ['app/Service/TripDocument*','app/Service/DocumentMail*','app/Service/EmployeeMail*','app/Service/MaxEvent*','app/Http/Controllers/Company/TripDocumentController.php','app/Http/Routes/company_trip_documents.php','app/View/pages/company_trip_documents.php','app/View/partials/trip_document*','public/assets/css/trip-documents.css','public/assets/js/trip-documents.js','database/migrations-local/**','scripts/trip_document*','tests/trip_document*','tests/document_mail*','.github/workflows/trip_document*']
   pull_request:
-    paths: ['app/Service/TripDocument*','app/Service/DocumentMail*','app/Service/EmployeeMail*','app/Service/MaxEvent*','app/Http/Controllers/Company/TripDocumentController.php','app/Http/Routes/company_trip_documents.php','app/View/pages/company_trip_documents.php','app/View/partials/trip_document*','public/assets/js/trip-documents.js','database/migrations-local/**','scripts/trip_document*','tests/trip_document*','tests/document_mail*','.github/workflows/trip_document*']
+    paths: ['app/Service/TripDocument*','app/Service/DocumentMail*','app/Service/EmployeeMail*','app/Service/MaxEvent*','app/Http/Controllers/Company/TripDocumentController.php','app/Http/Routes/company_trip_documents.php','app/View/pages/company_trip_documents.php','app/View/partials/trip_document*','public/assets/css/trip-documents.css','public/assets/js/trip-documents.js','database/migrations-local/**','scripts/trip_document*','tests/trip_document*','tests/document_mail*','.github/workflows/trip_document*']
 permissions:
   contents: read
 jobs:
@@ -37,5 +37,6 @@ jobs:
         run: |
           php tests/document_mail_transport_test.php
           php tests/trip_document_collection_mysql_test.php
+          php tests/trip_document_ui_contract_test.php
           php tests/trip_document_140_production_migration_contract_test.php
           php tests/trip_document_140_migration_mysql_test.php

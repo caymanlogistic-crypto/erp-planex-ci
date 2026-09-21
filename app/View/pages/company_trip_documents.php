@@ -2,10 +2,13 @@
 $actions=['send'=>'Ожидает отправки','wait'=>'Ожидаем ответ','review'=>'Проверить ответ','collect'=>'Собрать недостающее','remind'=>'Связаться с перевозчиком','mail_error'=>'Проверить отправку','complete'=>'Полный пакет отправлен'];
 $stages=['none'=>'Не отправлен','minimum'=>'Минимальный отправлен','full'=>'Полный отправлен'];
 $mailStates=['pending'=>'Ожидает отправки','sending'=>'Отправляется','accepted'=>'Принято почтовым сервером','failed'=>'Не отправлено','unknown'=>'Результат не подтверждён','stale'=>'Нужен новый предпросмотр'];
+$pageSummary=$mode==='request'
+    ?'Запрос документов у перевозчика по рейсу перевозки отходов'
+    :($mode==='collection'?'Контроль ответов, комплектности и отправленных пакетов':'Письма, вложения, карточки и история запроса');
 ?>
 <link rel="stylesheet" href="<?= e(app_url('/assets/css/trip-documents.css')) ?>">
 <section class="trip-documents" data-document-page data-request-base="<?= e(app_url('/company/documents/request')) ?>">
-<div class="page-head"><div><h1><?= e($pageTitle) ?></h1></div><div class="page-head-actions">
+<div class="page-head"><div class="page-head-left"><h1 class="page-title"><?= e($pageTitle) ?></h1><div class="page-summary"><span><?= e($pageSummary) ?></span></div></div><div class="page-head-actions">
 <?php if ($mode==='request'): ?><a class="btn btn-ghost" href="<?= e(app_url('/company/documents/collection')) ?>">Мои запросы</a>
 <?php elseif ($mode==='detail'): ?><a class="btn btn-ghost" href="<?= e(app_url('/company/documents/collection')) ?>">← К запросам</a>
 <?php elseif (!$assistant && \App\Security\AccessRuntime::current()->canAccessPage('company.documents.request')): ?><a class="btn btn-primary" href="<?= e(app_url('/company/documents/request')) ?>">Запросить документы</a><?php endif; ?>
@@ -16,7 +19,7 @@ $mailStates=['pending'=>'Ожидает отправки','sending'=>'Отпра
 <form data-document-request method="post"><?= csrfField() ?>
 <div class="trip-documents__fields">
 <div class="field"><label class="field-label" for="dc-entity">Юридическое лицо</label><select id="dc-entity" name="legal_entity_id" class="field-input" required><option value="">Выберите</option><?php foreach ($entities as $entity): ?><option value="<?= (int)$entity['id'] ?>"><?= e($entity['name']) ?></option><?php endforeach; ?></select></div>
-<div class="field"><label class="field-label" for="dc-trip">Рейс</label><select id="dc-trip" name="trip" class="field-input" required><option value="">Выберите рейс</option><?php foreach ($trips as $row): ?><option value="<?= e($row['type'].':'.$row['id']) ?>"><?= e('Отходы #'.$row['number']) ?></option><?php endforeach; ?></select></div>
+<div class="field trip-documents__trip-picker" data-trip-picker><label class="field-label" for="dc-trip-search">Рейс</label><input id="dc-trip-search" class="field-input" type="text" autocomplete="off" placeholder="Начните вводить номер, название, водителя или перевозчика" data-trip-search role="combobox" aria-autocomplete="list" aria-controls="dc-trip-options" aria-expanded="false" required><input id="dc-trip" name="trip" type="hidden"><div id="dc-trip-options" class="trip-documents__trip-options" data-trip-options role="listbox" hidden><?php foreach ($trips as $row): ?><button type="button" role="option" data-trip-option data-trip-value="<?= e($row['type'].':'.$row['id']) ?>"><?= e($row['label']) ?></button><?php endforeach; ?><p class="text-muted" data-trip-empty hidden>Рейсы не найдены.</p></div><span class="field-msg">Выберите рейс из отфильтрованного списка.</span></div>
 </div>
 <p class="text-muted" data-trip-summary>Помощник назначается автоматически. Отправитель — почта ПЛ выбранного юрлица, ответственный логист — в копии.</p>
 <div class="field" data-contact-choice hidden><label class="field-label" for="dc-contact">Контакт перевозчика</label><select id="dc-contact" class="field-input"><option value="">Ввести контакт</option></select></div>
@@ -37,13 +40,13 @@ $mailStates=['pending'=>'Ожидает отправки','sending'=>'Отпра
 <div class="form-actions"><button type="button" class="btn btn-primary" data-document-send>Отправить запрос</button><button type="button" class="btn btn-ghost" data-document-edit>Изменить</button></div>
 </section></div></div>
 <?php elseif ($mode==='collection'): ?>
-<div class="panel"><div class="table-wrap"><table class="table"><thead><tr><th>Рейс</th><th>Ответственный Л</th><th>Пакет</th><th>Следующее действие</th><th>Проверка</th></tr></thead><tbody>
-<?php foreach ($rows as $row): ?><tr><td><a href="<?= e(app_url('/company/documents/collection/'.$row['id'])) ?>">#<?= e($row['trip_number']) ?></a></td><td><?= e($row['responsible_name']) ?></td><td><?= e($stages[$row['package_stage']]??'') ?></td><td><?= e($actions[$row['next_action']]??'') ?></td><td><?= e($row['next_check_at']?date('d.m H:i',strtotime($row['next_check_at'])):'—') ?></td></tr><?php endforeach; ?>
+<div class="table-card table-card--toolbar-only"><div class="table-toolbar"><div class="found-label">Найдено: <b><?= count($rows) ?></b> запросов</div></div><div class="table-scroll"><table class="table"><thead><tr><th>Рейс</th><th>Ответственный Л</th><th>Пакет</th><th>Следующее действие</th><th>Проверка</th></tr></thead><tbody>
+<?php foreach ($rows as $row): ?><tr><td><a href="<?= e(app_url('/company/documents/collection/'.$row['id'])) ?>"><?= e($row['trip_label']) ?></a></td><td><?= e($row['responsible_name']) ?></td><td><?= e($stages[$row['package_stage']]??'') ?></td><td><?= e($actions[$row['next_action']]??'') ?></td><td><?= e($row['next_check_at']?date('d.m H:i',strtotime($row['next_check_at'])):'—') ?></td></tr><?php endforeach; ?>
 <?php if (!$rows): ?><tr><td colspan="5" class="text-muted">Запросов документов пока нет.</td></tr><?php endif; ?>
 </tbody></table></div></div>
 <?php else: ?>
 <div class="panel"><div class="panel-body">
-<div class="trip-documents__summary"><strong>Рейс #<?= e($trip['number']) ?></strong><span><?= e($trip['responsible']['full_name']) ?></span><span><?= e($trip['loading_dates']?:'Даты загрузки не указаны') ?></span></div>
+<div class="trip-documents__summary"><strong><?= e($trip['label']) ?></strong><span><?= e($trip['responsible']['full_name']) ?></span><span><?= e($trip['loading_dates']?:'Даты загрузки не указаны') ?></span></div>
 <p><strong><?= e($actions[$request['next_action']]??'') ?></strong> · <?= e($stages[$request['package_stage']]??'') ?></p>
 <p class="text-muted"><?= $request['promised_at']?'Обещано: '.e(date('d.m.Y H:i',strtotime($request['promised_at']))):'Срок не назван — ожидаем как можно быстрее' ?><?= $request['next_check_at']?' · Следующая проверка: '.e(date('d.m.Y H:i',strtotime($request['next_check_at']))):'' ?></p>
 <div class="trip-documents__summary"><span>Контакт: <?= e($request['contact_name']) ?></span><a href="mailto:<?= e($request['contact_email']) ?>"><?= e($request['contact_email']) ?></a><span><?= e($request['contact_phone']) ?></span></div>
