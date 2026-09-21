@@ -8,7 +8,7 @@ use RuntimeException;
 /** Editable FEO text, stored with the existing event rule; no second delivery pipeline. */
 final class MaxFeoMessageTemplates
 {
-    private const VERSION = 2;
+    private const VERSION = 3;
 
     public static function definitions(): array
     {
@@ -16,8 +16,8 @@ final class MaxFeoMessageTemplates
             'items'=>'Сгруппированные заявки', 'count_label'=>'Количество заявок', 'mass_kg'=>'Общая масса, кг'];
         $row = ['id'=>'Номер заявки','mass_kg'=>'Масса заявки, кг'];
         return [
-            'main'=>['title'=>'Общее сообщение', 'variables'=>['action_icon'=>'✅ / ❌','action_title'=>'Добавлено / снято с карты','count_label'=>'Количество заявок','mass_kg'=>'Общая масса, кг'],
-                'template'=>"{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг"],
+            'main'=>['title'=>'Общее сообщение', 'variables'=>['action_icon'=>'✅ / ❌','action_title'=>'Добавлено / снято с карты','count_label'=>'Количество заявок','mass_kg'=>'Общая масса, кг','request_ids'=>'Номера заявок блока'],
+                'template'=>"{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг\n{{request_ids}}"],
             'same_point'=>['title'=>'Добавление в активные точки','variables'=>$route,
                 'template'=>"‼️ {{manager}}**НЕОБХОДИМО ДОБАВИТЬ В РЕЙС** ‼️\n**{{route}}**\n\n{{items}}\n\n**ИТОГО ДОБАВИТЬ:** {{count_label}} · {{mass_kg}} кг"],
             'nearby'=>['title'=>'Заявки рядом с рейсом','variables'=>$route,
@@ -37,10 +37,17 @@ final class MaxFeoMessageTemplates
     public static function decode(string $stored): array
     {
         $data = json_decode($stored, true);
-        if (!is_array($data) || !in_array($data['feo_templates_version'] ?? null, [1,self::VERSION], true)) return self::defaults();
-        $templates = self::validate($data['templates'] ?? []);
-        if (($data['feo_templates_version'] ?? null) === 1 && $templates === self::legacyDefaultsV1()) return self::defaults();
-        return $templates;
+        if (!is_array($data) || !in_array($data['feo_templates_version'] ?? null, [1,2,self::VERSION], true)) return self::defaults();
+        $version = (int)$data['feo_templates_version'];
+        $templates = $data['templates'] ?? [];
+        if (!is_array($templates)) return self::defaults();
+        if (($version === 1 && $templates === self::legacyDefaultsV1())
+            || ($version === 2 && $templates === self::legacyDefaultsV2())) return self::defaults();
+        if ($version < self::VERSION && isset($templates['main']) && is_string($templates['main'])
+            && !preg_match('/\{\{\s*request_ids\s*\}\}/u', $templates['main'])) {
+            $templates['main'] = rtrim($templates['main']) . "\n{{request_ids}}";
+        }
+        return self::validate($templates);
     }
 
     public static function fromInput(mixed $input): array
@@ -99,10 +106,17 @@ final class MaxFeoMessageTemplates
         ];
     }
 
+    private static function legacyDefaultsV2(): array
+    {
+        $defaults = self::defaults();
+        $defaults['main'] = "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг";
+        return $defaults;
+    }
+
     public static function preview(array $templates, string $kind): string
     {
         $templates=self::validate($templates);
-        $values=['action_icon'=>'✅','action_title'=>'ДОБАВЛЕНО НА КАРТУ','count_label'=>'2 заявки','mass_kg'=>'200',
+        $values=['action_icon'=>'✅','action_title'=>'ДОБАВЛЕНО НА КАРТУ','count_label'=>'2 заявки','mass_kg'=>'200','request_ids'=>'248516, 900002',
             'manager'=>'[Михаил](max://user/123456) · ','route'=>'\\#253 Новороссийск',
             'id'=>'248516','active_ids'=>'247370, 248948'];
         $lineKind=match($kind){'nearby'=>'nearby_row','active_exclusion'=>'exclusion_row',default=>'addition_row'};

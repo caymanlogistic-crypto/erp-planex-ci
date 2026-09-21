@@ -52,12 +52,13 @@ try{
     $values['action_title']='ДОБАВЛЕНО НА КАРТУ';
     $values['request_count']='4';
     $values['mass_kg']='45 402';
+    $values['request_ids']='123456, 123457, 456789, 876676';
     $additionText=MaxEventCatalog::render($key,MaxEventCatalog::event($key)['template'],'plain',$values);
-    $ok($additionText==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг",'addition main format');
+    $ok($additionText==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг\n123456, 123457, 456789, 876676",'addition main format with request IDs');
     $exclusionValues=$values;
     $exclusionValues['action_title']='СНЯТИЕ ЗАЯВОК';
     $exclusionText=MaxEventCatalog::render($key,MaxEventCatalog::event($key)['template'],'plain',$exclusionValues);
-    $ok($exclusionText==="❌ **СНЯТО С КАРТЫ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг",'exclusion main format');
+    $ok($exclusionText==="❌ **СНЯТО С КАРТЫ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг\n123456, 123457, 456789, 876676",'exclusion main format with request IDs');
 
     $pdo->beginTransaction();
     $main=$events->enqueue($key,'42',$values,77);

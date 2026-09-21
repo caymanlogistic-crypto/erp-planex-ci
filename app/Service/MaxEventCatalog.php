@@ -10,7 +10,7 @@ require_once __DIR__ . '/MaxFeoMessageTemplates.php';
 final class MaxEventCatalog
 {
     private const LEGACY_FEO_TEMPLATE = "Создан блок ФЭО №{{block_id}}: {{block_name}}\nТип: {{block_type}}\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг\nОтветственный: {{author}}\nКомпания: {{company}}\n{{created_at}}";
-    private const FEO_TEMPLATE = "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг";
+    private const FEO_TEMPLATE = "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг\n{{request_ids}}";
 
     public static function all(): array
     {
@@ -33,6 +33,7 @@ final class MaxEventCatalog
                     'block_name' => ['Название блока', 'Размещение 15 сентября'],
                     'block_type' => ['Тип блока', 'Добавление'],
                     'request_count' => ['Число заявок в блоке', '12'],
+                    'request_ids' => ['Номера заявок блока', '123456, 123457, 456789'],
                     'mass_kg' => ['Масса блока, кг', '25 400'],
                     'author' => ['Ответственный', 'Владимир С.'],
                     'company' => ['Название компании', 'Пример компании'],
@@ -94,7 +95,8 @@ final class MaxEventCatalog
             if (str_starts_with(ltrim($stored), '{"feo_templates_version"')) return MaxFeoMessageTemplates::decode($stored)['main'];
             if ($stored === '' || $stored === self::LEGACY_FEO_TEMPLATE
                 || $stored === "{{action_title}}:\n\nЗаявок: {{request_count}}, масса: {{mass_kg}} кг"
-                || $stored === "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг") return self::FEO_TEMPLATE;
+                || $stored === "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг"
+                || $stored === "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг") return self::FEO_TEMPLATE;
         }
         return $stored;
     }

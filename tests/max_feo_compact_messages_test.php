@@ -72,8 +72,8 @@ foreach (['FeoMapService','WasteTripService','FeoPlacementRouteNotificationServi
     }
     $key='feo.placement.block_created';
     foreach([1=>'1 заявка',2=>'2 заявки',5=>'5 заявок',11=>'11 заявок',21=>'21 заявка',40=>'40 заявок'] as $n=>$label){
-        $text=App\Service\MaxEventCatalog::render($key,App\Service\MaxFeoMessageTemplates::defaults()['main'],'plain',['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>$n,'mass_kg'=>'22 000']);
-        $ok($text==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** ".$label."\n**ОБЩАЯ МАССА:** 22 000 кг",'readable main/count agreement');
+        $text=App\Service\MaxEventCatalog::render($key,App\Service\MaxFeoMessageTemplates::defaults()['main'],'plain',['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>$n,'mass_kg'=>'22 000','request_ids'=>'123456, 123457']);
+        $ok($text==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** ".$label."\n**ОБЩАЯ МАССА:** 22 000 кг\n123456, 123457",'readable main/count agreement and request IDs');
     }
     $legacy=['feo_templates_version'=>1,'templates'=>[
         'main'=>"{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг",
@@ -88,8 +88,13 @@ foreach (['FeoMapService','WasteTripService','FeoPlacementRouteNotificationServi
     $legacy['templates']['nearby']=str_replace('РЯДОМ, ДО 5 КМ','МОЙ ТЕКСТ',$legacy['templates']['nearby']);
     $ok(str_contains(App\Service\MaxFeoMessageTemplates::decode(json_encode($legacy,JSON_UNESCAPED_UNICODE))['nearby'],'МОЙ ТЕКСТ'),
         'edited v1 template must be preserved');
-    $ok(str_contains(App\Service\MaxFeoMessageTemplates::encode(App\Service\MaxFeoMessageTemplates::defaults()),'"feo_templates_version":2'),
-        'new template saves must use version 2');
+    $v2=['feo_templates_version'=>2,'templates'=>App\Service\MaxFeoMessageTemplates::defaults()];
+    $v2['templates']['main']="{{action_icon}} **{{action_title}} — МОЙ ЗАГОЛОВОК**\n{{count_label}} · {{mass_kg}} кг";
+    $migratedV2=App\Service\MaxFeoMessageTemplates::decode(json_encode($v2,JSON_UNESCAPED_UNICODE));
+    $ok($migratedV2['main']==="{{action_icon}} **{{action_title}} — МОЙ ЗАГОЛОВОК**\n{{count_label}} · {{mass_kg}} кг\n{{request_ids}}",
+        'edited v2 main template must be preserved and gain required request IDs');
+    $ok(str_contains(App\Service\MaxFeoMessageTemplates::encode(App\Service\MaxFeoMessageTemplates::defaults()),'"feo_templates_version":3'),
+        'new template saves must use version 3');
     $ok(str_contains(App\Service\MaxEventCatalog::currentTemplate('feo.placement.block_created',
         "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг"),'**КОЛИЧЕСТВО:**'),
         'legacy standalone main template must upgrade to readable default');
