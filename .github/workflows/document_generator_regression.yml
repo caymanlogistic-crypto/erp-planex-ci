@@ -207,6 +207,7 @@ jobs:
             DOCUMENT_GENERATOR_CLIENT_PACKAGE=PASS \
             DOCUMENT_GENERATOR_CLIENT_PACKAGE_DOCX=PASS \
             DOCUMENT_GENERATOR_CLIENT_PACKAGE_IMMUTABLE=PASS \
+            DOCUMENT_GENERATOR_CLIENT_PACKAGE_OVERWRITE=PASS \
             DOCUMENT_GENERATOR_REGRESSION=PASS
           do
             grep -Fqx "$marker" /tmp/document-generator-regression.log

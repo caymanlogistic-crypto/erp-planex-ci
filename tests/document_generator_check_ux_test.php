@@ -43,6 +43,10 @@ $assert(str_contains($view, 'await fetch(check.formAction||form.action'), 'AJAX 
 $assert(str_contains($view, "new DOMParser().parseFromString(await r.text(),'text/html')"), 'AJAX consumes canonical server-rendered preview instead of duplicating backend prepare logic');
 $assert(str_contains($view, "e.submitter?.matches('[data-docgen-check]')"), 'AJAX intercepts preview only and leaves generation submit untouched');
 $assert(str_contains($view, '[data-docgen-generate]'), 'successful preview preserves canonical generation action');
+$assert(str_contains($view, 'Комплект №') && str_contains($view, 'уже был создан.'), 'existing package preview explains the conflict');
+$assert(str_contains($view, 'data-docgen-overwrite name="overwrite_existing" value="1"'), 'overwrite action carries explicit server confirmation');
+$assert(str_contains($view, "confirm('Комплект уже был создан. Перезаписать договор, счёт и акт?')"), 'overwrite action requires user confirmation');
+$assert(str_contains($view, "'Перезаписать комплект'"), 'existing package action has an explicit overwrite label');
 $assert(str_contains($view, "panel.className='panel'"), 'successful result uses standard ERP panel');
 $assert(str_contains($view, 'class="notice danger mb-3"'), 'no-JS server preview also uses standard red error notice');
 
