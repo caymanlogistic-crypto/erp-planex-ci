@@ -23,7 +23,7 @@
     const options = {headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},credentials:'same-origin'};
     if (data) { data.set('_csrf_token',csrf()); options.method = 'POST'; options.body = data; }
     const response = await fetch(url,options);
-    let result; try { result = await response.json(); } catch { throw new Error('Сервер не ответил. Обновите страницу и проверьте историю пакетов.'); }
+    let result; try { result = await response.json(); } catch { throw new Error('Сервер не ответил. Обновите страницу и проверьте историю блоков.'); }
     if (!response.ok || !result.success) throw new Error(result.message || (response.status === 403 ? 'Доступ запрещён.' : 'Не удалось выполнить действие.'));
     return result;
   }
@@ -78,24 +78,24 @@
   });
   function completed(result, verb) {
     const warning = result.notification === 'failed' || result.notification === 'sending';
-    sessionStorage.setItem('feo-transfer-result',JSON.stringify({message:`Пакет #${result.batch_id} ${verb}.${warning ? ' Уведомление MAX не отправлено или результат неизвестен; проверьте журнал событий.' : result.notification === 'disabled' ? ' Уведомление MAX отключено в настройках события.' : result.notification === 'sent' ? ' Уведомление MAX отправлено.' : ''}`,warning}));
+    sessionStorage.setItem('feo-transfer-result',JSON.stringify({message:`Блок #${result.batch_id} ${verb}.${warning ? ' Уведомление MAX не отправлено или результат неизвестен; проверьте журнал событий.' : result.notification === 'disabled' ? ' Уведомление MAX отключено в настройках события.' : result.notification === 'sent' ? ' Уведомление MAX отправлено.' : ''}`,warning}));
     location.reload();
   }
   find('[data-commit]').addEventListener('click',e => action(e.currentTarget,async () => {
-    if (!previewToken) throw new Error('Проверьте пакет заново.');
+    if (!previewToken) throw new Error('Проверьте блок заново.');
     const data = new FormData(); data.set('preview_token',previewToken);
     const result = await request(`${root.dataset.base}/create`,data); completed(result,'сохранён');
   }));
   root.querySelectorAll('[data-revert]').forEach(button => button.addEventListener('click',() => {
     const id = button.dataset.revert; const body = find('[data-detail-body]');
-    body.innerHTML = `<p>Вернуть все заявки пакета <strong>#${escape(id)}</strong> к адресам и координатам до этого перемещения?</p><p class="muted">Если заявки перемещены более поздним пакетом, возврат остановится. История сохранится.</p><div class="form-alert alert-warning" data-revert-error hidden role="alert"></div><div class="transfer-confirm-actions"><button class="btn btn-secondary" type="button" data-cancel-revert>Отмена</button><button class="btn btn-primary" type="button" data-confirm-revert>Вернуть весь пакет</button></div>`;
+    body.innerHTML = `<p>Вернуть все заявки блока <strong>#${escape(id)}</strong> к адресам и координатам до этого перемещения?</p><p class="muted">Если заявки перемещены более поздним блоком, возврат остановится. История сохранится.</p><div class="form-alert alert-warning" data-revert-error hidden role="alert"></div><div class="transfer-confirm-actions"><button class="btn btn-secondary" type="button" data-cancel-revert>Отмена</button><button class="btn btn-primary" type="button" data-confirm-revert>Вернуть весь блок</button></div>`;
     find('[data-cancel-revert]').onclick = () => detailDialog.close();
     find('[data-confirm-revert]').onclick = e => action(e.currentTarget,async () => { const result = await request(`${root.dataset.base}/${id}/revert`,new FormData()); completed(result,'возвращён'); },message => { find('[data-revert-error]').textContent = message; find('[data-revert-error]').hidden = false; });
     detailDialog.showModal();
   }));
   root.querySelectorAll('[data-detail]').forEach(button => button.addEventListener('click',() => action(button,async () => {
     const id = button.dataset.detail, result = await request(`${root.dataset.base}/${id}/json`), batch = result.batch;
-    find('[data-detail-body]').innerHTML = `<div class="transfer-detail-meta"><p>Пакет<b>#${escape(id)} · ${escape(batch.name)}</b></p><p>Автор<b>${escape(batch.created_by_name)} · ${escape(batch.created_at)}</b></p><p>Комментарий<b>${escape(batch.comment || '—')}</b></p><p>Возврат<b>${batch.reverted_at ? `${escape(batch.reverted_by_name)} · ${escape(batch.reverted_at)}` : 'Не выполнялся'}</b></p></div><div class="table-scroll"><table class="table"><thead><tr><th>Заявка</th><th>До перемещения</th><th>После перемещения</th></tr></thead><tbody>${result.items.map(row => `<tr><td>${escape(row.zayavka_id)}</td><td>${escape(row.before.mno_adres_pogruzki)}<div class="muted">${escape(row.before.mno_d)}, ${escape(row.before.mno_sh)}</div></td><td>${escape(row.after.mno_adres_pogruzki)}<div class="muted">${escape(row.after.mno_d)}, ${escape(row.after.mno_sh)}</div></td></tr>`).join('')}</tbody></table></div><details class="transfer-settings"><summary>Передача в старую базу</summary><p>Изменения подготовлены. Подключение к старой базе ещё не настроено; данные туда не отправлялись.</p><a class="btn btn-secondary btn-sm" href="${escape(root.dataset.base)}/${escape(id)}/export">Скачать пакет изменений (JSON)</a></details>`;
+    find('[data-detail-body]').innerHTML = `<div class="transfer-detail-meta"><p>Блок<b>#${escape(id)} · ${escape(batch.name)}</b></p><p>Автор<b>${escape(batch.created_by_name)} · ${escape(batch.created_at)}</b></p><p>Комментарий<b>${escape(batch.comment || '—')}</b></p><p>Возврат<b>${batch.reverted_at ? `${escape(batch.reverted_by_name)} · ${escape(batch.reverted_at)}` : 'Не выполнялся'}</b></p></div><div class="table-scroll"><table class="table"><thead><tr><th>Заявка</th><th>До перемещения</th><th>После перемещения</th></tr></thead><tbody>${result.items.map(row => `<tr><td>${escape(row.zayavka_id)}</td><td>${escape(row.before.mno_adres_pogruzki)}<div class="muted">${escape(row.before.mno_d)}, ${escape(row.before.mno_sh)}</div></td><td>${escape(row.after.mno_adres_pogruzki)}<div class="muted">${escape(row.after.mno_d)}, ${escape(row.after.mno_sh)}</div></td></tr>`).join('')}</tbody></table></div><details class="transfer-settings"><summary>Передача в старую базу</summary><p>Изменения подготовлены. Подключение к старой базе ещё не настроено; данные туда не отправлялись.</p><a class="btn btn-secondary btn-sm" href="${escape(root.dataset.base)}/${escape(id)}/export">Скачать блок изменений (JSON)</a></details>`;
     detailDialog.showModal();
   },message => pageMessage(message,true))));
   find('[data-history-search]')?.addEventListener('input',e => { const query = e.target.value.trim().toLocaleLowerCase('ru'); root.querySelectorAll('[data-batch-row]').forEach(row => { row.hidden = !row.textContent.toLocaleLowerCase('ru').includes(query); }); });

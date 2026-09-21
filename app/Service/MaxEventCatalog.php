@@ -13,6 +13,8 @@ final class MaxEventCatalog
     private const FEO_TEMPLATE = "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг\n{{request_ids}}";
     private const LEGACY_TRANSFER_CREATED_TEMPLATE = "Создан пакет переноса №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
     private const LEGACY_TRANSFER_REVERTED_TEMPLATE = "Возвращён пакет переноса №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
+    private const PREVIOUS_TRANSFER_CREATED_TEMPLATE = "Создан пакет перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
+    private const PREVIOUS_TRANSFER_REVERTED_TEMPLATE = "Возвращён пакет перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
 
     public static function all(): array
     {
@@ -65,7 +67,7 @@ final class MaxEventCatalog
     private static function transferEvents(): array
     {
         $variables = [
-            'batch_id'=>['Номер пакета','18'], 'batch_name'=>['Название пакета','Перемещение на склад'],
+            'batch_id'=>['Номер блока','18'], 'batch_name'=>['Название блока','Перемещение на склад'],
             'request_count'=>['Число заявок','12'], 'address'=>['Адрес назначения','Москва, улица Примерная, 1'],
             'quality'=>['Качество координат','Только улица, дом не определён'],
             'request_ids'=>['Номера заявок','123456, 123457, 456789'],
@@ -74,9 +76,9 @@ final class MaxEventCatalog
             'created_at'=>['Дата и время','18.09.2026 15:30'], 'comment'=>['Комментарий','Изменение места погрузки'],
         ];
         $events=[];
-        foreach (['created'=>['ФЭО — создан пакет перемещения','Создан пакет перемещения'], 'reverted'=>['ФЭО — возвращён пакет перемещения','Возвращён пакет перемещения']] as $action=>$labels) {
+        foreach (['created'=>['ФЭО — создан блок перемещения','Создан блок перемещения'], 'reverted'=>['ФЭО — возвращён блок перемещения','Возвращён блок перемещения']] as $action=>$labels) {
             $events['feo.transfer.'.$action]=['title'=>$labels[0],
-                'description'=>'После успешного '.($action==='created'?'перемещения':'возврата').' всего пакета. Качество координат обязательно присутствует в сообщении.',
+                'description'=>'После успешного '.($action==='created'?'перемещения':'возврата').' всего блока. Качество координат обязательно присутствует в сообщении.',
                 'template'=>$labels[1]." №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}",
                 'variables'=>$variables];
         }
@@ -125,8 +127,8 @@ final class MaxEventCatalog
                 || $stored === "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг"
                 || $stored === "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг") return self::FEO_TEMPLATE;
         }
-        if ($key === 'feo.transfer.created' && ($stored === '' || $stored === self::LEGACY_TRANSFER_CREATED_TEMPLATE)) return self::event($key)['template'];
-        if ($key === 'feo.transfer.reverted' && ($stored === '' || $stored === self::LEGACY_TRANSFER_REVERTED_TEMPLATE)) return self::event($key)['template'];
+        if ($key === 'feo.transfer.created' && ($stored === '' || $stored === self::LEGACY_TRANSFER_CREATED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_CREATED_TEMPLATE)) return self::event($key)['template'];
+        if ($key === 'feo.transfer.reverted' && ($stored === '' || $stored === self::LEGACY_TRANSFER_REVERTED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_REVERTED_TEMPLATE)) return self::event($key)['template'];
         return $stored;
     }
 

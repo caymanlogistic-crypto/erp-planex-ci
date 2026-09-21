@@ -506,7 +506,7 @@ final class FeoRequestService
                 $legacySync->replay($after[FeoLegacyImportSync::JOURNAL_KEY], $id, false);
             }
             if (($change['action'] ?? '') === 'insert') {
-                if (isset($locationOverrides[$id])) throw new \RuntimeException("Заявка {$id} перемещена. Сначала верните пакет перемещения, затем откатывайте загрузку.");
+                if (isset($locationOverrides[$id])) throw new \RuntimeException("Заявка {$id} перемещена. Сначала верните блок перемещения, затем откатывайте загрузку.");
                 $delete->execute([$id,$importId]);
                 if ($delete->rowCount() !== 1) throw new \RuntimeException("Заявка {$id} была изменена после загрузки; безопасный откат остановлен.");
                 $deleted++;

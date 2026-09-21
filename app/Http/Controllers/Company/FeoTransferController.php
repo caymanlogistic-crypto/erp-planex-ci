@@ -106,7 +106,7 @@ final class FeoTransferController
             [, $pdo]=$this->context(); $batchId=$this->id($id);
             $q=$pdo->prepare('SELECT * FROM feo_transfer_batches WHERE id=?'); $q->execute([$batchId]);
             $batch=$q->fetch(PDO::FETCH_ASSOC);
-            if (!$batch) throw new RuntimeException('Пакет не найден.');
+            if (!$batch) throw new RuntimeException('Блок не найден.');
             $q=$pdo->prepare('SELECT operation,status,created_at FROM feo_transfer_outbox WHERE batch_id=? ORDER BY id'); $q->execute([$batchId]);
             return ['batch'=>$batch,'items'=>$this->service->items($pdo,$batchId),'legacy'=>$q->fetchAll(PDO::FETCH_ASSOC)];
         });
@@ -118,7 +118,7 @@ final class FeoTransferController
             [$company,$pdo]=$this->context();
             $q=$pdo->prepare('SELECT id,operation,payload_json,status FROM feo_transfer_outbox WHERE batch_id=? ORDER BY id'); $q->execute([$this->id($id)]);
             $operations=$q->fetchAll(PDO::FETCH_ASSOC);
-            if (!$operations) throw new RuntimeException('Пакет не найден.');
+            if (!$operations) throw new RuntimeException('Блок не найден.');
             foreach ($operations as &$row) { $row['payload']=json_decode($row['payload_json'],true,32,JSON_THROW_ON_ERROR); unset($row['payload_json']); } unset($row);
             header('Content-Type: application/json; charset=utf-8'); header('Content-Disposition: attachment; filename="feo-transfer-'.(int)$id.'.json"');
             header('Cache-Control: no-store'); header('X-Content-Type-Options: nosniff');
@@ -174,7 +174,7 @@ final class FeoTransferController
             $after=$this->shortAddress((string)($item['after']['mno_adres_pogruzki']??''));
             $changes[]='№'.(string)($item['request_number']??'').' — '.$before.' → '.$after;
         }
-        if (count($items)>count($changes)) $changes[]='… ещё '.(count($items)-count($changes)).' заявок; полный состав сохранён в пакете.';
+        if (count($items)>count($changes)) $changes[]='… ещё '.(count($items)-count($changes)).' заявок; полный состав сохранён в блоке.';
         return ['batch_id'=>(string)$result['batch_id'],'batch_name'=>$name?:'Перемещение заявок','request_count'=>(string)$result['count'],
             'request_ids'=>$requestList?:'—','changes'=>$changes?implode("\n",$changes):'—',
             'address'=>mb_substr($result['destination']['address'],0,1000),'quality'=>$result['destination']['quality'],
@@ -197,7 +197,7 @@ final class FeoTransferController
         $q=$pdo->prepare('SELECT id FROM max_event_deliveries WHERE event_key=? AND entity_key=?'); $q->execute([$event,(string)$batchId]);
         $id=$q->fetchColumn(); return $id!==false?(int)$id:null;
     }
-    private function id(string $id): int { if (!ctype_digit($id) || (int)$id<=0) throw new RuntimeException('Некорректный номер пакета.'); return (int)$id; }
+    private function id(string $id): int { if (!ctype_digit($id) || (int)$id<=0) throw new RuntimeException('Некорректный номер блока.'); return (int)$id; }
     private function respond(callable $action): void
     {
         try { jsonResponse(['success'=>true]+$action()); }

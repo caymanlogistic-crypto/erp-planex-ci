@@ -32,7 +32,7 @@ try {
     if(url.endsWith('/geocode')) result={success:true,geo_token:'fixture-geo',result:destination};
     else if(url.endsWith('/preview')) {previewCalls++; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination,rows:[{zayavka_id:'100001',mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
     else if(url.endsWith('/create')) {createCalls++; result={success:true,batch_id:19,notification:'failed'};}
-    else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего пакета остановлен.'};
+    else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего блока остановлен.'};
     else result={success:true};
     await route.fulfill({status:result.success?200:422,contentType:'application/json',body:JSON.stringify(result)});
   });
@@ -40,9 +40,17 @@ try {
   for (const width of [1920,1366,800,390]) {
     await page.setViewportSize({width,height:900}); await page.goto(url);
     assert.equal(await page.locator('.page-title').innerText(),'Перемещение заявок');
-    assert.equal(await page.getByText('Новый пакет перемещения',{exact:true}).count(),1);
+    assert.equal(await page.getByText('Новый блок перемещения',{exact:true}).count(),1);
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Page overflow '+width);
     await page.locator('[data-open-transfer]').first().click();
+    assert.equal(await page.getByText('Вставьте один номер или список из столбца Excel. До 1000 заявок; повторы будут объединены.',{exact:true}).count(),0);
+    assert.equal(await page.getByText('Заявка назначения останется без изменений.',{exact:true}).count(),0);
+    assert.equal(await page.getByText('Заявка с нужным адресом',{exact:true}).count(),1);
+    assert.equal(await page.locator('[data-create-dialog] .modal-foot [data-close-dialog]').innerText(),'Отмена');
+    assert.equal(await page.locator('[data-create-dialog] .modal-foot [data-preview]').innerText(),'Проверить');
+    const modalGeometry=await page.locator('[data-create-dialog]').evaluate(e=>({radius:parseFloat(getComputedStyle(e).borderRadius),title:parseFloat(getComputedStyle(e.querySelector('.modal-title')).fontSize)}));
+    assert.ok(modalGeometry.radius<=2 && modalGeometry.title<=14,'System modal geometry '+width);
+    if(screenshotDir) await page.screenshot({path:path.join(screenshotDir,`transfer-form-${width}.png`),fullPage:true});
     await page.locator('[name=request_ids]').fill('100001\n100002');
     await page.locator('[name=source_request_id]').fill('100003');
     await page.locator('[data-preview]').click(); await page.locator('[data-preview-result]').waitFor({state:'visible'});
@@ -52,7 +60,7 @@ try {
     if(screenshotDir) await page.screenshot({path:path.join(screenshotDir,`transfer-${width}.png`),fullPage:true});
     await page.locator('[name=source_request_id]').fill('100004');
     assert.equal(await page.locator('[data-preview-result]').isVisible(),false,'Edited destination invalidates preview');
-    await page.locator('[data-create-dialog] [data-close-dialog]').click();
+    await page.locator('[data-create-dialog] .modal-close[data-close-dialog]').click();
   }
   await page.goto(url); await page.locator('[data-open-transfer]').first().click();
   await page.locator('[name=request_ids]').fill('100001\n100002');
@@ -67,7 +75,7 @@ try {
   assert.equal(createCalls,1,'One commit call');
   await page.locator('[data-revert]').click(); await page.locator('[data-confirm-revert]').click();
   await page.locator('[data-revert-error]').waitFor({state:'visible'});
-  assert.match(await page.locator('[data-revert-error]').innerText(),/Возврат всего пакета остановлен/);
+  assert.match(await page.locator('[data-revert-error]').innerText(),/Возврат всего блока остановлен/);
   await page.goto(url+'/coordinates'); await page.locator('[name=address]').fill('Москва');
   await page.locator('[data-geocode]').click(); await page.locator('[data-geo-result]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-geo-lon]').innerText(),'37.123');

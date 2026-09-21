@@ -123,7 +123,7 @@ final class FeoRequestInteractionService
             if (isset($locationOverrides[(string)$current['zayavka_id']])) {
                 foreach (FeoLocationOverrideService::FIELDS as $field) {
                     if (array_key_exists($field, $input) && (string)$this->normalizeEditableValue($field, $input[$field]) !== (string)$current[$field]) {
-                        throw new \RuntimeException('Место погрузки изменено пакетом перемещения. Используйте «Перемещение заявок» или верните пакет.');
+                        throw new \RuntimeException('Место погрузки изменено блоком перемещения. Используйте «Перемещение заявок» или верните блок.');
                     }
                 }
             }
