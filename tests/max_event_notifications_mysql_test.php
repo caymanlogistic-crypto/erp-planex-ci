@@ -54,8 +54,8 @@ try {
     $ok((string)$stored['message_format']==='markdown','System FEO main format must be markdown');
     $additionValues=array_replace($values,['action_title'=>'ДОБАВЛЕНО НА КАРТУ','request_count'=>'4','mass_kg'=>'45 402']);
     $exclusionValues=array_replace($values,['action_title'=>'СНЯТИЕ ЗАЯВОК','request_count'=>'4','mass_kg'=>'45 402']);
-    $ok(MaxEventCatalog::render($key,$canonicalTemplate,'html',$additionValues)==="✅ **ДОБАВЛЕНО НА КАРТУ**\n4 заявки · 45 402 кг",'Exact default addition main text');
-    $ok(MaxEventCatalog::render($key,$canonicalTemplate,'markdown',$exclusionValues)==="❌ **СНЯТО С КАРТЫ**\n4 заявки · 45 402 кг",'Exact default exclusion main text');
+    $ok(MaxEventCatalog::render($key,$canonicalTemplate,'html',$additionValues)==="✅ **ДОБАВЛЕНО НА КАРТУ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг",'Exact default addition main text');
+    $ok(MaxEventCatalog::render($key,$canonicalTemplate,'markdown',$exclusionValues)==="❌ **СНЯТО С КАРТЫ**\n**КОЛИЧЕСТВО:** 4 заявки\n**ОБЩАЯ МАССА:** 45 402 кг",'Exact default exclusion main text');
     $transferKey='feo.transfer.created';
     $transferValues=MaxEventCatalog::example($transferKey);
     $htmlEscaped=MaxEventCatalog::render($transferKey,'{{author}} {{quality}}','html',array_replace($transferValues,['author'=>'<b>A&B</b>']));
@@ -81,7 +81,7 @@ try {
         $before=$sends;
         $sent=$events->dispatch($deliveryId);
         $ok($sent['status']==='sent' && $sends===$before+1,'New block notification failed');
-        $expectedMain=($type==='addition'?'✅ **ДОБАВЛЕНО НА КАРТУ**':'❌ **СНЯТО С КАРТЫ**')."\n1 заявка · 1 500 кг";
+        $expectedMain=($type==='addition'?'✅ **ДОБАВЛЕНО НА КАРТУ**':'❌ **СНЯТО С КАРТЫ**')."\n**КОЛИЧЕСТВО:** 1 заявка\n**ОБЩАЯ МАССА:** 1 500 кг";
         $ok($sent['message_text']===$expectedMain && $sent['message_format']==='markdown','Exact system main payload mismatch');
         $events->dispatch($deliveryId,true);
         $ok($sends===$before+1,'Sent delivery duplicated');

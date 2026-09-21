@@ -56,11 +56,11 @@ try {
     assert.equal(await modal.locator('[data-max-event-dirty]').isVisible(),false);
     await template.fill((await template.inputValue()).replace('ДОБАВИТЬ В РЕЙС','НОВЫЕ В ТОЧКЕ'));
     await modal.locator('[name=feo_template_kind]').selectOption('point');
-    await template.fill((await template.inputValue()).replace('В точке:','Уже в рейсе:'));
+    await template.fill((await template.inputValue()).replace('НАХОДЯТСЯ В ТОМ ЖЕ МЕСТЕ','РАСПОЛОЖЕНЫ В ТОМ ЖЕ МЕСТЕ'));
     await modal.locator('[name=feo_template_kind]').selectOption('same_point');
     assert.ok((await template.inputValue()).includes('НОВЫЕ В ТОЧКЕ'));
     const bundle=JSON.parse(await modal.locator('[name=feo_templates]').inputValue());
-    assert.ok(bundle.point.includes('Уже в рейсе:'));
+    assert.ok(bundle.point.includes('РАСПОЛОЖЕНЫ В ТОМ ЖЕ МЕСТЕ'));
     assert.ok(bundle.same_point.includes('НОВЫЕ В ТОЧКЕ'));
     page.once('dialog',d=>d.accept());
     await modal.locator('[data-max-event-default]').click();

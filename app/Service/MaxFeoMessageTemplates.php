@@ -8,6 +8,8 @@ use RuntimeException;
 /** Editable FEO text, stored with the existing event rule; no second delivery pipeline. */
 final class MaxFeoMessageTemplates
 {
+    private const VERSION = 2;
+
     public static function definitions(): array
     {
         $route = ['manager'=>'Упоминание и разделитель (пусто без MAX ID)', 'route'=>'Номер и название рейса',
@@ -15,18 +17,18 @@ final class MaxFeoMessageTemplates
         $row = ['id'=>'Номер заявки','mass_kg'=>'Масса заявки, кг'];
         return [
             'main'=>['title'=>'Общее сообщение', 'variables'=>['action_icon'=>'✅ / ❌','action_title'=>'Добавлено / снято с карты','count_label'=>'Количество заявок','mass_kg'=>'Общая масса, кг'],
-                'template'=>"{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг"],
+                'template'=>"{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг"],
             'same_point'=>['title'=>'Добавление в активные точки','variables'=>$route,
-                'template'=>"‼️ {{manager}}**ДОБАВИТЬ В РЕЙС** ‼️\n**{{route}}**\n{{items}}\n**Итого добавить: {{count_label}} · {{mass_kg}} кг**"],
+                'template'=>"‼️ {{manager}}**НЕОБХОДИМО ДОБАВИТЬ В РЕЙС** ‼️\n**{{route}}**\n\n{{items}}\n\n**ИТОГО ДОБАВИТЬ:** {{count_label}} · {{mass_kg}} кг"],
             'nearby'=>['title'=>'Заявки рядом с рейсом','variables'=>$route,
-                'template'=>"⚠️ {{manager}}**РЯДОМ, ДО 5 КМ** ⚠️\n**{{route}}**\n{{items}}\n**{{count_label}} · {{mass_kg}} кг**\n⚠️ Рассмотрите добавление в рейс ⚠️"],
+                'template'=>"⚠️ {{manager}}**НОВЫЕ ЗАЯВКИ РЯДОМ С РЕЙСОМ, ДО 5 КМ** ⚠️\n**{{route}}**\n\n**НОВЫЕ ЗАЯВКИ:**\n{{items}}\n\n**ИТОГО:** {{count_label}} · {{mass_kg}} кг\n⚠️ **ПРОВЕРЬТЕ ВОЗМОЖНОСТЬ ДОБАВЛЕНИЯ В РЕЙС** ⚠️"],
             'active_exclusion'=>['title'=>'Снятие активных заявок','variables'=>$route,
-                'template'=>"‼️ {{manager}}**СНЯТЫ С КАРТЫ** ‼️\n**{{route}}**\n{{items}}\n**{{count_label}} · {{mass_kg}} кг**\n‼️ Скорректируйте состав рейса ‼️"],
+                'template'=>"‼️ {{manager}}**С КАРТЫ СНЯТЫ ЗАЯВКИ, УЖЕ ВКЛЮЧЁННЫЕ В РЕЙС** ‼️\n**{{route}}**\n\n**СНЯТЫЕ ЗАЯВКИ:**\n{{items}}\n\n**ИТОГО СНЯТО:** {{count_label}} · {{mass_kg}} кг\n‼️ **ПРОВЕРЬТЕ И СКОРРЕКТИРУЙТЕ СОСТАВ РЕЙСА** ‼️"],
             'point'=>['title'=>'Группа одной точки','variables'=>['active_ids'=>'Все активные заявки в точке','requests'=>'Новые заявки в точке'],
-                'template'=>"В точке: **{{active_ids}}**\n{{requests}}"],
-            'addition_row'=>['title'=>'Строка новой заявки в точке','variables'=>$row,'template'=>'\\+ {{id}} — {{mass_kg}} кг'],
+                'template'=>"**НОВЫЕ ЗАЯВКИ:**\n{{requests}}\n**НАХОДЯТСЯ В ТОМ ЖЕ МЕСТЕ, ЧТО И ЗАЯВКИ, УЖЕ ВКЛЮЧЁННЫЕ В РЕЙС:**\n**{{active_ids}}**"],
+            'addition_row'=>['title'=>'Строка новой заявки в точке','variables'=>$row,'template'=>'{{id}} — {{mass_kg}} кг'],
             'nearby_row'=>['title'=>'Строка заявки рядом','variables'=>$row,'template'=>'{{id}} — {{mass_kg}} кг'],
-            'exclusion_row'=>['title'=>'Строка снятой заявки','variables'=>$row,'template'=>'− **{{id}} — {{mass_kg}} кг**'],
+            'exclusion_row'=>['title'=>'Строка снятой заявки','variables'=>$row,'template'=>'**{{id}} — {{mass_kg}} кг**'],
         ];
     }
 
@@ -35,8 +37,10 @@ final class MaxFeoMessageTemplates
     public static function decode(string $stored): array
     {
         $data = json_decode($stored, true);
-        if (!is_array($data) || ($data['feo_templates_version'] ?? null) !== 1) return self::defaults();
-        return self::validate($data['templates'] ?? []);
+        if (!is_array($data) || !in_array($data['feo_templates_version'] ?? null, [1,self::VERSION], true)) return self::defaults();
+        $templates = self::validate($data['templates'] ?? []);
+        if (($data['feo_templates_version'] ?? null) === 1 && $templates === self::legacyDefaultsV1()) return self::defaults();
+        return $templates;
     }
 
     public static function fromInput(mixed $input): array
@@ -48,7 +52,7 @@ final class MaxFeoMessageTemplates
 
     public static function encode(array $templates): string
     {
-        $encoded = json_encode(['feo_templates_version'=>1,'templates'=>self::validate($templates)], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
+        $encoded = json_encode(['feo_templates_version'=>self::VERSION,'templates'=>self::validate($templates)], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
         if (strlen($encoded) > 65535) throw new RuntimeException('Общий размер шаблонов слишком большой. Сократите текст.');
         return $encoded;
     }
@@ -79,6 +83,20 @@ final class MaxFeoMessageTemplates
         $q=$pdo->prepare('SELECT message_template FROM max_event_rules WHERE event_key=?');
         $q->execute(['feo.placement.block_created']);
         return self::decode((string)$q->fetchColumn());
+    }
+
+    private static function legacyDefaultsV1(): array
+    {
+        return [
+            'main'=>"{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг",
+            'same_point'=>"‼️ {{manager}}**ДОБАВИТЬ В РЕЙС** ‼️\n**{{route}}**\n{{items}}\n**Итого добавить: {{count_label}} · {{mass_kg}} кг**",
+            'nearby'=>"⚠️ {{manager}}**РЯДОМ, ДО 5 КМ** ⚠️\n**{{route}}**\n{{items}}\n**{{count_label}} · {{mass_kg}} кг**\n⚠️ Рассмотрите добавление в рейс ⚠️",
+            'active_exclusion'=>"‼️ {{manager}}**СНЯТЫ С КАРТЫ** ‼️\n**{{route}}**\n{{items}}\n**{{count_label}} · {{mass_kg}} кг**\n‼️ Скорректируйте состав рейса ‼️",
+            'point'=>"В точке: **{{active_ids}}**\n{{requests}}",
+            'addition_row'=>'\\+ {{id}} — {{mass_kg}} кг',
+            'nearby_row'=>'{{id}} — {{mass_kg}} кг',
+            'exclusion_row'=>'− **{{id}} — {{mass_kg}} кг**',
+        ];
     }
 
     public static function preview(array $templates, string $kind): string
