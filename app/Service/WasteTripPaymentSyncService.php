@@ -11,6 +11,7 @@ final class WasteTripPaymentSyncService
     public static function synchronize(PDO $pdo, int $tripId, string $side, ?string $amount, ?string $comment, array $actor): void
     {
         if (!$pdo->inTransaction()) throw new RuntimeException('Стоимость синхронизируется в транзакции рейса.');
+        if ($side === 'customer' && WasteTripCustomerPaymentService::amountSyncDisabled($pdo, $tripId)) return;
         $table = match ($side) {
             'customer' => 'waste_trip_customer_payments',
             'general' => 'waste_trip_general_payments',
