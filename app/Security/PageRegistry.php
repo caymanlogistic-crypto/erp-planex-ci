@@ -72,7 +72,7 @@ final class PageRegistry
             self::definition('company.drivers', 'Водители', 'Справочники', '', 210, '/company/drivers'),
             self::definition('company.vehicle_units', 'ТС', 'Справочники', '', 220, '/company/vehicles', navVisible: false, grantable: false),
             self::definition('company.vehicle_sets', 'ТС', 'Справочники', '', 230, '/company/vehicle-sets'),
-            self::definition('company.statistics.managers', 'Работа менеджеров', 'Статистика', '', 250, '/company/statistics/managers'),
+            self::definition('company.statistics.managers', 'Работа логистов', 'Статистика', '', 250, '/company/statistics/managers'),
             self::definition('company.finance.dashboard', 'Дашборд', 'Финансы', '', 300, '/company/finance/dashboard'),
             self::definition('company.finance.bank_accounts', 'Выписки со счёта', 'Финансы', '', 310, '/company/finance/bank-accounts', badgeProvider: 'bank_attention'),
             self::definition('company.finance.closing_documents', 'Закрывающие документы', 'Финансы', '', 320, '/company/finance/closing-documents', badgeProvider: 'closing_documents_problem'),

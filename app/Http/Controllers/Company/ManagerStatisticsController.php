@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
-use App\Service\EntityResponsibilityService;
 use App\Service\WasteTripStartStatisticsService;
 use PDO;
 use Throwable;
@@ -19,8 +18,8 @@ final class ManagerStatisticsController
     {
         requireRole(['company_owner','senior_logist','logist']);
 
-        $pageTitle = 'Работа менеджеров';
-        $pageContext = 'Статистика › Работа менеджеров';
+        $pageTitle = 'Работа логистов';
+        $pageContext = 'Статистика › Работа логистов';
         $company = null;
         $dbError = null;
         $eligibleManagers = [];
@@ -28,7 +27,8 @@ final class ManagerStatisticsController
         $statistics = [
             'totals'=>['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0],
             'previous_totals'=>['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0],
-            'managers'=>[], 'trend'=>[], 'previous_trend'=>[], 'details'=>[], 'scope'=>'none',
+            'managers'=>[], 'trend'=>[], 'previous_trend'=>[], 'manager_trends'=>[],
+            'period_rows'=>[], 'details'=>[], 'available_years'=>[(int)date('Y')], 'scope'=>'none',
         ];
 
         $companyId = (int)(getSessionCompanyId() ?? 0);
@@ -47,7 +47,7 @@ final class ManagerStatisticsController
                     if (!WasteTripStartStatisticsService::schemaReady($local)) {
                         $dbError = 'Раздел ожидает обновление схемы статистики (141).';
                     } else {
-                        $eligibleManagers = EntityResponsibilityService::eligibleRecipients($central, $local, $companyId);
+                        $eligibleManagers = WasteTripStartStatisticsService::eligibleLogists($central, $companyId);
                         $statistics = WasteTripStartStatisticsService::dashboard($local, $filters, $eligibleManagers);
                         $pageContext .= ' › Компания: '.(string)$company['name'];
                     }
