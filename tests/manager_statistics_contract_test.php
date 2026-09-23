@@ -65,7 +65,27 @@ $check(
 );
 $check(str_contains($view, 'Динамика компании и логистов') && str_contains($service, "'period_rows'=>self::periodRows"), 'company and logist dynamics with exact period values');
 $check(str_contains($view, "'trips'=>") && str_contains($view, "'requests'=>") && str_contains($view, "'weight'=>"), 'required metric modes');
-$check(str_contains($css, '#C07830') && str_contains($css, '#4A7A9B') && str_contains($css, '#3A8278'), 'approved chart palette');
+$check(
+    str_contains($view, "['#4A7A9B','#B84C3A','#6A8A50','#B89228'")
+    && str_contains($view, "\$companyChartColor = '#C07830'")
+    && str_contains($css, '--chart-sage:#6A8A50'),
+    'approved ordered company and manager chart palette'
+);
+$check(
+    str_contains($view, "array_reverse(\$statistics['period_rows'])")
+    && str_contains($view, 'abs($metricValue($row, $metric)) > 0.000001')
+    && str_contains($view, 'foreach($visiblePeriodRows as$row)'),
+    'exact values are newest-first and suppress zero totals for the active metric'
+);
+$check(
+    str_contains($view, "' C'.\$number(\$cp1x)")
+    && str_contains($view, 'manager-stats__chart-node')
+    && str_contains($view, 'manager-stats__node-tooltip')
+    && str_contains($css, '@keyframes manager-stats-line-in')
+    && str_contains($css, '@media(prefers-reduced-motion:reduce)'),
+    'smooth animated accessible node chart contract'
+);
+$check(str_contains($css, '.manager-stats__field--mode { width:max-content; min-width:0; }'), 'report mode selector has no empty tail after Year');
 $check(str_contains($css, '@media(max-width:1180px)') && str_contains($css, '@media(max-width:760px)'), 'responsive dashboard contract');
 
 echo "MANAGER_STATISTICS_CONTRACT=PASS\n";

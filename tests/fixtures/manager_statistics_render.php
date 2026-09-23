@@ -27,7 +27,7 @@ $filters = [
     'previous_from'=>'2026-06-08','previous_to'=>'2026-07-29','manager_ids'=>[],'compare'=>false,'duration_days'=>52,
 ];
 $trend=[];$previousTrend=[];
-foreach ([14,18,16,20,21,19,25,30] as $index=>$value) {
+foreach ([0,0,0,0,3,4,9,5] as $index=>$value) {
     $start=(new DateTimeImmutable('2026-08-03'))->modify('+'.$index.' weeks');$end=$start->modify('+6 days');
     if ($end > new DateTimeImmutable('2026-09-23')) $end=new DateTimeImmutable('2026-09-23');
     $trend[]=['key'=>$start->format('Y-m-d'),'label'=>'Нед. '.$start->format('W').' · '.$start->format('d.m'),'from'=>$start->format('Y-m-d'),'to'=>$end->format('Y-m-d'),'trips'=>$value,'requests'=>$value*3+($index%3),'weight'=>$value*4280.0];
@@ -35,10 +35,10 @@ foreach ([14,18,16,20,21,19,25,30] as $index=>$value) {
     $previousTrend[]=['key'=>$previousStart->format('Y-m-d'),'label'=>'Нед. '.$previousStart->format('W').' · '.$previousStart->format('d.m'),'from'=>$previousStart->format('Y-m-d'),'to'=>$previousEnd->format('Y-m-d'),'trips'=>max(2,$value-4),'requests'=>max(4,$value*3-10),'weight'=>max(1000,($value-4)*4100.0)];
 }
 $managers = [
- ['membership_id'=>101,'responsible_user_id'=>1,'name'=>'Анна Белова','is_active'=>true,'trips'=>57,'requests'=>164,'weight'=>242500.0,'completed'=>49,'cancelled'=>2,'requests_per_trip'=>2.9,'weight_per_trip'=>4254.4,'previous'=>[]],
- ['membership_id'=>102,'responsible_user_id'=>2,'name'=>'Борис Серов','is_active'=>true,'trips'=>45,'requests'=>139,'weight'=>194300.0,'completed'=>36,'cancelled'=>3,'requests_per_trip'=>3.1,'weight_per_trip'=>4317.8,'previous'=>[]],
- ['membership_id'=>103,'responsible_user_id'=>3,'name'=>'Вера Тихая','is_active'=>true,'trips'=>39,'requests'=>112,'weight'=>171800.0,'completed'=>31,'cancelled'=>1,'requests_per_trip'=>2.9,'weight_per_trip'=>4405.1,'previous'=>[]],
- ['membership_id'=>104,'responsible_user_id'=>4,'name'=>'Глеб Романов','is_active'=>true,'trips'=>22,'requests'=>61,'weight'=>88900.0,'completed'=>17,'cancelled'=>4,'requests_per_trip'=>2.8,'weight_per_trip'=>4040.9,'previous'=>[]],
+ ['membership_id'=>101,'responsible_user_id'=>1,'name'=>'Анна Белова','is_active'=>true,'trips'=>8,'requests'=>109,'weight'=>86400.0,'completed'=>7,'cancelled'=>0,'requests_per_trip'=>13.6,'weight_per_trip'=>10800.0,'previous'=>[]],
+ ['membership_id'=>102,'responsible_user_id'=>2,'name'=>'Борис Серов','is_active'=>true,'trips'=>6,'requests'=>82,'weight'=>64800.0,'completed'=>5,'cancelled'=>0,'requests_per_trip'=>13.7,'weight_per_trip'=>10800.0,'previous'=>[]],
+ ['membership_id'=>103,'responsible_user_id'=>3,'name'=>'Вера Тихая','is_active'=>true,'trips'=>4,'requests'=>55,'weight'=>43200.0,'completed'=>3,'cancelled'=>0,'requests_per_trip'=>13.8,'weight_per_trip'=>10800.0,'previous'=>[]],
+ ['membership_id'=>104,'responsible_user_id'=>4,'name'=>'Глеб Романов','is_active'=>true,'trips'=>3,'requests'=>42,'weight'=>30410.0,'completed'=>2,'cancelled'=>0,'requests_per_trip'=>14.0,'weight_per_trip'=>10136.7,'previous'=>[]],
 ];
 $details=[];
 foreach ([['2026-09-23',101,'Анна Белова',742,'in_progress',4,7200],['2026-09-22',102,'Борис Серов',741,'completed',3,5100],['2026-09-22',103,'Вера Тихая',739,'completed',2,4600],['2026-09-21',104,'Глеб Романов',737,'cancelled',1,1500]] as $index=>$row) {
@@ -55,7 +55,7 @@ foreach($managers as$managerIndex=>$manager){
     foreach($values as$periodIndex=>$value)$periodRows[$periodIndex]['manager_values'][$manager['membership_id']]=$value;
 }
 $statistics = [
- 'totals'=>['trips'=>163,'requests'=>476,'weight'=>697500.0,'active_managers'=>4,'completed'=>133,'cancelled'=>10],
+ 'totals'=>['trips'=>21,'requests'=>288,'weight'=>224810.0,'active_managers'=>4,'completed'=>17,'cancelled'=>0],
  'previous_totals'=>['trips'=>128,'requests'=>361,'weight'=>522200.0,'active_managers'=>4,'completed'=>109,'cancelled'=>8],
  'managers'=>$managers,'trend'=>$trend,'previous_trend'=>$previousTrend,'manager_trends'=>$managerTrends,
  'period_rows'=>$periodRows,'details'=>$details,'available_years'=>[2026,2025,2024],'scope'=>'all',
