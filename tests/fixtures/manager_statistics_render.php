@@ -3,7 +3,15 @@ declare(strict_types=1);
 $root = dirname(__DIR__, 2);
 function base_path(string $path=''): string { global $root; return $root.($path!==''?'/'.ltrim($path,'/'):''); }
 function app_url(string $path): string { return $path; }
+function app_base_path(): string { return ''; }
+function current_app_path(): string { return '/company/statistics/managers'; }
+function csrfToken(): string { return str_repeat('a', 64); }
 function e(mixed $value): string { return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+
+$_SESSION = [
+    'role_code'=>'logist', 'company_id'=>1, 'user_id'=>1,
+    'user_name'=>'Анна Белова',
+];
 
 $_GET = ['mode'=>'year','year'=>'2026','group'=>'week','metric'=>'trips','compare'=>'1'];
 $company = ['name'=>'ООО «ПЛАНЭКС»'];
@@ -51,8 +59,13 @@ $statistics = [
  'managers'=>$managers,'trend'=>$trend,'previous_trend'=>$previousTrend,'manager_trends'=>$managerTrends,
  'period_rows'=>$periodRows,'details'=>$details,'available_years'=>[2026,2025,2024],'scope'=>'all',
 ];
-?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css">
-<style>html,body{height:auto!important;min-height:100%;overflow:auto!important}body{margin:0;background:var(--app-bg)}.fixture-topbar{height:46px;display:flex;align-items:center;padding:0 20px;border-bottom:1px solid var(--line);background:var(--surface-strong);font:700 11px var(--font-base);letter-spacing:.06em}.fixture-shell{padding:12px 8px 24px}</style></head><body>
-<div class="fixture-topbar">ERP PLANEX · СТАТИСТИКА</div><main class="fixture-shell"><?php require $root.'/app/View/pages/company_manager_statistics.php'; ?></main>
-</body></html>
+$pageTitle = 'Работа логистов';
+$pageContext = 'Статистика › Работа логистов › Компания: ООО «ПЛАНЭКС»';
+$config = ['app'=>['app_name'=>'ERP PLANEX']];
+$db = new stdClass();
+$pageStylesheets = ['/assets/css/manager-statistics.css'];
+$pageScripts = ['/assets/js/manager-statistics.js'];
+ob_start();
+require $root.'/app/View/pages/company_manager_statistics.php';
+$content = (string)ob_get_clean();
+require $root.'/app/View/layouts/main.php';

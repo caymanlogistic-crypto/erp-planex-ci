@@ -65,9 +65,6 @@ $kpis = [
     ['label'=>'Логисты с результатом','value'=>$fmtInt($statistics['totals']['active_managers']),'current'=>(float)$statistics['totals']['active_managers'],'previous'=>(float)$statistics['previous_totals']['active_managers'],'class'=>'is-asphalt','note'=>'Только активная роль «Логист»'],
 ];
 ?>
-<link rel="stylesheet" href="<?= app_url('/assets/css/manager-statistics.css') ?>?v=<?= filemtime(base_path('public/assets/css/manager-statistics.css')) ?>">
-<style>.manager-stats__manager-list label[hidden]{display:none}</style>
-
 <div class="manager-stats" data-manager-statistics>
     <div class="page-head manager-stats__head">
         <div class="page-head-left">
@@ -81,7 +78,6 @@ $kpis = [
     <?php if ($dbError !== null): ?>
         <div class="notice warn"><?= e($dbError) ?></div>
     <?php else: ?>
-        <div class="manager-stats__role-note"><span class="manager-stats__role-mark">Л</span><div><strong>В отчёт входят только активные сотрудники с системной ролью «Логист».</strong><span>Руководитель, «Логист+» и пользовательские роли могут иметь доступ к странице, но их рейсы в показатели не включаются.</span></div></div>
         <?php if (($statistics['scope'] ?? 'none') === 'own'): ?>
             <div class="manager-stats__scope-note"><span class="manager-stats__scope-dot"></span><strong>Ограниченный набор данных.</strong> Показаны только рейсы, доступные вам в режиме «Только свои».</div>
         <?php elseif (($statistics['scope'] ?? 'none') === 'none'): ?>
@@ -178,4 +174,3 @@ $kpis = [
         </section>
     <?php endif; ?>
 </div>
-<script src="<?= app_url('/assets/js/manager-statistics.js') ?>?v=<?= filemtime(base_path('public/assets/js/manager-statistics.js')) ?>"></script>
