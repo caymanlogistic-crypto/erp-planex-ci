@@ -828,6 +828,15 @@ form.panel {
     min-width: 0;
 }
 
+/* Existing entity-form blocks with the document inspector on the left. */
+.driver-layout--docs-left {
+    grid-template-columns: 380px minmax(0, 1fr);
+}
+.driver-layout--docs-left > .driver-layout-docs {
+    border-left: 0;
+    border-right: 1px solid var(--line);
+}
+
 /* Кнопка сохранения — компактный отступ без линии */
 .driver-layout-main > .form-actions {
     margin-top: 0;
@@ -2959,6 +2968,13 @@ input:autofill,
     gap: 0;
     align-items: start;
 }
+.vehicle-set-unit-card-body--docs-left {
+    grid-template-columns: 340px minmax(0, 1fr);
+}
+.vehicle-set-unit-card-body--docs-left > .vehicle-set-unit-docs {
+    border-left: 0;
+    border-right: 1px solid var(--line);
+}
 .vehicle-set-unit-fields {
     min-width: 0;
     padding: 0 14px 12px;
@@ -3112,6 +3128,12 @@ input:autofill,
         padding: 10px 14px 12px;
         border-left: none;
         border-top: 1px solid var(--line);
+    }
+    .vehicle-set-unit-card-body--docs-left > .vehicle-set-unit-docs {
+        margin-top: 0;
+        border-right: 0;
+        border-top: 0;
+        border-bottom: 1px solid var(--line);
     }
     .vehicle-set-footer-grid,
     .vehicle-set-summary-grid {
@@ -4829,5 +4851,10 @@ a.nav-sub-item:visited {
     .driver-layout-docs {
         border-left: 0;
         border-top: 1px solid var(--line);
+    }
+    .driver-layout--docs-left > .driver-layout-docs {
+        border-right: 0;
+        border-top: 0;
+        border-bottom: 1px solid var(--line);
     }
 }

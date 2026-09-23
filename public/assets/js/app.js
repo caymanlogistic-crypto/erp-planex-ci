@@ -3197,8 +3197,15 @@ window.initOwnerCreateForm = window.initPasswordControls;
             if (!select || !secondary) return;
             var hasSecondary = select.value === 'coupling' || select.value === 'road_train';
             secondary.classList.toggle('is-hidden', !hasSecondary);
-            secondary.querySelectorAll('[data-quick-secondary-required]').forEach(function (input) {
-                input.required = hasSecondary;
+            form.querySelectorAll('[data-quick-unit]').forEach(function (unit) {
+                var role = unit.getAttribute('data-quick-unit');
+                var unitActive = role === 'primary' || hasSecondary;
+                var showMetrics = select.value !== 'coupling' || role === 'secondary';
+                var metrics = unit.querySelector('[data-quick-capacity-row]');
+                if (metrics) metrics.classList.toggle('is-hidden', !showMetrics);
+                unit.querySelectorAll('[data-quick-unit-required]').forEach(function (input) {
+                    input.required = unitActive && (showMetrics || !input.closest('[data-quick-capacity-row]'));
+                });
             });
             var primaryTitle = form.querySelector('[data-quick-primary-title]');
             var secondaryTitle = form.querySelector('[data-quick-secondary-title]');
@@ -3298,7 +3305,9 @@ window.initOwnerCreateForm = window.initPasswordControls;
                         contractor_type: 'contractor[contractor_type]',
                         kpp: 'contractor[kpp]',
                         ogrn: 'contractor[ogrn]',
-                        legal_address: 'contractor[legal_address]'
+                        legal_address: 'contractor[legal_address]',
+                        director_full_name: 'contractor[director_full_name]',
+                        director_position: 'contractor[director_position]'
                     },
                     idleButtonText: '\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u044c \u043f\u043e \u0418\u041d\u041d',
                     loadingButtonText: '\u041f\u043e\u0438\u0441\u043a...'

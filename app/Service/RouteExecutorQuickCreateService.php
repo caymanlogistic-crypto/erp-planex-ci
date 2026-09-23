@@ -49,6 +49,12 @@ final class RouteExecutorQuickCreateService
             $contractor['inn'] = preg_replace('/\D+/', '', (string)($contractor['inn'] ?? '')) ?? '';
             $contractor['kpp'] = preg_replace('/\D+/', '', (string)($contractor['kpp'] ?? '')) ?? '';
             $contractor['ogrn'] = preg_replace('/\D+/', '', (string)($contractor['ogrn'] ?? '')) ?? '';
+            foreach (['bank_account', 'bank_bik', 'bank_corr_account', 'bank_inn'] as $numericField) {
+                $contractor[$numericField] = preg_replace('/\D+/', '', (string)($contractor[$numericField] ?? '')) ?? '';
+            }
+            foreach (['contractor_type', 'legal_address', 'physical_address', 'bank_name', 'director_full_name', 'director_position', 'comments'] as $textField) {
+                $contractor[$textField] = trim((string)($contractor[$textField] ?? ''));
+            }
             $normalizedContacts = ContractorContactService::normalizeSubmittedContacts($contractor['contacts'] ?? []);
             $contractor['contacts'] = $normalizedContacts['contacts'];
             $input['contractor'] = $contractor;
@@ -155,6 +161,7 @@ final class RouteExecutorQuickCreateService
             $setType = 'single';
         }
         $vehicle['set_type'] = $setType;
+        $vehicle['comments'] = trim((string)($vehicle['comments'] ?? ''));
         $vehicle['primary'] = self::normalizeUnit(is_array($vehicle['primary'] ?? null) ? $vehicle['primary'] : []);
         $vehicle['secondary'] = self::normalizeUnit(is_array($vehicle['secondary'] ?? null) ? $vehicle['secondary'] : []);
         $input['vehicle'] = $vehicle;
@@ -263,14 +270,15 @@ final class RouteExecutorQuickCreateService
 
             $insertSet = $pdo->prepare(
                 'INSERT INTO vehicle_sets
-                    (set_type,primary_vehicle_unit_id,secondary_vehicle_unit_id,status,created_by_user_id,created_by_membership_id,created_by_role)
-                 VALUES (?,?,?,?,?,?,?)'
+                    (set_type,primary_vehicle_unit_id,secondary_vehicle_unit_id,status,comments,created_by_user_id,created_by_membership_id,created_by_role)
+                 VALUES (?,?,?,?,?,?,?,?)'
             );
             $insertSet->execute([
                 $setType,
                 $unitIds['primary'],
                 $unitIds['secondary'] ?? null,
                 'active',
+                $input['vehicle']['comments'] !== '' ? $input['vehicle']['comments'] : null,
                 $userId,
                 $membershipId,
                 $role,
