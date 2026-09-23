@@ -6,7 +6,6 @@
  * PDO-обёртка и роутер интегрированы.
  * Бизнес-маршруты, авторизация — не подключаются.
  */
-
 $isHttps = (!empty($_SERVER['HTTPS']) && strtolower((string) $_SERVER['HTTPS']) !== 'off')
     || (($_SERVER['HTTP_X_FORWARDED_PROTO'] ?? '') === 'https');
 
