@@ -44,6 +44,7 @@ $clientsActive = str_starts_with($requestPath, '/company/clients');
 $tripsActive = str_starts_with($requestPath, '/company/trips');
 $linearTripsActive = str_starts_with($requestPath, '/company/trips/linear');
 $departuresActive = str_starts_with($requestPath, '/company/trips/departures');
+$managerStatisticsActive = str_starts_with($requestPath, '/company/statistics/managers');
 $routeExecutorsActive = str_starts_with($requestPath, '/company/route-executors');
 $documentGeneratorOpen = str_starts_with($requestPath, '/company/document-generator');
 $documentGeneratorCreateActive = $requestPath === '/company/document-generator';
@@ -122,6 +123,7 @@ $wideWorkspacePrefixes = [
     '/company/document-generator',
     '/company/trips/linear',
     '/company/trips/departures',
+    '/company/statistics/managers',
     '/company/documents',
     '/company/route-executors',
     '/company/feo/requests',
@@ -332,7 +334,11 @@ if (empty($topbarCrumbs)) {
                             $navigationIsActive = $activeNavigationKey === (string) $navigationPage['key'];
                         ?>
                         <a class="nav-item<?= $navigationIsActive ? ' is-active' : '' ?>" href="<?= app_url($navigationPath) ?>">
+                            <?php if ((string) $navigationPage['key'] === 'company.statistics.managers'): ?>
+                            <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                            <?php else: ?>
                             <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                            <?php endif; ?>
                             <span class="nav-label"><?= e($navigationPage['label']) ?></span>
                             <?php if (in_array((string)($navigationPage['badge_display'] ?? 'self'), ['self','self_parent'], true)) echo $navigationBadgeHtml($navigationPage); ?>
                         </a>
@@ -452,6 +458,14 @@ if (empty($topbarCrumbs)) {
                         <span>ТС</span>
                     </a>
                 </div>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-section-label">СТАТИСТИКА</div>
+                <a class="nav-item<?= $managerStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/managers') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="nav-label">Работа менеджеров</span>
+                </a>
             </div>
 
             <div class="nav-group">
@@ -660,6 +674,14 @@ if (empty($topbarCrumbs)) {
                         <span>ТС</span>
                     </a>
                 </div>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-section-label">СТАТИСТИКА</div>
+                <a class="nav-item<?= $managerStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/managers') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                    <span class="nav-label">Работа менеджеров</span>
+                </a>
             </div>
 
             <?php endif; ?>
