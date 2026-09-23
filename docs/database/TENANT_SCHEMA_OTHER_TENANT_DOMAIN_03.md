@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `49cf1e05561a1ac2d4d207fd88851c5042464f75b2e88375c53da016cb83a9bf`
+**Schema fingerprint:** `7809e638acb09566522a2e570abf4305134101f0c1bd8dfbb61b5958fa934f96`
 
 ## `max_bots`
 
@@ -230,6 +230,10 @@
 | `departed_at` | `datetime` | YES | NULL | — | — |
 | `driver_signature_present` | `tinyint(1)` | NO | `0` | — | — |
 | `sender_signature_present` | `tinyint(1)` | NO | `0` | — | — |
+| `tn_datetime_missing` | `tinyint(1)` | NO | `0` | — | — |
+| `data_from_tracker` | `tinyint(1)` | NO | `0` | — | — |
+| `data_from_driver` | `tinyint(1)` | NO | `0` | — | — |
+| `data_invented` | `tinyint(1)` | NO | `0` | — | — |
 | `comment` | `varchar(500)` | YES | NULL | — | — |
 | `updated_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
 | `lock_version` | `int unsigned` | NO | `1` | — | — |

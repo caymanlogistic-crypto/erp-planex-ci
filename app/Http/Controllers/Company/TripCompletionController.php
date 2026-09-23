@@ -26,7 +26,7 @@ final class TripCompletionController
         unset($_SESSION['trip_completion_success'],$_SESSION['trip_completion_error']);
         try {
             [$company,$service]=$this->context();
-            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (142).');
+            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (143).');
             $all=$service->trips('',false);
             $metrics=[
                 'trips'=>count(array_filter($all,static fn(array $row):bool=>(int)$row['complete_count']<(int)$row['request_count'])),
@@ -42,8 +42,8 @@ final class TripCompletionController
             $openTripId=max(0,(int)($_GET['trip_id']??0));
         } catch (DomainException $exception) { $error=$exception->getMessage(); }
         catch (Throwable $exception) { error_log('trip completion index failed: '.$exception->getMessage());$error='Не удалось загрузить рабочее место помощника логиста.'; }
-        $pageTitle='Помощник логиста';$pageContext='Рейсы › Помощник логиста';
-        $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>'Помощник логиста','url'=>null]];
+        $pageTitle='Регистрация прибытия и убытия';$pageContext='Рейсы › Регистрация времени загрузки';
+        $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>'Регистрация времени загрузки','url'=>null]];
         $config=$this->config;$db=$this->db;
         ob_start();require base_path('app/View/pages/company_logistics_assistant.php');$content=(string)ob_get_clean();require base_path('app/View/layouts/main.php');
     }
@@ -144,7 +144,7 @@ final class TripCompletionController
     }
 
     private function assertReady(TripCompletionService $service): void
-    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (142).'); }
+    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (143).'); }
 
     /** @return list<array<string,mixed>> */
     private function uploadedFiles(string $field): array

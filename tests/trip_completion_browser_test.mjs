@@ -11,7 +11,7 @@ const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fix
 let postCount=0;
 const response=(withDocument=false)=>JSON.stringify({
  ok:true,
- request:{id:12,is_complete:false,issues:['Нет подписи водителя'],documents:withDocument?[{id:301,download_name:'Рейс_244_Заявка_275006_ТН_01.jpg',download_url:'/download/301',delete_url:'/delete/301'}]:[]},
+ request:{id:12,is_complete:false,arrived_at:'2026-09-01 09:40:00',departed_at:'2026-09-01 10:00:00',driver_signature_present:1,sender_signature_present:1,tn_datetime_missing:1,data_from_tracker:1,data_from_driver:1,data_invented:0,issues:['Нет подписи водителя'],documents:withDocument?[{id:301,download_name:'Рейс_244_Заявка_275006_ТН_01.jpg',download_url:'/download/301',delete_url:'/delete/301'}]:[]},
  trip:{complete_count:1,request_count:3,document_count:withDocument?3:2,missing_summary:['подпись водителя 1']},
 });
 const server=http.createServer((req,res)=>{
@@ -24,7 +24,7 @@ const server=http.createServer((req,res)=>{
  if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
  res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'application/javascript':'application/octet-stream');res.end(fs.readFileSync(file));
 });
-await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const browser=await chromium.launch({headless:true});
+await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));const browser=await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_EXECUTABLE?{executablePath:process.env.PLANEX_BROWSER_EXECUTABLE}:{})});
 try{
  const page=await browser.newPage({viewport:{width:1680,height:1000}}),errors=[];page.on('pageerror',error=>errors.push(error.message));await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
  assert.equal(await page.locator('.metric-card').count(),4,'four compact metrics');
@@ -37,18 +37,29 @@ try{
  assert.equal(await page.locator('.logistics-trip').first().getAttribute('open'),'','clicked trip expands');
  assert.equal(await page.locator('.logistics-trip').first().locator('.logistics-request-row').count(),3,'expanded trip renders request rows');
  assert.equal((await page.locator('.logistics-trip').first().locator('.logistics-request-row').first().evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),6,'desktop request is one integrated row');
+ assert.deepEqual(await page.locator('.logistics-trip').first().locator('.logistics-request-head span').allTextContents(),['Заявка и маршрут','Загрузка: дата, приезд — уезд','Подписи','Данные','Сканы ТН','Комментарий'],'status column removed and data column added');
+ assert.equal(await page.locator('[data-request-issues]').count(),0,'request errors are not rendered on hover');
  assert.equal(await page.locator('[data-autosave-form] button[type="submit"]').count(),0,'no manual save button');
  assert.equal(await page.locator('[data-upload-form] button[type="submit"]').count(),0,'no manual upload button');
  const requestNumbers=await page.locator('.logistics-trip').first().locator('.logistics-request-route b').allTextContents();
  assert.deepEqual(requestNumbers,['№ 275006','№ 274405','№ 271941'],'requests ordered by descending number');
  const second=page.locator('[data-request-id="12"]');
+ assert.equal(await second.locator('.logistics-signatures input[type="checkbox"]').count(),3,'three signature/document checks are in one column');
+ assert.equal(await second.locator('.logistics-data-source input[type="checkbox"]').count(),3,'three provenance checks are in data column');
+ assert.equal(await second.locator('input[name="tn_datetime_missing"]').isChecked(),true,'missing datetime in TN is persisted');
+ assert.equal(await second.locator('input[name="data_from_driver"]').isChecked(),true,'driver-provided data is persisted');
  assert.notEqual(await second.locator('input[type="checkbox"]').first().evaluate(el=>getComputedStyle(el).accentColor),'auto','checkbox uses ERP system accent');
+ const warningColor=await second.evaluate(el=>getComputedStyle(el).backgroundColor);
+ assert.ok(warningColor!=='rgba(0, 0, 0, 0)'&&warningColor!=='rgb(255, 255, 255)','checkbox-only row has system warning fill');
+ await second.hover();
+ assert.equal(await second.evaluate(el=>getComputedStyle(el).backgroundColor),warningColor,'hover keeps warning fill and reveals no errors');
  const interval=second.locator('input[name="pickup_interval"]');
  await interval.fill('01092609401000');
  assert.equal(await interval.inputValue(),'01.09.26 09:40 - 10:00','digits are formatted into one pickup interval');
  await interval.press('a');
  assert.equal(await interval.inputValue(),'01.09.26 09:40 - 10:00','non-digit input is blocked');
  await second.locator('[data-save-label]').filter({hasText:/Сохранено|Собрано/}).waitFor();
+ assert.equal(await second.evaluate(el=>el.classList.contains('has-time')),true,'filled time gives system success row');
  await second.locator('input[name="driver_signature_present"]').check();
  await second.locator('[data-save-label]').filter({hasText:/Сохранено|Собрано/}).waitFor();
  assert.ok(postCount>=1,'field change saved automatically');
@@ -70,7 +81,8 @@ try{
  await page.setViewportSize({width:1280,height:900});
  await page.locator('.logistics-workspace').evaluate(el=>{el.style.width='1034px';});
  assert.equal(await second.evaluate(el=>el.scrollWidth<=el.parentElement.clientWidth),true,'request row fits ERP workspace at 1280px');
- assert.ok(await second.evaluate(el=>el.getBoundingClientRect().height<=62),'1280px request row stays compact');
+ const rowHeight=await second.evaluate(el=>el.getBoundingClientRect().height);
+ assert.ok(rowHeight<=70,'1280px request row stays compact, actual '+rowHeight);
  const compact1280Evidence=process.env.PLANEX_BROWSER_EVIDENCE_1280;if(compact1280Evidence)await page.screenshot({path:compact1280Evidence,fullPage:true});
  await page.locator('.logistics-workspace').evaluate(el=>{el.style.width='';});
  await page.setViewportSize({width:390,height:844});
