@@ -62,7 +62,7 @@ crOk(str_contains($view,'cash-select-all'),'select all exists');
 crOk(str_contains($view,'Передать сотруднику'),'employee action exists');
 crOk(str_contains($view,'cash-dispatch-carrier-btn') && str_contains($view,'disabled'),'carrier action disabled');
 $routes=file_get_contents(__DIR__.'/../app/Http/Routes/company_finance_cash.php');crOk(str_contains($routes,'dispatch-employee'),'dispatch route registered');
-$layout=file_get_contents(__DIR__.'/../app/View/layouts/main.php');crOk(str_contains($layout,'cashAttentionCount'),'sidebar cash badge wired');
+$layout=file_get_contents(__DIR__.'/../app/View/layouts/main.php');crOk(str_contains($layout,"'cash_attention' => 0") && str_contains($layout,'$navigationBadgeCount'),'sidebar cash badge wired through registry');
 
 $rows=$pdo->query("SELECT source_finance_operation_id,outflow_finance_operation_id,employee_movement_id FROM finance_cash_resolutions ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
 foreach($rows as $row){crOk((int)$row['source_finance_operation_id']>0 && (int)$row['outflow_finance_operation_id']>0 && (int)$row['employee_movement_id']>0,'resolution keeps complete provenance');}
