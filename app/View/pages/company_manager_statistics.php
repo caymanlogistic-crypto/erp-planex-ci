@@ -58,6 +58,10 @@ $availableYears = array_values(array_unique(array_merge([(int)$filters['year']],
 rsort($availableYears, SORT_NUMERIC);
 $managerTotals = [];
 foreach ($statistics['managers'] as $row) $managerTotals[(int)$row['membership_id']] = $row;
+$rankMax = 1.0;
+foreach ($statistics['managers'] as $row) {
+    $rankMax = max($rankMax, $metricValue($row, $metric));
+}
 $kpis = [
     ['label'=>'Рейсы поставлены на погрузку','value'=>$fmtInt($statistics['totals']['trips']),'current'=>(float)$statistics['totals']['trips'],'previous'=>(float)$statistics['previous_totals']['trips'],'class'=>'is-copper','note'=>'Факт начала вывоза'],
     ['label'=>'Заявки в рейсах','value'=>$fmtInt($statistics['totals']['requests']),'current'=>(float)$statistics['totals']['requests'],'previous'=>(float)$statistics['previous_totals']['requests'],'class'=>'is-steel','note'=>'Состав рейса на момент старта'],
@@ -143,7 +147,7 @@ $kpis = [
             <section class="manager-stats__card manager-stats__ranking">
                 <header class="manager-stats__card-head"><div><h2>Рейтинг логистов</h2><p><?=e($metricMeta[$metric]['long'])?></p></div><span class="manager-stats__card-meta"><?=count($statistics['managers'])?> логистов</span></header>
                 <div class="manager-stats__rank-list">
-                    <?php $rankMax=max(1.0,...array_map(static fn(array$row):float=>$metricValue($row,$metric),$statistics['managers']));foreach(array_slice($statistics['managers'],0,10)as$index=>$row):$value=$metricValue($row,$metric);$width=$value/$rankMax*100;?><a class="manager-stats__rank" href="<?=e($queryFor(['manager_ids'=>[(int)$row['membership_id']]]))?>"><div class="manager-stats__rank-line"><span><b><?=$index+1?></b><?=e($row['name'])?></span><strong><?=e($metricFormat($value,$metric))?></strong></div><div class="manager-stats__rank-track"><i style="width:<?=number_format($width,2,'.','')?>%;background:<?=$metricMeta[$metric]['color']?>"></i></div></a><?php endforeach;?>
+                    <?php foreach(array_slice($statistics['managers'],0,10)as$index=>$row):$value=$metricValue($row,$metric);$width=$value/$rankMax*100;?><a class="manager-stats__rank" href="<?=e($queryFor(['manager_ids'=>[(int)$row['membership_id']]]))?>"><div class="manager-stats__rank-line"><span><b><?=$index+1?></b><?=e($row['name'])?></span><strong><?=e($metricFormat($value,$metric))?></strong></div><div class="manager-stats__rank-track"><i style="width:<?=number_format($width,2,'.','')?>%;background:<?=$metricMeta[$metric]['color']?>"></i></div></a><?php endforeach;?>
                     <?php if($statistics['managers']===[]):?><div class="manager-stats__empty">Нет логистов для отображения.</div><?php endif;?>
                 </div>
             </section>

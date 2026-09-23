@@ -59,6 +59,15 @@ $statistics = [
  'managers'=>$managers,'trend'=>$trend,'previous_trend'=>$previousTrend,'manager_trends'=>$managerTrends,
  'period_rows'=>$periodRows,'details'=>$details,'available_years'=>[2026,2025,2024],'scope'=>'all',
 ];
+if (getenv('PLANEX_MANAGER_STATISTICS_EMPTY') === '1') {
+    $statistics['totals'] = ['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0];
+    $statistics['previous_totals'] = $statistics['totals'];
+    $statistics['managers'] = [];
+    $statistics['manager_trends'] = [];
+    $statistics['period_rows'] = [];
+    $statistics['details'] = [];
+    $eligibleManagers = [];
+}
 $pageTitle = 'Работа логистов';
 $pageContext = 'Статистика › Работа логистов › Компания: ООО «ПЛАНЭКС»';
 $config = ['app'=>['app_name'=>'ERP PLANEX']];
