@@ -67,4 +67,4 @@ activation = index_source[index_source.index("if ($rolesAccessEnabled)"):index_s
 assert "catch (" not in activation
 for route_file in ("company_document_generator.php", "company_switch.php", "company_roles_access.php"):
     assert route_file in index_source
-print("roles access complete route registry: PASS (366 routes; manager statistics ACL; 1 retired legacy writer)")
+print("roles access complete route registry: PASS (364 routes; manager statistics ACL; 1 retired legacy writer)")
