@@ -47,6 +47,8 @@ with tempfile.TemporaryDirectory(prefix="planex-local-publish-") as temporary:
     (seed / "tools" / "agent_preflight.py").write_text(
         "import argparse\n"
         "a=argparse.ArgumentParser();a.add_argument('--class',dest='c');a.add_argument('--base');a.add_argument('--head');x=a.parse_args()\n"
+        "print('CLASS=STANDARD')  # nested/noisy test output must not confuse the publisher\n"
+        "print('REQUESTED_CLASS=' + x.c)\n"
         "print('CLASS=' + ('STANDARD' if x.c == 'AUTO' else x.c))\n"
         "print('LOCAL_PREFLIGHT_PASS')\n",
         encoding="utf-8",

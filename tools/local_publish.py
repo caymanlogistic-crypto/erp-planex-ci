@@ -105,9 +105,13 @@ def run_preflight(worktree: Path, base: str, head: str, requested_class: str) ->
     sys.stdout.flush()
     lines = process.stdout.decode("utf-8", errors="replace").splitlines()
     require(process.returncode == 0 and lines and lines[-1] == "LOCAL_PREFLIGHT_PASS", "LOCAL_PREFLIGHT_FAILED")
-    classes = [line.split("=", 1)[1] for line in lines if line.startswith("CLASS=")]
-    require(len(classes) == 1 and classes[0] in {"FAST", "STANDARD", "CRITICAL"}, "PREFLIGHT_CLASS_MISSING")
-    return classes[0], process.stdout
+    markers = [index for index, line in enumerate(lines) if line == f"REQUESTED_CLASS={requested_class}"]
+    require(markers, "PREFLIGHT_REQUEST_MARKER_MISSING")
+    marker = markers[-1]
+    require(marker + 1 < len(lines) and lines[marker + 1].startswith("CLASS="), "PREFLIGHT_CLASS_MISSING")
+    resolved_class = lines[marker + 1].split("=", 1)[1]
+    require(resolved_class in {"FAST", "STANDARD", "CRITICAL"}, "PREFLIGHT_CLASS_INVALID")
+    return resolved_class, process.stdout
 
 
 def atomic_write(path: Path, data: bytes) -> None:
