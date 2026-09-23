@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `49cf1e05561a1ac2d4d207fd88851c5042464f75b2e88375c53da016cb83a9bf`
+**Schema fingerprint:** `7809e638acb09566522a2e570abf4305134101f0c1bd8dfbb61b5958fa934f96`
 
 ## `bank_accounts`
 
