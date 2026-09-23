@@ -149,7 +149,7 @@ function company_breadcrumbs(array $route, string $companyName, ?array $company 
 
     if ($page === 'statistics' && ($parts[2] ?? '') === 'managers') {
         $crumbs[] = ['label' => 'Статистика', 'url' => null];
-        $crumbs[] = ['label' => 'Работа менеджеров', 'url' => null];
+        $crumbs[] = ['label' => 'Работа логистов', 'url' => null];
         return $crumbs;
     }
 

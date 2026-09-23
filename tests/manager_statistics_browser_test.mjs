@@ -9,8 +9,12 @@ import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/manager_statistics_render.php')],{encoding:'utf8'});
+const emptyHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/manager_statistics_render.php')],{
+  encoding:'utf8',env:{...process.env,PLANEX_MANAGER_STATISTICS_EMPTY:'1'},
+});
 const server=http.createServer((req,res)=>{
   if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html);}
+  if(req.url==='/empty'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(emptyHtml);}
   const file=path.resolve(root,'public','.'+req.url.split('?')[0]);
   if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
   res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'application/octet-stream');res.end(fs.readFileSync(file));
@@ -58,6 +62,16 @@ try{
   assert.equal(await page.locator('[data-mode-fields="custom"]').isVisible(),true,'custom period fields');
   assert.equal(await page.locator('[data-mode-fields="year"] select').first().isDisabled(),true,'inactive period controls are disabled');
   assert.equal(errors.length,0,'page errors: '+errors.join('; '));
+  await page.setViewportSize({width:1920,height:1100});
+  await page.goto('http://127.0.0.1:'+server.address().port+'/empty',{waitUntil:'networkidle'});
+  assert.equal(await page.locator('.topbar').count(),1,'empty state keeps standard ERP topbar');
+  assert.equal(await page.locator('.sidebar').count(),1,'empty state keeps standard ERP sidebar');
+  assert.equal(await page.locator('head link[href*="manager-statistics.css"]').count(),1,'empty state keeps page stylesheet');
+  assert.equal(await page.locator('.manager-stats__rank').count(),0,'empty state has no ranking rows');
+  assert.equal(await page.getByText('Нет логистов для отображения.').count(),1,'empty ranking message');
+  assert.equal(await page.locator('.manager-stats__periods').count(),1,'empty state renders period section after ranking');
+  assert.equal(await page.locator('.manager-stats__details').count(),1,'empty state renders details section after ranking');
+  assert.match((await page.locator('body').evaluate(el=>getComputedStyle(el).fontFamily)),/IBM Plex Sans/i,'empty state keeps ERP font');
   await page.setViewportSize({width:390,height:844});
   assert.equal(await page.locator('.manager-stats__kpis').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),1,'mobile KPI stack');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'no page horizontal overflow');
