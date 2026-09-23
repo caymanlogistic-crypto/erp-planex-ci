@@ -198,6 +198,21 @@ assert "Parallel LOCAL agents / shared-machine safety" in policy
 assert "PREFLIGHT_COVERAGE_DEFECT" in policy
 assert "missing incremental CI safeguard: git diff --name-only --diff-filter=ACMR HEAD^1 HEAD" not in policy
 
+agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+for token in [
+    "Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes",
+    "Repeat search/fetch is forbidden without ambiguity, drift or a state-changing event",
+    "No placeholder/probe/temp/dummy files, empty/checkpoint commits or temporary verification PRs",
+    "Do not duplicate a regression already triggered by GitHub",
+    "Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate",
+    "Normal development is LOCAL:",
+    "SentinelX and the persistent remote runner are outside the normal PLANEX task route",
+    "Parallel LOCAL agents / shared-machine safety",
+    "MEMORY drift/integrity is checked before publication",
+    "Technical integration actor identity is not the current standard request gate",
+]:
+    assert token in agents, token
+
 
 
 for path in ["app/Service/FeoLegacyImportSync.php", "app/Service/FeoXlsxParser.php", "app/View/pages/company_feo_requests.php", "scripts/feo_legacy_sync_configure.php", "tests/feo_import_browser_test.mjs"]:

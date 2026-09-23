@@ -13,6 +13,8 @@ For one new ERP task:
 
 Do not read the whole repository, the whole Notion memory, release history or a stack of manuals before a scoped change.
 
+Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes. Repeat search/fetch is forbidden without ambiguity, drift or a state-changing event.
+
 Repository: `caymanlogistic-crypto/erp-planex-ci`.
 Canonical branch: `chatgpt/production-stabilization-20260802`.
 Production: `/erpv2`.
@@ -75,7 +77,7 @@ For CRITICAL repository-memory work:
 
 The implementation SHA must exist before repository-memory `Verified SHA` is updated.
 
-## Parallel local safety
+## Parallel LOCAL agents / shared-machine safety
 
 - One task owns one `TASK_ID`, branch, worktree, evidence directory and process set.
 - Mutable MySQL tests use a unique disposable schema and restricted per-run user supplied by the trusted local wrapper. Direct use of shared slot 2 is legacy-only and prohibited for new task scripts.
@@ -88,13 +90,18 @@ The implementation SHA must exist before repository-memory `Verified SHA` is upd
 ## GitHub and correction discipline
 
 - Canonical changes only through a PR merge. No direct canonical push or force-push.
-- Observe required workflows for one `FEATURE_HEAD` as one aggregate.
+- Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate.
 - If CI fails, collect all terminal failures, fix one local batch, rerun relevant checks and final preflight, then make at most the normal corrective push.
-- No placeholder/probe/dummy files, empty commits, checkpoint pushes or verification PRs.
+- No placeholder/probe/temp/dummy files, empty/checkpoint commits or temporary verification PRs.
+- Do not duplicate a regression already triggered by GitHub.
 - Before a third STANDARD/CRITICAL push, declare `PREFLIGHT_COVERAGE_DEFECT` and repair reproducible local coverage.
+
+Technical integration actor identity is not the current standard request gate.
 
 ## Memory and production boundaries
 
+- Normal development is LOCAL: coding, debugging, database/browser tests and preflight run on the trusted Windows/WSL host.
+- MEMORY drift/integrity is checked before publication.
 - Notion writes happen only after merge and are serialized per Canonical ID. Update only impacted records and read back CRITICAL FINANCE/DB/SECURITY/CONTROL PLANE changes.
 - Binding memory rules live in Notion `21 — MEMORY GOVERNANCE & INTEGRITY CONTRACT`.
 - `VERIFIED` requires direct current evidence; owning-path drift requires revalidation or `NEEDS_REVERIFY`.
