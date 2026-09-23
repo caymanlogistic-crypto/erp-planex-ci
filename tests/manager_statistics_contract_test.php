@@ -25,6 +25,7 @@ $service = $read('app/Service/WasteTripStartStatisticsService.php');
 $tripService = $read('app/Service/WasteTripService.php');
 $view = $read('app/View/pages/company_manager_statistics.php');
 $css = $read('public/assets/css/manager-statistics.css');
+$js = $read('public/assets/js/manager-statistics.js');
 $migration = $read('database/migrations-local/141_create_waste_trip_start_statistics.sql');
 
 $check(str_contains($route, "'/company/statistics/managers'") && str_contains($route, "'company.statistics.managers'"), 'page route and access key');
@@ -79,11 +80,26 @@ $check(
 );
 $check(
     str_contains($view, "' C'.\$number(\$cp1x)")
+    && str_contains($view, '$smooth=.82')
     && str_contains($view, 'manager-stats__chart-node')
     && str_contains($view, 'manager-stats__node-tooltip')
+    && !str_contains($view, '<title>')
     && str_contains($css, '@keyframes manager-stats-line-in')
     && str_contains($css, '@media(prefers-reduced-motion:reduce)'),
-    'smooth animated accessible node chart contract'
+    'strongly curved animated accessible node chart without native SVG tooltips'
+);
+$check(
+    str_contains($controller, "\$pageScripts = ['/assets/js/manager-statistics.js']")
+    && str_contains($js, "node.addEventListener('pointerenter', activate)")
+    && str_contains($js, "node.addEventListener('focusin', activate)")
+    && str_contains($js, 'parent.appendChild(node)'),
+    'active chart node is raised above every SVG sibling'
+);
+$check(
+    str_contains($view, "\$managerColors[(int)\$series['membership_id']] = \$seriesColor")
+    && str_contains($view, '--rank-color:')
+    && str_contains($css, 'background:var(--rank-color,var(--chart-copper))'),
+    'ranking bars reuse the matching manager series color'
 );
 $check(str_contains($css, '.manager-stats__field--mode { width:max-content; min-width:0; }'), 'report mode selector has no empty tail after Year');
 $check(str_contains($css, '@media(max-width:1180px)') && str_contains($css, '@media(max-width:760px)'), 'responsive dashboard contract');

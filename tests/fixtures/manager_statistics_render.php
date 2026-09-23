@@ -74,6 +74,7 @@ $pageContext = 'Статистика › Работа логистов › Ко�
 $config = ['app'=>['app_name'=>'ERP PLANEX']];
 $db = new stdClass();
 $pageStylesheets = ['/assets/css/manager-statistics.css'];
+$pageScripts = ['/assets/js/manager-statistics.js'];
 ob_start();
 require $root.'/app/View/pages/company_manager_statistics.php';
 $content = (string)ob_get_clean();

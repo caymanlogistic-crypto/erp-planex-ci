@@ -42,13 +42,13 @@
 .manager-stats__line-chart .grid-line { stroke:var(--line-hair); stroke-width:1; }
 .manager-stats__line-chart .axis-label { fill:var(--text-faint); font:9px var(--font-base); }
 .manager-stats__chart-area { opacity:0; animation:manager-stats-area-in 480ms ease-out 120ms forwards; }
-.manager-stats__chart-line { stroke-dasharray:1; stroke-dashoffset:1; animation:manager-stats-line-in 620ms cubic-bezier(.65,0,.35,1) calc(var(--series-index) * 70ms) forwards; }
+.manager-stats__chart-line { stroke-dasharray:1; stroke-dashoffset:1; animation:manager-stats-line-in 780ms cubic-bezier(.22,.78,.3,1) calc(var(--series-index) * 70ms) forwards; }
 .manager-stats__chart-line.is-manager { opacity:.82; }
 .manager-stats__chart-node { opacity:0; cursor:help; outline:none; animation:manager-stats-node-in 260ms cubic-bezier(.2,.8,.2,1) calc(260ms + var(--series-index) * 70ms + var(--node-index) * 32ms) forwards; }
 .manager-stats__chart-node>circle { fill:var(--surface-strong); stroke:var(--node-color); stroke-width:2; transform-box:fill-box; transform-origin:center; transition:transform 130ms ease,fill 130ms ease; }
 .manager-stats__chart-node:hover>circle,.manager-stats__chart-node:focus>circle { fill:var(--node-color); transform:scale(1.55); }
 .manager-stats__node-tooltip { opacity:0; visibility:hidden; pointer-events:none; transition:opacity 120ms ease; }
-.manager-stats__chart-node:hover .manager-stats__node-tooltip,.manager-stats__chart-node:focus .manager-stats__node-tooltip { opacity:1; visibility:visible; }
+.manager-stats__chart-node:hover .manager-stats__node-tooltip,.manager-stats__chart-node:focus .manager-stats__node-tooltip,.manager-stats__chart-node.is-tooltip-active .manager-stats__node-tooltip { opacity:1; visibility:visible; }
 .manager-stats__node-tooltip rect { fill:rgba(19,18,16,.94); stroke:rgba(192,120,48,.42); stroke-width:1; }
 .manager-stats__node-tooltip text { font-family:var(--font-base); }
 .manager-stats__node-tooltip .tooltip-title { fill:rgba(240,238,232,.72); font-size:9px; font-weight:700; }
@@ -65,7 +65,7 @@
 .manager-stats__rank-line b { display:inline-grid; place-items:center; width:19px; height:17px; margin-right:6px; border:1px solid var(--line-soft); background:var(--surface-form); color:var(--text-faint); font-size:8.5px; }
 .manager-stats__rank-line strong { font-size:10.5px; white-space:nowrap; }
 .manager-stats__rank-track { height:5px; margin:5px 0 0 25px; background:var(--surface-muted); overflow:hidden; }
-.manager-stats__rank-track i { display:block; height:100%; }
+.manager-stats__rank-track i { display:block; height:100%; background:var(--rank-color,var(--chart-copper)); }
 
 .manager-stats__periods,.manager-stats__table-card,.manager-stats__details { margin-bottom:8px; }
 .manager-stats__period-table,.manager-stats__table,.manager-stats__detail-table { margin:0; table-layout:auto; }
