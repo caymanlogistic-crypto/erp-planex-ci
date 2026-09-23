@@ -4,6 +4,7 @@ Describe the smallest intended change and affected ERP area.
 
 ## CHANGE CLASS
 
+- [ ] AUTO — resolved by local preflight to the least expensive safe class
 - [ ] FAST — presentation/view/CSS/text only; no route/business/DB/security/integration semantics
 - [ ] STANDARD — controller/service/business behavior; no production DB mutation
 - [ ] CRITICAL — settlement/matching/debt, security/access, DB/schema, financial integration, control plane or destructive work
@@ -15,6 +16,7 @@ Expected path-triggered CI/contracts:
 ## Validation
 
 - [ ] Focused checks and all path-triggered required CI are green.
+- [ ] Exact candidate passed the serialized local publisher (`LOCAL_PUBLISH_PASS`).
 - [ ] No empty/technical commit or zero-change PR was created merely to retrigger CI/release.
 - [ ] No temporary verification PR/workflow was created for routine deployment evidence.
 - [ ] No production DB migration/reconciliation was executed without separate OWNER approval.

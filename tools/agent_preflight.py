@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail-closed ERP PLANEX pre-push gate with capability-aware remote integration gates."""
+"""Fail-closed local pre-push gate with deterministic automatic task classification."""
 from __future__ import annotations
 import argparse, importlib.util, json, os, re, shutil, subprocess, sys, tempfile
 from collections import Counter
@@ -12,6 +12,7 @@ ci=importlib.util.module_from_spec(spec); spec.loader.exec_module(ci)
 FAST_ALLOWED=re.compile(r"^(?:app/View/pages/[A-Za-z0-9_./-]+\.php|public/assets/(?:css|js)/[A-Za-z0-9_./-]+|tests/[A-Za-z0-9_]+_ui_contract_test\.php)$")
 FAST_FILE_LIMIT=6; FAST_LINE_LIMIT=120
 TENANT="TENANT_SCHEMA_PROVISIONING_AND_GENERATED_DRIFT"
+PYTHON=sys.executable
 REMOTE_REQUIRED_ALLOWLIST={TENANT:frozenset({"PDO_MYSQL_AVAILABLE","MYSQL_SERVER_REACHABLE"})}
 CAPABILITY_KEYS=("PHP_AVAILABLE","PDO_MYSQL_AVAILABLE","MYSQL_CLIENT_AVAILABLE","MYSQL_SERVER_REACHABLE")
 FINANCE_TESTS=["tests/finance_invoice_ui_contract_test.php","tests/finance_manual_facts_regression_test.php","tests/finance_employee_personal_expense_event_regression_test.php","tests/finance_invoice_cash_employee_regression_test.php","tests/finance_cash_employee_invoice_lifecycle_regression_test.php","tests/finance_carrier_payables_regression_test.php"]
@@ -133,6 +134,15 @@ def fast_policy(rows,lines,results):
     if lines>FAST_LINE_LIMIT: fail=fail or f"FAST change too large: {lines} changed lines"
     if fail: print("FAST_SCOPE_FAIL="+fail)
     mark(results,"FAST_SCOPE_POLICY",1 if fail else 0)
+def fast_eligible(rows,lines):
+    if not 1<=len(rows)<=FAST_FILE_LIMIT or lines>FAST_LINE_LIMIT: return False
+    if any(st.startswith("D") or not FAST_ALLOWED.fullmatch(name) for st,name in rows): return False
+    return any(name.startswith("app/View/pages/") or name.startswith("public/assets/") for _,name in rows)
+def resolve_class(requested,paths,rows,lines):
+    if requested != "AUTO": return requested
+    if ci.critical_path(paths): return "CRITICAL"
+    if fast_eligible(rows,lines): return "FAST"
+    return "STANDARD"
 def cheap_ui(results):
     tests=sorted(ROOT.glob("tests/*_ui_contract_test.php")); failed=not tests
     for p in tests: failed |= run(["php",str(p.relative_to(ROOT))])!=0
@@ -158,12 +168,12 @@ def tenant_check(results):
             for x in sorted(names or ["<generator reported drift; no comparable candidate emitted>"]): print(x)
 def memory_checks(head,results):
     for p in ["docs/memory/critical_records.json","docs/memory/machine_ownership.json","tools/memory_integrity_check.py","tests/memory_integrity_checker_test.py"]: need(p)
-    cmdcheck(results,"MEMORY_INTEGRITY_CONTRACTS",["python3","tests/memory_integrity_checker_test.py"])
-    cmdcheck(results,"MEMORY_INTEGRITY_CONTRACTS",["python3","tools/memory_integrity_check.py","docs/memory/critical_records.json","--ownership-manifest","docs/memory/machine_ownership.json","--head",head])
+    cmdcheck(results,"MEMORY_INTEGRITY_CONTRACTS",[PYTHON,"tests/memory_integrity_checker_test.py"])
+    cmdcheck(results,"MEMORY_INTEGRITY_CONTRACTS",[PYTHON,"tools/memory_integrity_check.py","docs/memory/critical_records.json","--ownership-manifest","docs/memory/machine_ownership.json","--head",head])
 def registry_checks(results):
     for p in ["docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json","tools/active_registry_coverage_check.py","tests/active_registry_coverage_checker_test.py"]: need(p)
-    cmdcheck(results,"ACTIVE_REGISTRY_CONTRACTS",["python3","tests/active_registry_coverage_checker_test.py"])
-    cmdcheck(results,"ACTIVE_REGISTRY_CONTRACTS",["python3","tools/active_registry_coverage_check.py","docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json"])
+    cmdcheck(results,"ACTIVE_REGISTRY_CONTRACTS",[PYTHON,"tests/active_registry_coverage_checker_test.py"])
+    cmdcheck(results,"ACTIVE_REGISTRY_CONTRACTS",[PYTHON,"tools/active_registry_coverage_check.py","docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json"])
 def execute_local_required(cls,head,paths,scopes,rows,lines,required):
     results={}; want=set(required)
     if cls=="FAST":
@@ -177,7 +187,9 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
         cheap_ui(results); return results
     if "CHANGED_PHP_SYNTAX" in want: exe("php"); lint(paths,".php",lambda p:["php","-l",p],"CHANGED_PHP_SYNTAX",results)
     if "CHANGED_JS_SYNTAX" in want: exe("node"); lint(paths,".js",lambda p:["node","--check",p],"CHANGED_JS_SYNTAX",results); lint(paths,".mjs",lambda p:["node","--check",p],"CHANGED_JS_SYNTAX",results)
-    if "CHANGED_PYTHON_SYNTAX" in want: lint([p for p in paths if p.startswith("tools/")],".py",lambda p:[sys.executable,"-m","py_compile",p],"CHANGED_PYTHON_SYNTAX",results)
+    if "CHANGED_PYTHON_SYNTAX" in want:
+        syntax_probe = "import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_bytes(), sys.argv[1], 'exec')"
+        lint([p for p in paths if p.startswith("tools/")], ".py", lambda p:[PYTHON,"-c",syntax_probe,p], "CHANGED_PYTHON_SYNTAX", results)
     if "FINANCE_REGRESSIONS" in want:
         exe("php"); [need(x) for x in FINANCE_TESTS]
         for t in FINANCE_TESTS: cmdcheck(results,"FINANCE_REGRESSIONS",["php",t])
@@ -195,7 +207,7 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
             if check == "DOCUMENT_GENERATOR_REGRESSIONS": env["PLANEX_DOCGEN_REQUIRE_RUNTIME"]="1"
             for t in tests: need(t); cmdcheck(results,check,["php",t],env)
     if "ROLES_ROUTE_REGISTRY" in want:
-        cmdcheck(results,"ROLES_ROUTE_REGISTRY",["python3","tests/roles_access_route_registry_test.py"])
+        cmdcheck(results,"ROLES_ROUTE_REGISTRY",[PYTHON,"tests/roles_access_route_registry_test.py"])
     if "EMPLOYEE_MAIL_REGRESSIONS" in want:
         env = os.environ.copy(); env["APP_ENV"] = "test"
         env.pop("PLANEX_SKIP_MYSQL", None)
@@ -206,10 +218,12 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
         env=os.environ.copy();env["APP_ENV"]="test"
         for t in ["tests/document_mail_transport_test.php","tests/trip_document_collection_mysql_test.php","tests/trip_document_140_production_migration_contract_test.php","tests/trip_document_140_migration_mysql_test.php"]:
             need(t);cmdcheck(results,"TRIP_DOCUMENT_REGRESSIONS",["php",t],env)
-    if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",["python3","tools/dynamic_table_safety_audit.py"])
+    if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",[PYTHON,"tools/dynamic_table_safety_audit.py"])
     if "ARCHITECTURE_GUARD" in want: need("tools/architecture_guard.php"); cmdcheck(results,"ARCHITECTURE_GUARD",["php","tools/architecture_guard.php"])
     if "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in want:
-        for t in ["tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/runner_helpers_contract_test.py","tests/sentinelx_hardening_test.py"]: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",["python3",t])
+        tests=["tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/local_publish_test.py","tests/runner_helpers_contract_test.py"]
+        if any(p.startswith("tools/sentinelx/") or p=="tests/sentinelx_hardening_test.py" for p in paths): tests.append("tests/sentinelx_hardening_test.py")
+        for t in tests: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",[PYTHON,t])
         for t in ["tests/agent_deploy_request_contract_test.php","tests/agent_db_migration_request_contract_test.php"]: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",["php",t])
     if "MEMORY_INTEGRITY_CONTRACTS" in want: memory_checks(head,results)
     if "ACTIVE_REGISTRY_CONTRACTS" in want: registry_checks(results)
@@ -221,11 +235,11 @@ def jsonish(v): return json.dumps(v,sort_keys=True)
 def revok(rev):
     if caprun(["git","cat-file","-e",f"{rev}^{{commit}}"]).returncode: raise PreflightEnvironmentError(f"invalid git revision: {rev}")
 def main():
-    a=argparse.ArgumentParser(description=__doc__); a.add_argument("--class",dest="cls",choices=["FAST","STANDARD","CRITICAL"],required=True); a.add_argument("--base",required=True); a.add_argument("--head",required=True); a.add_argument("--plan",action="store_true"); x=a.parse_args()
+    a=argparse.ArgumentParser(description=__doc__); a.add_argument("--class",dest="cls",choices=["AUTO","FAST","STANDARD","CRITICAL"],default="AUTO"); a.add_argument("--base",required=True); a.add_argument("--head",required=True); a.add_argument("--plan",action="store_true"); x=a.parse_args()
     try:
-        revok(x.base); revok(x.head); paths=ci.git_changed_files(x.base,x.head); scopes=ci.classify(paths); rows,lines=diff_meta(x.base,x.head); planned=plan(x.cls,paths,scopes); caps=detect_capabilities()
-        for k,v in [("CLASS",x.cls),("BASE",x.base),("HEAD",x.head),("CHANGED_FILES",paths),("DETECTED_SCOPES",[k for k,v in scopes.items() if v]),("CHECKS_PLANNED",planned),("CAPABILITIES",caps)]: print(f"{k}={jsonish(v) if not isinstance(v,str) else v}")
-        if x.cls=="STANDARD" and ci.critical_path(paths):
+        revok(x.base); revok(x.head); paths=ci.git_changed_files(x.base,x.head); scopes=ci.classify(paths); rows,lines=diff_meta(x.base,x.head); requested=x.cls; resolved=resolve_class(requested,paths,rows,lines); planned=plan(resolved,paths,scopes); caps=detect_capabilities()
+        for k,v in [("REQUESTED_CLASS",requested),("CLASS",resolved),("BASE",x.base),("HEAD",x.head),("CHANGED_FILES",paths),("DETECTED_SCOPES",[k for k,v in scopes.items() if v]),("CHECKS_PLANNED",planned),("CAPABILITIES",caps)]: print(f"{k}={jsonish(v) if not isinstance(v,str) else v}")
+        if resolved=="STANDARD" and ci.critical_path(paths):
             print("LOCAL_REQUIRED_CHECKS=[]\nLOCAL_REQUIRED_RESULTS=[]\nREMOTE_REQUIRED_CHECKS=[]\nMISSING_CAPABILITIES=[]\nCLASS_ESCALATION_REQUIRED=CRITICAL\nCHECKS_EXECUTED=[]\nLOCAL_PREFLIGHT_FAIL"); return 1
         local,remote,missing=check_execution_classes(planned,caps); print("LOCAL_REQUIRED_CHECKS="+jsonish(local)); print("REMOTE_REQUIRED_CHECKS="+jsonish(remote)); print("MISSING_CAPABILITIES="+jsonish(missing))
         if x.plan: print("LOCAL_REQUIRED_RESULTS=[]\nCHECKS_EXECUTED=[]\nPREFLIGHT_PLAN_ONLY"); return 0
@@ -234,7 +248,7 @@ def main():
             print("CHECKS_EXECUTED=[]")
             print("LOCAL_PREFLIGHT_REMOTE_GATES_FORBIDDEN")
             return 2
-        results=execute_local_required(x.cls,x.head,paths,scopes,rows,lines,local); ordered=[{"check":n,"result":results[n]} for n in local]; print("LOCAL_REQUIRED_RESULTS="+jsonish(ordered)); print("CHECKS_EXECUTED="+jsonish(local))
+        results=execute_local_required(resolved,x.head,paths,scopes,rows,lines,local); ordered=[{"check":n,"result":results[n]} for n in local]; print("LOCAL_REQUIRED_RESULTS="+jsonish(ordered)); print("CHECKS_EXECUTED="+jsonish(local))
         if any(value != "PASS" for value in results.values()): print("LOCAL_PREFLIGHT_FAIL"); return 1
         print("LOCAL_PREFLIGHT_PASS"); return 0
     except PreflightEnvironmentError as e: print(f"PREFLIGHT_ENV_REASON={e}\nLOCAL_PREFLIGHT_ENV_ERROR"); return 2

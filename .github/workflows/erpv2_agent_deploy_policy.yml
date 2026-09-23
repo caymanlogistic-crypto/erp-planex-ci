@@ -161,14 +161,14 @@ jobs:
 
           for token in [
               'FAST', 'STANDARD', 'CRITICAL',
-              'START_HEAD → WORK_BRANCH → LOCAL_SIGNED_PREFLIGHT_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT',
+              'START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS → LOCAL_PUBLISH_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT',
               'Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes',
               'Repeat search/fetch is forbidden without ambiguity, drift or a state-changing event',
               'No placeholder/probe/temp/dummy files, empty/checkpoint commits or temporary verification PRs',
               'Do not duplicate a regression already triggered by GitHub',
               'Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate',
               'Normal development is LOCAL:',
-              'SentinelX begins only after `LOCAL_SIGNED_PREFLIGHT_PASS`',
+              'SentinelX and the persistent remote runner are outside the normal PLANEX task route',
               'Parallel LOCAL agents / shared-machine safety',
               'MEMORY drift/integrity is checked before publication',
               'PREFLIGHT_COVERAGE_DEFECT',

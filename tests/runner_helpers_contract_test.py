@@ -6,10 +6,32 @@ import os
 import shutil
 import stat
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+# The runner helpers intentionally contain Linux ownership, mode and symlink
+# contracts.  Windows developer hosts execute that exact contract in the local
+# WSL runtime instead of weakening it or requiring Developer Mode privileges.
+if os.name == "nt":
+    root_posix = ROOT.as_posix()
+    wsl_root = f"/mnt/{ROOT.drive[0].lower()}{root_posix[2:]}"
+    completed = subprocess.run(
+        [
+            "wsl.exe",
+            "--cd",
+            wsl_root,
+            "env",
+            "PYTHONDONTWRITEBYTECODE=1",
+            "python3",
+            "tests/runner_helpers_contract_test.py",
+        ],
+        check=False,
+    )
+    raise SystemExit(completed.returncode)
+
 TOOL = ROOT / "tools" / "runner" / "sync_runner_helpers.py"
 spec = importlib.util.spec_from_file_location("runner_sync", TOOL)
 assert spec and spec.loader

@@ -27,18 +27,20 @@ Forbidden: placeholder/probe writes, empty/checkpoint commits, dummy files and t
 
 ## Pre-push engineering gate
 
-`tools/ci_scope.py` is the reusable deterministic changed-path classifier used by local preflight and the main CI scope step. `tools/agent_preflight.py` calculates and executes the path-owned deterministic checks before the first feature-branch push.
+`tools/ci_scope.py` is the reusable deterministic changed-path classifier used by local preflight and the main CI scope step. `tools/agent_preflight.py` resolves `AUTO` to the least expensive safe class and executes the path-owned deterministic checks before the first feature-branch push.
 
 Stable lifecycle:
 
-`START_HEAD → WORK_BRANCH → LOCAL_SIGNED_PREFLIGHT_PASS → FEATURE_HEAD → PR → CI aggregate → MERGED_SHA → MEMORY PASS → optional deploy`.
+`START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS → LOCAL_PUBLISH_PASS → FEATURE_HEAD → PR → CI aggregate → MERGED_SHA → MEMORY PASS → optional deploy`.
 
 GitHub Actions remains an independent verification layer. Agents aggregate all required terminal results for one feature SHA before remediation; a failed aggregate is fixed as one local batch and must pass local preflight again before a corrective push. Normal remote push budget is one initial push, with at most one corrective push for STANDARD/CRITICAL before a `PREFLIGHT_COVERAGE_DEFECT` investigation is required.
 
 
-The normal OWNER workflow is fail-closed and LOCAL: all pre-push application, DB, browser, memory and control-plane checks must run on Windows/local WSL. Missing capability is repaired locally or blocks publication; it is not deferred to SentinelX/remote runner.
+The normal OWNER workflow is fail-closed and LOCAL: all pre-push application, DB, browser, memory and control-plane checks run on Windows/local WSL. Missing capability is repaired locally or blocks publication.
 
-SentinelX begins only after a fresh full signed local PASS. Its role is limited to signed evidence import, exact candidate transport and the existing guarded publishing helpers. It is not an application test or preflight execution environment for LOCAL tasks.
+`tools/local_publish.py` is the only normal publication path. A machine-wide queue serializes canonical refresh and task-branch push while development remains parallel. The publisher merges non-conflicting canonical movement, runs one final exact-candidate preflight, rechecks canonical, refuses non-fast-forward publication and records local evidence. SentinelX and the persistent remote runner remain historical recovery/infrastructure assets outside the normal task route.
+
+Mutable local tests use a unique disposable schema and restricted per-run user. Local browser/dev servers use task-owned dynamic ports and PID/start-time/command/worktree identity. Shared slot 2 and port 8016 are legacy compatibility only and are not allocated to new task scripts.
 
 The privileged FAST `pull_request_target` boundary is intentionally **not** refactored to execute PR-head helper code before validation/checkout. Its exact-base, whitelist, size, deletion and UI-presence checks stay non-PR-controlled and are parity-tested against local FAST policy.
 

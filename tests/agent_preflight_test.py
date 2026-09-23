@@ -46,6 +46,12 @@ assert not fast_ok([f"app/View/pages/x{i}.php" for i in range(7)])
 assert not fast_ok(["public/assets/css/x.css"], 121)
 assert not fast_ok(["public/assets/css/x.css"], 1, True)
 
+# AUTO selects the least expensive safe class deterministically.
+assert p.resolve_class("AUTO", ["public/assets/css/x.css"], [("M", "public/assets/css/x.css")], 10) == "FAST"
+assert p.resolve_class("AUTO", ["app/Service/ClientService.php"], [("M", "app/Service/ClientService.php")], 10) == "STANDARD"
+assert p.resolve_class("AUTO", ["tools/local_publish.py"], [("M", "tools/local_publish.py")], 10) == "CRITICAL"
+assert p.resolve_class("CRITICAL", ["public/assets/css/x.css"], [("M", "public/assets/css/x.css")], 1) == "CRITICAL"
+
 # STANDARD critical escalation remains fail-closed.
 assert p.ci.critical_path([".github/workflows/ci.yml"])
 assert p.ci.critical_path(["database/migrations-local/100_x.sql"])
@@ -174,7 +180,8 @@ assert p.ci.classify([".github/workflows/ci.yml"])["tenant_schema"] is True
 assert "memory_integrity_checker_test.py" in source
 assert "active_registry_coverage_checker_test.py" in source
 assert "runner_helpers_contract_test.py" in source
-assert "sentinelx_hardening_test.py" in source
+assert "local_publish_test.py" in source
+assert 'p.startswith("tools/sentinelx/")' in source
 assert '"--head"' in source
 assert '"tools/active_registry_coverage_check.py","docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json"' in source
 
@@ -183,13 +190,28 @@ policy = (ROOT / ".github/workflows/erpv2_agent_deploy_policy.yml").read_text(en
 assert "python3 tools/ci_scope.py" in policy
 assert '--github-output "$GITHUB_OUTPUT"' in policy
 assert "Control-plane preflight regression contracts" in policy
-assert "START_HEAD → WORK_BRANCH → LOCAL_SIGNED_PREFLIGHT_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT" in policy
+assert "START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS → LOCAL_PUBLISH_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT" in policy
 assert "Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate" in policy
 assert "Normal development is LOCAL:" in policy
-assert "SentinelX begins only after `LOCAL_SIGNED_PREFLIGHT_PASS`" in policy
+assert "SentinelX and the persistent remote runner are outside the normal PLANEX task route" in policy
 assert "Parallel LOCAL agents / shared-machine safety" in policy
 assert "PREFLIGHT_COVERAGE_DEFECT" in policy
 assert "missing incremental CI safeguard: git diff --name-only --diff-filter=ACMR HEAD^1 HEAD" not in policy
+
+agents = (ROOT / "AGENTS.md").read_text(encoding="utf-8")
+for token in [
+    "Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes",
+    "Repeat search/fetch is forbidden without ambiguity, drift or a state-changing event",
+    "No placeholder/probe/temp/dummy files, empty/checkpoint commits or temporary verification PRs",
+    "Do not duplicate a regression already triggered by GitHub",
+    "Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate",
+    "Normal development is LOCAL:",
+    "SentinelX and the persistent remote runner are outside the normal PLANEX task route",
+    "Parallel LOCAL agents / shared-machine safety",
+    "MEMORY drift/integrity is checked before publication",
+    "Technical integration actor identity is not the current standard request gate",
+]:
+    assert token in agents, token
 
 
 
