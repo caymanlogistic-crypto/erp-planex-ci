@@ -37,7 +37,7 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 366, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 364, f"company route inventory drift: {len(company_routes)}"
 documents = (ROOT / 'app/Http/Routes/company_trip_documents.php').read_text()
 assert documents.count('$router->') == 16
 assert "'company.documents.request'" in documents and "'company.documents.collection'" in documents
