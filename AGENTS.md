@@ -1,153 +1,109 @@
 # ERP PLANEX — agent governance
 
-Current OWNER policy and current canonical executable implementation are different authority dimensions. Historical reports/handoffs are evidence, never current instructions.
+Latest OWNER decisions define policy. Canonical executable GitHub defines implementation truth. Historical reports are evidence, never current instructions.
 
-## Default bootstrap
+## Minimal bootstrap
 
-For every material ERP task:
+For one new ERP task:
 
-1. Read Notion `ERP PLANEX — MASTER MEMORY` → `00 — START HERE` once.
-2. Read canonical GitHub HEAD once and cache it as `START_HEAD`.
-3. Determine MEMORY IMPACT from owning/changed paths and read only affected registry records.
-4. Reuse already resolved repository, branch, file/blob, Notion page/data-source and PR identifiers.
+1. Read workspace instructions and Notion `00 — START HERE` once.
+2. Capture the live canonical HEAD once as `START_HEAD`.
+3. Open only code and semantic-memory records owned by the changed paths.
+4. Create one `chatgpt/*` branch/worktree. Never implement in the shared `source` checkout.
+
+Do not read the whole repository, the whole Notion memory, release history or a stack of manuals before a scoped change.
 
 Repository: `caymanlogistic-crypto/erp-planex-ci`.
 Canonical branch: `chatgpt/production-stabilization-20260802`.
 Production: `/erpv2`.
 Legacy `/erp`: never touch.
-Previous canonical `planexerp/erp-planex`: read-only insurance; do not push.
-Old `caymanlogistic-crypto/erp-planex`: read-only insurance; not canonical.
 
-## Source precedence by dimension
+## Fast and economical agent routing
 
-1. Latest OWNER decision — business/product policy and authorization.
-2. Executable canonical GitHub code/workflow/schema — current implementation truth.
-3. Generated deterministic contracts — derived physical truth.
-4. Canonical active policy documentation.
-5. Notion semantic memory.
-6. Secondary documentation.
-7. Historical evidence.
+- Default coordinator: Sol with medium reasoning.
+- A small, ordered task stays with one agent. Do not create a subagent for a correction that fits one short run.
+- Delegate only independent, bounded work. Two agents must never edit the same files or use the same mutable resource.
+- At most two code-writing agents may work on one feature; an optional third agent is read-only review.
+- Prefer Luna low for a bounded micro-edit, Sol low/medium for normal implementation, and Astra medium/high only for architecture, difficult diagnosis, security or database risk.
+- `high`, `xhigh`, `max` and `ultra` require a concrete complexity or risk reason. Do not use them as defaults.
+- Reuse the same task conversation for corrections to the same feature. Start a new conversation for a new independent feature.
 
-OWNER target and current implementation can legitimately differ when the record is explicitly TARGET or LEGACY_IMPLEMENTATION.
+Operational budgets are signals, not permission to skip correctness:
 
-## Execution-state cache / anti-thrashing
+| Class | Normal wall time | Normal tool calls | Agents |
+|---|---:|---:|---:|
+| FAST | 5–8 minutes | up to 25 | 1 |
+| STANDARD | 10–20 minutes | up to 60 | 1, exceptionally 2 |
+| CRITICAL | risk-based | measured | up to 2 writers + 1 reviewer |
 
-Maintain one task state machine:
+When a budget is exceeded, report the concrete blocker or coverage defect. Do not repeat unchanged reads or successful checks.
 
-`START_HEAD → WORK_BRANCH → LOCAL_SIGNED_PREFLIGHT_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT`
+## Automatic change class
 
-For CRITICAL DB/schema work that impacts repository memory, finalize locally in two phases:
-
-`IMPLEMENTATION_SHA → REPOSITORY_MEMORY_SHA → LOCAL_SIGNED_PREFLIGHT_PASS → one initial push`.
-
-`IMPLEMENTATION_SHA` must be a real commit containing the finished implementation/generated artifacts. Repository-memory `Verified SHA` must reference that existing implementation commit, never a future PR/merge/latest/current SHA.
-
-Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes. A second canonical-HEAD read is allowed only when:
-
-- branch/base setup genuinely needs a fresh base and no branch exists;
-- GitHub reports merge conflict/base drift;
-- after merge, once, to capture `MERGED_SHA` / current canonical HEAD;
-- at a deploy boundary only if the guarded mechanism does not already perform the exact check;
-- evidenced external repository drift affects the task.
-
-A successful lookup is cached. Repeat search/fetch is forbidden without ambiguity, drift or a state-changing event.
-
-## Change class
-
-- **FAST** — presentation/view/CSS/text/local UI only; no controller/business/state/finance/DB/security/integration/control-plane semantics.
-- **STANDARD** — controller/service/business behavior without production DB/schema mutation and without critical finance/security semantics.
-- **CRITICAL** — settlement/matching/debt, security/access, DB/schema, financial integrations, control plane or destructive operations.
-
-Classify upward when genuinely ambiguous. `tools/agent_preflight.py` also fails closed with `CLASS_ESCALATION_REQUIRED=CRITICAL` for known DB/schema/control-plane path families passed as STANDARD.
-
-## Local preflight / Git discipline
-
-GitHub Actions is an **independent final verification gate**, not the normal iterative debugging environment. A ready candidate must pass the executable local preflight before the first branch push:
+Use `AUTO` unless a stricter explicit class is required:
 
 ```bash
-python3 tools/agent_preflight.py --class FAST|STANDARD|CRITICAL --base "$START_HEAD" --head HEAD
+python3 tools/agent_preflight.py --class AUTO --base "$START_HEAD" --head HEAD --plan
 ```
 
-Use `--plan` to inspect deterministic changed scope and the calculated check plan without executing checks.
+- **FAST** — eligible presentation/view/CSS/text/UI-only diff within executable limits.
+- **STANDARD** — normal controller/service/business behavior without critical paths.
+- **CRITICAL** — finance, security/access, DB/schema, integrations, control plane or destructive behavior.
 
-Rules:
+The executable classifier resolves `AUTO` fail-closed. Explicit FAST/STANDARD never bypasses critical-path escalation.
 
-- Normal development is LOCAL: edit, debug, DB/browser tests, memory checks and pre-push preflight run on Windows/local WSL. SentinelX is not a DEV/DEBUG/TEST fallback.
-- Work in a task checkout and batch multi-file changes there. Local logical commits are allowed; do not create one remote commit/push per file.
-- Normal multi-file work is `local edit → local tests → repository memory drift check → local commit(s) → signed full local PASS → one initial push`.
-- A required check may not be silently skipped or deferred to the remote runner. Missing local capability is repaired locally or blocks publication.
-- GitHub CI remains required after local PASS; local verification never replaces, disables or weakens repository CI/workflows.
-- SentinelX begins only after `LOCAL_SIGNED_PREFLIGHT_PASS`, for signed evidence import, candidate transport and existing guarded publication operations.
+## Two loops
 
-## Parallel LOCAL agents / shared-machine safety
+Development loop:
 
-- One task owns one `TASK_ID`, branch, worktree, evidence directory and process set. `source` is never an implementation workspace.
-- Before changing a shared process/port, prove ownership from PID, command line and task/worktree metadata. Never kill by process name.
-- Port 8016 is single-owner local state; a foreign `php-server.json` is not permission to stop it. Use a task-local free port/server when required.
-- Mutable local MySQL slot 2 is serialized by its existing lock/wrapper. Never bypass the lock or clean another task; persistent slots 3–4 are not cleanup targets.
-- Do not reset/delete another task's branch/worktree/evidence or change global RDC/runtime configuration to solve a task-local issue.
-- MEMORY drift/integrity is checked before publication so task-owned repository memory is repaired in the same change whenever possible.
+`edit → focused check → inspect diff → repeat`
 
-## GitHub CI aggregate / failure handling
+- Run only checks relevant to the current change.
+- Do not run full preflight, publish, CI, deploy or Notion writes after each correction.
+- A successful check is not repeated while its inputs and candidate HEAD are unchanged.
+- Batch related corrections in the same worktree and commit chain.
 
-- Observe all required workflows for one `FEATURE_HEAD` as one aggregate gate. While they are running, do not react to the first red job with a new push.
-- After all required checks for that SHA are terminal, if PASS continue to merge. If FAIL, enumerate **all** failed required workflows/jobs, read logs only for those failures, and build one remediation set.
-- Apply the complete remediation set locally, rerun the full relevant local checks and fresh signed preflight, and only after `LOCAL_SIGNED_PREFLIGHT_PASS` make a corrective push.
-- The forbidden normal loop is `fix job A → push → fix job B → push → fix job C → push`.
+Publication loop, once per ready batch:
 
-### Remote push budget (operational SLO)
+`START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS → LOCAL_PUBLISH_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT`
 
-- FAST: normal = 1 push.
-- STANDARD: normal = 1 initial push; exception = +1 corrective push.
-- CRITICAL: normal = 1 initial push of the ready commit chain; exception = +1 corrective push.
-- Before a third STANDARD/CRITICAL remote push, declare `PREFLIGHT_COVERAGE_DEFECT` and explain why the previous local PASS missed a deterministic failure. If reproducible, repair the preflight coverage together with the candidate before another push. Safety emergencies remain fail-safe exceptions, not a reason to normalize thrashing.
+Normal publication is serialized by the local publisher. It refreshes canonical under the queue lock, merges non-conflicting canonical movement, runs one final exact-candidate preflight, rechecks canonical, and pushes only a clean fast-forward task branch. SentinelX and the persistent remote runner are outside the normal PLANEX task route.
 
-## Git / CI discipline
+For CRITICAL repository-memory work:
 
-- Work on a feature branch; canonical changes only through PR merge.
-- No placeholder/probe/temp/dummy files, empty/checkpoint commits or temporary verification PRs.
-- Do not duplicate a regression already triggered by GitHub.
-- Do not perform Actions archaeology after a green aggregate result.
+`IMPLEMENTATION_SHA → REPOSITORY_MEMORY_SHA → LOCAL_PREFLIGHT_PASS → LOCAL_PUBLISH_PASS`.
 
-## Production boundary
+The implementation SHA must exist before repository-memory `Verified SHA` is updated.
 
-FAST uses the guarded FAST release when eligible. STANDARD/CRITICAL merged code/UI uses the guarded `deploy/erpv2-agent` request path.
+## Parallel local safety
 
-The current standard request workflow itself validates the dedicated request ref, exact current canonical SHA, exact-SHA canonical `ERP PLANEX CI`, rechecks canonical HEAD immediately before dispatch, then dispatches exact-SHA `ERPv2 Controlled Deploy`. **Technical integration actor identity is not the current standard request gate.** Do not manually repeat machine guards three times.
+- One task owns one `TASK_ID`, branch, worktree, evidence directory and process set.
+- Mutable MySQL tests use a unique disposable schema and restricted per-run user supplied by the trusted local wrapper. Direct use of shared slot 2 is legacy-only and prohibited for new task scripts.
+- Dev/browser servers use task-local dynamic ports and state containing TASK_ID, PID, start time, executable, command line and worktree.
+- Before stopping a process, verify all recorded identity fields. Never kill by process name.
+- Never reset, delete or clean another task's branch, worktree, evidence, database, port or process.
+- Do not change common Git `core.worktree`, global RDC, PATH, PHP or MySQL configuration for a task-local issue.
+- `source` is a shared object-store checkout, not an implementation workspace.
 
-Merge != deploy. Deploy != migration.
+## GitHub and correction discipline
 
-Production migration/reconciliation/seed/backfill/destructive SQL requires separate task-specific OWNER authorization. Standing code deploy authorization does not grant DB authority.
+- Canonical changes only through a PR merge. No direct canonical push or force-push.
+- Observe required workflows for one `FEATURE_HEAD` as one aggregate.
+- If CI fails, collect all terminal failures, fix one local batch, rerun relevant checks and final preflight, then make at most the normal corrective push.
+- No placeholder/probe/dummy files, empty commits, checkpoint pushes or verification PRs.
+- Before a third STANDARD/CRITICAL push, declare `PREFLIGHT_COVERAGE_DEFECT` and repair reproducible local coverage.
 
-## Semantic-memory integrity
+## Memory and production boundaries
 
-Binding semantic-memory rules live in Notion `21 — MEMORY GOVERNANCE & INTEGRITY CONTRACT`; do not create a competing copy here.
+- Notion writes happen only after merge and are serialized per Canonical ID. Update only impacted records and read back CRITICAL FINANCE/DB/SECURITY/CONTROL PLANE changes.
+- Binding memory rules live in Notion `21 — MEMORY GOVERNANCE & INTEGRITY CONTRACT`.
+- `VERIFIED` requires direct current evidence; owning-path drift requires revalidation or `NEEDS_REVERIFY`.
+- Merge does not authorize deploy. Deploy does not authorize migration.
+- Production migration, reconciliation, seed, backfill, destructive SQL and business-data writes require separate task-specific OWNER authorization.
+- Docs/governance/control-plane-only changes do not require an application deploy.
 
-Operational minimum:
-
-- semantic class and truth status are independent;
-- implementation `Verified SHA` is a real full 40-hex commit, never an OWNER ID;
-- `VERIFIED` requires direct current evidence, never memory/search snippet/handoff;
-- one volatile fact has one authoritative canonical home;
-- memory impact is derived from changed paths → owning records;
-- path-aware drift: old SHA remains valid when owning paths did not change; relevant owning-path diff requires reverify or `NEEDS_REVERIFY`;
-- closed migration ranges such as `042–076` are forbidden drift scopes; use future-proof ownership such as `database/migrations-local/**`;
-- FINANCE / DB / SECURITY / CONTROL PLANE semantic writes require direct readback;
-- body + provenance metadata are one atomic semantic update;
-- `01 — CURRENT SNAPSHOT` is current durable state, not release history;
-- stale critical `VERIFIED` is a P0 memory defect.
-
-GitHub provides a small deterministic integrity contract, not a Notion mirror:
-
-```bash
-python3 tests/memory_integrity_checker_test.py
-python3 tools/memory_integrity_check.py docs/memory/critical_records.json --head HEAD
-```
-
-## Definition of Done
+## Definition of done
 
 `CODE PASS + CI PASS + MEMORY PASS`.
 
-`MEMORY PASS` requires an impact set, affected record repair, stale current record reverify/supersession, critical readback, zero known stale critical VERIFIED in scope, and a passing integrity checker.
-
-Application deploy is required only when the task changes production runtime and current policy requires it. Docs/Notion/tooling-only governance work does not justify an application deploy by itself.
+Finish with a clean task worktree, exact local publication evidence, green aggregate CI, merged SHA, impacted memory readback and no leaked task database/server/lease.

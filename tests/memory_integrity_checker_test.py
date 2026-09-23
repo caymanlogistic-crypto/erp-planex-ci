@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -46,7 +47,7 @@ def check(repo: Path, data: dict, expected: int, owners=None):
     o = repo / "ownership.json"
     p.write_text(json.dumps(data), encoding="utf-8")
     o.write_text(json.dumps(owners or ownership()), encoding="utf-8")
-    proc = run(["python3", str(SCRIPT), str(p), "--head", "HEAD", "--ownership-manifest", str(o), "--json"], repo, check=False)
+    proc = run([sys.executable, str(SCRIPT), str(p), "--head", "HEAD", "--ownership-manifest", str(o), "--json"], repo, check=False)
     if proc.returncode != expected:
         raise AssertionError(f"expected rc={expected}, got {proc.returncode}\nstdout={proc.stdout}\nstderr={proc.stderr}")
     return json.loads(proc.stdout)

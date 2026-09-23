@@ -16,7 +16,7 @@ SCOPE_PATTERNS = {
     "tenant_schema": r"^(database/migrations-local/|app/Service/LocalMigrationService\.php$|app/Support/company_database\.php$|app/Http/Controllers/Superadmin/CompanyActions/create_submit\.php$|tools/database/|tests/tenant_schema_provisioning_contract_test\.php$|docs/database/|\.github/workflows/ci\.yml$)",
     "ui_lab": r"^(app/Http/Controllers/Superadmin/UiPatternLabController\.php$|app/Http/Routes/superadmin\.php$|app/View/pages/ui_pattern_lab\.php$|app/View/components/(button|input|page_header|status_badge|table)\.php$|public/assets/css/(ui-pattern-lab|erp-ui|app|app-base|workspace-benchmark)\.css$|tests/ui_pattern_lab_contract_test\.php$|\.github/ui-pattern-lab/ui_pattern_lab_visual\.js$)",
     "memory": r"^(docs/memory/|tools/(memory_integrity_check|active_registry_coverage_check)\.py$|tests/(memory_integrity_checker|active_registry_coverage_checker)_test\.py$)",
-    "control_plane": r"^(\.github/(?:workflows/|p07/)|AGENTS\.md$|docs/GITHUB_CONTROL_PLANE\.md$|\.github/pull_request_template\.md$|tools/(?:runner/|sentinelx/|(?:agent_preflight|ci_scope)\.py$)|tests/(?:(?:runner_helpers_contract|sentinelx_hardening)_test\.py$|(?:agent_preflight|ci_scope)_test\.py$))",
+    "control_plane": r"^(\.github/(?:workflows/|p07/)|AGENTS\.md$|docs/(?:GITHUB_CONTROL_PLANE|LOCAL_PREFLIGHT_PUBLISHING)\.md$|\.github/pull_request_template\.md$|tools/(?:runner/|sentinelx/|(?:agent_preflight|ci_scope|local_publish)\.py$)|tests/(?:(?:runner_helpers_contract|sentinelx_hardening|local_publish)_test\.py$|(?:agent_preflight|ci_scope)_test\.py$))",
 }
 CRITICAL_PATH_SCOPES = ("finance", "security", "migrations", "tenant_schema", "memory", "control_plane")
 KNOWN_CRITICAL_PATHS = (
