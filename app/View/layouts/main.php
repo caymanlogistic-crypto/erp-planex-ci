@@ -473,7 +473,7 @@ if (empty($topbarCrumbs)) {
                 <div class="nav-section-label">СТАТИСТИКА</div>
                 <a class="nav-item<?= $managerStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/managers') ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span class="nav-label">Работа менеджеров</span>
+                    <span class="nav-label">Работа логистов</span>
                 </a>
             </div>
 
@@ -689,7 +689,7 @@ if (empty($topbarCrumbs)) {
                 <div class="nav-section-label">СТАТИСТИКА</div>
                 <a class="nav-item<?= $managerStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/managers') ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span class="nav-label">Работа менеджеров</span>
+                    <span class="nav-label">Работа логистов</span>
                 </a>
             </div>
 
