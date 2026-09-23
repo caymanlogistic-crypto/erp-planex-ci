@@ -52,6 +52,11 @@ try{
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'no 1366px overflow');
  assert.equal((await second.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),7,'1366px keeps integrated request row');
  const compactEvidence=process.env.PLANEX_BROWSER_EVIDENCE_1366;if(compactEvidence)await page.screenshot({path:compactEvidence,fullPage:true});
+ await page.setViewportSize({width:1280,height:900});
+ await page.locator('.logistics-workspace').evaluate(el=>{el.style.width='1034px';});
+ assert.equal(await second.evaluate(el=>el.scrollWidth<=el.parentElement.clientWidth),true,'request row fits ERP workspace at 1280px');
+ assert.ok(await second.evaluate(el=>el.getBoundingClientRect().height<=62),'1280px request row stays compact');
+ await page.locator('.logistics-workspace').evaluate(el=>{el.style.width='';});
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'no mobile overflow');
  assert.equal((await second.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),1,'mobile request uses one column');
