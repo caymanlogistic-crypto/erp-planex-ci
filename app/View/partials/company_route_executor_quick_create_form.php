@@ -19,6 +19,19 @@ $value = static function (string $path, string $default = '') use ($quickOld): s
 };
 $error = static fn(string $path): string => (string)($quickErrors[$path] ?? '');
 $fieldClass = static fn(string $path): string => !empty($quickErrors[$path]) ? ' is-error' : '';
+$vehiclePresentation = static function (string $setType, string $unit): array {
+    if ($setType === 'coupling') {
+        return $unit === 'secondary'
+            ? ['title' => 'ПОЛУПРИЦЕП', 'docs' => 'Документы полуприцепа', 'custom_docs' => 'Произвольные документы полуприцепа']
+            : ['title' => 'ТЯГАЧ', 'docs' => 'Документы тягача', 'custom_docs' => 'Произвольные документы тягача'];
+    }
+    if ($setType === 'road_train') {
+        return $unit === 'secondary'
+            ? ['title' => 'ПРИЦЕП', 'docs' => 'Документы прицепа', 'custom_docs' => 'Произвольные документы прицепа']
+            : ['title' => 'ПЕРВАЯ ЧАСТЬ', 'docs' => 'Документы первой части', 'custom_docs' => 'Произвольные документы первой части'];
+    }
+    return ['title' => 'ТРАНСПОРТНАЯ ЕДИНИЦА', 'docs' => 'Документы транспортной единицы', 'custom_docs' => 'Произвольные документы транспортной единицы'];
+};
 $upload = static function (string $entity, string $code, string $label): void {
     $id = 'route-executor-' . $entity . '-' . $code;
     ?>
@@ -70,8 +83,12 @@ foreach ($quickErrors as $key => $message) {
     <?php endif; ?>
 
     <div class="<?= !$quickStartAtDetails ? 'is-hidden' : '' ?>" data-quick-details-step>
+        <div class="vehicle-set-card-list">
         <?php if ($quickMode === RouteExecutorQuickCreateService::MODE_NEW_CONTRACTOR): ?>
-        <div class="form-section">
+        <div class="vehicle-set-form-card vehicle-set-unit-panel">
+            <div class="section-title">Перевозчик</div>
+            <div class="entity-form-layout driver-layout driver-layout--no-docs">
+            <div class="entity-form-main driver-layout-main">
             <div class="section-title">Данные перевозчика</div>
             <div class="form-alert alert-warning is-hidden" data-inn-autofill-message><div class="alert-body"><div class="alert-body-title" data-inn-autofill-title></div><div class="alert-body-sub" data-inn-autofill-sub></div></div></div>
             <div class="driver-fields">
@@ -79,16 +96,16 @@ foreach ($quickErrors as $key => $message) {
                     <div class="field field-w-name<?= $fieldClass('contractor.name') ?>" data-field="contractor[name]"><label class="field-label">Наименование <span class="req">*</span></label><input class="field-input" name="contractor[name]" value="<?= e($value('contractor.name')) ?>" placeholder='ООО "РОМАШКА"' required><div class="field-msg"><?= e($error('contractor.name')) ?></div></div>
                     <div class="driver-contact-stack"><div class="driver-contact-main-row"><div class="field field-w-phone<?= $fieldClass('contractor.inn') ?>" data-field="contractor[inn]"><label class="field-label">ИНН <span class="req">*</span></label><input class="field-input" name="contractor[inn]" inputmode="numeric" value="<?= e($value('contractor.inn')) ?>" placeholder="7701234567" required><div class="field-msg"><?= e($error('contractor.inn')) ?></div></div><button type="button" class="btn btn-ghost phone-add-btn" data-inn-autofill-btn>Заполнить по ИНН</button></div></div>
                 </div>
-                <div class="form-grid-3">
+                <div class="form-grid-3 mt-3">
                     <div class="field" data-field="contractor[contractor_type]"><label class="field-label">Тип перевозчика</label><select class="field-select" name="contractor[contractor_type]"><?php foreach ([''=>'— Не указан —','legal_entity'=>'Юридическое лицо','individual'=>'Индивидуальный предприниматель','self_employed'=>'Самозанятый','private_person'=>'Физическое лицо'] as $type=>$label): ?><option value="<?= e($type) ?>" <?= $value('contractor.contractor_type') === $type ? 'selected' : '' ?>><?= e($label) ?></option><?php endforeach; ?></select></div>
                     <div class="field<?= $fieldClass('contractor.kpp') ?>" data-field="contractor[kpp]"><label class="field-label">КПП</label><input class="field-input" name="contractor[kpp]" value="<?= e($value('contractor.kpp')) ?>"><div class="field-msg"><?= e($error('contractor.kpp')) ?></div></div>
                     <div class="field<?= $fieldClass('contractor.ogrn') ?>" data-field="contractor[ogrn]"><label class="field-label">ОГРН / ОГРНИП</label><input class="field-input" name="contractor[ogrn]" value="<?= e($value('contractor.ogrn')) ?>"><div class="field-msg"><?= e($error('contractor.ogrn')) ?></div></div>
                 </div>
-                <div class="form-grid-2">
+                <div class="form-grid-2 mt-3">
                     <div class="field" data-field="contractor[director_full_name]"><label class="field-label">Руководитель</label><input class="field-input" name="contractor[director_full_name]" value="<?= e($value('contractor.director_full_name')) ?>" placeholder="ФИО руководителя"></div>
                     <div class="field" data-field="contractor[director_position]"><label class="field-label">Должность</label><input class="field-input" name="contractor[director_position]" value="<?= e($value('contractor.director_position')) ?>" placeholder="Должность"></div>
                 </div>
-                <div class="form-grid-2">
+                <div class="form-grid-2 mt-3">
                     <div class="field" data-field="contractor[legal_address]"><label class="field-label">Юридический адрес</label><textarea class="field-textarea driver-textarea" name="contractor[legal_address]" rows="2" placeholder="Юридический адрес"><?= e($value('contractor.legal_address')) ?></textarea></div>
                     <div class="field" data-field="contractor[physical_address]"><label class="field-label">Фактический адрес</label><textarea class="field-textarea driver-textarea" name="contractor[physical_address]" rows="2" placeholder="Фактический адрес"><?= e($value('contractor.physical_address')) ?></textarea></div>
                 </div>
@@ -103,17 +120,27 @@ foreach ($quickErrors as $key => $message) {
                 <div class="field<?= $fieldClass('contractor.bank_corr_account') ?>" data-field="contractor[bank_corr_account]"><label class="field-label">Корр. счёт</label><input class="field-input" name="contractor[bank_corr_account]" inputmode="numeric" value="<?= e($value('contractor.bank_corr_account')) ?>" placeholder="30101810..."><div class="field-msg"><?= e($error('contractor.bank_corr_account')) ?></div></div>
                 <div class="field<?= $fieldClass('contractor.bank_inn') ?>" data-field="contractor[bank_inn]"><label class="field-label">ИНН банка</label><input class="field-input" name="contractor[bank_inn]" inputmode="numeric" value="<?= e($value('contractor.bank_inn')) ?>" placeholder="7707083893"><div class="field-msg"><?= e($error('contractor.bank_inn')) ?></div></div>
             </div>
-            <div class="field"><label class="field-label">Комментарий</label><textarea name="contractor[comments]" class="field-textarea driver-textarea" rows="2" placeholder="Примечания"><?= e($value('contractor.comments')) ?></textarea></div>
+            <div class="field mt-3"><label class="field-label">Комментарий</label><textarea name="contractor[comments]" class="field-textarea driver-textarea" rows="2" placeholder="Примечания"><?= e($value('contractor.comments')) ?></textarea></div>
+            </div>
+            </div>
         </div>
         <?php endif; ?>
 
-        <div class="form-section route-executor-quick-split-section">
+        <div class="vehicle-set-form-card vehicle-set-unit-panel">
+            <div class="section-title">Водитель</div>
             <div class="entity-form-layout driver-layout driver-layout--docs-left">
                 <div class="entity-form-docs driver-layout-docs">
-                    <div class="section-title">Документы водителя</div>
+                    <div>
+                        <div class="section-title">Документы</div>
+                        <div class="field-msg">Документы можно загрузить сейчас или позже в карточке водителя</div>
+                    </div>
                     <div class="file-list"><?php $upload('driver','passport','Паспорт'); $upload('driver','driver_license','Водительское удостоверение'); $upload('driver','snils','СНИЛС'); ?></div>
-                    <div class="file-list" data-quick-custom-docs="driver"><?php foreach (($quickOld['custom_document_types']['driver'] ?? []) as $index => $title) $customDocument('driver', (int)$index, (string)$title); ?></div>
-                    <button type="button" class="btn btn-ghost" data-add-quick-custom-doc="driver">+ Добавить документ</button>
+                    <div class="form-section">
+                        <div class="section-title">Произвольные документы</div>
+                        <div class="field-msg docs-section-hint">Введите название документа и выберите файл</div>
+                        <div class="file-list" data-quick-custom-docs="driver"><?php foreach (($quickOld['custom_document_types']['driver'] ?? []) as $index => $title) $customDocument('driver', (int)$index, (string)$title); ?></div>
+                        <button type="button" class="btn btn-ghost" data-add-quick-custom-doc="driver">+ Добавить документ</button>
+                    </div>
                 </div>
                 <div class="entity-form-main driver-layout-main">
                     <div class="section-title">Данные водителя</div>
@@ -142,20 +169,23 @@ foreach ($quickErrors as $key => $message) {
             </div>
         </div>
 
-        <div class="form-section">
+        <div class="vehicle-set-form-card vehicle-set-unit-panel">
             <div class="section-title">Транспорт</div>
             <div class="vehicle-set-card-list">
                 <div class="vehicle-set-form-card vehicle-set-type-card"><div class="field<?= $fieldClass('vehicle.set_type') ?>"><label class="field-label">Тип комплекта <span class="req">*</span></label><select class="field-input" name="vehicle[set_type]" data-quick-set-type><option value="single" <?= $value('vehicle.set_type','single') === 'single' ? 'selected' : '' ?>>Одиночное ТС</option><option value="coupling" <?= $value('vehicle.set_type') === 'coupling' ? 'selected' : '' ?>>Сцепка</option><option value="road_train" <?= $value('vehicle.set_type') === 'road_train' ? 'selected' : '' ?>>Автопоезд</option></select><div class="field-msg"><?= e($error('vehicle.set_type')) ?></div></div></div>
-                <?php foreach (['primary' => 'Транспортная единица', 'secondary' => 'Полуприцеп'] as $unit => $title): $secondary = $unit === 'secondary'; $selectedSetType = $value('vehicle.set_type', 'single'); $unitActive = !$secondary || in_array($selectedSetType, ['coupling','road_train'], true); $showMetrics = $selectedSetType !== 'coupling' || $secondary; ?>
+                <?php foreach (['primary', 'secondary'] as $unit): $secondary = $unit === 'secondary'; $selectedSetType = $value('vehicle.set_type', 'single'); $presentation = $vehiclePresentation($selectedSetType, $unit); $unitActive = !$secondary || in_array($selectedSetType, ['coupling','road_train'], true); $showMetrics = $selectedSetType !== 'coupling' || $secondary; ?>
                 <div class="vehicle-set-form-card vehicle-set-unit-panel<?= !$unitActive ? ' is-hidden' : '' ?>" data-quick-unit="<?= e($unit) ?>" <?= $secondary ? 'data-quick-secondary' : '' ?>>
-                    <div class="section-title" data-quick-<?= e($unit) ?>-title><?= e($title) ?></div>
+                    <div class="section-title" data-quick-<?= e($unit) ?>-title><?= e($presentation['title']) ?></div>
                     <div class="vehicle-set-unit-card-body vehicle-set-unit-card-body--docs-left">
                         <div class="vehicle-set-unit-docs">
                             <div class="vehicle-doc-section">
-                                <div class="section-title">Документы <?= $secondary ? 'дополнительной единицы' : 'ТС' ?></div>
+                                <div class="section-title" data-quick-docs-title><?= e($presentation['docs']) ?></div>
                                 <div class="file-list"><?php $upload($unit,'sts','СТС'); $upload($unit,'diagnostic_card','Диагностическая карта'); $upload($unit,'photo','Фотография'); ?></div>
-                                <div class="file-list" data-quick-custom-docs="<?= e($unit) ?>"><?php foreach (($quickOld['custom_document_types'][$unit] ?? []) as $index => $docTitle) $customDocument($unit, (int)$index, (string)$docTitle); ?></div>
-                                <button type="button" class="btn btn-ghost" data-add-quick-custom-doc="<?= e($unit) ?>">+ Добавить документ</button>
+                                <div class="form-section vehicle-custom-docs">
+                                    <div class="section-title" data-quick-custom-docs-title><?= e($presentation['custom_docs']) ?></div>
+                                    <div class="file-list" data-quick-custom-docs="<?= e($unit) ?>"><?php foreach (($quickOld['custom_document_types'][$unit] ?? []) as $index => $docTitle) $customDocument($unit, (int)$index, (string)$docTitle); ?></div>
+                                    <button type="button" class="btn btn-ghost" data-add-quick-custom-doc="<?= e($unit) ?>">+ Добавить документ</button>
+                                </div>
                             </div>
                         </div>
                         <div class="vehicle-set-unit-fields">
@@ -182,6 +212,7 @@ foreach ($quickErrors as $key => $message) {
             <?php $documentErrors = array_filter($quickErrors, static fn($key): bool => str_starts_with((string)$key, 'documents.'), ARRAY_FILTER_USE_KEY); ?>
             <?php if ($documentErrors): ?><div class="notice warn"><?= e(implode(' ', array_values($documentErrors))) ?></div><?php endif; ?>
             <?php if ($quickMode === RouteExecutorQuickCreateService::MODE_EXISTING_CONTRACTOR): ?><div class="form-actions"><button type="button" class="btn btn-ghost" data-quick-contractor-back>← Сменить подрядчика</button></div><?php endif; ?>
+        </div>
         </div>
     </div>
 </form>
