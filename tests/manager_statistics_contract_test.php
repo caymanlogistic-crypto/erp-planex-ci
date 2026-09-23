@@ -15,6 +15,7 @@ $registry = new App\Security\PageRegistry();
 $page = $registry->page('company.statistics.managers');
 $check(is_array($page), 'statistics page is registered');
 $check(($page['path'] ?? '') === '/company/statistics/managers', 'statistics page route');
+$check(($page['label'] ?? '') === 'Работа логистов', 'statistics page role-management label');
 $check(($page['section'] ?? '') === 'Статистика', 'statistics section in role tree');
 $check(in_array('company.statistics.managers', $registry->grantablePageKeys(), true), 'statistics page is grantable');
 
@@ -32,8 +33,10 @@ $check(str_contains($controller, 'schemaReady($local)') && !str_contains($contro
 $check(str_contains($service, "effectiveDataScope('waste_trip')") && str_contains($service, "RegulatedDataScopeService::condition('waste_trip'"), 'waste trip data scope enforced');
 $check(substr_count($tripService, 'WasteTripStartStatisticsService::synchronizeTrip') >= 6, 'all waste trip mutation paths synchronize facts');
 $check(str_contains($migration, 'responsible_name_snapshot') && str_contains($migration, 'ON DUPLICATE KEY UPDATE'), 'historical manager attribution and idempotent backfill');
-$check(str_contains($view, 'Рейсы поставлены на погрузку') && str_contains($view, 'Работа каждого менеджера') && str_contains($view, 'Из чего сложился результат'), 'decision layers are rendered');
-$check(str_contains($view, "'weeks'=>'Недели'") && str_contains($view, "'months'=>'Месяцы'") && str_contains($view, "'custom'=>'Период'"), 'required period modes');
+$check(str_contains($controller, 'eligibleLogists($central, $companyId)') && str_contains($service, "r.system_key='logist'"), 'only active central Logist role is included');
+$check(str_contains($view, 'Рейсы поставлены на погрузку') && str_contains($view, 'Точные значения по периодам') && str_contains($view, 'Итоги каждого логиста') && str_contains($view, 'Из чего сложился результат'), 'decision layers are rendered');
+$check(str_contains($view, "'week'=>'Неделя'") && str_contains($view, "'month'=>'Месяц'") && str_contains($view, "'year'=>'Год'") && str_contains($view, "'custom'=>'Свой период'"), 'required calendar period modes');
+$check(str_contains($view, 'Динамика компании и логистов') && str_contains($service, "'period_rows'=>self::periodRows"), 'company and logist dynamics with exact period values');
 $check(str_contains($view, "'trips'=>") && str_contains($view, "'requests'=>") && str_contains($view, "'weight'=>"), 'required metric modes');
 $check(str_contains($css, '#C07830') && str_contains($css, '#4A7A9B') && str_contains($css, '#3A8278'), 'approved chart palette');
 $check(str_contains($css, '@media(max-width:1180px)') && str_contains($css, '@media(max-width:760px)'), 'responsive dashboard contract');
