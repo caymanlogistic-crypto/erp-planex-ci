@@ -3153,17 +3153,19 @@ window.initOwnerCreateForm = window.initPasswordControls;
     function setCreateModalLayout(layout) {
         var inner = document.getElementById('route-executor-create-modal-inner');
         if (!inner) return;
-        ['is-quick-new', 'is-quick-select', 'is-quick-details', 'is-legacy-create'].forEach(function (className) {
+        ['modal-sm', 'modal-md', 'modal-lg', 'driver-create-modal'].forEach(function (className) {
             inner.classList.remove(className);
         });
-        if (layout) inner.classList.add(layout);
+        (layout || 'modal-lg').split(/\s+/).forEach(function (className) {
+            if (className) inner.classList.add(className);
+        });
     }
 
     function showCreateChoices() {
         if (!createModal) return;
         var target = document.getElementById('route-executor-create-modal-content');
         if (target) target.innerHTML = createChoiceHtml;
-        setCreateModalLayout('');
+        setCreateModalLayout('modal-lg');
         setCreateTitle('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f \u0440\u0435\u0439\u0441\u0430');
         var foot = document.getElementById('route-executor-create-modal-foot');
         if (foot) foot.style.display = 'none';
@@ -3200,8 +3202,10 @@ window.initOwnerCreateForm = window.initPasswordControls;
             });
             var primaryTitle = form.querySelector('[data-quick-primary-title]');
             var secondaryTitle = form.querySelector('[data-quick-secondary-title]');
+            var secondaryDocs = form.querySelector('[data-quick-secondary-docs]');
             if (primaryTitle) primaryTitle.textContent = select.value === 'coupling' ? '\u0422\u044f\u0433\u0430\u0447' : (select.value === 'road_train' ? '\u041f\u0435\u0440\u0432\u0430\u044f \u0447\u0430\u0441\u0442\u044c' : '\u0422\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u043d\u0430\u044f \u0435\u0434\u0438\u043d\u0438\u0446\u0430');
             if (secondaryTitle) secondaryTitle.textContent = select.value === 'road_train' ? '\u041f\u0440\u0438\u0446\u0435\u043f' : '\u041f\u043e\u043b\u0443\u043f\u0440\u0438\u0446\u0435\u043f';
+            if (secondaryDocs) secondaryDocs.classList.toggle('is-hidden', !hasSecondary);
         }
 
         var setType = form.querySelector('[data-quick-set-type]');
@@ -3210,15 +3214,97 @@ window.initOwnerCreateForm = window.initPasswordControls;
             updateVehicleFields();
         }
 
-        form.querySelectorAll('[data-quick-file-input]').forEach(function (input) {
-            input.addEventListener('change', function () {
-                var label = input.closest('[data-quick-upload]');
-                var state = label ? label.querySelector('[data-quick-upload-state]') : null;
-                var count = input.files ? input.files.length : 0;
-                if (state) state.textContent = count ? (count === 1 ? input.files[0].name : '\u0412\u044b\u0431\u0440\u0430\u043d\u043e: ' + count) : '\u0424\u0430\u0439\u043b \u043d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d';
-                if (label) label.classList.toggle('has-files', count > 0);
+        if (window.initContactFields) window.initContactFields(form, { fieldPrefix: 'contractor[contacts]' });
+
+        var extraPhoneButton = form.querySelector('[data-quick-add-extra-phone]');
+        var extraPhoneContainer = form.querySelector('[data-quick-extra-phones]');
+        function bindExtraPhoneRemove(button) {
+            if (!button || button.dataset.phoneRemoveReady === '1') return;
+            button.dataset.phoneRemoveReady = '1';
+            button.addEventListener('click', function () {
+                var row = button.closest('.driver-extra-phone-row');
+                if (row) row.remove();
+            });
+        }
+        if (extraPhoneButton && extraPhoneContainer && extraPhoneButton.dataset.quickReady !== '1') {
+            extraPhoneButton.dataset.quickReady = '1';
+            extraPhoneButton.addEventListener('click', function () {
+                var row = document.createElement('div');
+                row.className = 'driver-extra-phone-row';
+                row.innerHTML = '<div class="field driver-extra-phone-field"><input type="text" name="driver[extra_phones][]" class="field-input" placeholder="+7 900 000-00-00"><div class="field-msg"></div></div><div class="driver-extra-phone-comment-wrap"><input type="text" name="driver[extra_phone_comments][]" class="field-input" placeholder="Комментарий к телефону"><button type="button" class="driver-extra-phone-remove" title="Удалить">×</button></div>';
+                extraPhoneContainer.appendChild(row);
+                bindExtraPhoneRemove(row.querySelector('.driver-extra-phone-remove'));
+                row.querySelector('input').focus();
+            });
+        }
+        form.querySelectorAll('.driver-extra-phone-remove').forEach(bindExtraPhoneRemove);
+
+        var quickDocumentCounter = form.querySelectorAll('[data-quick-custom-document]').length;
+        function bindQuickDocumentRow(row) {
+            if (!row || row.dataset.quickDocumentReady === '1') return;
+            row.dataset.quickDocumentReady = '1';
+            var picker = row.querySelector('.js-file-pick-btn');
+            var input = row.querySelector('.js-custom-file-input, .js-predef-file-input');
+            var remove = row.querySelector('.file-remove');
+            var clear = row.querySelector('.predef-file-clear');
+            if (picker && input) picker.addEventListener('click', function () { input.click(); });
+            if (input) input.addEventListener('change', function () {
+                var files = input.files;
+                var badge = row.querySelector('.file-type-badge');
+                var meta = row.querySelector('.file-meta');
+                var label = picker ? picker.querySelector('span') : null;
+                var filled = !!(files && files.length);
+                var extension = filled ? String(files[0].name || '').split('.').pop().toUpperCase() : '—';
+                if (badge) { badge.textContent = filled ? extension.slice(0, 4) : '—'; badge.className = 'file-type-badge ' + (filled ? 'is-other' : 'file-type-badge-empty'); }
+                if (meta) { meta.textContent = filled ? (files.length === 1 ? files[0].name : '\u0412\u044b\u0431\u0440\u0430\u043d\u043e \u0444\u0430\u0439\u043b\u043e\u0432: ' + files.length) : '\u0424\u0430\u0439\u043b \u043d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d'; meta.classList.toggle('is-hidden', !filled && row.classList.contains('custom-doc-row')); }
+                if (label) label.textContent = filled ? '\u0417\u0430\u043c\u0435\u043d\u0438\u0442\u044c' : '\u0412\u044b\u0431\u0440\u0430\u0442\u044c';
+                row.classList.toggle('is-empty', !filled); row.classList.toggle('has-file', filled);
+                if (clear) clear.classList.toggle('is-hidden', !filled);
+            });
+            if (remove) remove.addEventListener('click', function () { row.remove(); });
+            if (clear && input) clear.addEventListener('click', function () { input.value = ''; input.dispatchEvent(new Event('change')); });
+        }
+        form.querySelectorAll('.document-file-row').forEach(bindQuickDocumentRow);
+        form.querySelectorAll('[data-add-quick-custom-doc]').forEach(function (button) {
+            if (button.dataset.quickReady === '1') return;
+            button.dataset.quickReady = '1';
+            button.addEventListener('click', function () {
+                var entity = button.getAttribute('data-add-quick-custom-doc');
+                var container = form.querySelector('[data-quick-custom-docs="' + entity + '"]');
+                if (!container) return;
+                quickDocumentCounter += 1;
+                var id = 'route-executor-custom-' + entity + '-dynamic-' + quickDocumentCounter;
+                var row = document.createElement('div');
+                row.className = 'file-item custom-doc-row document-file-row is-empty';
+                row.setAttribute('data-quick-custom-document', '');
+                row.innerHTML = '<div class="file-type-badge file-type-badge-empty" id="' + id + '-badge">—</div><div class="file-info"><div class="field custom-doc-title-field"><input type="text" name="custom_document_types[' + entity + '][]" class="field-input" placeholder="Введите название"><div class="field-msg"></div></div><div class="file-meta is-hidden" id="' + id + '-name"></div></div><button type="button" class="btn btn-secondary file-action-btn js-file-pick-btn" data-file-input="' + id + '-input"><span>Выбрать</span></button><button type="button" class="file-remove" title="Удалить документ">×</button><input type="file" id="' + id + '-input" class="file-input-hidden js-custom-file-input" name="quick_custom_docs[' + entity + '][]" accept=".pdf,.doc,.docx,.rtf,.odt,.xls,.xlsx,.csv,.ods,.jpg,.jpeg,.png,.webp,.gif,.bmp,.tif,.tiff,.txt">';
+                container.appendChild(row);
+                bindQuickDocumentRow(row);
+                row.querySelector('input[type="text"]').focus();
             });
         });
+
+        var innAutofillButton = form.querySelector('[data-inn-autofill-btn]');
+        if (innAutofillButton && window.runLegalEntityInnLookup && innAutofillButton.dataset.leInnReady !== '1') {
+            innAutofillButton.dataset.leInnReady = '1';
+            innAutofillButton.addEventListener('click', function (event) {
+                event.preventDefault();
+                window.runLegalEntityInnLookup(form, {
+                    button: innAutofillButton,
+                    typeFieldName: 'contractor_type',
+                    fieldNames: {
+                        inn: 'contractor[inn]',
+                        name: 'contractor[name]',
+                        contractor_type: 'contractor[contractor_type]',
+                        kpp: 'contractor[kpp]',
+                        ogrn: 'contractor[ogrn]',
+                        legal_address: 'contractor[legal_address]'
+                    },
+                    idleButtonText: '\u0417\u0430\u043f\u043e\u043b\u043d\u0438\u0442\u044c \u043f\u043e \u0418\u041d\u041d',
+                    loadingButtonText: '\u041f\u043e\u0438\u0441\u043a...'
+                });
+            });
+        }
 
         var contractorStep = form.querySelector('[data-quick-contractor-step]');
         var detailsStep = form.querySelector('[data-quick-details-step]');
@@ -3226,14 +3312,14 @@ window.initOwnerCreateForm = window.initPasswordControls;
         var back = form.querySelector('[data-quick-contractor-back]');
         if (next && contractorStep && detailsStep) {
             var showingDetails = !detailsStep.classList.contains('is-hidden');
-            setCreateModalLayout(showingDetails ? 'is-quick-details' : 'is-quick-select');
+            setCreateModalLayout(showingDetails ? 'modal-lg driver-create-modal' : 'modal-md');
             setQuickCreateFoot(showingDetails);
             next.addEventListener('click', function () {
                 var select = form.querySelector('#quick-contractor-id');
                 if (!select || !select.reportValidity()) return;
                 contractorStep.classList.add('is-hidden');
                 detailsStep.classList.remove('is-hidden');
-                setCreateModalLayout('is-quick-details');
+                setCreateModalLayout('modal-lg driver-create-modal');
                 setQuickCreateFoot(true);
                 var first = detailsStep.querySelector('input:not([type="hidden"]), select');
                 if (first) first.focus();
@@ -3241,18 +3327,33 @@ window.initOwnerCreateForm = window.initPasswordControls;
             if (back) back.addEventListener('click', function () {
                 detailsStep.classList.add('is-hidden');
                 contractorStep.classList.remove('is-hidden');
-                setCreateModalLayout('is-quick-select');
+                setCreateModalLayout('modal-md');
                 setQuickCreateFoot(false);
             });
         } else {
-            setCreateModalLayout('is-quick-new');
+            setCreateModalLayout('modal-lg driver-create-modal');
             setQuickCreateFoot(true);
         }
 
         if (form.dataset.quickCreateReady === '1') return;
         form.dataset.quickCreateReady = '1';
         form.addEventListener('submit', function (event) {
+            var blockedByExistingValidation = event.defaultPrevented;
             event.preventDefault();
+            if (blockedByExistingValidation || !form.reportValidity()) return;
+            var customDocumentsValid = true;
+            form.querySelectorAll('[data-quick-custom-document]').forEach(function (row) {
+                var title = row.querySelector('input[type="text"]');
+                var input = row.querySelector('input[type="file"]');
+                var hasFile = !!(input && input.files && input.files.length);
+                var hasTitle = !!(title && title.value.trim());
+                var field = title ? title.closest('.field') : null;
+                var message = field ? field.querySelector('.field-msg') : null;
+                if (field) field.classList.toggle('is-error', hasFile && !hasTitle);
+                if (message) message.textContent = hasFile && !hasTitle ? '\u0412\u0432\u0435\u0434\u0438\u0442\u0435 \u043d\u0430\u0437\u0432\u0430\u043d\u0438\u0435 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u0430' : '';
+                if (hasFile && !hasTitle) customDocumentsValid = false;
+            });
+            if (!customDocumentsValid) return;
             var submit = document.querySelector('button[form="route-executor-quick-create-form"][type="submit"]');
             if (submit) submit.disabled = true;
             fetch(form.getAttribute('action'), { method: 'POST', credentials: 'same-origin', body: new FormData(form) })
@@ -3278,7 +3379,7 @@ window.initOwnerCreateForm = window.initPasswordControls;
 
     function openQuickCreateForm(mode) {
         if (!createModal) return;
-        setCreateModalLayout(mode === 'new_contractor' ? 'is-quick-new' : 'is-quick-select');
+        setCreateModalLayout(mode === 'new_contractor' ? 'modal-lg driver-create-modal' : 'modal-md');
         setCreateTitle(mode === 'new_contractor' ? '\u041d\u043e\u0432\u044b\u0439 \u043f\u043e\u0434\u0440\u044f\u0434\u0447\u0438\u043a' : '\u0421\u0442\u0430\u0440\u044b\u0439 \u043f\u043e\u0434\u0440\u044f\u0434\u0447\u0438\u043a, \u043d\u043e\u0432\u044b\u0439 \u0432\u043e\u0434\u0438\u0442\u0435\u043b\u044c \u0438 \u0422\u0421');
         setModalLoading(createModal, 'route-executor-create-modal-content');
         setQuickCreateFoot(mode === 'new_contractor');
@@ -3295,7 +3396,7 @@ window.initOwnerCreateForm = window.initPasswordControls;
 
     function openExistingCreateForm() {
         if (!createModal) return;
-        setCreateModalLayout('is-legacy-create');
+        setCreateModalLayout('modal-lg driver-create-modal');
         setCreateTitle('\u0421\u043e\u0431\u0440\u0430\u0442\u044c \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f \u0438\u0437 \u0433\u043e\u0442\u043e\u0432\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445');
         setModalLoading(createModal, 'route-executor-create-modal-content');
         var foot = document.getElementById('route-executor-create-modal-foot');
@@ -3502,6 +3603,14 @@ window.initOwnerCreateForm = window.initPasswordControls;
             event.preventDefault();
             openEditModal(editLink.getAttribute('data-route-executor-edit-link'));
         }
+    });
+
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        var createChoice = event.target.closest('[data-route-executor-create-choice]');
+        if (!createChoice) return;
+        event.preventDefault();
+        createChoice.click();
     });
 
     var tableBody = document.querySelector('[data-route-executors-grid] tbody');

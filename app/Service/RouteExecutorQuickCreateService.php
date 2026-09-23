@@ -13,12 +13,6 @@ final class RouteExecutorQuickCreateService
 
     /** @var array<string,array<string,string>> */
     private const DOCUMENTS = [
-        'contractor' => [
-            'company_card' => 'Карточка предприятия',
-            'inn_cert' => 'Свидетельство ИНН',
-            'ogrn_cert' => 'Свидетельство ОГРН',
-            'contract' => 'Договор',
-        ],
         'driver' => [
             'passport' => 'Паспорт',
             'driver_license' => 'Водительское удостоверение',
@@ -55,18 +49,17 @@ final class RouteExecutorQuickCreateService
             $contractor['inn'] = preg_replace('/\D+/', '', (string)($contractor['inn'] ?? '')) ?? '';
             $contractor['kpp'] = preg_replace('/\D+/', '', (string)($contractor['kpp'] ?? '')) ?? '';
             $contractor['ogrn'] = preg_replace('/\D+/', '', (string)($contractor['ogrn'] ?? '')) ?? '';
-            $contractor['contact_phone'] = self::normalizePhone((string)($contractor['contact_phone'] ?? '')) ?? trim((string)($contractor['contact_phone'] ?? ''));
-            $contractor['contact_email'] = mb_strtolower(trim((string)($contractor['contact_email'] ?? '')), 'UTF-8');
+            $normalizedContacts = ContractorContactService::normalizeSubmittedContacts($contractor['contacts'] ?? []);
+            $contractor['contacts'] = $normalizedContacts['contacts'];
             $input['contractor'] = $contractor;
 
             foreach ($contractorService->validateContractor($contractor, $pdo) as $field => $message) {
                 $errors['contractor.' . $field] = (string)$message;
             }
-            if ($contractor['contact_email'] !== '' && !filter_var($contractor['contact_email'], FILTER_VALIDATE_EMAIL)) {
-                $errors['contractor.contact_email'] = 'Укажите корректный email.';
-            }
-            if (trim((string)($contractor['contact_phone'] ?? '')) !== '' && self::normalizePhone((string)$contractor['contact_phone']) === null) {
-                $errors['contractor.contact_phone'] = 'Телефон должен содержать 10 или 11 цифр.';
+            foreach ($normalizedContacts['errors'] as $index => $rowErrors) {
+                foreach ($rowErrors as $field => $message) {
+                    $errors['contractor.contacts.' . $index . '.' . $field] = (string)$message;
+                }
             }
         } else {
             $contractorId = (int)($input['contractor_id'] ?? 0);
@@ -84,12 +77,35 @@ final class RouteExecutorQuickCreateService
         $driver = is_array($input['driver'] ?? null) ? $input['driver'] : [];
         $rawPassportNumber = trim((string)($driver['passport_number'] ?? ''));
         $rawLicenseNumber = trim((string)($driver['license_number'] ?? ''));
+        $rawDepartmentCode = trim((string)($driver['passport_department_code'] ?? ''));
+        $rawPassportIssueDate = trim((string)($driver['passport_issue_date'] ?? ''));
+        $rawLicenseIssueDate = trim((string)($driver['license_issue_date'] ?? ''));
+        $rawSnils = trim((string)($driver['snils'] ?? ''));
         $driver['full_name'] = self::normalizeFullName((string)($driver['full_name'] ?? ''));
         $rawDriverPhone = trim((string)($driver['phone'] ?? ''));
         $driver['phone'] = self::normalizePhone($rawDriverPhone) ?? $rawDriverPhone;
         $driver['email'] = mb_strtolower(trim((string)($driver['email'] ?? '')), 'UTF-8');
         $driver['passport_number'] = self::normalizeTenDigits($rawPassportNumber);
         $driver['license_number'] = self::normalizeTenDigits($rawLicenseNumber);
+        $driver['passport_department_code'] = self::normalizeDepartmentCode((string)($driver['passport_department_code'] ?? ''));
+        $driver['passport_issued_by'] = self::compactSpaces((string)($driver['passport_issued_by'] ?? ''));
+        $driver['passport_issue_date'] = self::normalizeDate((string)($driver['passport_issue_date'] ?? ''));
+        $driver['license_issue_date'] = self::normalizeDate((string)($driver['license_issue_date'] ?? ''));
+        $driver['snils'] = self::normalizeSnils((string)($driver['snils'] ?? ''));
+        $driver['comments'] = self::compactSpaces((string)($driver['comments'] ?? ''));
+        $driver['extra_phones'] = is_array($driver['extra_phones'] ?? null) ? $driver['extra_phones'] : [];
+        $driver['extra_phone_comments'] = is_array($driver['extra_phone_comments'] ?? null) ? $driver['extra_phone_comments'] : [];
+        foreach ($driver['extra_phones'] as $index => $extraPhone) {
+            $rawExtraPhone = trim((string)$extraPhone);
+            if ($rawExtraPhone === '') continue;
+            $normalizedExtraPhone = self::normalizePhone($rawExtraPhone);
+            if ($normalizedExtraPhone === null) {
+                $errors['driver.extra_phones.' . $index] = 'Телефон должен содержать 10 или 11 цифр.';
+                continue;
+            }
+            $driver['extra_phones'][$index] = $normalizedExtraPhone;
+            $driver['extra_phone_comments'][$index] = self::compactSpaces((string)($driver['extra_phone_comments'][$index] ?? ''));
+        }
         $input['driver'] = $driver;
 
         if (count(preg_split('/\s+/u', trim($driver['full_name'])) ?: []) !== 3) {
@@ -114,6 +130,21 @@ final class RouteExecutorQuickCreateService
         if ($rawLicenseNumber !== '' && $driver['license_number'] === null) {
             $errors['driver.license_number'] = 'Номер ВУ должен содержать 10 цифр.';
             $input['driver']['license_number'] = $rawLicenseNumber;
+        }
+        $rawDates = ['passport_issue_date' => $rawPassportIssueDate, 'license_issue_date' => $rawLicenseIssueDate];
+        foreach (['passport_issue_date' => 'дату выдачи паспорта', 'license_issue_date' => 'дату выдачи ВУ'] as $field => $label) {
+            if (($driver[$field] ?? null) === false) {
+                $errors['driver.' . $field] = 'Укажите корректную ' . $label . ' в формате ДД.ММ.ГГГГ.';
+                $input['driver'][$field] = $rawDates[$field];
+            }
+        }
+        if ($rawDepartmentCode !== '' && $driver['passport_department_code'] === null) {
+            $errors['driver.passport_department_code'] = 'Код подразделения должен состоять из 6 цифр.';
+            $input['driver']['passport_department_code'] = $rawDepartmentCode;
+        }
+        if ($rawSnils !== '' && $driver['snils'] === null) {
+            $errors['driver.snils'] = 'СНИЛС должен содержать 11 цифр.';
+            $input['driver']['snils'] = $rawSnils;
         }
 
         $vehicle = is_array($input['vehicle'] ?? null) ? $input['vehicle'] : [];
@@ -156,7 +187,7 @@ final class RouteExecutorQuickCreateService
     ): array {
         $mode = self::normalizeMode($mode);
         $errors = self::validate($pdo, $input, $mode, $contractorService);
-        $uploadPlan = self::buildUploadPlan($files, (string)($input['vehicle']['set_type'] ?? 'single'), $mode);
+        $uploadPlan = self::buildUploadPlan($files, $input, (string)($input['vehicle']['set_type'] ?? 'single'));
         foreach ($uploadPlan['errors'] as $key => $message) {
             $errors[$key] = $message;
         }
@@ -171,18 +202,7 @@ final class RouteExecutorQuickCreateService
             if ($mode === self::MODE_NEW_CONTRACTOR) {
                 $contractorData = $input['contractor'];
                 $contractorId = $contractorService->createContractor($pdo, $contractorData, $userId, $role);
-                $contacts = [];
-                if (($contractorData['contact_phone'] ?? '') !== '' || ($contractorData['contact_email'] ?? '') !== '') {
-                    $contacts[] = [
-                        'contact_person' => null,
-                        'phone' => (string)($contractorData['contact_phone'] ?? ''),
-                        'email' => (string)($contractorData['contact_email'] ?? ''),
-                        'comment' => null,
-                        'is_primary' => 1,
-                        'is_document_email' => ($contractorData['contact_email'] ?? '') !== '' ? 1 : 0,
-                    ];
-                }
-                ContractorContactService::replaceForContractor($pdo, $contractorId, $contacts, $userId, $role);
+                ContractorContactService::replaceForContractor($pdo, $contractorId, $contractorData['contacts'] ?? [], $userId, $role);
             } else {
                 $contractorId = (int)$input['contractor_id'];
                 $stmt = $pdo->prepare("SELECT 1 FROM contractors WHERE id=? AND deleted_at IS NULL AND status='active' FOR UPDATE");
@@ -203,6 +223,7 @@ final class RouteExecutorQuickCreateService
                 'comments' => null,
             ];
             $driverId = $driverService->createDriver($pdo, $driverData, $userId, $role);
+            self::storeDriverExtraPhones($pdo, $driverId, $input['driver'], $userId, $role);
 
             $vehicleMembershipId = RegulatedDataScopeService::assertCanCreate('vehicle_unit');
             $rules = vehicleSetTypeRules();
@@ -213,8 +234,8 @@ final class RouteExecutorQuickCreateService
                 $unitRule = $rules[$setType]['units'][$unitRole];
                 $insertUnit = $pdo->prepare(
                     'INSERT INTO vehicle_units
-                        (plate_number,brand,model,unit_type,vin,capacity_tons,volume_m3,status,created_by_user_id,created_by_membership_id,created_by_role)
-                     VALUES (?,?,?,?,?,?,?,?,?,?,?)'
+                        (plate_number,brand,model,unit_type,vin,capacity_tons,volume_m3,diagnostic_card_number,diagnostic_card_date,status,created_by_user_id,created_by_membership_id,created_by_role)
+                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)'
                 );
                 $insertUnit->execute([
                     $unit['plate_number'],
@@ -224,6 +245,8 @@ final class RouteExecutorQuickCreateService
                     $unit['vin'] !== '' ? $unit['vin'] : null,
                     $unit['capacity_tons'] !== '' ? (float)$unit['capacity_tons'] : null,
                     $unit['volume_m3'] !== '' ? (float)$unit['volume_m3'] : null,
+                    $unit['diagnostic_card_number'] !== '' ? $unit['diagnostic_card_number'] : null,
+                    $unit['diagnostic_card_date'] !== '' ? $unit['diagnostic_card_date'] : null,
                     'active',
                     $userId,
                     $vehicleMembershipId > 0 ? $vehicleMembershipId : null,
@@ -291,7 +314,8 @@ final class RouteExecutorQuickCreateService
                     $upload['file'],
                     $userId,
                     $role,
-                    $storedPaths
+                    $storedPaths,
+                    $upload['category'] ?? 'predefined'
                 );
             }
 
@@ -353,9 +377,38 @@ final class RouteExecutorQuickCreateService
         return strlen($digits) === 10 ? substr($digits, 0, 4) . ' ' . substr($digits, 4) : null;
     }
 
+    private static function normalizeDepartmentCode(string $value): string|null
+    {
+        $value = trim($value);
+        if ($value === '') return null;
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        return strlen($digits) === 6 ? substr($digits, 0, 3) . '-' . substr($digits, 3) : null;
+    }
+
+    private static function normalizeSnils(string $value): string|null
+    {
+        $value = trim($value);
+        if ($value === '') return null;
+        $digits = preg_replace('/\D+/', '', $value) ?? '';
+        return strlen($digits) === 11 ? substr($digits, 0, 3) . '-' . substr($digits, 3, 3) . '-' . substr($digits, 6, 3) . ' ' . substr($digits, 9) : null;
+    }
+
+    private static function normalizeDate(string $value): string|false|null
+    {
+        $value = trim($value);
+        if ($value === '') return null;
+        foreach (['!d.m.Y', '!Y-m-d'] as $format) {
+            $date = \DateTimeImmutable::createFromFormat($format, $value);
+            if ($date !== false && $date->format($format === '!d.m.Y' ? 'd.m.Y' : 'Y-m-d') === $value) return $date->format('Y-m-d');
+        }
+        return false;
+    }
+
     /** @return array<string,string> */
     private static function normalizeUnit(array $unit): array
     {
+        $rawDiagnosticDate = trim((string)($unit['diagnostic_card_date'] ?? ''));
+        $diagnosticDate = self::normalizeDate($rawDiagnosticDate);
         return [
             'plate_number' => mb_strtoupper(self::compactSpaces((string)($unit['plate_number'] ?? '')), 'UTF-8'),
             'brand' => self::compactSpaces((string)($unit['brand'] ?? '')),
@@ -363,6 +416,8 @@ final class RouteExecutorQuickCreateService
             'vin' => mb_strtoupper(trim((string)($unit['vin'] ?? '')), 'UTF-8'),
             'capacity_tons' => str_replace(',', '.', trim((string)($unit['capacity_tons'] ?? ''))),
             'volume_m3' => str_replace(',', '.', trim((string)($unit['volume_m3'] ?? ''))),
+            'diagnostic_card_number' => self::compactSpaces((string)($unit['diagnostic_card_number'] ?? '')),
+            'diagnostic_card_date' => $diagnosticDate === false ? $rawDiagnosticDate : ($diagnosticDate ?? ''),
         ];
     }
 
@@ -380,6 +435,9 @@ final class RouteExecutorQuickCreateService
         if ($unit['vin'] !== '' && !preg_match('/^[A-HJ-NPR-Z0-9]{17}$/', $unit['vin'])) {
             $errors[$prefix . '.vin'] = 'VIN должен содержать 17 допустимых символов.';
         }
+        if ($unit['diagnostic_card_date'] !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $unit['diagnostic_card_date'])) {
+            $errors[$prefix . '.diagnostic_card_date'] = 'Укажите корректную дату в формате ДД.ММ.ГГГГ.';
+        }
         foreach (['capacity_tons' => 'Грузоподъёмность', 'volume_m3' => 'Объём'] as $field => $label) {
             if ($unit[$field] !== '' && (!is_numeric(str_replace(',', '.', $unit[$field])) || (float)str_replace(',', '.', $unit[$field]) < 0)) {
                 $errors[$prefix . '.' . $field] = $label . ' должен быть положительным числом.';
@@ -388,7 +446,7 @@ final class RouteExecutorQuickCreateService
     }
 
     /** @return array{files:list<array<string,mixed>>,errors:array<string,string>} */
-    private static function buildUploadPlan(array $files, string $setType, string $mode): array
+    private static function buildUploadPlan(array $files, array $input, string $setType): array
     {
         $plan = [];
         $errors = [];
@@ -396,10 +454,6 @@ final class RouteExecutorQuickCreateService
         if (isset(vehicleSetTypeRules()[$setType]['units']['secondary'])) {
             $allowedEntities[] = 'secondary';
         }
-        if ($mode === self::MODE_NEW_CONTRACTOR) {
-            $allowedEntities[] = 'contractor';
-        }
-
         foreach ($allowedEntities as $entityKey) {
             foreach (self::DOCUMENTS[$entityKey] as $code => $name) {
                 foreach (self::normalizeFiles($files['quick_docs'] ?? [], $entityKey, $code) as $index => $file) {
@@ -417,11 +471,67 @@ final class RouteExecutorQuickCreateService
                         'code' => $code,
                         'name' => $name,
                         'file' => $file,
+                        'category' => 'predefined',
                     ];
                 }
             }
+            $customNames = $input['custom_document_types'][$entityKey] ?? [];
+            if (!is_array($customNames)) $customNames = [];
+            foreach (self::normalizeCustomFiles($files['quick_custom_docs'] ?? [], $entityKey) as $index => $file) {
+                if (($file['error'] ?? UPLOAD_ERR_NO_FILE) === UPLOAD_ERR_NO_FILE || ($file['name'] ?? '') === '') continue;
+                $name = self::compactSpaces((string)($customNames[$index] ?? ''));
+                if ($name === '') {
+                    $errors['documents.' . $entityKey . '.custom.' . $index] = 'Введите название произвольного документа.';
+                    continue;
+                }
+                $validationError = DocumentService::validateUploadedFile($file, true);
+                if ($validationError !== null) {
+                    $errors['documents.' . $entityKey . '.custom.' . $index] = self::uploadErrorMessage($name, $validationError);
+                    continue;
+                }
+                $plan[] = [
+                    'entity_key' => $entityKey,
+                    'entity_type' => in_array($entityKey, ['primary', 'secondary'], true) ? 'vehicle_unit' : $entityKey,
+                    'code' => '',
+                    'name' => $name,
+                    'file' => $file,
+                    'category' => 'custom',
+                ];
+            }
         }
         return ['files' => $plan, 'errors' => $errors];
+    }
+
+    /** @return list<array{name:string,type:string,tmp_name:string,error:int,size:int}> */
+    private static function normalizeCustomFiles(array $files, string $entityKey): array
+    {
+        $names = $files['name'][$entityKey] ?? [];
+        if (!is_array($names)) $names = [$names];
+        $result = [];
+        foreach ($names as $index => $name) {
+            $result[] = [
+                'name' => (string)$name,
+                'type' => (string)($files['type'][$entityKey][$index] ?? ''),
+                'tmp_name' => (string)($files['tmp_name'][$entityKey][$index] ?? ''),
+                'error' => (int)($files['error'][$entityKey][$index] ?? UPLOAD_ERR_NO_FILE),
+                'size' => (int)($files['size'][$entityKey][$index] ?? 0),
+            ];
+        }
+        return $result;
+    }
+
+    private static function storeDriverExtraPhones(PDO $pdo, int $driverId, array $driver, int $userId, string $role): void
+    {
+        $phones = is_array($driver['extra_phones'] ?? null) ? $driver['extra_phones'] : [];
+        $comments = is_array($driver['extra_phone_comments'] ?? null) ? $driver['extra_phone_comments'] : [];
+        if ($phones === []) return;
+        $insert = $pdo->prepare('INSERT INTO driver_phones (driver_id,phone,is_main,comment,created_by_user_id,created_by_role) VALUES (?,?,0,?,?,?)');
+        foreach ($phones as $index => $phone) {
+            $phone = self::normalizePhone((string)$phone);
+            if ($phone === null) continue;
+            $comment = self::compactSpaces((string)($comments[$index] ?? ''));
+            $insert->execute([$driverId, $phone, $comment !== '' ? $comment : null, $userId, $role]);
+        }
     }
 
     /** @return list<array{name:string,type:string,tmp_name:string,error:int,size:int}> */
@@ -464,7 +574,8 @@ final class RouteExecutorQuickCreateService
         array $file,
         int $userId,
         string $role,
-        array &$storedPaths
+        array &$storedPaths,
+        string $category = 'predefined'
     ): void {
         $storedName = DocumentService::makeSafeFilename((string)$file['name']);
         $relativeDir = 'companies/' . $companyId . '/documents/' . $entityType . '/' . $entityId;
@@ -478,7 +589,7 @@ final class RouteExecutorQuickCreateService
         }
         $storedPaths[] = $absolutePath;
         $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($absolutePath) ?: 'application/octet-stream';
-        $documentTypeId = ensureDocumentTypeRecord($pdo, $name, $code, $entityType, 'predefined');
+        $documentTypeId = ensureDocumentTypeRecord($pdo, $name, $code, $entityType, $category);
         $stmt = $pdo->prepare(
             'INSERT INTO documents
                 (entity_type,entity_id,document_type,document_type_id,original_name,stored_name,relative_path,mime_type,file_size,status,uploaded_by_user_id,uploaded_by_role,created_by_user_id,created_by_role)

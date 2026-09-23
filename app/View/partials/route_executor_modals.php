@@ -1,27 +1,30 @@
 <div class="modal-overlay" id="route-executor-create-modal" data-close-on-overlay="0" data-close-on-escape="0">
-  <div class="modal route-executor-modal-inner route-executor-create-modal-inner" id="route-executor-create-modal-inner">
+  <div class="modal modal-lg" id="route-executor-create-modal-inner">
     <div class="modal-head">
       <span class="modal-title" data-route-executor-create-title>Добавить исполнителя рейса</span>
       <button type="button" class="modal-close" data-route-executor-create-close>×</button>
     </div>
     <div class="modal-body" id="route-executor-create-modal-content">
-      <div class="route-executor-create-choices" data-route-executor-create-choices>
-        <p class="route-executor-choice-intro">Выберите, какие данные уже есть в справочниках.</p>
-        <button type="button" class="route-executor-choice" data-route-executor-create-choice="new_contractor">
-          <span class="route-executor-choice-icon">+</span>
-          <span><strong>Новый подрядчик</strong><small>Создать подрядчика, водителя и ТС в одной компактной форме</small></span>
-          <span class="route-executor-choice-arrow">→</span>
-        </button>
-        <button type="button" class="route-executor-choice" data-route-executor-create-choice="existing_contractor">
-          <span class="route-executor-choice-icon">↗</span>
-          <span><strong>Старый подрядчик, новый водитель и ТС</strong><small>Сначала выбрать подрядчика, затем заполнить водителя и транспорт</small></span>
-          <span class="route-executor-choice-arrow">→</span>
-        </button>
-        <button type="button" class="route-executor-choice route-executor-choice--secondary" data-route-executor-create-choice="existing_data">
-          <span class="route-executor-choice-icon">✓</span>
-          <span><strong>Все данные уже созданы</strong><small>Собрать исполнителя из готовых подрядчика, водителей и ТС</small></span>
-          <span class="route-executor-choice-arrow">→</span>
-        </button>
+      <div class="table-card table-card--standard" data-route-executor-create-choices>
+        <div class="table-scroll">
+          <table class="table">
+            <thead><tr><th>Вариант создания</th><th>Что будет создано</th></tr></thead>
+            <tbody>
+              <tr data-route-executor-create-choice="new_contractor" tabindex="0" role="button">
+                <td class="cell-name">Новый подрядчик</td>
+                <td>Подрядчик, водитель и ТС</td>
+              </tr>
+              <tr data-route-executor-create-choice="existing_contractor" tabindex="0" role="button">
+                <td class="cell-name">Старый подрядчик, новый водитель и ТС</td>
+                <td>Водитель и ТС у выбранного подрядчика</td>
+              </tr>
+              <tr data-route-executor-create-choice="existing_data" tabindex="0" role="button">
+                <td class="cell-name">Все данные уже созданы</td>
+                <td>Исполнитель из готовых данных</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
     <div class="modal-foot is-spaced" id="route-executor-create-modal-foot" style="display:none">

@@ -63,6 +63,7 @@
     function applyLookupPayload(form, payload, options) {
         var data = payload && payload.data ? payload.data : {};
         var typeFieldName = options.typeFieldName || 'contractor_type';
+        var fieldNames = options.fieldNames || {};
         var map = {
             name: data.name || '',
             kpp: data.kpp || '',
@@ -74,12 +75,13 @@
         map[typeFieldName] = data.contractor_type || '';
 
         Object.keys(map).forEach(function (fieldName) {
-            var input = form.querySelector('[name="' + fieldName + '"]');
+            var actualFieldName = fieldNames[fieldName] || fieldName;
+            var input = form.querySelector('[name="' + actualFieldName + '"]');
             if (!input || !map[fieldName]) {
                 return;
             }
             markAutofilled(input, map[fieldName]);
-            setFieldMessage(form, fieldName, '');
+            setFieldMessage(form, actualFieldName, '');
         });
     }
 
@@ -89,21 +91,23 @@
         }
 
         var config = options || {};
-        var innField = form.querySelector('[name="inn"]');
+        var fieldNames = config.fieldNames || {};
+        var innFieldName = fieldNames.inn || 'inn';
+        var innField = form.querySelector('[name="' + innFieldName + '"]');
         var button = config.button || form.querySelector('[data-inn-autofill-btn]');
         var idleText = config.idleButtonText || 'Заполнить по ИНН';
         var loadingText = config.loadingButtonText || 'Поиск...';
         var inn = normalizeInn(innField ? innField.value : '');
 
         clearAutofillMessage(form);
-        setFieldMessage(form, 'inn', '');
+        setFieldMessage(form, innFieldName, '');
 
         if (innField) {
             innField.value = inn;
         }
 
         if (inn === '') {
-            setFieldMessage(form, 'inn', 'Укажите ИНН');
+            setFieldMessage(form, innFieldName, 'Укажите ИНН');
             setAutofillMessage(form, 'warning', 'Автозаполнение недоступно', 'Сначала введите ИНН.');
             if (innField && typeof innField.focus === 'function') {
                 innField.focus();
@@ -112,7 +116,7 @@
         }
 
         if (!/^\d+$/.test(inn) || (inn.length !== 10 && inn.length !== 12)) {
-            setFieldMessage(form, 'inn', 'ИНН: 10 или 12 цифр');
+            setFieldMessage(form, innFieldName, 'ИНН: 10 или 12 цифр');
             setAutofillMessage(form, 'warning', 'Некорректный ИНН', 'Укажите ИНН длиной 10 или 12 цифр.');
             if (innField && typeof innField.focus === 'function') {
                 innField.focus();
