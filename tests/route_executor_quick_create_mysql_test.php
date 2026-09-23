@@ -74,6 +74,16 @@ try {
             'kpp' => '770101001',
             'ogrn' => '1027700123456',
             'contractor_type' => 'legal_entity',
+            'legal_address' => 'Москва, ул. Юридическая, 1',
+            'physical_address' => 'Москва, ул. Фактическая, 2',
+            'director_full_name' => 'Сидоров Семен Сергеевич',
+            'director_position' => 'Генеральный директор',
+            'bank_account' => '40702810900000000001',
+            'bank_bik' => '044525225',
+            'bank_name' => 'АО Тест Банк',
+            'bank_corr_account' => '30101810400000000225',
+            'bank_inn' => '7707083893',
+            'comments' => 'Полный комплект реквизитов',
             'contacts' => [
                 ['contact_person' => 'Анна', 'phone' => '+7 900 111-22-33', 'email' => 'docs@quick.test', 'comment' => 'Документы', 'is_primary' => '1', 'is_document_email' => '1'],
                 ['contact_person' => 'Игорь', 'phone' => '+7 900 111-22-44', 'email' => 'dispatch@quick.test', 'comment' => 'Диспетчер'],
@@ -93,6 +103,7 @@ try {
         ],
         'vehicle' => [
             'set_type' => 'coupling',
+            'comments' => 'Основной комплект',
             'primary' => ['plate_number' => 'А001АА77', 'brand' => 'КамАЗ', 'model' => '5490', 'vin' => '', 'capacity_tons' => '', 'volume_m3' => '', 'diagnostic_card_number' => '123456789012345', 'diagnostic_card_date' => '05.06.2025'],
             'secondary' => ['plate_number' => 'В002ВВ77', 'brand' => 'Тонар', 'model' => '', 'vin' => '', 'capacity_tons' => '20', 'volume_m3' => '82'],
         ],
@@ -100,6 +111,10 @@ try {
     $first = RouteExecutorQuickCreateService::create($pdo, 7, $newInput, [], 'new_contractor', 201, 'company_owner', $contractorService, $driverService);
     $ok($first['crew_id'] > 0, 'New-contractor flow did not create a route executor.');
     $ok((int)$pdo->query('SELECT COUNT(*) FROM contractors')->fetchColumn() === 1, 'New contractor was not created exactly once.');
+    $ok((string)$pdo->query('SELECT bank_account FROM contractors LIMIT 1')->fetchColumn() === '40702810900000000001', 'Contractor bank account was not stored.');
+    $ok((string)$pdo->query('SELECT bank_bik FROM contractors LIMIT 1')->fetchColumn() === '044525225', 'Contractor BIK was not stored.');
+    $ok((string)$pdo->query('SELECT physical_address FROM contractors LIMIT 1')->fetchColumn() === 'Москва, ул. Фактическая, 2', 'Contractor physical address was not stored.');
+    $ok((string)$pdo->query('SELECT director_full_name FROM contractors LIMIT 1')->fetchColumn() === 'Сидоров Семен Сергеевич', 'Contractor director was not stored.');
     $ok((int)$pdo->query('SELECT COUNT(*) FROM vehicle_units')->fetchColumn() === 2, 'Coupling must create two vehicle units.');
     $ok((int)$pdo->query('SELECT COUNT(*) FROM crew_drivers')->fetchColumn() === 1, 'Primary crew driver relation is missing.');
     $ok((int)$pdo->query('SELECT COUNT(*) FROM contractor_contacts')->fetchColumn() === 2, 'Additional contractor contacts were not stored.');
@@ -108,6 +123,7 @@ try {
     $ok((string)$pdo->query('SELECT comment FROM driver_phones WHERE is_main=0 LIMIT 1')->fetchColumn() === 'Запасной', 'Additional driver phone comment was not stored.');
     $ok((string)$pdo->query("SELECT diagnostic_card_number FROM vehicle_units WHERE plate_number='А001АА77'")->fetchColumn() === '123456789012345', 'Vehicle diagnostic card number was not stored.');
     $ok((string)$pdo->query("SELECT diagnostic_card_date FROM vehicle_units WHERE plate_number='А001АА77'")->fetchColumn() === '2025-06-05', 'Vehicle diagnostic card date was not normalized and stored.');
+    $ok((string)$pdo->query('SELECT comments FROM vehicle_sets LIMIT 1')->fetchColumn() === 'Основной комплект', 'Vehicle set comment was not stored.');
     $ok((int)$pdo->query("SELECT COUNT(*) FROM entity_assignments WHERE membership_id=11 AND assignment_kind='creator_auto'")->fetchColumn() === 4, 'Creator assignments for contractor, driver and two units are incomplete.');
 
     $existingInput = [
