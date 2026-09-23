@@ -11,7 +11,7 @@ use RuntimeException;
 final class WasteTripStartStatisticsService
 {
     public const METRICS = ['trips', 'requests', 'weight'];
-    public const MODES = ['week', 'month', 'year', 'custom'];
+    public const MODES = ['week', 'month', 'year'];
     public const GROUPS = ['day', 'week', 'month'];
 
     public static function schemaReady(PDO $pdo): bool
@@ -112,37 +112,27 @@ final class WasteTripStartStatisticsService
     {
         $tz = new DateTimeZone('Europe/Moscow');
         $today = ($today ?? new DateTimeImmutable('today', $tz))->setTimezone($tz)->setTime(0, 0);
-        $mode = in_array((string)($query['mode'] ?? ''), self::MODES, true) ? (string)$query['mode'] : 'year';
+        $mode = in_array((string)($query['mode'] ?? ''), self::MODES, true) ? (string)$query['mode'] : 'week';
         $metric = in_array((string)($query['metric'] ?? ''), self::METRICS, true) ? (string)$query['metric'] : 'trips';
-        $selectedWeek = self::parseWeek((string)($query['week'] ?? ''), $tz) ?? $today->modify('monday this week');
-        $selectedMonth = self::parseMonth((string)($query['month'] ?? ''), $tz) ?? $today->modify('first day of this month');
-        $selectedYear = filter_var($query['year'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>2000,'max_range'=>2100]]) ?: (int)$today->format('Y');
 
         if ($mode === 'week') {
-            $from = $selectedWeek;
-            $to = $from->add(new DateInterval('P6D'));
-            $group = 'day';
-        } elseif ($mode === 'month') {
-            $from = $selectedMonth;
-            $to = $from->modify('last day of this month');
+            $from = $today->modify('monday this week')->modify('-7 weeks');
+            $to = $today;
             $group = 'week';
-        } elseif ($mode === 'custom') {
-            $from = self::parseDate((string)($query['from'] ?? ''), $tz) ?? $today->sub(new DateInterval('P29D'));
-            $to = self::parseDate((string)($query['to'] ?? ''), $tz) ?? $today;
-            if ($from > $to) {
-                [$from, $to] = [$to, $from];
-            }
-            $group = in_array((string)($query['group'] ?? ''), self::GROUPS, true)
-                ? (string)$query['group']
-                : (($to->diff($from)->days ?? 0) <= 31 ? 'day' : 'week');
+            $previousFrom = $from->modify('-8 weeks');
+            $previousTo = $to->modify('-8 weeks');
+        } elseif ($mode === 'month') {
+            $from = $today->modify('first day of this month')->modify('-3 months');
+            $to = $today;
+            $group = 'month';
+            $previousFrom = $from->modify('-4 months');
+            $previousTo = self::shiftMonthsClamped($to, -4);
         } else {
-            $from = $today->setDate((int)$selectedYear, 1, 1);
-            $to = (int)$selectedYear === (int)$today->format('Y')
-                ? $today
-                : $today->setDate((int)$selectedYear, 12, 31);
-            $group = in_array((string)($query['group'] ?? ''), ['week','month'], true)
-                ? (string)$query['group']
-                : 'week';
+            $from = $today->modify('first day of this month')->modify('-11 months');
+            $to = $today;
+            $group = 'month';
+            $previousFrom = $from->modify('-12 months');
+            $previousTo = self::shiftMonthsClamped($to, -12);
         }
 
         $durationDays = max(1, (int)$from->diff($to)->days + 1);
@@ -151,41 +141,25 @@ final class WasteTripStartStatisticsService
             $durationDays = 1096;
         }
 
-        if ($mode === 'year') {
-            $previousFrom = $from->modify('-1 year');
-            $previousTo = $to->modify('-1 year');
-        } elseif ($mode === 'month') {
-            $previousFrom = $from->modify('-1 month');
-            $previousTo = $previousFrom->modify('last day of this month');
-        } else {
-            $previousTo = $from->sub(new DateInterval('P1D'));
-            $previousFrom = $previousTo->sub(new DateInterval('P'.($durationDays - 1).'D'));
-        }
-
-        $rawManagers = $query['manager_ids'] ?? [];
-        if (!is_array($rawManagers)) {
-            $rawManagers = explode(',', (string)$rawManagers);
-        }
-        $managerIds = array_values(array_unique(array_filter(
-            array_map('intval', $rawManagers),
-            static fn(int $id): bool => $id > 0
-        )));
-
         return [
             'mode'=>$mode,
             'metric'=>$metric,
             'group'=>$group,
-            'week'=>$selectedWeek->format('o-\WW'),
-            'month'=>$selectedMonth->format('Y-m'),
-            'year'=>(int)$selectedYear,
             'from'=>$from->format('Y-m-d'),
             'to'=>$to->format('Y-m-d'),
             'previous_from'=>$previousFrom->format('Y-m-d'),
             'previous_to'=>$previousTo->format('Y-m-d'),
-            'manager_ids'=>$managerIds,
-            'compare'=>!isset($query['compare']) || (string)$query['compare'] !== '0',
+            'manager_ids'=>[],
+            'compare'=>false,
             'duration_days'=>$durationDays,
         ];
+    }
+
+    private static function shiftMonthsClamped(DateTimeImmutable $date, int $months): DateTimeImmutable
+    {
+        $target = $date->modify('first day of this month')->modify(($months >= 0 ? '+' : '').$months.' months');
+        $day = min((int)$date->format('j'), (int)$target->format('t'));
+        return $target->setDate((int)$target->format('Y'), (int)$target->format('n'), $day);
     }
 
     /** @param list<array{membership_id:int,full_name:string,login?:string}> $eligibleManagers */
@@ -225,7 +199,6 @@ final class WasteTripStartStatisticsService
             'manager_trends'=>$managerTrends,
             'period_rows'=>self::periodRows($trend, $managerTrends),
             'details'=>self::details($pdo, $filters, $allowedIds),
-            'available_years'=>self::availableYears($pdo, $allowedIds),
             'scope'=>AccessControlService::effectiveDataScope('waste_trip'),
         ];
     }
@@ -444,25 +417,6 @@ final class WasteTripStartStatisticsService
         );
         $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    private static function availableYears(PDO $pdo, array $allowedIds): array
-    {
-        $years = [(int)(new DateTimeImmutable('now', new DateTimeZone('Europe/Moscow')))->format('Y')];
-        if ($allowedIds !== []) {
-            [$where,$params] = self::where('2000-01-01', '2100-12-31', [], $allowedIds);
-            $stmt = $pdo->prepare(
-                'SELECT DISTINCT YEAR(s.actual_start_date) AS year
-                   FROM waste_trip_start_statistics s
-                   JOIN waste_trips wt ON wt.id=s.waste_trip_id
-                  WHERE '.implode(' AND ', $where).' ORDER BY year DESC'
-            );
-            $stmt->execute($params);
-            $years = array_merge($years, array_map('intval', $stmt->fetchAll(PDO::FETCH_COLUMN)));
-        }
-        $years = array_values(array_unique(array_filter($years)));
-        rsort($years, SORT_NUMERIC);
-        return $years;
     }
 
     private static function parseDate(string $value, DateTimeZone $tz): ?DateTimeImmutable
