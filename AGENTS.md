@@ -65,6 +65,16 @@ Development loop:
 - A successful check is not repeated while its inputs and candidate HEAD are unchanged.
 - Batch related corrections in the same worktree and commit chain.
 
+### РЕЖИМ РАЗРАБОТКА / DESIGN LAB
+
+When the OWNER asks for `РЕЖИМ РАЗРАБОТКА`, `ПЕСОЧНИЦУ` or iterative page design before implementation, use the repository skill `.agents/skills/planex-design-lab/SKILL.md` and `docs/DESIGN_LAB.md`.
+
+- Work in a localhost-only task session outside the repository; do not expose it to the LAN or Internet.
+- Default to synthetic fixtures. An OWNER-approved local HTML snapshot is allowed only after secret/CSRF sanitization. Never connect the sandbox directly to production DB, APIs or write endpoints.
+- During iteration edit only session overrides/notes, make cheap focused checks and checkpoint meaningful variants. Do not commit, preflight, publish, deploy or write Notion after every visual correction.
+- On explicit `ВНЕДРЯЙ`, require an accepted immutable checkpoint, implement it in the real ERP worktree, and run the normal publication loop once for the finished batch.
+- Each sandbox server owns a dynamic loopback port and exact PID/start-time/executable/arguments/worktree/session state. Stop only that verified process.
+
 Publication loop, once per ready batch:
 
 `START_HEAD → WORK_BRANCH → LOCAL_PREFLIGHT_PASS → LOCAL_PUBLISH_PASS → FEATURE_HEAD → PR_NUMBER → CI_AGGREGATE_RESULT → MERGED_SHA → LIVE_NOTION_MEMORY_PASS → optional DEPLOY_RESULT`
