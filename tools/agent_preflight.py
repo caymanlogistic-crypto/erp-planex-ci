@@ -187,7 +187,9 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
         cheap_ui(results); return results
     if "CHANGED_PHP_SYNTAX" in want: exe("php"); lint(paths,".php",lambda p:["php","-l",p],"CHANGED_PHP_SYNTAX",results)
     if "CHANGED_JS_SYNTAX" in want: exe("node"); lint(paths,".js",lambda p:["node","--check",p],"CHANGED_JS_SYNTAX",results); lint(paths,".mjs",lambda p:["node","--check",p],"CHANGED_JS_SYNTAX",results)
-    if "CHANGED_PYTHON_SYNTAX" in want: lint([p for p in paths if p.startswith("tools/")],".py",lambda p:[sys.executable,"-m","py_compile",p],"CHANGED_PYTHON_SYNTAX",results)
+    if "CHANGED_PYTHON_SYNTAX" in want:
+        syntax_probe = "import pathlib,sys; compile(pathlib.Path(sys.argv[1]).read_bytes(), sys.argv[1], 'exec')"
+        lint([p for p in paths if p.startswith("tools/")], ".py", lambda p:[PYTHON,"-c",syntax_probe,p], "CHANGED_PYTHON_SYNTAX", results)
     if "FINANCE_REGRESSIONS" in want:
         exe("php"); [need(x) for x in FINANCE_TESTS]
         for t in FINANCE_TESTS: cmdcheck(results,"FINANCE_REGRESSIONS",["php",t])
