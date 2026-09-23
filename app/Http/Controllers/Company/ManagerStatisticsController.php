@@ -61,6 +61,8 @@ final class ManagerStatisticsController
         ob_start();
         require base_path('app/View/pages/company_manager_statistics.php');
         $content = (string)ob_get_clean();
+        $pageStylesheets = ['/assets/css/manager-statistics.css'];
+        $pageScripts = ['/assets/js/manager-statistics.js'];
         $config = $this->config;
         $db = $this->db;
         require base_path('app/View/layouts/main.php');

@@ -5,10 +5,6 @@
   margin:0 auto; padding-bottom:20px; font-variant-numeric:tabular-nums;
 }
 .manager-stats__head { margin-bottom:8px; }
-.manager-stats__role-note { display:flex; align-items:center; gap:10px; margin:0 0 8px; padding:9px 11px; border:1px solid color-mix(in srgb,var(--chart-patina) 35%,var(--line-soft)); background:color-mix(in srgb,var(--chart-patina) 7%,var(--surface-strong)); color:var(--text-muted); font-size:10px; }
-.manager-stats__role-note>div { display:flex; flex-direction:column; gap:2px; }
-.manager-stats__role-note strong { color:var(--text-main); font-size:10.5px; }
-.manager-stats__role-mark { display:grid; place-items:center; flex:0 0 25px; height:25px; border-radius:50%; background:var(--chart-patina); color:#fff; font-size:10px; font-weight:800; }
 .manager-stats__scope-note { display:flex; align-items:center; gap:7px; margin:0 0 8px; padding:8px 11px; border:1px solid var(--warning-border); background:var(--warning-bg); color:var(--text-muted); font-size:10.5px; }
 .manager-stats__scope-dot { width:7px; height:7px; border-radius:50%; background:var(--warning); }
 
@@ -40,6 +36,7 @@
 .manager-stats__manager-actions button { padding:0; border:0; background:none; color:var(--accent); font:700 9.5px var(--font-base); cursor:pointer; }
 .manager-stats__manager-list { max-height:220px; overflow:auto; border-top:1px solid var(--line-hair); }
 .manager-stats__manager-list label { display:flex; align-items:center; gap:7px; min-height:31px; padding:5px 3px; border-bottom:1px solid var(--line-hair); font-size:10.5px; cursor:pointer; }
+.manager-stats__manager-list label[hidden] { display:none; }
 .manager-stats__manager-list label:hover { background:var(--surface-form); }
 .manager-stats__manager-list input { width:15px; height:15px; accent-color:var(--accent); }
 .manager-stats__picker-empty { display:block; padding:16px 4px; color:var(--text-faint); font-size:10px; text-align:center; }
@@ -115,7 +112,6 @@
 @media(max-width:760px) {
   .manager-stats { width:calc(100% - 8px); }
   .manager-stats__head { height:auto; min-height:70px; align-items:flex-start; padding-top:10px; padding-bottom:10px; }
-  .manager-stats__role-note { align-items:flex-start; }
   .manager-stats__filter-body,.manager-stats__period-fields { display:grid; grid-template-columns:1fr; width:100%; }
   .manager-stats__field,.manager-stats__field--managers,.manager-stats__field--mode { width:100%; min-width:0; }
   .manager-stats__segments { width:100%; height:auto; flex-wrap:wrap; }

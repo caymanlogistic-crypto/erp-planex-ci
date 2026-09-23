@@ -243,6 +243,13 @@ if (empty($topbarCrumbs)) {
     <link rel="stylesheet" href="<?= app_url('/assets/css/app.css') ?>?v=<?= filemtime(base_path('public/assets/css/app.css')) ?>">
     <link rel="stylesheet" href="<?= app_url('/assets/css/erp-ui.css') ?>?v=<?= filemtime(base_path('public/assets/css/erp-ui.css')) ?>">
     <link rel="stylesheet" href="<?= app_url('/assets/css/roles-access.css') ?>?v=<?= filemtime(base_path('public/assets/css/roles-access.css')) ?>">
+    <?php foreach (($pageStylesheets ?? []) as $pageStylesheet):
+        $pageStylesheet = (string)$pageStylesheet;
+        $pageStylesheetFile = base_path('public/' . ltrim($pageStylesheet, '/'));
+        if (!preg_match('~^/assets/[a-z0-9_./-]+\.css$~i', $pageStylesheet) || !is_file($pageStylesheetFile)) continue;
+    ?>
+    <link rel="stylesheet" href="<?= e(app_url($pageStylesheet)) ?>?v=<?= filemtime($pageStylesheetFile) ?>">
+    <?php endforeach; ?>
 </head>
 <body>
     <div class="app">
@@ -708,5 +715,12 @@ if (empty($topbarCrumbs)) {
     <script src="<?= app_url('/assets/js/legal-entity-modal.js') ?>?v=<?= filemtime(base_path('public/assets/js/legal-entity-modal.js')) ?>"></script>
     <script src="<?= app_url('/assets/js/app.js') ?>?v=<?= filemtime(base_path('public/assets/js/app.js')) ?>"></script>
     <script src="<?= app_url('/assets/js/entity-assignments.js') ?>?v=<?= filemtime(base_path('public/assets/js/entity-assignments.js')) ?>"></script>
+    <?php foreach (($pageScripts ?? []) as $pageScript):
+        $pageScript = (string)$pageScript;
+        $pageScriptFile = base_path('public/' . ltrim($pageScript, '/'));
+        if (!preg_match('~^/assets/[a-z0-9_./-]+\.js$~i', $pageScript) || !is_file($pageScriptFile)) continue;
+    ?>
+    <script src="<?= e(app_url($pageScript)) ?>?v=<?= filemtime($pageScriptFile) ?>"></script>
+    <?php endforeach; ?>
 </body>
 </html>
