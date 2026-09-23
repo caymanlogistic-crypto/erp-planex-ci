@@ -1,0 +1,8 @@
+<?php
+declare(strict_types=1);
+$root=dirname(__DIR__);$workflow=file_get_contents($root.'/.github/workflows/trip_completion_142_production_migration.yml');$script=file_get_contents($root.'/scripts/trip_completion_migration_142.php');$sql=file_get_contents($root.'/database/migrations-local/142_create_waste_trip_completion.sql');
+foreach(['workflow_dispatch:','APPLY_TRIP_COMPLETION_142','group: erpv2-controlled-deploy','Validate exact canonical source and tooling','Require successful exact canonical ERP PLANEX CI','git merge-base --is-ancestor','TRIP_COMPLETION_142_BEFORE_PASS','TRIP_COMPLETION_142_INVARIANTS_PASS','TRIP_COMPLETION_142_DEPLOY_MARKER_UNCHANGED','erpv2/migration142','TRIP_COMPLETION_MIGRATION_MODE=apply','TRIP_COMPLETION_MIGRATION_CONFIRM=APPLY_TRIP_COMPLETION_142','trip_sha256','request_sha256']as$value)if(!str_contains((string)$workflow,$value))throw new RuntimeException('Missing workflow guard: '.$value);
+foreach(["\n  push:","\n  schedule:","\n  workflow_run:",'rsync','git push']as$value)if(str_contains((string)$workflow,$value))throw new RuntimeException('Forbidden migration trigger/action');
+foreach(['TRIP_COMPLETION_142_READ_ONLY_OK','TRIP_COMPLETION_142_APPLY_OK','GET_LOCK','Unjournaled trip completion schema','checksum mismatch','Newer migration exists','141_create_waste_trip_start_statistics.sql','Migration change outside allowed scope','changed source business data']as$value)if(!str_contains((string)$script,$value))throw new RuntimeException('Missing script guard: '.$value);
+if(substr_count((string)$sql,'CREATE TABLE IF NOT EXISTS')!==2||preg_match('/(?:^|;)\s*(INSERT|UPDATE|DELETE|DROP|ALTER)\s/i',(string)$sql))throw new RuntimeException('Migration scope changed');
+echo "TRIP_COMPLETION_142_PRODUCTION_CONTRACT=PASS\n";

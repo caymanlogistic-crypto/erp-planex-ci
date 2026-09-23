@@ -55,6 +55,7 @@ $routePages = [
     'company_bank_finance.php' => ['company.finance.bank_accounts', 'company.finance.bank_settings', 'company.finance.closing_documents'],
     'company_document_generator.php' => ['company.documents.create', 'company.documents.history', 'company.documents.templates'],
     'company_trip_documents.php' => ['company.documents.request', 'company.documents.collection'],
+    'company_trip_completion.php' => ['company.documents.collection'],
     'company_documents.php' => ['company.clients', 'company.contractors', 'company.drivers', 'company.vehicle_units', 'company.vehicle_sets', 'company.route_executors', 'company.trips.linear'],
     'company_feo_map.php' => ['company.feo.map', 'company.feo.utilizers'],
     'company_feo_request_costs.php' => ['company.feo.costs'],
@@ -83,7 +84,7 @@ foreach ($routePages as $file => $pageKeys) {
     foreach ($pageKeys as $pageKey) endpointExpect(str_contains($source, $pageKey), "{$file} missing {$pageKey}");
     $declarationCount += count($counts);
 }
-endpointExpect($declarationCount === 204, 'owned inventory must contain exactly 204 protected declarations');
+endpointExpect($declarationCount === 211, 'owned inventory must contain exactly 211 protected declarations');
 
 $ownedSources = '';
 foreach (array_keys($routePages) as $file) $ownedSources .= file_get_contents($root . '/app/Http/Routes/' . $file);

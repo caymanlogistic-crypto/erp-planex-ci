@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `5035c55a3a781ec6e0315cabe57ccecb39dac614afdc3729a6be60f01cfacf6a`
+**Schema fingerprint:** `49cf1e05561a1ac2d4d207fd88851c5042464f75b2e88375c53da016cb83a9bf`
 
 ## `trip_document_incoming`
 
@@ -161,3 +161,32 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
+
+## `waste_trip_completion_documents`
+
+**Domain:** Documents<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `original_name` | `varchar(255)` | NO | NULL | — | — |
+| `download_name` | `varchar(255)` | NO | NULL | — | — |
+| `stored_path` | `varchar(500)` | NO | NULL | — | `UNI` |
+| `mime_type` | `varchar(127)` | NO | NULL | — | — |
+| `size_bytes` | `bigint unsigned` | NO | NULL | — | — |
+| `uploaded_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `deleted_at` | `datetime` | YES | NULL | — | — |
+| `deleted_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_waste_trip_completion_documents_request` (`waste_trip_request_id`, `deleted_at`, `id`)
+- **UNIQUE** `uk_waste_trip_completion_stored_path` (`stored_path`)
+
+### Physical foreign keys
+
+- `fk_waste_trip_completion_document_request`: (`waste_trip_request_id`) → `waste_trip_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
