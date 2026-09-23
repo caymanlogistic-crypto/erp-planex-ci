@@ -103,6 +103,15 @@ expected = {
 }
 assert set(m.SCOPE_PATTERNS) == expected
 
+for path in [
+    "tools/design_lab.py",
+    "tests/design_lab_contract_test.py",
+    "docs/DESIGN_LAB.md",
+    ".agents/skills/planex-design-lab/SKILL.md",
+]:
+    assert m.classify([path])["control_plane"], path
+    assert m.critical_path([path]), path
+
 # Critical regression: ci.yml must remain tenant_schema.
 assert m.classify([".github/workflows/ci.yml"])["tenant_schema"] is True
 

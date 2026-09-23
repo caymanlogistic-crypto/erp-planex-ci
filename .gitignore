@@ -21,6 +21,8 @@
 /tmp/
 /temp/
 *.cache
+__pycache__/
+*.py[cod]
 
 # IDE
 .idea/

@@ -181,6 +181,7 @@ assert "memory_integrity_checker_test.py" in source
 assert "active_registry_coverage_checker_test.py" in source
 assert "runner_helpers_contract_test.py" in source
 assert "local_publish_test.py" in source
+assert "design_lab_contract_test.py" in source
 assert 'p.startswith("tools/sentinelx/")' in source
 assert '"--head"' in source
 assert '"tools/active_registry_coverage_check.py","docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json"' in source
