@@ -3,11 +3,17 @@
   if (!root) return;
   const form = root.querySelector('[data-stat-filters]');
   if (form) {
-    const dates = form.querySelector('[data-custom-dates]');
+    const periodFields = [...form.querySelectorAll('[data-mode-fields]')];
     form.querySelectorAll('input[name="mode"]').forEach((input) => {
       input.addEventListener('change', () => {
-        form.querySelectorAll('.manager-stats__segments label').forEach((label) => label.classList.toggle('is-active', label.contains(input)));
-        if (dates) dates.hidden = input.value !== 'custom';
+        form.querySelectorAll('.manager-stats__segments label').forEach((label) => {
+          label.classList.toggle('is-active', label.contains(input));
+        });
+        periodFields.forEach((field) => {
+          const active = field.dataset.modeFields === input.value;
+          field.hidden = !active;
+          field.querySelectorAll('input,select').forEach((control) => { control.disabled = !active; });
+        });
       });
     });
   }
@@ -17,7 +23,7 @@
   const summary = picker.querySelector('[data-manager-summary]');
   const refresh = () => {
     const count = boxes.filter((box) => box.checked).length;
-    if (summary) summary.textContent = count === 0 ? 'Все сотрудники' : `Выбрано: ${count}`;
+    if (summary) summary.textContent = count === 0 ? 'Все логисты' : `Выбрано: ${count}`;
   };
   picker.querySelector('[data-manager-search]')?.addEventListener('input', (event) => {
     const query = event.target.value.trim().toLocaleLowerCase('ru-RU');
