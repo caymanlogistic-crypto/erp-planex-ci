@@ -3038,6 +3038,8 @@ window.initOwnerCreateForm = window.initPasswordControls;
 
     var baseUrl = '';
     try { baseUrl = window.getErpBasePath ? window.getErpBasePath() : ''; } catch (e) { baseUrl = ''; }
+    var createContent = document.getElementById('route-executor-create-modal-content');
+    var createChoiceHtml = createContent ? createContent.innerHTML : '';
 
     function parseContent(html) {
         var doc = new DOMParser().parseFromString(html, 'text/html');
@@ -3143,8 +3145,158 @@ window.initOwnerCreateForm = window.initPasswordControls;
         });
     }
 
-    function openCreateModal() {
+    function setCreateTitle(title) {
+        var node = createModal ? createModal.querySelector('[data-route-executor-create-title]') : null;
+        if (node) node.textContent = title;
+    }
+
+    function setCreateModalLayout(layout) {
+        var inner = document.getElementById('route-executor-create-modal-inner');
+        if (!inner) return;
+        ['is-quick-new', 'is-quick-select', 'is-quick-details', 'is-legacy-create'].forEach(function (className) {
+            inner.classList.remove(className);
+        });
+        if (layout) inner.classList.add(layout);
+    }
+
+    function showCreateChoices() {
         if (!createModal) return;
+        var target = document.getElementById('route-executor-create-modal-content');
+        if (target) target.innerHTML = createChoiceHtml;
+        setCreateModalLayout('');
+        setCreateTitle('\u0414\u043e\u0431\u0430\u0432\u0438\u0442\u044c \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f \u0440\u0435\u0439\u0441\u0430');
+        var foot = document.getElementById('route-executor-create-modal-foot');
+        if (foot) foot.style.display = 'none';
+        if (window.openModal) window.openModal(createModal.id);
+        else createModal.classList.add('is-open');
+    }
+
+    function setQuickCreateFoot(showSubmit) {
+        var foot = document.getElementById('route-executor-create-modal-foot');
+        if (!foot) return;
+        foot.style.display = '';
+        var note = foot.querySelector('.modal-required-note');
+        var actions = foot.querySelector('.modal-foot-actions');
+        if (note) note.style.display = showSubmit ? '' : 'none';
+        if (actions) {
+            actions.innerHTML = '<button type="button" class="btn btn-ghost" data-route-executor-create-back>\u2190 \u041a \u0432\u044b\u0431\u043e\u0440\u0443</button><button type="button" class="btn btn-ghost" data-route-executor-create-close>\u041e\u0442\u043c\u0435\u043d\u0430</button>' +
+                (showSubmit ? '<button type="submit" form="route-executor-quick-create-form" class="btn btn-primary">\u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f</button>' : '');
+        }
+    }
+
+    function bindQuickCreateForm() {
+        if (!createModal) return;
+        var form = createModal.querySelector('#route-executor-quick-create-form');
+        if (!form) return;
+
+        function updateVehicleFields() {
+            var select = form.querySelector('[data-quick-set-type]');
+            var secondary = form.querySelector('[data-quick-secondary]');
+            if (!select || !secondary) return;
+            var hasSecondary = select.value === 'coupling' || select.value === 'road_train';
+            secondary.classList.toggle('is-hidden', !hasSecondary);
+            secondary.querySelectorAll('[data-quick-secondary-required]').forEach(function (input) {
+                input.required = hasSecondary;
+            });
+            var primaryTitle = form.querySelector('[data-quick-primary-title]');
+            var secondaryTitle = form.querySelector('[data-quick-secondary-title]');
+            if (primaryTitle) primaryTitle.textContent = select.value === 'coupling' ? '\u0422\u044f\u0433\u0430\u0447' : (select.value === 'road_train' ? '\u041f\u0435\u0440\u0432\u0430\u044f \u0447\u0430\u0441\u0442\u044c' : '\u0422\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u043d\u0430\u044f \u0435\u0434\u0438\u043d\u0438\u0446\u0430');
+            if (secondaryTitle) secondaryTitle.textContent = select.value === 'road_train' ? '\u041f\u0440\u0438\u0446\u0435\u043f' : '\u041f\u043e\u043b\u0443\u043f\u0440\u0438\u0446\u0435\u043f';
+        }
+
+        var setType = form.querySelector('[data-quick-set-type]');
+        if (setType) {
+            setType.addEventListener('change', updateVehicleFields);
+            updateVehicleFields();
+        }
+
+        form.querySelectorAll('[data-quick-file-input]').forEach(function (input) {
+            input.addEventListener('change', function () {
+                var label = input.closest('[data-quick-upload]');
+                var state = label ? label.querySelector('[data-quick-upload-state]') : null;
+                var count = input.files ? input.files.length : 0;
+                if (state) state.textContent = count ? (count === 1 ? input.files[0].name : '\u0412\u044b\u0431\u0440\u0430\u043d\u043e: ' + count) : '\u0424\u0430\u0439\u043b \u043d\u0435 \u0432\u044b\u0431\u0440\u0430\u043d';
+                if (label) label.classList.toggle('has-files', count > 0);
+            });
+        });
+
+        var contractorStep = form.querySelector('[data-quick-contractor-step]');
+        var detailsStep = form.querySelector('[data-quick-details-step]');
+        var next = form.querySelector('[data-quick-contractor-next]');
+        var back = form.querySelector('[data-quick-contractor-back]');
+        if (next && contractorStep && detailsStep) {
+            var showingDetails = !detailsStep.classList.contains('is-hidden');
+            setCreateModalLayout(showingDetails ? 'is-quick-details' : 'is-quick-select');
+            setQuickCreateFoot(showingDetails);
+            next.addEventListener('click', function () {
+                var select = form.querySelector('#quick-contractor-id');
+                if (!select || !select.reportValidity()) return;
+                contractorStep.classList.add('is-hidden');
+                detailsStep.classList.remove('is-hidden');
+                setCreateModalLayout('is-quick-details');
+                setQuickCreateFoot(true);
+                var first = detailsStep.querySelector('input:not([type="hidden"]), select');
+                if (first) first.focus();
+            });
+            if (back) back.addEventListener('click', function () {
+                detailsStep.classList.add('is-hidden');
+                contractorStep.classList.remove('is-hidden');
+                setCreateModalLayout('is-quick-select');
+                setQuickCreateFoot(false);
+            });
+        } else {
+            setCreateModalLayout('is-quick-new');
+            setQuickCreateFoot(true);
+        }
+
+        if (form.dataset.quickCreateReady === '1') return;
+        form.dataset.quickCreateReady = '1';
+        form.addEventListener('submit', function (event) {
+            event.preventDefault();
+            var submit = document.querySelector('button[form="route-executor-quick-create-form"][type="submit"]');
+            if (submit) submit.disabled = true;
+            fetch(form.getAttribute('action'), { method: 'POST', credentials: 'same-origin', body: new FormData(form) })
+                .then(function (response) { return response.text(); })
+                .then(function (html) {
+                    var tmp = document.createElement('div');
+                    tmp.innerHTML = html;
+                    if (tmp.querySelector('[data-route-executor-quick-create-success]')) {
+                        window.closeModal('route-executor-create-modal');
+                        window.location.reload();
+                        return;
+                    }
+                    var target = document.getElementById('route-executor-create-modal-content');
+                    if (target) {
+                        target.innerHTML = html;
+                        bindQuickCreateForm();
+                    }
+                })
+                .catch(function () { showModalError('route-executor-create-modal-content', '\u041e\u0448\u0438\u0431\u043a\u0430 \u043e\u0442\u043f\u0440\u0430\u0432\u043a\u0438 \u0444\u043e\u0440\u043c\u044b.'); })
+                .finally(function () { if (submit) submit.disabled = false; });
+        });
+    }
+
+    function openQuickCreateForm(mode) {
+        if (!createModal) return;
+        setCreateModalLayout(mode === 'new_contractor' ? 'is-quick-new' : 'is-quick-select');
+        setCreateTitle(mode === 'new_contractor' ? '\u041d\u043e\u0432\u044b\u0439 \u043f\u043e\u0434\u0440\u044f\u0434\u0447\u0438\u043a' : '\u0421\u0442\u0430\u0440\u044b\u0439 \u043f\u043e\u0434\u0440\u044f\u0434\u0447\u0438\u043a, \u043d\u043e\u0432\u044b\u0439 \u0432\u043e\u0434\u0438\u0442\u0435\u043b\u044c \u0438 \u0422\u0421');
+        setModalLoading(createModal, 'route-executor-create-modal-content');
+        setQuickCreateFoot(mode === 'new_contractor');
+        fetch(baseUrl + '/company/route-executors/quick-create?mode=' + encodeURIComponent(mode), { credentials: 'same-origin' })
+            .then(function (response) { return response.text(); })
+            .then(function (html) {
+                var target = document.getElementById('route-executor-create-modal-content');
+                if (!target) return;
+                target.innerHTML = html;
+                bindQuickCreateForm();
+            })
+            .catch(function () { showModalError('route-executor-create-modal-content', '\u041d\u0435 \u0443\u0434\u0430\u043b\u043e\u0441\u044c \u0437\u0430\u0433\u0440\u0443\u0437\u0438\u0442\u044c \u0431\u044b\u0441\u0442\u0440\u0443\u044e \u0444\u043e\u0440\u043c\u0443.'); });
+    }
+
+    function openExistingCreateForm() {
+        if (!createModal) return;
+        setCreateModalLayout('is-legacy-create');
+        setCreateTitle('\u0421\u043e\u0431\u0440\u0430\u0442\u044c \u0438\u0441\u043f\u043e\u043b\u043d\u0438\u0442\u0435\u043b\u044f \u0438\u0437 \u0433\u043e\u0442\u043e\u0432\u044b\u0445 \u0434\u0430\u043d\u043d\u044b\u0445');
         setModalLoading(createModal, 'route-executor-create-modal-content');
         var foot = document.getElementById('route-executor-create-modal-foot');
         if (foot) {
@@ -3175,6 +3327,10 @@ window.initOwnerCreateForm = window.initPasswordControls;
             .catch(function () {
                 showModalError('route-executor-create-modal-content', 'Не удалось загрузить форму создания.');
             });
+    }
+
+    function openCreateModal() {
+        showCreateChoices();
     }
 
     function prepareEditForm(content, id) {
@@ -3311,6 +3467,17 @@ window.initOwnerCreateForm = window.initPasswordControls;
     });
 
     document.addEventListener('click', function (event) {
+        var createChoice = event.target.closest('[data-route-executor-create-choice]');
+        if (createChoice) {
+            event.preventDefault();
+            var choice = createChoice.getAttribute('data-route-executor-create-choice');
+            if (choice === 'existing_data') openExistingCreateForm();
+            else openQuickCreateForm(choice);
+        }
+        if (event.target.closest('[data-route-executor-create-back]')) {
+            event.preventDefault();
+            showCreateChoices();
+        }
         if (event.target.closest('[data-route-executor-create-close]')) {
             if (createModal && createModal.dataset.refreshOnClose === '1') {
                 window.location.reload();

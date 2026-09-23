@@ -36,6 +36,22 @@ final class RouteExecutorController
         require base_path('app/Http/Controllers/Company/RouteExecutorActions/create_submit.php');
     }
 
+    public function quickCreateForm(): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+
+        require base_path('app/Http/Controllers/Company/RouteExecutorActions/quick_create_form.php');
+    }
+
+    public function quickCreateSubmit(): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+
+        require base_path('app/Http/Controllers/Company/RouteExecutorActions/quick_create_submit.php');
+    }
+
     public function view(string $crewId): void
     {
         $config = $this->config;
