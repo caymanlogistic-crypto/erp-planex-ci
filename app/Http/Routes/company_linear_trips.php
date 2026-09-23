@@ -7,6 +7,7 @@ require_once base_path('app/Service/WasteTripGeneralPaymentService.php');
 require_once base_path('app/Service/WasteTripPaymentSyncService.php');
 require_once base_path('app/Service/WasteTripLegacyPriceService.php');
 require_once base_path('app/Service/WasteTripCarrierPaymentService.php');
+require_once base_path('app/Service/WasteTripStartStatisticsService.php');
 require_once base_path('app/Service/WasteTripService.php');
 require_once base_path('app/Service/FeoUtilizerService.php');
 require_once base_path('app/Service/WasteTripLegacyMappingService.php');

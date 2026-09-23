@@ -17,6 +17,7 @@ require_once base_path('app/Service/LegacyAccessProjectionService.php');
 require_once base_path('app/Service/EntityResponsibilityService.php');
 require_once base_path('app/Service/CompanyLandingPageService.php');
 require_once base_path('app/Service/RegulatedDataScopeService.php');
+require_once base_path('app/Service/WasteTripStartStatisticsService.php');
 require_once base_path('app/Service/CompanyInnLookupService.php');
 require_once base_path('app/Service/ContractorContactService.php');
 require_once base_path('app/Service/ClientContactService.php');

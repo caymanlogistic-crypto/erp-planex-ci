@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `332351ec162c13c5a77ce3635ed766c469095894d20062a921e757a840abc2a0`
+**Schema fingerprint:** `5035c55a3a781ec6e0315cabe57ccecb39dac614afdc3729a6be60f01cfacf6a`
 
 ## `waste_trip_general_payments`
 
@@ -87,6 +87,36 @@
 
 - `fk_waste_trip_requests_feo`: (`feo_request_id`) → `feo_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 - `fk_waste_trip_requests_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+
+## `waste_trip_start_statistics`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `PRI` |
+| `actual_start_date` | `date` | NO | NULL | — | `MUL` |
+| `responsible_user_id` | `int unsigned` | NO | NULL | — | `MUL` |
+| `responsible_membership_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
+| `responsible_name_snapshot` | `varchar(255)` | NO | NULL | — | — |
+| `request_count` | `int unsigned` | NO | `0` | — | — |
+| `total_mass_kg` | `decimal(18,3)` | NO | `0.000` | — | — |
+| `is_backfilled` | `tinyint(1)` | NO | `0` | — | — |
+| `captured_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`waste_trip_id`)
+- **INDEX** `fk_waste_trip_start_stats_user` (`responsible_user_id`)
+- **INDEX** `idx_waste_trip_start_stats_date` (`actual_start_date`, `waste_trip_id`)
+- **INDEX** `idx_waste_trip_start_stats_manager` (`responsible_membership_id`, `actual_start_date`, `waste_trip_id`)
+
+### Physical foreign keys
+
+- `fk_waste_trip_start_stats_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_waste_trip_start_stats_user`: (`responsible_user_id`) → `users`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `waste_trips`
 

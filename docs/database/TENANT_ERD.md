@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `332351ec162c13c5a77ce3635ed766c469095894d20062a921e757a840abc2a0`
+**Schema fingerprint:** `5035c55a3a781ec6e0315cabe57ccecb39dac614afdc3729a6be60f01cfacf6a`
 
 ## Architecture overview
 
@@ -151,13 +151,15 @@ erDiagram
   T_waste_trips ||--o{ T_waste_trip_general_payments : "fk_waste_trip_general_payments_trip"
   T_feo_requests ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_feo"
   T_waste_trips ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_trip"
+  T_waste_trips ||--o{ T_waste_trip_start_statistics : "fk_waste_trip_start_stats_trip"
+  T_users ||--o{ T_waste_trip_start_statistics : "fk_waste_trip_start_stats_user"
   T_clients ||--o{ T_waste_trips : "fk_waste_trips_client"
   T_crews ||--o{ T_waste_trips : "fk_waste_trips_executor"
   T_users ||--o{ T_waste_trips : "fk_waste_trips_responsible"
   T_feo_utilizers ||--o{ T_waste_trips : "fk_waste_trips_utilizer"
 ```
 
-Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trips`
+Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trip_start_statistics`, `waste_trips`
 
 ## System / Migration metadata
 
