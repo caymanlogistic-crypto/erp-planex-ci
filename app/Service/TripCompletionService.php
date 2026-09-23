@@ -62,7 +62,7 @@ final class TripCompletionService
                WHERE {$where}
                GROUP BY wt.id,wt.business_id,wt.actual_end_date,wt.comment,wt.updated_at,ct.name,d.full_name
                {$having}
-               ORDER BY wt.actual_end_date DESC,wt.business_id DESC";
+               ORDER BY wt.business_id DESC,wt.id DESC";
         $stmt=$this->tenant->prepare($sql); $stmt->execute($params);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -89,7 +89,8 @@ final class TripCompletionService
               FROM waste_trip_requests wtr
               JOIN feo_requests fr ON fr.id=wtr.feo_request_id
               LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
-             WHERE wtr.waste_trip_id=? ORDER BY wtr.position_no,wtr.id");
+             WHERE wtr.waste_trip_id=?
+             ORDER BY CAST(fr.zayavka_id AS UNSIGNED) DESC,fr.zayavka_id DESC,wtr.id DESC");
         $stmt->execute([$tripId]); $requests=$stmt->fetchAll(PDO::FETCH_ASSOC);
         $ids=array_map('intval',array_column($requests,'id')); $documents=[];
         if ($ids!==[]) {
@@ -124,9 +125,7 @@ final class TripCompletionService
     public function save(int $tripId,int $requestId,array $input,int $actorMembershipId): void
     {
         $this->assertRequest($tripId,$requestId);
-        $arrived=$this->dateTime($input['arrived_at']??null);
-        $departed=$this->dateTime($input['departed_at']??null);
-        if ($arrived!==null && $departed!==null && $arrived>$departed) throw new DomainException('Время уезда не может быть раньше времени приезда.');
+        [$arrived,$departed]=$this->pickupInterval($input['pickup_interval']??null);
         $comment=trim((string)($input['comment']??''));
         if (mb_strlen($comment)>500) throw new DomainException('Комментарий не должен превышать 500 символов.');
         $stmt=$this->tenant->prepare("INSERT INTO waste_trip_completion_items
@@ -239,13 +238,26 @@ final class TripCompletionService
         return $row;
     }
 
-    private function dateTime(mixed $value): ?string
+    /** @return array{0:?string,1:?string} */
+    private function pickupInterval(mixed $value): array
     {
-        $value=trim((string)$value); if ($value==='') return null;
-        $date=DateTimeImmutable::createFromFormat('Y-m-d\TH:i',$value);
-        $errors=DateTimeImmutable::getLastErrors();
-        if (!$date || (is_array($errors) && (($errors['warning_count']??0)>0 || ($errors['error_count']??0)>0))) throw new DomainException('Укажите корректные дату и время.');
-        return $date->format('Y-m-d H:i:00');
+        $value=trim((string)$value);
+        if ($value==='') return [null,null];
+        if (!preg_match('/^(\d{2})\.(\d{2})\.(\d{2}) (\d{2}):(\d{2}) - (\d{2}):(\d{2})$/D',$value,$parts)) {
+            throw new DomainException('Укажите интервал в формате ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ.');
+        }
+        $date=$parts[1].'.'.$parts[2].'.'.$parts[3];
+        $arrived=DateTimeImmutable::createFromFormat('!d.m.y H:i',$date.' '.$parts[4].':'.$parts[5]);
+        $arrivedErrors=DateTimeImmutable::getLastErrors();
+        $departed=DateTimeImmutable::createFromFormat('!d.m.y H:i',$date.' '.$parts[6].':'.$parts[7]);
+        $departedErrors=DateTimeImmutable::getLastErrors();
+        $invalid=static fn(mixed $dateTime,mixed $errors):bool=>!$dateTime
+            || (is_array($errors) && (($errors['warning_count']??0)>0 || ($errors['error_count']??0)>0));
+        if ($invalid($arrived,$arrivedErrors) || $invalid($departed,$departedErrors)) {
+            throw new DomainException('Укажите корректные дату и время.');
+        }
+        if ($arrived>$departed) throw new DomainException('Время уезда не может быть раньше времени приезда.');
+        return [$arrived->format('Y-m-d H:i:00'),$departed->format('Y-m-d H:i:00')];
     }
 
     private function safeSegment(string $value): string
