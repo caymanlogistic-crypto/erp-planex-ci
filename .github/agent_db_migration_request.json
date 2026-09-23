@@ -1,7 +1,7 @@
 {
-  "migration_id": "140",
-  "workflow": "trip_document_140_production_migration.yml",
+  "migration_id": "142",
+  "workflow": "trip_completion_142_production_migration.yml",
   "source_sha_input": "source_sha",
   "confirmation_input": "confirm_migration",
-  "confirmation_value": "APPLY_DOCUMENT_COLLECTION_140"
+  "confirmation_value": "APPLY_TRIP_COMPLETION_142"
 }

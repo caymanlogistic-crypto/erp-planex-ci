@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `5035c55a3a781ec6e0315cabe57ccecb39dac614afdc3729a6be60f01cfacf6a`
+**Schema fingerprint:** `49cf1e05561a1ac2d4d207fd88851c5042464f75b2e88375c53da016cb83a9bf`
 
 ## Architecture overview
 
@@ -83,9 +83,10 @@ erDiagram
   T_trip_document_requests ||--o{ T_trip_document_events : "fk_document_event_request"
   T_trip_document_requests ||--o{ T_trip_document_incoming : "fk_document_incoming_request"
   T_trip_document_requests ||--o{ T_trip_document_mail : "fk_document_mail_request"
+  T_waste_trip_requests ||--o{ T_waste_trip_completion_documents : "fk_waste_trip_completion_document_request"
 ```
 
-Tables: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`, `trip_document_events`, `trip_document_incoming`, `trip_document_mail`, `trip_document_mailboxes`, `trip_document_previews`, `trip_document_requests`
+Tables: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`, `trip_document_events`, `trip_document_incoming`, `trip_document_mail`, `trip_document_mailboxes`, `trip_document_previews`, `trip_document_requests`, `waste_trip_completion_documents`
 
 ## Finance
 
@@ -147,6 +148,7 @@ erDiagram
   T_max_chats ||--o{ T_max_message_logs : "fk_max_message_logs_chat"
   T_waste_trips ||--o{ T_waste_trip_audit_log : "fk_waste_trip_audit_trip"
   T_waste_trips ||--o{ T_waste_trip_carrier_payments : "fk_waste_trip_carrier_payments_trip"
+  T_waste_trip_requests ||--o{ T_waste_trip_completion_items : "fk_waste_trip_completion_request"
   T_waste_trips ||--o{ T_waste_trip_customer_payments : "fk_waste_trip_customer_payments_trip"
   T_waste_trips ||--o{ T_waste_trip_general_payments : "fk_waste_trip_general_payments_trip"
   T_feo_requests ||--o{ T_waste_trip_requests : "fk_waste_trip_requests_feo"
@@ -159,7 +161,7 @@ erDiagram
   T_feo_utilizers ||--o{ T_waste_trips : "fk_waste_trips_utilizer"
 ```
 
-Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trip_start_statistics`, `waste_trips`
+Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_completion_items`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_requests`, `waste_trip_start_statistics`, `waste_trips`
 
 ## System / Migration metadata
 

@@ -1,0 +1,22 @@
+<?php
+declare(strict_types=1);
+$root=dirname(__DIR__);
+$read=static fn(string $path):string=>(string)file_get_contents($root.'/'.$path);
+$ok=static function(bool $condition,string $message):void{if(!$condition)throw new RuntimeException($message);};
+$migration=$read('database/migrations-local/142_create_waste_trip_completion.sql');
+$service=$read('app/Service/TripCompletionService.php');
+$controller=$read('app/Http/Controllers/Company/TripCompletionController.php');
+$routes=$read('app/Http/Routes/company_trip_completion.php');
+$view=$read('app/View/pages/company_logistics_assistant.php');
+$registry=$read('app/Security/PageRegistry.php');
+foreach(['waste_trip_completion_items','waste_trip_completion_documents','arrived_at','departed_at','driver_signature_present','sender_signature_present','deleted_at']as$token)$ok(str_contains($migration,$token),'Migration missing '.$token);
+foreach(['/company/logistics-assistant','/report','/package','/documents/{documentId}']as$token)$ok(str_contains($routes,$token),'Route missing '.$token);
+$ok(substr_count($routes,'$tripCompletionPage')===8,'Every endpoint must use the existing collection permission');
+$ok(str_contains($registry,"'Помощник логиста'")&&str_contains($registry,"badgeProvider: 'trip_completion_problem'"),'Navigation entry missing');
+foreach(['Скрывать полностью собранные','Приезд на забор','Уезд с забора','Подпись водителя','Подпись отправителя','Скачать комплект']as$label)$ok(str_contains($view,$label),'UI missing '.$label);
+$ok(substr_count($view,'<?=csrfField()?>')===3,'Every POST form type must include CSRF protection');
+$ok(str_contains($controller,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')&&str_contains($service,'сводный_отчет.xlsx'),'Formatted XLSX report contract missing');
+$ok(str_contains($service,'Рейс_{$tripNumber}_Заявка_{$requestNumber}_ТН_'),'Canonical TN filename missing trip/request identity');
+$ok(str_contains($service,"wt.status='completed'")&&str_contains($service,'doc.deleted_at IS NULL'),'Completion query contract missing');
+$ok(!str_contains($controller,'applyLocalMigrations'),'GET/action controller must not mutate schema');
+echo "TRIP_COMPLETION_CONTRACT=PASS\n";

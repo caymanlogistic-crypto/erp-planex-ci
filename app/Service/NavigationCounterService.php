@@ -19,7 +19,7 @@ final class NavigationCounterService
      * Every counter is intentionally isolated. A missing/temporarily unavailable
      * schema object for one module must never suppress unrelated badges.
      *
-     * @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,feo_freshness:int,feo_placement_problem:int,feo_map_problem:int,feo_utilizer_problem:int,feo_cost_problem:int,production_calendar_warning:int}
+     * @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,trip_completion_problem:int,feo_freshness:int,feo_placement_problem:int,feo_map_problem:int,feo_utilizer_problem:int,feo_cost_problem:int,production_calendar_warning:int}
      */
     public static function forCompany(array $config, Database $centralDb, int $companyId, ?array $knownCompany = null): array
     {
@@ -107,6 +107,25 @@ final class NavigationCounterService
         // parent counter a true sum of child counters instead of a hard-coded
         // alias to the Linear Trips value.
         $counters['departures_problem'] = 0;
+
+        try {
+            $counters['trip_completion_problem'] = max(0, (int)$tenant->query(
+                "SELECT COUNT(*) FROM (
+                    SELECT wt.id
+                      FROM waste_trips wt
+                      JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+                      LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+                      LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
+                     WHERE wt.deleted_at IS NULL AND wt.status='completed'
+                     GROUP BY wt.id
+                    HAVING COUNT(DISTINCT CASE WHEN i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
+                       AND i.driver_signature_present=1 AND i.sender_signature_present=1
+                       AND doc.waste_trip_request_id IS NOT NULL THEN wtr.id END) < COUNT(DISTINCT wtr.id)
+                ) incomplete_trips"
+            )->fetchColumn());
+        } catch (Throwable) {
+            $counters['trip_completion_problem'] = 0;
+        }
 
         try {
             // Same factual freshness rule as FeoRequestService::freshnessState():
@@ -208,7 +227,7 @@ final class NavigationCounterService
         return $counters;
     }
 
-    /** @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,feo_freshness:int,feo_placement_problem:int,feo_map_problem:int,feo_utilizer_problem:int,feo_cost_problem:int,production_calendar_warning:int} */
+    /** @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,trip_completion_problem:int,feo_freshness:int,feo_placement_problem:int,feo_map_problem:int,feo_utilizer_problem:int,feo_cost_problem:int,production_calendar_warning:int} */
     private static function emptyCounters(): array
     {
         return [
@@ -217,6 +236,7 @@ final class NavigationCounterService
             'closing_documents_problem' => 0,
             'linear_trips_problem' => 0,
             'departures_problem' => 0,
+            'trip_completion_problem' => 0,
             'feo_freshness' => 0,
             'feo_placement_problem' => 0,
             'feo_map_problem' => 0,

@@ -55,7 +55,7 @@ final class PageRegistry
             self::definition('company.trips.linear', 'Линейные', 'Операции', 'Рейсы', 30, '/company/trips/linear', badgeProvider: 'linear_trips_problem', badgeDisplay: 'self_parent'),
             self::definition('company.trips.waste', 'Отходы', 'Операции', 'Рейсы', 40, '/company/trips/departures', badgeProvider: 'departures_problem', badgeDisplay: 'self_parent'),
             self::definition('company.documents.request', 'Запросить документы', 'Операции', 'Рейсы', 41, '/company/documents/request'),
-            self::definition('company.documents.collection', 'Сбор документов', 'Операции', 'Рейсы', 42, '/company/documents/collection'),
+            self::definition('company.documents.collection', 'Помощник логиста', 'Операции', 'Рейсы', 42, '/company/logistics-assistant', badgeProvider: 'trip_completion_problem'),
             self::definition('company.feo.requests', 'Все заявки', 'Операции', 'Заявки ФЭО', 50, '/company/feo/requests', badgeProvider: 'feo_freshness', badgeDisplay: 'self_parent'),
             self::definition('company.feo.costs', 'Стоимость заявок', 'Операции', 'Заявки ФЭО', 61, '/company/feo/requests/costs', badgeProvider: 'feo_cost_problem', badgeDisplay: 'self_parent'),
             self::definition('company.feo.map', 'Карта', 'Операции', 'Заявки ФЭО', 70, '/company/feo/requests/map', badgeProvider: 'feo_map_problem', badgeDisplay: 'self_parent'),

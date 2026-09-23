@@ -1,0 +1,285 @@
+<?php
+declare(strict_types=1);
+
+namespace App\Service;
+
+use DateTimeImmutable;
+use DomainException;
+use PDO;
+use RuntimeException;
+use Throwable;
+use ZipArchive;
+
+final class TripCompletionService
+{
+    public function __construct(
+        public readonly PDO $tenant,
+        private readonly int $companyId,
+    ) {}
+
+    public function ready(): bool
+    {
+        try {
+            foreach (['waste_trip_completion_items','waste_trip_completion_documents'] as $table) {
+                $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?');
+                $stmt->execute([$table]);
+                if ((int)$stmt->fetchColumn()!==1) return false;
+            }
+            return true;
+        } catch (Throwable) { return false; }
+    }
+
+    /** @return list<array<string,mixed>> */
+    public function trips(string $query='', bool $hideComplete=true): array
+    {
+        $where="wt.deleted_at IS NULL AND wt.status='completed'";
+        $params=[];
+        $query=trim($query);
+        if ($query!=='') {
+            $where.=" AND (CAST(wt.business_id AS CHAR) LIKE ? OR fr.zayavka_id LIKE ? OR wt.comment LIKE ? OR ct.name LIKE ? OR d.full_name LIKE ?)";
+            $like='%'.$query.'%'; $params=[$like,$like,$like,$like,$like];
+        }
+        $having=$hideComplete?'HAVING complete_count < request_count':'';
+        $sql="SELECT wt.id,wt.business_id,wt.actual_end_date,wt.comment,wt.updated_at,
+                     COALESCE(ct.name,'') contractor_name,COALESCE(d.full_name,'') driver_name,
+                     COUNT(DISTINCT wtr.id) request_count,
+                     COUNT(DISTINCT CASE WHEN i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
+                         AND i.driver_signature_present=1 AND i.sender_signature_present=1
+                         AND doc.waste_trip_request_id IS NOT NULL THEN wtr.id END) complete_count,
+                     COUNT(DISTINCT doc.id) document_count,
+                     COUNT(DISTINCT CASE WHEN doc.waste_trip_request_id IS NULL THEN wtr.id END) missing_scan_count,
+                     COUNT(DISTINCT CASE WHEN i.arrived_at IS NULL OR i.departed_at IS NULL THEN wtr.id END) missing_time_count,
+                     COUNT(DISTINCT CASE WHEN COALESCE(i.driver_signature_present,0)=0 THEN wtr.id END) missing_driver_signature_count,
+                     COUNT(DISTINCT CASE WHEN COALESCE(i.sender_signature_present,0)=0 THEN wtr.id END) missing_sender_signature_count
+                FROM waste_trips wt
+                JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+                JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+                LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+                LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
+                LEFT JOIN crews c ON c.id=wt.route_executor_id
+                LEFT JOIN contractors ct ON ct.id=c.contractor_id
+                LEFT JOIN drivers d ON d.id=c.driver_id
+               WHERE {$where}
+               GROUP BY wt.id,wt.business_id,wt.actual_end_date,wt.comment,wt.updated_at,ct.name,d.full_name
+               {$having}
+               ORDER BY wt.actual_end_date DESC,wt.business_id DESC";
+        $stmt=$this->tenant->prepare($sql); $stmt->execute($params);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    /** @return array<string,mixed> */
+    public function trip(int $tripId): array
+    {
+        $stmt=$this->tenant->prepare("SELECT wt.id,wt.business_id,wt.actual_start_date,wt.actual_end_date,wt.comment,
+                COALESCE(ct.name,'') contractor_name,COALESCE(d.full_name,'') driver_name
+              FROM waste_trips wt
+              LEFT JOIN crews c ON c.id=wt.route_executor_id
+              LEFT JOIN contractors ct ON ct.id=c.contractor_id
+              LEFT JOIN drivers d ON d.id=c.driver_id
+             WHERE wt.id=? AND wt.deleted_at IS NULL AND wt.status='completed' LIMIT 1");
+        $stmt->execute([$tripId]); $trip=$stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$trip) throw new DomainException('Завершённый рейс не найден.');
+
+        $stmt=$this->tenant->prepare("SELECT wtr.id,wtr.position_no,wtr.snapshot_mass_kg,fr.zayavka_id,
+                fr.naim_oo_gruzootpravitel shipper_name,fr.mno_adres_pogruzki pickup_address,
+                fr.gruzopoluchatel consignee_name,COALESCE(NULLIF(fr.adres_dostavki_otkhodov,''),fr.adres_vygruzki_otkhodov) delivery_address,
+                i.arrived_at,i.departed_at,COALESCE(i.driver_signature_present,0) driver_signature_present,
+                COALESCE(i.sender_signature_present,0) sender_signature_present,COALESCE(i.comment,'') completion_comment,
+                COALESCE(i.lock_version,0) lock_version
+              FROM waste_trip_requests wtr
+              JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+              LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+             WHERE wtr.waste_trip_id=? ORDER BY wtr.position_no,wtr.id");
+        $stmt->execute([$tripId]); $requests=$stmt->fetchAll(PDO::FETCH_ASSOC);
+        $ids=array_map('intval',array_column($requests,'id')); $documents=[];
+        if ($ids!==[]) {
+            $marks=implode(',',array_fill(0,count($ids),'?'));
+            $stmt=$this->tenant->prepare("SELECT * FROM waste_trip_completion_documents WHERE deleted_at IS NULL AND waste_trip_request_id IN ({$marks}) ORDER BY id");
+            $stmt->execute($ids);
+            foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $doc) $documents[(int)$doc['waste_trip_request_id']][]=$doc;
+        }
+        foreach ($requests as &$request) {
+            $request['documents']=$documents[(int)$request['id']]??[];
+            $request['issues']=$this->issues($request);
+            $request['is_complete']=$request['issues']===[];
+        }
+        unset($request);
+        $trip['requests']=$requests;
+        $trip['complete_count']=count(array_filter($requests,static fn(array $r):bool=>(bool)$r['is_complete']));
+        $trip['request_count']=count($requests);
+        return $trip;
+    }
+
+    /** @return list<string> */
+    public function issues(array $request): array
+    {
+        $issues=[];
+        if (empty($request['documents'])) $issues[]='Нет скана ТН';
+        if (empty($request['arrived_at']) || empty($request['departed_at'])) $issues[]='Нет даты или времени';
+        if ((int)($request['driver_signature_present']??0)!==1) $issues[]='Нет подписи водителя';
+        if ((int)($request['sender_signature_present']??0)!==1) $issues[]='Нет подписи отправителя';
+        return $issues;
+    }
+
+    public function save(int $tripId,int $requestId,array $input,int $actorMembershipId): void
+    {
+        $this->assertRequest($tripId,$requestId);
+        $arrived=$this->dateTime($input['arrived_at']??null);
+        $departed=$this->dateTime($input['departed_at']??null);
+        if ($arrived!==null && $departed!==null && $arrived>$departed) throw new DomainException('Время уезда не может быть раньше времени приезда.');
+        $comment=trim((string)($input['comment']??''));
+        if (mb_strlen($comment)>500) throw new DomainException('Комментарий не должен превышать 500 символов.');
+        $stmt=$this->tenant->prepare("INSERT INTO waste_trip_completion_items
+            (waste_trip_request_id,arrived_at,departed_at,driver_signature_present,sender_signature_present,comment,updated_by_membership_id)
+            VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE arrived_at=VALUES(arrived_at),departed_at=VALUES(departed_at),
+            driver_signature_present=VALUES(driver_signature_present),sender_signature_present=VALUES(sender_signature_present),
+            comment=VALUES(comment),updated_by_membership_id=VALUES(updated_by_membership_id),lock_version=lock_version+1");
+        $stmt->execute([$requestId,$arrived,$departed,!empty($input['driver_signature_present'])?1:0,!empty($input['sender_signature_present'])?1:0,$comment!==''?$comment:null,$actorMembershipId]);
+    }
+
+    /** @param array<string,mixed> $file */
+    public function upload(int $tripId,int $requestId,array $file,int $actorMembershipId,bool $requireHttpUpload=true): int
+    {
+        $identity=$this->assertRequest($tripId,$requestId);
+        $validation=DocumentService::validateUploadedFile($file,$requireHttpUpload);
+        if ($validation!==null) throw new DomainException(match($validation){'file_too_large'=>'Файл больше 20 МБ.','invalid_extension','invalid_mime'=>'Разрешены PDF и изображения.',default=>'Не удалось принять файл.'});
+        $ext=DocumentService::extractExtension((string)$file['name']);
+        if (!in_array($ext,['pdf','jpg','jpeg','png','webp','tif','tiff'],true)) throw new DomainException('Разрешены PDF и изображения.');
+        $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM waste_trip_completion_documents WHERE waste_trip_request_id=?');$stmt->execute([$requestId]);$sequence=(int)$stmt->fetchColumn()+1;
+        $tripNumber=$this->safeSegment((string)$identity['business_id']); $requestNumber=$this->safeSegment((string)$identity['zayavka_id']);
+        $storedName="trip_{$tripNumber}_request_{$requestNumber}_tn_".str_pad((string)$sequence,2,'0',STR_PAD_LEFT).'_'.bin2hex(random_bytes(4)).'.'.$ext;
+        $downloadName="Рейс_{$tripNumber}_Заявка_{$requestNumber}_ТН_".str_pad((string)$sequence,2,'0',STR_PAD_LEFT).'.'.$ext;
+        $relativeDir="companies/{$this->companyId}/documents/waste_trip_completion/{$requestId}";
+        $absoluteDir=storage_path($relativeDir);
+        if (!is_dir($absoluteDir) && !mkdir($absoluteDir,0750,true) && !is_dir($absoluteDir)) throw new RuntimeException('Не удалось подготовить хранилище документов.');
+        $absolute=$absoluteDir.DIRECTORY_SEPARATOR.$storedName;
+        $moved=$requireHttpUpload?move_uploaded_file((string)$file['tmp_name'],$absolute):rename((string)$file['tmp_name'],$absolute);
+        if (!$moved) throw new RuntimeException('Не удалось сохранить файл.');
+        try {
+            $mime=(string)((new \finfo(FILEINFO_MIME_TYPE))->file($absolute)?:'application/octet-stream');
+            $stmt=$this->tenant->prepare('INSERT INTO waste_trip_completion_documents (waste_trip_request_id,original_name,download_name,stored_path,mime_type,size_bytes,uploaded_by_membership_id) VALUES (?,?,?,?,?,?,?)');
+            $stmt->execute([$requestId,(string)$file['name'],$downloadName,$relativeDir.'/'.$storedName,$mime,(int)filesize($absolute),$actorMembershipId]);
+            return (int)$this->tenant->lastInsertId();
+        } catch (Throwable $error) { @unlink($absolute); throw $error; }
+    }
+
+    public function softDelete(int $tripId,int $requestId,int $documentId,int $actorMembershipId): void
+    {
+        $this->assertRequest($tripId,$requestId);
+        $stmt=$this->tenant->prepare('UPDATE waste_trip_completion_documents SET deleted_at=NOW(),deleted_by_membership_id=? WHERE id=? AND waste_trip_request_id=? AND deleted_at IS NULL');
+        $stmt->execute([$actorMembershipId,$documentId,$requestId]);
+        if ($stmt->rowCount()!==1) throw new DomainException('Файл не найден.');
+    }
+
+    /** @return array<string,mixed> */
+    public function document(int $tripId,int $documentId): array
+    {
+        $stmt=$this->tenant->prepare("SELECT doc.* FROM waste_trip_completion_documents doc JOIN waste_trip_requests wtr ON wtr.id=doc.waste_trip_request_id JOIN waste_trips wt ON wt.id=wtr.waste_trip_id WHERE doc.id=? AND wt.id=? AND doc.deleted_at IS NULL LIMIT 1");
+        $stmt->execute([$documentId,$tripId]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) throw new DomainException('Файл не найден.');
+        return $row;
+    }
+
+    public function absoluteDocumentPath(array $document): string
+    {
+        $path=realpath(storage_path((string)$document['stored_path']));
+        $root=realpath(storage_path("companies/{$this->companyId}/documents/waste_trip_completion"));
+        if ($path===false || $root===false || !str_starts_with($path,$root.DIRECTORY_SEPARATOR)) throw new DomainException('Файл недоступен.');
+        return $path;
+    }
+
+    public function xlsx(array $trip): string
+    {
+        if (!class_exists(ZipArchive::class)) throw new RuntimeException('На сервере недоступно создание Excel.');
+        $path=tempnam(sys_get_temp_dir(),'trip_report_');if($path===false)throw new RuntimeException('Не удалось подготовить Excel.');
+        $zip=new ZipArchive();if($zip->open($path,ZipArchive::OVERWRITE)!==true){@unlink($path);throw new RuntimeException('Не удалось создать Excel.');}
+        $headers=['Заявка','Грузоотправитель','Адрес забора','Грузополучатель','Адрес выгрузки','Вес, кг','Приезд на забор','Уезд с забора','Подпись водителя','Подпись отправителя','Файлов ТН','Статус','Проблемы','Комментарий'];
+        $rows=[];
+        foreach($trip['requests']as$request)$rows[]=[
+            (string)$request['zayavka_id'],(string)$request['shipper_name'],(string)$request['pickup_address'],(string)$request['consignee_name'],(string)$request['delivery_address'],
+            (float)$request['snapshot_mass_kg'],$this->excelSerial($request['arrived_at']??null),$this->excelSerial($request['departed_at']??null),
+            (int)$request['driver_signature_present']===1?'Да':'Нет',(int)$request['sender_signature_present']===1?'Да':'Нет',count($request['documents']),
+            $request['is_complete']?'Собрано':'Требует дополнения',implode(', ',$request['issues']),(string)$request['completion_comment'],
+        ];
+        $last=max(3,3+count($rows));$sheetRows=[];
+        $sheetRows[]='<row r="1" ht="26" customHeight="1"><c r="A1" s="1" t="inlineStr"><is><t>'.$this->xml('Рейс №'.$trip['business_id'].' — комплектность документов').'</t></is></c></row>';
+        $summary='Завершён: '.$this->reportDate((string)($trip['actual_end_date']??'')).' · Заявок: '.count($rows).' · Полностью собрано: '.(int)$trip['complete_count'];
+        $sheetRows[]='<row r="2" ht="21" customHeight="1"><c r="A2" s="5" t="inlineStr"><is><t>'.$this->xml($summary).'</t></is></c></row>';
+        $cells=[];foreach($headers as$i=>$value)$cells[]=$this->xlsxCell($i+1,3,$value,2);$sheetRows[]='<row r="3" ht="34" customHeight="1">'.implode('',$cells).'</row>';
+        foreach($rows as$rowIndex=>$values){$excelRow=$rowIndex+4;$style=$values[11]==='Собрано'?4:3;$cells=[];foreach($values as$columnIndex=>$value){$cellStyle=$columnIndex===5||$columnIndex===10?6:(in_array($columnIndex,[6,7],true)?($style===4?8:7):$style);$cells[]=$this->xlsxCell($columnIndex+1,$excelRow,$value,$cellStyle);}$sheetRows[]='<row r="'.$excelRow.'" ht="42" customHeight="1">'.implode('',$cells).'</row>';}
+        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:N'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>';
+        foreach([14,27,36,27,36,12,20,20,18,20,12,20,34,28]as$i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
+        $sheet.='</cols><sheetData>'.implode('',$sheetRows).'</sheetData><autoFilter ref="A3:N'.$last.'"/><mergeCells count="2"><mergeCell ref="A1:N1"/><mergeCell ref="A2:N2"/></mergeCells><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+        $zip->addFromString('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>');
+        $zip->addFromString('_rels/.rels','<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
+        $zip->addFromString('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Рейс '.$this->xml((string)$trip['business_id']).'" sheetId="1" r:id="rId1"/></sheets></workbook>');
+        $zip->addFromString('xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>');
+        $zip->addFromString('xl/styles.xml',$this->xlsxStyles());$zip->addFromString('xl/worksheets/sheet1.xml',$sheet);$zip->close();return$path;
+    }
+
+    public function package(array $trip): string
+    {
+        if (!class_exists(ZipArchive::class)) throw new RuntimeException('На сервере недоступно создание ZIP.');
+        $path=tempnam(sys_get_temp_dir(),'trip_completion_'); if ($path===false) throw new RuntimeException('Не удалось подготовить архив.');
+        $zip=new ZipArchive(); if ($zip->open($path,ZipArchive::OVERWRITE)!==true) { @unlink($path); throw new RuntimeException('Не удалось создать архив.'); }
+        $report=$this->xlsx($trip);
+        $zip->addFile($report,'Рейс_'.$trip['business_id'].'_сводный_отчет.xlsx');
+        foreach ($trip['requests'] as $request) foreach ($request['documents'] as $document) {
+            try { $zip->addFile($this->absoluteDocumentPath($document),(string)$document['download_name']); } catch (Throwable) {}
+        }
+        $zip->close();@unlink($report);return $path;
+    }
+
+    /** @return array{business_id:int|string,zayavka_id:string} */
+    private function assertRequest(int $tripId,int $requestId): array
+    {
+        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.id=? AND wt.id=? AND wt.status='completed' AND wt.deleted_at IS NULL LIMIT 1");
+        $stmt->execute([$requestId,$tripId]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
+        if (!$row) throw new DomainException('Заявка завершённого рейса не найдена.');
+        return $row;
+    }
+
+    private function dateTime(mixed $value): ?string
+    {
+        $value=trim((string)$value); if ($value==='') return null;
+        $date=DateTimeImmutable::createFromFormat('Y-m-d\TH:i',$value);
+        $errors=DateTimeImmutable::getLastErrors();
+        if (!$date || (is_array($errors) && (($errors['warning_count']??0)>0 || ($errors['error_count']??0)>0))) throw new DomainException('Укажите корректные дату и время.');
+        return $date->format('Y-m-d H:i:00');
+    }
+
+    private function safeSegment(string $value): string
+    {
+        $value=preg_replace('/[^0-9A-Za-zА-Яа-я_-]+/u','_',$value)??'';
+        return trim($value,'_')?:'unknown';
+    }
+
+    private function xlsxCell(int $column,int $row,mixed $value,int $style): string
+    {
+        $ref=$this->xlsxColumn($column).$row;
+        if(is_int($value)||is_float($value))return'<c r="'.$ref.'" s="'.$style.'"><v>'.(string)$value.'</v></c>';
+        return'<c r="'.$ref.'" s="'.$style.'" t="inlineStr"><is><t xml:space="preserve">'.$this->xml((string)$value).'</t></is></c>';
+    }
+
+    private function xlsxColumn(int $number): string
+    { $label='';while($number>0){$number--; $label=chr(65+($number%26)).$label;$number=intdiv($number,26);}return$label; }
+
+    private function xml(string $value): string
+    { return htmlspecialchars($value,ENT_XML1|ENT_QUOTES,'UTF-8'); }
+
+    private function excelSerial(mixed $value): float|string
+    {
+        $text=trim((string)$value);if($text==='')return'';$date=new DateTimeImmutable($text);
+        $day=$date->setTime(0,0);$origin=new DateTimeImmutable('1899-12-30 00:00:00',$date->getTimezone());
+        $days=(int)$origin->diff($day)->format('%r%a');$seconds=((int)$date->format('H'))*3600+((int)$date->format('i'))*60+(int)$date->format('s');
+        return$days+($seconds/86400);
+    }
+
+    private function reportDate(string $value): string
+    { return trim($value)!==''?date('d.m.Y',strtotime($value)):'не указан'; }
+
+    private function xlsxStyles(): string
+    {
+        return'<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="16"/><color rgb="FFFFFFFF"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts><fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F766E"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF1F0"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFECFDF3"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD0D5DD"/></left><right style="thin"><color rgb="FFD0D5DD"/></right><top style="thin"><color rgb="FFD0D5DD"/></top><bottom style="thin"><color rgb="FFD0D5DD"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf><xf numFmtId="22" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="top"/></xf><xf numFmtId="22" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="top"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+    }
+}

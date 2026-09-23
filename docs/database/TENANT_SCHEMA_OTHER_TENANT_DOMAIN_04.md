@@ -2,7 +2,42 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `5035c55a3a781ec6e0315cabe57ccecb39dac614afdc3729a6be60f01cfacf6a`
+**Schema fingerprint:** `49cf1e05561a1ac2d4d207fd88851c5042464f75b2e88375c53da016cb83a9bf`
+
+## `waste_trip_customer_payments`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `sort_order` | `int unsigned` | NO | `1` | — | — |
+| `amount` | `decimal(12,2)` | YES | NULL | — | — |
+| `payment_type` | `varchar(50)` | NO | NULL | — | — |
+| `payment_method` | `varchar(20)` | NO | `cashless` | — | — |
+| `vat_rate` | `decimal(5,2)` | YES | NULL | — | — |
+| `condition_type` | `varchar(50)` | NO | NULL | — | — |
+| `days_count` | `int` | YES | NULL | — | — |
+| `days_kind` | `varchar(10)` | YES | NULL | — | — |
+| `specific_due_date` | `date` | YES | NULL | — | — |
+| `condition_comment` | `text` | YES | NULL | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_waste_trip_customer_payments_trip` (`waste_trip_id`, `sort_order`, `id`)
+
+### Physical foreign keys
+
+- `fk_waste_trip_customer_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `waste_trip_general_payments`
 
