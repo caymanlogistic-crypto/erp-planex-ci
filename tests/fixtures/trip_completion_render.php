@@ -14,4 +14,12 @@ $selectedTrip=['id'=>1,'business_id'=>244,'actual_start_date'=>'2026-09-01','act
  ['id'=>12,'zayavka_id'=>'275006','position_no'=>2,'snapshot_mass_kg'=>135,'shipper_name'=>'ООО Экопром','pickup_address'=>'Архангельская область, Приморский район','consignee_name'=>'Переработчик','delivery_address'=>'Московская область, Воскресенск, ул. Кирова, 3в','arrived_at'=>'','departed_at'=>'','driver_signature_present'=>0,'sender_signature_present'=>1,'completion_comment'=>'Уточнить время у водителя','documents'=>[],'issues'=>['Нет скана ТН','Нет даты или времени','Нет подписи водителя'],'is_complete'=>false],
  ['id'=>13,'zayavka_id'=>'271941','position_no'=>3,'snapshot_mass_kg'=>104,'shipper_name'=>'СПО Арктика','pickup_address'=>'Архангельская область, Северодвинск','consignee_name'=>'Переработчик','delivery_address'=>'Московская область, Воскресенск, ул. Кирова, 3в','arrived_at'=>'2026-09-02 12:30:00','departed_at'=>'2026-09-02 13:10:00','driver_signature_present'=>1,'sender_signature_present'=>0,'completion_comment'=>'','documents'=>[['id'=>102,'download_name'=>'Рейс_244_Заявка_271941_ТН_01.jpg','size_bytes'=>201120]],'issues'=>['Нет подписи отправителя'],'is_complete'=>false],
 ]];
+$trips[0]=array_merge($trips[0],$selectedTrip);
+$trips[1]=array_merge($trips[1],[
+ 'actual_start_date'=>'2026-09-03',
+ 'requests'=>[
+  ['id'=>21,'zayavka_id'=>'270001','position_no'=>1,'snapshot_mass_kg'=>210,'shipper_name'=>'ООО Север','pickup_address'=>'Архангельск','consignee_name'=>'Переработчик','delivery_address'=>'Воскресенск','arrived_at'=>'2026-09-03 10:00:00','departed_at'=>'2026-09-03 10:30:00','driver_signature_present'=>1,'sender_signature_present'=>1,'completion_comment'=>'','documents'=>[['id'=>201,'download_name'=>'Рейс_243_Заявка_270001_ТН_01.jpg','size_bytes'=>120000]],'issues'=>[],'is_complete'=>true],
+ ],
+]);
+$openTripId=0;
 ?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><title>Помощник логиста</title></head><body><main style="padding:20px;max-width:1800px;margin:auto"><?php require BASE_PATH.'/app/View/pages/company_logistics_assistant.php';?></main></body></html>

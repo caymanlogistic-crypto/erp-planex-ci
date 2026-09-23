@@ -19,7 +19,7 @@ final class TripCompletionController
     public function index(): void
     {
         header('Cache-Control: no-store');
-        $error=null;$company=null;$trips=[];$selectedTrip=null;$metrics=['trips'=>0,'requests'=>0,'ready'=>0,'problems'=>0];
+        $error=null;$company=null;$trips=[];$metrics=['trips'=>0,'requests'=>0,'ready'=>0,'problems'=>0];
         $query=trim((string)($_GET['q']??''));
         $hideComplete=!isset($_GET['filter']) || isset($_GET['hide_complete']);
         $success=$_SESSION['trip_completion_success']??null;$formError=$_SESSION['trip_completion_error']??null;
@@ -35,9 +35,11 @@ final class TripCompletionController
                 'problems'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count']-(int)$row['complete_count'],$all)),
             ];
             $trips=$service->trips($query,$hideComplete);
-            $selectedId=max(0,(int)($_GET['trip_id']??0));
-            if ($selectedId===0 && $trips!==[]) $selectedId=(int)$trips[0]['id'];
-            if ($selectedId>0) $selectedTrip=$service->trip($selectedId);
+            foreach ($trips as $index=>$trip) {
+                $details=$service->trip((int)$trip['id']);
+                $trips[$index]=array_merge($trip,$details);
+            }
+            $openTripId=max(0,(int)($_GET['trip_id']??0));
         } catch (DomainException $exception) { $error=$exception->getMessage(); }
         catch (Throwable $exception) { error_log('trip completion index failed: '.$exception->getMessage());$error='Не удалось загрузить рабочее место помощника логиста.'; }
         $pageTitle='Помощник логиста';$pageContext='Рейсы › Помощник логиста';
@@ -49,8 +51,16 @@ final class TripCompletionController
     public function save(string $tripId,string $requestId): void
     {
         verifyCsrfRequest();
-        try { [, $service,$actor]=$this->context();$this->assertReady($service);$service->save((int)$tripId,(int)$requestId,$_POST,$actor);$this->success('Данные заявки сохранены.'); }
-        catch (Throwable $exception) { $this->failure($exception,'Не удалось сохранить заявку.'); }
+        try {
+            [, $service,$actor]=$this->context();$this->assertReady($service);
+            $service->save((int)$tripId,(int)$requestId,$_POST,$actor);
+            if ($this->wantsJson()) $this->json($this->payload($service,(int)$tripId,(int)$requestId));
+            $this->success('Данные заявки сохранены.');
+        }
+        catch (Throwable $exception) {
+            if ($this->wantsJson()) $this->jsonError($exception,'Не удалось сохранить заявку.');
+            $this->failure($exception,'Не удалось сохранить заявку.');
+        }
         $this->back((int)$tripId);
     }
 
@@ -64,16 +74,28 @@ final class TripCompletionController
             $total=array_sum(array_map(static fn(array $file):int=>(int)($file['size']??0),$files));
             if ($total>80*1024*1024) throw new DomainException('Общий размер файлов больше 80 МБ.');
             foreach ($files as $file) $service->upload((int)$tripId,(int)$requestId,$file,$actor);
+            if ($this->wantsJson()) $this->json($this->payload($service,(int)$tripId,(int)$requestId));
             $this->success('Сканы ТН загружены: '.count($files).'.');
-        } catch (Throwable $exception) { $this->failure($exception,'Не удалось загрузить сканы ТН.'); }
+        } catch (Throwable $exception) {
+            if ($this->wantsJson()) $this->jsonError($exception,'Не удалось загрузить сканы ТН.');
+            $this->failure($exception,'Не удалось загрузить сканы ТН.');
+        }
         $this->back((int)$tripId);
     }
 
     public function deleteFile(string $tripId,string $requestId,string $documentId): void
     {
         verifyCsrfRequest();
-        try { [, $service,$actor]=$this->context();$this->assertReady($service);$service->softDelete((int)$tripId,(int)$requestId,(int)$documentId,$actor);$this->success('Файл удалён из комплекта.'); }
-        catch (Throwable $exception) { $this->failure($exception,'Не удалось удалить файл.'); }
+        try {
+            [, $service,$actor]=$this->context();$this->assertReady($service);
+            $service->softDelete((int)$tripId,(int)$requestId,(int)$documentId,$actor);
+            if ($this->wantsJson()) $this->json($this->payload($service,(int)$tripId,(int)$requestId));
+            $this->success('Файл удалён из комплекта.');
+        }
+        catch (Throwable $exception) {
+            if ($this->wantsJson()) $this->jsonError($exception,'Не удалось удалить файл.');
+            $this->failure($exception,'Не удалось удалить файл.');
+        }
         $this->back((int)$tripId);
     }
 
@@ -141,4 +163,55 @@ final class TripCompletionController
     private function failure(Throwable $exception,string $fallback): void
     { $_SESSION['trip_completion_error']=$exception instanceof DomainException?$exception->getMessage():$fallback;error_log('trip completion action failed: '.$exception->getMessage()); }
     private function back(int $tripId): never { header('Location: '.app_url('/company/logistics-assistant?trip_id='.$tripId));exit; }
+
+    private function wantsJson(): bool
+    {
+        return str_contains(strtolower((string)($_SERVER['HTTP_ACCEPT']??'')),'application/json')
+            || strtolower((string)($_SERVER['HTTP_X_REQUESTED_WITH']??''))==='xmlhttprequest';
+    }
+
+    /** @return array<string,mixed> */
+    private function payload(TripCompletionService $service,int $tripId,int $requestId): array
+    {
+        $trip=$service->trip($tripId);$request=null;
+        foreach ($trip['requests'] as $candidate) if ((int)$candidate['id']===$requestId) {$request=$candidate;break;}
+        if (!is_array($request)) throw new DomainException('Заявка завершённого рейса не найдена.');
+        $request['documents']=array_map(static fn(array $document):array=>[
+            'id'=>(int)$document['id'],
+            'download_name'=>(string)$document['download_name'],
+            'download_url'=>app_url('/company/logistics-assistant/'.$tripId.'/documents/'.(int)$document['id']),
+            'delete_url'=>app_url('/company/logistics-assistant/'.$tripId.'/requests/'.$requestId.'/documents/'.(int)$document['id'].'/delete'),
+        ],$request['documents']);
+        $missing=['scan'=>0,'time'=>0,'driver'=>0,'sender'=>0];
+        foreach ($trip['requests'] as $item) {
+            if (empty($item['documents'])) $missing['scan']++;
+            if (empty($item['arrived_at']) || empty($item['departed_at'])) $missing['time']++;
+            if ((int)$item['driver_signature_present']!==1) $missing['driver']++;
+            if ((int)$item['sender_signature_present']!==1) $missing['sender']++;
+        }
+        $summary=[];
+        if ($missing['scan']>0) $summary[]='ТН '.$missing['scan'];
+        if ($missing['time']>0) $summary[]='время '.$missing['time'];
+        if ($missing['driver']>0) $summary[]='подпись водителя '.$missing['driver'];
+        if ($missing['sender']>0) $summary[]='подпись отправителя '.$missing['sender'];
+        return ['ok'=>true,'request'=>$request,'trip'=>[
+            'complete_count'=>(int)$trip['complete_count'],
+            'request_count'=>(int)$trip['request_count'],
+            'missing_summary'=>$summary,
+        ]];
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function json(array $payload,int $status=200): never
+    {
+        http_response_code($status);header('Content-Type: application/json; charset=utf-8');
+        echo json_encode($payload,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit;
+    }
+
+    private function jsonError(Throwable $exception,string $fallback): never
+    {
+        error_log('trip completion ajax action failed: '.$exception->getMessage());
+        $message=$exception instanceof DomainException?$exception->getMessage():$fallback;
+        $this->json(['ok'=>false,'message'=>$message],$exception instanceof DomainException?422:500);
+    }
 }
