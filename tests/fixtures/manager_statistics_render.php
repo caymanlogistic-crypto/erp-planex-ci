@@ -13,7 +13,7 @@ $_SESSION = [
     'user_name'=>'Анна Белова',
 ];
 
-$_GET = ['mode'=>'year','year'=>'2026','group'=>'week','metric'=>'trips','compare'=>'1'];
+$_GET = ['mode'=>'week','metric'=>'trips'];
 $company = ['name'=>'ООО «ПЛАНЭКС»'];
 $dbError = null;
 $eligibleManagers = [
@@ -23,12 +23,13 @@ $eligibleManagers = [
     ['membership_id'=>104,'full_name'=>'Глеб Романов'],
 ];
 $filters = [
-    'mode'=>'year','metric'=>'trips','group'=>'week','week'=>'2026-W39','month'=>'2026-09','year'=>2026,'from'=>'2026-07-06','to'=>'2026-09-23',
-    'previous_from'=>'2026-04-18','previous_to'=>'2026-07-05','manager_ids'=>[],'compare'=>true,'duration_days'=>80,
+    'mode'=>'week','metric'=>'trips','group'=>'week','from'=>'2026-08-03','to'=>'2026-09-23',
+    'previous_from'=>'2026-06-08','previous_to'=>'2026-07-29','manager_ids'=>[],'compare'=>false,'duration_days'=>52,
 ];
 $trend=[];$previousTrend=[];
-foreach ([7,11,9,14,12,16,13,18,15,21,19,23] as $index=>$value) {
-    $start=(new DateTimeImmutable('2026-07-06'))->modify('+'.$index.' weeks');$end=$start->modify('+6 days');
+foreach ([14,18,16,20,21,19,25,30] as $index=>$value) {
+    $start=(new DateTimeImmutable('2026-08-03'))->modify('+'.$index.' weeks');$end=$start->modify('+6 days');
+    if ($end > new DateTimeImmutable('2026-09-23')) $end=new DateTimeImmutable('2026-09-23');
     $trend[]=['key'=>$start->format('Y-m-d'),'label'=>'Нед. '.$start->format('W').' · '.$start->format('d.m'),'from'=>$start->format('Y-m-d'),'to'=>$end->format('Y-m-d'),'trips'=>$value,'requests'=>$value*3+($index%3),'weight'=>$value*4280.0];
     $previousStart=$start->modify('-12 weeks');$previousEnd=$previousStart->modify('+6 days');
     $previousTrend[]=['key'=>$previousStart->format('Y-m-d'),'label'=>'Нед. '.$previousStart->format('W').' · '.$previousStart->format('d.m'),'from'=>$previousStart->format('Y-m-d'),'to'=>$previousEnd->format('Y-m-d'),'trips'=>max(2,$value-4),'requests'=>max(4,$value*3-10),'weight'=>max(1000,($value-4)*4100.0)];
@@ -73,7 +74,6 @@ $pageContext = 'Статистика › Работа логистов › Ко�
 $config = ['app'=>['app_name'=>'ERP PLANEX']];
 $db = new stdClass();
 $pageStylesheets = ['/assets/css/manager-statistics.css'];
-$pageScripts = ['/assets/js/manager-statistics.js'];
 ob_start();
 require $root.'/app/View/pages/company_manager_statistics.php';
 $content = (string)ob_get_clean();

@@ -40,7 +40,29 @@ $check(
     'exact active central Logist role supports system and historical role shapes'
 );
 $check(str_contains($view, 'Рейсы поставлены на погрузку') && str_contains($view, 'Точные значения по периодам') && str_contains($view, 'Итоги каждого логиста') && str_contains($view, 'Из чего сложился результат'), 'decision layers are rendered');
-$check(str_contains($view, "'week'=>'Неделя'") && str_contains($view, "'month'=>'Месяц'") && str_contains($view, "'year'=>'Год'") && str_contains($view, "'custom'=>'Свой период'"), 'required calendar period modes');
+$check(
+    str_contains($view, "'week'=>'Недели'")
+    && str_contains($view, "'month'=>'Месяцы'")
+    && str_contains($view, "'year'=>'Год'")
+    && !str_contains($view, 'Свой период')
+    && !str_contains($view, '>Показать<')
+    && !str_contains($view, 'Период и логисты')
+    && !str_contains($view, 'Открыть реестр рейсов')
+    && !str_contains($view, 'Открыть →'),
+    'three instant rolling modes without removed controls or trip transitions'
+);
+$check(
+    str_contains($service, "modify('-7 weeks')")
+    && str_contains($service, "modify('-3 months')")
+    && str_contains($service, "modify('-11 months')"),
+    'rolling 8-week 4-month and 12-month windows'
+);
+$check(
+    str_contains($view, '<th class="num is-total">Итого</th>')
+    && str_contains($css, '.manager-stats__period-table .is-total { font-weight:800; }')
+    && !str_contains($css, '.manager-stats__period-table .is-company'),
+    'rightmost total column uses bold weight only'
+);
 $check(str_contains($view, 'Динамика компании и логистов') && str_contains($service, "'period_rows'=>self::periodRows"), 'company and logist dynamics with exact period values');
 $check(str_contains($view, "'trips'=>") && str_contains($view, "'requests'=>") && str_contains($view, "'weight'=>"), 'required metric modes');
 $check(str_contains($css, '#C07830') && str_contains($css, '#4A7A9B') && str_contains($css, '#3A8278'), 'approved chart palette');

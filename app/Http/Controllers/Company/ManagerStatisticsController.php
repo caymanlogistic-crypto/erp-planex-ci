@@ -28,7 +28,7 @@ final class ManagerStatisticsController
             'totals'=>['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0],
             'previous_totals'=>['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0],
             'managers'=>[], 'trend'=>[], 'previous_trend'=>[], 'manager_trends'=>[],
-            'period_rows'=>[], 'details'=>[], 'available_years'=>[(int)date('Y')], 'scope'=>'none',
+            'period_rows'=>[], 'details'=>[], 'scope'=>'none',
         ];
 
         $companyId = (int)(getSessionCompanyId() ?? 0);
@@ -62,7 +62,6 @@ final class ManagerStatisticsController
         require base_path('app/View/pages/company_manager_statistics.php');
         $content = (string)ob_get_clean();
         $pageStylesheets = ['/assets/css/manager-statistics.css'];
-        $pageScripts = ['/assets/js/manager-statistics.js'];
         $config = $this->config;
         $db = $this->db;
         require base_path('app/View/layouts/main.php');

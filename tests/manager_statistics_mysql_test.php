@@ -81,7 +81,7 @@ try {
     check((int)$snapshot['request_count']===1 && (float)$snapshot['total_mass_kg']===1500.0, 'composition corrections update result');
     $pdo->exec("UPDATE users SET full_name='Анна Новая' WHERE id=1; UPDATE waste_trip_start_statistics SET responsible_name_snapshot='Анна Старая' WHERE waste_trip_id=2");
 
-    $filters=Statistics::normalizeFilters(['mode'=>'custom','from'=>'2026-09-01','to'=>'2026-09-30','group'=>'week','metric'=>'trips','compare'=>'1'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
+    $filters=Statistics::normalizeFilters(['mode'=>'week','metric'=>'trips'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
     $dashboard=Statistics::dashboard($pdo,$filters,[
         ['membership_id'=>101,'full_name'=>'Анна Новая'],
         ['membership_id'=>102,'full_name'=>'Борис Серов'],
@@ -94,8 +94,8 @@ try {
     check($dashboard['managers'][0]['name']==='Анна Новая' && $dashboard['managers'][0]['trips']===2, 'manager rows aggregate by identity and show the current employee name');
     $zero=array_values(array_filter($dashboard['managers'],static fn(array $row):bool=>$row['name']==='Вера Тихая'))[0]??null;
     check(is_array($zero)&&$zero['trips']===0, 'zero-result employee visible');
-    check(count($dashboard['trend'])===5 && count($dashboard['details'])===3, 'weekly trend and drill-down');
-    check(count($dashboard['period_rows'])===5 && count($dashboard['manager_trends'])===3, 'exact period matrix and per-logist dynamics');
+    check(count($dashboard['trend'])===8 && count($dashboard['details'])===3, 'eight-week trend and drill-down');
+    check(count($dashboard['period_rows'])===8 && count($dashboard['manager_trends'])===3, 'eight exact periods and per-logist dynamics');
 
     $filtered=$filters;$filtered['manager_ids']=[102];
     $one=Statistics::dashboard($pdo,$filtered,[
@@ -112,12 +112,14 @@ try {
         ['membership_id'=>103,'full_name'=>'Вера Тихая'],
     ]);
     check($none['totals']['trips']===0 && $none['details']===[], 'non-Logist membership cannot be forced through query filters');
-    $year=Statistics::normalizeFilters(['mode'=>'year','year'=>'2025','group'=>'month'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
-    check($year['from']==='2025-01-01'&&$year['to']==='2025-12-31'&&$year['previous_from']==='2024-01-01','calendar year boundaries');
+    $year=Statistics::normalizeFilters(['mode'=>'year','year'=>'2025','group'=>'week'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
+    check($year['from']==='2025-10-01'&&$year['to']==='2026-09-23'&&$year['group']==='month'&&$year['previous_from']==='2024-10-01'&&$year['previous_to']==='2025-09-23','rolling twelve-month boundaries ignore removed selectors');
     $week=Statistics::normalizeFilters(['mode'=>'week','week'=>'2026-W01'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
-    check($week['from']==='2025-12-29'&&$week['to']==='2026-01-04'&&$week['group']==='day','ISO week boundaries');
+    check($week['from']==='2026-08-03'&&$week['to']==='2026-09-23'&&$week['group']==='week'&&$week['previous_from']==='2026-06-08'&&$week['previous_to']==='2026-07-29','current and seven previous weeks');
     $month=Statistics::normalizeFilters(['mode'=>'month','month'=>'2026-03'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
-    check($month['from']==='2026-03-01'&&$month['to']==='2026-03-31'&&$month['previous_from']==='2026-02-01'&&$month['previous_to']==='2026-02-28','calendar month comparison');
+    check($month['from']==='2026-06-01'&&$month['to']==='2026-09-23'&&$month['group']==='month'&&$month['previous_from']==='2026-02-01'&&$month['previous_to']==='2026-05-23','current and three previous months');
+    $removed=Statistics::normalizeFilters(['mode'=>'custom','from'=>'2020-01-01','to'=>'2030-01-01','manager_ids'=>[102],'compare'=>'1'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
+    check($removed['mode']==='week'&&$removed['from']==='2026-08-03'&&$removed['manager_ids']===[]&&$removed['compare']===false,'removed settings cannot change the fixed report');
     echo "MANAGER_STATISTICS_MYSQL=PASS\n";
 } finally {
     if($fixed!=='')cleanCompanyPoolDatabase($pdo);else $admin->exec("DROP DATABASE `$database`");
