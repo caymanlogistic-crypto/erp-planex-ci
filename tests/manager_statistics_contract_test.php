@@ -33,7 +33,12 @@ $check(str_contains($controller, 'schemaReady($local)') && !str_contains($contro
 $check(str_contains($service, "effectiveDataScope('waste_trip')") && str_contains($service, "RegulatedDataScopeService::condition('waste_trip'"), 'waste trip data scope enforced');
 $check(substr_count($tripService, 'WasteTripStartStatisticsService::synchronizeTrip') >= 6, 'all waste trip mutation paths synchronize facts');
 $check(str_contains($migration, 'responsible_name_snapshot') && str_contains($migration, 'ON DUPLICATE KEY UPDATE'), 'historical manager attribution and idempotent backfill');
-$check(str_contains($controller, 'eligibleLogists($central, $companyId)') && str_contains($service, "r.system_key='logist'"), 'only active central Logist role is included');
+$check(
+    str_contains($controller, 'eligibleLogists($central, $companyId)')
+    && str_contains($service, "r.system_key='logist'")
+    && str_contains($service, "r.normalized_name='логист'"),
+    'exact active central Logist role supports system and historical role shapes'
+);
 $check(str_contains($view, 'Рейсы поставлены на погрузку') && str_contains($view, 'Точные значения по периодам') && str_contains($view, 'Итоги каждого логиста') && str_contains($view, 'Из чего сложился результат'), 'decision layers are rendered');
 $check(str_contains($view, "'week'=>'Неделя'") && str_contains($view, "'month'=>'Месяц'") && str_contains($view, "'year'=>'Год'") && str_contains($view, "'custom'=>'Свой период'"), 'required calendar period modes');
 $check(str_contains($view, 'Динамика компании и логистов') && str_contains($service, "'period_rows'=>self::periodRows"), 'company and logist dynamics with exact period values');

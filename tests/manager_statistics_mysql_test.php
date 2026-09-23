@@ -39,13 +39,22 @@ try {
     LocalMigrationService::apply($pdo);
     check(Statistics::schemaReady($pdo), 'migration 141 applied');
     $pdo->exec("CREATE TEMPORARY TABLE user_accounts(id BIGINT PRIMARY KEY,full_name VARCHAR(100),login VARCHAR(100),status VARCHAR(20));
-        CREATE TEMPORARY TABLE company_roles(id BIGINT PRIMARY KEY,company_id INT,is_system TINYINT,system_key VARCHAR(50));
+        CREATE TEMPORARY TABLE company_roles(id BIGINT PRIMARY KEY,company_id INT,name VARCHAR(120),normalized_name VARCHAR(120),is_system TINYINT,system_key VARCHAR(50));
         CREATE TEMPORARY TABLE company_memberships(id BIGINT PRIMARY KEY,account_id BIGINT,company_id INT,role_id BIGINT,status VARCHAR(20));
-        INSERT INTO user_accounts VALUES(1,'Точный Логист','exact','active'),(2,'Руководитель','owner','active'),(3,'Логист плюс','senior','active'),(4,'Заблокированный','blocked','blocked');
-        INSERT INTO company_roles VALUES(1,25,1,'logist'),(2,25,1,'company_owner'),(3,25,1,'senior_logist'),(4,27,1,'logist');
-        INSERT INTO company_memberships VALUES(101,1,25,1,'active'),(102,2,25,2,'active'),(103,3,25,3,'active'),(104,4,25,1,'active'),(201,1,27,4,'active');");
+        INSERT INTO user_accounts VALUES(1,'Точный Логист','exact','active'),(2,'Руководитель','owner','active'),(3,'Логист плюс','senior','active'),(4,'Заблокированный','blocked','blocked'),(5,'Системный Логист','system','active'),(6,'Логист Лайт','lite','active');
+        INSERT INTO company_roles VALUES
+            (1,25,'Логист','логист',0,NULL),
+            (2,25,'Руководитель','руководитель',1,'company_owner'),
+            (3,25,'Логист+','логист+',1,'senior_logist'),
+            (4,27,'Логист','логист',1,'logist'),
+            (5,25,'Логист','логист',1,'logist'),
+            (6,25,'Логист (lite)','логист (lite)',0,NULL);
+        INSERT INTO company_memberships VALUES(101,1,25,1,'active'),(102,2,25,2,'active'),(103,3,25,3,'active'),(104,4,25,1,'active'),(105,5,25,5,'active'),(106,6,25,6,'active'),(201,1,27,4,'active');");
     $exactLogists=Statistics::eligibleLogists($pdo,25);
-    check(count($exactLogists)===1&&(int)$exactLogists[0]['membership_id']===101, 'central exact active Logist role filter');
+    check(
+        array_column($exactLogists, 'membership_id') === [105,101],
+        'central exact active Logist role accepts system and historical shapes only'
+    );
     $pdo->exec("INSERT INTO users(id,membership_id,full_name,login,password_hash,role_code,status) VALUES
         (1,101,'Анна Белова','anna','hash','logist','active'),
         (2,102,'Борис Серов','boris','hash','logist','active'),

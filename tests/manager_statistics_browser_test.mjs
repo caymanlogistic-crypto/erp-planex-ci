@@ -36,10 +36,14 @@ try{
   assert.equal(await page.locator('.manager-stats__role-note').count(),0,'redundant logist role note is absent');
   const shellStyle=await page.evaluate(()=>({
     font:getComputedStyle(document.body).fontFamily,
+    bodyMargin:getComputedStyle(document.body).margin,
+    topbarTop:document.querySelector('.topbar').getBoundingClientRect().top,
     topbar:getComputedStyle(document.querySelector('.topbar')).display,
     sidebar:getComputedStyle(document.querySelector('.sidebar')).display,
   }));
   assert.match(shellStyle.font,/IBM Plex Sans/i,'ERP font is applied');
+  assert.equal(shellStyle.bodyMargin,'0px','ERP shell has no browser-page top gap');
+  assert.equal(shellStyle.topbarTop,0,'ERP topbar starts at the document top edge');
   assert.equal(shellStyle.topbar,'grid','topbar styles are applied');
   assert.equal(shellStyle.sidebar,'flex','sidebar styles are applied');
   assert.equal(await page.locator('.manager-stats__kpi').count(),4,'four KPI cards');
