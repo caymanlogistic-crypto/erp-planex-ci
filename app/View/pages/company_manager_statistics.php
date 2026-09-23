@@ -6,6 +6,7 @@ $metricMeta = [
     'requests'=>['label'=>'Заявки','long'=>'Заявки в начатых рейсах','color'=>'#4A7A9B'],
     'weight'=>['label'=>'Вес','long'=>'Вес заявок','color'=>'#3A8278'],
 ];
+$companyChartColor = '#C07830';
 $modeLabels = ['week'=>'Недели','month'=>'Месяцы','year'=>'Год'];
 $fmtInt = static fn(mixed $value): string => number_format((int)$value, 0, ',', ' ');
 $fmtWeight = static fn(mixed $value): string => number_format((float)$value / 1000, 2, ',', ' ').' т';
@@ -31,18 +32,41 @@ $chart = static function(array $current, string $key, callable $valueOf): array 
         return$result;
     };
     $currentPoints=$points($current);
-    $path=static fn(array $pts):string=>implode(' ',array_map(static fn(array$p,int$i):string=>($i===0?'M':'L').number_format($p['x'],1,'.','').' '.number_format($p['y'],1,'.',''),$pts,array_keys($pts)));
+    $number=static fn(float $value):string=>number_format($value,1,'.','');
+    $path=static function(array $pts)use($number,$top,$plotH):string{
+        $count=count($pts);
+        if($count===0)return'';
+        if($count===1)return'M'.$number((float)$pts[0]['x']).' '.$number((float)$pts[0]['y']);
+        $bottom=$top+$plotH;$smooth=.38;
+        $result='M'.$number((float)$pts[0]['x']).' '.$number((float)$pts[0]['y']);
+        for($i=0;$i<$count-1;$i++){
+            $previous=$pts[max(0,$i-1)];$current=$pts[$i];$next=$pts[$i+1];$after=$pts[min($count-1,$i+2)];
+            $cp1x=(float)$current['x']+(((float)$next['x']-(float)$previous['x'])/6*$smooth);
+            $cp1y=max($top,min($bottom,(float)$current['y']+(((float)$next['y']-(float)$previous['y'])/6*$smooth)));
+            $cp2x=(float)$next['x']-(((float)$after['x']-(float)$current['x'])/6*$smooth);
+            $cp2y=max($top,min($bottom,(float)$next['y']-(((float)$after['y']-(float)$current['y'])/6*$smooth)));
+            $result.=' C'.$number($cp1x).' '.$number($cp1y).' '.$number($cp2x).' '.$number($cp2y).' '.$number((float)$next['x']).' '.$number((float)$next['y']);
+        }
+        return$result;
+    };
     return compact('width','height','left','right','top','bottom','plotW','plotH','max','currentPoints','points','path');
 };
 $chartData = $chart($statistics['trend'], $metric, $metricValue);
-$lineColors = array_values(array_filter(
-    ['#4A7A9B','#3A8278','#B84C3A','#B89228','#6D5B8C','#5C7A88','#8A6A44','#7A6478'],
-    static fn(string $color): bool => strcasecmp($color, $metricMeta[$metric]['color']) !== 0
-));
+$lineColors = ['#4A7A9B','#B84C3A','#6A8A50','#B89228','#6D5B8C','#5C7A88','#8A6A44','#7A6478'];
 $managerChartSeries = [];
 foreach ($statistics['manager_trends'] as $index=>$series) {
     $managerChartSeries[] = $series + ['color'=>$lineColors[$index % count($lineColors)],'points'=>$chartData['points']($series['values'])];
 }
+$visiblePeriodRows = array_values(array_filter(
+    array_reverse($statistics['period_rows']),
+    static fn(array $row): bool => abs($metricValue($row, $metric)) > 0.000001
+));
+$tooltipPosition = static function(array $point) use ($chartData): array {
+    $width=176.0;$height=43.0;
+    $x=max(4.0-(float)$point['x'],min(-$width/2,$chartData['width']-4.0-(float)$point['x']-$width));
+    $y=(float)$point['y']<64.0?12.0:-($height+10.0);
+    return['x'=>$x,'y'=>$y,'width'=>$width,'height'=>$height];
+};
 $totalMetric = $metricValue($statistics['totals'], $metric);
 $statusLabels=['in_progress'=>'Вывоз начался','completed'=>'Груз сдан','cancelled'=>'Отменён'];
 $periodLabel = date('d.m.Y',strtotime((string)$filters['from'])).' — '.date('d.m.Y',strtotime((string)$filters['to']));
@@ -94,13 +118,15 @@ $kpis = [
                 <div class="manager-stats__chart-body">
                     <?php if($statistics['trend']===[]):?><div class="manager-stats__empty">Нет данных для построения графика.</div><?php else:?>
                     <svg class="manager-stats__line-chart" viewBox="0 0 <?=$chartData['width']?> <?=$chartData['height']?>" role="img" aria-label="Динамика показателя <?=e($metricMeta[$metric]['label'])?>">
+                        <defs><linearGradient id="manager-stats-company-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="<?=$companyChartColor?>" stop-opacity=".22"/><stop offset=".72" stop-color="<?=$companyChartColor?>" stop-opacity=".05"/><stop offset="1" stop-color="<?=$companyChartColor?>" stop-opacity="0"/></linearGradient></defs>
                         <?php for($i=0;$i<=4;$i++):$y=$chartData['top']+$chartData['plotH']*$i/4;$v=$chartData['max']*(1-$i/4);?><line x1="<?=$chartData['left']?>" y1="<?=$y?>" x2="<?=$chartData['left']+$chartData['plotW']?>" y2="<?=$y?>" class="grid-line"/><text x="<?=$chartData['left']-8?>" y="<?=$y+4?>" text-anchor="end" class="axis-label"><?=e($metricFormat($v,$metric))?></text><?php endfor;?>
-                        <?php if($chartData['currentPoints']!==[]):$area=$chartData['path']($chartData['currentPoints']).' L'.$chartData['currentPoints'][count($chartData['currentPoints'])-1]['x'].' '.($chartData['top']+$chartData['plotH']).' L'.$chartData['currentPoints'][0]['x'].' '.($chartData['top']+$chartData['plotH']).' Z';?><path d="<?=$area?>" fill="<?=$metricMeta[$metric]['color']?>" opacity=".08"/><?php endif;?>
-                        <?php foreach($managerChartSeries as$series):?><path d="<?=$chartData['path']($series['points'])?>" fill="none" stroke="<?=$series['color']?>" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity=".78"><title><?=e($series['name'])?></title></path><?php endforeach;?>
-                        <?php if($chartData['currentPoints']!==[]):?><path d="<?=$chartData['path']($chartData['currentPoints'])?>" fill="none" stroke="<?=$metricMeta[$metric]['color']?>" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/><?php endif;?>
-                        <?php foreach($chartData['currentPoints'] as$i=>$point):?><circle cx="<?=$point['x']?>" cy="<?=$point['y']?>" r="3.5" fill="var(--surface-strong)" stroke="<?=$metricMeta[$metric]['color']?>" stroke-width="2"><title><?=e('Компания · '.$point['label'].' — '.$metricFormat($point['v'],$metric))?></title></circle><?php $step=max(1,(int)ceil(count($chartData['currentPoints'])/12));if($i%$step===0||$i===count($chartData['currentPoints'])-1):?><text x="<?=$point['x']?>" y="<?=$chartData['height']-12?>" text-anchor="middle" class="axis-label"><?=e($point['label'])?></text><?php endif;endforeach;?>
+                        <?php if($chartData['currentPoints']!==[]):$area=$chartData['path']($chartData['currentPoints']).' L'.$chartData['currentPoints'][count($chartData['currentPoints'])-1]['x'].' '.($chartData['top']+$chartData['plotH']).' L'.$chartData['currentPoints'][0]['x'].' '.($chartData['top']+$chartData['plotH']).' Z';?><path class="manager-stats__chart-area" d="<?=$area?>" fill="url(#manager-stats-company-area)"/><?php endif;?>
+                        <?php foreach($managerChartSeries as$seriesIndex=>$series):?><path class="manager-stats__chart-line is-manager" data-series="manager" data-series-name="<?=e($series['name'])?>" pathLength="1" d="<?=$chartData['path']($series['points'])?>" fill="none" stroke="<?=$series['color']?>" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="--series-index:<?=$seriesIndex+1?>"><title><?=e($series['name'])?></title></path><?php endforeach;?>
+                        <?php if($chartData['currentPoints']!==[]):?><path class="manager-stats__chart-line is-company" data-series="company" pathLength="1" d="<?=$chartData['path']($chartData['currentPoints'])?>" fill="none" stroke="<?=$companyChartColor?>" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="--series-index:0"/><?php endif;?>
+                        <?php foreach($managerChartSeries as$seriesIndex=>$series):foreach($series['points']as$pointIndex=>$point):$tip=$tooltipPosition($point);$nodeLabel=$series['name'].' · '.$point['label'].' — '.$metricFormat($point['v'],$metric);?><g class="manager-stats__chart-node is-manager" data-series-name="<?=e($series['name'])?>" tabindex="0" role="img" aria-label="<?=e($nodeLabel)?>" transform="translate(<?=$point['x']?> <?=$point['y']?>)" style="--series-index:<?=$seriesIndex+1?>;--node-index:<?=$pointIndex?>;--node-color:<?=$series['color']?>"><circle r="3.5"/><g class="manager-stats__node-tooltip" transform="translate(<?=$tip['x']?> <?=$tip['y']?>)"><rect width="<?=$tip['width']?>" height="<?=$tip['height']?>" rx="2"/><text x="10" y="16" class="tooltip-title"><?=e($point['label'])?></text><text x="10" y="32" class="tooltip-value"><?=e($series['name'].' · '.$metricFormat($point['v'],$metric))?></text></g><title><?=e($nodeLabel)?></title></g><?php endforeach;endforeach;?>
+                        <?php foreach($chartData['currentPoints'] as$i=>$point):$tip=$tooltipPosition($point);$nodeLabel='Компания · '.$point['label'].' — '.$metricFormat($point['v'],$metric);?><g class="manager-stats__chart-node is-company" data-series-name="Компания" tabindex="0" role="img" aria-label="<?=e($nodeLabel)?>" transform="translate(<?=$point['x']?> <?=$point['y']?>)" style="--series-index:0;--node-index:<?=$i?>;--node-color:<?=$companyChartColor?>"><circle r="4"/><g class="manager-stats__node-tooltip" transform="translate(<?=$tip['x']?> <?=$tip['y']?>)"><rect width="<?=$tip['width']?>" height="<?=$tip['height']?>" rx="2"/><text x="10" y="16" class="tooltip-title"><?=e($point['label'])?></text><text x="10" y="32" class="tooltip-value"><?=e('Компания · '.$metricFormat($point['v'],$metric))?></text></g><title><?=e($nodeLabel)?></title></g><?php $step=max(1,(int)ceil(count($chartData['currentPoints'])/12));if($i%$step===0||$i===count($chartData['currentPoints'])-1):?><text x="<?=$point['x']?>" y="<?=$chartData['height']-12?>" text-anchor="middle" class="axis-label"><?=e($point['label'])?></text><?php endif;endforeach;?>
                     </svg>
-                    <div class="manager-stats__legend"><span><i style="background:<?=$metricMeta[$metric]['color']?>"></i><strong>Компания</strong></span><?php foreach($managerChartSeries as$series):?><span><i style="background:<?=$series['color']?>"></i><?=e($series['name'])?></span><?php endforeach;?></div>
+                    <div class="manager-stats__legend"><span><i style="background:<?=$companyChartColor?>"></i><strong>Компания</strong></span><?php foreach($managerChartSeries as$series):?><span><i style="background:<?=$series['color']?>"></i><?=e($series['name'])?></span><?php endforeach;?></div>
                     <?php endif;?>
                 </div>
             </section>
@@ -117,8 +143,8 @@ $kpis = [
         <section class="manager-stats__card manager-stats__periods">
             <header class="manager-stats__card-head"><div><h2>Точные значения по периодам</h2><p>Каждая строка показывает результат каждого логиста и общий итог за <?= $filters['group']==='month'?'месяц':'неделю' ?>.</p></div><span class="manager-stats__card-meta"><?=e($metricMeta[$metric]['long'])?></span></header>
             <div class="table-scroll"><table class="table manager-stats__period-table"><thead><tr><th>Период</th><?php foreach($statistics['manager_trends']as$series):?><th class="num"><?=e($series['name'])?></th><?php endforeach;?><th class="num is-total">Итого</th></tr></thead><tbody>
-                <?php foreach($statistics['period_rows']as$row):?><tr><td><div class="manager-stats__period-label"><strong><?=e($row['label'])?></strong><span><?=e(date('d.m',strtotime($row['from'])).($row['from']!==$row['to']?'–'.date('d.m',strtotime($row['to'])):''))?></span></div></td><?php foreach($statistics['manager_trends']as$series):$value=$row['manager_values'][(int)$series['membership_id']]??[];?><td class="num"><?=e($metricFormat($metricValue($value,$metric),$metric))?></td><?php endforeach;?><td class="num is-total"><?=e($metricFormat($metricValue($row,$metric),$metric))?></td></tr><?php endforeach;?>
-                <?php if($statistics['period_rows']===[]):?><tr><td colspan="<?=2+count($statistics['manager_trends'])?>" class="manager-stats__empty">Нет периодов для отображения.</td></tr><?php endif;?>
+                <?php foreach($visiblePeriodRows as$row):?><tr><td><div class="manager-stats__period-label"><strong><?=e($row['label'])?></strong><span><?=e(date('d.m',strtotime($row['from'])).($row['from']!==$row['to']?'–'.date('d.m',strtotime($row['to'])):''))?></span></div></td><?php foreach($statistics['manager_trends']as$series):$value=$row['manager_values'][(int)$series['membership_id']]??[];?><td class="num"><?=e($metricFormat($metricValue($value,$metric),$metric))?></td><?php endforeach;?><td class="num is-total"><?=e($metricFormat($metricValue($row,$metric),$metric))?></td></tr><?php endforeach;?>
+                <?php if($visiblePeriodRows===[]):?><tr><td colspan="<?=2+count($statistics['manager_trends'])?>" class="manager-stats__empty">Нет периодов с ненулевым итогом.</td></tr><?php endif;?>
             </tbody><tfoot><tr><th>Итого за период</th><?php foreach($statistics['manager_trends']as$series):$total=$managerTotals[(int)$series['membership_id']]??[];?><th class="num"><?=e($metricFormat($metricValue($total,$metric),$metric))?></th><?php endforeach;?><th class="num is-total"><?=e($metricFormat($totalMetric,$metric))?></th></tr></tfoot></table></div>
         </section>
 

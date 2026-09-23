@@ -43,6 +43,11 @@ try{
   assert.equal(await page.getByRole('link',{name:'Открыть реестр рейсов'}).count(),0,'registry transition is removed');
   assert.equal(await page.getByRole('link',{name:'Открыть →'}).count(),0,'trip transitions are removed');
   assert.deepEqual(await page.locator('.manager-stats__segments a').allTextContents(),['Недели','Месяцы','Год'],'only three instant modes');
+  const modeFit=await page.locator('.manager-stats__segments').evaluate(element=>{
+    const segment=element.getBoundingClientRect(),last=element.lastElementChild.getBoundingClientRect();
+    return segment.right-last.right;
+  });
+  assert.ok(modeFit<=4,'report mode selector ends immediately after Year without an empty tail');
   assert.equal(await page.locator('.manager-stats__filters').evaluate(el=>getComputedStyle(el).borderBottomWidth),'0px','removed period header divider does not remain as an empty panel');
   const shellStyle=await page.evaluate(()=>({
     font:getComputedStyle(document.body).fontFamily,
@@ -59,7 +64,27 @@ try{
   assert.equal(await page.locator('.manager-stats__kpi').count(),4,'four KPI cards');
   assert.equal(await page.locator('.manager-stats__rank').count(),4,'manager ranking');
   assert.equal(await page.locator('.manager-stats__line-chart').count(),1,'trend chart');
-  assert.equal((await page.locator('.manager-stats__period-table tbody tr').count()),8,'current week and seven previous weeks');
+  const chartLines=page.locator('.manager-stats__chart-line');
+  assert.equal(await chartLines.count(),5,'company and four manager series');
+  assert.ok((await chartLines.first().getAttribute('d')).includes(' C'),'trend paths use smooth cubic curves');
+  assert.deepEqual(await page.locator('.manager-stats__chart-line.is-manager').evaluateAll(paths=>paths.map(path=>path.getAttribute('stroke'))),['#4A7A9B','#B84C3A','#6A8A50','#B89228'],'first four managers use the approved ordered palette');
+  assert.equal(await page.locator('.manager-stats__chart-line.is-company').getAttribute('stroke'),'#C07830','company series uses the approved copper');
+  assert.equal(await page.locator('.manager-stats__chart-node').count(),40,'every point of every series has a circular node');
+  assert.equal(await page.locator('.manager-stats__chart-node>circle').count(),40,'all graph nodes are circles');
+  assert.equal(await page.locator('.manager-stats__node-tooltip').count(),40,'every node has an informative tooltip');
+  assert.match(await chartLines.first().evaluate(path=>getComputedStyle(path).animationName),/manager-stats-line-in/,'line appearance animation is enabled');
+  await page.waitForTimeout(1000);
+  const firstManagerNode=page.locator('.manager-stats__chart-node.is-manager').first();
+  await firstManagerNode.focus();
+  assert.equal(await firstManagerNode.locator('.manager-stats__node-tooltip').evaluate(element=>getComputedStyle(element).visibility),'visible','node focus reveals details');
+  const hoverNode=page.locator('.manager-stats__chart-node.is-manager').nth(7),hoverCircle=hoverNode.locator('circle'),hoverBox=await hoverCircle.boundingBox();
+  assert.ok(hoverBox,'graph circle has a pointer target');
+  await page.mouse.move(hoverBox.x+hoverBox.width/2,hoverBox.y+hoverBox.height/2);
+  assert.equal(await hoverNode.locator('.manager-stats__node-tooltip').evaluate(element=>getComputedStyle(element).visibility),'visible','node hover reveals details');
+  assert.equal((await page.locator('.manager-stats__period-table tbody tr').count()),4,'zero-total periods are hidden from exact values');
+  const visiblePeriods=await page.locator('.manager-stats__period-table tbody .manager-stats__period-label strong').allTextContents();
+  assert.deepEqual(visiblePeriods,['Нед. 39 · 21.09','Нед. 38 · 14.09','Нед. 37 · 07.09','Нед. 36 · 31.08'],'exact values are ordered newest to oldest');
+  assert.equal(await page.locator('.manager-stats__period-table tbody .is-total').evaluateAll(cells=>cells.every(cell=>cell.textContent.trim()!=='0')),true,'no visible exact-value row has a zero total');
   assert.deepEqual(await page.locator('.manager-stats__period-table thead th').allTextContents(),['Период','Анна Белова','Борис Серов','Вера Тихая','Глеб Романов','Итого'],'total is the rightmost column');
   const totalStyle=await page.locator('.manager-stats__period-table tbody tr').first().locator('td').evaluateAll(cells=>({
     managerBackground:getComputedStyle(cells[cells.length-2]).backgroundColor,
