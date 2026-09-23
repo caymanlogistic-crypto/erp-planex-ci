@@ -26,7 +26,7 @@ final class TripCompletionController
         unset($_SESSION['trip_completion_success'],$_SESSION['trip_completion_error']);
         try {
             [$company,$service]=$this->context();
-            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (142).');
+            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (143).');
             $all=$service->trips('',false);
             $metrics=[
                 'trips'=>count(array_filter($all,static fn(array $row):bool=>(int)$row['complete_count']<(int)$row['request_count'])),
@@ -144,7 +144,7 @@ final class TripCompletionController
     }
 
     private function assertReady(TripCompletionService $service): void
-    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (142).'); }
+    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (143).'); }
 
     /** @return list<array<string,mixed>> */
     private function uploadedFiles(string $field): array

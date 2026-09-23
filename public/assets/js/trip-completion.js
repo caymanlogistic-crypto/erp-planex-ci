@@ -11,9 +11,13 @@
   const state=(row,kind,label)=>{
     const box=row.querySelector('[data-save-state]'),text=box&&box.querySelector('[data-save-label]');
     if(!box||!text)return;
-    box.classList.toggle('is-saving',kind==='saving');
-    box.classList.toggle('is-error',kind==='error');
+    row.classList.toggle('is-saving',kind==='saving');
+    row.classList.toggle('is-save-error',kind==='error');
+    box.hidden=false;
     text.textContent=label;
+    if(kind==='saved')window.setTimeout(()=>{
+      if(!row.classList.contains('is-saving')&&!row.classList.contains('is-save-error'))box.hidden=true;
+    },800);
   };
   const csrfData=(row)=>{
     const source=row.querySelector('input[type="hidden"][name]');
@@ -45,13 +49,11 @@
   };
   const update=(row,data)=>{
     const request=data.request||{},trip=data.trip||{};
-    row.classList.toggle('is-complete',!!request.is_complete);
-    row.classList.toggle('is-problem',!request.is_complete);
-    const issueBox=row.querySelector('[data-request-issues]');
-    if(issueBox){
-      issueBox.replaceChildren();
-      (request.issues||[]).forEach(issue=>{const el=document.createElement('small');el.textContent=issue;issueBox.append(el);});
-    }
+    const hasTime=!!request.arrived_at&&!!request.departed_at;
+    const hasChecks=['driver_signature_present','sender_signature_present','tn_datetime_missing','data_from_tracker','data_from_driver','data_invented'].some(name=>Number(request[name]||0)===1);
+    const hasProgress=hasChecks||(request.documents||[]).length>0;
+    row.classList.toggle('has-time',hasTime);
+    row.classList.toggle('has-progress',!hasTime&&hasProgress);
     renderDocuments(row,request);
     state(row,'saved',request.is_complete?'Собрано':'Сохранено');
     const tripBox=row.closest('[data-trip-id]');

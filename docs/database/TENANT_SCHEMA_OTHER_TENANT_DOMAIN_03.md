@@ -230,6 +230,10 @@
 | `departed_at` | `datetime` | YES | NULL | — | — |
 | `driver_signature_present` | `tinyint(1)` | NO | `0` | — | — |
 | `sender_signature_present` | `tinyint(1)` | NO | `0` | — | — |
+| `tn_datetime_missing` | `tinyint(1)` | NO | `0` | — | — |
+| `data_from_tracker` | `tinyint(1)` | NO | `0` | — | — |
+| `data_from_driver` | `tinyint(1)` | NO | `0` | — | — |
+| `data_invented` | `tinyint(1)` | NO | `0` | — | — |
 | `comment` | `varchar(500)` | YES | NULL | — | — |
 | `updated_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
 | `lock_version` | `int unsigned` | NO | `1` | — | — |

@@ -25,6 +25,9 @@ final class TripCompletionService
                 $stmt->execute([$table]);
                 if ((int)$stmt->fetchColumn()!==1) return false;
             }
+            $stmt=$this->tenant->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='waste_trip_completion_items' AND column_name IN ('tn_datetime_missing','data_from_tracker','data_from_driver','data_invented')");
+            $stmt->execute();
+            if ((int)$stmt->fetchColumn()!==4) return false;
             return true;
         } catch (Throwable) { return false; }
     }
@@ -84,7 +87,12 @@ final class TripCompletionService
                 fr.naim_oo_gruzootpravitel shipper_name,fr.mno_adres_pogruzki pickup_address,
                 fr.gruzopoluchatel consignee_name,COALESCE(NULLIF(fr.adres_dostavki_otkhodov,''),fr.adres_vygruzki_otkhodov) delivery_address,
                 i.arrived_at,i.departed_at,COALESCE(i.driver_signature_present,0) driver_signature_present,
-                COALESCE(i.sender_signature_present,0) sender_signature_present,COALESCE(i.comment,'') completion_comment,
+                COALESCE(i.sender_signature_present,0) sender_signature_present,
+                COALESCE(i.tn_datetime_missing,0) tn_datetime_missing,
+                COALESCE(i.data_from_tracker,0) data_from_tracker,
+                COALESCE(i.data_from_driver,0) data_from_driver,
+                COALESCE(i.data_invented,0) data_invented,
+                COALESCE(i.comment,'') completion_comment,
                 COALESCE(i.lock_version,0) lock_version
               FROM waste_trip_requests wtr
               JOIN feo_requests fr ON fr.id=wtr.feo_request_id
@@ -129,11 +137,19 @@ final class TripCompletionService
         $comment=trim((string)($input['comment']??''));
         if (mb_strlen($comment)>500) throw new DomainException('Комментарий не должен превышать 500 символов.');
         $stmt=$this->tenant->prepare("INSERT INTO waste_trip_completion_items
-            (waste_trip_request_id,arrived_at,departed_at,driver_signature_present,sender_signature_present,comment,updated_by_membership_id)
-            VALUES (?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE arrived_at=VALUES(arrived_at),departed_at=VALUES(departed_at),
+            (waste_trip_request_id,arrived_at,departed_at,driver_signature_present,sender_signature_present,tn_datetime_missing,data_from_tracker,data_from_driver,data_invented,comment,updated_by_membership_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE arrived_at=VALUES(arrived_at),departed_at=VALUES(departed_at),
             driver_signature_present=VALUES(driver_signature_present),sender_signature_present=VALUES(sender_signature_present),
+            tn_datetime_missing=VALUES(tn_datetime_missing),data_from_tracker=VALUES(data_from_tracker),
+            data_from_driver=VALUES(data_from_driver),data_invented=VALUES(data_invented),
             comment=VALUES(comment),updated_by_membership_id=VALUES(updated_by_membership_id),lock_version=lock_version+1");
-        $stmt->execute([$requestId,$arrived,$departed,!empty($input['driver_signature_present'])?1:0,!empty($input['sender_signature_present'])?1:0,$comment!==''?$comment:null,$actorMembershipId]);
+        $stmt->execute([
+            $requestId,$arrived,$departed,
+            !empty($input['driver_signature_present'])?1:0,!empty($input['sender_signature_present'])?1:0,
+            !empty($input['tn_datetime_missing'])?1:0,!empty($input['data_from_tracker'])?1:0,
+            !empty($input['data_from_driver'])?1:0,!empty($input['data_invented'])?1:0,
+            $comment!==''?$comment:null,$actorMembershipId,
+        ]);
     }
 
     /** @param array<string,mixed> $file */
@@ -192,12 +208,14 @@ final class TripCompletionService
         if (!class_exists(ZipArchive::class)) throw new RuntimeException('На сервере недоступно создание Excel.');
         $path=tempnam(sys_get_temp_dir(),'trip_report_');if($path===false)throw new RuntimeException('Не удалось подготовить Excel.');
         $zip=new ZipArchive();if($zip->open($path,ZipArchive::OVERWRITE)!==true){@unlink($path);throw new RuntimeException('Не удалось создать Excel.');}
-        $headers=['Заявка','Грузоотправитель','Адрес забора','Грузополучатель','Адрес выгрузки','Вес, кг','Приезд на забор','Уезд с забора','Подпись водителя','Подпись отправителя','Файлов ТН','Статус','Проблемы','Комментарий'];
+        $headers=['Заявка','Грузоотправитель','Адрес забора','Грузополучатель','Адрес выгрузки','Вес, кг','Приезд на забор','Уезд с забора','Подпись водителя','Подпись отправителя','Даты и времени нет в ТН','Восстановлены по трекеру','Внесены со слов водителя','Придуманы','Файлов ТН','Статус','Проблемы','Комментарий'];
         $rows=[];
         foreach($trip['requests']as$request)$rows[]=[
             (string)$request['zayavka_id'],(string)$request['shipper_name'],(string)$request['pickup_address'],(string)$request['consignee_name'],(string)$request['delivery_address'],
             (float)$request['snapshot_mass_kg'],$this->excelSerial($request['arrived_at']??null),$this->excelSerial($request['departed_at']??null),
-            (int)$request['driver_signature_present']===1?'Да':'Нет',(int)$request['sender_signature_present']===1?'Да':'Нет',count($request['documents']),
+            (int)$request['driver_signature_present']===1?'Да':'Нет',(int)$request['sender_signature_present']===1?'Да':'Нет',
+            (int)$request['tn_datetime_missing']===1?'Да':'Нет',(int)$request['data_from_tracker']===1?'Да':'Нет',
+            (int)$request['data_from_driver']===1?'Да':'Нет',(int)$request['data_invented']===1?'Да':'Нет',count($request['documents']),
             $request['is_complete']?'Собрано':'Требует дополнения',implode(', ',$request['issues']),(string)$request['completion_comment'],
         ];
         $last=max(3,3+count($rows));$sheetRows=[];
@@ -205,10 +223,10 @@ final class TripCompletionService
         $summary='Завершён: '.$this->reportDate((string)($trip['actual_end_date']??'')).' · Заявок: '.count($rows).' · Полностью собрано: '.(int)$trip['complete_count'];
         $sheetRows[]='<row r="2" ht="21" customHeight="1"><c r="A2" s="5" t="inlineStr"><is><t>'.$this->xml($summary).'</t></is></c></row>';
         $cells=[];foreach($headers as$i=>$value)$cells[]=$this->xlsxCell($i+1,3,$value,2);$sheetRows[]='<row r="3" ht="34" customHeight="1">'.implode('',$cells).'</row>';
-        foreach($rows as$rowIndex=>$values){$excelRow=$rowIndex+4;$style=$values[11]==='Собрано'?4:3;$cells=[];foreach($values as$columnIndex=>$value){$cellStyle=$columnIndex===5||$columnIndex===10?6:(in_array($columnIndex,[6,7],true)?($style===4?8:7):$style);$cells[]=$this->xlsxCell($columnIndex+1,$excelRow,$value,$cellStyle);}$sheetRows[]='<row r="'.$excelRow.'" ht="42" customHeight="1">'.implode('',$cells).'</row>';}
-        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:N'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>';
-        foreach([14,27,36,27,36,12,20,20,18,20,12,20,34,28]as$i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
-        $sheet.='</cols><sheetData>'.implode('',$sheetRows).'</sheetData><autoFilter ref="A3:N'.$last.'"/><mergeCells count="2"><mergeCell ref="A1:N1"/><mergeCell ref="A2:N2"/></mergeCells><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+        foreach($rows as$rowIndex=>$values){$excelRow=$rowIndex+4;$style=$values[15]==='Собрано'?4:3;$cells=[];foreach($values as$columnIndex=>$value){$cellStyle=$columnIndex===5||$columnIndex===14?6:(in_array($columnIndex,[6,7],true)?($style===4?8:7):$style);$cells[]=$this->xlsxCell($columnIndex+1,$excelRow,$value,$cellStyle);}$sheetRows[]='<row r="'.$excelRow.'" ht="42" customHeight="1">'.implode('',$cells).'</row>';}
+        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:R'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>';
+        foreach([14,27,36,27,36,12,20,20,18,20,22,22,24,13,12,20,34,28]as$i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
+        $sheet.='</cols><sheetData>'.implode('',$sheetRows).'</sheetData><autoFilter ref="A3:R'.$last.'"/><mergeCells count="2"><mergeCell ref="A1:R1"/><mergeCell ref="A2:R2"/></mergeCells><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
         $zip->addFromString('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>');
         $zip->addFromString('_rels/.rels','<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
         $zip->addFromString('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Рейс '.$this->xml((string)$trip['business_id']).'" sheetId="1" r:id="rId1"/></sheets></workbook>');
@@ -292,6 +310,6 @@ final class TripCompletionService
 
     private function xlsxStyles(): string
     {
-        return'<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="16"/><color rgb="FFFFFFFF"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts><fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F766E"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF1F0"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFECFDF3"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD0D5DD"/></left><right style="thin"><color rgb="FFD0D5DD"/></right><top style="thin"><color rgb="FFD0D5DD"/></top><bottom style="thin"><color rgb="FFD0D5DD"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf><xf numFmtId="22" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="top"/></xf><xf numFmtId="22" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="top"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
+        return'<?xml version="1.0" encoding="UTF-8"?><styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><numFmts count="1"><numFmt numFmtId="164" formatCode="dd.mm.yy hh:mm"/></numFmts><fonts count="3"><font><sz val="10"/><name val="Arial"/></font><font><b/><sz val="16"/><color rgb="FFFFFFFF"/><name val="Arial"/></font><font><b/><sz val="10"/><color rgb="FFFFFFFF"/><name val="Arial"/></font></fonts><fills count="5"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FF0F766E"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFFFF1F0"/><bgColor indexed="64"/></patternFill></fill><fill><patternFill patternType="solid"><fgColor rgb="FFECFDF3"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFD0D5DD"/></left><right style="thin"><color rgb="FFD0D5DD"/></right><top style="thin"><color rgb="FFD0D5DD"/></top><bottom style="thin"><color rgb="FFD0D5DD"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="9"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="2" borderId="0" xfId="0" applyAlignment="1"><alignment horizontal="left" vertical="center"/></xf><xf numFmtId="0" fontId="2" fillId="2" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="center" vertical="center" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="3" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="4" borderId="1" xfId="0" applyAlignment="1"><alignment vertical="top" wrapText="1"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0" applyAlignment="1"><alignment vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyAlignment="1"><alignment horizontal="right" vertical="top"/></xf><xf numFmtId="164" fontId="0" fillId="3" borderId="1" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="top"/></xf><xf numFmtId="164" fontId="0" fillId="4" borderId="1" xfId="0" applyNumberFormat="1" applyAlignment="1"><alignment vertical="top"/></xf></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>';
     }
 }
