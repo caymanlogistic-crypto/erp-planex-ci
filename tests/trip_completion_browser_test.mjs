@@ -12,7 +12,7 @@ let postCount=0;
 const response=(withDocument=false)=>JSON.stringify({
  ok:true,
  request:{id:12,is_complete:false,issues:['Нет подписи водителя'],documents:withDocument?[{id:301,download_name:'Рейс_244_Заявка_275006_ТН_01.jpg',download_url:'/download/301',delete_url:'/delete/301'}]:[]},
- trip:{complete_count:1,request_count:3,missing_summary:['подпись водителя 1']},
+ trip:{complete_count:1,request_count:3,document_count:withDocument?3:2,missing_summary:['подпись водителя 1']},
 });
 const server=http.createServer((req,res)=>{
  if(req.method==='POST'){
@@ -36,26 +36,42 @@ try{
  await page.locator('.logistics-trip').first().locator('summary').click();
  assert.equal(await page.locator('.logistics-trip').first().getAttribute('open'),'','clicked trip expands');
  assert.equal(await page.locator('.logistics-trip').first().locator('.logistics-request-row').count(),3,'expanded trip renders request rows');
- assert.equal((await page.locator('.logistics-trip').first().locator('.logistics-request-row').first().evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),7,'desktop request is one integrated row');
+ assert.equal((await page.locator('.logistics-trip').first().locator('.logistics-request-row').first().evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),6,'desktop request is one integrated row');
  assert.equal(await page.locator('[data-autosave-form] button[type="submit"]').count(),0,'no manual save button');
  assert.equal(await page.locator('[data-upload-form] button[type="submit"]').count(),0,'no manual upload button');
- const second=page.locator('.logistics-trip').first().locator('.logistics-request-row').nth(1);
+ const requestNumbers=await page.locator('.logistics-trip').first().locator('.logistics-request-route b').allTextContents();
+ assert.deepEqual(requestNumbers,['№ 275006','№ 274405','№ 271941'],'requests ordered by descending number');
+ const second=page.locator('[data-request-id="12"]');
  assert.notEqual(await second.locator('input[type="checkbox"]').first().evaluate(el=>getComputedStyle(el).accentColor),'auto','checkbox uses ERP system accent');
+ const interval=second.locator('input[name="pickup_interval"]');
+ await interval.fill('01092609401000');
+ assert.equal(await interval.inputValue(),'01.09.26 09:40 - 10:00','digits are formatted into one pickup interval');
+ await interval.press('a');
+ assert.equal(await interval.inputValue(),'01.09.26 09:40 - 10:00','non-digit input is blocked');
+ await second.locator('[data-save-label]').filter({hasText:/Сохранено|Собрано/}).waitFor();
  await second.locator('input[name="driver_signature_present"]').check();
  await second.locator('[data-save-label]').filter({hasText:/Сохранено|Собрано/}).waitFor();
  assert.ok(postCount>=1,'field change saved automatically');
  await second.locator('input[type="file"]').setInputFiles({name:'tn.jpg',mimeType:'image/jpeg',buffer:Buffer.from('test-image')});
- await second.locator('.logistics-document').filter({hasText:'ТН 01'}).waitFor();
+ await second.locator('.logistics-document').filter({hasText:'Рейс_244_Заявка_275006_ТН_01.jpg'}).waitFor();
+ assert.equal(await page.locator('.logistics-trip').first().locator('[data-trip-document-count]').textContent(),'3','trip file count updates after upload');
+ assert.equal(await second.locator('.logistics-document a').innerText(),'Рейс_244_Заявка_275006_ТН_01.jpg','full document filename is visible');
+ page.once('dialog',dialog=>dialog.accept());
+ await second.locator('.logistics-document-delete').click();
+ await page.locator('.logistics-trip').first().locator('[data-trip-document-count]').filter({hasText:'2'}).waitFor();
+ assert.equal(await second.locator('.logistics-document').count(),0,'document row updates after delete');
+ assert.equal(await page.locator('.logistics-trip').first().locator('[data-trip-document-count]').textContent(),'2','trip file count decreases after delete');
  assert.ok(postCount>=2,'file selection uploaded automatically');
  const evidence=process.env.PLANEX_BROWSER_EVIDENCE;if(evidence){fs.mkdirSync(path.dirname(evidence),{recursive:true});await page.screenshot({path:evidence,fullPage:true});}
  await page.setViewportSize({width:1366,height:900});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'no 1366px overflow');
- assert.equal((await second.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),7,'1366px keeps integrated request row');
+ assert.equal((await second.evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length)),6,'1366px keeps integrated request row');
  const compactEvidence=process.env.PLANEX_BROWSER_EVIDENCE_1366;if(compactEvidence)await page.screenshot({path:compactEvidence,fullPage:true});
  await page.setViewportSize({width:1280,height:900});
  await page.locator('.logistics-workspace').evaluate(el=>{el.style.width='1034px';});
  assert.equal(await second.evaluate(el=>el.scrollWidth<=el.parentElement.clientWidth),true,'request row fits ERP workspace at 1280px');
  assert.ok(await second.evaluate(el=>el.getBoundingClientRect().height<=62),'1280px request row stays compact');
+ const compact1280Evidence=process.env.PLANEX_BROWSER_EVIDENCE_1280;if(compact1280Evidence)await page.screenshot({path:compact1280Evidence,fullPage:true});
  await page.locator('.logistics-workspace').evaluate(el=>{el.style.width='';});
  await page.setViewportSize({width:390,height:844});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'no mobile overflow');
