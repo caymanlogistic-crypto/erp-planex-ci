@@ -25,8 +25,10 @@ final class WasteTripStartStatisticsService
     }
 
     /**
-     * The central role is the authority. Statistics deliberately excludes the
-     * owner, senior logist and custom roles, even if they can open the page.
+     * The exact central role "Логист" is the authority. Historical companies
+     * can have that role without a system_key, while newer companies use the
+     * stable "logist" system key. Both shapes are accepted; similarly named
+     * roles such as "Логист+" and "Логист (lite)" remain excluded.
      *
      * @return list<array{id:int,membership_id:int,full_name:string,login:string}>
      */
@@ -43,8 +45,10 @@ final class WasteTripStartStatisticsService
               WHERE m.company_id=?
                 AND m.status='active'
                 AND a.status='active'
-                AND r.is_system=1
-                AND r.system_key='logist'
+                AND (
+                    r.system_key='logist'
+                    OR (r.system_key IS NULL AND r.normalized_name='логист')
+                )
               ORDER BY a.full_name,m.id"
         );
         $stmt->execute([$companyId]);
