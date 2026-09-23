@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "d8c8edade0d97bf3d4099ed0e30a45f3f63c829f",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d8c8edade0d97bf3d4099ed0e30a45f3f63c829f/tests/roles_access_route_registry_test.py",
+      "verified_sha": "ed4a984a7e2db8736f2fd3a0bb0406529fd57d8f",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed4a984a7e2db8736f2fd3a0bb0406529fd57d8f/tests/roles_access_menu_state_browser_test.mjs",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -261,8 +261,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "d8c8edade0d97bf3d4099ed0e30a45f3f63c829f",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d8c8edade0d97bf3d4099ed0e30a45f3f63c829f/tests/employee_mail_profiles_mysql_test.php",
+      "verified_sha": "ed4a984a7e2db8736f2fd3a0bb0406529fd57d8f",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed4a984a7e2db8736f2fd3a0bb0406529fd57d8f/tests/employee_mail_contract_test.php",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",
@@ -284,8 +284,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "8c281fefcd45dcb96882497dd1bad0501cbafa76",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/8c281fefcd45dcb96882497dd1bad0501cbafa76/tests/trip_completion_browser_test.mjs",
+      "verified_sha": "ed4a984a7e2db8736f2fd3a0bb0406529fd57d8f",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed4a984a7e2db8736f2fd3a0bb0406529fd57d8f/tests/trip_completion_contract_test.php",
       "owning_paths": [
         "app/Service/TripDocument*.php",
         "app/Service/TripCompletionService.php",
