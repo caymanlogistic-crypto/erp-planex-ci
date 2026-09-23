@@ -22,4 +22,4 @@ $trips[1]=array_merge($trips[1],[
  ],
 ]);
 $openTripId=0;
-?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><title>Помощник логиста</title></head><body><main style="padding:20px;max-width:1800px;margin:auto"><?php require BASE_PATH.'/app/View/pages/company_logistics_assistant.php';?></main></body></html>
+?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><title>Регистрация времени загрузки</title></head><body><main style="padding:20px;max-width:1800px;margin:auto"><?php require BASE_PATH.'/app/View/pages/company_logistics_assistant.php';?></main></body></html>

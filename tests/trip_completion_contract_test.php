@@ -16,7 +16,8 @@ foreach(['waste_trip_completion_items','waste_trip_completion_documents','arrive
 foreach(['tn_datetime_missing','data_from_tracker','data_from_driver','data_invented']as$token)$ok(str_contains($extensionMigration,$token),'Migration 143 missing '.$token);
 foreach(['/company/logistics-assistant','/report','/package','/documents/{documentId}']as$token)$ok(str_contains($routes,$token),'Route missing '.$token);
 $ok(substr_count($routes,'$tripCompletionPage')===8,'Every endpoint must use the existing collection permission');
-$ok(str_contains($registry,"'company.documents.collection', 'Помощник логиста', 'Операции', '', 42")&&str_contains($registry,"badgeProvider: 'trip_completion_problem'"),'Standalone navigation entry missing');
+$ok(str_contains($registry,"'company.documents.collection', 'Регистрация времени загрузки', 'Операции', '', 42")&&str_contains($registry,"badgeProvider: 'trip_completion_problem'"),'Standalone navigation entry missing');
+$ok(str_contains($view,'Регистрация прибытия и убытия у отходообразователя')&&str_contains($view,'Дата и время загрузки по завершённым рейсам и ТН.'),'Compact page title missing');
 foreach(['Скрывать полностью собранные','Нажмите на рейс, чтобы развернуть заявки','Загрузка: дата, приезд — уезд','ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ','Подпись водителя есть','Подпись отправителя есть','Даты и времени нет в ТН','Восстановлены по трекеру','Внесены со слов водителя','Придуманы','+ Добавить ТН','Скачать комплект']as$label)$ok(str_contains($view,$label),'UI missing '.$label);
 $ok(!str_contains($view,'<span>Статус</span>')&&!str_contains($view,'data-request-issues'),'Status column and hover issue list must be removed');
 $ok(substr_count($view,'<?=csrfField()?>')===2,'Autosave and upload forms must include CSRF protection');

@@ -42,8 +42,8 @@ final class TripCompletionController
             $openTripId=max(0,(int)($_GET['trip_id']??0));
         } catch (DomainException $exception) { $error=$exception->getMessage(); }
         catch (Throwable $exception) { error_log('trip completion index failed: '.$exception->getMessage());$error='Не удалось загрузить рабочее место помощника логиста.'; }
-        $pageTitle='Помощник логиста';$pageContext='Рейсы › Помощник логиста';
-        $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>'Помощник логиста','url'=>null]];
+        $pageTitle='Регистрация прибытия и убытия';$pageContext='Рейсы › Регистрация времени загрузки';
+        $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>'Регистрация времени загрузки','url'=>null]];
         $config=$this->config;$db=$this->db;
         ob_start();require base_path('app/View/pages/company_logistics_assistant.php');$content=(string)ob_get_clean();require base_path('app/View/layouts/main.php');
     }

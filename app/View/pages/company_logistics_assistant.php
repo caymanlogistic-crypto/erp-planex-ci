@@ -16,7 +16,7 @@ $missingSummary=static function(array $trip):array{
 };
 ?>
 <link rel="stylesheet" href="<?=app_url('/assets/css/trip-completion.css')?>?v=<?=filemtime(base_path('public/assets/css/trip-completion.css'))?>">
-<div class="page-head"><div class="page-head-left"><h1 class="page-title">Помощник логиста</h1><div class="page-summary"><span>Комплектность завершённых рейсов и транспортных накладных.</span></div></div><div class="page-head-actions"><a class="btn btn-ghost" href="<?=app_url('/company/documents/collection')?>">Документы перевозчика</a></div></div>
+<div class="page-head"><div class="page-head-left"><h1 class="page-title">Регистрация прибытия и убытия у отходообразователя</h1><div class="page-summary"><span>Дата и время загрузки по завершённым рейсам и ТН.</span></div></div><div class="page-head-actions"><a class="btn btn-ghost" href="<?=app_url('/company/documents/collection')?>">Документы перевозчика</a></div></div>
 <?php if($success):?><div class="notice success"><?=e((string)$success)?></div><?php endif;?>
 <?php if($formError):?><div class="notice warn"><?=e((string)$formError)?></div><?php endif;?>
 <?php if($error):?><div class="notice warn"><?=e((string)$error)?></div><?php else:?>
