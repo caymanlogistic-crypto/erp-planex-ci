@@ -14,7 +14,7 @@ $registry=$read('app/Security/PageRegistry.php');
 foreach(['waste_trip_completion_items','waste_trip_completion_documents','arrived_at','departed_at','driver_signature_present','sender_signature_present','deleted_at']as$token)$ok(str_contains($migration,$token),'Migration missing '.$token);
 foreach(['/company/logistics-assistant','/report','/package','/documents/{documentId}']as$token)$ok(str_contains($routes,$token),'Route missing '.$token);
 $ok(substr_count($routes,'$tripCompletionPage')===8,'Every endpoint must use the existing collection permission');
-$ok(str_contains($registry,"'Помощник логиста'")&&str_contains($registry,"badgeProvider: 'trip_completion_problem'"),'Navigation entry missing');
+$ok(str_contains($registry,"'company.documents.collection', 'Помощник логиста', 'Операции', '', 42")&&str_contains($registry,"badgeProvider: 'trip_completion_problem'"),'Standalone navigation entry missing');
 foreach(['Скрывать полностью собранные','Нажмите на рейс, чтобы развернуть заявки','Приезд','Уезд','Водитель','Отправитель','+ Добавить ТН','Скачать комплект']as$label)$ok(str_contains($view,$label),'UI missing '.$label);
 $ok(substr_count($view,'<?=csrfField()?>')===2,'Autosave and upload forms must include CSRF protection');
 $ok(str_contains($view,'data-autosave-form')&&str_contains($view,'data-upload-form')&&str_contains($view,'trip-completion.js'),'Autosave UI hooks missing');
