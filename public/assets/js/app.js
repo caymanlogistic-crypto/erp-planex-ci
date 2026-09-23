@@ -3201,18 +3201,30 @@ window.initOwnerCreateForm = window.initPasswordControls;
                 var role = unit.getAttribute('data-quick-unit');
                 var unitActive = role === 'primary' || hasSecondary;
                 var showMetrics = select.value !== 'coupling' || role === 'secondary';
+                var title = '\u0422\u0420\u0410\u041d\u0421\u041f\u041e\u0420\u0422\u041d\u0410\u042f \u0415\u0414\u0418\u041d\u0418\u0426\u0410';
+                var docsTitle = '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u0442\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u043d\u043e\u0439 \u0435\u0434\u0438\u043d\u0438\u0446\u044b';
+                var customDocsTitle = '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u043b\u044c\u043d\u044b\u0435 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u0442\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u043d\u043e\u0439 \u0435\u0434\u0438\u043d\u0438\u0446\u044b';
+                if (select.value === 'coupling') {
+                    title = role === 'secondary' ? '\u041f\u041e\u041b\u0423\u041f\u0420\u0418\u0426\u0415\u041f' : '\u0422\u042f\u0413\u0410\u0427';
+                    docsTitle = role === 'secondary' ? '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u043f\u043e\u043b\u0443\u043f\u0440\u0438\u0446\u0435\u043f\u0430' : '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u0442\u044f\u0433\u0430\u0447\u0430';
+                    customDocsTitle = role === 'secondary' ? '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u043b\u044c\u043d\u044b\u0435 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u043f\u043e\u043b\u0443\u043f\u0440\u0438\u0446\u0435\u043f\u0430' : '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u043b\u044c\u043d\u044b\u0435 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u0442\u044f\u0433\u0430\u0447\u0430';
+                } else if (select.value === 'road_train') {
+                    title = role === 'secondary' ? '\u041f\u0420\u0418\u0426\u0415\u041f' : '\u041f\u0415\u0420\u0412\u0410\u042f \u0427\u0410\u0421\u0422\u042c';
+                    docsTitle = role === 'secondary' ? '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u043f\u0440\u0438\u0446\u0435\u043f\u0430' : '\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u043f\u0435\u0440\u0432\u043e\u0439 \u0447\u0430\u0441\u0442\u0438';
+                    customDocsTitle = role === 'secondary' ? '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u043b\u044c\u043d\u044b\u0435 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u043f\u0440\u0438\u0446\u0435\u043f\u0430' : '\u041f\u0440\u043e\u0438\u0437\u0432\u043e\u043b\u044c\u043d\u044b\u0435 \u0434\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u043f\u0435\u0440\u0432\u043e\u0439 \u0447\u0430\u0441\u0442\u0438';
+                }
                 var metrics = unit.querySelector('[data-quick-capacity-row]');
                 if (metrics) metrics.classList.toggle('is-hidden', !showMetrics);
+                var unitTitle = unit.querySelector('[data-quick-primary-title], [data-quick-secondary-title]');
+                var unitDocsTitle = unit.querySelector('[data-quick-docs-title]');
+                var unitCustomDocsTitle = unit.querySelector('[data-quick-custom-docs-title]');
+                if (unitTitle) unitTitle.textContent = title;
+                if (unitDocsTitle) unitDocsTitle.textContent = docsTitle;
+                if (unitCustomDocsTitle) unitCustomDocsTitle.textContent = customDocsTitle;
                 unit.querySelectorAll('[data-quick-unit-required]').forEach(function (input) {
                     input.required = unitActive && (showMetrics || !input.closest('[data-quick-capacity-row]'));
                 });
             });
-            var primaryTitle = form.querySelector('[data-quick-primary-title]');
-            var secondaryTitle = form.querySelector('[data-quick-secondary-title]');
-            var secondaryDocs = form.querySelector('[data-quick-secondary-docs]');
-            if (primaryTitle) primaryTitle.textContent = select.value === 'coupling' ? '\u0422\u044f\u0433\u0430\u0447' : (select.value === 'road_train' ? '\u041f\u0435\u0440\u0432\u0430\u044f \u0447\u0430\u0441\u0442\u044c' : '\u0422\u0440\u0430\u043d\u0441\u043f\u043e\u0440\u0442\u043d\u0430\u044f \u0435\u0434\u0438\u043d\u0438\u0446\u0430');
-            if (secondaryTitle) secondaryTitle.textContent = select.value === 'road_train' ? '\u041f\u0440\u0438\u0446\u0435\u043f' : '\u041f\u043e\u043b\u0443\u043f\u0440\u0438\u0446\u0435\u043f';
-            if (secondaryDocs) secondaryDocs.classList.toggle('is-hidden', !hasSecondary);
         }
 
         var setType = form.querySelector('[data-quick-set-type]');
