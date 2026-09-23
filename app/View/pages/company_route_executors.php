@@ -1,5 +1,5 @@
 <?php
-$routeExecutorCreateButton = '<button type="button" class="btn btn-primary" data-route-executor-create-btn>Добавить исполнителя</button>';
+$routeExecutorCreateButton = '<button type="button" class="btn btn-primary" data-route-executor-create-btn>Создать исполнителя рейса</button>';
 $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/company/document-generator') . '">Создать документ</a>';
 ?>
 
