@@ -197,6 +197,7 @@ final class TripCompletionController
         return ['ok'=>true,'request'=>$request,'trip'=>[
             'complete_count'=>(int)$trip['complete_count'],
             'request_count'=>(int)$trip['request_count'],
+            'document_count'=>array_sum(array_map(static fn(array $item):int=>count($item['documents']),$trip['requests'])),
             'missing_summary'=>$summary,
         ]];
     }

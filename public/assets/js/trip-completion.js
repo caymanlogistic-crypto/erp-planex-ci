@@ -25,14 +25,14 @@
     const list=row.querySelector('[data-document-list]');
     if(!list)return;
     list.replaceChildren();
-    (request.documents||[]).forEach((document,index)=>{
+    (request.documents||[]).forEach(document=>{
       const wrapper=window.document.createElement('span');
       wrapper.className='logistics-document';
       wrapper.dataset.documentId=String(document.id);
       const link=window.document.createElement('a');
       link.href=document.download_url;
       link.title=document.download_name;
-      link.textContent='ТН '+String(index+1).padStart(2,'0');
+      link.textContent=document.download_name;
       const remove=window.document.createElement('button');
       remove.type='button';
       remove.className='logistics-document-delete';
@@ -58,6 +58,8 @@
     if(tripBox){
       const progress=tripBox.querySelector('[data-trip-progress]');
       if(progress)progress.textContent=String(trip.complete_count||0)+' / '+String(trip.request_count||0);
+      const documentCount=tripBox.querySelector('[data-trip-document-count]');
+      if(documentCount)documentCount.textContent=String(trip.document_count||0);
       const issues=tripBox.querySelector('[data-trip-issues]');
       if(issues){
         issues.replaceChildren();
@@ -69,6 +71,17 @@
     }
   };
   const post=async(url,body)=>json(await fetch(url,{method:'POST',credentials:'same-origin',headers:{Accept:'application/json','X-Requested-With':'XMLHttpRequest'},body}));
+  const formatInterval=value=>{
+    const digits=value.replace(/\D/g,'').slice(0,14),parts=[];
+    if(digits.length)parts.push(digits.slice(0,2));
+    if(digits.length>2)parts.push('.'+digits.slice(2,4));
+    if(digits.length>4)parts.push('.'+digits.slice(4,6));
+    if(digits.length>6)parts.push(' '+digits.slice(6,8));
+    if(digits.length>8)parts.push(':'+digits.slice(8,10));
+    if(digits.length>10)parts.push(' - '+digits.slice(10,12));
+    if(digits.length>12)parts.push(':'+digits.slice(12,14));
+    return parts.join('');
+  };
 
   root.querySelectorAll('[data-autosave-form]').forEach(form=>{
     const row=form.closest('[data-request-row]');
@@ -83,6 +96,31 @@
     const schedule=delay=>{dirty=true;window.clearTimeout(timer);timer=window.setTimeout(flush,delay);};
     form.addEventListener('submit',event=>{event.preventDefault();schedule(0);});
     form.addEventListener('change',()=>schedule(120));
+    const interval=form.elements.pickup_interval;
+    if(interval){
+      interval.addEventListener('beforeinput',event=>{
+        if(event.inputType.startsWith('insert')&&event.data!==null&&/\D/.test(event.data))event.preventDefault();
+      });
+      interval.addEventListener('paste',event=>{
+        const value=(event.clipboardData&&event.clipboardData.getData('text'))||'';
+        if(/\D/.test(value))event.preventDefault();
+      });
+      interval.addEventListener('input',()=>{
+        const digitOffset=(interval.value.slice(0,interval.selectionStart||0).match(/\d/g)||[]).length;
+        interval.value=formatInterval(interval.value);
+        let caret=interval.value.length;
+        if(digitOffset>0){
+          let seen=0;
+          for(let index=0;index<interval.value.length;index++){
+            if(/\d/.test(interval.value[index]))seen++;
+            if(seen===digitOffset){caret=index+1;break;}
+          }
+        }
+        interval.setSelectionRange(caret,caret);
+        const digitCount=(interval.value.match(/\d/g)||[]).length;
+        if(digitCount===0||digitCount===14)schedule(350);
+      });
+    }
     const comment=form.elements.comment;
     if(comment)comment.addEventListener('input',()=>schedule(550));
   });
