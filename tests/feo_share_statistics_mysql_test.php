@@ -36,6 +36,18 @@ try {
     $service->rollbackLatest($pdo, $b['import_id'], []);
     $rolled = FeoShareStatisticsService::dashboard($pdo);
     if (count($rolled['snapshots']) !== count($dashboard['snapshots'])-1) throw new RuntimeException('Rolled-back import remained visible');
+    $historicalImports = [
+        ['Все заявки на 07.09.2026.xlsx',3066,'2026-09-07 21:35:00'],
+        ['Все заявки на 16.09.2026.xlsx',2987,'2026-09-16 00:31:00'],
+        ['Копия 69f080ce01ef0fd5.fgis-opvk-40-2026-09-18-09_Vl2DNwQ.xlsx',3127,'2026-09-18 23:14:00'],
+        ['4ca2cf03d2e2e17c.fgis-opvk-40-2026-09-23-11_rE4Emtx.xlsx',3311,'2026-09-24 20:51:00'],
+    ];
+    $insertHistorical = $pdo->prepare('INSERT INTO feo_imports(filename,file_hash,unique_requests,created_at) VALUES(?,?,?,?)');
+    foreach ($historicalImports as [$filename,$count,$createdAt]) $insertHistorical->execute([$filename,hash('sha256',$filename),$count,$createdAt]);
+    $withHistory = FeoShareStatisticsService::dashboard($pdo);
+    if (count($withHistory['snapshots']) !== 5 || array_column(array_slice($withHistory['snapshots'],0,4),'feo_count') !== [3066,2987,3127,3311]) {
+        throw new RuntimeException('Renamed historical imports were not matched to real snapshots');
+    }
     echo "FEO_SHARE_STATISTICS_MYSQL=PASS\n";
 } finally {
     cleanCompanyPoolDatabase($pdo);
