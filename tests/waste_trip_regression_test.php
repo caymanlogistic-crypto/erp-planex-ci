@@ -19,6 +19,16 @@ require_once $root.'/app/Service/WasteTripLegacySourceService.php';
 require_once $root.'/app/Service/WasteTripService.php';
 require_once $root.'/app/Service/WasteTripLegacySyncService.php';
 require_once $root.'/app/Support/company_database.php';
+if (($argv[1]??'')==='--create-child') {
+    $host=getenv('PLANEX_SCHEMA_DB_HOST')?:'127.0.0.1';$port=(int)(getenv('PLANEX_SCHEMA_DB_PORT')?:3306);
+    $user=getenv('PLANEX_SCHEMA_DB_USER')?:'planex_ci';$pass=getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'planex_ci';
+    $db=(string)(getenv('PLANEX_TEST_FIXED_DB')?:'');
+    if($db===''||!in_array($db,explode(',',(string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')),true))throw new RuntimeException('Concurrent child requires the approved disposable schema.');
+    $pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
+    $base=['client_id'=>1,'responsible_user_id'=>1,'destination_type'=>'utilizer','utilizer_id'=>1,'status'=>'searching_executor','planned_start_mode'=>'exact','planned_start_date'=>'2026-09-01','comment'=>'independent'];
+    WasteTripService::createIndependent($pdo,$pdo,$base,[(string)($argv[2]??'')],['user_id'=>1,'role_code'=>'company_owner']);
+    exit(0);
+}
 $fail=static function(string$m):never{fwrite(STDERR,"FAIL: {$m}\n");exit(1);};
 $ok=static function(bool$v,string$m)use($fail):void{if(!$v)$fail($m);};
 
@@ -78,10 +88,14 @@ $legacy->exec("INSERT INTO flights VALUES(300,'1004','new legacy 300',NULL,NULL,
 $diag300=WasteTripService::legacyRangeDiagnostic($legacy);$ok($diag300['legacy_max_id']===300&&$diag300['warning']===null,'legacy max 300 must be normal');
 $ok(WasteTripLegacySourceService::fetchFlight($legacy,300)!==null,'new legacy flight remains readable by scheduler');
 
-if(!function_exists('pcntl_fork'))$fail('pcntl required for concurrent create regression');
 $pdo=null;$legacy=null;$admin=null;
-$children=[];foreach(['1006','1007'] as$rid){$pid=pcntl_fork();if($pid===-1)$fail('pcntl_fork failed');if($pid===0){try{$cp=new \PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION,\PDO::ATTR_EMULATE_PREPARES=>false]);$cl=new \PDO("mysql:host={$host};port={$port};dbname={$legacyDb};charset=utf8mb4",$user,$pass,[\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION,\PDO::ATTR_EMULATE_PREPARES=>false]);WasteTripService::createIndependent($cp,$cl,$base,[$rid],$userCtx);exit(0);}catch(\Throwable$e){fwrite(STDERR,'child create failed: '.$e->getMessage().PHP_EOL);exit(1);}}$children[]=$pid;}
-foreach($children as$pid){pcntl_waitpid($pid,$status);if(!pcntl_wifexited($status)||pcntl_wexitstatus($status)!==0)$fail('concurrent create child failed');}
+if(function_exists('pcntl_fork')) {
+    $children=[];foreach(['1006','1007'] as$rid){$pid=pcntl_fork();if($pid===-1)$fail('pcntl_fork failed');if($pid===0){try{$cp=new \PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION,\PDO::ATTR_EMULATE_PREPARES=>false]);$cl=new \PDO("mysql:host={$host};port={$port};dbname={$legacyDb};charset=utf8mb4",$user,$pass,[\PDO::ATTR_ERRMODE=>\PDO::ERRMODE_EXCEPTION,\PDO::ATTR_EMULATE_PREPARES=>false]);WasteTripService::createIndependent($cp,$cl,$base,[$rid],$userCtx);exit(0);}catch(\Throwable$e){fwrite(STDERR,'child create failed: '.$e->getMessage().PHP_EOL);exit(1);}}$children[]=$pid;}
+    foreach($children as$pid){pcntl_waitpid($pid,$status);if(!pcntl_wifexited($status)||pcntl_wexitstatus($status)!==0)$fail('concurrent create child failed');}
+} else {
+    $children=[];foreach(['1006','1007'] as$rid){$process=proc_open([PHP_BINARY,__FILE__,'--create-child',$rid],[1=>['pipe','w'],2=>['pipe','w']],$pipes);if(!is_resource($process))$fail('concurrent create child failed to start');$children[]=[$process,$pipes];}
+    foreach($children as[$process,$pipes]){$output=stream_get_contents($pipes[1]).stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);if(proc_close($process)!==0)$fail('concurrent create child failed: '.$output);}
+}
 $pdo=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);$legacy=new PDO("mysql:host={$host};port={$port};dbname={$legacyDb};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);$admin=new PDO("mysql:host={$host};port={$port};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
 $concurrentIds=$pdo->query("SELECT business_id FROM waste_trips WHERE business_id>401 ORDER BY business_id")->fetchAll(PDO::FETCH_COLUMN);$ok(array_map('intval',$concurrentIds)===[402,403],'concurrent allocator must issue distinct sequential IDs');
 echo "WASTE_TRIP_CONCURRENCY=PASS\n";

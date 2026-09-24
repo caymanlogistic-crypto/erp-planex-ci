@@ -37,7 +37,7 @@ final class WasteTripController
         if ($company!==null && $localPdo instanceof PDO && $dbError===null) {
             if (!WasteTripService::schemaReady($localPdo)) $dbError='Модуль ожидает обновление схемы рейсов (138).';
             else try {
-                $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','q'=>$_GET['q']??''],$isFinanceRealm);
+                $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','q'=>$_GET['q']??'','sort'=>$_GET['sort']??''],$isFinanceRealm);
                 $trips=array_values(array_filter($trips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
                 [$clients,$routeExecutors,$responsibleUsers,$utilizers]=$this->loadOptions($localPdo,$sessionUser,$central,$companyId);
                 $pageContext.=' › Компания: '.(string)$company['name'];
