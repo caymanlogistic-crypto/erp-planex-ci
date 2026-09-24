@@ -13,6 +13,17 @@ FAST_ALLOWED=re.compile(r"^(?:app/View/pages/[A-Za-z0-9_./-]+\.php|public/assets
 FAST_FILE_LIMIT=6; FAST_LINE_LIMIT=120
 TENANT="TENANT_SCHEMA_PROVISIONING_AND_GENERATED_DRIFT"
 PYTHON=sys.executable
+def configured_tool(env_name,name):
+    configured=os.environ.get(env_name)
+    if configured:
+        path=Path(configured)
+        return str(path.resolve()) if path.is_file() else None
+    return shutil.which(name)
+PHP=configured_tool("PLANEX_PHP","php")
+NODE=configured_tool("PLANEX_NODE","node")
+GIT=configured_tool("PLANEX_GIT","git")
+MYSQL=configured_tool("PLANEX_MYSQL","mysql")
+TOOLS={"php":PHP,"node":NODE,"git":GIT,"mysql":MYSQL}
 REMOTE_REQUIRED_ALLOWLIST={TENANT:frozenset({"PDO_MYSQL_AVAILABLE","MYSQL_SERVER_REACHABLE"})}
 CAPABILITY_KEYS=("PHP_AVAILABLE","PDO_MYSQL_AVAILABLE","MYSQL_CLIENT_AVAILABLE","MYSQL_SERVER_REACHABLE")
 FINANCE_TESTS=["tests/finance_invoice_ui_contract_test.php","tests/finance_manual_facts_regression_test.php","tests/finance_employee_personal_expense_event_regression_test.php","tests/finance_invoice_cash_employee_regression_test.php","tests/finance_cash_employee_invoice_lifecycle_regression_test.php","tests/finance_carrier_payables_regression_test.php"]
@@ -43,21 +54,28 @@ DOCGEN_TESTS=["tests/"+name+".php" for name in (
 )]
 class PreflightEnvironmentError(RuntimeError): pass
 
-def caprun(cmd,env=None): return subprocess.run(cmd,cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+def exact_command(cmd):
+    resolved=TOOLS.get(cmd[0])
+    if cmd[0] in TOOLS:
+        if not resolved: raise PreflightEnvironmentError(f"required executable missing: {cmd[0]}")
+        return [resolved,*cmd[1:]]
+    return cmd
+def caprun(cmd,env=None): return subprocess.run(exact_command(cmd),cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 def run(cmd,env=None):
-    print("RUN:"," ".join(cmd)); return subprocess.run(cmd,cwd=ROOT,env=env,text=True).returncode
+    command=exact_command(cmd); print("RUN:"," ".join(command)); return subprocess.run(command,cwd=ROOT,env=env,text=True).returncode
 def need(path):
     if not (ROOT/path).is_file(): raise PreflightEnvironmentError(f"required file missing: {path}")
 def exe(name):
-    if shutil.which(name) is None: raise PreflightEnvironmentError(f"required executable missing: {name}")
+    if name in TOOLS and TOOLS[name] is None: raise PreflightEnvironmentError(f"required executable missing: {name}")
+    if name not in TOOLS and shutil.which(name) is None: raise PreflightEnvironmentError(f"required executable missing: {name}")
 def detect_capabilities():
-    php=shutil.which("php") is not None; pdo=False; server=False
+    php=PHP is not None; pdo=False; server=False
     if php:
         pdo=caprun(["php","-r",'exit(extension_loaded("pdo_mysql") ? 0 : 1);']).returncode==0
         if pdo:
             probe='$h=getenv("PLANEX_SCHEMA_DB_HOST")?:"127.0.0.1";$p=(int)(getenv("PLANEX_SCHEMA_DB_PORT")?:3306);$u=getenv("PLANEX_SCHEMA_DB_USER")?:"planex_ci";$w=getenv("PLANEX_SCHEMA_DB_PASSWORD")?:"planex_ci";try{$x=new PDO("mysql:host={$h};port={$p};charset=utf8mb4",$u,$w,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);$x->query("SELECT 1");exit(0);}catch(Throwable $e){exit(1);}'
             server=caprun(["php","-r",probe],os.environ.copy()).returncode==0
-    return {"PHP_AVAILABLE":php,"PDO_MYSQL_AVAILABLE":pdo,"MYSQL_CLIENT_AVAILABLE":shutil.which("mysql") is not None,"MYSQL_SERVER_REACHABLE":server}
+    return {"PHP_AVAILABLE":php,"PDO_MYSQL_AVAILABLE":pdo,"MYSQL_CLIENT_AVAILABLE":MYSQL is not None,"MYSQL_SERVER_REACHABLE":server}
 
 def diff_meta(base,head):
     a=caprun(["git","diff","--name-status",f"{base}..{head}"]); n=caprun(["git","diff","--numstat",f"{base}..{head}"])
