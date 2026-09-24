@@ -102,6 +102,20 @@ try {
     $pdo->exec("UPDATE waste_trips SET status='searching_executor' WHERE business_id=226");
     $planned=Trips::fetchTrips($pdo,['status'=>'planned_route']);
     check(count($planned)===1&&(int)$planned[0]['business_id']===226,'Planned filter includes historical searching alias');
+    $pdo->exec("INSERT INTO waste_trips (business_id,client_id,responsible_user_id,destination_type,status,planned_start_mode,source_system)
+        SELECT 900,client_id,responsible_user_id,destination_type,'completed',planned_start_mode,'erp' FROM waste_trips WHERE business_id=226;
+        INSERT INTO waste_trips (business_id,client_id,responsible_user_id,destination_type,status,planned_start_mode,source_system)
+        SELECT 901,client_id,responsible_user_id,destination_type,'in_progress',planned_start_mode,'erp' FROM waste_trips WHERE business_id=226;
+        INSERT INTO waste_trips (business_id,client_id,responsible_user_id,destination_type,status,planned_start_mode,source_system)
+        SELECT 902,client_id,responsible_user_id,destination_type,'planned_route',planned_start_mode,'erp' FROM waste_trips WHERE business_id=227;
+        INSERT INTO waste_trips (business_id,client_id,responsible_user_id,destination_type,status,planned_start_mode,source_system)
+        SELECT 903,client_id,responsible_user_id,destination_type,'completed',planned_start_mode,'erp' FROM waste_trips WHERE business_id=227");
+    $ids=static fn(array $rows):array=>array_map(static fn(array $row):int=>(int)$row['business_id'],$rows);
+    check($ids(Trips::fetchTrips($pdo))===[903,902,901,900,227,226],'Default ID order');
+    check($ids(Trips::fetchTrips($pdo,['sort'=>'status']))===[902,226,227,901,903,900],'Status order with ID tie break');
+    check($ids(Trips::fetchTrips($pdo,['sort'=>'manager']))===[902,227,903,226,901,900],'Manager groups contain status order');
+    check($ids(Trips::fetchTrips($pdo,['sort'=>'unknown']))===[903,902,901,900,227,226],'Unknown sort falls back to ID');
+    $pdo->exec('DELETE FROM waste_trips WHERE business_id BETWEEN 900 AND 903');
     $payment=$pdo->query("SELECT * FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetch();
     $obligation=$pdo->query("SELECT * FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND direction='RECEIVABLE'")->fetch();
     check($payment['amount']==='1000.00'&&$payment['payment_method']===''&&$obligation['due_date']===null,'Sale with default terms waits for factual unload');

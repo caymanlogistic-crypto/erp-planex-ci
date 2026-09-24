@@ -35,6 +35,10 @@ $render=static function(bool $finance) use($legacy): string {
 $html=$render(true);
 $dom=new DOMDocument();@$dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);$xp=new DOMXPath($dom);
 $assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th')->length===12,'Twelve registry columns');
+$sort=$xp->query('//select[@name="sort"]')->item(0);
+$assert($sort!==null && $sort->getAttribute('aria-label')==='Сортировка рейсов','Registry sort control');
+$assert($xp->query('//select[@name="sort"]/option[@value="id" and @selected]')->length===1,'ID sort is selected by default');
+$assert($xp->query('//select[@name="sort"]/option[@value="status"]')->length===1 && $xp->query('//select[@name="sort"]/option[@value="manager"]')->length===1,'Status and manager sort choices');
 $assert($xp->query('//tr[@data-waste-view="1"]/td')->length===12,'Twelve data columns');
 $assert(str_contains($html,'ГЕН. ЗАКАЗЧИК') && !str_contains($html,'ДОХОДНОСТЬ'),'Three amounts replace profitability');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[9]')->item(0)->textContent,'200 ₽'),'General amount separate from sale');
