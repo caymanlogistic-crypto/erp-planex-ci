@@ -33,6 +33,7 @@ FEO_TRANSFER_TESTS=["tests/"+name+".php" for name in (
     "feo_transfers_contract_test", "feo_transfers_mysql_test", "feo_transfers_access_mysql_test",
     "feo_transfers_139_production_migration_contract_test", "feo_transfers_139_migration_mysql_test",
     "feo_transfers_activation_contract_test", "feo_transfers_activation_mysql_test",
+    "feo_share_statistics_contract_test", "feo_share_statistics_mysql_test",
 )]
 WASTE_TESTS=["tests/"+name+".php" for name in (
     "waste_trip_incident_service_test", "waste_trip_legacy_readonly_probe_contract_test",

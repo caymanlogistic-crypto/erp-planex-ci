@@ -2,7 +2,59 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `2bd4430056c0daebb9b8eae3d029346aba4702ce8ca8fa8642d1c5292e90768a`
+**Schema fingerprint:** `f263af952933de98b022b8e1f0e2e7c9679d7ac061d630beba7e4f9a2e33aac7`
+
+## `feo_utilizers`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `full_name` | `varchar(255)` | NO | NULL | — | — |
+| `short_name` | `varchar(80)` | NO | NULL | — | `UNI` |
+| `address` | `varchar(500)` | YES | NULL | — | — |
+| `latitude` | `decimal(10,7)` | YES | NULL | — | — |
+| `longitude` | `decimal(10,7)` | YES | NULL | — | — |
+| `fkko_classification` | `varchar(500)` | YES | NULL | — | — |
+| `adr` | `tinyint(1)` | NO | `0` | — | — |
+| `color_hex` | `char(7)` | NO | `#2563EB` | — | — |
+| `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
+| `sort_order` | `int` | NO | `100` | — | — |
+| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_feo_utilizers_active_order` (`is_active`, `sort_order`, `id`)
+- **UNIQUE** `uk_feo_utilizers_short_name` (`short_name`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `geocoding_settings`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `tinyint unsigned` | NO | NULL | — | `PRI` |
+| `api_key_encrypted` | `text` | NO | NULL | — | — |
+| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
 
 ## `max_bots`
 
@@ -217,38 +269,3 @@
 ### Physical foreign keys
 
 - `fk_waste_trip_carrier_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-
-## `waste_trip_completion_items`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `waste_trip_request_id` | `bigint unsigned` | NO | NULL | — | `PRI` |
-| `arrived_at` | `datetime` | YES | NULL | — | — |
-| `departed_at` | `datetime` | YES | NULL | — | — |
-| `driver_signature_present` | `tinyint(1)` | NO | `0` | — | — |
-| `driver_signature_status` | `varchar(3)` | YES | NULL | — | — |
-| `sender_signature_present` | `tinyint(1)` | NO | `0` | — | — |
-| `sender_signature_status` | `varchar(3)` | YES | NULL | — | — |
-| `tn_datetime_missing` | `tinyint(1)` | NO | `0` | — | — |
-| `tn_datetime_status` | `varchar(7)` | YES | NULL | — | — |
-| `data_from_tracker` | `tinyint(1)` | NO | `0` | — | — |
-| `data_from_driver` | `tinyint(1)` | NO | `0` | — | — |
-| `data_invented` | `tinyint(1)` | NO | `0` | — | — |
-| `recovery_source` | `varchar(8)` | YES | NULL | — | — |
-| `comment` | `varchar(500)` | YES | NULL | — | — |
-| `updated_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
-| `lock_version` | `int unsigned` | NO | `1` | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | `MUL` |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`waste_trip_request_id`)
-- **INDEX** `idx_waste_trip_completion_updated` (`updated_at`, `waste_trip_request_id`)
-
-### Physical foreign keys
-
-- `fk_waste_trip_completion_request`: (`waste_trip_request_id`) → `waste_trip_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT

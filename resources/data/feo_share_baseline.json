@@ -1,0 +1,815 @@
+{
+  "snapshots": [
+    {
+      "date": "2026-09-07",
+      "file": "372f2061fc28534f.fgis-opvk-40-2026-09-07-10_Qg5dV6i.xlsx",
+      "feo_count": 3066,
+      "feo_kg": 2175725,
+      "added_count": null,
+      "added_kg": null,
+      "gone_count": null,
+      "gone_kg": null,
+      "own_count": 457,
+      "own_kg": 284283,
+      "imported_at": "07.09 21:35"
+    },
+    {
+      "date": "2026-09-15",
+      "file": "d74c8134b544379f.fgis-opvk-40-2026-09-15-01_WoxT2GL.xlsx",
+      "feo_count": 2987,
+      "feo_kg": 2176964,
+      "added_count": 269,
+      "added_kg": 253483,
+      "gone_count": 348,
+      "gone_kg": 252539,
+      "own_count": 681,
+      "own_kg": 438189,
+      "imported_at": "16.09 00:31"
+    },
+    {
+      "date": "2026-09-18",
+      "file": "69f080ce01ef0fd5.fgis-opvk-40-2026-09-18-09_Vl2DNwQ.xlsx",
+      "feo_count": 3127,
+      "feo_kg": 2179338,
+      "added_count": 198,
+      "added_kg": 164267,
+      "gone_count": 58,
+      "gone_kg": 160232,
+      "own_count": 708,
+      "own_kg": 485942,
+      "imported_at": "18.09 23:14"
+    },
+    {
+      "date": "2026-09-23",
+      "file": "4ca2cf03d2e2e17c.fgis-opvk-40-2026-09-23-11_rE4Emtx.xlsx",
+      "feo_count": 3311,
+      "feo_kg": 2281786,
+      "added_count": 186,
+      "added_kg": 111103,
+      "gone_count": 2,
+      "gone_kg": 5595,
+      "own_count": 708,
+      "own_kg": 485942,
+      "imported_at": "24.09 20:51"
+    }
+  ],
+  "districts": [
+    {
+      "district": "ЦФО",
+      "feo_count": 499,
+      "feo_kg": 332401,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СЗФО",
+      "feo_count": 273,
+      "feo_kg": 217243,
+      "own_count": 66,
+      "own_kg": 43548
+    },
+    {
+      "district": "ЮФО",
+      "feo_count": 713,
+      "feo_kg": 268765,
+      "own_count": 198,
+      "own_kg": 79696
+    },
+    {
+      "district": "СКФО",
+      "feo_count": 158,
+      "feo_kg": 83974,
+      "own_count": 120,
+      "own_kg": 50083
+    },
+    {
+      "district": "ПФО",
+      "feo_count": 674,
+      "feo_kg": 448998,
+      "own_count": 4,
+      "own_kg": 8571
+    },
+    {
+      "district": "УФО",
+      "feo_count": 450,
+      "feo_kg": 446587,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СФО",
+      "feo_count": 544,
+      "feo_kg": 483818,
+      "own_count": 339,
+      "own_kg": 314365
+    },
+    {
+      "district": "ДФО",
+      "feo_count": 0,
+      "feo_kg": 0,
+      "own_count": 0,
+      "own_kg": 0
+    }
+  ],
+  "regions": [
+    {
+      "district": "СФО",
+      "region": "Алтайский край",
+      "feo_count": 30,
+      "feo_kg": 12807,
+      "own_count": 29,
+      "own_kg": 12515
+    },
+    {
+      "district": "СЗФО",
+      "region": "Архангельская область",
+      "feo_count": 10,
+      "feo_kg": 1389,
+      "own_count": 33,
+      "own_kg": 11880
+    },
+    {
+      "district": "ЮФО",
+      "region": "Астраханская область",
+      "feo_count": 39,
+      "feo_kg": 29157,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Белгородская область",
+      "feo_count": 41,
+      "feo_kg": 22366,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Брянская область",
+      "feo_count": 17,
+      "feo_kg": 4763,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Владимирская область",
+      "feo_count": 8,
+      "feo_kg": 6926,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЮФО",
+      "region": "Волгоградская область",
+      "feo_count": 60,
+      "feo_kg": 24726,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СЗФО",
+      "region": "Вологодская область",
+      "feo_count": 16,
+      "feo_kg": 19167,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Воронежская область",
+      "feo_count": 25,
+      "feo_kg": 19285,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Ивановская область",
+      "feo_count": 5,
+      "feo_kg": 1779,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СФО",
+      "region": "Иркутская область",
+      "feo_count": 114,
+      "feo_kg": 98927,
+      "own_count": 107,
+      "own_kg": 100070
+    },
+    {
+      "district": "СКФО",
+      "region": "Кабардино-Балкарская республика",
+      "feo_count": 16,
+      "feo_kg": 3167,
+      "own_count": 14,
+      "own_kg": 1812
+    },
+    {
+      "district": "ЦФО",
+      "region": "Калужская область",
+      "feo_count": 26,
+      "feo_kg": 12909,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СКФО",
+      "region": "Карачаево-Черкесская республика",
+      "feo_count": 8,
+      "feo_kg": 4801,
+      "own_count": 7,
+      "own_kg": 4764
+    },
+    {
+      "district": "СФО",
+      "region": "Кемеровская область",
+      "feo_count": 154,
+      "feo_kg": 123045,
+      "own_count": 4,
+      "own_kg": 45402
+    },
+    {
+      "district": "ПФО",
+      "region": "Кировская область",
+      "feo_count": 20,
+      "feo_kg": 8536,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Костромская область",
+      "feo_count": 4,
+      "feo_kg": 3135,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЮФО",
+      "region": "Краснодарский край",
+      "feo_count": 363,
+      "feo_kg": 108608,
+      "own_count": 83,
+      "own_kg": 21840
+    },
+    {
+      "district": "СФО",
+      "region": "Красноярский край",
+      "feo_count": 97,
+      "feo_kg": 138890,
+      "own_count": 78,
+      "own_kg": 58370
+    },
+    {
+      "district": "УФО",
+      "region": "Курганская область",
+      "feo_count": 33,
+      "feo_kg": 12394,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Курская область",
+      "feo_count": 21,
+      "feo_kg": 21311,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СЗФО",
+      "region": "Ленинградская область",
+      "feo_count": 31,
+      "feo_kg": 31668,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Липецкая область",
+      "feo_count": 14,
+      "feo_kg": 12689,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Москва",
+      "feo_count": 88,
+      "feo_kg": 81105,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Московская область",
+      "feo_count": 77,
+      "feo_kg": 47036,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СЗФО",
+      "region": "Мурманская область",
+      "feo_count": 10,
+      "feo_kg": 13741,
+      "own_count": 14,
+      "own_kg": 15905
+    },
+    {
+      "district": "СЗФО",
+      "region": "Ненецкий автономный округ",
+      "feo_count": 29,
+      "feo_kg": 22907,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Нижегородская область",
+      "feo_count": 33,
+      "feo_kg": 30566,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СЗФО",
+      "region": "Новгородская область",
+      "feo_count": 26,
+      "feo_kg": 10073,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СФО",
+      "region": "Новосибирская область",
+      "feo_count": 37,
+      "feo_kg": 21944,
+      "own_count": 40,
+      "own_kg": 36613
+    },
+    {
+      "district": "СФО",
+      "region": "Омская область",
+      "feo_count": 49,
+      "feo_kg": 40349,
+      "own_count": 27,
+      "own_kg": 17398
+    },
+    {
+      "district": "ПФО",
+      "region": "Оренбургская область",
+      "feo_count": 66,
+      "feo_kg": 21232,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Орловская область",
+      "feo_count": 18,
+      "feo_kg": 4205,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Пензенская область",
+      "feo_count": 20,
+      "feo_kg": 3926,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Пермский край",
+      "feo_count": 78,
+      "feo_kg": 96740,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СЗФО",
+      "region": "Псковская область",
+      "feo_count": 28,
+      "feo_kg": 6570,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЮФО",
+      "region": "Республика Адыгея",
+      "feo_count": 12,
+      "feo_kg": 4682,
+      "own_count": 14,
+      "own_kg": 4411
+    },
+    {
+      "district": "СФО",
+      "region": "Республика Алтай",
+      "feo_count": 5,
+      "feo_kg": 2900,
+      "own_count": 5,
+      "own_kg": 2900
+    },
+    {
+      "district": "ПФО",
+      "region": "Республика Башкортостан",
+      "feo_count": 93,
+      "feo_kg": 60653,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СКФО",
+      "region": "Республика Дагестан",
+      "feo_count": 19,
+      "feo_kg": 9241,
+      "own_count": 14,
+      "own_kg": 8879
+    },
+    {
+      "district": "ЮФО",
+      "region": "Республика Калмыкия",
+      "feo_count": 4,
+      "feo_kg": 5462,
+      "own_count": 2,
+      "own_kg": 452
+    },
+    {
+      "district": "СЗФО",
+      "region": "Республика Карелия",
+      "feo_count": 13,
+      "feo_kg": 13190,
+      "own_count": 19,
+      "own_kg": 15763
+    },
+    {
+      "district": "СЗФО",
+      "region": "Республика Коми",
+      "feo_count": 37,
+      "feo_kg": 32623,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЮФО",
+      "region": "Республика Крым",
+      "feo_count": 70,
+      "feo_kg": 19833,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Республика Марий Эл",
+      "feo_count": 19,
+      "feo_kg": 5742,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Республика Мордовия",
+      "feo_count": 13,
+      "feo_kg": 5539,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СКФО",
+      "region": "Республика Северная Осетия - Алания",
+      "feo_count": 10,
+      "feo_kg": 5024,
+      "own_count": 9,
+      "own_kg": 4296
+    },
+    {
+      "district": "ПФО",
+      "region": "Республика Татарстан",
+      "feo_count": 128,
+      "feo_kg": 89192,
+      "own_count": 4,
+      "own_kg": 8571
+    },
+    {
+      "district": "СФО",
+      "region": "Республика Тыва",
+      "feo_count": 5,
+      "feo_kg": 2232,
+      "own_count": 5,
+      "own_kg": 2232
+    },
+    {
+      "district": "СФО",
+      "region": "Республика Хакасия",
+      "feo_count": 13,
+      "feo_kg": 13839,
+      "own_count": 13,
+      "own_kg": 13528
+    },
+    {
+      "district": "ЮФО",
+      "region": "Ростовская область",
+      "feo_count": 157,
+      "feo_kg": 61237,
+      "own_count": 98,
+      "own_kg": 39993
+    },
+    {
+      "district": "ЦФО",
+      "region": "Рязанская область",
+      "feo_count": 24,
+      "feo_kg": 12830,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Самарская область",
+      "feo_count": 63,
+      "feo_kg": 61006,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СЗФО",
+      "region": "Санкт-Петербург",
+      "feo_count": 73,
+      "feo_kg": 65915,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Саратовская область",
+      "feo_count": 62,
+      "feo_kg": 32879,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "УФО",
+      "region": "Свердловская область",
+      "feo_count": 79,
+      "feo_kg": 74532,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЮФО",
+      "region": "Севастополь",
+      "feo_count": 8,
+      "feo_kg": 15060,
+      "own_count": 1,
+      "own_kg": 13000
+    },
+    {
+      "district": "ЦФО",
+      "region": "Смоленская область",
+      "feo_count": 21,
+      "feo_kg": 24960,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СКФО",
+      "region": "Ставропольский край",
+      "feo_count": 105,
+      "feo_kg": 61741,
+      "own_count": 76,
+      "own_kg": 30332
+    },
+    {
+      "district": "ЦФО",
+      "region": "Тамбовская область",
+      "feo_count": 22,
+      "feo_kg": 13903,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Тверская область",
+      "feo_count": 28,
+      "feo_kg": 10690,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "СФО",
+      "region": "Томская область",
+      "feo_count": 40,
+      "feo_kg": 28885,
+      "own_count": 31,
+      "own_kg": 25337
+    },
+    {
+      "district": "ЦФО",
+      "region": "Тульская область",
+      "feo_count": 29,
+      "feo_kg": 16575,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "УФО",
+      "region": "Тюменская область",
+      "feo_count": 105,
+      "feo_kg": 47717,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Удмуртская республика",
+      "feo_count": 40,
+      "feo_kg": 23347,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Ульяновская область",
+      "feo_count": 24,
+      "feo_kg": 5345,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "УФО",
+      "region": "Ханты-Мансийский автономный округ - Югра",
+      "feo_count": 67,
+      "feo_kg": 64576,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "УФО",
+      "region": "Челябинская область",
+      "feo_count": 80,
+      "feo_kg": 46195,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ПФО",
+      "region": "Чувашская Республика",
+      "feo_count": 15,
+      "feo_kg": 4295,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "УФО",
+      "region": "Ямало-Ненецкий автономный округ",
+      "feo_count": 86,
+      "feo_kg": 201173,
+      "own_count": 0,
+      "own_kg": 0
+    },
+    {
+      "district": "ЦФО",
+      "region": "Ярославская область",
+      "feo_count": 31,
+      "feo_kg": 15934,
+      "own_count": 0,
+      "own_kg": 0
+    }
+  ],
+  "block_daily": [
+    [
+      "2026-08-26",
+      38,
+      26371,
+      0,
+      0
+    ],
+    [
+      "2026-08-27",
+      46,
+      20203,
+      0,
+      0
+    ],
+    [
+      "2026-08-31",
+      495,
+      279945,
+      19,
+      5305
+    ],
+    [
+      "2026-09-01",
+      3,
+      1282,
+      103,
+      46687
+    ],
+    [
+      "2026-09-02",
+      3,
+      9040,
+      4,
+      297
+    ],
+    [
+      "2026-09-03",
+      0,
+      0,
+      4,
+      406
+    ],
+    [
+      "2026-09-04",
+      2,
+      137,
+      0,
+      0
+    ],
+    [
+      "2026-09-08",
+      174,
+      104929,
+      4,
+      406
+    ],
+    [
+      "2026-09-09",
+      0,
+      0,
+      16,
+      8743
+    ],
+    [
+      "2026-09-10",
+      1,
+      13000,
+      56,
+      21698
+    ],
+    [
+      "2026-09-12",
+      0,
+      0,
+      1,
+      1130
+    ],
+    [
+      "2026-09-14",
+      77,
+      27754,
+      3,
+      1245
+    ],
+    [
+      "2026-09-15",
+      60,
+      41784,
+      8,
+      339
+    ],
+    [
+      "2026-09-16",
+      2,
+      2686,
+      5,
+      2827
+    ],
+    [
+      "2026-09-17",
+      0,
+      0,
+      4,
+      21745
+    ],
+    [
+      "2026-09-18",
+      46,
+      82817,
+      12,
+      13178
+    ],
+    [
+      "2026-09-24",
+      19,
+      10321,
+      0,
+      0
+    ]
+  ],
+  "current": {
+    "own_count": 727,
+    "own_kg": 496263,
+    "as_of": "25.09.2026"
+  },
+  "source_notes": {
+    "feo": "Полные файлы ФЭО за 07, 15, 18 и 23.09.2026",
+    "own": "Применяемые блоки размещения и актуальный состав на 25.09.2026",
+    "districts": "Росстат: классификация федеральных округов и субъектов"
+  }
+}
