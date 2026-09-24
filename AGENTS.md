@@ -80,6 +80,7 @@ Development loop:
 When the OWNER asks for `РЕЖИМ РАЗРАБОТКА`, `ПЕСОЧНИЦУ` or iterative page design before implementation, use the repository skill `.agents/skills/planex-design-lab/SKILL.md` and `docs/DESIGN_LAB.md`.
 
 - Work in a localhost-only task session outside the repository; do not expose it to the LAN or Internet.
+- Before the first correction, verify that the sandbox reproduces the current ERP page 1:1 visually and in user-visible behavior. Synthetic values may differ only if their data shape and UI states remain equivalent; safety blocks for production writes/network and external navigation stay enabled.
 - Default to synthetic fixtures. An OWNER-approved local HTML snapshot is allowed only after secret/CSRF sanitization. Never connect the sandbox directly to production DB, APIs or write endpoints.
 - During iteration edit only session overrides/notes, make cheap focused checks and checkpoint meaningful variants. Do not commit, preflight, publish, deploy or write Notion after every visual correction.
 - On explicit `ВНЕДРЯЙ`, require an accepted immutable checkpoint, implement it in the real ERP worktree, and run the normal publication loop once for the finished batch.

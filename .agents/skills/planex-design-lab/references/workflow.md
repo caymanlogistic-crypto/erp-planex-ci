@@ -4,6 +4,8 @@
 
 Use the existing ERP task worktree and a stable TASK_ID. `New-DesignLab.ps1` is idempotent with `-Resume`. Use the built-in browser for visual review and keep annotations scoped to the sandbox tab.
 
+Before changing an override, complete `parity-checklist.md`: compare the sandbox with the current ERP page at the relevant desktop/mobile viewports and run the key interactions. The starting copy must be 1:1 in visual presentation and user-visible behavior. Fix baseline gaps before treating any difference as a requested redesign. Safety blocks for production writes, production network/API access, and external navigation remain mandatory; simulate only their visible outcome locally.
+
 ## Iterate
 
 Translate each OWNER correction into a small override. Preserve notes that explain intent, not implementation chatter. A checkpoint is an immutable candidate: `v001`, `v002`, and so on. Include a screenshot when it materially reduces ambiguity.

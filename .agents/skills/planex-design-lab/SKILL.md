@@ -7,10 +7,11 @@ description: "Use for PLANEX requests containing РЕЖИМ РАЗРАБОТКА
 
 1. Read `docs/DESIGN_LAB.md` and `references/workflow.md`. Read `references/data-safety.md` when a real-shaped snapshot or data source is requested.
 2. Create or resume the task-owned session with `local/New-DesignLab.ps1`; default to `synthetic` data. Start it with `local/Start-DesignLab.ps1` and open the returned localhost URL.
-3. Change only the session's `workspace/overrides.css`, `workspace/overrides.js`, and `workspace/notes.md` during exploration. Make one requested correction at a time and verify it in the browser. Do not edit ERP source merely to preview an idea.
-4. Save meaningful variants with `local/Save-DesignLabVersion.ps1`. Do not checkpoint every keystroke.
-5. Do not run full preflight, create commits/PRs, deploy, or write Notion during the iterative loop.
-6. When OWNER says `ВНЕДРЯЙ`, require an explicit accepted version and create `acceptance.json` with `local/Approve-DesignLabVersion.ps1`. Implement that exact version in ERP source, then use the normal PLANEX test/publication/memory route once.
-7. Stop only the task-owned server through `local/Stop-DesignLab.ps1`; never kill by image/name or touch another task's session.
+3. Before any design correction, verify the initial copy against the current ERP page using `parity-checklist.md`. It must match 1:1 visually and in available user behavior. Synthetic values may differ, but data shape and UI-relevant states must match. Only production writes, production DB/API/network access, and external navigation may differ; simulate their visible result locally when needed.
+4. Change only the session's `workspace/overrides.css`, `workspace/overrides.js`, and `workspace/notes.md` during exploration. Make one requested correction at a time and verify it in the browser. Do not edit ERP source merely to preview an idea.
+5. Save meaningful variants with `local/Save-DesignLabVersion.ps1`. Do not checkpoint every keystroke.
+6. Do not run full preflight, create commits/PRs, deploy, or write Notion during the iterative loop.
+7. When OWNER says `ВНЕДРЯЙ`, require an explicit accepted version and create `acceptance.json` with `local/Approve-DesignLabVersion.ps1`. Implement that exact version in ERP source, then use the normal PLANEX test/publication/memory route once.
+8. Stop only the task-owned server through `local/Stop-DesignLab.ps1`; never kill by image/name or touch another task's session.
 
 The sandbox is a design acceptance aid, not production evidence. Never claim ERP completion until accepted changes are implemented and the normal checks pass.

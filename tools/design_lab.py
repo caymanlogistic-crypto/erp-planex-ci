@@ -25,6 +25,28 @@ VERSION = re.compile(r"v[0-9]{3}")
 MAX_SNAPSHOT_BYTES = 8 * 1024 * 1024
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost", "[::1]"}
 
+PARITY_CONTRACT = {
+    "required": True,
+    "baseline": "current-erp-page-visual-and-behavioral-1-to-1",
+    "visual": [
+        "shell-and-navigation",
+        "layout-and-component-sizes",
+        "typography-colors-and-spacing",
+        "responsive-breakpoints-and-visible-states",
+    ],
+    "behavior": [
+        "tabs-filters-and-sorting",
+        "dropdowns-modals-and-tooltips",
+        "hover-focus-keyboard-and-validation",
+        "local-state-transitions",
+    ],
+    "safety_exceptions": [
+        "production-writes",
+        "production-api-and-network",
+        "external-navigation",
+    ],
+}
+
 PRESETS = {
     "manager-statistics": {
         "label": "Статистика менеджеров",
@@ -44,11 +66,6 @@ DEFAULT_CSS = """/* DESIGN LAB overrides. Keep selectors scoped to the target pa
 
 DEFAULT_JS = """(() => {
   document.documentElement.dataset.planexDesignLab = 'active';
-  const banner = document.createElement('aside');
-  banner.className = 'planex-design-lab-banner';
-  banner.setAttribute('role', 'status');
-  banner.textContent = 'РЕЖИМ РАЗРАБОТКА · локальная песочница · записи отключены';
-  document.body.prepend(banner);
   document.addEventListener('submit', (event) => {
     event.preventDefault();
     window.alert('DESIGN LAB: отправка форм и записи отключены.');
@@ -66,13 +83,20 @@ DEFAULT_JS = """(() => {
 })();
 """
 
-BANNER_CSS = """
-.planex-design-lab-banner {
-  position: sticky; top: 0; z-index: 2147483647; box-sizing: border-box;
-  width: 100%; padding: 7px 12px; border-bottom: 1px solid #7a5a17;
-  background: #fff4cc; color: #49350d; font: 700 12px/1.25 system-ui, sans-serif;
-  text-align: center; letter-spacing: .02em;
-}
+PARITY_CHECKLIST = """# DESIGN LAB — базовая копия 1:1
+
+До первой дизайнерской правки сравните песочницу с текущей ERP-страницей.
+
+- [ ] Совпадают общий каркас, навигация, размеры блоков и расположение элементов.
+- [ ] Совпадают шрифты, цвета, отступы, иконки и адаптивные состояния.
+- [ ] Совпадают вкладки, фильтры, сортировки, списки, модальные окна и подсказки.
+- [ ] Совпадают hover/focus, управление с клавиатуры, валидация и локальные переходы состояния.
+- [ ] Синтетические данные сохраняют форму, порядок и набор доменных состояний реальной страницы.
+- [ ] До подтверждения базового совпадения не внесено ни одного улучшения дизайна.
+
+Допустимые отличия только защитные: production-записи, production API/сеть и внешние
+переходы отключены. Их пользовательский результат имитируется локально, когда он нужен
+для проверки сценария.
 """
 
 
@@ -213,6 +237,7 @@ def create_session(args: argparse.Namespace) -> None:
         atomic_write(temporary / "workspace" / "overrides.css", DEFAULT_CSS.encode("utf-8"))
         atomic_write(temporary / "workspace" / "overrides.js", DEFAULT_JS.encode("utf-8"))
         atomic_write(temporary / "workspace" / "notes.md", b"# DESIGN LAB notes\n\n")
+        atomic_write(temporary / "parity-checklist.md", PARITY_CHECKLIST.encode("utf-8"))
         write_json(
             temporary / "session.json",
             {
@@ -229,6 +254,7 @@ def create_session(args: argparse.Namespace) -> None:
                 "worktree": str(worktree),
                 "created_at": utc_now(),
                 "accepted_version": None,
+                "parity_contract": PARITY_CONTRACT,
             },
         )
         root.parent.mkdir(parents=True, exist_ok=True)
@@ -410,14 +436,19 @@ class DesignLabHandler(BaseHTTPRequestHandler):
             self._send(200, inject_overrides((root / "baseline.html").read_bytes()), "text/html; charset=utf-8")
             return
         if path == "/__design_lab__/overrides.css":
-            data = (root / "workspace" / "overrides.css").read_bytes() + BANNER_CSS.encode("utf-8")
-            self._send(200, data, "text/css; charset=utf-8")
+            self._send(200, (root / "workspace" / "overrides.css").read_bytes(), "text/css; charset=utf-8")
             return
         if path == "/__design_lab__/overrides.js":
             self._send(200, (root / "workspace" / "overrides.js").read_bytes(), "text/javascript; charset=utf-8")
             return
         if path == "/__design_lab__/status.json":
-            status = {"schema": SCHEMA, "task_id": manifest["task_id"], "target_route": manifest["target_route"], "accepted_version": manifest.get("accepted_version")}
+            status = {
+                "schema": SCHEMA,
+                "task_id": manifest["task_id"],
+                "target_route": manifest["target_route"],
+                "accepted_version": manifest.get("accepted_version"),
+                "parity_required": bool(dict(manifest.get("parity_contract", {})).get("required")),
+            }
             self._send(200, json.dumps(status, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
         if path.startswith("/assets/"):
