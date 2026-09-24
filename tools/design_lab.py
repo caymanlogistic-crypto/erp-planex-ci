@@ -47,6 +47,24 @@ PARITY_CONTRACT = {
     ],
 }
 
+UI_QUALITY_CONTRACT = {
+    "required": True,
+    "forms": [
+        "reuse-existing-erp-components-and-tokens",
+        "shared-grid-and-aligned-edges",
+        "consistent-control-heights-padding-gaps-borders-radius-and-type",
+        "semantic-checkbox-radio-and-field-groups",
+        "stable-help-validation-and-action-placement",
+        "complete-hover-focus-selected-disabled-error-success-states",
+        "responsive-no-overflow-no-clipping",
+    ],
+    "verification": [
+        "empty-filled-long-content-error-disabled-selected",
+        "desktop-mobile-and-keyboard",
+        "compare-adjacent-fields-and-repeated-rows-before-owner-review",
+    ],
+}
+
 PRESETS = {
     "manager-statistics": {
         "label": "Статистика менеджеров",
@@ -97,6 +115,25 @@ PARITY_CHECKLIST = """# DESIGN LAB — базовая копия 1:1
 Допустимые отличия только защитные: production-записи, production API/сеть и внешние
 переходы отключены. Их пользовательский результат имитируется локально, когда он нужен
 для проверки сценария.
+"""
+
+UI_QUALITY_CHECKLIST = """# DESIGN LAB — качество форм и визуальная сетка
+
+Проверяйте этот список после каждой законченной правки и до показа варианта OWNER.
+
+- [ ] Использованы существующие ERP-компоненты и дизайн-токены; нет случайных локальных значений для одинаковых элементов.
+- [ ] У формы единая сетка: левые и правые края полей, подписи, сообщения и действия выровнены.
+- [ ] Одинаковые по смыслу элементы имеют одинаковые высоту, внутренние отступы, интервалы, рамку, радиус, шрифт и размер иконок.
+- [ ] Независимое «да/нет» оформлено checkbox; выбор одного варианта — radio или единым переключателем, а не взаимоисключающими checkbox.
+- [ ] Поля объединены семантически: label/fieldset/legend связаны с элементами, виден focus, форма управляется клавиатурой.
+- [ ] Подсказки, ошибки, успешные состояния и кнопки находятся в постоянных местах и не вызывают неожиданных скачков раскладки.
+- [ ] Проверены empty, filled, длинная подпись/значение, error, disabled, selected, hover и focus.
+- [ ] Проверены согласованные desktop/mobile размеры: нет наложений, обрезки и случайной горизонтальной прокрутки.
+- [ ] Перед показом OWNER визуально сравнены соседние поля и повторяющиеся строки; заметные расхождения исправлены.
+
+Правка не готова к показу или checkpoint, пока применимые пункты не выполнены. В цикле
+песочницы достаточно быстрой браузерной проверки: полный preflight запускается один раз
+после принятия варианта и переноса в ERP.
 """
 
 
@@ -238,6 +275,7 @@ def create_session(args: argparse.Namespace) -> None:
         atomic_write(temporary / "workspace" / "overrides.js", DEFAULT_JS.encode("utf-8"))
         atomic_write(temporary / "workspace" / "notes.md", b"# DESIGN LAB notes\n\n")
         atomic_write(temporary / "parity-checklist.md", PARITY_CHECKLIST.encode("utf-8"))
+        atomic_write(temporary / "ui-quality-checklist.md", UI_QUALITY_CHECKLIST.encode("utf-8"))
         write_json(
             temporary / "session.json",
             {
@@ -255,6 +293,7 @@ def create_session(args: argparse.Namespace) -> None:
                 "created_at": utc_now(),
                 "accepted_version": None,
                 "parity_contract": PARITY_CONTRACT,
+                "ui_quality_contract": UI_QUALITY_CONTRACT,
             },
         )
         root.parent.mkdir(parents=True, exist_ok=True)
@@ -448,6 +487,7 @@ class DesignLabHandler(BaseHTTPRequestHandler):
                 "target_route": manifest["target_route"],
                 "accepted_version": manifest.get("accepted_version"),
                 "parity_required": bool(dict(manifest.get("parity_contract", {})).get("required")),
+                "ui_quality_required": bool(dict(manifest.get("ui_quality_contract", {})).get("required")),
             }
             self._send(200, json.dumps(status, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return

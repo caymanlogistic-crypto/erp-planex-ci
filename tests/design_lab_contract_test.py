@@ -57,10 +57,16 @@ with tempfile.TemporaryDirectory(prefix="planex-design-lab-contract-") as tempor
     assert manifest["accepted_version"] is None
     assert manifest["parity_contract"] == design_lab.PARITY_CONTRACT
     assert manifest["parity_contract"]["baseline"] == "current-erp-page-visual-and-behavioral-1-to-1"
+    assert manifest["ui_quality_contract"] == design_lab.UI_QUALITY_CONTRACT
+    assert "shared-grid-and-aligned-edges" in manifest["ui_quality_contract"]["forms"]
     assert "Статистика" in (session / "baseline.html").read_text(encoding="utf-8")
     checklist = (session / "parity-checklist.md").read_text(encoding="utf-8")
     assert "базовая копия 1:1" in checklist
     assert "До первой дизайнерской правки" in checklist
+    quality_checklist = (session / "ui-quality-checklist.md").read_text(encoding="utf-8")
+    assert "качество форм и визуальная сетка" in quality_checklist
+    assert "Одинаковые по смыслу элементы" in quality_checklist
+    assert "до показа варианта OWNER" in quality_checklist
 
     css = session / "workspace" / "overrides.css"
     css.write_text(".manager-statistics { --design-lab-contract: 1; }\n", encoding="utf-8")
@@ -124,6 +130,7 @@ with tempfile.TemporaryDirectory(prefix="planex-design-lab-contract-") as tempor
 
         status = json.loads(opener.open(f"http://127.0.0.1:{port}/__design_lab__/status.json", timeout=3).read())
         assert status["parity_required"] is True
+        assert status["ui_quality_required"] is True
 
         connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
         connection.request("GET", manifest["target_route"], headers={"Host": "example.com"})
@@ -179,5 +186,8 @@ for contract_path in [
 ]:
     contract = contract_path.read_text(encoding="utf-8")
     assert "1:1" in contract, contract_path
+    normalized = contract.lower()
+    assert "visual" in normalized or "визуальн" in normalized, contract_path
+    assert "ui-quality-checklist.md" in normalized, contract_path
 
 print("design_lab_contract_test: PASS")
