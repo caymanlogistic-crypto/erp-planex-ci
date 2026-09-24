@@ -11,7 +11,7 @@ if (!function_exists('documentEntityPageKeys')) {
             'client' => ['company.clients'],
             'contractor' => ['company.contractors'],
             'driver' => ['company.drivers'],
-            'vehicle_unit' => ['company.vehicle_units'],
+            'vehicle_unit' => ['company.vehicle_sets'],
             'vehicle_set' => ['company.vehicle_sets'],
             'driver_vehicle_block' => ['company.drivers', 'company.vehicle_sets'],
             'crew' => ['company.route_executors'],
@@ -33,11 +33,25 @@ if (!function_exists('documentEntityPageKeys')) {
         if ($entityId <= 0) {
             return false;
         }
+        if ($entityType === 'vehicle_unit') {
+            if (\App\Service\RegulatedDataScopeService::canAccess($pdo, 'vehicle_unit', 'vehicle_units', $entityId)) {
+                return true;
+            }
+            // The vehicle-set card can expose a unit through a direct set grant.
+            // A document shown in that card must use the same unit visibility rule.
+            $sets = $pdo->prepare('SELECT * FROM vehicle_sets WHERE primary_vehicle_unit_id = ? OR secondary_vehicle_unit_id = ?');
+            $sets->execute([$entityId, $entityId]);
+            while ($set = $sets->fetch(PDO::FETCH_ASSOC)) {
+                if (isset(vehicleSetAccessibleUnitIds($pdo, $set)[$entityId])) {
+                    return true;
+                }
+            }
+            return false;
+        }
         $regulated = [
             'client' => 'clients',
             'contractor' => 'contractors',
             'driver' => 'drivers',
-            'vehicle_unit' => 'vehicle_units',
             'linear_route' => 'linear_routes',
         ];
         if (isset($regulated[$entityType])) {
