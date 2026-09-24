@@ -20,6 +20,7 @@ EXPECTED_REMOTE = f"https://github.com/{REPOSITORY}"
 SCHEMA = "planex-local-publish/v1"
 HEX40 = re.compile(r"[0-9a-f]{40}")
 TASK_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,95}")
+GIT = os.environ.get("PLANEX_GIT", "git")
 
 
 class Refused(RuntimeError):
@@ -41,7 +42,7 @@ def run(worktree: Path, *args: str, check: bool = True) -> subprocess.CompletedP
 
 
 def git(worktree: Path, *args: str) -> str:
-    return run(worktree, "git", *args).stdout.strip()
+    return run(worktree, GIT, *args).stdout.strip()
 
 
 def normalize_remote(value: str) -> str:
@@ -62,16 +63,16 @@ def candidate_state(worktree: Path, expected_remote: str = EXPECTED_REMOTE) -> d
 
 
 def is_ancestor(worktree: Path, older: str, newer: str) -> bool:
-    return run(worktree, "git", "merge-base", "--is-ancestor", older, newer, check=False).returncode == 0
+    return run(worktree, GIT, "merge-base", "--is-ancestor", older, newer, check=False).returncode == 0
 
 
 def fetch_ref(worktree: Path, remote_ref: str, local_ref: str) -> str:
-    run(worktree, "git", "fetch", "--no-tags", "origin", f"+{remote_ref}:{local_ref}")
+    run(worktree, GIT, "fetch", "--no-tags", "origin", f"+{remote_ref}:{local_ref}")
     return git(worktree, "rev-parse", local_ref)
 
 
 def remote_branch_head(worktree: Path, branch: str) -> str | None:
-    process = run(worktree, "git", "ls-remote", "--heads", "origin", f"refs/heads/{branch}", check=False)
+    process = run(worktree, GIT, "ls-remote", "--heads", "origin", f"refs/heads/{branch}", check=False)
     require(process.returncode == 0, "REMOTE_LOOKUP_FAILED")
     rows = [line.split() for line in process.stdout.splitlines() if line.strip()]
     require(len(rows) <= 1, "AMBIGUOUS_REMOTE_BRANCH")
@@ -85,9 +86,9 @@ def refresh_canonical(worktree: Path, start_head: str) -> str:
     head = git(worktree, "rev-parse", "HEAD")
     require(is_ancestor(worktree, start_head, head), "TASK_HISTORY_MISMATCH")
     if not is_ancestor(worktree, remote, head):
-        merge = run(worktree, "git", "merge", "--no-edit", remote, check=False)
+        merge = run(worktree, GIT, "merge", "--no-edit", remote, check=False)
         if merge.returncode:
-            run(worktree, "git", "merge", "--abort", check=False)
+            run(worktree, GIT, "merge", "--abort", check=False)
             raise Refused("CANONICAL_MERGE_CONFLICT")
         require(not git(worktree, "status", "--porcelain"), "DIRTY_AFTER_CANONICAL_MERGE")
     return remote
@@ -135,6 +136,8 @@ def publish_lock(path: Path, task: str, timeout: float):
     stream = path.open("r+b")
     deadline = time.monotonic() + timeout
     locked = False
+    announced_owner = False
+    last_owner = "unknown"
     try:
         while not locked:
             try:
@@ -151,8 +154,19 @@ def publish_lock(path: Path, task: str, timeout: float):
                     fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
                 locked = True
             except (BlockingIOError, OSError):
+                try:
+                    stream.seek(0)
+                    payload = stream.read(4096).decode("utf-8", errors="replace").strip("\0\r\n ")
+                    if payload:
+                        owner = json.loads(payload)
+                        last_owner = f"task={owner.get('task','unknown')} pid={owner.get('pid','unknown')} acquired_at={owner.get('acquired_at','unknown')}"
+                except (OSError, ValueError, json.JSONDecodeError):
+                    last_owner = "unknown"
+                if not announced_owner:
+                    print(f"PUBLISH_QUEUE_WAIT={last_owner}", file=sys.stderr)
+                    announced_owner = True
                 if time.monotonic() >= deadline:
-                    raise Refused("PUBLISH_QUEUE_TIMEOUT")
+                    raise Refused(f"PUBLISH_QUEUE_TIMEOUT:{last_owner}")
                 time.sleep(0.2)
         stream.seek(0)
         stream.truncate()
@@ -220,7 +234,7 @@ def publish(*, task: str, worktree: Path, start_head: str, requested_class: str,
             fetched = fetch_ref(worktree, f"refs/heads/{final['branch']}", f"refs/remotes/origin/{final['branch']}")
             require(fetched == remote_before and is_ancestor(worktree, remote_before, final["head"]),
                     "NON_FAST_FORWARD_TASK_BRANCH")
-        push_args = ["git", "push", "--porcelain"]
+        push_args = [GIT, "push", "--porcelain"]
         if dry_run:
             push_args.append("--dry-run")
         push_args += ["origin", f"{final['head']}:refs/heads/{final['branch']}"]

@@ -7,9 +7,9 @@ Latest OWNER decisions define policy. Canonical executable GitHub defines implem
 For one new ERP task:
 
 1. Read workspace instructions and Notion `00 — START HERE` once.
-2. Capture the live canonical HEAD once as `START_HEAD`.
+2. On the Windows host use `local\New-PlanexTask.ps1`; it captures the live canonical HEAD once, creates the task branch/worktree and performs early toolchain and MEMORY drift checks.
 3. Open only code and semantic-memory records owned by the changed paths.
-4. Create one `chatgpt/*` branch/worktree. Never implement in the shared `source` checkout.
+4. Never implement in the shared `source` checkout.
 
 Do not read the whole repository, the whole Notion memory, release history or a stack of manuals before a scoped change.
 
@@ -64,13 +64,25 @@ Development loop:
 - Do not run full preflight, publish, CI, deploy or Notion writes after each correction.
 - A successful check is not repeated while its inputs and candidate HEAD are unchanged.
 - Batch related corrections in the same worktree and commit chain.
+- Label an intentionally failing red-phase test as TDD evidence. Environment/setup failures are blockers, not product-test failures.
+
+### Windows local toolchain
+
+- Run `local\Test-LocalReadiness.ps1` once when a task starts or resumes. Reuse the result until the worktree or machine toolchain changes.
+- Use `local\Invoke-LocalTests.ps1`; add `-Static` only for tests proven not to need MySQL. Use `local\Invoke-LocalBrowserTest.ps1` for Playwright so Node, `NODE_PATH`, browser storage and the executable are pinned.
+- Child processes use `PLANEX_PHP`, `PLANEX_PYTHON`, `PLANEX_NODE`, `PLANEX_GIT`, `PLANEX_GZIP`, `PLANEX_TAR` and `PLANEX_MYSQL`; Python code uses `sys.executable`. Do not guess `python`, `python3` or another PATH runtime.
+- Windows worktrees use Windows Git. Never run repository-aware Git/Python commands for a Windows `.git` worktree through WSL; create a native Linux clone/worktree if Linux filesystem semantics are genuinely required.
+- Discover files with `rg --files` or `Get-ChildItem`, prove guessed paths with `Test-Path`, and pass patterns beginning with a dash after `rg --`. Do not pass PowerShell wildcard directory arguments to `rg`.
+- Browser fixtures must be deterministic and scope selectors to one visible layout. Use domain fixture builders for valid entity states instead of incomplete hand-written records.
 
 ### РЕЖИМ РАЗРАБОТКА / DESIGN LAB
 
 When the OWNER asks for `РЕЖИМ РАЗРАБОТКА`, `ПЕСОЧНИЦУ` or iterative page design before implementation, use the repository skill `.agents/skills/planex-design-lab/SKILL.md` and `docs/DESIGN_LAB.md`.
 
 - Work in a localhost-only task session outside the repository; do not expose it to the LAN or Internet.
+- Before the first correction, verify that the sandbox reproduces the current ERP page 1:1 visually and in user-visible behavior. Synthetic values may differ only if their data shape and UI states remain equivalent; safety blocks for production writes/network and external navigation stay enabled.
 - Default to synthetic fixtures. An OWNER-approved local HTML snapshot is allowed only after secret/CSRF sanitization. Never connect the sandbox directly to production DB, APIs or write endpoints.
+- Before showing a correction or saving a checkpoint, complete the session `ui-quality-checklist.md`: forms use one alignment grid, identical controls have identical dimensions and spacing, checkbox/radio semantics are correct, help/error/actions stay aligned, focus/keyboard behavior works, and desktop/mobile plus content/state variants have no overlap, clipping or accidental horizontal scroll.
 - During iteration edit only session overrides/notes, make cheap focused checks and checkpoint meaningful variants. Do not commit, preflight, publish, deploy or write Notion after every visual correction.
 - On explicit `ВНЕДРЯЙ`, require an accepted immutable checkpoint, implement it in the real ERP worktree, and run the normal publication loop once for the finished batch.
 - Each sandbox server owns a dynamic loopback port and exact PID/start-time/executable/arguments/worktree/session state. Stop only that verified process.
@@ -96,6 +108,7 @@ The implementation SHA must exist before repository-memory `Verified SHA` is upd
 - Never reset, delete or clean another task's branch, worktree, evidence, database, port or process.
 - Do not change common Git `core.worktree`, global RDC, PATH, PHP or MySQL configuration for a task-local issue.
 - `source` is a shared object-store checkout, not an implementation workspace.
+- Readiness and focused tests run in parallel per task; only publication and explicitly named external writes are serialized. A busy lease must report its owning TASK_ID/PID instead of inviting blind retries.
 
 ## GitHub and correction discipline
 
@@ -110,8 +123,8 @@ Technical integration actor identity is not the current standard request gate.
 
 ## Memory and production boundaries
 
-- Normal development is LOCAL: coding, debugging, database/browser tests and preflight run on the trusted Windows/WSL host.
-- MEMORY drift/integrity is checked before publication.
+- Normal development is LOCAL: coding, debugging, database/browser tests and preflight run on the trusted Windows host; WSL is not a Git fallback for Windows worktrees.
+- MEMORY drift/integrity is checked before publication and also at task start.
 - Notion writes happen only after merge and are serialized per Canonical ID. Update only impacted records and read back CRITICAL FINANCE/DB/SECURITY/CONTROL PLANE changes.
 - Binding memory rules live in Notion `21 — MEMORY GOVERNANCE & INTEGRITY CONTRACT`.
 - `VERIFIED` requires direct current evidence; owning-path drift requires revalidation or `NEEDS_REVERIFY`.

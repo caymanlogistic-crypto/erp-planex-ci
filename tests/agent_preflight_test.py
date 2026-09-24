@@ -115,6 +115,12 @@ else:
 
 # Contract 6: normal LOCAL execution must fail closed when any remote gate would be required.
 source = (ROOT / "tools/agent_preflight.py").read_text(encoding="utf-8")
+assert 'configured_tool("PLANEX_PHP","php")' in source
+assert 'configured_tool("PLANEX_PYTHON"' not in source  # current interpreter is authoritative
+assert 'configured_tool("PLANEX_NODE","node")' in source
+assert 'configured_tool("PLANEX_GIT","git")' in source
+assert 'configured_tool("PLANEX_MYSQL","mysql")' in source
+assert 'command=exact_command(cmd)' in source
 assert 'LOCAL_PREFLIGHT_REMOTE_GATES_FORBIDDEN' in source
 assert 'print("LOCAL_PREFLIGHT_PASS_WITH_REMOTE_GATES")' not in source
 assert source.index('if remote:') < source.index('results=execute_local_required')
@@ -209,8 +215,13 @@ for token in [
     "Normal development is LOCAL:",
     "SentinelX and the persistent remote runner are outside the normal PLANEX task route",
     "Parallel LOCAL agents / shared-machine safety",
-    "MEMORY drift/integrity is checked before publication",
     "Technical integration actor identity is not the current standard request gate",
+    "local\\New-PlanexTask.ps1",
+    "local\\Test-LocalReadiness.ps1",
+    "local\\Invoke-LocalBrowserTest.ps1",
+    "Windows worktrees use Windows Git",
+    "MEMORY drift/integrity is checked before publication and also at task start",
+    "Discover files with `rg --files`",
 ]:
     assert token in agents, token
 

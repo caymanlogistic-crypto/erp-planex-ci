@@ -56,7 +56,7 @@ $routePages = [
     'company_document_generator.php' => ['company.documents.create', 'company.documents.history', 'company.documents.templates'],
     'company_trip_documents.php' => ['company.documents.request', 'company.documents.collection'],
     'company_trip_completion.php' => ['company.documents.collection'],
-    'company_documents.php' => ['company.clients', 'company.contractors', 'company.drivers', 'company.vehicle_units', 'company.vehicle_sets', 'company.route_executors', 'company.trips.linear'],
+    'company_documents.php' => ['company.clients', 'company.contractors', 'company.drivers', 'company.vehicle_sets', 'company.route_executors', 'company.trips.linear'],
     'company_feo_map.php' => ['company.feo.map', 'company.feo.utilizers'],
     'company_feo_request_costs.php' => ['company.feo.costs'],
     'company_feo_requests.php' => ['company.feo.requests', 'company.feo.map_placement'],
@@ -99,7 +99,8 @@ endpointExpect(!str_contains($ownedSources, 'requireFinanceAccess('), 'owned fin
 
 $documents = (string) file_get_contents($root . '/app/Http/Routes/company_documents.php');
 endpointExpect(str_contains($documents, 'requireDocumentEntityPage'), 'shared documents must derive page context server-side');
-endpointExpect(str_contains($documents, "'vehicle_unit' => ['company.vehicle_units']"), 'vehicle document context mapping missing');
+endpointExpect(str_contains($documents, "'vehicle_unit' => ['company.vehicle_sets']"), 'vehicle document context must use the grantable ТС page');
+endpointExpect(str_contains($documents, 'vehicleSetAccessibleUnitIds($pdo, $set)'), 'vehicle documents must honor direct set grants');
 endpointExpect(str_contains($documents, 'RegulatedDataScopeService::canAccess'), 'shared documents must preserve data-scope');
 
 $vehicleRoutes = (string) file_get_contents($root . '/app/Http/Routes/company_vehicle_sets.php');

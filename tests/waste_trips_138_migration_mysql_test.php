@@ -59,7 +59,8 @@ PHP);
     };
     $compare=static function(array $before,array $after,bool $expected=true)use($root,$fixture):void {
         foreach(['before'=>$before,'after'=>$after] as $name=>$value)file_put_contents($fixture.'/'.$name.'.txt','WASTE_138_SNAPSHOT='.json_encode($value,JSON_THROW_ON_ERROR));
-        $proc=proc_open(['python3',$root.'/scripts/waste_trips_compare_138.py',$fixture.'/before.txt',$fixture.'/after.txt',$root.'/database/migrations-local/138_waste_trip_general_payments.sql'],[1=>['pipe','w'],2=>['pipe','w']],$pipes);
+        $python=(string)(getenv('PLANEX_PYTHON')?:getenv('PYTHON')?:'python3');
+        $proc=proc_open([$python,$root.'/scripts/waste_trips_compare_138.py',$fixture.'/before.txt',$fixture.'/after.txt',$root.'/database/migrations-local/138_waste_trip_general_payments.sql'],[1=>['pipe','w'],2=>['pipe','w']],$pipes);
         $out=stream_get_contents($pipes[1]);$err=stream_get_contents($pipes[2]);fclose($pipes[1]);fclose($pipes[2]);$code=proc_close($proc);
         verify138(($code===0)===$expected,'Snapshot comparison: '.$out.$err);
     };

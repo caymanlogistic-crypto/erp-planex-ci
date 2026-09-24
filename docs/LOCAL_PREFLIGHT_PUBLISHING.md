@@ -6,6 +6,16 @@ The normal PLANEX publication route is fully local until GitHub receives the rea
 
 SentinelX, SSH transport, evidence bundles and the persistent remote runner are not part of this route.
 
+## Start once
+
+Create a task from the actual configured canonical branch instead of assuming `main` or manually composing Git commands:
+
+```powershell
+& C:\plan-ex\ERP-PLANEX\local\New-PlanexTask.ps1 -TaskId <task-id>
+```
+
+The command records `START_HEAD`, creates `chatgpt/<task-id>` in its own worktree, validates the pinned Windows toolchain and runs a read-only MEMORY drift check. Windows Git is mandatory for these Windows worktrees; their `.git` pointer is not passed to WSL.
+
 ## One command
 
 From Windows PowerShell:
@@ -38,6 +48,10 @@ The publisher does not create an application deploy and never authorizes product
 
 Do not run this command after every correction. During development use only focused syntax, contract, DB or browser checks that cover the current diff. Publish once when the correction batch is ready.
 
+Use `local\Invoke-LocalTests.ps1`; `-Static` avoids allocating a disposable schema only for tests proven not to touch MySQL. Playwright tests use `local\Invoke-LocalBrowserTest.ps1`, which pins Node, `NODE_PATH`, `PLAYWRIGHT_BROWSERS_PATH` and verifies the Chromium executable before running the test. Do not install dependencies ad hoc inside a task worktree.
+
+The local environment exposes exact executables through `PLANEX_PHP`, `PLANEX_PYTHON`, `PLANEX_NODE`, `PLANEX_GIT`, `PLANEX_GZIP`, `PLANEX_TAR` and `PLANEX_MYSQL`. Nested Python subprocesses must use `PLANEX_PYTHON`/`sys.executable`, not a guessed `python3` command.
+
 Mutable MySQL checks are launched through the trusted local wrapper. Every invocation receives a unique disposable schema and restricted per-run database user. Cleanup drops that exact schema and user in `finally`; it never touches persistent synthetic schemas or another task's database.
 
 ## GitHub phase
@@ -60,7 +74,7 @@ Important refusal markers include:
 - `LOCAL_PREFLIGHT_FAILED`
 - `CANONICAL_MOVED_REPEATEDLY`
 - `NON_FAST_FORWARD_TASK_BRANCH`
-- `PUBLISH_QUEUE_TIMEOUT`
+- `PUBLISH_QUEUE_TIMEOUT:<owner>`
 - `REMOTE_HEAD_MISMATCH_AFTER_PUSH`
 
 Resolve the stated condition locally. Do not bypass the publisher with direct credentials or force-push.
