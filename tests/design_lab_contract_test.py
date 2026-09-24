@@ -55,7 +55,12 @@ with tempfile.TemporaryDirectory(prefix="planex-design-lab-contract-") as tempor
     assert manifest["target_route"] == "/company/statistics/managers"
     assert manifest["data_mode"] == "synthetic"
     assert manifest["accepted_version"] is None
+    assert manifest["parity_contract"] == design_lab.PARITY_CONTRACT
+    assert manifest["parity_contract"]["baseline"] == "current-erp-page-visual-and-behavioral-1-to-1"
     assert "Статистика" in (session / "baseline.html").read_text(encoding="utf-8")
+    checklist = (session / "parity-checklist.md").read_text(encoding="utf-8")
+    assert "базовая копия 1:1" in checklist
+    assert "До первой дизайнерской правки" in checklist
 
     css = session / "workspace" / "overrides.css"
     css.write_text(".manager-statistics { --design-lab-contract: 1; }\n", encoding="utf-8")
@@ -104,13 +109,21 @@ with tempfile.TemporaryDirectory(prefix="planex-design-lab-contract-") as tempor
         assert page.status == 200
         assert "/__design_lab__/overrides.css" in body
         assert "/__design_lab__/overrides.js" in body
+        assert "planex-design-lab-banner" not in body
         assert headers["cache-control"] == "no-store, private"
         assert "connect-src 'none'" in headers["content-security-policy"]
         assert "form-action 'none'" in headers["content-security-policy"]
 
         override = opener.open(f"http://127.0.0.1:{port}/__design_lab__/overrides.css", timeout=3).read().decode("utf-8")
         assert "--design-lab-contract: 1" in override
-        assert "planex-design-lab-banner" in override
+        assert "planex-design-lab-banner" not in override
+
+        override_js = opener.open(f"http://127.0.0.1:{port}/__design_lab__/overrides.js", timeout=3).read().decode("utf-8")
+        assert "planexDesignLab" in override_js
+        assert "createElement('aside')" not in override_js
+
+        status = json.loads(opener.open(f"http://127.0.0.1:{port}/__design_lab__/status.json", timeout=3).read())
+        assert status["parity_required"] is True
 
         connection = http.client.HTTPConnection("127.0.0.1", port, timeout=3)
         connection.request("GET", manifest["target_route"], headers={"Host": "example.com"})
@@ -157,5 +170,14 @@ for token in [
     "WORKTREE_INSIDE_LOCAL_ROOT",
 ]:
     assert token in source, token
+
+for contract_path in [
+    ROOT / "AGENTS.md",
+    ROOT / "docs" / "DESIGN_LAB.md",
+    ROOT / ".agents" / "skills" / "planex-design-lab" / "SKILL.md",
+    ROOT / ".agents" / "skills" / "planex-design-lab" / "references" / "workflow.md",
+]:
+    contract = contract_path.read_text(encoding="utf-8")
+    assert "1:1" in contract, contract_path
 
 print("design_lab_contract_test: PASS")
