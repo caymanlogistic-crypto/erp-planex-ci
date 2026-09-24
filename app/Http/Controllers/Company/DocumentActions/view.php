@@ -83,6 +83,7 @@ try {
     readfile($filePath);
     exit;
 } catch (\Throwable $e) {
+    error_log('Company document view failed: company=' . $companyId . ' document=' . $docId . ' error=' . $e->getMessage());
     http_response_code(500);
     exit;
 }
