@@ -220,7 +220,7 @@ for token in [
     "local\\Test-LocalReadiness.ps1",
     "local\\Invoke-LocalBrowserTest.ps1",
     "Windows worktrees use Windows Git",
-    "MEMORY drift/integrity is checked at task start and again before publication",
+    "MEMORY drift/integrity is checked before publication and also at task start",
     "Discover files with `rg --files`",
 ]:
     assert token in agents, token

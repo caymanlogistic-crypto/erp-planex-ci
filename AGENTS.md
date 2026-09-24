@@ -122,7 +122,7 @@ Technical integration actor identity is not the current standard request gate.
 ## Memory and production boundaries
 
 - Normal development is LOCAL: coding, debugging, database/browser tests and preflight run on the trusted Windows host; WSL is not a Git fallback for Windows worktrees.
-- MEMORY drift/integrity is checked at task start and again before publication.
+- MEMORY drift/integrity is checked before publication and also at task start.
 - Notion writes happen only after merge and are serialized per Canonical ID. Update only impacted records and read back CRITICAL FINANCE/DB/SECURITY/CONTROL PLANE changes.
 - Binding memory rules live in Notion `21 — MEMORY GOVERNANCE & INTEGRITY CONTRACT`.
 - `VERIFIED` requires direct current evidence; owning-path drift requires revalidation or `NEEDS_REVERIFY`.
