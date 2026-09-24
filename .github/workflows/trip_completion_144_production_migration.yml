@@ -181,7 +181,7 @@ jobs:
               if row['trip_rows']!=prior['trip_rows'] or row['trip_sha256']!=prior['trip_sha256']: raise SystemExit('Trip rows changed')
               if row['request_rows']!=prior['request_rows'] or row['request_sha256']!=prior['request_sha256']: raise SystemExit('Request rows changed')
               if row['completion_rows']!=prior['completion_rows'] or row['completion_sha256']!=prior['completion_sha256']: raise SystemExit('Completion rows changed')
-              if row['migration_144']!=1 or row['checksum']!=expected or not row['items_table'] or not row['documents_table'] or row['provenance_columns']!=4: raise SystemExit('Migration journal mismatch')
+              if row['migration_144']!=1 or row['checksum']!=expected or not row['items_table'] or not row['documents_table'] or row['status_columns']!=4: raise SystemExit('Migration journal mismatch')
           print('TRIP_COMPLETION_144_INVARIANTS_PASS=YES')
           print('TRIP_COMPLETION_144_SOURCE_DATA_MUTATION=0')
           PY
