@@ -1,0 +1,98 @@
+#feo-share-root{--ink:#193344;--muted:#6d808d;--line:#dce6ec;--teal:#087c79;--blue:#345ecb;color:var(--ink);font-family:'IBM Plex Sans',Arial,sans-serif;min-width:0}
+#feo-share-root *{box-sizing:border-box}#feo-share-root .fs-page{max-width:1500px;margin:auto;padding:24px 24px 40px}#feo-share-root h1,#feo-share-root h2,#feo-share-root h3,#feo-share-root p{margin:0}
+#feo-share-root .fs-title{display:flex;align-items:end;justify-content:space-between;gap:24px;margin-bottom:20px}#feo-share-root .fs-eyebrow,#feo-share-root .fs-section-kicker{color:var(--teal);font-size:11px;font-weight:700;letter-spacing:.12em}#feo-share-root h1{font-size:32px;line-height:1.15;letter-spacing:-.035em;margin:7px 0 8px}#feo-share-root .fs-title p{font-size:15px;color:var(--muted)}
+#feo-share-root .fs-title-asof{min-width:234px;padding:12px 16px;border:1px solid var(--line);background:#f9fbfc;border-radius:12px;display:flex;flex-direction:column;gap:2px}#feo-share-root .fs-title-asof span,#feo-share-root .fs-title-asof small{color:var(--muted);font-size:11px}#feo-share-root .fs-title-asof strong{font-size:16px}
+#feo-share-root .fs-caveat{display:flex;gap:12px;align-items:flex-start;padding:13px 16px;border:1px solid #bad9dd;border-radius:12px;background:#eff9f8;color:#27535d;font-size:12px;line-height:1.5;margin-bottom:18px}#feo-share-root .fs-caveat-icon{flex:0 0 20px;height:20px;line-height:17px;text-align:center;border:1.5px solid #6aa5aa;border-radius:50%;font-weight:700}
+#feo-share-root .fs-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:18px}#feo-share-root .fs-kpi{min-height:138px;display:flex;flex-direction:column;padding:18px;border:1px solid var(--line);border-radius:14px;background:white;box-shadow:0 3px 14px #15344609}#feo-share-root .fs-kpi--primary{background:#f1f5ff;border-color:#cdd8fa}#feo-share-root .fs-kpi--teal{background:#eff9f7;border-color:#c6e3df}#feo-share-root .fs-kpi span{font-size:10px;font-weight:700;letter-spacing:.095em;color:var(--muted)}#feo-share-root .fs-kpi strong{font-size:31px;line-height:1.12;letter-spacing:-.04em;margin:10px 0 4px;font-variant-numeric:tabular-nums}#feo-share-root .fs-kpi--primary strong{color:var(--blue)}#feo-share-root .fs-kpi--teal strong{color:var(--teal)}#feo-share-root .fs-kpi p{font-size:13px;font-weight:600}#feo-share-root .fs-kpi em{font-size:11px;color:var(--muted);font-style:normal;margin-top:auto;padding-top:10px}
+#feo-share-root .fs-card{border:1px solid var(--line);background:white;border-radius:15px;overflow:hidden;margin-bottom:18px;box-shadow:0 3px 14px #15344608}#feo-share-root .fs-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 22px 18px}#feo-share-root .fs-card h2{font-size:20px;line-height:1.2;letter-spacing:-.02em;margin:5px 0}#feo-share-root .fs-card-head p{color:var(--muted);font-size:12px;line-height:1.4}
+#feo-share-root .fs-controls{display:flex;align-items:center;gap:3px;background:#f3f7f9;padding:3px;border:1px solid #e4ebef;border-radius:9px;flex-shrink:0}#feo-share-root .fs-controls button{font:inherit;border:0;background:transparent;color:#58717d;font-size:12px;font-weight:600;white-space:nowrap;border-radius:7px;padding:7px 11px;cursor:pointer;min-height:32px}#feo-share-root .fs-controls button:hover{background:#e7eff2}#feo-share-root .fs-controls button.is-active{background:white;color:#1c4252;box-shadow:0 1px 5px #10374924}#feo-share-root button:focus-visible,#feo-share-root summary:focus-visible,#feo-share-root .fs-series g:focus-visible{outline:3px solid #f59e0b;outline-offset:2px}
+#feo-share-root .fs-chart-wrap{padding:0 22px 14px}#feo-share-root .fs-chart{display:block;width:100%;max-height:280px}#feo-share-root .fs-grid{stroke:#e4ebef;stroke-width:1}#feo-share-root .fs-axis{fill:#7b8e9b;font:12px 'IBM Plex Sans',Arial,sans-serif}#feo-share-root .fs-chart-line{fill:none;stroke-width:3.5;stroke-linecap:round;stroke-linejoin:round}#feo-share-root .fs-chart-dot{stroke:white;stroke-width:2.4}#feo-share-root .fs-series--count .fs-chart-line{stroke:var(--blue)}#feo-share-root .fs-series--count .fs-chart-dot{fill:var(--blue)}#feo-share-root .fs-series--mass .fs-chart-line{stroke:var(--teal)}#feo-share-root .fs-series--mass .fs-chart-dot{fill:var(--teal)}#feo-share-root .fs-chart-legend{display:flex;justify-content:center;flex-wrap:wrap;gap:20px;color:#607381;font-size:12px;font-weight:600}#feo-share-root .fs-chart-legend span{display:inline-flex;align-items:center;gap:7px}#feo-share-root .fs-chart-legend i{width:18px;height:3px;border-radius:3px;display:inline-block}#feo-share-root .fs-legend-count{background:var(--blue)}#feo-share-root .fs-legend-mass{background:var(--teal)}
+#feo-share-root .fs-card-subhead{display:flex;justify-content:space-between;gap:12px;align-items:baseline;padding:13px 22px 9px;border-top:1px solid var(--line)}#feo-share-root .fs-card-subhead h3{font-size:14px}#feo-share-root .fs-card-subhead span{font-size:11px;color:var(--muted)}#feo-share-root .fs-table-wrap{width:100%;overflow-x:auto;scrollbar-width:thin}#feo-share-root .fs-table{border-collapse:collapse;width:100%;min-width:650px;font-size:12px;line-height:1.35;font-variant-numeric:tabular-nums}#feo-share-root .fs-table th,#feo-share-root .fs-table td{text-align:left;vertical-align:middle;padding:11px 16px;border-top:1px solid #e9eef1}#feo-share-root .fs-table thead th{color:#69808e;font-size:10px;text-transform:uppercase;letter-spacing:.045em;font-weight:700;background:#fbfcfd;white-space:nowrap}#feo-share-root .fs-table th.num,#feo-share-root .fs-table td.num{text-align:right}#feo-share-root .fs-table td small,#feo-share-root .fs-table tfoot small{display:block;margin-top:3px;color:#81929e;font-size:10px;font-weight:400;white-space:nowrap}#feo-share-root .fs-table tbody tr:hover{background:#f7fafb}#feo-share-root .fs-table tbody tr.is-latest{background:#f4f9ff}#feo-share-root .fs-table .positive{color:var(--teal)}#feo-share-root .fs-table .negative{color:#bb5b55}
+#feo-share-root .fs-flow-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}#feo-share-root .fs-flow-grid .fs-card{min-width:0}#feo-share-root .fs-flow-grid .fs-table{min-width:490px}#feo-share-root .fs-district-table{min-width:760px}#feo-share-root .fs-district-link{display:flex;align-items:center;gap:9px;width:100%;text-align:left;font:inherit;color:var(--ink);border:0;background:none;cursor:pointer;padding:0}#feo-share-root .fs-district-link strong{display:inline-flex;align-items:center;justify-content:center;color:var(--blue);background:#eff3fe;border-radius:6px;min-width:42px;height:27px;padding:0 5px}#feo-share-root .fs-district-link span{font-size:11px;color:#637b88}#feo-share-root .fs-district-link:hover span{text-decoration:underline}#feo-share-root .fs-district-table .is-selected{background:#f1f7ff}#feo-share-root .fs-share-cell strong{display:block}#feo-share-root .fs-mini-track{display:block;width:85px;height:4px;margin:6px 0 0 auto;border-radius:5px;background:#e9eef2;overflow:hidden}#feo-share-root .fs-mini-track i{display:block;height:100%;border-radius:5px;background:var(--blue)}#feo-share-root .fs-mini-track--mass i{background:var(--teal)}#feo-share-root .fs-district-table tfoot{background:#f5f8fa;font-weight:700}
+#feo-share-root .fs-region-detail{border-top:1px solid var(--line)}#feo-share-root .fs-region-empty{padding:17px 22px;color:var(--muted);font-size:12px;background:#fbfcfd}#feo-share-root .fs-region-title{display:flex;justify-content:space-between;gap:12px;align-items:start;padding:16px 22px 10px}#feo-share-root .fs-region-title h3{font-size:15px}#feo-share-root .fs-region-title p{color:var(--muted);font-size:11px;margin-top:3px}#feo-share-root .fs-region-title button{border:1px solid var(--line);background:white;width:30px;height:30px;border-radius:7px;font-size:19px;line-height:1;color:var(--muted);cursor:pointer}#feo-share-root .fs-region-table{min-width:610px}#feo-share-root .fs-method{margin:5px 0 16px;background:#f8fafb;border:1px solid var(--line);border-radius:11px;color:#526b79}#feo-share-root .fs-method summary{padding:13px 16px;cursor:pointer;font-size:12px;font-weight:700;color:#355464}#feo-share-root .fs-method>div{padding:0 16px 15px;font-size:12px;line-height:1.55}#feo-share-root .fs-method p+p{margin-top:8px}#feo-share-root .fs-footer{color:#94a3ad;font-size:10px;text-align:right}
+@media(max-width:1250px){#feo-share-root .fs-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}#feo-share-root .fs-flow-grid{grid-template-columns:1fr;gap:0}}@media(max-width:760px){#feo-share-root .fs-page{padding:18px 12px 30px}#feo-share-root .fs-title{align-items:stretch;flex-direction:column;gap:12px}#feo-share-root h1{font-size:26px}#feo-share-root .fs-title-asof{min-width:0}#feo-share-root .fs-kpis{gap:9px}#feo-share-root .fs-kpi{padding:14px;min-height:124px}#feo-share-root .fs-kpi strong{font-size:27px}#feo-share-root .fs-card-head{flex-direction:column;padding:17px 15px 14px}#feo-share-root .fs-card h2{font-size:18px}#feo-share-root .fs-controls{max-width:100%;overflow:auto}#feo-share-root .fs-chart-wrap{padding:0 11px 12px}#feo-share-root .fs-card-subhead{padding:11px 15px;flex-direction:column;gap:3px}#feo-share-root .fs-table th,#feo-share-root .fs-table td{padding:10px 12px}}@media(max-width:480px){#feo-share-root .fs-kpis{grid-template-columns:1fr}#feo-share-root .fs-kpi{min-height:110px}#feo-share-root .fs-caveat{padding:11px}}
+
+/* v002: ERP PLANEX statistics design code, matching manager-statistics.css. */
+#feo-share-root{--fs-ink:var(--text-main);--fs-muted:var(--text-muted);--fs-line:var(--line-soft);--fs-teal:var(--chart-3);--fs-blue:var(--chart-2);color:var(--text-main);font-family:var(--font);font-variant-numeric:tabular-nums}
+#feo-share-root .fs-page{width:min(1480px,calc(100% - 12px));max-width:1480px;padding:0 0 20px}
+#feo-share-root .fs-title{min-height:70px;align-items:center;padding:10px 14px;margin:0 0 8px;border:1px solid var(--line);background:linear-gradient(180deg,var(--surface-strong),var(--surface-page-head));gap:16px}
+#feo-share-root .fs-eyebrow{display:none}
+#feo-share-root h1{font-size:19px;line-height:1;letter-spacing:-.035em;margin:0 0 7px;color:var(--text-main)}
+#feo-share-root .fs-title p{font-size:11px;line-height:1.3;color:var(--text-muted)}
+#feo-share-root .fs-title-asof{min-width:0;padding:0;border:0;background:none;border-radius:0;align-items:flex-end;text-align:right;gap:2px}
+#feo-share-root .fs-title-asof span,#feo-share-root .fs-title-asof small{color:var(--text-faint);font-size:9.5px}
+#feo-share-root .fs-title-asof strong{color:var(--text-main);font-size:11px}
+#feo-share-root .fs-caveat{align-items:center;gap:7px;padding:8px 11px;margin:0 0 8px;border:1px solid var(--accent-line);border-radius:0;background:var(--accent-bg);color:var(--accent-deep);font-size:10.5px;line-height:1.4}
+#feo-share-root .fs-caveat-icon{flex:0 0 7px;width:7px;height:7px;line-height:0;border:0;border-radius:0;background:var(--accent);font-size:0}
+#feo-share-root .fs-kpis{gap:8px;margin-bottom:8px}
+#feo-share-root .fs-kpi{min-height:94px;padding:12px 13px;border:1px solid var(--line-soft);border-radius:0;background:var(--surface-strong);box-shadow:inset 3px 0 0 var(--chart-1)}
+#feo-share-root .fs-kpi--primary{border-color:var(--line-soft);background:var(--surface-strong);box-shadow:inset 3px 0 0 var(--chart-1)}
+#feo-share-root .fs-kpi--teal{border-color:var(--line-soft);background:var(--surface-strong);box-shadow:inset 3px 0 0 var(--chart-2)}
+#feo-share-root .fs-kpi:nth-child(3){box-shadow:inset 3px 0 0 var(--chart-3)}
+#feo-share-root .fs-kpi:nth-child(4){box-shadow:inset 3px 0 0 var(--chart-8)}
+#feo-share-root .fs-kpi span{color:var(--text-faint);font-size:9.5px;letter-spacing:.04em}
+#feo-share-root .fs-kpi strong,#feo-share-root .fs-kpi--primary strong,#feo-share-root .fs-kpi--teal strong{font-size:22px;line-height:1;color:var(--text-main);letter-spacing:0;margin:8px 0 6px}
+#feo-share-root .fs-kpi p{font-size:10px;font-weight:600;color:var(--text-main)}
+#feo-share-root .fs-kpi em{font-size:9.5px;color:var(--text-muted);padding-top:7px}
+#feo-share-root .fs-card{border:1px solid var(--line-soft);border-radius:0;background:var(--surface-strong);box-shadow:none;margin-bottom:8px}
+#feo-share-root .fs-card-head{align-items:flex-start;min-height:48px;padding:8px 11px;border-bottom:1px solid var(--line-soft);background:linear-gradient(180deg,var(--surface-form),var(--surface-muted))}
+#feo-share-root .fs-card h2{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.045em;margin:0;color:var(--text-main)}
+#feo-share-root .fs-card-head p{margin:3px 0 0;color:var(--text-faint);font-size:9.5px}
+#feo-share-root .fs-section-kicker{display:none}
+#feo-share-root .fs-controls{height:28px;gap:0;padding:0;border:1px solid var(--line-soft);border-radius:0;background:var(--surface-muted)}
+#feo-share-root .fs-controls button{height:26px;min-height:26px;padding:0 10px;border-right:1px solid var(--line-hair);border-radius:0;color:var(--text-muted);font-size:9.5px;font-weight:700}
+#feo-share-root .fs-controls button:last-child{border-right:0}
+#feo-share-root .fs-controls button:hover{background:var(--surface-form);color:var(--text-main)}
+#feo-share-root .fs-controls button.is-active{background:var(--surface-strong);box-shadow:inset 0 -2px 0 var(--accent);color:var(--text-main)}
+#feo-share-root button:focus-visible,#feo-share-root summary:focus-visible,#feo-share-root .fs-series g:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+#feo-share-root .fs-chart-wrap{padding:8px 10px 7px;background:var(--surface-form)}
+#feo-share-root .fs-chart{max-height:300px}
+#feo-share-root .fs-grid{stroke:var(--line-hair)}
+#feo-share-root .fs-axis{fill:var(--text-faint);font:9px var(--font)}
+#feo-share-root .fs-chart-line{stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+#feo-share-root .fs-chart-dot{fill:var(--surface-strong)!important;stroke-width:2.5}
+#feo-share-root .fs-series--count .fs-chart-line{stroke:var(--chart-1)}
+#feo-share-root .fs-series--count .fs-chart-dot{stroke:var(--chart-1)}
+#feo-share-root .fs-series--mass .fs-chart-line{stroke:var(--chart-2)}
+#feo-share-root .fs-series--mass .fs-chart-dot{stroke:var(--chart-2)}
+#feo-share-root .fs-chart-legend{gap:7px 16px;color:var(--text-muted);font-size:9.5px;padding:3px 8px 6px}
+#feo-share-root .fs-chart-legend i{width:16px;height:2px;border-radius:0}
+#feo-share-root .fs-legend-count{background:var(--chart-1)}
+#feo-share-root .fs-legend-mass{background:var(--chart-2)}
+#feo-share-root .fs-card-subhead{padding:8px 11px;border-top:1px solid var(--line-soft);border-bottom:1px solid var(--line-soft);background:linear-gradient(180deg,var(--surface-form),var(--surface-muted))}
+#feo-share-root .fs-card-subhead h3{font-size:11px;text-transform:uppercase;letter-spacing:.045em;color:var(--text-main)}
+#feo-share-root .fs-card-subhead span{font-size:9.5px;color:var(--text-faint)}
+#feo-share-root .fs-table{font-size:12px}
+#feo-share-root .fs-table thead th{height:var(--thead-h);padding:0 10px;background:linear-gradient(180deg,#e0dbd2,#d4cfc5);border-bottom:1px solid #b0a89c;border-right:1px solid rgba(160,152,140,.28);font-size:10px;letter-spacing:.08em;color:#343028}
+#feo-share-root .fs-table td{height:var(--row-h);padding:7px 10px;border-bottom:1px solid rgba(220,216,208,.7);border-right:1px solid rgba(216,212,204,.35);background:var(--table-row);color:var(--text-main);font-size:12px;font-weight:500}
+#feo-share-root .fs-table tbody tr:hover td{background:var(--table-row-hover)}
+#feo-share-root .fs-table tbody tr.is-latest td,#feo-share-root .fs-table tbody tr.is-selected td{background:var(--table-row-selected)}
+#feo-share-root .fs-table tbody tr.is-selected td:first-child{box-shadow:inset 3px 0 0 var(--table-row-sel-line)}
+#feo-share-root .fs-table td small,#feo-share-root .fs-table tfoot small{color:var(--text-faint);font-size:9px}
+#feo-share-root .fs-table .positive{color:var(--success)}
+#feo-share-root .fs-table .negative{color:var(--danger)}
+#feo-share-root .fs-flow-grid{gap:8px}
+#feo-share-root .fs-district-link strong{min-width:42px;height:22px;border:1px solid var(--line-soft);border-radius:0;background:var(--surface-form);color:var(--text-main);font-size:9.5px}
+#feo-share-root .fs-district-link span{color:var(--text-muted);font-size:10px}
+#feo-share-root .fs-mini-track{height:5px;margin-top:5px;border-radius:0;background:var(--surface-muted)}
+#feo-share-root .fs-mini-track i{border-radius:0;background:var(--chart-1)}
+#feo-share-root .fs-mini-track--mass i{background:var(--chart-2)}
+#feo-share-root .fs-district-table tfoot{background:var(--surface-form)}
+#feo-share-root .fs-region-detail{border-top:1px solid var(--line-soft)}
+#feo-share-root .fs-region-empty{padding:14px;color:var(--text-faint);font-size:10.5px;background:var(--surface-form)}
+#feo-share-root .fs-region-title{padding:8px 11px;border-bottom:1px solid var(--line-soft);background:linear-gradient(180deg,var(--surface-form),var(--surface-muted))}
+#feo-share-root .fs-region-title h3{font-size:11px;text-transform:uppercase;letter-spacing:.045em}
+#feo-share-root .fs-region-title p{font-size:9.5px;color:var(--text-faint)}
+#feo-share-root .fs-region-title button{width:26px;height:26px;border:1px solid var(--line-soft);border-radius:0;background:var(--surface-strong);color:var(--text-muted);font-size:17px}
+#feo-share-root .fs-method{margin:0 0 8px;border:1px solid var(--line-soft);border-radius:0;background:var(--surface-strong);color:var(--text-muted)}
+#feo-share-root .fs-method summary{padding:8px 11px;background:linear-gradient(180deg,var(--surface-form),var(--surface-muted));font-size:10.5px;color:var(--text-main)}
+#feo-share-root .fs-method>div{padding:10px 11px;font-size:10.5px}
+#feo-share-root .fs-footer{color:var(--text-faint);font-size:9.5px}
+@media(max-width:760px){#feo-share-root .fs-page{width:calc(100% - 8px);padding:0 0 20px}#feo-share-root .fs-title{align-items:flex-start;padding:10px 14px}#feo-share-root h1{font-size:19px}#feo-share-root .fs-title-asof{align-items:flex-start;text-align:left}#feo-share-root .fs-kpi{min-height:94px;padding:12px 13px}#feo-share-root .fs-kpi strong{font-size:22px}#feo-share-root .fs-card-head{padding:8px 11px}#feo-share-root .fs-card h2{font-size:11px}#feo-share-root .fs-chart-wrap{padding:8px 10px 7px}#feo-share-root .fs-card-subhead{padding:8px 11px}#feo-share-root .fs-table th,#feo-share-root .fs-table td{padding:7px 10px}}
+
+/* v003: the ERP trend chart fills this report's full card width. */
+#feo-share-root .fs-chart{display:block;width:100%;height:286px;max-height:none;overflow:visible}
+#feo-share-root .fs-chart .grid-line{stroke:var(--line-hair);stroke-width:1}
+#feo-share-root .fs-chart .axis-label{fill:var(--text-faint);font:9px var(--font)}
+#feo-share-root .fs-chart-node:focus-visible{outline:none}
+@media(max-width:760px){#feo-share-root .fs-chart{height:230px}}

@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `2bd4430056c0daebb9b8eae3d029346aba4702ce8ca8fa8642d1c5292e90768a`
+**Schema fingerprint:** `f263af952933de98b022b8e1f0e2e7c9679d7ac061d630beba7e4f9a2e33aac7`
 
 ## `trip_document_incoming`
 

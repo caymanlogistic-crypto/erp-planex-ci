@@ -267,6 +267,9 @@ final class FeoRequestService
             $updateRequest = $pdo->prepare("UPDATE feo_requests SET {$updateSql}, current_import_id=? WHERE zayavka_id=?");
             $find = $pdo->prepare('SELECT * FROM feo_requests WHERE zayavka_id=? FOR UPDATE');
             $insertChange = $pdo->prepare('INSERT INTO feo_import_changes (import_id,zayavka_id,action,previous_import_id,before_json,after_json) VALUES (?,?,?,?,?,?)');
+            $shareReady = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('feo_share_import_totals','feo_share_import_requests')")->fetchColumn() === 2;
+            $insertShareRequest = $shareReady ? $pdo->prepare('INSERT INTO feo_share_import_requests (import_id,zayavka_id,mass_kg,mno_region) VALUES (?,?,?,?)') : null;
+            $shareMassKg = 0.0;
 
             $stats = ['rows_total' => count($rows), 'unique_requests' => count($rows), 'new_count' => 0, 'updated_count' => 0, 'unchanged_count' => 0, 'missing_count' => 0];
             $incomingIds = [];
@@ -277,6 +280,9 @@ final class FeoRequestService
                 $find->execute([$id]);
                 $beforeDb = $find->fetch(PDO::FETCH_ASSOC) ?: null;
                 if ($beforeDb === null) {
+                    $snapshotKg = round((float)($row['mass_netto'] ?? 0) * 1000, 3);
+                    $insertShareRequest?->execute([$importId, $id, $snapshotKg, $row['mno_region'] ?? null]);
+                    $shareMassKg += $snapshotKg;
                     $values = array_map(static fn(string $f) => $row[$f] ?? null, $fields);
                     $insertRequest->execute([...$values, $importId]);
                     $legacyJournal = $legacySync?->apply($row, $overwriteExisting);
@@ -288,6 +294,9 @@ final class FeoRequestService
                 $before = $this->businessRow($beforeDb);
                 if (!$overwriteExisting) $row = $before;
                 if (isset($locationOverrides[$id])) $row = FeoLocationOverrideService::preserve($row, $before);
+                $snapshotKg = round((float)($row['mass_netto'] ?? 0) * 1000, 3);
+                $insertShareRequest?->execute([$importId, $id, $snapshotKg, $row['mno_region'] ?? null]);
+                $shareMassKg += $snapshotKg;
                 if ($this->sameBusinessRow($before, $row)) {
                     $stats['unchanged_count']++;
                     continue;
@@ -320,6 +329,11 @@ final class FeoRequestService
 
             $updateImport = $pdo->prepare('UPDATE feo_imports SET rows_total=?,unique_requests=?,new_count=?,updated_count=?,unchanged_count=?,missing_count=? WHERE id=?');
             $updateImport->execute([$stats['rows_total'],$stats['unique_requests'],$stats['new_count'],$stats['updated_count'],$stats['unchanged_count'],$stats['missing_count'],$importId]);
+            if ($shareReady) {
+                $companyAtImport = $pdo->query('SELECT COUNT(*) count, COALESCE(SUM(COALESCE(r.mass_netto,0))*1000,0) kg FROM feo_placement_current c LEFT JOIN feo_requests r ON r.zayavka_id=c.zayavka_id')->fetch(PDO::FETCH_ASSOC);
+                $saveShareTotals = $pdo->prepare('INSERT INTO feo_share_import_totals (import_id,feo_count,feo_kg,company_count,company_kg) VALUES (?,?,?,?,?)');
+                $saveShareTotals->execute([$importId, count($incomingIds), round($shareMassKg, 3), (int)$companyAtImport['count'], round((float)$companyAtImport['kg'], 3)]);
+            }
             if ($weightChanges !== [] && $weightEvent !== null) $weightEvent($weightChanges, $importId);
             $transaction->commit();
             return ['import_id' => $importId, 'legacy_synced' => $legacySync !== null] + $stats;

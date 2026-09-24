@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `2bd4430056c0daebb9b8eae3d029346aba4702ce8ca8fa8642d1c5292e90768a`
+**Schema fingerprint:** `f263af952933de98b022b8e1f0e2e7c9679d7ac061d630beba7e4f9a2e33aac7`
 
 ## `feo_requests`
 
@@ -72,6 +72,48 @@
 ### Physical foreign keys
 
 - `fk_feo_requests_current_import`: (`current_import_id`) → `feo_imports`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
+
+## `feo_share_import_requests`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `import_id` | `bigint unsigned` | NO | NULL | — | `PRI` |
+| `zayavka_id` | `varchar(64)` | NO | NULL | — | `PRI` |
+| `mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
+| `mno_region` | `varchar(255)` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`import_id`, `zayavka_id`)
+- **INDEX** `idx_feo_share_request_id` (`zayavka_id`)
+
+### Physical foreign keys
+
+- `fk_feo_share_requests_import`: (`import_id`) → `feo_imports`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
+
+## `feo_share_import_totals`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `import_id` | `bigint unsigned` | NO | NULL | — | `PRI` |
+| `feo_count` | `int unsigned` | NO | NULL | — | — |
+| `feo_kg` | `decimal(18,3)` | NO | NULL | — | — |
+| `company_count` | `int unsigned` | NO | NULL | — | — |
+| `company_kg` | `decimal(18,3)` | NO | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`import_id`)
+
+### Physical foreign keys
+
+- `fk_feo_share_totals_import`: (`import_id`) → `feo_imports`.`id` ON UPDATE NO ACTION ON DELETE CASCADE
 
 ## `feo_transfer_batches`
 
@@ -210,55 +252,3 @@
 ### Physical foreign keys
 
 - `fk_feo_utilizer_rule_utilizer`: (`utilizer_id`) → `feo_utilizers`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-
-## `feo_utilizers`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `full_name` | `varchar(255)` | NO | NULL | — | — |
-| `short_name` | `varchar(80)` | NO | NULL | — | `UNI` |
-| `address` | `varchar(500)` | YES | NULL | — | — |
-| `latitude` | `decimal(10,7)` | YES | NULL | — | — |
-| `longitude` | `decimal(10,7)` | YES | NULL | — | — |
-| `fkko_classification` | `varchar(500)` | YES | NULL | — | — |
-| `adr` | `tinyint(1)` | NO | `0` | — | — |
-| `color_hex` | `char(7)` | NO | `#2563EB` | — | — |
-| `is_active` | `tinyint(1)` | NO | `1` | — | `MUL` |
-| `sort_order` | `int` | NO | `100` | — | — |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_feo_utilizers_active_order` (`is_active`, `sort_order`, `id`)
-- **UNIQUE** `uk_feo_utilizers_short_name` (`short_name`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.
-
-## `geocoding_settings`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `tinyint unsigned` | NO | NULL | — | `PRI` |
-| `api_key_encrypted` | `text` | NO | NULL | — | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.
