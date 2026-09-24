@@ -21,5 +21,19 @@ $trips[1]=array_merge($trips[1],[
   ['id'=>21,'zayavka_id'=>'270001','position_no'=>1,'snapshot_mass_kg'=>210,'shipper_name'=>'ООО Север','pickup_address'=>'Архангельск','consignee_name'=>'Переработчик','delivery_address'=>'Воскресенск','arrived_at'=>'2026-09-03 10:00:00','departed_at'=>'2026-09-03 10:30:00','driver_signature_present'=>1,'sender_signature_present'=>1,'tn_datetime_missing'=>0,'data_from_tracker'=>0,'data_from_driver'=>0,'data_invented'=>0,'completion_comment'=>'','documents'=>[['id'=>201,'download_name'=>'Рейс_243_Заявка_270001_ТН_01.jpg','size_bytes'=>120000]],'issues'=>[],'is_complete'=>true],
  ],
 ]);
+foreach($trips as &$trip){
+ $trip['contractor_contact_name']=$trip['id']===1?'Петров Пётр':'Сидорова Мария';
+ $trip['contractor_contact_phone']='+7 900 000-10-01';
+ $trip['contractor_contact_email']='carrier@example.test';
+ $trip['driver_phone']='+7 900 000-20-01';
+ foreach($trip['requests'] as &$request){
+  $request['driver_signature_status']=(int)$request['driver_signature_present']===1?'yes':null;
+  $request['sender_signature_status']=(int)$request['sender_signature_present']===1?'yes':'no';
+  $request['tn_datetime_status']=(int)$request['tn_datetime_missing']===1?'no':'full';
+  $request['recovery_source']=(int)$request['data_from_driver']===1?'driver':null;
+ }
+ unset($request);
+}
+unset($trip);
 $openTripId=0;
 ?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><title>Регистрация времени загрузки</title></head><body><main style="padding:20px;max-width:1800px;margin:auto"><?php require BASE_PATH.'/app/View/pages/company_logistics_assistant.php';?></main></body></html>
