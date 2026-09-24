@@ -26,7 +26,7 @@ final class TripCompletionController
         unset($_SESSION['trip_completion_success'],$_SESSION['trip_completion_error']);
         try {
             [$company,$service]=$this->context();
-            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (143).');
+            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (144).');
             $all=$service->trips('',false);
             $metrics=[
                 'trips'=>count(array_filter($all,static fn(array $row):bool=>(int)$row['complete_count']<(int)$row['request_count'])),
@@ -34,7 +34,7 @@ final class TripCompletionController
                 'ready'=>array_sum(array_map(static fn(array $row):int=>(int)$row['complete_count'],$all)),
                 'problems'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count']-(int)$row['complete_count'],$all)),
             ];
-            $trips=$service->trips($query,$hideComplete);
+            $trips=$service->trips('',false);
             foreach ($trips as $index=>$trip) {
                 $details=$service->trip((int)$trip['id']);
                 $trips[$index]=array_merge($trip,$details);
@@ -71,6 +71,7 @@ final class TripCompletionController
             [, $service,$actor]=$this->context();$this->assertReady($service);
             $files=$this->uploadedFiles('documents');
             if ($files===[]) throw new DomainException('Выберите хотя бы один файл.');
+            if ($service->activeDocumentCount((int)$tripId,(int)$requestId)+count($files)>2) throw new DomainException('К заявке можно добавить не более двух сканов ТН.');
             $total=array_sum(array_map(static fn(array $file):int=>(int)($file['size']??0),$files));
             if ($total>80*1024*1024) throw new DomainException('Общий размер файлов больше 80 МБ.');
             foreach ($files as $file) $service->upload((int)$tripId,(int)$requestId,$file,$actor);
@@ -104,7 +105,8 @@ final class TripCompletionController
         try {
             [, $service]=$this->context();$this->assertReady($service);$document=$service->document((int)$tripId,(int)$documentId);$path=$service->absoluteDocumentPath($document);
             header('Content-Type: '.(string)$document['mime_type']);header('Content-Length: '.filesize($path));
-            header("Content-Disposition: attachment; filename*=UTF-8''".rawurlencode(DocumentService::safeDownloadName((string)$document['download_name'])));
+            $disposition=isset($_GET['preview'])?'inline':'attachment';
+            header("Content-Disposition: {$disposition}; filename*=UTF-8''".rawurlencode(DocumentService::safeDownloadName((string)$document['download_name'])));
             readfile($path);
         } catch (Throwable) { http_response_code(404);header('Content-Type: text/plain; charset=utf-8');echo 'Файл не найден.'; }
     }
@@ -144,7 +146,7 @@ final class TripCompletionController
     }
 
     private function assertReady(TripCompletionService $service): void
-    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (143).'); }
+    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (144).'); }
 
     /** @return list<array<string,mixed>> */
     private function uploadedFiles(string $field): array

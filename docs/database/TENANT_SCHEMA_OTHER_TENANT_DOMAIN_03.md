@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `7809e638acb09566522a2e570abf4305134101f0c1bd8dfbb61b5958fa934f96`
+**Schema fingerprint:** `2bd4430056c0daebb9b8eae3d029346aba4702ce8ca8fa8642d1c5292e90768a`
 
 ## `max_bots`
 
@@ -229,11 +229,15 @@
 | `arrived_at` | `datetime` | YES | NULL | — | — |
 | `departed_at` | `datetime` | YES | NULL | — | — |
 | `driver_signature_present` | `tinyint(1)` | NO | `0` | — | — |
+| `driver_signature_status` | `varchar(3)` | YES | NULL | — | — |
 | `sender_signature_present` | `tinyint(1)` | NO | `0` | — | — |
+| `sender_signature_status` | `varchar(3)` | YES | NULL | — | — |
 | `tn_datetime_missing` | `tinyint(1)` | NO | `0` | — | — |
+| `tn_datetime_status` | `varchar(7)` | YES | NULL | — | — |
 | `data_from_tracker` | `tinyint(1)` | NO | `0` | — | — |
 | `data_from_driver` | `tinyint(1)` | NO | `0` | — | — |
 | `data_invented` | `tinyint(1)` | NO | `0` | — | — |
+| `recovery_source` | `varchar(8)` | YES | NULL | — | — |
 | `comment` | `varchar(500)` | YES | NULL | — | — |
 | `updated_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
 | `lock_version` | `int unsigned` | NO | `1` | — | — |

@@ -1,0 +1,246 @@
+name: Trip Completion 144 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact canonical SHA containing trip completion migration 144 tooling'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_TRIP_COMPLETION_144 to authorize tenant migration 144'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  statuses: write
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  migrate-144:
+    if: ${{ inputs.confirm_migration == 'APPLY_TRIP_COMPLETION_144' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Validate exact canonical source and tooling
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          php -l scripts/trip_completion_migration_144.php
+          php tests/trip_completion_144_production_migration_contract_test.php
+          php tests/agent_db_migration_request_contract_test.php
+          test -s database/migrations-local/144_trip_completion_explicit_statuses.sql
+
+      - name: Require successful exact canonical ERP PLANEX CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/ci-runs.json
+          SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
+          import json,os
+          rows=[row for row in json.load(open('/tmp/ci-runs.json')).get('workflow_runs',[]) if row.get('head_sha')==os.environ['SOURCE_SHA'] and row.get('event')=='push']
+          if not rows: raise SystemExit('exact canonical ERP PLANEX CI run missing')
+          run=max(rows,key=lambda row:row.get('run_number',0))
+          if run.get('status')!='completed' or run.get('conclusion')!='success': raise SystemExit('exact canonical ERP PLANEX CI not successful')
+          print('TRIP_COMPLETION_144_CANONICAL_CI_PASS='+str(run.get('id')))
+          PY
+
+      - name: Publish pending status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - > /tmp/payload.json <<'PY'
+          import json
+          print(json.dumps({'state':'pending','context':'erpv2/migration144','description':'Trip completion tenant migration 144 in progress'}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Configure isolated SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/trip_completion_144_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/trip_completion_144_key" "$HOME/.ssh/known_hosts"
+          SSH_CONTROL_DIR="/tmp/trip_completion144_mux_${GITHUB_RUN_ID}"
+          install -d -m 700 "$SSH_CONTROL_DIR"
+          SSH_CONTROL_PATH="$SSH_CONTROL_DIR/%C"
+          test "${#SSH_CONTROL_PATH}" -lt 90
+          printf 'SSH_CONTROL_DIR=%s\nSSH_CONTROL_PATH=%s\n' "$SSH_CONTROL_DIR" "$SSH_CONTROL_PATH" >> "$GITHUB_ENV"
+
+      - name: Require deployed marker as successful canonical ancestor and upload tooling
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/trip_completion_144_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/trip_completion_144_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH")
+          DEPLOYED="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          [[ "$DEPLOYED" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$DEPLOYED" "$SOURCE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/commits/$DEPLOYED/status" > /tmp/deployed-status.json
+          python3 - <<'PY'
+          import json
+          rows=[row for row in json.load(open('/tmp/deployed-status.json')).get('statuses',[]) if row.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success': raise SystemExit('deployed marker lacks successful erpv2/deploy status')
+          print('TRIP_COMPLETION_144_DEPLOYED_ANCESTOR_PASS=YES')
+          PY
+          printf 'DEPLOYED_BEFORE=%s\n' "$DEPLOYED" >> "$GITHUB_ENV"
+          "${SCP[@]}" scripts/trip_completion_migration_144.php "$SSH_USER@$SSH_HOST:/tmp/trip_completion144_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" database/migrations-local/144_trip_completion_explicit_statuses.sql "$SSH_USER@$SSH_HOST:/tmp/trip_completion_144_${GITHUB_RUN_ID}.sql"
+
+      - name: Snapshot BEFORE
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/trip_completion_144_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TENANT_MIGRATION_PATH='/tmp/trip_completion_144_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/trip_completion144_${GITHUB_RUN_ID}.php'" | tee trip_completion_144_before.txt
+          grep -q '^TRIP_COMPLETION_144_READ_ONLY_OK$' trip_completion_144_before.txt
+          grep -q '^TRIP_COMPLETION_144_SNAPSHOT=' trip_completion_144_before.txt
+          echo 'TRIP_COMPLETION_144_BEFORE_PASS=YES'
+
+      - name: Apply tenant migration 144
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/trip_completion_144_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TENANT_MIGRATION_PATH='/tmp/trip_completion_144_${GITHUB_RUN_ID}.sql' TRIP_COMPLETION_MIGRATION_MODE=apply TRIP_COMPLETION_MIGRATION_CONFIRM=APPLY_TRIP_COMPLETION_144 /usr/bin/php8.5 '/tmp/trip_completion144_${GITHUB_RUN_ID}.php'" | tee trip_completion_144_apply.txt
+          grep -q '^TRIP_COMPLETION_144_APPLY_OK$' trip_completion_144_apply.txt
+
+      - name: Snapshot AFTER and verify invariants
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -p "$SSH_PORT" -i "$HOME/.ssh/trip_completion_144_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_TENANT_MIGRATION_PATH='/tmp/trip_completion_144_${GITHUB_RUN_ID}.sql' /usr/bin/php8.5 '/tmp/trip_completion144_${GITHUB_RUN_ID}.php'" | tee trip_completion_144_after.txt
+          grep -q '^TRIP_COMPLETION_144_READ_ONLY_OK$' trip_completion_144_after.txt
+          python3 - <<'PY'
+          import hashlib,json,re
+          def snapshot(path):
+              match=re.search(r'^TRIP_COMPLETION_144_SNAPSHOT=(.+)$',open(path).read(),re.M)
+              if not match: raise SystemExit(path+' snapshot missing')
+              return {row['company_id']:row for row in json.loads(match.group(1))['tenants']}
+          before,after=snapshot('trip_completion_144_before.txt'),snapshot('trip_completion_144_after.txt')
+          expected=hashlib.sha256(open('database/migrations-local/144_trip_completion_explicit_statuses.sql','rb').read()).hexdigest()
+          if set(before)!=set(after): raise SystemExit('Tenant set changed')
+          for company_id,row in after.items():
+              prior=before[company_id]
+              if row['trip_rows']!=prior['trip_rows'] or row['trip_sha256']!=prior['trip_sha256']: raise SystemExit('Trip rows changed')
+              if row['request_rows']!=prior['request_rows'] or row['request_sha256']!=prior['request_sha256']: raise SystemExit('Request rows changed')
+              if row['completion_rows']!=prior['completion_rows'] or row['completion_sha256']!=prior['completion_sha256']: raise SystemExit('Completion rows changed')
+              if row['migration_144']!=1 or row['checksum']!=expected or not row['items_table'] or not row['documents_table'] or row['provenance_columns']!=4: raise SystemExit('Migration journal mismatch')
+          print('TRIP_COMPLETION_144_INVARIANTS_PASS=YES')
+          print('TRIP_COMPLETION_144_SOURCE_DATA_MUTATION=0')
+          PY
+
+      - name: HTTP acceptance before deploy and marker unchanged
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
+          CURRENT="$(ssh -p "$SSH_PORT" -i "$HOME/.ssh/trip_completion_144_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          test "$CURRENT" = "$DEPLOYED_BEFORE"
+          echo 'TRIP_COMPLETION_144_PREDEPLOY_HTTP_PASS=YES'
+          echo 'TRIP_COMPLETION_144_DEPLOY_MARKER_UNCHANGED=YES'
+
+      - name: Upload migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trip_completion_144_production_migration_${{ inputs.source_sha }}
+          path: |
+            trip_completion_144_before.txt
+            trip_completion_144_apply.txt
+            trip_completion_144_after.txt
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Publish final migration status
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          JOB_STATUS: ${{ job.status }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$JOB_STATUS" = success ]; then state=success; description='Trip completion migration 144 verified'; else state=failure; description='Trip completion migration 144 failed'; fi
+          python3 - "$state" "$description" > /tmp/payload.json <<'PY'
+          import json,sys
+          print(json.dumps({'state':sys.argv[1],'context':'erpv2/migration144','description':sys.argv[2]}))
+          PY
+          curl -fsS -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/statuses/$SOURCE_SHA" --data-binary @/tmp/payload.json >/dev/null
+
+      - name: Cleanup
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          if [ -f "$HOME/.ssh/trip_completion_144_key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/trip_completion_144_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ControlMaster=auto -o ControlPersist=600 -o ControlPath="$SSH_CONTROL_PATH" "$SSH_USER@$SSH_HOST" \
+              "rm -f '/tmp/trip_completion144_${GITHUB_RUN_ID}.php' '/tmp/trip_completion_144_${GITHUB_RUN_ID}.sql'" 2>/dev/null || true
+          fi
+          rm -f "$HOME/.ssh/trip_completion_144_key"
+          rm -rf "${SSH_CONTROL_DIR:-}"

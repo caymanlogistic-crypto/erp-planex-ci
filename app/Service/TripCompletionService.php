@@ -28,6 +28,9 @@ final class TripCompletionService
             $stmt=$this->tenant->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='waste_trip_completion_items' AND column_name IN ('tn_datetime_missing','data_from_tracker','data_from_driver','data_invented')");
             $stmt->execute();
             if ((int)$stmt->fetchColumn()!==4) return false;
+            $stmt=$this->tenant->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='waste_trip_completion_items' AND column_name IN ('sender_signature_status','driver_signature_status','tn_datetime_status','recovery_source')");
+            $stmt->execute();
+            if ((int)$stmt->fetchColumn()!==4) return false;
             return true;
         } catch (Throwable) { return false; }
     }
@@ -44,10 +47,13 @@ final class TripCompletionService
         }
         $having=$hideComplete?'HAVING complete_count < request_count':'';
         $sql="SELECT wt.id,wt.business_id,wt.actual_end_date,wt.comment,wt.updated_at,
-                     COALESCE(ct.name,'') contractor_name,COALESCE(d.full_name,'') driver_name,
+                     COALESCE(ct.name,'') contractor_name,COALESCE(cc.contact_person,'') contractor_contact_name,
+                     COALESCE(cc.phone,'') contractor_contact_phone,COALESCE(cc.email,'') contractor_contact_email,
+                     COALESCE(d.full_name,'') driver_name,COALESCE(d.phone,'') driver_phone,
                      COUNT(DISTINCT wtr.id) request_count,
                      COUNT(DISTINCT CASE WHEN i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
                          AND i.driver_signature_present=1 AND i.sender_signature_present=1
+                         AND (i.tn_datetime_status='full' OR (i.tn_datetime_status IN ('partial','no') AND i.recovery_source IS NOT NULL) OR i.tn_datetime_status IS NULL)
                          AND doc.waste_trip_request_id IS NOT NULL THEN wtr.id END) complete_count,
                      COUNT(DISTINCT doc.id) document_count,
                      COUNT(DISTINCT CASE WHEN doc.waste_trip_request_id IS NULL THEN wtr.id END) missing_scan_count,
@@ -61,9 +67,10 @@ final class TripCompletionService
                 LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
                 LEFT JOIN crews c ON c.id=wt.route_executor_id
                 LEFT JOIN contractors ct ON ct.id=c.contractor_id
+                LEFT JOIN contractor_contacts cc ON cc.id=(SELECT contact.id FROM contractor_contacts contact WHERE contact.contractor_id=ct.id ORDER BY contact.is_primary DESC,contact.id LIMIT 1)
                 LEFT JOIN drivers d ON d.id=c.driver_id
                WHERE {$where}
-               GROUP BY wt.id,wt.business_id,wt.actual_end_date,wt.comment,wt.updated_at,ct.name,d.full_name
+               GROUP BY wt.id,wt.business_id,wt.actual_end_date,wt.comment,wt.updated_at,ct.name,cc.contact_person,cc.phone,cc.email,d.full_name,d.phone
                {$having}
                ORDER BY wt.business_id DESC,wt.id DESC";
         $stmt=$this->tenant->prepare($sql); $stmt->execute($params);
@@ -74,10 +81,13 @@ final class TripCompletionService
     public function trip(int $tripId): array
     {
         $stmt=$this->tenant->prepare("SELECT wt.id,wt.business_id,wt.actual_start_date,wt.actual_end_date,wt.comment,
-                COALESCE(ct.name,'') contractor_name,COALESCE(d.full_name,'') driver_name
+                COALESCE(ct.name,'') contractor_name,COALESCE(cc.contact_person,'') contractor_contact_name,
+                COALESCE(cc.phone,'') contractor_contact_phone,COALESCE(cc.email,'') contractor_contact_email,
+                COALESCE(d.full_name,'') driver_name,COALESCE(d.phone,'') driver_phone
               FROM waste_trips wt
               LEFT JOIN crews c ON c.id=wt.route_executor_id
               LEFT JOIN contractors ct ON ct.id=c.contractor_id
+              LEFT JOIN contractor_contacts cc ON cc.id=(SELECT contact.id FROM contractor_contacts contact WHERE contact.contractor_id=ct.id ORDER BY contact.is_primary DESC,contact.id LIMIT 1)
               LEFT JOIN drivers d ON d.id=c.driver_id
              WHERE wt.id=? AND wt.deleted_at IS NULL AND wt.status='completed' LIMIT 1");
         $stmt->execute([$tripId]); $trip=$stmt->fetch(PDO::FETCH_ASSOC);
@@ -88,6 +98,7 @@ final class TripCompletionService
                 fr.gruzopoluchatel consignee_name,COALESCE(NULLIF(fr.adres_dostavki_otkhodov,''),fr.adres_vygruzki_otkhodov) delivery_address,
                 i.arrived_at,i.departed_at,COALESCE(i.driver_signature_present,0) driver_signature_present,
                 COALESCE(i.sender_signature_present,0) sender_signature_present,
+                i.driver_signature_status,i.sender_signature_status,i.tn_datetime_status,i.recovery_source,
                 COALESCE(i.tn_datetime_missing,0) tn_datetime_missing,
                 COALESCE(i.data_from_tracker,0) data_from_tracker,
                 COALESCE(i.data_from_driver,0) data_from_driver,
@@ -108,6 +119,10 @@ final class TripCompletionService
             foreach ($stmt->fetchAll(PDO::FETCH_ASSOC) as $doc) $documents[(int)$doc['waste_trip_request_id']][]=$doc;
         }
         foreach ($requests as &$request) {
+            $request['driver_signature_status']=$request['driver_signature_status']?:((int)$request['driver_signature_present']===1?'yes':null);
+            $request['sender_signature_status']=$request['sender_signature_status']?:((int)$request['sender_signature_present']===1?'yes':null);
+            $request['tn_datetime_status']=$request['tn_datetime_status']?:((int)$request['tn_datetime_missing']===1?'no':(!empty($request['arrived_at'])&&!empty($request['departed_at'])?'full':null));
+            $request['recovery_source']=$request['recovery_source']?:((int)$request['data_from_tracker']===1?'tracker':((int)$request['data_from_driver']===1?'driver':((int)$request['data_invented']===1?'invented':null)));
             $request['documents']=$documents[(int)$request['id']]??[];
             $request['issues']=$this->issues($request);
             $request['is_complete']=$request['issues']===[];
@@ -125,6 +140,7 @@ final class TripCompletionService
         $issues=[];
         if (empty($request['documents'])) $issues[]='Нет скана ТН';
         if (empty($request['arrived_at']) || empty($request['departed_at'])) $issues[]='Нет даты или времени';
+        if (in_array($request['tn_datetime_status']??null,['partial','no'],true) && empty($request['recovery_source'])) $issues[]='Не указан источник восстановления';
         if ((int)($request['driver_signature_present']??0)!==1) $issues[]='Нет подписи водителя';
         if ((int)($request['sender_signature_present']??0)!==1) $issues[]='Нет подписи отправителя';
         return $issues;
@@ -134,20 +150,30 @@ final class TripCompletionService
     {
         $this->assertRequest($tripId,$requestId);
         [$arrived,$departed]=$this->pickupInterval($input['pickup_interval']??null);
+        $senderStatus=(string)($input['sender_signature_status']??(!empty($input['sender_signature_present'])?'yes':''));
+        $driverStatus=(string)($input['driver_signature_status']??(!empty($input['driver_signature_present'])?'yes':''));
+        $dateStatus=(string)($input['tn_datetime_status']??(!empty($input['tn_datetime_missing'])?'no':($arrived&&$departed?'full':'')));
+        $recoverySource=(string)($input['recovery_source']??(!empty($input['data_from_tracker'])?'tracker':(!empty($input['data_from_driver'])?'driver':(!empty($input['data_invented'])?'invented':''))));
+        if (!in_array($senderStatus,['','yes','no'],true) || !in_array($driverStatus,['','yes','no'],true)
+            || !in_array($dateStatus,['','full','partial','no'],true) || !in_array($recoverySource,['','tracker','driver','invented'],true)) {
+            throw new DomainException('Некорректный статус заявки.');
+        }
+        if (!in_array($dateStatus,['partial','no'],true)) $recoverySource='';
         $comment=trim((string)($input['comment']??''));
         if (mb_strlen($comment)>500) throw new DomainException('Комментарий не должен превышать 500 символов.');
         $stmt=$this->tenant->prepare("INSERT INTO waste_trip_completion_items
-            (waste_trip_request_id,arrived_at,departed_at,driver_signature_present,sender_signature_present,tn_datetime_missing,data_from_tracker,data_from_driver,data_invented,comment,updated_by_membership_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE arrived_at=VALUES(arrived_at),departed_at=VALUES(departed_at),
+            (waste_trip_request_id,arrived_at,departed_at,driver_signature_present,driver_signature_status,sender_signature_present,sender_signature_status,tn_datetime_missing,tn_datetime_status,data_from_tracker,data_from_driver,data_invented,recovery_source,comment,updated_by_membership_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE arrived_at=VALUES(arrived_at),departed_at=VALUES(departed_at),
             driver_signature_present=VALUES(driver_signature_present),sender_signature_present=VALUES(sender_signature_present),
+            driver_signature_status=VALUES(driver_signature_status),sender_signature_status=VALUES(sender_signature_status),tn_datetime_status=VALUES(tn_datetime_status),recovery_source=VALUES(recovery_source),
             tn_datetime_missing=VALUES(tn_datetime_missing),data_from_tracker=VALUES(data_from_tracker),
             data_from_driver=VALUES(data_from_driver),data_invented=VALUES(data_invented),
             comment=VALUES(comment),updated_by_membership_id=VALUES(updated_by_membership_id),lock_version=lock_version+1");
         $stmt->execute([
             $requestId,$arrived,$departed,
-            !empty($input['driver_signature_present'])?1:0,!empty($input['sender_signature_present'])?1:0,
-            !empty($input['tn_datetime_missing'])?1:0,!empty($input['data_from_tracker'])?1:0,
-            !empty($input['data_from_driver'])?1:0,!empty($input['data_invented'])?1:0,
+            $driverStatus==='yes'?1:0,$driverStatus?:null,$senderStatus==='yes'?1:0,$senderStatus?:null,
+            in_array($dateStatus,['partial','no'],true)?1:0,$dateStatus?:null,$recoverySource==='tracker'?1:0,
+            $recoverySource==='driver'?1:0,$recoverySource==='invented'?1:0,$recoverySource?:null,
             $comment!==''?$comment:null,$actorMembershipId,
         ]);
     }
@@ -160,22 +186,42 @@ final class TripCompletionService
         if ($validation!==null) throw new DomainException(match($validation){'file_too_large'=>'Файл больше 20 МБ.','invalid_extension','invalid_mime'=>'Разрешены PDF и изображения.',default=>'Не удалось принять файл.'});
         $ext=DocumentService::extractExtension((string)$file['name']);
         if (!in_array($ext,['pdf','jpg','jpeg','png','webp','tif','tiff'],true)) throw new DomainException('Разрешены PDF и изображения.');
-        $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM waste_trip_completion_documents WHERE waste_trip_request_id=?');$stmt->execute([$requestId]);$sequence=(int)$stmt->fetchColumn()+1;
-        $tripNumber=$this->safeSegment((string)$identity['business_id']); $requestNumber=$this->safeSegment((string)$identity['zayavka_id']);
-        $storedName="trip_{$tripNumber}_request_{$requestNumber}_tn_".str_pad((string)$sequence,2,'0',STR_PAD_LEFT).'_'.bin2hex(random_bytes(4)).'.'.$ext;
-        $downloadName="Рейс_{$tripNumber}_Заявка_{$requestNumber}_ТН_".str_pad((string)$sequence,2,'0',STR_PAD_LEFT).'.'.$ext;
-        $relativeDir="companies/{$this->companyId}/documents/waste_trip_completion/{$requestId}";
-        $absoluteDir=storage_path($relativeDir);
-        if (!is_dir($absoluteDir) && !mkdir($absoluteDir,0750,true) && !is_dir($absoluteDir)) throw new RuntimeException('Не удалось подготовить хранилище документов.');
-        $absolute=$absoluteDir.DIRECTORY_SEPARATOR.$storedName;
-        $moved=$requireHttpUpload?move_uploaded_file((string)$file['tmp_name'],$absolute):rename((string)$file['tmp_name'],$absolute);
-        if (!$moved) throw new RuntimeException('Не удалось сохранить файл.');
+        $absolute=null;
+        $this->tenant->beginTransaction();
         try {
+            $lock=$this->tenant->prepare('SELECT id FROM waste_trip_requests WHERE id=? FOR UPDATE');$lock->execute([$requestId]);
+            $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM waste_trip_completion_documents WHERE waste_trip_request_id=? AND deleted_at IS NULL');$stmt->execute([$requestId]);
+            $activeCount=(int)$stmt->fetchColumn();
+            if ($activeCount>=2) throw new DomainException('К заявке можно добавить не более двух сканов ТН.');
+            $sequence=$activeCount+1;
+            $tripNumber=$this->safeSegment((string)$identity['business_id']); $requestNumber=$this->safeSegment((string)$identity['zayavka_id']);
+            $storedName="trip_{$tripNumber}_request_{$requestNumber}_tn_".str_pad((string)$sequence,2,'0',STR_PAD_LEFT).'_'.bin2hex(random_bytes(4)).'.'.$ext;
+            $downloadName="Рейс_{$tripNumber}_Заявка_{$requestNumber}_ТН_".str_pad((string)$sequence,2,'0',STR_PAD_LEFT).'.'.$ext;
+            $relativeDir="companies/{$this->companyId}/documents/waste_trip_completion/{$requestId}";
+            $absoluteDir=storage_path($relativeDir);
+            if (!is_dir($absoluteDir) && !mkdir($absoluteDir,0750,true) && !is_dir($absoluteDir)) throw new RuntimeException('Не удалось подготовить хранилище документов.');
+            $absolute=$absoluteDir.DIRECTORY_SEPARATOR.$storedName;
+            $moved=$requireHttpUpload?move_uploaded_file((string)$file['tmp_name'],$absolute):rename((string)$file['tmp_name'],$absolute);
+            if (!$moved) throw new RuntimeException('Не удалось сохранить файл.');
             $mime=(string)((new \finfo(FILEINFO_MIME_TYPE))->file($absolute)?:'application/octet-stream');
             $stmt=$this->tenant->prepare('INSERT INTO waste_trip_completion_documents (waste_trip_request_id,original_name,download_name,stored_path,mime_type,size_bytes,uploaded_by_membership_id) VALUES (?,?,?,?,?,?,?)');
             $stmt->execute([$requestId,(string)$file['name'],$downloadName,$relativeDir.'/'.$storedName,$mime,(int)filesize($absolute),$actorMembershipId]);
-            return (int)$this->tenant->lastInsertId();
-        } catch (Throwable $error) { @unlink($absolute); throw $error; }
+            $id=(int)$this->tenant->lastInsertId();
+            $this->tenant->commit();
+            return $id;
+        } catch (Throwable $error) {
+            if ($this->tenant->inTransaction()) $this->tenant->rollBack();
+            if ($absolute!==null && is_file($absolute)) @unlink($absolute);
+            throw $error;
+        }
+    }
+
+    public function activeDocumentCount(int $tripId,int $requestId): int
+    {
+        $this->assertRequest($tripId,$requestId);
+        $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM waste_trip_completion_documents WHERE waste_trip_request_id=? AND deleted_at IS NULL');
+        $stmt->execute([$requestId]);
+        return (int)$stmt->fetchColumn();
     }
 
     public function softDelete(int $tripId,int $requestId,int $documentId,int $actorMembershipId): void

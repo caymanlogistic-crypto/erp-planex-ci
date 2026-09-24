@@ -6,13 +6,10 @@ $fmtPickupInterval=static function(mixed $arrived,mixed $departed):string{
     return date('d.m.y H:i',strtotime((string)$arrived)).' - '.date('H:i',strtotime((string)$departed));
 };
 $fmtMass=static fn(mixed $value):string=>number_format((float)$value,0,',',' ');
-$missingSummary=static function(array $trip):array{
-    $missing=[];
-    if((int)$trip['missing_scan_count']>0)$missing[]='ТН '.(int)$trip['missing_scan_count'];
-    if((int)$trip['missing_time_count']>0)$missing[]='время '.(int)$trip['missing_time_count'];
-    if((int)$trip['missing_driver_signature_count']>0)$missing[]='подпись водителя '.(int)$trip['missing_driver_signature_count'];
-    if((int)$trip['missing_sender_signature_count']>0)$missing[]='подпись отправителя '.(int)$trip['missing_sender_signature_count'];
-    return $missing;
+$statusChoice=static function(string $name,string $selected,array $options):void{
+    foreach($options as $value=>$label):?>
+      <label class="lab-choice-option"><input type="checkbox" name="<?=e($name)?>" value="<?=e($value)?>" <?=$selected===$value?'checked':''?>><?=e($label)?></label>
+    <?php endforeach;
 };
 ?>
 <link rel="stylesheet" href="<?=app_url('/assets/css/trip-completion.css')?>?v=<?=filemtime(base_path('public/assets/css/trip-completion.css'))?>">
@@ -29,24 +26,25 @@ $missingSummary=static function(array $trip):array{
 <form method="get" action="<?=app_url('/company/logistics-assistant')?>" class="table-toolbar logistics-filter">
   <input type="hidden" name="filter" value="1">
   <label class="logistics-check"><input type="checkbox" name="hide_complete" value="1" <?=$hideComplete?'checked':''?>> Скрывать полностью собранные</label>
-  <div class="toolbar-right"><input class="toolbar-search" type="search" name="q" value="<?=e($query)?>" placeholder="Рейс, заявка, водитель, подрядчик"><button class="btn btn-secondary" type="submit">Найти</button><?php if($query!==''||!$hideComplete):?><a class="btn btn-ghost" href="<?=app_url('/company/logistics-assistant')?>">Сбросить</a><?php endif;?></div>
+  <div class="toolbar-right"><input class="toolbar-search" type="search" name="q" value="<?=e($query)?>" placeholder="Рейс, заявка, водитель, перевозчик" aria-label="Поиск по рейсам и заявкам"></div>
 </form>
 <section class="logistics-workspace" aria-label="Рейсы для обработки" data-logistics-assistant>
   <div class="logistics-list-head"><div><b>Рейсы для обработки</b><span><?=count($trips)?></span></div><small>Нажмите на рейс, чтобы развернуть заявки</small></div>
   <?php if($trips===[]):?><div class="panel"><div class="panel-body"><div class="empty-state"><p class="empty-title">По выбранному фильтру рейсов нет.</p><p>Полностью собранные рейсы можно показать, сняв флажок выше.</p></div></div></div><?php else:?>
   <div class="logistics-trip-list">
-  <?php foreach($trips as $trip):$missing=$missingSummary($trip);$open=(int)($openTripId??0)===(int)$trip['id'];?>
+  <?php foreach($trips as $trip):$open=(int)($openTripId??0)===(int)$trip['id'];?>
     <details class="logistics-trip panel" data-trip-id="<?=(int)$trip['id']?>" <?=$open?'open':''?>>
       <summary class="logistics-trip-summary">
         <span class="logistics-trip-chevron" aria-hidden="true"></span>
-        <span class="logistics-trip-primary"><b>Рейс #<?=e((string)$trip['business_id'])?></b><small><?=e($fmtDate($trip['actual_end_date']))?></small></span>
-        <span class="logistics-trip-person"><b><?=e(trim((string)$trip['driver_name'])?:'Водитель не указан')?></b><small><?=e(trim((string)$trip['contractor_name'])?:'Подрядчик не указан')?></small></span>
-        <span class="logistics-trip-progress"><b data-trip-progress><?=(int)$trip['complete_count']?> / <?=(int)$trip['request_count']?></b><small><span data-trip-document-count><?=(int)$trip['document_count']?></span> файл.</small></span>
-        <span class="logistics-trip-issues" data-trip-issues><span class="badge <?=empty($missing)?'badge-ok':'badge-danger'?>"><?=e($missing?implode(' · ',$missing):'Собрано')?></span></span>
+        <span class="lab-trip-identity"><b>Рейс #<?=e((string)$trip['business_id'])?></b><small><?=e($fmtDate($trip['actual_end_date']))?></small></span>
+        <span class="lab-trip-contact"><small class="lab-trip-label">Перевозчик</small><b class="lab-trip-name"><?=e(trim((string)$trip['contractor_name'])?:'Не указан')?></b><span class="lab-trip-contact-line">Контакт: <?=e(trim((string)($trip['contractor_contact_name']??''))?:'не указан')?> · <?=e(trim((string)($trip['contractor_contact_phone']??''))?:'телефон не указан')?></span><span class="lab-trip-contact-line lab-trip-email"><?=e(trim((string)($trip['contractor_contact_email']??''))?:'email не указан')?></span></span>
+        <span class="lab-trip-contact"><small class="lab-trip-label">Водитель</small><b class="lab-trip-name"><?=e(trim((string)$trip['driver_name'])?:'Не указан')?></b><span class="lab-trip-contact-line"><?=e(trim((string)($trip['driver_phone']??''))?:'Телефон не указан')?></span></span>
+        <span class="lab-trip-progress"><small class="lab-trip-label">Заполнение заявок</small><b class="lab-trip-progress-count" data-trip-progress><?=(int)$trip['complete_count']?> из <?=(int)$trip['request_count']?> готовы</b><span class="lab-trip-progress-track"><span class="lab-trip-progress-fill" style="width:<?=$trip['request_count']?round(100*$trip['complete_count']/$trip['request_count']):0?>%"></span></span></span>
+        <span class="lab-trip-overview"><small class="lab-trip-label">Что требует внимания</small><span class="lab-trip-counters"></span><span class="lab-trip-examples"></span></span>
       </summary>
       <div class="logistics-trip-body">
         <div class="logistics-trip-toolbar"><div><b>Заявки рейса</b><span><?=e($fmtDate($trip['actual_start_date']))?> — <?=e($fmtDate($trip['actual_end_date']))?></span></div><div><a class="btn btn-secondary" href="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/report')?>">Сводный отчёт</a><a class="btn btn-primary" href="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/package')?>">Скачать комплект</a></div></div>
-        <div class="logistics-request-head" aria-hidden="true"><span>Заявка и маршрут</span><span>Загрузка: дата, приезд — уезд</span><span>Подписи</span><span>Данные</span><span>Сканы ТН</span><span>Комментарий</span></div>
+        <div class="logistics-request-head" aria-hidden="true"><span>Заявка и маршрут</span><span>Дата и время прибытия/убытия</span><span>Подпись Отходообразователя</span><span>Подпись водителя</span><span>Дата и время указаны</span><span>Данные восстановлены</span><span>Сканы ТН</span><span>Комментарий</span></div>
         <div class="logistics-request-list">
         <?php foreach($trip['requests'] as $request):
           $hasTime=!empty($request['arrived_at'])&&!empty($request['departed_at']);
@@ -56,14 +54,17 @@ $missingSummary=static function(array $trip):array{
           <div class="logistics-request-row <?=$rowClass?>" data-request-row data-request-id="<?=(int)$request['id']?>">
             <div class="logistics-request-route"><div><b>№ <?=e((string)$request['zayavka_id'])?></b><span><?=e($fmtMass($request['snapshot_mass_kg']))?> кг</span></div><strong title="<?=e(trim((string)$request['pickup_address']))?>"><?=e(trim((string)$request['shipper_name'])?:'Отправитель не указан')?></strong><small title="<?=e(trim((string)$request['delivery_address']))?>">→ <?=e(trim((string)$request['consignee_name'])?:'Получатель не указан')?></small></div>
             <form method="post" action="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/requests/'.(int)$request['id'])?>" class="logistics-data-form" data-autosave-form><?=csrfField()?>
-              <label class="field logistics-time"><span class="field-label">Дата и время загрузки</span><input class="field-input" type="text" name="pickup_interval" value="<?=e($fmtPickupInterval($request['arrived_at'],$request['departed_at']))?>" inputmode="numeric" maxlength="22" autocomplete="off" placeholder="ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ" aria-label="Дата и время загрузки"></label>
-              <div class="logistics-signatures logistics-checkbox-column"><label class="logistics-check"><input type="checkbox" name="driver_signature_present" value="1" <?=(int)$request['driver_signature_present']===1?'checked':''?>> Подпись водителя есть</label><label class="logistics-check"><input type="checkbox" name="sender_signature_present" value="1" <?=(int)$request['sender_signature_present']===1?'checked':''?>> Подпись отправителя есть</label><label class="logistics-check"><input type="checkbox" name="tn_datetime_missing" value="1" <?=(int)$request['tn_datetime_missing']===1?'checked':''?>> Даты и времени нет в ТН</label></div>
-              <div class="logistics-data-source logistics-checkbox-column"><label class="logistics-check"><input type="checkbox" name="data_from_tracker" value="1" <?=(int)$request['data_from_tracker']===1?'checked':''?>> Восстановлены по трекеру</label><label class="logistics-check"><input type="checkbox" name="data_from_driver" value="1" <?=(int)$request['data_from_driver']===1?'checked':''?>> Внесены со слов водителя</label><label class="logistics-check"><input type="checkbox" name="data_invented" value="1" <?=(int)$request['data_invented']===1?'checked':''?>> Придуманы</label></div>
-              <label class="field logistics-comment"><span class="field-label">Комментарий</span><input class="field-input" name="comment" maxlength="500" value="<?=e((string)$request['completion_comment'])?>" placeholder="Если есть проблема"></label>
+              <label class="field logistics-time"><span class="field-label">Дата и время прибытия/убытия</span><input class="field-input" type="text" name="pickup_interval" value="<?=e($fmtPickupInterval($request['arrived_at'],$request['departed_at']))?>" inputmode="numeric" maxlength="22" autocomplete="off" placeholder="ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ" aria-label="Дата и время прибытия/убытия"></label>
+              <div class="lab-choice lab-choice--oo" role="group" aria-label="Подпись Отходообразователя"><span class="lab-choice-title">Подпись Отходообразователя</span><div class="lab-choice-options"><?php $statusChoice('sender_signature_status',(string)($request['sender_signature_status']??''),['yes'=>'Есть','no'=>'Нет']);?></div></div>
+              <div class="lab-choice lab-choice--driver" role="group" aria-label="Подпись водителя"><span class="lab-choice-title">Подпись водителя</span><div class="lab-choice-options"><?php $statusChoice('driver_signature_status',(string)($request['driver_signature_status']??''),['yes'=>'Есть','no'=>'Нет']);?></div></div>
+              <div class="lab-choice lab-choice--date" role="group" aria-label="Дата и время указаны"><span class="lab-choice-title">Дата и время указаны</span><div class="lab-choice-options"><?php $statusChoice('tn_datetime_status',(string)($request['tn_datetime_status']??''),['full'=>'Полностью','partial'=>'Частично','no'=>'Нет']);?></div></div>
+              <div class="lab-choice lab-choice--recovery" role="group" aria-label="Данные восстановлены"><span class="lab-choice-title">Данные восстановлены</span><div class="lab-choice-options"><?php $statusChoice('recovery_source',(string)($request['recovery_source']??''),['tracker'=>'По трекеру','driver'=>'Со слов водителя','invented'=>'Придуманы']);?></div></div>
+              <label class="field logistics-comment"><span class="field-label">Комментарий</span><textarea class="field-input" name="comment" maxlength="500" rows="2" placeholder="Если есть проблема" aria-label="Если есть проблема"><?=e((string)$request['completion_comment'])?></textarea></label>
             </form>
-            <div class="logistics-documents" data-documents>
-              <div class="logistics-document-list" data-document-list><?php foreach($request['documents'] as $document):?><span class="logistics-document" data-document-id="<?=(int)$document['id']?>"><a href="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/documents/'.(int)$document['id'])?>" title="<?=e((string)$document['download_name'])?>"><?=e((string)$document['download_name'])?></a><button class="logistics-document-delete" type="button" title="Удалить файл" data-delete-url="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/requests/'.(int)$request['id'].'/documents/'.(int)$document['id'].'/delete')?>">×</button></span><?php endforeach;?></div>
-              <form method="post" enctype="multipart/form-data" action="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/requests/'.(int)$request['id'].'/documents')?>" class="logistics-upload-form" data-upload-form><?=csrfField()?><label class="btn btn-ghost btn-sm logistics-upload"><input type="file" name="documents[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" multiple>+ Добавить ТН</label></form>
+            <div class="logistics-documents lab-docs" data-documents data-scan-state="<?=empty($request['documents'])?'empty':'added'?>">
+              <div class="lab-docs-head"><span>Сканы ТН</span><small data-document-count><?=count($request['documents'])?>/2</small></div>
+              <div class="lab-docs-list" data-document-list><?php foreach($request['documents'] as $document):$extension=strtoupper((string)pathinfo((string)$document['download_name'],PATHINFO_EXTENSION));?><div class="lab-docs-item" data-document-id="<?=(int)$document['id']?>"><span class="file-type-badge"><?=e(substr($extension,0,4))?></span><span class="lab-docs-name" title="<?=e((string)$document['download_name'])?>"><?=e((string)$document['download_name'])?></span><button class="lab-docs-view" type="button" data-preview-url="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'?preview=1')?>">Просмотр</button><button class="lab-docs-remove" type="button" aria-label="Убрать <?=e((string)$document['download_name'])?>" data-delete-url="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/requests/'.(int)$request['id'].'/documents/'.(int)$document['id'].'/delete')?>">×</button></div><?php endforeach;?></div>
+              <form method="post" enctype="multipart/form-data" action="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/requests/'.(int)$request['id'].'/documents')?>" class="logistics-upload-form" data-upload-form><?=csrfField()?><input class="lab-docs-input" type="file" name="documents[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff" multiple aria-label="Выбрать сканы ТН"><button class="lab-docs-add" type="button" <?=count($request['documents'])>=2?'disabled':''?>>+ Добавить скан</button></form><div class="lab-docs-message" role="status"></div>
             </div>
             <div class="logistics-save-state" data-save-state aria-live="polite" hidden><span data-save-label></span></div>
           </div>

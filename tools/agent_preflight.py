@@ -54,6 +54,33 @@ DOCGEN_TESTS=["tests/"+name+".php" for name in (
 )]
 class PreflightEnvironmentError(RuntimeError): pass
 
+POSIX_XA_TESTS=frozenset({"tests/feo_legacy_xa_mysql_test.php","tests/feo_placement_legacy_sync_xa_mysql_test.php"})
+POSIX_XA_ENV=("APP_ENV","PLANEX_SCHEMA_DB_HOST","PLANEX_SCHEMA_DB_PORT","PLANEX_SCHEMA_DB_USER",
+              "PLANEX_SCHEMA_DB_PASSWORD","PLANEX_TEST_FIXED_DB","PLANEX_TEST_FIXED_DB_ALLOWLIST",
+              "PLANEX_TEST_DB_LEASE","PLANEX_TEST_LEGACY_USER","PLANEX_TEST_LEGACY_PASSWORD")
+
+def local_posix_xa(cmd,env):
+    if os.name!="nt" or len(cmd)!=2 or cmd[0]!="php" or cmd[1] not in POSIX_XA_TESTS:
+        return cmd,env
+    if os.environ.get("PLANEX_LOCAL_POSIX_XA")!="wsl":
+        return cmd,env
+    host=os.environ.get("PLANEX_LOCAL_POSIX_DB_HOST","")
+    port=os.environ.get("PLANEX_LOCAL_POSIX_DB_PORT","")
+    distro=os.environ.get("PLANEX_LOCAL_POSIX_DISTRO","Ubuntu")
+    if not host or not port.isdigit() or not distro or shutil.which("wsl.exe") is None:
+        raise PreflightEnvironmentError("local POSIX XA bridge is incomplete")
+    drive,tail=os.path.splitdrive(str(ROOT))
+    if not drive or not re.fullmatch(r"[A-Za-z]:",drive):
+        raise PreflightEnvironmentError("local POSIX XA requires a Windows drive worktree")
+    linux_root=f"/mnt/{drive[0].lower()}{tail.replace(chr(92),'/')}"
+    forwarded=(env or os.environ).copy()
+    forwarded["PLANEX_SCHEMA_DB_HOST"]=host
+    forwarded["PLANEX_SCHEMA_DB_PORT"]=port
+    names=set(filter(None,forwarded.get("WSLENV","").split(":")))
+    names.update(key for key in POSIX_XA_ENV if key in forwarded)
+    forwarded["WSLENV"]=":".join(sorted(names))
+    return ["wsl.exe","-d",distro,"--cd",linux_root,"--exec","php",cmd[1]],forwarded
+
 def exact_command(cmd):
     resolved=TOOLS.get(cmd[0])
     if cmd[0] in TOOLS:
@@ -62,6 +89,7 @@ def exact_command(cmd):
     return cmd
 def caprun(cmd,env=None): return subprocess.run(exact_command(cmd),cwd=ROOT,env=env,text=True,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 def run(cmd,env=None):
+    cmd,env=local_posix_xa(cmd,env)
     command=exact_command(cmd); print("RUN:"," ".join(command)); return subprocess.run(command,cwd=ROOT,env=env,text=True).returncode
 def need(path):
     if not (ROOT/path).is_file(): raise PreflightEnvironmentError(f"required file missing: {path}")
