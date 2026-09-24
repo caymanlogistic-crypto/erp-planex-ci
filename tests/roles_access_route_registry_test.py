@@ -37,7 +37,7 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 364, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 365, f"company route inventory drift: {len(company_routes)}"
 documents = (ROOT / 'app/Http/Routes/company_trip_documents.php').read_text()
 assert documents.count('$router->') == 16
 assert "'company.documents.request'" in documents and "'company.documents.collection'" in documents
@@ -45,8 +45,9 @@ trip_routes = (ROOT / "app/Http/Routes/company_linear_trips.php").read_text()
 assert "/company/trips/departures/synchronize" in trip_routes
 assert "/company/trips/departures/legacy" not in trip_routes
 statistics_routes = (ROOT / "app/Http/Routes/company_statistics.php").read_text()
-assert statistics_routes.count('$router->get(') == 1
+assert statistics_routes.count('$router->get(') == 2
 assert "'/company/statistics/managers'" in statistics_routes and "'company.statistics.managers'" in statistics_routes
+assert "'/company/statistics/feo-share'" in statistics_routes and "'company.statistics.feo_share'" in statistics_routes
 max_routes = (ROOT / "app/Http/Routes/company_max_messaging.php").read_text()
 for action in ("saveEvent", "previewEvent", "retryEvent"):
     assert f"[$maxMessagingController, '{action}'], $maxSettingsPage" in max_routes, action
@@ -67,4 +68,4 @@ activation = index_source[index_source.index("if ($rolesAccessEnabled)"):index_s
 assert "catch (" not in activation
 for route_file in ("company_document_generator.php", "company_switch.php", "company_roles_access.php"):
     assert route_file in index_source
-print("roles access complete route registry: PASS (364 routes; manager statistics ACL; 1 retired legacy writer)")
+print("roles access complete route registry: PASS (365 routes; two statistics ACLs; 1 retired legacy writer)")
