@@ -16,13 +16,20 @@ final class FeoShareStatisticsService
     public static function dashboard(PDO $pdo): array
     {
         $data = json_decode((string)file_get_contents(base_path('resources/data/feo_share_baseline.json')), true, 512, JSON_THROW_ON_ERROR);
-        $knownImports = $pdo->query("SELECT filename,unique_requests FROM feo_imports WHERE status='applied'")->fetchAll(PDO::FETCH_ASSOC);
+        $knownImports = $pdo->query("SELECT id,unique_requests,created_at FROM feo_imports WHERE status='applied'")->fetchAll(PDO::FETCH_ASSOC);
+        $matchedImportIds = [];
         foreach ($data['snapshots'] as $historical) {
             $found = false;
             foreach ($knownImports as $import) {
-                $sameFile = (string)$import['filename'] === (string)$historical['file']
-                    || str_contains((string)$import['filename'], (string)$historical['date']);
-                if ($sameFile && (int)$import['unique_requests'] === (int)$historical['feo_count']) { $found = true; break; }
+                $id = (int)$import['id'];
+                $createdAt = (string)$import['created_at'];
+                $sameImportTime = substr($createdAt, 0, 4) === substr((string)$historical['date'], 0, 4)
+                    && date('d.m H:i', strtotime($createdAt)) === (string)$historical['imported_at'];
+                if (!isset($matchedImportIds[$id]) && $sameImportTime && (int)$import['unique_requests'] === (int)$historical['feo_count']) {
+                    $matchedImportIds[$id] = true;
+                    $found = true;
+                    break;
+                }
             }
             if (!$found) { $data['snapshots'] = []; break; }
         }
