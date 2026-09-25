@@ -19,7 +19,8 @@ foreach(['sender_signature_status','driver_signature_status','tn_datetime_status
 foreach(['/company/logistics-assistant','/report','/package','/documents/{documentId}']as$token)$ok(str_contains($routes,$token),'Route missing '.$token);
 $ok(substr_count($routes,'$tripCompletionPage')===8,'Every endpoint must use the existing collection permission');
 $ok(str_contains($registry,"'company.documents.collection', 'Регистрация времени загрузки', 'Операции', '', 42")&&str_contains($registry,"badgeProvider: 'trip_completion_problem'"),'Standalone navigation entry missing');
-$ok(str_contains($view,'Регистрация прибытия и убытия у отходообразователя')&&str_contains($view,'Дата и время загрузки по завершённым рейсам и ТН.'),'Compact page title missing');
+$ok(str_contains($view,'Регистрация прибытия и убытия у отходообразователя')&&str_contains($view,'Дата и время загрузки по рейсам в процессе вывоза и сданным рейсам.'),'Compact page title missing');
+$ok(str_contains($view,'lab-trip-status')&&str_contains($view,'lab-trip-manager')&&str_contains($view,'lab-pickup-address')&&!str_contains($view,'class="lab-trip-label">Перевозчик'),'Trip status, manager, and pickup address missing');
 foreach(['Скрывать полностью собранные','Нажмите на рейс, чтобы развернуть заявки','Дата и время прибытия/убытия','ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ','Подпись Отходообразователя','Подпись водителя','Дата и время указаны','Данные восстановлены','Со слов водителя','Придуманы','+ Добавить скан','Просмотр','Скачать комплект']as$label)$ok(str_contains($view,$label),'UI missing '.$label);
 $ok(!str_contains($view,'<span>Статус</span>')&&!str_contains($view,'data-request-issues'),'Status column and hover issue list must be removed');
 $ok(substr_count($view,'<?=csrfField()?>')===2,'Autosave and upload forms must include CSRF protection');
@@ -38,6 +39,6 @@ $ok(str_contains($view,'class="lab-docs-name"')&&str_contains($styles,'.lab-docs
 $ok(str_contains($styles,'accent-color:var(--accent')&&str_contains($styles,'min-height:64px')&&str_contains($styles,'var(--success-bg')&&str_contains($styles,'var(--warning-bg'),'Compact rows must use ERP system states');
 $ok(str_contains($controller,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')&&str_contains($service,'сводный_отчет.xlsx'),'Formatted XLSX report contract missing');
 $ok(str_contains($service,'Рейс_{$tripNumber}_Заявка_{$requestNumber}_ТН_'),'Canonical TN filename missing trip/request identity');
-$ok(str_contains($service,"wt.status='completed'")&&str_contains($service,'doc.deleted_at IS NULL'),'Completion query contract missing');
+$ok(substr_count($service,"wt.status IN ('in_progress','completed')")>=3&&str_contains($service,'doc.deleted_at IS NULL'),'Eligible trip status contract missing');
 $ok(!str_contains($controller,'applyLocalMigrations'),'GET/action controller must not mutate schema');
 echo "TRIP_COMPLETION_CONTRACT=PASS\n";

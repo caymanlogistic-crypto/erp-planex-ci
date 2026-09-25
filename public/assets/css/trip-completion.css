@@ -356,6 +356,13 @@
 .lab-trip-identity { gap: 5px; }
 .lab-trip-identity b { font-size: 13px; }
 .lab-trip-identity small { color: var(--text-muted); font-size: 10px; }
+.logistics-workspace .lab-trip-identity { gap: 3px; }
+.logistics-workspace .lab-trip-identity small { white-space: nowrap; }
+.logistics-workspace .lab-trip-status { display: inline-flex; align-items: center; align-self: flex-start; min-height: 20px; padding: 2px 7px; border: 1px solid; border-radius: 3px; font-size: 9.5px; font-weight: 750; line-height: 1.1; white-space: nowrap; }
+.logistics-workspace .lab-trip-status.is-progress { border-color: #9fcca8; background: #e8f5e9; color: #2a6b3f; }
+.logistics-workspace .lab-trip-status.is-delivered { border-color: #cbd0d4; background: #f0f1f2; color: #596168; }
+.logistics-workspace .lab-trip-manager { gap: 3px; }
+.logistics-workspace .logistics-request-route .lab-pickup-address { display: -webkit-box; overflow: hidden; color: var(--text-muted); font-size: 9.5px; line-height: 1.25; white-space: normal; overflow-wrap: anywhere; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .lab-trip-label { display: block; margin-bottom: 3px; color: var(--text-muted); font-size: 9px; font-weight: 750; letter-spacing: .04em; text-transform: uppercase; }
 .lab-trip-name { overflow: hidden; color: var(--text-main); font-size: 11.5px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
 .lab-trip-contact-line { overflow: hidden; color: var(--text-muted); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }

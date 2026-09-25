@@ -29,7 +29,7 @@ final class TripCompletionController
             if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (144).');
             $all=$service->trips('',false);
             $metrics=[
-                'trips'=>count(array_filter($all,static fn(array $row):bool=>(int)$row['complete_count']<(int)$row['request_count'])),
+                'trips'=>count($all),
                 'requests'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count'],$all)),
                 'ready'=>array_sum(array_map(static fn(array $row):int=>(int)$row['complete_count'],$all)),
                 'problems'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count']-(int)$row['complete_count'],$all)),
@@ -177,7 +177,7 @@ final class TripCompletionController
     {
         $trip=$service->trip($tripId);$request=null;
         foreach ($trip['requests'] as $candidate) if ((int)$candidate['id']===$requestId) {$request=$candidate;break;}
-        if (!is_array($request)) throw new DomainException('Заявка завершённого рейса не найдена.');
+        if (!is_array($request)) throw new DomainException('Заявка рейса не найдена.');
         $request['documents']=array_map(static fn(array $document):array=>[
             'id'=>(int)$document['id'],
             'download_name'=>(string)$document['download_name'],

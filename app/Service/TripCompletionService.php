@@ -38,17 +38,16 @@ final class TripCompletionService
     /** @return list<array<string,mixed>> */
     public function trips(string $query='', bool $hideComplete=true): array
     {
-        $where="wt.deleted_at IS NULL AND wt.status='completed'";
+        $where="wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed')";
         $params=[];
         $query=trim($query);
         if ($query!=='') {
-            $where.=" AND (CAST(wt.business_id AS CHAR) LIKE ? OR fr.zayavka_id LIKE ? OR wt.comment LIKE ? OR ct.name LIKE ? OR d.full_name LIKE ?)";
+            $where.=" AND (CAST(wt.business_id AS CHAR) LIKE ? OR fr.zayavka_id LIKE ? OR wt.comment LIKE ? OR u.full_name LIKE ? OR d.full_name LIKE ?)";
             $like='%'.$query.'%'; $params=[$like,$like,$like,$like,$like];
         }
         $having=$hideComplete?'HAVING complete_count < request_count':'';
-        $sql="SELECT wt.id,wt.business_id,wt.actual_end_date,wt.comment,wt.updated_at,
-                     COALESCE(ct.name,'') contractor_name,COALESCE(cc.contact_person,'') contractor_contact_name,
-                     COALESCE(cc.phone,'') contractor_contact_phone,COALESCE(cc.email,'') contractor_contact_email,
+        $sql="SELECT wt.id,wt.business_id,wt.status,wt.actual_start_date,wt.actual_end_date,wt.comment,wt.updated_at,
+                     COALESCE(u.full_name,'') manager_name,COALESCE(u.phone,'') manager_phone,COALESCE(u.email,'') manager_email,
                      COALESCE(d.full_name,'') driver_name,COALESCE(d.phone,'') driver_phone,
                      COUNT(DISTINCT wtr.id) request_count,
                      COUNT(DISTINCT CASE WHEN i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
@@ -61,16 +60,15 @@ final class TripCompletionService
                      COUNT(DISTINCT CASE WHEN COALESCE(i.driver_signature_present,0)=0 THEN wtr.id END) missing_driver_signature_count,
                      COUNT(DISTINCT CASE WHEN COALESCE(i.sender_signature_present,0)=0 THEN wtr.id END) missing_sender_signature_count
                 FROM waste_trips wt
-                JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
-                JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+                LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+                LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id
                 LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
                 LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
+                LEFT JOIN users u ON u.id=wt.responsible_user_id
                 LEFT JOIN crews c ON c.id=wt.route_executor_id
-                LEFT JOIN contractors ct ON ct.id=c.contractor_id
-                LEFT JOIN contractor_contacts cc ON cc.id=(SELECT contact.id FROM contractor_contacts contact WHERE contact.contractor_id=ct.id ORDER BY contact.is_primary DESC,contact.id LIMIT 1)
                 LEFT JOIN drivers d ON d.id=c.driver_id
                WHERE {$where}
-               GROUP BY wt.id,wt.business_id,wt.actual_end_date,wt.comment,wt.updated_at,ct.name,cc.contact_person,cc.phone,cc.email,d.full_name,d.phone
+               GROUP BY wt.id,wt.business_id,wt.status,wt.actual_start_date,wt.actual_end_date,wt.comment,wt.updated_at,u.full_name,u.phone,u.email,d.full_name,d.phone
                {$having}
                ORDER BY wt.business_id DESC,wt.id DESC";
         $stmt=$this->tenant->prepare($sql); $stmt->execute($params);
@@ -80,18 +78,16 @@ final class TripCompletionService
     /** @return array<string,mixed> */
     public function trip(int $tripId): array
     {
-        $stmt=$this->tenant->prepare("SELECT wt.id,wt.business_id,wt.actual_start_date,wt.actual_end_date,wt.comment,
-                COALESCE(ct.name,'') contractor_name,COALESCE(cc.contact_person,'') contractor_contact_name,
-                COALESCE(cc.phone,'') contractor_contact_phone,COALESCE(cc.email,'') contractor_contact_email,
+        $stmt=$this->tenant->prepare("SELECT wt.id,wt.business_id,wt.status,wt.actual_start_date,wt.actual_end_date,wt.comment,
+                COALESCE(u.full_name,'') manager_name,COALESCE(u.phone,'') manager_phone,COALESCE(u.email,'') manager_email,
                 COALESCE(d.full_name,'') driver_name,COALESCE(d.phone,'') driver_phone
               FROM waste_trips wt
+              LEFT JOIN users u ON u.id=wt.responsible_user_id
               LEFT JOIN crews c ON c.id=wt.route_executor_id
-              LEFT JOIN contractors ct ON ct.id=c.contractor_id
-              LEFT JOIN contractor_contacts cc ON cc.id=(SELECT contact.id FROM contractor_contacts contact WHERE contact.contractor_id=ct.id ORDER BY contact.is_primary DESC,contact.id LIMIT 1)
               LEFT JOIN drivers d ON d.id=c.driver_id
-             WHERE wt.id=? AND wt.deleted_at IS NULL AND wt.status='completed' LIMIT 1");
+             WHERE wt.id=? AND wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed') LIMIT 1");
         $stmt->execute([$tripId]); $trip=$stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$trip) throw new DomainException('Завершённый рейс не найден.');
+        if (!$trip) throw new DomainException('Рейс в процессе вывоза или со сданным грузом не найден.');
 
         $stmt=$this->tenant->prepare("SELECT wtr.id,wtr.position_no,wtr.snapshot_mass_kg,fr.zayavka_id,
                 fr.naim_oo_gruzootpravitel shipper_name,fr.mno_adres_pogruzki pickup_address,
@@ -266,7 +262,7 @@ final class TripCompletionService
         ];
         $last=max(3,3+count($rows));$sheetRows=[];
         $sheetRows[]='<row r="1" ht="26" customHeight="1"><c r="A1" s="1" t="inlineStr"><is><t>'.$this->xml('Рейс №'.$trip['business_id'].' — комплектность документов').'</t></is></c></row>';
-        $summary='Завершён: '.$this->reportDate((string)($trip['actual_end_date']??'')).' · Заявок: '.count($rows).' · Полностью собрано: '.(int)$trip['complete_count'];
+        $summary='Статус: '.(($trip['status']??'')==='completed'?'Груз сдан':'Идёт вывоз').' · Выезд: '.$this->reportDate((string)($trip['actual_start_date']??'')).' · Сдача: '.$this->reportDate((string)($trip['actual_end_date']??'')).' · Заявок: '.count($rows).' · Полностью собрано: '.(int)$trip['complete_count'];
         $sheetRows[]='<row r="2" ht="21" customHeight="1"><c r="A2" s="5" t="inlineStr"><is><t>'.$this->xml($summary).'</t></is></c></row>';
         $cells=[];foreach($headers as$i=>$value)$cells[]=$this->xlsxCell($i+1,3,$value,2);$sheetRows[]='<row r="3" ht="34" customHeight="1">'.implode('',$cells).'</row>';
         foreach($rows as$rowIndex=>$values){$excelRow=$rowIndex+4;$style=$values[15]==='Собрано'?4:3;$cells=[];foreach($values as$columnIndex=>$value){$cellStyle=$columnIndex===5||$columnIndex===14?6:(in_array($columnIndex,[6,7],true)?($style===4?8:7):$style);$cells[]=$this->xlsxCell($columnIndex+1,$excelRow,$value,$cellStyle);}$sheetRows[]='<row r="'.$excelRow.'" ht="42" customHeight="1">'.implode('',$cells).'</row>';}
@@ -296,9 +292,9 @@ final class TripCompletionService
     /** @return array{business_id:int|string,zayavka_id:string} */
     private function assertRequest(int $tripId,int $requestId): array
     {
-        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.id=? AND wt.id=? AND wt.status='completed' AND wt.deleted_at IS NULL LIMIT 1");
+        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.id=? AND wt.id=? AND wt.status IN ('in_progress','completed') AND wt.deleted_at IS NULL LIMIT 1");
         $stmt->execute([$requestId,$tripId]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$row) throw new DomainException('Заявка завершённого рейса не найдена.');
+        if (!$row) throw new DomainException('Заявка рейса не найдена.');
         return $row;
     }
 
