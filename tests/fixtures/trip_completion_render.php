@@ -6,8 +6,8 @@ if (!function_exists('csrfField')) { function csrfField(): string { return '<inp
 $company=['id'=>1,'name'=>'ПЛАНЭКС'];$error=null;$success=null;$formError=null;$query='';$hideComplete=true;
 $metrics=['trips'=>2,'requests'=>22,'ready'=>8,'problems'=>14];
 $trips=[
- ['id'=>1,'business_id'=>244,'actual_end_date'=>'2026-09-05','driver_name'=>'Пинчук Антон','contractor_name'=>'Перевозчик','complete_count'=>1,'request_count'=>3,'document_count'=>2,'missing_scan_count'=>1,'missing_time_count'=>1,'missing_driver_signature_count'=>1,'missing_sender_signature_count'=>0],
- ['id'=>2,'business_id'=>243,'actual_end_date'=>'2026-09-04','driver_name'=>'Иванов Иван','contractor_name'=>'Перевозчик 2','complete_count'=>7,'request_count'=>9,'document_count'=>8,'missing_scan_count'=>1,'missing_time_count'=>0,'missing_driver_signature_count'=>0,'missing_sender_signature_count'=>1],
+ ['id'=>1,'business_id'=>244,'status'=>'completed','actual_end_date'=>'2026-09-05','driver_name'=>'Пинчук Антон','complete_count'=>1,'request_count'=>3,'document_count'=>2,'missing_scan_count'=>1,'missing_time_count'=>1,'missing_driver_signature_count'=>1,'missing_sender_signature_count'=>0],
+ ['id'=>2,'business_id'=>243,'status'=>'in_progress','actual_end_date'=>null,'driver_name'=>'Иванов Иван','complete_count'=>7,'request_count'=>9,'document_count'=>8,'missing_scan_count'=>1,'missing_time_count'=>0,'missing_driver_signature_count'=>0,'missing_sender_signature_count'=>1],
 ];
 $selectedTrip=['id'=>1,'business_id'=>244,'actual_start_date'=>'2026-09-01','actual_end_date'=>'2026-09-05','driver_name'=>'Пинчук Антон','contractor_name'=>'Перевозчик','complete_count'=>1,'request_count'=>3,'requests'=>[
  ['id'=>12,'zayavka_id'=>'275006','position_no'=>2,'snapshot_mass_kg'=>135,'shipper_name'=>'ООО Экопром','pickup_address'=>'Архангельская область, Приморский район','consignee_name'=>'Переработчик','delivery_address'=>'Московская область, Воскресенск, ул. Кирова, 3в','arrived_at'=>'','departed_at'=>'','driver_signature_present'=>0,'sender_signature_present'=>1,'tn_datetime_missing'=>1,'data_from_tracker'=>0,'data_from_driver'=>1,'data_invented'=>0,'completion_comment'=>'Уточнить время у водителя','documents'=>[],'issues'=>['Нет скана ТН','Нет даты или времени','Нет подписи водителя'],'is_complete'=>false],
@@ -22,9 +22,9 @@ $trips[1]=array_merge($trips[1],[
  ],
 ]);
 foreach($trips as &$trip){
- $trip['contractor_contact_name']=$trip['id']===1?'Петров Пётр':'Сидорова Мария';
- $trip['contractor_contact_phone']='+7 900 000-10-01';
- $trip['contractor_contact_email']='carrier@example.test';
+ $trip['manager_name']='Карина Г';
+ $trip['manager_phone']='+7 908 221-12-12';
+ $trip['manager_email']='';
  $trip['driver_phone']='+7 900 000-20-01';
  foreach($trip['requests'] as &$request){
   $request['driver_signature_status']=(int)$request['driver_signature_present']===1?'yes':null;

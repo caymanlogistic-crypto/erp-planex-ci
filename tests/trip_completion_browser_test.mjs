@@ -45,10 +45,14 @@ try{
   await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
   assert.equal(await page.locator('.logistics-trip').count(),2,'trip list rendered');
   assert.equal(await page.locator('.logistics-trip-summary .badge-danger').count(),0,'old red issue badge removed');
-  assert.match(await page.locator('.logistics-trip').first().locator('summary').innerText(),/Петров Пётр.*\+7 900 000-10-01/s,'carrier contact shown');
+  assert.match(await page.locator('.logistics-trip').first().locator('summary').innerText(),/Груз сдан.*менеджер.*Карина Г.*\+7 908 221-12-12/is,'completed status and manager shown');
+  assert.match(await page.locator('.logistics-trip').last().locator('summary').innerText(),/Идёт вывоз.*Выезд: 03\.09\.2026/s,'in-progress status and actual start shown');
+  assert.equal(await page.locator('.lab-trip-status.is-delivered').count(),1,'delivered badge is gray');
+  assert.equal(await page.locator('.lab-trip-status.is-progress').count(),1,'in-progress badge is green');
   assert.match(await page.locator('.logistics-trip').first().locator('summary').innerText(),/Без скана 1.*Время 1/s,'structured issue counts shown');
   await page.locator('.logistics-trip').first().locator('summary').click();
   const row=page.locator('[data-request-id="12"]');
+  assert.deepEqual(await row.locator('.logistics-request-route > strong, .logistics-request-route > small').allTextContents(),['ООО Экопром','Архангельская область, Приморский район','→ Переработчик'],'pickup address shown between sender and recipient');
   assert.equal((await row.evaluate(element=>getComputedStyle(element).gridTemplateColumns.split(' ').length)),8,'desktop request uses eight aligned blocks');
   assert.equal(await row.locator('.lab-choice--date input[value="no"]').isChecked(),true,'missing time status persisted');
   assert.equal(await row.locator('.lab-choice--recovery input[value="driver"]').isChecked(),true,'driver source persisted');

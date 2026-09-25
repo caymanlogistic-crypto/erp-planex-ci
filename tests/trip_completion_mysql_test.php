@@ -15,21 +15,24 @@ $pdo=new PDO('mysql:host='.getenv('PLANEX_SCHEMA_DB_HOST').';port='.(getenv('PLA
 cleanCompanyPoolDatabase($pdo);$companyId=987654;$stored=[];
 try{
     LocalMigrationService::apply($pdo);$service=new TripCompletionService($pdo,$companyId);$ok($service->ready(),'Migration 144 not ready');
-    $pdo->exec("INSERT INTO users(id,membership_id,full_name,login,password_hash,role_code,status) VALUES(1,101,'Тестовый логист','tester','hash','logist','active');
+    $pdo->exec("INSERT INTO users(id,membership_id,full_name,login,email,phone,password_hash,role_code,status) VALUES(1,101,'Тестовый логист','tester','manager@example.test','+7 900 000-30-01','hash','logist','active');
       INSERT INTO clients(id,name,inn,status) VALUES(1,'Тестовый клиент','7700000000','active');
       INSERT INTO feo_requests(id,zayavka_id,naim_oo_gruzootpravitel,mno_adres_pogruzki,gruzopoluchatel,adres_dostavki_otkhodov,mass_netto) VALUES
         (1,'274405','Отправитель','Архангельская область','Получатель','Воскресенск',350),(2,'275006','Отправитель 2','Приморский район','Получатель','Воскресенск',135);
       INSERT INTO waste_trips(id,business_id,client_id,responsible_user_id,destination_type,status,actual_start_date,actual_end_date,created_by_membership_id) VALUES
-        (1,244,1,1,'warehouse','completed','2026-09-01','2026-09-05',101),(2,245,1,1,'warehouse','completed','2026-08-01','2026-08-02',101);
+        (1,244,1,1,'warehouse','completed','2026-09-01','2026-09-05',101),(2,245,1,1,'warehouse','in_progress','2026-08-01',NULL,101),(3,246,1,1,'warehouse','in_progress','2026-08-03',NULL,101);
       INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) VALUES(11,1,1,350,1),(12,1,2,135,2),(13,2,2,135,1)");
     $pdo->exec("INSERT INTO contractors(id,name,inn) VALUES(1,'Перевозчик','7700000001');
       INSERT INTO contractor_contacts(contractor_id,contact_person,phone,email,is_primary) VALUES(1,'Петров Пётр','+7 900 000-10-01','carrier@example.test',1);
       INSERT INTO drivers(id,full_name,phone) VALUES(1,'Пинчук Антон','+7 900 000-20-01');
       INSERT INTO crews(id,contractor_id,vehicle_id,driver_id) VALUES(1,1,1,1);
       UPDATE waste_trips SET route_executor_id=1 WHERE id=1");
-    $rows=$service->trips('',true);$ok(count($rows)===2&&(int)$rows[0]['business_id']===245&&(int)$rows[1]['business_id']===244,'Trips ordered by descending identifier');
+    $rows=$service->trips('',true);$ok(count($rows)===2&&(int)$rows[0]['business_id']===245&&(int)$rows[1]['business_id']===244,'In-progress and completed trips ordered by descending identifier');
+    $ok(count($service->trips('',false))===3,'All eligible trips include a trip with no requests');
+    $ok($rows[0]['status']==='in_progress'&&$rows[0]['actual_end_date']===null&&$rows[0]['manager_name']==='Тестовый логист','In-progress status, missing end date, and manager visible');
     $trip=$service->trip(1);$ok(array_column($trip['requests'],'zayavka_id')===['275006','274405'],'Requests ordered by descending number');$ok(count($trip['requests'][0]['issues'])===4,'Initial four problems');
-    $ok($trip['contractor_contact_name']==='Петров Пётр'&&$trip['contractor_contact_phone']==='+7 900 000-10-01'&&$trip['contractor_contact_email']==='carrier@example.test'&&$trip['driver_phone']==='+7 900 000-20-01','Carrier and driver contacts loaded from source records');
+    $ok($trip['manager_name']==='Тестовый логист'&&$trip['manager_phone']==='+7 900 000-30-01'&&$trip['manager_email']==='manager@example.test'&&$trip['driver_phone']==='+7 900 000-20-01','Manager and driver contacts loaded from source records');
+    $ok($service->trip(2)['status']==='in_progress','In-progress trip is accessible for request updates');
     $service->save(1,11,['pickup_interval'=>'01.09.26 09:40 - 10:00','driver_signature_status'=>'yes','sender_signature_status'=>'yes','tn_datetime_status'=>'full'],101);
     $service->save(1,12,['pickup_interval'=>'01.09.26 10:40 - 11:00','driver_signature_status'=>'yes','sender_signature_status'=>'yes','tn_datetime_status'=>'no','recovery_source'=>'driver'],101);
     $service->save(2,13,['driver_signature_status'=>'no','sender_signature_status'=>'no','tn_datetime_status'=>'partial','recovery_source'=>'tracker'],101);
