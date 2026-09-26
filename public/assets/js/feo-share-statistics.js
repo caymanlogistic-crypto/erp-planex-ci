@@ -56,8 +56,8 @@
   const svgChart = rows => {
     const wrap = root.querySelector('.fs-chart-wrap');
     const width = Math.max(330, Math.round(wrap ? wrap.clientWidth - 20 : root.clientWidth - 32));
-    const height = root.clientWidth <= 760 ? 230 : 286;
-    const left = 58, right = 22, top = 20, bottom = 46;
+    const height = 174;
+    const left = 58, right = 58, top = 12, bottom = 30;
     const plotW = width - left - right, plotH = height - top - bottom;
     const max = Math.max(30, Math.ceil(Math.max(...rows.map(r => Math.max(share(r.own_count,r.feo_count)||0, share(r.own_kg,r.feo_kg)||0))) / 10) * 10), baseline = top + plotH;
     const format = value => Number(value).toFixed(1);
@@ -81,26 +81,23 @@
       }
       return d;
     };
-    const area = countPoints.length > 1 ? `${path(countPoints)} L${format(countPoints.at(-1).x)} ${format(baseline)} L${format(countPoints[0].x)} ${format(baseline)} Z` : '';
+    const area = pts => pts.length > 1 ? `${path(pts)} L${format(pts.at(-1).x)} ${format(baseline)} L${format(pts[0].x)} ${format(baseline)} Z` : '';
     const ticks = [max, max*.75, max*.5, max*.25, 0].map(value => {
       const y = py(value);
       return `<line x1="${left}" y1="${format(y)}" x2="${width-right}" y2="${format(y)}" class="grid-line"/><text x="${left-8}" y="${format(y+4)}" text-anchor="end" class="axis-label">${dec.format(value)}%</text>`;
     }).join('');
-    const nodes = (pts, name, color, seriesIndex, radius) => pts.map((point, i) => {
-      const tooltipWidth = 176, tooltipHeight = 43;
-      const tx = Math.max(4-point.x, Math.min(-tooltipWidth/2, width-4-point.x-tooltipWidth));
-      const ty = point.y < 64 ? 12 : -(tooltipHeight+10);
+    const nodes = (pts, name, color, seriesIndex) => pts.map((point, i) => {
       const period = state.mode === 'week' ? weekLabel(point.date) : state.mode === 'month' ? monthLabel(point.date) : shortDate(point.date);
-      return `<g class="manager-stats__chart-node fs-chart-node" data-node-index="${i}" tabindex="0" role="img" aria-label="${name} · ${period} — ${percentage(point.value)}" transform="translate(${format(point.x)} ${format(point.y)})" style="--series-index:${seriesIndex};--node-index:${i};--node-color:${color}"><circle r="${radius}"/><g class="manager-stats__node-tooltip" transform="translate(${format(tx)} ${format(ty)})"><rect width="${tooltipWidth}" height="${tooltipHeight}" rx="2"/><text x="10" y="16" class="tooltip-title">${period}</text><text x="10" y="32" class="tooltip-value">${name} · ${percentage(point.value)}</text></g></g>`;
+      return `<g class="manager-stats__chart-node fs-chart-node ${seriesIndex === 0 ? 'is-company' : 'is-manager'}" data-node-index="${i}" tabindex="0" role="img" aria-label="${name} · ${period} — ${percentage(point.value)}" transform="translate(${format(point.x)} ${format(point.y)})" style="--series-index:${seriesIndex};--node-index:${i};--node-color:${color}"><circle r="4.5"/></g>`;
     }).join('');
-    const labels = rows.map((r, i) => `<text x="${format(px(i))}" y="${height-12}" text-anchor="middle" class="axis-label">${state.mode==='week' ? weekLabel(r.date) : state.mode==='month' ? monthLabel(r.date) : shortDate(r.date)}</text>`).join('');
-    return `<svg class="fs-chart manager-stats__line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Изменение доли компаний в общем объёме ФЭО"><defs><linearGradient id="fs-company-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C07830" stop-opacity=".22"/><stop offset=".72" stop-color="#C07830" stop-opacity=".05"/><stop offset="1" stop-color="#C07830" stop-opacity="0"/></linearGradient></defs>${ticks}${area ? `<path class="manager-stats__chart-area" d="${area}" fill="url(#fs-company-area)"/>` : ''}<path class="manager-stats__chart-line is-manager" pathLength="1" d="${path(massPoints)}" fill="none" stroke="#4A7A9B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="--series-index:1"/><path class="manager-stats__chart-line is-company" pathLength="1" d="${path(countPoints)}" fill="none" stroke="#C07830" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="--series-index:0"/>${nodes(massPoints,'По массе','#4A7A9B',1,3.5)}${nodes(countPoints,'По заявкам','#C07830',0,4)}${labels}</svg>`;
+    const labels = rows.map((r, i) => `<text x="${format(px(i))}" y="${height-7}" text-anchor="middle" class="axis-label">${state.mode==='week' ? weekLabel(r.date) : state.mode==='month' ? monthLabel(r.date) : shortDate(r.date)}</text>`).join('');
+    return `<svg class="fs-chart manager-stats__line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Изменение доли компаний в общем объёме ФЭО"><defs><linearGradient id="fs-company-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C07830" stop-opacity=".22"/><stop offset=".72" stop-color="#C07830" stop-opacity=".05"/><stop offset="1" stop-color="#C07830" stop-opacity="0"/></linearGradient><linearGradient id="fs-mass-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A7A9B" stop-opacity=".22"/><stop offset=".72" stop-color="#4A7A9B" stop-opacity=".05"/><stop offset="1" stop-color="#4A7A9B" stop-opacity="0"/></linearGradient></defs>${ticks}<rect class="manager-stats__plot-hit" x="${left}" y="${top}" width="${plotW}" height="${plotH}"/>${area(countPoints) ? `<path class="manager-stats__chart-area" d="${area(countPoints)}" fill="url(#fs-company-area)"/>` : ''}${area(massPoints) ? `<path class="manager-stats__chart-area" d="${area(massPoints)}" fill="url(#fs-mass-area)"/>` : ''}<line class="manager-stats__period-guide" x1="0" x2="0" y1="${top}" y2="${baseline}" aria-hidden="true"/><path class="manager-stats__chart-line is-manager" pathLength="1" d="${path(massPoints)}" fill="none" stroke="#4A7A9B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="--series-index:1"/><path class="manager-stats__chart-line is-company" pathLength="1" d="${path(countPoints)}" fill="none" stroke="#C07830" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="--series-index:0"/>${nodes(massPoints,'По массе','#4A7A9B',1)}${nodes(countPoints,'По заявкам','#C07830',0)}${labels}</svg>`;
   };
 
   const snapshotRows = rows => rows.slice().reverse().map((r, index) => {
     const prior = rows[rows.indexOf(r)-1];
     const delta = prior ? share(r.own_count, r.feo_count) - share(prior.own_count, prior.feo_count) : null;
-    return `<tr class="${index===0?'is-latest':''}"><td><strong>${shortDate(r.date)}.${r.date.slice(0,4)}</strong><small>Импорт ${r.imported_at}</small></td><td class="num">${nf.format(r.feo_count)}<small>${mass(r.feo_kg)}</small></td><td class="num">${nf.format(r.own_count)}<small>${mass(r.own_kg)}</small></td><td class="num"><strong>${percentage(share(r.own_count,r.feo_count))}</strong><small>${percentage(share(r.own_kg,r.feo_kg))} по массе</small></td><td class="num ${delta>0?'positive':delta<0?'negative':''}">${delta==null?'—':(delta>0?'+':'')+pct.format(delta)+' п.п.'}</td></tr>`;
+    return `<tr class="${index===0?'is-latest':''}" data-period="${rows.indexOf(r)}" tabindex="0"><td><strong>${shortDate(r.date)}.${r.date.slice(0,4)}</strong><small>Импорт ${r.imported_at}</small></td><td class="num">${nf.format(r.feo_count)}<small>${mass(r.feo_kg)}</small></td><td class="num">${nf.format(r.own_count)}<small>${mass(r.own_kg)}</small></td><td class="num"><strong>${percentage(share(r.own_count,r.feo_count))}</strong><small>${percentage(share(r.own_kg,r.feo_kg))} по массе</small></td><td class="num ${delta>0?'positive':delta<0?'negative':''}">${delta==null?'—':(delta>0?'+':'')+pct.format(delta)+' п.п.'}</td></tr>`;
   }).join('');
 
   const intervalRows = DATA.snapshots.slice(1).map((r, i) => {
@@ -154,7 +151,7 @@
         <article class="fs-kpi"><span>ТЕКУЩИЙ ОБЪЁМ КОМПАНИЙ</span><strong>${nf.format(DATA.current.own_count)}</strong><p>${mass(DATA.current.own_kg)}</p><em>Актуальный состав на ${esc(DATA.current.as_of)}</em></article>
         <article class="fs-kpi"><span>ВСЕ ЗАЯВКИ ФЭО</span><strong>${nf.format(latest.feo_count)}</strong><p>${mass(latest.feo_kg)}</p><em>Файл от ${shortDate(latest.date)}</em></article>
       </section>
-      <section class="fs-card fs-history"><div class="fs-card-head"><div><span class="fs-section-kicker">01 · ДИНАМИКА</span><h2>Динамика доли компаний</h2><p>${modeText[state.mode]}</p></div><div class="fs-controls" aria-label="Период отчёта">${Object.entries(modeLabels).map(([key,label])=>`<button type="button" data-mode="${key}" aria-pressed="${state.mode===key}" class="${state.mode===key?'is-active':''}">${label}</button>`).join('')}</div></div><div class="fs-chart-wrap">${svgChart(rows)}<div class="fs-chart-legend"><span><i class="fs-legend-count"></i>По заявкам</span><span><i class="fs-legend-mass"></i>По массе</span></div></div><div class="fs-card-subhead"><h3>Точные значения по срезам</h3><span>Штуки и масса показаны вместе · изменение к предыдущей строке</span></div><div class="fs-table-wrap"><table class="fs-table"><thead><tr><th>Файл ФЭО</th><th class="num">Все ФЭО</th><th class="num">Компании</th><th class="num">Доля компаний</th><th class="num">Изм. доли, шт.</th></tr></thead><tbody>${snapshotRows(rows)}</tbody></table></div></section>
+      <section class="fs-card fs-history"><div class="fs-card-head"><div><span class="fs-section-kicker">01 · ДИНАМИКА</span><h2>Динамика доли компаний</h2><p>${modeText[state.mode]}</p></div><div class="fs-controls" aria-label="Период отчёта">${Object.entries(modeLabels).map(([key,label])=>`<button type="button" data-mode="${key}" aria-pressed="${state.mode===key}" class="${state.mode===key?'is-active':''}">${label}</button>`).join('')}</div></div><div class="fs-chart-wrap manager-stats__chart-body">${svgChart(rows)}<aside class="manager-stats__period-popup fs-period-popup" role="tooltip" aria-hidden="true"></aside><div class="fs-chart-legend"><span><i class="fs-legend-count"></i>По заявкам</span><span><i class="fs-legend-mass"></i>По массе</span></div></div><div class="fs-card-subhead"><h3>Точные значения по срезам</h3><span>Штуки и масса показаны вместе · изменение к предыдущей строке</span></div><div class="fs-table-wrap"><table class="fs-table fs-snapshot-table"><thead><tr><th>Файл ФЭО</th><th class="num">Все ФЭО</th><th class="num">Компании</th><th class="num">Доля компаний</th><th class="num">Изм. доли, шт.</th></tr></thead><tbody>${snapshotRows(rows)}</tbody></table></div></section>
       <section class="fs-flow-grid" aria-label="Движение заявок"><article class="fs-card"><div class="fs-card-head"><div><span class="fs-section-kicker">02 · ФЭО</span><h2>Появились и исчезли</h2><p>Сравнение ID между соседними полными файлами.</p></div></div><div class="fs-table-wrap"><table class="fs-table"><thead><tr><th>Интервал</th><th class="num">Появились</th><th class="num">Исчезли</th><th class="num">Изменение остатка</th></tr></thead><tbody>${intervalRows}</tbody></table></div></article><article class="fs-card"><div class="fs-card-head"><div><span class="fs-section-kicker">03 · КОМПАНИИ</span><h2>Изменение распределения</h2><p>Операции по применяемым блокам, сгруппированные по неделям.</p></div></div><div class="fs-table-wrap"><table class="fs-table"><thead><tr><th>Неделя</th><th class="num">Передано</th><th class="num">Снято</th><th class="num">Изменение</th></tr></thead><tbody>${blockRows}</tbody></table></div></article></section>
       <section class="fs-card fs-geography"><div class="fs-card-head"><div><span class="fs-section-kicker">04 · ГЕОГРАФИЯ</span><h2>Доля компаний по федеральным округам</h2><p>ФЭО — полный файл от ${shortDate(latest.date)}; компании — актуальный состав на ${esc(DATA.current.as_of)}. Выберите округ для списка регионов.</p></div><div class="fs-controls" aria-label="Сортировка федеральных округов"><button type="button" data-sort="volume" aria-pressed="${state.districtSort==='volume'}" class="${state.districtSort==='volume'?'is-active':''}">По объёму компаний</button><button type="button" data-sort="share" aria-pressed="${state.districtSort==='share'}" class="${state.districtSort==='share'?'is-active':''}">По доле</button></div></div><div class="fs-table-wrap"><table class="fs-table fs-district-table"><thead><tr><th>Федеральный округ</th><th class="num">Все ФЭО</th><th class="num">Компании</th><th class="num">Доля · штуки</th><th class="num">Доля · масса</th></tr></thead><tbody>${districtRows()}</tbody><tfoot><tr><th>Итого по файлу</th><th class="num">${nf.format(latest.feo_count)}<small>${mass(latest.feo_kg)}</small></th><th class="num">${nf.format(DATA.current.own_count)}<small>${mass(DATA.current.own_kg)}</small></th><th class="num">${percentage(share(DATA.current.own_count,latest.feo_count))}</th><th class="num">${percentage(share(DATA.current.own_kg,latest.feo_kg))}</th></tr></tfoot></table></div><div class="fs-region-detail" aria-live="polite">${regionDetail()}</div></section>
       <details class="fs-method"><summary>Источники и правила расчёта</summary><div><p><b>ФЭО:</b> полные файлы по датам в таблице; каждый ID учитывается один раз, масса — нетто в килограммах. Исчезновение означает отсутствие ID в следующем полном файле. Разность общей массы также учитывает изменение массы у сохранившихся заявок. ${esc(DATA.historical_note)}</p><p><b>Компании:</b> применяемые блоки «Размещения на карте». История до внедрения отчёта восстановлена по датам действующих блоков; статусы ранее отключённых блоков отдельно не сохранены.</p><p><b>Федеральные округа:</b> регион файла ФЭО и текущего состава компаний сопоставлен с округом. Даты географических источников могут различаться. Файл «FEO_недостающие_заявки_для_штатного_импорта.xlsx» исключён.</p></div></details>
@@ -162,30 +159,90 @@
     </div>`;
     const initialChart = root.querySelector('.fs-chart');
     if (initialChart) initialChart.outerHTML = svgChart(rows);
+    bindChart(rows);
   }
-  const clearChartTooltips = active => root.querySelectorAll('.fs-chart-node').forEach(node => node.classList.toggle('is-tooltip-active', node === active));
-  const activateChartNode = node => {
-    if (!node) return;
-    if (node.parentNode?.lastElementChild !== node) node.parentNode.appendChild(node);
-    clearChartTooltips(node);
-  };
-  root.addEventListener('pointerover', event => activateChartNode(event.target.closest?.('.fs-chart-node')));
-  root.addEventListener('pointerout', event => {
-    const node = event.target.closest?.('.fs-chart-node');
-    if (node && !node.contains(event.relatedTarget)) requestAnimationFrame(() => {
-      if (!node.matches(':hover') && document.activeElement !== node) clearChartTooltips();
+  function bindChart(rows) {
+    const chart = root.querySelector('.fs-chart');
+    const wrap = root.querySelector('.fs-chart-wrap');
+    const popup = wrap.querySelector('.fs-period-popup');
+    const guide = chart.querySelector('.manager-stats__period-guide');
+    const tableRows = [...root.querySelectorAll('.fs-snapshot-table tbody tr[data-period]')];
+    const nodes = [...chart.querySelectorAll('.fs-chart-node')];
+    const countNodes = [...chart.querySelectorAll('.fs-chart-node.is-company')];
+    const positions = countNodes.map(node => Number(/^translate\((-?[\d.]+)/.exec(node.getAttribute('transform'))?.[1]));
+    let hoveredRow = null, focusedRow = null, hoveredPlot = null, focusedPoint = null;
+    const renderPopup = index => {
+      const row = rows[index];
+      popup.replaceChildren();
+      const title = document.createElement('strong');
+      title.className = 'manager-stats__period-popup-title';
+      title.textContent = `${shortDate(row.date)}.${row.date.slice(0,4)} · импорт ${row.imported_at}`;
+      popup.append(title);
+      for (const [name, value, detail, color] of [
+        ['По заявкам', percentage(share(row.own_count, row.feo_count)), `${nf.format(row.own_count)} из ${nf.format(row.feo_count)}`, '#C07830'],
+        ['По массе', percentage(share(row.own_kg, row.feo_kg)), `${mass(row.own_kg)} из ${mass(row.feo_kg)}`, '#4A7A9B'],
+      ]) {
+        const item = document.createElement('div');
+        item.className = 'manager-stats__period-popup-item';
+        item.style.color = color;
+        const label = document.createElement('strong');
+        label.textContent = name;
+        const result = document.createElement('span');
+        result.textContent = `${value} · ${detail}`;
+        item.append(label, result);
+        popup.append(item);
+      }
+    };
+    const sync = () => {
+      const index = hoveredRow ?? hoveredPlot ?? focusedRow ?? focusedPoint;
+      const active = Number.isInteger(index);
+      tableRows.forEach(row => row.classList.toggle('is-period-active', Number(row.dataset.period) === index));
+      nodes.forEach(node => node.classList.toggle('is-period-active', Number(node.dataset.nodeIndex) === index));
+      guide.classList.toggle('is-visible', active);
+      popup.classList.toggle('is-visible', active);
+      popup.setAttribute('aria-hidden', String(!active));
+      if (!active) return;
+      const x = positions[index];
+      guide.setAttribute('x1', x);
+      guide.setAttribute('x2', x);
+      renderPopup(index);
+      const chartRect = chart.getBoundingClientRect();
+      const wrapRect = wrap.getBoundingClientRect();
+      const lineX = chartRect.left - wrapRect.left + x / chart.viewBox.baseVal.width * chartRect.width;
+      const popupWidth = popup.getBoundingClientRect().width;
+      let left = lineX - popupWidth - 12;
+      if (left < 4) left = Math.min(lineX + 12, wrapRect.width - popupWidth - 4);
+      popup.style.left = `${Math.max(4, left)}px`;
+    };
+    tableRows.forEach(row => {
+      const index = Number(row.dataset.period);
+      row.addEventListener('pointerenter', () => { hoveredRow = index; sync(); });
+      row.addEventListener('pointerleave', () => { hoveredRow = null; sync(); });
+      row.addEventListener('focus', () => { focusedRow = index; sync(); });
+      row.addEventListener('blur', () => { focusedRow = null; sync(); });
     });
-  });
-  root.addEventListener('focusin', event => {
-    const node = event.target.closest?.('.fs-chart-node');
-    if (node) activateChartNode(node); else clearChartTooltips();
-  });
+    chart.addEventListener('pointermove', event => {
+      const bounds = chart.getBoundingClientRect();
+      const x = (event.clientX - bounds.left) / bounds.width * chart.viewBox.baseVal.width;
+      const y = (event.clientY - bounds.top) / bounds.height * chart.viewBox.baseVal.height;
+      const nearest = x >= 58 && x <= chart.viewBox.baseVal.width - 58 && y >= 12 && y <= 144
+        ? positions.reduce((best, pointX, index) => Math.abs(pointX - x) < Math.abs(positions[best] - x) ? index : best, 0)
+        : null;
+      if (hoveredPlot !== nearest) { hoveredPlot = nearest; sync(); }
+    });
+    chart.addEventListener('pointerleave', () => { hoveredPlot = null; sync(); });
+    nodes.forEach(node => {
+      const index = Number(node.dataset.nodeIndex);
+      node.addEventListener('focus', () => { focusedPoint = index; sync(); });
+      node.addEventListener('blur', () => { focusedPoint = null; sync(); });
+    });
+  }
   let chartResizeFrame = 0;
   window.addEventListener('resize', () => {
     cancelAnimationFrame(chartResizeFrame);
     chartResizeFrame = requestAnimationFrame(() => {
       const chart = root.querySelector('.fs-chart');
-      if (chart) chart.outerHTML = svgChart(visibleRows());
+      if (chart) { chart.outerHTML = svgChart(visibleRows()); bindChart(visibleRows()); }
     });
   });
   root.addEventListener('click', event => {

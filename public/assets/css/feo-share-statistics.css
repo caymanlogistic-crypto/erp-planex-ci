@@ -91,8 +91,14 @@
 @media(max-width:760px){#feo-share-root .fs-page{width:calc(100% - 8px);padding:0 0 20px}#feo-share-root .fs-title{align-items:flex-start;padding:10px 14px}#feo-share-root h1{font-size:19px}#feo-share-root .fs-title-asof{align-items:flex-start;text-align:left}#feo-share-root .fs-kpi{min-height:94px;padding:12px 13px}#feo-share-root .fs-kpi strong{font-size:22px}#feo-share-root .fs-card-head{padding:8px 11px}#feo-share-root .fs-card h2{font-size:11px}#feo-share-root .fs-chart-wrap{padding:8px 10px 7px}#feo-share-root .fs-card-subhead{padding:8px 11px}#feo-share-root .fs-table th,#feo-share-root .fs-table td{padding:7px 10px}}
 
 /* v003: the ERP trend chart fills this report's full card width. */
-#feo-share-root .fs-chart{display:block;width:100%;height:286px;max-height:none;overflow:visible}
+#feo-share-root .fs-chart{display:block;width:100%;height:174px;max-height:none;overflow:visible}
 #feo-share-root .fs-chart .grid-line{stroke:var(--line-hair);stroke-width:1}
 #feo-share-root .fs-chart .axis-label{fill:var(--text-faint);font:9px var(--font)}
 #feo-share-root .fs-chart-node:focus-visible{outline:none}
-@media(max-width:760px){#feo-share-root .fs-chart{height:230px}}
+#feo-share-root .fs-chart-node.is-period-active>circle{r:6.5px}
+#feo-share-root .fs-snapshot-table tbody tr.is-period-active td{background:var(--surface-muted)}
+#feo-share-root .fs-snapshot-table tbody tr:focus{outline:1px solid var(--chart-copper);outline-offset:-1px}
+#feo-share-root .fs-period-popup{width:270px}
+#feo-share-root .fs-period-popup .manager-stats__period-popup-item{justify-content:space-between}
+#feo-share-root .fs-period-popup .manager-stats__period-popup-item span{font-size:10px;font-weight:700;white-space:nowrap}
+@media(max-width:760px){#feo-share-root .fs-chart{height:138px}#feo-share-root .fs-period-popup{width:190px}#feo-share-root .fs-period-popup .manager-stats__period-popup-item{align-items:flex-start;flex-direction:column;gap:1px}#feo-share-root .fs-period-popup .manager-stats__period-popup-item span{font-size:9px}}
