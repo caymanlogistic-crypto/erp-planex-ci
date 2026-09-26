@@ -31,7 +31,18 @@ $migration = $read('database/migrations-local/141_create_waste_trip_start_statis
 $check(str_contains($route, "'/company/statistics/managers'") && str_contains($route, "'company.statistics.managers'"), 'page route and access key');
 $check(str_contains($controller, 'getSessionCompanyId()') && str_contains($controller, 'companyDatabaseConfig'), 'current company tenant only');
 $check(str_contains($controller, 'schemaReady($local)') && !str_contains($controller, 'LocalMigrationService::apply'), 'GET is migration-free');
-$check(str_contains($service, "effectiveDataScope('waste_trip')") && str_contains($service, "RegulatedDataScopeService::condition('waste_trip'"), 'waste trip data scope enforced');
+$check(
+    str_contains($controller, 'AccessRuntime::current()->isActive()')
+    && str_contains($controller, "requireRole(['company_owner','senior_logist','logist'])"),
+    'page grant is authoritative with roles/access enabled; legacy installations keep their role gate'
+);
+$check(
+    !str_contains($service, "effectiveDataScope('waste_trip')")
+    && !str_contains($service, "RegulatedDataScopeService::condition('waste_trip'")
+    && !str_contains($view, 'Страница разрешена, но для рейсов')
+    && !str_contains($view, 'Ограниченный набор данных.'),
+    'granted report does not inherit trip data scope or show a misleading scope warning'
+);
 $check(substr_count($tripService, 'WasteTripStartStatisticsService::synchronizeTrip') >= 6, 'all waste trip mutation paths synchronize facts');
 $check(str_contains($migration, 'responsible_name_snapshot') && str_contains($migration, 'ON DUPLICATE KEY UPDATE'), 'historical manager attribution and idempotent backfill');
 $check(

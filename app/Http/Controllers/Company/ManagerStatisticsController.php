@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Security\AccessRuntime;
 use App\Service\WasteTripStartStatisticsService;
 use PDO;
 use Throwable;
@@ -16,7 +17,12 @@ final class ManagerStatisticsController
 
     public function index(): void
     {
-        requireRole(['company_owner','senior_logist','logist']);
+        // When the roles/access registry is active, the route's page grant is
+        // authoritative. Keep the legacy role gate only for installations
+        // where that registry has not been enabled.
+        if (!AccessRuntime::current()->isActive()) {
+            requireRole(['company_owner','senior_logist','logist']);
+        }
 
         $pageTitle = 'Работа логистов';
         $pageContext = 'Статистика › Работа логистов';
@@ -28,7 +34,7 @@ final class ManagerStatisticsController
             'totals'=>['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0],
             'previous_totals'=>['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0],
             'managers'=>[], 'trend'=>[], 'previous_trend'=>[], 'manager_trends'=>[],
-            'period_rows'=>[], 'details'=>[], 'scope'=>'none',
+            'period_rows'=>[], 'details'=>[],
         ];
 
         $companyId = (int)(getSessionCompanyId() ?? 0);

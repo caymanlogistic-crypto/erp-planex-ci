@@ -199,7 +199,6 @@ final class WasteTripStartStatisticsService
             'manager_trends'=>$managerTrends,
             'period_rows'=>self::periodRows($trend, $managerTrends),
             'details'=>self::details($pdo, $filters, $allowedIds),
-            'scope'=>AccessControlService::effectiveDataScope('waste_trip'),
         ];
     }
 
@@ -255,9 +254,8 @@ final class WasteTripStartStatisticsService
     /** @return array{0:list<string>,1:list<int|string>} */
     private static function where(string $from, string $to, array $managerIds, array $allowedIds): array
     {
-        $access = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
-        $where = [$access['sql'], 'wt.deleted_at IS NULL', 's.actual_start_date BETWEEN ? AND ?'];
-        $params = array_merge($access['params'], [$from, $to]);
+        $where = ['wt.deleted_at IS NULL', 's.actual_start_date BETWEEN ? AND ?'];
+        $params = [$from, $to];
         if ($allowedIds === []) {
             $where[] = '1=0';
             return [$where, $params];

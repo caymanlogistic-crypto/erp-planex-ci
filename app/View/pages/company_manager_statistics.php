@@ -83,12 +83,6 @@ $kpis = [
     <?php if ($dbError !== null): ?>
         <div class="notice warn"><?= e($dbError) ?></div>
     <?php else: ?>
-        <?php if (($statistics['scope'] ?? 'none') === 'own'): ?>
-            <div class="manager-stats__scope-note"><span class="manager-stats__scope-dot"></span><strong>Ограниченный набор данных.</strong> Показаны только рейсы, доступные вам в режиме «Только свои».</div>
-        <?php elseif (($statistics['scope'] ?? 'none') === 'none'): ?>
-            <div class="notice warn">Страница разрешена, но для рейсов установлена область данных «Нет доступа».</div>
-        <?php endif; ?>
-
         <div class="manager-stats__kpis">
             <?php foreach($kpis as$kpi):?><article class="manager-stats__kpi <?=$kpi['class']?>"><div class="manager-stats__kpi-label"><?=e($kpi['label'])?></div><div class="manager-stats__kpi-row"><strong><?=e($kpi['value'])?></strong></div><div class="manager-stats__kpi-note"><?=e($kpi['note'])?></div></article><?php endforeach;?>
         </div>
