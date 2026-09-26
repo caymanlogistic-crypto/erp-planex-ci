@@ -55,7 +55,12 @@ require_once base_path('app/Support/entrypoint_dependencies.php');
 
 sendSecurityHeaders($isHttps);
 startCsrfFormInjection();
-verifyCsrfRequest();
+$requestedPath = current_app_path();
+if (!isAuthenticated() && ($requestedPath === '/company' || str_starts_with($requestedPath, '/company/')
+    || $requestedPath === '/superadmin' || str_starts_with($requestedPath, '/superadmin/'))) {
+    rememberLoginReturnTarget();
+    redirect_to('/login');
+}
 
 use App\Core\Database;
 use App\Http\Router;
@@ -101,6 +106,8 @@ if ($rolesAccessEnabled) {
         unset($_SESSION['role_code'], $_SESSION['user']['role_code']);
     }
 }
+
+verifyCsrfRequest();
 
 // Route registration extracted from the legacy index monolith.
 require_once base_path('app/Http/Routes/core.php');

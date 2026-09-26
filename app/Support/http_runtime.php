@@ -100,6 +100,77 @@ if (!function_exists('isAuthenticated')) {
     }
 }
 
+if (!function_exists('safeLoginReturnTarget')) {
+    function safeLoginReturnTarget(mixed $target): ?string
+    {
+        if (!is_string($target) || $target === '' || $target[0] !== '/'
+            || str_starts_with($target, '//') || preg_match('/[\x00-\x1F\x7F\\\\#]/', $target)) {
+            return null;
+        }
+
+        $path = parse_url($target, PHP_URL_PATH);
+        if (!is_string($path) || !($path === '/company' || str_starts_with($path, '/company/')
+            || $path === '/superadmin' || str_starts_with($path, '/superadmin/'))) {
+            return null;
+        }
+
+        return $target;
+    }
+}
+
+if (!function_exists('loginReturnTargetFromRequest')) {
+    function loginReturnTargetFromRequest(): ?string
+    {
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        if ($method === 'GET' || $method === 'HEAD') {
+            $query = parse_url((string) ($_SERVER['REQUEST_URI'] ?? ''), PHP_URL_QUERY);
+            return safeLoginReturnTarget(current_app_path() . (is_string($query) ? '?' . $query : ''));
+        }
+
+        // A submitted form must never be replayed after login. Return to its
+        // same-origin GET page when the browser supplied one.
+        $referer = (string) ($_SERVER['HTTP_REFERER'] ?? '');
+        $host = parse_url('http://' . (string) ($_SERVER['HTTP_HOST'] ?? ''), PHP_URL_HOST);
+        if ($referer === '' || !is_string($host) || $host === ''
+            || strcasecmp((string) parse_url($referer, PHP_URL_HOST), $host) !== 0) {
+            return null;
+        }
+
+        $path = parse_url($referer, PHP_URL_PATH);
+        if (!is_string($path)) {
+            return null;
+        }
+        $base = app_base_path();
+        if ($base !== '' && !path_starts_with_base_path($path, $base)) {
+            return null;
+        }
+        $path = $base !== '' ? substr($path, strlen($base)) : $path;
+        $query = parse_url($referer, PHP_URL_QUERY);
+
+        return safeLoginReturnTarget(($path !== '' ? $path : '/') . (is_string($query) ? '?' . $query : ''));
+    }
+}
+
+if (!function_exists('rememberLoginReturnTarget')) {
+    function rememberLoginReturnTarget(): ?string
+    {
+        $target = loginReturnTargetFromRequest();
+        if ($target !== null) {
+            $_SESSION['_login_return_to'] = $target;
+        }
+        return $target;
+    }
+}
+
+if (!function_exists('consumeLoginReturnTarget')) {
+    function consumeLoginReturnTarget(): ?string
+    {
+        $target = safeLoginReturnTarget($_SESSION['_login_return_to'] ?? null);
+        unset($_SESSION['_login_return_to']);
+        return $target;
+    }
+}
+
 if (!function_exists('currentAccessRequestContext')) {
     function currentAccessRequestContext(): \App\Security\AccessRequestContext
     {
@@ -119,8 +190,9 @@ if (!function_exists('recoverLegacyRolesAccessSession')) {
             return;
         }
 
+        $returnTo = loginReturnTargetFromRequest();
         session_regenerate_id(true);
-        $_SESSION = [];
+        $_SESSION = $returnTo !== null ? ['_login_return_to' => $returnTo] : [];
         if (current_app_path() !== '/login') {
             redirect_to('/login');
         }
@@ -156,8 +228,9 @@ if (!function_exists('enforceUsableCompanyAccessSession')) {
             return;
         }
 
+        $returnTo = loginReturnTargetFromRequest();
         session_regenerate_id(true);
-        $_SESSION = [];
+        $_SESSION = $returnTo !== null ? ['_login_return_to' => $returnTo] : [];
         redirect_to('/login');
     }
 }
