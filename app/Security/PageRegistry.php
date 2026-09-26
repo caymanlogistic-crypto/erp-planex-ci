@@ -74,6 +74,7 @@ final class PageRegistry
             self::definition('company.vehicle_sets', 'ТС', 'Справочники', '', 230, '/company/vehicle-sets'),
             self::definition('company.statistics.managers', 'Работа логистов', 'Статистика', '', 250, '/company/statistics/managers'),
             self::definition('company.statistics.feo_share', 'Доля компаний в ФЭО', 'Статистика', '', 260, '/company/statistics/feo-share'),
+            self::definition('company.statistics.cargo_balance', 'Баланс заявок', 'Статистика', '', 270, '/company/statistics/cargo-balance'),
             self::definition('company.finance.dashboard', 'Дашборд', 'Финансы', '', 300, '/company/finance/dashboard'),
             self::definition('company.finance.bank_accounts', 'Выписки со счёта', 'Финансы', '', 310, '/company/finance/bank-accounts', badgeProvider: 'bank_attention'),
             self::definition('company.finance.closing_documents', 'Закрывающие документы', 'Финансы', '', 320, '/company/finance/closing-documents', badgeProvider: 'closing_documents_problem'),

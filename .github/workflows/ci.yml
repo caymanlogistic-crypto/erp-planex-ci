@@ -219,6 +219,8 @@ jobs:
           php tests/feo_transfers_activation_mysql_test.php
           php tests/feo_share_statistics_contract_test.php
           php tests/feo_share_statistics_mysql_test.php
+          php tests/cargo_balance_statistics_contract_test.php
+          php tests/cargo_balance_statistics_mysql_test.php
 
       - name: Changed Python syntax checks
         if: steps.changes.outputs.python == 'true'
