@@ -28,7 +28,10 @@ try {
   assert.equal(await page.locator('.fs-chart-node').count(), 6, 'two series have a point for each period');
   assert.equal(await page.locator('.manager-stats__node-tooltip').count(), 0, 'per-point popups are removed');
   assert.equal(await page.locator('.fs-chart linearGradient').count(), 2, 'both lines have matching gradients');
-  assert.equal(await page.locator('.fs-chart-node circle').first().getAttribute('r'), '4.5', 'visible points match the other statistics charts');
+  assert.equal(await page.locator('.fs-chart-node.is-company circle').first().getAttribute('r'), '4', 'company points match the managers chart');
+  assert.equal(await page.locator('.fs-chart-node.is-manager circle').first().getAttribute('r'), '3.5', 'series points match the managers chart');
+  assert.equal(await page.locator('.fs-snapshot-table tbody tr.is-latest').count(), 0, 'latest snapshot has no permanent highlight');
+  assert.deepEqual(await page.locator('.fs-snapshot-table tbody tr').evaluateAll(rows => rows.slice(0, 2).map(row => getComputedStyle(row.cells[0]).backgroundColor)), ['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'], 'first snapshot starts with the same cell background as the next one');
   const margins = await page.locator('.fs-chart').evaluate(svg => {
     const box = svg.viewBox.baseVal, grid = svg.querySelector('.grid-line');
     return [Number(grid.getAttribute('x1')), box.width - Number(grid.getAttribute('x2'))];
@@ -40,6 +43,8 @@ try {
   assert.equal(await page.locator('.fs-chart-node:hover').count(), 0, 'points do not receive pointer hover');
   assert.equal(await page.locator('.fs-snapshot-table tr.is-period-active').getAttribute('data-period'), '1', 'plot hover highlights the matching table row');
   assert.equal(await page.locator('.manager-stats__period-guide.is-visible').count(), 1, 'one vertical guide is visible');
+  assert.deepEqual(await page.locator('.manager-stats__period-guide').evaluate(guide => [getComputedStyle(guide).stroke, getComputedStyle(guide).opacity]), ['rgb(192, 120, 48)', '0.95'], 'vertical guide has a visible copper stroke');
+  assert.deepEqual(await page.locator('.fs-chart-node.is-period-active circle').evaluateAll(circles => circles.map(circle => getComputedStyle(circle).r)), ['5.5px', '5.5px'], 'active points match the managers chart size');
   assert.equal(await page.locator('.fs-period-popup.is-visible').count(), 1, 'one shared summary is visible');
   assert.equal(await page.locator('.fs-period-popup .manager-stats__period-popup-item').count(), 2, 'summary contains both series');
   assert.deepEqual(await page.locator('.fs-period-popup .manager-stats__period-popup-item').evaluateAll(items => items.map(item => item.style.color)), ['rgb(192, 120, 48)','rgb(74, 122, 155)'], 'summary text follows line colors');
