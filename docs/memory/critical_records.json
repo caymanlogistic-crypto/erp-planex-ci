@@ -290,8 +290,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ac3ec9ff6819fcc168e903227558f590f838423b",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ac3ec9ff6819fcc168e903227558f590f838423b/tests/trip_completion_browser_test.mjs",
+      "verified_sha": "5efc011a314c6187fa49aa79a2b2fa74d27a1295",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/5efc011a314c6187fa49aa79a2b2fa74d27a1295/tests/trip_completion_browser_test.mjs",
       "owning_paths": [
         "app/Service/TripDocument*.php",
         "app/Service/TripCompletionService.php",

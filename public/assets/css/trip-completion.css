@@ -405,7 +405,7 @@
 .lab-trip-progress-count { font-size: 11.5px; white-space: nowrap; }
 .lab-trip-progress-track { display: flex; width: 100%; height: 7px; margin-top: 8px; overflow: hidden; border-radius: 5px; background: #e7e2da; }
 .lab-trip-progress-fill { display: block; height: 100%; border-radius: inherit; background: #7eaf8a; transition: width .2s ease; }
-.lab-trip-progress-no-tn { display: block; height: 100%; flex: none; background: #dc1010; transition: width .2s ease; }
+.lab-trip-progress-no-tn { display: block; height: 100%; flex: none; margin-left: auto; background: #dc1010; transition: width .2s ease; }
 .lab-trip-progress-track.has-no-tn .lab-trip-progress-fill { border-radius: 5px 0 0 5px; }
 .lab-trip-progress-track.has-no-tn .lab-trip-progress-no-tn { border-radius: 0 5px 5px 0; }
 .lab-trip-progress-track.has-no-tn.has-no-ready .lab-trip-progress-no-tn { border-radius: 5px; }
