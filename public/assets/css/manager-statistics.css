@@ -131,108 +131,156 @@
   min-width: 0;
 }
 .manager-stats__chart-controls .manager-stats__segments {
+  width: max-content;
+  max-width: 100%;
   height: 28px;
+  padding: 0;
 }
 .manager-stats__chart-controls .manager-stats__segments a {
-  height: 22px;
+  flex: none;
+  height: auto;
+  padding: 0 10px;
+  border-right: 1px solid var(--line-hair);
+  font-size: 9.5px;
+  font-weight: 700;
+}
+.manager-stats__chart-controls .manager-stats__segments a:last-child {
+  border-right: 0;
 }
 .manager-stats__chart-controls .manager-stats__metric-tabs {
   flex: none;
 }
 .manager-stats__line-chart {
   height: auto;
+  cursor: crosshair;
 }
-.manager-stats__integrated-summary {
-  border-top: 1px solid var(--line-soft);
-  background: var(--surface-form);
+.manager-stats__period-table.is-all-metrics {
+  min-width: 950px;
+  table-layout: fixed;
 }
-.manager-stats__integrated-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: 9px 11px 0;
+.manager-stats__period-table.is-all-metrics th:first-child,
+.manager-stats__period-table.is-all-metrics td:first-child {
+  width: 174px;
 }
-.manager-stats__integrated-head h3 {
-  margin: 0;
-  color: var(--text-main);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: .04em;
-  text-transform: uppercase;
+.manager-stats__period-table.is-all-metrics thead tr:first-child th:not(:first-child) {
+  border-left: 1px solid var(--line-soft);
+  text-align: center;
 }
-.manager-stats__integrated-head span {
-  color: var(--text-faint);
-  font-size: 9.5px;
+.manager-stats__period-table.is-all-metrics .is-group-start {
+  border-left: 1px solid var(--line-soft);
 }
-.manager-stats__integrated-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr));
-  gap: 8px;
-  padding: 8px 11px 11px;
+.manager-stats__period-table.is-all-metrics thead tr:nth-child(2) th {
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 600;
 }
-.manager-stats__integrated-manager {
-  min-width: 0;
+.manager-stats__period-table.is-all-metrics td.num,
+.manager-stats__period-table.is-all-metrics th.num {
+  padding-right: 7px;
+  padding-left: 7px;
+}
+.manager-stats__period-table.is-all-metrics tbody tr.is-period-active td {
+  background: var(--surface-muted);
+}
+.manager-stats__period-table.is-all-metrics tbody tr:focus {
+  outline: 1px solid var(--chart-copper);
+  outline-offset: -1px;
+}
+.manager-stats__period-guide {
+  stroke: var(--chart-copper);
+  stroke-width: 2;
+  stroke-dasharray: 5 4;
+  opacity: 0;
+  pointer-events: none;
+  transition: none;
+}
+.manager-stats__period-guide.is-visible {
+  opacity: .95;
+}
+.manager-stats__plot-hit {
+  fill: transparent;
+  pointer-events: all;
+  cursor: crosshair;
+}
+.manager-stats__chart-area,
+.manager-stats__chart-line,
+.manager-stats__line-chart > .grid-line,
+.manager-stats__line-chart > .axis-label,
+.manager-stats__chart-node {
+  pointer-events: none;
+}
+.manager-stats__chart-node > circle {
+  transition: none;
+}
+.manager-stats__chart-node.is-period-active > circle {
+  fill: var(--node-color);
+  r: 5.5px;
+  transform: none;
+}
+.manager-stats__chart-body {
+  position: relative;
+}
+.manager-stats__period-popup {
+  position: absolute;
+  z-index: 4;
+  top: 13px;
+  box-sizing: border-box;
+  width: 260px;
+  padding: 7px 8px;
   border: 1px solid var(--line-soft);
   background: var(--surface-strong);
+  color: var(--text-main);
+  box-shadow: 0 2px 7px rgba(40, 30, 20, .16);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: none;
 }
-.manager-stats__integrated-manager-head {
+.manager-stats__period-popup.is-visible {
+  opacity: 1;
+  visibility: visible;
+}
+.manager-stats__period-popup-title {
+  display: block;
+  padding-bottom: 5px;
+  font-size: 10px;
+  line-height: 1.2;
+}
+.manager-stats__period-popup-item {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 34px;
-  padding: 7px 9px;
-  border-bottom: 1px solid var(--line-hair);
-  font-size: 10px;
+  gap: 6px;
+  padding: 4px 0;
+  border-top: 1px solid var(--line-hair);
 }
-.manager-stats__integrated-manager-head strong {
-  min-width: 0;
+.manager-stats__period-popup-name {
+  flex: 0 0 75px;
   overflow: hidden;
+  font-size: 9px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.manager-stats__integrated-manager-head span {
-  flex: none;
-  color: var(--text-muted);
-  font-size: 9px;
-}
-.manager-stats__integrated-primary,
-.manager-stats__integrated-secondary {
+.manager-stats__period-popup-values {
   display: grid;
-  margin: 0;
-}
-.manager-stats__integrated-primary {
+  flex: 1;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-}
-.manager-stats__integrated-secondary {
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  border-top: 1px solid var(--line-hair);
-  background: var(--surface-form);
-}
-.manager-stats__integrated-primary>div,
-.manager-stats__integrated-secondary>div {
+  gap: 3px;
   min-width: 0;
-  padding: 7px 9px;
-  border-right: 1px solid var(--line-hair);
+  text-align: right;
 }
-.manager-stats__integrated-primary>div:last-child,
-.manager-stats__integrated-secondary>div:last-child {
-  border-right: 0;
-}
-.manager-stats__integrated-summary dt {
-  color: var(--text-faint);
-  font-size: 8.5px;
-  line-height: 1.3;
+.manager-stats__period-popup-values span,
+.manager-stats__period-popup-values b,
+.manager-stats__period-popup-values small {
+  display: block;
   white-space: nowrap;
 }
-.manager-stats__integrated-summary dd {
-  margin: 3px 0 0;
-  color: var(--text-main);
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 1.2;
-  white-space: nowrap;
+.manager-stats__period-popup-values b {
+  font-size: 10px;
+}
+.manager-stats__period-popup-values small {
+  color: inherit;
+  font-size: 8px;
+  font-weight: 600;
 }
 @media (max-width: 1050px) {
   .manager-stats__trend .manager-stats__card-head {
@@ -250,26 +298,56 @@
     gap: 8px;
   }
   .manager-stats__chart-controls .manager-stats__segments {
-    width: 100%;
+    width: max-content;
   }
   .manager-stats__chart-controls .manager-stats__metric-tabs {
     width: max-content;
   }
   .manager-stats__line-chart {
-    height: 230px;
+    height: 138px;
   }
-  .manager-stats__integrated-head {
-    align-items: flex-start;
+  .manager-stats__period-popup {
+    top: 8px;
+    width: 176px;
+    max-width: calc(100% - 8px);
+    padding: 5px 6px;
+  }
+  .manager-stats__period-popup-title {
+    padding-bottom: 3px;
+    font-size: 9.5px;
+  }
+  .manager-stats__period-popup-item {
+    align-items: stretch;
     flex-direction: column;
-    gap: 3px;
+    gap: 1px;
+    padding: 3px 0;
   }
-  .manager-stats__integrated-secondary {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .manager-stats__period-popup-name {
+    flex: none;
+    font-size: 8.5px;
   }
-  .manager-stats__integrated-secondary>div:nth-child(2) {
-    border-right: 0;
+  .manager-stats__period-popup-values {
+    flex: none;
+    text-align: center;
   }
-  .manager-stats__integrated-secondary>div:nth-child(-n+2) {
-    border-bottom: 1px solid var(--line-hair);
+  .manager-stats__period-popup-values b {
+    font-size: 9px;
+  }
+  .manager-stats__period-popup-values small {
+    font-size: 7.5px;
+  }
+  .manager-stats__period-popup.is-dense {
+    width: min(340px, calc(100% - 8px));
+  }
+  .manager-stats__period-popup.is-dense .manager-stats__period-popup-item {
+    align-items: center;
+    flex-direction: row;
+  }
+  .manager-stats__period-popup.is-dense .manager-stats__period-popup-name {
+    flex: 0 0 75px;
+  }
+  .manager-stats__period-popup.is-dense .manager-stats__period-popup-values {
+    flex: 1;
+    text-align: right;
   }
 }

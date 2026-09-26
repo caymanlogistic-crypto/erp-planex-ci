@@ -40,7 +40,7 @@ $check(
     && str_contains($service, "r.normalized_name='логист'"),
     'exact active central Logist role supports system and historical role shapes'
 );
-$check(str_contains($view, 'Рейсы поставлены на погрузку') && str_contains($view, 'Точные значения по периодам') && str_contains($view, 'Сводка по логистам') && str_contains($view, 'Из чего сложился результат'), 'decision layers are rendered');
+$check(str_contains($view, 'Рейсы поставлены на погрузку') && str_contains($view, 'Точные значения по периодам') && !str_contains($view, 'Сводка по логистам') && !str_contains($view, 'Из чего сложился результат'), 'accepted report sections are rendered');
 $check(
     str_contains($view, "'week'=>'Недели'")
     && str_contains($view, "'month'=>'Месяцы'")
@@ -59,7 +59,7 @@ $check(
     'rolling 8-week 4-month and 12-month windows'
 );
 $check(
-    str_contains($view, '<th class="num is-total">Итого</th>')
+    str_contains($view, '<th colspan="3" scope="colgroup" class="is-total">Итого</th>')
     && str_contains($css, '.manager-stats__period-table .is-total { font-weight:800; }')
     && !str_contains($css, '.manager-stats__period-table .is-company'),
     'rightmost total column uses bold weight only'
@@ -74,42 +74,43 @@ $check(
 );
 $check(
     str_contains($view, "array_reverse(\$statistics['period_rows'])")
-    && str_contains($view, 'abs($metricValue($row, $metric)) > 0.000001')
+    && str_contains($view, "(int)(\$row['trips'] ?? 0) > 0")
     && str_contains($view, 'foreach($visiblePeriodRows as$row)'),
-    'exact values are newest-first and suppress zero totals for the active metric'
+    'exact values are newest-first and independent of the chart metric'
 );
 $check(
     str_contains($view, "' C'.\$number(\$cp1x)")
     && str_contains($view, '$smooth=.82')
     && str_contains($view, 'manager-stats__chart-node')
-    && str_contains($view, 'manager-stats__node-tooltip')
+    && !str_contains($view, 'manager-stats__node-tooltip')
     && !str_contains($view, '<title>')
     && str_contains($css, '@keyframes manager-stats-line-in')
     && str_contains($css, '@media(prefers-reduced-motion:reduce)'),
-    'strongly curved animated accessible node chart without native SVG tooltips'
+    'strongly curved animated chart with one shared tooltip'
 );
 $check(
     str_contains($controller, "\$pageScripts = ['/assets/js/manager-statistics.js']")
-    && str_contains($js, "node.addEventListener('pointerenter', activate)")
-    && str_contains($js, "node.addEventListener('focusin', activate)")
-    && str_contains($js, 'parent.appendChild(node)'),
-    'active chart node is raised above every SVG sibling'
+    && str_contains($js, "svg.addEventListener('pointermove'")
+    && str_contains($js, "node.addEventListener('focus'")
+    && str_contains($js, 'manager-stats__period-popup'),
+    'plot hover and keyboard focus share one period summary'
 );
 $check(
     !str_contains($view, 'manager-stats__ranking')
     && !str_contains($view, 'manager-stats__table-card')
-    && str_contains($view, 'manager-stats__integrated-summary')
-    && str_contains($view, "foreach(\$statistics['managers']as\$row)")
-    && str_contains($view, "\$metricValue(\$row,\$metric)/\$totalMetric*100"),
-    'ranking and separate totals removed while real manager values remain in period card'
+    && !str_contains($view, 'manager-stats__integrated-summary')
+    && !str_contains($view, 'manager-stats__details')
+    && str_contains($view, 'foreach($tableMeasures as$measure=>$label)'),
+    'only chart and all-metric period table remain'
 );
 $check(
     str_contains($view, 'manager-stats__chart-controls')
     && str_contains($css, '.manager-stats__charts {')
     && str_contains($css, 'display: block;')
-    && str_contains($css, '.manager-stats__integrated-grid'),
-    'full-width chart with report controls and integrated manager summary'
+    && str_contains($css, '.manager-stats__period-popup'),
+    'full-width chart with report controls and shared summary'
 );
+$check(str_contains($view, 'manager-stats-manager-area-') && str_contains($view, 'manager-stats__chart-area--manager'), 'each manager line has its own gradient');
 $check(str_contains($css, '.manager-stats__field--mode { width:max-content; min-width:0; }'), 'report mode selector has no empty tail after Year');
 $check(str_contains($css, '@media(max-width:1180px)') && str_contains($css, '@media(max-width:760px)'), 'responsive dashboard contract');
 
