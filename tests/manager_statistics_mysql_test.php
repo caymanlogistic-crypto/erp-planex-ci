@@ -3,10 +3,10 @@ declare(strict_types=1);
 
 namespace App\Service {
     final class AccessControlService {
-        public static function effectiveDataScope(string $entityType): string { return 'all'; }
+        public static function effectiveDataScope(string $entityType): string { return 'none'; }
     }
     final class RegulatedDataScopeService {
-        public static function condition(string $type, string $id, string $creator=''): array { return ['sql'=>'1=1','params'=>[]]; }
+        public static function condition(string $type, string $id, string $creator=''): array { return ['sql'=>'1=0','params'=>[]]; }
     }
 }
 
@@ -87,7 +87,7 @@ try {
         ['membership_id'=>102,'full_name'=>'Борис Серов'],
         ['membership_id'=>103,'full_name'=>'Вера Тихая'],
     ]);
-    check($dashboard['totals']['trips']===3, 'company trip total excludes users outside exact Logist role');
+    check($dashboard['totals']['trips']===3, 'granted report includes company Logist trips even when trip data scope is none');
     check($dashboard['totals']['requests']===3 && (float)$dashboard['totals']['weight']===7000.0, 'company requests and weight totals');
     check($dashboard['totals']['completed']===1 && $dashboard['totals']['cancelled']===1, 'current statuses retained');
     check(count($dashboard['managers'])===3, 'active employees include zero-result rows');
