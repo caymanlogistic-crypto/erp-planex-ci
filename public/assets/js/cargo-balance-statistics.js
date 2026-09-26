@@ -38,9 +38,12 @@
         result.push({from,to,label:name.charAt(0).toUpperCase()+name.slice(1)+' '+month.getUTCFullYear()});
       }
     } else {
-      for(let i=2;i>=0;i--) {
-        const year=current.getUTCFullYear()-i;
-        result.push({from:year+'-01-01',to:i===0?today:year+'-12-31',label:String(year)});
+      for(let monthIndex=0;monthIndex<=current.getUTCMonth();monthIndex++) {
+        const month=new Date(Date.UTC(current.getUTCFullYear(),monthIndex,1));
+        const from=iso(month),end=new Date(Date.UTC(current.getUTCFullYear(),monthIndex+1,0));
+        const to=monthIndex===current.getUTCMonth()?today:iso(end);
+        const name=month.toLocaleDateString('ru-RU',{month:'short',timeZone:'UTC'}).replace('.','');
+        result.push({from,to,label:name.charAt(0).toUpperCase()+name.slice(1)+' '+current.getUTCFullYear()});
       }
     }
     return result.filter(p=>p.to>=dailyRows[0].date);
