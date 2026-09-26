@@ -267,8 +267,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "afd157b44be94aed10ff6ea8707ec3b846882d57",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/afd157b44be94aed10ff6ea8707ec3b846882d57/tests/report_email_recipients_mysql_test.php",
+      "verified_sha": "21934d0cbf9211d2e9ec9a14c446c3f363ade4cc",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/21934d0cbf9211d2e9ec9a14c446c3f363ade4cc/tests/fixtures/feo_transfers_render.php",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",
