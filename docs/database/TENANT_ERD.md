@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `f263af952933de98b022b8e1f0e2e7c9679d7ac061d630beba7e4f9a2e33aac7`
+**Schema fingerprint:** `b4325ae47a45a505cf8f1b8e720c087d4628d7ea135d14d60bff37f6338cf4c4`
 
 ## Architecture overview
 

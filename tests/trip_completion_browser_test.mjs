@@ -10,6 +10,7 @@ const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php')],{encoding:'utf8'});
 let postCount=0;
+let lastSaveBody='';
 let documents=[];
 const payload=()=>JSON.stringify({ok:true,request:{id:12,is_complete:false,documents},trip:{complete_count:1,request_count:3}});
 const server=http.createServer((req,res)=>{
@@ -18,6 +19,7 @@ const server=http.createServer((req,res)=>{
     const body=[];
     req.on('data',chunk=>body.push(chunk));
     req.on('end',()=>{
+      if(req.url?.endsWith('/requests/12')) lastSaveBody=Buffer.concat(body).toString('utf8');
       if(req.url?.endsWith('/documents')){
         const id=300+documents.length+1;
         documents.push({id,download_name:`Рейс_244_Заявка_275006_ТН_0${documents.length+1}.jpg`,download_url:`/download/${id}`,delete_url:`/delete/${id}`});
@@ -61,6 +63,14 @@ try{
   assert.match(await row.locator('.lab-choice--recovery').evaluate(element=>getComputedStyle(element).backgroundColor),/rgb\(/,'driver recovery has state color');
   assert.equal(await row.locator('.lab-choice--recovery input[value="tracker"]').isEnabled(),true,'recovery choices enabled when needed');
   assert.equal(await row.locator('textarea[name="comment"]').count(),1,'comment is multiline');
+  assert.equal(await row.locator('[data-document-count]').isVisible(),false,'scan count is visually hidden');
+  const noTn=row.locator('.lab-docs-no-tn');
+  await noTn.check();
+  await page.locator('.logistics-trip').first().locator('.lab-trip-breakdown-line--error').waitFor();
+  assert.match(await page.locator('.logistics-trip').first().locator('summary').innerText(),/Нет ТН.*275006/s,'missing TN is shown in compact quality summary');
+  await row.locator('[data-save-label]').filter({hasText:/Сохранено|Собрано/}).waitFor();
+  assert.match(lastSaveBody,/name="tn_absent"[\s\S]*?\r\n\r\n1\r\n/,'external checkbox is submitted with request form');
+  await noTn.uncheck();
   const interval=row.locator('input[name="pickup_interval"]');
   await interval.fill('01092609401000');
   assert.equal(await interval.inputValue(),'01.09.26 09:40 - 10:00','digits formatted as date and two times');
@@ -73,7 +83,7 @@ try{
   assert.equal(await row.locator('.lab-choice--driver input[value="no"]').isChecked(),false,'signature choices are exclusive');
   const fileInput=row.locator('.lab-docs-input');
   await fileInput.setInputFiles({name:'first.jpg',mimeType:'image/jpeg',buffer:Buffer.from('test-image')});
-  await row.locator('[data-document-count]').filter({hasText:'1/2'}).waitFor({timeout:3000}).catch(async()=>{throw new Error('Upload not reflected: '+JSON.stringify({postCount,documents,label:await row.locator('[data-save-label]').textContent(),message:await row.locator('.lab-docs-message').textContent(),count:await row.locator('[data-document-count]').textContent(),errors}));});
+  await row.locator('[data-document-count]').filter({hasText:'1/2'}).waitFor({state:'attached',timeout:3000}).catch(async()=>{throw new Error('Upload not reflected: '+JSON.stringify({postCount,documents,label:await row.locator('[data-save-label]').textContent(),message:await row.locator('.lab-docs-message').textContent(),count:await row.locator('[data-document-count]').textContent(),errors}));});
   assert.equal(await row.locator('.lab-docs-view').count(),1,'one scan can be viewed');
   assert.equal(await row.locator('.lab-docs-download').count(),1,'one scan can be downloaded');
   assert.equal(await row.locator('.file-type-badge').count(),0,'file type badge removed');
@@ -81,12 +91,12 @@ try{
   assert.equal(await page.locator('.lab-scan-preview').evaluate(element=>element.open),true,'preview opens in a dialog');
   await page.locator('.lab-scan-preview-head button').click();
   await fileInput.setInputFiles({name:'second.jpg',mimeType:'image/jpeg',buffer:Buffer.from('test-image')});
-  await row.locator('[data-document-count]').filter({hasText:'2/2'}).waitFor();
+  await row.locator('[data-document-count]').filter({hasText:'2/2'}).waitFor({state:'attached'});
   assert.equal(await row.locator('.lab-docs-add').isDisabled(),true,'third scan cannot be added');
   assert.equal(await row.locator('.lab-docs-item').count(),2,'two scan limit visible');
   page.once('dialog',dialog=>dialog.accept());
   await row.locator('.lab-docs-remove').first().click();
-  await row.locator('[data-document-count]').filter({hasText:'1/2'}).waitFor({timeout:3000}).catch(async()=>{throw new Error('Delete not reflected: '+JSON.stringify({postCount,documents,label:await row.locator('[data-save-label]').textContent(),count:await row.locator('[data-document-count]').textContent(),errors}));});
+  await row.locator('[data-document-count]').filter({hasText:'1/2'}).waitFor({state:'attached',timeout:3000}).catch(async()=>{throw new Error('Delete not reflected: '+JSON.stringify({postCount,documents,label:await row.locator('[data-save-label]').textContent(),count:await row.locator('[data-document-count]').textContent(),errors}));});
   await page.locator('input[name="q"]').fill('275006');
   assert.equal(await page.locator('.logistics-trip:not([hidden])').count(),1,'search works without submit button');
   assert.equal(await page.locator('.logistics-trip:not([hidden]) .logistics-request-row:not([hidden])').count(),1,'matching request remains visible');

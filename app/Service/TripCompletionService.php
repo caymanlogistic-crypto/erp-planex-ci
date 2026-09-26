@@ -31,6 +31,9 @@ final class TripCompletionService
             $stmt=$this->tenant->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='waste_trip_completion_items' AND column_name IN ('sender_signature_status','driver_signature_status','tn_datetime_status','recovery_source')");
             $stmt->execute();
             if ((int)$stmt->fetchColumn()!==4) return false;
+            $stmt=$this->tenant->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='waste_trip_completion_items' AND column_name='tn_absent'");
+            $stmt->execute();
+            if ((int)$stmt->fetchColumn()!==1) return false;
             return true;
         } catch (Throwable) { return false; }
     }
@@ -52,6 +55,7 @@ final class TripCompletionService
                      COUNT(DISTINCT wtr.id) request_count,
                      COUNT(DISTINCT CASE WHEN i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
                          AND i.driver_signature_present=1 AND i.sender_signature_present=1
+                         AND COALESCE(i.tn_absent,0)=0
                          AND (i.tn_datetime_status='full' OR (i.tn_datetime_status IN ('partial','no') AND i.recovery_source IS NOT NULL) OR i.tn_datetime_status IS NULL)
                          AND doc.waste_trip_request_id IS NOT NULL THEN wtr.id END) complete_count,
                      COUNT(DISTINCT doc.id) document_count,
@@ -95,6 +99,7 @@ final class TripCompletionService
                 i.arrived_at,i.departed_at,COALESCE(i.driver_signature_present,0) driver_signature_present,
                 COALESCE(i.sender_signature_present,0) sender_signature_present,
                 i.driver_signature_status,i.sender_signature_status,i.tn_datetime_status,i.recovery_source,
+                COALESCE(i.tn_absent,0) tn_absent,
                 COALESCE(i.tn_datetime_missing,0) tn_datetime_missing,
                 COALESCE(i.data_from_tracker,0) data_from_tracker,
                 COALESCE(i.data_from_driver,0) data_from_driver,
@@ -134,7 +139,8 @@ final class TripCompletionService
     public function issues(array $request): array
     {
         $issues=[];
-        if (empty($request['documents'])) $issues[]='Нет скана ТН';
+        if ((int)($request['tn_absent']??0)===1) $issues[]='Нет ТН';
+        else if (empty($request['documents'])) $issues[]='Нет скана ТН';
         if (empty($request['arrived_at']) || empty($request['departed_at'])) $issues[]='Нет даты или времени';
         if (in_array($request['tn_datetime_status']??null,['partial','no'],true) && empty($request['recovery_source'])) $issues[]='Не указан источник восстановления';
         if ((int)($request['driver_signature_present']??0)!==1) $issues[]='Нет подписи водителя';
@@ -150,25 +156,27 @@ final class TripCompletionService
         $driverStatus=(string)($input['driver_signature_status']??(!empty($input['driver_signature_present'])?'yes':''));
         $dateStatus=(string)($input['tn_datetime_status']??(!empty($input['tn_datetime_missing'])?'no':($arrived&&$departed?'full':'')));
         $recoverySource=(string)($input['recovery_source']??(!empty($input['data_from_tracker'])?'tracker':((!empty($input['data_from_driver'])||!empty($input['data_invented']))?'driver':'')));
+        $tnAbsent=$input['tn_absent']??'0';
         if (!in_array($senderStatus,['','yes','no'],true) || !in_array($driverStatus,['','yes','no'],true)
-            || !in_array($dateStatus,['','full','partial','no'],true) || !in_array($recoverySource,['','tracker','driver'],true)) {
+            || !in_array($dateStatus,['','full','partial','no'],true) || !in_array($recoverySource,['','tracker','driver'],true)
+            || !in_array((string)$tnAbsent,['0','1'],true)) {
             throw new DomainException('Некорректный статус заявки.');
         }
         if (!in_array($dateStatus,['partial','no'],true)) $recoverySource='';
         $comment=trim((string)($input['comment']??''));
         if (mb_strlen($comment)>500) throw new DomainException('Комментарий не должен превышать 500 символов.');
         $stmt=$this->tenant->prepare("INSERT INTO waste_trip_completion_items
-            (waste_trip_request_id,arrived_at,departed_at,driver_signature_present,driver_signature_status,sender_signature_present,sender_signature_status,tn_datetime_missing,tn_datetime_status,data_from_tracker,data_from_driver,data_invented,recovery_source,comment,updated_by_membership_id)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE arrived_at=VALUES(arrived_at),departed_at=VALUES(departed_at),
+            (waste_trip_request_id,arrived_at,departed_at,driver_signature_present,driver_signature_status,sender_signature_present,sender_signature_status,tn_datetime_missing,tn_datetime_status,tn_absent,data_from_tracker,data_from_driver,data_invented,recovery_source,comment,updated_by_membership_id)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE arrived_at=VALUES(arrived_at),departed_at=VALUES(departed_at),
             driver_signature_present=VALUES(driver_signature_present),sender_signature_present=VALUES(sender_signature_present),
-            driver_signature_status=VALUES(driver_signature_status),sender_signature_status=VALUES(sender_signature_status),tn_datetime_status=VALUES(tn_datetime_status),recovery_source=VALUES(recovery_source),
+            driver_signature_status=VALUES(driver_signature_status),sender_signature_status=VALUES(sender_signature_status),tn_datetime_status=VALUES(tn_datetime_status),tn_absent=VALUES(tn_absent),recovery_source=VALUES(recovery_source),
             tn_datetime_missing=VALUES(tn_datetime_missing),data_from_tracker=VALUES(data_from_tracker),
             data_from_driver=VALUES(data_from_driver),data_invented=VALUES(data_invented),
             comment=VALUES(comment),updated_by_membership_id=VALUES(updated_by_membership_id),lock_version=lock_version+1");
         $stmt->execute([
             $requestId,$arrived,$departed,
             $driverStatus==='yes'?1:0,$driverStatus?:null,$senderStatus==='yes'?1:0,$senderStatus?:null,
-            in_array($dateStatus,['partial','no'],true)?1:0,$dateStatus?:null,$recoverySource==='tracker'?1:0,
+            in_array($dateStatus,['partial','no'],true)?1:0,$dateStatus?:null,(int)$tnAbsent,$recoverySource==='tracker'?1:0,
             $recoverySource==='driver'?1:0,0,$recoverySource?:null,
             $comment!==''?$comment:null,$actorMembershipId,
         ]);

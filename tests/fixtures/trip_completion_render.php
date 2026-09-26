@@ -30,6 +30,7 @@ foreach($trips as &$trip){
   $request['driver_signature_status']=(int)$request['driver_signature_present']===1?'yes':null;
   $request['sender_signature_status']=(int)$request['sender_signature_present']===1?'yes':'no';
   $request['tn_datetime_status']=(int)$request['tn_datetime_missing']===1?'no':'full';
+  $request['tn_absent']=0;
   $request['recovery_source']=(int)$request['data_from_driver']===1?'driver':null;
  }
  unset($request);
