@@ -95,6 +95,7 @@
 #feo-share-root .fs-chart .grid-line{stroke:var(--line-hair);stroke-width:1}
 #feo-share-root .fs-chart .axis-label{fill:var(--text-faint);font:9px var(--font)}
 #feo-share-root .fs-chart-node:focus-visible{outline:none}
+#feo-share-root .fs-chart-node>circle{transform:scale(var(--fs-point-scale,1))}
 #feo-share-root .manager-stats__period-guide{stroke:#C07830}
 #feo-share-root .fs-snapshot-table tbody tr.is-period-active td{background:var(--surface-muted)}
 #feo-share-root .fs-snapshot-table tbody tr:focus{outline:1px solid var(--chart-copper);outline-offset:-1px}

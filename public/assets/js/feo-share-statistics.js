@@ -166,6 +166,13 @@
     const wrap = root.querySelector('.fs-chart-wrap');
     const popup = wrap.querySelector('.fs-period-popup');
     const guide = chart.querySelector('.manager-stats__period-guide');
+    const chartBox = chart.getBoundingClientRect();
+    const viewBox = chart.viewBox.baseVal;
+    const ownScale = Math.min(chartBox.width / viewBox.width, chartBox.height / viewBox.height);
+    const managerScale = Math.min(chartBox.width / 920, window.matchMedia('(max-width:760px)').matches ? 138 / 171.6 : Infinity);
+    // Managers use a fixed SVG viewBox, while this report fits its viewBox to the card.
+    // Match the rendered circle and stroke diameter, including on narrow screens.
+    chart.style.setProperty('--fs-point-scale', String(managerScale / ownScale));
     const tableRows = [...root.querySelectorAll('.fs-snapshot-table tbody tr[data-period]')];
     const nodes = [...chart.querySelectorAll('.fs-chart-node')];
     const countNodes = [...chart.querySelectorAll('.fs-chart-node.is-company')];
