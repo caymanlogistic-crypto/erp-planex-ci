@@ -20,3 +20,5 @@ $router->post('/company/settings/services/yandex',[$serviceKeysController,'saveY
 // Compatibility for an already-open page; the same owner-only gate protects both routes.
 $router->post('/company/feo/requests/coordinates/settings',[$serviceKeysController,'saveYandex'],'company.service_keys');
 $router->post('/company/settings/services/mail',[$serviceKeysController,'saveMail'],'company.service_keys');
+$router->get('/company/settings/services/report-recipients/suggest',[$serviceKeysController,'suggestReportRecipients'],'company.service_keys');
+$router->post('/company/settings/services/report-recipients',[$serviceKeysController,'saveReportRecipients'],'company.service_keys');

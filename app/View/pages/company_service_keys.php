@@ -1,6 +1,17 @@
 <div class="service-keys" data-service-keys>
   <div class="page-head"><div class="page-head-left"><h1 class="page-title">Ключи и сервисы</h1><div class="page-summary">Подключения к внешним сервисам для вашей компании.</div></div></div>
   <div class="service-keys-grid">
+    <section class="panel-section service-key-card report-email-card" aria-labelledby="report-email-title" data-report-email data-state="<?= e(json_encode($reportEmails,JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP)) ?>" data-suggest-url="<?= e(app_url('/company/settings/services/report-recipients/suggest')) ?>">
+      <header class="service-key-head"><div><h2 class="section-title" id="report-email-title">Получатели отчётов по рейсам</h2><p class="service-key-caption">Список адресов для отправки отчёта одной кнопкой</p></div><span class="badge report-email-badge">Настройка</span></header>
+      <div class="service-key-body">
+        <?php if ($reportEmailError): ?><div class="notice warn" role="alert"><?= e($reportEmailError) ?></div><?php else: ?>
+        <div class="report-email-form"><div class="field report-email-person"><label class="field-label" for="report-email-person">Сотрудник или email</label><input class="field-input" id="report-email-person" type="search" role="combobox" aria-autocomplete="list" aria-controls="report-email-options" aria-expanded="false" autocomplete="off" placeholder="Начните вводить фамилию"><div class="report-email-options" id="report-email-options" role="listbox" hidden></div></div><div class="field"><label class="field-label" for="report-email-address">Email получателя</label><input class="field-input" id="report-email-address" type="email" autocomplete="off" placeholder="name@company.ru"></div><button type="button" class="btn btn-secondary report-email-add">+ Email</button></div>
+        <div class="report-email-feedback" role="status" aria-live="polite" hidden></div>
+        <div class="report-email-recipients"><div class="report-email-list-title">Получатели отчёта <span class="report-email-count"></span></div><ul class="report-email-list" aria-label="Список получателей отчёта"></ul><div class="report-email-empty" hidden>Получатели пока не добавлены.</div></div>
+        <div class="report-email-footer"><label class="report-email-logist"><input type="checkbox" id="report-email-logist"><span><b>Отправлять ответственному логисту</b><small>Адрес берётся из карточки логиста, за которым закреплён рейс.</small></span></label><form class="report-email-actions" action="<?= e(app_url('/company/settings/services/report-recipients')) ?>" method="post" data-report-email-form><?= csrfField() ?><input type="hidden" name="recipients"><input type="hidden" name="send_responsible_logist"><button type="submit" class="btn btn-primary">Сохранить получателей</button><span class="report-email-save-state" role="status" aria-live="polite">Настройки не менялись</span></form></div>
+        <?php endif; ?>
+      </div>
+    </section>
   <?php if ($dbError): ?><div class="form-alert alert-error" role="alert"><div class="alert-body"><?= e($dbError) ?></div></div><?php else: ?>
     <section class="panel-section service-key-card" aria-labelledby="yandex-title">
       <header class="service-key-head">
@@ -34,9 +45,8 @@
             <div class="field"><label class="field-label" for="mail-<?= $protocol ?>-port">Порт</label><input class="field-input" id="mail-<?= $protocol ?>-port" type="number" min="1" max="65535" name="<?= $protocol ?>_port" value="<?= (int)$mailSettings[$protocol.'_port'] ?>" required></div>
           </div>
           <?php endforeach; ?>
-          <div class="field"><label class="field-label" for="mail-encryption">Защита подключения</label><select class="field-select" id="mail-encryption" name="encryption"><option value="SSL">SSL</option></select></div>
+          <div class="mail-controls"><div class="field"><label class="field-label" for="mail-encryption">Защита подключения</label><select class="field-select" id="mail-encryption" name="encryption"><option value="SSL">SSL</option></select></div><div class="service-key-actions"><button class="btn btn-primary" type="submit">Сохранить настройки</button></div></div>
           <div class="notice is-hidden" data-mail-settings-message role="status"></div>
-          <div class="service-key-actions"><button class="btn btn-primary" type="submit">Сохранить настройки</button></div>
         </form>
         <?php endif; ?>
       </div>
@@ -45,3 +55,5 @@
   </div>
 </div>
 <script src="<?= app_url('/assets/js/service-keys.js') ?>" defer></script>
+<link rel="stylesheet" href="<?= app_url('/assets/css/service-keys-layout.css') ?>">
+<script src="<?= app_url('/assets/js/report-email-recipients.js') ?>" defer></script>

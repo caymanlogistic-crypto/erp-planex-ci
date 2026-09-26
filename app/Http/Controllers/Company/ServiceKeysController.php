@@ -8,7 +8,9 @@ use App\Service\FeoRequestService;
 use PDO;
 use App\Service\EmployeeMailSettingsService;
 use App\Service\EmployeeMailProfileService;
+use App\Service\ReportEmailRecipientService;
 require_once __DIR__.'/../../../Service/EmployeeMailProfileService.php';
+require_once __DIR__.'/../../../Service/ReportEmailRecipientService.php';
 use RuntimeException;
 
 final class ServiceKeysController
@@ -29,6 +31,9 @@ final class ServiceKeysController
             $stored=$mail->read();
             $mailSettings=$stored??$mailSettings; $mailConfigured=$stored!==null;
         } catch (\Throwable) { $mailError='Настройки почты недоступны. Проверьте обновление структуры базы данных.'; }
+        $reportEmails=['recipients'=>[],'send_responsible_logist'=>false];$reportEmailError=null;
+        try { $reportEmails=$this->reportEmailContext()->read(); }
+        catch (\Throwable) { $reportEmailError='Получатели отчётов недоступны. Проверьте обновление структуры базы данных.'; }
         $pageTitle='Ключи и сервисы'; $pageContext='Настройки › '.$pageTitle;
         $topbarCrumbs=[['label'=>'Настройки','url'=>null],['label'=>$pageTitle,'url'=>null]];
         $config=$this->config; $db=$this->db;
@@ -65,6 +70,40 @@ final class ServiceKeysController
         } catch (\Throwable) {
             jsonResponse(['success'=>false,'message'=>'Не удалось сохранить настройки почты. Попробуйте ещё раз.'],422);
         }
+    }
+
+    public function suggestReportRecipients(): void
+    {
+        header('Cache-Control: no-store');
+        try {
+            $query=is_scalar($_GET['q']??null)?(string)$_GET['q']:'';
+            $suggestions=$this->reportEmailContext()->suggest($query);
+            jsonResponse(['success'=>true,'people'=>$suggestions]);
+        } catch (\Throwable) { jsonResponse(['success'=>false,'message'=>'Не удалось найти сотрудников.'],422); }
+    }
+
+    public function saveReportRecipients(): void
+    {
+        verifyCsrfRequest();header('Cache-Control: no-store');
+        try {
+            $service=$this->reportEmailContext();$access=AccessRuntime::current();
+            $stmt=$this->db->connection()->prepare('SELECT account_id FROM company_memberships WHERE id=? AND company_id=?');
+            $stmt->execute([$access->membershipId(),$access->companyId()]);
+            $actorAccountId=(int)$stmt->fetchColumn();
+            $recipients=json_decode((string)($_POST['recipients']??'[]'),true,64,JSON_THROW_ON_ERROR);
+            if (!is_array($recipients) || !array_is_list($recipients)) throw new \InvalidArgumentException('Некорректный список получателей.');
+            $service->save($actorAccountId,(int)$access->membershipId(),$recipients,($_POST['send_responsible_logist']??'0')==='1');
+            jsonResponse(['success'=>true,'message'=>'Получатели отчётов сохранены.']);
+        } catch (\InvalidArgumentException|\DomainException|\JsonException $error) {
+            jsonResponse(['success'=>false,'message'=>$error->getMessage()],422);
+        } catch (\Throwable) { jsonResponse(['success'=>false,'message'=>'Не удалось сохранить получателей.'],422); }
+    }
+
+    private function reportEmailContext(): ReportEmailRecipientService
+    {
+        $access=AccessRuntime::current();
+        if (!$access->isActive() || !$access->isSystemOwner() || !$access->companyId()) throw new \DomainException('Настройка доступна только руководителю компании.');
+        return new ReportEmailRecipientService($this->db->connection(),(int)$access->companyId());
     }
 
     private function mailContext(): EmployeeMailSettingsService

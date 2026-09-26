@@ -26,7 +26,7 @@ final class TripCompletionController
         unset($_SESSION['trip_completion_success'],$_SESSION['trip_completion_error']);
         try {
             [$company,$service]=$this->context();
-            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (147).');
+            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (148).');
             $all=$service->trips('',false);
             $metrics=[
                 'trips'=>count($all),
@@ -48,12 +48,33 @@ final class TripCompletionController
         ob_start();require base_path('app/View/pages/company_logistics_assistant.php');$content=(string)ob_get_clean();require base_path('app/View/layouts/main.php');
     }
 
+    public function journal(): void
+    {
+        header('Cache-Control: no-store');
+        $error=null;$journal=['rows'=>[],'total'=>0,'page'=>1,'pages'=>1,'users'=>[]];
+        $filterValue=static fn(string $key): string=>is_scalar($_GET[$key]??null)?(string)$_GET[$key]:'';
+        $filters=['from'=>$filterValue('from'),'to'=>$filterValue('to'),'user'=>$filterValue('user'),
+            'kind'=>$filterValue('kind'),'q'=>$filterValue('q'),'page'=>$filterValue('page')];
+        try {
+            [, $service]=$this->context();
+            $journal=$service->journal($filters);
+        } catch (Throwable $exception) {
+            error_log('registration journal failed: '.$exception->getMessage());
+            $error='Не удалось загрузить журнал регистрации заявок.';
+        }
+        $pageTitle='Журнал регистрации заявок';$pageContext='Журналы › Регистрация заявок';
+        $topbarCrumbs=[['label'=>'Журналы','url'=>null],['label'=>'Регистрация заявок','url'=>null]];
+        $config=$this->config;$db=$this->db;
+        ob_start();require base_path('app/View/pages/company_registration_journal.php');$content=(string)ob_get_clean();
+        require base_path('app/View/layouts/main.php');
+    }
+
     public function save(string $tripId,string $requestId): void
     {
         verifyCsrfRequest();
         try {
-            [, $service,$actor]=$this->context();$this->assertReady($service);
-            $service->save((int)$tripId,(int)$requestId,$_POST,$actor);
+            [, $service,$actor,$login]=$this->context();$this->assertReady($service);
+            $service->save((int)$tripId,(int)$requestId,$_POST,$actor,$login);
             if ($this->wantsJson()) $this->json($this->payload($service,(int)$tripId,(int)$requestId));
             $this->success('Данные заявки сохранены.');
         }
@@ -68,13 +89,13 @@ final class TripCompletionController
     {
         verifyCsrfRequest();
         try {
-            [, $service,$actor]=$this->context();$this->assertReady($service);
+            [, $service,$actor,$login]=$this->context();$this->assertReady($service);
             $files=$this->uploadedFiles('documents');
             if ($files===[]) throw new DomainException('Выберите хотя бы один файл.');
             if ($service->activeDocumentCount((int)$tripId,(int)$requestId)+count($files)>2) throw new DomainException('К заявке можно добавить не более двух сканов ТН.');
             $total=array_sum(array_map(static fn(array $file):int=>(int)($file['size']??0),$files));
             if ($total>80*1024*1024) throw new DomainException('Общий размер файлов больше 80 МБ.');
-            foreach ($files as $file) $service->upload((int)$tripId,(int)$requestId,$file,$actor);
+            foreach ($files as $file) $service->upload((int)$tripId,(int)$requestId,$file,$actor,true,$login);
             if ($this->wantsJson()) $this->json($this->payload($service,(int)$tripId,(int)$requestId));
             $this->success('Сканы ТН загружены: '.count($files).'.');
         } catch (Throwable $exception) {
@@ -88,8 +109,8 @@ final class TripCompletionController
     {
         verifyCsrfRequest();
         try {
-            [, $service,$actor]=$this->context();$this->assertReady($service);
-            $service->softDelete((int)$tripId,(int)$requestId,(int)$documentId,$actor);
+            [, $service,$actor,$login]=$this->context();$this->assertReady($service);
+            $service->softDelete((int)$tripId,(int)$requestId,(int)$documentId,$actor,$login);
             if ($this->wantsJson()) $this->json($this->payload($service,(int)$tripId,(int)$requestId));
             $this->success('Файл удалён из комплекта.');
         }
@@ -133,7 +154,7 @@ final class TripCompletionController
         finally { if (is_string($path) && is_file($path)) @unlink($path); }
     }
 
-    /** @return array{0:array<string,mixed>,1:TripCompletionService,2:int} */
+    /** @return array{0:array<string,mixed>,1:TripCompletionService,2:int,3:string} */
     private function context(): array
     {
         $access=AccessRuntime::current();$companyId=(int)($access->companyId()?:getSessionCompanyId());
@@ -141,12 +162,15 @@ final class TripCompletionController
         if ($companyId<=0 || $actor<=0) throw new DomainException('Войдите в компанию.');
         $central=$this->db->connection();$stmt=$central->prepare("SELECT * FROM companies WHERE id=? AND status='active' LIMIT 1");$stmt->execute([$companyId]);
         $company=$stmt->fetch(PDO::FETCH_ASSOC);if (!$company) throw new DomainException('Компания недоступна.');
+        $identity=$central->prepare("SELECT a.login FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id WHERE m.id=? AND m.company_id=? AND m.status='active' AND a.status='active' LIMIT 1");
+        $identity->execute([$actor,$companyId]);$login=$identity->fetchColumn();
+        if (!is_string($login) || $login==='') throw new DomainException('Пользователь компании недоступен.');
         $tenant=(new Database(companyDatabaseConfig($this->config,$company)))->connection();
-        return [$company,new TripCompletionService($tenant,$companyId),$actor];
+        return [$company,new TripCompletionService($tenant,$companyId),$actor,$login];
     }
 
     private function assertReady(TripCompletionService $service): void
-    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (147).'); }
+    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (148).'); }
 
     /** @return list<array<string,mixed>> */
     private function uploadedFiles(string $field): array

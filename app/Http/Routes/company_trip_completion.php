@@ -4,6 +4,7 @@ require_once base_path('app/Http/Controllers/Company/TripCompletionController.ph
 $tripCompletionController=new \App\Http\Controllers\Company\TripCompletionController($config,$db);
 $tripCompletionPage='company.documents.collection';
 $router->get('/company/logistics-assistant',[$tripCompletionController,'index'],$tripCompletionPage);
+$router->get('/company/registration-journal',[$tripCompletionController,'journal'],'company.registration_journal');
 $router->post('/company/logistics-assistant/{tripId}/requests/{requestId}',[$tripCompletionController,'save'],$tripCompletionPage);
 $router->post('/company/logistics-assistant/{tripId}/requests/{requestId}/documents',[$tripCompletionController,'upload'],$tripCompletionPage);
 $router->post('/company/logistics-assistant/{tripId}/requests/{requestId}/documents/{documentId}/delete',[$tripCompletionController,'deleteFile'],$tripCompletionPage);
