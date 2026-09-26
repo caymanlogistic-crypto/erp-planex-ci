@@ -398,3 +398,139 @@
   .lab-trip-progress { grid-column: 2 / -1; }
   .lab-trip-overview { grid-column: 2 / -1; }
 }
+/* Статусы и сводка рейса. */
+.logistics-workspace .lab-trip-overview { gap: 3px; }
+.logistics-workspace .lab-trip-overview[hidden] { display: none !important; }
+.logistics-workspace .lab-trip-restored[hidden] { display: none !important; }
+.logistics-workspace .lab-trip-counters { display: block; line-height: 1.25; }
+.logistics-workspace .lab-trip-counter {
+  display: inline;
+  min-height: 0;
+  margin-right: 5px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: #895b43;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.logistics-workspace .lab-trip-counter:not(:last-child)::after { content: ' ·'; color: #baaa9d; }
+.logistics-workspace .lab-trip-examples {
+  color: #756b62;
+  font-size: 9px;
+  line-height: 1.25;
+  -webkit-line-clamp: 2;
+}
+.logistics-workspace .logistics-trip-summary.logistics-trip-summary {
+  grid-template-columns: 16px minmax(100px, .45fr) minmax(155px, .78fr) minmax(140px, .72fr) minmax(120px, .58fr) minmax(215px, 1.2fr) minmax(185px, 1.1fr);
+  gap: 8px;
+}
+.logistics-workspace .lab-trip-overview,
+.logistics-workspace .lab-trip-restored {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-self: stretch;
+  min-width: 0;
+  padding-left: 10px;
+  border-left: 1px solid var(--line-soft);
+}
+.logistics-workspace .logistics-trip-summary:has(.lab-trip-restored[hidden]) .lab-trip-overview:not([hidden]),
+.logistics-workspace .logistics-trip-summary:has(.lab-trip-overview[hidden]) .lab-trip-restored:not([hidden]) {
+  grid-column: 6 / -1;
+}
+.logistics-workspace .lab-trip-breakdown-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 5px;
+  margin-top: 4px;
+  font-size: 9.5px;
+  line-height: 1.25;
+}
+.logistics-workspace .lab-trip-breakdown-caption { overflow-wrap: anywhere; color: var(--text-main); }
+.logistics-workspace .lab-trip-breakdown-count { color: var(--accent-deep); font-size: 10px; }
+.logistics-workspace .lab-trip-breakdown-ids {
+  grid-column: 1 / -1;
+  max-height: 2.5em;
+  overflow: auto;
+  color: var(--text-muted);
+  scrollbar-width: thin;
+}
+@media (max-width: 1120px) {
+  .logistics-workspace .logistics-trip-summary.logistics-trip-summary {
+    grid-template-columns: 16px 100px minmax(175px, 1fr) minmax(160px, .9fr) minmax(130px, .7fr);
+  }
+  .logistics-workspace .lab-trip-overview {
+    grid-column: 3 / 5;
+    padding: 7px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+  .logistics-workspace .lab-trip-restored {
+    grid-column: 5;
+    padding: 7px 0 0 10px;
+    border-top: 1px solid var(--line-soft);
+  }
+  .logistics-workspace .logistics-trip-summary:has(.lab-trip-restored[hidden]) .lab-trip-overview:not([hidden]),
+  .logistics-workspace .logistics-trip-summary:has(.lab-trip-overview[hidden]) .lab-trip-restored:not([hidden]) {
+    grid-column: 3 / -1;
+  }
+}
+@media (max-width: 760px) {
+  .logistics-workspace .logistics-trip-summary.logistics-trip-summary { grid-template-columns: 16px minmax(85px, .7fr) minmax(0, 1.5fr); }
+  .logistics-workspace .lab-trip-overview,
+  .logistics-workspace .lab-trip-restored {
+    grid-column: 2 / -1;
+    padding: 7px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--line-soft);
+  }
+  .logistics-workspace .logistics-trip-summary:has(.lab-trip-restored[hidden]) .lab-trip-overview:not([hidden]),
+  .logistics-workspace .logistics-trip-summary:has(.lab-trip-overview[hidden]) .lab-trip-restored:not([hidden]) {
+    grid-column: 2 / -1;
+  }
+}
+.logistics-workspace .logistics-request-row:has(.lab-choice--recovery input[value="driver"]:checked) .logistics-time {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+}
+.logistics-workspace .logistics-request-row:has(.lab-choice--recovery input[value="driver"]:checked) .logistics-time .field-label {
+  color: var(--warning-text);
+}
+.logistics-workspace .logistics-request-row:has(.lab-choice--recovery input[value="driver"]:checked) .logistics-time .field-input {
+  border-color: var(--warning-border);
+  background: var(--warning-field);
+  color: var(--warning-text);
+}
+.logistics-workspace .lab-choice--recovery[data-recovery-state="complete"]:has(input[value="tracker"]:checked) {
+  border-color: var(--success-border);
+  background: var(--success-bg);
+}
+.logistics-workspace .lab-choice--recovery[data-recovery-state="complete"]:has(input[value="driver"]:checked) {
+  border-color: var(--warning-border);
+  background: var(--warning-bg);
+}
+.logistics-workspace .lab-choice--recovery[data-recovery-state="complete"]:has(input[value="driver"]:checked) .lab-choice-title {
+  color: var(--warning-text);
+}
+.logistics-workspace .lab-trip-progress-fill {
+  background: var(--lab-progress-color, var(--danger));
+}
+.logistics-workspace .lab-docs-item {
+  grid-template-columns: minmax(0, 1fr) auto 22px 18px;
+}
+.logistics-workspace .lab-docs-download {
+  display: inline-grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-strong);
+  color: var(--text-main);
+  cursor: pointer;
+}
+.logistics-workspace .lab-docs-download:hover { background: var(--surface-form); }
+.logistics-workspace .lab-docs-download:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.logistics-workspace .lab-docs-download svg { width: 14px; height: 14px; }

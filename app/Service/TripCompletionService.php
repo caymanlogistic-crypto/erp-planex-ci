@@ -118,7 +118,7 @@ final class TripCompletionService
             $request['driver_signature_status']=$request['driver_signature_status']?:((int)$request['driver_signature_present']===1?'yes':null);
             $request['sender_signature_status']=$request['sender_signature_status']?:((int)$request['sender_signature_present']===1?'yes':null);
             $request['tn_datetime_status']=$request['tn_datetime_status']?:((int)$request['tn_datetime_missing']===1?'no':(!empty($request['arrived_at'])&&!empty($request['departed_at'])?'full':null));
-            $request['recovery_source']=$request['recovery_source']?:((int)$request['data_from_tracker']===1?'tracker':((int)$request['data_from_driver']===1?'driver':((int)$request['data_invented']===1?'invented':null)));
+            $request['recovery_source']=$request['recovery_source']==='invented'?'driver':($request['recovery_source']?:((int)$request['data_from_tracker']===1?'tracker':(((int)$request['data_from_driver']===1||(int)$request['data_invented']===1)?'driver':null)));
             $request['documents']=$documents[(int)$request['id']]??[];
             $request['issues']=$this->issues($request);
             $request['is_complete']=$request['issues']===[];
@@ -149,9 +149,9 @@ final class TripCompletionService
         $senderStatus=(string)($input['sender_signature_status']??(!empty($input['sender_signature_present'])?'yes':''));
         $driverStatus=(string)($input['driver_signature_status']??(!empty($input['driver_signature_present'])?'yes':''));
         $dateStatus=(string)($input['tn_datetime_status']??(!empty($input['tn_datetime_missing'])?'no':($arrived&&$departed?'full':'')));
-        $recoverySource=(string)($input['recovery_source']??(!empty($input['data_from_tracker'])?'tracker':(!empty($input['data_from_driver'])?'driver':(!empty($input['data_invented'])?'invented':''))));
+        $recoverySource=(string)($input['recovery_source']??(!empty($input['data_from_tracker'])?'tracker':((!empty($input['data_from_driver'])||!empty($input['data_invented']))?'driver':'')));
         if (!in_array($senderStatus,['','yes','no'],true) || !in_array($driverStatus,['','yes','no'],true)
-            || !in_array($dateStatus,['','full','partial','no'],true) || !in_array($recoverySource,['','tracker','driver','invented'],true)) {
+            || !in_array($dateStatus,['','full','partial','no'],true) || !in_array($recoverySource,['','tracker','driver'],true)) {
             throw new DomainException('Некорректный статус заявки.');
         }
         if (!in_array($dateStatus,['partial','no'],true)) $recoverySource='';
@@ -169,7 +169,7 @@ final class TripCompletionService
             $requestId,$arrived,$departed,
             $driverStatus==='yes'?1:0,$driverStatus?:null,$senderStatus==='yes'?1:0,$senderStatus?:null,
             in_array($dateStatus,['partial','no'],true)?1:0,$dateStatus?:null,$recoverySource==='tracker'?1:0,
-            $recoverySource==='driver'?1:0,$recoverySource==='invented'?1:0,$recoverySource?:null,
+            $recoverySource==='driver'?1:0,0,$recoverySource?:null,
             $comment!==''?$comment:null,$actorMembershipId,
         ]);
     }
@@ -250,14 +250,14 @@ final class TripCompletionService
         if (!class_exists(ZipArchive::class)) throw new RuntimeException('На сервере недоступно создание Excel.');
         $path=tempnam(sys_get_temp_dir(),'trip_report_');if($path===false)throw new RuntimeException('Не удалось подготовить Excel.');
         $zip=new ZipArchive();if($zip->open($path,ZipArchive::OVERWRITE)!==true){@unlink($path);throw new RuntimeException('Не удалось создать Excel.');}
-        $headers=['Заявка','Грузоотправитель','Адрес забора','Грузополучатель','Адрес выгрузки','Вес, кг','Приезд на забор','Уезд с забора','Подпись водителя','Подпись отправителя','Даты и времени нет в ТН','Восстановлены по трекеру','Внесены со слов водителя','Придуманы','Файлов ТН','Статус','Проблемы','Комментарий'];
+        $headers=['Заявка','Грузоотправитель','Адрес забора','Грузополучатель','Адрес выгрузки','Вес, кг','Приезд на забор','Уезд с забора','Подпись водителя','Подпись отправителя','Даты и времени нет в ТН','Восстановлены по трекеру','Внесены со слов вод./мен','Файлов ТН','Статус','Проблемы','Комментарий'];
         $rows=[];
         foreach($trip['requests']as$request)$rows[]=[
             (string)$request['zayavka_id'],(string)$request['shipper_name'],(string)$request['pickup_address'],(string)$request['consignee_name'],(string)$request['delivery_address'],
             (float)$request['snapshot_mass_kg'],$this->excelSerial($request['arrived_at']??null),$this->excelSerial($request['departed_at']??null),
             (int)$request['driver_signature_present']===1?'Да':'Нет',(int)$request['sender_signature_present']===1?'Да':'Нет',
             (int)$request['tn_datetime_missing']===1?'Да':'Нет',(int)$request['data_from_tracker']===1?'Да':'Нет',
-            (int)$request['data_from_driver']===1?'Да':'Нет',(int)$request['data_invented']===1?'Да':'Нет',count($request['documents']),
+            ($request['recovery_source']==='driver'?'Да':'Нет'),count($request['documents']),
             $request['is_complete']?'Собрано':'Требует дополнения',implode(', ',$request['issues']),(string)$request['completion_comment'],
         ];
         $last=max(3,3+count($rows));$sheetRows=[];
@@ -265,10 +265,10 @@ final class TripCompletionService
         $summary='Статус: '.(($trip['status']??'')==='completed'?'Груз сдан':'Идёт вывоз').' · Выезд: '.$this->reportDate((string)($trip['actual_start_date']??'')).' · Сдача: '.$this->reportDate((string)($trip['actual_end_date']??'')).' · Заявок: '.count($rows).' · Полностью собрано: '.(int)$trip['complete_count'];
         $sheetRows[]='<row r="2" ht="21" customHeight="1"><c r="A2" s="5" t="inlineStr"><is><t>'.$this->xml($summary).'</t></is></c></row>';
         $cells=[];foreach($headers as$i=>$value)$cells[]=$this->xlsxCell($i+1,3,$value,2);$sheetRows[]='<row r="3" ht="34" customHeight="1">'.implode('',$cells).'</row>';
-        foreach($rows as$rowIndex=>$values){$excelRow=$rowIndex+4;$style=$values[15]==='Собрано'?4:3;$cells=[];foreach($values as$columnIndex=>$value){$cellStyle=$columnIndex===5||$columnIndex===14?6:(in_array($columnIndex,[6,7],true)?($style===4?8:7):$style);$cells[]=$this->xlsxCell($columnIndex+1,$excelRow,$value,$cellStyle);}$sheetRows[]='<row r="'.$excelRow.'" ht="42" customHeight="1">'.implode('',$cells).'</row>';}
-        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:R'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>';
-        foreach([14,27,36,27,36,12,20,20,18,20,22,22,24,13,12,20,34,28]as$i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
-        $sheet.='</cols><sheetData>'.implode('',$sheetRows).'</sheetData><autoFilter ref="A3:R'.$last.'"/><mergeCells count="2"><mergeCell ref="A1:R1"/><mergeCell ref="A2:R2"/></mergeCells><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
+        foreach($rows as$rowIndex=>$values){$excelRow=$rowIndex+4;$style=$values[14]==='Собрано'?4:3;$cells=[];foreach($values as$columnIndex=>$value){$cellStyle=$columnIndex===5||$columnIndex===13?6:(in_array($columnIndex,[6,7],true)?($style===4?8:7):$style);$cells[]=$this->xlsxCell($columnIndex+1,$excelRow,$value,$cellStyle);}$sheetRows[]='<row r="'.$excelRow.'" ht="42" customHeight="1">'.implode('',$cells).'</row>';}
+        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:Q'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="3" topLeftCell="A4" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="18"/><cols>';
+        foreach([14,27,36,27,36,12,20,20,18,20,22,22,24,12,20,34,28]as$i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
+        $sheet.='</cols><sheetData>'.implode('',$sheetRows).'</sheetData><autoFilter ref="A3:Q'.$last.'"/><mergeCells count="2"><mergeCell ref="A1:Q1"/><mergeCell ref="A2:Q2"/></mergeCells><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>';
         $zip->addFromString('[Content_Types].xml','<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>');
         $zip->addFromString('_rels/.rels','<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>');
         $zip->addFromString('xl/workbook.xml','<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Рейс '.$this->xml((string)$trip['business_id']).'" sheetId="1" r:id="rId1"/></sheets></workbook>');
