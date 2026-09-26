@@ -106,3 +106,170 @@
   .manager-stats__metric-tabs { width:max-content; }
   .manager-stats__line-chart { height:230px; }
 }
+
+/* DESIGN LAB: full-width chart and aligned report controls. */
+.manager-stats__field-label {
+  color: var(--text-faint);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .035em;
+  text-transform: uppercase;
+}
+.manager-stats__charts {
+  display: block;
+}
+.manager-stats__trend .manager-stats__card-head {
+  align-items: center;
+}
+.manager-stats__chart-controls {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.manager-stats__chart-controls .manager-stats__field--mode {
+  min-width: 0;
+}
+.manager-stats__chart-controls .manager-stats__segments {
+  height: 28px;
+}
+.manager-stats__chart-controls .manager-stats__segments a {
+  height: 22px;
+}
+.manager-stats__chart-controls .manager-stats__metric-tabs {
+  flex: none;
+}
+.manager-stats__line-chart {
+  height: auto;
+}
+.manager-stats__integrated-summary {
+  border-top: 1px solid var(--line-soft);
+  background: var(--surface-form);
+}
+.manager-stats__integrated-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 11px 0;
+}
+.manager-stats__integrated-head h3 {
+  margin: 0;
+  color: var(--text-main);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.manager-stats__integrated-head span {
+  color: var(--text-faint);
+  font-size: 9.5px;
+}
+.manager-stats__integrated-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 370px), 1fr));
+  gap: 8px;
+  padding: 8px 11px 11px;
+}
+.manager-stats__integrated-manager {
+  min-width: 0;
+  border: 1px solid var(--line-soft);
+  background: var(--surface-strong);
+}
+.manager-stats__integrated-manager-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 34px;
+  padding: 7px 9px;
+  border-bottom: 1px solid var(--line-hair);
+  font-size: 10px;
+}
+.manager-stats__integrated-manager-head strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.manager-stats__integrated-manager-head span {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 9px;
+}
+.manager-stats__integrated-primary,
+.manager-stats__integrated-secondary {
+  display: grid;
+  margin: 0;
+}
+.manager-stats__integrated-primary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.manager-stats__integrated-secondary {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  border-top: 1px solid var(--line-hair);
+  background: var(--surface-form);
+}
+.manager-stats__integrated-primary>div,
+.manager-stats__integrated-secondary>div {
+  min-width: 0;
+  padding: 7px 9px;
+  border-right: 1px solid var(--line-hair);
+}
+.manager-stats__integrated-primary>div:last-child,
+.manager-stats__integrated-secondary>div:last-child {
+  border-right: 0;
+}
+.manager-stats__integrated-summary dt {
+  color: var(--text-faint);
+  font-size: 8.5px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+.manager-stats__integrated-summary dd {
+  margin: 3px 0 0;
+  color: var(--text-main);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+@media (max-width: 1050px) {
+  .manager-stats__trend .manager-stats__card-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .manager-stats__chart-controls {
+    width: 100%;
+  }
+}
+@media (max-width: 760px) {
+  .manager-stats__chart-controls {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .manager-stats__chart-controls .manager-stats__segments {
+    width: 100%;
+  }
+  .manager-stats__chart-controls .manager-stats__metric-tabs {
+    width: max-content;
+  }
+  .manager-stats__line-chart {
+    height: 230px;
+  }
+  .manager-stats__integrated-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+  .manager-stats__integrated-secondary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .manager-stats__integrated-secondary>div:nth-child(2) {
+    border-right: 0;
+  }
+  .manager-stats__integrated-secondary>div:nth-child(-n+2) {
+    border-bottom: 1px solid var(--line-hair);
+  }
+}
