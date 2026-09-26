@@ -55,6 +55,11 @@ try{
   assert.match(await progress.innerText(),/2 из 3 обработано/,'missing TN counts as a processed request');
   assert.equal(await progress.locator('.lab-trip-progress-no-tn').evaluate(element=>getComputedStyle(element).backgroundColor),'rgb(220, 16, 16)','missing TN has a vivid red segment');
   assert.equal(await progress.locator('.lab-trip-progress-no-tn').evaluate(element=>Math.round(element.getBoundingClientRect().width/element.parentElement.getBoundingClientRect().width*100)),33,'one missing TN occupies one third of the bar');
+  const redAtRight=()=>progress.locator('.lab-trip-progress-no-tn').evaluate(element=>Math.abs(element.getBoundingClientRect().right-element.parentElement.getBoundingClientRect().right)<1);
+  assert.equal(await redAtRight(),true,'missing TN segment ends at the right edge after the ready segment');
+  await progress.locator('.lab-trip-progress-fill').evaluate(element=>{element.style.width='0%';element.style.transition='none';});
+  assert.equal(await redAtRight(),true,'missing TN segment stays at the right edge without ready requests');
+  await progress.locator('.lab-trip-progress-fill').evaluate(element=>{element.style.width='33.33%';element.style.transition='';});
   assert.match(await page.locator('.logistics-trip').first().locator('summary').innerText(),/Качество заполнения.*Частично заполнены.*Восстановлено.*Со слов вод\.\/мен/is,'compact quality and recovery shown');
   assert.equal(await page.locator('.logistics-trip').first().locator('.lab-trip-email').count(),0,'manager email removed');
   assert.equal(await page.locator('.lab-choice--recovery input[value="invented"]').count(),0,'invented choice removed');
@@ -75,6 +80,7 @@ try{
   assert.match(await progress.innerText(),/3 из 3 обработано/,'new missing TN immediately increases processed count');
   await page.waitForFunction(()=>{const segment=document.querySelector('.logistics-trip .lab-trip-progress-no-tn');return segment&&segment.getBoundingClientRect().width/segment.parentElement.getBoundingClientRect().width>.665;});
   assert.equal(await progress.locator('.lab-trip-progress-no-tn').evaluate(element=>Math.round(element.getBoundingClientRect().width/element.parentElement.getBoundingClientRect().width*100)),67,'red segment grows for two missing TN requests');
+  assert.equal(await redAtRight(),true,'additional missing TN share grows leftward from the right edge');
   assert.equal(await page.locator('.logistics-trip').first().isVisible(),true,'processed trip with missing TN remains visible under hide-complete filter');
   await row.locator('[data-save-label]').filter({hasText:/Сохранено|Собрано/}).waitFor();
   assert.match(lastSaveBody,/name="tn_absent"[\s\S]*?\r\n\r\n1\r\n/,'external checkbox is submitted with request form');
