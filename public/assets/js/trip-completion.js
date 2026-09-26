@@ -13,8 +13,6 @@
   empty.hidden = true;
   root.querySelector('.logistics-trip-list')?.after(empty);
 
-  const requestWord = (count) => count % 10 === 1 && count % 100 !== 11 ? 'заявка'
-    : count % 10 >= 2 && count % 10 <= 4 && (count % 100 < 12 || count % 100 > 14) ? 'заявки' : 'заявок';
   const make = (tag, className, text) => {
     const element = document.createElement(tag);
     element.className = className;
@@ -106,17 +104,21 @@
     documents.slice(0, 2).forEach((documentData) => {
       const item = make('div', 'lab-docs-item', '');
       item.dataset.documentId = documentData.id;
-      const badge = make('span', 'file-type-badge', (documentData.download_name.split('.').pop() || 'FILE').toUpperCase().slice(0, 4));
       const name = make('span', 'lab-docs-name', documentData.download_name);
       name.title = documentData.download_name;
       const view = make('button', 'lab-docs-view', 'Просмотр');
       view.type = 'button';
       view.dataset.previewUrl = documentData.download_url + '?preview=1';
+      const download = make('a', 'lab-docs-download', '');
+      download.href = documentData.download_url;
+      download.title = 'Скачать ' + documentData.download_name;
+      download.setAttribute('aria-label', download.title);
+      download.innerHTML = '<svg aria-hidden="true" viewBox="0 0 16 16" fill="none"><path d="M8 2v8m0 0 3-3m-3 3L5 7M3 12.5h10" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>';
       const remove = make('button', 'lab-docs-remove', '×');
       remove.type = 'button';
       remove.dataset.deleteUrl = documentData.delete_url;
       remove.setAttribute('aria-label', 'Убрать ' + documentData.download_name);
-      item.append(badge, name, view, remove);
+      item.append(name, view, download, remove);
       list.append(item);
     });
     card.querySelector('[data-document-count]').textContent = `${documents.length}/2`;
@@ -126,10 +128,10 @@
 
   const updateTripSummary = (trip) => {
     const rows = [...trip.querySelectorAll('[data-request-row]')];
-    const missing = { scans: [], time: [], oo: [], driver: [], recovery: [], comments: [] };
+    const partial = [], unfilled = [], tracker = [], driverSource = [];
     let ready = 0;
     rows.forEach((row) => {
-      const id = row.querySelector('.logistics-request-route b')?.textContent.trim() || `№ ${row.dataset.requestId}`;
+      const id = (row.querySelector('.logistics-request-route b')?.textContent.trim() || row.dataset.requestId).replace(/^№\s*/, '');
       const scans = row.querySelectorAll('.lab-docs-item').length;
       const interval = row.querySelector('.logistics-time')?.dataset.intervalState;
       const date = row.querySelector('.lab-choice--date input:checked')?.value;
@@ -137,42 +139,37 @@
       const oo = row.querySelector('.lab-choice--oo input:checked')?.value;
       const driver = row.querySelector('.lab-choice--driver input:checked')?.value;
       const comment = row.querySelector('.logistics-comment textarea')?.value.trim();
-      if (!scans) missing.scans.push(id);
-      if (date !== 'full' || interval !== 'valid') {
-        const status = date === 'no' ? 'нет времени' : date === 'partial' ? 'время частично' : date === 'full' ? 'ввод не завершён' : 'статус не указан';
-        const source = recovery === 'tracker' ? 'восстановлено по трекеру' : recovery === 'driver' ? 'восстановлено со слов водителя' : recovery === 'invented' ? 'данные придуманы' : (date === 'no' || date === 'partial') ? 'источник не указан' : '';
-        const rank = date === 'no' ? 0 : date === 'partial' ? 1 : date === 'full' ? 2 : 3;
-        missing.time.push({ id, rank, text: `${id} — ${status}${source ? ` (${source})` : ''}` });
-      }
-      if (oo !== 'yes') missing.oo.push(id);
-      if (driver !== 'yes') missing.driver.push(id);
-      if ((date === 'partial' || date === 'no') && !recovery) missing.recovery.push(id);
-      if (comment) missing.comments.push({ id, text: comment });
-      if (scans && interval === 'valid' && (date === 'full' || ((date === 'partial' || date === 'no') && recovery)) && oo === 'yes' && driver === 'yes') ready++;
+      if (recovery === 'tracker') tracker.push(id);
+      if (recovery === 'driver') driverSource.push(id);
+      const complete = scans && interval === 'valid' && (date === 'full' || ((date === 'partial' || date === 'no') && recovery)) && oo === 'yes' && driver === 'yes';
+      if (complete) ready++;
+      else if (row.querySelector('.logistics-time input')?.value.trim() || date || recovery || oo || driver || scans || comment) partial.push(id);
+      else unfilled.push(id);
     });
     const progress = trip.querySelector('.lab-trip-progress');
     progress.querySelector('[data-trip-progress]').textContent = `${ready} из ${rows.length} готовы`;
-    progress.querySelector('.lab-trip-progress-fill').style.width = `${rows.length ? Math.round(ready / rows.length * 100) : 0}%`;
+    const percent = rows.length ? Math.round(ready / rows.length * 100) : 0;
+    const fill = progress.querySelector('.lab-trip-progress-fill');
+    fill.style.width = `${percent}%`;
+    const share = percent <= 50 ? percent / 50 : (percent - 50) / 50;
+    const first = percent <= 50 ? 'var(--danger)' : 'var(--warning-border)';
+    const second = percent <= 50 ? 'var(--warning-border)' : 'var(--success)';
+    fill.style.setProperty('--lab-progress-color', `color-mix(in srgb, ${first} ${Math.round((1 - share) * 100)}%, ${second})`);
     trip.dataset.ready = String(ready === rows.length);
-    const counters = trip.querySelector('.lab-trip-counters');
-    counters.replaceChildren();
-    [
-      ['Без скана', missing.scans.length], ['Время', missing.time.length],
-      ['Подпись ОО', missing.oo.length], ['Подпись водителя', missing.driver.length],
-      ['Источник', missing.recovery.length], ['Замечания', missing.comments.length],
-    ].filter(([, count]) => count).forEach(([label, count]) => counters.append(make('span', 'lab-trip-counter', `${label} ${count}`)));
-    if (!counters.children.length) counters.append(make('span', 'lab-trip-all-ready', 'Все заявки заполнены'));
-    const parts = [];
-    if (missing.time.length) {
-      const sample = missing.time.sort((left, right) => left.rank - right.rank).slice(0, 2).map((item) => item.text).join('; ');
-      const rest = missing.time.length - 2;
-      parts.push(`Время: ${sample}${rest > 0 ? `; ещё ${rest} ${requestWord(rest)}` : ''}`);
-    }
-    if (missing.scans.length) parts.push(`Без скана: ${missing.scans.slice(0, 2).join(', ')}${missing.scans.length > 2 ? ` +${missing.scans.length - 2}` : ''}`);
-    if (missing.comments.length) parts.push(`Замечание: ${missing.comments[0].id} — ${missing.comments[0].text.slice(0, 42)}${missing.comments[0].text.length > 42 ? '…' : ''}`);
-    const examples = trip.querySelector('.lab-trip-examples');
-    examples.textContent = parts.join(' · ') || 'Данные по всем заявкам внесены';
-    examples.title = examples.textContent;
+    const hasEnteredTime = rows.some((row) => /\b\d{1,2}:\d{1,2}\b/.test(row.querySelector('.logistics-time input')?.value || ''));
+    const renderBlock = (block, title, categories) => {
+      block.replaceChildren(make('small', 'lab-trip-label', title));
+      categories.filter(([, ids]) => ids.length).forEach(([label, ids]) => {
+        const line = make('span', 'lab-trip-breakdown-line', '');
+        const list = make('span', 'lab-trip-breakdown-ids', ids.join(', '));
+        list.title = ids.join(', ');
+        line.append(make('span', 'lab-trip-breakdown-caption', label), make('b', 'lab-trip-breakdown-count', String(ids.length)), list);
+        block.append(line);
+      });
+      block.hidden = !hasEnteredTime || categories.every(([, ids]) => !ids.length);
+    };
+    renderBlock(trip.querySelector('.lab-trip-overview'), 'Качество заполнения', [['Частично заполнены', partial], ['Полностью не заполнены', unfilled]]);
+    renderBlock(trip.querySelector('.lab-trip-restored'), 'Восстановлено', [['По трекеру', tracker], ['Со слов вод./мен', driverSource]]);
   };
 
   const applySearch = () => {

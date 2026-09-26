@@ -49,13 +49,16 @@ try{
   assert.match(await page.locator('.logistics-trip').last().locator('summary').innerText(),/Идёт вывоз.*Выезд: 03\.09\.2026/s,'in-progress status and actual start shown');
   assert.equal(await page.locator('.lab-trip-status.is-delivered').count(),1,'delivered badge is gray');
   assert.equal(await page.locator('.lab-trip-status.is-progress').count(),1,'in-progress badge is green');
-  assert.match(await page.locator('.logistics-trip').first().locator('summary').innerText(),/Без скана 1.*Время 1/s,'structured issue counts shown');
+  assert.match(await page.locator('.logistics-trip').first().locator('summary').innerText(),/Качество заполнения.*Частично заполнены.*Восстановлено.*Со слов вод\.\/мен/is,'compact quality and recovery shown');
+  assert.equal(await page.locator('.logistics-trip').first().locator('.lab-trip-email').count(),0,'manager email removed');
+  assert.equal(await page.locator('.lab-choice--recovery input[value="invented"]').count(),0,'invented choice removed');
   await page.locator('.logistics-trip').first().locator('summary').click();
   const row=page.locator('[data-request-id="12"]');
   assert.deepEqual(await row.locator('.logistics-request-route > strong, .logistics-request-route > small').allTextContents(),['ООО Экопром','Архангельская область, Приморский район','→ Переработчик'],'pickup address shown between sender and recipient');
   assert.equal((await row.evaluate(element=>getComputedStyle(element).gridTemplateColumns.split(' ').length)),8,'desktop request uses eight aligned blocks');
   assert.equal(await row.locator('.lab-choice--date input[value="no"]').isChecked(),true,'missing time status persisted');
   assert.equal(await row.locator('.lab-choice--recovery input[value="driver"]').isChecked(),true,'driver source persisted');
+  assert.match(await row.locator('.lab-choice--recovery').evaluate(element=>getComputedStyle(element).backgroundColor),/rgb\(/,'driver recovery has state color');
   assert.equal(await row.locator('.lab-choice--recovery input[value="tracker"]').isEnabled(),true,'recovery choices enabled when needed');
   assert.equal(await row.locator('textarea[name="comment"]').count(),1,'comment is multiline');
   const interval=row.locator('input[name="pickup_interval"]');
@@ -72,6 +75,8 @@ try{
   await fileInput.setInputFiles({name:'first.jpg',mimeType:'image/jpeg',buffer:Buffer.from('test-image')});
   await row.locator('[data-document-count]').filter({hasText:'1/2'}).waitFor({timeout:3000}).catch(async()=>{throw new Error('Upload not reflected: '+JSON.stringify({postCount,documents,label:await row.locator('[data-save-label]').textContent(),message:await row.locator('.lab-docs-message').textContent(),count:await row.locator('[data-document-count]').textContent(),errors}));});
   assert.equal(await row.locator('.lab-docs-view').count(),1,'one scan can be viewed');
+  assert.equal(await row.locator('.lab-docs-download').count(),1,'one scan can be downloaded');
+  assert.equal(await row.locator('.file-type-badge').count(),0,'file type badge removed');
   await row.locator('.lab-docs-view').click();
   assert.equal(await page.locator('.lab-scan-preview').evaluate(element=>element.open),true,'preview opens in a dialog');
   await page.locator('.lab-scan-preview-head button').click();
