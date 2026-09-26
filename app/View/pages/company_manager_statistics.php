@@ -1,5 +1,4 @@
 <?php
-$companyName = (string)($company['name'] ?? 'Компания');
 $metric = (string)$filters['metric'];
 $metricMeta = [
     'trips'=>['label'=>'Рейсы','long'=>'Рейсы поставлены на погрузку','color'=>'#C07830'],
@@ -54,11 +53,9 @@ $chart = static function(array $current, string $key, callable $valueOf): array 
 $chartData = $chart($statistics['trend'], $metric, $metricValue);
 $lineColors = ['#4A7A9B','#B84C3A','#6A8A50','#B89228','#6D5B8C','#5C7A88','#8A6A44','#7A6478'];
 $managerChartSeries = [];
-$managerColors = [];
 foreach ($statistics['manager_trends'] as $index=>$series) {
     $seriesColor = $lineColors[$index % count($lineColors)];
     $managerChartSeries[] = $series + ['color'=>$seriesColor,'points'=>$chartData['points']($series['values'])];
-    $managerColors[(int)$series['membership_id']] = $seriesColor;
 }
 $visiblePeriodRows = array_values(array_filter(
     array_reverse($statistics['period_rows']),
@@ -75,10 +72,7 @@ $statusLabels=['in_progress'=>'Вывоз начался','completed'=>'Груз
 $periodLabel = date('d.m.Y',strtotime((string)$filters['from'])).' — '.date('d.m.Y',strtotime((string)$filters['to']));
 $managerTotals = [];
 foreach ($statistics['managers'] as $row) $managerTotals[(int)$row['membership_id']] = $row;
-$rankMax = 1.0;
-foreach ($statistics['managers'] as $row) {
-    $rankMax = max($rankMax, $metricValue($row, $metric));
-}
+$shareMeasure = ['trips'=>'рейсам','requests'=>'заявкам','weight'=>'весу'][$metric] ?? 'показателю';
 $kpis = [
     ['label'=>'Рейсы поставлены на погрузку','value'=>$fmtInt($statistics['totals']['trips']),'current'=>(float)$statistics['totals']['trips'],'previous'=>(float)$statistics['previous_totals']['trips'],'class'=>'is-copper','note'=>'Факт начала вывоза'],
     ['label'=>'Заявки в рейсах','value'=>$fmtInt($statistics['totals']['requests']),'current'=>(float)$statistics['totals']['requests'],'previous'=>(float)$statistics['previous_totals']['requests'],'class'=>'is-steel','note'=>'Состав рейса на момент старта'],
@@ -103,21 +97,13 @@ $kpis = [
             <div class="notice warn">Страница разрешена, но для рейсов установлена область данных «Нет доступа».</div>
         <?php endif; ?>
 
-        <div class="manager-stats__filters">
-            <div class="manager-stats__filter-body">
-                <div class="manager-stats__field manager-stats__field--mode"><label>Режим отчёта</label><nav class="manager-stats__segments" aria-label="Режим отчёта">
-                    <?php foreach($modeLabels as$value=>$label):?><a class="<?= $filters['mode']===$value?'is-active':'' ?>" href="<?=e($queryFor(['mode'=>$value]))?>"><?=e($label)?></a><?php endforeach;?>
-                </nav></div>
-            </div>
-        </div>
-
         <div class="manager-stats__kpis">
             <?php foreach($kpis as$kpi):?><article class="manager-stats__kpi <?=$kpi['class']?>"><div class="manager-stats__kpi-label"><?=e($kpi['label'])?></div><div class="manager-stats__kpi-row"><strong><?=e($kpi['value'])?></strong></div><div class="manager-stats__kpi-note"><?=e($kpi['note'])?></div></article><?php endforeach;?>
         </div>
 
         <div class="manager-stats__charts">
             <section class="manager-stats__card manager-stats__trend">
-                <header class="manager-stats__card-head"><div><h2>Динамика компании и логистов</h2><p><?=e($periodLabel)?> · <?=e($metricMeta[$metric]['long'])?></p></div><nav class="manager-stats__metric-tabs" aria-label="Показатель графиков"><?php foreach($metricMeta as$key=>$meta):?><a class="<?=$metric===$key?'is-active':''?>" href="<?=e($queryFor(['metric'=>$key]))?>"><?=e($meta['label'])?></a><?php endforeach;?></nav></header>
+                <header class="manager-stats__card-head"><div><h2>Динамика компании и логистов</h2><p><?=e($periodLabel)?> · <?=e($metricMeta[$metric]['long'])?></p></div><div class="manager-stats__chart-controls"><div class="manager-stats__field manager-stats__field--mode"><span class="manager-stats__field-label">Режим отчёта</span><nav class="manager-stats__segments" aria-label="Режим отчёта"><?php foreach($modeLabels as$value=>$label):?><a class="<?=$filters['mode']===$value?'is-active':''?>" href="<?=e($queryFor(['mode'=>$value]))?>"><?=e($label)?></a><?php endforeach;?></nav></div><nav class="manager-stats__metric-tabs" aria-label="Показатель графиков"><?php foreach($metricMeta as$key=>$meta):?><a class="<?=$metric===$key?'is-active':''?>" href="<?=e($queryFor(['metric'=>$key]))?>"><?=e($meta['label'])?></a><?php endforeach;?></nav></div></header>
                 <div class="manager-stats__chart-body">
                     <?php if($statistics['trend']===[]):?><div class="manager-stats__empty">Нет данных для построения графика.</div><?php else:?>
                     <svg class="manager-stats__line-chart" viewBox="0 0 <?=$chartData['width']?> <?=$chartData['height']?>" role="img" aria-label="Динамика показателя <?=e($metricMeta[$metric]['label'])?>">
@@ -134,13 +120,6 @@ $kpis = [
                 </div>
             </section>
 
-            <section class="manager-stats__card manager-stats__ranking">
-                <header class="manager-stats__card-head"><div><h2>Рейтинг логистов</h2><p><?=e($metricMeta[$metric]['long'])?></p></div><span class="manager-stats__card-meta"><?=count($statistics['managers'])?> логистов</span></header>
-                <div class="manager-stats__rank-list">
-                    <?php foreach(array_slice($statistics['managers'],0,10)as$index=>$row):$value=$metricValue($row,$metric);$width=$value/$rankMax*100;$rankColor=$managerColors[(int)$row['membership_id']]??$companyChartColor;?><div class="manager-stats__rank" data-membership-id="<?=(int)$row['membership_id']?>" data-manager-name="<?=e($row['name'])?>" style="--rank-color:<?=e($rankColor)?>"><div class="manager-stats__rank-line"><span><b><?=$index+1?></b><?=e($row['name'])?></span><strong><?=e($metricFormat($value,$metric))?></strong></div><div class="manager-stats__rank-track"><i style="width:<?=number_format($width,2,'.','')?>%"></i></div></div><?php endforeach;?>
-                    <?php if($statistics['managers']===[]):?><div class="manager-stats__empty">Нет логистов для отображения.</div><?php endif;?>
-                </div>
-            </section>
         </div>
 
         <section class="manager-stats__card manager-stats__periods">
@@ -149,18 +128,21 @@ $kpis = [
                 <?php foreach($visiblePeriodRows as$row):?><tr><td><div class="manager-stats__period-label"><strong><?=e($row['label'])?></strong><span><?=e(date('d.m',strtotime($row['from'])).($row['from']!==$row['to']?'–'.date('d.m',strtotime($row['to'])):''))?></span></div></td><?php foreach($statistics['manager_trends']as$series):$value=$row['manager_values'][(int)$series['membership_id']]??[];?><td class="num"><?=e($metricFormat($metricValue($value,$metric),$metric))?></td><?php endforeach;?><td class="num is-total"><?=e($metricFormat($metricValue($row,$metric),$metric))?></td></tr><?php endforeach;?>
                 <?php if($visiblePeriodRows===[]):?><tr><td colspan="<?=2+count($statistics['manager_trends'])?>" class="manager-stats__empty">Нет периодов с ненулевым итогом.</td></tr><?php endif;?>
             </tbody><tfoot><tr><th>Итого за период</th><?php foreach($statistics['manager_trends']as$series):$total=$managerTotals[(int)$series['membership_id']]??[];?><th class="num"><?=e($metricFormat($metricValue($total,$metric),$metric))?></th><?php endforeach;?><th class="num is-total"><?=e($metricFormat($totalMetric,$metric))?></th></tr></tfoot></table></div>
-        </section>
-
-        <section class="manager-stats__card manager-stats__table-card">
-            <header class="manager-stats__card-head"><div><h2>Итоги каждого логиста</h2><p>Сумма результатов логистов равна показателю компании.</p></div><span class="manager-stats__card-meta">Сортировка: <?=e(mb_strtolower($metricMeta[$metric]['label'],'UTF-8'))?></span></header>
-            <div class="table-scroll"><table class="table manager-stats__table"><thead><tr><th>Логист</th><th class="num">Рейсы</th><th class="num">Заявки</th><th class="num">Вес</th><th class="num">Заявок / рейс</th><th class="num">Вес / рейс</th><th class="num">Доля компании</th><th class="num">Завершено</th><th class="num">Отменено</th></tr></thead><tbody>
-                <?php foreach($statistics['managers']as$row):$share=$totalMetric>0?$metricValue($row,$metric)/$totalMetric*100:0;?><tr><td><strong><?=e($row['name'])?></strong></td><td class="num"><?=$fmtInt($row['trips'])?></td><td class="num"><?=$fmtInt($row['requests'])?></td><td class="num"><?=$fmtWeight($row['weight'])?></td><td class="num"><?=number_format((float)$row['requests_per_trip'],1,',',' ')?></td><td class="num"><?=$fmtWeight($row['weight_per_trip'])?></td><td class="num"><span class="manager-stats__share"><?=number_format($share,1,',',' ')?>%</span></td><td class="num"><?=$fmtInt($row['completed'])?></td><td class="num <?=$row['cancelled']>0?'is-danger':''?>"><?=$fmtInt($row['cancelled'])?></td></tr><?php endforeach;?>
-                <?php if($statistics['managers']===[]):?><tr><td colspan="9" class="manager-stats__empty">Активные логисты не найдены.</td></tr><?php endif;?>
-            </tbody><tfoot><tr><th>Компания · <?=e($companyName)?></th><th class="num"><?=$fmtInt($statistics['totals']['trips'])?></th><th class="num"><?=$fmtInt($statistics['totals']['requests'])?></th><th class="num"><?=$fmtWeight($statistics['totals']['weight'])?></th><th colspan="3"></th><th class="num"><?=$fmtInt($statistics['totals']['completed'])?></th><th class="num"><?=$fmtInt($statistics['totals']['cancelled'])?></th></tr></tfoot></table></div>
+            <section class="manager-stats__integrated-summary" aria-labelledby="manager-stats-summary-title">
+                <div class="manager-stats__integrated-head"><h3 id="manager-stats-summary-title">Сводка по логистам</h3><span>За весь период · <?=$fmtInt($statistics['totals']['completed'])?> завершено · <?=$fmtInt($statistics['totals']['cancelled'])?> отменено</span></div>
+                <div class="manager-stats__integrated-grid">
+                    <?php foreach($statistics['managers']as$row):$share=$totalMetric>0?$metricValue($row,$metric)/$totalMetric*100:0;?><article class="manager-stats__integrated-manager">
+                        <div class="manager-stats__integrated-manager-head"><strong><?=e($row['name'])?></strong><span>Доля по <?=e($shareMeasure)?> <?=number_format($share,1,',',' ')?>%</span></div>
+                        <dl class="manager-stats__integrated-primary"><div><dt>Рейсы</dt><dd><?=$fmtInt($row['trips'])?></dd></div><div><dt>Заявки</dt><dd><?=$fmtInt($row['requests'])?></dd></div><div><dt>Вес</dt><dd><?=$fmtWeight($row['weight'])?></dd></div></dl>
+                        <dl class="manager-stats__integrated-secondary"><div><dt>Заявок / рейс</dt><dd><?=number_format((float)$row['requests_per_trip'],1,',',' ')?></dd></div><div><dt>Вес / рейс</dt><dd><?=$fmtWeight($row['weight_per_trip'])?></dd></div><div><dt>Завершено</dt><dd><?=$fmtInt($row['completed'])?></dd></div><div><dt>Отменено</dt><dd class="<?=$row['cancelled']>0?'is-danger':''?>"><?=$fmtInt($row['cancelled'])?></dd></div></dl>
+                    </article><?php endforeach;?>
+                    <?php if($statistics['managers']===[]):?><div class="manager-stats__empty">Активные логисты не найдены.</div><?php endif;?>
+                </div>
+            </section>
         </section>
 
         <section class="manager-stats__card manager-stats__details">
-            <header class="manager-stats__card-head"><div><h2>Из чего сложился результат</h2><p>Рейсы, учтённые в показателях за выбранный период.</p></div><span class="manager-stats__card-meta">Рейсов: <?=count($statistics['details'])?><?=count($statistics['details'])===500?' · достигнут лимит':''?></span></header>
+            <header class="manager-stats__card-head"><div><h2>Из чего сложился результат</h2><p>Все рейсы, учтённые на дату отчёта — <?=e(date('d.m.Y',strtotime((string)$filters['to'])))?>.</p></div><span class="manager-stats__card-meta">Рейсов: <?=count($statistics['details'])?><?=count($statistics['details'])===500?' · достигнут лимит':''?></span></header>
             <div class="table-scroll"><table class="table manager-stats__detail-table"><thead><tr><th>Дата результата</th><th>Логист</th><th>Рейс</th><th>Текущий статус</th><th class="num">Заявки</th><th class="num">Вес</th></tr></thead><tbody>
                 <?php foreach($statistics['details']as$row):?><tr><td><?=e(date('d.m.Y',strtotime((string)$row['actual_start_date'])))?></td><td><?=e((string)$row['responsible_name_snapshot'])?></td><td><strong>#<?=(int)$row['business_id']?></strong></td><td><span class="badge <?=($row['status']==='cancelled'?'badge-danger':($row['status']==='completed'?'badge-ok':'badge-warning'))?>"><?=e($statusLabels[$row['status']]??(string)$row['status'])?></span></td><td class="num"><?=$fmtInt($row['request_count'])?></td><td class="num"><?=$fmtWeight($row['total_mass_kg'])?></td></tr><?php endforeach;?>
                 <?php if($statistics['details']===[]):?><tr><td colspan="6" class="manager-stats__empty"><strong>За выбранный диапазон машины на погрузку не ставились.</strong></td></tr><?php endif;?>

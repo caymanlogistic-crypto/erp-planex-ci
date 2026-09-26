@@ -48,7 +48,8 @@ try{
     return segment.right-last.right;
   });
   assert.ok(modeFit<=4,'report mode selector ends immediately after Year without an empty tail');
-  assert.equal(await page.locator('.manager-stats__filters').evaluate(el=>getComputedStyle(el).borderBottomWidth),'0px','removed period header divider does not remain as an empty panel');
+  assert.equal(await page.locator('.manager-stats__filters').count(),0,'mode selector has moved into the chart header');
+  assert.equal(await page.locator('.manager-stats__trend .manager-stats__chart-controls').count(),1,'mode and metric switches share the chart header');
   const shellStyle=await page.evaluate(()=>({
     font:getComputedStyle(document.body).fontFamily,
     bodyMargin:getComputedStyle(document.body).margin,
@@ -62,7 +63,10 @@ try{
   assert.equal(shellStyle.topbar,'grid','topbar styles are applied');
   assert.equal(shellStyle.sidebar,'flex','sidebar styles are applied');
   assert.equal(await page.locator('.manager-stats__kpi').count(),4,'four KPI cards');
-  assert.equal(await page.locator('.manager-stats__rank').count(),4,'manager ranking');
+  assert.equal(await page.locator('.manager-stats__ranking').count(),0,'separate ranking is removed');
+  const chartWidth=await page.locator('.manager-stats__trend').evaluate(el=>Math.round(el.getBoundingClientRect().width));
+  const periodWidth=await page.locator('.manager-stats__periods').evaluate(el=>Math.round(el.getBoundingClientRect().width));
+  assert.ok(Math.abs(chartWidth-periodWidth)<=1,'chart fills the full report width');
   assert.equal(await page.locator('.manager-stats__line-chart').count(),1,'trend chart');
   const chartLines=page.locator('.manager-stats__chart-line');
   assert.equal(await chartLines.count(),5,'company and four manager series');
@@ -70,9 +74,6 @@ try{
   assert.deepEqual(await page.locator('.manager-stats__chart-line.is-manager').evaluateAll(paths=>paths.map(path=>path.getAttribute('stroke'))),['#4A7A9B','#B84C3A','#6A8A50','#B89228'],'first four managers use the approved ordered palette');
   assert.equal(await page.locator('.manager-stats__chart-line.is-company').getAttribute('stroke'),'#C07830','company series uses the approved copper');
   assert.equal(await page.locator('.manager-stats__line-chart title').count(),0,'native white SVG tooltips are absent');
-  const managerSeriesColors=await page.locator('.manager-stats__chart-line.is-manager').evaluateAll(paths=>Object.fromEntries(paths.map(path=>[path.dataset.seriesName,path.getAttribute('stroke')])));
-  const rankingColors=await page.locator('.manager-stats__rank').evaluateAll(rows=>Object.fromEntries(rows.map(row=>[row.dataset.managerName,getComputedStyle(row).getPropertyValue('--rank-color').trim()])));
-  assert.deepEqual(rankingColors,managerSeriesColors,'every ranking bar uses the matching manager line color');
   assert.equal(await page.locator('.manager-stats__chart-node').count(),40,'every point of every series has a circular node');
   assert.equal(await page.locator('.manager-stats__chart-node>circle').count(),40,'all graph nodes are circles');
   assert.equal(await page.locator('.manager-stats__node-tooltip').count(),40,'every node has an informative tooltip');
@@ -106,7 +107,9 @@ try{
   assert.ok(Number(totalStyle.totalWeight)>Number(totalStyle.managerWeight),'total column differs only by bold weight');
   const periodViewport=await page.locator('.manager-stats__periods .table-scroll').evaluate(element=>({client:element.clientHeight,scroll:element.scrollHeight}));
   assert.equal(periodViewport.client>=periodViewport.scroll,true,'period values must not be vertically clipped');
-  assert.equal((await page.locator('.manager-stats__table tbody tr').count()),4,'manager comparison rows');
+  assert.equal(await page.locator('.manager-stats__table-card').count(),0,'separate manager totals table is removed');
+  assert.equal((await page.locator('.manager-stats__periods .manager-stats__integrated-manager').count()),4,'manager totals are integrated with period values');
+  assert.match(await page.locator('.manager-stats__integrated-manager').first().innerText(),/Рейсы[\s\S]*Заявки[\s\S]*Вес[\s\S]*Заявок \/ рейс[\s\S]*Вес \/ рейс[\s\S]*Завершено[\s\S]*Отменено/,'all manager measures are retained');
   assert.equal((await page.locator('.manager-stats__detail-table tbody tr').count()),4,'trip drill-down rows');
   const detailViewport=await page.locator('.manager-stats__details .table-scroll').evaluate(element=>({client:element.clientHeight,scroll:element.scrollHeight}));
   assert.equal(detailViewport.client>=detailViewport.scroll,true,'trip drill-down must not be vertically clipped');
@@ -120,10 +123,10 @@ try{
   assert.equal(await page.locator('.topbar').count(),1,'empty state keeps standard ERP topbar');
   assert.equal(await page.locator('.sidebar').count(),1,'empty state keeps standard ERP sidebar');
   assert.equal(await page.locator('head link[href*="manager-statistics.css"]').count(),1,'empty state keeps page stylesheet');
-  assert.equal(await page.locator('.manager-stats__rank').count(),0,'empty state has no ranking rows');
-  assert.equal(await page.getByText('Нет логистов для отображения.').count(),1,'empty ranking message');
-  assert.equal(await page.locator('.manager-stats__periods').count(),1,'empty state renders period section after ranking');
-  assert.equal(await page.locator('.manager-stats__details').count(),1,'empty state renders details section after ranking');
+  assert.equal(await page.locator('.manager-stats__integrated-manager').count(),0,'empty state has no manager cards');
+  assert.equal(await page.getByText('Активные логисты не найдены.').count(),1,'empty manager summary message');
+  assert.equal(await page.locator('.manager-stats__periods').count(),1,'empty state renders period section');
+  assert.equal(await page.locator('.manager-stats__details').count(),1,'empty state renders details section');
   assert.match((await page.locator('body').evaluate(el=>getComputedStyle(el).fontFamily)),/IBM Plex Sans/i,'empty state keeps ERP font');
   await page.setViewportSize({width:390,height:844});
   assert.equal(await page.locator('.manager-stats__kpis').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),1,'mobile KPI stack');
