@@ -13,7 +13,8 @@ $_SESSION = [
     'user_name'=>'Анна Белова',
 ];
 
-$_GET = ['mode'=>'week','metric'=>'trips'];
+$fixtureMetric = getenv('PLANEX_MANAGER_STATISTICS_METRIC') ?: 'trips';
+$_GET = ['mode'=>'week','metric'=>$fixtureMetric];
 $company = ['name'=>'ООО «ПЛАНЭКС»'];
 $dbError = null;
 $eligibleManagers = [
@@ -23,14 +24,14 @@ $eligibleManagers = [
     ['membership_id'=>104,'full_name'=>'Глеб Романов'],
 ];
 $filters = [
-    'mode'=>'week','metric'=>'trips','group'=>'week','from'=>'2026-08-03','to'=>'2026-09-23',
+    'mode'=>'week','metric'=>$fixtureMetric,'group'=>'week','from'=>'2026-08-03','to'=>'2026-09-23',
     'previous_from'=>'2026-06-08','previous_to'=>'2026-07-29','manager_ids'=>[],'compare'=>false,'duration_days'=>52,
 ];
 $trend=[];$previousTrend=[];
 foreach ([0,0,0,0,3,4,9,5] as $index=>$value) {
     $start=(new DateTimeImmutable('2026-08-03'))->modify('+'.$index.' weeks');$end=$start->modify('+6 days');
     if ($end > new DateTimeImmutable('2026-09-23')) $end=new DateTimeImmutable('2026-09-23');
-    $trend[]=['key'=>$start->format('Y-m-d'),'label'=>'Нед. '.$start->format('W').' · '.$start->format('d.m'),'from'=>$start->format('Y-m-d'),'to'=>$end->format('Y-m-d'),'trips'=>$value,'requests'=>$value*3+($index%3),'weight'=>$value*4280.0];
+    $trend[]=['key'=>$start->format('Y-m-d'),'label'=>'Нед. '.$start->format('W').' · '.$start->format('d.m'),'from'=>$start->format('Y-m-d'),'to'=>$end->format('Y-m-d'),'trips'=>$value,'requests'=>$value>0?$value*3+($index%3):0,'weight'=>$value*4280.0];
     $previousStart=$start->modify('-12 weeks');$previousEnd=$previousStart->modify('+6 days');
     $previousTrend[]=['key'=>$previousStart->format('Y-m-d'),'label'=>'Нед. '.$previousStart->format('W').' · '.$previousStart->format('d.m'),'from'=>$previousStart->format('Y-m-d'),'to'=>$previousEnd->format('Y-m-d'),'trips'=>max(2,$value-4),'requests'=>max(4,$value*3-10),'weight'=>max(1000,($value-4)*4100.0)];
 }
