@@ -336,6 +336,41 @@
   .logistics-workspace .lab-choice--recovery .lab-choice-options { flex-wrap: wrap; }
 }
 
+/* Explicit missing TN status, aligned with the other request cards. */
+.logistics-workspace .logistics-documents { align-items: stretch; align-content: stretch; }
+.logistics-workspace .lab-docs { display: flex; flex-direction: column; }
+.logistics-workspace .lab-docs-head { align-items: flex-start; }
+.logistics-workspace .lab-docs-head [data-document-count] { display: none; }
+.logistics-workspace .lab-docs .logistics-upload-form { margin-top: auto; }
+.logistics-workspace .lab-docs-no-tn-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: auto;
+  color: var(--text-main);
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.logistics-workspace .lab-docs-no-tn-label input {
+  width: 13px;
+  min-width: 13px;
+  max-width: 13px;
+  height: 13px;
+  min-height: 13px;
+  max-height: 13px;
+  margin: 0;
+  accent-color: var(--danger);
+  cursor: pointer;
+}
+.logistics-workspace .lab-docs-no-tn-label input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.logistics-workspace .lab-docs:has(.lab-docs-no-tn:checked) { border-color: var(--danger-border); background: var(--danger-bg); }
+.logistics-workspace .lab-docs:has(.lab-docs-no-tn:checked) .lab-docs-no-tn-label { color: var(--danger-text); }
+.logistics-workspace .lab-trip-breakdown-line--error .lab-trip-breakdown-caption,
+.logistics-workspace .lab-trip-breakdown-line--error .lab-trip-breakdown-count,
+.logistics-workspace .lab-trip-breakdown-line--error .lab-trip-breakdown-ids { color: var(--danger-text); }
+
 /* v013: compact, structured trip summary for large request sets. */
 .logistics-workspace .logistics-request-row.has-progress,
 .logistics-workspace .logistics-request-row.has-time,

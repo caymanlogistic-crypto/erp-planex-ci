@@ -14,7 +14,7 @@ if($database===''||!in_array($database,explode(',',(string)getenv('PLANEX_TEST_F
 $pdo=new PDO('mysql:host='.getenv('PLANEX_SCHEMA_DB_HOST').';port='.(getenv('PLANEX_SCHEMA_DB_PORT')?:3306).';dbname='.$database.';charset=utf8mb4',getenv('PLANEX_SCHEMA_DB_USER'),getenv('PLANEX_SCHEMA_DB_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 cleanCompanyPoolDatabase($pdo);$companyId=987654;$stored=[];
 try{
-    LocalMigrationService::apply($pdo);$service=new TripCompletionService($pdo,$companyId);$ok($service->ready(),'Migration 144 not ready');
+    LocalMigrationService::apply($pdo);$service=new TripCompletionService($pdo,$companyId);$ok($service->ready(),'Migration 147 not ready');
     $pdo->exec("INSERT INTO users(id,membership_id,full_name,login,email,phone,password_hash,role_code,status) VALUES(1,101,'Тестовый логист','tester','manager@example.test','+7 900 000-30-01','hash','logist','active');
       INSERT INTO clients(id,name,inn,status) VALUES(1,'Тестовый клиент','7700000000','active');
       INSERT INTO feo_requests(id,zayavka_id,naim_oo_gruzootpravitel,mno_adres_pogruzki,gruzopoluchatel,adres_dostavki_otkhodov,mass_netto) VALUES
@@ -57,6 +57,14 @@ try{
     $tmp=tempnam(sys_get_temp_dir(),'tn_');file_put_contents($tmp,base64_decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2Q=='));
     try{$fails(fn()=>$service->upload(1,12,['name'=>'third.jpg','tmp_name'=>$tmp,'error'=>UPLOAD_ERR_OK,'size'=>filesize($tmp)],101,false));}finally{@unlink($tmp);}
     $trip=$service->trip(1);$visible=$service->trips('',true);$ok((int)$trip['complete_count']===2&&count($visible)===1&&(int)$visible[0]['business_id']===245,'Complete trip hidden by default');
+    $completeInput=['pickup_interval'=>'01.09.26 09:40 - 10:00','driver_signature_status'=>'yes','sender_signature_status'=>'yes','tn_datetime_status'=>'full'];
+    $service->save(1,11,$completeInput+['tn_absent'=>'1'],101);
+    $flagged=$service->trip(1);$flaggedRequest=array_values(array_filter($flagged['requests'],static fn(array $request):bool=>(int)$request['id']===11))[0];
+    $ok((int)$flaggedRequest['tn_absent']===1&&in_array('Нет ТН',$flaggedRequest['issues'],true)&&$flagged['complete_count']===1,'Explicit missing TN persists and overrides an uploaded scan');
+    $ok(count($service->trips('',true))===2,'Missing TN reopens otherwise complete trip');
+    $service->save(1,11,$completeInput,101);
+    $trip=$service->trip(1);$ok((int)$trip['complete_count']===2&&count($service->trips('',true))===1,'Clearing missing TN restores trip completion');
+    $fails(fn()=>$service->save(1,11,$completeInput+['tn_absent'=>'invalid'],101));
     $xlsx=$service->xlsx($trip);$book=new ZipArchive();$ok($book->open($xlsx)===true,'Excel opens as XLSX');$sheet=(string)$book->getFromName('xl/worksheets/sheet1.xml');$styles=(string)$book->getFromName('xl/styles.xml');$book->close();$ok(str_contains($sheet,'274405')&&str_contains($sheet,'Архангельская область')&&str_contains($sheet,'Восстановлены по трекеру')&&str_contains($sheet,'Внесены со слов вод./мен')&&!str_contains($sheet,'Придуманы')&&str_contains($sheet,'autoFilter ref="A3:Q'),'Formatted Excel contains route, current provenance and filter');$ok(str_contains($styles,'FF0F766E')&&str_contains($styles,'FFFFF1F0')&&str_contains($styles,'numFmtId="164"')&&str_contains($styles,'dd.mm.yy hh:mm'),'Excel styles missing');$xlsxEvidence=trim((string)getenv('PLANEX_XLSX_EVIDENCE'));if($xlsxEvidence!==''){$ok(copy($xlsx,$xlsxEvidence),'Cannot preserve XLSX evidence');}@unlink($xlsx);
     $zip=$service->package($trip);$ok(is_file($zip)&&filesize($zip)>0,'Trip ZIP created');$package=new ZipArchive();$ok($package->open($zip)===true&&$package->locateName('Рейс_244_сводный_отчет.xlsx')!==false,'Formatted Excel included in trip package');$ok($package->locateName('Рейс_244_Заявка_274405_ТН_01.jpg')!==false,'TN scan included with canonical name');$package->close();@unlink($zip);
     $request11=array_values(array_filter($trip['requests'],static fn(array $request):bool=>(int)$request['id']===11))[0];

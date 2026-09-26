@@ -128,11 +128,12 @@
 
   const updateTripSummary = (trip) => {
     const rows = [...trip.querySelectorAll('[data-request-row]')];
-    const partial = [], unfilled = [], tracker = [], driverSource = [];
+    const partial = [], unfilled = [], noTn = [], tracker = [], driverSource = [];
     let ready = 0;
     rows.forEach((row) => {
       const id = (row.querySelector('.logistics-request-route b')?.textContent.trim() || row.dataset.requestId).replace(/^№\s*/, '');
       const scans = row.querySelectorAll('.lab-docs-item').length;
+      const tnAbsent = !!row.querySelector('.lab-docs-no-tn:checked');
       const interval = row.querySelector('.logistics-time')?.dataset.intervalState;
       const date = row.querySelector('.lab-choice--date input:checked')?.value;
       const recovery = row.querySelector('.lab-choice--recovery input:checked')?.value;
@@ -141,9 +142,10 @@
       const comment = row.querySelector('.logistics-comment textarea')?.value.trim();
       if (recovery === 'tracker') tracker.push(id);
       if (recovery === 'driver') driverSource.push(id);
-      const complete = scans && interval === 'valid' && (date === 'full' || ((date === 'partial' || date === 'no') && recovery)) && oo === 'yes' && driver === 'yes';
+      if (tnAbsent) noTn.push(id);
+      const complete = scans && !tnAbsent && interval === 'valid' && (date === 'full' || ((date === 'partial' || date === 'no') && recovery)) && oo === 'yes' && driver === 'yes';
       if (complete) ready++;
-      else if (row.querySelector('.logistics-time input')?.value.trim() || date || recovery || oo || driver || scans || comment) partial.push(id);
+      else if (row.querySelector('.logistics-time input')?.value.trim() || date || recovery || oo || driver || scans || comment || tnAbsent) partial.push(id);
       else unfilled.push(id);
     });
     const progress = trip.querySelector('.lab-trip-progress');
@@ -157,18 +159,22 @@
     fill.style.setProperty('--lab-progress-color', `color-mix(in srgb, ${first} ${Math.round((1 - share) * 100)}%, ${second})`);
     trip.dataset.ready = String(ready === rows.length);
     const hasEnteredTime = rows.some((row) => /\b\d{1,2}:\d{1,2}\b/.test(row.querySelector('.logistics-time input')?.value || ''));
-    const renderBlock = (block, title, categories) => {
+    const renderBlock = (block, title, categories, visible = hasEnteredTime) => {
       block.replaceChildren(make('small', 'lab-trip-label', title));
-      categories.filter(([, ids]) => ids.length).forEach(([label, ids]) => {
-        const line = make('span', 'lab-trip-breakdown-line', '');
+      categories.filter(([, ids]) => ids.length).forEach(([label, ids, error]) => {
+        const line = make('span', `lab-trip-breakdown-line${error ? ' lab-trip-breakdown-line--error' : ''}`, '');
         const list = make('span', 'lab-trip-breakdown-ids', ids.join(', '));
         list.title = ids.join(', ');
         line.append(make('span', 'lab-trip-breakdown-caption', label), make('b', 'lab-trip-breakdown-count', String(ids.length)), list);
         block.append(line);
       });
-      block.hidden = !hasEnteredTime || categories.every(([, ids]) => !ids.length);
+      block.hidden = !visible || categories.every(([, ids]) => !ids.length);
     };
-    renderBlock(trip.querySelector('.lab-trip-overview'), 'Качество заполнения', [['Частично заполнены', partial], ['Полностью не заполнены', unfilled]]);
+    renderBlock(trip.querySelector('.lab-trip-overview'), 'Качество заполнения', [
+      ['Частично заполнены', hasEnteredTime ? partial : []],
+      ['Полностью не заполнены', hasEnteredTime ? unfilled : []],
+      ['Нет ТН', noTn, true],
+    ], hasEnteredTime || noTn.length > 0);
     renderBlock(trip.querySelector('.lab-trip-restored'), 'Восстановлено', [['По трекеру', tracker], ['Со слов вод./мен', driverSource]]);
   };
 
@@ -202,7 +208,7 @@
       const validTime = row.querySelector('.logistics-time')?.dataset.intervalState === 'valid';
       const date = row.querySelector('.lab-choice--date input:checked')?.value;
       const recovery = row.querySelector('.lab-choice--recovery input:checked')?.value;
-      row.dataset.ready = String(hasScan && validTime && (date === 'full' || ((date === 'partial' || date === 'no') && recovery))
+      row.dataset.ready = String(hasScan && !row.querySelector('.lab-docs-no-tn:checked') && validTime && (date === 'full' || ((date === 'partial' || date === 'no') && recovery))
         && row.querySelector('.lab-choice--oo input[value="yes"]')?.checked && row.querySelector('.lab-choice--driver input[value="yes"]')?.checked);
     });
     updateTripSummary(trip);
@@ -280,6 +286,7 @@
     form.addEventListener('submit', (event) => { event.preventDefault(); schedule(0); });
     form.addEventListener('change', () => schedule(120));
     form.querySelector('textarea[name="comment"]').addEventListener('input', () => { refresh(trip); schedule(550); });
+    row.querySelector('.lab-docs-no-tn')?.addEventListener('change', () => { refresh(trip); schedule(120); });
 
     const upload = row.querySelector('[data-upload-form]');
     const picker = upload.querySelector('input[type="file"]');
