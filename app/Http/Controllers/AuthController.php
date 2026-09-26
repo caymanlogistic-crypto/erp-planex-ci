@@ -23,10 +23,10 @@ final class AuthController
         if (isAuthenticated()) {
             $role = $_SESSION['role_code'] ?? '';
             if ($role === 'superadmin') {
-                redirect_to('/superadmin/companies');
+                redirect_to(consumeLoginReturnTarget() ?? '/superadmin/companies');
             }
 
-            redirect_to($this->companyLandingPath());
+            redirect_to(consumeLoginReturnTarget() ?? $this->companyLandingPath());
         }
 
         $loginValue = '';
@@ -70,7 +70,7 @@ final class AuthController
     public function login(): void
     {
         if (isAuthenticated()) {
-            redirect_to($this->companyLandingPath());
+            redirect_to(consumeLoginReturnTarget() ?? $this->companyLandingPath());
         }
 
         $loginValue = trim($_POST['login'] ?? '');
@@ -116,7 +116,7 @@ final class AuthController
                     'role_code' => 'superadmin',
                     'company_id' => null,
                 ];
-                redirect_to('/superadmin/companies');
+                redirect_to(consumeLoginReturnTarget() ?? '/superadmin/companies');
             }
 
             // The new global identity path is enabled only together with the
@@ -139,7 +139,7 @@ final class AuthController
                     } else {
                         session_regenerate_id(true);
                         (new AccountAuthenticationService($pdo))->establishSession($_SESSION, $globalAuth, $readyCompanyId);
-                        redirect_to($this->companyLandingPath());
+                        redirect_to(consumeLoginReturnTarget() ?? $this->companyLandingPath());
                     }
                 } else {
                     // Once the global access provider is wired, tenant-local
@@ -176,7 +176,7 @@ final class AuthController
                         'role_code' => 'company_owner',
                         'company_id' => $_SESSION['company_id'],
                     ];
-                    redirect_to($this->companyLandingPath());
+                    redirect_to(consumeLoginReturnTarget() ?? $this->companyLandingPath());
                 }
                 }
 
@@ -224,7 +224,7 @@ final class AuthController
                         'role_code' => $_SESSION['role_code'],
                         'company_id' => $_SESSION['company_id'],
                     ];
-                    redirect_to($this->companyLandingPath());
+                    redirect_to(consumeLoginReturnTarget() ?? $this->companyLandingPath());
                 }
                 $authError = 'Неверный логин или пароль.';
                 } elseif (count($logistCandidates) > 1) {
