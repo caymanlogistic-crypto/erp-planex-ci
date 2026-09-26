@@ -12,10 +12,14 @@ const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fix
 const emptyHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/manager_statistics_render.php')],{
   encoding:'utf8',env:{...process.env,PLANEX_MANAGER_STATISTICS_EMPTY:'1'},
 });
+const weightHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/manager_statistics_render.php')],{
+  encoding:'utf8',env:{...process.env,PLANEX_MANAGER_STATISTICS_METRIC:'weight'},
+});
 const server=http.createServer((req,res)=>{
   const pathname=req.url.split('?')[0];
   if(pathname==='/'||pathname==='/company/statistics/managers'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html);}
   if(pathname==='/empty'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(emptyHtml);}
+  if(pathname==='/weight'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(weightHtml);}
   const file=path.resolve(root,'public','.'+pathname);
   if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
   res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'application/octet-stream');res.end(fs.readFileSync(file));
@@ -76,57 +80,71 @@ try{
   assert.equal(await page.locator('.manager-stats__line-chart title').count(),0,'native white SVG tooltips are absent');
   assert.equal(await page.locator('.manager-stats__chart-node').count(),40,'every point of every series has a circular node');
   assert.equal(await page.locator('.manager-stats__chart-node>circle').count(),40,'all graph nodes are circles');
-  assert.equal(await page.locator('.manager-stats__node-tooltip').count(),40,'every node has an informative tooltip');
+  assert.equal(await page.locator('.manager-stats__node-tooltip').count(),0,'individual node tooltips are removed');
+  assert.equal(await page.locator('.manager-stats__chart-area').count(),5,'company and all four managers have gradient fills');
+  assert.deepEqual(await page.locator('.manager-stats__line-chart linearGradient').evaluateAll(gradients=>gradients.map(gradient=>gradient.querySelector('stop').getAttribute('stop-color'))),['#C07830','#4A7A9B','#B84C3A','#6A8A50','#B89228'],'gradient colors follow the line palette');
   assert.match(await chartLines.first().evaluate(path=>getComputedStyle(path).animationName),/manager-stats-line-in/,'line appearance animation is enabled');
   await page.waitForTimeout(1000);
   const firstManagerNode=page.locator('.manager-stats__chart-node.is-manager[data-series-name="Анна Белова"][data-node-index="0"]');
   await firstManagerNode.focus();
-  assert.equal(await firstManagerNode.locator('.manager-stats__node-tooltip').evaluate(element=>getComputedStyle(element).visibility),'visible','node focus reveals details');
-  const hoverNode=page.locator('.manager-stats__chart-node.is-manager[data-series-name="Анна Белова"][data-node-index="7"]'),hoverCircle=hoverNode.locator('circle'),hoverBox=await hoverCircle.boundingBox();
-  assert.ok(hoverBox,'graph circle has a pointer target');
+  assert.equal(await page.locator('.manager-stats__period-popup').isVisible(),true,'keyboard focus reveals one period summary');
+  assert.equal(await page.locator('.manager-stats__chart-node.is-period-active').count(),5,'focus highlights all series for the period');
+  const hoverCircle=page.locator('.manager-stats__chart-node.is-company[data-node-index="7"]>circle'),hoverBox=await hoverCircle.boundingBox();
+  assert.ok(hoverBox,'graph point is rendered');
   await page.mouse.move(hoverBox.x+hoverBox.width/2,hoverBox.y+hoverBox.height/2);
-  await page.waitForTimeout(50);
-  assert.equal(await hoverNode.locator('.manager-stats__node-tooltip').evaluate(element=>getComputedStyle(element).visibility),'visible','node hover reveals details');
-  assert.equal(await hoverNode.locator('.manager-stats__node-tooltip').evaluate(element=>getComputedStyle(element).opacity),'1','custom black tooltip is fully opaque');
-  assert.equal(await hoverNode.evaluate(node=>node.classList.contains('is-tooltip-active')),true,'hover tooltip remains active after SVG reordering');
-  assert.equal(await hoverNode.evaluate(node=>node===node.ownerSVGElement.lastElementChild),true,'hovered node and its black tooltip are raised above all SVG siblings');
+  assert.equal(await page.locator('.manager-stats__chart-node.is-period-active').count(),5,'plot hover highlights company and all managers');
+  assert.equal(await page.locator('.manager-stats__chart-node:hover').count(),0,'points do not receive pointer hover');
+  assert.equal(await page.locator('.manager-stats__period-guide.is-visible').count(),1,'plot hover shows the dashed guide');
+  assert.equal(await page.locator('.manager-stats__period-popup-item').count(),5,'shared popup contains company and four managers');
+  assert.equal(await page.locator('.manager-stats__period-popup-item').evaluateAll(items=>items.every(item=>getComputedStyle(item).color===getComputedStyle(item.querySelector('b')).color)) ,true,'summary values use their line colors');
   const hoverEvidence=process.env.PLANEX_BROWSER_HOVER_EVIDENCE;
   if(hoverEvidence){fs.mkdirSync(path.dirname(hoverEvidence),{recursive:true});await page.screenshot({path:hoverEvidence,fullPage:true});}
   assert.equal((await page.locator('.manager-stats__period-table tbody tr').count()),4,'zero-total periods are hidden from exact values');
   const visiblePeriods=await page.locator('.manager-stats__period-table tbody .manager-stats__period-label strong').allTextContents();
   assert.deepEqual(visiblePeriods,['Нед. 39 · 21.09','Нед. 38 · 14.09','Нед. 37 · 07.09','Нед. 36 · 31.08'],'exact values are ordered newest to oldest');
-  assert.equal(await page.locator('.manager-stats__period-table tbody .is-total').evaluateAll(cells=>cells.every(cell=>cell.textContent.trim()!=='0')),true,'no visible exact-value row has a zero total');
-  assert.deepEqual(await page.locator('.manager-stats__period-table thead th').allTextContents(),['Период','Анна Белова','Борис Серов','Вера Тихая','Глеб Романов','Итого'],'total is the rightmost column');
+  assert.deepEqual(await page.locator('.manager-stats__period-table thead tr').first().locator('th').allTextContents(),['Период','Анна Белова','Борис Серов','Вера Тихая','Глеб Романов','Итого'],'total is the rightmost column');
+  assert.deepEqual(await page.locator('.manager-stats__period-table thead tr').nth(1).locator('th').allTextContents(),Array(5).fill(['Рейсы','Заявки','Вес, т']).flat(),'every manager and total have all three metrics');
   const totalStyle=await page.locator('.manager-stats__period-table tbody tr').first().locator('td').evaluateAll(cells=>({
-    managerBackground:getComputedStyle(cells[cells.length-2]).backgroundColor,
+    managerBackground:getComputedStyle(cells[cells.length-4]).backgroundColor,
     totalBackground:getComputedStyle(cells[cells.length-1]).backgroundColor,
-    managerWeight:getComputedStyle(cells[cells.length-2]).fontWeight,
+    managerWeight:getComputedStyle(cells[cells.length-4]).fontWeight,
     totalWeight:getComputedStyle(cells[cells.length-1]).fontWeight,
   }));
   assert.equal(totalStyle.totalBackground,totalStyle.managerBackground,'total column has the ordinary table background');
   assert.ok(Number(totalStyle.totalWeight)>Number(totalStyle.managerWeight),'total column differs only by bold weight');
   const periodViewport=await page.locator('.manager-stats__periods .table-scroll').evaluate(element=>({client:element.clientHeight,scroll:element.scrollHeight}));
   assert.equal(periodViewport.client>=periodViewport.scroll,true,'period values must not be vertically clipped');
-  assert.equal(await page.locator('.manager-stats__table-card').count(),0,'separate manager totals table is removed');
-  assert.equal((await page.locator('.manager-stats__periods .manager-stats__integrated-manager').count()),4,'manager totals are integrated with period values');
-  assert.match(await page.locator('.manager-stats__integrated-manager').first().innerText(),/Рейсы[\s\S]*Заявки[\s\S]*Вес[\s\S]*Заявок \/ рейс[\s\S]*Вес \/ рейс[\s\S]*Завершено[\s\S]*Отменено/,'all manager measures are retained');
-  assert.equal((await page.locator('.manager-stats__detail-table tbody tr').count()),4,'trip drill-down rows');
-  const detailViewport=await page.locator('.manager-stats__details .table-scroll').evaluate(element=>({client:element.clientHeight,scroll:element.scrollHeight}));
-  assert.equal(detailViewport.client>=detailViewport.scroll,true,'trip drill-down must not be vertically clipped');
+  assert.equal(await page.locator('.manager-stats__table-card,.manager-stats__integrated-summary,.manager-stats__details').count(),0,'removed lower sections are absent');
+  const periodTable=await page.locator('.manager-stats__period-table').innerText();
   const evidence=process.env.PLANEX_BROWSER_EVIDENCE;
   if(evidence){fs.mkdirSync(path.dirname(evidence),{recursive:true});await page.screenshot({path:evidence,fullPage:true});}
   await page.getByRole('link',{name:'Месяцы'}).click();
   assert.match(page.url(),/\?mode=month&metric=trips$/,'mode click navigates immediately without confirmation');
+  await page.goto('http://127.0.0.1:'+server.address().port+'/weight',{waitUntil:'networkidle'});
+  assert.equal(await page.locator('.manager-stats__period-table').innerText(),periodTable,'chart metric does not change the all-metric period table');
+  assert.equal(await page.locator('.manager-stats__metric-tabs a.is-active').innerText(),'Вес','weight fixture selects the graph metric');
+  await page.setViewportSize({width:390,height:844});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'filled mobile report has no page horizontal overflow');
+  await page.locator('.manager-stats__line-chart').scrollIntoViewIfNeeded();
+  const mobilePoint=await page.locator('.manager-stats__chart-node.is-company[data-node-index="7"]>circle').boundingBox();
+  await page.mouse.move(mobilePoint.x+mobilePoint.width/2,mobilePoint.y+mobilePoint.height/2);
+  assert.equal(await page.locator('.manager-stats__chart-node.is-period-active').count(),5,'mobile plot hover highlights all five series');
+  const popupFit=await page.locator('.manager-stats__period-popup').evaluate(element=>{
+    const popup=element.getBoundingClientRect(),body=element.parentElement.getBoundingClientRect();
+    return {right:popup.right<=body.right,bottom:popup.bottom<=body.bottom};
+  });
+  assert.deepEqual(popupFit,{right:true,bottom:true},'mobile summary stays inside the chart card');
+  const mobileEvidence=process.env.PLANEX_BROWSER_MOBILE_EVIDENCE;
+  if(mobileEvidence){fs.mkdirSync(path.dirname(mobileEvidence),{recursive:true});await page.screenshot({path:mobileEvidence,fullPage:true});}
   assert.equal(errors.length,0,'page errors: '+errors.join('; '));
   await page.setViewportSize({width:1920,height:1100});
   await page.goto('http://127.0.0.1:'+server.address().port+'/empty',{waitUntil:'networkidle'});
   assert.equal(await page.locator('.topbar').count(),1,'empty state keeps standard ERP topbar');
   assert.equal(await page.locator('.sidebar').count(),1,'empty state keeps standard ERP sidebar');
   assert.equal(await page.locator('head link[href*="manager-statistics.css"]').count(),1,'empty state keeps page stylesheet');
-  assert.equal(await page.locator('.manager-stats__integrated-manager').count(),0,'empty state has no manager cards');
-  assert.equal(await page.getByText('Активные логисты не найдены.').count(),1,'empty manager summary message');
+  assert.equal(await page.locator('.manager-stats__chart-line.is-manager').count(),0,'empty state has no manager series');
   assert.equal(await page.locator('.manager-stats__periods').count(),1,'empty state renders period section');
-  assert.equal(await page.locator('.manager-stats__details').count(),1,'empty state renders details section');
+  assert.equal(await page.locator('.manager-stats__details,.manager-stats__integrated-summary').count(),0,'removed sections stay absent in empty state');
   assert.match((await page.locator('body').evaluate(el=>getComputedStyle(el).fontFamily)),/IBM Plex Sans/i,'empty state keeps ERP font');
   await page.setViewportSize({width:390,height:844});
   assert.equal(await page.locator('.manager-stats__kpis').evaluate(el=>getComputedStyle(el).gridTemplateColumns.split(' ').length),1,'mobile KPI stack');
