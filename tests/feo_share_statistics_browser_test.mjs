@@ -30,6 +30,16 @@ try {
   assert.equal(await page.locator('.fs-chart linearGradient').count(), 2, 'both lines have matching gradients');
   assert.equal(await page.locator('.fs-chart-node.is-company circle').first().getAttribute('r'), '4', 'company points match the managers chart');
   assert.equal(await page.locator('.fs-chart-node.is-manager circle').first().getAttribute('r'), '3.5', 'series points match the managers chart');
+  const dotDiameters = (active = false) => page.locator('.fs-chart').evaluate((svg, active) => {
+    const width = svg.getBoundingClientRect().width;
+    const managerScale = Math.min(width / 920, matchMedia('(max-width:760px)').matches ? 138 / 171.6 : Infinity);
+    const diameter = selector => svg.querySelector(selector).getBoundingClientRect().width;
+    const selected = active ? '.is-period-active' : '';
+    return {managerScale, company:diameter(`.fs-chart-node.is-company${selected} circle`), mass:diameter(`.fs-chart-node.is-manager${selected} circle`)};
+  }, active);
+  const initialDots = await dotDiameters();
+  assert.ok(Math.abs(initialDots.company - 8 * initialDots.managerScale) < .1, 'company point has the same rendered diameter as the managers chart');
+  assert.ok(Math.abs(initialDots.mass - 7 * initialDots.managerScale) < .1, 'mass point has the same rendered diameter as a manager series');
   assert.equal(await page.locator('.fs-snapshot-table tbody tr.is-latest').count(), 0, 'latest snapshot has no permanent highlight');
   assert.deepEqual(await page.locator('.fs-snapshot-table tbody tr').evaluateAll(rows => rows.slice(0, 2).map(row => getComputedStyle(row.cells[0]).backgroundColor)), ['rgba(0, 0, 0, 0)', 'rgba(0, 0, 0, 0)'], 'first snapshot starts with the same cell background as the next one');
   const margins = await page.locator('.fs-chart').evaluate(svg => {
@@ -45,6 +55,8 @@ try {
   assert.equal(await page.locator('.manager-stats__period-guide.is-visible').count(), 1, 'one vertical guide is visible');
   assert.deepEqual(await page.locator('.manager-stats__period-guide').evaluate(guide => [getComputedStyle(guide).stroke, getComputedStyle(guide).opacity]), ['rgb(192, 120, 48)', '0.95'], 'vertical guide has a visible copper stroke');
   assert.deepEqual(await page.locator('.fs-chart-node.is-period-active circle').evaluateAll(circles => circles.map(circle => getComputedStyle(circle).r)), ['5.5px', '5.5px'], 'active points match the managers chart size');
+  const activeDots = await dotDiameters(true);
+  assert.ok(Math.abs(activeDots.company - 11 * activeDots.managerScale) < .1, 'selected point matches the rendered diameter in the managers chart');
   assert.equal(await page.locator('.fs-period-popup.is-visible').count(), 1, 'one shared summary is visible');
   assert.equal(await page.locator('.fs-period-popup .manager-stats__period-popup-item').count(), 2, 'summary contains both series');
   assert.deepEqual(await page.locator('.fs-period-popup .manager-stats__period-popup-item').evaluateAll(items => items.map(item => item.style.color)), ['rgb(192, 120, 48)','rgb(74, 122, 155)'], 'summary text follows line colors');
@@ -56,11 +68,15 @@ try {
   const point = await page.locator('.fs-chart-node.is-company[data-node-index="1"] circle').boundingBox();
   await page.mouse.move(point.x + point.width / 2, point.y + point.height / 2);
   assert.equal(await page.locator('.fs-chart-node.is-period-active').count(), 2, 'mode change keeps chart interaction bound');
+  const desktopViewBox = await page.locator('.fs-chart').getAttribute('viewBox');
   await page.setViewportSize({width:390,height:844});
+  await page.waitForFunction(previous => document.querySelector('.fs-chart')?.getAttribute('viewBox') !== previous, desktopViewBox);
   assert.equal(await page.locator('.fs-chart').evaluate(el => Math.round(el.getBoundingClientRect().height)), 138, 'mobile chart matches statistics height');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'mobile page has no horizontal overflow');
   await page.locator('.fs-snapshot-table tbody tr[data-period="0"]').focus();
   assert.equal(await page.locator('.fs-chart-node.is-period-active').count(), 2, 'keyboard focus highlights both chart points');
+  const mobileDots = await dotDiameters(true);
+  assert.ok(Math.abs(mobileDots.company - 11 * mobileDots.managerScale) < .1, 'selected point also matches the managers chart on mobile');
   const popupFit = await page.locator('.fs-period-popup').evaluate(el => {
     const popup = el.getBoundingClientRect(), wrap = el.parentElement.getBoundingClientRect();
     return popup.left >= wrap.left && popup.right <= wrap.right && popup.bottom <= wrap.bottom;
