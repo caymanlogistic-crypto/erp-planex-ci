@@ -40,7 +40,7 @@ $check(
     && str_contains($service, "r.normalized_name='логист'"),
     'exact active central Logist role supports system and historical role shapes'
 );
-$check(str_contains($view, 'Рейсы поставлены на погрузку') && str_contains($view, 'Точные значения по периодам') && str_contains($view, 'Итоги каждого логиста') && str_contains($view, 'Из чего сложился результат'), 'decision layers are rendered');
+$check(str_contains($view, 'Рейсы поставлены на погрузку') && str_contains($view, 'Точные значения по периодам') && str_contains($view, 'Сводка по логистам') && str_contains($view, 'Из чего сложился результат'), 'decision layers are rendered');
 $check(
     str_contains($view, "'week'=>'Недели'")
     && str_contains($view, "'month'=>'Месяцы'")
@@ -96,10 +96,19 @@ $check(
     'active chart node is raised above every SVG sibling'
 );
 $check(
-    str_contains($view, "\$managerColors[(int)\$series['membership_id']] = \$seriesColor")
-    && str_contains($view, '--rank-color:')
-    && str_contains($css, 'background:var(--rank-color,var(--chart-copper))'),
-    'ranking bars reuse the matching manager series color'
+    !str_contains($view, 'manager-stats__ranking')
+    && !str_contains($view, 'manager-stats__table-card')
+    && str_contains($view, 'manager-stats__integrated-summary')
+    && str_contains($view, "foreach(\$statistics['managers']as\$row)")
+    && str_contains($view, "\$metricValue(\$row,\$metric)/\$totalMetric*100"),
+    'ranking and separate totals removed while real manager values remain in period card'
+);
+$check(
+    str_contains($view, 'manager-stats__chart-controls')
+    && str_contains($css, '.manager-stats__charts {')
+    && str_contains($css, 'display: block;')
+    && str_contains($css, '.manager-stats__integrated-grid'),
+    'full-width chart with report controls and integrated manager summary'
 );
 $check(str_contains($css, '.manager-stats__field--mode { width:max-content; min-width:0; }'), 'report mode selector has no empty tail after Year');
 $check(str_contains($css, '@media(max-width:1180px)') && str_contains($css, '@media(max-width:760px)'), 'responsive dashboard contract');
