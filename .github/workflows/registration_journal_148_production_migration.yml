@@ -1,0 +1,144 @@
+name: Registration Journal 148 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact deployed canonical SHA'
+        required: true
+        type: string
+      confirm_migration:
+        description: 'Type APPLY_REGISTRATION_JOURNAL_148_AND_CENTRAL_017'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  migrate:
+    if: ${{ inputs.confirm_migration == 'APPLY_REGISTRATION_JOURNAL_148_AND_CENTRAL_017' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact canonical candidate and CI
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          php -l scripts/report_recipients_central_migration_017.php
+          php -l scripts/registration_journal_migration_148.php
+          test -s database/migrations/017_registration_journal_and_report_recipients.sql
+          test -s database/migrations-local/148_create_registration_journal.sql
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/registration-ci.json
+          SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
+          import json,os
+          rows=[r for r in json.load(open('/tmp/registration-ci.json')).get('workflow_runs',[]) if r.get('head_sha')==os.environ['SOURCE_SHA'] and r.get('event')=='push']
+          if not rows or max(rows,key=lambda r:r.get('run_number',0)).get('conclusion')!='success': raise SystemExit('Exact canonical CI is not green')
+          print('REGISTRATION_MIGRATION_CI_PASS=YES')
+          PY
+
+      - name: Install isolated SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/registration148_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/registration148_key" "$HOME/.ssh/known_hosts"
+
+      - name: Verify deployed marker and transfer exact tooling
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/registration148_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/registration148_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          test "$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
+          "${SCP[@]}" scripts/report_recipients_central_migration_017.php "$SSH_USER@$SSH_HOST:/tmp/registration_central017_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" scripts/registration_journal_migration_148.php "$SSH_USER@$SSH_HOST:/tmp/registration_tenant148_${GITHUB_RUN_ID}.php"
+
+      - name: Inspect, apply, and verify both migrations
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          central_hash="$(sha256sum database/migrations/017_registration_journal_and_report_recipients.sql | awk '{print $1}')"
+          tenant_hash="$(sha256sum database/migrations-local/148_create_registration_journal.sql | awk '{print $1}')"
+          remote=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/registration148_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
+          base="PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOYED_SHA='$SOURCE_SHA' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER'"
+          "${remote[@]}" "$base PLANEX_MIGRATION_SHA256='$central_hash' /usr/bin/php8.5 '/tmp/registration_central017_${GITHUB_RUN_ID}.php'" | tee central-before.txt
+          grep -q '^REPORT_RECIPIENTS_017_READ_ONLY_OK$' central-before.txt
+          "${remote[@]}" "$base PLANEX_MIGRATION_SHA256='$tenant_hash' /usr/bin/php8.5 '/tmp/registration_tenant148_${GITHUB_RUN_ID}.php'" | tee tenant-before.txt
+          grep -q '^REGISTRATION_JOURNAL_148_READ_ONLY_OK$' tenant-before.txt
+          "${remote[@]}" "$base PLANEX_MIGRATION_SHA256='$central_hash' REPORT_RECIPIENTS_017_MODE=apply REPORT_RECIPIENTS_017_CONFIRM=APPLY_REPORT_RECIPIENTS_017 /usr/bin/php8.5 '/tmp/registration_central017_${GITHUB_RUN_ID}.php'" | tee central-apply.txt
+          grep -q '^REPORT_RECIPIENTS_017_APPLY_OK$' central-apply.txt
+          "${remote[@]}" "$base PLANEX_MIGRATION_SHA256='$tenant_hash' REGISTRATION_JOURNAL_148_MODE=apply REGISTRATION_JOURNAL_148_CONFIRM=APPLY_REGISTRATION_JOURNAL_148 /usr/bin/php8.5 '/tmp/registration_tenant148_${GITHUB_RUN_ID}.php'" | tee tenant-apply.txt
+          grep -q '^REGISTRATION_JOURNAL_148_APPLY_OK$' tenant-apply.txt
+          "${remote[@]}" "$base PLANEX_MIGRATION_SHA256='$central_hash' /usr/bin/php8.5 '/tmp/registration_central017_${GITHUB_RUN_ID}.php'" | tee central-after.txt
+          "${remote[@]}" "$base PLANEX_MIGRATION_SHA256='$tenant_hash' /usr/bin/php8.5 '/tmp/registration_tenant148_${GITHUB_RUN_ID}.php'" | tee tenant-after.txt
+          grep -q '^REPORT_RECIPIENTS_017_READ_ONLY_OK$' central-after.txt
+          grep -q '^REGISTRATION_JOURNAL_148_READ_ONLY_OK$' tenant-after.txt
+          test "$("${remote[@]}" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
+          echo 'REGISTRATION_MIGRATION_PASS=YES'
+
+      - name: Save audit snapshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: registration-journal-148-${{ github.run_id }}
+          path: |
+            central-before.txt
+            central-apply.txt
+            central-after.txt
+            tenant-before.txt
+            tenant-apply.txt
+            tenant-after.txt
+          if-no-files-found: ignore
+
+      - name: Remove remote temporary files
+        if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          if [ -f "$HOME/.ssh/registration148_key" ]; then
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/registration148_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST" \
+              "rm -f '/tmp/registration_central017_${GITHUB_RUN_ID}.php' '/tmp/registration_tenant148_${GITHUB_RUN_ID}.php'" || true
+          fi
+          rm -f "$HOME/.ssh/registration148_key"

@@ -20,7 +20,7 @@ final class TripCompletionService
     public function ready(): bool
     {
         try {
-            foreach (['waste_trip_completion_items','waste_trip_completion_documents'] as $table) {
+            foreach (['waste_trip_completion_items','waste_trip_completion_documents','waste_trip_registration_journal'] as $table) {
                 $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?');
                 $stmt->execute([$table]);
                 if ((int)$stmt->fetchColumn()!==1) return false;
@@ -148,7 +148,7 @@ final class TripCompletionService
         return $issues;
     }
 
-    public function save(int $tripId,int $requestId,array $input,int $actorMembershipId): void
+    public function save(int $tripId,int $requestId,array $input,int $actorMembershipId,string $actorLogin=''): void
     {
         $this->assertRequest($tripId,$requestId);
         [$arrived,$departed]=$this->pickupInterval($input['pickup_interval']??null);
@@ -165,6 +165,29 @@ final class TripCompletionService
         if (!in_array($dateStatus,['partial','no'],true)) $recoverySource='';
         $comment=trim((string)($input['comment']??''));
         if (mb_strlen($comment)>500) throw new DomainException('Комментарий не должен превышать 500 символов.');
+        $next=[
+            'arrived_at'=>$arrived,'departed_at'=>$departed,
+            'driver_signature_present'=>$driverStatus==='yes'?1:0,'driver_signature_status'=>$driverStatus?:null,
+            'sender_signature_present'=>$senderStatus==='yes'?1:0,'sender_signature_status'=>$senderStatus?:null,
+            'tn_datetime_missing'=>in_array($dateStatus,['partial','no'],true)?1:0,'tn_datetime_status'=>$dateStatus?:null,
+            'tn_absent'=>(int)$tnAbsent,'data_from_tracker'=>$recoverySource==='tracker'?1:0,
+            'data_from_driver'=>$recoverySource==='driver'?1:0,'data_invented'=>0,
+            'recovery_source'=>$recoverySource?:null,'comment'=>$comment!==''?$comment:null,
+        ];
+        $this->tenant->beginTransaction();
+        try {
+        $lock=$this->tenant->prepare('SELECT id FROM waste_trip_requests WHERE id=? FOR UPDATE');
+        $lock->execute([$requestId]);
+        $oldStmt=$this->tenant->prepare('SELECT * FROM waste_trip_completion_items WHERE waste_trip_request_id=? FOR UPDATE');
+        $oldStmt->execute([$requestId]);
+        $old=$oldStmt->fetch(PDO::FETCH_ASSOC) ?: [];
+        $before=[];$after=[];
+        foreach ($next as $field=>$value) {
+            $previous=$old[$field]??null;
+            if (in_array($field,['driver_signature_present','sender_signature_present','tn_datetime_missing','tn_absent','data_from_tracker','data_from_driver','data_invented'],true)) $previous=(int)$previous;
+            if ($previous!==$value) { $before[$field]=$previous;$after[$field]=$value; }
+        }
+        if ($after===[]) { $this->tenant->commit();return; }
         $stmt=$this->tenant->prepare("INSERT INTO waste_trip_completion_items
             (waste_trip_request_id,arrived_at,departed_at,driver_signature_present,driver_signature_status,sender_signature_present,sender_signature_status,tn_datetime_missing,tn_datetime_status,tn_absent,data_from_tracker,data_from_driver,data_invented,recovery_source,comment,updated_by_membership_id)
             VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE arrived_at=VALUES(arrived_at),departed_at=VALUES(departed_at),
@@ -173,17 +196,23 @@ final class TripCompletionService
             tn_datetime_missing=VALUES(tn_datetime_missing),data_from_tracker=VALUES(data_from_tracker),
             data_from_driver=VALUES(data_from_driver),data_invented=VALUES(data_invented),
             comment=VALUES(comment),updated_by_membership_id=VALUES(updated_by_membership_id),lock_version=lock_version+1");
-        $stmt->execute([
-            $requestId,$arrived,$departed,
-            $driverStatus==='yes'?1:0,$driverStatus?:null,$senderStatus==='yes'?1:0,$senderStatus?:null,
-            in_array($dateStatus,['partial','no'],true)?1:0,$dateStatus?:null,(int)$tnAbsent,$recoverySource==='tracker'?1:0,
-            $recoverySource==='driver'?1:0,0,$recoverySource?:null,
-            $comment!==''?$comment:null,$actorMembershipId,
-        ]);
+        $stmt->execute([$requestId,$next['arrived_at'],$next['departed_at'],
+            $next['driver_signature_present'],$next['driver_signature_status'],$next['sender_signature_present'],$next['sender_signature_status'],
+            $next['tn_datetime_missing'],$next['tn_datetime_status'],$next['tn_absent'],$next['data_from_tracker'],
+            $next['data_from_driver'],$next['data_invented'],$next['recovery_source'],$next['comment'],$actorMembershipId]);
+        $keys=array_keys($after);
+        $kind=count(array_diff($keys,['arrived_at','departed_at']))===0?'time':
+            (count($keys)===1 && $keys[0]==='comment'?'comment':'marks');
+        $this->writeJournal($tripId,$requestId,null,$kind,'Изменены данные заявки',$actorMembershipId,$actorLogin,$before,$after);
+        $this->tenant->commit();
+        } catch (Throwable $error) {
+            if ($this->tenant->inTransaction()) $this->tenant->rollBack();
+            throw $error;
+        }
     }
 
     /** @param array<string,mixed> $file */
-    public function upload(int $tripId,int $requestId,array $file,int $actorMembershipId,bool $requireHttpUpload=true): int
+    public function upload(int $tripId,int $requestId,array $file,int $actorMembershipId,bool $requireHttpUpload=true,string $actorLogin=''): int
     {
         $identity=$this->assertRequest($tripId,$requestId);
         $validation=DocumentService::validateUploadedFile($file,$requireHttpUpload);
@@ -211,6 +240,7 @@ final class TripCompletionService
             $stmt=$this->tenant->prepare('INSERT INTO waste_trip_completion_documents (waste_trip_request_id,original_name,download_name,stored_path,mime_type,size_bytes,uploaded_by_membership_id) VALUES (?,?,?,?,?,?,?)');
             $stmt->execute([$requestId,(string)$file['name'],$downloadName,$relativeDir.'/'.$storedName,$mime,(int)filesize($absolute),$actorMembershipId]);
             $id=(int)$this->tenant->lastInsertId();
+            $this->writeJournal($tripId,$requestId,$id,'scan','Добавлен скан ТН',$actorMembershipId,$actorLogin,[],['file'=>(string)$file['name']]);
             $this->tenant->commit();
             return $id;
         } catch (Throwable $error) {
@@ -228,12 +258,74 @@ final class TripCompletionService
         return (int)$stmt->fetchColumn();
     }
 
-    public function softDelete(int $tripId,int $requestId,int $documentId,int $actorMembershipId): void
+    public function softDelete(int $tripId,int $requestId,int $documentId,int $actorMembershipId,string $actorLogin=''): void
     {
         $this->assertRequest($tripId,$requestId);
-        $stmt=$this->tenant->prepare('UPDATE waste_trip_completion_documents SET deleted_at=NOW(),deleted_by_membership_id=? WHERE id=? AND waste_trip_request_id=? AND deleted_at IS NULL');
-        $stmt->execute([$actorMembershipId,$documentId,$requestId]);
-        if ($stmt->rowCount()!==1) throw new DomainException('Файл не найден.');
+        $this->tenant->beginTransaction();
+        try {
+            $lock=$this->tenant->prepare('SELECT original_name FROM waste_trip_completion_documents WHERE id=? AND waste_trip_request_id=? AND deleted_at IS NULL FOR UPDATE');
+            $lock->execute([$documentId,$requestId]);
+            $name=$lock->fetchColumn();
+            if ($name===false) throw new DomainException('Файл не найден.');
+            $stmt=$this->tenant->prepare('UPDATE waste_trip_completion_documents SET deleted_at=NOW(),deleted_by_membership_id=? WHERE id=? AND waste_trip_request_id=? AND deleted_at IS NULL');
+            $stmt->execute([$actorMembershipId,$documentId,$requestId]);
+            if ($stmt->rowCount()!==1) throw new DomainException('Файл не найден.');
+            $this->writeJournal($tripId,$requestId,$documentId,'scan','Удалён скан ТН',$actorMembershipId,$actorLogin,['file'=>(string)$name],[]);
+            $this->tenant->commit();
+        } catch (Throwable $error) {
+            if ($this->tenant->inTransaction()) $this->tenant->rollBack();
+            throw $error;
+        }
+    }
+
+    /** @return array{rows:list<array<string,mixed>>,total:int,page:int,pages:int,users:list<string>} */
+    public function journal(array $filters): array
+    {
+        $where=[];$params=[];
+        foreach (['from'=>'>=','to'=>'<='] as $key=>$operator) {
+            $date=trim((string)($filters[$key]??''));
+            if ($date!=='' && preg_match('/^\d{4}-\d{2}-\d{2}$/D',$date)) {
+                $where[]="DATE(j.occurred_at) {$operator} ?";$params[]=$date;
+            }
+        }
+        $user=trim((string)($filters['user']??''));
+        if ($user!=='') { $where[]='j.actor_login=?';$params[]=$user; }
+        $kind=trim((string)($filters['kind']??''));
+        if (in_array($kind,['initial','time','marks','scan','comment'],true)) { $where[]='j.event_kind=?';$params[]=$kind; }
+        $query=trim((string)($filters['q']??''));
+        if ($query!=='') {
+            $where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR fr.zayavka_id LIKE ?)';
+            $like='%'.str_replace(['%','_'],['\\%','\\_'],$query).'%';
+            $params[]=$like;$params[]=$like;
+        }
+        $condition=$where?' WHERE '.implode(' AND ',$where):'';
+        $from=' FROM waste_trip_registration_journal j JOIN waste_trips wt ON wt.id=j.waste_trip_id JOIN waste_trip_requests wtr ON wtr.id=j.waste_trip_request_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id';
+        $count=$this->tenant->prepare('SELECT COUNT(*)'.$from.$condition);
+        $count->execute($params);$total=(int)$count->fetchColumn();
+        $pages=max(1,(int)ceil($total/50));$page=min($pages,max(1,(int)($filters['page']??1)));
+        $sql='SELECT j.id,j.occurred_at,j.actor_login,j.event_kind,j.action_text,j.before_json,j.after_json,wt.business_id trip_number,fr.zayavka_id request_number'
+            .$from.$condition.' ORDER BY j.occurred_at DESC,j.id DESC LIMIT 50 OFFSET '.(($page-1)*50);
+        $stmt=$this->tenant->prepare($sql);$stmt->execute($params);
+        $rows=$stmt->fetchAll(PDO::FETCH_ASSOC);
+        foreach ($rows as &$row) {
+            $row['before']=json_decode((string)($row['before_json']??'{}'),true)?:[];
+            $row['after']=json_decode((string)($row['after_json']??'{}'),true)?:[];
+            unset($row['before_json'],$row['after_json']);
+        }
+        unset($row);
+        $users=$this->tenant->query('SELECT DISTINCT actor_login FROM waste_trip_registration_journal ORDER BY actor_login')->fetchAll(PDO::FETCH_COLUMN);
+        return ['rows'=>$rows,'total'=>$total,'page'=>$page,'pages'=>$pages,'users'=>$users];
+    }
+
+    private function writeJournal(int $tripId,int $requestId,?int $documentId,string $kind,string $action,int $actorMembershipId,string $actorLogin,array $before,array $after): void
+    {
+        $stmt=$this->tenant->prepare('INSERT INTO waste_trip_registration_journal
+            (waste_trip_id,waste_trip_request_id,document_id,event_kind,action_text,actor_membership_id,actor_login,before_json,after_json)
+            VALUES (?,?,?,?,?,?,?,?,?)');
+        $stmt->execute([$tripId,$requestId,$documentId,$kind,$action,$actorMembershipId,
+            $actorLogin!==''?$actorLogin:'membership:'.$actorMembershipId,
+            json_encode($before,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR),
+            json_encode($after,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR)]);
     }
 
     /** @return array<string,mixed> */

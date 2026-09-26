@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `b4325ae47a45a505cf8f1b8e720c087d4628d7ea135d14d60bff37f6338cf4c4`
+**Schema fingerprint:** `1344ab2773eb6f5736e153c18e3ffc83532742b75fb5e0dba2336dafa48948d8`
 
 ## `waste_trip_completion_items`
 
@@ -132,6 +132,40 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
+
+## `waste_trip_registration_journal`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `waste_trip_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `document_id` | `bigint unsigned` | YES | NULL | — | — |
+| `event_kind` | `varchar(32)` | NO | NULL | — | — |
+| `action_text` | `varchar(255)` | NO | NULL | — | — |
+| `actor_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `actor_login` | `varchar(100)` | NO | NULL | — | `MUL` |
+| `before_json` | `json` | YES | NULL | — | — |
+| `after_json` | `json` | YES | NULL | — | — |
+| `initial_key` | `varchar(80)` | YES | NULL | — | `UNI` |
+| `occurred_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED` | `MUL` |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `fk_registration_journal_request` (`waste_trip_request_id`)
+- **INDEX** `idx_registration_journal_actor` (`actor_login`, `occurred_at`)
+- **INDEX** `idx_registration_journal_time` (`occurred_at`, `id`)
+- **INDEX** `idx_registration_journal_trip` (`waste_trip_id`, `waste_trip_request_id`, `id`)
+- **UNIQUE** `uk_registration_journal_initial` (`initial_key`)
+
+### Physical foreign keys
+
+- `fk_registration_journal_request`: (`waste_trip_request_id`) → `waste_trip_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_registration_journal_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `waste_trip_requests`
 

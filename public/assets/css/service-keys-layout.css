@@ -1,0 +1,122 @@
+/* Report email recipients on the local copy of "Ключи и сервисы". */
+.service-keys[hidden] { display: none !important; }
+.service-keys { --settings-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(220px, .66fr); width: min(1480px, calc(100% - 12px)); max-width: 1480px; min-width: 0; margin: 0 auto; }
+.service-keys .service-keys-grid { grid-template-columns: minmax(0, 1fr); gap: 8px; margin-top: 8px; }
+.service-keys .service-key-card { width: 100%; min-width: 0; }
+.service-keys .service-key-head { min-height: 52px; align-items: center; padding: 8px 12px; background: linear-gradient(180deg, var(--surface-form), var(--surface-muted)); }
+.service-keys .section-title { margin: 0; font-size: 14px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+.service-keys .service-key-body { padding: 10px 12px; }
+.service-keys .service-key-footer { padding: 5px 12px; }
+.service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-body { display: grid; grid-template-columns: var(--settings-columns); gap: 10px 14px; align-items: center; }
+.service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-body > p { grid-column: 1; margin: 0; }
+.service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-usage { grid-column: 2; margin: 0; padding: 0; border: 0; }
+.service-keys .service-key-card[aria-labelledby="yandex-title"] [data-key-edit] { grid-column: 3; justify-self: end; width: 170px; }
+.service-keys .service-key-card[aria-labelledby="yandex-title"] [data-key-form] { grid-column: 1 / -1; }
+.service-keys .service-key-card[aria-labelledby="mail-settings-title"] .service-key-body > p { display: none; }
+.service-keys [data-mail-settings-form] { display: grid; grid-template-columns: var(--settings-columns); gap: 14px; align-items: start; }
+.service-keys [data-mail-settings-form] > .field { min-width: 0; margin: 0; }
+.service-keys [data-mail-settings-form] .service-mail-fields { grid-template-columns: minmax(0, 1fr) 56px; gap: 5px; min-width: 0; }
+.service-keys [data-mail-settings-form] .field { margin-bottom: 0; }
+.service-keys [data-mail-settings-form] .field-label { display: flex; align-items: end; min-height: 24px; }
+.service-keys [data-mail-settings-form] .field-input,
+.service-keys [data-mail-settings-form] .field-select,
+.service-keys [data-mail-settings-form] .btn { height: 34px; }
+.service-keys .mail-controls { display: flex; flex-wrap: wrap; align-items: end; justify-content: flex-end; gap: 8px; min-width: 0; }
+.service-keys .mail-controls > .field { flex: 1 1 70px; min-width: 70px; margin: 0; }
+.service-keys .mail-controls .service-key-actions { flex: 0 0 auto; }
+.service-keys .mail-controls .btn { width: 170px; }
+.service-keys [data-key-edit] { height: 34px; }
+.service-keys [data-mail-settings-form] .service-key-actions { margin: 0; }
+.service-keys [data-mail-settings-form] .btn { white-space: nowrap; }
+.report-email-card .section-title { margin: 0; font-size: 14px; }
+.report-email-badge { border: 1px solid var(--line-soft); background: var(--surface-strong); color: var(--text-muted); white-space: nowrap; }
+.report-email-card .service-key-body { display: grid; grid-template-columns: var(--settings-columns); grid-template-areas: 'form recipients footer'; align-items: start; gap: 14px; }
+.report-email-card .service-key-body > p { display: none; }
+.report-email-form { grid-area: form; display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr) auto; align-items: end; gap: 8px; margin: 0; }
+.report-email-form .field { min-width: 0; margin: 0; }
+.report-email-form .field-input { height: 34px; }
+.report-email-form .btn { height: 34px; white-space: nowrap; }
+.report-email-person { position: relative; }
+.report-email-options { position: absolute; z-index: 15; top: 100%; right: 0; left: 0; margin-top: 2px; border: 1px solid var(--line-soft); background: var(--surface-strong); box-shadow: 0 8px 20px rgba(25,20,15,.16); }
+.report-email-options[hidden] { display: none; }
+.report-email-options button { display: grid; gap: 2px; width: 100%; padding: 9px 10px; border: 0; border-bottom: 1px solid var(--line-hair); background: transparent; color: var(--text-main); font: inherit; text-align: left; cursor: pointer; }
+.report-email-options button:last-child { border-bottom: 0; }
+.report-email-options button:hover, .report-email-options button:focus-visible { background: var(--surface-form); outline: 2px solid var(--accent); outline-offset: -2px; }
+.report-email-options small { color: var(--text-muted); font-size: 11px; }
+.report-email-feedback { margin-top: 10px; padding: 8px 10px; border: 1px solid var(--success-border); background: var(--success-bg); color: var(--success-text); font-size: 11px; }
+.report-email-feedback.is-error { border-color: var(--danger-border); background: var(--danger-bg); color: var(--danger-text); }
+.report-email-recipients { grid-area: recipients; min-width: 0; }
+.report-email-list-title { display: flex; align-items: center; gap: 7px; margin: 0; padding: 0 0 5px; border-bottom: 1px solid var(--line-soft); font-size: 12px; font-weight: 750; }
+.report-email-count { display: inline-grid; place-items: center; min-width: 19px; height: 19px; padding: 0 5px; border-radius: 10px; background: var(--surface-form); color: var(--text-muted); font-size: 10px; }
+.report-email-list { margin: 0; padding: 0; list-style: none; }
+.report-email-recipient { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 7px; min-height: 35px; padding: 3px 0; border-bottom: 1px solid var(--line-hair); }
+.report-email-recipient-icon { display: grid; place-items: center; width: 24px; height: 24px; border: 1px solid var(--line-soft); background: var(--surface-form); color: var(--accent-deep); font-size: 13px; font-weight: 700; }
+.report-email-recipient b, .report-email-recipient small { display: block; overflow-wrap: anywhere; }
+.report-email-recipient b { font-size: 11px; }
+.report-email-recipient small { margin-top: 2px; color: var(--text-muted); font-size: 11px; }
+.report-email-remove { color: var(--danger-text); }
+.report-email-empty { padding: 8px 4px; color: var(--text-muted); font-size: 11px; }
+.report-email-footer { grid-area: footer; display: grid; align-content: start; gap: 8px; min-width: 0; }
+.report-email-logist { display: flex; flex: 1 1 auto; align-items: flex-start; gap: 8px; min-width: 0; margin: 0; padding: 6px 8px; border: 1px solid var(--line-soft); background: var(--surface-form); cursor: pointer; }
+.report-email-logist input { width: 15px; height: 15px; margin: 1px 0 0; accent-color: var(--accent); cursor: pointer; }
+.report-email-logist b, .report-email-logist small { display: block; }
+.report-email-logist b { font-size: 11px; }
+.report-email-logist small { margin-top: 3px; color: var(--text-muted); font-size: 11px; line-height: 1.35; }
+.report-email-logist:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+.report-email-actions { display: grid; justify-items: end; gap: 2px; margin: 0; }
+.report-email-actions .btn { width: 170px; }
+.report-email-actions .btn { height: 34px; }
+.report-email-save-state { color: var(--text-muted); font-size: 11px; }
+@media (min-width: 1141px) {
+  .service-keys .service-keys-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'report yandex' 'report mail'; align-items: stretch; }
+  .service-keys .report-email-card { grid-area: report; align-self: start; }
+  .service-keys .report-email-card .service-key-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: 'form' 'recipients' 'footer'; gap: 12px; }
+  .service-keys .report-email-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
+  .service-keys .report-email-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"],
+  .service-keys .service-key-card[aria-labelledby="mail-settings-title"] { display: flex; flex-direction: column; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] { grid-area: yandex; }
+  .service-keys .service-key-card[aria-labelledby="mail-settings-title"] { grid-area: mail; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-body,
+  .service-keys .service-key-card[aria-labelledby="mail-settings-title"] .service-key-body { flex: 1; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto 1fr; align-content: stretch; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-body > p,
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-usage,
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] [data-key-edit] { grid-column: 1; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] [data-key-edit] { grid-row: 3; align-self: end; }
+  .service-keys [data-mail-settings-form] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .service-keys .mail-controls { grid-column: 1 / -1; }
+}
+@media (min-width: 1141px) and (max-width: 1350px) {
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] [data-key-edit],
+  .service-keys .mail-controls .btn,
+  .service-keys .report-email-actions .btn { width: 150px; }
+  .service-keys .mail-controls { gap: 5px; }
+  .service-keys .mail-controls > .field { min-width: 70px; }
+}
+@media (max-width: 1140px) {
+  .app:has(.service-keys) { min-width: 0; grid-template-columns: 204px minmax(0, 1fr); }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-body { grid-template-columns: minmax(0, 1fr) auto; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-usage { grid-column: 1; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] [data-key-edit] { grid-column: 2; grid-row: 1 / 3; }
+  .service-keys [data-mail-settings-form] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .service-keys .mail-controls { grid-column: 1 / -1; }
+  .report-email-card .service-key-body { grid-template-columns: minmax(0, 1fr); grid-template-areas: 'form' 'recipients' 'footer'; }
+  .report-email-footer { display: flex; align-items: center; }
+}
+@media (max-width: 720px) {
+  .app:has(.service-keys) { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 720px) {
+  .report-email-form { grid-template-columns: minmax(0, 1fr); }
+  .report-email-form .btn { justify-self: start; }
+  .report-email-card .service-key-head { align-items: flex-start; }
+  .report-email-footer { align-items: stretch; flex-direction: column; }
+  .report-email-footer { display: grid; }
+  .report-email-logist, .report-email-actions { width: 100%; }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] .service-key-body { grid-template-columns: minmax(0, 1fr); }
+  .service-keys .service-key-card[aria-labelledby="yandex-title"] [data-key-edit] { grid-column: 1; grid-row: auto; justify-self: start; }
+  .service-keys [data-mail-settings-form] { grid-template-columns: minmax(0, 1fr); }
+  .service-keys .mail-controls { grid-column: 1; flex-wrap: wrap; }
+}
+

@@ -14,7 +14,7 @@ if($database===''||!in_array($database,explode(',',(string)getenv('PLANEX_TEST_F
 $pdo=new PDO('mysql:host='.getenv('PLANEX_SCHEMA_DB_HOST').';port='.(getenv('PLANEX_SCHEMA_DB_PORT')?:3306).';dbname='.$database.';charset=utf8mb4',getenv('PLANEX_SCHEMA_DB_USER'),getenv('PLANEX_SCHEMA_DB_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 cleanCompanyPoolDatabase($pdo);$companyId=987654;$stored=[];
 try{
-    LocalMigrationService::apply($pdo);$service=new TripCompletionService($pdo,$companyId);$ok($service->ready(),'Migration 147 not ready');
+    LocalMigrationService::apply($pdo);$service=new TripCompletionService($pdo,$companyId);$ok($service->ready(),'Migration 148 not ready');
     $pdo->exec("INSERT INTO users(id,membership_id,full_name,login,email,phone,password_hash,role_code,status) VALUES(1,101,'Тестовый логист','tester','manager@example.test','+7 900 000-30-01','hash','logist','active');
       INSERT INTO clients(id,name,inn,status) VALUES(1,'Тестовый клиент','7700000000','active');
       INSERT INTO feo_requests(id,zayavka_id,naim_oo_gruzootpravitel,mno_adres_pogruzki,gruzopoluchatel,adres_dostavki_otkhodov,mass_netto) VALUES
@@ -42,6 +42,11 @@ try{
     $service->save(1,11,['pickup_interval'=>'01.09.26 09:40 - 10:00','driver_signature_status'=>'yes','sender_signature_status'=>'yes','tn_datetime_status'=>'full'],101);
     $service->save(1,12,['pickup_interval'=>'01.09.26 10:40 - 11:00','driver_signature_status'=>'yes','sender_signature_status'=>'yes','tn_datetime_status'=>'no','recovery_source'=>'driver'],101);
     $service->save(2,13,['driver_signature_status'=>'no','sender_signature_status'=>'no','tn_datetime_status'=>'partial','recovery_source'=>'tracker'],101);
+    $events=$service->journal(['user'=>'membership:101','kind'=>'marks']);
+    $ok($events['total']===3,'Each saved request creates an attributed journal event');
+    $beforeCount=$events['total'];
+    $service->save(2,13,['driver_signature_status'=>'no','sender_signature_status'=>'no','tn_datetime_status'=>'partial','recovery_source'=>'tracker'],101);
+    $ok($service->journal(['user'=>'membership:101','kind'=>'marks'])['total']===$beforeCount,'No-op save must not create a journal event');
     $fails(fn()=>$service->save(1,11,['pickup_interval'=>'01.09.26 12:00 - 11:00'],101));
     $fails(fn()=>$service->save(1,11,['pickup_interval'=>'01.09.26 10:00 - xx:00'],101));
     $stmt=$pdo->query('SELECT arrived_at,departed_at,tn_datetime_status,recovery_source FROM waste_trip_completion_items WHERE waste_trip_request_id=11');$saved=$stmt->fetch();$ok(substr((string)$saved['arrived_at'],0,10)===substr((string)$saved['departed_at'],0,10),'Departure reuses arrival date');$ok($saved['tn_datetime_status']==='full'&&$saved['recovery_source']===null,'Full time needs no recovery source');
@@ -69,7 +74,15 @@ try{
     $zip=$service->package($trip);$ok(is_file($zip)&&filesize($zip)>0,'Trip ZIP created');$package=new ZipArchive();$ok($package->open($zip)===true&&$package->locateName('Рейс_244_сводный_отчет.xlsx')!==false,'Formatted Excel included in trip package');$ok($package->locateName('Рейс_244_Заявка_274405_ТН_01.jpg')!==false,'TN scan included with canonical name');$package->close();@unlink($zip);
     $request11=array_values(array_filter($trip['requests'],static fn(array $request):bool=>(int)$request['id']===11))[0];
     $firstDoc=(int)$request11['documents'][0]['id'];$service->softDelete(1,11,$firstDoc,101);
+    $ok($service->journal(['kind'=>'scan'])['total']===4,'Upload and deletion are logged');
     $ok(count($service->trips('',true))===2,'Soft-deleted scan reopens work item');
+    $pdo->exec('DROP TABLE waste_trip_registration_journal');
+    $pdo->exec("DELETE FROM schema_migrations WHERE migration='148_create_registration_journal.sql'");
+    $migration=(string)file_get_contents(BASE_PATH.'/database/migrations-local/148_create_registration_journal.sql');
+    $pdo->exec($migration);$pdo->exec($migration);
+    $initial=$service->journal(['kind'=>'initial']);
+    $expected=(int)$pdo->query('SELECT COUNT(*) FROM waste_trip_completion_items')->fetchColumn()+(int)$pdo->query('SELECT COUNT(*) FROM waste_trip_completion_documents')->fetchColumn();
+    $ok($initial['total']===$expected && count(array_unique(array_column($initial['rows'],'actor_login')))==1 && $initial['rows'][0]['actor_login']==='enshina','Initial backfill must be complete, idempotent and attributed to enshina');
     echo "TRIP_COMPLETION_MYSQL=PASS\n";
 }finally{
     foreach($stored as$path)if(is_file($path))@unlink($path);
