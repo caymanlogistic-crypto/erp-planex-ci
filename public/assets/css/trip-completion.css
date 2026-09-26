@@ -403,8 +403,12 @@
 .lab-trip-contact-line { overflow: hidden; color: var(--text-muted); font-size: 10px; line-height: 1.35; text-overflow: ellipsis; white-space: nowrap; }
 .lab-trip-email { color: var(--accent-deep); }
 .lab-trip-progress-count { font-size: 11.5px; white-space: nowrap; }
-.lab-trip-progress-track { display: block; width: 100%; height: 5px; margin-top: 8px; overflow: hidden; border-radius: 5px; background: #e7e2da; }
+.lab-trip-progress-track { display: flex; width: 100%; height: 7px; margin-top: 8px; overflow: hidden; border-radius: 5px; background: #e7e2da; }
 .lab-trip-progress-fill { display: block; height: 100%; border-radius: inherit; background: #7eaf8a; transition: width .2s ease; }
+.lab-trip-progress-no-tn { display: block; height: 100%; flex: none; margin-left: auto; background: #dc1010; transition: width .2s ease; }
+.lab-trip-progress-track.has-no-tn .lab-trip-progress-fill { border-radius: 5px 0 0 5px; }
+.lab-trip-progress-track.has-no-tn .lab-trip-progress-no-tn { border-radius: 0 5px 5px 0; }
+.lab-trip-progress-track.has-no-tn.has-no-ready .lab-trip-progress-no-tn { border-radius: 5px; }
 .lab-trip-overview { gap: 5px; align-self: stretch; padding-left: 12px; border-left: 1px solid var(--line-soft); }
 .lab-trip-overview .lab-trip-label { margin-bottom: 0; }
 .lab-trip-counters { display: flex; flex-wrap: wrap; gap: 4px; }
