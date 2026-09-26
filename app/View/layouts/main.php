@@ -345,7 +345,7 @@ if (empty($topbarCrumbs)) {
                             $navigationIsActive = $activeNavigationKey === (string) $navigationPage['key'];
                         ?>
                         <a class="nav-item<?= $navigationIsActive ? ' is-active' : '' ?>" href="<?= app_url($navigationPath) ?>">
-                            <?php if (in_array((string) $navigationPage['key'], ['company.statistics.managers', 'company.statistics.feo_share'], true)): ?>
+                            <?php if (in_array((string) $navigationPage['key'], ['company.statistics.managers', 'company.statistics.feo_share', 'company.statistics.cargo_balance'], true)): ?>
                             <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
                             <?php else: ?>
                             <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>

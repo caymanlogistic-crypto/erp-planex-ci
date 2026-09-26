@@ -1,0 +1,45 @@
+.cargo-report { --cargo-copper:#C07830; --cargo-steel:#4A7A9B; }
+.cargo-report__error { margin:0 0 8px; padding:8px 11px; border:1px solid var(--line-soft); border-left:3px solid var(--accent); background:var(--surface-form); color:var(--text-muted); font-size:10px; line-height:1.4; }
+.cargo-report__trend { margin-bottom:8px; }
+.cargo-report .manager-stats__card-head { align-items:center; }
+.cargo-report .manager-stats__field-label { color:var(--text-faint); font-size:9px; font-weight:700; letter-spacing:.035em; text-transform:uppercase; }
+.cargo-report .manager-stats__segments { height:28px; padding:0; }
+.cargo-report .manager-stats__segments button { display:flex; align-items:center; height:26px; padding:0 12px; border:0; border-right:1px solid var(--line-hair); border-radius:0; background:transparent; color:var(--text-muted); font:700 9.5px var(--font-base); cursor:pointer; }
+.cargo-report .manager-stats__segments button:last-child { border-right:0; }
+.cargo-report .manager-stats__segments button.is-active { background:var(--surface-strong); box-shadow:inset 0 -2px 0 var(--accent); color:var(--text-main); }
+.cargo-report .manager-stats__segments button:focus-visible,.cargo-report__table tbody tr:focus-visible,.cargo-report__hit:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.cargo-report .manager-stats__chart-body { position:relative; padding:8px 10px 7px; }
+.cargo-report__chart { display:block; width:100%; height:auto; cursor:crosshair; }
+.cargo-report__area { pointer-events:none; opacity:0; animation:manager-stats-area-in 480ms ease-out 120ms forwards; }
+.cargo-report__line { pointer-events:none; stroke-dasharray:1; stroke-dashoffset:1; animation:manager-stats-line-in 780ms cubic-bezier(.22,.78,.3,1) forwards; }
+.cargo-report__node { pointer-events:none; transition:none; }
+.cargo-report__node.is-period-active { fill:var(--series-color); r:5.5px; }
+.cargo-report__guide { opacity:0; stroke:var(--cargo-copper); stroke-width:2; stroke-dasharray:5 4; pointer-events:none; }
+.cargo-report__guide.is-visible { opacity:.95; }
+.cargo-report__hit { pointer-events:all; cursor:crosshair; }
+.cargo-report__popup { position:absolute; z-index:5; top:13px; width:260px; box-sizing:border-box; padding:7px 8px; border:1px solid var(--line-soft); background:var(--surface-strong); box-shadow:0 2px 7px rgba(40,30,20,.16); opacity:0; visibility:hidden; pointer-events:none; }
+.cargo-report__popup.is-visible { opacity:1; visibility:visible; }
+.cargo-report__popup strong,.cargo-report__popup span,.cargo-report__popup small { display:block; }
+.cargo-report__popup strong { padding-bottom:5px; font-size:10px; }
+.cargo-report__popup span { display:flex; justify-content:space-between; gap:10px; padding:4px 0; border-top:1px solid var(--line-hair); font-size:9.5px; font-weight:700; }
+.cargo-report__popup small { padding-top:4px; border-top:1px solid var(--line-hair); color:var(--text-muted); font-size:8.5px; }
+.cargo-report__table { margin:0; min-width:1020px; table-layout:fixed; }
+.cargo-report__table th:first-child { width:172px; }
+.cargo-report__table th,.cargo-report__table td { white-space:nowrap; }
+.cargo-report__table .num { text-align:right; }
+.cargo-report__table .is-available { color:var(--cargo-copper); font-weight:800; }
+.cargo-report__table .is-started { color:var(--cargo-steel); font-weight:800; }
+.cargo-report__table .is-idle { color:var(--text-main); font-weight:800; }
+.cargo-report__table tbody tr.is-period-active th,.cargo-report__table tbody tr.is-period-active td { background:var(--surface-muted); }
+.cargo-report__table tbody tr { cursor:crosshair; }
+.cargo-report__scroll-hint { display:none; }
+@media(max-width:760px) {
+  .cargo-report .manager-stats__card-head { align-items:stretch; }
+  .cargo-report .manager-stats__chart-controls,.cargo-report .manager-stats__segments { width:100%; }
+  .cargo-report .manager-stats__segments button { flex:1; justify-content:center; }
+  .cargo-report__popup { width:min(250px,calc(100% - 18px)); }
+  .cargo-report__scroll-hint { display:inline; }
+}
+@media(prefers-reduced-motion:reduce) {
+  .cargo-report__area,.cargo-report__line { animation:none; opacity:1; stroke-dashoffset:0; }
+}
