@@ -44,7 +44,7 @@ $_SESSION['_login_return_to'] = '//attacker.example';
 checkReturn(consumeLoginReturnTarget() === null, 'stored unsafe target accepted');
 
 $index = (string) file_get_contents($root . '/public/index.php');
-$guard = strpos($index, 'rememberLoginReturnTarget();');
+$guard = strpos($index, 'redirectUnauthenticatedProtectedRequest();');
 $csrf = strpos($index, 'verifyCsrfRequest();');
 $router = strpos($index, '$router->dispatch(');
 checkReturn($guard !== false && $csrf !== false && $router !== false && $guard < $csrf && $csrf < $router,

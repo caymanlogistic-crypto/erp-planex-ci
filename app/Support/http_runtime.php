@@ -171,6 +171,21 @@ if (!function_exists('consumeLoginReturnTarget')) {
     }
 }
 
+if (!function_exists('redirectUnauthenticatedProtectedRequest')) {
+    function redirectUnauthenticatedProtectedRequest(): void
+    {
+        $path = current_app_path();
+        if (isAuthenticated() || !($path === '/company' || str_starts_with($path, '/company/')
+            || $path === '/superadmin' || str_starts_with($path, '/superadmin/'))) {
+            return;
+        }
+
+        rememberLoginReturnTarget();
+        $method = strtoupper((string) ($_SERVER['REQUEST_METHOD'] ?? 'GET'));
+        redirect_to('/login', in_array($method, ['GET', 'HEAD'], true) ? 302 : 303);
+    }
+}
+
 if (!function_exists('currentAccessRequestContext')) {
     function currentAccessRequestContext(): \App\Security\AccessRequestContext
     {
