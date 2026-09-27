@@ -97,6 +97,7 @@
         driver: selected(row,'driver_signature_status'),
         datetime: selected(row,'tn_datetime_status'),
         recovery: selected(row,'recovery_source'),
+        tnAbsent: row.querySelector('input[name="tn_absent"]')?.checked || false,
         documents: [...row.querySelectorAll('.lab-docs-item')].map((item) => ({
           id:item.dataset.documentId,
           name:item.querySelector('.lab-docs-name')?.textContent.trim() || 'Скан ТН',
@@ -120,17 +121,18 @@
     sheetRows.push(`<row r="3">${cell('A3','Старт рейса',19)}${cell('B3',dateSerial(start),24,true)}</row>`);
     sheetRows.push(`<row r="4">${cell('A4','Окончание рейса',19)}${cell('B4',dateSerial(end),24,true)}</row>`);
     sheetRows.push(`<row r="5">${cell('A5','Статус рейса',19)}${cell('B5',status,23)}</row>`);
-    const headers = ['Заявка','ОО','Дата','прибытие','убытие','ПОДПИСЬ ОО','Подпись ВОДИТЕЛЯ','Заполнено Дата/время','Восстановление данных'];
-    sheetRows.push(`<row r="6">${headers.map((value,index)=>cell(`${'ABCDEFGHI'[index]}6`,value,20)).join('')}</row>`);
+    const headers = ['Заявка','ОО','Дата','прибытие','убытие','Скан ТН','ПОДПИСЬ ОО','Подпись ВОДИТЕЛЯ','Заполнено Дата/время','Восстановление данных'];
+    sheetRows.push(`<row r="6">${headers.map((value,index)=>cell(`${'ABCDEFGHIJ'[index]}6`,value,20)).join('')}</row>`);
     data.forEach((row,index) => {
       const n=index+7, dateState={full:'полностью',partial:'частично',no:'нет'}[row.datetime] || '';
       const recovery={tracker:'по трекеру',driver:'со слов вод./мен'}[row.recovery] || '';
-      const values=[row.id,row.origin,row.day,row.arrival,row.departure,mark(row.sender),mark(row.driver),dateState,recovery];
-      const styles=[8,8,21,22,22,markStyle(row.sender),markStyle(row.driver),row.datetime==='full'?13:row.datetime==='no'?11:row.datetime==='partial'?14:8,row.recovery==='tracker'?13:row.recovery==='driver'?14:8];
-      sheetRows.push(`<row r="${n}">${values.map((value,i)=>cell(`${'ABCDEFGHI'[i]}${n}`,value,styles[i],i>=2&&i<=4)).join('')}</row>`);
+      const scanState=row.tnAbsent?'Нет ТН':row.documents.length?'Есть':'Нет скана';
+      const values=[row.id,row.origin,row.day,row.arrival,row.departure,scanState,mark(row.sender),mark(row.driver),dateState,recovery];
+      const styles=[8,8,21,22,22,scanState==='Есть'?13:11,markStyle(row.sender),markStyle(row.driver),row.datetime==='full'?13:row.datetime==='no'?11:row.datetime==='partial'?14:8,row.recovery==='tracker'?13:row.recovery==='driver'?14:8];
+      sheetRows.push(`<row r="${n}">${values.map((value,i)=>cell(`${'ABCDEFGHIJ'[i]}${n}`,value,styles[i],i>=2&&i<=4)).join('')}</row>`);
     });
     const last = Math.max(7,data.length+6);
-    const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:I${last}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols><col min="1" max="1" width="20.7265625" customWidth="1"/><col min="2" max="2" width="37.36328125" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="5" width="13" customWidth="1"/><col min="6" max="7" width="23" customWidth="1"/><col min="8" max="9" width="25" customWidth="1"/></cols><sheetData>${sheetRows.join('')}</sheetData><autoFilter ref="A6:I${last}"/><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
+    const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:J${last}"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="6" topLeftCell="A7" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/><cols><col min="1" max="1" width="20.7265625" customWidth="1"/><col min="2" max="2" width="37.36328125" customWidth="1"/><col min="3" max="3" width="12" customWidth="1"/><col min="4" max="5" width="13" customWidth="1"/><col min="6" max="6" width="16" customWidth="1"/><col min="7" max="8" width="23" customWidth="1"/><col min="9" max="10" width="25" customWidth="1"/></cols><sheetData>${sheetRows.join('')}</sheetData><autoFilter ref="A6:J${last}"/><pageMargins left="0.25" right="0.25" top="0.5" bottom="0.5" header="0.2" footer="0.2"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/></worksheet>`;
     const contentTypes = `<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/><Override PartName="/xl/theme/theme1.xml" ContentType="application/vnd.openxmlformats-officedocument.theme+xml"/></Types>`;
     return zip([
       ['[Content_Types].xml',contentTypes],
@@ -204,26 +206,77 @@
     const panel=trip.querySelector('.lab-download-result');
     if (panel && !panel.childElementCount) panel.remove();
   };
+  const activePackages = new WeakSet();
+  const paint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
+  function packageProgress(link) {
+    const overlay=document.createElement('div');
+    overlay.className='lab-package-progress';
+    overlay.innerHTML=`<div class="lab-package-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="lab-package-progress-title" tabindex="-1">
+      <h2 id="lab-package-progress-title">Подготовка комплекта</h2>
+      <ol class="lab-package-progress-steps">
+        <li data-step="0"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Формирование отчёта</span></li>
+        <li data-step="1"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Создание PDF файлов</span></li>
+        <li data-step="2"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Создание архива</span></li>
+      </ol>
+      <p class="lab-package-progress-detail" role="status" aria-live="polite"></p>
+      <button class="btn btn-secondary lab-package-progress-close" type="button" hidden>Закрыть</button>
+    </div>`;
+    document.body.append(overlay);
+    const dialog=overlay.querySelector('[role="dialog"]'), detail=overlay.querySelector('[role="status"]');
+    dialog.focus();
+    overlay.querySelector('button').addEventListener('click',()=>{overlay.remove();link.focus();});
+    return {
+      stage(index,message) {
+        overlay.querySelectorAll('[data-step]').forEach((item,step)=>{
+          item.dataset.state=step<index?'done':step===index?'active':'waiting';
+        });
+        detail.textContent=message;
+      },
+      close() { overlay.remove(); link.focus(); },
+      error(message) {
+        overlay.querySelectorAll('[data-step="0"], [data-step="1"], [data-step="2"]').forEach((item)=>{
+          if(item.dataset.state==='active') item.dataset.state='error';
+        });
+        detail.textContent=message;
+        detail.setAttribute('role','alert');
+        const button=overlay.querySelector('button');button.hidden=false;button.focus();
+      },
+    };
+  }
   const downloadTrip = async (link) => {
     const trip=link.closest('.logistics-trip'); if (!trip) return;
     const id=trip.querySelector('.lab-trip-identity b')?.textContent.match(/\d+/)?.[0] || '0';
     const packageMode=/\/package$/.test(new URL(link.href).pathname);
+    if (packageMode && activePackages.has(trip)) return;
+    if (packageMode) activePackages.add(trip);
+    const progress=packageMode?packageProgress(link):null;
     try {
-      notice(trip,'Подготовка файла…');
+      if (progress) {progress.stage(0,'Готовим данные заявок…');await paint();}
+      else notice(trip,'Подготовка файла…');
       const report=makeXlsx(trip);
       if (!packageMode) {
         download(report,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`Рейс_${id}_сводный_отчёт.xlsx`);
         clearNotice(trip); return;
       }
       const files=[[`Рейс_${id}_сводный_отчёт.xlsx`,report]];
-      for (const row of reportRows(trip)) if (row.documents.length) {
+      const rowsWithScans=reportRows(trip).filter((row)=>row.documents.length);
+      progress.stage(1,rowsWithScans.length?`Создаём PDF: 0 из ${rowsWithScans.length}`:'Сканов ТН для PDF нет.');
+      await paint();
+      for (const row of rowsWithScans) {
         const result=await makePdf(row);
         files.push([`Заявка_${row.id}_ТН.pdf`,result.data]);
+        progress.stage(1,`Создаём PDF: ${files.length-1} из ${rowsWithScans.length}`);
       }
+      progress.stage(2,'Упаковываем отчёт и PDF…');
+      await paint();
       download(zip(files),'application/zip',`Рейс_${id}_комплект.zip`);
-      clearNotice(trip);
+      progress.close();
     } catch (error) {
-      notice(trip,`Не удалось подготовить файл: ${error.message}`);
+      const message=`Не удалось подготовить комплект: ${error.message}`;
+      if (progress) progress.error(message);
+      else notice(trip,`Не удалось подготовить файл: ${error.message}`);
+    } finally {
+      if (packageMode) activePackages.delete(trip);
     }
   };
   document.addEventListener('click', (event) => {
