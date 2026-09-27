@@ -641,3 +641,15 @@
 .lab-package-progress-close[hidden] { display: none; }
 @keyframes lab-package-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .lab-package-progress-steps li[data-state="active"] .lab-package-progress-indicator { animation: none; } }
+/* The TN review keeps the registration workspace visible when its list is empty. */
+main.content:has(.logistics-workspace[data-reviewer-mode="1"]) > .workspace-shell-1690 {
+  min-height: calc(100vh - 68px);
+  outline: 1px solid var(--line-soft, #c9c5bc);
+  background: var(--canvas, #e2dfd8);
+}
+
+@media (max-width: 640px) {
+  main.content:has(.logistics-workspace[data-reviewer-mode="1"]) > .workspace-shell-1690 {
+    min-height: 0;
+  }
+}
