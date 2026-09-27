@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "090cb43777f3db568e9e70a7d594a565025413e7",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/090cb43777f3db568e9e70a7d594a565025413e7/tests/roles_access_route_registry_test.py",
+      "verified_sha": "7639cb7ae19d4015930ee26213e279ec4d4b347b",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/7639cb7ae19d4015930ee26213e279ec4d4b347b/tests/roles_access_route_registry_test.py",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
