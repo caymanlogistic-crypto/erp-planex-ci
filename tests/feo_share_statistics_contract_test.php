@@ -4,7 +4,7 @@ declare(strict_types=1);
 $root = dirname(__DIR__);
 require_once $root.'/app/Security/PageRegistry.php';
 $page = (new App\Security\PageRegistry())->page('company.statistics.feo_share');
-if (!is_array($page) || $page['path'] !== '/company/statistics/feo-share' || $page['section'] !== 'Статистика' || !$page['grantable']) throw new RuntimeException('FEO statistics page must be grantable in Statistics');
+if (!is_array($page) || $page['path'] !== '/company/statistics/feo-share' || $page['section'] !== 'Операции' || $page['group'] !== 'Статистика' || !$page['grantable']) throw new RuntimeException('FEO statistics page must be grantable in Statistics folder');
 $routes = (string)file_get_contents($root.'/app/Http/Routes/company_statistics.php');
 if (!str_contains($routes, "'company.statistics.feo_share'")) throw new RuntimeException('Protected route missing');
 $data = json_decode((string)file_get_contents($root.'/resources/data/feo_share_baseline.json'), true, 512, JSON_THROW_ON_ERROR);

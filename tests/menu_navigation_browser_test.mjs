@@ -28,6 +28,15 @@ try{
   assert.equal((await calendar.locator('xpath=ancestor::div[contains(@class,"nav-group")][1]//div[contains(@class,"nav-section-label")]').innerText()).trim(),'НАСТРОЙКИ');
   const feoLabels=await page.locator('.nav-item.is-parent',{hasText:'Заявки ФЭО'}).first().evaluate(el=>Array.from(el.nextElementSibling.querySelectorAll('.nav-sub-item span'),node=>(node.textContent||'').trim()));
   assert.equal(feoLabels.indexOf('Стоимость заявок'),feoLabels.indexOf('Размещение на карте')+1,'costs must follow placement');
+  const statistics=page.locator('.nav-item.is-parent',{hasText:'Статистика'}).first();
+  assert.equal(await statistics.count(),1,'statistics folder missing');
+  assert.equal((await statistics.locator('xpath=ancestor::div[contains(@class,"nav-group")][1]//div[contains(@class,"nav-section-label")]').innerText()).trim(),'ОПЕРАЦИИ');
+  const statisticsLabels=await statistics.evaluate(el=>Array.from(el.nextElementSibling.querySelectorAll('.nav-sub-item span'),node=>(node.textContent||'').trim()));
+  assert.deepEqual(statisticsLabels,['Работа логистов','Доля компаний в ФЭО','Баланс заявок']);
+  await statistics.click();
+  assert.equal(await statistics.evaluate(el=>el.classList.contains('is-open')&&el.nextElementSibling.classList.contains('is-open')),true,'statistics folder must open');
+  await statistics.click();
+  assert.equal(await statistics.evaluate(el=>el.classList.contains('is-open')||el.nextElementSibling.classList.contains('is-open')),false,'statistics folder must close');
   assert.equal(errors.length,0,'page errors: '+errors.join('; '));
   console.log('MENU_NAVIGATION_BROWSER=PASS '+feoLabels.join(' | '));
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

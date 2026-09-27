@@ -13,5 +13,9 @@ try{const page=await browser.newPage({viewport:{width:1366,height:900}}),errors=
  for(const label of ['Касса','Операции']){const row=page.locator('.roles-access__tree-page--role',{hasText:label}).filter({has:page.locator('.roles-access__tree-page-note',{hasText:'Скрыто из меню'})});assert.equal(await row.count(),1,label+' hidden marker');}
  const names=await page.locator('.roles-access__tree-page--role .roles-access__tree-page-label').allTextContents();
  assert.equal(names.some(x=>x.includes('Сообщения MAX')),false,'MAX messages must not be grantable');
+ const statisticsGroup=page.locator('.roles-access__tree-group',{has:page.locator('.roles-access__tree-group-head',{hasText:'Статистика'})});
+ assert.equal(await statisticsGroup.count(),1,'roles-access statistics group missing');
+ assert.deepEqual(await statisticsGroup.locator('.roles-access__tree-page--role .roles-access__tree-page-label').allTextContents(),['Работа логистов','Доля компаний в ФЭО','Баланс заявок']);
+ assert.deepEqual(await statisticsGroup.locator('[data-page-key]').evaluateAll(nodes=>nodes.filter(node=>node.matches('input')).map(node=>node.dataset.pageKey)),['company.statistics.managers','company.statistics.feo_share','company.statistics.cargo_balance']);
  assert.equal(errors.length,0,'page errors: '+errors.join('; ')); console.log('ROLES_ACCESS_MENU_STATE_BROWSER=PASS');}
 finally{await browser.close();await new Promise(r=>server.close(r));}

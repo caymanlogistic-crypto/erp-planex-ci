@@ -6,7 +6,8 @@ require_once $root.'/app/Security/PageRegistry.php';
 $registry = new App\Security\PageRegistry();
 $page = $registry->page('company.statistics.cargo_balance');
 if (($page['label'] ?? '') !== 'Баланс заявок'
-    || ($page['section'] ?? '') !== 'Статистика'
+    || ($page['section'] ?? '') !== 'Операции'
+    || ($page['group'] ?? '') !== 'Статистика'
     || ($page['path'] ?? '') !== '/company/statistics/cargo-balance'
     || !in_array('company.statistics.cargo_balance', $registry->grantablePageKeys(), true)) {
     throw new RuntimeException('Cargo balance role and navigation registration failed');
