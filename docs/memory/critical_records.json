@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "a9fb1ebabe6f8d251e2688db47eab71d89bf6a17",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/a9fb1ebabe6f8d251e2688db47eab71d89bf6a17/tests/roles_access_ui_contract_test.php",
+      "verified_sha": "2fc249f68e2dff4a338815530f3af81aa3def827",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2fc249f68e2dff4a338815530f3af81aa3def827/tests/roles_access_route_registry_test.py",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -290,8 +290,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "306a5fc927b0fdd23d2a37573a8569daaf2eb44d",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/306a5fc927b0fdd23d2a37573a8569daaf2eb44d/tests/trip_review_browser_test.mjs",
+      "verified_sha": "2fc249f68e2dff4a338815530f3af81aa3def827",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2fc249f68e2dff4a338815530f3af81aa3def827/tests/trip_review_browser_test.mjs",
       "owning_paths": [
         "app/Service/TripDocument*.php",
         "app/Service/TripCompletionService.php",
