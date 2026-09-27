@@ -30,6 +30,13 @@ body.roles-access-modal-open{overflow:hidden!important}.roles-access-modal{paddi
 }
 @media(max-width:620px){
  .roles-access__table th:nth-child(2){width:25%}.roles-access__table th:nth-child(3){display:none}.roles-access__table td:nth-child(3){display:none}.roles-access-modal__identity{grid-template-columns:1fr}.roles-access-modal__identity .field:first-child{grid-column:auto}.roles-access__role-basics{grid-template-columns:1fr}.roles-access__tree-page--member{display:block;padding:7px 8px}.roles-access__tree-page-name{display:block;margin-bottom:5px}.roles-access__tri{width:100%;grid-template-columns:repeat(3,minmax(0,1fr))}.roles-access__assignment-tools{grid-template-columns:1fr}.roles-access__assignment-actions{flex-wrap:wrap}.roles-access__scope-row{grid-template-columns:1fr;gap:4px;padding:7px 8px}.roles-access__scope-row .field-select{width:100%}.roles-access-modal__foot{align-items:flex-start;gap:6px}.roles-access-modal__foot.is-spaced{flex-direction:column-reverse}.roles-access-modal__foot .modal-foot-actions{width:100%;justify-content:flex-end}
+ #roles-access-users .roles-access__table{table-layout:fixed}
+ #roles-access-users .roles-access__table th:nth-child(1){width:50%}
+ #roles-access-users .roles-access__table th:nth-child(2){width:24%}
+ #roles-access-users .roles-access__table th:nth-child(4){width:26%}
+ #roles-access-users .roles-access__table thead th{padding:6px 5px;white-space:normal;overflow-wrap:anywhere;line-height:1.2}
+ #roles-access-users .roles-access__table tbody td{padding-left:6px;padding-right:6px}
+ #roles-access-users .roles-access__table tbody td:first-child,#roles-access-users .roles-access__name{white-space:normal;overflow-wrap:anywhere}
 }
 
 /* Each working mailbox keeps its identity, default choice, and connection state together. */
