@@ -415,7 +415,7 @@
         var container=modalBody.querySelector('[data-work-mail-content]');
         if (!container || container.dataset.loaded !== 'true') throw new Error('Дождитесь загрузки рабочей почты. Если загрузка не удалась, откройте карточку заново.');
         return Array.from(container.querySelectorAll('[data-mail-row]')).map(function (row) {
-            return {legal_entity_id:Number(row.dataset.entityId),version:Number(row.dataset.version),email:row.querySelector('[data-mail-email]').value.trim(),password:row.querySelector('[data-mail-password]').value,clear_password:row.querySelector('[data-mail-clear]').checked};
+            return {legal_entity_id:Number(row.dataset.entityId),version:Number(row.dataset.version),email:row.querySelector('[data-mail-email]').value.trim(),password:row.querySelector('[data-mail-password]').value,clear_password:row.querySelector('[data-mail-clear]').checked,is_default:row.querySelector('[data-mail-default]').checked};
         });
     }
 
@@ -424,14 +424,14 @@
         var statusLabels = {incomplete:'Подключение не завершено',unverified:'Подключение не проверено',connected:'IMAP и SMTP подключены',failed:'Ошибка подключения'};
         jsonRequest(endpoint).then(function (data) {
             if (!container.isConnected) return;
-            container.innerHTML = '<p class="roles-access-modal__help">Изменения почты сохраняются общей кнопкой «Сохранить». Пустое поле пароля сохраняет прежний пароль.</p>';
+            container.innerHTML = '<p class="roles-access-modal__help">Изменения почты сохраняются общей кнопкой «Сохранить». Пустое поле пароля сохраняет прежний пароль. Основной ящик используется для отправки комплекта при передаче рейса на проверку.</p>';
             (data.profiles || []).forEach(function (profile) {
                 var row = document.createElement('div');
                 row.className = 'roles-access__mail-row'; row.dataset.mailRow=''; row.dataset.entityId=profile.legal_entity_id; row.dataset.version=profile.version;
                 row.innerHTML = '<h4 class="roles-access-modal__section-head">' + esc(profile.company_name) + '</h4><div class="roles-access__mail-fields">' +
                     '<label class="field"><span class="field-label">Рабочий email</span><input type="email" class="field-input" data-mail-email maxlength="254" autocomplete="off" placeholder="@'+esc(profile.email_domain||'')+'" value="' + esc(profile.email) + '"></label>' +
                     '<label class="field"><span class="field-label">Пароль почтового ящика</span><input type="password" class="field-input" data-mail-password autocomplete="new-password" maxlength="512" placeholder="' + (profile.has_password ? 'Сохранён' : 'Не задан') + '"></label></div>' +
-                    '<div class="roles-access__mail-actions"><label class="roles-access__mail-clear"><input type="checkbox" data-mail-clear> Удалить пароль</label><button type="button" class="btn btn-ghost" data-mail-check>Проверить подключение</button></div><div class="roles-access-modal__help" data-mail-status role="status"></div>';
+                    '<div class="roles-access__mail-actions"><label class="roles-access__mail-default"><input type="radio" name="work-mail-default" data-mail-default' + (profile.is_default ? ' checked' : '') + '> Основной ящик</label><label class="roles-access__mail-clear"><input type="checkbox" data-mail-clear> Удалить пароль</label><button type="button" class="btn btn-ghost" data-mail-check>Проверить подключение</button></div><div class="roles-access-modal__help" data-mail-status role="status"></div>';
                 container.appendChild(row);
                 var status = row.querySelector('[data-mail-status]'), check = row.querySelector('[data-mail-check]');
                 var email = row.querySelector('[data-mail-email]'), password = row.querySelector('[data-mail-password]'), clear = row.querySelector('[data-mail-clear]');

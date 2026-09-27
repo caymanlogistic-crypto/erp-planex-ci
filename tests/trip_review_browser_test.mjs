@@ -18,7 +18,7 @@ const server=http.createServer((req,res)=>{
       req.on('end',()=>{const sent=Buffer.concat(chunks).toString('latin1');submitted=sent.includes('name="package"')&&sent.includes('name="snapshot_hash"');res.end(JSON.stringify({ok:true,status:'review',version:1,mail_status:'accepted'}));});
       return;
     }
-    return res.end(JSON.stringify({ok:true,status:'work',version:0,problems:[{label:'Нет ТН',ids:['271941']}],snapshot_hash:'synthetic',sender_ready:senderReady,recipient_count:2}));
+    return res.end(JSON.stringify({ok:true,status:'work',version:0,problems:[{label:'Нет ТН',ids:['271941']}],snapshot_hash:'synthetic',sender_ready:senderReady,sender_email:senderReady?'actor@plan-ex.ru':null,sender_error:senderReady?null:'У вашего пользователя нет подключённого рабочего ящика.',recipient_count:2}));
   }
   if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html);}
   const file=path.resolve(root,'public','.'+req.url.split('?')[0]);
@@ -43,6 +43,7 @@ try {
   const dialog=page.locator('.lab-review-dialog');
   await dialog.waitFor({state:'visible',timeout:5000}).catch(error=>{throw new Error(`${error.message}; alerts=${alerts.join(';')}; pageerrors=${errors.join(';')}`);});
   assert.match(await dialog.innerText(),/Нет ТН.*271941/s);
+  assert.match(await dialog.innerText(),/У вашего пользователя нет подключённого рабочего ящика/);
   assert.equal(await dialog.getByRole('button',{name:'Всё верно, передать'}).isDisabled(),true,'missing sender blocks submission');
   await dialog.getByRole('button',{name:'Отмена'}).click();
   assert.equal(await dialog.isVisible(),false);
@@ -50,6 +51,7 @@ try {
   await page.evaluate(()=>{window.TripCompletionReport.buildPackage=async()=>({bytes:new Uint8Array([80,75,3,4]),name:'Рейс_244_комплект.zip'});});
   await page.locator('.logistics-trip').first().getByRole('button',{name:'Передать на проверку'}).click();
   await dialog.waitFor({state:'visible'});
+  assert.match(await dialog.innerText(),/Отправитель: actor@plan-ex\.ru/);
   await dialog.getByRole('button',{name:'Всё верно, передать'}).click();
   await page.waitForFunction(()=>document.querySelector('.lab-review-dialog')?.open===false);
   assert.equal(submitted,true,'package and snapshot are submitted together');

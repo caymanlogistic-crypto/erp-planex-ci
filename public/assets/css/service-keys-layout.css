@@ -69,8 +69,7 @@
 .report-email-save-state { color: var(--text-muted); font-size: 11px; }
 .service-keys .report-email-footer { grid-template-columns: minmax(0, 1fr); }
 .service-keys .report-email-actions { grid-template-columns: minmax(0, 1fr) auto; align-items: end; justify-items: stretch; gap: 8px; }
-.service-keys .report-email-sender, .service-keys .report-email-logist { grid-column: 1 / -1; min-width: 0; margin: 0; }
-.service-keys .report-email-sender select { width: 100%; height: 34px; }
+.service-keys .report-email-logist { grid-column: 1 / -1; min-width: 0; margin: 0; }
 .service-keys .report-email-save-state { align-self: center; }
 @media (max-width: 520px) { .service-keys .report-email-actions { grid-template-columns: minmax(0, 1fr); } }
 @media (min-width: 1141px) {

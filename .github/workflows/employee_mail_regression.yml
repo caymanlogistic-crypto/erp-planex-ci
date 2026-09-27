@@ -2,9 +2,9 @@ name: Employee Mail Regression
 on:
   push:
     branches: ['chatgpt/**']
-    paths: ['app/Service/EmployeeMail*','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','public/assets/css/roles-access.css','app/Service/CompanyMembershipService.php','app/Http/Controllers/Company/RolesAccessController.php','app/Http/Controllers/Company/ServiceKeysController.php','app/View/pages/company_service_keys.php','public/assets/js/service-keys.js','tests/fixtures/feo_transfers_render.php','database/migrations/016_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','.github/workflows/employee_mail*']
+    paths: ['app/Service/EmployeeMail*','app/Service/ReportEmailRecipientService.php','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Controllers/Company/TripCompletionController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','public/assets/js/trip-completion-review.js','public/assets/css/roles-access.css','app/Service/CompanyMembershipService.php','app/Http/Controllers/Company/RolesAccessController.php','app/Http/Controllers/Company/ServiceKeysController.php','app/View/pages/company_service_keys.php','public/assets/js/service-keys.js','tests/fixtures/feo_transfers_render.php','database/migrations/016_*','database/migrations/019_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','tests/report_email_recipients_mysql_test.php','tests/trip_completion_contract_test.php','tests/trip_review_browser_test.mjs','.github/workflows/employee_mail*']
   pull_request:
-    paths: ['app/Service/EmployeeMail*','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','public/assets/css/roles-access.css','app/Service/CompanyMembershipService.php','app/Http/Controllers/Company/RolesAccessController.php','app/Http/Controllers/Company/ServiceKeysController.php','app/View/pages/company_service_keys.php','public/assets/js/service-keys.js','tests/fixtures/feo_transfers_render.php','database/migrations/016_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','.github/workflows/employee_mail*']
+    paths: ['app/Service/EmployeeMail*','app/Service/ReportEmailRecipientService.php','app/Http/Controllers/Company/EmployeeMailController.php','app/Http/Controllers/Company/TripCompletionController.php','app/Http/Routes/company_roles_access.php','public/assets/js/roles-access.js','public/assets/js/trip-completion-review.js','public/assets/css/roles-access.css','app/Service/CompanyMembershipService.php','app/Http/Controllers/Company/RolesAccessController.php','app/Http/Controllers/Company/ServiceKeysController.php','app/View/pages/company_service_keys.php','public/assets/js/service-keys.js','tests/fixtures/feo_transfers_render.php','database/migrations/016_*','database/migrations/019_*','scripts/central_016*','scripts/employee_mail*','tests/employee_mail*','tests/report_email_recipients_mysql_test.php','tests/trip_completion_contract_test.php','tests/trip_review_browser_test.mjs','.github/workflows/employee_mail*']
 permissions:
   contents: read
 jobs:
@@ -46,4 +46,8 @@ jobs:
           php tests/employee_mail_contract_test.php
           php tests/employee_mail_profiles_mysql_test.php
           php tests/employee_mail_migration_mysql_test.php
+          php tests/employee_mail_default_019_migration_contract_test.php
+          php tests/report_email_recipients_mysql_test.php
+          php tests/trip_completion_contract_test.php
           node tests/employee_mail_browser_test.mjs
+          node tests/trip_review_browser_test.mjs
