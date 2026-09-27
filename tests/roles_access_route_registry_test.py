@@ -43,7 +43,7 @@ assert documents.count('$router->') == 16
 assert "'company.documents.request'" in documents and "'company.documents.collection'" in documents
 tn_review_routes = (ROOT / 'app/Http/Routes/company_trip_completion.php').read_text(encoding='utf-8')
 assert tn_review_routes.count('$tnReviewPage);') == 9, 'Every TN reviewer endpoint needs its own role gate'
-assert tn_review_routes.count('$tripCompletionPage);') == 9, 'Registration endpoints must retain their role gate'
+assert tn_review_routes.count('$tripCompletionPage);') == 10, 'Registration endpoints must retain their role gate'
 trip_routes = (ROOT / "app/Http/Routes/company_linear_trips.php").read_text(encoding="utf-8")
 assert "/company/trips/departures/synchronize" in trip_routes
 assert "'/company/warehouses/stock'" in trip_routes and "'company.warehouses.stock'" in trip_routes
