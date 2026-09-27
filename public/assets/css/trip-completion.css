@@ -573,3 +573,10 @@
 .logistics-workspace .lab-docs-download:hover { background: var(--surface-form); }
 .logistics-workspace .lab-docs-download:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 .logistics-workspace .lab-docs-download svg { width: 14px; height: 14px; }
+.logistics-workspace .lab-download-result {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  padding: 7px 12px;
+  border-top: 1px solid var(--line-soft);
+}
