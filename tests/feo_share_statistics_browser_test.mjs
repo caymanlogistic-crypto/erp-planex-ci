@@ -24,6 +24,11 @@ try {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.goto(`http://127.0.0.1:${server.address().port}`, {waitUntil:'networkidle'});
+  assert.equal(await page.locator('.fs-title-asof:visible,.fs-caveat:visible').count(), 0, 'duplicate import note and caveat are hidden');
+  assert.equal(await page.locator('.fs-chart').getAttribute('viewBox'), '0 0 920 171.6', 'chart uses manager geometry');
+  const cardGap = await page.locator('.fs-card-subhead').evaluate(el =>
+    el.getBoundingClientRect().top - document.querySelector('.fs-chart-wrap').getBoundingClientRect().bottom);
+  assert.ok(Math.abs(cardGap - 8) < .2, 'values table has the cargo balance card gap');
   assert.equal(await page.locator('.fs-snapshot-table tbody tr').count(), 3, 'weekly rows use available real snapshots');
   assert.equal(await page.locator('.fs-chart-node').count(), 6, 'two series have a point for each period');
   assert.equal(await page.locator('.manager-stats__node-tooltip').count(), 0, 'per-point popups are removed');
@@ -68,10 +73,13 @@ try {
   const point = await page.locator('.fs-chart-node.is-company[data-node-index="1"] circle').boundingBox();
   await page.mouse.move(point.x + point.width / 2, point.y + point.height / 2);
   assert.equal(await page.locator('.fs-chart-node.is-period-active').count(), 2, 'mode change keeps chart interaction bound');
-  const desktopViewBox = await page.locator('.fs-chart').getAttribute('viewBox');
   await page.setViewportSize({width:390,height:844});
-  await page.waitForFunction(previous => document.querySelector('.fs-chart')?.getAttribute('viewBox') !== previous, desktopViewBox);
-  assert.equal(await page.locator('.fs-chart').evaluate(el => Math.round(el.getBoundingClientRect().height)), 138, 'mobile chart matches statistics height');
+  await page.waitForFunction(() => !document.querySelector('.fs-period-popup')?.classList.contains('is-visible'));
+  const chartRatio = await page.locator('.fs-chart').evaluate(el => {
+    const box = el.getBoundingClientRect();
+    return box.height / box.width;
+  });
+  assert.ok(Math.abs(chartRatio - 171.6 / 920) < .002, 'mobile chart keeps manager proportions');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'mobile page has no horizontal overflow');
   await page.locator('.fs-snapshot-table tbody tr[data-period="0"]').focus();
   assert.equal(await page.locator('.fs-chart-node.is-period-active').count(), 2, 'keyboard focus highlights both chart points');

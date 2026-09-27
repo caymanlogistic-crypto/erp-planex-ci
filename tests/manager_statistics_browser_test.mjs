@@ -75,14 +75,14 @@ try{
   const chartLines=page.locator('.manager-stats__chart-line');
   assert.equal(await chartLines.count(),5,'company and four manager series');
   assert.ok((await chartLines.first().getAttribute('d')).includes(' C'),'trend paths use smooth cubic curves');
-  assert.deepEqual(await page.locator('.manager-stats__chart-line.is-manager').evaluateAll(paths=>paths.map(path=>path.getAttribute('stroke'))),['#4A7A9B','#B84C3A','#6A8A50','#B89228'],'first four managers use the approved ordered palette');
+  assert.deepEqual(await page.locator('.manager-stats__chart-line.is-manager').evaluateAll(paths=>paths.map(path=>path.getAttribute('stroke'))),['#4A7A9B','#6A8A50','#B89228','#6D5B8C'],'logist palette skips red');
   assert.equal(await page.locator('.manager-stats__chart-line.is-company').getAttribute('stroke'),'#C07830','company series uses the approved copper');
   assert.equal(await page.locator('.manager-stats__line-chart title').count(),0,'native white SVG tooltips are absent');
   assert.equal(await page.locator('.manager-stats__chart-node').count(),40,'every point of every series has a circular node');
   assert.equal(await page.locator('.manager-stats__chart-node>circle').count(),40,'all graph nodes are circles');
   assert.equal(await page.locator('.manager-stats__node-tooltip').count(),0,'individual node tooltips are removed');
   assert.equal(await page.locator('.manager-stats__chart-area').count(),5,'company and all four managers have gradient fills');
-  assert.deepEqual(await page.locator('.manager-stats__line-chart linearGradient').evaluateAll(gradients=>gradients.map(gradient=>gradient.querySelector('stop').getAttribute('stop-color'))),['#C07830','#4A7A9B','#B84C3A','#6A8A50','#B89228'],'gradient colors follow the line palette');
+  assert.deepEqual(await page.locator('.manager-stats__line-chart linearGradient').evaluateAll(gradients=>gradients.map(gradient=>gradient.querySelector('stop').getAttribute('stop-color'))),['#C07830','#4A7A9B','#6A8A50','#B89228','#6D5B8C'],'gradient colors follow the line palette');
   assert.match(await chartLines.first().evaluate(path=>getComputedStyle(path).animationName),/manager-stats-line-in/,'line appearance animation is enabled');
   await page.waitForTimeout(1000);
   const firstManagerNode=page.locator('.manager-stats__chart-node.is-manager[data-series-name="Анна Белова"][data-node-index="0"]');
@@ -107,11 +107,12 @@ try{
   const totalStyle=await page.locator('.manager-stats__period-table tbody tr').first().locator('td').evaluateAll(cells=>({
     managerBackground:getComputedStyle(cells[cells.length-4]).backgroundColor,
     totalBackground:getComputedStyle(cells[cells.length-1]).backgroundColor,
-    managerWeight:getComputedStyle(cells[cells.length-4]).fontWeight,
-    totalWeight:getComputedStyle(cells[cells.length-1]).fontWeight,
+    managerColor:getComputedStyle(cells[cells.length-4]).color,
+    totalColor:getComputedStyle(cells[cells.length-1]).color,
   }));
   assert.equal(totalStyle.totalBackground,totalStyle.managerBackground,'total column has the ordinary table background');
-  assert.ok(Number(totalStyle.totalWeight)>Number(totalStyle.managerWeight),'total column differs only by bold weight');
+  assert.equal(totalStyle.managerColor,'rgb(109, 91, 140)','last logist values use the violet line color');
+  assert.equal(totalStyle.totalColor,'rgb(192, 120, 48)','total values use the company line color');
   const periodViewport=await page.locator('.manager-stats__periods .table-scroll').evaluate(element=>({client:element.clientHeight,scroll:element.scrollHeight}));
   assert.equal(periodViewport.client>=periodViewport.scroll,true,'period values must not be vertically clipped');
   assert.equal(await page.locator('.manager-stats__table-card,.manager-stats__integrated-summary,.manager-stats__details').count(),0,'removed lower sections are absent');
