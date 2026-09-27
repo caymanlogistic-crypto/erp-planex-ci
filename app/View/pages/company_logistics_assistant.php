@@ -18,32 +18,34 @@ $statusChoice=static function(string $name,string $selected,array $options):void
 <?php if($formError):?><div class="notice warn"><?=e((string)$formError)?></div><?php endif;?>
 <?php if($error):?><div class="notice warn"><?=e((string)$error)?></div><?php else:?>
 <div class="metric-grid logistics-metrics">
-  <div class="metric-card"><div class="metric-label">Рейсов на контроле</div><div class="metric-value"><?=(int)$metrics['trips']?></div></div>
+  <div class="metric-card"><div class="metric-label">Рейсов в работе</div><div class="metric-value"><?=(int)$metrics['trips']?></div></div>
   <div class="metric-card"><div class="metric-label">Заявок всего</div><div class="metric-value"><?=(int)$metrics['requests']?></div></div>
   <div class="metric-card"><div class="metric-label">Полностью собрано</div><div class="metric-value"><?=(int)$metrics['ready']?></div></div>
   <div class="metric-card"><div class="metric-label">Требуют дополнения</div><div class="metric-value"><?=(int)$metrics['problems']?></div></div>
 </div>
 <form method="get" action="<?=app_url('/company/logistics-assistant')?>" class="table-toolbar logistics-filter">
   <input type="hidden" name="filter" value="1">
-  <label class="logistics-check"><input type="checkbox" name="hide_complete" value="1" <?=$hideComplete?'checked':''?>> Скрывать полностью собранные</label>
+  <label class="logistics-check lab-show-all"><input type="checkbox" name="show_all_trips" value="1"> Показать все рейсы</label>
   <div class="toolbar-right"><input class="toolbar-search" type="search" name="q" value="<?=e($query)?>" placeholder="Рейс, заявка, водитель, менеджер" aria-label="Поиск по рейсам и заявкам"></div>
 </form>
 <section class="logistics-workspace" aria-label="Рейсы для обработки" data-logistics-assistant>
-  <div class="logistics-list-head"><div><b>Рейсы для обработки</b><span><?=count($trips)?></span></div><small>Нажмите на рейс, чтобы развернуть заявки</small></div>
-  <?php if($trips===[]):?><div class="panel"><div class="panel-body"><div class="empty-state"><p class="empty-title">По выбранному фильтру рейсов нет.</p><p>Полностью собранные рейсы можно показать, сняв флажок выше.</p></div></div></div><?php else:?>
-  <div class="logistics-trip-list">
-  <?php foreach($trips as $trip):$open=(int)($openTripId??0)===(int)$trip['id'];$noTnCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)===1));$processedCount=(int)$trip['complete_count']+$noTnCount;?>
-    <details class="logistics-trip panel" data-trip-id="<?=(int)$trip['id']?>" <?=$open?'open':''?>>
+  <?php foreach(['work'=>'В работе','review'=>'На проверке','archive'=>'Проверено / архив'] as $groupStatus=>$groupName):
+    $groupTrips=array_values(array_filter($trips,static fn(array $trip):bool=>$trip['review_status']===$groupStatus));?>
+  <section class="lab-review-group lab-review-group--<?=e($groupStatus)?>" data-review-group="<?=e($groupStatus)?>" <?=$groupStatus!=='work'?'hidden':''?>>
+    <div class="lab-review-group-head"><h2><?=e($groupName)?></h2><span class="lab-review-group-count" aria-label="Количество рейсов"><?=count($groupTrips)?></span></div>
+    <div class="logistics-trip-list">
+  <?php foreach($groupTrips as $trip):$open=(int)($openTripId??0)===(int)$trip['id'];$noTnCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)===1));$processedCount=(int)$trip['complete_count']+$noTnCount;?>
+    <details class="logistics-trip panel" data-trip-id="<?=(int)$trip['id']?>" data-review-status="<?=e($groupStatus)?>" data-review-version="<?=(int)$trip['review_version']?>" <?=$open?'open':''?>>
       <summary class="logistics-trip-summary">
         <span class="logistics-trip-chevron" aria-hidden="true"></span>
-        <span class="lab-trip-identity"><b>Рейс #<?=e((string)$trip['business_id'])?></b><strong class="lab-trip-status <?=($trip['status']??'')==='in_progress'?'is-progress':'is-delivered'?>"><?=($trip['status']??'')==='in_progress'?'Идёт вывоз':'Груз сдан'?></strong><?php if(!empty($trip['actual_start_date'])):?><small title="Фактическая дата начала рейса">Выезд: <?=e($fmtDate($trip['actual_start_date']))?></small><?php endif;?><?php if(!empty($trip['actual_end_date'])):?><small title="Фактическая дата сдачи груза">Сдача: <?=e($fmtDate($trip['actual_end_date']))?></small><?php endif;?></span>
+        <span class="lab-trip-identity"><b>Рейс #<?=e((string)$trip['business_id'])?></b><span class="lab-review-status is-<?=e($groupStatus)?>"><?=e($groupName)?></span><strong class="lab-trip-status <?=($trip['status']??'')==='in_progress'?'is-progress':'is-delivered'?>"><?=($trip['status']??'')==='in_progress'?'Идёт вывоз':'Груз сдан'?></strong><?php if(!empty($trip['actual_start_date'])):?><small title="Фактическая дата начала рейса">Выезд: <?=e($fmtDate($trip['actual_start_date']))?></small><?php endif;?><?php if(!empty($trip['actual_end_date'])):?><small title="Фактическая дата сдачи груза">Сдача: <?=e($fmtDate($trip['actual_end_date']))?></small><?php endif;?></span>
         <span class="lab-trip-contact lab-trip-manager"><small class="lab-trip-label">Менеджер</small><b class="lab-trip-name"><?=e(trim((string)($trip['manager_name']??''))?:'Не указан')?></b><span class="lab-trip-contact-line">Контакт: <?=e(trim((string)($trip['manager_phone']??''))?:'телефон не указан')?></span></span>
         <span class="lab-trip-contact"><small class="lab-trip-label">Водитель</small><b class="lab-trip-name"><?=e(trim((string)$trip['driver_name'])?:'Не указан')?></b><span class="lab-trip-contact-line"><?=e(trim((string)($trip['driver_phone']??''))?:'Телефон не указан')?></span></span>
         <span class="lab-trip-progress"><small class="lab-trip-label">Обработано заявок</small><b class="lab-trip-progress-count" data-trip-progress><?=$processedCount?> из <?=(int)$trip['request_count']?> обработано</b><span class="lab-trip-progress-track <?=$noTnCount?'has-no-tn':''?> <?=(int)$trip['complete_count']===0?'has-no-ready':''?>" aria-label="Собрано: <?=(int)$trip['complete_count']?>; нет ТН: <?=$noTnCount?>"><span class="lab-trip-progress-fill" style="width:<?=$trip['request_count']?round(100*$trip['complete_count']/$trip['request_count'],2):0?>%"></span><span class="lab-trip-progress-no-tn" style="width:<?=$trip['request_count']?round(100*$noTnCount/$trip['request_count'],2):0?>%" title="Нет ТН: <?=$noTnCount?>"></span></span></span>
         <span class="lab-trip-overview" hidden></span><span class="lab-trip-restored" hidden></span>
       </summary>
       <div class="logistics-trip-body">
-        <div class="logistics-trip-toolbar"><div><b>Заявки рейса</b><span><?php if(!empty($trip['actual_start_date'])):?>Выезд: <?=e($fmtDate($trip['actual_start_date']))?><?php endif;?><?php if(!empty($trip['actual_end_date'])):?><?=!empty($trip['actual_start_date'])?' — ':''?>Сдача: <?=e($fmtDate($trip['actual_end_date']))?><?php endif;?></span></div><div><a class="btn btn-secondary" href="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/report')?>">Сводный отчёт</a><a class="btn btn-primary" href="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/package')?>">Скачать комплект</a></div></div>
+        <div class="logistics-trip-toolbar"><div><b>Заявки рейса</b><span><?php if(!empty($trip['actual_start_date'])):?>Выезд: <?=e($fmtDate($trip['actual_start_date']))?><?php endif;?><?php if(!empty($trip['actual_end_date'])):?><?=!empty($trip['actual_start_date'])?' — ':''?>Сдача: <?=e($fmtDate($trip['actual_end_date']))?><?php endif;?></span></div><div><a class="btn btn-secondary" href="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/report')?>">Скачать сводный отчёт</a><a class="btn btn-secondary" href="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/package')?>">Скачать полный комплекс</a><form class="lab-review-form" method="post" action="<?=app_url('/company/logistics-assistant/'.(int)$trip['id'].'/review')?>" data-review-form><?=csrfField()?><input type="hidden" name="action" value="<?=$groupStatus==='work'?'submit':'return'?>"><input type="hidden" name="version" value="<?=(int)$trip['review_version']?>"><button type="submit" class="btn <?=$groupStatus==='work'?'btn-primary':'btn-secondary'?> lab-review-submit"><?=$groupStatus==='work'?'Передать на проверку':'Вернуть в работу'?></button></form></div></div>
         <div class="logistics-request-head" aria-hidden="true"><span>Заявка и маршрут</span><span>Дата и время прибытия/убытия</span><span>Подпись ОО</span><span>Подпись водителя</span><span>Дата и время указаны</span><span>Данные восстановлены</span><span>Сканы ТН</span><span>Комментарий</span></div>
         <div class="logistics-request-list">
         <?php foreach($trip['requests'] as $request):
@@ -73,9 +75,13 @@ $statusChoice=static function(string $name,string $selected,array $options):void
       </div>
     </details>
   <?php endforeach;?>
-  </div>
-  <?php endif;?>
+    </div>
+  </section>
+  <?php endforeach;?>
+  <p class="lab-review-empty" hidden>Рейсы по запросу не найдены.</p>
 </section>
+<dialog class="lab-review-dialog" aria-labelledby="lab-review-title"><div class="lab-review-dialog-head"><strong id="lab-review-title"></strong><button type="button" class="lab-review-x" aria-label="Закрыть">×</button></div><div class="lab-review-dialog-body"></div><div class="lab-review-dialog-foot"><button type="button" class="btn btn-secondary lab-review-cancel">Отмена</button><button type="button" class="btn btn-primary lab-review-confirm">Передать на проверку</button></div></dialog>
 <script src="<?=app_url('/assets/js/trip-completion-report.js')?>?v=<?=filemtime(base_path('public/assets/js/trip-completion-report.js'))?>" defer></script>
 <script src="<?=app_url('/assets/js/trip-completion.js')?>?v=<?=filemtime(base_path('public/assets/js/trip-completion.js'))?>" defer></script>
+<script src="<?=app_url('/assets/js/trip-completion-review.js')?>?v=<?=filemtime(base_path('public/assets/js/trip-completion-review.js'))?>" defer></script>
 <?php endif;?>
