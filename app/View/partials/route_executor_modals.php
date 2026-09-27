@@ -76,3 +76,5 @@
     </div>
   </div>
 </div>
+
+<?php require base_path('app/View/partials/route_executor_delete_modal.php'); ?>

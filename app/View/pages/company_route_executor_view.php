@@ -201,13 +201,7 @@
                 <h3 class="re-section-title">Действия</h3>
                 <div class="form-actions">
                     <a href="/company/route-executors/<?= $crew['id'] ?>/edit" class="btn btn-primary">Редактировать</a>
-                    <?php if (($crew['status'] ?? '') !== 'archived'): ?>
-                    <form method="post" action="/company/route-executors/<?= $crew['id'] ?>/archive" class="inline-form">
-                        <button type="button" class="btn btn-danger" onclick="window.confirmDeleteForm(this)">Удалить</button>
-                    </form>
-                    <?php else: ?>
-                        <p class="text-muted">Исполнитель рейса уже удалён.</p>
-                    <?php endif; ?>
+                    <button type="button" class="btn btn-danger" data-route-executor-delete-btn="<?= (int) $crew['id'] ?>">Удалить</button>
                     <a href="<?= app_url('/company/route-executors') ?>" class="btn btn-ghost">← К списку</a>
                 </div>
             </div>
@@ -217,6 +211,6 @@
     </div>
 </div>
 
-<?php require base_path('app/View/partials/delete_confirm_modal.php'); ?>
+<?php require base_path('app/View/partials/route_executor_delete_modal.php'); ?>
 
 <?php endif; ?>

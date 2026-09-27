@@ -6,6 +6,7 @@ use App\Core\Database;
 use App\Security\AccessRuntime;
 use App\Security\EffectiveAccess;
 use App\Service\RouteExecutorCombinedCreateService;
+use App\Service\RouteExecutorDeletionService;
 
 $config = require dirname(__DIR__) . '/bootstrap/app.php';
 require_once BASE_PATH . '/app/Support/entrypoint_dependencies.php';
@@ -68,4 +69,29 @@ try {
 } finally {
     @unlink($tmp);
 }
+$pdo->exec("INSERT INTO linear_routes(route_type,client_id,carrier_contractor_id,route_executor_id,cargo_type_id,planned_loading_date,planned_unloading_date,status) VALUES('direct',1,1,$crewId,1,'2026-09-27','2026-09-28','cancelled')");
+$usage = RouteExecutorDeletionService::tripUsage($pdo, $crewId);
+if ($usage['linear_count'] !== 1 || $usage['waste_count'] !== 0) throw new RuntimeException('Linear trip usage was not detected.');
+try {
+    RouteExecutorDeletionService::archive($pdo, $crewId, 101, 'company_owner');
+    throw new RuntimeException('Linked linear trip allowed deletion.');
+} catch (RuntimeException $expected) {
+    if (!str_contains($expected->getMessage(), 'участвует')) throw $expected;
+}
+$pdo->exec('DELETE FROM linear_routes WHERE route_executor_id=' . $crewId);
+$pdo->exec("INSERT INTO clients(id,name,inn,status) VALUES(1,'Тестовый клиент','7700000000','active')");
+$pdo->exec("INSERT INTO users(id,full_name,login,password_hash,role_code,status) VALUES(101,'Тестовый пользователь','owner','hash','company_owner','active')");
+$pdo->exec("INSERT INTO waste_trips(business_id,client_id,route_executor_id,responsible_user_id,destination_type,status) VALUES(144,1,$crewId,101,'warehouse','cancelled')");
+$usage = RouteExecutorDeletionService::tripUsage($pdo, $crewId);
+if ($usage['linear_count'] !== 0 || $usage['waste_count'] !== 1) throw new RuntimeException('Waste trip usage was not detected.');
+try {
+    RouteExecutorDeletionService::archive($pdo, $crewId, 101, 'company_owner');
+    throw new RuntimeException('Linked waste trip allowed deletion.');
+} catch (RuntimeException $expected) {
+    if (!str_contains($expected->getMessage(), 'участвует')) throw $expected;
+}
+$pdo->exec('DELETE FROM waste_trips WHERE route_executor_id=' . $crewId);
+RouteExecutorDeletionService::archive($pdo, $crewId, 101, 'company_owner');
+$archived = $pdo->query('SELECT status,deleted_at FROM crews WHERE id=' . $crewId)->fetch(PDO::FETCH_ASSOC);
+if (($archived['status'] ?? '') !== 'archived' || empty($archived['deleted_at'])) throw new RuntimeException('Unlinked crew was not archived.');
 echo "ROUTE_EXECUTOR_COMBINED_TRANSACTION=PASS\n";

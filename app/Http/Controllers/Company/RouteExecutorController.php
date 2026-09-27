@@ -71,7 +71,8 @@ final class RouteExecutorController
         $config = $this->config;
         $db = $this->db;
         $id = $crewId;
-
-        require base_path('app/Http/Controllers/Company/RouteExecutorActions/archive.php');
+        require base_path(($_POST['preview'] ?? '') === '1'
+            ? 'app/Http/Controllers/Company/RouteExecutorActions/preview_delete.php'
+            : 'app/Http/Controllers/Company/RouteExecutorActions/archive.php');
     }
 }
