@@ -132,6 +132,10 @@
       heading.className = 'section-title';
       heading.textContent = title;
       left.appendChild(heading);
+      if (key === 'contractor') {
+        const assignment = document.querySelector('#route-executor-create-modal-content > .source-combined-assignment');
+        if (assignment) left.appendChild(assignment);
+      }
       const right = document.createElement('section');
       right.className = 'source-combined-docs';
       if (key === 'vehicle') {
@@ -182,7 +186,9 @@
     const contractor = document.getElementById('lab-contractor-form');
     const driver = document.getElementById('lab-driver-form');
     const vehicle = document.getElementById('lab-vehicle-form');
+    const responsibleLogist = document.getElementById('route-executor-responsible-logist');
     const required = [
+      [responsibleLogist, 'Выберите ответственного логиста.'],
       [contractor.elements.namedItem('name'), 'Укажите наименование подрядчика.'],
       [contractor.elements.namedItem('inn'), 'Укажите ИНН подрядчика.'],
       [driver.elements.namedItem('full_name'), 'Укажите ФИО водителя.'],
@@ -214,6 +220,7 @@
       for (const key of ['contractor', 'driver', 'vehicle']) {
         const form = document.getElementById('lab-' + key + '-form');
         for (const [name, value] of new FormData(form)) {
+          if (name === 'responsible_logist_membership_id') continue;
           const targetName = value instanceof File
             ? key + '_' + name
             : key + '[' + name.replace(/\]/g, '').split('[').join('][') + ']';
@@ -221,6 +228,7 @@
         }
       }
       data.set('_route_executor_combined', '1');
+      data.set('responsible_logist_membership_id', document.getElementById('route-executor-responsible-logist').value);
       const response = await fetch(base + '/company/route-executors/create', { method: 'POST', credentials: 'same-origin', body: data });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось создать исполнителя рейса.');

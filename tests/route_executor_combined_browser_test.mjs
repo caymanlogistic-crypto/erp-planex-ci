@@ -44,6 +44,8 @@ try {
         }
         assert.equal(await page.locator('#lab-contractor-form [name="bank_inn"]').count(), 0);
         assert.equal(await page.locator('#lab-driver-form [name="license_issue_date"]').count(), 1);
+        assert.equal(await page.locator('#route-executor-responsible-logist[required]').count(), 1);
+        assert.equal(await page.locator('#route-executor-responsible-logist option').count(), 3);
         assert.equal(await page.locator('[data-readiness-key="training"][data-state="pending"]').count(), 1);
         await page.locator('#lab-driver-form [name="full_name"]').fill('Иванов Иван Иванович');
         await page.locator('#lab-driver-form [name="snils"]').fill('123-456-789 00');
@@ -60,13 +62,15 @@ try {
             await page.locator('#lab-contractor-form [name="inn"]').fill('7701234567');
             await page.locator('#lab-driver-form [name="phone"]').fill('+7 900 000-00-00');
             await page.locator('#lab-vehicle-form [name="set_type"]').selectOption('single');
+            await page.locator('#route-executor-responsible-logist').selectOption('12');
             const file = { name: 'synthetic.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4 synthetic') };
             await page.locator('#lab-contractor-form [name="predef_doc[company_card]"]').setInputFiles(file);
             await page.locator('#lab-driver-form [name="predef_doc[passport][]"]').setInputFiles(file);
             await page.locator('#lab-vehicle-form [name="predef_doc[primary][sts][]"]').setInputFiles(file);
             await page.locator('[data-source-create-submit]').click();
             await page.locator('[data-combined-feedback]:not(.is-hidden)').waitFor();
-            for (const name of ['contractor[name]', 'contractor[contacts][0][contact_person]', 'driver[phone]', 'vehicle[set_type]', 'contractor_predef_doc[company_card]', 'driver_predef_doc[passport][]', 'vehicle_predef_doc[primary][sts][]']) assert.ok(payload.includes('name="' + name + '"'), 'missing multipart field ' + name);
+            for (const name of ['responsible_logist_membership_id', 'contractor[name]', 'contractor[contacts][0][contact_person]', 'driver[phone]', 'vehicle[set_type]', 'contractor_predef_doc[company_card]', 'driver_predef_doc[passport][]', 'vehicle_predef_doc[primary][sts][]']) assert.ok(payload.includes('name="' + name + '"'), 'missing multipart field ' + name);
+            assert.ok(payload.includes('name="responsible_logist_membership_id"\r\n\r\n12'), 'selected logist must be submitted');
         }
         const overflows = await page.locator('#route-executor-create-modal-inner').evaluate(element => element.scrollWidth > element.clientWidth + 1);
         assert.equal(overflows, false, 'modal horizontal overflow at ' + width);

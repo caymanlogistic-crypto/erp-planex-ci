@@ -15,6 +15,12 @@ final class RouteExecutorCombinedCreateService
         $contractor = (array) ($post['contractor'] ?? []);
         $driver = (array) ($post['driver'] ?? []);
         $vehicle = (array) ($post['vehicle'] ?? []);
+        $requestedLogistId = filter_var($post['responsible_logist_membership_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($requestedLogistId === false || $requestedLogistId === null) throw new RuntimeException('Выберите ответственного логиста.');
+        $responsibleLogistId = EntityResponsibilityService::eligibleRecipientMembershipId($centralDb->connection(), $pdo, $companyId, (int) $requestedLogistId);
+        if ($responsibleLogistId === null) throw new RuntimeException('Выбранный ответственный логист недоступен в этой компании.');
+        $actorMembershipId = (int) (AccessControlService::effectiveMembershipId() ?? 0);
+        if ($actorMembershipId <= 0) throw new RuntimeException('Не удалось определить сотрудника, создающего исполнителя рейса.');
         $contractorService = new ContractorService($config, $centralDb);
         $driverService = new DriverService($config, $centralDb);
         $errors = $contractorService->validateContractor($contractor, $pdo);
@@ -75,6 +81,7 @@ final class RouteExecutorCombinedCreateService
             'documents' => 'SELECT 1 FROM documents LIMIT 0',
             'document_types' => 'SELECT 1 FROM document_types LIMIT 0',
             'entity_assignments' => 'SELECT 1 FROM entity_assignments LIMIT 0',
+            'entity_responsibilities' => 'SELECT 1 FROM entity_responsibilities LIMIT 0',
         ];
         foreach ($schemaProbes as $table => $query) {
             try { $pdo->query($query); }
@@ -126,6 +133,8 @@ final class RouteExecutorCombinedCreateService
             $crewInsert->execute([$contractorId, $unitIds['primary'], $driverId, $blockId, $userId, $role]);
             $crewId = (int) $pdo->lastInsertId();
             syncCrewDrivers($pdo, $crewId, [$driverId]);
+            $responsibilityInsert = $pdo->prepare('INSERT INTO entity_responsibilities (entity_type,entity_id,membership_id,assigned_by_membership_id) VALUES (?,?,?,?)');
+            $responsibilityInsert->execute(['route_executor', $crewId, $responsibleLogistId, $actorMembershipId]);
 
             self::storeDocuments($pdo, $companyId, 'contractor', $contractorId, $contractor, $files, 'contractor', $userId, $role, $savedPaths);
             self::storeDocuments($pdo, $companyId, 'driver', $driverId, $driver, $files, 'driver', $userId, $role, $savedPaths);

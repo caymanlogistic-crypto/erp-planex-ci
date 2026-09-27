@@ -120,7 +120,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
                         <span class="cell-sub"><?= e($e['plates'] ?? '—') ?></span>
                     </td>
                     <td class="col-mono"><?= e($e['primary_plate'] ?? '—') ?></td>
-                    <td><?= e($e['created_by_name'] ?? '—') ?></td>
+                    <td><?= e($e['responsible_name'] ?? '—') ?></td>
                     <td>
                         <span class="badge<?= $e['crew_status'] === 'active' ? ' badge-ok' : '' ?>">
                             <span class="dot"></span>
