@@ -25,6 +25,11 @@ try {
         ? 'Исполнитель рейса недоступен по текущим правам на подрядчика, водителей или транспорт.'
         : null;
     if($crew&&!$accessDenied){
+        $responsibleMembershipId=\App\Service\EntityResponsibilityService::effectiveBaseMembershipId($localPdo,'route_executor',$crewId);
+        $crew['responsible_name']=$crew['created_by_name']??'—';
+        foreach(\App\Service\EntityResponsibilityService::eligibleRecipients($pdo,$localPdo,$companyId) as $logist){
+            if((int)$logist['membership_id']===$responsibleMembershipId){$crew['responsible_name']=$logist['full_name'];break;}
+        }
         $crew['driver_name']=crewDriverNames($localPdo,$crewId,(string)($crew['driver_name']??''));
         $ids=loadCrewDriverIds($localPdo,$crewId,(int)($crew['driver_id']??0));
         $crew['driver_count']=count($ids);

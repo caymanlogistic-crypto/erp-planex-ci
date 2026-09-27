@@ -19,7 +19,7 @@ final class NavigationCounterService
      * Every counter is intentionally isolated. A missing/temporarily unavailable
      * schema object for one module must never suppress unrelated badges.
      *
-     * @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,trip_completion_problem:int,feo_freshness:int,feo_placement_problem:int,feo_map_problem:int,feo_utilizer_problem:int,feo_cost_problem:int,production_calendar_warning:int}
+     * @return array<string,int>
      */
     public static function forCompany(array $config, Database $centralDb, int $companyId, ?array $knownCompany = null): array
     {
@@ -107,6 +107,18 @@ final class NavigationCounterService
         // parent counter a true sum of child counters instead of a hard-coded
         // alias to the Linear Trips value.
         $counters['departures_problem'] = 0;
+
+        try {
+            if (!class_exists(WasteTripLegacySourceService::class)) require_once __DIR__.'/WasteTripLegacySourceService.php';
+            if (!class_exists(WarehouseStockService::class)) require_once __DIR__.'/WarehouseStockService.php';
+            $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
+            $counters['warehouse_stock_problem'] = $legacy instanceof PDO
+                ? WarehouseStockService::load($legacy, $tenant)['issue_count']
+                : 1;
+        } catch (Throwable $error) {
+            error_log('warehouse stock navigation count failed: '.$error->getMessage());
+            $counters['warehouse_stock_problem'] = 1;
+        }
 
         try {
             $counters['trip_completion_problem'] = max(0, (int)$tenant->query(
@@ -221,7 +233,7 @@ final class NavigationCounterService
         return $counters;
     }
 
-    /** @return array{bank_attention:int,cash_attention:int,closing_documents_problem:int,linear_trips_problem:int,departures_problem:int,trip_completion_problem:int,feo_freshness:int,feo_placement_problem:int,feo_map_problem:int,feo_utilizer_problem:int,feo_cost_problem:int,production_calendar_warning:int} */
+    /** @return array<string,int> */
     private static function emptyCounters(): array
     {
         return [
@@ -230,6 +242,7 @@ final class NavigationCounterService
             'closing_documents_problem' => 0,
             'linear_trips_problem' => 0,
             'departures_problem' => 0,
+            'warehouse_stock_problem' => 0,
             'trip_completion_problem' => 0,
             'feo_freshness' => 0,
             'feo_placement_problem' => 0,

@@ -18,6 +18,16 @@
           }
       }
       ?>
+      <div class="source-combined-assignment field">
+        <label class="field-label" for="route-executor-responsible-logist">Ответственный логист <span class="req">*</span></label>
+        <select id="route-executor-responsible-logist" name="responsible_logist_membership_id" class="field-input" required<?= empty($responsibleLogists) ? ' disabled' : '' ?>>
+          <option value="">— Выберите логиста —</option>
+          <?php foreach (($responsibleLogists ?? []) as $logist): ?>
+            <option value="<?= (int)$logist['membership_id'] ?>"><?= e($logist['full_name']) ?> (<?= e($logist['login']) ?>)</option>
+          <?php endforeach; ?>
+        </select>
+        <?php if (empty($responsibleLogists)): ?><p class="field-hint">Нет доступных сотрудников для назначения. Обратитесь к руководителю компании.</p><?php endif; ?>
+      </div>
       <div class="source-combined-grid">
         <?php
         $leEntityType = 'contractor';

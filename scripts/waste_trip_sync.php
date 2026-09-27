@@ -8,6 +8,7 @@ if (PHP_SAPI !== 'cli' && PHP_SAPI !== 'cgi-fcgi') {
 $root = rtrim((string) (getenv('PLANEX_ROOT') ?: ($argv[1] ?? '')), '/');
 if ($root === '' || !is_file($root . '/bootstrap/app.php') || !is_file($root . '/.env')) throw new RuntimeException('PLANEX_ROOT invalid');
 $config = require $root . '/bootstrap/app.php';
+require_once $root . '/app/Support/entrypoint_dependencies.php';
 require_once $root . '/app/Support/crypto_helper.php';
 require_once $root . '/app/Support/company_database.php';
 require_once $root . '/app/Service/WasteTripLegacySourceService.php';

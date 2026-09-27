@@ -44,6 +44,8 @@ $clientsActive = str_starts_with($requestPath, '/company/clients');
 $tripsActive = str_starts_with($requestPath, '/company/trips');
 $linearTripsActive = str_starts_with($requestPath, '/company/trips/linear');
 $departuresActive = str_starts_with($requestPath, '/company/trips/departures');
+$warehouseStockActive = str_starts_with($requestPath, '/company/warehouses/stock');
+$warehousesOpen = $warehouseStockActive;
 $managerStatisticsActive = str_starts_with($requestPath, '/company/statistics/managers');
 $feoShareStatisticsActive = str_starts_with($requestPath, '/company/statistics/feo-share');
 $cargoBalanceStatisticsActive = str_starts_with($requestPath, '/company/statistics/cargo-balance');
@@ -78,7 +80,7 @@ $feoRequestsActive = str_starts_with($requestPath, '/company/feo/requests') && !
 
 $navigationCounters = [
     'bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0,
-    'linear_trips_problem' => 0, 'departures_problem' => 0, 'trip_completion_problem' => 0,
+    'linear_trips_problem' => 0, 'departures_problem' => 0, 'warehouse_stock_problem' => 0, 'trip_completion_problem' => 0,
     'feo_freshness' => 0, 'feo_placement_problem' => 0, 'feo_map_problem' => 0, 'feo_utilizer_problem' => 0, 'feo_cost_problem' => 0, 'production_calendar_warning' => 0,
 ];
 if ((($effectiveAccess !== null && $effectiveAccess->isActive()) || $roleCode === 'company_owner') && (int)$companyId > 0) {
@@ -103,6 +105,7 @@ $navigationBadgeTitle = static function (array $page): string {
         'closing_documents_problem' => 'Требуют закрывающих документов',
         'linear_trips_problem' => 'Требуется актуализировать дату выгрузки',
         'departures_problem' => 'Ошибки в рейсах отходов',
+        'warehouse_stock_problem' => 'Расхождения складских рейсов со старой базой',
         'trip_completion_problem' => 'Заявок в работе',
         'feo_freshness' => 'Требуется обновить заявки ФЭО',
         'feo_placement_problem' => 'Расхождения размещения со старой базой или блоками',
@@ -127,6 +130,7 @@ $wideWorkspacePrefixes = [
     '/company/document-generator',
     '/company/trips/linear',
     '/company/trips/departures',
+    '/company/warehouses/stock',
     '/company/statistics/managers',
     '/company/statistics/feo-share',
     '/company/documents',
@@ -412,6 +416,8 @@ if (empty($topbarCrumbs)) {
                         <span>Отходы</span>
                     </a>
                 </div>
+                <div class="nav-item is-parent<?= $warehousesOpen ? ' is-open is-active' : '' ?>"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M1.5 4.5h5l1.5 2h6v6.5H1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span class="nav-label">Склады</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?><svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4"/></svg></div>
+                <div class="nav-sub<?= $warehousesOpen ? ' is-open' : '' ?>"><a class="nav-sub-item<?= $warehouseStockActive ? ' is-active' : '' ?>" href="<?=app_url('/company/warehouses/stock')?>"><span>Заявки на складе</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?></a></div>
                 <div class="nav-item is-parent<?= $feoRequestsOpen ? ' is-open is-active' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
                         <path d="M3 2.5H10L13 5.5V13.5H3V2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -631,6 +637,8 @@ if (empty($topbarCrumbs)) {
                         <span>Отходы</span>
                     </a>
                 </div>
+                <div class="nav-item is-parent<?= $warehousesOpen ? ' is-open is-active' : '' ?>"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M1.5 4.5h5l1.5 2h6v6.5H1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span class="nav-label">Склады</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?><svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4"/></svg></div>
+                <div class="nav-sub<?= $warehousesOpen ? ' is-open' : '' ?>"><a class="nav-sub-item<?= $warehouseStockActive ? ' is-active' : '' ?>" href="<?=app_url('/company/warehouses/stock')?>"><span>Заявки на складе</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?></a></div>
                 <div class="nav-item is-parent<?= $feoRequestsOpen ? ' is-open is-active' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
                         <path d="M3 2.5H10L13 5.5V13.5H3V2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
