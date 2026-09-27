@@ -51,7 +51,7 @@ $chart = static function(array $current, string $key, callable $valueOf): array 
     return compact('width','height','left','right','top','bottom','plotW','plotH','max','currentPoints','points','path');
 };
 $chartData = $chart($statistics['trend'], $metric, $metricValue);
-$lineColors = ['#4A7A9B','#B84C3A','#6A8A50','#B89228','#6D5B8C','#5C7A88','#8A6A44','#7A6478'];
+$lineColors = ['#4A7A9B','#6A8A50','#B89228','#6D5B8C','#5C7A88','#8A6A44','#7A6478'];
 $managerChartSeries = [];
 foreach ($statistics['manager_trends'] as $index=>$series) {
     $seriesColor = $lineColors[$index % count($lineColors)];
@@ -114,7 +114,7 @@ $kpis = [
 
         <section class="manager-stats__card manager-stats__periods">
             <header class="manager-stats__card-head"><div><h2>Точные значения по периодам</h2><p>Каждая строка показывает результат каждого логиста и общий итог за <?= $filters['group']==='month'?'месяц':'неделю' ?>.</p></div><span class="manager-stats__card-meta">Рейсы · Заявки · Вес</span></header>
-            <div class="table-scroll"><table class="table manager-stats__period-table is-all-metrics" style="min-width:<?=max(950,174+(count($managerChartSeries)+1)*225)?>px"><thead>
+            <div class="table-scroll"><table class="table manager-stats__period-table is-all-metrics" style="min-width:<?=max(1020,174+(count($managerChartSeries)+1)*225)?>px"><thead>
                 <tr><th rowspan="2" scope="col">Период</th><?php foreach($managerChartSeries as$series):?><th colspan="3" scope="colgroup"><?=e($series['name'])?></th><?php endforeach;?><th colspan="3" scope="colgroup" class="is-total">Итого</th></tr>
                 <tr><?php foreach($managerChartSeries as$series):foreach($tableMeasures as$measure=>$label):?><th class="num <?=$measure==='trips'?'is-group-start':''?>" scope="col"><?=e($label)?></th><?php endforeach;endforeach;?><?php foreach($tableMeasures as$measure=>$label):?><th class="num is-total <?=$measure==='trips'?'is-group-start':''?>" scope="col"><?=e($label)?></th><?php endforeach;?></tr>
             </thead><tbody>

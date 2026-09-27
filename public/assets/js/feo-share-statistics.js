@@ -54,10 +54,8 @@
   const metricValue = value => state.metric === 'count' ? nf.format(value) : mass(value);
 
   const svgChart = rows => {
-    const wrap = root.querySelector('.fs-chart-wrap');
-    const width = Math.max(330, Math.round(wrap ? wrap.clientWidth - 20 : root.clientWidth - 32));
-    const height = 174;
-    const left = 58, right = 58, top = 12, bottom = 30;
+    const width = 920, height = 171.6;
+    const left = 58, right = 58, top = 12, bottom = 27.6;
     const plotW = width - left - right, plotH = height - top - bottom;
     const max = Math.max(30, Math.ceil(Math.max(...rows.map(r => Math.max(share(r.own_count,r.feo_count)||0, share(r.own_kg,r.feo_kg)||0))) / 10) * 10), baseline = top + plotH;
     const format = value => Number(value).toFixed(1);
@@ -66,6 +64,7 @@
     const points = (owner, total) => rows.map((r, i) => ({ x:px(i), y:py(share(r[owner], r[total])), value:share(r[owner], r[total]), date:r.date }));
     const countPoints = points('own_count', 'feo_count');
     const massPoints = points('own_kg', 'feo_kg');
+    const overlappingSeries = countPoints.every((point, index) => point.value === massPoints[index].value);
     // Same clamped cubic interpolation and .82 smoothing as the ERP manager chart.
     const path = pts => {
       if (!pts.length) return '';
@@ -88,7 +87,7 @@
     }).join('');
     const nodes = (pts, name, color, seriesIndex) => pts.map((point, i) => {
       const period = state.mode === 'week' ? weekLabel(point.date) : state.mode === 'month' ? monthLabel(point.date) : shortDate(point.date);
-      return `<g class="manager-stats__chart-node fs-chart-node ${seriesIndex === 0 ? 'is-company' : 'is-manager'}" data-node-index="${i}" tabindex="0" role="img" aria-label="${name} · ${period} — ${percentage(point.value)}" transform="translate(${format(point.x)} ${format(point.y)})" style="--series-index:${seriesIndex};--node-index:${i};--node-color:${color}"><circle r="${seriesIndex === 0 ? 4 : 3.5}"/></g>`;
+      return `<g class="manager-stats__chart-node fs-chart-node ${seriesIndex === 0 ? 'is-company' : 'is-manager'}" data-node-index="${i}" tabindex="0" role="img" aria-label="${name} · ${period} — ${percentage(point.value)}" transform="translate(${format(point.x)} ${format(point.y)})" style="--series-index:${seriesIndex};--node-index:${i};--node-color:${color}"><circle r="${seriesIndex === 0 ? 4 : overlappingSeries ? 5.5 : 3.5}"/></g>`;
     }).join('');
     const labels = rows.map((r, i) => `<text x="${format(px(i))}" y="${height-7}" text-anchor="middle" class="axis-label">${state.mode==='week' ? weekLabel(r.date) : state.mode==='month' ? monthLabel(r.date) : shortDate(r.date)}</text>`).join('');
     return `<svg class="fs-chart manager-stats__line-chart" viewBox="0 0 ${width} ${height}" role="img" aria-label="Изменение доли компаний в общем объёме ФЭО"><defs><linearGradient id="fs-company-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C07830" stop-opacity=".22"/><stop offset=".72" stop-color="#C07830" stop-opacity=".05"/><stop offset="1" stop-color="#C07830" stop-opacity="0"/></linearGradient><linearGradient id="fs-mass-area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4A7A9B" stop-opacity=".22"/><stop offset=".72" stop-color="#4A7A9B" stop-opacity=".05"/><stop offset="1" stop-color="#4A7A9B" stop-opacity="0"/></linearGradient></defs>${ticks}<rect class="manager-stats__plot-hit" x="${left}" y="${top}" width="${plotW}" height="${plotH}"/>${area(countPoints) ? `<path class="manager-stats__chart-area" d="${area(countPoints)}" fill="url(#fs-company-area)"/>` : ''}${area(massPoints) ? `<path class="manager-stats__chart-area" d="${area(massPoints)}" fill="url(#fs-mass-area)"/>` : ''}<line class="manager-stats__period-guide" x1="0" x2="0" y1="${top}" y2="${baseline}" aria-hidden="true"/><path class="manager-stats__chart-line is-manager" pathLength="1" d="${path(massPoints)}" fill="none" stroke="#4A7A9B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="--series-index:1"/><path class="manager-stats__chart-line is-company" pathLength="1" d="${path(countPoints)}" fill="none" stroke="#C07830" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="--series-index:0"/>${nodes(massPoints,'По массе','#4A7A9B',1)}${nodes(countPoints,'По заявкам','#C07830',0)}${labels}</svg>`;
@@ -165,14 +164,12 @@
     const chart = root.querySelector('.fs-chart');
     const wrap = root.querySelector('.fs-chart-wrap');
     const popup = wrap.querySelector('.fs-period-popup');
+    popup.classList.remove('is-visible');
+    popup.setAttribute('aria-hidden', 'true');
+    popup.style.removeProperty('left');
     const guide = chart.querySelector('.manager-stats__period-guide');
-    const chartBox = chart.getBoundingClientRect();
-    const viewBox = chart.viewBox.baseVal;
-    const ownScale = Math.min(chartBox.width / viewBox.width, chartBox.height / viewBox.height);
-    const managerScale = Math.min(chartBox.width / 920, window.matchMedia('(max-width:760px)').matches ? 138 / 171.6 : Infinity);
-    // Managers use a fixed SVG viewBox, while this report fits its viewBox to the card.
-    // Match the rendered circle and stroke diameter, including on narrow screens.
-    chart.style.setProperty('--fs-point-scale', String(managerScale / ownScale));
+    chart.classList.toggle('is-overlapping-series', rows.every(row =>
+      share(row.own_count, row.feo_count) === share(row.own_kg, row.feo_kg)));
     const tableRows = [...root.querySelectorAll('.fs-snapshot-table tbody tr[data-period]')];
     const nodes = [...chart.querySelectorAll('.fs-chart-node')];
     const countNodes = [...chart.querySelectorAll('.fs-chart-node.is-company')];

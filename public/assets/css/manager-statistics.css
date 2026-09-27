@@ -4,6 +4,31 @@
   width:min(1480px,calc(100% - 12px)); max-width:1480px; min-width:0;
   margin:0 auto; padding-bottom:20px; font-variant-numeric:tabular-nums;
 }
+
+/* The period table shares the compact layout of the cargo balance report. */
+.manager-stats__period-table.is-all-metrics { table-layout:fixed; }
+.manager-stats__period-table.is-all-metrics th:first-child,
+.manager-stats__period-table.is-all-metrics td:first-child { width:172px; }
+.manager-stats__period-table.is-all-metrics thead tr:nth-child(2) th {
+  color:#343028; font-size:10px; font-weight:700; padding:0 10px;
+}
+.manager-stats__period-table.is-all-metrics .num { padding-right:10px; padding-left:10px; }
+.manager-stats__period-table.is-all-metrics tbody td:first-child {
+  background:linear-gradient(180deg,#e0dbd2 0%,#d4cfc5 100%);
+  border-bottom:1px solid #b0a89c;
+  border-right:1px solid rgba(160,152,140,.28);
+  color:#343028; font-size:10px; font-weight:700;
+  letter-spacing:.08em; text-transform:uppercase;
+}
+.manager-stats__period-table.is-all-metrics tbody td:first-child strong { font-size:inherit; font-weight:900; }
+.manager-stats__period-table.is-all-metrics tbody td:first-child .manager-stats__period-label span { font-weight:700; }
+.manager-stats__period-table.is-all-metrics tbody tr:hover td:first-child,
+.manager-stats__period-table.is-all-metrics tbody tr.is-period-active td:first-child { background:var(--surface-muted); }
+.manager-stats__period-table.is-all-metrics tbody tr { cursor:crosshair; }
+.manager-stats__period-table.is-all-metrics tbody tr:focus-visible { outline:2px solid var(--accent); outline-offset:-2px; }
+.manager-stats__period-table.is-all-metrics .is-series-colored { color:var(--period-series-color); }
+.manager-stats__period-table.is-all-metrics tbody .is-series-colored { font-weight:800; }
+.manager-stats__trend .manager-stats__line-chart { height:auto; max-height:none; }
 .manager-stats__head { margin-bottom:8px; }
 
 .manager-stats__filters { margin-bottom:8px; }
@@ -348,4 +373,10 @@
     flex: 1;
     text-align: right;
   }
+  .manager-stats__period-popup.is-dense { top:4px; padding:3px 5px; }
+  .manager-stats__period-popup.is-dense .manager-stats__period-popup-title { padding-bottom:2px; font-size:9px; line-height:1; }
+  .manager-stats__period-popup.is-dense .manager-stats__period-popup-item { padding:1px 0; line-height:1; }
+  .manager-stats__period-popup.is-dense .manager-stats__period-popup-name { font-size:8px; }
+  .manager-stats__period-popup.is-dense .manager-stats__period-popup-values b { font-size:8px; line-height:1; }
+  .manager-stats__period-popup.is-dense .manager-stats__period-popup-values small { font-size:6.5px; line-height:1; }
 }

@@ -103,3 +103,21 @@
 #feo-share-root .fs-period-popup .manager-stats__period-popup-item{justify-content:space-between}
 #feo-share-root .fs-period-popup .manager-stats__period-popup-item span{font-size:10px;font-weight:700;white-space:nowrap}
 @media(max-width:760px){#feo-share-root .fs-chart{height:138px}#feo-share-root .fs-period-popup{width:190px}#feo-share-root .fs-period-popup .manager-stats__period-popup-item{align-items:flex-start;flex-direction:column;gap:1px}#feo-share-root .fs-period-popup .manager-stats__period-popup-item span{font-size:9px}}
+
+/* Accepted statistics design v008. */
+#feo-share-root .fs-page > .fs-caveat,
+#feo-share-root .fs-title-asof { display:none; }
+#feo-share-root .fs-title { min-height:58px; padding:0 14px; border-color:#a8a196; }
+#feo-share-root .fs-history { overflow:visible; border:0; background:transparent; }
+#feo-share-root .fs-history .fs-card-head { border:1px solid var(--line-soft); }
+#feo-share-root .fs-history .fs-chart-wrap { border:1px solid var(--line-soft); border-top:0; }
+#feo-share-root .fs-history .fs-card-subhead {
+  margin-top:8px; border:1px solid var(--line-soft); border-bottom:0;
+  background:linear-gradient(180deg,var(--surface-form),var(--surface-muted));
+}
+#feo-share-root .fs-history .fs-table-wrap {
+  border:1px solid var(--line-soft); border-top:0; background:var(--surface-strong);
+}
+#feo-share-root .fs-history .fs-chart { width:100%; height:auto; max-height:none; }
+#feo-share-root .fs-chart.is-overlapping-series .manager-stats__chart-line.is-manager { stroke-width:5; }
+@media(max-width:760px){#feo-share-root .fs-period-popup{top:4px}}
