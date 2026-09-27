@@ -1,4 +1,5 @@
 .logistics-metrics{margin-bottom:10px}
+.tn-review-shell{width:100%;margin:12px 0 18px;padding:10px 12px 12px;background:var(--surface-form)}
 .lab-review-group[hidden],.lab-review-empty[hidden],.logistics-trip[hidden]{display:none!important}
 .lab-review-group-head{display:flex;align-items:center;gap:8px;min-height:34px;padding:7px 12px;border-bottom:1px solid var(--line-soft,#e4e7ec);background:var(--surface-form,#f8fafc)}
 .lab-review-group+.lab-review-group .lab-review-group-head{border-top:1px solid var(--line-soft,#e4e7ec)}
@@ -641,15 +642,3 @@
 .lab-package-progress-close[hidden] { display: none; }
 @keyframes lab-package-spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .lab-package-progress-steps li[data-state="active"] .lab-package-progress-indicator { animation: none; } }
-/* The TN review keeps the registration workspace visible when its list is empty. */
-main.content:has(.logistics-workspace[data-reviewer-mode="1"]) > .workspace-shell-1690 {
-  min-height: calc(100vh - 68px);
-  outline: 1px solid var(--line-soft, #c9c5bc);
-  background: var(--canvas, #e2dfd8);
-}
-
-@media (max-width: 640px) {
-  main.content:has(.logistics-workspace[data-reviewer-mode="1"]) > .workspace-shell-1690 {
-    min-height: 0;
-  }
-}

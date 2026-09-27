@@ -19,6 +19,7 @@ $statusChoice=static function(string $name,string $selected,array $options):void
 <?php if($success):?><div class="notice success"><?=e((string)$success)?></div><?php endif;?>
 <?php if($formError):?><div class="notice warn"><?=e((string)$formError)?></div><?php endif;?>
 <?php if($error):?><div class="notice warn"><?=e((string)$error)?></div><?php else:?>
+<?php if($reviewerMode):?><div class="panel tn-review-shell"><?php endif;?>
 <div class="metric-grid logistics-metrics">
   <div class="metric-card"><div class="metric-label"><?=$reviewerMode?'Рейсов на проверке':'Рейсов в работе'?></div><div class="metric-value"><?=(int)$metrics['trips']?></div></div>
   <div class="metric-card"><div class="metric-label">Заявок всего</div><div class="metric-value"><?=(int)$metrics['requests']?></div></div>
@@ -82,6 +83,7 @@ $statusChoice=static function(string $name,string $selected,array $options):void
   <?php endforeach;?>
   <p class="lab-review-empty" hidden>Рейсы по запросу не найдены.</p>
 </section>
+<?php if($reviewerMode):?></div><?php endif;?>
 <dialog class="lab-review-dialog" aria-labelledby="lab-review-title"><div class="lab-review-dialog-head"><strong id="lab-review-title"></strong><button type="button" class="lab-review-x" aria-label="Закрыть">×</button></div><div class="lab-review-dialog-body"></div><div class="lab-review-dialog-foot"><button type="button" class="btn btn-secondary lab-review-cancel">Отмена</button><button type="button" class="btn btn-primary lab-review-confirm">Передать на проверку</button></div></dialog>
 <script src="<?=app_url('/assets/js/trip-completion-report.js')?>?v=<?=filemtime(base_path('public/assets/js/trip-completion-report.js'))?>" defer></script>
 <script src="<?=app_url('/assets/js/trip-completion.js')?>?v=<?=filemtime(base_path('public/assets/js/trip-completion.js'))?>" defer></script>
