@@ -135,6 +135,7 @@ $wideWorkspacePrefixes = [
     '/company/statistics/feo-share',
     '/company/documents',
     '/company/logistics-assistant',
+    '/company/tn-review',
     '/company/route-executors',
     '/company/feo/requests',
     '/company/contractors',
