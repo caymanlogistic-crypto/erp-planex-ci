@@ -3,6 +3,7 @@
   const root = document.querySelector('[data-logistics-assistant]');
   const dialog = document.querySelector('.lab-review-dialog');
   if (!root || !dialog) return;
+  const reviewerMode = root.dataset.reviewerMode === '1';
 
   const search = document.querySelector('.logistics-filter input[name="q"]');
   const showAll = document.querySelector('.lab-show-all input');
@@ -24,7 +25,7 @@
     const term = (search?.value || '').trim().toLowerCase();
     let visible = 0;
     root.querySelectorAll('[data-review-group]').forEach((group) => {
-      const enabled = group.dataset.reviewGroup === 'work' || !!showAll?.checked;
+      const enabled = group.dataset.reviewGroup === (reviewerMode ? 'review' : 'work') || !!showAll?.checked;
       let matches = 0;
       group.querySelectorAll('.logistics-trip').forEach((trip) => {
         const found = !term || trip.textContent.toLowerCase().includes(term);
@@ -36,7 +37,8 @@
     });
     root.querySelector('.lab-review-empty').hidden = visible > 0;
   };
-  root.querySelectorAll('.logistics-trip[data-review-status]:not([data-review-status="work"])').forEach((trip) => {
+  root.querySelectorAll('.logistics-trip[data-review-status]').forEach((trip) => {
+    if (trip.dataset.reviewStatus === (reviewerMode ? 'review' : 'work')) return;
     trip.querySelectorAll('[data-autosave-form] input, [data-autosave-form] textarea, [data-upload-form] input, [data-upload-form] button, .lab-docs-remove, .lab-docs-no-tn').forEach((control) => { control.disabled = true; });
   });
   search?.addEventListener('input', refreshFilter);
@@ -55,7 +57,7 @@
     if (busy) return;
     const trip = form.closest('.logistics-trip');
     const action = form.querySelector('[name="action"]').value;
-    if (action === 'return') {
+    if (action === 'restore') {
       busy = true;
       const button = form.querySelector('button');
       button.disabled = true;
@@ -77,14 +79,20 @@
     button.disabled = true;
     try {
       const preview = await responseJson(await fetch(form.getAttribute('action'), {credentials:'same-origin', headers:{Accept:'application/json'}}));
-      if (preview.status !== 'work') throw new Error('Рейс уже передан. Обновите страницу.');
-      pending = {form, trip, preview};
-      title.textContent = `${trip.querySelector('.lab-trip-identity b')?.textContent || 'Рейс'} · Передача на проверку`;
+      if (preview.status !== (reviewerMode ? 'review' : 'work')) throw new Error('Статус рейса изменился. Обновите страницу.');
+      pending = {form, trip, preview, action};
+      title.textContent = `${trip.querySelector('.lab-trip-identity b')?.textContent || 'Рейс'} · ${reviewerMode ? 'Перенос в архив' : 'Передача на проверку'}`;
       const issues = preview.problems || [];
       const list = issues.map((issue) => `<li><span>${escape(issue.label)}</span><b>${issue.ids.length}</b><small>${escape(issue.ids.join(', '))}</small></li>`).join('');
-      body.innerHTML = `<p class="lab-review-intro">${issues.length ? 'Найдены ошибки и недостающие данные:' : 'Ошибок не найдено. Рейс будет помещён в архив.'}</p>${issues.length ? `<ul class="lab-review-problems">${list}</ul><p class="lab-review-warning">Убедитесь, что всю доступную информацию внесли. Если это окончательные данные, передайте рейс на проверку.</p>` : ''}<p class="lab-review-mail">${preview.sender_ready ? `Отправитель: <b>${escape(preview.sender_email)}</b>. ` : ''}Комплект будет отправлен ${preview.recipient_count} получателям.</p>${!preview.sender_ready ? `<p class="lab-review-warning">${escape(preview.sender_error || 'Настройте основной рабочий ящик в карточке пользователя.')}</p>` : ''}`;
-      confirm.disabled = !preview.sender_ready || preview.recipient_count === 0;
-      confirm.textContent = issues.length ? 'Всё верно, передать' : 'Передать в архив';
+      if (reviewerMode) {
+        body.innerHTML = `<p class="lab-review-intro">${issues.length ? 'В рейсе остаются замечания:' : 'Замечаний нет.'}</p>${issues.length ? `<ul class="lab-review-problems">${list}</ul>` : ''}<p class="lab-review-warning">После переноса в архив редактирование будет закрыто. При необходимости рейс можно вернуть на проверку.</p>`;
+        confirm.disabled = false;
+        confirm.textContent = 'Переместить в архив';
+      } else {
+        body.innerHTML = `<p class="lab-review-intro">${issues.length ? 'Найдены ошибки и недостающие данные:' : 'Ошибок не найдено. Рейс будет передан на проверку.'}</p>${issues.length ? `<ul class="lab-review-problems">${list}</ul><p class="lab-review-warning">Убедитесь, что всю доступную информацию внесли. Если это окончательные данные, передайте рейс на проверку.</p>` : ''}<p class="lab-review-mail">${preview.sender_ready ? `Отправитель: <b>${escape(preview.sender_email)}</b>. ` : ''}Комплект будет отправлен ${preview.recipient_count} получателям.</p>${!preview.sender_ready ? `<p class="lab-review-warning">${escape(preview.sender_error || 'Настройте основной рабочий ящик в карточке пользователя.')}</p>` : ''}`;
+        confirm.disabled = !preview.sender_ready || preview.recipient_count === 0;
+        confirm.textContent = 'Всё верно, передать';
+      }
       dialog.showModal();
     } catch (error) { window.alert(error.message); }
     finally { busy = false; button.disabled = false; }
@@ -93,7 +101,7 @@
   confirm.addEventListener('click', async () => {
     if (!pending || busy) return;
     busy = true;
-    const {form, trip, preview} = pending;
+    const {form, trip, preview, action} = pending;
     confirm.disabled = true;
     cancel.disabled = true;
     dialog.querySelector('.lab-review-x').disabled = true;
@@ -103,6 +111,14 @@
     progress.textContent = 'Формируем отчёт…';
     body.append(progress);
     try {
+      if (action === 'archive') {
+        progress.textContent = 'Переносим рейс в архив…';
+        const data = new FormData(form);
+        data.set('version', String(preview.version));
+        await responseJson(await fetch(form.getAttribute('action'), {method:'POST',credentials:'same-origin',headers:{Accept:'application/json'},body:data}));
+        window.location.reload();
+        return;
+      }
       if (!window.TripCompletionReport?.buildPackage) throw new Error('Генератор комплекта недоступен. Обновите страницу.');
       const built = await window.TripCompletionReport.buildPackage(trip, {
         stage(index) { progress.textContent = ['Формируем отчёт…','Создаём PDF файлы…','Создаём архив…'][index] || 'Подготавливаем комплект…'; },

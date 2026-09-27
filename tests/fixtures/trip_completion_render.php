@@ -38,5 +38,11 @@ foreach($trips as &$trip){
  unset($request);
 }
 unset($trip);
+$fixtureMode=$argv[1]??'registration';
+if(in_array($fixtureMode,['reviewer','registration-readonly'],true)){
+ $trips[0]['review_status']='review';$trips[0]['review_version']=1;
+ $trips[1]['review_status']='archive';$trips[1]['review_version']=2;
+ $reviewerMode=$fixtureMode==='reviewer';
+}
 $openTripId=0;
 ?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><title>Регистрация времени загрузки</title></head><body><main style="padding:20px;max-width:1800px;margin:auto"><?php require BASE_PATH.'/app/View/pages/company_logistics_assistant.php';?></main></body></html>

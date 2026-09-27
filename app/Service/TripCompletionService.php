@@ -15,6 +15,7 @@ final class TripCompletionService
     public function __construct(
         public readonly PDO $tenant,
         private readonly int $companyId,
+        private readonly string $editableReviewStatus = 'work',
     ) {}
 
     public function ready(): bool
@@ -169,7 +170,8 @@ final class TripCompletionService
     /** @return array{status:string,version:int,problems:list<array{label:string,ids:list<string>}> >} */
     public function transitionReview(int $tripId,int $expectedVersion,string $action,int $actorMembershipId,string $actorLogin=''): array
     {
-        if (!in_array($action,['submit','return'],true)) throw new DomainException('Неизвестное действие с рейсом.');
+        if (!in_array($action,['submit','archive','restore'],true)) throw new DomainException('Неизвестное действие с рейсом.');
+        if (($action==='submit')!==($this->editableReviewStatus==='work')) throw new DomainException('Это действие недоступно в вашем разделе.');
         $this->tenant->beginTransaction();
         try {
             $lock=$this->tenant->prepare("SELECT id FROM waste_trips WHERE id=? AND deleted_at IS NULL AND status IN ('in_progress','completed') FOR UPDATE");
@@ -179,14 +181,14 @@ final class TripCompletionService
             $current=$this->tenant->prepare('SELECT review_status,status_version FROM waste_trip_completion_reviews WHERE waste_trip_id=? FOR UPDATE');
             $current->execute([$tripId]);$row=$current->fetch(PDO::FETCH_ASSOC);
             if ((int)$row['status_version']!==$expectedVersion) throw new DomainException('Статус рейса изменился. Обновите страницу.');
-            if ($action==='submit' && $row['review_status']!=='work') throw new DomainException('Рейс уже передан на проверку.');
-            if ($action==='return' && $row['review_status']==='work') throw new DomainException('Рейс уже находится в работе.');
+            $expectedStatus=match($action){'submit'=>'work','archive'=>'review','restore'=>'archive'};
+            if ($row['review_status']!==$expectedStatus) throw new DomainException('Статус рейса изменился. Обновите страницу.');
             $trip=$this->trip($tripId);
             $problems=$this->reviewProblems($trip);
-            $next=$action==='return'?'work':($problems===[]?'archive':'review');
+            $next=$action==='archive'?'archive':'review';
             $update=$this->tenant->prepare('UPDATE waste_trip_completion_reviews SET review_status=?,status_version=status_version+1,updated_by_membership_id=?,submitted_at=IF(?=\'submit\',NOW(6),submitted_at),mail_status=IF(?=\'submit\',\'pending\',mail_status),mail_error=IF(?=\'submit\',NULL,mail_error) WHERE waste_trip_id=?');
             $update->execute([$next,$actorMembershipId,$action,$action,$action,$tripId]);
-            $this->writeJournal($tripId,null,null,'review',$action==='return'?'Рейс возвращён в работу':($next==='archive'?'Рейс проверен и перенесён в архив':'Рейс передан на проверку'),$actorMembershipId,$actorLogin,
+            $this->writeJournal($tripId,null,null,'review',match($action){'archive'=>'Рейс проверен и перенесён в архив','restore'=>'Рейс возвращён из архива на проверку',default=>'Рейс передан на проверку'},$actorMembershipId,$actorLogin,
                 ['review_status'=>$row['review_status']],['review_status'=>$next]);
             $this->tenant->commit();
             return ['status'=>$next,'version'=>$expectedVersion+1,'problems'=>$problems];
@@ -238,6 +240,7 @@ final class TripCompletionService
         ];
         $this->tenant->beginTransaction();
         try {
+        $this->lockEditableTrip($tripId,$requestId);
         $lock=$this->tenant->prepare('SELECT id FROM waste_trip_requests WHERE id=? FOR UPDATE');
         $lock->execute([$requestId]);
         $oldStmt=$this->tenant->prepare('SELECT * FROM waste_trip_completion_items WHERE waste_trip_request_id=? FOR UPDATE');
@@ -284,6 +287,7 @@ final class TripCompletionService
         $absolute=null;
         $this->tenant->beginTransaction();
         try {
+            $identity=$this->lockEditableTrip($tripId,$requestId);
             $lock=$this->tenant->prepare('SELECT id FROM waste_trip_requests WHERE id=? FOR UPDATE');$lock->execute([$requestId]);
             $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM waste_trip_completion_documents WHERE waste_trip_request_id=? AND deleted_at IS NULL');$stmt->execute([$requestId]);
             $activeCount=(int)$stmt->fetchColumn();
@@ -325,6 +329,7 @@ final class TripCompletionService
         $this->assertRequest($tripId,$requestId);
         $this->tenant->beginTransaction();
         try {
+            $this->lockEditableTrip($tripId,$requestId);
             $lock=$this->tenant->prepare('SELECT original_name FROM waste_trip_completion_documents WHERE id=? AND waste_trip_request_id=? AND deleted_at IS NULL FOR UPDATE');
             $lock->execute([$documentId,$requestId]);
             $name=$lock->fetchColumn();
@@ -452,12 +457,20 @@ final class TripCompletionService
     }
 
     /** @return array{business_id:int|string,zayavka_id:string} */
+    private function lockEditableTrip(int $tripId,int $requestId): array
+    {
+        $lock=$this->tenant->prepare('SELECT id FROM waste_trips WHERE id=? FOR UPDATE');
+        $lock->execute([$tripId]);
+        return $this->assertRequest($tripId,$requestId);
+    }
+
+    /** @return array{business_id:int|string,zayavka_id:string} */
     private function assertRequest(int $tripId,int $requestId): array
     {
         $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id,COALESCE(cr.review_status,'work') review_status FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id WHERE wtr.id=? AND wt.id=? AND wt.status IN ('in_progress','completed') AND wt.deleted_at IS NULL LIMIT 1");
         $stmt->execute([$requestId,$tripId]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new DomainException('Заявка рейса не найдена.');
-        if ($row['review_status']!=='work') throw new DomainException('Верните рейс в работу, чтобы изменить заявку.');
+        if ($row['review_status']!==$this->editableReviewStatus) throw new DomainException('Изменять заявки можно только в доступном для вашей роли состоянии рейса.');
         return $row;
     }
 
