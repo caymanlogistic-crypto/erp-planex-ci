@@ -16,7 +16,7 @@ $page = $registry->page('company.statistics.managers');
 $check(is_array($page), 'statistics page is registered');
 $check(($page['path'] ?? '') === '/company/statistics/managers', 'statistics page route');
 $check(($page['label'] ?? '') === 'Работа логистов', 'statistics page role-management label');
-$check(($page['section'] ?? '') === 'Статистика', 'statistics section in role tree');
+$check(($page['section'] ?? '') === 'Операции' && ($page['group'] ?? '') === 'Статистика', 'statistics folder in role tree');
 $check(in_array('company.statistics.managers', $registry->grantablePageKeys(), true), 'statistics page is grantable');
 
 $route = $read('app/Http/Routes/company_statistics.php');
@@ -72,13 +72,14 @@ $check(
 $check(
     str_contains($view, '<th colspan="3" scope="colgroup" class="is-total">Итого</th>')
     && str_contains($css, '.manager-stats__period-table .is-total { font-weight:800; }')
-    && !str_contains($css, '.manager-stats__period-table .is-company'),
-    'rightmost total column uses bold weight only'
+    && str_contains($css, '.manager-stats__period-table.is-all-metrics .is-series-colored')
+    && str_contains($js, "style.setProperty('--period-series-color', color)"),
+    'period columns use their graph series colors'
 );
 $check(str_contains($view, 'Динамика компании и логистов') && str_contains($service, "'period_rows'=>self::periodRows"), 'company and logist dynamics with exact period values');
 $check(str_contains($view, "'trips'=>") && str_contains($view, "'requests'=>") && str_contains($view, "'weight'=>"), 'required metric modes');
 $check(
-    str_contains($view, "['#4A7A9B','#B84C3A','#6A8A50','#B89228'")
+    str_contains($view, "['#4A7A9B','#6A8A50','#B89228','#6D5B8C'")
     && str_contains($view, "\$companyChartColor = '#C07830'")
     && str_contains($css, '--chart-sage:#6A8A50'),
     'approved ordered company and manager chart palette'

@@ -4,6 +4,27 @@
   const table = report?.querySelector('.manager-stats__period-table.is-all-metrics');
   if (!svg || !table) return;
 
+  const groups = [...table.tHead.rows[0].cells].slice(1);
+  const subheaders = [...table.tHead.rows[1].cells];
+  const valueRows = [...table.tBodies[0].rows, ...table.tFoot.rows];
+  const colorCell = (cell, color) => {
+    if (!cell || !/^#[\da-f]{6}$/i.test(color || '')) return;
+    cell.classList.add('is-series-colored');
+    cell.style.setProperty('--period-series-color', color);
+  };
+  const managerLines = [...svg.querySelectorAll('.manager-stats__chart-line.is-manager')];
+  const companyLine = svg.querySelector('.manager-stats__chart-line.is-company');
+  [...managerLines, companyLine].forEach((line, groupIndex) => {
+    if (!line || !groups[groupIndex]) return;
+    const color = line.getAttribute('stroke');
+    colorCell(groups[groupIndex], color);
+    for (let measureIndex = 0; measureIndex < 3; measureIndex++) {
+      const column = groupIndex * 3 + measureIndex;
+      colorCell(subheaders[column], color);
+      valueRows.forEach((row) => colorCell(row.cells[column + 1], color));
+    }
+  });
+
   const grids = [...svg.querySelectorAll('.grid-line')];
   const plotLeft = Number(grids[0]?.getAttribute('x1') || 58);
   const plotRight = Number(grids[0]?.getAttribute('x2') || 862);
