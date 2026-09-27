@@ -26,6 +26,8 @@ $warehouseStockController = new \App\Http\Controllers\Company\WarehouseStockCont
 $router->get('/company/warehouses/stock', [$warehouseStockController, 'index'], 'company.warehouses.stock');
 $router->get('/company/warehouses/stock/correction-preview', [$warehouseStockController, 'correctionPreview'], 'company.warehouses.stock');
 $router->post('/company/warehouses/stock/correction', [$warehouseStockController, 'correctionSubmit'], 'company.warehouses.stock');
+$router->get('/company/warehouses/stock/cancellation-preview', [$warehouseStockController, 'cancellationPreview'], 'company.warehouses.stock');
+$router->post('/company/warehouses/stock/cancellation', [$warehouseStockController, 'cancellationSubmit'], 'company.warehouses.stock');
 
 $router->get('/company/trips/linear', [$controller, 'index'], 'company.trips.linear');
 $router->get('/company/trips/linear/service-lines', [$controller, 'serviceLines'], 'company.trips.linear');
