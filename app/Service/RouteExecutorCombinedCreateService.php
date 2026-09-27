@@ -62,8 +62,22 @@ final class RouteExecutorCombinedCreateService
         self::validateFiles($files);
 
         // A schema change during the transaction would make rollback ineffective in MySQL.
-        foreach (['contractors','contractor_contacts','drivers','driver_phones','vehicle_units','vehicle_sets','driver_vehicle_blocks','crews','crew_drivers','documents','document_types','entity_assignments'] as $table) {
-            try { $pdo->query("SELECT 1 FROM `$table` LIMIT 0"); }
+        $schemaProbes = [
+            'contractors' => 'SELECT 1 FROM contractors LIMIT 0',
+            'contractor_contacts' => 'SELECT 1 FROM contractor_contacts LIMIT 0',
+            'drivers' => 'SELECT 1 FROM drivers LIMIT 0',
+            'driver_phones' => 'SELECT 1 FROM driver_phones LIMIT 0',
+            'vehicle_units' => 'SELECT 1 FROM vehicle_units LIMIT 0',
+            'vehicle_sets' => 'SELECT 1 FROM vehicle_sets LIMIT 0',
+            'driver_vehicle_blocks' => 'SELECT 1 FROM driver_vehicle_blocks LIMIT 0',
+            'crews' => 'SELECT 1 FROM crews LIMIT 0',
+            'crew_drivers' => 'SELECT 1 FROM crew_drivers LIMIT 0',
+            'documents' => 'SELECT 1 FROM documents LIMIT 0',
+            'document_types' => 'SELECT 1 FROM document_types LIMIT 0',
+            'entity_assignments' => 'SELECT 1 FROM entity_assignments LIMIT 0',
+        ];
+        foreach ($schemaProbes as $table => $query) {
+            try { $pdo->query($query); }
             catch (Throwable $missing) { throw new RuntimeException('Необходимые таблицы компании ещё не обновлены: ' . $table); }
         }
 
