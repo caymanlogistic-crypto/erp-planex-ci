@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `1d645d434a5f2720c24b53b75724c0b960a26e5317f316c2002eb15323513def`
+**Schema fingerprint:** `acdc13e142a7125a73d3a728431e2c9d73ac6125d88abc4764b025544c2a8932`
 
 ## `waste_trip_completion_items`
 
@@ -39,6 +39,32 @@
 ### Physical foreign keys
 
 - `fk_waste_trip_completion_request`: (`waste_trip_request_id`) → `waste_trip_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+
+## `waste_trip_completion_reviews`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `PRI` |
+| `review_status` | `varchar(16)` | NO | `work` | — | `MUL` |
+| `status_version` | `bigint unsigned` | NO | `0` | — | — |
+| `updated_by_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `updated_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)` | — |
+| `submitted_at` | `datetime(6)` | YES | NULL | — | — |
+| `mail_status` | `varchar(16)` | YES | NULL | — | — |
+| `mail_message_id` | `varchar(255)` | YES | NULL | — | — |
+| `mail_error` | `varchar(255)` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`waste_trip_id`)
+- **INDEX** `idx_completion_review_status` (`review_status`, `waste_trip_id`)
+
+### Physical foreign keys
+
+- `fk_completion_review_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `waste_trip_customer_payments`
 
@@ -142,7 +168,7 @@
 |---|---|---|---|---|---|
 | `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
 | `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `waste_trip_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `waste_trip_request_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
 | `document_id` | `bigint unsigned` | YES | NULL | — | — |
 | `event_kind` | `varchar(32)` | NO | NULL | — | — |
 | `action_text` | `varchar(255)` | NO | NULL | — | — |

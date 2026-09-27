@@ -40,8 +40,8 @@ $assert($sort!==null && $sort->getAttribute('aria-label')==='Сортировк�
 $assert($xp->query('//select[@name="sort"]/option[@value="id" and @selected]')->length===1,'ID sort is selected by default');
 $assert($xp->query('//select[@name="sort"]/option[@value="status"]')->length===1 && $xp->query('//select[@name="sort"]/option[@value="manager"]')->length===1,'Status and manager sort choices');
 $assert($xp->query('//tr[@data-waste-view="1"]/td')->length===13,'Thirteen data columns');
-$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[3]')->item(0)->textContent)==='На склад: Склад Север','Warehouse column follows description');
-$assert(str_contains($xp->query('//tr[@data-waste-view="2"]/td[3]')->item(0)->textContent,'Склад Север → на склад: Склад Юг'),'Warehouse route shows both names');
+$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[3]')->item(0)->textContent)==="Выгрузка на склад:\nСклад Север" && $xp->query('//tr[@data-waste-view="1"]/td[3]/br')->length===1,'Warehouse destination has caption and name on separate lines');
+$assert(trim($xp->query('//tr[@data-waste-view="2"]/td[3]')->item(0)->textContent)==="Загрузка со склада:\nСклад Север\nВыгрузка на склад:\nСклад Юг" && $xp->query('//tr[@data-waste-view="2"]/td[3]/br')->length===3,'Warehouse route shows both roles and names on separate lines');
 $assert($xp->query('//tr[@data-waste-view="2"]/td[2]/span[contains(@class,"is-mg-logistic")]')->length===1,'MG company is second line');
 $assert(trim($xp->query('//tr[@data-waste-view="2"]/td[12]')->item(0)->textContent)===''&&$xp->query('//tr[@data-waste-view="2"]/td[12][contains(@class,"waste-cost-disabled")]')->length===1,'MG cost is blank and grey');
 $assert($xp->query('//tr[@data-waste-view="1"]//span[contains(@class,"registry-payment-line")]')->length===0,'Payment terms absent from registry');

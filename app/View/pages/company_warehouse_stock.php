@@ -2,11 +2,17 @@
 $fmtKg = static fn(int $value): string => number_format($value, 0, ',', ' ');
 $fmtDate = static fn(string $value): string => $value !== '' ? ui_date($value) : '—';
 $warehouseFilter = (int)($_GET['warehouse'] ?? 0);
+$showAllWarehouses = (string)($_GET['show_all'] ?? '') === '1';
 $directionFilter = in_array((string)($_GET['operation'] ?? ''), ['in', 'out'], true) ? (string)$_GET['operation'] : '';
 $search = trim((string)($_GET['q'] ?? ''));
+$hasStock = static function (int $warehouseId) use ($data): bool {
+    $stock = $data['current'][$warehouseId] ?? [];
+    return (int)($stock['request_count'] ?? 0) > 0 || (int)($stock['weight_kg'] ?? 0) !== 0;
+};
 $visible = [];
 foreach ($data['groups'] as $warehouseId => $groups) {
     if ($warehouseFilter > 0 && $warehouseFilter !== (int)$warehouseId) continue;
+    if (!$showAllWarehouses && !$hasStock((int)$warehouseId)) continue;
     foreach ($groups as $group) {
         if ($directionFilter !== '' && $directionFilter !== $group['direction']) continue;
         if ($search !== '' && !str_contains(mb_strtolower(implode(' ', [
@@ -27,10 +33,11 @@ $visibleCount = array_sum(array_map('count', $visible));
 <?php else: ?>
 <?php if ($data['issue_count'] > 0): ?><div class="notice warn wh-alert" role="status"><strong>Расхождения по <?=(int)$data['issue_count']?> рейсам.</strong> <a href="#warehouse-issues">Показать подробности</a></div><?php endif; ?>
 <form class="table-toolbar wh-filter" method="get" action="<?=app_url('/company/warehouses/stock')?>"><div class="toolbar-right" style="margin-left:0;width:100%">
-<select class="toolbar-select" name="warehouse" aria-label="Склад"><option value="0">Все склады</option><?php foreach ($data['warehouses'] as $id => $name): ?><option value="<?=(int)$id?>" <?=$warehouseFilter===(int)$id?'selected':''?>><?=e($name)?></option><?php endforeach; ?></select>
+<select class="toolbar-select" name="warehouse" aria-label="Склад"><option value="0">Все склады</option><?php foreach ($data['warehouses'] as $id => $name): if (!isset($data['groups'][$id]) || (!$showAllWarehouses && !$hasStock((int)$id))) continue; ?><option value="<?=(int)$id?>" <?=$warehouseFilter===(int)$id?'selected':''?>><?=e($name)?></option><?php endforeach; ?></select>
 <select class="toolbar-select" name="operation" aria-label="Операция"><option value="">Все операции</option><option value="in" <?=$directionFilter==='in'?'selected':''?>>Приход на склад</option><option value="out" <?=$directionFilter==='out'?'selected':''?>>Вывоз со склада</option></select>
 <input class="toolbar-search" name="q" type="search" value="<?=e($search)?>" placeholder="Рейс, заявка, наименование, водитель" aria-label="Поиск по рейсу, заявке, наименованию или водителю">
-<button class="btn btn-secondary" type="submit">Найти</button><?php if ($warehouseFilter || $directionFilter || $search !== ''): ?><a class="btn btn-ghost" href="<?=app_url('/company/warehouses/stock')?>">Сбросить</a><?php endif; ?>
+<label class="checkbox-item wh-show-all"><input type="checkbox" name="show_all" value="1" <?=$showAllWarehouses?'checked':''?>><span class="checkbox-mark" aria-hidden="true"></span><span class="checkbox-label">Показать все склады</span></label>
+<button class="btn btn-secondary" type="submit">Найти</button><?php if ($warehouseFilter || $directionFilter || $search !== '' || $showAllWarehouses): ?><a class="btn btn-ghost" href="<?=app_url('/company/warehouses/stock')?>">Сбросить</a><?php endif; ?>
 <?php if ($data['issue_count'] > 0): ?><a class="btn btn-ghost" href="#warehouse-issues">Расхождения: <?=(int)$data['issue_count']?></a><?php endif; ?>
 </div></form>
 <div class="found-label wh-total">Найдено: <b><?=$visibleCount?></b></div>
@@ -51,6 +58,6 @@ $visibleCount = array_sum(array_map('count', $visible));
 <h3 class="wh-section-title">Заявки <?=$group['direction']==='in'?'после выгрузки':'после вывоза'?></h3><div class="table-scroll"><table class="table wh-request-table"><thead><tr><th>ЗАЯВКА ФЭО</th><th><?=$group['direction']==='in'?'ПРИВЕЗЕНО, КГ':'ЗАБРАНО, КГ'?></th><th>ОСТАТОК ДО, КГ</th><th>ОСТАТОК ПОСЛЕ, КГ</th></tr></thead><tbody><?php foreach ($group['requests'] as $request): ?><tr><td class="col-mono">#<?=e($request['id'])?></td><td><?=e($fmtKg((int)$request['mass_kg']))?></td><td><?=e($fmtKg((int)$request['before_kg']))?></td><td><strong><?=e($fmtKg((int)$request['after_kg']))?></strong></td></tr><?php endforeach; ?></tbody></table></div>
 </div><div class="modal-foot"><button class="btn btn-secondary" type="button" data-wh-close>Закрыть</button></div></div></div>
 <?php endforeach; endforeach; ?>
-<script>(function(){var previous=null;function close(){var m=document.querySelector('.wh-trip-modal.is-open');if(!m)return;m.classList.remove('is-open');document.body.classList.remove('modal-open');if(previous)previous.focus()}document.querySelectorAll('[data-wh-trip]').forEach(function(row){function open(){previous=row;var m=document.getElementById('wh-trip-'+row.dataset.whTrip.replaceAll(':','-'));if(m){m.classList.add('is-open');document.body.classList.add('modal-open');m.querySelector('[data-wh-close]').focus()}}row.addEventListener('dblclick',open);row.addEventListener('click',function(){if(matchMedia('(max-width:700px)').matches)open()});row.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}})});document.querySelectorAll('.wh-trip-modal').forEach(function(m){m.querySelectorAll('[data-wh-close]').forEach(function(button){button.addEventListener('click',close)});m.addEventListener('click',function(e){if(e.target===m)close()})});document.addEventListener('keydown',function(e){if(e.key==='Escape')close()})})();</script>
+<script>(function(){var previous=null;var showAll=document.querySelector('.wh-show-all input');if(showAll)showAll.addEventListener('change',function(){this.form.requestSubmit()});function close(){var m=document.querySelector('.wh-trip-modal.is-open');if(!m)return;m.classList.remove('is-open');document.body.classList.remove('modal-open');if(previous)previous.focus()}document.querySelectorAll('[data-wh-trip]').forEach(function(row){function open(){previous=row;var m=document.getElementById('wh-trip-'+row.dataset.whTrip.replaceAll(':','-'));if(m){m.classList.add('is-open');document.body.classList.add('modal-open');m.querySelector('[data-wh-close]').focus()}}row.addEventListener('dblclick',open);row.addEventListener('click',function(){if(matchMedia('(max-width:700px)').matches)open()});row.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}})});document.querySelectorAll('.wh-trip-modal').forEach(function(m){m.querySelectorAll('[data-wh-close]').forEach(function(button){button.addEventListener('click',close)});m.addEventListener('click',function(e){if(e.target===m)close()})});document.addEventListener('keydown',function(e){if(e.key==='Escape')close()})})();</script>
 <?php endif; ?>
 </section>

@@ -46,7 +46,7 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
 <tr class="waste-row" data-waste-view="<?=(int)$trip['id']?>" tabindex="0">
     <td class="col-mono registry-id">#<?=(int)$trip['business_id']?></td>
     <td class="waste-description"><span class="waste-description-text" title="<?=e((string)($trip['comment']??''))?>"><?=e(trim((string)($trip['comment']??''))?:'—')?></span><?php if($companyName=\App\Service\WasteTripLegacyMetadataService::companyName($trip['legal_entity_code']??null)):?><span class="waste-legal-entity <?=($trip['legal_entity_code']==='mg_logistic'?'is-mg-logistic':'is-planex')?>"><?=e($companyName)?></span><?php endif;?></td>
-    <td class="waste-warehouse"><?=e(\App\Service\WasteTripLegacyMetadataService::warehouseLabel($trip)??'—')?></td>
+    <td class="waste-warehouse"><?=nl2br(e(\App\Service\WasteTripLegacyMetadataService::warehouseLabel($trip)??'—'))?></td>
     <td class="registry-date <?=$startPlanned?'registry-date-planned':''?>"><span class="registry-date-value"><?=e($startLabel)?></span><?php if($startPlanned):?><span class="registry-date-note">(плановая)</span><?php endif;?></td>
     <td class="registry-date <?=$endPlanned?'registry-date-planned':''?>"><span class="registry-date-value"><?=e($endLabel)?></span><?php if($endPlanned):?><span class="registry-date-note">(плановая)</span><?php endif;?></td>
     <td class="waste-status <?=e(WasteTripService::statusCellClass((string)$trip['status']))?>"><?=e(WasteTripService::statusLabel((string)$trip['status']))?></td>

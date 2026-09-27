@@ -17,15 +17,15 @@ foreach(['waste_trip_completion_items','waste_trip_completion_documents','arrive
 foreach(['tn_datetime_missing','data_from_tracker','data_from_driver','data_invented']as$token)$ok(str_contains($extensionMigration,$token),'Migration 143 missing '.$token);
 foreach(['sender_signature_status','driver_signature_status','tn_datetime_status','recovery_source']as$token)$ok(str_contains($statusMigration,$token),'Migration 144 missing '.$token);
 foreach(['/company/logistics-assistant','/report','/package','/documents/{documentId}']as$token)$ok(str_contains($routes,$token),'Route missing '.$token);
-$ok(substr_count($routes,'$tripCompletionPage')===8,'Every endpoint must use the existing collection permission');
+$ok(substr_count($routes,'$tripCompletionPage')===10,'Every endpoint must use the existing collection permission');
 $ok(str_contains($registry,"'company.documents.collection', 'Регистрация времени загрузки', 'Операции', '', 42")&&str_contains($registry,"badgeProvider: 'trip_completion_problem'"),'Standalone navigation entry missing');
 $ok(str_contains($view,'Регистрация прибытия и убытия у отходообразователя')&&str_contains($view,'Дата и время загрузки по рейсам в процессе вывоза и сданным рейсам.'),'Compact page title missing');
 $ok(str_contains($view,'lab-trip-status')&&str_contains($view,'lab-trip-manager')&&str_contains($view,'lab-pickup-address')&&!str_contains($view,'class="lab-trip-label">Перевозчик'),'Trip status, manager, and pickup address missing');
-foreach(['Скрывать полностью собранные','Нажмите на рейс, чтобы развернуть заявки','Дата и время прибытия/убытия','ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ','Подпись ОО','Подпись водителя','Дата и время указаны','Данные восстановлены','Со слов вод./мен','+ Добавить скан','Просмотр','Скачать комплект']as$label)$ok(str_contains($view,$label),'UI missing '.$label);
+foreach(['Показать все рейсы','В работе','На проверке','Проверено / архив','Передать на проверку','Вернуть в работу','Дата и время прибытия/убытия','ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ','Подпись ОО','Подпись водителя','Дата и время указаны','Данные восстановлены','Со слов вод./мен','+ Добавить скан','Просмотр','Скачать полный комплекс']as$label)$ok(str_contains($view,$label),'UI missing '.$label);
 $ok(!str_contains($view,'Подпись Отходообразователя')&&!str_contains($view,'Придуманы')&&!str_contains($view,'lab-trip-email'),'Removed labels must not appear in the page');
 $ok(str_contains($view,'lab-trip-restored')&&str_contains($view,'lab-docs-download'),'Summary and scan download controls missing');
 $ok(!str_contains($view,'<span>Статус</span>')&&!str_contains($view,'data-request-issues'),'Status column and hover issue list must be removed');
-$ok(substr_count($view,'<?=csrfField()?>')===2,'Autosave and upload forms must include CSRF protection');
+$ok(substr_count($view,'<?=csrfField()?>')===3,'Autosave, upload and review forms must include CSRF protection');
 $ok(str_contains($view,'data-autosave-form')&&str_contains($view,'data-upload-form')&&str_contains($view,'trip-completion.js'),'Autosave UI hooks missing');
 $ok(substr_count($view,'name="pickup_interval"')===1&&!str_contains($view,'type="datetime-local"'),'Pickup date and times must use one compact field');
 $ok(str_contains($service,"ORDER BY wt.business_id DESC,wt.id DESC")&&str_contains($service,"ORDER BY CAST(fr.zayavka_id AS UNSIGNED) DESC"),'Trips and requests must be ordered by descending identifiers');
