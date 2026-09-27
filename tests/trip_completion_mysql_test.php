@@ -14,7 +14,7 @@ if($database===''||!in_array($database,explode(',',(string)getenv('PLANEX_TEST_F
 $pdo=new PDO('mysql:host='.getenv('PLANEX_SCHEMA_DB_HOST').';port='.(getenv('PLANEX_SCHEMA_DB_PORT')?:3306).';dbname='.$database.';charset=utf8mb4',getenv('PLANEX_SCHEMA_DB_USER'),getenv('PLANEX_SCHEMA_DB_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
 cleanCompanyPoolDatabase($pdo);$companyId=987654;$stored=[];
 try{
-    LocalMigrationService::apply($pdo);$service=new TripCompletionService($pdo,$companyId);$ok($service->ready(),'Migration 148 not ready');
+    LocalMigrationService::apply($pdo);$service=new TripCompletionService($pdo,$companyId);$ok($service->ready(),'Migration 150 not ready');
     $pdo->exec("INSERT INTO users(id,membership_id,full_name,login,email,phone,password_hash,role_code,status) VALUES(1,101,'Тестовый логист','tester','manager@example.test','+7 900 000-30-01','hash','logist','active');
       INSERT INTO clients(id,name,inn,status) VALUES(1,'Тестовый клиент','7700000000','active');
       INSERT INTO feo_requests(id,zayavka_id,naim_oo_gruzootpravitel,mno_adres_pogruzki,gruzopoluchatel,adres_dostavki_otkhodov,mass_netto) VALUES
@@ -72,6 +72,15 @@ try{
     $fails(fn()=>$service->save(1,11,$completeInput+['tn_absent'=>'invalid'],101));
     $xlsx=$service->xlsx($trip);$book=new ZipArchive();$ok($book->open($xlsx)===true,'Excel opens as XLSX');$sheet=(string)$book->getFromName('xl/worksheets/sheet1.xml');$styles=(string)$book->getFromName('xl/styles.xml');$book->close();$ok(str_contains($sheet,'274405')&&str_contains($sheet,'Архангельская область')&&str_contains($sheet,'Восстановлены по трекеру')&&str_contains($sheet,'Внесены со слов вод./мен')&&!str_contains($sheet,'Придуманы')&&str_contains($sheet,'autoFilter ref="A3:Q'),'Formatted Excel contains route, current provenance and filter');$ok(str_contains($styles,'FF0F766E')&&str_contains($styles,'FFFFF1F0')&&str_contains($styles,'numFmtId="164"')&&str_contains($styles,'dd.mm.yy hh:mm'),'Excel styles missing');$xlsxEvidence=trim((string)getenv('PLANEX_XLSX_EVIDENCE'));if($xlsxEvidence!==''){$ok(copy($xlsx,$xlsxEvidence),'Cannot preserve XLSX evidence');}@unlink($xlsx);
     $zip=$service->package($trip);$ok(is_file($zip)&&filesize($zip)>0,'Trip ZIP created');$package=new ZipArchive();$ok($package->open($zip)===true&&$package->locateName('Рейс_244_сводный_отчет.xlsx')!==false,'Formatted Excel included in trip package');$ok($package->locateName('Рейс_244_Заявка_274405_ТН_01.jpg')!==false,'TN scan included with canonical name');$package->close();@unlink($zip);
+    $ok($service->reviewProblems($trip)===[],'Complete trip has no review problems');
+    $transition=$service->transitionReview(1,0,'submit',101,'tester');
+    $ok($transition['status']==='archive'&&$transition['version']===1,'Complete trip moves to archive');
+    $ok($service->journal(['kind'=>'review'])['total']===1,'Review submission is attributed in the journal');
+    $fails(fn()=>$service->save(1,11,$completeInput,101));
+    $fails(fn()=>$service->transitionReview(1,0,'return',101));
+    $returned=$service->transitionReview(1,1,'return',101,'tester');
+    $ok($returned['status']==='work'&&$returned['version']===2,'Archived trip returns to work');
+    $ok($service->journal(['kind'=>'review'])['total']===2,'Return to work is attributed in the journal');
     $request11=array_values(array_filter($trip['requests'],static fn(array $request):bool=>(int)$request['id']===11))[0];
     $firstDoc=(int)$request11['documents'][0]['id'];$service->softDelete(1,11,$firstDoc,101);
     $ok($service->journal(['kind'=>'scan'])['total']===4,'Upload and deletion are logged');

@@ -110,18 +110,12 @@ final class NavigationCounterService
 
         try {
             $counters['trip_completion_problem'] = max(0, (int)$tenant->query(
-                "SELECT COUNT(*) FROM (
-                    SELECT wt.id
-                      FROM waste_trips wt
-                      JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
-                      LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
-                      LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
-                     WHERE wt.deleted_at IS NULL AND wt.status='completed'
-                     GROUP BY wt.id
-                    HAVING COUNT(DISTINCT CASE WHEN i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
-                       AND i.driver_signature_present=1 AND i.sender_signature_present=1
-                       AND doc.waste_trip_request_id IS NOT NULL THEN wtr.id END) < COUNT(DISTINCT wtr.id)
-                ) incomplete_trips"
+                "SELECT COUNT(*)
+                   FROM waste_trip_requests wtr
+                   JOIN waste_trips wt ON wt.id=wtr.waste_trip_id
+                   LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id
+                  WHERE wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed')
+                    AND COALESCE(cr.review_status,'work')='work'"
             )->fetchColumn());
         } catch (Throwable) {
             $counters['trip_completion_problem'] = 0;
