@@ -18,6 +18,7 @@ try {
     $apply=getenv('REGISTRATION_JOURNAL_148_MODE')==='apply';
     if ($apply && getenv('REGISTRATION_JOURNAL_148_CONFIRM')!=='APPLY_REGISTRATION_JOURNAL_148') throw new RuntimeException('Explicit migration confirmation required');
     $config=require $root.'/bootstrap/app.php';
+    require_once $root.'/app/Support/crypto_helper.php';
     require_once $root.'/app/Support/company_database.php';
     $connect=static fn(array $db):PDO=>new PDO('mysql:host='.$db['host'].';port='.($db['port']??3306).';dbname='.$db['database'].';charset=utf8mb4',$db['username'],$db['password'],[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
     $central=$connect($config['database']);
