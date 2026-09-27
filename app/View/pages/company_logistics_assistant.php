@@ -76,5 +76,6 @@ $statusChoice=static function(string $name,string $selected,array $options):void
   </div>
   <?php endif;?>
 </section>
+<script src="<?=app_url('/assets/js/trip-completion-report.js')?>?v=<?=filemtime(base_path('public/assets/js/trip-completion-report.js'))?>" defer></script>
 <script src="<?=app_url('/assets/js/trip-completion.js')?>?v=<?=filemtime(base_path('public/assets/js/trip-completion.js'))?>" defer></script>
 <?php endif;?>
