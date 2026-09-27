@@ -46,14 +46,25 @@ try{
   });
   const report=entries(fs.readFileSync(await reportDownload.path()));
   const sheet=report.get('xl/worksheets/sheet1.xml')?.toString('utf8')||'';
-  assert.match(sheet,/dimension ref="A1:I\d+"/,'report has nine columns');
-  for(const header of ['Заявка','ОО','Дата','прибытие','убытие','ПОДПИСЬ ОО','Подпись ВОДИТЕЛЯ','Заполнено Дата/время','Восстановление данных'])
+  assert.match(sheet,/dimension ref="A1:J\d+"/,'report has ten columns');
+  for(const header of ['Заявка','ОО','Дата','прибытие','убытие','Скан ТН','ПОДПИСЬ ОО','Подпись ВОДИТЕЛЯ','Заполнено Дата/время','Восстановление данных'])
     assert.ok(sheet.includes(header),`report header: ${header}`);
+  assert.match(sheet,/<c r="F7"[^>]*><is><t>Нет скана<\/t><\/is><\/c>/,'request without scan is marked missing');
+  assert.match(sheet,/<c r="F8"[^>]*><is><t>Есть<\/t><\/is><\/c>/,'request with scan is marked present');
+  assert.match(sheet,/<c r="F9"[^>]*><is><t>Нет ТН<\/t><\/is><\/c>/,'explicit absent-TN flag takes priority');
   assert.ok(sheet.includes('275006')&&sheet.includes('274405'),'report uses current request values');
   assert.ok(!sheet.includes('ЛЕГЕНДА'),'legend is absent');
   assert.ok(report.has('xl/styles.xml')&&report.has('xl/theme/theme1.xml'),'sample formatting is present');
   assert.equal(await page.locator('.lab-ready-download, .lab-report-download-state').count(),0,'report creates no extra success UI');
-  const [packageDownload]=await Promise.all([page.waitForEvent('download',{timeout:10000}),toolbar.getByText('Скачать комплект').click()]).catch(async error=>{
+  const packageButton=toolbar.getByText('Скачать комплект');
+  const packageDownloadPromise=page.waitForEvent('download',{timeout:10000});
+  await packageButton.click();
+  const dialog=page.locator('.lab-package-progress-dialog');
+  await dialog.waitFor({state:'visible'});
+  for(const step of ['Формирование отчёта','Создание PDF файлов','Создание архива'])
+    assert.ok(await dialog.getByText(step).isVisible(),`package progress shows ${step}`);
+  await dialog.locator('[data-step="1"][data-state="active"]').waitFor({state:'visible'});
+  const packageDownload=await packageDownloadPromise.catch(async error=>{
     throw new Error(`${error.message}; notice=${await page.locator('.lab-report-download-state').allTextContents()}; errors=${errors.join(';')}`);
   });
   const archive=entries(fs.readFileSync(await packageDownload.path()));
@@ -63,6 +74,14 @@ try{
   const pages=await page.evaluate(async files=>Promise.all(files.map(async file=>(await PDFLib.PDFDocument.load(new Uint8Array(file))).getPageCount())),pdfs.map(([,data])=>[...data]));
   assert.deepEqual(pages.sort(),[1,2],'two scans of one request are merged in source order');
   assert.equal(await page.locator('.lab-ready-download, .lab-report-download-state').count(),0,'package creates no extra success UI');
+  assert.equal(await page.locator('.lab-package-progress').count(),0,'progress dialog closes when download begins');
+  await page.route('**/documents/101',route=>route.abort());
+  await packageButton.click();
+  await dialog.getByText(/Не удалось подготовить комплект/).waitFor({state:'visible'});
+  assert.equal(await dialog.locator('[data-step="1"][data-state="error"]').count(),1,'PDF error is shown at its stage');
+  await dialog.getByRole('button',{name:'Закрыть'}).click();
+  assert.equal(await page.locator('.lab-package-progress').count(),0,'error dialog can be closed');
+  await page.unroute('**/documents/101');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'no desktop overflow');
   await page.setViewportSize({width:390,height:800});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'no mobile overflow');
