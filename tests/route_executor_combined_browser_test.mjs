@@ -52,6 +52,29 @@ try {
         assert.equal(await page.locator('[data-readiness-key="training"][data-state="ready"]').count(), 1);
         await page.locator('#lab-driver-form [name="snils"]').fill('');
         assert.equal(await page.locator('[data-readiness-key="training"][data-state="pending"]').count(), 1);
+        assert.equal(await page.locator('[data-readiness-key="contract"][data-state="pending"]').count(), 1);
+        const contractor = page.locator('#lab-contractor-form');
+        await contractor.locator('[name="contractor_type"]').selectOption('individual');
+        for (const [name, value] of Object.entries({
+            name: 'ИП Кириченко Владимир Анатольевич', inn: '392002231443',
+            kpp: '30101810200000000593', ogrn: '326508100388050',
+            director_full_name: 'Иванов Иван Иванович', director_position: 'Руководитель',
+            legal_address: 'Московская область, Щёлково',
+            'contacts[0][contact_person]': 'Контактное лицо',
+            'contacts[0][phone]': '+7 333 333-33-33',
+            'contacts[0][email]': 'contact@example.test',
+            bank_account: '40802810515360001210', bank_bik: '044525593',
+            bank_name: 'АО Альфа-Банк', bank_corr_account: '30101810200000000593'
+        })) await contractor.locator(`[name="${name}"]`).fill(value);
+        assert.equal(await contractor.locator('[name="physical_address"]').inputValue(), '');
+        assert.equal(await contractor.locator('[name="comments"]').inputValue(), '');
+        assert.equal(await contractor.locator('[data-contact-comment]').inputValue(), '');
+        assert.equal(await page.locator('[data-readiness-key="contract"][data-state="ready"]').count(), 1,
+            'agreement status must ignore optional addresses, comments and files');
+        await contractor.locator('[name="legal_address"]').fill('');
+        assert.equal(await page.locator('[data-readiness-key="contract"][data-state="pending"]').count(), 1);
+        await contractor.locator('[name="legal_address"]').fill('Московская область, Щёлково');
+        assert.equal(await page.locator('[data-readiness-key="contract"][data-state="ready"]').count(), 1);
         if (width === 1280) {
             let payload = '';
             await page.route('**/company/route-executors/create', async route => {
