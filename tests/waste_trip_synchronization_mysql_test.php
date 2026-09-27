@@ -137,7 +137,7 @@ try {
     $pdo->exec("UPDATE fixture_flights SET legal_entity_code='planex',route_type='warehouse_to_warehouse',source_warehouse_id=1,destination_warehouse_id=2 WHERE id=226");
     $metadataRefresh=$run();check($metadataRefresh['failed']===0,'Manual metadata refresh');
     $metadata=$pdo->query("SELECT * FROM waste_trips WHERE id=$id")->fetch();
-    check($metadata['legal_entity_code']==='planex'&&\App\Service\WasteTripLegacyMetadataService::warehouseLabel($metadata)==='Со склада: Склад Север → на склад: Склад Юг','Manual sync refreshes legal entity and both warehouse names');
+    check($metadata['legal_entity_code']==='planex'&&\App\Service\WasteTripLegacyMetadataService::warehouseLabel($metadata)==="Загрузка со склада:\nСклад Север\nВыгрузка на склад:\nСклад Юг",'Manual sync refreshes legal entity and both warehouse names');
     check((int)$pdo->query("SELECT id FROM waste_trips WHERE business_id=226")->fetchColumn()===$id,'Stable trip identity');
     foreach (['legacy_flights','legacy_prefill'] as $provenance) {
         $pdo->prepare('UPDATE waste_trips SET source_system=? WHERE id=?')->execute([$provenance,$id]);

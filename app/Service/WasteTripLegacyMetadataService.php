@@ -56,10 +56,10 @@ final class WasteTripLegacyMetadataService
         $source = trim((string)($trip['legacy_source_warehouse_name'] ?? '')) ?: 'название не указано';
         $destination = trim((string)($trip['legacy_destination_warehouse_name'] ?? '')) ?: 'название не указано';
         return match ((string)($trip['legacy_route_type'] ?? '')) {
-            'generator_to_warehouse' => 'На склад: '.$destination,
-            'warehouse_to_warehouse' => 'Со склада: '.$source.' → на склад: '.$destination,
-            'warehouse_to_utilizer' => 'Со склада: '.$source,
-            default => ($trip['legacy_unload_type'] ?? null) === 'SKLAD' ? 'На склад: '.$destination : null,
+            'generator_to_warehouse' => "Выгрузка на склад:\n".$destination,
+            'warehouse_to_warehouse' => "Загрузка со склада:\n".$source."\nВыгрузка на склад:\n".$destination,
+            'warehouse_to_utilizer' => "Загрузка со склада:\n".$source,
+            default => ($trip['legacy_unload_type'] ?? null) === 'SKLAD' ? "Выгрузка на склад:\n".$destination : null,
         };
     }
 }
