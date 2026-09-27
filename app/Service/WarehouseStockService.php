@@ -15,7 +15,7 @@ final class WarehouseStockService
     {
         $warehouses = $legacy->query('SELECT id,name FROM warehouses ORDER BY name,id')->fetchAll(PDO::FETCH_ASSOC);
         $movements = $legacy->query(
-            "SELECT id,movement_type,warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status
+            "SELECT id,movement_type,warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment
                FROM warehouse_movements
               WHERE status='active'
               ORDER BY movement_date,id"
@@ -89,13 +89,15 @@ final class WarehouseStockService
                 $groups[$key] = [
                     'key'=>$key,'flight_id'=>$flightId,'warehouse_id'=>$warehouseId,
                     'direction'=>$direction,'date'=>(string)$row['movement_date'],
-                    'requests'=>[],'mass_kg'=>0,'stock_count'=>0,'stock_kg'=>0,
+                    'requests'=>[],'mass_kg'=>0,'stock_count'=>0,'stock_kg'=>0,'is_correction'=>true,
                 ];
             }
             $group =& $groups[$key];
             $group['date'] = max($group['date'], (string)$row['movement_date']);
             $group['requests'][] = ['id'=>$requestId,'mass_kg'=>$weight,'before_kg'=>$before,'after_kg'=>$after];
             $group['mass_kg'] += $weight;
+            $group['is_correction'] = $group['is_correction']
+                && str_starts_with((string)($row['comment'] ?? ''), 'Исправление складского направления рейса #'.$flightId.' в ERP PLANEX пользователем #');
             $group['stock_count'] = count(array_filter($balances[$warehouseId], static fn(int $value): bool => $value > 0));
             $group['stock_kg'] = array_sum($balances[$warehouseId]);
             unset($group);
@@ -118,6 +120,10 @@ final class WarehouseStockService
             $group['actual_end_date'] = $flight['actual_end_date'] ?? null;
             $group['request_ids'] = array_values(array_unique(array_column($group['requests'], 'id')));
             $group['request_count'] = count($group['request_ids']);
+            $flightRequestIds = preg_split('/[\s,;]+/u', trim((string)($flight['zayavki_ids'] ?? '')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $group['display_request_ids'] = array_values(array_unique($flightRequestIds ?: $group['request_ids']));
+            $group['skipped_request_ids'] = $group['direction'] === 'out'
+                ? array_values(array_diff($group['display_request_ids'], $group['request_ids'])) : [];
         }
         unset($group);
         $byWarehouse = [];
@@ -138,12 +144,13 @@ final class WarehouseStockService
                 $erp[$id] = [
                     'source'=>(int)($row['legacy_source_warehouse_id'] ?? 0),
                     'destination'=>(int)($row['legacy_destination_warehouse_id'] ?? 0),
-                    'requests'=>[], 'mass_kg'=>0,
+                    'requests'=>[], 'mass_kg'=>0, 'request_masses_kg'=>[],
                 ];
             }
             if (($row['zayavka_id'] ?? null) !== null && !in_array((string)$row['zayavka_id'], $erp[$id]['requests'], true)) {
                 $erp[$id]['requests'][] = (string)$row['zayavka_id'];
                 $erp[$id]['mass_kg'] += (int)round((float)($row['snapshot_mass_kg'] ?? 0));
+                $erp[$id]['request_masses_kg'][(string)$row['zayavka_id']] = (int)round((float)($row['snapshot_mass_kg'] ?? 0));
             }
         }
         $issues = [];
@@ -166,12 +173,21 @@ final class WarehouseStockService
                         .'; только в ERP '.(implode(', ', $onlyErp) ?: '—').'.';
                 }
                 $directionMass = ['in'=>0, 'out'=>0];
+                $directionRequests = ['in'=>[], 'out'=>[]];
                 foreach ($groups as $group) {
-                    if ($group['flight_id'] === $flightId) $directionMass[$group['direction']] += $group['mass_kg'];
+                    if ($group['flight_id'] === $flightId) {
+                        $directionMass[$group['direction']] += $group['mass_kg'];
+                        $directionRequests[$group['direction']] = array_merge($directionRequests[$group['direction']], $group['request_ids']);
+                    }
                 }
                 $flightMass = max($directionMass);
-                if ($flightMass > 0 && abs($flightMass - $erp[$flightId]['mass_kg']) > 1) {
-                    $messages[] = 'Масса заявок: старая база '.$flightMass.' кг, ERP '.$erp[$flightId]['mass_kg'].' кг.';
+                $direction = $directionMass['out'] > $directionMass['in'] ? 'out' : 'in';
+                $expectedMass = 0;
+                foreach (array_unique($directionRequests[$direction]) as $requestId) {
+                    $expectedMass += $erp[$flightId]['request_masses_kg'][$requestId] ?? 0;
+                }
+                if ($flightMass > 0 && abs($flightMass - $expectedMass) > 1) {
+                    $messages[] = 'Масса складских движений: старая база '.$flightMass.' кг, ERP '.$expectedMass.' кг по списанным заявкам.';
                 }
             }
             if ($messages !== []) {

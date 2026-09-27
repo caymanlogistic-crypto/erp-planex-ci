@@ -64,7 +64,7 @@ final class WarehouseTripCorrectionService
             foreach ($warehouseIds as $id) if (!isset($warehouseNames[$id])) $errors[] = 'Склад #'.$id.' не найден.';
         }
 
-        $query = $pdo->prepare('SELECT id FROM '.$table('warehouse_movements').' WHERE flight_id=?'.$suffix);
+        $query = $pdo->prepare("SELECT id FROM ".$table('warehouse_movements')." WHERE flight_id=? AND status='active'".$suffix);
         $query->execute([$flightId]);
         $existing = $query->fetchAll(PDO::FETCH_COLUMN);
         if ($existing !== []) $errors[] = 'По рейсу уже есть складские движения. Автоматическая повторная разметка заблокирована.';
@@ -106,7 +106,8 @@ final class WarehouseTripCorrectionService
             $net = (float)$item['mass_netto'];
             if ($net <= 0) $errors[] = 'У заявки #'.$id.' не указана положительная масса нетто.';
             $available = $balances[$id]['mass_netto'] ?? 0;
-            if ($source > 0 && $available + 0.0001 < $net) {
+            $willMove = $source <= 0 || $available + 0.0001 >= $net;
+            if (!$willMove) {
                 $stockWarnings[] = [
                     'request_id'=>(int)$id,
                     'available_netto'=>$available,
@@ -119,14 +120,18 @@ final class WarehouseTripCorrectionService
                 'mass_netto'=>$item['mass_netto'],'mass_brutto'=>$item['mass_brutto'],
                 'volume'=>$item['summarnyy_obem'],
                 'available_netto'=>$available,
+                'will_move'=>$willMove,
             ];
         }
+        $movementRows = array_values(array_filter($rows, static fn(array $row): bool => $row['will_move']));
+        if ($rows !== [] && $movementRows === []) $errors[] = 'На складе нет заявок рейса с достаточным остатком для списания.';
         $fingerprint = hash('sha256', json_encode([$flight, $existing, $warehouseNames, $rows, $balances], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
         return [
             'flight_id'=>$flightId,'name'=>(string)$flight['comment'],'status'=>(string)$flight['status'],
             'current_route'=>(string)$flight['route_type'],'request_count'=>count($ids),
             'route_type'=>$route,'source_warehouse_id'=>$source,'destination_warehouse_id'=>$destination,
-            'warehouses'=>$warehouseNames,'rows'=>$rows,'operation_count'=>count($rows)*count(self::ROUTES[$route]),
+            'warehouses'=>$warehouseNames,'rows'=>$rows,'operation_count'=>count($movementRows)*count(self::ROUTES[$route]),
+            'movement_request_count'=>count($movementRows),
             'errors'=>array_values(array_unique($errors)),'stock_warnings'=>$stockWarnings,
             'ready'=>$errors === [],'fingerprint'=>$fingerprint,
             'movement_date'=>(string)($flight['actual_end_date'] ?: date('Y-m-d H:i:s')),
@@ -155,6 +160,7 @@ final class WarehouseTripCorrectionService
             $insert = $pdo->prepare('INSERT INTO '.$movementTable.' (movement_type,warehouse_id,source_warehouse_id,destination_warehouse_id,flight_id,zayavka_id,fkko_code,mass_netto,mass_brutto,volume,movement_date,status,comment,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())');
             $created = 0;
             foreach ($preview['rows'] as $row) {
+                if (!$row['will_move']) continue;
                 foreach (self::ROUTES[$route] as $type) {
                     $warehouseId = in_array($type, ['issue', 'transfer_out'], true) ? $preview['source_warehouse_id'] : $preview['destination_warehouse_id'];
                     $insert->execute([
@@ -166,11 +172,11 @@ final class WarehouseTripCorrectionService
                 }
             }
             if ($created !== $preview['operation_count']) throw new RuntimeException('Не все складские движения созданы.');
-            $check = $pdo->prepare('SELECT COUNT(*) FROM '.$movementTable.' WHERE flight_id=?');
+            $check = $pdo->prepare("SELECT COUNT(*) FROM ".$movementTable." WHERE flight_id=? AND status='active'");
             $check->execute([$flightId]);
             if ((int)$check->fetchColumn() !== $created) throw new RuntimeException('Контроль складских движений не прошёл.');
             $pdo->commit();
-            return ['flight_id'=>$flightId,'created'=>$created,'request_count'=>$preview['request_count']];
+            return ['flight_id'=>$flightId,'created'=>$created,'request_count'=>$preview['movement_request_count']];
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $error;
@@ -181,6 +187,68 @@ final class WarehouseTripCorrectionService
             } catch (Throwable) {
                 // The connection closing releases its advisory lock. Do not hide a committed result.
             }
+        }
+    }
+
+    /** Cancel only movements created by this correction, retaining the flight and audit rows. */
+    public static function cancellationPreview(PDO $pdo, string $database, int $flightId, bool $lock = false): array
+    {
+        if ($flightId <= 0) throw new RuntimeException('Укажите ID рейса.');
+        $table = self::table($database, 'warehouse_movements');
+        $suffix = $lock ? ' FOR UPDATE' : '';
+        $query = $pdo->prepare('SELECT id,warehouse_id,zayavka_id,movement_type,movement_date,mass_netto,comment FROM '.$table." WHERE flight_id=? AND status='active' ORDER BY id".$suffix);
+        $query->execute([$flightId]);
+        $rows = $query->fetchAll(PDO::FETCH_ASSOC);
+        $errors = [];
+        if ($rows === []) $errors[] = 'У рейса нет активных складских движений.';
+        foreach ($rows as $row) {
+            if (!str_starts_with((string)$row['comment'], 'Исправление складского направления рейса #'.$flightId.' в ERP PLANEX пользователем #')) {
+                $errors[] = 'У рейса есть движения, созданные вне складского исправления ERP.';
+                break;
+            }
+        }
+        $dependent = $pdo->prepare('SELECT id FROM '.$table." WHERE status='active' AND flight_id<>? AND warehouse_id=? AND zayavka_id=? AND (movement_date>? OR (movement_date=? AND id>?)) LIMIT 1".$suffix);
+        foreach ($rows as $row) {
+            $dependent->execute([$flightId, $row['warehouse_id'], $row['zayavka_id'], $row['movement_date'], $row['movement_date'], $row['id']]);
+            if ($dependent->fetchColumn()) {
+                $errors[] = 'После исправления есть другие движения по этим заявкам. Отмена требует отдельной проверки цепочки склада.';
+                break;
+            }
+        }
+        $fingerprint = hash('sha256', json_encode([$flightId, $rows], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
+        return ['flight_id'=>$flightId,'movement_count'=>count($rows),'request_count'=>count(array_unique(array_column($rows, 'zayavka_id'))),
+            'errors'=>$errors,'ready'=>$errors === [],'fingerprint'=>$fingerprint];
+    }
+
+    public static function cancel(PDO $pdo, string $database, int $flightId, string $fingerprint, int $actorId = 0): array
+    {
+        if (!preg_match('/^[a-f0-9]{64}$/D', $fingerprint)) throw new RuntimeException('Повторите предварительную проверку отмены.');
+        self::assertTransactionalTables($pdo, $database);
+        $lockName = 'planex_warehouse_correction';
+        $lock = $pdo->prepare('SELECT GET_LOCK(?, 10)');
+        $lock->execute([$lockName]);
+        if ((int)$lock->fetchColumn() !== 1) throw new RuntimeException('Складской учёт занят. Повторите попытку.');
+        try {
+            if ($pdo->inTransaction()) throw new RuntimeException('Отмену нельзя начать внутри другой транзакции.');
+            $pdo->exec('SET TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+            $pdo->beginTransaction();
+            $preview = self::cancellationPreview($pdo, $database, $flightId, true);
+            if (!hash_equals($fingerprint, $preview['fingerprint'])) throw new RuntimeException('Движения рейса изменились. Повторите предварительную проверку.');
+            if (!$preview['ready']) throw new RuntimeException(implode(' ', $preview['errors']));
+            $table = self::table($database, 'warehouse_movements');
+            $update = $pdo->prepare('UPDATE '.$table." SET status='cancelled',updated_at=NOW() WHERE flight_id=? AND status='active'");
+            $update->execute([$flightId]);
+            if ($update->rowCount() !== $preview['movement_count']) throw new RuntimeException('Не все складские движения отменены.');
+            $pdo->commit();
+            return ['flight_id'=>$flightId,'cancelled'=>$preview['movement_count'],'actor_id'=>$actorId];
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        } finally {
+            try {
+                $release = $pdo->prepare('SELECT RELEASE_LOCK(?)');
+                $release->execute([$lockName]);
+            } catch (Throwable) {}
         }
     }
 
