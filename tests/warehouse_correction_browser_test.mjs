@@ -51,9 +51,9 @@ try {
         assert.match(await page.locator('[data-correction-preview]').innerText(), /заявки, которых нет на складе «Иркутск»: #121/);
         assert.match(await page.locator('[data-correction-preview]').innerText(), /Складское движение: 1 заявок · 1\s?000 кг/);
         await page.locator('[data-correction-confirm]').click();
-        await page.waitForFunction(() => document.querySelector('[data-correction-preview]').textContent.includes('Создано складских движений: 1'));
+        await page.waitForFunction(() => document.querySelector('[data-correction-preview]').textContent.includes('Проведено складских движений: 1'));
         assert.equal(submitted, true);
-        assert.match(await page.locator('[data-correction-preview]').innerText(), /Создано складских движений: 1/);
+        assert.match(await page.locator('[data-correction-preview]').innerText(), /Проведено складских движений: 1/);
         assert.deepEqual(errors, []);
         await page.close();
     }
