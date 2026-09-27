@@ -34,7 +34,7 @@ INSERT INTO flights VALUES
 (25,'started','generator_to_utilizer','OO',NULL,NULL,'102',NULL,'Откат');");
 
 $preview = Correction::preview($pdo, $database, 21, 'warehouse_to_utilizer', 1, 0);
-checkCorrection(!$preview['ready'], 'Outgoing flight without stock must be blocked.');
+checkCorrection($preview['ready'] && $preview['stock_warnings'][0]['request_id'] === 101 && $preview['stock_warnings'][0]['absent'], 'Outgoing flight without stock needs an explicit visible warning.');
 $preview = Correction::preview($pdo, $database, 20, 'generator_to_warehouse', 0, 1);
 checkCorrection($preview['ready'] && $preview['operation_count'] === 2, 'Incoming preview.');
 $result = Correction::apply($pdo, $database, 20, 'generator_to_warehouse', 0, 1, $preview['fingerprint']);
@@ -51,7 +51,10 @@ $preview = Correction::preview($pdo, $database, 22, 'warehouse_to_warehouse', 1,
 checkCorrection($preview['ready'] && $preview['operation_count'] === 2, 'Transfer preview.');
 Correction::apply($pdo, $database, 22, 'warehouse_to_warehouse', 1, 2, $preview['fingerprint']);
 checkCorrection((int)$pdo->query('SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=22')->fetchColumn() === 2, 'Both transfer rows.');
-checkCorrection(!Correction::preview($pdo, $database, 23, 'warehouse_to_utilizer', 1, 0)['ready'], 'Already transferred stock cannot be issued again.');
+$preview = Correction::preview($pdo, $database, 23, 'warehouse_to_utilizer', 1, 0);
+checkCorrection($preview['ready'] && count($preview['stock_warnings']) === 1 && $preview['stock_warnings'][0]['request_id'] === 102, 'Missing stock must be shown without blocking the operator.');
+Correction::apply($pdo, $database, 23, 'warehouse_to_utilizer', 1, 0, $preview['fingerprint']);
+checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=23 AND movement_type='issue'")->fetchColumn() === 1, 'Operator-approved issue was recorded.');
 
 $preview = Correction::preview($pdo, $database, 24, 'generator_to_warehouse', 0, 2);
 $pdo->exec("UPDATE feo SET mass_netto='1.2000' WHERE zayavka_id=101");
