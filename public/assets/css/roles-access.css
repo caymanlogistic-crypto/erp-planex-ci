@@ -32,16 +32,19 @@ body.roles-access-modal-open{overflow:hidden!important}.roles-access-modal{paddi
  .roles-access__table th:nth-child(2){width:25%}.roles-access__table th:nth-child(3){display:none}.roles-access__table td:nth-child(3){display:none}.roles-access-modal__identity{grid-template-columns:1fr}.roles-access-modal__identity .field:first-child{grid-column:auto}.roles-access__role-basics{grid-template-columns:1fr}.roles-access__tree-page--member{display:block;padding:7px 8px}.roles-access__tree-page-name{display:block;margin-bottom:5px}.roles-access__tri{width:100%;grid-template-columns:repeat(3,minmax(0,1fr))}.roles-access__assignment-tools{grid-template-columns:1fr}.roles-access__assignment-actions{flex-wrap:wrap}.roles-access__scope-row{grid-template-columns:1fr;gap:4px;padding:7px 8px}.roles-access__scope-row .field-select{width:100%}.roles-access-modal__foot{align-items:flex-start;gap:6px}.roles-access-modal__foot.is-spaced{flex-direction:column-reverse}.roles-access-modal__foot .modal-foot-actions{width:100%;justify-content:flex-end}
 }
 
-/* Work mail uses the existing compact fields, buttons and checkbox dimensions. */
-.roles-access__mail-row{padding:8px 0;border-top:1px solid var(--line-hair)}
+/* Each working mailbox keeps its identity, default choice, and connection state together. */
+.roles-access__mail-row{padding:8px 10px;margin-top:7px;border:1px solid var(--line-soft);background:var(--surface-field);min-width:0}
+.roles-access__mail-heading{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:21px;margin-bottom:6px}
+.roles-access__mail-heading .roles-access-modal__section-head{margin:0;min-width:0}
 .roles-access__mail-fields{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .roles-access__mail-fields .field{min-width:0;margin:0}
 .roles-access__mail-fields .field-label{font-size:9.5px}
 .roles-access__mail-fields .field-input{height:31px;min-height:31px;font-size:11px}
-.roles-access__mail-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px}
-.roles-access__mail-clear{display:flex;align-items:center;gap:6px;margin:0;font-size:10px;cursor:pointer}
-.roles-access__mail-default{display:flex;align-items:center;gap:6px;margin:0;font-size:10px;font-weight:700;cursor:pointer}
-.roles-access__mail-default input{accent-color:var(--accent)}
+.roles-access__mail-actions{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:10px;margin-top:6px;min-height:28px}
+.roles-access__mail-clear,.roles-access__mail-default{display:inline-flex;align-items:center;gap:6px;margin:0;font-size:10px;line-height:16px;white-space:nowrap;cursor:pointer}
+.roles-access__mail-default{font-weight:600}
+.roles-access__mail-default input[type=radio]{appearance:auto;width:16px;height:16px;min-width:16px;min-height:16px;max-width:16px;max-height:16px;margin:0;flex:0 0 16px;accent-color:var(--accent)}
 .roles-access__mail-actions .btn{min-height:28px;padding:0 8px;font-size:10px}
-.roles-access__mail-row [data-mail-status]{margin:4px 0 0;overflow-wrap:anywhere}
-@media(max-width:620px){.roles-access__mail-fields{grid-template-columns:1fr;gap:5px}.roles-access__mail-actions{flex-wrap:wrap}}
+.roles-access__mail-row [data-mail-status]{margin:0;min-width:0;overflow-wrap:anywhere}
+.roles-access__mail-row[data-mail-state=connected] [data-mail-status]{color:var(--success)}
+@media(max-width:620px){.roles-access__mail-fields{grid-template-columns:1fr;gap:5px}.roles-access__mail-actions{grid-template-columns:minmax(0,1fr) auto}.roles-access__mail-actions [data-mail-status]{grid-column:1/-1}.roles-access__mail-actions .btn{justify-self:end}}

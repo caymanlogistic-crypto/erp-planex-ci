@@ -428,14 +428,15 @@
             (data.profiles || []).forEach(function (profile) {
                 var row = document.createElement('div');
                 row.className = 'roles-access__mail-row'; row.dataset.mailRow=''; row.dataset.entityId=profile.legal_entity_id; row.dataset.version=profile.version;
-                row.innerHTML = '<h4 class="roles-access-modal__section-head">' + esc(profile.company_name) + '</h4><div class="roles-access__mail-fields">' +
+                row.innerHTML = '<div class="roles-access__mail-heading"><h4 class="roles-access-modal__section-head">' + esc(profile.company_name) + '</h4><label class="roles-access__mail-default"><input type="radio" name="work-mail-default" data-mail-default' + (profile.is_default ? ' checked' : '') + '><span>Основной ящик</span></label></div><div class="roles-access__mail-fields">' +
                     '<label class="field"><span class="field-label">Рабочий email</span><input type="email" class="field-input" data-mail-email maxlength="254" autocomplete="off" placeholder="@'+esc(profile.email_domain||'')+'" value="' + esc(profile.email) + '"></label>' +
                     '<label class="field"><span class="field-label">Пароль почтового ящика</span><input type="password" class="field-input" data-mail-password autocomplete="new-password" maxlength="512" placeholder="' + (profile.has_password ? 'Сохранён' : 'Не задан') + '"></label></div>' +
-                    '<div class="roles-access__mail-actions"><label class="roles-access__mail-default"><input type="radio" name="work-mail-default" data-mail-default' + (profile.is_default ? ' checked' : '') + '> Основной ящик</label><label class="roles-access__mail-clear"><input type="checkbox" data-mail-clear> Удалить пароль</label><button type="button" class="btn btn-ghost" data-mail-check>Проверить подключение</button></div><div class="roles-access-modal__help" data-mail-status role="status"></div>';
+                    '<div class="roles-access__mail-actions"><div class="roles-access-modal__help" data-mail-status role="status"></div><label class="roles-access__mail-clear"><input type="checkbox" data-mail-clear> Удалить пароль</label><button type="button" class="btn btn-ghost" data-mail-check>Проверить подключение</button></div>';
                 container.appendChild(row);
                 var status = row.querySelector('[data-mail-status]'), check = row.querySelector('[data-mail-check]');
                 var email = row.querySelector('[data-mail-email]'), password = row.querySelector('[data-mail-password]'), clear = row.querySelector('[data-mail-clear]');
                 function refresh(message) {
+                    row.dataset.mailState = profile.connection_status;
                     status.textContent = message || statusLabels[profile.connection_status] || '';
                     check.disabled = !membershipId || !profile.has_password;
                 }
