@@ -22,7 +22,7 @@ $pdo = new PDO("mysql:host=$host;port=$port;dbname=$database;charset=utf8mb4", $
 $pdo->exec("CREATE TABLE warehouses(id INT PRIMARY KEY,name VARCHAR(100) NOT NULL,is_active TINYINT NOT NULL) ENGINE=InnoDB;
 CREATE TABLE flights(id INT PRIMARY KEY,status VARCHAR(30) NOT NULL,route_type VARCHAR(40),unload_type VARCHAR(20),source_warehouse_id INT NULL,destination_warehouse_id INT NULL,zayavki_ids TEXT NOT NULL,actual_end_date DATETIME NULL,comment VARCHAR(100)) ENGINE=InnoDB;
 CREATE TABLE feo(zayavka_id INT PRIMARY KEY,naim_otkhoda_fkko VARCHAR(20),mass_netto DECIMAL(12,4),mass_brutto DECIMAL(12,4),summarnyy_obem DECIMAL(12,4)) ENGINE=InnoDB;
-CREATE TABLE warehouse_movements(id INT AUTO_INCREMENT PRIMARY KEY,movement_type VARCHAR(30) NOT NULL,warehouse_id INT NOT NULL,source_warehouse_id INT NULL,destination_warehouse_id INT NULL,flight_id INT NOT NULL,zayavka_id INT NOT NULL,fkko_code VARCHAR(20),mass_netto DECIMAL(12,4),mass_brutto DECIMAL(12,4),volume DECIMAL(12,4),movement_date DATETIME,status VARCHAR(20),comment VARCHAR(255),created_at DATETIME,updated_at DATETIME,INDEX idx_balance(warehouse_id,zayavka_id,status),INDEX idx_flight(flight_id)) ENGINE=InnoDB;
+CREATE TABLE warehouse_movements(id INT AUTO_INCREMENT PRIMARY KEY,movement_type VARCHAR(30) NOT NULL,warehouse_id INT NOT NULL,source_warehouse_id INT NULL,destination_warehouse_id INT NULL,flight_id INT NOT NULL,zayavka_id INT NOT NULL,fkko_code VARCHAR(20),mass_netto DECIMAL(12,4),mass_brutto DECIMAL(12,4),volume DECIMAL(12,4),movement_date DATETIME,status VARCHAR(20),comment VARCHAR(255),created_at DATETIME,updated_at DATETIME,UNIQUE KEY uniq_flight_movement_zayavka(flight_id,movement_type,warehouse_id,zayavka_id),INDEX idx_balance(warehouse_id,zayavka_id,status),INDEX idx_flight(flight_id)) ENGINE=InnoDB;
 INSERT INTO warehouses VALUES(1,'Север',1),(2,'Юг',1),(3,'Закрыт',0),(4,'Тестовый',1);
 INSERT INTO feo VALUES(101,'code','1.0000','1.1000','2.0000'),(102,'code','2.0000','2.2000','3.0000');
 INSERT INTO flights VALUES
@@ -32,7 +32,8 @@ INSERT INTO flights VALUES
 (23,'started','generator_to_utilizer','OO',NULL,NULL,'102',NULL,'Недостаток'),
 (24,'started','generator_to_utilizer','OO',NULL,NULL,'101',NULL,'Устаревшая проверка'),
 (25,'started','generator_to_utilizer','OO',NULL,NULL,'102',NULL,'Откат'),
-(26,'started','generator_to_utilizer','OO',NULL,NULL,'101,102',NULL,'Смешанный вывоз');");
+(26,'started','generator_to_utilizer','OO',NULL,NULL,'101,102',NULL,'Смешанный вывоз'),
+(27,'started','generator_to_utilizer','OO',NULL,NULL,'102',NULL,'Чужая отмена');");
 
 $preview = Correction::preview($pdo, $database, 21, 'warehouse_to_utilizer', 1, 0);
 checkCorrection(!$preview['ready'] && $preview['operation_count'] === 0 && $preview['stock_warnings'][0]['request_id'] === 101, 'Outgoing flight without stock must not create a negative balance.');
@@ -67,7 +68,19 @@ correctionRejected(static fn() => Correction::cancel($pdo, $database, 26, str_re
 Correction::cancel($pdo, $database, 26, $cancel['fingerprint']);
 checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=26 AND status='active'")->fetchColumn() === 0, 'Correction movements cancelled.');
 checkCorrection((string)$pdo->query('SELECT route_type FROM flights WHERE id=26')->fetchColumn() === 'warehouse_to_utilizer', 'Flight remains after warehouse cancellation.');
-checkCorrection(Correction::preview($pdo, $database, 26, 'warehouse_to_utilizer', 4, 0)['ready'], 'Cancelled correction can be reapplied.');
+$pdo->exec("INSERT INTO warehouse_movements(movement_type,warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment) VALUES('issue',4,26,102,2,'2026-09-01 12:00:00','cancelled','Исправление складского направления рейса #26 в ERP PLANEX пользователем #6')");
+$preview = Correction::preview($pdo, $database, 26, 'warehouse_to_utilizer', 4, 0);
+checkCorrection($preview['ready'] && $preview['operation_count'] === 1, 'Cancelled correction can be reapplied.');
+$result = Correction::apply($pdo, $database, 26, 'warehouse_to_utilizer', 4, 0, $preview['fingerprint']);
+checkCorrection($result['created'] === 1 && $result['reactivated'] === 1, 'Cancelled unique-key movement was reactivated.');
+checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=26")->fetchColumn() === 2, 'Reapply must not duplicate audit rows.');
+checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=26 AND status='active' AND zayavka_id=101")->fetchColumn() === 1, 'Present request became active again.');
+checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=26 AND status='cancelled' AND zayavka_id=102")->fetchColumn() === 1, 'Previously cancelled absent request remains unsent after reapply.');
+$pdo->exec("INSERT INTO warehouse_movements(movement_type,warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment) VALUES('issue',2,27,102,2,'2026-09-01 12:00:00','cancelled','Другое исправление')");
+$preview = Correction::preview($pdo, $database, 27, 'warehouse_to_utilizer', 2, 0);
+checkCorrection($preview['ready'], 'Foreign cancelled movement can be detected at apply.');
+correctionRejected(static fn() => Correction::apply($pdo, $database, 27, 'warehouse_to_utilizer', 2, 0, $preview['fingerprint']), 'Foreign cancelled movement must not be reactivated.');
+checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=27 AND status='active'")->fetchColumn() === 0, 'Foreign movement remains cancelled.');
 
 $preview = Correction::preview($pdo, $database, 24, 'generator_to_warehouse', 0, 2);
 $pdo->exec("UPDATE feo SET mass_netto='1.2000' WHERE zayavka_id=101");

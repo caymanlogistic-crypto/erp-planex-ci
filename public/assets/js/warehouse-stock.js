@@ -137,7 +137,7 @@
             });
             const data = await response.json();
             if (!response.ok) throw new Error(data.error || 'Исправление не выполнено.');
-            preview.innerHTML = `<div class="notice success" role="status"><b>Рейс #${escape(data.flight_id)} исправлен.</b> Создано складских движений: ${escape(data.created)}. Обновляем остатки…</div>${data.warning ? `<div class="notice warn" role="alert">${escape(data.warning)}</div>` : ''}`;
+            preview.innerHTML = `<div class="notice success" role="status"><b>Рейс #${escape(data.flight_id)} исправлен.</b> Проведено складских движений: ${escape(data.created)}. Обновляем остатки…</div>${data.warning ? `<div class="notice warn" role="alert">${escape(data.warning)}</div>` : ''}`;
             setTimeout(() => location.reload(), 1200);
         } catch (error) {
             fingerprint.value = '';

@@ -64,10 +64,12 @@ final class WarehouseTripCorrectionService
             foreach ($warehouseIds as $id) if (!isset($warehouseNames[$id])) $errors[] = 'Склад #'.$id.' не найден.';
         }
 
-        $query = $pdo->prepare("SELECT id FROM ".$table('warehouse_movements')." WHERE flight_id=? AND status='active'".$suffix);
+        $query = $pdo->prepare('SELECT id,status,movement_type,warehouse_id,zayavka_id,comment FROM '.$table('warehouse_movements').' WHERE flight_id=? ORDER BY id'.$suffix);
         $query->execute([$flightId]);
-        $existing = $query->fetchAll(PDO::FETCH_COLUMN);
-        if ($existing !== []) $errors[] = 'По рейсу уже есть складские движения. Автоматическая повторная разметка заблокирована.';
+        $existing = $query->fetchAll(PDO::FETCH_ASSOC);
+        if (array_filter($existing, static fn(array $row): bool => $row['status'] === 'active')) {
+            $errors[] = 'По рейсу уже есть складские движения. Автоматическая повторная разметка заблокирована.';
+        }
 
         $feo = [];
         if ($ids !== []) {
@@ -158,16 +160,35 @@ final class WarehouseTripCorrectionService
             $update = $pdo->prepare('UPDATE '.$flightTable.' SET route_type=?,unload_type=?,source_warehouse_id=?,destination_warehouse_id=? WHERE id=?');
             $update->execute([$route, $route === 'warehouse_to_utilizer' ? 'OO' : 'SKLAD', $preview['source_warehouse_id'] ?: null, $preview['destination_warehouse_id'] ?: null, $flightId]);
             $insert = $pdo->prepare('INSERT INTO '.$movementTable.' (movement_type,warehouse_id,source_warehouse_id,destination_warehouse_id,flight_id,zayavka_id,fkko_code,mass_netto,mass_brutto,volume,movement_date,status,comment,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,NOW(),NOW())');
+            $find = $pdo->prepare('SELECT id,status,comment FROM '.$movementTable.' WHERE flight_id=? AND movement_type=? AND warehouse_id=? AND zayavka_id=? LIMIT 1 FOR UPDATE');
+            $reactivate = $pdo->prepare('UPDATE '.$movementTable." SET source_warehouse_id=?,destination_warehouse_id=?,fkko_code=?,mass_netto=?,mass_brutto=?,volume=?,movement_date=?,status='active',comment=?,updated_at=NOW() WHERE id=? AND status='cancelled'");
             $created = 0;
+            $reactivated = 0;
             foreach ($preview['rows'] as $row) {
                 if (!$row['will_move']) continue;
                 foreach (self::ROUTES[$route] as $type) {
                     $warehouseId = in_array($type, ['issue', 'transfer_out'], true) ? $preview['source_warehouse_id'] : $preview['destination_warehouse_id'];
-                    $insert->execute([
-                        $type,$warehouseId,$preview['source_warehouse_id'] ?: null,$preview['destination_warehouse_id'] ?: null,
-                        $flightId,$row['request_id'],$row['fkko_code'],$row['mass_netto'],$row['mass_brutto'],$row['volume'],
-                        $preview['movement_date'],'active','Исправление складского направления рейса #'.$flightId.' в ERP PLANEX пользователем #'.$actorId,
-                    ]);
+                    $comment = 'Исправление складского направления рейса #'.$flightId.' в ERP PLANEX пользователем #'.$actorId;
+                    $find->execute([$flightId,$type,$warehouseId,$row['request_id']]);
+                    $previous = $find->fetch(PDO::FETCH_ASSOC);
+                    if ($previous) {
+                        if ($previous['status'] !== 'cancelled' || !str_starts_with((string)$previous['comment'], 'Исправление складского направления рейса #'.$flightId.' в ERP PLANEX пользователем #')) {
+                            throw new RuntimeException('Складское движение уже существует и не может быть восстановлено автоматически.');
+                        }
+                        $reactivate->execute([
+                            $preview['source_warehouse_id'] ?: null,$preview['destination_warehouse_id'] ?: null,
+                            $row['fkko_code'],$row['mass_netto'],$row['mass_brutto'],$row['volume'],
+                            $preview['movement_date'],$comment.'; повторно проведено после отмены',(int)$previous['id'],
+                        ]);
+                        if ($reactivate->rowCount() !== 1) throw new RuntimeException('Не удалось восстановить отменённое складское движение.');
+                        $reactivated++;
+                    } else {
+                        $insert->execute([
+                            $type,$warehouseId,$preview['source_warehouse_id'] ?: null,$preview['destination_warehouse_id'] ?: null,
+                            $flightId,$row['request_id'],$row['fkko_code'],$row['mass_netto'],$row['mass_brutto'],$row['volume'],
+                            $preview['movement_date'],'active',$comment,
+                        ]);
+                    }
                     $created++;
                 }
             }
@@ -176,7 +197,7 @@ final class WarehouseTripCorrectionService
             $check->execute([$flightId]);
             if ((int)$check->fetchColumn() !== $created) throw new RuntimeException('Контроль складских движений не прошёл.');
             $pdo->commit();
-            return ['flight_id'=>$flightId,'created'=>$created,'request_count'=>$preview['movement_request_count']];
+            return ['flight_id'=>$flightId,'created'=>$created,'reactivated'=>$reactivated,'request_count'=>$preview['movement_request_count']];
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             throw $error;
