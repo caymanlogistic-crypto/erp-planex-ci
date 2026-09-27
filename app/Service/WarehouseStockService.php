@@ -192,6 +192,11 @@ final class WarehouseStockService
             ];
         }
         krsort($issues, SORT_NUMERIC);
-        return ['warehouses'=>$names,'groups'=>$byWarehouse,'current'=>$current,'issues'=>$issues,'issue_count'=>count($issues)];
+        $correctionFlights = [];
+        foreach ($flightMap as $flight) $correctionFlights[] = [
+            'id'=>(int)$flight['id'], 'name'=>(string)($flight['comment'] ?? ''),
+        ];
+        usort($correctionFlights, static fn(array $a, array $b): int => $b['id'] <=> $a['id']);
+        return ['warehouses'=>$names,'groups'=>$byWarehouse,'current'=>$current,'issues'=>$issues,'issue_count'=>count($issues),'correction_flights'=>$correctionFlights];
     }
 }
