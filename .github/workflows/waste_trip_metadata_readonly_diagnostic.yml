@@ -1,0 +1,87 @@
+name: Waste Trip Metadata Read Only Diagnostic
+
+on:
+  workflow_dispatch:
+    inputs:
+      flight_id:
+        description: Legacy flight ID
+        required: true
+        type: string
+      company_id:
+        description: ERP company ID
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify canonical source and inputs
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          FLIGHT_ID: ${{ inputs.flight_id }}
+          COMPANY_ID: ${{ inputs.company_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          [[ "$FLIGHT_ID" =~ ^[0-9]{3,10}$ ]]
+          [[ "$COMPANY_ID" =~ ^[0-9]{1,10}$ ]]
+          php -l scripts/waste_trip_metadata_readonly_probe.php
+      - name: Configure SSH
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/waste_metadata_probe_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/waste_metadata_probe_key" "$HOME/.ssh/known_hosts"
+      - name: Compare source and tenant metadata without writes
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          FLIGHT_ID: ${{ inputs.flight_id }}
+          COMPANY_ID: ${{ inputs.company_id }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_metadata_probe_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
+          deployed="$("${SSH[@]}" "cat '$DEPLOY_MARKER'")"
+          [[ "$deployed" =~ ^[a-f0-9]{40}$ ]]
+          git merge-base --is-ancestor "$deployed" "$SOURCE_SHA"
+          cat scripts/waste_trip_metadata_readonly_probe.php | "${SSH[@]}" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_FLIGHT_ID='$FLIGHT_ID' PLANEX_COMPANY_ID='$COMPANY_ID' /usr/bin/php8.5" | tee metadata-readonly.txt
+          grep -Fqx 'WASTE_TRIP_METADATA_READ_ONLY_PASS' metadata-readonly.txt
+          "${SSH[@]}" "if crontab -l 2>/dev/null | grep -Fq '# ERP PLANEX waste_trip_sync'; then echo WASTE_TRIP_CRON_CONFIGURED=YES; else echo WASTE_TRIP_CRON_CONFIGURED=NO; fi; if [ -f '$LIVE_ROOT/logs/waste_trip_sync.log' ]; then stat -c 'WASTE_TRIP_SYNC_LOG_MTIME=%y' '$LIVE_ROOT/logs/waste_trip_sync.log'; tail -n 12 '$LIVE_ROOT/logs/waste_trip_sync.log' | grep -E 'company=|WASTE_TRIP_SYNC_OK|ERROR|skipped=' || true; else echo WASTE_TRIP_SYNC_LOG_PRESENT=NO; fi" | tee scheduler-readonly.txt
+      - name: Upload read-only evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trip-metadata-readonly-${{ github.run_id }}
+          path: |
+            metadata-readonly.txt
+            scheduler-readonly.txt
+          if-no-files-found: ignore
+      - name: Cleanup SSH key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/waste_metadata_probe_key"
