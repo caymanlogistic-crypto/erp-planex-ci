@@ -12,6 +12,6 @@ $rolesAccessInitialStateJson=json_encode([
  'page_tree'=>$registry->grantableTree(),'pages'=>$registry->grantablePages(),'regulated_entities'=>[],
 ],JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);
 ?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="erp-base-path" content=""><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><link rel="stylesheet" href="/assets/css/roles-access.css"></head><body>
-<?php require $root.'/app/View/pages/company/roles_access.php'; ?>
+<meta name="erp-base-path" content=""><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><link rel="stylesheet" href="/assets/css/workspace-benchmark.css"><link rel="stylesheet" href="/assets/css/roles-access.css"></head><body>
+<main class="content content--wide-workspace"><div class="workspace-shell-1690"><?php require $root.'/app/View/pages/company/roles_access.php'; ?></div></main>
 </body></html>

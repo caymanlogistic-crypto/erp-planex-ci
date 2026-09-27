@@ -29,11 +29,19 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({ headless: true });
 
 try {
-    for (const width of [1440, 390]) {
+    for (const width of [1920, 1440, 390]) {
         const page = await browser.newPage({ viewport: { width, height: 900 } });
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         await page.goto(`http://127.0.0.1:${server.address().port}/`);
+        const frame = await page.locator('.workspace-shell-1690').evaluate(element => {
+            const shell = element.getBoundingClientRect();
+            const head = element.querySelector('.roles-access__head').getBoundingClientRect();
+            const card = element.querySelector('.roles-access__workspace').getBoundingClientRect();
+            return { shell: { left: shell.left, right: shell.right, width: shell.width }, head: { left: head.left, right: head.right, bottom: head.bottom }, card: { left: card.left, right: card.right, top: card.top } };
+        });
+        assert.ok(frame.shell.width <= 1690 && frame.shell.left > 0 && frame.shell.right < width, `${width}: centered workspace shell`);
+        assert.ok(Math.abs(frame.head.left - frame.card.left) <= 1 && Math.abs(frame.head.right - frame.card.right) <= 1 && frame.card.top > frame.head.bottom, `${width}: separate aligned heading and standard panel`);
 
         const checkTable = async panel => {
             const geometry = await page.locator(panel).evaluate(element => {
@@ -53,7 +61,7 @@ try {
                     workspaceBorder: getComputedStyle(workspace).borderLeftWidth,
                     workspaceBackground: getComputedStyle(workspace).backgroundColor,
                     workspaceContentWidth: workspace.clientWidth,
-                    headBottom: getComputedStyle(workspace.querySelector('.roles-access__head')).borderBottomWidth,
+                    headBottom: getComputedStyle(element.closest('.roles-access').querySelector('.roles-access__head')).borderBottomWidth,
                     panelPadding: getComputedStyle(element).paddingLeft,
                     cardBorder: getComputedStyle(card).borderLeftWidth,
                     clippedCell: visibleCells.some(cell => box(cell).right > box(scroll).right + 1),
@@ -87,6 +95,18 @@ try {
         if (process.env.PLANEX_SCREENSHOT_DIR) {
             await page.screenshot({ path: path.join(process.env.PLANEX_SCREENSHOT_DIR, `users-${width}.png`) });
         }
+        await page.locator('[data-access-tab="assignments"]').click();
+        assert.equal(await page.locator('#roles-access-assignments').isVisible(), true, `${width}: assignments tab`);
+        const assignmentFrame = await page.locator('#roles-access-assignments').evaluate(element => {
+            const panel = element.getBoundingClientRect();
+            const card = element.closest('.roles-access__workspace').getBoundingClientRect();
+            return { panelLeft: panel.left, panelRight: panel.right, cardLeft: card.left, cardRight: card.right };
+        });
+        assert.ok(assignmentFrame.panelLeft >= assignmentFrame.cardLeft && assignmentFrame.panelRight <= assignmentFrame.cardRight, `${width}: assignments remain inside standard panel`);
+        if (process.env.PLANEX_SCREENSHOT_DIR) {
+            await page.screenshot({ path: path.join(process.env.PLANEX_SCREENSHOT_DIR, `assignments-${width}.png`) });
+        }
+        await page.locator('[data-access-tab="users"]').click();
         await page.locator('[data-membership-create]').click();
         await page.locator('.roles-access-modal.is-open [data-access-modal-form]').waitFor();
         await page.locator('.roles-access-modal.is-open .roles-access-modal__head [data-access-modal-close]').click();
