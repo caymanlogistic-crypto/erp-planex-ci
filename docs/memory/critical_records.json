@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "afd157b44be94aed10ff6ea8707ec3b846882d57",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/afd157b44be94aed10ff6ea8707ec3b846882d57/docs/database/TENANT_SCHEMA_OTHER_TENANT_DOMAIN_04.md",
+      "verified_sha": "09f347165e8d62b19ccd2abe66084981147b6f28",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/09f347165e8d62b19ccd2abe66084981147b6f28/docs/database/TENANT_SCHEMA_OTHER_TENANT_DOMAIN_05.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c55e54ff223ca07d69e3e8e3f29eb3b0a9ea2eab",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c55e54ff223ca07d69e3e8e3f29eb3b0a9ea2eab/tests/menu_navigation_browser_test.mjs",
+      "verified_sha": "09f347165e8d62b19ccd2abe66084981147b6f28",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/09f347165e8d62b19ccd2abe66084981147b6f28/tests/waste_trip_legacy_linked_contract_test.php",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -150,8 +150,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9220309755cad3a98aa5e57bdb23717f9ec9793d",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9220309755cad3a98aa5e57bdb23717f9ec9793d/tests/agent_preflight_test.py",
+      "verified_sha": "f3218c0aff4f96576ede29810ffd0f59103b76fa",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/f3218c0aff4f96576ede29810ffd0f59103b76fa/tests/design_lab_contract_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",

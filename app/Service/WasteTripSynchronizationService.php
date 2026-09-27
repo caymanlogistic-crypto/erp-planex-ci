@@ -13,7 +13,7 @@ final class WasteTripSynchronizationService
     {
         if (($actor['role_code'] ?? '') !== 'company_owner') throw new RuntimeException('Синхронизация доступна руководителю компании.');
         RegulatedDataScopeService::assertCanCreate('waste_trip');
-        if (!WasteTripService::schemaReady($tenant)) throw new RuntimeException('Для синхронизации требуется актуальная схема рейсов (138).');
+        if (!WasteTripService::legacyMetadataReady($tenant)) throw new RuntimeException('Для синхронизации требуется актуальная схема рейсов (149).');
         if ($companyId <= 0) throw new RuntimeException('Компания не выбрана.');
         $name = (string)$tenant->query('SELECT DATABASE()')->fetchColumn();
         $lockName = 'erp_waste_trip_legacy_sync_' . substr(hash('sha256', $name), 0, 24);
@@ -29,10 +29,11 @@ final class WasteTripSynchronizationService
             $flights = $legacy->query(
                 'SELECT f.id,f.zayavki_ids,f.comment,f.status,f.cost,f.payment_terms,f.driver_id,
                  f.planned_start_date,f.planned_start_date_from,f.planned_start_date_to,
-                 f.actual_start_date,f.actual_end_date,f.unload_type,f.assigned_manager_id,
+                 f.actual_start_date,f.actual_end_date,f.unload_type,f.assigned_manager_id
+                 '.WasteTripLegacyMetadataService::sourceSql($legacy).',
                  u.`Фамилия` AS manager_surname,u.`Имя` AS manager_first_name,
                  d.full_name AS driver_name,d.vehicle_make_plate
-                 FROM flights f LEFT JOIN drivers d ON d.id=f.driver_id
+                 FROM flights f '.WasteTripLegacyMetadataService::joins().' LEFT JOIN drivers d ON d.id=f.driver_id
                  LEFT JOIN users u ON u.id=f.assigned_manager_id WHERE f.id > 225 ORDER BY f.id'
             )->fetchAll(PDO::FETCH_ASSOC);
             $prices = WasteTripLegacyPriceService::fetchPrices($legacy);
@@ -67,6 +68,7 @@ final class WasteTripSynchronizationService
                 $id = (int)$flight['id'];
                 try {
                     $state = WasteTripLegacyMappingService::state($flight);
+                    $state += WasteTripLegacyMetadataService::fromFlight($flight);
                     $state['general_amount'] = WasteTripLegacyPriceService::flightTotal($state['request_ids'], $prices);
                     $state['client_id'] = $clientId;
                     $membershipId = WasteTripLegacyMappingService::manager((string)$flight['manager_surname'], (string)$flight['manager_first_name'], $memberships);

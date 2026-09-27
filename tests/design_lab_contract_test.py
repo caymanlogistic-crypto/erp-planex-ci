@@ -18,6 +18,15 @@ assert spec and spec.loader
 design_lab = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(design_lab)
 
+waste_preset = design_lab.PRESETS["waste-trips"]
+assert waste_preset["target_route"] == "/company/trips/departures"
+waste_html = design_lab.render_preset(ROOT, waste_preset).decode("utf-8")
+assert "Перевозка отходов" in waste_html
+assert "data-waste-view=" in waste_html
+assert "data-lab-modal=\"view\"" in waste_html
+assert "data-lab-modal=\"edit\"" in waste_html
+assert "ООО «Вектор»" in waste_html
+
 
 def run(*arguments: str, ok: bool = True) -> subprocess.CompletedProcess[str]:
     process = subprocess.run(

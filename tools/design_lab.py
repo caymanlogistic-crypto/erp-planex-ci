@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import base64
 from contextlib import contextmanager
 from datetime import datetime, timezone
 import hashlib
@@ -66,6 +67,18 @@ UI_QUALITY_CONTRACT = {
 }
 
 PRESETS = {
+    "waste-trips": {
+        "label": "Перевозка отходов",
+        "target_route": "/company/trips/departures",
+        "renderer": ["php", "tests/fixtures/waste_trips_design_lab_render.php"],
+        "source_paths": [
+            "app/View/pages/company_waste_trips.php",
+            "app/View/partials/company_waste_trip_modal_view.php",
+            "app/View/partials/company_waste_trip_modal_edit.php",
+            "public/assets/css/waste-trip-registry.css",
+            "tests/fixtures/waste_trips_design_lab_render.php",
+        ],
+    },
     "manager-statistics": {
         "label": "Статистика менеджеров",
         "target_route": "/company/statistics/managers",
@@ -441,7 +454,7 @@ def inject_overrides(html: bytes) -> bytes:
 class DesignLabHandler(BaseHTTPRequestHandler):
     server_version = "PLANEXDesignLab/1"
 
-    def _security_headers(self, content_type: str) -> None:
+    def _security_headers(self, content_type: str, inline_hashes: str = "") -> None:
         self.send_header("Content-Type", content_type)
         self.send_header("Cache-Control", "no-store, private")
         self.send_header("Pragma", "no-cache")
@@ -449,7 +462,7 @@ class DesignLabHandler(BaseHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("Referrer-Policy", "no-referrer")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
-        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
+        self.send_header("Content-Security-Policy", "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self'" + inline_hashes + "; connect-src 'none'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'none'")
 
     def _host_allowed(self) -> bool:
         raw = self.headers.get("Host", "").strip().lower()
@@ -458,7 +471,11 @@ class DesignLabHandler(BaseHTTPRequestHandler):
 
     def _send(self, status: int, data: bytes, content_type: str) -> None:
         self.send_response(status)
-        self._security_headers(content_type)
+        inline_hashes = ""
+        if content_type.startswith("text/html") and self.server.manifest.get("data_mode") == "synthetic":  # type: ignore[attr-defined]
+            scripts = re.findall(rb"(?is)<script\b(?![^>]*\bsrc\s*=)[^>]*>(.*?)</script\s*>", data)
+            inline_hashes = "".join(" 'sha256-" + base64.b64encode(hashlib.sha256(script).digest()).decode("ascii") + "'" for script in scripts)
+        self._security_headers(content_type, inline_hashes)
         self.send_header("Content-Length", str(len(data)))
         self.end_headers()
         self.wfile.write(data)

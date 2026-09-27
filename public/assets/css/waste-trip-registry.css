@@ -19,3 +19,8 @@
 .waste-registry tbody tr td.status-completed { background: var(--flight-completed-bg); color: var(--flight-completed-text); }
 .waste-row { cursor: pointer; }
 .waste-row:hover { background: var(--surface-hover, #f8fafc); }
+.waste-legal-entity { display:block; margin-top:3px; font-size:12px; font-weight:600; white-space:nowrap; }
+.waste-legal-entity.is-mg-logistic { color:#9c27b0; }
+.waste-legal-entity.is-planex { color:#28a745; }
+.waste-registry .waste-warehouse { min-width:140px; max-width:220px; white-space:normal; overflow-wrap:anywhere; }
+.waste-registry tbody tr td.waste-cost-disabled, .waste-registry tbody tr:hover td.waste-cost-disabled { background:#e5e7eb; }

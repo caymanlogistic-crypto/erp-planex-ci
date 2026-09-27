@@ -82,18 +82,22 @@ try {
         INSERT INTO fixture_managers VALUES(3,'Сидоров','Другой'),(4,'Гладских','Карина');
         CREATE TABLE fixture_drivers(id INT PRIMARY KEY,full_name VARCHAR(255),vehicle_make_plate VARCHAR(255));
         INSERT INTO fixture_drivers VALUES(80,'Семёнов Алексей','Hyundai С894НО193');
-        CREATE TABLE fixture_flights(id INT PRIMARY KEY,zayavki_ids TEXT,comment VARCHAR(500),status VARCHAR(50),cost INT NULL,payment_terms VARCHAR(500) NULL,driver_id INT NULL,assigned_manager_id INT,unload_type VARCHAR(20),planned_start_date DATE NULL,planned_start_date_from DATE NULL,planned_start_date_to DATE NULL,actual_start_date DATE NULL,actual_end_date DATE NULL);
+        CREATE TABLE warehouses(id INT PRIMARY KEY,name VARCHAR(255)); INSERT INTO warehouses VALUES(1,'Склад Север'),(2,'Склад Юг'); CREATE TABLE fixture_flights(id INT PRIMARY KEY,legal_entity_code VARCHAR(32) NULL,route_type VARCHAR(64) NULL,source_warehouse_id INT NULL,destination_warehouse_id INT NULL,zayavki_ids TEXT,comment VARCHAR(500),status VARCHAR(50),cost INT NULL,payment_terms VARCHAR(500) NULL,driver_id INT NULL,assigned_manager_id INT,unload_type VARCHAR(20),planned_start_date DATE NULL,planned_start_date_from DATE NULL,planned_start_date_to DATE NULL,actual_start_date DATE NULL,actual_end_date DATE NULL);
         INSERT INTO fixture_flights(id,zayavki_ids,comment,status,cost,driver_id,assigned_manager_id,unload_type,planned_start_date_from) VALUES
         (225,'700001','Excluded','planned_route',1,NULL,3,'SKLAD',NULL),
         (226,'700001','First','planned_route',1000,80,3,'SKLAD','2026-09-01'),
         (227,'700001,700002','Shared requests','found',NULL,NULL,4,'OO',NULL);");
+    $pdo->exec("UPDATE fixture_flights SET legal_entity_code='mg_logistic',route_type='generator_to_warehouse',destination_warehouse_id=1 WHERE id=226");
     $legacy->exec('SET SESSION TRANSACTION READ ONLY');
     $actor=['user_id'=>1,'role_code'=>'company_owner'];
     $run=static fn()=>Sync::run($legacy,$pdo,$central,25,$actor);
     $first=$run();check($first['created']===2&&$first['failed']===0,'Create source rows: '.json_encode($first,JSON_UNESCAPED_UNICODE));
     check((int)$pdo->query('SELECT COUNT(*) FROM waste_trips WHERE business_id=225')->fetchColumn()===0,'Cutoff');
     $trip=$pdo->query('SELECT * FROM waste_trips WHERE business_id=226')->fetch();$id=(int)$trip['id'];
+    reject(static fn()=>Trips::update($pdo,$id,[],[],(int)$trip['lock_version'],$actor,null,[]),'MG cost POST must be rejected server-side');
+    check(in_array($id,array_map('intval',array_column(Trips::linkedTripsForSync($pdo),'id')),true),'Automatic scheduler includes manually synchronized flights from ID 226');
     check((int)$trip['client_id']===13&&(int)$trip['route_executor_id']===1&&$trip['status']==='planned_route','Mapped entities/status');
+    check($trip['legal_entity_code']==='mg_logistic'&&$trip['legacy_destination_warehouse_name']==='Склад Север','Required legacy metadata synchronized');
     check($trip['planned_start_date_from']==='2026-09-01'&&$trip['planned_start_date_to']===null,'Open range');
     check((int)$pdo->query("SELECT membership_id FROM users WHERE id={$trip['responsible_user_id']}")->fetchColumn()===10,'Central membership projection, not legacy numeric ID');
     check((int)$pdo->query('SELECT COUNT(*) FROM waste_trip_requests')->fetchColumn()===3,'Duplicate membership retained');
@@ -129,6 +133,11 @@ try {
         INSERT INTO finance_operations(id,operation_type,status,source,money_account_id,operation_date,amount) VALUES(1,'INCOME','POSTED','MANUAL',1,'2026-09-01',1);
         INSERT INTO finance_operation_allocations(operation_id,obligation_id,amount,allocation_date) VALUES(1,{$obligation['id']},1,'2026-09-01')");
     $repeat=$run();check($repeat['updated']===2&&$repeat['created']===0,'Repeat upsert');
+    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trips WHERE id=$id AND legal_entity_code='mg_logistic' AND legacy_destination_warehouse_name='Склад Север'")->fetchColumn()===1,'Repeated manual sync retains required metadata');
+    $pdo->exec("UPDATE fixture_flights SET legal_entity_code='planex',route_type='warehouse_to_warehouse',source_warehouse_id=1,destination_warehouse_id=2 WHERE id=226");
+    $metadataRefresh=$run();check($metadataRefresh['failed']===0,'Manual metadata refresh');
+    $metadata=$pdo->query("SELECT * FROM waste_trips WHERE id=$id")->fetch();
+    check($metadata['legal_entity_code']==='planex'&&\App\Service\WasteTripLegacyMetadataService::warehouseLabel($metadata)==='Со склада: Склад Север → на склад: Склад Юг','Manual sync refreshes legal entity and both warehouse names');
     check((int)$pdo->query("SELECT id FROM waste_trips WHERE business_id=226")->fetchColumn()===$id,'Stable trip identity');
     foreach (['legacy_flights','legacy_prefill'] as $provenance) {
         $pdo->prepare('UPDATE waste_trips SET source_system=? WHERE id=?')->execute([$provenance,$id]);
