@@ -1,6 +1,8 @@
 <?php
 
 require_once base_path('app/Service/WasteTripLegacySourceService.php');
+require_once base_path('app/Service/WarehouseStockService.php');
+require_once base_path('app/Http/Controllers/Company/WarehouseStockController.php');
 require_once base_path('app/Service/WasteTripIncidentService.php');
 require_once base_path('app/Service/WasteTripCustomerPaymentService.php');
 require_once base_path('app/Service/WasteTripGeneralPaymentService.php');
@@ -18,6 +20,9 @@ require_once base_path('app/Http/Controllers/Company/WasteTripController.php');
 
 $controller = new \App\Http\Controllers\Company\LinearTripController($config, $db);
 $wasteTripController = new \App\Http\Controllers\Company\WasteTripController($config, $db);
+$warehouseStockController = new \App\Http\Controllers\Company\WarehouseStockController($config, $db);
+
+$router->get('/company/warehouses/stock', [$warehouseStockController, 'index'], 'company.warehouses.stock');
 
 $router->get('/company/trips/linear', [$controller, 'index'], 'company.trips.linear');
 $router->get('/company/trips/linear/service-lines', [$controller, 'serviceLines'], 'company.trips.linear');
