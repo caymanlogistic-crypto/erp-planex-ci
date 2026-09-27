@@ -121,16 +121,18 @@ final class NavigationCounterService
         }
 
         try {
-            $counters['trip_completion_problem'] = max(0, (int)$tenant->query(
-                "SELECT COUNT(*)
-                   FROM waste_trip_requests wtr
-                   JOIN waste_trips wt ON wt.id=wtr.waste_trip_id
+            $reviewCounts = $tenant->query(
+                "SELECT SUM(CASE WHEN COALESCE(cr.review_status,'work')='work' THEN 1 ELSE 0 END) work_trips,
+                        SUM(CASE WHEN cr.review_status='review' THEN 1 ELSE 0 END) review_trips
+                   FROM waste_trips wt
                    LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id
-                  WHERE wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed')
-                    AND COALESCE(cr.review_status,'work')='work'"
-            )->fetchColumn());
+                  WHERE wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed')"
+            )->fetch(PDO::FETCH_ASSOC);
+            $counters['trip_completion_problem'] = max(0, (int)($reviewCounts['work_trips'] ?? 0));
+            $counters['tn_review_pending'] = max(0, (int)($reviewCounts['review_trips'] ?? 0));
         } catch (Throwable) {
             $counters['trip_completion_problem'] = 0;
+            $counters['tn_review_pending'] = 0;
         }
 
         try {
@@ -244,6 +246,7 @@ final class NavigationCounterService
             'departures_problem' => 0,
             'warehouse_stock_problem' => 0,
             'trip_completion_problem' => 0,
+            'tn_review_pending' => 0,
             'feo_freshness' => 0,
             'feo_placement_problem' => 0,
             'feo_map_problem' => 0,

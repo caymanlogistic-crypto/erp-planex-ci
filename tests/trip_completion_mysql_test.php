@@ -5,6 +5,8 @@ require_once BASE_PATH.'/app/Support/company_database.php';
 require_once BASE_PATH.'/app/Service/LocalMigrationService.php';
 require_once BASE_PATH.'/app/Service/DocumentService.php';
 require_once BASE_PATH.'/app/Service/TripCompletionService.php';
+require_once BASE_PATH.'/app/Core/Database.php';
+require_once BASE_PATH.'/app/Service/NavigationCounterService.php';
 use App\Service\LocalMigrationService;
 use App\Service\TripCompletionService;
 $ok=static function(bool $condition,string $message):void{if(!$condition)throw new RuntimeException($message);};
@@ -75,6 +77,12 @@ try{
     $ok($service->reviewProblems($trip)===[],'Complete trip has no review problems');
     $transition=$service->transitionReview(1,0,'submit',101,'tester');
     $ok($transition['status']==='review'&&$transition['version']===1,'Even a complete trip waits for human review');
+    $counterConfig=['database'=>['host'=>getenv('PLANEX_SCHEMA_DB_HOST'),'port'=>(int)(getenv('PLANEX_SCHEMA_DB_PORT')?:3306),
+        'database'=>$database,'username'=>getenv('PLANEX_SCHEMA_DB_USER'),'password'=>getenv('PLANEX_SCHEMA_DB_PASSWORD'),'charset'=>'utf8mb4']];
+    $badges=App\Service\NavigationCounterService::forCompany($counterConfig,new App\Core\Database($counterConfig['database']),
+        $companyId,['id'=>$companyId,'status'=>'active','db_identifier'=>$database]);
+    $ok($badges['trip_completion_problem']===2&&$badges['tn_review_pending']===1,
+        'Navigation badges must count work trips and review trips, not requests');
     $ok($service->journal(['kind'=>'review'])['total']===1,'Review submission is attributed in the journal');
     $fails(fn()=>$service->save(1,11,$completeInput,101));
     $fails(fn()=>$service->transitionReview(1,1,'archive',101));

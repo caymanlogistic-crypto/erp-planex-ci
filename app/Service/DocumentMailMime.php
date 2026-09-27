@@ -30,14 +30,26 @@ final class DocumentMailMime
         $subject=(string)$message['subject'];
         if (mb_strlen($subject)>250 || preg_match('/[\r\n\x00]/',$subject)) throw new \InvalidArgumentException('Некорректная тема письма.');
         $boundary='planex_'.bin2hex(random_bytes(18));
-        $headers=['From: '.$from,'To: '.implode(', ',$to),'Message-ID: '.$id,'Date: '.gmdate('D, d M Y H:i:s').' +0000','Subject: '.self::encodeHeader($subject),'MIME-Version: 1.0','Content-Type: multipart/mixed; boundary="'.$boundary.'"'];
+        $html=isset($message['html']) ? (string)$message['html'] : null;
+        $hasAttachments=!empty($message['attachments']);
+        $headers=['From: '.$from,'To: '.implode(', ',$to),'Message-ID: '.$id,'Date: '.gmdate('D, d M Y H:i:s').' +0000','Subject: '.self::encodeHeader($subject),'MIME-Version: 1.0',
+            'Content-Type: multipart/'.($hasAttachments?'mixed':'alternative').'; boundary="'.$boundary.'"'];
         if ($cc) $headers[]='Cc: '.implode(', ',array_unique($cc));
         if (!empty($message['in_reply_to'])) {
             $reply=self::messageId($message['in_reply_to']);
             $headers[]='In-Reply-To: '.$reply;
             $headers[]='References: '.$reply;
         }
-        $parts=['Content-Type: text/plain; charset=UTF-8'."\r\nContent-Transfer-Encoding: base64\r\n\r\n".chunk_split(base64_encode((string)$message['text']),76,"\r\n")];
+        $textPart='Content-Type: text/plain; charset=UTF-8'."\r\nContent-Transfer-Encoding: base64\r\n\r\n".chunk_split(base64_encode((string)$message['text']),76,"\r\n");
+        $parts=[$textPart];
+        if ($html!==null) {
+            if (strlen($html)>2*1024*1024) throw new \InvalidArgumentException('Таблица письма слишком большая.');
+            $htmlPart='Content-Type: text/html; charset=UTF-8'."\r\nContent-Transfer-Encoding: base64\r\n\r\n".chunk_split(base64_encode($html),76,"\r\n");
+            if ($hasAttachments) {
+                $alternative='planex_alt_'.bin2hex(random_bytes(18));
+                $parts=['Content-Type: multipart/alternative; boundary="'.$alternative.'"'."\r\n\r\n--".$alternative."\r\n".$textPart."\r\n--".$alternative."\r\n".$htmlPart."\r\n--".$alternative."--\r\n"];
+            } else $parts[]=$htmlPart;
+        }
         if (count($message['attachments']??[])>self::MAX_PARTS-1) throw new \InvalidArgumentException('Слишком много вложений.');
         $size=0;
         foreach ($message['attachments']??[] as $file) {

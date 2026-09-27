@@ -12,6 +12,8 @@ use App\Service\DocumentMailMime;
 use App\Service\EmployeeMailProfileService;
 use App\Service\ReportEmailRecipientService;
 use App\Service\TripCompletionService;
+use App\Service\TripReviewEmail;
+use App\Service\TripReviewPackageStore;
 use DomainException;
 use PDO;
 use Throwable;
@@ -130,28 +132,96 @@ final class TripCompletionController
             $sender=$mailProfiles->defaultSender($actorAccountId);
             $recipients=$this->reviewRecipients($settings,$trip);
             if ($recipients===[]) throw new DomainException('В «Ключи и сервисы» добавьте получателей отчёта.');
-            $package=$this->reviewPackage($_FILES['package']??null,$trip);
             $resolved=$mailProfiles->resolve($actorAccountId,(int)$sender['legal_entity_id']);
             $credentials=$mailProfiles->credentials($actorAccountId,(int)$sender['legal_entity_id']);
             if ((int)$credentials['id']!==(int)$sender['id'] || (int)$resolved['profile_id']!==(int)$sender['id']
                 || (string)$credentials['email']!==(string)$sender['email'] || (string)$resolved['email']!==(string)$sender['email']) throw new DomainException('Ваш рабочий ящик изменился. Обновите страницу.');
             $domain=substr(strrchr((string)$sender['email'],'@')?:'',1);
+            $packageStore=new TripReviewPackageStore((int)$company['id']);
+            if (function_exists('set_time_limit')) @set_time_limit(300);
+            $publishedToken=$packageStore->publish((string)($_POST['package_token']??''),$id,$actor,(int)$version,
+                (string)$_POST['snapshot_hash'],'Рейс_'.$trip['business_id'].'_комплект.zip',
+                function(string $path)use($trip):void { $this->reviewPackage($path,$trip); });
+            $origin=rtrim((string)env('APP_PUBLIC_ORIGIN','https://plan-ex.ru'),'/');
+            if (!preg_match('~^https://[a-zA-Z0-9.-]+(?::[0-9]{2,5})?$~D',$origin)
+                && !preg_match('~^http://127\.0\.0\.1:[0-9]{2,5}$~D',$origin)) {
+                throw new DomainException('Публичный адрес ERP настроен неверно.');
+            }
+            $link=$origin.app_url('/trip-review-package/'.(int)$company['id'].'/'.$publishedToken);
+            $mail=TripReviewEmail::build($trip,$link);
             $messageId='<trip-completion-'.$id.'-'.((int)$version+1).'-'.bin2hex(random_bytes(6)).'@'.$domain.'>';
             $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
                 'subject'=>'Рейс №'.$trip['business_id'].' — комплект документов',
-                'text'=>'Рейс №'.$trip['business_id'].' передан на проверку. Комплект документов во вложении.',
-                'attachments'=>[['name'=>'Рейс_'.$trip['business_id'].'_комплект.zip','mime'=>'application/zip','bytes'=>$package]]];
+                'text'=>$mail['text'],'html'=>$mail['html'],'attachments'=>[]];
             DocumentMailMime::build($message);
             $result=$service->transitionReview($id,(int)$version,'submit',$actor,$login);
+            $transitioned=true;
             $service->beginReviewMail($id,$result['version'],$messageId);
             $mailState=(new DocumentMailTransport())->send($credentials,$message);
             $service->finishReviewMail($id,$messageId,$mailState);
             $this->json(['ok'=>true,'mail_status'=>$mailState]+$result);
         } catch (Throwable $exception) {
+            if (isset($publishedToken,$packageStore) && empty($transitioned)) $packageStore->discard($publishedToken);
             if (isset($service,$id,$messageId)) {
                 try { $service->finishReviewMail($id,$messageId,'unknown'); } catch (Throwable) {}
             }
             $this->jsonError($exception,'Не удалось передать рейс.');
+        }
+    }
+
+    public function packageStage(string $tripId): void
+    {
+        header('Cache-Control: no-store');
+        try {
+            [$company,$service,$actor]=$this->context();$this->assertReady($service);
+            $trip=$service->trip((int)$tripId);
+            if ($trip['review_status']!=='work') throw new DomainException('Рейс уже передан на проверку.');
+            $store=new TripReviewPackageStore((int)$company['id']);
+            $token=(string)($_SERVER['HTTP_X_PLANEX_UPLOAD']??'');
+            if ($token!=='') {
+                $offset=filter_var($_SERVER['HTTP_X_PLANEX_OFFSET']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+                if ($offset===false) throw new DomainException('Некорректная позиция загрузки.');
+                if (function_exists('set_time_limit')) @set_time_limit(120);
+                $size=$store->append($token,(int)$tripId,$actor,(int)$offset);
+                $this->json(['ok'=>true,'size'=>$size]);
+            }
+            $version=filter_var($_POST['version']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            $snapshot=(string)($_POST['snapshot_hash']??'');
+            if ($version===false || $version!==(int)$trip['review_version']
+                || !hash_equals($this->reviewSnapshot($trip),$snapshot)) {
+                throw new DomainException('Данные рейса изменились. Обновите страницу и повторите действие.');
+            }
+            $this->json(['ok'=>true,'upload_token'=>$store->begin((int)$tripId,$actor,(int)$version,$snapshot)]);
+        } catch (Throwable $exception) { $this->jsonError($exception,'Не удалось загрузить комплект.'); }
+    }
+
+    public function sharedPackage(string $companyId,string $token): void
+    {
+        try {
+            if (!preg_match('/^[1-9][0-9]{0,9}$/D',$companyId)) throw new DomainException('Ссылка недействительна.');
+            $file=(new TripReviewPackageStore((int)$companyId))->download($token);
+            $stream=fopen($file['path'],'rb');
+            if ($stream===false) throw new DomainException('Комплект недоступен.');
+            if (session_status()===PHP_SESSION_ACTIVE) session_write_close();
+            if (function_exists('set_time_limit')) @set_time_limit(0);
+            header('Cache-Control: private, no-store');
+            header('X-Robots-Tag: noindex, nofollow');
+            header('Content-Type: application/zip');
+            header('Content-Length: '.$file['size']);
+            header("Content-Disposition: attachment; filename*=UTF-8''".rawurlencode($file['name']));
+            try {
+                while (!feof($stream) && !connection_aborted()) {
+                    $chunk=fread($stream,1024*1024);
+                    if ($chunk===false || $chunk==='') break;
+                    echo $chunk;
+                    flush();
+                }
+            } finally { fclose($stream); }
+        } catch (Throwable) {
+            if (!headers_sent()) {
+                http_response_code(404);header('Content-Type: text/plain; charset=utf-8');
+                echo 'Ссылка недействительна или срок её действия истёк.';
+            }
         }
     }
 
@@ -170,33 +240,27 @@ final class TripCompletionController
         return array_values(array_unique(array_map('strtolower',$addresses)));
     }
 
-    /** @param mixed $file @param array<string,mixed> $trip */
-    private function reviewPackage(mixed $file,array $trip): string
+    /** @param array<string,mixed> $trip */
+    private function reviewPackage(string $path,array $trip): void
     {
-        if (!is_array($file) || ($file['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || !is_uploaded_file((string)($file['tmp_name']??''))) throw new DomainException('Не удалось получить комплект. Проверьте размер файла.');
-        $size=(int)($file['size']??0);
-        if ($size<100 || $size>16*1024*1024) throw new DomainException('Комплект превышает размер почтового вложения (16 МБ).');
         $zip=new ZipArchive();
-        if ($zip->open((string)$file['tmp_name'])!==true) throw new DomainException('Комплект повреждён.');
+        if ($zip->open($path)!==true) throw new DomainException('Комплект повреждён.');
         try {
             $expected=1+count(array_filter($trip['requests'],static fn(array $request):bool=>!empty($request['documents'])));
             if ($zip->numFiles!==$expected) throw new DomainException('Состав комплекта не совпадает с рейсом.');
             $expectedNames=['Рейс_'.$trip['business_id'].'_сводный_отчёт.xlsx'=>true];
             foreach ($trip['requests'] as $request) if (!empty($request['documents'])) $expectedNames['Заявка_'.$request['zayavka_id'].'_ТН.pdf']=true;
-            $seen=[];$total=0;
+            $seen=[];
             for ($i=0;$i<$zip->numFiles;$i++) {
                 $stat=$zip->statIndex($i);if (!is_array($stat)) throw new DomainException('Комплект повреждён.');
-                $name=(string)$stat['name'];$total+=(int)$stat['size'];
-                if ($total>32*1024*1024 || !isset($expectedNames[$name]) || isset($seen[$name])) throw new DomainException('Состав комплекта не совпадает с рейсом.');
+                $name=(string)$stat['name'];
+                if (!isset($expectedNames[$name]) || isset($seen[$name])) throw new DomainException('Состав комплекта не совпадает с рейсом.');
                 $seen[$name]=true;
                 $header=$zip->getFromIndex($i,4);
                 if (!is_string($header) || (str_ends_with($name,'.pdf')?!str_starts_with($header,'%PDF'):!str_starts_with($header,'PK'))) throw new DomainException('Некорректный файл в комплекте.');
             }
             if (count($seen)!==count($expectedNames)) throw new DomainException('Состав комплекта не совпадает с рейсом.');
         } finally { $zip->close(); }
-        $bytes=file_get_contents((string)$file['tmp_name']);
-        if (!is_string($bytes)) throw new DomainException('Не удалось прочитать комплект.');
-        return $bytes;
     }
 
     public function save(string $tripId,string $requestId): void

@@ -17,8 +17,11 @@ foreach(['waste_trip_completion_items','waste_trip_completion_documents','arrive
 foreach(['tn_datetime_missing','data_from_tracker','data_from_driver','data_invented']as$token)$ok(str_contains($extensionMigration,$token),'Migration 143 missing '.$token);
 foreach(['sender_signature_status','driver_signature_status','tn_datetime_status','recovery_source']as$token)$ok(str_contains($statusMigration,$token),'Migration 144 missing '.$token);
 foreach(['/company/logistics-assistant','/report','/package','/documents/{documentId}']as$token)$ok(str_contains($routes,$token),'Route missing '.$token);
-$ok(substr_count($routes,'$tripCompletionPage')===10,'Every endpoint must use the existing collection permission');
-$ok(str_contains($registry,"'company.documents.collection', 'Регистрация времени загрузки', 'Операции', '', 42")&&str_contains($registry,"badgeProvider: 'trip_completion_problem'"),'Standalone navigation entry missing');
+$ok(substr_count($routes,'$tripCompletionPage')===11&&str_contains($routes,'/package-stage'),
+    'Every registrar endpoint, including chunked package upload, must use the collection permission');
+$ok(str_contains($registry,"'company.documents.collection', 'Регистрация времени загрузки', 'Операции', '', 42")
+    &&str_contains($registry,"badgeProvider: 'trip_completion_problem'")
+    &&str_contains($registry,"badgeProvider: 'tn_review_pending'"),'Registrar and reviewer navigation counters missing');
 $ok(str_contains($view,'Регистрация прибытия и убытия у отходообразователя')&&str_contains($view,'Дата и время загрузки по рейсам в процессе вывоза и сданным рейсам.'),'Compact page title missing');
 $ok(str_contains($view,'lab-trip-status')&&str_contains($view,'lab-trip-manager')&&str_contains($view,'lab-pickup-address')&&!str_contains($view,'class="lab-trip-label">Перевозчик'),'Trip status, manager, and pickup address missing');
 foreach(['Показать все рейсы','Показать архив','В работе','На проверке','Проверено / архив','Передать на проверку','Вернуть на доработку','Переместить в архив','Вернуть из архива','Дата и время прибытия/убытия','ДД.ММ.ГГ ЧЧ:ММ - ЧЧ:ММ','Подпись ОО','Подпись водителя','Дата и время указаны','Данные восстановлены','Со слов вод./мен','+ Добавить скан','Просмотр','Скачать полный комплекс']as$label)$ok(str_contains($view,$label),'UI missing '.$label);

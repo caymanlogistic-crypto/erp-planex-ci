@@ -80,7 +80,7 @@ $feoRequestsActive = str_starts_with($requestPath, '/company/feo/requests') && !
 
 $navigationCounters = [
     'bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0,
-    'linear_trips_problem' => 0, 'departures_problem' => 0, 'warehouse_stock_problem' => 0, 'trip_completion_problem' => 0,
+    'linear_trips_problem' => 0, 'departures_problem' => 0, 'warehouse_stock_problem' => 0, 'trip_completion_problem' => 0, 'tn_review_pending' => 0,
     'feo_freshness' => 0, 'feo_placement_problem' => 0, 'feo_map_problem' => 0, 'feo_utilizer_problem' => 0, 'feo_cost_problem' => 0, 'production_calendar_warning' => 0,
 ];
 if ((($effectiveAccess !== null && $effectiveAccess->isActive()) || $roleCode === 'company_owner') && (int)$companyId > 0) {
@@ -106,7 +106,8 @@ $navigationBadgeTitle = static function (array $page): string {
         'linear_trips_problem' => 'Требуется актуализировать дату выгрузки',
         'departures_problem' => 'Ошибки в рейсах отходов',
         'warehouse_stock_problem' => 'Расхождения складских рейсов со старой базой',
-        'trip_completion_problem' => 'Заявок в работе',
+        'trip_completion_problem' => 'Рейсов в работе',
+        'tn_review_pending' => 'Рейсов на проверке',
         'feo_freshness' => 'Требуется обновить заявки ФЭО',
         'feo_placement_problem' => 'Расхождения размещения со старой базой или блоками',
         'feo_map_problem' => 'Проблемы данных карты ФЭО',
