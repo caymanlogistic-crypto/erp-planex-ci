@@ -1,5 +1,5 @@
 <?php
-$kindLabels=['initial'=>'Начальное состояние','time'=>'Время','marks'=>'Отметки','scan'=>'Сканы','comment'=>'Комментарий'];
+$kindLabels=['initial'=>'Начальное состояние','time'=>'Время','marks'=>'Отметки','scan'=>'Сканы','comment'=>'Комментарий','review'=>'Проверка рейса'];
 $fieldLabels=[
     'arrived_at'=>'Прибытие','departed_at'=>'Убытие',
     'sender_signature_status'=>'Подпись ОО','driver_signature_status'=>'Подпись водителя',
@@ -7,13 +7,14 @@ $fieldLabels=[
     'tn_absent'=>'Нет ТН','comment'=>'Комментарий','file'=>'Скан ТН','download_name'=>'Имя файла','active'=>'В комплекте',
     'sender_signature_present'=>'Подпись ОО — наличие','driver_signature_present'=>'Подпись водителя — наличие',
     'tn_datetime_missing'=>'Время отсутствует','data_from_tracker'=>'Восстановлено по трекеру',
-    'data_from_driver'=>'Со слов вод./мен','data_invented'=>'Прежняя отметка «Придуманы»',
+    'data_from_driver'=>'Со слов вод./мен','data_invented'=>'Прежняя отметка «Придуманы»','review_status'=>'Статус проверки',
 ];
 $valueText=static function(string $field,mixed $value): string {
     if ($value===null || $value==='') return 'Не указано';
     if (in_array($field,['sender_signature_status','driver_signature_status'],true)) return ['yes'=>'Есть','no'=>'Нет'][$value]??(string)$value;
     if ($field==='tn_datetime_status') return ['full'=>'Полностью','partial'=>'Частично','no'=>'Нет'][$value]??(string)$value;
     if ($field==='recovery_source') return ['tracker'=>'По трекеру','driver'=>'Со слов вод./мен','invented'=>'Со слов вод./мен'][$value]??(string)$value;
+    if ($field==='review_status') return ['work'=>'В работе','review'=>'На проверке','archive'=>'Проверено / архив'][$value]??(string)$value;
     if (in_array($field,['tn_absent','active','sender_signature_present','driver_signature_present','tn_datetime_missing','data_from_tracker','data_from_driver','data_invented'],true)) return (int)$value===1?'Да':'Нет';
     return (string)$value;
 };
@@ -38,7 +39,7 @@ $pageUrl=static function(int $page) use ($filters): string {
   <div class="registration-journal-results"><strong>Найдено: <?= (int)$journal['total'] ?></strong><span>Сначала новые</span></div>
   <div class="registration-journal-list"><table class="registration-journal-table"><thead><tr><th scope="col">ДАТА И ВРЕМЯ ДЕЙСТВИЯ</th><th scope="col">ПОЛЬЗОВАТЕЛЬ</th><th scope="col">РЕЙС / ЗАЯВКА</th><th scope="col">ВИД</th><th scope="col">ДЕЙСТВИЕ</th><th scope="col">ИЗМЕНЕНИЯ · БЫЛО → СТАЛО</th></tr></thead><tbody>
   <?php foreach ($journal['rows'] as $event): ?>
-    <tr class="registration-journal-event"><td data-label="Дата и время действия"><time datetime="<?= e((string)$event['occurred_at']) ?>"><?= e(date('d.m.Y H:i',strtotime((string)$event['occurred_at']))) ?></time></td><td data-label="Пользователь"><b><?= e((string)$event['actor_login']) ?></b></td><td data-label="Рейс / заявка"><b>Рейс #<?= e((string)$event['trip_number']) ?></b><small>Заявка <?= e((string)$event['request_number']) ?></small></td><td data-label="Вид"><span class="registration-journal-kind"><?= e($kindLabels[$event['event_kind']]??(string)$event['event_kind']) ?></span></td><td data-label="Действие"><?= e((string)$event['action_text']) ?></td><td data-label="Изменения" class="registration-journal-changes">
+    <tr class="registration-journal-event"><td data-label="Дата и время действия"><time datetime="<?= e((string)$event['occurred_at']) ?>"><?= e(date('d.m.Y H:i',strtotime((string)$event['occurred_at']))) ?></time></td><td data-label="Пользователь"><b><?= e((string)$event['actor_login']) ?></b></td><td data-label="Рейс / заявка"><b>Рейс #<?= e((string)$event['trip_number']) ?></b><small><?= $event['request_number']===null?'Весь рейс':'Заявка '.e((string)$event['request_number']) ?></small></td><td data-label="Вид"><span class="registration-journal-kind"><?= e($kindLabels[$event['event_kind']]??(string)$event['event_kind']) ?></span></td><td data-label="Действие"><?= e((string)$event['action_text']) ?></td><td data-label="Изменения" class="registration-journal-changes">
       <?php foreach (array_unique(array_merge(array_keys($event['before']),array_keys($event['after']))) as $field): ?>
       <div class="registration-journal-delta"><b><?= e($fieldLabels[$field]??$field) ?></b><span><?= e(array_key_exists($field,$event['before'])?$valueText($field,$event['before'][$field]):'История неизвестна') ?></span><em aria-label="стало">→</em><strong><?= e(array_key_exists($field,$event['after'])?$valueText($field,$event['after'][$field]):'Удалено') ?></strong></div>
       <?php endforeach; ?>

@@ -261,6 +261,22 @@
       },
     };
   }
+  const buildPackage = async (trip, progress) => {
+    const id=trip.querySelector('.lab-trip-identity b')?.textContent.match(/\d+/)?.[0] || '0';
+    const report=makeXlsx(trip);
+    const files=[[`Рейс_${id}_сводный_отчёт.xlsx`,report]];
+    const rowsWithScans=reportRows(trip).filter((row)=>row.documents.length);
+    progress?.pdf(0,rowsWithScans.length);
+    progress?.stage(1,rowsWithScans.length?'Обрабатываем сканы ТН…':'Сканов ТН для PDF нет.');
+    for (const row of rowsWithScans) {
+      const result=await makePdf(row);
+      files.push([`Заявка_${row.id}_ТН.pdf`,result.data]);
+      progress?.pdf(files.length-1,rowsWithScans.length);
+    }
+    progress?.stage(2,'Упаковываем отчёт и PDF…');
+    return {bytes:zip(files),name:`Рейс_${id}_комплект.zip`,pdfCount:rowsWithScans.length};
+  };
+  window.TripCompletionReport={buildPackage};
   const downloadTrip = async (link) => {
     const trip=link.closest('.logistics-trip'); if (!trip) return;
     const id=trip.querySelector('.lab-trip-identity b')?.textContent.match(/\d+/)?.[0] || '0';
@@ -271,24 +287,14 @@
     try {
       if (progress) {progress.stage(0,'Готовим данные заявок…');await paint();}
       else notice(trip,'Подготовка файла…');
-      const report=makeXlsx(trip);
       if (!packageMode) {
+        const report=makeXlsx(trip);
         download(report,'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',`Рейс_${id}_сводный_отчёт.xlsx`);
         clearNotice(trip); return;
       }
-      const files=[[`Рейс_${id}_сводный_отчёт.xlsx`,report]];
-      const rowsWithScans=reportRows(trip).filter((row)=>row.documents.length);
-      progress.pdf(0,rowsWithScans.length);
-      progress.stage(1,rowsWithScans.length?'Обрабатываем сканы ТН…':'Сканов ТН для PDF нет.');
+      const packageFile=await buildPackage(trip,progress);
       await paint();
-      for (const row of rowsWithScans) {
-        const result=await makePdf(row);
-        files.push([`Заявка_${row.id}_ТН.pdf`,result.data]);
-        progress.pdf(files.length-1,rowsWithScans.length);
-      }
-      progress.stage(2,'Упаковываем отчёт и PDF…');
-      await paint();
-      download(zip(files),'application/zip',`Рейс_${id}_комплект.zip`);
+      download(packageFile.bytes,'application/zip',packageFile.name);
       progress.close();
     } catch (error) {
       const message=`Не удалось подготовить комплект: ${error.message}`;

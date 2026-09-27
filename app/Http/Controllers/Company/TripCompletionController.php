@@ -7,10 +7,15 @@ use App\Core\Database;
 use App\Security\AccessRuntime;
 use App\Service\AccessControlService;
 use App\Service\DocumentService;
+use App\Service\DocumentMailTransport;
+use App\Service\DocumentMailMime;
+use App\Service\EmployeeMailProfileService;
+use App\Service\ReportEmailRecipientService;
 use App\Service\TripCompletionService;
 use DomainException;
 use PDO;
 use Throwable;
+use ZipArchive;
 
 final class TripCompletionController
 {
@@ -21,24 +26,27 @@ final class TripCompletionController
         header('Cache-Control: no-store');
         $error=null;$company=null;$trips=[];$metrics=['trips'=>0,'requests'=>0,'ready'=>0,'problems'=>0];
         $query=trim((string)($_GET['q']??''));
-        $hideComplete=!isset($_GET['filter']) || isset($_GET['hide_complete']);
         $success=$_SESSION['trip_completion_success']??null;$formError=$_SESSION['trip_completion_error']??null;
         unset($_SESSION['trip_completion_success'],$_SESSION['trip_completion_error']);
         try {
             [$company,$service]=$this->context();
-            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (148).');
+            if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (150).');
             $all=$service->trips('',false);
+            $work=array_values(array_filter($all,static fn(array $row):bool=>$row['review_status']==='work'));
             $metrics=[
-                'trips'=>count($all),
+                'trips'=>count($work),
                 'requests'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count'],$all)),
                 'ready'=>array_sum(array_map(static fn(array $row):int=>(int)$row['complete_count'],$all)),
-                'problems'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count']-(int)$row['complete_count'],$all)),
+                'problems'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count']-(int)$row['complete_count'],$work)),
             ];
             $trips=$service->trips('',false);
             foreach ($trips as $index=>$trip) {
                 $details=$service->trip((int)$trip['id']);
                 $trips[$index]=array_merge($trip,$details);
             }
+            $order=['work'=>0,'review'=>1,'archive'=>2];
+            usort($trips,static fn(array $a,array $b):int=>($order[$a['review_status']]??3)<=>($order[$b['review_status']]??3)
+                ?: ((int)$b['business_id']<=>(int)$a['business_id']));
             $openTripId=max(0,(int)($_GET['trip_id']??0));
         } catch (DomainException $exception) { $error=$exception->getMessage(); }
         catch (Throwable $exception) { error_log('trip completion index failed: '.$exception->getMessage());$error='Не удалось загрузить рабочее место помощника логиста.'; }
@@ -67,6 +75,107 @@ final class TripCompletionController
         $config=$this->config;$db=$this->db;
         ob_start();require base_path('app/View/pages/company_registration_journal.php');$content=(string)ob_get_clean();
         require base_path('app/View/layouts/main.php');
+    }
+
+    public function reviewPreview(string $tripId): void
+    {
+        header('Cache-Control: no-store');
+        try {
+            [$company,$service]=$this->context();$this->assertReady($service);
+            $trip=$service->trip((int)$tripId);
+            $settings=(new ReportEmailRecipientService($this->db->connection(),(int)$company['id']))->read();
+            $senderReady=count(array_filter($settings['senders'],static fn(array $sender):bool=>(int)$sender['id']===(int)$settings['sender_profile_id']))===1;
+            $this->json(['ok'=>true,'status'=>$trip['review_status'],'version'=>(int)$trip['review_version'],
+                'problems'=>$service->reviewProblems($trip),'snapshot_hash'=>$this->reviewSnapshot($trip),
+                'sender_ready'=>$senderReady,'recipient_count'=>count($this->reviewRecipients($settings,$trip))]);
+        } catch (Throwable $exception) { $this->jsonError($exception,'Не удалось проверить рейс.'); }
+    }
+
+    public function reviewAction(string $tripId): void
+    {
+        verifyCsrfRequest();header('Cache-Control: no-store');
+        try {
+            [$company,$service,$actor,$login]=$this->context();$this->assertReady($service);
+            $id=(int)$tripId;$version=filter_var($_POST['version']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
+            if ($version===false) throw new DomainException('Обновите страницу и повторите действие.');
+            $action=(string)($_POST['action']??'');
+            if ($action==='return') {
+                $result=$service->transitionReview($id,(int)$version,'return',$actor,$login);
+                $this->json(['ok'=>true]+$result);
+            }
+            if ($action!=='submit') throw new DomainException('Неизвестное действие с рейсом.');
+            $trip=$service->trip($id);
+            if ((int)$trip['request_count']===0) throw new DomainException('В рейсе нет заявок для передачи.');
+            if (!hash_equals($this->reviewSnapshot($trip),(string)($_POST['snapshot_hash']??''))) throw new DomainException('Данные рейса изменились. Обновите страницу и проверьте комплект снова.');
+            $settings=(new ReportEmailRecipientService($this->db->connection(),(int)$company['id']))->read();
+            $sender=(new ReportEmailRecipientService($this->db->connection(),(int)$company['id']))->sender((int)$settings['sender_profile_id']);
+            $recipients=$this->reviewRecipients($settings,$trip);
+            if ($recipients===[]) throw new DomainException('В «Ключи и сервисы» добавьте получателей отчёта.');
+            $package=$this->reviewPackage($_FILES['package']??null,$trip);
+            $credentials=(new EmployeeMailProfileService($this->db->connection(),(int)$company['id']))->credentials((int)$sender['account_id'],(int)$sender['legal_entity_id']);
+            if ((int)$credentials['id']!==(int)$sender['id']) throw new DomainException('Ящик отправителя изменился. Обновите настройки.');
+            $domain=substr(strrchr((string)$sender['email'],'@')?:'',1);
+            $messageId='<trip-completion-'.$id.'-'.((int)$version+1).'-'.bin2hex(random_bytes(6)).'@'.$domain.'>';
+            $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
+                'subject'=>'Рейс №'.$trip['business_id'].' — комплект документов',
+                'text'=>'Рейс №'.$trip['business_id'].' передан '.($service->reviewProblems($trip)===[]?'в архив':'на проверку').'. Комплект документов во вложении.',
+                'attachments'=>[['name'=>'Рейс_'.$trip['business_id'].'_комплект.zip','mime'=>'application/zip','bytes'=>$package]]];
+            DocumentMailMime::build($message);
+            $result=$service->transitionReview($id,(int)$version,'submit',$actor,$login);
+            $service->beginReviewMail($id,$result['version'],$messageId);
+            $mailState=(new DocumentMailTransport())->send($credentials,$message);
+            $service->finishReviewMail($id,$messageId,$mailState);
+            $this->json(['ok'=>true,'mail_status'=>$mailState]+$result);
+        } catch (Throwable $exception) {
+            if (isset($service,$id,$messageId)) {
+                try { $service->finishReviewMail($id,$messageId,'unknown'); } catch (Throwable) {}
+            }
+            $this->jsonError($exception,'Не удалось передать рейс.');
+        }
+    }
+
+    /** @param array<string,mixed> $trip */
+    private function reviewSnapshot(array $trip): string
+    {
+        return hash('sha256',json_encode([$trip['review_status'],$trip['review_version'],$trip['requests']],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));
+    }
+
+    /** @param array<string,mixed> $settings @param array<string,mixed> $trip @return list<string> */
+    private function reviewRecipients(array $settings,array $trip): array
+    {
+        $addresses=[];
+        foreach ($settings['recipients'] as $recipient) $addresses[]=(string)$recipient['email'];
+        if ($settings['send_responsible_logist'] && filter_var($trip['manager_email']??null,FILTER_VALIDATE_EMAIL)) $addresses[]=(string)$trip['manager_email'];
+        return array_values(array_unique(array_map('strtolower',$addresses)));
+    }
+
+    /** @param mixed $file @param array<string,mixed> $trip */
+    private function reviewPackage(mixed $file,array $trip): string
+    {
+        if (!is_array($file) || ($file['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || !is_uploaded_file((string)($file['tmp_name']??''))) throw new DomainException('Не удалось получить комплект. Проверьте размер файла.');
+        $size=(int)($file['size']??0);
+        if ($size<100 || $size>16*1024*1024) throw new DomainException('Комплект превышает размер почтового вложения (16 МБ).');
+        $zip=new ZipArchive();
+        if ($zip->open((string)$file['tmp_name'])!==true) throw new DomainException('Комплект повреждён.');
+        try {
+            $expected=1+count(array_filter($trip['requests'],static fn(array $request):bool=>!empty($request['documents'])));
+            if ($zip->numFiles!==$expected) throw new DomainException('Состав комплекта не совпадает с рейсом.');
+            $expectedNames=['Рейс_'.$trip['business_id'].'_сводный_отчёт.xlsx'=>true];
+            foreach ($trip['requests'] as $request) if (!empty($request['documents'])) $expectedNames['Заявка_'.$request['zayavka_id'].'_ТН.pdf']=true;
+            $seen=[];$total=0;
+            for ($i=0;$i<$zip->numFiles;$i++) {
+                $stat=$zip->statIndex($i);if (!is_array($stat)) throw new DomainException('Комплект повреждён.');
+                $name=(string)$stat['name'];$total+=(int)$stat['size'];
+                if ($total>32*1024*1024 || !isset($expectedNames[$name]) || isset($seen[$name])) throw new DomainException('Состав комплекта не совпадает с рейсом.');
+                $seen[$name]=true;
+                $header=$zip->getFromIndex($i,4);
+                if (!is_string($header) || (str_ends_with($name,'.pdf')?!str_starts_with($header,'%PDF'):!str_starts_with($header,'PK'))) throw new DomainException('Некорректный файл в комплекте.');
+            }
+            if (count($seen)!==count($expectedNames)) throw new DomainException('Состав комплекта не совпадает с рейсом.');
+        } finally { $zip->close(); }
+        $bytes=file_get_contents((string)$file['tmp_name']);
+        if (!is_string($bytes)) throw new DomainException('Не удалось прочитать комплект.');
+        return $bytes;
     }
 
     public function save(string $tripId,string $requestId): void
@@ -170,7 +279,7 @@ final class TripCompletionController
     }
 
     private function assertReady(TripCompletionService $service): void
-    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (148).'); }
+    { if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (150).'); }
 
     /** @return list<array<string,mixed>> */
     private function uploadedFiles(string $field): array

@@ -56,7 +56,7 @@ try{
   assert.ok(!sheet.includes('ЛЕГЕНДА'),'legend is absent');
   assert.ok(report.has('xl/styles.xml')&&report.has('xl/theme/theme1.xml'),'sample formatting is present');
   assert.equal(await page.locator('.lab-ready-download, .lab-report-download-state').count(),0,'report creates no extra success UI');
-  const packageButton=toolbar.getByText('Скачать комплект');
+  const packageButton=toolbar.getByText('Скачать полный комплекс');
   await page.route('**/documents/101',async route=>{await new Promise(resolve=>setTimeout(resolve,400));await route.continue();});
   await page.route('**/documents/102',async route=>{await new Promise(resolve=>setTimeout(resolve,400));await route.continue();});
   const packageDownloadPromise=page.waitForEvent('download',{timeout:10000});
@@ -90,12 +90,11 @@ try{
   assert.equal(await page.locator('.lab-package-progress').count(),0,'progress dialog closes when download begins');
   await page.unroute('**/documents/101');
   await page.unroute('**/documents/102');
-  await page.locator('input[name="hide_complete"]').uncheck();
   const secondTrip=page.locator('.logistics-trip').nth(1);
   await secondTrip.locator('summary').click();
   await page.route('**/documents/201',async route=>{await new Promise(resolve=>setTimeout(resolve,150));await route.continue();});
   const secondDownloadPromise=page.waitForEvent('download',{timeout:10000});
-  await secondTrip.locator('.logistics-trip-toolbar').getByText('Скачать комплект').click();
+  await secondTrip.locator('.logistics-trip-toolbar').getByText('Скачать полный комплекс').click();
   await dialog.locator('[data-step="1"][data-state="active"]').waitFor({state:'visible'});
   assert.equal(await dialog.locator('.lab-package-progress-pdf-count').textContent(),'0 из 1','second trip uses its own PDF count');
   assert.equal(await dialog.getByRole('progressbar',{name:'Создание PDF файлов'}).getAttribute('aria-valuemax'),'1','bar maximum changes with selected trip');

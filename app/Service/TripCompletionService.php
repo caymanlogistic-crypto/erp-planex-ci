@@ -20,7 +20,7 @@ final class TripCompletionService
     public function ready(): bool
     {
         try {
-            foreach (['waste_trip_completion_items','waste_trip_completion_documents','waste_trip_registration_journal'] as $table) {
+            foreach (['waste_trip_completion_items','waste_trip_completion_documents','waste_trip_registration_journal','waste_trip_completion_reviews'] as $table) {
                 $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name=?');
                 $stmt->execute([$table]);
                 if ((int)$stmt->fetchColumn()!==1) return false;
@@ -52,6 +52,7 @@ final class TripCompletionService
         $sql="SELECT wt.id,wt.business_id,wt.status,wt.actual_start_date,wt.actual_end_date,wt.comment,wt.updated_at,
                      COALESCE(u.full_name,'') manager_name,COALESCE(u.phone,'') manager_phone,COALESCE(u.email,'') manager_email,
                      COALESCE(d.full_name,'') driver_name,COALESCE(d.phone,'') driver_phone,
+                     COALESCE(cr.review_status,'work') review_status,COALESCE(cr.status_version,0) review_version,
                      COUNT(DISTINCT wtr.id) request_count,
                      COUNT(DISTINCT CASE WHEN i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
                          AND i.driver_signature_present=1 AND i.sender_signature_present=1
@@ -68,11 +69,12 @@ final class TripCompletionService
                 LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id
                 LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
                 LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
+                LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id
                 LEFT JOIN users u ON u.id=wt.responsible_user_id
                 LEFT JOIN crews c ON c.id=wt.route_executor_id
                 LEFT JOIN drivers d ON d.id=c.driver_id
                WHERE {$where}
-               GROUP BY wt.id,wt.business_id,wt.status,wt.actual_start_date,wt.actual_end_date,wt.comment,wt.updated_at,u.full_name,u.phone,u.email,d.full_name,d.phone
+               GROUP BY wt.id,wt.business_id,wt.status,wt.actual_start_date,wt.actual_end_date,wt.comment,wt.updated_at,u.full_name,u.phone,u.email,d.full_name,d.phone,cr.review_status,cr.status_version
                {$having}
                ORDER BY wt.business_id DESC,wt.id DESC";
         $stmt=$this->tenant->prepare($sql); $stmt->execute($params);
@@ -84,11 +86,13 @@ final class TripCompletionService
     {
         $stmt=$this->tenant->prepare("SELECT wt.id,wt.business_id,wt.status,wt.actual_start_date,wt.actual_end_date,wt.comment,
                 COALESCE(u.full_name,'') manager_name,COALESCE(u.phone,'') manager_phone,COALESCE(u.email,'') manager_email,
-                COALESCE(d.full_name,'') driver_name,COALESCE(d.phone,'') driver_phone
+                COALESCE(d.full_name,'') driver_name,COALESCE(d.phone,'') driver_phone,
+                COALESCE(cr.review_status,'work') review_status,COALESCE(cr.status_version,0) review_version
               FROM waste_trips wt
               LEFT JOIN users u ON u.id=wt.responsible_user_id
               LEFT JOIN crews c ON c.id=wt.route_executor_id
               LEFT JOIN drivers d ON d.id=c.driver_id
+              LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id
              WHERE wt.id=? AND wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed') LIMIT 1");
         $stmt->execute([$tripId]); $trip=$stmt->fetch(PDO::FETCH_ASSOC);
         if (!$trip) throw new DomainException('Рейс в процессе вывоза или со сданным грузом не найден.');
@@ -146,6 +150,64 @@ final class TripCompletionService
         if ((int)($request['driver_signature_present']??0)!==1) $issues[]='Нет подписи водителя';
         if ((int)($request['sender_signature_present']??0)!==1) $issues[]='Нет подписи отправителя';
         return $issues;
+    }
+
+    /** @return list<array{label:string,ids:list<string>}> */
+    public function reviewProblems(array $trip): array
+    {
+        $groups=[];
+        foreach ($trip['requests'] as $request) {
+            foreach ($request['issues'] as $issue) {
+                $groups[$issue][]=(string)$request['zayavka_id'];
+            }
+        }
+        $result=[];
+        foreach ($groups as $label=>$ids) $result[]=['label'=>$label,'ids'=>array_values(array_unique($ids))];
+        return $result;
+    }
+
+    /** @return array{status:string,version:int,problems:list<array{label:string,ids:list<string>}> >} */
+    public function transitionReview(int $tripId,int $expectedVersion,string $action,int $actorMembershipId,string $actorLogin=''): array
+    {
+        if (!in_array($action,['submit','return'],true)) throw new DomainException('Неизвестное действие с рейсом.');
+        $this->tenant->beginTransaction();
+        try {
+            $lock=$this->tenant->prepare("SELECT id FROM waste_trips WHERE id=? AND deleted_at IS NULL AND status IN ('in_progress','completed') FOR UPDATE");
+            $lock->execute([$tripId]);
+            if (!$lock->fetchColumn()) throw new DomainException('Рейс недоступен.');
+            $this->tenant->prepare("INSERT IGNORE INTO waste_trip_completion_reviews (waste_trip_id) VALUES (?)")->execute([$tripId]);
+            $current=$this->tenant->prepare('SELECT review_status,status_version FROM waste_trip_completion_reviews WHERE waste_trip_id=? FOR UPDATE');
+            $current->execute([$tripId]);$row=$current->fetch(PDO::FETCH_ASSOC);
+            if ((int)$row['status_version']!==$expectedVersion) throw new DomainException('Статус рейса изменился. Обновите страницу.');
+            if ($action==='submit' && $row['review_status']!=='work') throw new DomainException('Рейс уже передан на проверку.');
+            if ($action==='return' && $row['review_status']==='work') throw new DomainException('Рейс уже находится в работе.');
+            $trip=$this->trip($tripId);
+            $problems=$this->reviewProblems($trip);
+            $next=$action==='return'?'work':($problems===[]?'archive':'review');
+            $update=$this->tenant->prepare('UPDATE waste_trip_completion_reviews SET review_status=?,status_version=status_version+1,updated_by_membership_id=?,submitted_at=IF(?=\'submit\',NOW(6),submitted_at),mail_status=IF(?=\'submit\',\'pending\',mail_status),mail_error=IF(?=\'submit\',NULL,mail_error) WHERE waste_trip_id=?');
+            $update->execute([$next,$actorMembershipId,$action,$action,$action,$tripId]);
+            $this->writeJournal($tripId,null,null,'review',$action==='return'?'Рейс возвращён в работу':($next==='archive'?'Рейс проверен и перенесён в архив':'Рейс передан на проверку'),$actorMembershipId,$actorLogin,
+                ['review_status'=>$row['review_status']],['review_status'=>$next]);
+            $this->tenant->commit();
+            return ['status'=>$next,'version'=>$expectedVersion+1,'problems'=>$problems];
+        } catch (Throwable $error) {
+            if ($this->tenant->inTransaction()) $this->tenant->rollBack();
+            throw $error;
+        }
+    }
+
+    public function beginReviewMail(int $tripId,int $version,string $messageId): void
+    {
+        $stmt=$this->tenant->prepare("UPDATE waste_trip_completion_reviews SET mail_status='sending',mail_message_id=? WHERE waste_trip_id=? AND status_version=? AND mail_status='pending'");
+        $stmt->execute([$messageId,$tripId,$version]);
+        if ($stmt->rowCount()!==1) throw new DomainException('Отправка уже начата или статус рейса изменился.');
+    }
+
+    public function finishReviewMail(int $tripId,string $messageId,string $state): void
+    {
+        if (!in_array($state,['accepted','failed','unknown'],true)) throw new DomainException('Некорректный результат отправки.');
+        $stmt=$this->tenant->prepare('UPDATE waste_trip_completion_reviews SET mail_status=?,mail_error=? WHERE waste_trip_id=? AND mail_message_id=?');
+        $stmt->execute([$state,$state==='accepted'?null:($state==='unknown'?'Отправка не подтверждена. Проверьте почту перед повторной передачей.':'Не удалось отправить письмо.'),$tripId,$messageId]);
     }
 
     public function save(int $tripId,int $requestId,array $input,int $actorMembershipId,string $actorLogin=''): void
@@ -291,7 +353,7 @@ final class TripCompletionService
         $user=trim((string)($filters['user']??''));
         if ($user!=='') { $where[]='j.actor_login=?';$params[]=$user; }
         $kind=trim((string)($filters['kind']??''));
-        if (in_array($kind,['initial','time','marks','scan','comment'],true)) { $where[]='j.event_kind=?';$params[]=$kind; }
+        if (in_array($kind,['initial','time','marks','scan','comment','review'],true)) { $where[]='j.event_kind=?';$params[]=$kind; }
         $query=trim((string)($filters['q']??''));
         if ($query!=='') {
             $where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR fr.zayavka_id LIKE ?)';
@@ -299,7 +361,7 @@ final class TripCompletionService
             $params[]=$like;$params[]=$like;
         }
         $condition=$where?' WHERE '.implode(' AND ',$where):'';
-        $from=' FROM waste_trip_registration_journal j JOIN waste_trips wt ON wt.id=j.waste_trip_id JOIN waste_trip_requests wtr ON wtr.id=j.waste_trip_request_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id';
+        $from=' FROM waste_trip_registration_journal j JOIN waste_trips wt ON wt.id=j.waste_trip_id LEFT JOIN waste_trip_requests wtr ON wtr.id=j.waste_trip_request_id LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id';
         $count=$this->tenant->prepare('SELECT COUNT(*)'.$from.$condition);
         $count->execute($params);$total=(int)$count->fetchColumn();
         $pages=max(1,(int)ceil($total/50));$page=min($pages,max(1,(int)($filters['page']??1)));
@@ -317,7 +379,7 @@ final class TripCompletionService
         return ['rows'=>$rows,'total'=>$total,'page'=>$page,'pages'=>$pages,'users'=>$users];
     }
 
-    private function writeJournal(int $tripId,int $requestId,?int $documentId,string $kind,string $action,int $actorMembershipId,string $actorLogin,array $before,array $after): void
+    private function writeJournal(int $tripId,?int $requestId,?int $documentId,string $kind,string $action,int $actorMembershipId,string $actorLogin,array $before,array $after): void
     {
         $stmt=$this->tenant->prepare('INSERT INTO waste_trip_registration_journal
             (waste_trip_id,waste_trip_request_id,document_id,event_kind,action_text,actor_membership_id,actor_login,before_json,after_json)
@@ -392,9 +454,10 @@ final class TripCompletionService
     /** @return array{business_id:int|string,zayavka_id:string} */
     private function assertRequest(int $tripId,int $requestId): array
     {
-        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.id=? AND wt.id=? AND wt.status IN ('in_progress','completed') AND wt.deleted_at IS NULL LIMIT 1");
+        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id,COALESCE(cr.review_status,'work') review_status FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id WHERE wtr.id=? AND wt.id=? AND wt.status IN ('in_progress','completed') AND wt.deleted_at IS NULL LIMIT 1");
         $stmt->execute([$requestId,$tripId]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new DomainException('Заявка рейса не найдена.');
+        if ($row['review_status']!=='work') throw new DomainException('Верните рейс в работу, чтобы изменить заявку.');
         return $row;
     }
 

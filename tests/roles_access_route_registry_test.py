@@ -29,7 +29,7 @@ def calls(text):
 
 company_routes, unmapped = [], []
 for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
-    source = path.read_text()
+    source = path.read_text(encoding="utf-8")
     for call, argc in calls(source):
         route = re.search(r"\(\s*['\"](/company[^'\"]*)", call, re.S)
         if route is None: continue
@@ -37,37 +37,37 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 370, f"company route inventory drift: {len(company_routes)}"
-documents = (ROOT / 'app/Http/Routes/company_trip_documents.php').read_text()
+assert len(company_routes) == 372, f"company route inventory drift: {len(company_routes)}"
+documents = (ROOT / 'app/Http/Routes/company_trip_documents.php').read_text(encoding="utf-8")
 assert documents.count('$router->') == 16
 assert "'company.documents.request'" in documents and "'company.documents.collection'" in documents
-trip_routes = (ROOT / "app/Http/Routes/company_linear_trips.php").read_text()
+trip_routes = (ROOT / "app/Http/Routes/company_linear_trips.php").read_text(encoding="utf-8")
 assert "/company/trips/departures/synchronize" in trip_routes
 assert "'/company/warehouses/stock'" in trip_routes and "'company.warehouses.stock'" in trip_routes
 assert "/company/trips/departures/legacy" not in trip_routes
-statistics_routes = (ROOT / "app/Http/Routes/company_statistics.php").read_text()
+statistics_routes = (ROOT / "app/Http/Routes/company_statistics.php").read_text(encoding="utf-8")
 assert statistics_routes.count('$router->get(') == 3
 assert "'/company/statistics/managers'" in statistics_routes and "'company.statistics.managers'" in statistics_routes
 assert "'/company/statistics/feo-share'" in statistics_routes and "'company.statistics.feo_share'" in statistics_routes
 assert "'/company/statistics/cargo-balance'" in statistics_routes and "'company.statistics.cargo_balance'" in statistics_routes
-max_routes = (ROOT / "app/Http/Routes/company_max_messaging.php").read_text()
+max_routes = (ROOT / "app/Http/Routes/company_max_messaging.php").read_text(encoding="utf-8")
 for action in ("saveEvent", "previewEvent", "retryEvent"):
     assert f"[$maxMessagingController, '{action}'], $maxSettingsPage" in max_routes, action
 assert unmapped == [("app/Http/Routes/company_contractor_assignments.php", "/company/contractor-assignments/{id}/assign")], unmapped
-contractor_source = (ROOT / unmapped[0][0]).read_text()
+contractor_source = (ROOT / unmapped[0][0]).read_text(encoding="utf-8")
 assert "entity_access_grants" in contractor_source and "company.roles_access" not in contractor_source
-dashboard_source = (ROOT / "app/Http/Routes/company_dashboard.php").read_text()
+dashboard_source = (ROOT / "app/Http/Routes/company_dashboard.php").read_text(encoding="utf-8")
 assert dashboard_source.count("AccessRuntime::current()->isActive()") >= 2
 assert dashboard_source.count("http_response_code(410)") >= 2
-assert "$uri !== '/company/switch'" in (ROOT / "app/Http/Router.php").read_text()
-index_source = (ROOT / "public/index.php").read_text()
+assert "$uri !== '/company/switch'" in (ROOT / "app/Http/Router.php").read_text(encoding="utf-8")
+index_source = (ROOT / "public/index.php").read_text(encoding="utf-8")
 assert "ERP_ROLES_ACCESS_ENABLED" in index_source and "if ($rolesAccessEnabled)" in index_source
 assert "AccessRuntime::current()->compatibilityRoleCode()" in index_source
 assert "$_SESSION['role_code'] = $compatibilityRoleCode" in index_source
-http_runtime = (ROOT / "app/Support/http_runtime.php").read_text()
+http_runtime = (ROOT / "app/Support/http_runtime.php").read_text(encoding="utf-8")
 assert "!in_array('superadmin', $allowed, true)" in http_runtime, "company ACL must never bypass technical superadmin role boundary"
 activation = index_source[index_source.index("if ($rolesAccessEnabled)"):index_source.index("// Route registration")]
 assert "catch (" not in activation
 for route_file in ("company_document_generator.php", "company_switch.php", "company_roles_access.php"):
     assert route_file in index_source
-print("roles access complete route registry: PASS (370 routes; three statistics ACLs; 1 retired legacy writer)")
+print("roles access complete route registry: PASS (372 routes; three statistics ACLs; 1 retired legacy writer)")

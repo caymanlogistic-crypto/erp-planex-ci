@@ -13,7 +13,7 @@ $fails=static function(callable $action):void {try{$action();}catch(DomainExcept
 cleanCompanyPoolDatabase($pdo);
 try {
     $pdo->exec('CREATE TABLE companies(id INT UNSIGNED PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),inn VARCHAR(12)) ENGINE=InnoDB');
-    foreach (['013_create_roles_access.sql','016_create_employee_mail_profiles.sql','017_registration_journal_and_report_recipients.sql'] as $migration) $pdo->exec((string)file_get_contents(BASE_PATH.'/database/migrations/'.$migration));
+    foreach (['013_create_roles_access.sql','016_create_employee_mail_profiles.sql','017_registration_journal_and_report_recipients.sql','018_report_email_sender.sql'] as $migration) $pdo->exec((string)file_get_contents(BASE_PATH.'/database/migrations/'.$migration));
     $pdo->exec("INSERT INTO companies VALUES(1,'A','active','1111111111'),(2,'B','active','2222222222');
       INSERT INTO user_accounts(id,full_name,login,normalized_login,email,password_hash) VALUES
         (1,'Руководитель','owner','owner','owner@example.test','unused'),
@@ -26,7 +26,7 @@ try {
       INSERT INTO company_memberships(id,account_id,company_id,role_id) VALUES
         (101,1,1,10),(102,2,1,11),(103,4,1,11),(201,1,2,20),(202,3,2,21);
       INSERT INTO employee_mail_legal_entities(id,company_id,code,name,email_domain) VALUES(1,1,'planex','A','example.test');
-      INSERT INTO employee_mail_profiles(account_id,company_id,legal_entity_id,email,password_encrypted) VALUES(2,1,1,'karina@company.test','synthetic')");
+      INSERT INTO employee_mail_profiles(account_id,company_id,legal_entity_id,email,password_encrypted,connection_status) VALUES(2,1,1,'karina@company.test','synthetic','connected')");
     $migration=(string)file_get_contents(BASE_PATH.'/database/migrations/017_registration_journal_and_report_recipients.sql');
     $pdo->exec($migration);
     $service=new App\Service\ReportEmailRecipientService($pdo,1);
@@ -36,9 +36,11 @@ try {
     $ok($service->suggest('Другой')===[],'Autocomplete leaked another company');
     $fails(fn()=>$service->save(2,102,[['account_id'=>2,'email'=>'karina@company.test']],false));
     $fails(fn()=>$service->save(1,101,[['account_id'=>3,'email'=>'other@example.test']],false));
-    $service->save(1,101,[['account_id'=>2,'email'=>'karina@company.test'],['email'=>'report@outside.test']],true);
+    $senderId=(int)$pdo->query('SELECT id FROM employee_mail_profiles WHERE account_id=2')->fetchColumn();
+    $service->save(1,101,[['account_id'=>2,'email'=>'karina@company.test'],['email'=>'report@outside.test']],true,$senderId);
     $saved=$service->read();
-    $ok(count($saved['recipients'])===2 && $saved['send_responsible_logist']===true,'Recipient settings did not persist');
+    $ok(count($saved['recipients'])===2 && $saved['send_responsible_logist']===true && $saved['sender_profile_id']===$senderId,'Recipient and sender settings did not persist');
+    $fails(fn()=>$service->save(1,101,[],false,$senderId+1000));
     $ok((new App\Service\ReportEmailRecipientService($pdo,2))->read()['recipients']===[],'Recipient list leaked another company');
     $fails(fn()=>$service->save(1,101,[['email'=>'same@test.test'],['email'=>'same@test.test']],false));
     $ok(count($service->read()['recipients'])===2,'Invalid save modified previous list');
