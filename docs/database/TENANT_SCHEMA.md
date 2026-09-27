@@ -4,7 +4,7 @@
 
 **Physical source of truth:** `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `1344ab2773eb6f5736e153c18e3ffc83532742b75fb5e0dba2336dafa48948d8`
+**Schema fingerprint:** `1d645d434a5f2720c24b53b75724c0b960a26e5317f316c2002eb15323513def`
 
 Foreign keys below are **DB-enforced physical relations only**. Logical/application relations are intentionally not inferred: if the database has no FK, this catalog will not invent one. Use owning application code/Notion semantic records for logical relations.
 

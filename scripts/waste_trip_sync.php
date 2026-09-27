@@ -24,7 +24,7 @@ foreach ($companies as $company) {
     try {
         $cfg = companyDatabaseConfig($config, $company);
         $tenant = new PDO('mysql:host='.$cfg['host'].';port='.($cfg['port'] ?? 3306).';dbname='.$cfg['database'].';charset=utf8mb4', $cfg['username'], $cfg['password'], [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
-        if (!\App\Service\WasteTripService::schemaReady($tenant)) {
+        if (!\App\Service\WasteTripService::legacyMetadataReady($tenant)) {
             fwrite(STDOUT, 'company='.(int)$company['id'].' skipped=schema_not_ready'.PHP_EOL);
             continue;
         }

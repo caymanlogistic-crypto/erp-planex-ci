@@ -179,7 +179,9 @@
       if (!document.url || new URL(document.url, location.href).origin !== location.origin) {
         throw new Error(`Скан ТН ${document.name} недоступен.`);
       }
-      const response = await fetch(document.url, {credentials:'same-origin'});
+      let response;
+      try { response = await fetch(document.url, {credentials:'same-origin'}); }
+      catch { throw new Error(`Не удалось загрузить скан ТН ${document.name}.`); }
       if (!response.ok) throw new Error(`Не удалось загрузить скан ТН ${document.name}.`);
       const blob = await response.blob();
       const file = new File([blob], document.name, {type:blob.type});
@@ -210,16 +212,19 @@
   const paint = () => new Promise((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0)));
   function packageProgress(link) {
     const overlay=document.createElement('div');
-    overlay.className='lab-package-progress';
-    overlay.innerHTML=`<div class="lab-package-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="lab-package-progress-title" tabindex="-1">
-      <h2 id="lab-package-progress-title">Подготовка комплекта</h2>
-      <ol class="lab-package-progress-steps">
-        <li data-step="0"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Формирование отчёта</span></li>
-        <li data-step="1"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Создание PDF файлов</span></li>
-        <li data-step="2"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Создание архива</span></li>
-      </ol>
-      <p class="lab-package-progress-detail" role="status" aria-live="polite"></p>
-      <button class="btn btn-secondary lab-package-progress-close" type="button" hidden>Закрыть</button>
+    overlay.className='modal-overlay is-open lab-package-progress';
+    overlay.innerHTML=`<div class="modal modal-sm lab-package-progress-dialog" role="dialog" aria-modal="true" aria-labelledby="lab-package-progress-title" tabindex="-1">
+      <div class="modal-head"><span class="modal-title" id="lab-package-progress-title">Подготовка комплекта</span></div>
+      <div class="modal-body">
+        <ol class="lab-package-progress-steps">
+          <li data-step="0"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Формирование отчёта</span></li>
+          <li data-step="1"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Создание PDF файлов</span></li>
+          <li data-step="2"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Создание архива</span></li>
+        </ol>
+        <p class="lab-package-progress-detail" role="status" aria-live="polite"></p>
+      </div>
+      <div class="modal-foot"><span class="lab-package-progress-hint">Пожалуйста, подождите…</span>
+        <button class="btn btn-ghost lab-package-progress-close" type="button" hidden>Закрыть</button></div>
     </div>`;
     document.body.append(overlay);
     const dialog=overlay.querySelector('[role="dialog"]'), detail=overlay.querySelector('[role="status"]');
@@ -239,6 +244,7 @@
         });
         detail.textContent=message;
         detail.setAttribute('role','alert');
+        overlay.querySelector('.lab-package-progress-hint').hidden=true;
         const button=overlay.querySelector('button');button.hidden=false;button.focus();
       },
     };

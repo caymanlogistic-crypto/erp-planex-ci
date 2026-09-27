@@ -29,7 +29,7 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
 <form method="get" action="<?=app_url('/company/trips/departures')?>" class="table-toolbar" style="margin-bottom:12px"><div class="toolbar-right" style="margin-left:0;width:100%"><select name="status" class="toolbar-select"><option value="">Все статусы</option><?php foreach(WasteTripService::STATUS_OPTIONS as $v=>$label):?><option value="<?=e($v)?>" <?=$selectedStatus===$v?'selected':''?>><?=e($label)?></option><?php endforeach;?></select><input name="q" class="toolbar-search" value="<?=e($searchQuery)?>" placeholder="ID, описание, заказчик, заявка, исполнитель, менеджер"><select name="sort" class="toolbar-select" aria-label="Сортировка рейсов"><option value="id" <?=$selectedSort==='id'?'selected':''?>>По ID (сначала новые)</option><option value="status" <?=$selectedSort==='status'?'selected':''?>>По статусу</option><option value="manager" <?=$selectedSort==='manager'?'selected':''?>>По менеджеру и статусу</option></select><button class="btn btn-secondary" type="submit">Найти</button><?php if($selectedStatus!==''||$searchQuery!==''||$selectedSort!=='id'):?><a class="btn btn-ghost" href="<?=app_url('/company/trips/departures')?>">Сбросить</a><?php endif;?></div></form>
 <?php if($trips===[]):?><div class="panel"><div class="panel-body"><div class="empty-state"><p class="empty-title">Рейсов пока нет.</p></div></div></div><?php else:?>
 <div class="table-card table-card--standard" data-erp-grid><div class="table-toolbar"><div class="found-label">Найдено: <b><?=count($trips)?></b></div></div>
-<div class="table-scroll waste-table-scroll"><table class="table waste-registry"><thead><tr><th>ID</th><th>ОПИСАНИЕ РЕЙСА</th><th>НАЧАЛО РЕЙСА</th><th>ОКОНЧАНИЕ РЕЙСА</th><th>СТАТУС</th><th>ПОДРЯД. / ВОД.</th><th>ЗАЯВКИ</th><th>ВЕС, КГ</th><th>ГЕН. ЗАКАЗЧИК</th><th>ПРОДАЖА</th><th>СЕБЕС, РУБ</th><th>МЕНЕДЖЕР</th></tr></thead><tbody>
+<div class="table-scroll waste-table-scroll"><table class="table waste-registry"><thead><tr><th>ID</th><th>ОПИСАНИЕ РЕЙСА</th><th>СКЛАД</th><th>НАЧАЛО РЕЙСА</th><th>ОКОНЧАНИЕ РЕЙСА</th><th>СТАТУС</th><th>ПОДРЯД. / ВОД.</th><th>ЗАЯВКИ</th><th>ВЕС, КГ</th><th>ГЕН. ЗАКАЗЧИК</th><th>ПРОДАЖА</th><th>СЕБЕС, РУБ</th><th>МЕНЕДЖЕР</th></tr></thead><tbody>
 <?php foreach($trips as $trip):
     $plan=$planLabel($trip);
     $startPlanned=empty($trip['actual_start_date']) && $plan!=='—';
@@ -45,7 +45,8 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
 ?>
 <tr class="waste-row" data-waste-view="<?=(int)$trip['id']?>" tabindex="0">
     <td class="col-mono registry-id">#<?=(int)$trip['business_id']?></td>
-    <td class="waste-description"><span class="waste-description-text" title="<?=e((string)($trip['comment']??''))?>"><?=e(trim((string)($trip['comment']??''))?:'—')?></span></td>
+    <td class="waste-description"><span class="waste-description-text" title="<?=e((string)($trip['comment']??''))?>"><?=e(trim((string)($trip['comment']??''))?:'—')?></span><?php if($companyName=\App\Service\WasteTripLegacyMetadataService::companyName($trip['legal_entity_code']??null)):?><span class="waste-legal-entity <?=($trip['legal_entity_code']==='mg_logistic'?'is-mg-logistic':'is-planex')?>"><?=e($companyName)?></span><?php endif;?></td>
+    <td class="waste-warehouse"><?=e(\App\Service\WasteTripLegacyMetadataService::warehouseLabel($trip)??'—')?></td>
     <td class="registry-date <?=$startPlanned?'registry-date-planned':''?>"><span class="registry-date-value"><?=e($startLabel)?></span><?php if($startPlanned):?><span class="registry-date-note">(плановая)</span><?php endif;?></td>
     <td class="registry-date <?=$endPlanned?'registry-date-planned':''?>"><span class="registry-date-value"><?=e($endLabel)?></span><?php if($endPlanned):?><span class="registry-date-note">(плановая)</span><?php endif;?></td>
     <td class="waste-status <?=e(WasteTripService::statusCellClass((string)$trip['status']))?>"><?=e(WasteTripService::statusLabel((string)$trip['status']))?></td>
@@ -58,9 +59,9 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
     <td class="waste-weight"><?=e($fmtKg($trip['snapshot_total_mass_kg']??0))?></td>
     <?php foreach([$generalPayments,$customerPayments,$carrierPayments] as $sideIndex=>$payments):
         $payments=array_values(array_filter($payments,static fn(array $payment):bool=>trim((string)($payment['amount']??''))!==''));
-    ?><td class="registry-rate">
-        <?php if($payments!==[]):?><span class="registry-rate-total"><?=e(WasteTripCustomerPaymentService::total($payments))?></span>
-            <?php foreach($payments as $payment):?><span class="registry-payment-line"><?=e(WasteTripCustomerPaymentService::detail($payment))?></span><?php endforeach;?>
+    ?><td class="registry-rate <?=($sideIndex===2&&($trip['legal_entity_code']??null)==='mg_logistic')?'waste-cost-disabled':''?>">
+        <?php if($sideIndex===2&&($trip['legal_entity_code']??null)==='mg_logistic'):?><span aria-hidden="true"></span>
+        <?php elseif($payments!==[]):?><span class="registry-rate-total"><?=e(WasteTripCustomerPaymentService::total($payments))?></span>
         <?php else:?><span class="registry-empty">—</span><?php endif;?>
     <?php if($isFinanceRealm && $sideIndex===1 && WasteTripService::hasPreservedSettlements($trip)):?><span class="registry-payment-line" title="<?=e(WasteTripService::PRESERVED_SETTLEMENTS_NOTICE)?>">Расчёты по прежним условиям</span><?php endif;?>
     </td><?php endforeach;?>

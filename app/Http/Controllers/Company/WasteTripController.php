@@ -123,7 +123,7 @@ final class WasteTripController
             $input=$this->resolveResponsibleInput($context,$_POST);
             $generalPayments=$this->generalPaymentsForSession($_POST,$context['sessionUser']);
             $customerPayments=$this->customerPaymentsForSession($_POST,$context['sessionUser']);
-            $carrierPayments=$this->carrierPaymentsForSession($_POST,$context['sessionUser']);
+            $carrierPayments=array_key_exists('carrier_payments',$_POST)?$this->carrierPaymentsForSession($_POST,$context['sessionUser']):null;
             WasteTripService::update($pdo,(int)$id,$input,$parsed['ids'],(int)($_POST['lock_version']??0),$context['sessionUser'],$customerPayments,$carrierPayments,$generalPayments);
             $_SESSION['waste_trip_success']='Рейс сохранён.';
             $redirect='/company/trips/departures?open_trip='.(int)$id;
