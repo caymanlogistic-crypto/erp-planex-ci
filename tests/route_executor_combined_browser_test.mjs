@@ -52,7 +52,7 @@ try {
         assert.equal(await page.locator('[data-readiness-key="training"][data-state="pending"]').count(), 1);
         if (width === 1280) {
             let payload = '';
-            await page.route('**/company/route-executors/create-combined', async route => {
+            await page.route('**/company/route-executors/create', async route => {
                 payload = route.request().postData() || '';
                 await route.fulfill({ status: 422, json: { ok: false, error: 'Синтетическая ошибка сохранения' } });
             });

@@ -220,7 +220,8 @@
           data.append(targetName, value);
         }
       }
-      const response = await fetch(base + '/company/route-executors/create-combined', { method: 'POST', credentials: 'same-origin', body: data });
+      data.set('_route_executor_combined', '1');
+      const response = await fetch(base + '/company/route-executors/create', { method: 'POST', credentials: 'same-origin', body: data });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось создать исполнителя рейса.');
       window.closeModal('route-executor-create-modal');
