@@ -13,3 +13,13 @@ $router->post('/company/logistics-assistant/{tripId}/requests/{requestId}/docume
 $router->get('/company/logistics-assistant/{tripId}/documents/{documentId}',[$tripCompletionController,'download'],$tripCompletionPage);
 $router->get('/company/logistics-assistant/{tripId}/report',[$tripCompletionController,'report'],$tripCompletionPage);
 $router->get('/company/logistics-assistant/{tripId}/package',[$tripCompletionController,'package'],$tripCompletionPage);
+$tnReviewPage='company.documents.tn_review';
+$router->get('/company/tn-review',[$tripCompletionController,'tnReview'],$tnReviewPage);
+$router->get('/company/tn-review/{tripId}/review',[$tripCompletionController,'tnReviewPreview'],$tnReviewPage);
+$router->post('/company/tn-review/{tripId}/review',[$tripCompletionController,'tnReviewAction'],$tnReviewPage);
+$router->post('/company/tn-review/{tripId}/requests/{requestId}',[$tripCompletionController,'tnReviewSave'],$tnReviewPage);
+$router->post('/company/tn-review/{tripId}/requests/{requestId}/documents',[$tripCompletionController,'tnReviewUpload'],$tnReviewPage);
+$router->post('/company/tn-review/{tripId}/requests/{requestId}/documents/{documentId}/delete',[$tripCompletionController,'tnReviewDeleteFile'],$tnReviewPage);
+$router->get('/company/tn-review/{tripId}/documents/{documentId}',[$tripCompletionController,'tnReviewDownload'],$tnReviewPage);
+$router->get('/company/tn-review/{tripId}/report',[$tripCompletionController,'tnReviewReport'],$tnReviewPage);
+$router->get('/company/tn-review/{tripId}/package',[$tripCompletionController,'tnReviewPackage'],$tnReviewPage);

@@ -19,7 +19,18 @@ use ZipArchive;
 
 final class TripCompletionController
 {
+    private bool $reviewerMode=false;
     public function __construct(private readonly array $config,private readonly Database $db) {}
+
+    public function tnReview(): void { $this->reviewerMode=true; $this->index(); }
+    public function tnReviewPreview(string $tripId): void { $this->reviewerMode=true; $this->reviewPreview($tripId); }
+    public function tnReviewAction(string $tripId): void { $this->reviewerMode=true; $this->reviewAction($tripId); }
+    public function tnReviewSave(string $tripId,string $requestId): void { $this->reviewerMode=true; $this->save($tripId,$requestId); }
+    public function tnReviewUpload(string $tripId,string $requestId): void { $this->reviewerMode=true; $this->upload($tripId,$requestId); }
+    public function tnReviewDeleteFile(string $tripId,string $requestId,string $documentId): void { $this->reviewerMode=true; $this->deleteFile($tripId,$requestId,$documentId); }
+    public function tnReviewDownload(string $tripId,string $documentId): void { $this->reviewerMode=true; $this->download($tripId,$documentId); }
+    public function tnReviewReport(string $tripId): void { $this->reviewerMode=true; $this->report($tripId); }
+    public function tnReviewPackage(string $tripId): void { $this->reviewerMode=true; $this->package($tripId); }
 
     public function index(): void
     {
@@ -32,14 +43,15 @@ final class TripCompletionController
             [$company,$service]=$this->context();
             if (!$service->ready()) throw new DomainException('Рабочее место ожидает обновление схемы (150).');
             $all=$service->trips('',false);
-            $work=array_values(array_filter($all,static fn(array $row):bool=>$row['review_status']==='work'));
+            if ($this->reviewerMode) $all=array_values(array_filter($all,static fn(array $row):bool=>$row['review_status']!=='work'));
+            $work=array_values(array_filter($all,fn(array $row):bool=>$row['review_status']===($this->reviewerMode?'review':'work')));
             $metrics=[
                 'trips'=>count($work),
                 'requests'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count'],$all)),
                 'ready'=>array_sum(array_map(static fn(array $row):int=>(int)$row['complete_count'],$all)),
                 'problems'=>array_sum(array_map(static fn(array $row):int=>(int)$row['request_count']-(int)$row['complete_count'],$work)),
             ];
-            $trips=$service->trips('',false);
+            $trips=$all;
             foreach ($trips as $index=>$trip) {
                 $details=$service->trip((int)$trip['id']);
                 $trips[$index]=array_merge($trip,$details);
@@ -50,9 +62,9 @@ final class TripCompletionController
             $openTripId=max(0,(int)($_GET['trip_id']??0));
         } catch (DomainException $exception) { $error=$exception->getMessage(); }
         catch (Throwable $exception) { error_log('trip completion index failed: '.$exception->getMessage());$error='Не удалось загрузить рабочее место помощника логиста.'; }
-        $pageTitle='Регистрация прибытия и убытия';$pageContext='Рейсы › Регистрация времени загрузки';
-        $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>'Регистрация времени загрузки','url'=>null]];
-        $config=$this->config;$db=$this->db;
+        $pageTitle=$this->reviewerMode?'Проверка ТН':'Регистрация прибытия и убытия';$pageContext='Рейсы › '.($this->reviewerMode?'Проверка ТН':'Регистрация времени загрузки');
+        $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>$this->reviewerMode?'Проверка ТН':'Регистрация времени загрузки','url'=>null]];
+        $config=$this->config;$db=$this->db;$reviewerMode=$this->reviewerMode;
         ob_start();require base_path('app/View/pages/company_logistics_assistant.php');$content=(string)ob_get_clean();require base_path('app/View/layouts/main.php');
     }
 
@@ -82,7 +94,9 @@ final class TripCompletionController
         header('Cache-Control: no-store');
         try {
             [$company,$service,,,$actorAccountId]=$this->context();$this->assertReady($service);
-            $trip=$service->trip((int)$tripId);
+            $trip=$this->visibleTrip($service,(int)$tripId);
+            if ($this->reviewerMode) $this->json(['ok'=>true,'status'=>$trip['review_status'],'version'=>(int)$trip['review_version'],
+                'problems'=>$service->reviewProblems($trip),'snapshot_hash'=>$this->reviewSnapshot($trip)]);
             $settings=(new ReportEmailRecipientService($this->db->connection(),(int)$company['id']))->read();
             $sender=null;$senderError=null;
             try { $sender=(new EmployeeMailProfileService($this->db->connection(),(int)$company['id']))->defaultSender($actorAccountId); }
@@ -102,11 +116,12 @@ final class TripCompletionController
             $id=(int)$tripId;$version=filter_var($_POST['version']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
             if ($version===false) throw new DomainException('Обновите страницу и повторите действие.');
             $action=(string)($_POST['action']??'');
-            if ($action==='return') {
-                $result=$service->transitionReview($id,(int)$version,'return',$actor,$login);
+            if ($this->reviewerMode && in_array($action,['archive','restore'],true)) {
+                $this->visibleTrip($service,$id);
+                $result=$service->transitionReview($id,(int)$version,$action,$actor,$login);
                 $this->json(['ok'=>true]+$result);
             }
-            if ($action!=='submit') throw new DomainException('Неизвестное действие с рейсом.');
+            if ($this->reviewerMode || $action!=='submit') throw new DomainException('Это действие недоступно в вашем разделе.');
             $trip=$service->trip($id);
             if ((int)$trip['request_count']===0) throw new DomainException('В рейсе нет заявок для передачи.');
             if (!hash_equals($this->reviewSnapshot($trip),(string)($_POST['snapshot_hash']??''))) throw new DomainException('Данные рейса изменились. Обновите страницу и проверьте комплект снова.');
@@ -124,7 +139,7 @@ final class TripCompletionController
             $messageId='<trip-completion-'.$id.'-'.((int)$version+1).'-'.bin2hex(random_bytes(6)).'@'.$domain.'>';
             $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
                 'subject'=>'Рейс №'.$trip['business_id'].' — комплект документов',
-                'text'=>'Рейс №'.$trip['business_id'].' передан '.($service->reviewProblems($trip)===[]?'в архив':'на проверку').'. Комплект документов во вложении.',
+                'text'=>'Рейс №'.$trip['business_id'].' передан на проверку. Комплект документов во вложении.',
                 'attachments'=>[['name'=>'Рейс_'.$trip['business_id'].'_комплект.zip','mime'=>'application/zip','bytes'=>$package]]];
             DocumentMailMime::build($message);
             $result=$service->transitionReview($id,(int)$version,'submit',$actor,$login);
@@ -239,7 +254,7 @@ final class TripCompletionController
     public function download(string $tripId,string $documentId): void
     {
         try {
-            [, $service]=$this->context();$this->assertReady($service);$document=$service->document((int)$tripId,(int)$documentId);$path=$service->absoluteDocumentPath($document);
+            [, $service]=$this->context();$this->assertReady($service);$this->visibleTrip($service,(int)$tripId);$document=$service->document((int)$tripId,(int)$documentId);$path=$service->absoluteDocumentPath($document);
             header('Content-Type: '.(string)$document['mime_type']);header('Content-Length: '.filesize($path));
             $disposition=isset($_GET['preview'])?'inline':'attachment';
             header("Content-Disposition: {$disposition}; filename*=UTF-8''".rawurlencode(DocumentService::safeDownloadName((string)$document['download_name'])));
@@ -251,7 +266,7 @@ final class TripCompletionController
     {
         $path=null;
         try {
-            [, $service]=$this->context();$this->assertReady($service);$trip=$service->trip((int)$tripId);$path=$service->xlsx($trip);
+            [, $service]=$this->context();$this->assertReady($service);$trip=$this->visibleTrip($service,(int)$tripId);$path=$service->xlsx($trip);
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');header('Content-Length: '.filesize($path));
             header("Content-Disposition: attachment; filename*=UTF-8''".rawurlencode('Рейс_'.$trip['business_id'].'_сводный_отчет.xlsx'));readfile($path);
         } catch (Throwable) { http_response_code(404);header('Content-Type: text/plain; charset=utf-8');echo 'Отчёт недоступен.'; }
@@ -262,7 +277,7 @@ final class TripCompletionController
     {
         $path=null;
         try {
-            [, $service]=$this->context();$this->assertReady($service);$trip=$service->trip((int)$tripId);$path=$service->package($trip);
+            [, $service]=$this->context();$this->assertReady($service);$trip=$this->visibleTrip($service,(int)$tripId);$path=$service->package($trip);
             header('Content-Type: application/zip');header('Content-Length: '.filesize($path));
             header("Content-Disposition: attachment; filename*=UTF-8''".rawurlencode('Рейс_'.$trip['business_id'].'_ТН_и_отчет.zip'));readfile($path);
         } catch (Throwable) { http_response_code(404);header('Content-Type: text/plain; charset=utf-8');echo 'Архив недоступен.'; }
@@ -282,7 +297,14 @@ final class TripCompletionController
         $login=(string)($identityRow['login']??'');
         if ($login==='' || (int)($identityRow['account_id']??0)<=0) throw new DomainException('Пользователь компании недоступен.');
         $tenant=(new Database(companyDatabaseConfig($this->config,$company)))->connection();
-        return [$company,new TripCompletionService($tenant,$companyId),$actor,$login,(int)$identityRow['account_id']];
+        return [$company,new TripCompletionService($tenant,$companyId,$this->reviewerMode?'review':'work'),$actor,$login,(int)$identityRow['account_id']];
+    }
+
+    private function visibleTrip(TripCompletionService $service,int $tripId): array
+    {
+        $trip=$service->trip($tripId);
+        if ($this->reviewerMode && $trip['review_status']==='work') throw new DomainException('Рейс ещё не передан на проверку.');
+        return $trip;
     }
 
     private function assertReady(TripCompletionService $service): void
@@ -304,7 +326,7 @@ final class TripCompletionController
     private function success(string $message): void { $_SESSION['trip_completion_success']=$message; }
     private function failure(Throwable $exception,string $fallback): void
     { $_SESSION['trip_completion_error']=$exception instanceof DomainException?$exception->getMessage():$fallback;error_log('trip completion action failed: '.$exception->getMessage()); }
-    private function back(int $tripId): never { header('Location: '.app_url('/company/logistics-assistant?trip_id='.$tripId));exit; }
+    private function back(int $tripId): never { header('Location: '.app_url(($this->reviewerMode?'/company/tn-review':'/company/logistics-assistant').'?trip_id='.$tripId));exit; }
 
     private function wantsJson(): bool
     {
