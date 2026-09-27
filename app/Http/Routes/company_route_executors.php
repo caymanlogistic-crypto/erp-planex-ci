@@ -8,7 +8,6 @@ $routeExecutorsPage = 'company.route_executors';
 $router->get('/company/route-executors', [$controller, 'index'], $routeExecutorsPage);
 $router->get('/company/route-executors/create', [$controller, 'createForm'], $routeExecutorsPage);
 $router->post('/company/route-executors/create', [$controller, 'createSubmit'], $routeExecutorsPage);
-$router->post('/company/route-executors/{id}/preview-delete', [$controller, 'previewDelete'], $routeExecutorsPage);
 $router->get('/company/route-executors/{id}', [$controller, 'view'], $routeExecutorsPage);
 $router->get('/company/route-executors/{id}/edit', [$controller, 'editForm'], $routeExecutorsPage);
 $router->post('/company/route-executors/{id}/edit', [$controller, 'editSubmit'], $routeExecutorsPage);

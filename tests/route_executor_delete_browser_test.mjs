@@ -21,7 +21,7 @@ try {
         window._usage = {linear_count: 1, waste_count: 0};
         window.fetch = async (url, options) => {
             window._deleteRequests.push({url, fields: Object.fromEntries(options.body.entries())});
-            const preview = url.endsWith('/preview-delete');
+            const preview = Object.fromEntries(options.body.entries()).preview === '1';
             const data = preview
                 ? {success: true, can_delete: !window._usage.linear_count && !window._usage.waste_count, usage: window._usage, preview_token: 'synthetic-token'}
                 : {success: true};

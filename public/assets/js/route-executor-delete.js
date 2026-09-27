@@ -46,7 +46,7 @@
         if (window.openModal) window.openModal('route-executor-delete-modal');
         else { modal.style.display = 'flex'; modal.classList.add('is-open'); }
         try {
-            var data = await post(base + '/company/route-executors/' + id + '/preview-delete', {});
+            var data = await post(base + '/company/route-executors/' + id + '/archive', {preview: '1'});
             if (currentId !== id || !modal.classList.contains('is-open')) return;
             if (!data.can_delete) {
                 var usage = data.usage || {};
