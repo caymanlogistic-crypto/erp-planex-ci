@@ -3316,18 +3316,19 @@ window.initOwnerCreateForm = window.initPasswordControls;
 
     document.addEventListener('click', function (event) {
         if (event.target.closest('[data-route-executor-create-close]')) {
-            if (createModal && createModal.dataset.refreshOnClose === '1') {
-                window.location.reload();
-                return;
-            }
-            window.closeModal('route-executor-create-modal');
+            event.preventDefault();
+            // Closing an unfinished form must not reload or rebuild the list.
+            if (createModal) createModal.classList.remove('is-open');
+            return;
         }
         if (event.target.closest('[data-route-executor-view-close]')) {
+            event.preventDefault();
             if (viewModal && viewModal.dataset.refreshOnClose === '1') {
                 window.location.reload();
                 return;
             }
-            window.closeModal('route-executor-view-modal');
+            if (viewModal) viewModal.classList.remove('is-open');
+            return;
         }
         var editBtn = event.target.closest('[data-route-executor-edit-btn]');
         if (editBtn) {
