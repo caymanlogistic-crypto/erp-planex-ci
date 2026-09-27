@@ -2,6 +2,8 @@
 
 require_once base_path('app/Support/crew_driver_helpers.php');
 $pageTitle='Исполнители рейса';$pageContext='Исполнители рейса › Компания';$companyId=(int)(getSessionCompanyId()??0);
+$pageStylesheets[] = '/assets/css/route-executor-combined-create.css';
+$pageScripts[] = '/assets/js/route-executor-combined-create.js';
 if($companyId<=0){$company=null;$executors=[];$dbError=null;ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
 try{
     $pdo=$db->connection();$stmt=$pdo->prepare('SELECT * FROM companies WHERE id=?');$stmt->execute([$companyId]);$company=$stmt->fetch(PDO::FETCH_ASSOC);

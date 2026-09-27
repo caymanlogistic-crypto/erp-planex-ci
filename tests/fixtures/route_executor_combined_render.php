@@ -1,0 +1,28 @@
+<?php
+require dirname(__DIR__, 2) . '/bootstrap/app.php';
+require_once BASE_PATH . '/app/Support/core_runtime.php';
+
+$localPdo = new class {
+    public function prepare(): object
+    {
+        return new class {
+            public function execute(): void {}
+            public function fetchAll(): array { return []; }
+        };
+    }
+};
+?><!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="/assets/css/app.css">
+<link rel="stylesheet" href="/assets/css/erp-ui.css">
+<link rel="stylesheet" href="/assets/css/route-executor-combined-create.css">
+</head><body>
+<button type="button" data-route-executor-create-btn>Создать исполнителя рейса</button>
+<?php require BASE_PATH . '/app/View/partials/route_executor_modals.php'; ?>
+<script src="/assets/js/contact-fields.js"></script>
+<script src="/assets/js/legal-entity-documents.js"></script>
+<script src="/assets/js/legal-entity-inn.js"></script>
+<script src="/assets/js/modal-shell.js"></script>
+<script src="/assets/js/app.js"></script>
+<script src="/assets/js/route-executor-combined-create.js"></script>
+</body></html>
