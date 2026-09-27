@@ -36,6 +36,13 @@ final class RouteExecutorController
         require base_path('app/Http/Controllers/Company/RouteExecutorActions/create_submit.php');
     }
 
+    public function createCombinedSubmit(): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+        require base_path('app/Http/Controllers/Company/RouteExecutorActions/create_combined_submit.php');
+    }
+
     public function view(string $crewId): void
     {
         $config = $this->config;
