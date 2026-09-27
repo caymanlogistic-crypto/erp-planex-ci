@@ -29,10 +29,12 @@ try {
         };
     });
     await page.addScriptTag({content: script});
+    if (await page.locator('#route-executor-delete-password').count()) throw new Error('Password field must not exist before deletion is allowed.');
     await page.locator('[data-route-executor-delete-btn]').click();
     await page.getByText('Удаление недоступно').waitFor();
     if (await page.locator('[data-route-executor-delete-confirm]').isEnabled()) throw new Error('Linked trip must block deletion.');
     if (await page.locator('[data-route-executor-delete-password-wrap]').isVisible()) throw new Error('Password must stay hidden for linked trip.');
+    if (await page.locator('#route-executor-delete-password').count()) throw new Error('Linked trip must not create a password field.');
     await page.locator('[data-route-executor-delete-close]').first().click();
     await page.evaluate(() => { window._usage = {linear_count: 0, waste_count: 0}; });
     await page.locator('[data-route-executor-delete-btn]').click();
@@ -51,6 +53,12 @@ try {
     if (!(await page.locator('[data-route-executor-delete-confirm]').isEnabled())) throw new Error('Password did not enable confirmation.');
     const requests = await page.evaluate(() => window._deleteRequests);
     if (requests.length !== 2 || requests.some(request => request.fields._csrf_token !== 'test-token')) throw new Error('Preview requests lack CSRF token.');
+    await page.locator('[data-route-executor-delete-close]').first().click();
+    if (await page.locator('#route-executor-delete-password').count()) throw new Error('Closing deletion must remove the password field.');
+    await page.locator('[data-route-executor-delete-btn]').click();
+    await page.locator('#route-executor-delete-password').waitFor({state: 'visible'});
+    await page.keyboard.press('Escape');
+    if (await page.locator('#route-executor-delete-password').count()) throw new Error('Escape must remove the password field.');
     console.log('ROUTE_EXECUTOR_DELETE_BROWSER=PASS');
 } finally {
     await browser.close();
