@@ -11,6 +11,10 @@ $localPdo = new class {
         };
     }
 };
+$responsibleLogists = [
+    ['membership_id' => 11, 'full_name' => 'Анна Белова', 'login' => 'anna'],
+    ['membership_id' => 12, 'full_name' => 'Борис Серов', 'login' => 'boris'],
+];
 ?><!doctype html>
 <html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="stylesheet" href="/assets/css/app.css">

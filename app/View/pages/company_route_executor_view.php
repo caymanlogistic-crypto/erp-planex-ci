@@ -160,7 +160,7 @@
                 <div class="re-grid">
                     <div class="re-item">
                         <span class="re-label">Ответственный логист</span>
-                        <span class="re-value"><?= e($crew['created_by_name'] ?? '') ?: '—' ?></span>
+                        <span class="re-value"><?= e($crew['responsible_name'] ?? $crew['created_by_name'] ?? '') ?: '—' ?></span>
                     </div>
                     <div class="re-item">
                         <span class="re-label">Статус</span>
