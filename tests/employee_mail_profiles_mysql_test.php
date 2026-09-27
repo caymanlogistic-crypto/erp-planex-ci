@@ -16,6 +16,7 @@ try {
     $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations/013_create_roles_access.sql'));
     $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations/016_create_employee_mail_profiles.sql'));
     $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations/016_create_employee_mail_profiles.sql'));
+    $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations/019_employee_mail_default_sender.sql'));
     $pdo->exec("INSERT INTO companies VALUES(1,'Company A','active','1111111111'),(2,'Company B','active','2222222222'),(3,'Foreign company','active','3333333333')");
     $pdo->exec('INSERT INTO employee_mail_settings(company_id) VALUES(1)');
     $pdo->exec("INSERT INTO user_accounts(id,full_name,login,normalized_login,email,password_hash) VALUES(1,'Owner','owner','owner','original-owner@example.test','unused'),(2,'Logist','logist','logist','original@example.test','unused'),(3,'Assistant','assistant','assistant','assistant-original@example.test','unused'),(4,'Outsider','outsider','outsider',NULL,'unused')");
@@ -49,8 +50,25 @@ try {
     $ok($s->credentials(2,1)['password']==='synthetic-mail-password','Blank password destroyed credential');
     $s->check(1,2,1,static fn(array $c):array=>['imap'=>true,'smtp'=>true]);
     $ok($s->resolve(2,1)['email']==='logist@one.test','Resolver picked wrong company');
+    $ok($s->defaultSender(2)['email']==='logist@one.test','A sole connected mailbox should send implicitly');
+    $second=$s->publicProfile(2,2);
+    $s->save(1,2,2,['email'=>'logist@two.test','password'=>'synthetic-two','version'=>$second['version']]);
+    $s->check(1,2,2,static fn(array $c):array=>['imap'=>true,'smtp'=>true]);
+    $fails(fn()=>$s->defaultSender(2));
+    $one=$s->publicProfile(2,1);$two=$s->publicProfile(2,2);
+    $s->saveBatch(1,2,[
+        ['legal_entity_id'=>1,'email'=>'logist@one.test','version'=>$one['version'],'is_default'=>false],
+        ['legal_entity_id'=>2,'email'=>'logist@two.test','version'=>$two['version'],'is_default'=>true],
+    ]);
+    $ok($s->defaultSender(2)['email']==='logist@two.test','Two-mailbox sender must use the actor default');
+    $fails(fn()=>$s->saveBatch(1,2,[
+        ['legal_entity_id'=>1,'email'=>'logist@one.test','version'=>$s->publicProfile(2,1)['version'],'is_default'=>true],
+        ['legal_entity_id'=>2,'email'=>'logist@two.test','version'=>$s->publicProfile(2,2)['version'],'is_default'=>true],
+    ]));
+    $ok($s->defaultSender(2)['email']==='logist@two.test','Invalid second default changed the sender');
     $s->save(1,3,1,['email'=>'assistant@one.test','password'=>'synthetic-assistant']);
     $s->check(1,3,1,static fn(array $c):array=>['imap'=>true,'smtp'=>true]);
+    $ok($s->defaultSender(3)['email']==='assistant@one.test','Actor sender leaked another employee mailbox');
     $envelope=$s->resolveEnvelope(2,1,3,[3]);
     $ok($envelope['cc']===['assistant@one.test'] && $envelope['employees']===['assistant@one.test'],'Company recipient resolution failed');
     $fails(fn()=>$s->resolveEnvelope(2,2,3));

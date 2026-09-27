@@ -40,6 +40,8 @@ body.roles-access-modal-open{overflow:hidden!important}.roles-access-modal{paddi
 .roles-access__mail-fields .field-input{height:31px;min-height:31px;font-size:11px}
 .roles-access__mail-actions{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:5px}
 .roles-access__mail-clear{display:flex;align-items:center;gap:6px;margin:0;font-size:10px;cursor:pointer}
+.roles-access__mail-default{display:flex;align-items:center;gap:6px;margin:0;font-size:10px;font-weight:700;cursor:pointer}
+.roles-access__mail-default input{accent-color:var(--accent)}
 .roles-access__mail-actions .btn{min-height:28px;padding:0 8px;font-size:10px}
 .roles-access__mail-row [data-mail-status]{margin:4px 0 0;overflow-wrap:anywhere}
 @media(max-width:620px){.roles-access__mail-fields{grid-template-columns:1fr;gap:5px}.roles-access__mail-actions{flex-wrap:wrap}}

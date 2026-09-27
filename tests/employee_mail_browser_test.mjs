@@ -17,7 +17,7 @@ const origin='http://127.0.0.1:'+server.address().port;
 try {for(const width of [1366,390]) {
  const page=await browser.newPage({viewport:{width,height:1000}}), errors=[];page.on('pageerror',e=>errors.push(e.message));
  let saved=null,created=null,checks=0,failSave=true,snapshot;
- const profiles=[{legal_entity_id:1,company_id:25,company_name:'ПЛАНЭКС',email_domain:'plan-ex.ru',email:'ivan@plan-ex.ru',has_password:true,connection_status:'connected',version:1,schema_ready:true},{legal_entity_id:2,company_id:25,company_name:'МГ-ЛОГ',email_domain:'mg-log.ru',email:'ivan@mg-log.ru',has_password:false,connection_status:'incomplete',version:1,schema_ready:true}];
+ const profiles=[{legal_entity_id:1,company_id:25,company_name:'ПЛАНЭКС',email_domain:'plan-ex.ru',email:'ivan@plan-ex.ru',has_password:true,connection_status:'connected',version:1,is_default:true,schema_ready:true},{legal_entity_id:2,company_id:25,company_name:'МГ-ЛОГ',email_domain:'mg-log.ru',email:'ivan@mg-log.ru',has_password:false,connection_status:'incomplete',version:1,is_default:false,schema_ready:true}];
  await page.route('**/company/roles-access/**',async route=>{
    const req=route.request(),pathname=new URL(req.url()).pathname,body=req.method()==='POST'?req.postDataJSON():null;
    let result={ok:true,profiles},status=200;
@@ -26,7 +26,7 @@ try {for(const width of [1366,390]) {
    else if(pathname.endsWith('/memberships')) {created=body;result={ok:true,membership:{account_id:102,membership_id:13}};}
    else if(pathname.endsWith('/save')) {
      if(failSave) {status=422;result={ok:false,error:'Укажите корректный адрес рабочей почты.'};failSave=false;}
-     else {saved=body;for(const input of body.work_mail){const p=profiles.find(p=>p.legal_entity_id===input.legal_entity_id);Object.assign(p,{email:input.email,has_password:input.clear_password?false:!!input.password||p.has_password,connection_status:'unverified',version:p.version+1});} result={ok:true};}
+     else {saved=body;for(const input of body.work_mail){const p=profiles.find(p=>p.legal_entity_id===input.legal_entity_id);Object.assign(p,{email:input.email,has_password:input.clear_password?false:!!input.password||p.has_password,connection_status:'unverified',version:p.version+1,is_default:input.is_default});} result={ok:true};}
    }
    else if(pathname.endsWith('/check')) {checks++;assert.equal(body.legal_entity_id,2); const p=profiles[1];Object.assign(p,{connection_status:'connected',version:p.version+1});result={ok:true,profile:p,message:'IMAP и SMTP подключены. Письма не отправлялись.'};}
    await route.fulfill({status,json:result});
@@ -39,11 +39,13 @@ try {for(const width of [1366,390]) {
  assert.equal(await page.locator('[data-mail-password]').first().inputValue(),'');
  assert.equal(await page.locator('[data-mail-password]').first().getAttribute('type'),'password');
  assert.equal(await page.locator('[data-mail-check]').nth(1).isEnabled(),false);
+ assert.equal(await page.locator('[data-mail-default]').first().isChecked(),true);
+ await page.locator('[data-mail-default]').nth(1).check();
  await page.locator('[data-mail-password]').nth(1).fill('synthetic-ui-only');
  await save.click();await page.locator('[data-modal-error]').getByText('Укажите корректный адрес рабочей почты.',{exact:true}).waitFor();
  assert.equal(await page.locator('[data-mail-password]').nth(1).inputValue(),'synthetic-ui-only','Failed general save discarded input');
  await save.click();await page.locator('.roles-access-modal.is-open').waitFor({state:'hidden'});
- assert.equal(saved.work_mail.length,2);assert.equal(saved.work_mail[1].password,'synthetic-ui-only');assert.equal(saved.work_mail[0].email,'ivan@plan-ex.ru');
+ assert.equal(saved.work_mail.length,2);assert.equal(saved.work_mail[1].password,'synthetic-ui-only');assert.equal(saved.work_mail[0].email,'ivan@plan-ex.ru');assert.equal(saved.work_mail[1].is_default,true);assert.equal(saved.work_mail[0].is_default,false);
  await open();assert.equal(await page.locator('[data-mail-password]').nth(1).inputValue(),'');
  assert.equal(await page.locator('[data-mail-email]').nth(1).inputValue(),'ivan@mg-log.ru');
  await page.locator('[data-mail-check]').nth(1).click();

@@ -134,7 +134,7 @@ def plan(cls,paths,scopes):
         out.append("DOCUMENT_GENERATOR_REGRESSIONS")
     if any(p.startswith("app/Http/Routes/") or p.startswith("tests/roles_access_") for p in paths):
         out.append("ROLES_ROUTE_REGISTRY")
-    if any(re.search(r"(?:EmployeeMail|employee_mail|central_016|016_create_employee_mail|roles-access\.js|ServiceKeysController|company_service_keys|service-keys\.js)", p) for p in paths):
+    if any(re.search(r"(?:EmployeeMail|employee_mail|central_016|016_create_employee_mail|roles-access\.js|ServiceKeysController|company_service_keys|service-keys\.js|ReportEmailRecipient|report_email_recipient|TripCompletionController|trip-completion-review\.js|trip_review_browser)", p) for p in paths):
         out.append("EMPLOYEE_MAIL_REGRESSIONS")
     if scopes["tenant_schema"] or any(re.search(r"(?:TripDocument|DocumentMail|trip_document|trip-documents|document_mail|EmployeeMail|MaxEvent)",p) for p in paths):
         out.append("TRIP_DOCUMENT_REGRESSIONS")
@@ -265,9 +265,10 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
     if "EMPLOYEE_MAIL_REGRESSIONS" in want:
         env = os.environ.copy(); env["APP_ENV"] = "test"
         env.pop("PLANEX_SKIP_MYSQL", None)
-        for t in ["tests/employee_mail_contract_test.php", "tests/employee_mail_profiles_mysql_test.php", "tests/employee_mail_migration_mysql_test.php"]:
+        for t in ["tests/employee_mail_contract_test.php", "tests/employee_mail_profiles_mysql_test.php", "tests/employee_mail_migration_mysql_test.php", "tests/employee_mail_default_019_migration_contract_test.php", "tests/report_email_recipients_mysql_test.php", "tests/trip_completion_contract_test.php"]:
             need(t); cmdcheck(results,"EMPLOYEE_MAIL_REGRESSIONS",["php",t],env)
         cmdcheck(results,"EMPLOYEE_MAIL_REGRESSIONS",["node","tests/employee_mail_browser_test.mjs"],env)
+        cmdcheck(results,"EMPLOYEE_MAIL_REGRESSIONS",["node","tests/trip_review_browser_test.mjs"],env)
     if "TRIP_DOCUMENT_REGRESSIONS" in want:
         env=os.environ.copy();env["APP_ENV"]="test"
         for t in ["tests/document_mail_transport_test.php","tests/trip_document_collection_mysql_test.php","tests/trip_document_140_production_migration_contract_test.php","tests/trip_document_140_migration_mysql_test.php"]:

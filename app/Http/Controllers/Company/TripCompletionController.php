@@ -81,13 +81,16 @@ final class TripCompletionController
     {
         header('Cache-Control: no-store');
         try {
-            [$company,$service]=$this->context();$this->assertReady($service);
+            [$company,$service,,,$actorAccountId]=$this->context();$this->assertReady($service);
             $trip=$service->trip((int)$tripId);
             $settings=(new ReportEmailRecipientService($this->db->connection(),(int)$company['id']))->read();
-            $senderReady=count(array_filter($settings['senders'],static fn(array $sender):bool=>(int)$sender['id']===(int)$settings['sender_profile_id']))===1;
+            $sender=null;$senderError=null;
+            try { $sender=(new EmployeeMailProfileService($this->db->connection(),(int)$company['id']))->defaultSender($actorAccountId); }
+            catch (DomainException $exception) { $senderError=$exception->getMessage(); }
             $this->json(['ok'=>true,'status'=>$trip['review_status'],'version'=>(int)$trip['review_version'],
                 'problems'=>$service->reviewProblems($trip),'snapshot_hash'=>$this->reviewSnapshot($trip),
-                'sender_ready'=>$senderReady,'recipient_count'=>count($this->reviewRecipients($settings,$trip))]);
+                'sender_ready'=>$sender!==null,'sender_email'=>$sender['email']??null,'sender_error'=>$senderError,
+                'recipient_count'=>count($this->reviewRecipients($settings,$trip))]);
         } catch (Throwable $exception) { $this->jsonError($exception,'Не удалось проверить рейс.'); }
     }
 
@@ -95,7 +98,7 @@ final class TripCompletionController
     {
         verifyCsrfRequest();header('Cache-Control: no-store');
         try {
-            [$company,$service,$actor,$login]=$this->context();$this->assertReady($service);
+            [$company,$service,$actor,$login,$actorAccountId]=$this->context();$this->assertReady($service);
             $id=(int)$tripId;$version=filter_var($_POST['version']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
             if ($version===false) throw new DomainException('Обновите страницу и повторите действие.');
             $action=(string)($_POST['action']??'');
@@ -108,12 +111,15 @@ final class TripCompletionController
             if ((int)$trip['request_count']===0) throw new DomainException('В рейсе нет заявок для передачи.');
             if (!hash_equals($this->reviewSnapshot($trip),(string)($_POST['snapshot_hash']??''))) throw new DomainException('Данные рейса изменились. Обновите страницу и проверьте комплект снова.');
             $settings=(new ReportEmailRecipientService($this->db->connection(),(int)$company['id']))->read();
-            $sender=(new ReportEmailRecipientService($this->db->connection(),(int)$company['id']))->sender((int)$settings['sender_profile_id']);
+            $mailProfiles=new EmployeeMailProfileService($this->db->connection(),(int)$company['id']);
+            $sender=$mailProfiles->defaultSender($actorAccountId);
             $recipients=$this->reviewRecipients($settings,$trip);
             if ($recipients===[]) throw new DomainException('В «Ключи и сервисы» добавьте получателей отчёта.');
             $package=$this->reviewPackage($_FILES['package']??null,$trip);
-            $credentials=(new EmployeeMailProfileService($this->db->connection(),(int)$company['id']))->credentials((int)$sender['account_id'],(int)$sender['legal_entity_id']);
-            if ((int)$credentials['id']!==(int)$sender['id']) throw new DomainException('Ящик отправителя изменился. Обновите настройки.');
+            $resolved=$mailProfiles->resolve($actorAccountId,(int)$sender['legal_entity_id']);
+            $credentials=$mailProfiles->credentials($actorAccountId,(int)$sender['legal_entity_id']);
+            if ((int)$credentials['id']!==(int)$sender['id'] || (int)$resolved['profile_id']!==(int)$sender['id']
+                || (string)$credentials['email']!==(string)$sender['email'] || (string)$resolved['email']!==(string)$sender['email']) throw new DomainException('Ваш рабочий ящик изменился. Обновите страницу.');
             $domain=substr(strrchr((string)$sender['email'],'@')?:'',1);
             $messageId='<trip-completion-'.$id.'-'.((int)$version+1).'-'.bin2hex(random_bytes(6)).'@'.$domain.'>';
             $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
@@ -263,7 +269,7 @@ final class TripCompletionController
         finally { if (is_string($path) && is_file($path)) @unlink($path); }
     }
 
-    /** @return array{0:array<string,mixed>,1:TripCompletionService,2:int,3:string} */
+    /** @return array{0:array<string,mixed>,1:TripCompletionService,2:int,3:string,4:int} */
     private function context(): array
     {
         $access=AccessRuntime::current();$companyId=(int)($access->companyId()?:getSessionCompanyId());
@@ -271,11 +277,12 @@ final class TripCompletionController
         if ($companyId<=0 || $actor<=0) throw new DomainException('Войдите в компанию.');
         $central=$this->db->connection();$stmt=$central->prepare("SELECT * FROM companies WHERE id=? AND status='active' LIMIT 1");$stmt->execute([$companyId]);
         $company=$stmt->fetch(PDO::FETCH_ASSOC);if (!$company) throw new DomainException('Компания недоступна.');
-        $identity=$central->prepare("SELECT a.login FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id WHERE m.id=? AND m.company_id=? AND m.status='active' AND a.status='active' LIMIT 1");
-        $identity->execute([$actor,$companyId]);$login=$identity->fetchColumn();
-        if (!is_string($login) || $login==='') throw new DomainException('Пользователь компании недоступен.');
+        $identity=$central->prepare("SELECT a.id account_id,a.login FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id WHERE m.id=? AND m.company_id=? AND m.status='active' AND a.status='active' LIMIT 1");
+        $identity->execute([$actor,$companyId]);$identityRow=$identity->fetch(PDO::FETCH_ASSOC);
+        $login=(string)($identityRow['login']??'');
+        if ($login==='' || (int)($identityRow['account_id']??0)<=0) throw new DomainException('Пользователь компании недоступен.');
         $tenant=(new Database(companyDatabaseConfig($this->config,$company)))->connection();
-        return [$company,new TripCompletionService($tenant,$companyId),$actor,$login];
+        return [$company,new TripCompletionService($tenant,$companyId),$actor,$login,(int)$identityRow['account_id']];
     }
 
     private function assertReady(TripCompletionService $service): void

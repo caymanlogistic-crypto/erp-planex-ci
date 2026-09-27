@@ -36,11 +36,9 @@ try {
     $ok($service->suggest('Другой')===[],'Autocomplete leaked another company');
     $fails(fn()=>$service->save(2,102,[['account_id'=>2,'email'=>'karina@company.test']],false));
     $fails(fn()=>$service->save(1,101,[['account_id'=>3,'email'=>'other@example.test']],false));
-    $senderId=(int)$pdo->query('SELECT id FROM employee_mail_profiles WHERE account_id=2')->fetchColumn();
-    $service->save(1,101,[['account_id'=>2,'email'=>'karina@company.test'],['email'=>'report@outside.test']],true,$senderId);
+    $service->save(1,101,[['account_id'=>2,'email'=>'karina@company.test'],['email'=>'report@outside.test']],true);
     $saved=$service->read();
-    $ok(count($saved['recipients'])===2 && $saved['send_responsible_logist']===true && $saved['sender_profile_id']===$senderId,'Recipient and sender settings did not persist');
-    $fails(fn()=>$service->save(1,101,[],false,$senderId+1000));
+    $ok(count($saved['recipients'])===2 && $saved['send_responsible_logist']===true && !array_key_exists('sender_profile_id',$saved),'Recipient settings still expose the removed shared sender');
     $ok((new App\Service\ReportEmailRecipientService($pdo,2))->read()['recipients']===[],'Recipient list leaked another company');
     $fails(fn()=>$service->save(1,101,[['email'=>'same@test.test'],['email'=>'same@test.test']],false));
     $ok(count($service->read()['recipients'])===2,'Invalid save modified previous list');

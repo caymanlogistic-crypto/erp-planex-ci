@@ -15,40 +15,19 @@ final class ReportEmailRecipientService
     public function ready(): bool
     {
         $stmt=$this->pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('company_report_email_settings','company_report_email_recipients')");
-        if ((int)$stmt->fetchColumn()!==2) return false;
-        return (int)$this->pdo->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='company_report_email_settings' AND column_name='sender_profile_id'")->fetchColumn()===1;
+        return (int)$stmt->fetchColumn()===2;
     }
 
     /** @return array{recipients:list<array<string,mixed>>,send_responsible_logist:bool} */
     public function read(): array
     {
         if (!$this->ready()) throw new DomainException('Список получателей ожидает обновления структуры базы данных.');
-        $stmt=$this->pdo->prepare('SELECT send_responsible_logist,sender_profile_id FROM company_report_email_settings WHERE company_id=?');
+        $stmt=$this->pdo->prepare('SELECT send_responsible_logist FROM company_report_email_settings WHERE company_id=?');
         $stmt->execute([$this->companyId]);
         $settings=$stmt->fetch(PDO::FETCH_ASSOC)?:[];
         $stmt=$this->pdo->prepare('SELECT account_id,display_name,email FROM company_report_email_recipients WHERE company_id=? ORDER BY position_no,id');
         $stmt->execute([$this->companyId]);
-        return ['recipients'=>$stmt->fetchAll(PDO::FETCH_ASSOC),'send_responsible_logist'=>(bool)($settings['send_responsible_logist']??false),
-            'sender_profile_id'=>(int)($settings['sender_profile_id']??0),'senders'=>$this->senderOptions()];
-    }
-
-    /** @return list<array{id:int,account_id:int,legal_entity_id:int,email:string,name:string}> */
-    public function senderOptions(): array
-    {
-        $stmt=$this->pdo->prepare("SELECT p.id,p.account_id,p.legal_entity_id,p.email,a.full_name name
-            FROM employee_mail_profiles p
-            JOIN company_memberships m ON m.account_id=p.account_id AND m.company_id=p.company_id AND m.status='active'
-            JOIN user_accounts a ON a.id=p.account_id AND a.status='active'
-            WHERE p.company_id=? AND p.connection_status='connected' AND p.password_encrypted<>''
-            ORDER BY a.full_name,p.email");
-        $stmt->execute([$this->companyId]);return $stmt->fetchAll(PDO::FETCH_ASSOC);
-    }
-
-    /** @return array{id:int,account_id:int,legal_entity_id:int,email:string,name:string} */
-    public function sender(int $profileId): array
-    {
-        foreach ($this->senderOptions() as $option) if ((int)$option['id']===$profileId) return $option;
-        throw new DomainException('Выберите подключённый рабочий ящик отправителя в «Ключи и сервисы».');
+        return ['recipients'=>$stmt->fetchAll(PDO::FETCH_ASSOC),'send_responsible_logist'=>(bool)($settings['send_responsible_logist']??false)];
     }
 
     /** @return list<array{account_id:int,name:string,email:string}> */
@@ -71,11 +50,10 @@ final class ReportEmailRecipientService
     }
 
     /** @param list<array<string,mixed>> $recipients */
-    public function save(int $actorAccountId,int $actorMembershipId,array $recipients,bool $sendLogist,int $senderProfileId=0): void
+    public function save(int $actorAccountId,int $actorMembershipId,array $recipients,bool $sendLogist): void
     {
         (new EmployeeMailProfileService($this->pdo,$this->companyId))->assertOwner($actorAccountId,$this->companyId);
         if (!$this->ready()) throw new DomainException('Список получателей ожидает обновления структуры базы данных.');
-        if ($senderProfileId>0) $this->sender($senderProfileId);
         if (count($recipients)>50) throw new InvalidArgumentException('Можно указать не более 50 получателей.');
         $validated=[];$seen=[];
         $account=$this->pdo->prepare("SELECT a.full_name FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id WHERE m.company_id=? AND m.account_id=? AND m.status='active' AND a.status='active' LIMIT 1");
@@ -95,8 +73,8 @@ final class ReportEmailRecipientService
         $this->pdo->beginTransaction();
         try {
             $lock=$this->pdo->prepare('SELECT id FROM companies WHERE id=? FOR UPDATE');$lock->execute([$this->companyId]);
-            $stmt=$this->pdo->prepare('INSERT INTO company_report_email_settings(company_id,send_responsible_logist,sender_profile_id,updated_by_membership_id) VALUES(?,?,?,?) ON DUPLICATE KEY UPDATE send_responsible_logist=VALUES(send_responsible_logist),sender_profile_id=VALUES(sender_profile_id),updated_by_membership_id=VALUES(updated_by_membership_id)');
-            $stmt->execute([$this->companyId,$sendLogist?1:0,$senderProfileId?:null,$actorMembershipId]);
+            $stmt=$this->pdo->prepare('INSERT INTO company_report_email_settings(company_id,send_responsible_logist,updated_by_membership_id) VALUES(?,?,?) ON DUPLICATE KEY UPDATE send_responsible_logist=VALUES(send_responsible_logist),updated_by_membership_id=VALUES(updated_by_membership_id)');
+            $stmt->execute([$this->companyId,$sendLogist?1:0,$actorMembershipId]);
             $this->pdo->prepare('DELETE FROM company_report_email_recipients WHERE company_id=?')->execute([$this->companyId]);
             $insert=$this->pdo->prepare('INSERT INTO company_report_email_recipients(company_id,account_id,display_name,email,position_no) VALUES(?,?,?,?,?)');
             foreach ($validated as $position=>$recipient) $insert->execute([$this->companyId,$recipient['account_id'],$recipient['name'],$recipient['email'],$position]);

@@ -102,7 +102,6 @@
     selected = null; person.value = ''; email.value = ''; closeOptions(); render(); dirty(); person.focus();
   });
   logist.addEventListener('change', dirty);
-  form.elements.sender_profile_id.addEventListener('change', dirty);
   form.addEventListener('submit', async event => {
     event.preventDefault();
     form.elements.recipients.value = JSON.stringify(recipients);

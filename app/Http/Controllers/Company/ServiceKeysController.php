@@ -31,7 +31,7 @@ final class ServiceKeysController
             $stored=$mail->read();
             $mailSettings=$stored??$mailSettings; $mailConfigured=$stored!==null;
         } catch (\Throwable) { $mailError='Настройки почты недоступны. Проверьте обновление структуры базы данных.'; }
-        $reportEmails=['recipients'=>[],'send_responsible_logist'=>false,'sender_profile_id'=>0,'senders'=>[]];$reportEmailError=null;
+        $reportEmails=['recipients'=>[],'send_responsible_logist'=>false];$reportEmailError=null;
         try { $reportEmails=$this->reportEmailContext()->read(); }
         catch (\Throwable) { $reportEmailError='Получатели отчётов недоступны. Проверьте обновление структуры базы данных.'; }
         $pageTitle='Ключи и сервисы'; $pageContext='Настройки › '.$pageTitle;
@@ -92,7 +92,7 @@ final class ServiceKeysController
             $actorAccountId=(int)$stmt->fetchColumn();
             $recipients=json_decode((string)($_POST['recipients']??'[]'),true,64,JSON_THROW_ON_ERROR);
             if (!is_array($recipients) || !array_is_list($recipients)) throw new \InvalidArgumentException('Некорректный список получателей.');
-            $service->save($actorAccountId,(int)$access->membershipId(),$recipients,($_POST['send_responsible_logist']??'0')==='1',max(0,(int)($_POST['sender_profile_id']??0)));
+            $service->save($actorAccountId,(int)$access->membershipId(),$recipients,($_POST['send_responsible_logist']??'0')==='1');
             jsonResponse(['success'=>true,'message'=>'Получатели отчётов сохранены.']);
         } catch (\InvalidArgumentException|\DomainException|\JsonException $error) {
             jsonResponse(['success'=>false,'message'=>$error->getMessage()],422);

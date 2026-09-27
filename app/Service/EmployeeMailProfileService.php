@@ -19,6 +19,11 @@ final class EmployeeMailProfileService
         return (int)$this->pdo->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name IN ('employee_mail_profiles','employee_mail_legal_entities','employee_mail_settings')")->fetchColumn()===3;
     }
 
+    public function defaultReady(): bool
+    {
+        return (int)$this->pdo->query("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='employee_mail_profiles' AND column_name='is_default'")->fetchColumn()===1;
+    }
+
     public function settings(): array
     {
         $row=(new EmployeeMailSettingsService($this->pdo,$this->tenantCompanyId))->read();
@@ -62,16 +67,46 @@ final class EmployeeMailProfileService
         foreach ($q->fetchAll(PDO::FETCH_COLUMN) as $id) {
             $entity=$this->legalEntity((int)$id);
             $profile=$this->publicProfile($accountId,(int)$id);
-            $rows[]=['legal_entity_id'=>(int)$id,'company_id'=>$this->tenantCompanyId,'company_name'=>$entity['company_name'],'code'=>$entity['code'],'email_domain'=>$entity['email_domain'],'schema_ready'=>true]+($profile??['email'=>'','has_password'=>false,'connection_status'=>'incomplete','checked_at'=>null,'version'=>0]);
+            $rows[]=['legal_entity_id'=>(int)$id,'company_id'=>$this->tenantCompanyId,'company_name'=>$entity['company_name'],'code'=>$entity['code'],'email_domain'=>$entity['email_domain'],'schema_ready'=>true]+($profile??['email'=>'','has_password'=>false,'connection_status'=>'incomplete','checked_at'=>null,'version'=>0,'is_default'=>false]);
         }
         return $rows;
     }
 
     public function publicProfile(int $accountId, int $legalEntityId): ?array
     {
-        $q = $this->pdo->prepare("SELECT id,email,(password_encrypted <> '') AS has_password,connection_status,checked_at,version FROM employee_mail_profiles WHERE account_id=? AND company_id=? AND legal_entity_id=?");
+        $default=$this->defaultReady()?'is_default':'0 AS is_default';
+        $q = $this->pdo->prepare("SELECT id,email,(password_encrypted <> '') AS has_password,connection_status,checked_at,version,{$default} FROM employee_mail_profiles WHERE account_id=? AND company_id=? AND legal_entity_id=?");
         $q->execute([$accountId,$this->tenantCompanyId,$legalEntityId]);
-        return $q->fetch(PDO::FETCH_ASSOC) ?: null;
+        $profile=$q->fetch(PDO::FETCH_ASSOC);
+        if (!$profile) return null;
+        $profile['is_default']=(bool)$profile['is_default'];
+        return $profile;
+    }
+
+    /** Connected sender addresses owned by the active employee in this company. */
+    public function connectedSenders(int $accountId): array
+    {
+        if (!$this->ready() || !$this->defaultReady() || !(new EmployeeMailSettingsService($this->pdo,$this->tenantCompanyId))->read()) return [];
+        $q=$this->pdo->prepare("SELECT p.id,p.legal_entity_id,p.email,p.is_default,e.name AS legal_entity_name
+            FROM employee_mail_profiles p
+            JOIN employee_mail_legal_entities e ON e.id=p.legal_entity_id AND e.company_id=p.company_id
+            JOIN company_memberships m ON m.account_id=p.account_id AND m.company_id=p.company_id AND m.status='active'
+            JOIN user_accounts a ON a.id=p.account_id AND a.status='active'
+            WHERE p.account_id=? AND p.company_id=? AND p.connection_status='connected' AND p.password_encrypted<>''
+            ORDER BY e.id,p.id");
+        $q->execute([$accountId,$this->tenantCompanyId]);
+        return array_values(array_filter($q->fetchAll(PDO::FETCH_ASSOC),static fn(array $row):bool=>filter_var($row['email'],FILTER_VALIDATE_EMAIL)!==false));
+    }
+
+    public function defaultSender(int $accountId): array
+    {
+        if (!$this->defaultReady()) throw new \DomainException('Выбор основного рабочего ящика ожидает обновления структуры базы данных.');
+        $senders=$this->connectedSenders($accountId);
+        if ($senders===[]) throw new \DomainException('У вашего пользователя нет подключённого рабочего ящика. Попросите руководителя настроить его в карточке пользователя.');
+        if (count($senders)===1) return $senders[0];
+        $default=array_values(array_filter($senders,static fn(array $sender):bool=>(bool)$sender['is_default']));
+        if (count($default)!==1) throw new \DomainException('У вашего пользователя два рабочих ящика. Попросите руководителя отметить основной в карточке пользователя.');
+        return $default[0];
     }
 
     public function save(int $actorAccountId, int $accountId, int $legalEntityId, #[\SensitiveParameter] array $input): array
@@ -122,16 +157,41 @@ final class EmployeeMailProfileService
     /** Participates in the enclosing employee transaction; never leaves a partial card. */
     public function saveBatch(int $actorAccountId,int $accountId,#[\SensitiveParameter] array $profiles): void
     {
+        $this->assertOwner($actorAccountId,$this->tenantCompanyId);
+        $this->assertMember($accountId,$this->tenantCompanyId,false);
         if (count($profiles)>2) throw new \InvalidArgumentException('У сотрудника предусмотрено два рабочих ящика.');
-        $seen=[];
+        $seen=[];$defaultEntityId=null;$hasDefaultSelection=false;
+        if (!$this->defaultReady()) throw new \DomainException('Выбор основного рабочего ящика ожидает обновления структуры базы данных.');
+        $ownsTransaction=!$this->pdo->inTransaction();
+        if ($ownsTransaction) $this->pdo->beginTransaction();
+        try {
+        $lock=$this->pdo->prepare('SELECT id FROM companies WHERE id=? FOR UPDATE');$lock->execute([$this->tenantCompanyId]);
         foreach ($profiles as $profile) {
             if (!is_array($profile)) throw new \InvalidArgumentException('Некорректный почтовый профиль.');
             $id=filter_var($profile['legal_entity_id']??0,FILTER_VALIDATE_INT,['options'=>['min_range'=>1]]);
             if (!$id || isset($seen[$id])) throw new \InvalidArgumentException('Юридическое лицо почты указано неверно или повторяется.');
             $seen[$id]=true;
             $this->legalEntity((int)$id);
+            if (array_key_exists('is_default',$profile)) {
+                $hasDefaultSelection=true;
+                if (!in_array($profile['is_default'],[true,false,0,1,'0','1'],true)) throw new \InvalidArgumentException('Некорректная отметка основного ящика.');
+                if ((bool)$profile['is_default']) {
+                    if ($defaultEntityId!==null) throw new \InvalidArgumentException('Основным может быть только один рабочий ящик.');
+                    if (trim((string)($profile['email']??''))==='') throw new \InvalidArgumentException('Укажите адрес основного рабочего ящика.');
+                    $defaultEntityId=(int)$id;
+                }
+            }
             if (trim((string)($profile['email']??''))==='' && empty($profile['password']) && (int)($profile['version']??0)===0) continue;
             $this->save($actorAccountId,$accountId,(int)$id,$profile);
+        }
+        if ($hasDefaultSelection) {
+            $q=$this->pdo->prepare('UPDATE employee_mail_profiles SET is_default=(legal_entity_id=?) WHERE account_id=? AND company_id=?');
+            $q->execute([$defaultEntityId??0,$accountId,$this->tenantCompanyId]);
+        }
+        if ($ownsTransaction) $this->pdo->commit();
+        } catch (\Throwable $error) {
+            if ($ownsTransaction && $this->pdo->inTransaction()) $this->pdo->rollBack();
+            throw $error;
         }
     }
 
