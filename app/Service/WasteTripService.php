@@ -7,6 +7,7 @@ use RuntimeException;
 use Throwable;
 
 require_once __DIR__.'/WasteTripStartStatisticsService.php';
+require_once __DIR__.'/WasteTripLegacyMetadataService.php';
 
 final class WasteTripService
 {
@@ -21,6 +22,7 @@ final class WasteTripService
     public const CARRIER_PAYMENTS_MIGRATION = '135_create_waste_trip_carrier_payments.sql';
     public const SYNCHRONIZATION_MIGRATION = '137_waste_trip_synchronization.sql';
     public const GENERAL_PAYMENTS_MIGRATION = '138_waste_trip_general_payments.sql';
+    public const LEGACY_METADATA_MIGRATION = '149_waste_trip_legacy_metadata.sql';
     public const PRESERVED_SETTLEMENTS_NOTICE = 'По этому рейсу сохранены прежние взаиморасчёты: счета, оплаты, суммы и сроки обязательств. Три суммы в карточке справочные и не изменяют задолженность. Документы клиенту используют сохранённые условия.';
 
     public static function hasPreservedSettlements(array $trip): bool
@@ -67,6 +69,8 @@ final class WasteTripService
     private const LEGACY_OWNED_INPUT_KEYS = [
         'business_id', 'comment', 'planned_start_mode', 'planned_start_date', 'planned_start_date_from',
         'planned_start_date_to', 'planned_finish_date', 'actual_start_date', 'actual_end_date', 'request_ids',
+        'legal_entity_code', 'legacy_route_type', 'legacy_unload_type', 'legacy_source_warehouse_id',
+        'legacy_destination_warehouse_id', 'legacy_source_warehouse_name', 'legacy_destination_warehouse_name',
     ];
 
     public static function schemaReady(PDO $pdo): bool
@@ -95,6 +99,18 @@ final class WasteTripService
             if (!$state || (int) $state['legacy_high_water_at_cutover'] < 243 || (int) $state['last_issued_business_id'] < 0 || empty($state['cutover_completed_at'])) return false;
             return true;
         } catch (Throwable) { return false; }
+    }
+
+    public static function legacyMetadataReady(PDO $pdo): bool
+    {
+        if (!self::schemaReady($pdo)) return false;
+        $migration = $pdo->prepare('SELECT COUNT(*) FROM schema_migrations WHERE migration=?');
+        $migration->execute([self::LEGACY_METADATA_MIGRATION]);
+        if ((int)$migration->fetchColumn() !== 1) return false;
+        $columns = WasteTripLegacyMetadataService::COLUMNS;
+        $query = $pdo->prepare('SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME=\'waste_trips\' AND COLUMN_NAME IN ('.implode(',',array_fill(0,count($columns),'?')).')');
+        $query->execute($columns);
+        return (int)$query->fetchColumn() === count($columns);
     }
 
     public const STATUS_OPTIONS = [
@@ -199,6 +215,7 @@ final class WasteTripService
                 $pdo->prepare('UPDATE waste_trips SET '.implode(',',$assignments).",source_system='legacy_sync',deleted_at=NULL,cancelled_at=NULL,cancelled_by_user_id=NULL,cancelled_by_role=NULL,updated_by_user_id=:user_id,updated_by_role=:role_code,lock_version=lock_version+1 WHERE id=:trip_id")->execute($params);
                 $pdo->prepare('DELETE FROM waste_trip_requests WHERE waste_trip_id=?')->execute([$tripId]);
             }
+            self::writeLegacyMetadata($pdo, $tripId, $state);
             $stage = 'request_links';
             self::insertRequestLinks($pdo, $tripId, $resolved);
             WasteTripStartStatisticsService::synchronizeTrip($pdo, $tripId);
@@ -286,13 +303,13 @@ final class WasteTripService
         RegulatedDataScopeService::assertCanCreate('waste_trip');
         if($legacyId<WasteTripLegacySourceService::MIN_LEGACY_ID||(int)($sourceState['business_id']??0)!==$legacyId)throw new RuntimeException('Некорректная legacy identity.');self::assertLegacyOwnedMutationAbsent($operationalInput);$requestIds=array_values($sourceState['request_ids']??[]);if($requestIds===[])throw new RuntimeException('В legacy-рейсе нет полного состава заявок ФЭО.');
         $data=self::normalizeInput(array_merge($operationalInput,['planned_start_mode'=>$sourceState['planned_start_mode'],'planned_start_date'=>$sourceState['planned_start_date'],'planned_start_date_from'=>$sourceState['planned_start_date_from'],'planned_start_date_to'=>$sourceState['planned_start_date_to'],'planned_finish_date'=>$sourceState['planned_finish_date'],'actual_start_date'=>$sourceState['actual_start_date'],'actual_end_date'=>$sourceState['actual_end_date'],'comment'=>$sourceState['comment']]));$errors=self::validateInput($data,true,true);if($errors!==[])throw new RuntimeException(implode(' ',$errors));self::assertEntitiesVisible($pdo,$data,$sessionUser);
-        $pdo->beginTransaction();try{$dup=$pdo->prepare('SELECT id FROM waste_trips WHERE business_id=? OR (source_system=? AND legacy_flight_id=?) FOR UPDATE');$dup->execute([$legacyId,WasteTripLegacySourceService::SOURCE_SYSTEM,$legacyId]);if($dup->fetchColumn()!==false)throw new RuntimeException('Этот legacy-рейс уже материализован или его business ID уже занят.');$resolved=self::resolveRequestsForClaim($pdo,$requestIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'));$tripId=self::insertTrip($pdo,$legacyId,$data,WasteTripLegacySourceService::SOURCE_SYSTEM,$legacyId,$sessionUser);self::insertRequestLinks($pdo,$tripId,$resolved);WasteTripStartStatisticsService::synchronizeTrip($pdo,$tripId);$pdo->prepare('UPDATE waste_trips SET legacy_last_checked_at=NOW(),legacy_last_success_at=NOW(),legacy_sync_error=NULL WHERE id=?')->execute([$tripId]);self::logAudit($pdo,$tripId,'create',null,['business_id'=>$legacyId,'source_system'=>WasteTripLegacySourceService::SOURCE_SYSTEM,'request_ids'=>$requestIds],$sessionUser);$pdo->commit();return$legacyId;}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
+        $pdo->beginTransaction();try{$dup=$pdo->prepare('SELECT id FROM waste_trips WHERE business_id=? OR (source_system=? AND legacy_flight_id=?) FOR UPDATE');$dup->execute([$legacyId,WasteTripLegacySourceService::SOURCE_SYSTEM,$legacyId]);if($dup->fetchColumn()!==false)throw new RuntimeException('Этот legacy-рейс уже материализован или его business ID уже занят.');$resolved=self::resolveRequestsForClaim($pdo,$requestIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'));$tripId=self::insertTrip($pdo,$legacyId,$data,WasteTripLegacySourceService::SOURCE_SYSTEM,$legacyId,$sessionUser);self::writeLegacyMetadata($pdo,$tripId,$sourceState);self::insertRequestLinks($pdo,$tripId,$resolved);WasteTripStartStatisticsService::synchronizeTrip($pdo,$tripId);$pdo->prepare('UPDATE waste_trips SET legacy_last_checked_at=NOW(),legacy_last_success_at=NOW(),legacy_sync_error=NULL WHERE id=?')->execute([$tripId]);self::logAudit($pdo,$tripId,'create',null,['business_id'=>$legacyId,'source_system'=>WasteTripLegacySourceService::SOURCE_SYSTEM,'request_ids'=>$requestIds],$sessionUser);$pdo->commit();return$legacyId;}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
     }
 
     public static function update(PDO $pdo,int $tripId,array $input,array $requestBusinessIds,int $expectedVersion,array $sessionUser,?array $customerPayments=null,?array $carrierPayments=null,?array $generalPayments=null): void
     {
         if($tripId<=0||$expectedVersion<=0)throw new RuntimeException('Некорректная версия рейса. Обновите страницу и повторите действие.');$pdo->beginTransaction();
-        try{$trip=self::fetchTripForUpdate($pdo,$tripId);if($trip===null)throw new RuntimeException('Рейс не найден.');self::assertCanAccessTrip($pdo,$trip,$sessionUser);if((int)$trip['lock_version']!==$expectedVersion)throw new RuntimeException('Рейс уже был изменён другим пользователем. Обновите страницу.');if(!in_array((int)($trip['financial_model_version']??2),[2,3],true))throw new RuntimeException('Требуется переход на три финансовые суммы.');if(self::isSynchronizableLegacyTrip($trip)){self::assertSourceAmountUnchanged($generalPayments,WasteTripGeneralPaymentService::fetchForTrip($pdo,$tripId));}$customerAmountChanged=self::isSynchronizableLegacyTrip($trip)&&self::sourceAmountsDiffer($customerPayments,WasteTripCustomerPaymentService::fetchForTrip($pdo,$tripId));$linked=self::isLegacyLinked($trip);if($linked)self::assertLegacyOwnedMutationAbsent($input);$existingLinks=self::fetchRequestLinks($pdo,$tripId,true);$existingIds=array_map(static fn(array $r):string=>(string)$r['zayavka_id'],$existingLinks);
+        try{$trip=self::fetchTripForUpdate($pdo,$tripId);if($trip===null)throw new RuntimeException('Рейс не найден.');self::assertCanAccessTrip($pdo,$trip,$sessionUser);if((int)$trip['lock_version']!==$expectedVersion)throw new RuntimeException('Рейс уже был изменён другим пользователем. Обновите страницу.');if(($trip['legal_entity_code']??null)==='mg_logistic'&&$carrierPayments!==null)throw new RuntimeException('Для ООО «МГ Логистик» себестоимость не заполняется.');if(!in_array((int)($trip['financial_model_version']??2),[2,3],true))throw new RuntimeException('Требуется переход на три финансовые суммы.');if(self::isSynchronizableLegacyTrip($trip)){self::assertSourceAmountUnchanged($generalPayments,WasteTripGeneralPaymentService::fetchForTrip($pdo,$tripId));}$customerAmountChanged=self::isSynchronizableLegacyTrip($trip)&&self::sourceAmountsDiffer($customerPayments,WasteTripCustomerPaymentService::fetchForTrip($pdo,$tripId));$linked=self::isLegacyLinked($trip);if($linked)self::assertLegacyOwnedMutationAbsent($input);$existingLinks=self::fetchRequestLinks($pdo,$tripId,true);$existingIds=array_map(static fn(array $r):string=>(string)$r['zayavka_id'],$existingLinks);
             if($linked){$requestBusinessIds=$existingIds;$data=self::normalizeInput(array_merge($input,['planned_start_mode'=>$trip['planned_start_mode'],'planned_start_date'=>$trip['planned_start_date'],'planned_start_date_from'=>$trip['planned_start_date_from'],'planned_start_date_to'=>$trip['planned_start_date_to'],'planned_finish_date'=>$trip['planned_finish_date'],'actual_start_date'=>$trip['actual_start_date'],'actual_end_date'=>$trip['actual_end_date'],'comment'=>$trip['comment']]));}else{if($requestBusinessIds===[])throw new RuntimeException('Добавьте хотя бы одну заявку ФЭО.');$data=self::normalizeInput($input);}
             $errors=self::validateInput($data,$linked&&$trip['planned_start_mode']==='unspecified',$linked&&empty($trip['route_executor_id']),($trip['source_system']??'')==='legacy_sync',($trip['source_system']??'')==='legacy_sync'&&empty($trip['utilizer_id']));if($errors!==[])throw new RuntimeException(implode(' ',$errors));self::assertEntitiesVisible($pdo,$data,$sessionUser);self::assertTransition((string)$trip['status'],$data['status']);
             if(!$linked&&$existingIds!==array_values($requestBusinessIds)){if(in_array((string)$trip['status'],[self::STATUS_COMPLETED,self::STATUS_CANCELLED],true))throw new RuntimeException('Состав завершённого или отменённого рейса менять нельзя.');if((string)$trip['status']===self::STATUS_IN_PROGRESS&&(($sessionUser['role_code']??'')!=='company_owner'||(string)($input['confirm_composition_correction']??'')!=='1'))throw new RuntimeException('После начала вывоза изменение состава разрешено только руководителю с явным подтверждением корректировки.');$resolved=self::resolveRequestsForClaim($pdo,$requestBusinessIds,true);self::assertNoActiveClaims($pdo,array_column($resolved,'id'),$tripId);$pdo->prepare('DELETE FROM waste_trip_requests WHERE waste_trip_id=?')->execute([$tripId]);self::insertRequestLinks($pdo,$tripId,$resolved);}
@@ -317,12 +334,20 @@ final class WasteTripService
 
     public static function syncLegacyOwnedState(PDO $pdo,int $tripId,array $sourceState): void
     {
-        $businessId=(int)($sourceState['business_id']??0);$requestIds=array_values($sourceState['request_ids']??[]);if($businessId<WasteTripLegacySourceService::MIN_LEGACY_ID||$requestIds===[])throw new RuntimeException('Некорректный authoritative legacy state.');$pdo->beginTransaction();
-        try{$trip=self::fetchTripForUpdate($pdo,$tripId);if($trip===null||!self::isLegacyLinked($trip)||(int)$trip['business_id']!==$businessId||(int)$trip['legacy_flight_id']!==$businessId)throw new RuntimeException('Linked Waste Trip identity mismatch.');$resolved=self::resolveRequestsForClaim($pdo,$requestIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'),$tripId);$stmt=$pdo->prepare('UPDATE waste_trips SET comment=?,planned_start_mode=?,planned_start_date=?,planned_start_date_from=?,planned_start_date_to=?,planned_finish_date=?,actual_start_date=?,actual_end_date=?,legacy_sync_error=NULL,legacy_last_checked_at=NOW(),legacy_last_success_at=NOW(),lock_version=lock_version+1 WHERE id=?');$stmt->execute([$sourceState['comment'],$sourceState['planned_start_mode'],$sourceState['planned_start_date'],$sourceState['planned_start_date_from'],$sourceState['planned_start_date_to'],$sourceState['planned_finish_date'],$sourceState['actual_start_date'],$sourceState['actual_end_date'],$tripId]);$pdo->prepare('DELETE FROM waste_trip_requests WHERE waste_trip_id=?')->execute([$tripId]);self::insertRequestLinks($pdo,$tripId,$resolved);WasteTripStartStatisticsService::synchronizeTrip($pdo,$tripId);FinanceObligationService::syncWasteTrip($pdo,$tripId);$pdo->commit();}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
+        $businessId=(int)($sourceState['business_id']??0);$requestIds=array_values($sourceState['request_ids']??[]);if($businessId<WasteTripLegacySourceService::MIN_SYNCHRONIZABLE_ID||$requestIds===[])throw new RuntimeException('Некорректный authoritative legacy state.');$pdo->beginTransaction();
+        try{$trip=self::fetchTripForUpdate($pdo,$tripId);if($trip===null||!self::isLegacyLinked($trip)||(int)$trip['business_id']!==$businessId||(int)$trip['legacy_flight_id']!==$businessId)throw new RuntimeException('Linked Waste Trip identity mismatch.');$resolved=self::resolveRequestsForClaim($pdo,$requestIds,false);self::assertNoActiveClaims($pdo,array_column($resolved,'id'),$tripId);$stmt=$pdo->prepare('UPDATE waste_trips SET comment=?,planned_start_mode=?,planned_start_date=?,planned_start_date_from=?,planned_start_date_to=?,planned_finish_date=?,actual_start_date=?,actual_end_date=?,legacy_sync_error=NULL,legacy_last_checked_at=NOW(),legacy_last_success_at=NOW(),lock_version=lock_version+1 WHERE id=?');$stmt->execute([$sourceState['comment'],$sourceState['planned_start_mode'],$sourceState['planned_start_date'],$sourceState['planned_start_date_from'],$sourceState['planned_start_date_to'],$sourceState['planned_finish_date'],$sourceState['actual_start_date'],$sourceState['actual_end_date'],$tripId]);self::writeLegacyMetadata($pdo,$tripId,$sourceState);$pdo->prepare('DELETE FROM waste_trip_requests WHERE waste_trip_id=?')->execute([$tripId]);self::insertRequestLinks($pdo,$tripId,$resolved);WasteTripStartStatisticsService::synchronizeTrip($pdo,$tripId);FinanceObligationService::syncWasteTrip($pdo,$tripId);$pdo->commit();}catch(Throwable $e){if($pdo->inTransaction())$pdo->rollBack();throw$e;}
+    }
+
+    private static function writeLegacyMetadata(PDO $pdo, int $tripId, array $state): void
+    {
+        $values = WasteTripLegacyMetadataService::fromFlight($state);
+        $columns = WasteTripLegacyMetadataService::COLUMNS;
+        $assignments = implode(',', array_map(static fn(string $column): string => $column.'=?', $columns));
+        $pdo->prepare('UPDATE waste_trips SET '.$assignments.' WHERE id=?')->execute(array_merge(array_map(static fn(string $column) => $values[$column], $columns), [$tripId]));
     }
 
     public static function markLegacySyncError(PDO $pdo,int $tripId,string $message): void
-    { $message=self::nullableText($message,1000)??'Unknown legacy sync error';$stmt=$pdo->prepare("UPDATE waste_trips SET legacy_sync_error=?,legacy_last_checked_at=NOW() WHERE id=? AND source_system='legacy_flights'");$stmt->execute([$message,$tripId]); }
+    { $message=self::nullableText($message,1000)??'Unknown legacy sync error';$stmt=$pdo->prepare("UPDATE waste_trips SET legacy_sync_error=?,legacy_last_checked_at=NOW() WHERE id=? AND source_system IN ('legacy_flights','legacy_sync')");$stmt->execute([$message,$tripId]); }
 
     public static function legacyRangeWarningForMax(int $legacyMax): ?string
     { return $legacyMax >= self::LEGACY_RANGE_WARNING_THRESHOLD ? self::LEGACY_RANGE_WARNING : null; }
@@ -331,7 +356,7 @@ final class WasteTripService
     { $legacyMax=WasteTripLegacySourceService::maxLegacyId($legacyPdo);return['legacy_max_id'=>$legacyMax,'warning'=>self::legacyRangeWarningForMax($legacyMax)]; }
 
     public static function linkedTripsForSync(PDO $pdo,int $limit=500): array
-    { $limit=max(1,min(500,$limit));return$pdo->query("SELECT id,business_id,legacy_flight_id FROM waste_trips WHERE source_system='legacy_flights' ORDER BY (legacy_last_checked_at IS NULL) DESC, legacy_last_checked_at ASC, id ASC LIMIT {$limit}")->fetchAll(PDO::FETCH_ASSOC); }
+    { $limit=max(1,min(500,$limit));return$pdo->query("SELECT id,business_id,legacy_flight_id FROM waste_trips WHERE source_system IN ('legacy_flights','legacy_sync') AND deleted_at IS NULL ORDER BY (legacy_last_checked_at IS NULL) DESC, legacy_last_checked_at ASC, id ASC LIMIT {$limit}")->fetchAll(PDO::FETCH_ASSOC); }
 
     public static function previewSelection(PDO $pdo,array $businessIds,bool $requireCurrentPlacement=true): array
     {
