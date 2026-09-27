@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "95c855dcadccce6a0b921688cebab735f674f250",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/95c855dcadccce6a0b921688cebab735f674f250/tests/roles_access_endpoint_integration_test.php",
+      "verified_sha": "c55e54ff223ca07d69e3e8e3f29eb3b0a9ea2eab",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c55e54ff223ca07d69e3e8e3f29eb3b0a9ea2eab/tests/roles_access_menu_state_browser_test.mjs",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9ecade53fb7625f7f006b3187baf170e315a3de7",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9ecade53fb7625f7f006b3187baf170e315a3de7/tests/manager_statistics_browser_test.mjs",
+      "verified_sha": "c55e54ff223ca07d69e3e8e3f29eb3b0a9ea2eab",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c55e54ff223ca07d69e3e8e3f29eb3b0a9ea2eab/tests/menu_navigation_browser_test.mjs",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -267,8 +267,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "95c855dcadccce6a0b921688cebab735f674f250",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/95c855dcadccce6a0b921688cebab735f674f250/tests/roles_access_endpoint_integration_test.php",
+      "verified_sha": "c55e54ff223ca07d69e3e8e3f29eb3b0a9ea2eab",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c55e54ff223ca07d69e3e8e3f29eb3b0a9ea2eab/tests/roles_access_endpoint_integration_test.php",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",
