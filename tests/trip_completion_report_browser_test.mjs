@@ -61,6 +61,8 @@ try{
   await packageButton.click();
   const dialog=page.locator('.lab-package-progress-dialog');
   await dialog.waitFor({state:'visible'});
+  assert.equal(await dialog.locator('.modal-head .modal-title, .modal-body, .modal-foot').count(),3,'progress uses the standard ERP modal structure');
+  if(process.env.PLANEX_POPUP_SCREENSHOT) await page.screenshot({path:process.env.PLANEX_POPUP_SCREENSHOT});
   for(const step of ['Формирование отчёта','Создание PDF файлов','Создание архива'])
     assert.ok(await dialog.getByText(step).isVisible(),`package progress shows ${step}`);
   await dialog.locator('[data-step="1"][data-state="active"]').waitFor({state:'visible'});
@@ -78,7 +80,12 @@ try{
   await page.route('**/documents/101',route=>route.abort());
   await packageButton.click();
   await dialog.getByText(/Не удалось подготовить комплект/).waitFor({state:'visible'});
+  assert.match(await dialog.locator('.lab-package-progress-detail').textContent(),/Не удалось загрузить скан ТН/,'network error is explained in Russian');
   assert.equal(await dialog.locator('[data-step="1"][data-state="error"]').count(),1,'PDF error is shown at its stage');
+  await page.setViewportSize({width:390,height:800});
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,'mobile error dialog has no horizontal overflow');
+  assert.equal(await dialog.getByRole('button',{name:'Закрыть'}).isVisible(),true,'mobile error dialog keeps close button visible');
+  if(process.env.PLANEX_POPUP_MOBILE_SCREENSHOT) await page.screenshot({path:process.env.PLANEX_POPUP_MOBILE_SCREENSHOT});
   await dialog.getByRole('button',{name:'Закрыть'}).click();
   assert.equal(await page.locator('.lab-package-progress').count(),0,'error dialog can be closed');
   await page.unroute('**/documents/101');
