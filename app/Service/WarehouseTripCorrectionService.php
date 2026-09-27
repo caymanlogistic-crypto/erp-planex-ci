@@ -99,19 +99,26 @@ final class WarehouseTripCorrectionService
         }
 
         $rows = [];
+        $stockWarnings = [];
         foreach ($ids as $id) {
             if (!isset($feo[$id])) { $errors[] = 'Заявка #'.$id.' отсутствует в старой базе.'; continue; }
             $item = $feo[$id];
             $net = (float)$item['mass_netto'];
             if ($net <= 0) $errors[] = 'У заявки #'.$id.' не указана положительная масса нетто.';
-            if ($source > 0 && (($balances[$id]['mass_netto'] ?? 0) + 0.0001 < $net)) {
-                $errors[] = 'На складе «'.($warehouseNames[$source] ?? '#'.$source).'» недостаточно остатка по заявке #'.$id.'.';
+            $available = $balances[$id]['mass_netto'] ?? 0;
+            if ($source > 0 && $available + 0.0001 < $net) {
+                $stockWarnings[] = [
+                    'request_id'=>(int)$id,
+                    'available_netto'=>$available,
+                    'required_netto'=>$item['mass_netto'],
+                    'absent'=>$available <= 0.0001,
+                ];
             }
             $rows[] = [
                 'request_id'=>(int)$id,'fkko_code'=>(string)($item['naim_otkhoda_fkko'] ?? ''),
                 'mass_netto'=>$item['mass_netto'],'mass_brutto'=>$item['mass_brutto'],
                 'volume'=>$item['summarnyy_obem'],
-                'available_netto'=>$balances[$id]['mass_netto'] ?? 0,
+                'available_netto'=>$available,
             ];
         }
         $fingerprint = hash('sha256', json_encode([$flight, $existing, $warehouseNames, $rows, $balances], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
@@ -120,7 +127,8 @@ final class WarehouseTripCorrectionService
             'current_route'=>(string)$flight['route_type'],'request_count'=>count($ids),
             'route_type'=>$route,'source_warehouse_id'=>$source,'destination_warehouse_id'=>$destination,
             'warehouses'=>$warehouseNames,'rows'=>$rows,'operation_count'=>count($rows)*count(self::ROUTES[$route]),
-            'errors'=>array_values(array_unique($errors)),'ready'=>$errors === [],'fingerprint'=>$fingerprint,
+            'errors'=>array_values(array_unique($errors)),'stock_warnings'=>$stockWarnings,
+            'ready'=>$errors === [],'fingerprint'=>$fingerprint,
             'movement_date'=>(string)($flight['actual_end_date'] ?: date('Y-m-d H:i:s')),
         ];
     }

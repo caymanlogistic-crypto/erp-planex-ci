@@ -90,10 +90,19 @@
             const operation = route === 'warehouse_to_warehouse' ? `Списание со склада «${escape(src)}» и приход на склад «${escape(dst)}»`
                 : route === 'warehouse_to_utilizer' ? `Списание со склада «${escape(src)}»` : `Приход на склад «${escape(dst)}»`;
             const weight = data.rows.reduce((sum, row) => sum + Number(row.mass_netto || 0) * 1000, 0);
+            const shortages = data.stock_warnings || [];
+            const absent = shortages.filter(row => row.absent).map(row => `#${escape(row.request_id)}`);
+            const partial = shortages.filter(row => !row.absent).map(row => `#${escape(row.request_id)}`);
+            const shortageNotice = shortages.length ? `<div class="notice warn" role="alert">
+                ${absent.length ? `<p><b>В рейсе есть заявки, которых нет на складе «${escape(src)}»:</b> ${absent.join(', ')}.</p>` : ''}
+                ${partial.length ? `<p><b>На складе «${escape(src)}» недостаточно массы по заявкам:</b> ${partial.join(', ')}.</p>` : ''}
+                <p>Проверьте причину. При подтверждении эти заявки будут списаны со склада, остаток может стать отрицательным.</p>
+            </div>` : '';
             preview.innerHTML = `<h3 class="wh-section-title">Предварительная проверка</h3><p><b>${operation}</b> · ${escape(data.request_count)} заявок · ${escape(Math.round(weight).toLocaleString('ru-RU'))} кг</p>
                 <p class="wh-correction-ids">${data.rows.map(row => '#'+escape(row.request_id)).join(', ') || '—'}</p>
+                ${shortageNotice}
                 ${data.errors.length ? `<div class="notice warn" role="alert"><b>Исправление пока недоступно:</b><ul>${data.errors.map(error => `<li>${escape(error)}</li>`).join('')}</ul></div>`
-                    : `<div class="notice success">Проверки пройдены. Будет создано движений: ${escape(data.operation_count)}.</div>`}`;
+                    : !shortages.length ? `<div class="notice success">Проверки пройдены. Будет создано движений: ${escape(data.operation_count)}.</div>` : ''}`;
             fingerprint.value = data.ready ? data.fingerprint : '';
             confirm.disabled = !data.ready;
         } catch (error) {
