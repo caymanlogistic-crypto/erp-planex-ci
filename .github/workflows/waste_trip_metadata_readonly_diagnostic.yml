@@ -71,7 +71,7 @@ jobs:
           cat scripts/waste_trip_metadata_readonly_probe.php | "${SSH[@]}" \
             "PLANEX_ROOT='$LIVE_ROOT' PLANEX_FLIGHT_ID='$FLIGHT_ID' PLANEX_COMPANY_ID='$COMPANY_ID' /usr/bin/php8.5" | tee metadata-readonly.txt
           grep -Fqx 'WASTE_TRIP_METADATA_READ_ONLY_PASS' metadata-readonly.txt
-          "${SSH[@]}" "if crontab -l 2>/dev/null | grep -Fq '# ERP PLANEX waste_trip_sync'; then echo WASTE_TRIP_CRON_CONFIGURED=YES; else echo WASTE_TRIP_CRON_CONFIGURED=NO; fi; if [ -f '$LIVE_ROOT/logs/waste_trip_sync.log' ]; then stat -c 'WASTE_TRIP_SYNC_LOG_MTIME=%y' '$LIVE_ROOT/logs/waste_trip_sync.log'; tail -n 12 '$LIVE_ROOT/logs/waste_trip_sync.log' | grep -E 'company=|WASTE_TRIP_SYNC_OK|ERROR|skipped=' || true; else echo WASTE_TRIP_SYNC_LOG_PRESENT=NO; fi" | tee scheduler-readonly.txt
+          "${SSH[@]}" "wrapper='/home/s/spugovxsim/public_html/crone/WasteTripSync.php'; if [ -r \"\$wrapper\" ]; then echo WASTE_TRIP_HOSTING_WRAPPER_PRESENT=YES; /usr/bin/php8.3 -l \"\$wrapper\"; if grep -Fq 'waste_trip_sync.php' \"\$wrapper\"; then echo WASTE_TRIP_HOSTING_WRAPPER_TARGET=YES; else echo WASTE_TRIP_HOSTING_WRAPPER_TARGET=NO; fi; else echo WASTE_TRIP_HOSTING_WRAPPER_PRESENT=NO; fi" | tee scheduler-readonly.txt
       - name: Upload read-only evidence
         if: always()
         uses: actions/upload-artifact@v4
