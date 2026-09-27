@@ -53,7 +53,7 @@ $tenantColumns = $tenant->query("SELECT COLUMN_NAME FROM information_schema.COLU
 $missingTenant = array_values(array_diff(\App\Service\WasteTripLegacyMetadataService::COLUMNS, $tenantColumns));
 $target = null;
 if ($missingTenant === []) {
-    $query = $tenant->prepare('SELECT business_id,source_system,legacy_flight_id,legal_entity_code,legacy_route_type,legacy_unload_type,legacy_source_warehouse_id,legacy_destination_warehouse_id,legacy_source_warehouse_name,legacy_destination_warehouse_name FROM waste_trips WHERE business_id=? OR legacy_flight_id=? ORDER BY id LIMIT 5');
+    $query = $tenant->prepare('SELECT business_id,source_system,legacy_flight_id,legal_entity_code,legacy_route_type,legacy_unload_type,legacy_source_warehouse_id,legacy_destination_warehouse_id,legacy_source_warehouse_name,legacy_destination_warehouse_name,legacy_sync_error,legacy_last_checked_at,legacy_last_success_at FROM waste_trips WHERE business_id=? OR legacy_flight_id=? ORDER BY id LIMIT 5');
     $query->execute([$flightId, $flightId]);
     $target = $query->fetchAll();
 }
