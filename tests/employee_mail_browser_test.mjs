@@ -51,6 +51,10 @@ try {for(const width of [1366,390]) {
  await page.locator('[data-mail-check]').nth(1).click();
  await page.getByText('IMAP и SMTP подключены. Письма не отправлялись.',{exact:true}).waitFor();assert.equal(checks,1);
  const checkbox=await page.locator('[data-mail-clear]').first().boundingBox();assert.ok(checkbox.width===16&&checkbox.height===16,'Checkbox must retain native compact dimensions');
+ const radio=await page.locator('[data-mail-default]').first().boundingBox();assert.ok(radio.width===16&&radio.height===16,'Default mailbox radio must match compact checkbox dimensions');
+ const heading=await page.locator('.roles-access__mail-heading').first().boundingBox(),defaultLabel=await page.locator('.roles-access__mail-default').first().boundingBox();
+ assert.ok(defaultLabel.height<=20&&defaultLabel.y>=heading.y&&defaultLabel.y+defaultLabel.height<=heading.y+heading.height+1,'Default mailbox label must stay on one line in the header');
+ assert.equal(await page.locator('[data-work-mail-content]').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,'Mail cards overflow horizontally');
  const box=await page.locator('.roles-access-modal__dialog').boundingBox();assert.ok(box.x>=0&&box.x+box.width<=width+1,'Modal overflows');
  const footer=await save.boundingBox();assert.ok(footer.y>=0&&footer.y+footer.height<=1000,'General Save not visible');
  const dir=process.env.PLANEX_SCREENSHOT_DIR;
