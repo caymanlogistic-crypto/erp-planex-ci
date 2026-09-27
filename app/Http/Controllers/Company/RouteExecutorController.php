@@ -32,7 +32,10 @@ final class RouteExecutorController
     {
         $config = $this->config;
         $db = $this->db;
-
+        if (($_POST['_route_executor_combined'] ?? '') === '1') {
+            require base_path('app/Http/Controllers/Company/RouteExecutorActions/create_combined_submit.php');
+            return;
+        }
         require base_path('app/Http/Controllers/Company/RouteExecutorActions/create_submit.php');
     }
 

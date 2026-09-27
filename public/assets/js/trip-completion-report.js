@@ -218,7 +218,10 @@
       <div class="modal-body">
         <ol class="lab-package-progress-steps">
           <li data-step="0"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Формирование отчёта</span></li>
-          <li data-step="1"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Создание PDF файлов</span></li>
+          <li data-step="1"><span class="lab-package-progress-indicator" aria-hidden="true"></span><div class="lab-package-progress-pdf">
+            <div class="lab-package-progress-pdf-head"><span>Создание PDF файлов</span><small class="lab-package-progress-pdf-count"></small></div>
+            <div class="lab-package-progress-track" role="progressbar" aria-label="Создание PDF файлов" aria-valuemin="0" aria-valuemax="1" aria-valuenow="0"><span class="lab-package-progress-fill"></span></div>
+          </div></li>
           <li data-step="2"><span class="lab-package-progress-indicator" aria-hidden="true"></span><span>Создание архива</span></li>
         </ol>
         <p class="lab-package-progress-detail" role="status" aria-live="polite"></p>
@@ -236,6 +239,15 @@
           item.dataset.state=step<index?'done':step===index?'active':'waiting';
         });
         detail.textContent=message;
+      },
+      pdf(done,total) {
+        const count=overlay.querySelector('.lab-package-progress-pdf-count');
+        const track=overlay.querySelector('.lab-package-progress-track');
+        count.textContent=total?`${done} из ${total}`:'Нет сканов';
+        track.hidden=!total;
+        track.setAttribute('aria-valuemax',String(Math.max(1,total)));
+        track.setAttribute('aria-valuenow',String(done));
+        track.querySelector('.lab-package-progress-fill').style.width=total?`${100*done/total}%`:'0%';
       },
       close() { overlay.remove(); link.focus(); },
       error(message) {
@@ -266,12 +278,13 @@
       }
       const files=[[`Рейс_${id}_сводный_отчёт.xlsx`,report]];
       const rowsWithScans=reportRows(trip).filter((row)=>row.documents.length);
-      progress.stage(1,rowsWithScans.length?`Создаём PDF: 0 из ${rowsWithScans.length}`:'Сканов ТН для PDF нет.');
+      progress.pdf(0,rowsWithScans.length);
+      progress.stage(1,rowsWithScans.length?'Обрабатываем сканы ТН…':'Сканов ТН для PDF нет.');
       await paint();
       for (const row of rowsWithScans) {
         const result=await makePdf(row);
         files.push([`Заявка_${row.id}_ТН.pdf`,result.data]);
-        progress.stage(1,`Создаём PDF: ${files.length-1} из ${rowsWithScans.length}`);
+        progress.pdf(files.length-1,rowsWithScans.length);
       }
       progress.stage(2,'Упаковываем отчёт и PDF…');
       await paint();
