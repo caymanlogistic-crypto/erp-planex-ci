@@ -40,10 +40,12 @@
     const named = (form, name) => filled(form.elements.namedItem(name));
     const hasFile = (form, name) => !!form.elements.namedItem(name)?.files?.length;
 
-    // Every editable contractor field is required except the physical address.
-    // Checkboxes describe contact roles, and contractor attachments are optional.
+    // Contractor comments and contact notes do not contain agreement requisites.
+    // The physical address, contact role checkboxes and files are optional too.
     const contractorFields = [...contractor.querySelectorAll('.entity-form-main input, .entity-form-main select, .entity-form-main textarea')]
-      .filter(element => !['hidden', 'checkbox', 'file'].includes(element.type) && element.name !== 'physical_address');
+      .filter(element => !['hidden', 'checkbox', 'file'].includes(element.type) &&
+        !['physical_address', 'comments'].includes(element.name) &&
+        !element.matches('[data-contact-comment]'));
     const contractReady = contractorFields.length > 0 && contractorFields.every(filled);
     const trainingReady = ['full_name', 'snils'].every(name => named(driver, name));
 
