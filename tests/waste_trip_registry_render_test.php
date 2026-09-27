@@ -26,6 +26,9 @@ $assert(Registry::profitability([['amount'=>'100.00']],[])===null,'Missing cost 
 $assert(Registry::profitability([['amount'=>'100.00']],[['amount'=>'0.00']])==='100,0 %','Explicit zero is valid');
 $assert(Registry::cents([['amount'=>'10.01'],['amount'=>'20.02']])===3003,'Integer cents');
 $assert(count(Trips::STATUS_OPTIONS)===4 && Trips::displayStatus('searching_executor')==='planned_route','Four selectable statuses and old alias');
+$assert(Trips::generalCustomerDoesNotPay(['destination_type'=>'warehouse']),'ERP warehouse destination blocks general customer cost');
+$assert(Trips::generalCustomerDoesNotPay(['legacy_unload_type'=>'SKLAD']),'Legacy warehouse unloading blocks general customer cost');
+$assert(!Trips::generalCustomerDoesNotPay(['destination_type'=>'utilizer','legacy_route_type'=>'warehouse_to_utilizer']),'Loading from warehouse still allows general customer cost');
 $render=static function(bool $finance) use($legacy): string {
     $company=['status'=>'active'];$dbError=null;$formSuccess=null;$formError=null;$old=[];$clients=[];$responsibleUsers=[];$routeExecutors=[];$utilizers=[];$isFinanceRealm=$finance;
     $base=$legacy+['id'=>1,'business_id'=>250,'comment'=>str_repeat('Длинное описание <script> ',20),'status'=>'searching_executor','actual_start_date'=>null,'planned_start_date'=>'2026-01-02','actual_end_date'=>null,'planned_finish_date'=>null,'responsible_name'=>'Сидоров Владимир Петрович','request_count'=>22,'snapshot_total_mass_kg'=>1500.25,'general_payments'=>[['amount'=>'200.00','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],'customer_payments'=>[['amount'=>'100.00','condition_type'=>'on_loading']],'carrier_payments'=>[['amount'=>'120.00','condition_type'=>'']]];
@@ -43,10 +46,12 @@ $assert($xp->query('//tr[@data-waste-view="1"]/td')->length===13,'Thirteen data 
 $assert(trim($xp->query('//tr[@data-waste-view="1"]/td[3]')->item(0)->textContent)==="Выгрузка на склад:\nСклад Север" && $xp->query('//tr[@data-waste-view="1"]/td[3]/br')->length===1,'Warehouse destination has caption and name on separate lines');
 $assert(trim($xp->query('//tr[@data-waste-view="2"]/td[3]')->item(0)->textContent)==="Загрузка со склада:\nСклад Север\nВыгрузка на склад:\nСклад Юг" && $xp->query('//tr[@data-waste-view="2"]/td[3]/br')->length===3,'Warehouse route shows both roles and names on separate lines');
 $assert($xp->query('//tr[@data-waste-view="2"]/td[2]/span[contains(@class,"is-mg-logistic")]')->length===1,'MG company is second line');
+$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[10]')->item(0)->textContent)===''&&$xp->query('//tr[@data-waste-view="1"]/td[10][contains(@class,"waste-general-disabled")]')->length===1,'Warehouse general customer cost is blank and grey');
+$assert(trim($xp->query('//tr[@data-waste-view="2"]/td[10]')->item(0)->textContent)===''&&$xp->query('//tr[@data-waste-view="2"]/td[10][contains(@class,"waste-general-disabled")]')->length===1,'Warehouse-to-warehouse general customer cost is blank and grey');
 $assert(trim($xp->query('//tr[@data-waste-view="2"]/td[12]')->item(0)->textContent)===''&&$xp->query('//tr[@data-waste-view="2"]/td[12][contains(@class,"waste-cost-disabled")]')->length===1,'MG cost is blank and grey');
 $assert($xp->query('//tr[@data-waste-view="1"]//span[contains(@class,"registry-payment-line")]')->length===0,'Payment terms absent from registry');
 $assert(str_contains($html,'ГЕН. ЗАКАЗЧИК') && !str_contains($html,'ДОХОДНОСТЬ'),'Three amounts replace profitability');
-$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[10]')->item(0)->textContent,'200 ₽'),'General amount separate from sale');
+$assert(str_contains($xp->query('//tr[@data-waste-view="3"]/td[10]')->item(0)->textContent,'200 ₽'),'Utilizer trip retains general amount');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[11]')->item(0)->textContent,'100 ₽'),'Sale column');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[12]')->item(0)->textContent,'120 ₽'),'Manual cost column');
 $assert($xp->query('//td[contains(@class,"waste-executor-unmatched")]')->length===1,'Only unmatched row yellow');
@@ -62,12 +67,14 @@ $assert(!str_contains($render(false),'Расчёты по прежним усл�
 $assert(!str_contains($html,'<script> Длинное'),'Escape legacy text');
 $assert(!str_contains($render(false),'100 ₽')&&!str_contains($render(false),'-20,0 %'),'Finance stays hidden for non-finance roles');
 if($out=getenv('WASTE_REGISTRY_RENDER_OUTPUT'))file_put_contents($out,$html);
-$renderEdit=static function(bool $manual=false, ?string $legalEntity=null): string {
+$renderEdit=static function(bool $manual=false, ?string $legalEntity=null, bool $warehouse=false): string {
     $trip=['id'=>1,'business_id'=>250,'legacy_flight_id'=>250,'source_system'=>'legacy_sync','status'=>'planned_route','lock_version'=>1,'financial_model_version'=>3,'requests'=>[],
         'general_payments'=>[['amount'=>'1500.00','payment_type'=>'','payment_method'=>'','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],
         'customer_payments'=>[['amount'=>'1000.00','payment_type'=>'','payment_method'=>'','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']], 'carrier_payments'=>[]];
     $trip['customer_amount_sync_disabled']=$manual;
     $trip['legal_entity_code']=$legalEntity;
+    $trip['destination_type']=$warehouse?'warehouse':'utilizer';
+    $trip['legacy_unload_type']=$warehouse?'SKLAD':'OO';
     $isFinanceRealm=true;$clients=[];$responsibleUsers=[];$routeExecutors=[];$utilizers=[];
     ob_start();require base_path('app/View/partials/company_waste_trip_modal_edit.php');return ob_get_clean();
 };
@@ -80,5 +87,8 @@ $assert(str_contains($edit,'После изменения и сохранени�
 $assert(str_contains($renderEdit(true),'Синхронизация суммы отключена.'),'Show persisted manual ownership after reopening');
 $mgEdit=$renderEdit(false,'mg_logistic');
 $assert(str_contains($mgEdit,'себестоимость не заполняется')&&!str_contains($mgEdit,'name="carrier_payments[0][amount]"'),'MG modal prevents cost entry');
+$warehouseEdit=$renderEdit(false,'planex',true);
+$assert(str_contains($warehouseEdit,'data-waste-general-forced="1"')&&str_contains($warehouseEdit,'data-waste-general-disabled'),'Warehouse edit marks general payment controls for blocking');
+if($out=getenv('WASTE_WAREHOUSE_EDIT_RENDER_OUTPUT'))file_put_contents($out,$warehouseEdit);
 if($out=getenv('WASTE_EDIT_RENDER_OUTPUT'))file_put_contents($out,$edit);
 echo "WASTE_TRIP_REGISTRY_RENDER=PASS\n";

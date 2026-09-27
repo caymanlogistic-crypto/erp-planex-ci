@@ -17,7 +17,7 @@ if ($paymentRows === []) {
 }
 $vatRateOptions = ['', '0', '5', '7', '20', '22'];
 ?>
-<div class="waste-form-field span-2 waste-general-payment-block">
+<div class="waste-form-field span-2 waste-general-payment-block" data-waste-general-payment-block>
     <div class="linear-trip-payment-card">
         <div class="linear-trip-block-head">
             <div>

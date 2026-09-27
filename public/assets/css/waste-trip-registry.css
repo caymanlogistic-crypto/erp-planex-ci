@@ -23,4 +23,6 @@
 .waste-legal-entity.is-mg-logistic { color:#9c27b0; }
 .waste-legal-entity.is-planex { color:#28a745; }
 .waste-registry .waste-warehouse { min-width:140px; max-width:220px; white-space:normal; overflow-wrap:anywhere; }
-.waste-registry tbody tr td.waste-cost-disabled, .waste-registry tbody tr:hover td.waste-cost-disabled { background:#e5e7eb; }
+.waste-registry tbody tr td.waste-cost-disabled, .waste-registry tbody tr:hover td.waste-cost-disabled,
+.waste-registry tbody tr td.waste-general-disabled, .waste-registry tbody tr:hover td.waste-general-disabled { background:#e5e7eb; }
+.waste-general-disabled-notice { background:#e5e7eb; padding:10px 12px; border-radius:4px; }
