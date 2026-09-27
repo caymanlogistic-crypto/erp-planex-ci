@@ -16,7 +16,7 @@ $page = $registry->page('company.statistics.managers');
 $check(is_array($page), 'statistics page is registered');
 $check(($page['path'] ?? '') === '/company/statistics/managers', 'statistics page route');
 $check(($page['label'] ?? '') === 'Работа логистов', 'statistics page role-management label');
-$check(($page['section'] ?? '') === 'Статистика', 'statistics section in role tree');
+$check(($page['section'] ?? '') === 'Операции' && ($page['group'] ?? '') === 'Статистика', 'statistics folder in role tree');
 $check(in_array('company.statistics.managers', $registry->grantablePageKeys(), true), 'statistics page is grantable');
 
 $route = $read('app/Http/Routes/company_statistics.php');

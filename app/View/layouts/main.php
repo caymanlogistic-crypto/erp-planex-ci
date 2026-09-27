@@ -46,6 +46,8 @@ $linearTripsActive = str_starts_with($requestPath, '/company/trips/linear');
 $departuresActive = str_starts_with($requestPath, '/company/trips/departures');
 $managerStatisticsActive = str_starts_with($requestPath, '/company/statistics/managers');
 $feoShareStatisticsActive = str_starts_with($requestPath, '/company/statistics/feo-share');
+$cargoBalanceStatisticsActive = str_starts_with($requestPath, '/company/statistics/cargo-balance');
+$statisticsOpen = $managerStatisticsActive || $feoShareStatisticsActive || $cargoBalanceStatisticsActive;
 $routeExecutorsActive = str_starts_with($requestPath, '/company/route-executors');
 $documentGeneratorOpen = str_starts_with($requestPath, '/company/document-generator');
 $documentGeneratorCreateActive = $requestPath === '/company/document-generator';
@@ -469,18 +471,16 @@ if (empty($topbarCrumbs)) {
                         <span>ТС</span>
                     </a>
                 </div>
-            </div>
-
-            <div class="nav-group">
-                <div class="nav-section-label">СТАТИСТИКА</div>
-                <a class="nav-item<?= $managerStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/managers') ?>">
-                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span class="nav-label">Работа логистов</span>
-                </a>
-                <a class="nav-item<?= $feoShareStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/feo-share') ?>">
-                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span class="nav-label">Доля компаний в ФЭО</span>
-                </a>
+                <div class="nav-item is-parent<?= $statisticsOpen ? ' is-open is-active' : '' ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4h4l1.5 2H14v7H2V4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                    <span class="nav-label">Статистика</span>
+                    <svg class="nav-chevron" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="nav-sub<?= $statisticsOpen ? ' is-open' : '' ?>">
+                    <a class="nav-sub-item<?= $managerStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/managers') ?>"><span>Работа логистов</span></a>
+                    <a class="nav-sub-item<?= $feoShareStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/feo-share') ?>"><span>Доля компаний в ФЭО</span></a>
+                    <a class="nav-sub-item<?= $cargoBalanceStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/cargo-balance') ?>"><span>Баланс заявок</span></a>
+                </div>
             </div>
 
             <div class="nav-group">
@@ -689,18 +689,16 @@ if (empty($topbarCrumbs)) {
                         <span>ТС</span>
                     </a>
                 </div>
-            </div>
-
-            <div class="nav-group">
-                <div class="nav-section-label">СТАТИСТИКА</div>
-                <a class="nav-item<?= $managerStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/managers') ?>">
-                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span class="nav-label">Работа логистов</span>
-                </a>
-                <a class="nav-item<?= $feoShareStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/feo-share') ?>">
-                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M2.5 13.5V9.5L5.5 6.5L8 9L12.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 4.5H12.5V7" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                    <span class="nav-label">Доля компаний в ФЭО</span>
-                </a>
+                <div class="nav-item is-parent<?= $statisticsOpen ? ' is-open is-active' : '' ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M2 4h4l1.5 2H14v7H2V4Z" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                    <span class="nav-label">Статистика</span>
+                    <svg class="nav-chevron" viewBox="0 0 14 14" fill="none" aria-hidden="true"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="nav-sub<?= $statisticsOpen ? ' is-open' : '' ?>">
+                    <a class="nav-sub-item<?= $managerStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/managers') ?>"><span>Работа логистов</span></a>
+                    <a class="nav-sub-item<?= $feoShareStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/feo-share') ?>"><span>Доля компаний в ФЭО</span></a>
+                    <a class="nav-sub-item<?= $cargoBalanceStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/cargo-balance') ?>"><span>Баланс заявок</span></a>
+                </div>
             </div>
 
             <?php endif; ?>
