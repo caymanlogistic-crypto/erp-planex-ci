@@ -17,6 +17,18 @@ if (!is_file($ciPath)) {
 
 $workflow = (string) file_get_contents($workflowPath);
 $ci = (string) file_get_contents($ciPath);
+$cli = (string) file_get_contents($root . '/scripts/waste_trip_sync.php');
+if (!str_contains($cli, "require_once \$root . '/app/Support/entrypoint_dependencies.php';")) {
+    fwrite(STDERR, "Waste Trip CLI must load the runtime service dependencies\n");
+    exit(1);
+}
+require_once $root . '/bootstrap/app.php';
+require_once $root . '/app/Support/entrypoint_dependencies.php';
+if (!class_exists(\App\Service\FinanceObligationService::class)
+    || !class_exists(\App\Service\WasteTripStartStatisticsService::class)) {
+    fwrite(STDERR, "Waste Trip CLI runtime services unavailable\n");
+    exit(1);
+}
 
 $required = [
     'name: Waste Trips Legacy Sync Manual',
