@@ -181,6 +181,7 @@ final class WasteTripController
     private function generalPaymentsForSession(array $post,array $sessionUser): ?array
     {
         if((string)($sessionUser['role_code']??'')!=='company_owner')return null;
+        if(!array_key_exists('general_payments',$post))return null;
         return WasteTripGeneralPaymentService::parseRows((array)($post['general_payments']??[]),false,true);
     }
 
