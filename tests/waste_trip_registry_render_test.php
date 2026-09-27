@@ -29,39 +29,45 @@ $assert(count(Trips::STATUS_OPTIONS)===4 && Trips::displayStatus('searching_exec
 $render=static function(bool $finance) use($legacy): string {
     $company=['status'=>'active'];$dbError=null;$formSuccess=null;$formError=null;$old=[];$clients=[];$responsibleUsers=[];$routeExecutors=[];$utilizers=[];$isFinanceRealm=$finance;
     $base=$legacy+['id'=>1,'business_id'=>250,'comment'=>str_repeat('Длинное описание <script> ',20),'status'=>'searching_executor','actual_start_date'=>null,'planned_start_date'=>'2026-01-02','actual_end_date'=>null,'planned_finish_date'=>null,'responsible_name'=>'Сидоров Владимир Петрович','request_count'=>22,'snapshot_total_mass_kg'=>1500.25,'general_payments'=>[['amount'=>'200.00','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],'customer_payments'=>[['amount'=>'100.00','condition_type'=>'on_loading']],'carrier_payments'=>[['amount'=>'120.00','condition_type'=>'']]];
-    $trips=[$base,array_replace($base,['id'=>2,'business_id'=>251,'financial_model_version'=>3,'status'=>'executor_assigned','legacy_sync_error'=>'Исполнитель не найден по фамилии и госномеру.']),array_replace($base,['id'=>3,'business_id'=>252,'status'=>'in_progress','actual_start_date'=>'2026-01-03','route_executor_id'=>7,'executor_contractor_name'=>'ООО Перевозчик','executor_driver_names'=>'Иванов Иван Петрович','executor_vehicle_label'=>'MAN А123ВС77']),array_replace($base,['id'=>4,'business_id'=>253,'status'=>'completed','actual_start_date'=>'2026-01-03','actual_end_date'=>'2026-01-04','general_payments'=>[['amount'=>null,'condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],'customer_payments'=>[['amount'=>'0.00','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],'carrier_payments'=>[['amount'=>'','condition_type'=>'after_end','days_count'=>7,'days_kind'=>'calendar']]] )];
+    $trips=[array_replace($base,['legal_entity_code'=>'planex','legacy_route_type'=>'generator_to_warehouse','legacy_destination_warehouse_name'=>'Склад Север']),array_replace($base,['id'=>2,'business_id'=>251,'legal_entity_code'=>'mg_logistic','legacy_route_type'=>'warehouse_to_warehouse','legacy_source_warehouse_name'=>'Склад Север','legacy_destination_warehouse_name'=>'Склад Юг','financial_model_version'=>3,'status'=>'executor_assigned','legacy_sync_error'=>'Исполнитель не найден по фамилии и госномеру.']),array_replace($base,['id'=>3,'business_id'=>252,'status'=>'in_progress','actual_start_date'=>'2026-01-03','route_executor_id'=>7,'executor_contractor_name'=>'ООО Перевозчик','executor_driver_names'=>'Иванов Иван Петрович','executor_vehicle_label'=>'MAN А123ВС77']),array_replace($base,['id'=>4,'business_id'=>253,'status'=>'completed','actual_start_date'=>'2026-01-03','actual_end_date'=>'2026-01-04','general_payments'=>[['amount'=>null,'condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],'customer_payments'=>[['amount'=>'0.00','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],'carrier_payments'=>[['amount'=>'','condition_type'=>'after_end','days_count'=>7,'days_kind'=>'calendar']]] )];
     ob_start();require base_path('app/View/pages/company_waste_trips.php');return ob_get_clean();
 };
 $html=$render(true);
 $dom=new DOMDocument();@$dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);$xp=new DOMXPath($dom);
-$assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th')->length===12,'Twelve registry columns');
+$assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th')->length===13,'Thirteen registry columns');
 $sort=$xp->query('//select[@name="sort"]')->item(0);
 $assert($sort!==null && $sort->getAttribute('aria-label')==='Сортировка рейсов','Registry sort control');
 $assert($xp->query('//select[@name="sort"]/option[@value="id" and @selected]')->length===1,'ID sort is selected by default');
 $assert($xp->query('//select[@name="sort"]/option[@value="status"]')->length===1 && $xp->query('//select[@name="sort"]/option[@value="manager"]')->length===1,'Status and manager sort choices');
-$assert($xp->query('//tr[@data-waste-view="1"]/td')->length===12,'Twelve data columns');
+$assert($xp->query('//tr[@data-waste-view="1"]/td')->length===13,'Thirteen data columns');
+$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[3]')->item(0)->textContent)==='На склад: Склад Север','Warehouse column follows description');
+$assert(str_contains($xp->query('//tr[@data-waste-view="2"]/td[3]')->item(0)->textContent,'Склад Север → на склад: Склад Юг'),'Warehouse route shows both names');
+$assert($xp->query('//tr[@data-waste-view="2"]/td[2]/span[contains(@class,"is-mg-logistic")]')->length===1,'MG company is second line');
+$assert(trim($xp->query('//tr[@data-waste-view="2"]/td[12]')->item(0)->textContent)===''&&$xp->query('//tr[@data-waste-view="2"]/td[12][contains(@class,"waste-cost-disabled")]')->length===1,'MG cost is blank and grey');
+$assert($xp->query('//tr[@data-waste-view="1"]//span[contains(@class,"registry-payment-line")]')->length===0,'Payment terms absent from registry');
 $assert(str_contains($html,'ГЕН. ЗАКАЗЧИК') && !str_contains($html,'ДОХОДНОСТЬ'),'Three amounts replace profitability');
-$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[9]')->item(0)->textContent,'200 ₽'),'General amount separate from sale');
-$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[10]')->item(0)->textContent,'100 ₽'),'Sale column');
-$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[11]')->item(0)->textContent,'120 ₽'),'Manual cost column');
+$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[10]')->item(0)->textContent,'200 ₽'),'General amount separate from sale');
+$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[11]')->item(0)->textContent,'100 ₽'),'Sale column');
+$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[12]')->item(0)->textContent,'120 ₽'),'Manual cost column');
 $assert($xp->query('//td[contains(@class,"waste-executor-unmatched")]')->length===1,'Only unmatched row yellow');
-$assert($xp->query('//tr[@data-waste-view="1"]/td[7]')->item(0)->textContent==='22','Request count');
-$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[8]')->item(0)->textContent)==='1 500','Total mass rounded to kilograms');
-$assert(trim($xp->query('//tr[@data-waste-view="4"]/td[9]')->item(0)->textContent)==='—','Unknown amount hides default terms');
-$assert(trim($xp->query('//tr[@data-waste-view="4"]/td[11]')->item(0)->textContent)==='—','Empty amount hides default terms');
-$assert(str_contains($xp->query('//tr[@data-waste-view="4"]/td[10]')->item(0)->textContent,'0 ₽'),'Explicit zero remains visible');
-$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[3]')->item(0)->textContent,'02.01.2026'),'Fallback planned date');
-$assert(!str_contains($xp->query('//tr[@data-waste-view="3"]/td[3]')->item(0)->textContent,'плановая'),'Actual wins over plan');
+$assert($xp->query('//tr[@data-waste-view="1"]/td[8]')->item(0)->textContent==='22','Request count');
+$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[9]')->item(0)->textContent)==='1 500','Total mass rounded to kilograms');
+$assert(trim($xp->query('//tr[@data-waste-view="4"]/td[10]')->item(0)->textContent)==='—','Unknown amount hides default terms');
+$assert(trim($xp->query('//tr[@data-waste-view="4"]/td[12]')->item(0)->textContent)==='—','Empty amount hides default terms');
+$assert(str_contains($xp->query('//tr[@data-waste-view="4"]/td[11]')->item(0)->textContent,'0 ₽'),'Explicit zero remains visible');
+$assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[4]')->item(0)->textContent,'02.01.2026'),'Fallback planned date');
+$assert(!str_contains($xp->query('//tr[@data-waste-view="3"]/td[4]')->item(0)->textContent,'плановая'),'Actual wins over plan');
 $assert(str_contains($html,'Расчёты по прежним условиям'),'Historical settlement notice');
 $assert(!str_contains($render(false),'Расчёты по прежним условиям'),'Historical finance mode hidden from non-finance roles');
 $assert(!str_contains($html,'<script> Длинное'),'Escape legacy text');
 $assert(!str_contains($render(false),'100 ₽')&&!str_contains($render(false),'-20,0 %'),'Finance stays hidden for non-finance roles');
 if($out=getenv('WASTE_REGISTRY_RENDER_OUTPUT'))file_put_contents($out,$html);
-$renderEdit=static function(bool $manual=false): string {
+$renderEdit=static function(bool $manual=false, ?string $legalEntity=null): string {
     $trip=['id'=>1,'business_id'=>250,'legacy_flight_id'=>250,'source_system'=>'legacy_sync','status'=>'planned_route','lock_version'=>1,'financial_model_version'=>3,'requests'=>[],
         'general_payments'=>[['amount'=>'1500.00','payment_type'=>'','payment_method'=>'','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],
         'customer_payments'=>[['amount'=>'1000.00','payment_type'=>'','payment_method'=>'','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']], 'carrier_payments'=>[]];
     $trip['customer_amount_sync_disabled']=$manual;
+    $trip['legal_entity_code']=$legalEntity;
     $isFinanceRealm=true;$clients=[];$responsibleUsers=[];$routeExecutors=[];$utilizers=[];
     ob_start();require base_path('app/View/partials/company_waste_trip_modal_edit.php');return ob_get_clean();
 };
@@ -72,5 +78,7 @@ $assert($saleInput!==null&&!$saleInput->hasAttribute('readonly')&&!$saleInput->h
 $assert($editXp->query('//input[@name="general_payments[0][amount]"]')->item(0)->hasAttribute('readonly'),'General amount remains source-owned');
 $assert(str_contains($edit,'После изменения и сохранения сумма больше не будет обновляться'),'Explain effect of saving manual sale');
 $assert(str_contains($renderEdit(true),'Синхронизация суммы отключена.'),'Show persisted manual ownership after reopening');
+$mgEdit=$renderEdit(false,'mg_logistic');
+$assert(str_contains($mgEdit,'себестоимость не заполняется')&&!str_contains($mgEdit,'name="carrier_payments[0][amount]"'),'MG modal prevents cost entry');
 if($out=getenv('WASTE_EDIT_RENDER_OUTPUT'))file_put_contents($out,$edit);
 echo "WASTE_TRIP_REGISTRY_RENDER=PASS\n";
