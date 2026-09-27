@@ -22,6 +22,14 @@ $responsibleLogists = [
 <link rel="stylesheet" href="/assets/css/route-executor-combined-create.css">
 </head><body>
 <button type="button" data-route-executor-create-btn>Создать исполнителя рейса</button>
+<div class="table-card" data-erp-grid data-route-executors-grid>
+  <div class="table-toolbar"><div class="found-label">Найдено: <b>2</b></div><input class="toolbar-search" placeholder="Поиск по таблице"></div>
+  <div class="table-scroll"><table class="table"><tbody>
+    <tr data-route-executor-id="1" data-erp-sort-date="1"><td>ИП Орлов</td><td>Иванов Иван</td></tr>
+    <tr data-route-executor-id="2" data-erp-sort-date="2"><td>ООО Вектор</td><td>Петров Пётр</td></tr>
+  </tbody></table></div>
+  <div class="table-footer"><span class="footer-range"></span><span class="footer-total"></span></div>
+</div>
 <?php require BASE_PATH . '/app/View/partials/route_executor_modals.php'; ?>
 <script src="/assets/js/contact-fields.js"></script>
 <script src="/assets/js/legal-entity-documents.js"></script>

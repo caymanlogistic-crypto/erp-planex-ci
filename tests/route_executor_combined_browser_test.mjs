@@ -25,6 +25,16 @@ try {
         const errors = [];
         page.on('pageerror', error => errors.push(error.message));
         await page.goto('http://127.0.0.1:' + server.address().port + '/');
+        const executorRows = page.locator('[data-route-executors-grid] tbody tr');
+        assert.equal(await executorRows.count(), 2);
+        await page.locator('[data-route-executor-create-btn]').click();
+        await page.locator('#route-executor-create-modal .modal-close').click();
+        assert.equal(await page.locator('#route-executor-create-modal.is-open').count(), 0);
+        assert.equal(await page.locator('[data-route-executors-grid] tbody tr:visible').count(), 2, 'closing with X must keep executor rows visible');
+        await page.locator('[data-route-executor-create-btn]').click();
+        await page.locator('#route-executor-create-modal-foot [data-route-executor-create-close]').click();
+        assert.equal(await page.locator('#route-executor-create-modal.is-open').count(), 0);
+        assert.equal(await page.locator('[data-route-executors-grid] tbody tr:visible').count(), 2, 'Cancel must keep executor rows visible');
         await page.locator('[data-route-executor-create-btn]').click();
         if (process.env.PLANEX_ROUTE_EXECUTOR_SCREENSHOT_DIR) {
             fs.mkdirSync(process.env.PLANEX_ROUTE_EXECUTOR_SCREENSHOT_DIR, { recursive: true });
