@@ -116,7 +116,7 @@ final class TripCompletionController
             $id=(int)$tripId;$version=filter_var($_POST['version']??null,FILTER_VALIDATE_INT,['options'=>['min_range'=>0]]);
             if ($version===false) throw new DomainException('Обновите страницу и повторите действие.');
             $action=(string)($_POST['action']??'');
-            if ($this->reviewerMode && in_array($action,['archive','restore'],true)) {
+            if ($this->reviewerMode && in_array($action,['archive','restore','return_work'],true)) {
                 $this->visibleTrip($service,$id);
                 $result=$service->transitionReview($id,(int)$version,$action,$actor,$login);
                 $this->json(['ok'=>true]+$result);
