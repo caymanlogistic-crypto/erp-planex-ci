@@ -1,7 +1,7 @@
 <?php
 $rolesAccessInitialStateJson = $rolesAccessInitialStateJson ?? '{}';
 ?>
-<section class="panel roles-access roles-access__workspace" data-roles-access-root>
+<div class="roles-access" data-roles-access-root>
     <div class="page-head roles-access__head">
         <div class="page-head-left">
             <h1 class="page-title">Роли и доступы</h1>
@@ -13,6 +13,7 @@ $rolesAccessInitialStateJson = $rolesAccessInitialStateJson ?? '{}';
         </div>
     </div>
 
+    <section class="panel roles-access__workspace">
     <div class="roles-access__tabs" role="tablist" aria-label="Настройки доступа">
         <button type="button" class="roles-access__tab is-active" role="tab" aria-selected="true" aria-controls="roles-access-roles" data-access-tab="roles">Роли</button>
         <button type="button" class="roles-access__tab" role="tab" aria-selected="false" aria-controls="roles-access-users" data-access-tab="users">Пользователи</button>
@@ -61,7 +62,8 @@ $rolesAccessInitialStateJson = $rolesAccessInitialStateJson ?? '{}';
     </section>
 
     <script type="application/json" data-roles-access-state><?= $rolesAccessInitialStateJson ?></script>
-</section>
+    </section>
+</div>
 
 <div class="modal-overlay roles-access-modal" id="roles-access-modal" role="dialog" aria-modal="true" aria-labelledby="roles-access-modal-title" aria-hidden="true">
     <div class="modal modal-lg roles-access-modal__dialog" tabindex="-1">

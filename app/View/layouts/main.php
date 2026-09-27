@@ -127,6 +127,7 @@ $navigationBadgeHtml = static function (array $page) use ($navigationBadgeCount,
 $wideWorkspacePrefixes = [
     '/company/clients',
     '/company/max/settings',
+    '/company/roles-access',
     '/company/document-generator',
     '/company/trips/linear',
     '/company/trips/departures',
