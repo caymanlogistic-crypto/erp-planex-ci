@@ -23,7 +23,7 @@ $pdo->exec("CREATE TABLE warehouses(id INT PRIMARY KEY,name VARCHAR(100) NOT NUL
 CREATE TABLE flights(id INT PRIMARY KEY,status VARCHAR(30) NOT NULL,route_type VARCHAR(40),unload_type VARCHAR(20),source_warehouse_id INT NULL,destination_warehouse_id INT NULL,zayavki_ids TEXT NOT NULL,actual_end_date DATETIME NULL,comment VARCHAR(100)) ENGINE=InnoDB;
 CREATE TABLE feo(zayavka_id INT PRIMARY KEY,naim_otkhoda_fkko VARCHAR(20),mass_netto DECIMAL(12,4),mass_brutto DECIMAL(12,4),summarnyy_obem DECIMAL(12,4)) ENGINE=InnoDB;
 CREATE TABLE warehouse_movements(id INT AUTO_INCREMENT PRIMARY KEY,movement_type VARCHAR(30) NOT NULL,warehouse_id INT NOT NULL,source_warehouse_id INT NULL,destination_warehouse_id INT NULL,flight_id INT NOT NULL,zayavka_id INT NOT NULL,fkko_code VARCHAR(20),mass_netto DECIMAL(12,4),mass_brutto DECIMAL(12,4),volume DECIMAL(12,4),movement_date DATETIME,status VARCHAR(20),comment VARCHAR(255),created_at DATETIME,updated_at DATETIME,INDEX idx_balance(warehouse_id,zayavka_id,status),INDEX idx_flight(flight_id)) ENGINE=InnoDB;
-INSERT INTO warehouses VALUES(1,'Север',1),(2,'Юг',1),(3,'Закрыт',0);
+INSERT INTO warehouses VALUES(1,'Север',1),(2,'Юг',1),(3,'Закрыт',0),(4,'Тестовый',1);
 INSERT INTO feo VALUES(101,'code','1.0000','1.1000','2.0000'),(102,'code','2.0000','2.2000','3.0000');
 INSERT INTO flights VALUES
 (20,'completed','generator_to_utilizer','OO',NULL,NULL,'101,102','2026-09-01 12:00:00','Приход'),
@@ -31,10 +31,11 @@ INSERT INTO flights VALUES
 (22,'started','generator_to_utilizer','OO',NULL,NULL,'102',NULL,'Перемещение'),
 (23,'started','generator_to_utilizer','OO',NULL,NULL,'102',NULL,'Недостаток'),
 (24,'started','generator_to_utilizer','OO',NULL,NULL,'101',NULL,'Устаревшая проверка'),
-(25,'started','generator_to_utilizer','OO',NULL,NULL,'102',NULL,'Откат');");
+(25,'started','generator_to_utilizer','OO',NULL,NULL,'102',NULL,'Откат'),
+(26,'started','generator_to_utilizer','OO',NULL,NULL,'101,102',NULL,'Смешанный вывоз');");
 
 $preview = Correction::preview($pdo, $database, 21, 'warehouse_to_utilizer', 1, 0);
-checkCorrection($preview['ready'] && $preview['stock_warnings'][0]['request_id'] === 101 && $preview['stock_warnings'][0]['absent'], 'Outgoing flight without stock needs an explicit visible warning.');
+checkCorrection(!$preview['ready'] && $preview['operation_count'] === 0 && $preview['stock_warnings'][0]['request_id'] === 101, 'Outgoing flight without stock must not create a negative balance.');
 $preview = Correction::preview($pdo, $database, 20, 'generator_to_warehouse', 0, 1);
 checkCorrection($preview['ready'] && $preview['operation_count'] === 2, 'Incoming preview.');
 $result = Correction::apply($pdo, $database, 20, 'generator_to_warehouse', 0, 1, $preview['fingerprint']);
@@ -52,9 +53,21 @@ checkCorrection($preview['ready'] && $preview['operation_count'] === 2, 'Transfe
 Correction::apply($pdo, $database, 22, 'warehouse_to_warehouse', 1, 2, $preview['fingerprint']);
 checkCorrection((int)$pdo->query('SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=22')->fetchColumn() === 2, 'Both transfer rows.');
 $preview = Correction::preview($pdo, $database, 23, 'warehouse_to_utilizer', 1, 0);
-checkCorrection($preview['ready'] && count($preview['stock_warnings']) === 1 && $preview['stock_warnings'][0]['request_id'] === 102, 'Missing stock must be shown without blocking the operator.');
-Correction::apply($pdo, $database, 23, 'warehouse_to_utilizer', 1, 0, $preview['fingerprint']);
-checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=23 AND movement_type='issue'")->fetchColumn() === 1, 'Operator-approved issue was recorded.');
+checkCorrection(!$preview['ready'] && count($preview['stock_warnings']) === 1 && $preview['operation_count'] === 0, 'Missing stock must not be deducted.');
+$pdo->exec("INSERT INTO warehouse_movements(movement_type,warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment) VALUES('receipt',4,20,101,1,'2026-09-01 12:00:00','active','Test receipt')");
+$preview = Correction::preview($pdo, $database, 26, 'warehouse_to_utilizer', 4, 0);
+checkCorrection($preview['ready'] && $preview['request_count'] === 2 && $preview['movement_request_count'] === 1 && $preview['operation_count'] === 1 && !$preview['rows'][1]['will_move'], 'Mixed flight must skip absent request.');
+Correction::apply($pdo, $database, 26, 'warehouse_to_utilizer', 4, 0, $preview['fingerprint']);
+checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=26 AND status='active'")->fetchColumn() === 1, 'Only present request was deducted.');
+checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=26 AND zayavka_id=102")->fetchColumn() === 0, 'Absent request was not deducted.');
+checkCorrection(!Correction::cancellationPreview($pdo, $database, 20)['ready'], 'Receipt with later dependent warehouse movements cannot be cancelled.');
+$cancel = Correction::cancellationPreview($pdo, $database, 26);
+checkCorrection($cancel['ready'] && $cancel['movement_count'] === 1, 'Warehouse-only cancellation preview.');
+correctionRejected(static fn() => Correction::cancel($pdo, $database, 26, str_repeat('0', 64)), 'Stale cancellation fingerprint must fail.');
+Correction::cancel($pdo, $database, 26, $cancel['fingerprint']);
+checkCorrection((int)$pdo->query("SELECT COUNT(*) FROM warehouse_movements WHERE flight_id=26 AND status='active'")->fetchColumn() === 0, 'Correction movements cancelled.');
+checkCorrection((string)$pdo->query('SELECT route_type FROM flights WHERE id=26')->fetchColumn() === 'warehouse_to_utilizer', 'Flight remains after warehouse cancellation.');
+checkCorrection(Correction::preview($pdo, $database, 26, 'warehouse_to_utilizer', 4, 0)['ready'], 'Cancelled correction can be reapplied.');
 
 $preview = Correction::preview($pdo, $database, 24, 'generator_to_warehouse', 0, 2);
 $pdo->exec("UPDATE feo SET mass_netto='1.2000' WHERE zayavka_id=101");

@@ -96,9 +96,11 @@
             const shortageNotice = shortages.length ? `<div class="notice warn" role="alert">
                 ${absent.length ? `<p><b>В рейсе есть заявки, которых нет на складе «${escape(src)}»:</b> ${absent.join(', ')}.</p>` : ''}
                 ${partial.length ? `<p><b>На складе «${escape(src)}» недостаточно массы по заявкам:</b> ${partial.join(', ')}.</p>` : ''}
-                <p>Проверьте причину. При подтверждении эти заявки будут списаны со склада, остаток может стать отрицательным.</p>
+                <p>Эти заявки останутся в списке рейса, но не будут списаны со склада. Оператор может проверить их происхождение отдельно.</p>
             </div>` : '';
-            preview.innerHTML = `<h3 class="wh-section-title">Предварительная проверка</h3><p><b>${operation}</b> · ${escape(data.request_count)} заявок · ${escape(Math.round(weight).toLocaleString('ru-RU'))} кг</p>
+            const movedWeight = data.rows.filter(row => row.will_move).reduce((sum, row) => sum + Number(row.mass_netto || 0) * 1000, 0);
+            preview.innerHTML = `<h3 class="wh-section-title">Предварительная проверка</h3><p><b>${operation}</b> · в рейсе ${escape(data.request_count)} заявок · ${escape(Math.round(weight).toLocaleString('ru-RU'))} кг</p>
+                <p>Складское движение: ${escape(data.movement_request_count)} заявок · ${escape(Math.round(movedWeight).toLocaleString('ru-RU'))} кг.</p>
                 <p class="wh-correction-ids">${data.rows.map(row => '#'+escape(row.request_id)).join(', ') || '—'}</p>
                 ${shortageNotice}
                 ${data.errors.length ? `<div class="notice warn" role="alert"><b>Исправление пока недоступно:</b><ul>${data.errors.map(error => `<li>${escape(error)}</li>`).join('')}</ul></div>`
@@ -142,4 +144,29 @@
             preview.innerHTML = `<div class="notice warn" role="alert">${escape(error.message)} Повторите предварительную проверку.</div>`;
         }
     });
+})();
+
+(function () {
+    const csrf = document.querySelector('.wh-correction-modal [name="_csrf_token"]');
+    document.querySelectorAll('[data-wh-cancel-correction]').forEach(button => button.addEventListener('click', async () => {
+        const flightId = button.dataset.flightId;
+        button.disabled = true;
+        try {
+            const url = button.dataset.previewUrl + '?' + new URLSearchParams({flight_id: flightId});
+            const previewResponse = await fetch(url, {credentials: 'same-origin', cache: 'no-store'});
+            const preview = await previewResponse.json();
+            if (!previewResponse.ok || !preview.ready) throw new Error(preview.error || preview.errors?.join(' ') || 'Отмена недоступна.');
+            if (!window.confirm(`Отменить ${preview.movement_count} складских движений рейса #${flightId}? Сам рейс сохранится.`)) return;
+            const body = new URLSearchParams({flight_id: flightId, fingerprint: preview.fingerprint});
+            if (csrf) body.set(csrf.name, csrf.value);
+            const response = await fetch(button.dataset.submitUrl, {method: 'POST', credentials: 'same-origin', body});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Отмена не выполнена.');
+            location.reload();
+        } catch (error) {
+            window.alert(error.message);
+        } finally {
+            button.disabled = false;
+        }
+    }));
 })();
