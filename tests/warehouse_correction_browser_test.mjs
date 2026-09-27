@@ -22,7 +22,8 @@ try {
             if (url.pathname === '/assets/js/warehouse-stock.js') return route.fulfill({status:200, contentType:'text/javascript',body:fs.readFileSync(path.join(root,'public/assets/js/warehouse-stock.js'),'utf8')});
             if (url.pathname.endsWith('.css')) return route.fulfill({status:200, contentType:'text/css',body:fs.readFileSync(path.join(root,'public/assets/css/warehouse-stock.css'),'utf8')});
             if (url.pathname.endsWith('/correction-preview')) {
-                return route.fulfill({status:200, contentType:'application/json',body:JSON.stringify({flight_id:20,name:'Первый рейс',status:'completed',current_route:'generator_to_utilizer',request_count:1,route_type:url.searchParams.get('route_type'),source_warehouse_id:0,destination_warehouse_id:1,warehouses:{1:'Иркутск'},rows:[{request_id:120,mass_netto:'1.000'}],operation_count:1,errors:[],ready:true,fingerprint:'a'.repeat(64)})});
+                const outgoing = url.searchParams.get('route_type') === 'warehouse_to_utilizer';
+                return route.fulfill({status:200, contentType:'application/json',body:JSON.stringify({flight_id:20,name:'Первый рейс',status:'completed',current_route:'generator_to_utilizer',request_count:1,route_type:url.searchParams.get('route_type'),source_warehouse_id:outgoing?1:0,destination_warehouse_id:outgoing?0:1,warehouses:{1:'Иркутск'},rows:[{request_id:120,mass_netto:'1.000'}],operation_count:1,errors:[],stock_warnings:outgoing?[{request_id:120,available_netto:0,required_netto:'1.000',absent:true}]:[],ready:true,fingerprint:'a'.repeat(64)})});
             }
             if (url.pathname.endsWith('/correction')) {
                 submitted = route.request().postData()?.includes('fingerprint=' + 'a'.repeat(64)) ?? false;
@@ -42,9 +43,11 @@ try {
         await page.locator('[name=warehouse]').selectOption('0');
         await page.locator('[data-wh-correct]').click();
         await page.locator('[name=flight_id]').fill('20');
-        await page.locator('[name=destination_warehouse_id]').selectOption('1');
+        await page.locator('[name=route_type][value=warehouse_to_utilizer]').check();
+        await page.locator('[name=source_warehouse_id]').selectOption('1');
         await page.locator('[data-correction-confirm]').waitFor({state:'visible'});
         await page.waitForFunction(() => !document.querySelector('[data-correction-confirm]').disabled);
+        assert.match(await page.locator('[data-correction-preview]').innerText(), /заявки, которых нет на складе «Иркутск»: #120/);
         await page.locator('[data-correction-confirm]').click();
         await page.waitForFunction(() => document.querySelector('[data-correction-preview]').textContent.includes('Создано складских движений: 1'));
         assert.equal(submitted, true);
