@@ -25,6 +25,8 @@ foreach($trips as &$trip){
  $trip['manager_name']='Карина Г';
  $trip['manager_phone']='+7 908 221-12-12';
  $trip['manager_email']='';
+ $trip['review_status']='work';
+ $trip['review_version']=0;
  $trip['driver_phone']='+7 900 000-20-01';
  foreach($trip['requests'] as &$request){
   $request['driver_signature_status']=(int)$request['driver_signature_present']===1?'yes':null;

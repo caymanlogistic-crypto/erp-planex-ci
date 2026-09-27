@@ -253,7 +253,13 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
             # Never let a caller's skip switch turn required MySQL coverage green.
             env.pop("PLANEX_SKIP_MYSQL",None)
             if check == "DOCUMENT_GENERATOR_REGRESSIONS": env["PLANEX_DOCGEN_REQUIRE_RUNTIME"]="1"
-            for t in tests: need(t); cmdcheck(results,check,["php",t],env)
+            for t in tests:
+                need(t)
+                if os.name == "nt" and t in {"tests/feo_legacy_xa_mysql_test.php", "tests/feo_placement_legacy_sync_xa_mysql_test.php"}:
+                    need("tools/wsl_posix_php_test.py")
+                    cmdcheck(results,check,[PYTHON,"tools/wsl_posix_php_test.py",t],env)
+                else:
+                    cmdcheck(results,check,["php",t],env)
     if "ROLES_ROUTE_REGISTRY" in want:
         cmdcheck(results,"ROLES_ROUTE_REGISTRY",[PYTHON,"tests/roles_access_route_registry_test.py"])
     if "EMPLOYEE_MAIL_REGRESSIONS" in want:
