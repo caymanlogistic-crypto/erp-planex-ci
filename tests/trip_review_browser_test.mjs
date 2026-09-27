@@ -10,6 +10,7 @@ const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php')],{encoding:'utf8'});
 const reviewerHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php'),'reviewer'],{encoding:'utf8'});
+const emptyReviewerHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php'),'reviewer-empty'],{encoding:'utf8'});
 const readonlyHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php'),'registration-readonly'],{encoding:'utf8'});
 let senderReady=false,submitted=false;const reviewerActions=[];
 const server=http.createServer((req,res)=>{
@@ -24,7 +25,7 @@ const server=http.createServer((req,res)=>{
     if(reviewer) return res.end(JSON.stringify({ok:true,status:'review',version:1,problems:[{label:'Нет ТН',ids:['271941']}],snapshot_hash:'synthetic'}));
     return res.end(JSON.stringify({ok:true,status:'work',version:0,problems:[{label:'Нет ТН',ids:['271941']}],snapshot_hash:'synthetic',sender_ready:senderReady,sender_email:senderReady?'actor@plan-ex.ru':null,sender_error:senderReady?null:'У вашего пользователя нет подключённого рабочего ящика.',recipient_count:2}));
   }
-  if(['/', '/reviewer', '/readonly'].includes(req.url)){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(req.url==='/reviewer'?reviewerHtml:req.url==='/readonly'?readonlyHtml:html);}
+  if(['/', '/reviewer', '/reviewer-empty', '/readonly'].includes(req.url)){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(req.url==='/reviewer'?reviewerHtml:req.url==='/reviewer-empty'?emptyReviewerHtml:req.url==='/readonly'?readonlyHtml:html);}
   const file=path.resolve(root,'public','.'+req.url.split('?')[0]);
   if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
   res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'application/javascript':'application/octet-stream');
@@ -64,6 +65,17 @@ try {
   assert.equal(await page.locator('[data-review-form]').count(),0,'Registrar cannot transition reviewed or archived trips');
   assert.equal(await page.locator('[data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Registrar cannot edit a trip under review');
   await page.goto('http://127.0.0.1:'+server.address().port+'/reviewer',{waitUntil:'networkidle'});
+  const layout=await page.evaluate(()=>{const box=selector=>document.querySelector(selector)?.getBoundingClientRect();const shell=box('.workspace-shell-1690'),head=box('.page-head'),panel=box('.tn-review-shell'),metrics=box('.logistics-metrics'),workspace=box('.logistics-workspace');return {shellWidth:shell?.width,headLeft:head?.left,panelLeft:panel?.left,panelWidth:panel?.width,metricsLeft:metrics?.left,workspaceLeft:workspace?.left,workspaceRight:workspace?.right,panelRight:panel?.right,bodyScroll:document.documentElement.scrollWidth,viewport:innerWidth,panelBorder:getComputedStyle(document.querySelector('.tn-review-shell')).borderLeftWidth};});
+  assert.ok(layout.shellWidth<=1690 && layout.shellWidth>=1200,'Reviewer uses centered standard workspace width');
+  assert.ok(Math.abs(layout.headLeft-layout.panelLeft)<=1,'Header and panel share one alignment grid');
+  assert.ok(layout.metricsLeft>layout.panelLeft && layout.workspaceLeft>layout.panelLeft && layout.workspaceRight<layout.panelRight,'Metrics and trip list stay inside standard panel');
+  assert.notEqual(layout.panelBorder,'0px','Reviewer panel retains standard box border');
+  assert.ok(layout.bodyScroll<=layout.viewport+1,'Reviewer page has no horizontal overflow');
+  await page.setViewportSize({width:1920,height:1080});
+  const wideLayout=await page.evaluate(()=>{const main=document.querySelector('main').getBoundingClientRect(),shell=document.querySelector('.workspace-shell-1690').getBoundingClientRect();return {shellWidth:shell.width,leftGap:shell.left-main.left,rightGap:main.right-shell.right,scroll:document.documentElement.scrollWidth,viewport:innerWidth};});
+  assert.ok(wideLayout.shellWidth<=1690 && Math.abs(wideLayout.leftGap-wideLayout.rightGap)<=1,'Reviewer box is capped and centered like MAX on a wide desktop');
+  assert.ok(wideLayout.scroll<=wideLayout.viewport+1,'Wide reviewer page has no horizontal overflow');
+  if(process.env.PLANEX_SCREENSHOT_DIR){fs.mkdirSync(process.env.PLANEX_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-1920.png')});}
   assert.equal(await page.locator('.lab-review-group--work').count(),0,'Reviewer must not see new work trips');
   assert.equal(await page.locator('.lab-review-group--review').isVisible(),true);
   assert.equal(await page.locator('.lab-review-group--archive').isVisible(),false);
@@ -81,6 +93,11 @@ try {
   await page.getByRole('button',{name:'Вернуть из архива'}).click();
   await page.waitForFunction(()=>document.querySelector('.lab-review-dialog')?.open===false);
   assert.deepEqual(reviewerActions,['archive','restore'],'Only reviewer can restore an archived trip');
+  await page.goto('http://127.0.0.1:'+server.address().port+'/reviewer-empty',{waitUntil:'networkidle'});
+  assert.equal(await page.locator('.tn-review-shell').isVisible(),true,'Empty reviewer state keeps the standard panel');
+  assert.equal(await page.locator('.lab-review-group--review').isVisible(),true,'Empty reviewer state keeps its group heading');
+  assert.equal(await page.locator('.logistics-trip').count(),0,'Empty reviewer state has no trip rows');
+  if(process.env.PLANEX_SCREENSHOT_DIR){await page.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-empty-1920.png')});}
   assert.deepEqual(errors,[],'no browser errors');
   console.log('TRIP_REVIEW_BROWSER=PASS');
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
