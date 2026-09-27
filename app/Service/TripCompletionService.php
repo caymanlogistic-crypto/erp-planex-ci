@@ -170,7 +170,7 @@ final class TripCompletionService
     /** @return array{status:string,version:int,problems:list<array{label:string,ids:list<string>}> >} */
     public function transitionReview(int $tripId,int $expectedVersion,string $action,int $actorMembershipId,string $actorLogin=''): array
     {
-        if (!in_array($action,['submit','archive','restore'],true)) throw new DomainException('Неизвестное действие с рейсом.');
+        if (!in_array($action,['submit','archive','restore','return_work'],true)) throw new DomainException('Неизвестное действие с рейсом.');
         if (($action==='submit')!==($this->editableReviewStatus==='work')) throw new DomainException('Это действие недоступно в вашем разделе.');
         $this->tenant->beginTransaction();
         try {
@@ -181,14 +181,14 @@ final class TripCompletionService
             $current=$this->tenant->prepare('SELECT review_status,status_version FROM waste_trip_completion_reviews WHERE waste_trip_id=? FOR UPDATE');
             $current->execute([$tripId]);$row=$current->fetch(PDO::FETCH_ASSOC);
             if ((int)$row['status_version']!==$expectedVersion) throw new DomainException('Статус рейса изменился. Обновите страницу.');
-            $expectedStatus=match($action){'submit'=>'work','archive'=>'review','restore'=>'archive'};
+            $expectedStatus=match($action){'submit'=>'work','archive','return_work'=>'review','restore'=>'archive'};
             if ($row['review_status']!==$expectedStatus) throw new DomainException('Статус рейса изменился. Обновите страницу.');
             $trip=$this->trip($tripId);
             $problems=$this->reviewProblems($trip);
-            $next=$action==='archive'?'archive':'review';
+            $next=match($action){'archive'=>'archive','return_work'=>'work',default=>'review'};
             $update=$this->tenant->prepare('UPDATE waste_trip_completion_reviews SET review_status=?,status_version=status_version+1,updated_by_membership_id=?,submitted_at=IF(?=\'submit\',NOW(6),submitted_at),mail_status=IF(?=\'submit\',\'pending\',mail_status),mail_error=IF(?=\'submit\',NULL,mail_error) WHERE waste_trip_id=?');
             $update->execute([$next,$actorMembershipId,$action,$action,$action,$tripId]);
-            $this->writeJournal($tripId,null,null,'review',match($action){'archive'=>'Рейс проверен и перенесён в архив','restore'=>'Рейс возвращён из архива на проверку',default=>'Рейс передан на проверку'},$actorMembershipId,$actorLogin,
+            $this->writeJournal($tripId,null,null,'review',match($action){'archive'=>'Рейс проверен и перенесён в архив','restore'=>'Рейс возвращён из архива на проверку','return_work'=>'Рейс возвращён на доработку',default=>'Рейс передан на проверку'},$actorMembershipId,$actorLogin,
                 ['review_status'=>$row['review_status']],['review_status'=>$next]);
             $this->tenant->commit();
             return ['status'=>$next,'version'=>$expectedVersion+1,'problems'=>$problems];

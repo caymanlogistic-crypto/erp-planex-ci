@@ -57,7 +57,7 @@
     if (busy) return;
     const trip = form.closest('.logistics-trip');
     const action = form.querySelector('[name="action"]').value;
-    if (action === 'restore') {
+    if (action === 'restore' || action === 'return_work') {
       busy = true;
       const button = form.querySelector('button');
       button.disabled = true;

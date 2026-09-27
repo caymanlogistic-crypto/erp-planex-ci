@@ -5,9 +5,6 @@
 .lab-review-group+.lab-review-group .lab-review-group-head{border-top:1px solid var(--line-soft,#e4e7ec)}
 .lab-review-group-head h2{margin:0;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}
 .lab-review-group-count{display:inline-grid;place-items:center;min-width:21px;height:20px;padding:0 5px;border-radius:10px;background:var(--surface-muted,#eef2f6);color:var(--text-muted,#667085);font-size:10px;font-weight:700}
-.lab-review-status{display:inline-block;width:fit-content;padding:2px 5px;border:1px solid var(--line-soft,#e4e7ec);background:var(--surface-form,#f8fafc);color:var(--text-muted,#667085);font-size:9px;font-weight:700}
-.lab-review-status.is-review{color:var(--accent,#95500f);border-color:var(--accent,#95500f)}
-.lab-review-status.is-archive{background:var(--surface-muted,#eef2f6)}
 .lab-review-form{margin:0}
 .lab-review-empty{margin:0;padding:16px 12px;color:var(--text-muted,#667085);font-size:11px}
 .lab-search-empty{display:none!important}
@@ -57,6 +54,7 @@
 .logistics-trip-body{border-top:1px solid var(--accent-line,#cfe0f5);background:var(--surface-strong,#fff)}
 .logistics-trip-toolbar{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:40px;padding:5px 12px;border-bottom:1px solid var(--line-soft,#e4e7ec);background:var(--surface-form,#f8fafc)}
 .logistics-trip-toolbar>div{display:flex;align-items:center;gap:8px}
+.logistics-trip-toolbar>div:last-child{flex-wrap:wrap;justify-content:flex-end}
 .logistics-trip-toolbar b{font-size:11px}
 .logistics-trip-toolbar span{color:var(--text-faint,#98a2b3);font-size:9.5px}
 .logistics-request-head,.logistics-request-row{display:grid;grid-template-columns:minmax(180px,1fr) 215px 150px 164px minmax(205px,1fr) minmax(112px,.65fr);gap:7px;align-items:center}

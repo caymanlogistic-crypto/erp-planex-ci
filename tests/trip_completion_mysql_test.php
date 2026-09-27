@@ -85,7 +85,14 @@ try{
     $fails(fn()=>$reviewer->save(1,11,$completeInput,101));
     $restored=$reviewer->transitionReview(1,2,'restore',101,'checker');
     $ok($restored['status']==='review'&&$restored['version']===3,'Reviewer restores archived trip to review');
-    $ok($service->journal(['kind'=>'review'])['total']===3,'Review transitions are attributed in the journal');
+    $returned=$reviewer->transitionReview(1,3,'return_work',101,'checker');
+    $ok($returned['status']==='work'&&$returned['version']===4,'Reviewer returns checked trip to registrar for corrections');
+    $fails(fn()=>$reviewer->transitionReview(1,4,'return_work',101));
+    $fails(fn()=>$reviewer->save(1,11,$completeInput,101));
+    $service->save(1,11,$completeInput,101,'tester');
+    $resubmitted=$service->transitionReview(1,4,'submit',101,'tester');
+    $ok($resubmitted['status']==='review'&&$resubmitted['version']===5,'Registrar may submit a corrected trip again');
+    $ok($service->journal(['kind'=>'review'])['total']===5,'Review transitions are attributed in the journal');
     $request11=array_values(array_filter($trip['requests'],static fn(array $request):bool=>(int)$request['id']===11))[0];
     $firstDoc=(int)$request11['documents'][0]['id'];$reviewer->softDelete(1,11,$firstDoc,101);
     $ok($service->journal(['kind'=>'scan'])['total']===4,'Upload and deletion are logged');

@@ -19,7 +19,7 @@ const server=http.createServer((req,res)=>{
     const reviewer=req.url.startsWith('/company/tn-review/');
     if(req.method==='POST'){
       const chunks=[];req.on('data',chunk=>chunks.push(chunk));
-      req.on('end',()=>{const sent=Buffer.concat(chunks).toString('latin1');if(reviewer){const action=sent.match(/name="action"\r\n\r\n(archive|restore)/)?.[1];reviewerActions.push(action);res.end(JSON.stringify({ok:true,status:action==='archive'?'archive':'review',version:action==='archive'?2:3}));return;}submitted=sent.includes('name="package"')&&sent.includes('name="snapshot_hash"');res.end(JSON.stringify({ok:true,status:'review',version:1,mail_status:'accepted'}));});
+      req.on('end',()=>{const sent=Buffer.concat(chunks).toString('latin1');if(reviewer){const action=sent.match(/name="action"\r\n\r\n(archive|restore|return_work)/)?.[1];reviewerActions.push(action);res.end(JSON.stringify({ok:true,status:action==='archive'?'archive':action==='return_work'?'work':'review',version:action==='archive'?2:3}));return;}submitted=sent.includes('name="package"')&&sent.includes('name="snapshot_hash"');res.end(JSON.stringify({ok:true,status:'review',version:1,mail_status:'accepted'}));});
       return;
     }
     if(reviewer) return res.end(JSON.stringify({ok:true,status:'review',version:1,problems:[{label:'Нет ТН',ids:['271941']}],snapshot_hash:'synthetic'}));
@@ -38,6 +38,7 @@ try {
   page.on('pageerror',error=>errors.push(error.message));
   page.on('dialog',async dialog=>{alerts.push(dialog.message());await dialog.dismiss();});
   await page.goto('http://127.0.0.1:'+server.address().port,{waitUntil:'networkidle'});
+  assert.equal(await page.locator('.lab-review-status').count(),0,'Registrar rows must not repeat review status badges');
   assert.equal(await page.locator('.lab-review-group--work').isVisible(),true);
   assert.equal(await page.locator('.lab-review-group--review').isVisible(),false);
   await page.locator('input[name="show_all_trips"]').check();
@@ -65,6 +66,7 @@ try {
   assert.equal(await page.locator('[data-review-form]').count(),0,'Registrar cannot transition reviewed or archived trips');
   assert.equal(await page.locator('[data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Registrar cannot edit a trip under review');
   await page.goto('http://127.0.0.1:'+server.address().port+'/reviewer',{waitUntil:'networkidle'});
+  assert.equal(await page.locator('.lab-review-status').count(),0,'Reviewer rows must not repeat review status badges');
   const layout=await page.evaluate(()=>{const box=selector=>document.querySelector(selector)?.getBoundingClientRect();const shell=box('.workspace-shell-1690'),head=box('.page-head'),panel=box('.tn-review-shell'),metrics=box('.logistics-metrics'),workspace=box('.logistics-workspace');return {shellWidth:shell?.width,headLeft:head?.left,panelLeft:panel?.left,panelWidth:panel?.width,metricsLeft:metrics?.left,workspaceLeft:workspace?.left,workspaceRight:workspace?.right,panelRight:panel?.right,bodyScroll:document.documentElement.scrollWidth,viewport:innerWidth,panelBorder:getComputedStyle(document.querySelector('.tn-review-shell')).borderLeftWidth};});
   assert.ok(layout.shellWidth<=1690 && layout.shellWidth>=1200,'Reviewer uses centered standard workspace width');
   assert.ok(Math.abs(layout.headLeft-layout.panelLeft)<=1,'Header and panel share one alignment grid');
@@ -81,6 +83,7 @@ try {
   assert.equal(await page.locator('.lab-review-group--archive').isVisible(),false);
   await page.locator('.lab-review-group--review summary').click();
   assert.equal(await page.locator('.lab-review-group--review [data-autosave-form] input[name="pickup_interval"]').first().isEnabled(),true,'Reviewer must be able to edit a trip under review');
+  assert.deepEqual((await page.locator('.lab-review-group--review .logistics-trip-toolbar button[type="submit"]').allTextContents()).map(text=>text.trim()),['Вернуть на доработку','Переместить в архив'],'Return action precedes archive');
   await page.getByRole('button',{name:'Переместить в архив'}).click();
   await dialog.waitFor({state:'visible'});
   assert.match(await dialog.innerText(),/Нет ТН.*271941/s);
@@ -93,6 +96,13 @@ try {
   await page.getByRole('button',{name:'Вернуть из архива'}).click();
   await page.waitForFunction(()=>document.querySelector('.lab-review-dialog')?.open===false);
   assert.deepEqual(reviewerActions,['archive','restore'],'Only reviewer can restore an archived trip');
+  await page.locator('.lab-review-group--review summary').click();
+  await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Вернуть на доработку'}).click()]);
+  assert.deepEqual(reviewerActions,['archive','restore','return_work'],'Reviewer can return a trip to registrar work');
+  await page.setViewportSize({width:390,height:844});
+  await page.locator('.lab-review-group--review summary').click();
+  const mobile=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth}));
+  assert.ok(mobile.scroll<=mobile.viewport+1,'Reviewer actions must not create mobile horizontal overflow');
   await page.goto('http://127.0.0.1:'+server.address().port+'/reviewer-empty',{waitUntil:'networkidle'});
   assert.equal(await page.locator('.tn-review-shell').isVisible(),true,'Empty reviewer state keeps the standard panel');
   assert.equal(await page.locator('.lab-review-group--review').isVisible(),true,'Empty reviewer state keeps its group heading');
