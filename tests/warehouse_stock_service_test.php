@@ -24,6 +24,11 @@ if ($data['current'][1] !== ['request_count'=>1,'weight_kg'=>500]) throw new Run
 if ($data['groups'][1][0]['stock_count'] !== 1 || $data['groups'][1][0]['stock_kg'] !== 500) throw new RuntimeException('Неверный остаток после вывоза.');
 if ($data['groups'][1][1]['stock_count'] !== 2 || $data['groups'][1][1]['stock_kg'] !== 2000) throw new RuntimeException('Неверный остаток после прихода.');
 if ($data['issue_count'] !== 0) throw new RuntimeException('Ложное расхождение.');
+$flights[1]['zayavki_ids'] = '123,456';
+$erp[] = ['business_id'=>11,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>456,'snapshot_mass_kg'=>500];
+$data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
+if ($data['groups'][1][0]['display_request_ids'] !== ['123','456'] || $data['groups'][1][0]['skipped_request_ids'] !== ['456']) throw new RuntimeException('Не показана неснятая заявка рейса.');
+if ($data['groups'][1][0]['request_count'] !== 1 || $data['groups'][1][0]['mass_kg'] !== 1500 || $data['issue_count'] !== 0) throw new RuntimeException('Несписанная заявка изменила складской итог или сверку.');
 $erp[0]['legacy_destination_warehouse_id'] = 2;
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 if ($data['issue_count'] !== 1 || !isset($data['issues'][10])) throw new RuntimeException('Не обнаружено расхождение складов.');

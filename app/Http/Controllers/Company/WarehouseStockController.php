@@ -103,6 +103,38 @@ final class WarehouseStockController
         }
     }
 
+    public function cancellationPreview(): void
+    {
+        requireRole(['company_owner']);
+        try {
+            $tenant = $this->tenant();
+            [, $database] = WarehouseTripCorrectionService::writeConnection($tenant);
+            $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
+            if (!$legacy instanceof PDO || (string)$legacy->query('SELECT DATABASE()')->fetchColumn() !== $database) {
+                throw new \RuntimeException('База записи не совпадает с базой складского журнала.');
+            }
+            $this->json(WarehouseTripCorrectionService::cancellationPreview($legacy, $database, (int)($_GET['flight_id'] ?? 0)));
+        } catch (Throwable $error) {
+            error_log('warehouse cancellation preview failed: '.get_class($error));
+            $this->json(['error'=>$this->publicError($error)], 422);
+        }
+    }
+
+    public function cancellationSubmit(): void
+    {
+        requireRole(['company_owner']);
+        verifyCsrfRequest();
+        try {
+            $tenant = $this->tenant();
+            [$writer, $database] = WarehouseTripCorrectionService::writeConnection($tenant);
+            $this->json(WarehouseTripCorrectionService::cancel($writer, $database, (int)($_POST['flight_id'] ?? 0),
+                (string)($_POST['fingerprint'] ?? ''), (int)($_SESSION['user_id'] ?? 0)));
+        } catch (Throwable $error) {
+            error_log('warehouse cancellation failed: '.get_class($error));
+            $this->json(['error'=>$this->publicError($error)], 422);
+        }
+    }
+
     private function tenant(): PDO
     {
         $companyId = (int)(getSessionCompanyId() ?? 0);

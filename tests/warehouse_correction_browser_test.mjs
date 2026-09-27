@@ -23,7 +23,7 @@ try {
             if (url.pathname.endsWith('.css')) return route.fulfill({status:200, contentType:'text/css',body:fs.readFileSync(path.join(root,'public/assets/css/warehouse-stock.css'),'utf8')});
             if (url.pathname.endsWith('/correction-preview')) {
                 const outgoing = url.searchParams.get('route_type') === 'warehouse_to_utilizer';
-                return route.fulfill({status:200, contentType:'application/json',body:JSON.stringify({flight_id:20,name:'Первый рейс',status:'completed',current_route:'generator_to_utilizer',request_count:1,route_type:url.searchParams.get('route_type'),source_warehouse_id:outgoing?1:0,destination_warehouse_id:outgoing?0:1,warehouses:{1:'Иркутск'},rows:[{request_id:120,mass_netto:'1.000'}],operation_count:1,errors:[],stock_warnings:outgoing?[{request_id:120,available_netto:0,required_netto:'1.000',absent:true}]:[],ready:true,fingerprint:'a'.repeat(64)})});
+                return route.fulfill({status:200, contentType:'application/json',body:JSON.stringify({flight_id:20,name:'Первый рейс',status:'completed',current_route:'generator_to_utilizer',request_count:2,movement_request_count:1,route_type:url.searchParams.get('route_type'),source_warehouse_id:outgoing?1:0,destination_warehouse_id:outgoing?0:1,warehouses:{1:'Иркутск'},rows:[{request_id:120,mass_netto:'1.000',will_move:true},{request_id:121,mass_netto:'0.500',will_move:false}],operation_count:1,errors:[],stock_warnings:outgoing?[{request_id:121,available_netto:0,required_netto:'0.500',absent:true}]:[],ready:true,fingerprint:'a'.repeat(64)})});
             }
             if (url.pathname.endsWith('/correction')) {
                 submitted = route.request().postData()?.includes('fingerprint=' + 'a'.repeat(64)) ?? false;
@@ -35,6 +35,7 @@ try {
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 1);
         await page.locator('[name=show_all]').check({force:true});
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 2);
+        assert.equal(await page.locator('[data-wh-trip="2:21:out"] strong.wh-request-id').innerText(), '999');
         await page.locator('[name=q]').fill('Первый');
         assert.equal(await page.locator('[data-wh-trip]:visible').count(), 1);
         await page.locator('[name=q]').fill('');
@@ -47,7 +48,8 @@ try {
         await page.locator('[name=source_warehouse_id]').selectOption('1');
         await page.locator('[data-correction-confirm]').waitFor({state:'visible'});
         await page.waitForFunction(() => !document.querySelector('[data-correction-confirm]').disabled);
-        assert.match(await page.locator('[data-correction-preview]').innerText(), /заявки, которых нет на складе «Иркутск»: #120/);
+        assert.match(await page.locator('[data-correction-preview]').innerText(), /заявки, которых нет на складе «Иркутск»: #121/);
+        assert.match(await page.locator('[data-correction-preview]').innerText(), /Складское движение: 1 заявок · 1\s?000 кг/);
         await page.locator('[data-correction-confirm]').click();
         await page.waitForFunction(() => document.querySelector('[data-correction-preview]').textContent.includes('Создано складских движений: 1'));
         assert.equal(submitted, true);
