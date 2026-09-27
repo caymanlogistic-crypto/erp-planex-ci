@@ -5,7 +5,7 @@
     var heading = modal.querySelector('[data-route-executor-delete-heading]');
     var summary = modal.querySelector('[data-route-executor-delete-summary]');
     var passwordWrap = modal.querySelector('[data-route-executor-delete-password-wrap]');
-    var password = modal.querySelector('#route-executor-delete-password');
+    var password = null;
     var error = modal.querySelector('[data-route-executor-delete-error]');
     var confirm = modal.querySelector('[data-route-executor-delete-confirm]');
     var currentId = 0;
@@ -18,11 +18,26 @@
         error.textContent = message || '';
         error.classList.toggle('is-hidden', !message);
     }
+    function clearPassword() {
+        if (password) password.remove();
+        password = null;
+    }
+    function showPassword() {
+        password = document.createElement('input');
+        password.type = 'password';
+        password.className = 'field-input driver-delete-confirm-field';
+        password.id = 'route-executor-delete-password';
+        password.autocomplete = 'off';
+        password.placeholder = 'Введите пароль';
+        passwordWrap.appendChild(password);
+        passwordWrap.classList.remove('is-hidden');
+        password.focus();
+    }
     function close() {
         if (busy) return;
         if (window.closeModal) window.closeModal('route-executor-delete-modal');
         else { modal.classList.remove('is-open'); modal.style.display = 'none'; }
-        password.value = '';
+        clearPassword();
         previewToken = '';
     }
     async function post(url, fields) {
@@ -37,7 +52,7 @@
     async function open(id) {
         currentId = id;
         previewToken = '';
-        password.value = '';
+        clearPassword();
         passwordWrap.classList.add('is-hidden');
         confirm.disabled = true;
         heading.textContent = 'Проверяем участие в рейсах…';
@@ -57,8 +72,7 @@
             previewToken = data.preview_token || '';
             heading.textContent = 'Исполнитель рейса будет удалён из списка';
             summary.textContent = 'Подрядчик, водители, транспорт и документы сохранятся. Для подтверждения введите пароль удаления.';
-            passwordWrap.classList.remove('is-hidden');
-            password.focus();
+            showPassword();
         } catch (e) {
             heading.textContent = 'Не удалось проверить исполнителя';
             setError(e.message);
@@ -73,12 +87,19 @@
         }
         if (event.target.closest('[data-route-executor-delete-close]')) close();
     });
-    password.addEventListener('input', function () {
+    document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape' || !modal.classList.contains('is-open') || busy) return;
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        close();
+    }, true);
+    passwordWrap.addEventListener('input', function (event) {
+        if (event.target !== password) return;
         confirm.disabled = !previewToken || !password.value.trim() || busy;
         setError('');
     });
     confirm.addEventListener('click', async function () {
-        if (!previewToken || !password.value.trim() || busy) return;
+        if (!previewToken || !password || !password.value.trim() || busy) return;
         busy = true;
         confirm.disabled = true;
         setError('');

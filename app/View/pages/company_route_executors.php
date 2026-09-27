@@ -93,7 +93,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
                     <option value="alpha">По алфавиту</option>
                 </select>
             </div>
-            <input type="text" class="toolbar-search" placeholder="Поиск по таблице">
+            <input type="search" class="toolbar-search" name="route_executor_search" placeholder="Поиск по таблице" aria-label="Поиск исполнителя рейса" autocomplete="off">
         </div>
     </div>
     <div class="table-scroll">

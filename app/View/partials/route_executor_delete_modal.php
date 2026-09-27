@@ -14,7 +14,6 @@
       </div>
       <div class="field mt-section is-hidden" data-route-executor-delete-password-wrap>
         <label class="field-label" for="route-executor-delete-password">Пароль удаления</label>
-        <input type="password" class="field-input driver-delete-confirm-field" id="route-executor-delete-password" autocomplete="off" placeholder="Введите пароль">
       </div>
       <div class="notice warn is-hidden" data-route-executor-delete-error role="alert"></div>
     </div>
