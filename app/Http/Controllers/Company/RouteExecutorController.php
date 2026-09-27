@@ -74,4 +74,11 @@ final class RouteExecutorController
 
         require base_path('app/Http/Controllers/Company/RouteExecutorActions/archive.php');
     }
+
+    public function previewDelete(string $crewId): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+        require base_path('app/Http/Controllers/Company/RouteExecutorActions/preview_delete.php');
+    }
 }

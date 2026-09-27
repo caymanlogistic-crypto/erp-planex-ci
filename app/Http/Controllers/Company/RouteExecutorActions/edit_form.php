@@ -80,7 +80,7 @@
              JOIN driver_vehicle_blocks dvb ON c.driver_vehicle_block_id = dvb.id
              JOIN drivers d ON dvb.driver_id = d.id
              JOIN vehicle_sets vs ON dvb.vehicle_set_id = vs.id
-             WHERE c.id = ?"
+             WHERE c.id = ? AND c.deleted_at IS NULL"
         );
         $cStmt->execute([$crewId]);
         $crew = $cStmt->fetch(PDO::FETCH_ASSOC);

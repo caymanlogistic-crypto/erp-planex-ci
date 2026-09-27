@@ -30,6 +30,7 @@ require_once base_path('app/Service/UserSyncService.php');
 require_once base_path('app/Service/DocumentService.php');
 require_once base_path('app/Service/RouteExecutorService.php');
 require_once base_path('app/Service/RouteExecutorCombinedCreateService.php');
+require_once base_path('app/Service/RouteExecutorDeletionService.php');
 require_once base_path('app/Service/EntityAssignmentService.php');
 require_once base_path('app/Service/ResponsibleAssignmentService.php');
 require_once base_path('app/Service/LocalMigrationService.php');

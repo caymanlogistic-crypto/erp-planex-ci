@@ -3233,7 +3233,7 @@ window.initOwnerCreateForm = window.initPasswordControls;
                 });
                 target.innerHTML = '';
                 target.appendChild(fragment);
-                setViewFoot('<div class="modal-foot is-spaced"><div></div><div class="modal-foot-actions"><button type="button" class="btn btn-ghost" data-route-executor-view-close>\u0417\u0430\u043a\u0440\u044b\u0442\u044c</button><button type="button" class="btn btn-primary" data-route-executor-edit-btn="' + id + '">\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c</button></div></div>');
+                setViewFoot('<div class="modal-foot is-spaced"><div><button type="button" class="btn btn-danger" data-route-executor-delete-btn="' + id + '">Удалить</button></div><div class="modal-foot-actions"><button type="button" class="btn btn-ghost" data-route-executor-view-close>\u0417\u0430\u043a\u0440\u044b\u0442\u044c</button><button type="button" class="btn btn-primary" data-route-executor-edit-btn="' + id + '">\u0420\u0435\u0434\u0430\u043a\u0442\u0438\u0440\u043e\u0432\u0430\u0442\u044c</button></div></div>');
             })
             .catch(function () {
                 showModalError('route-executor-view-modal-content', 'Не удалось загрузить карточку исполнителя рейса.');
