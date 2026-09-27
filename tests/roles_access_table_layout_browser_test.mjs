@@ -51,14 +51,20 @@ try {
                     scrollWidth: scroll.scrollWidth,
                     clientWidth: scroll.clientWidth,
                     workspaceBorder: getComputedStyle(workspace).borderLeftWidth,
+                    workspaceBackground: getComputedStyle(workspace).backgroundColor,
+                    workspaceContentWidth: workspace.clientWidth,
+                    headBottom: getComputedStyle(workspace.querySelector('.roles-access__head')).borderBottomWidth,
                     panelPadding: getComputedStyle(element).paddingLeft,
                     cardBorder: getComputedStyle(card).borderLeftWidth,
                     clippedCell: visibleCells.some(cell => box(cell).right > box(scroll).right + 1),
                 };
             });
-            assert.equal(geometry.workspaceBorder, '0px', `${width} ${panel}: outer frame`);
+            assert.equal(geometry.workspaceBorder, '1px', `${width} ${panel}: standard workspace card border`);
+            assert.notEqual(geometry.workspaceBackground, 'rgba(0, 0, 0, 0)', `${width} ${panel}: standard workspace card background`);
+            assert.equal(geometry.headBottom, '1px', `${width} ${panel}: heading separator`);
             assert.equal(geometry.panelPadding, '0px', `${width} ${panel}: panel padding`);
             assert.equal(geometry.cardBorder, '0px', `${width} ${panel}: table frame`);
+            assert.ok(Math.abs(geometry.panelWidth - geometry.workspaceContentWidth) <= 1, `${width} ${panel}: panel does not fill the card`);
             assert.ok(Math.abs(geometry.tableWidth - geometry.panelWidth) <= 1, `${width} ${panel}: table does not fill panel: ${JSON.stringify(geometry)}`);
             assert.ok(geometry.scrollWidth <= geometry.clientWidth + 1, `${width} ${panel}: horizontal scrolling: ${JSON.stringify(geometry)}`);
             assert.equal(geometry.clippedCell, false, `${width} ${panel}: clipped cell`);
