@@ -81,7 +81,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
       <div class="field"><label class="field-label">Плановая дата завершения</label><input type="date" name="finish_date" value="<?= e($old['finish_date']) ?>" class="field-input"></div>
       <div class="field"><label class="field-label">Стоимость, ₽</label><input type="text" inputmode="decimal" name="price" value="<?= e($old['price']) ?>" class="field-input"></div>
       <div class="field"><label class="field-label">НДС</label><input type="text" name="vat_mode" value="<?= e($old['vat_mode']) ?>" class="field-input" placeholder="без НДС"></div>
-    </div><div class="text-muted mt-2">Номер договора перевозчика присваивается по действующему автоматическому правилу.</div></div>
+    </div><div class="text-muted mt-2">Номер договора перевозчика: П-{ID рейса}. Файл: «Рейс {ID рейса} {фамилия водителя}.docx».</div></div>
   </div>
   <div class="panel mb-3 <?= $showWaybill?'':'is-hidden' ?>" data-docgen-section="waybill_driver_assignment">
     <div class="panel-head"><h3 class="panel-head-title">Параметры путевого листа</h3></div>
