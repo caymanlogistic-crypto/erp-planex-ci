@@ -89,13 +89,14 @@ trait DocumentGeneratorWorkflowTrait
         ];
         $values = self::buildFixedValues($snapshot);
         $errors = [];
+        $contractExists = false;
         if ((string)$template['document_type'] === 'vehicle_lease_crew') {
             if ((int)($snapshot['trip']['business_id'] ?? 0) <= 0) $errors[] = 'Не найден номер выбранного рейса для договора.';
             if (self::driverSurname((string)($snapshot['driver']['full_name'] ?? '')) === '') $errors[] = 'Не указана фамилия водителя для имени файла договора.';
             if (($snapshot['document']['number'] ?? '') !== '') {
                 $existing = $localPdo->prepare("SELECT 1 FROM generated_documents WHERE document_type='vehicle_lease_crew' AND document_number=? LIMIT 1");
                 $existing->execute([$snapshot['document']['number']]);
-                if ($existing->fetchColumn() !== false) $errors[] = 'Договор с номером '.$snapshot['document']['number'].' по этому рейсу уже сформирован.';
+                $contractExists = $existing->fetchColumn() !== false;
             }
         }
         if ($missing !== []) $errors[] = 'Не найдены заявки: ' . implode(', ', $missing) . '.';
@@ -114,11 +115,11 @@ trait DocumentGeneratorWorkflowTrait
             'missing_request_ids'=>$missing,'request_ids'=>$ids,'found_count'=>count($ordered),
             'total_mass_kg'=>$totalKg,'total_mass_kg_formatted'=>self::formatMassKg($totalKg),
             'unload_groups'=>$groups,'unload_address'=>$unload,'template'=>$template,'executor'=>$executor,
-            'snapshot'=>$snapshot,'values'=>$values,'request_values'=>$repeat,
+            'snapshot'=>$snapshot,'values'=>$values,'request_values'=>$repeat,'contract_exists'=>$contractExists,
         ];
     }
 
-    public static function generate(PDO $pdo, int $companyId, int $userId, string $role, array $prepared): int
+    public static function generate(PDO $pdo, int $companyId, int $userId, string $role, array $prepared, bool $overwriteExisting = false): int
     {
         if (!($prepared['ok'] ?? false)) throw new RuntimeException('Документ нельзя сформировать до устранения ошибок проверки.');
         if (!self::runtimeSchemaReady($pdo)) throw new RuntimeException('Схема генератора договоров не обновлена. Требуется штатная tenant migration 129.');
@@ -135,6 +136,7 @@ trait DocumentGeneratorWorkflowTrait
         $snapshot = $prepared['snapshot'] ?? null;
         if (!is_array($snapshot)) throw new RuntimeException('Snapshot документа не определён.');
         $absolutePath = null;
+        $replacedFile = null;
 
         $pdo->beginTransaction();
         try {
@@ -147,6 +149,28 @@ trait DocumentGeneratorWorkflowTrait
                 $snapshot['document']['number_mode'] = 'trip_based';
                 $snapshot['parameters']['contract_number'] = $number;
                 $params = $snapshot['parameters'];
+                $existing = $pdo->prepare("SELECT * FROM generated_documents WHERE document_type='vehicle_lease_crew' AND document_number=? LIMIT 1 FOR UPDATE");
+                $existing->execute([$number]);
+                $existingRow = $existing->fetch(PDO::FETCH_ASSOC) ?: null;
+                if ($existingRow !== null && !$overwriteExisting) {
+                    throw new RuntimeException('Договор с номером '.$number.' уже сформирован. Подтвердите перезапись договора.');
+                }
+                if ($existingRow !== null) {
+                    $storedPath = (string)($existingRow['stored_path'] ?? '');
+                    $expectedPrefix = 'companies/'.$companyId.'/document-generator/generated/';
+                    if ($storedPath === '' || !str_starts_with($storedPath, $expectedPrefix) || str_contains($storedPath, '..') || str_contains($storedPath, '\\')) {
+                        throw new RuntimeException('Путь ранее сформированного договора недопустим. Перезапись остановлена.');
+                    }
+                    $oldFile = DocumentService::resolveStoredPath($companyId, $storedPath);
+                    if ($oldFile !== null) {
+                        $shared = $pdo->prepare('SELECT id FROM generated_documents WHERE stored_path=? AND id<>? LIMIT 1');
+                        $shared->execute([$storedPath, (int)$existingRow['id']]);
+                        if ($shared->fetchColumn() === false) $replacedFile = $oldFile;
+                    } elseif (file_exists(storage_path($storedPath)) || is_link(storage_path($storedPath))) {
+                        throw new RuntimeException('Путь ранее сформированного договора недопустим. Перезапись остановлена.');
+                    }
+                    $pdo->prepare('DELETE FROM generated_documents WHERE id=?')->execute([(int)$existingRow['id']]);
+                }
             } else {
                 $number = trim((string)($params['waybill_number'] ?? ''));
                 $snapshot['document']['number'] = $number;
@@ -188,6 +212,9 @@ trait DocumentGeneratorWorkflowTrait
                 $child->execute([$documentId,(string)($request['zayavka_id'] ?? ''),$pos+1,self::json($request)]);
             }
             $pdo->commit();
+            if (is_string($replacedFile) && is_file($replacedFile) && !unlink($replacedFile)) {
+                error_log('Document generator overwrite: cannot remove replaced file '.$replacedFile);
+            }
             return $documentId;
         } catch (Throwable $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();

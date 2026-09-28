@@ -82,8 +82,12 @@ final class DocumentGeneratorController
                 $this->renderGenerator(true, 'Формирование заблокировано: исправьте ошибки проверки.');
                 return;
             }
-            $documentId = DocumentGeneratorService::generate($localPdo, $companyId, $userId, $role, $prepared);
-            $_SESSION['document_generator_flash'] = 'Документ сформирован и сохранён в истории.';
+            $overwriteExisting = (string)($_POST['overwrite_existing'] ?? '') === '1';
+            $didOverwrite = $overwriteExisting && ($prepared['contract_exists'] ?? false);
+            $documentId = DocumentGeneratorService::generate($localPdo, $companyId, $userId, $role, $prepared, $overwriteExisting);
+            $_SESSION['document_generator_flash'] = $didOverwrite
+                ? 'Договор перезаписан и обновлён в истории.'
+                : 'Документ сформирован и сохранён в истории.';
             redirect_to('/company/document-generator/history?created=' . $documentId);
         } catch (Throwable $e) {
             $this->renderGenerator(true, 'Не удалось сформировать документ: ' . $e->getMessage());

@@ -46,8 +46,13 @@ $assert(str_contains($view, "e.submitter?.matches('[data-docgen-check]')"), 'AJA
 $assert(str_contains($view, '[data-docgen-generate]'), 'successful preview preserves canonical generation action');
 $assert(str_contains($view, 'Комплект №') && str_contains($view, 'уже был создан.'), 'existing package preview explains the conflict');
 $assert(str_contains($view, 'data-docgen-overwrite name="overwrite_existing" value="1"'), 'overwrite action carries explicit server confirmation');
-$assert(str_contains($view, "confirm('Комплект уже был создан. Перезаписать договор, счёт и акт?')"), 'overwrite action requires user confirmation');
+$assert(str_contains($view, "'Комплект уже был создан. Перезаписать договор, счёт и акт?'"), 'package overwrite asks for confirmation');
+$assert(str_contains($view, 'if(!confirm(message))'), 'overwrite action requires user confirmation');
 $assert(str_contains($view, "'Перезаписать комплект'"), 'existing package action has an explicit overwrite label');
+$assert(str_contains($view, "'contract_exists'"), 'existing carrier contract is shown as a warning');
+$assert(str_contains($view, 'data-docgen-overwrite-kind='), 'overwrite confirmation identifies the document type');
+$assert(str_contains($view, "'Перезаписать договор'"), 'existing carrier contract has an explicit overwrite action');
+$assert(str_contains($view, 'Договор уже был создан. Перезаписать договор?'), 'carrier overwrite asks for confirmation');
 $assert(str_contains($view, "panel.className='panel'"), 'successful result uses standard ERP panel');
 $assert(str_contains($view, 'class="notice danger mb-3"'), 'no-JS server preview also uses standard red error notice');
 
