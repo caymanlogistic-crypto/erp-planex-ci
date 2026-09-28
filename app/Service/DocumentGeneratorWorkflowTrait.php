@@ -70,6 +70,14 @@ trait DocumentGeneratorWorkflowTrait
             if (!is_string($key) || $key==='') continue;
             $snapshot[$key]=$value;
         }
+        if ((string)$template['document_type'] === 'vehicle_lease_crew') {
+            $tripNumber = (int)($snapshot['trip']['business_id'] ?? 0);
+            if ($tripNumber > 0) {
+                $number = 'П-'.$tripNumber;
+                $snapshot['document']['number'] = $number;
+                $snapshot['parameters']['contract_number'] = $number;
+            }
+        }
         $snapshot['integrations']['google_sheets_contacts'] = [
             'available'=>(bool)($googleContacts['available'] ?? false),
             'warning'=>(string)($googleContacts['warning'] ?? ''),
@@ -81,6 +89,15 @@ trait DocumentGeneratorWorkflowTrait
         ];
         $values = self::buildFixedValues($snapshot);
         $errors = [];
+        if ((string)$template['document_type'] === 'vehicle_lease_crew') {
+            if ((int)($snapshot['trip']['business_id'] ?? 0) <= 0) $errors[] = 'Не найден номер выбранного рейса для договора.';
+            if (self::driverSurname((string)($snapshot['driver']['full_name'] ?? '')) === '') $errors[] = 'Не указана фамилия водителя для имени файла договора.';
+            if (($snapshot['document']['number'] ?? '') !== '') {
+                $existing = $localPdo->prepare("SELECT 1 FROM generated_documents WHERE document_type='vehicle_lease_crew' AND document_number=? LIMIT 1");
+                $existing->execute([$snapshot['document']['number']]);
+                if ($existing->fetchColumn() !== false) $errors[] = 'Договор с номером '.$snapshot['document']['number'].' по этому рейсу уже сформирован.';
+            }
+        }
         if ($missing !== []) $errors[] = 'Не найдены заявки: ' . implode(', ', $missing) . '.';
         array_push($errors,...self::validateParameters((string)$template['document_type'],$snapshot['parameters'] ?? []));
         array_push($errors,...self::validateFixedPlaceholders($placeholders,$values,$snapshot));
@@ -123,9 +140,11 @@ trait DocumentGeneratorWorkflowTrait
         try {
             $params = is_array($snapshot['parameters'] ?? null) ? $snapshot['parameters'] : [];
             if ($type === 'vehicle_lease_crew') {
-                $number = DocumentNumberSequenceService::allocateVehicleLeaseContractNumber($pdo);
+                $tripNumber = (int)($snapshot['trip']['business_id'] ?? 0);
+                if ($tripNumber <= 0) throw new RuntimeException('Не найден номер выбранного рейса для договора.');
+                $number = 'П-'.$tripNumber;
                 $snapshot['document']['number'] = $number;
-                $snapshot['document']['number_mode'] = 'automatic';
+                $snapshot['document']['number_mode'] = 'trip_based';
                 $snapshot['parameters']['contract_number'] = $number;
                 $params = $snapshot['parameters'];
             } else {
@@ -136,8 +155,13 @@ trait DocumentGeneratorWorkflowTrait
             $date = (string)($type==='vehicle_lease_crew' ? ($params['contract_date'] ?? '') : ($params['waybill_date'] ?? ''));
             $values = self::buildFixedValues($snapshot);
 
-            $downloadBase = $type==='vehicle_lease_crew' ? 'Договор-заявка' : 'Приложение-к-путевому-листу';
-            $downloadName = DocumentService::safeDownloadName($downloadBase . ($number!=='' ? '_' . $number : '') . '.docx');
+            if ($type === 'vehicle_lease_crew') {
+                $surname = self::driverSurname((string)($snapshot['driver']['full_name'] ?? ''));
+                if ($surname === '') throw new RuntimeException('Не указана фамилия водителя для имени файла договора.');
+                $downloadName = DocumentService::safeDownloadName('Рейс '.$tripNumber.' '.$surname.'.docx');
+            } else {
+                $downloadName = DocumentService::safeDownloadName('Приложение-к-путевому-листу'.($number!==''?'_'.$number:'').'.docx');
+            }
             $relativeDir = sprintf('companies/%d/document-generator/generated/%s', $companyId, date('Y/m'));
             $absoluteDir = storage_path($relativeDir);
             if (!is_dir($absoluteDir) && !mkdir($absoluteDir,0775,true) && !is_dir($absoluteDir)) throw new RuntimeException('Не удалось создать каталог сформированных документов.');
@@ -230,5 +254,12 @@ trait DocumentGeneratorWorkflowTrait
     {
         $value=trim((string)($row['contacts'] ?? ''));
         return $value!=='' ? $value : '—';
+    }
+
+    private static function driverSurname(string $fullName): string
+    {
+        $parts = preg_split('/\s+/u', trim($fullName), 2);
+        $first = (string)($parts[0] ?? '');
+        return preg_match('/^[\p{L}][\p{L}-]*$/u', $first) === 1 ? $first : '';
     }
 }
