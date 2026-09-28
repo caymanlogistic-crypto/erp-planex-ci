@@ -1,5 +1,6 @@
 <?php
 $routeExecutorCreateButton = '<button type="button" class="btn btn-primary" data-route-executor-create-btn>Создать исполнителя рейса</button>';
+$routeExecutorExistingButton = '<button type="button" class="btn btn-ghost" data-route-executor-existing-create>Выбрать из имеющихся</button>';
 $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/company/document-generator') . '">Создать документ</a>';
 ?>
 
@@ -45,6 +46,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
     </div>
     <div class="page-head-actions">
         <?= $routeExecutorDocumentButton ?>
+        <?= $routeExecutorExistingButton ?>
         <?= $routeExecutorCreateButton ?>
     </div>
 </div>
@@ -78,6 +80,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
     </div>
     <div class="page-head-actions">
         <?= $routeExecutorDocumentButton ?>
+        <?= $routeExecutorExistingButton ?>
         <?= $routeExecutorCreateButton ?>
     </div>
 </div>

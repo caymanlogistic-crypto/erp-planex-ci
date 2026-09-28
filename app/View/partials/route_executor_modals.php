@@ -58,9 +58,28 @@
     <div class="modal-foot is-spaced" id="route-executor-create-modal-foot">
       <div class="modal-required-note"><span class="req">*</span> — обязательные поля</div>
       <div class="modal-foot-actions">
-        <a href="<?= app_url('/company/route-executors/create') ?>" class="btn btn-ghost" data-route-executor-existing-create>Выбрать из имеющихся</a>
+        <button type="button" class="btn btn-ghost" data-route-executor-existing-create>Выбрать из имеющихся</button>
         <button type="button" class="btn btn-ghost" data-route-executor-create-close>Отмена</button>
         <button type="button" class="btn btn-primary" data-source-create-submit>Создать исполнителя рейса</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="route-executor-existing-modal" data-close-on-overlay="0" data-close-on-escape="0">
+  <div class="modal modal-md route-executor-existing-modal-inner">
+    <div class="modal-head">
+      <span class="modal-title">Выбрать из имеющихся</span>
+      <button type="button" class="modal-close" data-route-executor-existing-close>×</button>
+    </div>
+    <div class="modal-body" id="route-executor-existing-modal-content">
+      <div class="driver-modal-loading">Загрузка...</div>
+    </div>
+    <div class="modal-foot is-spaced">
+      <div class="modal-required-note"><span class="req">*</span> — обязательные поля</div>
+      <div class="modal-foot-actions">
+        <button type="button" class="btn btn-ghost" data-route-executor-existing-close>Отмена</button>
+        <button type="submit" form="route-executor-existing-form" class="btn btn-primary">Создать исполнителя рейса</button>
       </div>
     </div>
   </div>

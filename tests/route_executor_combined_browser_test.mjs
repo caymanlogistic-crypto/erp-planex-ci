@@ -9,9 +9,14 @@ import { fileURLToPath } from 'node:url';
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const pageSource = fs.readFileSync(path.join(root, 'app/View/pages/company_route_executors.php'), 'utf8');
+assert.match(pageSource, /data-route-executor-existing-create/);
+assert.equal((pageSource.match(/<\?= \$routeExecutorExistingButton \?>/g) || []).length, 2, 'existing-data button must appear in both list header states');
 const html = execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/fixtures/route_executor_combined_render.php')], { encoding: 'utf8' });
+const existingHtml = execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/fixtures/route_executor_existing_create_render.php')], { encoding: 'utf8' });
 const server = http.createServer((request, response) => {
     if (request.url === '/') { response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html); return; }
+    if (request.url === '/company/route-executors/create') { response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(existingHtml); return; }
     const file = path.resolve(root, 'public', '.' + request.url.split('?')[0]);
     if (!file.startsWith(path.join(root, 'public') + path.sep) || !fs.existsSync(file)) { response.statusCode = 404; response.end(); return; }
     response.setHeader('Content-Type', file.endsWith('.css') ? 'text/css' : 'text/javascript');
@@ -27,6 +32,16 @@ try {
         await page.goto('http://127.0.0.1:' + server.address().port + '/');
         const executorRows = page.locator('[data-route-executors-grid] tbody tr');
         assert.equal(await executorRows.count(), 2);
+        await page.locator('body > [data-route-executor-existing-create]').click();
+        await page.locator('#route-executor-existing-form').waitFor();
+        assert.equal(await page.locator('#route-executor-existing-modal.is-open').count(), 1);
+        assert.equal(await page.locator('#route-executor-existing-form [name="contractor_id"]').count(), 1);
+        assert.equal(await page.locator('#route-executor-existing-form [name="driver_ids[]"]').count(), 1);
+        assert.equal(await page.locator('#route-executor-existing-form [name="vehicle_set_id"]').count(), 1);
+        assert.equal(await page.locator('.route-executor-existing-modal-inner').evaluate(element => element.scrollWidth > element.clientWidth + 1), false, 'existing-data popup horizontal overflow at ' + width);
+        await page.locator('#route-executor-existing-modal [data-route-executor-existing-close]').first().click();
+        assert.equal(await page.locator('#route-executor-existing-modal.is-open').count(), 0);
+        assert.equal(await page.locator('[data-route-executors-grid] tbody tr:visible').count(), 2, 'closing existing-data popup must keep executor rows visible');
         await page.locator('[data-route-executor-create-btn]').click();
         await page.locator('#route-executor-create-modal .modal-close').click();
         assert.equal(await page.locator('#route-executor-create-modal.is-open').count(), 0);
@@ -56,8 +71,7 @@ try {
         assert.equal(await page.locator('#lab-driver-form [name="license_issue_date"]').count(), 1);
         assert.equal(await page.locator('#route-executor-responsible-logist[required]').count(), 1);
         assert.equal(await page.locator('#route-executor-responsible-logist option').count(), 3);
-        assert.equal(await page.locator('[data-route-executor-existing-create]').textContent(), 'Выбрать из имеющихся');
-        assert.match(await page.locator('[data-route-executor-existing-create]').getAttribute('href'), /\/company\/route-executors\/create$/);
+        assert.equal(await page.locator('#route-executor-create-modal [data-route-executor-existing-create]').textContent(), 'Выбрать из имеющихся');
         assert.equal(await page.locator('[data-readiness-key="training"][data-state="pending"]').count(), 1);
         await page.locator('#lab-driver-form [name="full_name"]').fill('Иванов Иван Иванович');
         await page.locator('#lab-driver-form [name="snils"]').fill('123-456-789 00');

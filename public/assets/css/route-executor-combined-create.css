@@ -21,6 +21,11 @@
   #route-executor-create-modal .source-create-modal .route-readiness-item[data-transition] { animation: none; }
 }
 #route-executor-create-modal .source-create-modal .modal-body { padding: 0; overflow: auto; min-height: 0; }
+#route-executor-existing-modal .route-executor-existing-modal-inner { width: min(620px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); }
+#route-executor-existing-modal .modal-body { padding: 0; overflow: auto; min-height: 0; }
+#route-executor-existing-modal .panel-body { padding: 14px; }
+#route-executor-existing-modal .form-section + .form-section { margin-top: 14px; }
+#route-executor-existing-modal .crew-driver-row { align-items: end; }
 .source-combined-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(320px, 380px); align-items: stretch; }
 .source-combined-form { display: contents; }
 .source-combined-main, .source-combined-docs { min-width: 0; border-bottom: 1px solid var(--line); }
@@ -86,6 +91,7 @@
   .source-combined-grid { grid-template-columns: minmax(0, 1fr); }
   .source-combined-docs { border-left: 0; }
   .source-combined-main, .source-combined-docs { padding: 10px 12px; }
+  #route-executor-existing-modal .route-executor-existing-modal-inner { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
 }
 @media (max-width: 520px) {
   .source-combined-main .contractor-contact-row { grid-template-columns: repeat(2, minmax(0, 1fr)) 24px; }
