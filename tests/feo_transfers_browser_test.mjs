@@ -122,8 +122,23 @@ try {
   await page.route('**/company/settings/services/yandex',async route=>{
     saveCalls++; await route.fulfill({status:failSave?422:200,contentType:'application/json',body:JSON.stringify(failSave?{success:false,message:'Ключ не сохранён'}:{success:true})});
   });
+  const recipientSaves=[]; let recipientRequestCount=0;
+  const recipientRoute=async route=>{
+    recipientRequestCount++;
+    if(route.request().method()==='GET') {
+      return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,people:[{account_id:2,name:'Гладких Карина Артуровна',email:'karina@company.test'}]})});
+    }
+    recipientSaves.push({url:route.request().url(),body:route.request().postData()||''});
+    await route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({success:true,message:'Получатели сохранены.'})});
+  };
+  await page.route(/\/company\/settings\/services\/(?:report|route-executor-review)-recipients(?:\/suggest)?(?:\?|$)/,recipientRoute);
   for (const width of [1366,800,390]) {
     await page.setViewportSize({width,height:900}); await page.goto(url+'/services');
+    assert.equal(await page.locator('[data-recipient-settings]').count(),2,'Both recipient settings cards rendered');
+    assert.equal(await page.getByRole('heading',{name:'Получатели отчётов по рейсам',exact:true}).count(),1);
+    assert.equal(await page.getByRole('heading',{name:'Получатели проверки исполнителей рейса',exact:true}).count(),1);
+    const recipientCardOverflow=await page.locator('[data-recipient-settings]').evaluateAll(cards=>cards.map(card=>card.scrollWidth>card.clientWidth));
+    assert.deepEqual(recipientCardOverflow,[false,false],'Recipient cards fit settings grid '+width);
     assert.equal(await page.locator('[data-key-form]').isVisible(),false);
     await page.locator('[data-key-edit]').click();
     assert.equal(await page.locator('[name=api_key]').getAttribute('type'),'password');
@@ -134,6 +149,27 @@ try {
     assert.equal(await page.locator('[name=api_key]').inputValue(),'');
     assert.equal(saveCalls,0,'Cancel never writes');
   }
+  await page.setViewportSize({width:1366,height:900}); await page.goto(url+'/services');
+  const executorRecipients=page.locator('[data-recipient-kind="route-executor-review"]');
+  await executorRecipients.locator('[data-recipient-person]').fill('Карина');
+  await page.waitForTimeout(500);
+  if (await executorRecipients.locator('.report-email-options button').count()===0) {
+    throw new Error('Executor recipient suggestions missing; requests='+recipientRequestCount+'; page errors: '+errors.join(' | '));
+  }
+  await executorRecipients.locator('.report-email-options button').waitFor({state:'visible'});
+  await executorRecipients.locator('.report-email-options button').click();
+  assert.equal(await executorRecipients.locator('[data-recipient-address]').inputValue(),'karina@company.test');
+  await executorRecipients.locator('.report-email-add').click();
+  assert.equal(await executorRecipients.locator('.report-email-list li').count(),1);
+  await executorRecipients.locator('[data-recipient-logist]').check();
+  await executorRecipients.locator('[data-recipient-form] [type=submit]').click();
+  await executorRecipients.locator('.report-email-save-state').getByText('Сохранено',{exact:true}).waitFor();
+  assert.equal(recipientSaves.length,1,'Executor recipient settings saved once');
+  assert.match(recipientSaves[0].url,/route-executor-review-recipients$/);
+  assert.match(recipientSaves[0].body,/karina%40company\.test|karina@company\.test/);
+  assert.match(recipientSaves[0].body,/send_responsible_logist/);
+  const reportRecipients=page.locator('[data-recipient-kind="trip-report"]');
+  assert.equal(await reportRecipients.locator('.report-email-list li').count(),0,'Report recipients stay independent');
   await page.goto(url+'/services-empty');
   assert.equal(await page.locator('[data-key-form]').isVisible(),true);
   await page.locator('[name=api_key]').fill('synthetic-test-api-key-123');

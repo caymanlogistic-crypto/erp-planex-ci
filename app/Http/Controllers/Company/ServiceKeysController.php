@@ -9,8 +9,10 @@ use PDO;
 use App\Service\EmployeeMailSettingsService;
 use App\Service\EmployeeMailProfileService;
 use App\Service\ReportEmailRecipientService;
+use App\Service\RouteExecutorReviewRecipientService;
 require_once __DIR__.'/../../../Service/EmployeeMailProfileService.php';
 require_once __DIR__.'/../../../Service/ReportEmailRecipientService.php';
+require_once __DIR__.'/../../../Service/RouteExecutorReviewRecipientService.php';
 use RuntimeException;
 
 final class ServiceKeysController
@@ -34,6 +36,9 @@ final class ServiceKeysController
         $reportEmails=['recipients'=>[],'send_responsible_logist'=>false];$reportEmailError=null;
         try { $reportEmails=$this->reportEmailContext()->read(); }
         catch (\Throwable) { $reportEmailError='Получатели отчётов недоступны. Проверьте обновление структуры базы данных.'; }
+        $routeExecutorReviewEmails=['recipients'=>[],'send_responsible_logist'=>false];$routeExecutorReviewEmailError=null;
+        try { $routeExecutorReviewEmails=$this->routeExecutorReviewEmailContext()->read(); }
+        catch (\Throwable) { $routeExecutorReviewEmailError='Получатели проверки исполнителей недоступны. Проверьте обновление структуры базы данных.'; }
         $pageTitle='Ключи и сервисы'; $pageContext='Настройки › '.$pageTitle;
         $topbarCrumbs=[['label'=>'Настройки','url'=>null],['label'=>$pageTitle,'url'=>null]];
         $config=$this->config; $db=$this->db;
@@ -99,11 +104,43 @@ final class ServiceKeysController
         } catch (\Throwable) { jsonResponse(['success'=>false,'message'=>'Не удалось сохранить получателей.'],422); }
     }
 
+    public function suggestRouteExecutorReviewRecipients(): void
+    {
+        header('Cache-Control: no-store');
+        try {
+            $query=is_scalar($_GET['q']??null)?(string)$_GET['q']:'';
+            jsonResponse(['success'=>true,'people'=>$this->routeExecutorReviewEmailContext()->suggest($query)]);
+        } catch (\Throwable) { jsonResponse(['success'=>false,'message'=>'Не удалось найти сотрудников.'],422); }
+    }
+
+    public function saveRouteExecutorReviewRecipients(): void
+    {
+        verifyCsrfRequest();header('Cache-Control: no-store');
+        try {
+            $service=$this->routeExecutorReviewEmailContext();$access=AccessRuntime::current();
+            $stmt=$this->db->connection()->prepare('SELECT account_id FROM company_memberships WHERE id=? AND company_id=?');
+            $stmt->execute([$access->membershipId(),$access->companyId()]);
+            $recipients=json_decode((string)($_POST['recipients']??'[]'),true,64,JSON_THROW_ON_ERROR);
+            if (!is_array($recipients) || !array_is_list($recipients)) throw new \InvalidArgumentException('Некорректный список получателей.');
+            $service->save((int)$stmt->fetchColumn(),(int)$access->membershipId(),$recipients,($_POST['send_responsible_logist']??'0')==='1');
+            jsonResponse(['success'=>true,'message'=>'Получатели проверки исполнителей сохранены.']);
+        } catch (\InvalidArgumentException|\DomainException|\JsonException $error) {
+            jsonResponse(['success'=>false,'message'=>$error->getMessage()],422);
+        } catch (\Throwable) { jsonResponse(['success'=>false,'message'=>'Не удалось сохранить получателей.'],422); }
+    }
+
     private function reportEmailContext(): ReportEmailRecipientService
     {
         $access=AccessRuntime::current();
         if (!$access->isActive() || !$access->isSystemOwner() || !$access->companyId()) throw new \DomainException('Настройка доступна только руководителю компании.');
         return new ReportEmailRecipientService($this->db->connection(),(int)$access->companyId());
+    }
+
+    private function routeExecutorReviewEmailContext(): RouteExecutorReviewRecipientService
+    {
+        $access=AccessRuntime::current();
+        if (!$access->isActive() || !$access->isSystemOwner() || !$access->companyId()) throw new \DomainException('Настройка доступна только руководителю компании.');
+        return new RouteExecutorReviewRecipientService($this->db->connection(),(int)$access->companyId());
     }
 
     private function mailContext(): EmployeeMailSettingsService
