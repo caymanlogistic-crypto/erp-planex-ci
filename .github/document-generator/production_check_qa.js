@@ -134,7 +134,9 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
       for (const item of packageTripOptions.slice(0, 80)) {
         await set('client_id', item.clientId);
         await set('trip_id', item.value);
-        await set('package_date', ymd(today));
+        await set('client_contract_date', ymd(today));
+        await set('client_invoice_date', ymd(today));
+        await set('client_act_date', ymd(today));
         if (await check() === 'success') { packagePreview = item; break; }
       }
       if (packagePreview) mark('CLIENT_PACKAGE_PREVIEW', { trip_id: Number(packagePreview.value), client_id: Number(packagePreview.clientId) });

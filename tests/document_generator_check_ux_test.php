@@ -27,7 +27,8 @@ $assert(str_contains($view, 'Не выбран рейс.'), 'missing trip has cl
 $assert(str_contains($view, 'Не указана дата начала.'), 'missing start date has clear message');
 $assert(str_contains($view, 'Не указана стоимость.'), 'missing price has clear message');
 $assert(str_contains($view, 'Не выбран клиент.'), 'client package has clear missing-client message');
-$assert(str_contains($view, 'Не указана дата документов.'), 'client package has clear missing-date message');
+$assert(str_contains($view, 'Не указана дата договора.') && str_contains($view, 'Не указана дата счёта.') && str_contains($view, 'Не указана дата акта.'), 'client package validates all three dates');
+$assert(!str_contains($view, 'name="package_date"'), 'shared package date field is removed');
 $assert(!str_contains($view, 'name="crew_id"'), 'manual executor selector is removed');
 $assert(!str_contains($view, 'name="request_input"'), 'manual FEO request input is removed');
 $assert(str_contains($view, 'data-docgen-carrier-trip'), 'carrier flow selects a Waste Trip');

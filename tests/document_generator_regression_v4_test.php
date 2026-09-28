@@ -46,6 +46,7 @@ require_once $root.'/app/Service/DocumentTemplateService.php';
 require_once $root.'/app/Service/CompanyRoleService.php';
 require_once $root.'/app/Service/UserSyncService.php';
 require_once $root.'/app/Service/FeoRequestInteractionService.php';
+require_once $root.'/app/Service/ProductionCalendarService.php';
 require_once $root.'/app/Service/DocumentGeneratorService.php';
 
 $p=new App\Service\FeoRequestInteractionService();
@@ -159,6 +160,12 @@ $pdo->exec("INSERT INTO waste_trips(id,business_id,client_id,route_executor_id,r
 $pdo->exec("INSERT INTO waste_trip_requests(waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) SELECT 77,id,ROUND(mass_netto*1000,3),CASE zayavka_id WHEN '300001' THEN 1 ELSE 2 END FROM feo_requests WHERE zayavka_id IN ('300001','300002')");
 $pdo->exec("INSERT INTO waste_trip_customer_payments(waste_trip_id,sort_order,amount,payment_type,payment_method,vat_rate,condition_type,days_count,days_kind,condition_comment) VALUES(77,1,230000.00,'Без НДС','cashless',NULL,'after_documents',7,'calendar','после получения оригиналов')");
 $pdo->exec("INSERT INTO waste_trip_general_payments(waste_trip_id,amount,payment_type,condition_type) VALUES(77,900000,'','after_end')");
+$applySql($root.'/database/migrations-local/070_production_calendar.sql');
+$eq(App\Service\ProductionCalendarService::seedOfficial2026($pdo),'seeded','official production calendar seeded');
+$suggested=App\Service\DocumentGeneratorService::suggestClientPackageDates($pdo,['actual_start_date'=>'2026-03-09','actual_end_date'=>'2026-05-11']);
+$eq($suggested,['contract_date'=>'2026-03-06','invoice_date'=>'2026-03-06','act_date'=>'2026-05-12'],'holidays and transferred days adjust in opposite directions');
+$suggestedWeekend=App\Service\DocumentGeneratorService::suggestClientPackageDates($pdo,['actual_start_date'=>'2026-09-05','actual_end_date'=>'2026-09-06']);
+$eq($suggestedWeekend,['contract_date'=>'2026-09-04','invoice_date'=>'2026-09-04','act_date'=>'2026-09-07'],'weekend start and unloading adjust in opposite directions');
 
 App\Security\AccessRuntime::setCurrent($ownerAccess);
 $docTrips=App\Service\DocumentGeneratorService::listDocumentTrips($pdo,true);$trip144=null;foreach($docTrips as$t)if((int)$t['business_id']===144)$trip144=$t;$ok(is_array($trip144),'document trip 144 visible');$eq((string)$trip144['_customer_amount'],'230000.00','customer amount from Waste Trip');
@@ -170,7 +177,12 @@ $ok(!($deletedPackage['ok']??true),'deleted trip cannot prepare client package')
 $pdo->exec("UPDATE waste_trips SET deleted_at=NULL WHERE id=77");
 echo "DOCUMENT_GENERATOR_DELETED_TRIP=PASS\n";
 $carrierByTrip=App\Service\DocumentGeneratorService::prepareFromTrip($pdo,$company,$cid,101,'company_owner',(int)$bt['vehicle_lease_crew']['id'],77,$params);$ok($carrierByTrip['ok']??false,'carrier document prepares from selected trip');$eq((int)$carrierByTrip['snapshot']['trip']['business_id'],144,'carrier snapshot trip');$eq((int)$carrierByTrip['snapshot']['executor']['crew_id'],1,'carrier executor from trip');$eq($carrierByTrip['request_ids'],['300001','300002'],'carrier FEO list from trip');
-$package=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,77,'2026-09-09');$ok($package['ok']??false,'client package prepare');$eq((string)$package['package_number'],date('y').'-144','package number YY-trip business id');$eq((string)$package['package_amount'],'230000.00','package amount');$eq((int)$package['found_count'],2,'package request count');$has((string)$package['snapshot']['parameters']['payment_terms'],'7 календарных','package payment terms');$has((string)$package['snapshot']['parameters']['payment_terms'],'после получения закрывающих документов','package payment event');
+$package=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,77,'2026-09-09','2026-09-10','2026-09-11');$ok($package['ok']??false,'client package prepare');$eq((string)$package['package_number'],date('y').'-144','package number YY-trip business id');$eq((string)$package['package_amount'],'230000.00','package amount');$eq((int)$package['found_count'],2,'package request count');$has((string)$package['snapshot']['parameters']['payment_terms'],'7 календарных','package payment terms');$has((string)$package['snapshot']['parameters']['payment_terms'],'после получения закрывающих документов','package payment event');
+$eq($package['values']['contract.date_plain'],'9 сентября 2026','contract date in template values');
+$eq($package['values']['invoice.date'],'10 сентября 2026','invoice date in template values');
+$eq($package['values']['act.date'],'11 сентября 2026','act date in template values');
+$invalidAct=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,77,'2026-09-09','2026-09-10','2026-02-30');
+$ok(!($invalidAct['ok']??true),'invalid act date is rejected server-side');
 $eq($package['snapshot']['client']['contact_phone'],'','client phone is optional');
 $eq($package['snapshot']['client']['contact_email'],'','client email is optional');
 $eq($package['values']['company.contact_phone'],'—','package accepts absent company phone');
@@ -179,6 +191,11 @@ $mismatch=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$compa
 App\Security\AccessRuntime::setCurrent($managerAccess);$denied=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,$managerUserId,'custom_role',1,77,'2026-09-09');$ok(!($denied['ok']??true),'non-owner client package denied');App\Security\AccessRuntime::setCurrent($ownerAccess);
 $packageIds=App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$package);$eq(count($packageIds),3,'package creates three documents');$expectedPackageTypes=['client_act','client_invoice','client_sublease_crew'];$actualPackageTypes=array_keys($packageIds);sort($actualPackageTypes);$eq($actualPackageTypes,$expectedPackageTypes,'package document types');
 $packageRows=[];$packagePaths=[];foreach($packageIds as$type=>$docId){$row=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$docId);$ok(is_array($row),'generated package row '.$type);$eq((string)$row['document_number'],date('y').'-144','generated package number '.$type);$eq(json_decode((string)$row['request_ids_json'],true),['300001','300002'],'generated package requests '.$type);$path=App\Service\DocumentService::resolveStoredPath($cid,(string)$row['stored_path']);$ok(is_string($path)&&is_file($path),'generated package file '.$type);$vv=App\Service\DocumentTemplateService::validateDocxFile($path);$ok($vv['ok']??false,'generated package DOCX '.$type);$eq($vv['placeholders']??[],[],'generated package placeholders '.$type);$z=new ZipArchive();$z->open($path);$text=App\Service\DocumentTemplateService::visibleText((string)$z->getFromName('word/document.xml'));$media=(string)$z->getFromName('word/media/image1.png');$z->close();if($type==='client_invoice'){$has($text,'Счёт на оплату № '.date('y').'-144','invoice number visible');$has($text,'230 000.00','invoice amount visible');$ok($media!=='','invoice PLANEX logo media');}elseif($type==='client_act'){$has($text,'Акт № '.date('y').'-144','act number visible');$has($text,'Исполнитель выполнил все обязательства','act quality clause');$has($text,'Заказчик не имеет претензий','act no-claims clause');$ok($media!=='','act PLANEX logo media');}else{$has($text,'ДОГОВОР СУБАРЕНДЫ ТРАНСПОРТНОГО СРЕДСТВА С ЭКИПАЖЕМ','sublease contract title');$has($text,'Субарендодатель','PLANEX sublessor contract side');$has($text,'Субарендатор','client sublessee contract side');}$packageRows[$type]=$row;$packagePaths[$type]=$path;}
+foreach (['client_sublease_crew'=>['2026-09-09','сентября 2026'],'client_invoice'=>['2026-09-10','10 сентября 2026'],'client_act'=>['2026-09-11','11 сентября 2026']] as $type=>$expected) {
+    $eq((string)$packageRows[$type]['document_date'],$expected[0],'stored date '.$type);
+    $zip=new ZipArchive();$zip->open($packagePaths[$type]);$visible=App\Service\DocumentTemplateService::visibleText((string)$zip->getFromName('word/document.xml'));$zip->close();
+    $has($visible,$expected[1],'DOCX date '.$type);
+}
 $replacement=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,77,'2026-09-10');$ok($replacement['ok']??false,'existing package remains valid for preview');$ok($replacement['package_exists']??false,'preview identifies existing package');$eq(count($replacement['existing_package_documents']??[]),3,'preview lists existing package documents');
 $duplicate=false;try{App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$replacement);}catch(RuntimeException $e){$duplicate=str_contains($e->getMessage(),'Подтвердите перезапись');}$ok($duplicate,'existing package requires explicit overwrite confirmation');
 foreach($packageIds as$type=>$docId){$ok(App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$docId)!==null,'unconfirmed overwrite preserves row '.$type);$ok(is_file($packagePaths[$type]),'unconfirmed overwrite preserves file '.$type);}
