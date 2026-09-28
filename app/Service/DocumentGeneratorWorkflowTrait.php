@@ -52,6 +52,9 @@ trait DocumentGeneratorWorkflowTrait
             $row['contacts'] = trim((string)($googleContacts['contacts'][$requestId] ?? '—')) ?: '—';
         }
         unset($row);
+        if (is_array($context['warehouse_loading'] ?? null)) {
+            $ordered = DocumentGeneratorWarehouseLoadingService::apply($ordered, $context['warehouse_loading']);
+        }
         $warnings=[];
         if (trim((string)($googleContacts['warning'] ?? ''))!=='') $warnings[]=(string)$googleContacts['warning'];
 

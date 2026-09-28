@@ -306,7 +306,7 @@ trait DocumentGeneratorDataTrait
             $id=(string)($row['zayavka_id'] ?? 'без ID');$items=[];
             if (in_array('request.mass_kg',$placeholders,true) && ($row['mass_netto'] ?? null)===null) $items[]='нет массы';
             if (in_array('request.sender',$placeholders,true) && trim((string)($row['naim_oo_gruzootpravitel'] ?? ''))==='') $items[]='нет грузоотправителя';
-            if (in_array('request.loading_address',$placeholders,true) && trim((string)($row['mno_adres_pogruzki'] ?? ''))==='') $items[]='нет адреса погрузки';
+            if (in_array('request.loading_address',$placeholders,true) && trim((string)($row['document_loading_address'] ?? $row['mno_adres_pogruzki'] ?? ''))==='') $items[]='нет адреса погрузки';
             if (in_array('requests.unload_address',$placeholders,true) && trim((string)($row['adres_vygruzki_otkhodov'] ?? ''))==='') $items[]='нет места выгрузки';
             if ($items!==[]) $errors[$id]=$items;
         }
@@ -331,7 +331,7 @@ trait DocumentGeneratorDataTrait
             $kg=round(((float)($row['mass_netto'] ?? 0))*1000,3);
             $out[]=[
                 'request.index'=>(string)($index+1),'request.id'=>(string)($row['zayavka_id'] ?? ''),'request.mass_kg'=>self::formatMassKg($kg),
-                'request.sender'=>(string)($row['naim_oo_gruzootpravitel'] ?? ''),'request.loading_address'=>(string)($row['mno_adres_pogruzki'] ?? ''),'request.contacts'=>self::requestContacts($row),
+                'request.sender'=>(string)($row['naim_oo_gruzootpravitel'] ?? ''),'request.loading_address'=>(string)($row['document_loading_address'] ?? $row['mno_adres_pogruzki'] ?? ''),'request.contacts'=>self::requestContacts($row),
             ];
         }
         return $out;

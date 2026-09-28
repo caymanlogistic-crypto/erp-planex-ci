@@ -17,6 +17,7 @@ require_once __DIR__ . '/DocumentGeneratorWorkflowTrait.php';
 require_once __DIR__ . '/DocumentGeneratorAccessTrait.php';
 require_once __DIR__ . '/DocumentGeneratorDataTrait.php';
 require_once __DIR__ . '/DocumentGeneratorTripPackageTrait.php';
+require_once __DIR__ . '/DocumentGeneratorWarehouseLoadingService.php';
 
 final class DocumentGeneratorService
 {
