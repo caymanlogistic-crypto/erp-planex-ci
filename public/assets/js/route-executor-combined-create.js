@@ -260,6 +260,90 @@
     document.querySelector('#lab-contractor-form [name="name"]')?.focus();
   };
 
+  const existingModal = document.getElementById('route-executor-existing-modal');
+  const existingContent = document.getElementById('route-executor-existing-modal-content');
+
+  function existingFormFrom(html) {
+    const documentNode = new DOMParser().parseFromString(html, 'text/html');
+    const form = documentNode.querySelector('#route-executor-create-form');
+    if (!form) return null;
+    form.id = 'route-executor-existing-form';
+    form.action = (window.getErpBasePath?.() || '') + '/company/route-executors/create';
+    form.classList.remove('panel');
+    form.querySelectorAll('.form-actions').forEach(node => node.remove());
+    let modalFlag = form.querySelector('input[name="_is_modal"]');
+    if (!modalFlag) {
+      modalFlag = document.createElement('input');
+      modalFlag.type = 'hidden';
+      modalFlag.name = '_is_modal';
+      form.appendChild(modalFlag);
+    }
+    modalFlag.value = '1';
+    return form;
+  }
+
+  function showExistingError(message) {
+    if (existingContent) existingContent.innerHTML = '<div class="notice warn modal-notice">' + message + '</div>';
+  }
+
+  function bindExistingForm(form) {
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const submit = existingModal?.querySelector('button[form="route-executor-existing-form"]');
+      if (submit) submit.disabled = true;
+      try {
+        const response = await fetch(form.action, { method: 'POST', credentials: 'same-origin', body: new FormData(form) });
+        const html = await response.text();
+        const parsed = new DOMParser().parseFromString(html, 'text/html');
+        if (parsed.querySelector('[data-route-executor-create-success]')) {
+          window.closeModal('route-executor-existing-modal');
+          window.location.reload();
+          return;
+        }
+        const nextForm = existingFormFrom(html);
+        if (!nextForm) throw new Error('Не удалось обработать ответ формы.');
+        existingContent.replaceChildren(nextForm);
+        bindExistingForm(nextForm);
+      } catch (error) {
+        showExistingError(error?.message || 'Не удалось создать исполнителя рейса.');
+      } finally {
+        if (submit) submit.disabled = false;
+      }
+    });
+  }
+
+  async function openExistingCreate() {
+    if (!existingModal || !existingContent) return;
+    if (document.getElementById('route-executor-create-modal')?.classList.contains('is-open')) {
+      window.closeModal('route-executor-create-modal');
+    }
+    existingContent.innerHTML = '<div class="driver-modal-loading">Загрузка...</div>';
+    window.openModal('route-executor-existing-modal');
+    try {
+      const base = window.getErpBasePath?.() || '';
+      const response = await fetch(base + '/company/route-executors/create', { credentials: 'same-origin' });
+      if (!response.ok) throw new Error('Не удалось загрузить форму выбора.');
+      const form = existingFormFrom(await response.text());
+      if (!form) throw new Error('Форма выбора недоступна.');
+      existingContent.replaceChildren(form);
+      bindExistingForm(form);
+      form.querySelector('select')?.focus();
+    } catch (error) {
+      showExistingError(error?.message || 'Не удалось загрузить форму выбора.');
+    }
+  }
+
+  document.addEventListener('click', event => {
+    if (event.target.closest?.('[data-route-executor-existing-create]')) {
+      event.preventDefault();
+      openExistingCreate();
+    }
+    if (event.target.closest?.('[data-route-executor-existing-close]')) {
+      event.preventDefault();
+      window.closeModal('route-executor-existing-modal');
+    }
+  });
+
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', arrangeForms);
   else arrangeForms();
 

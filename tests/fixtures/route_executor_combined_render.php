@@ -21,6 +21,7 @@ $responsibleLogists = [
 <link rel="stylesheet" href="/assets/css/erp-ui.css">
 <link rel="stylesheet" href="/assets/css/route-executor-combined-create.css">
 </head><body>
+<button type="button" data-route-executor-existing-create>Выбрать из имеющихся</button>
 <button type="button" data-route-executor-create-btn>Создать исполнителя рейса</button>
 <div class="table-card" data-erp-grid data-route-executors-grid>
   <div class="table-toolbar"><div class="found-label">Найдено: <b>2</b></div><input class="toolbar-search" placeholder="Поиск по таблице"></div>
