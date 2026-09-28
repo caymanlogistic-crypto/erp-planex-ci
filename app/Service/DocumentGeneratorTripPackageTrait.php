@@ -28,6 +28,9 @@ trait DocumentGeneratorTripPackageTrait
             $trip['_document_ready'] = (int)($trip['route_executor_id'] ?? 0) > 0
                 && (int)($trip['request_count'] ?? 0) > 0;
             $trip['_document_period'] = self::tripPeriodLabel($trip);
+            if ($includeFinance) {
+                $trip['_package_dates'] = self::suggestClientPackageDates($pdo, $trip);
+            }
             $trip['_customer_amount'] = $includeFinance
                 ? self::sumPaymentRows(WasteTripService::financialCustomerPayments($pdo, $trip))
                 : null;
@@ -85,14 +88,18 @@ trait DocumentGeneratorTripPackageTrait
         string $role,
         int $clientId,
         int $tripId,
-        string $packageDate,
+        string $contractDate,
+        ?string $invoiceDate = null,
+        ?string $actDate = null,
         ?GoogleSheetsRequestContactService $contactService = null
     ): array {
+        $invoiceDate ??= $contractDate;
+        $actDate ??= $contractDate;
         if (!self::canGenerateClientPackage($role)) {
             return self::failed(['Комплект документов клиенту доступен только руководителю компании.']);
         }
-        if (!self::validIsoDate($packageDate)) {
-            return self::failed(['Укажите корректную дату комплекта документов.']);
+        foreach (['договора' => $contractDate, 'счёта' => $invoiceDate, 'акта' => $actDate] as $label => $date) {
+            if (!self::validIsoDate($date)) return self::failed(['Укажите корректную дату ' . $label . '.']);
         }
 
         try {
@@ -132,14 +139,19 @@ trait DocumentGeneratorTripPackageTrait
             'trip' => self::tripSnapshot($trip),
             'package' => [
                 'number' => $packageNumber,
-                'date' => $packageDate,
+                'date' => $contractDate,
+                'contract_date' => $contractDate,
+                'invoice_date' => $invoiceDate,
+                'act_date' => $actDate,
                 'amount' => $amount,
                 'vat_mode' => 'Без НДС',
             ],
         ];
         $params = [
             'contract_number' => $packageNumber,
-            'contract_date' => $packageDate,
+            'contract_date' => $contractDate,
+            'invoice_date' => $invoiceDate,
+            'act_date' => $actDate,
             'start_date' => $startDate,
             'start_time' => '',
             'finish_date' => $finishDate,
@@ -166,7 +178,7 @@ trait DocumentGeneratorTripPackageTrait
         $snapshot = is_array($prepared['snapshot'] ?? null) ? $prepared['snapshot'] : [];
         $snapshot['package'] = $context['package'];
         $snapshot['service'] = [
-            'description' => self::clientServiceDescription($snapshot, $packageNumber, $packageDate),
+            'description' => self::clientServiceDescription($snapshot, $packageNumber, $contractDate),
             'amount' => $amount,
             'vat_mode' => 'Без НДС',
         ];
@@ -187,7 +199,7 @@ trait DocumentGeneratorTripPackageTrait
         }
 
         $prepared['package_number'] = $packageNumber;
-        $prepared['package_date'] = $packageDate;
+        $prepared['package_dates'] = ['client_sublease_crew'=>$contractDate, 'client_invoice'=>$invoiceDate, 'client_act'=>$actDate];
         $prepared['package_amount'] = $amount;
         $prepared['package_amount_formatted'] = self::formatMoneyText($amount);
         $prepared['package_templates'] = $templates;
@@ -206,9 +218,12 @@ trait DocumentGeneratorTripPackageTrait
         if (!self::runtimeSchemaReady($pdo)) throw new RuntimeException('Схема генератора документов не готова.');
 
         $number = trim((string)($prepared['package_number'] ?? ''));
-        $date = trim((string)($prepared['package_date'] ?? ''));
-        if (!preg_match('/^\d{2}-\d+$/', $number) || !self::validIsoDate($date)) {
-            throw new RuntimeException('Номер или дата комплекта документов не определены.');
+        $dates = (array)($prepared['package_dates'] ?? []);
+        if (!preg_match('/^\d{2}-\d+$/', $number)) {
+            throw new RuntimeException('Номер комплекта документов не определён.');
+        }
+        foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
+            if (!self::validIsoDate((string)($dates[$type] ?? ''))) throw new RuntimeException('Дата документа не определена: ' . $type . '.');
         }
         $templates = is_array($prepared['package_templates'] ?? null) ? $prepared['package_templates'] : [];
         foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
@@ -266,6 +281,7 @@ trait DocumentGeneratorTripPackageTrait
 
             foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
                 [$template, $templatePath] = $resolvedTemplates[$type];
+                $date = (string)$dates[$type];
                 $snapshot = $baseSnapshot;
                 $snapshot['template'] = [
                     'id'=>(int)$template['template_id'],
@@ -436,6 +452,28 @@ trait DocumentGeneratorTripPackageTrait
             $trip['planned_start_date_to'] ?? null,
         ]);
         return [$start, $finish];
+    }
+
+    public static function suggestClientPackageDates(PDO $pdo, array $trip): array
+    {
+        [$start, $finish] = self::tripDocumentDates($trip);
+        $contract = $start === null ? '' : self::nearestWorkingDate($pdo, $start, -1);
+        $act = $finish === null ? '' : self::nearestWorkingDate($pdo, $finish, 1);
+        return ['contract_date'=>$contract, 'invoice_date'=>$contract, 'act_date'=>$act];
+    }
+
+    private static function nearestWorkingDate(PDO $pdo, string $date, int $direction): string
+    {
+        $day = new \DateTimeImmutable($date);
+        for ($attempt = 0; $attempt < 366; $attempt++) {
+            try {
+                if (ProductionCalendarService::isWorkingDay($pdo, $day->format('Y-m-d'))) return $day->format('Y-m-d');
+            } catch (RuntimeException) {
+                return '';
+            }
+            $day = $day->modify(($direction < 0 ? '-1' : '+1') . ' day');
+        }
+        return '';
     }
 
     private static function firstDate(array $values): ?string

@@ -51,7 +51,9 @@ final class DocumentGeneratorController
                     $role,
                     (int)($_POST['client_id'] ?? 0),
                     (int)($_POST['trip_id'] ?? 0),
-                    (string)($_POST['package_date'] ?? '')
+                    (string)($_POST['client_contract_date'] ?? ''),
+                    (string)($_POST['client_invoice_date'] ?? ''),
+                    (string)($_POST['client_act_date'] ?? '')
                 );
                 if (!($prepared['ok'] ?? false)) {
                     $this->renderGenerator(true, 'Формирование комплекта заблокировано: исправьте ошибки проверки.');
@@ -280,7 +282,9 @@ final class DocumentGeneratorController
                         'template_id' => $seed['template_id'] ?? 0,
                         'trip_id' => (int)($snapshot['trip']['id'] ?? 0),
                         'client_id' => (int)($snapshot['client']['id'] ?? 0),
-                        'package_date' => (string)($generated['document_date'] ?? ''),
+                        'client_contract_date' => (string)($snapshot['parameters']['contract_date'] ?? $generated['document_date'] ?? ''),
+                        'client_invoice_date' => (string)($snapshot['parameters']['invoice_date'] ?? $generated['document_date'] ?? ''),
+                        'client_act_date' => (string)($snapshot['parameters']['act_date'] ?? $generated['document_date'] ?? ''),
                         ...($seed['params'] ?? []),
                     ]);
                 }
@@ -289,7 +293,16 @@ final class DocumentGeneratorController
             if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 if (trim((string)$old['contract_date']) === '') $old['contract_date'] = date('Y-m-d');
                 if (trim((string)$old['waybill_date']) === '') $old['waybill_date'] = date('Y-m-d');
-                if (trim((string)$old['package_date']) === '') $old['package_date'] = date('Y-m-d');
+                if ($old['generator_mode'] === 'client_package') {
+                    foreach ($trips as $trip) {
+                        if ((int)$trip['id'] !== (int)$old['trip_id']) continue;
+                        foreach ((array)($trip['_package_dates'] ?? []) as $key => $value) {
+                            $stateKey = 'client_' . $key;
+                            if (isset($old[$stateKey]) && $old[$stateKey] === '') $old[$stateKey] = $value;
+                        }
+                        break;
+                    }
+                }
             }
             if ($doPreview) {
                 if ($old['generator_mode'] === 'client_package') {
@@ -301,7 +314,9 @@ final class DocumentGeneratorController
                         $role,
                         (int)$old['client_id'],
                         (int)$old['trip_id'],
-                        (string)$old['package_date']
+                        (string)$old['client_contract_date'],
+                        (string)$old['client_invoice_date'],
+                        (string)$old['client_act_date']
                     );
                 } else {
                     $preview = DocumentGeneratorService::prepareFromTrip(
@@ -412,7 +427,9 @@ final class DocumentGeneratorController
             'template_id' => (int)($source['template_id'] ?? 0),
             'trip_id' => (int)($source['trip_id'] ?? 0),
             'client_id' => (int)($source['client_id'] ?? 0),
-            'package_date' => (string)($source['package_date'] ?? ''),
+            'client_contract_date' => (string)($source['client_contract_date'] ?? ''),
+            'client_invoice_date' => (string)($source['client_invoice_date'] ?? ''),
+            'client_act_date' => (string)($source['client_act_date'] ?? ''),
             ...$params,
         ];
     }

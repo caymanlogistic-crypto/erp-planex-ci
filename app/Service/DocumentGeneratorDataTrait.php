@@ -18,6 +18,8 @@ trait DocumentGeneratorDataTrait
             if ($type==='client_sublease_crew') {
                 $out['contract_number']=trim((string)($params['contract_number'] ?? ''));
                 $out['payment_terms']=trim((string)($params['payment_terms'] ?? ''));
+                $out['invoice_date']=trim((string)($params['invoice_date'] ?? ''));
+                $out['act_date']=trim((string)($params['act_date'] ?? ''));
             }
             return $out;
         }
@@ -111,6 +113,8 @@ trait DocumentGeneratorDataTrait
         $document=is_array($snapshot['document'] ?? null)?$snapshot['document']:[];
         $number=trim((string)($document['number'] ?? $p['contract_number'] ?? ''));
         $contractDate=(string)($p['contract_date'] ?? '');
+        $invoiceDate=(string)($p['invoice_date'] ?? $contractDate);
+        $actDate=(string)($p['act_date'] ?? $contractDate);
         $serviceAmountRaw=(string)($service['amount'] ?? $p['price'] ?? '');
         $price=self::formatMoneyText((string)($p['price'] ?? ''));
         $companyKpp=trim((string)($c['kpp'] ?? ''));
@@ -129,9 +133,9 @@ trait DocumentGeneratorDataTrait
             'contract.vat_mode'=>(string)($p['vat_mode'] ?? ''),
             'contract.payment_terms'=>(string)($p['payment_terms'] ?? ''),
             'invoice.number'=>$number,
-            'invoice.date'=>self::formatRuDatePlain($contractDate),
+            'invoice.date'=>self::formatRuDatePlain($invoiceDate),
             'act.number'=>$number,
-            'act.date'=>self::formatRuDatePlain($contractDate),
+            'act.date'=>self::formatRuDatePlain($actDate),
             'waybill.number'=>(string)($p['waybill_number'] ?? ''),
             'waybill.date'=>self::formatRuDate((string)($p['waybill_date'] ?? '')),
             'company.name'=>(string)($c['name'] ?? ''),
