@@ -1,17 +1,24 @@
 <div class="service-keys" data-service-keys>
   <div class="page-head"><div class="page-head-left"><h1 class="page-title">Ключи и сервисы</h1><div class="page-summary">Подключения к внешним сервисам для вашей компании.</div></div></div>
   <div class="service-keys-grid">
-    <section class="panel-section service-key-card report-email-card" aria-labelledby="report-email-title" data-report-email data-state="<?= e(json_encode($reportEmails,JSON_UNESCAPED_UNICODE|JSON_HEX_TAG|JSON_HEX_APOS|JSON_HEX_QUOT|JSON_HEX_AMP)) ?>" data-suggest-url="<?= e(app_url('/company/settings/services/report-recipients/suggest')) ?>">
-      <header class="service-key-head"><div><h2 class="section-title" id="report-email-title">Получатели отчётов по рейсам</h2><p class="service-key-caption">Список адресов для отправки отчёта одной кнопкой</p></div><span class="badge report-email-badge">Настройка</span></header>
-      <div class="service-key-body">
-        <?php if ($reportEmailError): ?><div class="notice warn" role="alert"><?= e($reportEmailError) ?></div><?php else: ?>
-        <div class="report-email-form"><div class="field report-email-person"><label class="field-label" for="report-email-person">Сотрудник или email</label><input class="field-input" id="report-email-person" type="search" role="combobox" aria-autocomplete="list" aria-controls="report-email-options" aria-expanded="false" autocomplete="off" placeholder="Начните вводить фамилию"><div class="report-email-options" id="report-email-options" role="listbox" hidden></div></div><div class="field"><label class="field-label" for="report-email-address">Email получателя</label><input class="field-input" id="report-email-address" type="email" autocomplete="off" placeholder="name@company.ru"></div><button type="button" class="btn btn-secondary report-email-add">+ Email</button></div>
-        <div class="report-email-feedback" role="status" aria-live="polite" hidden></div>
-        <div class="report-email-recipients"><div class="report-email-list-title">Получатели отчёта <span class="report-email-count"></span></div><ul class="report-email-list" aria-label="Список получателей отчёта"></ul><div class="report-email-empty" hidden>Получатели пока не добавлены.</div></div>
-        <div class="report-email-footer"><form class="report-email-actions" action="<?= e(app_url('/company/settings/services/report-recipients')) ?>" method="post" data-report-email-form><?= csrfField() ?><input type="hidden" name="recipients"><input type="hidden" name="send_responsible_logist"><label class="report-email-logist"><input type="checkbox" id="report-email-logist"><span><b>Отправлять ответственному логисту</b><small>Адрес берётся из карточки логиста, за которым закреплён рейс.</small></span></label><button type="submit" class="btn btn-primary">Сохранить получателей</button><span class="report-email-save-state" role="status" aria-live="polite">Настройки не менялись</span></form></div>
-        <?php endif; ?>
-      </div>
-    </section>
+    <?php
+    $recipientCard=[
+      'prefix'=>'report-email','kind'=>'report','state'=>$reportEmails,'error'=>$reportEmailError,
+      'title'=>'Получатели отчётов по рейсам','caption'=>'Список адресов для отправки отчёта одной кнопкой',
+      'list_title'=>'Получатели отчёта','logist_hint'=>'Адрес берётся из карточки логиста, за которым закреплён рейс.',
+      'suggest_url'=>app_url('/company/settings/services/report-recipients/suggest'),
+      'save_url'=>app_url('/company/settings/services/report-recipients'),
+    ];
+    require base_path('app/View/partials/company_service_recipient_card.php');
+    $recipientCard=[
+      'prefix'=>'route-executor-review-email','kind'=>'route-executor-review','state'=>$routeExecutorReviewEmails,'error'=>$routeExecutorReviewEmailError,
+      'title'=>'Получатели проверки исполнителей рейса','caption'=>'Данные нового исполнителя и ссылка на архив для проверки',
+      'list_title'=>'Получатели проверки','logist_hint'=>'Адрес берётся из карточки ответственного логиста исполнителя рейса.',
+      'suggest_url'=>app_url('/company/settings/services/route-executor-review-recipients/suggest'),
+      'save_url'=>app_url('/company/settings/services/route-executor-review-recipients'),
+    ];
+    require base_path('app/View/partials/company_service_recipient_card.php');
+    ?>
   <?php if ($dbError): ?><div class="form-alert alert-error" role="alert"><div class="alert-body"><?= e($dbError) ?></div></div><?php else: ?>
     <section class="panel-section service-key-card" aria-labelledby="yandex-title">
       <header class="service-key-head">

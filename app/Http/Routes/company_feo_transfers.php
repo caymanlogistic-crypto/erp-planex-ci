@@ -22,3 +22,5 @@ $router->post('/company/feo/requests/coordinates/settings',[$serviceKeysControll
 $router->post('/company/settings/services/mail',[$serviceKeysController,'saveMail'],'company.service_keys');
 $router->get('/company/settings/services/report-recipients/suggest',[$serviceKeysController,'suggestReportRecipients'],'company.service_keys');
 $router->post('/company/settings/services/report-recipients',[$serviceKeysController,'saveReportRecipients'],'company.service_keys');
+$router->get('/company/settings/services/route-executor-review-recipients/suggest',[$serviceKeysController,'suggestRouteExecutorReviewRecipients'],'company.service_keys');
+$router->post('/company/settings/services/route-executor-review-recipients',[$serviceKeysController,'saveRouteExecutorReviewRecipients'],'company.service_keys');

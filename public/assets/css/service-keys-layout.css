@@ -73,8 +73,10 @@
 .service-keys .report-email-save-state { align-self: center; }
 @media (max-width: 520px) { .service-keys .report-email-actions { grid-template-columns: minmax(0, 1fr); } }
 @media (min-width: 1141px) {
-  .service-keys .service-keys-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'report yandex' 'report mail'; align-items: stretch; }
-  .service-keys .report-email-card { grid-area: report; align-self: start; }
+  .service-keys .service-keys-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: 'report executor' 'yandex mail'; align-items: stretch; }
+  .service-keys [data-recipient-kind="report"] { grid-area: report; }
+  .service-keys [data-recipient-kind="route-executor-review"] { grid-area: executor; }
+  .service-keys .report-email-card { align-self: start; }
   .service-keys .report-email-card .service-key-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto auto; grid-template-areas: 'form' 'recipients' 'footer'; gap: 12px; }
   .service-keys .report-email-form { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto; }
   .service-keys .report-email-footer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
