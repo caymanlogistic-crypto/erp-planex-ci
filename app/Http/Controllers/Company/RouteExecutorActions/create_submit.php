@@ -13,9 +13,10 @@ $blockingNotices = [];
 $contractors = [];
 $drivers = [];
 $vehicleSets = [];
+$responsibleLogists = [];
 $company = null;
 
-$render = static function () use (&$company,&$success,&$errors,&$old,&$formError,&$createdExecutor,&$blockingNotices,&$contractors,&$drivers,&$vehicleSets,$config): void {
+$render = static function () use (&$company,&$success,&$errors,&$old,&$formError,&$createdExecutor,&$blockingNotices,&$contractors,&$drivers,&$vehicleSets,&$responsibleLogists,$config): void {
     $renderMode = ($_POST['_is_modal'] ?? '') === '1' ? 'modal' : 'page';
     if ($renderMode === 'modal') {
         header('Content-Type: text/html; charset=utf-8');
@@ -49,7 +50,11 @@ try {
     $contractors=\App\Service\RouteExecutorService::filterVisibleContractors($localPdo,$localPdo->query("SELECT id,name,inn FROM contractors WHERE deleted_at IS NULL AND status='active' ORDER BY name")->fetchAll(PDO::FETCH_ASSOC));
     $drivers=\App\Service\RouteExecutorService::filterVisibleDrivers($localPdo,$localPdo->query("SELECT id,full_name,phone FROM drivers WHERE deleted_at IS NULL AND status='active' ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC));
     $vehicleSets=\App\Service\RouteExecutorService::filterVisibleVehicleSets($localPdo,$localPdo->query("SELECT vs.id,vs.set_type,vs.primary_vehicle_unit_id,vs.secondary_vehicle_unit_id,vu1.plate_number primary_plate,vu2.plate_number secondary_plate FROM vehicle_sets vs LEFT JOIN vehicle_units vu1 ON vs.primary_vehicle_unit_id=vu1.id LEFT JOIN vehicle_units vu2 ON vs.secondary_vehicle_unit_id=vu2.id WHERE vs.deleted_at IS NULL AND vs.status='active' ORDER BY vs.set_type")->fetchAll(PDO::FETCH_ASSOC));
+    $responsibleLogists=\App\Service\EntityResponsibilityService::eligibleRecipients($pdo,$localPdo,$companyId);
 
+    $requestedLogistId=(int)($_POST['responsible_logist_membership_id']??0);
+    $responsibleLogistId=\App\Service\EntityResponsibilityService::eligibleRecipientMembershipId($pdo,$localPdo,$companyId,$requestedLogistId);
+    $actorMembershipId=(int)(\App\Service\AccessControlService::effectiveMembershipId()??0);
     $contractorId=(int)($_POST['contractor_id']??0);
     $vehicleSetId=(int)($_POST['vehicle_set_id']??0);
     $rawDriverIds=is_array($_POST['driver_ids']??null)?$_POST['driver_ids']:[];
@@ -57,6 +62,8 @@ try {
     $old['driver_ids']=$rawDriverIds ?: [''];
     $comments=trim((string)($_POST['comments']??''));
 
+    if($responsibleLogistId===null)$errors['responsible_logist_membership_id']='Выберите ответственного логиста.';
+    if($actorMembershipId<=0)throw new RuntimeException('Не удалось определить сотрудника, создающего исполнителя рейса.');
     if($contractorId<=0)$errors['contractor_id']='Выберите подрядчика.';
     if(!$driverIds)$errors['driver_ids']='Выберите хотя бы одного водителя.';
     if(count($driverIds)!==count(array_filter(array_map('intval',$rawDriverIds))))$errors['driver_ids']='Один и тот же водитель не может быть добавлен в экипаж дважды.';
@@ -97,6 +104,8 @@ try {
             $i->execute([$contractorId,$vehicleUnitId,$primaryDriverId,$dvbId,$comments!==''?$comments:null,$userId,$userRole]);
             $crewId=(int)$localPdo->lastInsertId();
             syncCrewDrivers($localPdo,$crewId,$driverIds);
+            $responsibility=$localPdo->prepare('INSERT INTO entity_responsibilities(entity_type,entity_id,membership_id,assigned_by_membership_id) VALUES (?,?,?,?)');
+            $responsibility->execute(['route_executor',$crewId,$responsibleLogistId,$actorMembershipId]);
             $localPdo->commit();
 
             $s=$localPdo->prepare('SELECT name FROM contractors WHERE id=?');$s->execute([$contractorId]);$contractorName=(string)$s->fetchColumn();

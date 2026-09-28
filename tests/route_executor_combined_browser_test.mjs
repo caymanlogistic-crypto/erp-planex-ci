@@ -38,6 +38,8 @@ try {
         assert.equal(await page.locator('#route-executor-existing-form [name="contractor_id"]').count(), 1);
         assert.equal(await page.locator('#route-executor-existing-form [name="driver_ids[]"]').count(), 1);
         assert.equal(await page.locator('#route-executor-existing-form [name="vehicle_set_id"]').count(), 1);
+        assert.equal(await page.locator('#route-executor-existing-form [name="responsible_logist_membership_id"][required]').count(), 1);
+        assert.equal(await page.locator('#route-executor-existing-form [name="responsible_logist_membership_id"] option').count(), 2);
         assert.equal(await page.locator('.route-executor-existing-modal-inner').evaluate(element => element.scrollWidth > element.clientWidth + 1), false, 'existing-data popup horizontal overflow at ' + width);
         await page.locator('#route-executor-existing-modal [data-route-executor-existing-close]').first().click();
         assert.equal(await page.locator('#route-executor-existing-modal.is-open').count(), 0);

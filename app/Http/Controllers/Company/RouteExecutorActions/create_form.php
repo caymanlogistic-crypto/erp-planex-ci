@@ -8,7 +8,7 @@
     if ($companyId <= 0) {
         $company = null;
         $success = false; $errors = []; $old = []; $formError = null; $createdExecutor = null;
-        $blockingNotices = []; $contractors = []; $drivers = []; $vehicleSets = [];
+        $blockingNotices = []; $contractors = []; $drivers = []; $vehicleSets = []; $responsibleLogists = [];
         ob_start(); require base_path('app/View/pages/company_route_executors_create.php');
         $content = ob_get_clean(); require base_path('app/View/layouts/main.php');
         return;
@@ -23,7 +23,7 @@
         if (!$company) {
             $company = null;
             $success = false; $errors = []; $old = []; $formError = null; $createdExecutor = null;
-            $blockingNotices = []; $contractors = []; $drivers = []; $vehicleSets = [];
+            $blockingNotices = []; $contractors = []; $drivers = []; $vehicleSets = []; $responsibleLogists = [];
             ob_start(); require base_path('app/View/pages/company_route_executors_create.php');
             $content = ob_get_clean(); require base_path('app/View/layouts/main.php');
             return;
@@ -34,11 +34,12 @@
         $success = false; $errors = []; $old = []; $formError = null; $createdExecutor = null;
 
         if ($company['status'] !== 'active') {
-            $blockingNotices = []; $contractors = []; $drivers = []; $vehicleSets = [];
+            $blockingNotices = []; $contractors = []; $drivers = []; $vehicleSets = []; $responsibleLogists = [];
         } else {
             $localDbConfig = companyDatabaseConfig($config, $company);
             $localDb = new \App\Core\Database($localDbConfig); $localPdo = $localDb->connection();
             applyLocalMigrations($localPdo);
+            $responsibleLogists = \App\Service\EntityResponsibilityService::eligibleRecipients($pdo, $localPdo, $companyId);
 
             try { $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch(); }
             catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/006_create_company_crews.sql'))); }
@@ -72,7 +73,7 @@
     } catch (\Exception $e) {
         $company = null;
         $success = false; $errors = []; $old = []; $formError = 'Ошибка загрузки данных: ' . $e->getMessage();
-        $createdExecutor = null; $blockingNotices = []; $contractors = []; $drivers = []; $vehicleSets = [];
+        $createdExecutor = null; $blockingNotices = []; $contractors = []; $drivers = []; $vehicleSets = []; $responsibleLogists = [];
     }
 
     ob_start();

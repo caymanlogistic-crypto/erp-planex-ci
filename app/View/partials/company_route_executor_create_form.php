@@ -8,6 +8,7 @@ $old = $old ?? [];
 $contractors = $contractors ?? [];
 $drivers = $drivers ?? [];
 $vehicleSets = $vehicleSets ?? [];
+$responsibleLogists = $responsibleLogists ?? [];
 $selectedDriverIds = $old['driver_ids'] ?? (($old['driver_id'] ?? '') !== '' ? [$old['driver_id']] : ['']);
 if (!is_array($selectedDriverIds) || !$selectedDriverIds) $selectedDriverIds = [''];
 $removeJs = "var f=this.closest('[data-crew-driver-form]'),r=this.closest('[data-crew-driver-row]');if(f.querySelectorAll('[data-crew-driver-row]').length>1){r.remove();f.querySelectorAll('[data-crew-driver-row]').forEach(function(x,i){var n=x.querySelector('.crew-driver-number');if(n)n.textContent='Водитель '+(i+1);});}";
@@ -20,6 +21,16 @@ $addJs = "var f=this.closest('[data-crew-driver-form]'),l=f.querySelector('[data
         <div class="form-section">
             <h3 class="panel-head-title">Исполнитель рейса</h3>
             <p class="text-muted mb-section">Подрядчик + экипаж водителей + ТС</p>
+
+            <div class="field">
+                <label class="field-label">Ответственный логист <span class="req">*</span></label>
+                <select name="responsible_logist_membership_id" class="field-input" required<?= empty($responsibleLogists) ? ' disabled' : '' ?>>
+                    <option value="">— Выберите логиста —</option>
+                    <?php foreach ($responsibleLogists as $logist): ?><option value="<?= (int)$logist['membership_id'] ?>" <?= ($old['responsible_logist_membership_id'] ?? '') == $logist['membership_id'] ? 'selected' : '' ?>><?= e($logist['full_name']) ?> (<?= e($logist['login']) ?>)</option><?php endforeach; ?>
+                </select>
+                <?php if (empty($responsibleLogists)): ?><p class="field-hint">Нет доступных сотрудников для назначения. Обратитесь к руководителю компании.</p><?php endif; ?>
+                <?php if (!empty($errors['responsible_logist_membership_id'])): ?><div class="field-msg is-error"><?= e($errors['responsible_logist_membership_id']) ?></div><?php endif; ?>
+            </div>
 
             <div class="field">
                 <label class="field-label">Подрядчик <span class="req">*</span></label>
