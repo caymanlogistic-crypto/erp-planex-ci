@@ -65,6 +65,19 @@ trait DocumentGeneratorTripPackageTrait
         $crewId = (int)($trip['route_executor_id'] ?? 0);
         if ($crewId <= 0) return self::failed(['В выбранном рейсе не назначен Исполнитель рейса.']);
 
+        $context = ['trip'=>self::tripSnapshot($trip)];
+        $template = self::getTemplateVersion($pdo, $templateId, null, true);
+        if ((string)($template['document_type'] ?? '') === 'vehicle_lease_crew'
+            && (int)($trip['legacy_source_warehouse_id'] ?? 0) > 0) {
+            try {
+                $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
+                if (!$legacy instanceof PDO) throw new RuntimeException('Старая база складов недоступна.');
+                $context['warehouse_loading'] = DocumentGeneratorWarehouseLoadingService::resolve($legacy, $trip, $requestIds);
+            } catch (\Throwable $e) {
+                return self::failed(['Не удалось проверить складскую погрузку: '.$e->getMessage()]);
+            }
+        }
+
         return self::prepare(
             $pdo,
             $company,
@@ -76,7 +89,7 @@ trait DocumentGeneratorTripPackageTrait
             implode("\n", $requestIds),
             $params,
             $contactService,
-            ['trip'=>self::tripSnapshot($trip)]
+            $context
         );
     }
 
