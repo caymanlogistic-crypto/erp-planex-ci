@@ -56,6 +56,8 @@ try {
         assert.equal(await page.locator('#lab-driver-form [name="license_issue_date"]').count(), 1);
         assert.equal(await page.locator('#route-executor-responsible-logist[required]').count(), 1);
         assert.equal(await page.locator('#route-executor-responsible-logist option').count(), 3);
+        assert.equal(await page.locator('[data-route-executor-existing-create]').textContent(), 'Выбрать из имеющихся');
+        assert.match(await page.locator('[data-route-executor-existing-create]').getAttribute('href'), /\/company\/route-executors\/create$/);
         assert.equal(await page.locator('[data-readiness-key="training"][data-state="pending"]').count(), 1);
         await page.locator('#lab-driver-form [name="full_name"]').fill('Иванов Иван Иванович');
         await page.locator('#lab-driver-form [name="snils"]').fill('123-456-789 00');

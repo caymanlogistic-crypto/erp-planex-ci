@@ -58,6 +58,7 @@
     <div class="modal-foot is-spaced" id="route-executor-create-modal-foot">
       <div class="modal-required-note"><span class="req">*</span> — обязательные поля</div>
       <div class="modal-foot-actions">
+        <a href="<?= app_url('/company/route-executors/create') ?>" class="btn btn-ghost" data-route-executor-existing-create>Выбрать из имеющихся</a>
         <button type="button" class="btn btn-ghost" data-route-executor-create-close>Отмена</button>
         <button type="button" class="btn btn-primary" data-source-create-submit>Создать исполнителя рейса</button>
       </div>
