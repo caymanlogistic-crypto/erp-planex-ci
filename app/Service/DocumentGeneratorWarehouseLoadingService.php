@@ -19,11 +19,17 @@ final class DocumentGeneratorWarehouseLoadingService
         foreach (array_chunk($requestIds, 300) as $chunk) {
             $marks = implode(',', array_fill(0, count($chunk), '?'));
             $query = $legacy->prepare(
-                "SELECT DISTINCT zayavka_id FROM warehouse_movements
-                  WHERE flight_id=? AND warehouse_id=? AND status='active'
-                    AND movement_type IN ('issue','transfer_out') AND zayavka_id IN ($marks) ORDER BY zayavka_id"
+                "SELECT zayavka_id FROM warehouse_movements
+                  WHERE warehouse_id=? AND status='active' AND zayavka_id IN ($marks)
+                  GROUP BY zayavka_id
+                  HAVING SUM(CASE
+                      WHEN movement_type IN ('receipt','transfer_in') THEN COALESCE(mass_netto,0)
+                      WHEN movement_type IN ('issue','transfer_out') THEN -COALESCE(mass_netto,0)
+                      ELSE 0 END) > 0
+                    OR MAX(CASE WHEN flight_id=? AND movement_type IN ('issue','transfer_out') THEN 1 ELSE 0 END) > 0
+                  ORDER BY zayavka_id"
             );
-            $query->execute([$flightId, $warehouseId, ...$chunk]);
+            $query->execute([$warehouseId, ...$chunk, $flightId]);
             foreach ($query->fetchAll(PDO::FETCH_COLUMN) as $id) $found[(string)$id] = true;
         }
         if ($found === []) return ['address'=>'', 'request_ids'=>[]];
