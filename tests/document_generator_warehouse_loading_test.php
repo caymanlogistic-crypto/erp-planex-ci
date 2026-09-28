@@ -15,7 +15,7 @@ if ($schema === '' || !in_array($schema, explode(',', getenv('PLANEX_TEST_FIXED_
     throw new RuntimeException('Run through the isolated local test wrapper.');
 }
 $pdo = new PDO("mysql:host=$host;port=$port;dbname=$schema;charset=utf8mb4", getenv('PLANEX_SCHEMA_DB_USER') ?: '', getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: '', [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
-$pdo->exec('CREATE TABLE warehouses(id INT PRIMARY KEY,name VARCHAR(255) NOT NULL,address VARCHAR(255) NULL)');
+$pdo->exec('CREATE TABLE warehouses(id INT PRIMARY KEY,name VARCHAR(255) NOT NULL,full_address VARCHAR(255) NULL)');
 $pdo->exec('CREATE TABLE warehouse_movements(id INT PRIMARY KEY,flight_id INT,warehouse_id INT,zayavka_id INT,movement_type VARCHAR(32),status VARCHAR(20))');
 $pdo->exec("INSERT INTO warehouses VALUES(1,'Склад Север','Москва, Складская, 1'),(2,'Склад Юг','Москва, Южная, 2')");
 $pdo->exec("INSERT INTO warehouse_movements VALUES
