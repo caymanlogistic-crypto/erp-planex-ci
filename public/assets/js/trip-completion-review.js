@@ -89,7 +89,7 @@
         confirm.disabled = false;
         confirm.textContent = 'Переместить в архив';
       } else {
-        body.innerHTML = `<p class="lab-review-intro">${issues.length ? 'Найдены ошибки и недостающие данные:' : 'Ошибок не найдено. Рейс будет передан на проверку.'}</p>${issues.length ? `<ul class="lab-review-problems">${list}</ul><p class="lab-review-warning">Убедитесь, что всю доступную информацию внесли. Если это окончательные данные, передайте рейс на проверку.</p>` : ''}<p class="lab-review-mail">${preview.sender_ready ? `Отправитель: <b>${escape(preview.sender_email)}</b>. ` : ''}Комплект будет отправлен ${preview.recipient_count} получателям.</p>${!preview.sender_ready ? `<p class="lab-review-warning">${escape(preview.sender_error || 'Настройте основной рабочий ящик в карточке пользователя.')}</p>` : ''}`;
+        body.innerHTML = `<p class="lab-review-intro">${issues.length ? 'Найдены ошибки и недостающие данные:' : 'Ошибок не найдено. Рейс будет передан на проверку.'}</p>${issues.length ? `<ul class="lab-review-problems">${list}</ul><p class="lab-review-warning">Убедитесь, что всю доступную информацию внесли. Если это окончательные данные, передайте рейс на проверку.</p>` : ''}<p class="lab-review-mail">${preview.sender_ready ? `Отправитель: <b>${escape(preview.sender_email)}</b>. ` : ''}Письмо с таблицей заявок и ссылкой на комплект получат ${preview.recipient_count} адресатов.</p>${!preview.sender_ready ? `<p class="lab-review-warning">${escape(preview.sender_error || 'Настройте основной рабочий ящик в карточке пользователя.')}</p>` : ''}`;
         confirm.disabled = !preview.sender_ready || preview.recipient_count === 0;
         confirm.textContent = 'Всё верно, передать';
       }
@@ -124,11 +124,27 @@
         stage(index) { progress.textContent = ['Формируем отчёт…','Создаём PDF файлы…','Создаём архив…'][index] || 'Подготавливаем комплект…'; },
         pdf(done, total) { if (total) progress.textContent = `Создаём PDF файлы: ${done} из ${total}`; },
       });
-      progress.textContent = 'Отправляем комплект получателям…';
+      const stageUrl = form.getAttribute('action').replace(/\/review$/, '/package-stage');
+      const csrf = form.querySelector('[name="_csrf_token"]')?.value || '';
+      const init = new FormData(form);
+      init.set('version', String(preview.version));
+      init.set('snapshot_hash', preview.snapshot_hash);
+      progress.textContent = 'Подготавливаем защищённую ссылку…';
+      const staged = await responseJson(await fetch(stageUrl, {method:'POST', credentials:'same-origin', headers:{Accept:'application/json'}, body:init}));
+      const chunkSize = 4 * 1024 * 1024;
+      for (let offset = 0; offset < built.bytes.length; offset += chunkSize) {
+        const chunk = built.bytes.subarray(offset, Math.min(offset + chunkSize, built.bytes.length));
+        const uploaded = await responseJson(await fetch(stageUrl, {method:'POST', credentials:'same-origin',
+          headers:{Accept:'application/json', 'Content-Type':'application/octet-stream', 'X-CSRF-Token':csrf,
+            'X-Planex-Upload':staged.upload_token, 'X-Planex-Offset':String(offset)}, body:chunk}));
+        if (uploaded.size !== offset + chunk.length) throw new Error('Комплект загрузился не полностью. Повторите попытку.');
+        progress.textContent = `Загружаем комплект: ${Math.round(100 * uploaded.size / built.bytes.length)}%`;
+      }
+      progress.textContent = 'Отправляем письмо со ссылкой…';
       const data = new FormData(form);
       data.set('version', String(preview.version));
       data.set('snapshot_hash', preview.snapshot_hash);
-      data.set('package', new File([built.bytes], built.name, {type:'application/zip'}));
+      data.set('package_token', staged.upload_token);
       const result = await responseJson(await fetch(form.getAttribute('action'), {method:'POST',credentials:'same-origin',headers:{Accept:'application/json'},body:data}));
       if (result.mail_status !== 'accepted') {
         window.alert('Статус рейса изменён, но отправка письма не подтверждена. Проверьте рабочий ящик и настройки почты.');

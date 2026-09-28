@@ -12,14 +12,22 @@ const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fix
 const reviewerHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php'),'reviewer'],{encoding:'utf8'});
 const emptyReviewerHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php'),'reviewer-empty'],{encoding:'utf8'});
 const readonlyHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php'),'registration-readonly'],{encoding:'utf8'});
-let senderReady=false,submitted=false;const reviewerActions=[];
+let senderReady=false,submitted=false,stagedBytes=0;const reviewerActions=[];
 const server=http.createServer((req,res)=>{
+  if(req.url?.endsWith('/package-stage')) {
+    res.setHeader('Content-Type','application/json; charset=utf-8');
+    if(req.headers['content-type']==='application/octet-stream') {
+      const chunks=[];req.on('data',chunk=>chunks.push(chunk));
+      req.on('end',()=>{stagedBytes+=Buffer.concat(chunks).length;res.end(JSON.stringify({ok:true,size:stagedBytes}));});
+    } else res.end(JSON.stringify({ok:true,upload_token:'a'.repeat(64)}));
+    return;
+  }
   if(req.url?.endsWith('/review')) {
     res.setHeader('Content-Type','application/json; charset=utf-8');
     const reviewer=req.url.startsWith('/company/tn-review/');
     if(req.method==='POST'){
       const chunks=[];req.on('data',chunk=>chunks.push(chunk));
-      req.on('end',()=>{const sent=Buffer.concat(chunks).toString('latin1');if(reviewer){const action=sent.match(/name="action"\r\n\r\n(archive|restore|return_work)/)?.[1];reviewerActions.push(action);res.end(JSON.stringify({ok:true,status:action==='archive'?'archive':action==='return_work'?'work':'review',version:action==='archive'?2:3}));return;}submitted=sent.includes('name="package"')&&sent.includes('name="snapshot_hash"');res.end(JSON.stringify({ok:true,status:'review',version:1,mail_status:'accepted'}));});
+      req.on('end',()=>{const sent=Buffer.concat(chunks).toString('latin1');if(reviewer){const action=sent.match(/name="action"\r\n\r\n(archive|restore|return_work)/)?.[1];reviewerActions.push(action);res.end(JSON.stringify({ok:true,status:action==='archive'?'archive':action==='return_work'?'work':'review',version:action==='archive'?2:3}));return;}submitted=stagedBytes===4&&sent.includes('name="package_token"')&&sent.includes('name="snapshot_hash"')&&!sent.includes('name="package"');res.end(JSON.stringify({ok:true,status:'review',version:1,mail_status:'accepted'}));});
       return;
     }
     if(reviewer) return res.end(JSON.stringify({ok:true,status:'review',version:1,problems:[{label:'Нет ТН',ids:['271941']}],snapshot_hash:'synthetic'}));
