@@ -30,7 +30,7 @@ final class DocumentGeneratorWarehouseLoadingService
 
         $columns = $legacy->query('SHOW COLUMNS FROM warehouses')->fetchAll(PDO::FETCH_COLUMN);
         $addressColumn = null;
-        foreach (['address', 'warehouse_address', 'adres', 'adres_sklada', 'location_address', 'physical_address', 'name'] as $candidate) {
+        foreach (['full_address', 'address', 'warehouse_address', 'adres', 'adres_sklada', 'location_address', 'physical_address', 'name'] as $candidate) {
             if (in_array($candidate, $columns, true)) { $addressColumn = $candidate; break; }
         }
         if ($addressColumn === null) throw new RuntimeException('В карточке склада не найден адрес для договора перевозчика.');
