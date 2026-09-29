@@ -178,11 +178,13 @@ $catalogsJson = json_encode([
             return;
         }
         var h='<table style="width:100%;border-collapse:collapse"><thead><tr><th style="padding:7px;text-align:left">Выбрать</th><th style="padding:7px;text-align:left">Рейс / событие</th><th style="padding:7px;text-align:right">Свободно</th><th style="padding:7px;text-align:right">В счёт</th></tr></thead><tbody>';
-        data.forEach(function(x){
+        data.slice().sort(function(a,b){
+            return Number(b.trip_business_id||b.route_id||0)-Number(a.trip_business_id||a.route_id||0);
+        }).forEach(function(x){
             var cur=parseFloat(x.current_amount||0), checked=cur>0, val=checked?x.current_amount:x.available;
             var due=x.due_date?' · срок '+esc(x.due_date):' · срок ожидает события';
-            var tripId=x.trip_business_id?' ID #'+esc(x.trip_business_id):'';
-            h+='<tr style="border-top:1px solid var(--border,#ddd)"><td style="padding:7px;text-align:center"><input type="checkbox" class="js-ob-check" style="width:16px;height:16px;min-width:16px;min-height:16px;margin:0;vertical-align:middle" '+(checked?'checked':'')+'></td><td style="padding:7px"><strong>Рейс #'+esc(x.route_id)+tripId+'</strong><div style="font-size:11px;color:var(--muted,#746f66)">'+esc(x.condition)+due+'</div></td><td style="padding:7px;text-align:right;white-space:nowrap">'+esc(x.available)+' ₽</td><td style="padding:7px;text-align:right"><input type="hidden" name="obligation_id[]" value="'+esc(x.id)+'" '+(checked?'':'disabled')+'><input class="field-input js-ob-amount" style="width:120px;text-align:right" name="obligation_amount[]" value="'+esc(val)+'" inputmode="decimal" autocomplete="off" '+(checked?'':'disabled')+'></td></tr>';
+            var tripId=esc(x.trip_business_id||x.route_id);
+            h+='<tr style="border-top:1px solid var(--border,#ddd)"><td style="padding:7px;text-align:center"><input type="checkbox" class="js-ob-check" style="width:16px;height:16px;min-width:16px;min-height:16px;margin:0;vertical-align:middle" '+(checked?'checked':'')+'></td><td style="padding:7px"><strong>#'+tripId+'</strong><div style="font-size:11px;color:var(--muted,#746f66)">'+esc(x.condition)+due+'</div></td><td style="padding:7px;text-align:right;white-space:nowrap">'+esc(x.available)+' ₽</td><td style="padding:7px;text-align:right"><input type="hidden" name="obligation_id[]" value="'+esc(x.id)+'" '+(checked?'':'disabled')+'><input class="field-input js-ob-amount" style="width:120px;text-align:right" name="obligation_amount[]" value="'+esc(val)+'" inputmode="decimal" autocomplete="off" '+(checked?'':'disabled')+'></td></tr>';
         });
         box.innerHTML=h+'</tbody></table>';
         box.querySelectorAll('.js-ob-check').forEach(function(ch){
