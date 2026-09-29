@@ -85,6 +85,7 @@ try{
     $out=FinanceObligationService::fetchCompatibleForInvoice($pdo,'OUTGOING','client',$clientId);$in=FinanceObligationService::fetchCompatibleForInvoice($pdo,'INCOMING','contractor',$contractorId);
     $ok(count($out)===1&&str_contains((string)$out[0]['parent_label'],'Перевозка отходов #500'),'customer obligation must be selectable in outgoing invoice');
     $ok(count($in)===1&&str_contains((string)$in[0]['parent_label'],'Перевозка отходов #500'),'carrier obligation must be selectable in incoming invoice');
+    $ok((int)($out[0]['source_parent_id']??0)===$tripId&&(int)($out[0]['trip_business_id']??0)===500,'invoice obligation must expose distinct internal and visible trip IDs');
     $calendar=FinancePaymentCalendarService::fetchCalendarData($pdo,['role_code'=>'company_owner']);$ok(count(array_filter($calendar,fn($r)=>str_contains((string)($r['route_label']??''),'Перевозка отходов #500')))===2,'Waste rates must be visible in payment calendar');
     $plan=FinancePaymentPlanFactService::fetchPlanFactData($pdo);$ok(count(array_filter($plan,fn($r)=>str_contains((string)($r['source_label']??''),'Перевозка отходов #500')))===2,'Waste rates must be visible in plan-fact');
     $balance=FinanceManagementBalanceService::computeBalance($pdo,'2026-09-30');$ok(count(array_filter(array_merge($balance['receivables'],$balance['payables']),fn($r)=>str_contains((string)($r['name']??''),'Перевозка отходов #500')))===2,'Waste rates must be visible in management balance');

@@ -217,6 +217,7 @@ final class FinanceObligationService
         }
         foreach ($rows as &$row) {
             $type=(string)($row['source_parent_type']??'');$id=(int)($row['source_parent_id']??0);
+            $row['trip_business_id']=$type==='WASTE_TRIP' ? ($wasteMap[$id]??null) : null;
             $row['parent_label']=$type==='WASTE_TRIP'
                 ? 'Перевозка отходов #'.($wasteMap[$id]??$id)
                 : ($type==='LINEAR_ROUTE' ? 'Рейс #'.$id : ($type!=='' ? $type.' #'.$id : 'Платёжное обязательство'));
