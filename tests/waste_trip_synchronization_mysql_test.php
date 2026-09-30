@@ -326,8 +326,10 @@ try {
     $parity=\App\Service\WasteTripParityService::state($pdo,$legacy);
     check($parity['available']===true&&$parity['legacy_count']===2&&$parity['erp_linked_count']===2&&$parity['erp_independent_count']===2,'Parity separates linked and independent flights');
     check(!in_array(501,$parity['missing_ids'],true)&&in_array(500,$parity['missing_ids'],true),'Parity identifies source ID collision');
+    check(\App\Service\WasteTripParityService::attentionCount($pdo,$legacy)===2,'Menu badge counts both missing and extra linked IDs');
     $pdo->exec("DELETE FROM fixture_flights WHERE id=500; INSERT INTO fixture_flights(id,zayavki_ids,status,assigned_manager_id,unload_type) VALUES(226,'700001','completed',3,'SKLAD')");
     check(\App\Service\WasteTripParityService::state($pdo,$legacy)['mismatch']===false,'Equal linked ID sets do not warn even with independent ERP trips');
+    check(\App\Service\WasteTripParityService::attentionCount($pdo,$legacy)===0,'Menu badge is hidden when linked ID sets match');
     $otherVersion=(int)Trips::fetchTrip($pdo,$other)['lock_version'];
     reject(static fn()=>Trips::delete($pdo,$other,$otherVersion+1,$actor),'Stale delete must fail');
     reject(static fn()=>Trips::delete($pdo,$other,$otherVersion,['user_id'=>1,'role_code'=>'logist']),'Only owner can delete');
@@ -336,6 +338,10 @@ try {
     check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_audit_log WHERE waste_trip_id=$other AND action='cancel' AND after_json LIKE '%user_delete%'")->fetchColumn()===1,'Manual deletion is audited');
     $parity=\App\Service\WasteTripParityService::state($pdo,$legacy);
     check($parity['mismatch']===true&&in_array(501,$parity['missing_ids'],true),'Deleted linked trip is reported in parity details');
+    check(\App\Service\WasteTripParityService::attentionCount($pdo,$legacy)===1,'Deleted linked trip adds one menu error');
+    $legacy->failRead=true;
+    check(\App\Service\WasteTripParityService::attentionCount($pdo,$legacy)===1,'Unavailable source leaves an attention marker');
+    $legacy->failRead=false;
     check(Trips::reconcileLegacyTrip($pdo,['business_id'=>501],$actor)==='skipped'&&Trips::fetchTrip($pdo,$other)===null,'Manual synchronization does not restore deleted trip');
     $pdo->exec("INSERT INTO waste_trips (business_id,client_id,responsible_user_id,destination_type,status,planned_start_mode,source_system)
         SELECT 902,client_id,responsible_user_id,destination_type,'cancelled',planned_start_mode,'erp' FROM waste_trips WHERE id=$id");

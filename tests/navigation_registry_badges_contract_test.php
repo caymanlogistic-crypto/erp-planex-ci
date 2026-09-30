@@ -31,6 +31,7 @@ foreach (['bank_attention','cash_attention','closing_documents_problem','linear_
     $must(str_contains($service, "'{$counter}'"), 'NavigationCounterService missing counter ' . $counter);
 }
 $must(str_contains($service, 'currentPlacementProblemSummary($tenant)'), 'FEO utilizer badge must use canonical classifier.');
+$must(str_contains($service, 'WasteTripParityService::attentionCount($tenant)'), 'Departures badge must use the same parity source as the page warning.');
 $must(str_contains($service, "['integrity']['block_count']"), 'FEO cost badge must use existing integrity block count.');
 $must(str_contains($service, "['is_consistent']"), 'FEO placement badge must use existing consistency state.');
 $must(str_contains($service, 'missing_coordinates_count') && str_contains($service, 'invalid_coordinates_count') && str_contains($service, 'unmatched_utilizer_count') && str_contains($service, 'inactive_utilizer_count'), 'FEO map badge must use existing map diagnostics.');
