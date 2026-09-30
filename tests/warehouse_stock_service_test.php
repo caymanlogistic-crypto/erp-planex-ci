@@ -27,7 +27,7 @@ if ($data['issue_count'] !== 0) throw new RuntimeException('Ложное рас�
 $flights[1]['zayavki_ids'] = '123,456';
 $erp[] = ['business_id'=>11,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>456,'snapshot_mass_kg'=>500];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
-if ($data['groups'][1][0]['display_request_ids'] !== ['123','456'] || $data['groups'][1][0]['skipped_request_ids'] !== ['456']) throw new RuntimeException('Не показана неснятая заявка рейса.');
+if ($data['groups'][1][0]['display_request_ids'] !== ['123'] || $data['groups'][1][0]['skipped_request_ids'] !== []) throw new RuntimeException('Показана заявка вне складского движения.');
 if ($data['groups'][1][0]['request_count'] !== 1 || $data['groups'][1][0]['mass_kg'] !== 1500 || $data['issue_count'] !== 0) throw new RuntimeException('Несписанная заявка изменила складской итог или сверку.');
 $erp[0]['legacy_destination_warehouse_id'] = 2;
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
@@ -35,4 +35,18 @@ if ($data['issue_count'] !== 1 || !isset($data['issues'][10])) throw new Runtime
 $erp[] = ['business_id'=>12,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>999,'snapshot_mass_kg'=>100];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 if ($data['issue_count'] !== 2 || !isset($data['issues'][12])) throw new RuntimeException('Не обнаружен лишний складской рейс ERP.');
+
+$flights[] = ['id'=>13,'comment'=>'Начался','status'=>'started','source_warehouse_id'=>1,'destination_warehouse_id'=>null,'actual_start_date'=>'2026-09-03','zayavki_ids'=>'456,999','driver_name'=>'Петров','vehicle'=>'В 456 ВВ'];
+$erp[] = ['business_id'=>13,'status'=>'in_progress','actual_start_date'=>'2026-09-03','legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>456,'snapshot_mass_kg'=>500];
+$erp[] = ['business_id'=>13,'status'=>'in_progress','actual_start_date'=>'2026-09-03','legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>999,'snapshot_mass_kg'=>100];
+$data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
+if ($data['current'][1] !== ['request_count'=>0,'weight_kg'=>0]) throw new RuntimeException('Начатый рейс не списал складской остаток.');
+if ($data['groups'][1][0]['request_ids'] !== ['456'] || !$data['groups'][1][0]['is_derived']) throw new RuntimeException('Рейс должен показывать только списанную складскую заявку.');
+$flights[2]['status'] = 'completed';
+$erp[5]['status'] = 'completed';
+$data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
+if ($data['current'][1]['weight_kg'] !== 0) throw new RuntimeException('Завершённый рейс повторно списал груз.');
+$movements[] = ['id'=>4,'movement_type'=>'issue','warehouse_id'=>1,'flight_id'=>13,'zayavka_id'=>456,'mass_netto'=>'0.500','movement_date'=>'2026-09-03','status'=>'active'];
+$data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
+if ($data['current'][1]['weight_kg'] !== 0 || $data['groups'][1][0]['is_derived']) throw new RuntimeException('Дублируется реальное списание складского журнала.');
 echo "warehouse stock service OK\n";
