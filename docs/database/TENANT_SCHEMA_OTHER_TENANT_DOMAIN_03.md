@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `acdc13e142a7125a73d3a728431e2c9d73ac6125d88abc4764b025544c2a8932`
+**Schema fingerprint:** `1c4cc8e0ba6bb32bfd0b3090e6f0c7b5b6d603e2c2199692351e3875761d36df`
 
 ## `feo_utilizers`
 
@@ -210,6 +210,35 @@
 - `fk_max_message_logs_bot`: (`bot_id`) → `max_bots`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
 - `fk_max_message_logs_chat`: (`chat_config_id`) → `max_chats`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
 
+## `route_executor_review_sends`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `card_id` | `char(36)` | NO | NULL | — | `PRI` |
+| `actor_account_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `responsible_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `stage` | `varchar(16)` | NO | NULL | — | — |
+| `partial_message_id` | `varchar(255)` | YES | NULL | — | — |
+| `partial_mail_status` | `varchar(16)` | YES | NULL | — | — |
+| `final_message_id` | `varchar(255)` | YES | NULL | — | — |
+| `final_mail_status` | `varchar(16)` | YES | NULL | — | — |
+| `partial_at` | `datetime(6)` | YES | NULL | — | — |
+| `final_at` | `datetime(6)` | YES | NULL | — | — |
+| `created_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`card_id`)
+- **INDEX** `idx_route_executor_review_actor` (`actor_account_id`, `updated_at`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
 ## `waste_trip_audit_log`
 
 **Domain:** Other tenant domain<br>
@@ -234,38 +263,3 @@
 ### Physical foreign keys
 
 - `fk_waste_trip_audit_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-
-## `waste_trip_carrier_payments`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `sort_order` | `int unsigned` | NO | `1` | — | — |
-| `amount` | `decimal(12,2)` | NO | NULL | — | — |
-| `payment_type` | `varchar(50)` | NO | NULL | — | — |
-| `payment_method` | `varchar(20)` | NO | `cashless` | — | — |
-| `vat_rate` | `decimal(5,2)` | YES | NULL | — | — |
-| `condition_type` | `varchar(50)` | NO | NULL | — | — |
-| `days_count` | `int` | YES | NULL | — | — |
-| `days_kind` | `varchar(10)` | YES | NULL | — | — |
-| `specific_due_date` | `date` | YES | NULL | — | — |
-| `condition_comment` | `text` | YES | NULL | — | — |
-| `created_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `created_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `updated_by_user_id` | `int unsigned` | YES | NULL | — | — |
-| `updated_by_role` | `varchar(20)` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_waste_trip_carrier_payments_trip` (`waste_trip_id`, `sort_order`, `id`)
-
-### Physical foreign keys
-
-- `fk_waste_trip_carrier_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
