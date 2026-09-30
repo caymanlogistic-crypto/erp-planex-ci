@@ -91,7 +91,7 @@ try {
         try { $localPdo->exec("RENAME TABLE vehicles TO vehicle_units"); } catch (\Exception $renameEx) {}
     }
 
-    $contractorStmt = $localPdo->prepare('SELECT * FROM contractors WHERE id = ?');
+    $contractorStmt = $localPdo->prepare('SELECT * FROM contractors WHERE id = ? AND deleted_at IS NULL');
     $contractorStmt->execute([$contractorId]);
     $contractor = $contractorStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
@@ -194,7 +194,7 @@ try {
             if ($driverIdExisting === '') {
                 $errors['driver_id'] = 'Выберите водителя';
             } else {
-                $checkStmt = $localPdo->prepare('SELECT id, full_name FROM drivers WHERE id = ?');
+                $checkStmt = $localPdo->prepare('SELECT id, full_name FROM drivers WHERE id = ? AND deleted_at IS NULL');
                 $checkStmt->execute([(int)$driverIdExisting]);
                 if (!$checkStmt->fetch(PDO::FETCH_ASSOC)) {
                     $errors['driver_id'] = 'Водитель не найден';
@@ -210,7 +210,7 @@ try {
             if ($vehicleSetIdExisting === '') {
                 $errors['vehicle_set_id'] = 'Выберите транспорт';
             } else {
-                $checkStmt = $localPdo->prepare('SELECT id FROM vehicle_sets WHERE id = ?');
+                $checkStmt = $localPdo->prepare('SELECT id FROM vehicle_sets WHERE id = ? AND deleted_at IS NULL');
                 $checkStmt->execute([(int)$vehicleSetIdExisting]);
                 if (!$checkStmt->fetch(PDO::FETCH_ASSOC)) {
                     $errors['vehicle_set_id'] = 'Транспорт не найден';
@@ -401,7 +401,7 @@ try {
             }
         }
 
-        $existingCrew = $localPdo->prepare('SELECT id FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ?');
+        $existingCrew = $localPdo->prepare('SELECT id FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ? AND deleted_at IS NULL');
         $existingCrew->execute([$contractorId, $blockId]);
         $crewRow = $existingCrew->fetch(PDO::FETCH_ASSOC);
         if ($crewRow) {

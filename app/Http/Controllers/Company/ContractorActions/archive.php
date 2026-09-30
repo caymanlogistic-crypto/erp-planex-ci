@@ -70,7 +70,7 @@ try {
         $localPdo->exec(file_get_contents(base_path('database/migrations-local/006_create_company_crews.sql')));
     }
 
-    $crewCheck = $localPdo->prepare('SELECT COUNT(*) FROM crews WHERE contractor_id = ?');
+    $crewCheck = $localPdo->prepare('SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND deleted_at IS NULL');
     $crewCheck->execute([(int) $id]);
     if ($crewCheck->fetchColumn() > 0) {
         $archiveError = 'Перевозчик участвует в экипажах. Сначала удалите экипажи.';

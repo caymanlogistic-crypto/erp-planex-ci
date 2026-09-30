@@ -43,7 +43,7 @@ try {
         throw new \RuntimeException('Логист может архивировать только записи, созданные им самим.');
     }
 
-    $crewCheck = $localPdo->prepare("SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND status != 'archived'");
+    $crewCheck = $localPdo->prepare("SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND deleted_at IS NULL");
     $crewCheck->execute([(int) $id]);
     if ((int) $crewCheck->fetchColumn() > 0) {
         throw new \RuntimeException('Перевозчик участвует в экипажах. Сначала удалите экипажи.');

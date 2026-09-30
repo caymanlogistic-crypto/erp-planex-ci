@@ -244,12 +244,14 @@ final class DriverService
         catch (\Exception $e) { $localPdo->exec(file_get_contents(base_path('database/migrations-local/018_create_driver_vehicle_blocks.sql'))); }
 
         $stmt = $localPdo->prepare(
-            'SELECT COUNT(*) FROM crews c
-             JOIN driver_vehicle_blocks dvb ON dvb.id = c.driver_vehicle_block_id
-             WHERE dvb.driver_id = ?'
+            'SELECT 1 FROM crews c
+             LEFT JOIN driver_vehicle_blocks dvb ON dvb.id = c.driver_vehicle_block_id
+             LEFT JOIN crew_drivers cd ON cd.crew_id = c.id
+             WHERE c.deleted_at IS NULL AND (dvb.driver_id = ? OR cd.driver_id = ?)
+             LIMIT 1'
         );
-        $stmt->execute([$id]);
-        return $stmt->fetchColumn() > 0;
+        $stmt->execute([$id, $id]);
+        return (bool) $stmt->fetchColumn();
     }
 
     public function getMainPhone(PDO $localPdo, array $phones, array $driver): ?string

@@ -138,10 +138,10 @@ final class ContractorService
         }
 
         if ($inn !== '') {
-            $checkStmt = $localPdo->prepare('SELECT COUNT(*) FROM contractors WHERE inn = ?');
+            $checkStmt = $localPdo->prepare('SELECT COUNT(*) FROM contractors WHERE inn = ? AND deleted_at IS NULL');
             $params = [$inn];
             if ($excludeId !== null) {
-                $checkStmt = $localPdo->prepare('SELECT COUNT(*) FROM contractors WHERE inn = ? AND id != ?');
+                $checkStmt = $localPdo->prepare('SELECT COUNT(*) FROM contractors WHERE inn = ? AND deleted_at IS NULL AND id != ?');
                 $params[] = $excludeId;
             }
             $checkStmt->execute($params);
