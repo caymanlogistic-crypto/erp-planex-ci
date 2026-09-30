@@ -25,8 +25,8 @@
 .wh-registry td.wh-operation{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.35;height:auto}
 .wh-registry th:nth-child(n+8),.wh-registry td:nth-child(n+8){text-align:center!important}
 .wh-registry td.wh-name,.wh-registry td.wh-driver,.wh-registry td.wh-vehicle{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.4;height:auto}
-.wh-registry .wh-traffic.in{color:var(--danger);font-weight:700}
-.wh-registry .wh-traffic.out{color:var(--success);font-weight:700}
+.wh-registry .wh-traffic.in{color:var(--success);font-weight:700}
+.wh-registry .wh-traffic.out{color:var(--danger);font-weight:700}
 .wh-registry .wh-row-error .registry-id{color:var(--danger)}
 .wh-total{margin:0 0 8px}
 .wh-warehouse-table{margin-bottom:14px}

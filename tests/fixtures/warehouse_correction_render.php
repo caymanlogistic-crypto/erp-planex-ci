@@ -16,8 +16,7 @@ $group = static fn(int $id, int $warehouse, string $direction, string $name): ar
     'actual_end_date'=>'2026-09-01','requests'=>[['id'=>(string)(100 + $id),'mass_kg'=>1000,'before_kg'=>0,'after_kg'=>1000]],
 ];
 $skippedGroup = $group(21,2,'out','Второй рейс');
-$skippedGroup['display_request_ids'] = ['121','999'];
-$skippedGroup['skipped_request_ids'] = ['999'];
+$skippedGroup['display_request_ids'] = ['121'];
 $skippedGroup['is_correction'] = true;
 $data = [
     'warehouses'=>[1=>'Иркутск', 2=>'Краснодар'],
