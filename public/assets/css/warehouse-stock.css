@@ -30,6 +30,8 @@
 .wh-registry .wh-row-error .registry-id{color:var(--danger)}
 .wh-total{margin:0 0 8px}
 .wh-warehouse-table{margin-bottom:14px}
+.wh-current-summary{white-space:normal;line-height:1.5}
+.wh-current-request-ids{overflow-wrap:anywhere}
 .wh-registry td.wh-request-cell{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:normal;line-height:1.5;height:auto}
 .wh-request-id{display:inline-block;white-space:nowrap}
 .wh-source{color:var(--text-muted,#625a52);font-size:11px;line-height:1.45;margin-top:10px}
