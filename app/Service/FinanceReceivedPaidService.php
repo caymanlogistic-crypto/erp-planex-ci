@@ -18,7 +18,8 @@ final class FinanceReceivedPaidService
             JOIN clients c ON c.id=wt.client_id
             LEFT JOIN crews cr ON cr.id=wt.route_executor_id
             LEFT JOIN contractors ct ON ct.id=cr.contractor_id
-            WHERE wt.deleted_at IS NULL AND wt.legal_entity_code='planex' AND {$scope['sql']}
+            WHERE wt.deleted_at IS NULL AND wt.legal_entity_code='planex'
+              AND wt.status='completed' AND {$scope['sql']}
             ORDER BY wt.business_id DESC");
         $stmt->execute($scope['params']);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
