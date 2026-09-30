@@ -1,4 +1,4 @@
-<div class="modal-overlay" id="route-executor-create-modal" data-close-on-overlay="0" data-close-on-escape="0">
+<div class="modal-overlay" id="route-executor-create-modal" data-close-on-overlay="0" data-close-on-escape="0" data-workflow-scope="<?= (int)($companyId ?? 0) ?>-<?= (int)($_SESSION['account_id'] ?? 0) ?>">
   <div class="modal route-executor-modal-inner source-create-modal" id="route-executor-create-modal-inner">
     <div class="modal-head">
       <span class="modal-title">Создать исполнителя рейса</span>
