@@ -36,7 +36,7 @@ foreach (['finance_operation_allocations','finance_operations','bank_transaction
 $pdo->exec('CREATE TABLE clients(id INT PRIMARY KEY,name VARCHAR(100))');
 $pdo->exec('CREATE TABLE contractors(id INT PRIMARY KEY,name VARCHAR(100))');
 $pdo->exec('CREATE TABLE crews(id INT PRIMARY KEY,contractor_id INT)');
-$pdo->exec('CREATE TABLE waste_trips(id INT PRIMARY KEY,business_id INT,comment VARCHAR(100),actual_start_date DATE NULL,planned_start_date DATE NULL,planned_start_date_from DATE NULL,actual_end_date DATE NULL,planned_finish_date DATE NULL,client_id INT,route_executor_id INT,legal_entity_code VARCHAR(32),deleted_at DATETIME NULL,created_by_membership_id INT NULL,created_by_user_id INT NULL)');
+$pdo->exec('CREATE TABLE waste_trips(id INT PRIMARY KEY,business_id INT,comment VARCHAR(100),actual_start_date DATE NULL,planned_start_date DATE NULL,planned_start_date_from DATE NULL,actual_end_date DATE NULL,planned_finish_date DATE NULL,client_id INT,route_executor_id INT,legal_entity_code VARCHAR(32),status VARCHAR(32),deleted_at DATETIME NULL,created_by_membership_id INT NULL,created_by_user_id INT NULL)');
 $pdo->exec('CREATE TABLE waste_trip_customer_payments(waste_trip_id INT,amount DECIMAL(12,2))');
 $pdo->exec('CREATE TABLE waste_trip_carrier_payments(waste_trip_id INT,amount DECIMAL(12,2))');
 $pdo->exec('CREATE TABLE finance_obligations(id INT PRIMARY KEY,source_parent_type VARCHAR(30),source_parent_id INT,party_role VARCHAR(20),amount DECIMAL(12,2),status VARCHAR(30),cancelled_at DATETIME NULL)');
@@ -48,7 +48,7 @@ $pdo->exec('CREATE TABLE finance_operation_allocations(operation_id INT,invoice_
 $pdo->exec("INSERT INTO clients VALUES(1,'Клиент')");
 $pdo->exec("INSERT INTO contractors VALUES(2,'Перевозчик')");
 $pdo->exec('INSERT INTO crews VALUES(1,2)');
-$pdo->exec("INSERT INTO waste_trips VALUES(1,310,'Рейс 310',NULL,'2026-09-28',NULL,NULL,NULL,1,1,'planex',NULL,1,1),(2,309,'Рейс 309',NULL,'2026-09-28',NULL,NULL,NULL,1,1,'planex',NULL,1,1),(3,308,'Чужой рейс',NULL,NULL,NULL,NULL,NULL,1,1,'mg_logistic',NULL,1,1)");
+$pdo->exec("INSERT INTO waste_trips VALUES(1,310,'Рейс 310',NULL,'2026-09-28',NULL,NULL,NULL,1,1,'planex','completed',NULL,1,1),(2,309,'Рейс 309',NULL,'2026-09-28',NULL,NULL,NULL,1,1,'planex','completed',NULL,1,1),(3,308,'Чужой рейс',NULL,NULL,NULL,NULL,NULL,1,1,'mg_logistic','completed',NULL,1,1),(4,311,'Рейс в работе',NULL,'2026-09-30',NULL,NULL,NULL,1,1,'planex','in_progress',NULL,1,1)");
 $pdo->exec('INSERT INTO waste_trip_customer_payments VALUES(1,280000),(2,280000),(3,280000)');
 $pdo->exec('INSERT INTO waste_trip_carrier_payments VALUES(1,240000),(2,240000),(3,240000)');
 $pdo->exec("INSERT INTO finance_obligations VALUES(1,'WASTE_TRIP',1,'customer',280000,'planned',NULL),(2,'WASTE_TRIP',2,'customer',280000,'planned',NULL),(3,'WASTE_TRIP',1,'carrier',240000,'planned',NULL)");
@@ -58,7 +58,7 @@ $pdo->exec("INSERT INTO finance_operations VALUES(1,'2026-09-30','POSTED',NULL),
 $pdo->exec("INSERT INTO finance_operation_allocations VALUES(1,1,1,'2026-09-30',60000,NULL),(1,1,2,'2026-09-30',40000,NULL),(2,2,3,'2026-09-30',50000,NULL)");
 $_SESSION['role_code'] = 'company_owner';
 $rows = FinanceReceivedPaidService::fetch($pdo);
-if (count($rows) !== 2 || (int)$rows[0]['business_id'] !== 310) throw new RuntimeException('Only PLANEX trips must appear, newest first.');
+if (count($rows) !== 2 || (int)$rows[0]['business_id'] !== 310) throw new RuntimeException('Only completed PLANEX trips must appear, newest first.');
 if (count($rows[0]['sides']['customer']['invoices']) !== 1 || (string)$rows[0]['sides']['customer']['invoices'][0]['amount'] !== '180000.00') throw new RuntimeException('Shared invoice amount must be scoped to trip.');
 if (count($rows[0]['sides']['customer']['payments']) !== 1 || (string)$rows[0]['sides']['customer']['payments'][0]['amount'] !== '60000.00') throw new RuntimeException('Only posted trip payment must appear.');
 if ((string)$rows[1]['sides']['customer']['invoices'][0]['amount'] !== '100000.00' || (string)$rows[1]['sides']['customer']['payments'][0]['amount'] !== '40000.00') throw new RuntimeException('Second trip must have its own invoice and payment share.');

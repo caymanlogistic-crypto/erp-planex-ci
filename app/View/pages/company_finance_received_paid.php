@@ -81,14 +81,14 @@ $renderSide = static function (array $trip, string $side) use ($money, $moneyCen
 };
 ?>
 <div class="table-card table-card--standard rp-standard-box">
-    <div class="page-head"><div class="page-head-left"><h1 class="page-title">Получено/оплачено</h1><div class="page-summary"><span>Счета и фактические оплаты по рейсам ООО «Планэкс».</span></div></div>
+    <div class="page-head"><div class="page-head-left"><h1 class="page-title">Получено/оплачено</h1><div class="page-summary"><span>Счета и фактические оплаты по рейсам ООО «Планэкс» со статусом «Груз сдан».</span></div></div>
         <div class="page-head-actions"><button type="button" class="btn btn-primary" data-open-modal="invoice-create-modal"<?= $localPdo === null ? ' disabled' : '' ?>>Создать счёт</button></div></div>
     <?php if ($dbError !== null): ?><div class="notice warn"><?= e($dbError) ?></div><?php endif; ?>
     <?php if (!empty($_SESSION['invoice_success'])): ?><div class="notice success"><?= e((string)$_SESSION['invoice_success']) ?></div><?php unset($_SESSION['invoice_success']); endif; ?>
     <div class="rp-filter-panel"><label class="rp-filter-field"><span>Состояние</span><select class="field-select" id="rp-filter"><option value="all">Все рейсы</option><option value="no-invoice">Не все счета выставлены</option><option value="in-progress">Оплата в процессе</option><option value="closed">Расчёты закрыты</option></select></label>
         <label class="rp-filter-field rp-search"><span>Поиск</span><input class="field-input" id="rp-search" placeholder="ID, описание, контрагент или счёт"></label>
         <label class="rp-filter-field"><span>Сортировка</span><select class="field-select" id="rp-sort"><option value="new">По ID (сначала новые)</option><option value="old">По ID (сначала старые)</option></select></label></div>
-    <div class="table-toolbar"><div class="found-label">Найдено: <b id="rp-count"><?= count($trips) ?></b></div><div class="rp-toolbar-note">Только рейсы ООО «Планэкс» · реальные данные</div></div>
+    <div class="table-toolbar"><div class="found-label">Найдено: <b id="rp-count"><?= count($trips) ?></b></div><div class="rp-toolbar-note">Только рейсы ООО «Планэкс» · груз сдан</div></div>
     <div class="rp-trip-list" id="rp-list">
         <?php foreach ($trips as $trip):
             $start = $trip['actual_start_date'] ?: ($trip['planned_start_date'] ?: $trip['planned_start_date_from']);
