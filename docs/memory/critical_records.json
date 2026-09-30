@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "cd409117f44a05e02e04480f85dbbf23f063ed4c",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/cd409117f44a05e02e04480f85dbbf23f063ed4c/tests/waste_trip_closing_finance_mysql_test.php",
+      "verified_sha": "481a83951a561d0976d29bc0c944ea3163233607",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/481a83951a561d0976d29bc0c944ea3163233607/tests/waste_trip_closing_ui_browser_test.mjs",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
