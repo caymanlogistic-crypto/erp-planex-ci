@@ -19,6 +19,13 @@ final class FinanceInvoiceController
         require base_path('app/Http/Controllers/Company/InvoiceActions/index.php');
     }
 
+    public function receivedPaid(): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+        require base_path('app/Http/Controllers/Company/InvoiceActions/received_paid.php');
+    }
+
     public function receivables(): void
     {
         $config = $this->config;

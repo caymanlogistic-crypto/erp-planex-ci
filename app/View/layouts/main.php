@@ -73,6 +73,7 @@ $matchingRulesActive = str_starts_with($requestPath, '/company/finance/settings/
     $managementBalanceActive = str_starts_with($requestPath, '/company/finance/reports/management-balance');
     $paymentPlanFactActive = str_starts_with($requestPath, '/company/finance/reports/payment-plan-fact');
     $invoicesActive = str_starts_with($requestPath, '/company/finance/invoices');
+    $receivedPaidActive = str_starts_with($requestPath, '/company/finance/received-paid');
 $financeDashboardActive = str_starts_with($requestPath, '/company/finance/dashboard');
 $bankStatementSettingsActive = str_starts_with($requestPath, '/company/bank-statement-settings');
 $feoRequestCostsActive = str_starts_with($requestPath, '/company/feo/requests/costs');
@@ -145,6 +146,7 @@ $wideWorkspacePrefixes = [
     '/company/vehicle-sets',
     '/company/finance/operations',
     '/company/finance/invoices',
+    '/company/finance/received-paid',
     '/company/finance/cash',
     '/company/finance/bank-accounts',
     '/company/finance/closing-documents',
@@ -529,6 +531,10 @@ if (empty($topbarCrumbs)) {
                         <path d="M5.5 13H8.5" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
                     </svg>
                     <span class="nav-label">Счета</span>
+                </a>
+                <a class="nav-item<?= $receivedPaidActive ? ' is-active' : '' ?>" href="<?= app_url('/company/finance/received-paid') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><rect x="2.5" y="2.5" width="11" height="11" rx="1" stroke="currentColor" stroke-width="1.3"/><path d="M5 6h6M5 9h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/></svg>
+                    <span class="nav-label">Получено/оплачено</span>
                 </a>
                 <a class="nav-item<?= $ddsCategoriesActive ? ' is-active' : '' ?>" href="<?= app_url('/company/finance/settings/dds-categories') ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
