@@ -35,7 +35,7 @@ try {
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 1);
         await page.locator('[name=show_all]').check({force:true});
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 2);
-        assert.equal(await page.locator('[data-wh-trip="2:21:out"] strong.wh-request-id').innerText(), '999');
+        assert.equal(await page.locator('[data-wh-trip="2:21:out"] .wh-request-cell').innerText(), '121');
         await page.locator('[name=q]').fill('Первый');
         assert.equal(await page.locator('[data-wh-trip]:visible').count(), 1);
         await page.locator('[name=q]').fill('');
