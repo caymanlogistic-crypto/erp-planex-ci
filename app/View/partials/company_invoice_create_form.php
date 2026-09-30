@@ -38,6 +38,7 @@ $catalogsJson = json_encode([
 ?>
 <form action="<?= e($formAction) ?>" method="post" class="invoice-form" data-invoice-id="<?= (int)($invoice['id'] ?? 0) ?>" autocomplete="off">
 <?= csrfField() ?>
+<?php if (!empty($returnTo) && !$isEdit): ?><input type="hidden" name="return_to" value="<?= e((string)$returnTo) ?>"><?php endif; ?>
 <div class="modal-body">
 <?php if (!empty($formError)): ?><div class="form-alert alert-error"><?= e($formError) ?></div><?php endif; ?>
 
@@ -181,7 +182,10 @@ $catalogsJson = json_encode([
         data.slice().sort(function(a,b){
             return Number(b.trip_business_id||b.route_id||0)-Number(a.trip_business_id||a.route_id||0);
         }).forEach(function(x){
-            var cur=parseFloat(x.current_amount||0), checked=cur>0, val=checked?x.current_amount:x.available;
+            var cur=parseFloat(x.current_amount||0);
+            var preferred=form.dataset.preferredTripId || '';
+            var checked=cur>0 || (preferred !== '' && String(x.trip_business_id||'')===preferred && parseFloat(x.available||0)>0);
+            var val=cur>0 ? x.current_amount : x.available;
             var due=x.due_date?' · срок '+esc(x.due_date):' · срок ожидает события';
             var tripId=esc(x.trip_business_id||x.route_id);
             h+='<tr style="border-top:1px solid var(--border,#ddd)"><td style="padding:7px;text-align:center"><input type="checkbox" class="js-ob-check" style="width:16px;height:16px;min-width:16px;min-height:16px;margin:0;vertical-align:middle" '+(checked?'checked':'')+'></td><td style="padding:7px"><strong>#'+tripId+'</strong><div style="font-size:11px;color:var(--muted,#746f66)">'+esc(x.condition)+due+'</div></td><td style="padding:7px;text-align:right;white-space:nowrap">'+esc(x.available)+' ₽</td><td style="padding:7px;text-align:right"><input type="hidden" name="obligation_id[]" value="'+esc(x.id)+'" '+(checked?'':'disabled')+'><input class="field-input js-ob-amount" style="width:120px;text-align:right" name="obligation_amount[]" value="'+esc(val)+'" inputmode="decimal" autocomplete="off" '+(checked?'':'disabled')+'></td></tr>';

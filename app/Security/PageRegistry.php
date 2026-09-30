@@ -83,6 +83,7 @@ final class PageRegistry
             self::definition('company.finance.closing_documents', 'Закрывающие документы', 'Финансы', '', 320, '/company/finance/closing-documents', badgeProvider: 'closing_documents_problem'),
             self::definition('company.finance.cash', 'Касса', 'Финансы', '', 330, '/company/finance/cash', navVisible: false, badgeProvider: 'cash_attention'),
             self::definition('company.finance.invoices', 'Счета', 'Финансы', '', 340, '/company/finance/invoices'),
+            self::definition('company.finance.received_paid', 'Получено/оплачено', 'Финансы', '', 345, '/company/finance/received-paid', grantable: false),
             self::definition('company.finance.operations', 'Операции', 'Финансы', '', 350, '/company/finance/operations', navVisible: false),
             self::definition('company.finance.dds_categories', 'Финансовая структура', 'Финансы', 'Настройки', 360, '/company/finance/settings/dds-categories'),
             self::definition('company.finance.payment_calendar', 'Платёжный календарь', 'Финансы', 'Отчёты', 370, '/company/finance/payment-calendar'),

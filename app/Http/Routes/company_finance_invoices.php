@@ -10,6 +10,8 @@ require_once base_path('app/Http/Controllers/Company/FinanceInvoiceController.ph
 $controller = new \App\Http\Controllers\Company\FinanceInvoiceController($config, $db);
 $invoicesPage = 'company.finance.invoices';
 
+$router->get('/company/finance/received-paid', [$controller, 'receivedPaid'], 'company.finance.received_paid');
+
 $router->get('/company/finance/invoices', [$controller, 'index'], $invoicesPage);
 $router->get('/company/finance/receivables', [$controller, 'receivables'], $invoicesPage);
 $router->get('/company/finance/payables', [$controller, 'payables'], $invoicesPage);

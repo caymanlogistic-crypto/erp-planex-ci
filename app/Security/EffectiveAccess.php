@@ -101,6 +101,9 @@ final class EffectiveAccess
 
     public function canAccessPage(string $pageKey): bool
     {
+        if ($pageKey === 'company.finance.received_paid') {
+            $pageKey = 'company.finance.invoices';
+        }
         return $this->active && ($this->pagePermissions[$pageKey] ?? false) === true;
     }
 

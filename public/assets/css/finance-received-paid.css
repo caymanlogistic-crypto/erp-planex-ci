@@ -1,0 +1,81 @@
+.rp-nav-link.is-active{background:var(--nav-active-bg,#3a2b1d);color:var(--nav-active-text,#d4a66a)}
+.table-card.table-card--standard.rp-standard-box{display:block;width:100%;max-width:1690px;min-width:0;margin-inline:auto}
+.rp-standard-box>.page-head{height:auto;min-height:58px;margin:0;border:0;border-bottom:1px solid var(--line-soft);padding:10px 14px}
+.rp-standard-box>.rp-filter-panel{margin:0;border:0;border-bottom:1px solid var(--line-soft)}
+.rp-filter-panel{display:flex;align-items:end;gap:8px;flex-wrap:wrap;padding:11px 12px;margin-bottom:12px;background:var(--surface,#faf9f5);border:1px solid var(--border,#d6d1c8)}
+.rp-filter-field{display:flex;flex-direction:column;gap:4px;min-width:180px;font-size:11px;color:var(--muted,#746f66)}
+.rp-filter-field .field-select,.rp-filter-field .field-input{height:30px;min-height:30px;font-size:12px}
+.rp-filter-field.rp-search{flex:1 1 260px}
+.rp-toolbar-note{font-size:11px;color:var(--muted,#746f66)}
+.rp-trip-list{min-width:0}
+.rp-trip-item{min-width:0;border-bottom:1px solid var(--line-soft)}
+.rp-trip-item:last-child{border-bottom:0}
+.rp-trip-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 13px;background:var(--surface-form,#f5f2ec);border-bottom:1px solid var(--line-soft)}
+.rp-trip-name{display:flex;align-items:baseline;gap:10px;min-width:0}
+.rp-trip-id{font-size:12px;font-weight:800;white-space:nowrap;color:var(--accent,#855d34)}
+.rp-trip-name h2{margin:0;min-width:0;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
+.rp-trip-dates{display:flex;gap:18px;min-width:0}
+.rp-trip-dates>div{display:flex;gap:6px;align-items:baseline}
+.rp-trip-dates span,.rp-side-kicker,.rp-side-rate span{font-size:10px;color:var(--muted,#746f66)}
+.rp-trip-dates strong{font-size:11px;white-space:nowrap}
+.rp-trip-sides{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;min-width:0;padding:10px 12px 14px}
+.rp-side-card{min-width:0;border:1px solid var(--line-soft);background:var(--surface-strong,#fff)}
+.rp-side-head{display:flex;justify-content:space-between;gap:10px;align-items:start;min-width:0;min-height:55px;padding:9px 11px;background:var(--surface-form,#f5f2ec);border-bottom:1px solid var(--line-soft)}
+.rp-side-party{min-width:0}
+.rp-side-party h3{margin:2px 0 0;font-size:11px;line-height:1.3;overflow-wrap:anywhere}
+.rp-side-rate{display:flex;flex-direction:column;align-items:end;gap:2px;flex:0 0 auto}
+.rp-side-rate strong{font-size:12px;white-space:nowrap}
+.rp-side-details{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));min-width:0}
+.rp-side-detail{min-width:0;padding:10px 11px}
+.rp-side-detail+.rp-side-detail{border-left:1px solid var(--line-soft)}
+.rp-side-detail h4{margin:0 0 8px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--muted,#746f66)}
+.rp-invoice-list,.rp-payment-list{display:flex;flex-direction:column;align-items:flex-start;gap:5px;min-height:74px}
+.rp-invoice-link,.rp-add-link{border:0;background:none;padding:0;color:var(--accent,#855d34);font:inherit;text-align:left;text-decoration:underline;cursor:pointer}
+.rp-invoice-link{font-weight:700}
+.rp-add-link{margin-top:auto;font-size:11px;text-decoration:none}
+.rp-invoice-link:hover,.rp-add-link:hover{text-decoration:underline}
+.rp-invoice-link:focus-visible,.rp-add-link:focus-visible{outline:2px solid var(--accent,#855d34);outline-offset:2px}
+.rp-invoice-meta{font-size:11px;color:var(--muted,#746f66)}
+.rp-unbilled{font-size:10px;color:var(--muted,#746f66)}
+.rp-invoice-list .badge{font-size:10px;white-space:nowrap}
+.rp-payment-line,.rp-payment-total{display:flex;align-items:baseline;justify-content:space-between;gap:8px;width:100%;min-width:0}
+.rp-payment-line span,.rp-payment-total span{min-width:0;overflow-wrap:anywhere}
+.rp-payment-line strong{white-space:nowrap}
+.rp-payment-line strong{font-weight:700}
+.rp-payment-total{margin-top:auto;padding-top:6px;border-top:1px solid var(--border,#d6d1c8);font-size:10px;color:var(--muted,#746f66);flex-direction:column;gap:2px}
+.rp-empty{color:var(--muted,#746f66);font-weight:400}
+.rp-empty-state{text-align:center;padding:30px!important;color:var(--muted,#746f66)}
+#rp-modal{z-index:1100}
+#rp-modal.is-open{display:flex}
+#rp-modal .invoice-form{display:flex;flex-direction:column;flex:1;min-height:0}
+.rp-modal-body{max-height:min(70vh,680px);overflow:auto}
+.rp-modal-body .field-input,.rp-modal-body .field-select{width:100%;min-height:34px}
+.rp-modal-body .field-textarea{width:100%}
+.rp-obligation{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px;border:1px solid var(--border,#d6d1c8);background:var(--surface,#fff);font-size:12px}
+.rp-obligation span{white-space:nowrap}
+.rp-sandbox-note{font-size:11px;color:var(--muted,#746f66)}
+.rp-view-grid{display:grid;grid-template-columns:150px minmax(0,1fr);gap:9px 12px}
+.rp-view-grid>span{color:var(--muted,#746f66)}
+.rp-view-payment{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border,#d6d1c8)}
+.rp-success{margin:4px 0 0}
+@media(max-width:700px){
+  .content .page-head{display:flex;flex-direction:column;align-items:stretch;gap:8px}
+  .content .page-head-actions{justify-content:flex-start}
+  .rp-filter-panel{display:grid;grid-template-columns:1fr;gap:8px}
+  .rp-filter-field,.rp-filter-field.rp-search{min-width:0;width:100%}
+  .rp-toolbar-note{display:none}
+  .rp-side-head{min-height:0}
+  .rp-side-details{grid-template-columns:1fr}
+  .rp-side-detail+.rp-side-detail{border-left:0;border-top:1px solid var(--line-soft)}
+  .rp-obligation{align-items:flex-start;flex-direction:column}
+  .rp-obligation span{white-space:normal}
+  .rp-view-grid{grid-template-columns:110px minmax(0,1fr)}
+  .rp-sandbox-note{display:none}
+  #rp-modal{padding:8px}
+  #rp-modal .modal{width:100%;max-width:100%;max-height:calc(100dvh - 16px)}
+  #rp-modal .form-grid-2,#rp-modal .form-grid-3{grid-template-columns:minmax(0,1fr)}
+  #rp-modal .modal-body{max-height:none;min-height:0}
+}
+@media(max-width:1100px){.rp-trip-sides{grid-template-columns:1fr}.rp-trip-head{grid-template-columns:1fr;gap:5px}.rp-trip-dates{gap:14px;flex-wrap:wrap}.rp-trip-dates>div{flex-wrap:wrap}}
+@media(max-width:900px){.rp-side-details{grid-template-columns:1fr}.rp-side-detail+.rp-side-detail{border-left:0;border-top:1px solid var(--line-soft)}}
+@media(min-width:701px) and (max-width:1023px){.app{min-width:0;grid-template-columns:var(--sidebar-w) minmax(0,1fr)}.content{min-width:0}}
