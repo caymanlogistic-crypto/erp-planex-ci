@@ -34,6 +34,21 @@ $tripStatus = static function (array $trip) use ($sideTotal, $moneyCents): strin
     }
     return 'closed';
 };
+$paymentStatus = static function (array $trip) use ($sideTotal, $moneyCents): string {
+    $customer = $trip['sides']['customer'];
+    $carrier = $trip['sides']['carrier'];
+    $customerPaid = $sideTotal($customer['payments']);
+    $carrierPaid = $sideTotal($carrier['payments']);
+    if ($customerPaid <= 0 && $carrierPaid <= 0) return 'unpaid';
+
+    $customerRate = $customer['rate'] === null ? null : $moneyCents($customer['rate']);
+    $carrierRate = $carrier['rate'] === null ? null : $moneyCents($carrier['rate']);
+    if (($customerRate !== null && $customerRate > $customerPaid)
+        || ($carrierRate !== null && $carrierRate > $carrierPaid)) return 'underpaid';
+    if ($customerRate !== null && $carrierRate !== null
+        && ($customerRate > 0 || $carrierRate > 0)) return 'paid';
+    return 'unknown-rate';
+};
 $renderSide = static function (array $trip, string $side) use ($money, $moneyCents, $date, $sideTotal): void {
     $block = $trip['sides'][$side];
     $customer = $side === 'customer';
@@ -86,6 +101,7 @@ $renderSide = static function (array $trip, string $side) use ($money, $moneyCen
     <?php if ($dbError !== null): ?><div class="notice warn"><?= e($dbError) ?></div><?php endif; ?>
     <?php if (!empty($_SESSION['invoice_success'])): ?><div class="notice success"><?= e((string)$_SESSION['invoice_success']) ?></div><?php unset($_SESSION['invoice_success']); endif; ?>
     <div class="rp-filter-panel"><label class="rp-filter-field"><span>Состояние</span><select class="field-select" id="rp-filter"><option value="all">Все рейсы</option><option value="no-invoice">Не все счета выставлены</option><option value="in-progress">Оплата в процессе</option><option value="closed">Расчёты закрыты</option></select></label>
+        <label class="rp-filter-field rp-payment-filter"><span>Оплаты по рейсу</span><select class="field-select" id="rp-payment-filter" title="Фактические оплаты сравниваются со ставками заказчика и перевозчика"><option value="all">Все оплаты</option><option value="paid">Обе стороны оплачены полностью</option><option value="underpaid">Есть недоплата</option><option value="unpaid">Нет оплат с обеих сторон</option><option value="unknown-rate">Не хватает ставки для сравнения</option></select></label>
         <label class="rp-filter-field rp-search"><span>Поиск</span><input class="field-input" id="rp-search" placeholder="ID, описание, контрагент или счёт"></label>
         <label class="rp-filter-field"><span>Сортировка</span><select class="field-select" id="rp-sort"><option value="new">По ID (сначала новые)</option><option value="old">По ID (сначала старые)</option></select></label></div>
     <div class="table-toolbar"><div class="found-label">Найдено: <b id="rp-count"><?= count($trips) ?></b></div><div class="rp-toolbar-note">Только рейсы ООО «Планэкс» · груз сдан</div></div>
@@ -95,7 +111,7 @@ $renderSide = static function (array $trip, string $side) use ($money, $moneyCen
             $end = $trip['actual_end_date'] ?: $trip['planned_finish_date'];
             $search = '#' . $trip['business_id'] . ' ' . $trip['comment'] . ' ' . $trip['client_name'] . ' ' . $trip['carrier_name'] . ' ' . implode(' ', array_map(static fn(array $i): string => (string)$i['number'], array_merge($trip['sides']['customer']['invoices'], $trip['sides']['carrier']['invoices'])));
             ?>
-        <article class="rp-trip-item" data-id="<?= (int)$trip['business_id'] ?>" data-status="<?= e($tripStatus($trip)) ?>" data-search="<?= e(mb_strtolower($search, 'UTF-8')) ?>">
+        <article class="rp-trip-item" data-id="<?= (int)$trip['business_id'] ?>" data-status="<?= e($tripStatus($trip)) ?>" data-payment-status="<?= e($paymentStatus($trip)) ?>" data-search="<?= e(mb_strtolower($search, 'UTF-8')) ?>">
             <div class="rp-trip-head"><div class="rp-trip-name"><span class="rp-trip-id">#<?= (int)$trip['business_id'] ?></span><h2><?= e(trim((string)$trip['comment']) ?: 'Без описания') ?></h2></div>
                 <div class="rp-trip-dates"><div><span>Начало рейса</span><strong><?= e($date($start)) ?></strong></div><div><span>Окончание рейса</span><strong><?= e($date($end)) ?></strong></div></div></div>
             <div class="rp-trip-sides"><?php $renderSide($trip, 'customer'); $renderSide($trip, 'carrier'); ?></div>
@@ -116,9 +132,21 @@ $renderSide = static function (array $trip, string $side) use ($money, $moneyCen
 <div id="invoice-view-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1"><div class="modal modal-lg"><div class="modal-head"><span class="modal-title">Счёт</span><button type="button" class="modal-close" data-close-modal="invoice-view-modal">&times;</button></div><div class="modal-body" id="invoice-view-modal-body"></div></div></div>
 <script>
 (function(){
-  const items=[...document.querySelectorAll('.rp-trip-item')], filter=document.getElementById('rp-filter'), search=document.getElementById('rp-search'), sort=document.getElementById('rp-sort'), list=document.getElementById('rp-list');
-  function render(){const q=search.value.trim().toLocaleLowerCase('ru');let visible=0;items.sort((a,b)=>sort.value==='old'?Number(a.dataset.id)-Number(b.dataset.id):Number(b.dataset.id)-Number(a.dataset.id)).forEach(item=>{item.hidden=(filter.value!=='all'&&item.dataset.status!==filter.value)||(q&&!item.dataset.search.includes(q));if(!item.hidden)visible++;list.insertBefore(item,document.getElementById('rp-empty'));});document.getElementById('rp-count').textContent=visible;document.getElementById('rp-empty').hidden=visible>0;}
-  [filter,sort].forEach(el=>el.addEventListener('change',render));search.addEventListener('input',render);
+  const items=[...document.querySelectorAll('.rp-trip-item')], filter=document.getElementById('rp-filter'), paymentFilter=document.getElementById('rp-payment-filter'), search=document.getElementById('rp-search'), sort=document.getElementById('rp-sort'), list=document.getElementById('rp-list');
+  function render(){
+    const q=search.value.trim().toLocaleLowerCase('ru');
+    let visible=0;
+    items.sort((a,b)=>sort.value==='old'?Number(a.dataset.id)-Number(b.dataset.id):Number(b.dataset.id)-Number(a.dataset.id)).forEach(item=>{
+      item.hidden=(filter.value!=='all'&&item.dataset.status!==filter.value)
+        ||(paymentFilter.value!=='all'&&item.dataset.paymentStatus!==paymentFilter.value)
+        ||(q&&!item.dataset.search.includes(q));
+      if(!item.hidden)visible++;
+      list.insertBefore(item,document.getElementById('rp-empty'));
+    });
+    document.getElementById('rp-count').textContent=visible;
+    document.getElementById('rp-empty').hidden=visible>0;
+  }
+  [filter,paymentFilter,sort].forEach(el=>el.addEventListener('change',render));search.addEventListener('input',render);
   document.querySelector('[data-open-modal="invoice-create-modal"]')?.addEventListener('click',()=>{const form=document.querySelector('#invoice-create-modal form.invoice-form');if(form)delete form.dataset.preferredTripId;});
   document.querySelectorAll('[data-create-trip]').forEach(button=>button.addEventListener('click',()=>{const form=document.querySelector('#invoice-create-modal form.invoice-form');form.dataset.preferredTripId=button.dataset.createTrip;const direction=form.querySelector('.js-inv-direction');direction.value=button.dataset.createDirection;direction.dispatchEvent(new Event('change',{bubbles:true}));const party=form.querySelector('.js-inv-cparty-select');party.value=button.dataset.createParty;party.dispatchEvent(new Event('change',{bubbles:true}));window.openModal('invoice-create-modal');}));
   document.querySelectorAll('[data-view-invoice]').forEach(button=>button.addEventListener('click',()=>{const body=document.getElementById('invoice-view-modal-body');body.textContent='Загрузка…';window.openModal('invoice-view-modal');fetch(<?= json_encode(app_url('/company/finance/invoices/'), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>+encodeURIComponent(button.dataset.viewInvoice)+'/modal-view').then(response=>{if(!response.ok)throw new Error('Счёт недоступен');return response.text()}).then(html=>body.innerHTML=html).catch(error=>body.textContent=error.message);}));

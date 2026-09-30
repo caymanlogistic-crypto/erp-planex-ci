@@ -4,6 +4,7 @@
 .rp-standard-box>.rp-filter-panel{margin:0;border:0;border-bottom:1px solid var(--line-soft)}
 .rp-filter-panel{display:flex;align-items:end;gap:8px;flex-wrap:wrap;padding:11px 12px;margin-bottom:12px;background:var(--surface,#faf9f5);border:1px solid var(--border,#d6d1c8)}
 .rp-filter-field{display:flex;flex-direction:column;gap:4px;min-width:180px;font-size:11px;color:var(--muted,#746f66)}
+.rp-filter-field.rp-payment-filter{flex:0 1 250px;min-width:200px}
 .rp-filter-field .field-select,.rp-filter-field .field-input{height:30px;min-height:30px;font-size:12px}
 .rp-filter-field.rp-search{flex:1 1 260px}
 .rp-toolbar-note{font-size:11px;color:var(--muted,#746f66)}
@@ -62,7 +63,7 @@
   .content .page-head{display:flex;flex-direction:column;align-items:stretch;gap:8px}
   .content .page-head-actions{justify-content:flex-start}
   .rp-filter-panel{display:grid;grid-template-columns:1fr;gap:8px}
-  .rp-filter-field,.rp-filter-field.rp-search{min-width:0;width:100%}
+  .rp-filter-field,.rp-filter-field.rp-search,.rp-filter-field.rp-payment-filter{min-width:0;width:100%}
   .rp-toolbar-note{display:none}
   .rp-side-head{min-height:0}
   .rp-side-details{grid-template-columns:1fr}

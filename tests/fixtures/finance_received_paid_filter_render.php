@@ -1,0 +1,51 @@
+<?php
+
+declare(strict_types=1);
+
+function e(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
+function app_url(string $path): string { return '/erpv2' . $path; }
+
+$payment = static fn(int $amount, int $invoiceId = 0): array => [
+    'amount' => (string)$amount,
+    'payment_date' => '2026-09-30',
+    'invoice_id' => $invoiceId,
+];
+$invoice = static fn(int $id, int $amount): array => [
+    'id' => $id,
+    'number' => (string)$id,
+    'invoice_date' => '2026-09-29',
+    'amount' => (string)$amount,
+];
+$side = static fn(?int $rate, array $payments = [], array $invoices = []): array => [
+    'rate' => $rate === null ? null : (string)$rate,
+    'payments' => $payments,
+    'invoices' => $invoices,
+];
+$trip = static fn(int $id, array $customer, array $carrier): array => [
+    'business_id' => $id,
+    'comment' => 'Рейс ' . $id,
+    'actual_start_date' => '2026-09-28',
+    'planned_start_date' => null,
+    'planned_start_date_from' => null,
+    'actual_end_date' => '2026-09-29',
+    'planned_finish_date' => null,
+    'client_id' => 1,
+    'client_name' => 'Заказчик',
+    'carrier_id' => 2,
+    'carrier_name' => 'Перевозчик',
+    'sides' => ['customer' => $customer, 'carrier' => $carrier],
+];
+$trips = array_reverse([
+    $trip(101, $side(100, [$payment(100, 1)], [$invoice(1, 100)]), $side(80, [$payment(80, 2)], [$invoice(2, 80)])),
+    $trip(102, $side(100, [$payment(100)]), $side(80, [$payment(20)])),
+    $trip(103, $side(100), $side(80)),
+    $trip(104, $side(100, [$payment(100)]), $side(null)),
+    $trip(105, $side(0), $side(80, [$payment(80)])),
+]);
+$localPdo = null;
+$dbError = null;
+$_SESSION = [];
+
+echo '<!doctype html><html lang="ru"><head><meta charset="utf-8"></head><body>';
+require __DIR__ . '/../../app/View/pages/company_finance_received_paid.php';
+echo '</body></html>';
