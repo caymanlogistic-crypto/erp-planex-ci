@@ -36,10 +36,12 @@ final class FinanceReceivedPaidService
         }
         unset($row);
 
-        // Preserved v3 rates live in obligations; older trips use the source payment terms.
+        // Customer rates may be preserved in obligations; carrier cost always comes
+        // from the trip's "Себес · оплата подрядчику" payment rows.
         $rates = $pdo->prepare("SELECT source_parent_id AS trip_id, party_role, SUM(amount) AS amount
             FROM finance_obligations WHERE source_parent_type='WASTE_TRIP'
-              AND cancelled_at IS NULL AND status<>'cancelled' AND source_parent_id IN ($marks)
+              AND party_role='customer' AND cancelled_at IS NULL
+              AND status<>'cancelled' AND source_parent_id IN ($marks)
             GROUP BY source_parent_id,party_role");
         $rates->execute($ids);
         foreach ($rates->fetchAll(PDO::FETCH_ASSOC) as $rate) {
@@ -49,16 +51,16 @@ final class FinanceReceivedPaidService
                 $rows[$byId[$tripId]]['sides'][$side]['rate'] = (string)$rate['amount'];
             }
         }
-        $fallback = $pdo->prepare("SELECT waste_trip_id AS trip_id,'customer' AS party_role,SUM(amount) AS amount
+        $sourceRates = $pdo->prepare("SELECT waste_trip_id AS trip_id,'customer' AS party_role,SUM(amount) AS amount
             FROM waste_trip_customer_payments WHERE waste_trip_id IN ($marks) GROUP BY waste_trip_id
             UNION ALL
             SELECT waste_trip_id AS trip_id,'carrier' AS party_role,SUM(amount) AS amount
             FROM waste_trip_carrier_payments WHERE waste_trip_id IN ($marks) GROUP BY waste_trip_id");
-        $fallback->execute(array_merge($ids, $ids));
-        foreach ($fallback->fetchAll(PDO::FETCH_ASSOC) as $rate) {
+        $sourceRates->execute(array_merge($ids, $ids));
+        foreach ($sourceRates->fetchAll(PDO::FETCH_ASSOC) as $rate) {
             $index = $byId[(int)$rate['trip_id']] ?? null;
             $side = (string)$rate['party_role'];
-            if ($index !== null && $rows[$index]['sides'][$side]['rate'] === null) {
+            if ($index !== null && ($side === 'carrier' || $rows[$index]['sides'][$side]['rate'] === null)) {
                 $rows[$index]['sides'][$side]['rate'] = (string)$rate['amount'];
             }
         }
