@@ -10,6 +10,13 @@ use App\Service\RouteExecutorReviewEmail;
 use App\Service\RouteExecutorReviewPackage;
 
 $assert=static function(bool $condition,string $message):void { if (!$condition) throw new RuntimeException($message); };
+$routeSource=(string)file_get_contents(__DIR__.'/../app/Http/Routes/company_route_executors.php');
+foreach (['EmployeeMailProfileService.php','DocumentMailTransport.php','MaxEventCatalog.php',
+    'MaxMessagingService.php','MaxEventNotificationService.php','RouteExecutorReviewRecipientService.php',
+    'RouteExecutorReviewPackage.php','RouteExecutorReviewEmail.php'] as $dependency) {
+    $assert(str_contains($routeSource,"require_once base_path('app/Service/{$dependency}')"),
+        "Review route must load {$dependency} before handling a send");
+}
 $control=static fn(string $form,string $name,string $value):array=>['formId'=>'lab-'.$form.'-form','name'=>$name,'value'=>$value,'label'=>$name,'type'=>'text'];
 $contract=[
     $control('contractor','name','ИП Иванов Иван Иванович'),$control('contractor','inn','123456789012'),

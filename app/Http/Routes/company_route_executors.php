@@ -1,6 +1,14 @@
 <?php
 
 require_once base_path('app/Http/Controllers/Company/RouteExecutorController.php');
+require_once base_path('app/Service/EmployeeMailProfileService.php');
+require_once base_path('app/Service/DocumentMailTransport.php');
+require_once base_path('app/Service/MaxEventCatalog.php');
+require_once base_path('app/Service/MaxMessagingService.php');
+require_once base_path('app/Service/MaxEventNotificationService.php');
+require_once base_path('app/Service/RouteExecutorReviewRecipientService.php');
+require_once base_path('app/Service/RouteExecutorReviewPackage.php');
+require_once base_path('app/Service/RouteExecutorReviewEmail.php');
 require_once base_path('app/Http/Controllers/Company/RouteExecutorReviewController.php');
 
 $controller = new \App\Http\Controllers\Company\RouteExecutorController($config, $db);
