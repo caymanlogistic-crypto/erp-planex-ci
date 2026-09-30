@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "4c3aee009fb2eb56381b32552635639d793238e8",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/4c3aee009fb2eb56381b32552635639d793238e8/tests/finance_received_paid_behavioral_test.php",
+      "verified_sha": "19d71fa61a73c289d9571e30b3da2ed65518b60f",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/19d71fa61a73c289d9571e30b3da2ed65518b60f/tests/roles_access_route_registry_test.py",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -267,8 +267,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "4c3aee009fb2eb56381b32552635639d793238e8",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/4c3aee009fb2eb56381b32552635639d793238e8/tests/employee_mail_browser_test.mjs",
+      "verified_sha": "19d71fa61a73c289d9571e30b3da2ed65518b60f",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/19d71fa61a73c289d9571e30b3da2ed65518b60f/tests/employee_mail_browser_test.mjs",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",
