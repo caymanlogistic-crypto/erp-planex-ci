@@ -10,6 +10,11 @@ require_once __DIR__ . '/../app/Service/FinanceReceivedPaidService.php';
 use App\Service\FinanceReceivedPaidService;
 use App\Security\EffectiveAccess;
 
+$invoiceRoutes = file_get_contents(__DIR__ . '/../app/Http/Routes/company_finance_invoices.php');
+if (!str_contains($invoiceRoutes, "require_once base_path('app/Service/FinanceReceivedPaidService.php')")) {
+    throw new RuntimeException('The production route must load the received/paid service.');
+}
+
 $invoiceAccess = EffectiveAccess::member(1, 1, ['company.finance.invoices' => true], ['waste_trip' => 'all']);
 if (!$invoiceAccess->canAccessPage('company.finance.received_paid')) throw new RuntimeException('Existing invoice permission must allow the new page.');
 $noInvoiceAccess = EffectiveAccess::member(1, 1, [], ['waste_trip' => 'all']);
