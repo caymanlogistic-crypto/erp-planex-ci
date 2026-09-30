@@ -7,6 +7,14 @@ use Throwable;
 
 final class WasteTripParityService
 {
+    public static function attentionCount(PDO $tenant, ?PDO $legacyPdo = null): int
+    {
+        $state = self::state($tenant, $legacyPdo);
+        if (empty($state['available'])) return 1;
+
+        return count($state['missing_ids']) + count($state['extra_ids']);
+    }
+
     public static function state(PDO $tenant, ?PDO $legacyPdo = null): array
     {
         try {

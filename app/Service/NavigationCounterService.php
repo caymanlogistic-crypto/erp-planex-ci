@@ -103,10 +103,15 @@ final class NavigationCounterService
             $counters['linear_trips_problem'] = 0;
         }
 
-        // Reserved for the sibling Trips submenu. Keeping it explicit makes the
-        // parent counter a true sum of child counters instead of a hard-coded
-        // alias to the Linear Trips value.
-        $counters['departures_problem'] = 0;
+        try {
+            if (!class_exists(WasteTripLegacySourceService::class)) require_once __DIR__.'/WasteTripLegacySourceService.php';
+            if (!class_exists(WasteTripService::class)) require_once __DIR__.'/WasteTripService.php';
+            if (!class_exists(WasteTripParityService::class)) require_once __DIR__.'/WasteTripParityService.php';
+            $counters['departures_problem'] = WasteTripParityService::attentionCount($tenant);
+        } catch (Throwable $error) {
+            error_log('waste trip navigation count failed: '.$error->getMessage());
+            $counters['departures_problem'] = 1;
+        }
 
         try {
             if (!class_exists(WasteTripLegacySourceService::class)) require_once __DIR__.'/WasteTripLegacySourceService.php';
