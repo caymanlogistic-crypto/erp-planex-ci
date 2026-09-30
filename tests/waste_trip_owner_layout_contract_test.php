@@ -17,6 +17,8 @@ if(!str_contains($edit,'class="btn btn-ghost" data-waste-cancel-edit="<?=$tripId
 echo "WASTE_TRIP_OWNER_LAYOUT=PASS\n";
 
 if(!str_contains($page,'Синхронизация рейсов со старой БД')||!str_contains($page,"app_url('/company/trips/departures/synchronize')")||!str_contains($page,'csrfField()'))$fail('sync button and CSRF required');
+if(!str_contains($page,'data-waste-trip-parity-warning')||!str_contains($page,'missing_ids')||!str_contains($page,'extra_ids'))$fail('registry parity warning/details missing');
+if(!str_contains($routes,"/company/trips/departures/{id}/delete")||!str_contains($source,'public function deleteSubmit(')||!str_contains($view,'class="btn btn-danger">Удалить</button>'))$fail('trip delete route, action or modal control missing');
 if(str_contains($routes,'departures/legacy')||str_contains($source,'materializeSubmit')||str_contains($source,'legacyIndex'))$fail('manual import remains');
 
 require __DIR__.'/waste_trip_registry_render_test.php';

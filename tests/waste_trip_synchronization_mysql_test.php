@@ -36,7 +36,7 @@ class LegacyFixturePDO extends PDO {
     }
     public function query(string $query,?int $fetchMode=null,mixed ...$args): PDOStatement|false {
         if($this->failRead)throw new PDOException('Synthetic source failure');
-        $query=str_replace(['FROM flights f','JOIN users u','JOIN drivers d'],['FROM fixture_flights f','JOIN fixture_managers u','JOIN fixture_drivers d'],$query);
+        $query=str_replace(['FROM flights f','FROM flights WHERE','JOIN users u','JOIN drivers d'],['FROM fixture_flights f','FROM fixture_flights WHERE','JOIN fixture_managers u','JOIN fixture_drivers d'],$query);
         return $fetchMode===null ? parent::query($query) : parent::query($query,$fetchMode,...$args);
     }
 }
@@ -322,6 +322,26 @@ try {
     $saveSale($id,'321');
     check($disabled($id)&&Trips::financialCustomerPayments($pdo,$historical)===$preserved,'Model 3 manual display edit preserves historical customer schedule');
     check(count($financialRows())===$count,'Model 3 manual edit creates no extra obligations');
+    $pdo->exec("UPDATE waste_trips SET deleted_at=NULL,status='completed' WHERE id=$other");
+    $parity=\App\Service\WasteTripParityService::state($pdo,$legacy);
+    check($parity['available']===true&&$parity['legacy_count']===2&&$parity['erp_linked_count']===2&&$parity['erp_independent_count']===2,'Parity separates linked and independent flights');
+    check(!in_array(501,$parity['missing_ids'],true)&&in_array(500,$parity['missing_ids'],true),'Parity identifies source ID collision');
+    $pdo->exec("DELETE FROM fixture_flights WHERE id=500; INSERT INTO fixture_flights(id,zayavki_ids,status,assigned_manager_id,unload_type) VALUES(226,'700001','completed',3,'SKLAD')");
+    check(\App\Service\WasteTripParityService::state($pdo,$legacy)['mismatch']===false,'Equal linked ID sets do not warn even with independent ERP trips');
+    $otherVersion=(int)Trips::fetchTrip($pdo,$other)['lock_version'];
+    reject(static fn()=>Trips::delete($pdo,$other,$otherVersion+1,$actor),'Stale delete must fail');
+    reject(static fn()=>Trips::delete($pdo,$other,$otherVersion,['user_id'=>1,'role_code'=>'logist']),'Only owner can delete');
+    Trips::delete($pdo,$other,$otherVersion,$actor);
+    check(Trips::fetchTrip($pdo,$other)===null,'Deleted active trip disappears from registry');
+    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_audit_log WHERE waste_trip_id=$other AND action='cancel' AND after_json LIKE '%user_delete%'")->fetchColumn()===1,'Manual deletion is audited');
+    $parity=\App\Service\WasteTripParityService::state($pdo,$legacy);
+    check($parity['mismatch']===true&&in_array(501,$parity['missing_ids'],true),'Deleted linked trip is reported in parity details');
+    check(Trips::reconcileLegacyTrip($pdo,['business_id'=>501],$actor)==='skipped'&&Trips::fetchTrip($pdo,$other)===null,'Manual synchronization does not restore deleted trip');
+    $pdo->exec("INSERT INTO waste_trips (business_id,client_id,responsible_user_id,destination_type,status,planned_start_mode,source_system)
+        SELECT 902,client_id,responsible_user_id,destination_type,'cancelled',planned_start_mode,'erp' FROM waste_trips WHERE id=$id");
+    $cancelledId=(int)$pdo->lastInsertId();
+    Trips::delete($pdo,$cancelledId,(int)Trips::fetchTrip($pdo,$cancelledId)['lock_version'],$actor);
+    check(Trips::fetchTrip($pdo,$cancelledId)===null,'Cancelled independent trip can be deleted');
     echo "WASTE_TRIP_MANUAL_SALE_SYNC=PASS\n";
     echo "WASTE_TRIP_SYNCHRONIZATION_MYSQL=PASS\n";
 } finally {
