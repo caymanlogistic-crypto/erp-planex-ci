@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `1c4cc8e0ba6bb32bfd0b3090e6f0c7b5b6d603e2c2199692351e3875761d36df`
+**Schema fingerprint:** `9fc06816d45bccdda33423ce1f6b2eafcebcaa674614cad73a0fc6630a5db318`
 
 ## `trip_document_incoming`
 
@@ -161,6 +161,33 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
+
+## `waste_trip_closing_documents`
+
+**Domain:** Documents<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `document_id` | `int unsigned` | NO | NULL | — | `UNI` |
+| `slot_code` | `varchar(24)` | NO | NULL | — | — |
+| `requirement_code` | `varchar(32)` | NO | NULL | — | — |
+| `custom_title` | `varchar(255)` | YES | NULL | — | — |
+| `deleted_at` | `datetime` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_wtcd_trip` (`waste_trip_id`, `deleted_at`, `id`)
+- **UNIQUE** `uq_wtcd_document` (`document_id`)
+
+### Physical foreign keys
+
+- `fk_wtcd_document`: (`document_id`) → `documents`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_wtcd_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `waste_trip_completion_documents`
 
