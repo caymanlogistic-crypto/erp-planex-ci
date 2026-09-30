@@ -143,7 +143,7 @@ try {
         if ($contractorIdExisting === '') {
             $errors['contractor_id'] = 'Выберите перевозчика';
         } else {
-            $checkStmt = $localPdo->prepare('SELECT id, name, inn FROM contractors WHERE id = ?');
+            $checkStmt = $localPdo->prepare('SELECT id, name, inn FROM contractors WHERE id = ? AND deleted_at IS NULL');
             $checkStmt->execute([(int)$contractorIdExisting]);
             $existingContractorRow = $checkStmt->fetch(PDO::FETCH_ASSOC);
             if (!$existingContractorRow) {
@@ -157,7 +157,7 @@ try {
         if ($inn === '') {
             $errors['inn'] = 'Обязательное поле';
         } else {
-            $checkStmt = $localPdo->prepare('SELECT COUNT(*) FROM contractors WHERE inn = ?');
+            $checkStmt = $localPdo->prepare('SELECT COUNT(*) FROM contractors WHERE inn = ? AND deleted_at IS NULL');
             $checkStmt->execute([$inn]);
             if ($checkStmt->fetchColumn() > 0) {
                 $errors['inn'] = 'ИНН уже используется в этой компании';
@@ -169,7 +169,7 @@ try {
         if ($driverIdExisting === '') {
             $errors['driver_id'] = 'Выберите водителя';
         } else {
-            $checkStmt = $localPdo->prepare('SELECT id, full_name FROM drivers WHERE id = ?');
+            $checkStmt = $localPdo->prepare('SELECT id, full_name FROM drivers WHERE id = ? AND deleted_at IS NULL');
             $checkStmt->execute([(int)$driverIdExisting]);
             if (!$checkStmt->fetch(PDO::FETCH_ASSOC)) {
                 $errors['driver_id'] = 'Водитель не найден';
@@ -185,7 +185,7 @@ try {
         if ($vehicleSetIdExisting === '') {
             $errors['vehicle_set_id'] = 'Выберите транспорт';
         } else {
-            $checkStmt = $localPdo->prepare('SELECT id FROM vehicle_sets WHERE id = ?');
+            $checkStmt = $localPdo->prepare('SELECT id FROM vehicle_sets WHERE id = ? AND deleted_at IS NULL');
             $checkStmt->execute([(int)$vehicleSetIdExisting]);
             if (!$checkStmt->fetch(PDO::FETCH_ASSOC)) {
                 $errors['vehicle_set_id'] = 'Транспорт не найден';
@@ -386,7 +386,7 @@ try {
             $blockId = (int)$localPdo->lastInsertId();
         }
 
-        $existingCrew = $localPdo->prepare('SELECT id FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ?');
+        $existingCrew = $localPdo->prepare('SELECT id FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ? AND deleted_at IS NULL');
         $existingCrew->execute([$contractorId, $blockId]);
         if (!$existingCrew->fetch()) {
             $insertCrew = $localPdo->prepare(
@@ -402,7 +402,7 @@ try {
             ]);
         }
 
-        $crewFetch = $localPdo->prepare('SELECT id FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ?');
+        $crewFetch = $localPdo->prepare('SELECT id FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ? AND deleted_at IS NULL');
         $crewFetch->execute([$contractorId, $blockId]);
         $crewRow = $crewFetch->fetch(PDO::FETCH_ASSOC);
         $crewId = $crewRow ? (int)$crewRow['id'] : 0;

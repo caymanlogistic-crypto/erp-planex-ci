@@ -219,7 +219,7 @@
 
             // 2. Check duplicate (excluding current crew)
             $dupStmt = $localPdo->prepare(
-                "SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ? AND id != ?"
+                "SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ? AND deleted_at IS NULL AND id != ?"
             );
             $dupStmt->execute([(int)$contractorId, $newDvbId, $crewId]);
             if ($dupStmt->fetchColumn() > 0) {

@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `1c4cc8e0ba6bb32bfd0b3090e6f0c7b5b6d603e2c2199692351e3875761d36df`
+**Schema fingerprint:** `4078f9a3a383a4ca99f49e80639e1471d2cbe025410ce6af733009a08b69f371`
 
 ## `crew_drivers`
 
@@ -52,11 +52,12 @@
 | `deleted_at` | `timestamp` | YES | NULL | — | — |
 | `deleted_by_user_id` | `int unsigned` | YES | NULL | — | — |
 | `deleted_by_role` | `varchar(32)` | YES | NULL | — | — |
+| `active_crew_key` | `tinyint` | YES | NULL | `STORED GENERATED` | — |
 
 ### Indexes / constraints
 
 - **PRIMARY** `PRIMARY` (`id`)
-- **UNIQUE** `uk_crew` (`contractor_id`, `driver_vehicle_block_id`)
+- **UNIQUE** `uk_crew` (`contractor_id`, `driver_vehicle_block_id`, `active_crew_key`)
 
 ### Physical foreign keys
 

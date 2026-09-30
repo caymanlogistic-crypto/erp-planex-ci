@@ -129,7 +129,7 @@ $router->post('/company/crews/create', function () use ($config, $db) {
         }
 
         if ($contractorId !== '' && $driverVehicleBlockId !== '') {
-            $dupStmt = $localPdo->prepare('SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ?');
+            $dupStmt = $localPdo->prepare('SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ? AND deleted_at IS NULL');
             $dupStmt->execute([(int)$contractorId, (int)$driverVehicleBlockId]);
             if ($dupStmt->fetchColumn() > 0) {
                 $errors['driver_vehicle_block_id'] = 'Такой экипаж уже существует.';
@@ -752,7 +752,7 @@ $router->post('/company/crews/{id}/edit', function ($crewId) use ($config, $db) 
 
         if (empty($errors)) {
             $dupStmt = $localPdo->prepare(
-                'SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ? AND id != ?'
+                'SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND driver_vehicle_block_id = ? AND deleted_at IS NULL AND id != ?'
             );
             $dupStmt->execute([$contractorId, $driverVehicleBlockId, $crewId]);
             if ($dupStmt->fetchColumn() > 0) {

@@ -18,6 +18,11 @@ if ($dbName === '' || !in_array($dbName, $allowed, true) || getenv('APP_ENV') !=
 $pdo = new PDO(sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1', (int) (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306), $dbName), getenv('PLANEX_SCHEMA_DB_USER'), getenv('PLANEX_SCHEMA_DB_PASSWORD'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false]);
 cleanCompanyPoolDatabase($pdo);
 applyLocalMigrations($pdo);
+$migration152 = file_get_contents(BASE_PATH . '/database/migrations-local/152_crew_active_uniqueness.sql');
+if ($migration152 === false) throw new RuntimeException('Migration 152 is missing.');
+$pdo->exec($migration152);
+$indexColumns = $pdo->query("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='crews' AND INDEX_NAME='uk_crew' ORDER BY SEQ_IN_INDEX")->fetchAll(PDO::FETCH_COLUMN);
+if ($indexColumns !== ['contractor_id', 'driver_vehicle_block_id', 'active_crew_key']) throw new RuntimeException('Migration 152 index is not idempotent.');
 AccessRuntime::setCurrent(EffectiveAccess::systemOwner(11, 7, ['company.route_executors']));
 $pdo->exec("CREATE TABLE company_roles (id INT PRIMARY KEY,company_id INT NOT NULL)");
 $pdo->exec("CREATE TABLE user_accounts (id INT PRIMARY KEY,full_name VARCHAR(255) NOT NULL,login VARCHAR(100) NOT NULL,status VARCHAR(20) NOT NULL)");
@@ -94,4 +99,23 @@ $pdo->exec('DELETE FROM waste_trips WHERE route_executor_id=' . $crewId);
 RouteExecutorDeletionService::archive($pdo, $crewId, 101, 'company_owner');
 $archived = $pdo->query('SELECT status,deleted_at FROM crews WHERE id=' . $crewId)->fetch(PDO::FETCH_ASSOC);
 if (($archived['status'] ?? '') !== 'archived' || empty($archived['deleted_at'])) throw new RuntimeException('Unlinked crew was not archived.');
+if ((new \App\Service\DriverService($config, $central))->checkDriverHasCrews($pdo, 1)) throw new RuntimeException('Archived crew still blocks driver deletion.');
+if (\App\Service\RouteExecutorService::hasDuplicateCrew($pdo, 1, 1, 1)) throw new RuntimeException('Archived crew still counts as a duplicate.');
+$pdo->exec('INSERT INTO crews(contractor_id,vehicle_id,driver_id,driver_vehicle_block_id,status,created_by_user_id,created_by_role) SELECT contractor_id,vehicle_id,driver_id,driver_vehicle_block_id,\'active\',created_by_user_id,created_by_role FROM crews WHERE id=' . $crewId);
+$recreatedCrewId = (int) $pdo->lastInsertId();
+if ($recreatedCrewId <= $crewId || !\App\Service\RouteExecutorService::hasDuplicateCrew($pdo, 1, 1, 1)) throw new RuntimeException('Active crew duplicate detection failed after re-entry.');
+try {
+    $pdo->exec('INSERT INTO crews(contractor_id,vehicle_id,driver_id,driver_vehicle_block_id,status,created_by_user_id,created_by_role) SELECT contractor_id,vehicle_id,driver_id,driver_vehicle_block_id,\'active\',created_by_user_id,created_by_role FROM crews WHERE id=' . $crewId);
+    throw new RuntimeException('Second active crew with the same components was accepted.');
+} catch (PDOException $expected) {
+}
+RouteExecutorDeletionService::archive($pdo, $recreatedCrewId, 101, 'company_owner');
+$contractorService = new \App\Service\ContractorService($config, $central);
+if (!isset($contractorService->validateContractor(['name' => 'Проверка', 'inn' => '7701234567'], $pdo)['inn'])) throw new RuntimeException('Live contractor duplicate was missed.');
+$contractorService->archiveContractor($pdo, 1);
+if (isset($contractorService->validateContractor(['name' => 'Проверка', 'inn' => '7701234567'], $pdo)['inn'])) throw new RuntimeException('Deleted contractor still reserves its INN.');
+(new \App\Service\DriverService($config, $central))->archiveDriver($pdo, 1);
+$pdo->exec('UPDATE vehicle_sets SET deleted_at=NOW() WHERE id=1');
+$newCrewId = RouteExecutorCombinedCreateService::create($pdo, $central, $config, 7, $payload('7701234567', 'А123ВС77'), [], 101, 'company_owner');
+if ($newCrewId <= $recreatedCrewId) throw new RuntimeException('Previously deleted data could not be entered again.');
 echo "ROUTE_EXECUTOR_COMBINED_TRANSACTION=PASS\n";

@@ -38,7 +38,7 @@ try {
     $archiveBlockedMessage = '';
     try {
         $localPdo->query("SELECT 1 FROM crews LIMIT 1")->fetch();
-        $crewCheck = $localPdo->prepare("SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND status != 'archived'");
+        $crewCheck = $localPdo->prepare("SELECT COUNT(*) FROM crews WHERE contractor_id = ? AND deleted_at IS NULL");
         $crewCheck->execute([(int) $id]);
         if ((int) $crewCheck->fetchColumn() > 0) {
             $archiveBlockedMessage = 'Перевозчик участвует в экипажах. Сначала удалите экипажи.';
