@@ -30,9 +30,45 @@
     if (!opened.matches?.('[data-closing-trip][open]')) return;
     trips.forEach(item=>{if(item!==opened)item.open=false;});
   },true);
-  page.querySelectorAll('.closing-upload-form input[type=file]').forEach(input=>input.addEventListener('change',()=>{
-    if(input.files?.length) input.form.requestSubmit();
-  }));
+  page.addEventListener('change',event=>{
+    const input=event.target;
+    if (input.matches?.('.closing-upload-form input[type=file]')&&input.files?.length) input.form.requestSubmit();
+  });
+  page.addEventListener('submit',async event=>{
+    const uploadForm=event.target;
+    if (!uploadForm.matches?.('.closing-upload-form,.closing-extra-upload,.closing-remove-form')) return;
+    event.preventDefault();
+    if (uploadForm.dataset.updating==='1') return;
+    const trip=uploadForm.closest('[data-closing-trip]');
+    const feedback=trip.querySelector('.closing-upload-feedback');
+    const scrollX=window.scrollX,scrollY=window.scrollY;
+    feedback.hidden=true;
+    uploadForm.dataset.updating='1';
+    uploadForm.setAttribute('aria-busy','true');
+    try {
+      const response=await fetch(uploadForm.action,{
+        method:'POST',body:new FormData(uploadForm),credentials:'same-origin',redirect:'follow'
+      });
+      if (!response.ok) throw new Error('Не удалось загрузить документ. Повторите попытку.');
+      const result=new DOMParser().parseFromString(await response.text(),'text/html');
+      const error=result.querySelector('.notice.warn[role="alert"]');
+      if (error) throw new Error(error.textContent.trim());
+      if (!result.querySelector('[data-closing-action-result="success"]')) throw new Error('Не удалось подтвердить изменение. Обновите страницу и проверьте документы.');
+      const updated=[...result.querySelectorAll('[data-closing-trip]')].find(item=>item.dataset.tripId===trip.dataset.tripId);
+      if (!updated) throw new Error('Не удалось обновить строку рейса. Обновите страницу.');
+      trip.dataset.state=updated.dataset.state;
+      trip.replaceChildren(...updated.children);
+      window.scrollTo(scrollX,scrollY);
+      requestAnimationFrame(()=>window.scrollTo(scrollX,scrollY));
+    } catch (error) {
+      feedback.textContent=error.message||'Не удалось изменить документы. Повторите попытку.';
+      feedback.hidden=false;
+      window.scrollTo(scrollX,scrollY);
+    } finally {
+      delete uploadForm.dataset.updating;
+      uploadForm.removeAttribute('aria-busy');
+    }
+  });
   const dialog=document.querySelector('[data-review-dialog]');
   if (!dialog) return;
   const form=dialog.querySelector('[data-review-form]');

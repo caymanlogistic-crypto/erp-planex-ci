@@ -12,7 +12,7 @@ $progressColor=static function(int $percent):string {
 };
 ?>
 <link rel="stylesheet" href="<?= e(app_url('/assets/css/waste-trip-closing.css')) ?>?v=<?= filemtime(base_path('public/assets/css/waste-trip-closing.css')) ?>">
-<?php if($success):?><div class="notice success" role="status"><?= e((string)$success) ?></div><?php endif;?>
+<?php if(in_array($success,['Документ добавлен.','Документ убран из комплекта.'],true)):?><span data-closing-action-result="success" hidden></span><?php elseif($success):?><div class="notice success" role="status"><?= e((string)$success) ?></div><?php endif;?>
 <?php if($flashError||$error):?><div class="notice warn" role="alert"><?= e((string)($flashError?:$error)) ?></div><?php endif;?>
 <div class="closing-page">
   <div class="page-head"><div class="page-head-left"><h1 class="page-title">Сбор закрывающих документов</h1><div class="page-summary">Документы по завершённым рейсам.</div></div></div>
@@ -32,33 +32,30 @@ $progressColor=static function(int $percent):string {
         $paid=$trip['paid_bank_transactions'];
         $search=mb_strtolower($trip['business_id'].' '.$trip['carrier_name'].' '.$trip['manager_name'].' '.$executorLabel((string)$trip['legal_entity_code']),'UTF-8');
     ?>
-    <details class="closing-trip" name="closing-trip" data-closing-trip data-state="<?= e($state) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
+    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-state="<?= e($state) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
       <summary class="closing-trip-summary"><span class="closing-chevron" aria-hidden="true"></span>
         <span class="closing-identity"><b>Рейс #<?= e((string)$trip['business_id']) ?></b><small>Завершён <?= e($trip['actual_end_date']?date('d.m.Y',strtotime((string)$trip['actual_end_date'])):'—') ?></small></span>
         <span class="closing-carrier"><small>ПЕРЕВОЗЧИК</small><b><?= e((string)$trip['carrier_name']) ?></b><span>Менеджер: <?= e((string)$trip['manager_name']) ?></span></span>
         <span class="closing-executor"><small>ИСПОЛНИТЕЛЬ</small><b><?= e($executorLabel((string)$trip['legal_entity_code'])) ?></b><span><?= e((string)$trip['recipient_email']) ?></span></span>
         <span class="closing-progress"><small>ДОКУМЕНТЫ</small><b><?= $count ?> из <?= $total ?> получено</b><span class="closing-track" aria-label="<?= $count ?> из <?= $total ?> документов получено"><i style="width:<?= $percent ?>%;--closing-progress-color:<?= e($progressColor($percent)) ?>"></i></span></span>
-        <span class="closing-missing"><small>НЕ ХВАТАЕТ ДОКУМЕНТОВ</small><?php if($missing):?><span><?= e(implode(' · ',$missing)) ?></span><?php else:?><b>Все документы получены</b><?php endif;?></span>
+        <?php if($count>0):?><span class="closing-missing"><small>НЕ ХВАТАЕТ ДОКУМЕНТОВ</small><?php if($missing):?><span><?= e(implode(' · ',$missing)) ?></span><?php else:?><b>Все документы получены</b><?php endif;?></span><?php endif;?>
       </summary>
       <div class="closing-trip-body">
         <div class="closing-body-head"><div><h2>Закрывающие документы рейса #<?= e((string)$trip['business_id']) ?></h2><p>Добавьте файлы и передайте комплект на проверку.</p></div><span class="closing-note">Получатель письма: <?= e((string)$trip['recipient_email']) ?></span></div>
         <?php if($paid):?><div class="closing-finance-handoff"><strong>Оплата отражена · <?= count($paid) ?> банковских операций</strong><span>Собранные файлы связаны с платежами в «Финансы → Закрывающие документы». Договор/заявка и акт/УПД учитываются в обязательных категориях, остальные доступны как приложения.</span></div><?php endif;?>
+        <p class="closing-upload-feedback" role="alert" hidden></p>
         <div class="closing-doc-table">
           <?php foreach(\App\Service\WasteTripClosingService::SLOTS as $slot=>$label):$document=$bySlot[$slot]??null;
             $defaultCode=$slot==='contract'?'application':($slot==='act'?'upd':$slot);
-            $code=(string)($document['requirement_code']??$defaultCode);
           ?><div class="closing-doc-row">
-            <div><strong><?= e($label) ?></strong><?php if($slot==='contract'||$slot==='act'):?><small><?= $slot==='contract'?'Выберите договор или заявку':'Выберите акт или УПД' ?></small><?php else:?><small>Файл PDF или изображение</small><?php endif;?></div>
+            <div><strong><?= e($label) ?></strong><small>Файл PDF или изображение</small></div>
             <span class="closing-file-name<?= $document?' is-present':'' ?>"><?php if($document):?><a href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a><?php else:?>Файл не получен<?php endif;?></span>
-            <form class="closing-upload-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents')) ?>">
-              <?= csrfField() ?><input type="hidden" name="slot_code" value="<?= e($slot) ?>">
-              <?php if($slot==='contract'):?><select name="requirement_code" aria-label="Вид договора или заявки"><option value="application"<?= $code==='application'?' selected':'' ?>>Заявка</option><option value="agreement"<?= $code==='agreement'?' selected':'' ?>>Договор</option></select>
-              <?php elseif($slot==='act'):?><select name="requirement_code" aria-label="Вид акта или УПД"><option value="upd"<?= $code==='upd'?' selected':'' ?>>УПД</option><option value="act"<?= $code==='act'?' selected':'' ?>>Акт</option></select>
-              <?php else:?><input type="hidden" name="requirement_code" value="<?= e($defaultCode) ?>"><?php endif;?>
+            <div class="closing-doc-actions"><form class="closing-upload-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents')) ?>">
+              <?= csrfField() ?><input type="hidden" name="slot_code" value="<?= e($slot) ?>"><input type="hidden" name="requirement_code" value="<?= e($defaultCode) ?>">
               <label class="btn btn-secondary closing-upload"><?= $document?'Заменить':'Добавить' ?><input type="file" name="document_file" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx,.xls,.xlsx" required></label>
-            </form>
+            </form><?php if($document):?><form class="closing-remove-form" method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'/remove')) ?>"><?= csrfField() ?><button class="btn btn-secondary closing-remove" type="submit">Удалить</button></form><?php endif;?></div>
           </div><?php endforeach;?>
-          <?php foreach($extras as $document):?><div class="closing-doc-row"><div><strong><?= e((string)$document['custom_title']) ?></strong><small>Другой документ</small></div><span class="closing-file-name is-present"><a href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a></span><form method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'/remove')) ?>"><?= csrfField() ?><button class="btn btn-secondary closing-upload" type="submit">Убрать</button></form></div><?php endforeach;?>
+          <?php foreach($extras as $document):?><div class="closing-doc-row"><div><strong><?= e((string)$document['custom_title']) ?></strong><small>Другой документ</small></div><span class="closing-file-name is-present"><a href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a></span><form class="closing-remove-form" method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'/remove')) ?>"><?= csrfField() ?><button class="btn btn-secondary closing-remove" type="submit">Удалить</button></form></div><?php endforeach;?>
         </div>
         <form class="closing-extra-upload" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents')) ?>">
           <?= csrfField() ?><input type="hidden" name="slot_code" value="extra"><input type="hidden" name="requirement_code" value="supporting">
