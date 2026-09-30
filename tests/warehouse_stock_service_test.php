@@ -20,7 +20,7 @@ $erp = [
     ['business_id'=>11,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>123,'snapshot_mass_kg'=>1500],
 ];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
-if ($data['current'][1] !== ['request_count'=>1,'weight_kg'=>500]) throw new RuntimeException('Неверный текущий остаток.');
+if ($data['current'][1] !== ['request_count'=>1,'weight_kg'=>500,'request_ids'=>[456]]) throw new RuntimeException('Неверный текущий остаток или список заявок.');
 if ($data['groups'][1][0]['stock_count'] !== 1 || $data['groups'][1][0]['stock_kg'] !== 500) throw new RuntimeException('Неверный остаток после вывоза.');
 if ($data['groups'][1][1]['stock_count'] !== 2 || $data['groups'][1][1]['stock_kg'] !== 2000) throw new RuntimeException('Неверный остаток после прихода.');
 if ($data['issue_count'] !== 0) throw new RuntimeException('Ложное расхождение.');
@@ -40,7 +40,7 @@ $flights[] = ['id'=>13,'comment'=>'Начался','status'=>'started','source_w
 $erp[] = ['business_id'=>13,'status'=>'in_progress','actual_start_date'=>'2026-09-03','legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>456,'snapshot_mass_kg'=>500];
 $erp[] = ['business_id'=>13,'status'=>'in_progress','actual_start_date'=>'2026-09-03','legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>999,'snapshot_mass_kg'=>100];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
-if ($data['current'][1] !== ['request_count'=>0,'weight_kg'=>0]) throw new RuntimeException('Начатый рейс не списал складской остаток.');
+if ($data['current'][1] !== ['request_count'=>0,'weight_kg'=>0,'request_ids'=>[]]) throw new RuntimeException('Начатый рейс не списал складской остаток.');
 if ($data['groups'][1][0]['request_ids'] !== ['456'] || !$data['groups'][1][0]['is_derived']) throw new RuntimeException('Рейс должен показывать только списанную складскую заявку.');
 $flights[2]['status'] = 'completed';
 $erp[5]['status'] = 'completed';

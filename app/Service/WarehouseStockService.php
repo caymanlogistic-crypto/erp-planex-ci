@@ -142,9 +142,13 @@ final class WarehouseStockService
         }
         $current = [];
         foreach ($balances as $warehouseId => $requestBalances) {
+            $present = array_filter($requestBalances, static fn(int $value): bool => $value > 0);
+            $requestIds = array_keys($present);
+            usort($requestIds, 'strnatcmp');
             $current[$warehouseId] = [
-                'request_count'=>count(array_filter($requestBalances, static fn(int $value): bool => $value > 0)),
+                'request_count'=>count($requestIds),
                 'weight_kg'=>array_sum($requestBalances),
+                'request_ids'=>$requestIds,
             ];
         }
         foreach ($groups as &$group) {

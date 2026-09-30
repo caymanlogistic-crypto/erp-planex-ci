@@ -33,8 +33,10 @@ try {
         });
         await page.goto('http://warehouse.test/company/warehouses/stock');
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 1);
+        assert.match(await page.locator('[data-wh-warehouse="1"] .wh-current-summary').innerText(), /Заявки на складе: 120/);
         await page.locator('[name=show_all]').check({force:true});
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 2);
+        assert.match(await page.locator('[data-wh-warehouse="2"] .wh-current-summary').innerText(), /Заявки на складе: —/);
         assert.equal(await page.locator('[data-wh-trip="2:21:out"] .wh-request-cell').innerText(), '121');
         await page.locator('[name=q]').fill('Первый');
         assert.equal(await page.locator('[data-wh-trip]:visible').count(), 1);

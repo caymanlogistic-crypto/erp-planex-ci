@@ -21,7 +21,7 @@ $skippedGroup['is_correction'] = true;
 $data = [
     'warehouses'=>[1=>'Иркутск', 2=>'Краснодар'],
     'groups'=>[1=>[$group(20,1,'in','Первый рейс')],2=>[$skippedGroup]],
-    'current'=>[1=>['request_count'=>1,'weight_kg'=>1000],2=>['request_count'=>0,'weight_kg'=>0]],
+    'current'=>[1=>['request_count'=>1,'weight_kg'=>1000,'request_ids'=>[120]],2=>['request_count'=>0,'weight_kg'=>0,'request_ids'=>[]]],
     'issues'=>[],'issue_count'=>0,
     'correction_flights'=>[['id'=>20,'name'=>'Первый рейс'],['id'=>21,'name'=>'Второй рейс']],
 ];
