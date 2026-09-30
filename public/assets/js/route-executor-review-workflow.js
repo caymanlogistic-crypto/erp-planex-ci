@@ -675,7 +675,10 @@
           data.append('attachment_keys[]', item.formId + '|' + item.name);
         }
       }
-      const response = await fetch(base + '/company/route-executors/review/send', { method: 'POST', credentials: 'same-origin', body: data });
+      const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+      const response = await fetch(base + '/company/route-executors/review/send', {
+        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf }, body: data
+      });
       const result = await response.json();
       if (result.stage && result.stage !== 'new') {
         const sent = { at: new Date().toISOString(), ...pendingSend, mailStatus: result.mail_status, maxStatus: result.max_status };
