@@ -124,7 +124,7 @@ $renderStatus = static function (array $status, bool $isExempt): string {
                     <?php foreach($visibleLinks as $link): ?>
                         <div class="file-item closing-file-row document-file-row has-file has-existing-file">
                             <div class="file-info">
-                                <div class="file-name"><?= e((string)($requirementLabels[$link['requirement_code']] ?? $link['requirement_code'])) ?></div>
+                                <div class="file-name"><?= e((string)($link['requirement_code']==='supporting' ? ($link['document_type']??'Другой документ') : ($requirementLabels[$link['requirement_code']] ?? $link['requirement_code']))) ?></div>
                                 <div class="file-meta" title="<?= e((string)$link['original_name']) ?>"><?= e((string)$link['original_name']) ?><?= !empty($link['is_edo']) ? ' · ЭДО' : '' ?></div>
                             </div>
                             <div class="closing-file-actions">
@@ -134,11 +134,12 @@ $renderStatus = static function (array $status, bool $isExempt): string {
                                     <label><input type="checkbox" name="is_edo" value="1"<?= !empty($link['is_edo']) ? ' checked' : '' ?>><span>ЭДО</span></label>
                                     <button type="submit" class="btn btn-secondary btn-sm">Сохранить</button>
                                 </form>
-                                <form method="post" action="<?= e(app_url('/company/finance/closing-documents/unlink-document')) ?>" class="inline-form closing-file-unlink" onsubmit="return confirm('Отвязать документ от этого платежа?');">
+                                <?php if(($link['document_entity_type']??'')!=='waste_trip'):?><form method="post" action="<?= e(app_url('/company/finance/closing-documents/unlink-document')) ?>" class="inline-form closing-file-unlink" onsubmit="return confirm('Отвязать документ от этого платежа?');">
                                     <input type="hidden" name="transaction_id" value="<?= (int)$row['id'] ?>">
                                     <input type="hidden" name="link_id" value="<?= (int)$link['id'] ?>">
                                     <button type="submit" class="btn btn-ghost btn-sm" title="Отвязать файл">×</button>
                                 </form>
+                                <?php else:?><span class="field-note">Из рейса</span><?php endif;?>
                             </div>
                         </div>
                     <?php endforeach; ?>

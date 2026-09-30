@@ -11,7 +11,7 @@ try {
         || !preg_match('/^[a-f0-9]{40}$/D', $sha) || trim((string) file_get_contents($marker)) !== $sha) {
         throw new RuntimeException('Exact deployment guard required');
     }
-    $name = '152_crew_active_uniqueness.sql';
+    $name = '153_crew_active_uniqueness.sql';
     $sql = (string) file_get_contents($root . '/database/migrations-local/' . $name);
     $checksum = hash('sha256', $sql);
     if (!hash_equals((string) getenv('PLANEX_TENANT_SHA256'), $checksum)
@@ -19,8 +19,8 @@ try {
         || !str_contains($sql, 'ADD UNIQUE KEY uk_crew (contractor_id, driver_vehicle_block_id, active_crew_key)')) {
         throw new RuntimeException('Migration checksum or SQL scope mismatch');
     }
-    $apply = getenv('ROUTE_EXECUTOR_152_MODE') === 'apply';
-    if ($apply && getenv('ROUTE_EXECUTOR_152_CONFIRM') !== 'APPLY_ROUTE_EXECUTOR_152') {
+    $apply = getenv('ROUTE_EXECUTOR_153_MODE') === 'apply';
+    if ($apply && getenv('ROUTE_EXECUTOR_153_CONFIRM') !== 'APPLY_ROUTE_EXECUTOR_153') {
         throw new RuntimeException('Explicit migration confirmation required');
     }
     $config = require $root . '/bootstrap/app.php';
@@ -51,7 +51,7 @@ try {
             $q->execute([$name]);
             $stored = $q->fetchColumn();
             if ($stored !== false && !hash_equals((string) $stored, $checksum)) {
-                throw new RuntimeException('Migration 152 journal checksum mismatch');
+                throw new RuntimeException('Migration 153 journal checksum mismatch');
             }
             $indexColumns = static function () use ($pdo): string {
                 $q = $pdo->query("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='crews' AND INDEX_NAME='uk_crew' ORDER BY SEQ_IN_INDEX");
@@ -67,7 +67,7 @@ try {
             }
             $ready = $indexColumns() === $expectedIndex;
             if (($stored !== false && !$ready) || ($apply && !$ready)) {
-                throw new RuntimeException('Migration 152 schema verification failed');
+                throw new RuntimeException('Migration 153 schema verification failed');
             }
             if ($crewsBefore !== (int) $pdo->query('SELECT COUNT(*) FROM crews')->fetchColumn()
                 || $activeBefore !== (int) $pdo->query('SELECT COUNT(*) FROM crews WHERE deleted_at IS NULL')->fetchColumn()) {
@@ -79,9 +79,9 @@ try {
             $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lockName]);
         }
     }
-    echo 'ROUTE_EXECUTOR_152_SNAPSHOT=' . json_encode($results, JSON_THROW_ON_ERROR) . "\n";
-    echo $apply ? "ROUTE_EXECUTOR_152_APPLY_OK\n" : "ROUTE_EXECUTOR_152_READ_ONLY_OK\n";
+    echo 'ROUTE_EXECUTOR_153_SNAPSHOT=' . json_encode($results, JSON_THROW_ON_ERROR) . "\n";
+    echo $apply ? "ROUTE_EXECUTOR_153_APPLY_OK\n" : "ROUTE_EXECUTOR_153_READ_ONLY_OK\n";
 } catch (Throwable $error) {
-    fwrite(STDERR, 'ROUTE_EXECUTOR_152_FAILED: ' . $error->getMessage() . "\n");
+    fwrite(STDERR, 'ROUTE_EXECUTOR_153_FAILED: ' . $error->getMessage() . "\n");
     exit(1);
 }

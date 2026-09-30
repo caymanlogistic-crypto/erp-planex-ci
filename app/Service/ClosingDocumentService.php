@@ -51,6 +51,9 @@ final class ClosingDocumentService
         'act' => 'Акт',
         'upd' => 'УПД',
         'npd_receipt' => 'Чек НПД',
+        'invoice' => 'Счёт',
+        'waybill' => 'Путевой лист',
+        'supporting' => 'Другой документ',
     ];
 
     private const REQUIREMENT_COLUMNS = [

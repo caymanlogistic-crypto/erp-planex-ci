@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `4078f9a3a383a4ca99f49e80639e1471d2cbe025410ce6af733009a08b69f371`
+**Schema fingerprint:** `b8abba11d51fdb947248b8be88433b54aaa560f72620d11dd465e827b728115c`
 
 ## Architecture overview
 
@@ -83,10 +83,12 @@ erDiagram
   T_trip_document_requests ||--o{ T_trip_document_events : "fk_document_event_request"
   T_trip_document_requests ||--o{ T_trip_document_incoming : "fk_document_incoming_request"
   T_trip_document_requests ||--o{ T_trip_document_mail : "fk_document_mail_request"
+  T_documents ||--o{ T_waste_trip_closing_documents : "fk_wtcd_document"
+  T_waste_trips ||--o{ T_waste_trip_closing_documents : "fk_wtcd_trip"
   T_waste_trip_requests ||--o{ T_waste_trip_completion_documents : "fk_waste_trip_completion_document_request"
 ```
 
-Tables: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`, `trip_document_events`, `trip_document_incoming`, `trip_document_mail`, `trip_document_mailboxes`, `trip_document_previews`, `trip_document_requests`, `waste_trip_completion_documents`
+Tables: `document_number_sequences`, `document_template_versions`, `document_templates`, `document_types`, `documents`, `generated_document_requests`, `generated_documents`, `trip_document_events`, `trip_document_incoming`, `trip_document_mail`, `trip_document_mailboxes`, `trip_document_previews`, `trip_document_requests`, `waste_trip_closing_documents`, `waste_trip_completion_documents`
 
 ## Finance
 
@@ -150,6 +152,10 @@ erDiagram
   T_max_chats ||--o{ T_max_message_logs : "fk_max_message_logs_chat"
   T_waste_trips ||--o{ T_waste_trip_audit_log : "fk_waste_trip_audit_trip"
   T_waste_trips ||--o{ T_waste_trip_carrier_payments : "fk_waste_trip_carrier_payments_trip"
+  T_bank_transactions ||--o{ T_waste_trip_closing_finance_links : "fk_wtcfl_bank_transaction"
+  T_waste_trip_closing_documents ||--o{ T_waste_trip_closing_finance_links : "fk_wtcfl_document"
+  T_finance_closing_document_links ||--o{ T_waste_trip_closing_finance_links : "fk_wtcfl_finance_link"
+  T_waste_trips ||--o{ T_waste_trip_closing_reviews : "fk_wtcr_trip"
   T_waste_trip_requests ||--o{ T_waste_trip_completion_items : "fk_waste_trip_completion_request"
   T_waste_trips ||--o{ T_waste_trip_completion_reviews : "fk_completion_review_trip"
   T_waste_trips ||--o{ T_waste_trip_customer_payments : "fk_waste_trip_customer_payments_trip"
@@ -166,7 +172,7 @@ erDiagram
   T_feo_utilizers ||--o{ T_waste_trips : "fk_waste_trips_utilizer"
 ```
 
-Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_share_import_requests`, `feo_share_import_totals`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `route_executor_review_sends`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_completion_items`, `waste_trip_completion_reviews`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_registration_journal`, `waste_trip_requests`, `waste_trip_start_statistics`, `waste_trips`
+Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_share_import_requests`, `feo_share_import_totals`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `route_executor_review_sends`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_closing_finance_links`, `waste_trip_closing_reviews`, `waste_trip_completion_items`, `waste_trip_completion_reviews`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_registration_journal`, `waste_trip_requests`, `waste_trip_start_statistics`, `waste_trips`
 
 ## System / Migration metadata
 

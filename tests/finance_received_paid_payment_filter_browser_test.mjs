@@ -14,10 +14,15 @@ try{
   const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
   page.on('pageerror',error=>errors.push(error.message));
   await page.setContent(html);
-  await page.addStyleTag({content:css+'\nbody{margin:0}.modal-overlay{display:none}'});
-  const visibleIds=()=>page.locator('.rp-trip-item:visible').evaluateAll(items=>items.map(item=>item.dataset.id));
+  await page.addStyleTag({content:css+'\nbody{margin:0}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
+  await page.evaluate(()=>{
+    window.openModal=id=>document.getElementById(id).classList.add('is-open');
+    window.closeModal=id=>document.getElementById(id).classList.remove('is-open');
+  });
+  const visibleIds=()=>page.locator('.rp-compact-row:visible').evaluateAll(items=>items.map(item=>item.dataset.id));
   assert.deepEqual(await visibleIds(),['105','104','103','102','101'],'all completed trips are visible initially, sorted newest first');
-  assert.deepEqual(await page.locator('.rp-trip-item').evaluateAll(items=>items.map(item=>item.dataset.paymentStatus)),['paid','unknown-rate','unpaid','underpaid','paid'],'posted payments are classified against both rates');
+  assert.deepEqual(await page.locator('.rp-compact-row').evaluateAll(items=>items.map(item=>item.dataset.paymentStatus)),['paid','unknown-rate','unpaid','underpaid','paid'],'posted payments are classified against both rates');
+  assert.equal(await page.locator('.rp-compact-row').first().locator('td').count(),11,'one trip occupies one table row');
   await page.selectOption('#rp-payment-filter','paid');
   assert.deepEqual(await visibleIds(),['105','101'],'both sides are covered, including an explicit zero-rate side');
   await page.selectOption('#rp-payment-filter','underpaid');
@@ -35,10 +40,38 @@ try{
   assert.equal(await page.locator('#rp-empty').isVisible(),true);
   await page.locator('#rp-search').clear();
   await page.selectOption('#rp-filter','all');
+  await page.locator('.rp-compact-row').first().click();
+  assert.equal(await page.locator('#rp-detail-modal').isVisible(),false,'single desktop click leaves details closed');
+  await page.locator('.rp-compact-row').first().dblclick();
+  assert.equal(await page.locator('#rp-detail-title').innerText(),'Рейс #105 · Рейс 105 · 28.09.2026 — 29.09.2026');
+  assert.equal(await page.locator('.rp-details-trip').count(),0,'dates have no separate block');
+  assert.equal(await page.locator('.rp-finance-pane').count(),2,'customer and carrier appear side by side');
+  const heights=await page.locator('.rp-finance-pane').evaluateAll(items=>items.map(item=>Math.round(item.getBoundingClientRect().height)));
+  assert.equal(heights[0],heights[1],'parallel blocks have equal height');
+  await page.evaluate(()=>window.closeModal('rp-detail-modal'));
   for(const width of [1280,390]){
     await page.setViewportSize({width,height:900});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`no horizontal overflow at ${width}px`);
   }
+  await page.locator('.rp-compact-row').first().click();
+  assert.equal(await page.locator('#rp-detail-modal').isVisible(),true,'mobile tap opens details');
+  await page.evaluate(()=>window.closeModal('rp-detail-modal'));
+  assert.equal(await page.locator('.rp-compact-row').first().evaluate(row=>document.activeElement===row),true,'focus returns to the trip row');
+  await page.setViewportSize({width:1280,height:900});
+  await page.locator('.rp-compact-row').last().dblclick();
+  await page.evaluate(()=>{window.fetch=async()=>({ok:true,text:async()=>'<p>Счёт открыт</p>'});});
+  await page.locator('#rp-detail-modal [data-view-invoice]').first().click();
+  assert.equal(await page.locator('#invoice-view-modal-body').innerText(),'Счёт открыт','invoice action works inside the copied details');
+  await page.evaluate(()=>{
+    window.closeModal('invoice-view-modal');window.closeModal('rp-detail-modal');
+    document.querySelector('#invoice-create-modal').insertAdjacentHTML('beforeend','<form class="invoice-form"><select class="js-inv-direction"><option value="OUTGOING">Клиенту</option><option value="INCOMING">От перевозчика</option></select><select class="js-inv-cparty-select"><option value="1">Заказчик</option><option value="2">Перевозчик</option></select></form>');
+  });
+  await page.selectOption('#rp-payment-filter','all');
+  await page.locator('.rp-compact-row').nth(2).dblclick();
+  await page.locator('#rp-detail-modal [data-create-trip]').first().click();
+  assert.equal(await page.locator('#invoice-create-modal form').getAttribute('data-preferred-trip-id'),'103','new invoice retains the selected trip');
+  assert.equal(await page.locator('#invoice-create-modal .js-inv-direction').inputValue(),'OUTGOING');
+  assert.equal(await page.locator('#invoice-create-modal .js-inv-cparty-select').inputValue(),'1');
   assert.deepEqual(errors,[],'filter has no browser errors');
   console.log('FINANCE_RECEIVED_PAID_PAYMENT_FILTER_BROWSER_OK');
 }finally{await browser.close();}

@@ -18,11 +18,11 @@ if ($dbName === '' || !in_array($dbName, $allowed, true) || getenv('APP_ENV') !=
 $pdo = new PDO(sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4', getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1', (int) (getenv('PLANEX_SCHEMA_DB_PORT') ?: 3306), $dbName), getenv('PLANEX_SCHEMA_DB_USER'), getenv('PLANEX_SCHEMA_DB_PASSWORD'), [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION, PDO::ATTR_EMULATE_PREPARES => false]);
 cleanCompanyPoolDatabase($pdo);
 applyLocalMigrations($pdo);
-$migration152 = file_get_contents(BASE_PATH . '/database/migrations-local/152_crew_active_uniqueness.sql');
-if ($migration152 === false) throw new RuntimeException('Migration 152 is missing.');
-$pdo->exec($migration152);
+$migration153 = file_get_contents(BASE_PATH . '/database/migrations-local/153_crew_active_uniqueness.sql');
+if ($migration153 === false) throw new RuntimeException('Migration 153 is missing.');
+$pdo->exec($migration153);
 $indexColumns = $pdo->query("SELECT COLUMN_NAME FROM information_schema.STATISTICS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='crews' AND INDEX_NAME='uk_crew' ORDER BY SEQ_IN_INDEX")->fetchAll(PDO::FETCH_COLUMN);
-if ($indexColumns !== ['contractor_id', 'driver_vehicle_block_id', 'active_crew_key']) throw new RuntimeException('Migration 152 index is not idempotent.');
+if ($indexColumns !== ['contractor_id', 'driver_vehicle_block_id', 'active_crew_key']) throw new RuntimeException('Migration 153 index is not idempotent.');
 AccessRuntime::setCurrent(EffectiveAccess::systemOwner(11, 7, ['company.route_executors']));
 $pdo->exec("CREATE TABLE company_roles (id INT PRIMARY KEY,company_id INT NOT NULL)");
 $pdo->exec("CREATE TABLE user_accounts (id INT PRIMARY KEY,full_name VARCHAR(255) NOT NULL,login VARCHAR(100) NOT NULL,status VARCHAR(20) NOT NULL)");
