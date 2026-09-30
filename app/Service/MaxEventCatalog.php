@@ -46,7 +46,33 @@ final class MaxEventCatalog
                     'current_mass_kg' => ['Масса актуального состава, кг', '100 000,000'],
                 ],
             ],
-        ] + self::transferEvents() + self::weightEvents() + self::documentEvents();
+        ] + self::transferEvents() + self::weightEvents() + self::documentEvents() + self::routeExecutorEvents();
+    }
+
+    private static function routeExecutorEvents(): array
+    {
+        $variables = [
+            'contractor'=>['Подрядчик','ИП Иванов Иван Иванович'],
+            'driver'=>['Водитель','Петров Пётр Петрович'],
+            'plate'=>['Госномер','А123ВС77'],
+            'responsible'=>['Ответственный логист','Сидоров Сергей'],
+            'ready'=>['Готовые действия','Подписание договора'],
+            'author'=>['Отправитель','Иванова Анна'],
+        ];
+        return [
+            'route_executor.partial'=>[
+                'title'=>'Исполнитель рейса — первичные данные',
+                'description'=>'После первой передачи неполных данных исполнителя рейса. Получатели письма задаются в «Ключи и сервисы».',
+                'template'=>"Первичные данные исполнителя рейса\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}\nЭто первичные данные. Ожидайте полный комплект вторым письмом.",
+                'variables'=>$variables,
+            ],
+            'route_executor.full'=>[
+                'title'=>'Исполнитель рейса — полный комплект',
+                'description'=>'После передачи полного комплекта данных исполнителя рейса.',
+                'template'=>"Полный комплект данных исполнителя рейса\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}",
+                'variables'=>$variables,
+            ],
+        ];
     }
 
     private static function documentEvents(): array

@@ -172,9 +172,7 @@
     });
     window.initDriverForm?.(document.getElementById('lab-driver-form'));
     markRequiredDriverPhones();
-    bindReadiness();
     initReadinessHeader();
-    updateReadiness();
   }
 
   function showFeedback(message) {
@@ -244,15 +242,7 @@
     }
   }
 
-  document.addEventListener('click', event => {
-    if (event.target.closest?.('[data-source-create-submit]')) createCombined();
-  });
-  document.addEventListener('submit', event => {
-    if (!event.target.matches?.('#lab-contractor-form, #lab-driver-form, #lab-vehicle-form')) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
-    createCombined();
-  }, true);
+  // The review workflow owns this modal's save and send actions.
 
   window.openCombinedRouteExecutorCreate = function () {
     arrangeForms();
