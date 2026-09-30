@@ -53,7 +53,7 @@ final class WasteTripSynchronizationService
             if ($clientId === null) throw new RuntimeException('В новой ERP не найден единственный активный заказчик ООО «МГ ЛОГИСТИК».');
             $memberships = EntityResponsibilityService::eligibleRecipients($central, $tenant, $companyId);
             $managerIds = [];
-            $result = ['source_count'=>count($flights),'created'=>0,'updated'=>0,'deleted'=>0,'failed'=>0,'warnings'=>[],'errors'=>[]];
+            $result = ['source_count'=>count($flights),'created'=>0,'updated'=>0,'deleted'=>0,'skipped'=>0,'failed'=>0,'warnings'=>[],'errors'=>[]];
             $existing = $tenant->query("SELECT * FROM waste_trips WHERE source_system IN ('legacy_flights','legacy_prefill','legacy_sync') AND legacy_flight_id > 225 ORDER BY business_id")->fetchAll(PDO::FETCH_ASSOC);
             foreach ($existing as $trip) {
                 if (isset($ids[(int)$trip['legacy_flight_id']]) || !empty($trip['deleted_at'])) continue;

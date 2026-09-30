@@ -12,6 +12,7 @@ require_once base_path('app/Service/WasteTripLegacyPriceService.php');
 require_once base_path('app/Service/WasteTripCarrierPaymentService.php');
 require_once base_path('app/Service/WasteTripStartStatisticsService.php');
 require_once base_path('app/Service/WasteTripService.php');
+require_once base_path('app/Service/WasteTripParityService.php');
 require_once base_path('app/Service/FeoUtilizerService.php');
 require_once base_path('app/Service/WasteTripLegacyMappingService.php');
 require_once base_path('app/Service/WasteTripSynchronizationService.php');
@@ -45,5 +46,6 @@ $router->get('/company/trips/departures/{id}/modal-view', [$wasteTripController,
 $router->get('/company/trips/departures/{id}/modal-edit', [$wasteTripController, 'modalEditForm'], 'company.trips.waste');
 $router->post('/company/trips/departures/{id}/modal-edit', [$wasteTripController, 'modalEditSubmit'], 'company.trips.waste');
 $router->post('/company/trips/departures/{id}/cancel', [$wasteTripController, 'cancelSubmit'], 'company.trips.waste');
+$router->post('/company/trips/departures/{id}/delete', [$wasteTripController, 'deleteSubmit'], 'company.trips.waste');
 
 $router->post('/company/trips/departures/synchronize', [$wasteTripController, 'synchronizeSubmit'], 'company.trips.waste');

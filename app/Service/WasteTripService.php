@@ -177,6 +177,33 @@ final class WasteTripService
             && (int)($trip['legacy_flight_id'] ?? 0) === (int)($trip['business_id'] ?? 0);
     }
 
+    public static function delete(PDO $pdo, int $tripId, int $expectedVersion, array $actor): void
+    {
+        if (($actor['role_code'] ?? '') !== 'company_owner') throw new RuntimeException('Удаление доступно руководителю компании.');
+        $pdo->beginTransaction();
+        try {
+            $trip = self::fetchTripForUpdate($pdo, $tripId);
+            if ($trip === null || !empty($trip['deleted_at'])) throw new RuntimeException('Рейс не найден.');
+            self::assertCanAccessTrip($pdo, $trip, $actor);
+            if ((int)$trip['lock_version'] !== $expectedVersion) throw new RuntimeException('Рейс уже был изменён. Обновите страницу.');
+            $userId = (int)($actor['user_id'] ?? 0) ?: null;
+            $role = (string)$actor['role_code'];
+            $stmt = $pdo->prepare("UPDATE waste_trips SET deleted_at=NOW(),status='cancelled',
+                cancellation_reason=COALESCE(cancellation_reason,'Рейс удалён пользователем'),
+                cancelled_at=COALESCE(cancelled_at,NOW()),cancelled_by_user_id=COALESCE(cancelled_by_user_id,?),
+                cancelled_by_role=COALESCE(cancelled_by_role,?),updated_by_user_id=?,updated_by_role=?,
+                lock_version=lock_version+1 WHERE id=? AND lock_version=? AND deleted_at IS NULL");
+            $stmt->execute([$userId,$role,$userId,$role,$tripId,$expectedVersion]);
+            if ($stmt->rowCount() !== 1) throw new RuntimeException('Конфликт удаления рейса. Обновите страницу.');
+            FinanceObligationService::syncWasteTrip($pdo, $tripId);
+            self::logAudit($pdo,$tripId,'cancel',['trip'=>$trip],['deleted'=>true,'reason'=>'user_delete'],$actor);
+            $pdo->commit();
+        } catch (Throwable $error) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+    }
+
     /** Apply one validated source flight atomically, preserving its ERP identity. */
     public static function reconcileLegacyTrip(PDO $pdo, array $state, array $actor): string
     {
@@ -198,6 +225,10 @@ final class WasteTripService
             if ($trip !== null) {
                 if (!self::isSynchronizableLegacyTrip($trip)) throw new RuntimeException('Номер #'.$id.' занят самостоятельным ERP-рейсом.');
                 if (!RegulatedDataScopeService::canAccess($pdo,'waste_trip','waste_trips',(int)$trip['id'])) throw new RuntimeException('Рейс недоступен.');
+                if (!empty($trip['deleted_at']) && self::wasManuallyDeleted($pdo,(int)$trip['id'])) {
+                    $pdo->commit();
+                    return 'skipped';
+                }
             }
             $stage = 'request_resolution';
             $resolved = self::resolveRequestsForClaim($pdo, $state['request_ids'], false);
@@ -442,6 +473,16 @@ final class WasteTripService
         foreach($existing as $requestId=>$linkId)if(!isset($keep[$requestId]))$delete->execute([$linkId,$tripId]);
     }
     private static function fetchTripForUpdate(PDO $pdo,int $tripId): ?array { $stmt=$pdo->prepare('SELECT * FROM waste_trips WHERE id=? FOR UPDATE');$stmt->execute([$tripId]);return$stmt->fetch(PDO::FETCH_ASSOC)?:null; }
+    private static function wasManuallyDeleted(PDO $pdo,int $tripId): bool
+    {
+        $stmt=$pdo->prepare("SELECT after_json FROM waste_trip_audit_log WHERE waste_trip_id=? AND action='cancel' ORDER BY id DESC");
+        $stmt->execute([$tripId]);
+        foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $json) {
+            $event=json_decode((string)$json,true);
+            if (($event['deleted']??false) === true) return ($event['reason']??'') === 'user_delete';
+        }
+        return false;
+    }
     private static function fetchRequestLinks(PDO $pdo,int $tripId,bool $forUpdate): array { $sql='SELECT wtr.id,wtr.feo_request_id,wtr.snapshot_mass_kg,wtr.position_no,fr.zayavka_id,fr.mass_netto,fr.naim_oo_gruzootpravitel,fr.mno_adres_pogruzki,fr.naim_otkhoda_fkko,fr.nomer_opasnogo_gr FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.waste_trip_id=? ORDER BY wtr.position_no,wtr.id'.($forUpdate?' FOR UPDATE':'');$stmt=$pdo->prepare($sql);$stmt->execute([$tripId]);return$stmt->fetchAll(PDO::FETCH_ASSOC); }
     private static function logAudit(PDO $pdo,int $tripId,string $action,?array $before,?array $after,array $sessionUser): void { $encode=static fn(?array $v):?string=>$v===null?null:json_encode($v,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);$stmt=$pdo->prepare('INSERT INTO waste_trip_audit_log (waste_trip_id,action,before_json,after_json,actor_user_id,actor_role) VALUES (?,?,?,?,?,?)');$stmt->execute([$tripId,$action,$encode($before),$encode($after),(int)($sessionUser['user_id']??0)?:null,(string)($sessionUser['role_code']??'')]); }
 

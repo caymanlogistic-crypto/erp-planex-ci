@@ -13,6 +13,7 @@ use App\Service\WasteTripCustomerPaymentService;
 use App\Service\WasteTripGeneralPaymentService;
 use App\Service\WasteTripCarrierPaymentService;
 use App\Service\WasteTripService;
+use App\Service\WasteTripParityService;
 use App\Service\UserSyncService;
 use PDO;
 use RuntimeException;
@@ -31,6 +32,7 @@ final class WasteTripController
         $isFinanceRealm=(string)($sessionUser['role_code']??'')==='company_owner';
         $pageTitle='Перевозка отходов'; $pageContext='Рейсы › Перевозка отходов'; $dbError=$context['error'];
         $trips=$clients=$routeExecutors=$responsibleUsers=$utilizers=[];
+        $tripParity=null;
         $syncResult=$_SESSION['waste_trip_sync_result']??null; unset($_SESSION['waste_trip_sync_result']);
         $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; $old=$_SESSION['waste_trip_old']??[];
         unset($_SESSION['waste_trip_error'],$_SESSION['waste_trip_success'],$_SESSION['waste_trip_old']);
@@ -39,6 +41,7 @@ final class WasteTripController
             else try {
                 $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','q'=>$_GET['q']??'','sort'=>$_GET['sort']??''],$isFinanceRealm);
                 $trips=array_values(array_filter($trips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
+                $tripParity=WasteTripParityService::state($localPdo);
                 [$clients,$routeExecutors,$responsibleUsers,$utilizers]=$this->loadOptions($localPdo,$sessionUser,$central,$companyId);
                 $pageContext.=' › Компания: '.(string)$company['name'];
             } catch(Throwable $e) { error_log('waste trips index failed: '.$e->getMessage()); $dbError='Не удалось загрузить реестр перевозки отходов.'; }
@@ -137,6 +140,17 @@ final class WasteTripController
         try { $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo); WasteTripService::cancel($pdo,(int)$id,(int)($_POST['lock_version']??0),(string)($_POST['cancellation_reason']??''),$context['sessionUser']); $_SESSION['waste_trip_success']='Рейс отменён.';$redirect='/company/trips/departures?open_trip='.(int)$id; }
         catch(Throwable $e){$_SESSION['waste_trip_error']=$this->publicError($e,'Не удалось отменить рейс.');$redirect='/company/trips/departures?open_trip='.(int)$id;}
         header('Location: '.app_url($redirect)); exit;
+    }
+
+    public function deleteSubmit(string $id): void
+    {
+        requireRole(['company_owner']); $context=$this->tenantContext(true);
+        try {
+            $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
+            WasteTripService::delete($pdo,(int)$id,(int)($_POST['lock_version']??0),$context['sessionUser']);
+            $_SESSION['waste_trip_success']='Рейс удалён из реестра.';
+        } catch(Throwable $e) { $_SESSION['waste_trip_error']=$this->publicError($e,'Не удалось удалить рейс.'); }
+        header('Location: '.app_url('/company/trips/departures')); exit;
     }
 
     private function tenantContext(bool $applyMigrations): array
