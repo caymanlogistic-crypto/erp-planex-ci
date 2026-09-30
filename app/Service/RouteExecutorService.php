@@ -50,7 +50,8 @@ final class RouteExecutorService
                 JOIN driver_vehicle_blocks dvb ON dvb.id = c.driver_vehicle_block_id
                 WHERE c.contractor_id = ?
                   AND dvb.driver_id = ?
-                  AND dvb.vehicle_set_id = ?";
+                  AND dvb.vehicle_set_id = ?
+                  AND c.deleted_at IS NULL";
         $params = [$contractorId, $driverId, $vehicleSetId];
 
         if ($excludeCrewId !== null && $excludeCrewId > 0) {

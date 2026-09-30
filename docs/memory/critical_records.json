@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "705c49c4bbedfff5413f96059d68022a55aa35c1",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/705c49c4bbedfff5413f96059d68022a55aa35c1/docs/database/TENANT_SCHEMA_DOCUMENTS_02.md",
+      "verified_sha": "7f776dff834e1b3937b7716f1acde76f86bdec50",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/7f776dff834e1b3937b7716f1acde76f86bdec50/docs/database/TENANT_SCHEMA_TRANSPORT.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",

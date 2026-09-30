@@ -98,7 +98,7 @@ try {
         try{
             $s=$localPdo->prepare('SELECT id FROM driver_vehicle_blocks WHERE driver_id=? AND vehicle_set_id=? LIMIT 1');$s->execute([$primaryDriverId,$vehicleSetId]);$dvbId=(int)$s->fetchColumn();
             if(!$dvbId){$i=$localPdo->prepare("INSERT INTO driver_vehicle_blocks(driver_id,vehicle_set_id,status,created_by_user_id,created_by_role) VALUES(?,?, 'active',?,?)");$i->execute([$primaryDriverId,$vehicleSetId,$userId,$userRole]);$dvbId=(int)$localPdo->lastInsertId();}
-            $dup=$localPdo->prepare('SELECT COUNT(*) FROM crews WHERE contractor_id=? AND driver_vehicle_block_id=?');$dup->execute([$contractorId,$dvbId]);
+            $dup=$localPdo->prepare('SELECT COUNT(*) FROM crews WHERE contractor_id=? AND driver_vehicle_block_id=? AND deleted_at IS NULL');$dup->execute([$contractorId,$dvbId]);
             if((int)$dup->fetchColumn()>0)throw new RuntimeException('Такой исполнитель рейса уже существует для выбранного подрядчика, первого водителя и ТС.');
             $i=$localPdo->prepare("INSERT INTO crews(contractor_id,vehicle_id,driver_id,driver_vehicle_block_id,status,comments,created_by_user_id,created_by_role) VALUES(?,?,?,?, 'active',?,?,?)");
             $i->execute([$contractorId,$vehicleUnitId,$primaryDriverId,$dvbId,$comments!==''?$comments:null,$userId,$userRole]);
