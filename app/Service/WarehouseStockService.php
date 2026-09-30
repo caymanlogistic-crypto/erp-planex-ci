@@ -11,6 +11,8 @@ use RuntimeException;
  */
 final class WarehouseStockService
 {
+    private const LEGACY_CUTOVER_FLIGHT_ID = 225;
+
     public static function load(PDO $legacy, PDO $tenant): array
     {
         $warehouses = $legacy->query('SELECT id,name FROM warehouses ORDER BY name,id')->fetchAll(PDO::FETCH_ASSOC);
@@ -100,7 +102,7 @@ final class WarehouseStockService
         }
         usort($movements, static fn(array $a, array $b): int =>
             strcmp((string)$a['movement_date'], (string)$b['movement_date']) ?: ((int)$a['id'] <=> (int)$b['id']));
-        $balances = $groups = $movementFlightIds = [];
+        $balances = $groups = $movementFlightIds = $journalFlightIds = [];
         foreach ($movements as $row) {
             if (($row['status'] ?? 'active') !== 'active') continue;
             $type = (string)$row['movement_type'];
@@ -139,6 +141,7 @@ final class WarehouseStockService
             $group['stock_kg'] = array_sum($balances[$warehouseId]);
             unset($group);
             $movementFlightIds[$flightId] = true;
+            if (empty($row['derived'])) $journalFlightIds[$flightId] = true;
         }
         $current = [];
         foreach ($balances as $warehouseId => $requestBalances) {
@@ -192,6 +195,15 @@ final class WarehouseStockService
                 $erp[$id]['request_masses_kg'][(string)$row['zayavka_id']] = (int)round((float)($row['snapshot_mass_kg'] ?? 0));
             }
         }
+        $receipts = [];
+        foreach ($groups as $group) {
+            if ($group['direction'] !== 'in') continue;
+            foreach ($group['requests'] as $request) {
+                $receipts[$group['warehouse_id']][$request['id']][$group['flight_id']] =
+                    ($receipts[$group['warehouse_id']][$request['id']][$group['flight_id']] ?? 0) + $request['mass_kg'];
+            }
+        }
+        $formatKg = static fn(int $kg): string => number_format($kg, 0, ',', ' ');
         $issues = [];
         foreach ($flightMap as $flightId => $flight) {
             $oldSource = (int)($flight['source_warehouse_id'] ?? 0);
@@ -199,7 +211,9 @@ final class WarehouseStockService
             if ($oldSource <= 0 && $oldDestination <= 0 && !isset($movementFlightIds[$flightId])) continue;
             $messages = [];
             if (!isset($erp[$flightId])) {
-                $messages[] = 'Рейс отсутствует в ERP.';
+                // The ERP trip namespace starts after the legacy cutover boundary.
+                if ($flightId <= self::LEGACY_CUTOVER_FLIGHT_ID) continue;
+                $messages[] = 'Рейс есть в старой базе, но его нет в ERP. Проверьте перенос рейса #'.$flightId.'.';
             } else {
                 if ($oldSource !== $erp[$flightId]['source'] || $oldDestination !== $erp[$flightId]['destination']) {
                     $messages[] = 'Склад рейса в ERP отличается от старой базы.';
@@ -213,10 +227,16 @@ final class WarehouseStockService
                 }
                 $directionMass = ['in'=>0, 'out'=>0];
                 $directionRequests = ['in'=>[], 'out'=>[]];
+                $directionRequestMass = ['in'=>[], 'out'=>[]];
                 foreach ($groups as $group) {
                     if ($group['flight_id'] === $flightId) {
                         $directionMass[$group['direction']] += $group['mass_kg'];
                         $directionRequests[$group['direction']] = array_merge($directionRequests[$group['direction']], $group['request_ids']);
+                        foreach ($group['requests'] as $request) {
+                            $requestId = $request['id'];
+                            $directionRequestMass[$group['direction']][$requestId] =
+                                ($directionRequestMass[$group['direction']][$requestId] ?? 0) + $request['mass_kg'];
+                        }
                     }
                 }
                 $flightMass = max($directionMass);
@@ -226,14 +246,37 @@ final class WarehouseStockService
                     $expectedMass += $erp[$flightId]['request_masses_kg'][$requestId] ?? 0;
                 }
                 if ($flightMass > 0 && abs($flightMass - $expectedMass) > 1) {
-                    $messages[] = 'Масса складских движений: старая база '.$flightMass.' кг, ERP '.$expectedMass.' кг по списанным заявкам.';
+                    $difference = $flightMass - $expectedMass;
+                    $messages[] = 'Масса по рейсу: складской учёт '.$formatKg($flightMass).' кг, снимок рейса ERP '
+                        .$formatKg($expectedMass).' кг. Разница '.($difference > 0 ? '+' : '−').$formatKg(abs($difference)).' кг.';
+                    foreach ($directionRequestMass[$direction] as $requestId => $movementMass) {
+                        $erpMass = $erp[$flightId]['request_masses_kg'][$requestId] ?? 0;
+                        if (abs($movementMass - $erpMass) <= 1) continue;
+                        $requestDifference = $movementMass - $erpMass;
+                        $messages[] = 'Заявка #'.$requestId.': в складском учёте '.$formatKg($movementMass)
+                            .' кг, в снимке рейса ERP '.$formatKg($erpMass).' кг; разница '
+                            .($requestDifference > 0 ? '+' : '−').$formatKg(abs($requestDifference)).' кг.';
+                        $warehouseId = $direction === 'in' ? $oldDestination : $oldSource;
+                        $requestReceipts = $receipts[$warehouseId][$requestId] ?? [];
+                        if (count($requestReceipts) > 1) {
+                            ksort($requestReceipts, SORT_NUMERIC);
+                            $parts = [];
+                            foreach ($requestReceipts as $receiptFlightId => $mass) {
+                                $parts[] = '#'.$receiptFlightId.' ('.$formatKg($mass).' кг)';
+                            }
+                            $messages[] = 'По этой заявке на складе учтены приходы в рейсах '
+                                .implode(' и ', $parts).'. Проверьте, оба ли прихода относятся к одному грузу.';
+                        }
+                    }
                 }
             }
             if ($messages !== []) {
                 $issues[$flightId] = [
                     'flight_id'=>$flightId,'warehouse_id'=>$oldDestination ?: $oldSource,
                     'messages'=>$messages,
-                    'has_movements'=>isset($movementFlightIds[$flightId]),
+                    'has_movements'=>isset($journalFlightIds[$flightId]),
+                    'movement_label'=>isset($journalFlightIds[$flightId]) ? 'Есть в журнале'
+                        : (isset($movementFlightIds[$flightId]) ? 'Расчётное движение' : 'Нет в журнале'),
                 ];
             }
         }
@@ -243,7 +286,7 @@ final class WarehouseStockService
                 'flight_id'=>$flightId,
                 'warehouse_id'=>$row['destination'] ?: $row['source'],
                 'messages'=>['Складской рейс есть в ERP, но отсутствует в старой базе.'],
-                'has_movements'=>false,
+                'has_movements'=>false, 'movement_label'=>'Нет в журнале',
             ];
         }
         krsort($issues, SORT_NUMERIC);
