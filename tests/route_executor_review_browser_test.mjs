@@ -21,13 +21,13 @@ try {
     if (path.endsWith('/review/config')) return route.fulfill({ json: { ok: true, sender: 'sender@example.test', author: 'Отправитель', recipients: ['info@plan-ex.ru'], send_responsible_logist: false,
       max_events: { 'route_executor.partial': { enabled: true, chat_config_id: 1, template: 'Первичные данные: {{driver}}. Ожидайте полный комплект вторым письмом.' } } } });
     if (path.endsWith('/review/send')) {
-      sends.push(route.request().postData());
+      sends.push({ body: route.request().postData(), csrf: route.request().headers()['x-csrf-token'] });
       return route.fulfill({ json: { ok: true, stage: 'partial', mail_status: 'accepted', max_status: 'sent' } });
     }
     return route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><html><body></body></html>' });
   });
   await page.goto('http://127.0.0.1:59999/');
-  await page.setContent(`<style>${css}</style>
+  await page.setContent(`<meta name="csrf-token" content="test-csrf-token"><style>${css}</style>
     <button data-source-create-open>Открыть</button>
     <div id="route-executor-create-modal" data-workflow-scope="7-11">
       <div id="route-executor-create-modal-inner">
@@ -70,6 +70,7 @@ try {
   await dialog.locator('[data-lab-review-confirm]').click();
   await page.waitForTimeout(300);
   assert.equal(sends.length, 1);
+  assert.equal(sends[0].csrf, 'test-csrf-token');
   assert.match(await modal.locator('[data-lab-workflow-message]').innerText(), /Первичные данные отправлены/);
   assert.equal(await modal.locator('[data-lab-send]').isVisible(), false);
   assert.deepEqual(errors, [], 'Browser script errors');
