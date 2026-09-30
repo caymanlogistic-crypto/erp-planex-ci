@@ -2,7 +2,67 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `1c4cc8e0ba6bb32bfd0b3090e6f0c7b5b6d603e2c2199692351e3875761d36df`
+**Schema fingerprint:** `9fc06816d45bccdda33423ce1f6b2eafcebcaa674614cad73a0fc6630a5db318`
+
+## `waste_trip_registration_journal`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `waste_trip_request_id` | `bigint unsigned` | YES | NULL | — | `MUL` |
+| `document_id` | `bigint unsigned` | YES | NULL | — | — |
+| `event_kind` | `varchar(32)` | NO | NULL | — | — |
+| `action_text` | `varchar(255)` | NO | NULL | — | — |
+| `actor_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `actor_login` | `varchar(100)` | NO | NULL | — | `MUL` |
+| `before_json` | `json` | YES | NULL | — | — |
+| `after_json` | `json` | YES | NULL | — | — |
+| `initial_key` | `varchar(80)` | YES | NULL | — | `UNI` |
+| `occurred_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED` | `MUL` |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `fk_registration_journal_request` (`waste_trip_request_id`)
+- **INDEX** `idx_registration_journal_actor` (`actor_login`, `occurred_at`)
+- **INDEX** `idx_registration_journal_time` (`occurred_at`, `id`)
+- **INDEX** `idx_registration_journal_trip` (`waste_trip_id`, `waste_trip_request_id`, `id`)
+- **UNIQUE** `uk_registration_journal_initial` (`initial_key`)
+
+### Physical foreign keys
+
+- `fk_registration_journal_request`: (`waste_trip_request_id`) → `waste_trip_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_registration_journal_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+
+## `waste_trip_requests`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `feo_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `snapshot_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
+| `position_no` | `int unsigned` | NO | `0` | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_waste_trip_requests_position` (`waste_trip_id`, `position_no`, `id`)
+- **INDEX** `idx_waste_trip_requests_request` (`feo_request_id`, `waste_trip_id`)
+- **UNIQUE** `uk_waste_trip_request` (`waste_trip_id`, `feo_request_id`)
+
+### Physical foreign keys
+
+- `fk_waste_trip_requests_feo`: (`feo_request_id`) → `feo_requests`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
+- `fk_waste_trip_requests_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `waste_trip_start_statistics`
 
