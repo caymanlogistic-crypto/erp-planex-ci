@@ -10,21 +10,24 @@ $moneyCents = static function ($value): int {
     $cents = ((int)$whole * 100) + (int)str_pad($fraction, 2, '0');
     return $negative ? -$cents : $cents;
 };
-$money = static function (int $cents): string {
-    return number_format($cents / 100, $cents % 100 === 0 ? 0 : 2, ',', ' ') . ' ₽';
-};
+$money = static fn(int $cents): string => number_format($cents / 100, $cents % 100 === 0 ? 0 : 2, ',', ' ') . ' ₽';
 $date = static function ($value): string {
     $value = trim((string)($value ?? ''));
     return preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) ? date('d.m.Y', strtotime($value)) : '—';
 };
-$sideTotal = static function (array $items) use ($moneyCents): int {
-    return array_sum(array_map(static fn(array $item): int => $moneyCents($item['amount'] ?? 0), $items));
+$sideTotal = static fn(array $items): int => array_sum(array_map(static fn(array $item): int => $moneyCents($item['amount'] ?? 0), $items));
+$stats = static function (array $trip, string $side) use ($sideTotal, $moneyCents): array {
+    $block = $trip['sides'][$side];
+    return [
+        'rate' => $block['rate'] === null ? null : $moneyCents($block['rate']),
+        'billed' => $sideTotal($block['invoices']),
+        'paid' => $sideTotal($block['payments']),
+    ];
 };
-$tripStatus = static function (array $trip) use ($sideTotal, $moneyCents): string {
+$tripStatus = static function (array $trip) use ($stats, $sideTotal, $moneyCents): string {
     foreach (['customer', 'carrier'] as $side) {
-        $block = $trip['sides'][$side];
-        $rate = $block['rate'] !== null ? $moneyCents($block['rate']) : null;
-        if ($rate === null || $rate <= 0 || $sideTotal($block['invoices']) < $rate) return 'no-invoice';
+        $values = $stats($trip, $side);
+        if ($values['rate'] === null || $values['rate'] <= 0 || $values['billed'] < $values['rate']) return 'no-invoice';
     }
     foreach (['customer', 'carrier'] as $side) {
         $block = $trip['sides'][$side];
@@ -34,62 +37,48 @@ $tripStatus = static function (array $trip) use ($sideTotal, $moneyCents): strin
     }
     return 'closed';
 };
-$paymentStatus = static function (array $trip) use ($sideTotal, $moneyCents): string {
-    $customer = $trip['sides']['customer'];
-    $carrier = $trip['sides']['carrier'];
-    $customerPaid = $sideTotal($customer['payments']);
-    $carrierPaid = $sideTotal($carrier['payments']);
-    if ($customerPaid <= 0 && $carrierPaid <= 0) return 'unpaid';
-
-    $customerRate = $customer['rate'] === null ? null : $moneyCents($customer['rate']);
-    $carrierRate = $carrier['rate'] === null ? null : $moneyCents($carrier['rate']);
-    if (($customerRate !== null && $customerRate > $customerPaid)
-        || ($carrierRate !== null && $carrierRate > $carrierPaid)) return 'underpaid';
-    if ($customerRate !== null && $carrierRate !== null
-        && ($customerRate > 0 || $carrierRate > 0)) return 'paid';
+$paymentStatus = static function (array $trip) use ($stats): string {
+    $customer = $stats($trip, 'customer');
+    $carrier = $stats($trip, 'carrier');
+    if ($customer['paid'] <= 0 && $carrier['paid'] <= 0) return 'unpaid';
+    if (($customer['rate'] !== null && $customer['paid'] < $customer['rate'])
+        || ($carrier['rate'] !== null && $carrier['paid'] < $carrier['rate'])) return 'underpaid';
+    if ($customer['rate'] !== null && $carrier['rate'] !== null
+        && ($customer['rate'] > 0 || $carrier['rate'] > 0)) return 'paid';
     return 'unknown-rate';
 };
-$renderSide = static function (array $trip, string $side) use ($money, $moneyCents, $date, $sideTotal): void {
-    $block = $trip['sides'][$side];
+$renderSide = static function (array $trip, string $side) use ($stats, $money, $moneyCents, $date): void {
     $customer = $side === 'customer';
-    $party = (string)($customer ? $trip['client_name'] : $trip['carrier_name']);
+    $block = $trip['sides'][$side];
+    $values = $stats($trip, $side);
+    $party = trim((string)($customer ? $trip['client_name'] : $trip['carrier_name']));
     $partyId = (int)($customer ? $trip['client_id'] : $trip['carrier_id']);
-    $rate = $block['rate'] === null ? null : $moneyCents($block['rate']);
-    $billed = $sideTotal($block['invoices']);
-    $paid = $sideTotal($block['payments']);
-    $byInvoice = [];
+    $unbilled = $values['rate'] === null ? null : max(0, $values['rate'] - $values['billed']);
+    $invoiceNumbers = [];
+    $invoicePaid = 0;
+    foreach ($block['invoices'] as $invoice) $invoiceNumbers[(int)$invoice['id']] = (string)$invoice['number'];
     foreach ($block['payments'] as $payment) {
-        $invoiceId = (int)($payment['invoice_id'] ?? 0);
-        $byInvoice[$invoiceId] = ($byInvoice[$invoiceId] ?? 0) + $moneyCents($payment['amount']);
+        if (isset($invoiceNumbers[(int)($payment['invoice_id'] ?? 0)])) $invoicePaid += $moneyCents($payment['amount']);
     }
-    $invoiceIds = array_flip(array_map(static fn(array $invoice): int => (int)$invoice['id'], $block['invoices']));
-    $invoicePaid = array_sum(array_intersect_key($byInvoice, $invoiceIds));
-    $label = !$block['invoices'] ? 'Счёта нет' : (($billed > 0 && $invoicePaid >= $billed && ($rate === null || $billed >= $rate))
-        ? ($customer ? 'Получено полностью' : 'Оплачено полностью')
-        : ($invoicePaid > 0 ? ($customer ? 'Получено частично' : 'Оплачено частично') : 'Ожидает оплаты'));
-    $badge = !$block['invoices'] ? 'neutral' : (($billed > 0 && $invoicePaid >= $billed && ($rate === null || $billed >= $rate)) ? 'ok' : ($invoicePaid > 0 ? 'warning' : 'danger'));
     ?>
-    <section class="rp-side-card" aria-label="<?= $customer ? 'Заказчик' : 'Перевозчик' ?>">
-        <div class="rp-side-head"><div class="rp-side-party"><span class="rp-side-kicker"><?= $customer ? 'Заказчик' : 'Перевозчик' ?></span><h3><?= e($party !== '' ? $party : '—') ?></h3></div>
-            <div class="rp-side-rate"><span>Ставка в рейсе</span><strong><?= $rate === null ? '—' : e($money($rate)) ?></strong></div></div>
-        <div class="rp-side-details">
-            <div class="rp-side-detail"><h4><?= $customer ? 'Счета заказчику' : 'Счета от перевозчика' ?></h4><div class="rp-invoice-list">
-                <?php if (!$block['invoices']): ?><span class="rp-empty">—</span><?php endif; ?>
-                <?php foreach ($block['invoices'] as $invoice): ?>
-                    <button type="button" class="rp-invoice-link" data-view-invoice="<?= (int)$invoice['id'] ?>">№ <?= e((string)$invoice['number']) ?></button>
-                    <span class="rp-invoice-meta"><?= e($date($invoice['invoice_date'])) ?> · <?= e($money($moneyCents($invoice['amount']))) ?></span>
-                <?php endforeach; ?>
-                <span class="badge badge-<?= $badge ?>"><span class="dot"></span><?= e($label) ?></span>
-                <?php if ($rate !== null && $rate > $billed): ?><span class="rp-unbilled"><?= $customer ? 'К выставлению' : 'Ожидается счёт' ?>: <?= e($money($rate - $billed)) ?></span><?php endif; ?>
-                <?php if ($partyId > 0 && ($rate === null || $rate > $billed)): ?><button type="button" class="rp-add-link" data-create-direction="<?= $customer ? 'OUTGOING' : 'INCOMING' ?>" data-create-party="<?= $partyId ?>" data-create-trip="<?= (int)$trip['business_id'] ?>">+ Добавить счёт</button><?php endif; ?>
-            </div></div>
-            <div class="rp-side-detail"><h4><?= $customer ? 'Получено от заказчика' : 'Оплачено перевозчику' ?></h4><div class="rp-payment-list">
-                <?php if (!$block['payments']): ?><span class="rp-empty">Оплат нет</span><?php endif; ?>
-                <?php foreach ($block['payments'] as $payment): ?>
-                    <div class="rp-payment-line"><span><?= e($date($payment['payment_date'])) ?></span><strong><?= e($money($moneyCents($payment['amount']))) ?></strong></div>
-                <?php endforeach; ?>
-                <?php if ($block['invoices']): ?><div class="rp-payment-total"><span><?= $customer ? 'Получено' : 'Оплачено' ?>: <?= e($money($paid)) ?></span><span>По счетам осталось: <?= e($money(max(0, $billed - $invoicePaid))) ?></span></div><?php endif; ?>
-            </div></div>
+    <section class="rp-finance-pane" aria-labelledby="rp-side-<?= (int)$trip['business_id'] ?>-<?= $side ?>">
+        <div class="rp-finance-head"><span><?= $customer ? 'Заказчик' : 'Перевозчик' ?></span><h3 id="rp-side-<?= (int)$trip['business_id'] ?>-<?= $side ?>"><?= e($party !== '' ? $party : '—') ?></h3></div>
+        <dl class="rp-finance-metrics"><div><dt>Ставка в рейсе</dt><dd><?= $values['rate'] === null ? '—' : e($money($values['rate'])) ?></dd></div><div><dt><?= $customer ? 'Выставлено' : 'Получено счетов' ?></dt><dd><?= e($money($values['billed'])) ?></dd></div><div><dt><?= $customer ? 'Получено' : 'Оплачено' ?></dt><dd><?= e($money($values['paid'])) ?></dd></div></dl>
+        <div class="rp-finance-section"><div class="rp-finance-section-head"><h4><?= $customer ? 'Счета заказчику' : 'Счета перевозчика' ?></h4>
+            <?php if ($partyId > 0 && ($values['rate'] === null || $values['rate'] > $values['billed'])): ?><button type="button" class="rp-add-link" data-create-direction="<?= $customer ? 'OUTGOING' : 'INCOMING' ?>" data-create-party="<?= $partyId ?>" data-create-trip="<?= (int)$trip['business_id'] ?>">+ Добавить счёт</button><?php endif; ?></div>
+            <?php if (!$block['invoices']): ?><p class="rp-detail-empty">Счёта пока нет</p><?php endif; ?>
+            <?php foreach ($block['invoices'] as $invoice): ?><div class="rp-detail-line"><button type="button" class="rp-invoice-link" data-view-invoice="<?= (int)$invoice['id'] ?>">№ <?= e((string)$invoice['number']) ?></button><span><?= e($date($invoice['invoice_date'])) ?></span><strong><?= e($money($moneyCents($invoice['amount']))) ?></strong></div><?php endforeach; ?>
+        </div>
+        <div class="rp-finance-section"><h4><?= $customer ? 'Поступления' : 'Выплаты' ?></h4>
+            <?php if (!$block['payments']): ?><p class="rp-detail-empty">Оплат пока нет</p><?php endif; ?>
+            <?php foreach ($block['payments'] as $payment):
+                $number = $invoiceNumbers[(int)($payment['invoice_id'] ?? 0)] ?? null; ?>
+                <div class="rp-detail-line"><span><?= e($date($payment['payment_date'])) ?></span><span><?= $number === null ? 'Без счёта' : 'по счёту № ' . e($number) ?></span><strong><?= e($money($moneyCents($payment['amount']))) ?></strong></div>
+            <?php endforeach; ?>
+        </div>
+        <div class="rp-finance-balance">
+            <?php if ($unbilled === null): ?><span>Ставка не указана</span><?php elseif ($unbilled > 0): ?><span><?= $customer ? 'К выставлению' : 'Ожидается счёт' ?>: <strong><?= e($money($unbilled)) ?></strong></span><?php else: ?><span>Счета покрывают ставку</span><?php endif; ?>
+            <?php if ($block['invoices']): ?><span>По счетам осталось: <strong><?= e($money(max(0, $values['billed'] - $invoicePaid))) ?></strong></span><?php endif; ?>
         </div>
     </section>
     <?php
@@ -104,23 +93,64 @@ $renderSide = static function (array $trip, string $side) use ($money, $moneyCen
         <label class="rp-filter-field rp-payment-filter"><span>Оплаты по рейсу</span><select class="field-select" id="rp-payment-filter" title="Фактические оплаты сравниваются со ставками заказчика и перевозчика"><option value="all">Все оплаты</option><option value="paid">Обе стороны оплачены полностью</option><option value="underpaid">Есть недоплата</option><option value="unpaid">Нет оплат с обеих сторон</option><option value="unknown-rate">Не хватает ставки для сравнения</option></select></label>
         <label class="rp-filter-field rp-search"><span>Поиск</span><input class="field-input" id="rp-search" placeholder="ID, описание, контрагент или счёт"></label>
         <label class="rp-filter-field"><span>Сортировка</span><select class="field-select" id="rp-sort"><option value="new">По ID (сначала новые)</option><option value="old">По ID (сначала старые)</option></select></label></div>
-    <div class="table-toolbar"><div class="found-label">Найдено: <b id="rp-count"><?= count($trips) ?></b></div><div class="rp-toolbar-note">Только рейсы ООО «Планэкс» · груз сдан</div></div>
-    <div class="rp-trip-list" id="rp-list">
+    <div class="table-toolbar"><div class="found-label">Найдено: <b id="rp-count"><?= count($trips) ?></b></div><div class="rp-toolbar-note"><span class="rp-hint-desktop">Двойной щелчок по строке — подробности</span><span class="rp-hint-mobile">Нажмите на строку — подробности</span></div></div>
+    <div class="rp-table-wrap"><table class="rp-compact-table"><colgroup><col class="rp-w-id"><col class="rp-w-desc"><col class="rp-w-date"><col class="rp-w-date"><col class="rp-w-party"><col class="rp-w-rate"><col class="rp-w-invoice"><col class="rp-w-paid"><col class="rp-w-party"><col class="rp-w-rate"><col class="rp-w-invoice"><col class="rp-w-paid"></colgroup>
+        <thead><tr><th scope="col">ID</th><th scope="col">Описание рейса</th><th scope="col">Начало</th><th scope="col">Окончание</th><th scope="col">Заказчик</th><th scope="col">Ставка</th><th scope="col">Счёт клиенту</th><th scope="col">Получено</th><th scope="col">Перевозчик</th><th scope="col">Себес</th><th scope="col">Счёт перевозчика</th><th scope="col">Оплачено</th></tr></thead>
+        <tbody id="rp-list">
         <?php foreach ($trips as $trip):
+            $businessId = (int)$trip['business_id'];
             $start = $trip['actual_start_date'] ?: ($trip['planned_start_date'] ?: $trip['planned_start_date_from']);
             $end = $trip['actual_end_date'] ?: $trip['planned_finish_date'];
-            $search = '#' . $trip['business_id'] . ' ' . $trip['comment'] . ' ' . $trip['client_name'] . ' ' . $trip['carrier_name'] . ' ' . implode(' ', array_map(static fn(array $i): string => (string)$i['number'], array_merge($trip['sides']['customer']['invoices'], $trip['sides']['carrier']['invoices'])));
+            $startLabel = $date($start);
+            if (!$trip['actual_start_date'] && !$trip['planned_start_date'] && $trip['planned_start_date_from']) $startLabel = 'с ' . $startLabel;
+            $endLabel = $date($end);
+            $description = trim((string)$trip['comment']) ?: 'Без описания';
+            $detailTitle = 'Рейс #' . $businessId . ' · ' . $description . ' · ' . $startLabel . ($endLabel === '—' ? '' : ' — ' . $endLabel);
+            $customer = $stats($trip, 'customer');
+            $carrier = $stats($trip, 'carrier');
+            $search = '#' . $businessId . ' ' . $description . ' ' . $trip['client_name'] . ' ' . $trip['carrier_name'] . ' ' . implode(' ', array_map(static fn(array $i): string => (string)$i['number'], array_merge($trip['sides']['customer']['invoices'], $trip['sides']['carrier']['invoices'])));
+            $invoiceSummary = static function (array $invoices): string {
+                if (!$invoices) return '—';
+                return '№ ' . (string)$invoices[0]['number'] . (count($invoices) > 1 ? ' +' . (count($invoices) - 1) : '');
+            };
+            $paidClass = static function (array $values): string {
+                if ($values['rate'] === null) return 'unknown';
+                if ($values['paid'] >= $values['rate']) return 'full';
+                return $values['paid'] > 0 ? 'partial' : 'none';
+            };
             ?>
-        <article class="rp-trip-item" data-id="<?= (int)$trip['business_id'] ?>" data-status="<?= e($tripStatus($trip)) ?>" data-payment-status="<?= e($paymentStatus($trip)) ?>" data-search="<?= e(mb_strtolower($search, 'UTF-8')) ?>">
-            <div class="rp-trip-head"><div class="rp-trip-name"><span class="rp-trip-id">#<?= (int)$trip['business_id'] ?></span><h2><?= e(trim((string)$trip['comment']) ?: 'Без описания') ?></h2></div>
-                <div class="rp-trip-dates"><div><span>Начало рейса</span><strong><?= e($date($start)) ?></strong></div><div><span>Окончание рейса</span><strong><?= e($date($end)) ?></strong></div></div></div>
-            <div class="rp-trip-sides"><?php $renderSide($trip, 'customer'); $renderSide($trip, 'carrier'); ?></div>
-        </article>
+            <tr class="rp-compact-row" data-id="<?= $businessId ?>" data-status="<?= e($tripStatus($trip)) ?>" data-payment-status="<?= e($paymentStatus($trip)) ?>" data-search="<?= e(mb_strtolower($search, 'UTF-8')) ?>" tabindex="0" aria-label="<?= e($detailTitle . '. Двойной щелчок или Enter — подробности') ?>" title="Двойной щелчок — подробности рейса">
+                <th scope="row" class="rp-col-id">#<?= $businessId ?></th>
+                <td class="rp-col-description"><span class="rp-summary-clip" title="<?= e($description) ?>"><?= e($description) ?></span></td>
+                <td class="rp-col-date"><?= e($startLabel) ?></td><td class="rp-col-date"><?= e($endLabel) ?></td>
+                <td class="rp-col-party"><span class="rp-summary-clip" title="<?= e((string)$trip['client_name']) ?>"><?= e((string)$trip['client_name']) ?></span></td>
+                <td class="rp-col-money"><?= $customer['rate'] === null ? '<span class="rp-summary-empty">—</span>' : e($money($customer['rate'])) ?></td>
+                <td class="rp-col-invoice"><span class="rp-summary-clip" title="<?= e(implode(', ', array_map(static fn(array $i): string => '№ ' . $i['number'], $trip['sides']['customer']['invoices']))) ?>"><?= e($invoiceSummary($trip['sides']['customer']['invoices'])) ?></span></td>
+                <td class="rp-col-money rp-paid--<?= $paidClass($customer) ?>" title="Получено: <?= e($money($customer['paid'])) ?>"><?= e($money($customer['paid'])) ?></td>
+                <td class="rp-col-party"><span class="rp-summary-clip" title="<?= e((string)$trip['carrier_name']) ?>"><?= e(trim((string)$trip['carrier_name']) ?: '—') ?></span></td>
+                <td class="rp-col-money"><?= $carrier['rate'] === null ? '<span class="rp-summary-empty">—</span>' : e($money($carrier['rate'])) ?></td>
+                <td class="rp-col-invoice"><span class="rp-summary-clip" title="<?= e(implode(', ', array_map(static fn(array $i): string => '№ ' . $i['number'], $trip['sides']['carrier']['invoices']))) ?>"><?= e($invoiceSummary($trip['sides']['carrier']['invoices'])) ?></span></td>
+                <td class="rp-col-money rp-paid--<?= $paidClass($carrier) ?>" title="Оплачено: <?= e($money($carrier['paid'])) ?>"><?= e($money($carrier['paid'])) ?></td>
+            </tr>
         <?php endforeach; ?>
-        <div class="rp-empty-state" id="rp-empty"<?= $trips ? ' hidden' : '' ?>>По выбранным условиям рейсов нет.</div>
-    </div>
+        </tbody>
+    </table><div class="rp-empty-state" id="rp-empty"<?= $trips ? ' hidden' : '' ?>>По выбранным условиям рейсов нет.</div></div>
 </div>
 
+<?php foreach ($trips as $trip):
+    $businessId = (int)$trip['business_id'];
+    $start = $trip['actual_start_date'] ?: ($trip['planned_start_date'] ?: $trip['planned_start_date_from']);
+    $end = $trip['actual_end_date'] ?: $trip['planned_finish_date'];
+    $startLabel = $date($start);
+    if (!$trip['actual_start_date'] && !$trip['planned_start_date'] && $trip['planned_start_date_from']) $startLabel = 'с ' . $startLabel;
+    $endLabel = $date($end);
+    $detailTitle = 'Рейс #' . $businessId . ' · ' . (trim((string)$trip['comment']) ?: 'Без описания') . ' · ' . $startLabel . ($endLabel === '—' ? '' : ' — ' . $endLabel);
+    ?><template id="rp-detail-<?= $businessId ?>" data-title="<?= e($detailTitle) ?>"><div class="modal-body rp-modal-body rp-details-body"><div class="rp-details-sides"><?php $renderSide($trip, 'customer'); $renderSide($trip, 'carrier'); ?></div></div></template>
+<?php endforeach; ?>
+<div id="rp-detail-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="rp-detail-title" data-close-on-overlay="1" data-close-on-escape="1"><div class="modal modal-lg">
+    <div class="modal-head"><span class="modal-title" id="rp-detail-title"></span><button type="button" class="modal-close" data-close-modal="rp-detail-modal" aria-label="Закрыть">&times;</button></div>
+    <div id="rp-detail-content"></div><div class="modal-foot is-spaced"><span></span><button type="button" class="btn btn-ghost" data-close-modal="rp-detail-modal">Закрыть</button></div>
+</div></div>
 <div id="invoice-create-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="0" data-close-on-escape="0"><div class="modal modal-lg">
     <div class="modal-head"><span class="modal-title">Создать счёт</span><button type="button" class="modal-close" data-close-modal="invoice-create-modal">&times;</button></div>
     <?php if ($localPdo !== null): $isEdit = false; $invoice = []; $returnTo = '/company/finance/received-paid';
@@ -132,7 +162,7 @@ $renderSide = static function (array $trip, string $side) use ($money, $moneyCen
 <div id="invoice-view-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1"><div class="modal modal-lg"><div class="modal-head"><span class="modal-title">Счёт</span><button type="button" class="modal-close" data-close-modal="invoice-view-modal">&times;</button></div><div class="modal-body" id="invoice-view-modal-body"></div></div></div>
 <script>
 (function(){
-  const items=[...document.querySelectorAll('.rp-trip-item')], filter=document.getElementById('rp-filter'), paymentFilter=document.getElementById('rp-payment-filter'), search=document.getElementById('rp-search'), sort=document.getElementById('rp-sort'), list=document.getElementById('rp-list');
+  const items=[...document.querySelectorAll('.rp-compact-row')], filter=document.getElementById('rp-filter'), paymentFilter=document.getElementById('rp-payment-filter'), search=document.getElementById('rp-search'), sort=document.getElementById('rp-sort'), list=document.getElementById('rp-list'), empty=document.getElementById('rp-empty');
   function render(){
     const q=search.value.trim().toLocaleLowerCase('ru');
     let visible=0;
@@ -141,14 +171,53 @@ $renderSide = static function (array $trip, string $side) use ($money, $moneyCen
         ||(paymentFilter.value!=='all'&&item.dataset.paymentStatus!==paymentFilter.value)
         ||(q&&!item.dataset.search.includes(q));
       if(!item.hidden)visible++;
-      list.insertBefore(item,document.getElementById('rp-empty'));
+      list.appendChild(item);
     });
     document.getElementById('rp-count').textContent=visible;
-    document.getElementById('rp-empty').hidden=visible>0;
+    empty.hidden=visible>0;
   }
   [filter,paymentFilter,sort].forEach(el=>el.addEventListener('change',render));search.addEventListener('input',render);
+  const details=document.getElementById('rp-detail-modal'), title=document.getElementById('rp-detail-title'), content=document.getElementById('rp-detail-content');
+  let lastFocusedRow=null;
+  new MutationObserver(()=>{if(!details.classList.contains('is-open')&&lastFocusedRow){lastFocusedRow.focus();lastFocusedRow=null;}}).observe(details,{attributes:true,attributeFilter:['class']});
+  function openDetails(row){
+    const template=document.getElementById('rp-detail-'+row.dataset.id);
+    if(!template)return;
+    title.textContent=template.dataset.title;
+    content.replaceChildren(template.content.cloneNode(true));
+    lastFocusedRow=row;
+    window.openModal('rp-detail-modal');
+    details.querySelector('.modal-close').focus();
+  }
+  items.forEach(row=>{
+    row.addEventListener('dblclick',()=>openDetails(row));
+    row.addEventListener('keydown',event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();openDetails(row);}});
+    row.addEventListener('click',()=>{if(window.matchMedia('(max-width:900px)').matches)openDetails(row);});
+  });
   document.querySelector('[data-open-modal="invoice-create-modal"]')?.addEventListener('click',()=>{const form=document.querySelector('#invoice-create-modal form.invoice-form');if(form)delete form.dataset.preferredTripId;});
-  document.querySelectorAll('[data-create-trip]').forEach(button=>button.addEventListener('click',()=>{const form=document.querySelector('#invoice-create-modal form.invoice-form');form.dataset.preferredTripId=button.dataset.createTrip;const direction=form.querySelector('.js-inv-direction');direction.value=button.dataset.createDirection;direction.dispatchEvent(new Event('change',{bubbles:true}));const party=form.querySelector('.js-inv-cparty-select');party.value=button.dataset.createParty;party.dispatchEvent(new Event('change',{bubbles:true}));window.openModal('invoice-create-modal');}));
-  document.querySelectorAll('[data-view-invoice]').forEach(button=>button.addEventListener('click',()=>{const body=document.getElementById('invoice-view-modal-body');body.textContent='Загрузка…';window.openModal('invoice-view-modal');fetch(<?= json_encode(app_url('/company/finance/invoices/'), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>+encodeURIComponent(button.dataset.viewInvoice)+'/modal-view').then(response=>{if(!response.ok)throw new Error('Счёт недоступен');return response.text()}).then(html=>body.innerHTML=html).catch(error=>body.textContent=error.message);}));
+  details.addEventListener('click',event=>{
+    const create=event.target.closest('[data-create-trip]');
+    if(create){
+      const form=document.querySelector('#invoice-create-modal form.invoice-form');
+      if(!form)return;
+      form.dataset.preferredTripId=create.dataset.createTrip;
+      const direction=form.querySelector('.js-inv-direction');
+      direction.value=create.dataset.createDirection;
+      direction.dispatchEvent(new Event('change',{bubbles:true}));
+      const party=form.querySelector('.js-inv-cparty-select');
+      party.value=create.dataset.createParty;
+      party.dispatchEvent(new Event('change',{bubbles:true}));
+      lastFocusedRow=null;
+      window.closeModal('rp-detail-modal');
+      window.openModal('invoice-create-modal');
+    }
+    const invoice=event.target.closest('[data-view-invoice]');
+    if(invoice){
+      const body=document.getElementById('invoice-view-modal-body');
+      body.textContent='Загрузка…';
+      window.openModal('invoice-view-modal');
+      fetch(<?= json_encode(app_url('/company/finance/invoices/'), JSON_UNESCAPED_SLASHES | JSON_HEX_TAG) ?>+encodeURIComponent(invoice.dataset.viewInvoice)+'/modal-view').then(response=>{if(!response.ok)throw new Error('Счёт недоступен');return response.text()}).then(html=>body.innerHTML=html).catch(error=>body.textContent=error.message);
+    }
+  });
 })();
 </script>
