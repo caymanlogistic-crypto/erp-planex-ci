@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "cd409117f44a05e02e04480f85dbbf23f063ed4c",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/cd409117f44a05e02e04480f85dbbf23f063ed4c/database/migrations-local/152_waste_trip_closing_documents.sql",
+      "verified_sha": "705c49c4bbedfff5413f96059d68022a55aa35c1",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/705c49c4bbedfff5413f96059d68022a55aa35c1/docs/database/TENANT_SCHEMA_DOCUMENTS_02.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "cd409117f44a05e02e04480f85dbbf23f063ed4c",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/cd409117f44a05e02e04480f85dbbf23f063ed4c/tests/roles_access_endpoint_integration_test.php",
+      "verified_sha": "705c49c4bbedfff5413f96059d68022a55aa35c1",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/705c49c4bbedfff5413f96059d68022a55aa35c1/tests/roles_access_route_registry_test.py",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -267,8 +267,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "cd409117f44a05e02e04480f85dbbf23f063ed4c",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/cd409117f44a05e02e04480f85dbbf23f063ed4c/app/Http/Controllers/Company/WasteTripClosingController.php",
+      "verified_sha": "705c49c4bbedfff5413f96059d68022a55aa35c1",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/705c49c4bbedfff5413f96059d68022a55aa35c/app/Http/Controllers/Company/WasteTripClosingController.php",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",
