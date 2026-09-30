@@ -48,14 +48,17 @@ final class FinanceReceivedPaidService
                 $rows[$byId[$tripId]]['sides'][$side]['rate'] = (string)$rate['amount'];
             }
         }
-        foreach (['customer' => 'waste_trip_customer_payments', 'carrier' => 'waste_trip_carrier_payments'] as $side => $table) {
-            $fallback = $pdo->prepare("SELECT waste_trip_id AS trip_id,SUM(amount) AS amount FROM $table WHERE waste_trip_id IN ($marks) GROUP BY waste_trip_id");
-            $fallback->execute($ids);
-            foreach ($fallback->fetchAll(PDO::FETCH_ASSOC) as $rate) {
-                $index = $byId[(int)$rate['trip_id']] ?? null;
-                if ($index !== null && $rows[$index]['sides'][$side]['rate'] === null) {
-                    $rows[$index]['sides'][$side]['rate'] = (string)$rate['amount'];
-                }
+        $fallback = $pdo->prepare("SELECT waste_trip_id AS trip_id,'customer' AS party_role,SUM(amount) AS amount
+            FROM waste_trip_customer_payments WHERE waste_trip_id IN ($marks) GROUP BY waste_trip_id
+            UNION ALL
+            SELECT waste_trip_id AS trip_id,'carrier' AS party_role,SUM(amount) AS amount
+            FROM waste_trip_carrier_payments WHERE waste_trip_id IN ($marks) GROUP BY waste_trip_id");
+        $fallback->execute(array_merge($ids, $ids));
+        foreach ($fallback->fetchAll(PDO::FETCH_ASSOC) as $rate) {
+            $index = $byId[(int)$rate['trip_id']] ?? null;
+            $side = (string)$rate['party_role'];
+            if ($index !== null && $rows[$index]['sides'][$side]['rate'] === null) {
+                $rows[$index]['sides'][$side]['rate'] = (string)$rate['amount'];
             }
         }
 
