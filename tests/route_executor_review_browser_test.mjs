@@ -67,6 +67,17 @@ try {
   const modal = page.locator('#route-executor-create-modal');
   await modal.locator('[data-source-create-submit]').waitFor();
   assert.equal(await modal.locator('[data-source-create-submit]').textContent(), 'Сохранить черновик');
+  await page.evaluate(() => {
+    window.routeExecutorExistingParts = { snapshot: () => ({ selected_entities: { contractor: 11, driver: 12, vehicle: 13 } }) };
+    document.querySelector('#lab-driver-form [name=full_name]').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(50);
+  for (const key of ['contract', 'training', 'vehicle'])
+    assert.equal(await modal.locator(`[data-readiness-key="${key}"]`).getAttribute('data-state'), 'ready', `existing ${key} block should be ready without field or file checks`);
+  await page.evaluate(() => {
+    delete window.routeExecutorExistingParts;
+    document.querySelector('#lab-driver-form [name=full_name]').dispatchEvent(new Event('input', { bubbles: true }));
+  });
   await modal.locator('[data-readiness-key="contract"]').click();
   assert.match(await modal.locator('#lab-readiness-details').innerText(), /Поля[\s\S]*Обязательные файлы/);
   await modal.locator('#lab-driver-form [name="full_name"]').fill('Тестовый Водитель Тестович');

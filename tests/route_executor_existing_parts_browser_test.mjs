@@ -43,6 +43,7 @@ try {
     await page.waitForFunction(() => document.querySelector('#lab-contractor-form [name=name]')?.value === 'ООО Синтетика');
     assert.equal(await page.locator('#lab-contractor-form [name=name]').inputValue(), 'ООО Синтетика');
     assert.equal(await page.locator('#lab-contractor-form [name=name]').getAttribute('readonly'), '');
+    assert.equal(await page.locator('#lab-contractor-form .lab-entity-locked input[type=checkbox]').first().evaluate(element => getComputedStyle(element).opacity), '0', 'native checkboxes must stay hidden behind their custom marks');
     assert.equal(await page.locator('#lab-driver-form [name=full_name]').getAttribute('readonly'), null);
     assert.equal(await page.locator('#lab-contractor-form .lab-file-existing').count(), 1);
     assert.match(await page.locator('#lab-contractor-form .lab-file-state').first().textContent(), /Карточка Синтетика\.pdf/);

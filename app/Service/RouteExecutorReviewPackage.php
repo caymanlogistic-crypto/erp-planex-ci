@@ -32,34 +32,38 @@ final class RouteExecutorReviewPackage
         }
         $get=static fn(string $form,string $name):string=>trim((string)($values[$form][$name]??''));
         $contract=$values['lab-contractor-form']??[];$driver=$values['lab-driver-form']??[];$vehicle=$values['lab-vehicle-form']??[];
+        $selected=(array)($snapshot['selected_entities']??[]);
+        $existingContractor=!empty($selected['contractor']);
+        $existingDriver=!empty($selected['driver']);
+        $existingVehicle=!empty($selected['vehicle']);
         $type=$get('lab-contractor-form','contractor_type');
         $contractFields=['name','inn','contractor_type','ogrn','director_full_name','director_position','legal_address','bank_account','bank_bik','bank_name','bank_corr_account'];
         if ($type==='legal_entity') $contractFields[]='kpp';
-        $contractReady=$type!=='';
-        foreach ($contractFields as $field) $contractReady=$contractReady && trim((string)($contract[$field]??''))!=='';
+        $contractReady=$existingContractor || $type!=='';
+        if (!$existingContractor) foreach ($contractFields as $field) $contractReady=$contractReady && trim((string)($contract[$field]??''))!=='';
         $contactRows=[];
         foreach (array_keys($contract) as $name) {
             if (preg_match('/^contacts\[(\d+)\]\[(contact_person|phone|email)\]$/D',$name,$match)) $contactRows[(int)$match[1]]=true;
         }
-        if (!$contactRows) $contractReady=false;
-        foreach (array_keys($contactRows) as $index) {
+        if (!$existingContractor && !$contactRows) $contractReady=false;
+        foreach ($existingContractor ? [] : array_keys($contactRows) as $index) {
             foreach (['contact_person','phone','email'] as $field) {
                 $contractReady=$contractReady && trim((string)($contract["contacts[$index][$field]"]??''))!=='';
             }
         }
-        $trainingReady=$get('lab-driver-form','full_name')!=='' && $get('lab-driver-form','snils')!=='';
+        $trainingReady=$existingDriver || ($get('lab-driver-form','full_name')!=='' && $get('lab-driver-form','snils')!=='');
         $driverFields=['full_name','passport_number','passport_issued_by','passport_issue_date','license_number','license_issue_date','email'];
         $vehicleReady=true;
-        foreach ($driverFields as $field) $vehicleReady=$vehicleReady && trim((string)($driver[$field]??''))!=='';
+        if (!$existingDriver) foreach ($driverFields as $field) $vehicleReady=$vehicleReady && trim((string)($driver[$field]??''))!=='';
         $setType=$get('lab-vehicle-form','set_type');
         $roles=match ($setType) {
             'single'=>'primary',
             'coupling','road_train'=>'primary,secondary',
             default=>'',
         };
-        if ($roles==='') $vehicleReady=false;
-        $requiredFiles=['lab-driver-form|predef_doc[passport][]','lab-driver-form|predef_doc[driver_license][]'];
-        foreach (array_filter(explode(',',$roles)) as $role) {
+        if (!$existingVehicle && $roles==='') $vehicleReady=false;
+        $requiredFiles=$existingDriver?[]:['lab-driver-form|predef_doc[passport][]','lab-driver-form|predef_doc[driver_license][]'];
+        foreach ($existingVehicle ? [] : array_filter(explode(',',$roles)) as $role) {
             foreach (['brand','plate_number','vin','capacity_tons','volume_m3'] as $field) {
                 $vehicleReady=$vehicleReady && $get('lab-vehicle-form',"units[$role][$field]")!=='';
             }
@@ -88,16 +92,16 @@ final class RouteExecutorReviewPackage
         $labels=['name'=>'Наименование подрядчика','inn'=>'ИНН','contractor_type'=>'Тип перевозчика','ogrn'=>'ОГРН / ОГРНИП',
             'director_full_name'=>'Руководитель','director_position'=>'Должность руководителя','legal_address'=>'Юридический адрес',
             'bank_account'=>'Расчётный счёт','bank_bik'=>'БИК','bank_name'=>'Банк','bank_corr_account'=>'Корреспондентский счёт','kpp'=>'КПП'];
-        foreach ($contractFields as $field) if (trim((string)($contract[$field]??''))==='') $missing[]='Подрядчик: '.($labels[$field]??$field);
-        if (!$contactRows) $missing[]='Подрядчик: контактное лицо, телефон и Email';
-        foreach (array_keys($contactRows) as $index) foreach (['contact_person'=>'контактное лицо','phone'=>'телефон контакта','email'=>'Email контакта'] as $field=>$label)
+        if (!$existingContractor) foreach ($contractFields as $field) if (trim((string)($contract[$field]??''))==='') $missing[]='Подрядчик: '.($labels[$field]??$field);
+        if (!$existingContractor && !$contactRows) $missing[]='Подрядчик: контактное лицо, телефон и Email';
+        foreach ($existingContractor ? [] : array_keys($contactRows) as $index) foreach (['contact_person'=>'контактное лицо','phone'=>'телефон контакта','email'=>'Email контакта'] as $field=>$label)
             if (trim((string)($contract["contacts[$index][$field]"]??''))==='') $missing[]='Подрядчик: '.$label;
-        foreach (['full_name'=>'ФИО водителя','snils'=>'СНИЛС водителя','passport_number'=>'Серия и номер паспорта',
+        foreach ($existingDriver ? [] : ['full_name'=>'ФИО водителя','snils'=>'СНИЛС водителя','passport_number'=>'Серия и номер паспорта',
             'passport_issued_by'=>'Кем выдан паспорт','passport_issue_date'=>'Дата выдачи паспорта',
             'license_number'=>'Номер водительского удостоверения','license_issue_date'=>'Дата выдачи водительского удостоверения',
             'email'=>'Email водителя'] as $field=>$label) if ($get('lab-driver-form',$field)==='') $missing[]='Водитель: '.$label;
-        if ($roles==='') $missing[]='Транспорт: тип комплекта ТС';
-        foreach (array_filter(explode(',',$roles)) as $role) foreach (['brand'=>'марка','plate_number'=>'госномер','vin'=>'VIN',
+        if (!$existingVehicle && $roles==='') $missing[]='Транспорт: тип комплекта ТС';
+        foreach ($existingVehicle ? [] : array_filter(explode(',',$roles)) as $role) foreach (['brand'=>'марка','plate_number'=>'госномер','vin'=>'VIN',
             'capacity_tons'=>'грузоподъёмность','volume_m3'=>'объём'] as $field=>$label)
             if ($get('lab-vehicle-form',"units[$role][$field]")==='') $missing[]='Транспорт '.($role==='primary'?'основной':'дополнительный').': '.$label;
         foreach ($requiredFiles as $key) if (!isset($seen[$key])) {

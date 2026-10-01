@@ -111,7 +111,9 @@
   function readinessReport(key) {
     const fields = [];
     const files = [];
+    const selected = window.routeExecutorExistingParts?.snapshot().selected_entities || {};
     if (key === 'contract') {
+      if (selected.contractor) return { fields, files };
       const form = document.getElementById('lab-contractor-form');
       if (!form) return { fields, files };
       const isIndividual = form.elements.namedItem('contractor_type')?.value === 'individual';
@@ -130,17 +132,21 @@
     const driver = document.getElementById('lab-driver-form');
     if (!driver) return { fields, files };
     if (key === 'training') {
+      if (selected.driver) return { fields, files };
       for (const [name, label] of [['full_name', 'ФИО водителя'], ['snils', 'СНИЛС водителя']]) {
         if (!filled(driver.elements.namedItem(name))) fields.push(label);
       }
       return { fields, files };
     }
     const vehicle = document.getElementById('lab-vehicle-form');
-    for (const [name, label] of Object.entries(vehicleDriverFields)) {
-      if (!filled(driver.elements.namedItem(name))) fields.push(label);
+    if (!selected.driver) {
+      for (const [name, label] of Object.entries(vehicleDriverFields)) {
+        if (!filled(driver.elements.namedItem(name))) fields.push(label);
+      }
+      if (!hasFile(driver, 'predef_doc[passport][]')) files.push('Паспорт водителя');
+      if (!hasFile(driver, 'predef_doc[driver_license][]')) files.push('Водительское удостоверение');
     }
-    if (!hasFile(driver, 'predef_doc[passport][]')) files.push('Паспорт водителя');
-    if (!hasFile(driver, 'predef_doc[driver_license][]')) files.push('Водительское удостоверение');
+    if (selected.vehicle) return { fields, files };
     if (!vehicle || !filled(vehicle.elements.namedItem('set_type'))) fields.push('Тип комплекта ТС');
     const roles = [...(vehicle?.querySelectorAll('.vehicle-set-unit-panel:not(.is-hidden)[data-unit-role]') || [])];
     for (const panel of roles) {
