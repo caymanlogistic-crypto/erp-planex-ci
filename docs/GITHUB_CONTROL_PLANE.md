@@ -42,6 +42,14 @@ The normal OWNER workflow is fail-closed and LOCAL: all pre-push application, DB
 
 Mutable local tests use a unique disposable schema and restricted per-run user. Local browser/dev servers use task-owned dynamic ports and PID/start-time/command/worktree identity. Shared slot 2 and port 8016 are legacy compatibility only and are not allocated to new task scripts.
 
+## Parallel PR/CI and serialized production release
+
+Independent tasks may publish their isolated task branches, open or update PRs and run GitHub CI concurrently. The production release lease is not acquired for those stages and must not be held while merely waiting for CI.
+
+After an exact PR candidate has a terminal green aggregate and is ready to merge, acquire `erp-production-release` immediately before the final canonical refresh for merge. Keep the lease through any local checks invalidated by canonical movement, merge, exact-SHA Controlled Deploy, separately authorized production migration and production verification. Release it in `finally`.
+
+If the lease is busy, keep the green PR ready and report `QUEUED_FOR_RELEASE`; do not launch a second merge, deploy or migration. The coordinator drains ready green PRs one at a time and refreshes each next candidate against the newly moved canonical. GitHub Actions is the execution transport, not permission for concurrent writes to the same production runtime or database.
+
 The privileged FAST `pull_request_target` boundary is intentionally **not** refactored to execute PR-head helper code before validation/checkout. Its exact-base, whitelist, size, deletion and UI-presence checks stay non-PR-controlled and are parity-tested against local FAST policy.
 
 ## Standard agent-driven production deploy
