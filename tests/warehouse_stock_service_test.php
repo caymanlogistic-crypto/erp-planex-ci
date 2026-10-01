@@ -64,7 +64,7 @@ $flights[] = ['id'=>286,'comment'=>'Сверка','status'=>'completed','source_
 $movements[] = ['id'=>5,'movement_type'=>'receipt','warehouse_id'=>1,'flight_id'=>286,'zayavka_id'=>311706,'mass_netto'=>'2.129','movement_date'=>'2026-09-04','status'=>'active'];
 $erp[] = ['business_id'=>286,'legacy_source_warehouse_id'=>null,'legacy_destination_warehouse_id'=>1,'zayavka_id'=>999,'snapshot_mass_kg'=>669];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
-$message = 'Краснодар / приход: на складе есть заявки вне рейса ERP: 311706.';
+$message = 'Краснодар / поступление: на складе есть заявки вне рейса ERP: 311706.';
 if (($data['issues'][286]['reconcile_targets'][$message] ?? null) !== ['warehouse_id'=>1,'direction'=>'in']) throw new RuntimeException('Кнопка должна относиться к нужному складу и рейсу.');
 $flights[] = ['id'=>309,'comment'=>'Вывоз с другой массой','status'=>'completed','source_warehouse_id'=>1,'destination_warehouse_id'=>null,'zayavki_ids'=>'311706','driver_name'=>'Иванов','vehicle'=>'А 123 АА'];
 $movements[] = ['id'=>6,'movement_type'=>'issue','warehouse_id'=>1,'flight_id'=>309,'zayavka_id'=>311706,'mass_netto'=>'4.258','movement_date'=>'2026-09-05','status'=>'active'];
