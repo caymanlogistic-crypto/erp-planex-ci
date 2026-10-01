@@ -58,4 +58,16 @@ if ($data['current'][1]['weight_kg'] !== 0) throw new RuntimeException('Заве
 $movements[] = ['id'=>4,'movement_type'=>'issue','warehouse_id'=>1,'flight_id'=>13,'zayavka_id'=>456,'mass_netto'=>'0.500','movement_date'=>'2026-09-03','status'=>'active'];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 if ($data['current'][1]['weight_kg'] !== 0 || $data['groups'][1][0]['is_derived']) throw new RuntimeException('Дублируется реальное списание складского журнала.');
+$flights[] = ['id'=>286,'comment'=>'Сверка','status'=>'completed','source_warehouse_id'=>null,'destination_warehouse_id'=>1,'zayavki_ids'=>'311706','driver_name'=>'Иванов','vehicle'=>'А 123 АА'];
+$movements[] = ['id'=>5,'movement_type'=>'receipt','warehouse_id'=>1,'flight_id'=>286,'zayavka_id'=>311706,'mass_netto'=>'2.129','movement_date'=>'2026-09-04','status'=>'active'];
+$erp[] = ['business_id'=>286,'legacy_source_warehouse_id'=>null,'legacy_destination_warehouse_id'=>1,'zayavka_id'=>999,'snapshot_mass_kg'=>669];
+$data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
+$message = 'Краснодар / приход: на складе есть заявки вне рейса ERP: 311706.';
+if (($data['issues'][286]['reconcile_targets'][$message] ?? null) !== ['warehouse_id'=>1,'direction'=>'in']) throw new RuntimeException('Кнопка должна относиться к нужному складу и рейсу.');
+$flights[] = ['id'=>309,'comment'=>'Вывоз с другой массой','status'=>'completed','source_warehouse_id'=>1,'destination_warehouse_id'=>null,'zayavki_ids'=>'311706','driver_name'=>'Иванов','vehicle'=>'А 123 АА'];
+$movements[] = ['id'=>6,'movement_type'=>'issue','warehouse_id'=>1,'flight_id'=>309,'zayavka_id'=>311706,'mass_netto'=>'4.258','movement_date'=>'2026-09-05','status'=>'active'];
+$erp[] = ['business_id'=>309,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>311706,'snapshot_mass_kg'=>2129];
+$data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
+$massTargets = array_values($data['issues'][309]['reconcile_targets'] ?? []);
+if ($massTargets !== [['warehouse_id'=>1,'direction'=>'out']]) throw new RuntimeException('Рейс с одной лишь разницей масс тоже можно сверить.');
 echo "warehouse stock service OK\n";

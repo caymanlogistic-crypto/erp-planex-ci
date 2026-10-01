@@ -3,6 +3,7 @@
 require_once base_path('app/Service/WasteTripLegacySourceService.php');
 require_once base_path('app/Service/WarehouseStockService.php');
 require_once base_path('app/Service/WarehouseTripCorrectionService.php');
+require_once base_path('app/Service/WarehouseTripRequestReconciliationService.php');
 require_once base_path('app/Http/Controllers/Company/WarehouseStockController.php');
 require_once base_path('app/Service/WasteTripIncidentService.php');
 require_once base_path('app/Service/WasteTripCustomerPaymentService.php');
@@ -29,6 +30,8 @@ $router->get('/company/warehouses/stock/correction-preview', [$warehouseStockCon
 $router->post('/company/warehouses/stock/correction', [$warehouseStockController, 'correctionSubmit'], 'company.warehouses.stock');
 $router->get('/company/warehouses/stock/cancellation-preview', [$warehouseStockController, 'cancellationPreview'], 'company.warehouses.stock');
 $router->post('/company/warehouses/stock/cancellation', [$warehouseStockController, 'cancellationSubmit'], 'company.warehouses.stock');
+$router->get('/company/warehouses/stock/request-reconciliation-preview', [$warehouseStockController, 'requestReconciliationPreview'], 'company.warehouses.stock');
+$router->post('/company/warehouses/stock/request-reconciliation', [$warehouseStockController, 'requestReconciliationSubmit'], 'company.warehouses.stock');
 
 $router->get('/company/trips/linear', [$controller, 'index'], 'company.trips.linear');
 $router->get('/company/trips/linear/service-lines', [$controller, 'serviceLines'], 'company.trips.linear');
