@@ -102,7 +102,7 @@ final class WarehouseStockService
         }
         usort($movements, static fn(array $a, array $b): int =>
             strcmp((string)$a['movement_date'], (string)$b['movement_date']) ?: ((int)$a['id'] <=> (int)$b['id']));
-        $balances = $groups = $movementFlightIds = $journalFlightIds = [];
+        $balances = $groups = $movementFlightIds = $journalFlightIds = $journalRequestIds = [];
         foreach ($movements as $row) {
             if (($row['status'] ?? 'active') !== 'active') continue;
             $type = (string)$row['movement_type'];
@@ -141,7 +141,10 @@ final class WarehouseStockService
             $group['stock_kg'] = array_sum($balances[$warehouseId]);
             unset($group);
             $movementFlightIds[$flightId] = true;
-            if (empty($row['derived'])) $journalFlightIds[$flightId] = true;
+            if (empty($row['derived'])) {
+                $journalFlightIds[$flightId] = true;
+                $journalRequestIds[$flightId][$requestId] = true;
+            }
         }
         $current = [];
         foreach ($balances as $warehouseId => $requestBalances) {
@@ -246,8 +249,14 @@ final class WarehouseStockService
                         }
                     }
                     if ($group['trip_only_request_ids'] !== []) {
-                        $messages[] = $where.': в рейсе доп: '
-                            .implode(', ', $group['trip_only_request_ids']).'.';
+                        $recorded = count(array_intersect($group['request_ids'], $erp[$flightId]['requests']));
+                        $total = count($erp[$flightId]['requests']);
+                        $missing = implode(', ', $group['trip_only_request_ids']);
+                        $messages[] = $group['direction'] === 'out'
+                            ? $where.': со склада списано '.$recorded.' из '.$total.' заявок рейса. Не списаны: '
+                                .$missing.'. Проверьте, были ли эти заявки на складе и почему нет списания.'
+                            : $where.': на склад поступило '.$recorded.' из '.$total.' заявок рейса. Не поступили: '
+                                .$missing.'. Проверьте складские записи.';
                     }
                 }
                 $directionMass = ['in'=>0, 'out'=>0];
@@ -309,7 +318,8 @@ final class WarehouseStockService
                     'warehouse_id'=>$oldDestination ?: $oldSource,
                     'messages'=>$messages,
                     'has_movements'=>isset($journalFlightIds[$flightId]),
-                    'movement_label'=>isset($journalFlightIds[$flightId]) ? 'Есть в журнале'
+                    'movement_label'=>isset($journalFlightIds[$flightId])
+                        ? 'В журнале: '.count($journalRequestIds[$flightId]).' из '.count($erp[$flightId]['requests'] ?? $journalRequestIds[$flightId]).' заявок'
                         : (isset($movementFlightIds[$flightId]) ? 'Расчётное движение' : 'Нет в журнале'),
                     'reconcile_targets'=>$reconcileTargets,
                 ];
