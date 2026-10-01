@@ -19,8 +19,10 @@ try {
     if ($store->verifiedPath($hash) !== null) throw new RuntimeException('Corrupt file downloadable');
     $store->remove($hash);
     if ($store->has($hash)) throw new RuntimeException('File still stored');
-    try { $store->has('../escape'); throw new RuntimeException('Invalid hash accepted'); }
-    catch (InvalidArgumentException $e) {}
+    if ($store->has('') || $store->has('../escape') || $store->verifiedPath('') !== null) {
+        throw new RuntimeException('Legacy or invalid hash appeared downloadable');
+    }
+    $store->remove('');
     echo "BANK_STATEMENT_FILE_STORE=PASS\n";
 } finally {
     if (is_file($source)) unlink($source);
