@@ -81,10 +81,8 @@ final class WasteTripSynchronizationService
                     };
                     $executor = WasteTripLegacyMappingService::executor($flight, $candidates);
                     $state['route_executor_id'] = $executor['id'];
-                    $state['executor_warning'] = $executor['warning'];
                     $outcome = WasteTripService::reconcileLegacyTrip($tenant, $state, $actor);
                     $result[$outcome]++;
-                    if ($executor['warning'] !== null) $result['warnings'][] = 'Рейс #'.$id.': '.$executor['warning'];
                 } catch (Throwable $error) {
                     self::recordFailure($result, $id, $error, 'upsert');
                 }
@@ -117,7 +115,7 @@ final class WasteTripSynchronizationService
         $result['failed']++;
         $message = $error instanceof RuntimeException && !$error instanceof \PDOException
             ? $error->getMessage()
-            : 'Ошибка синхронизации. Код: '.WasteTripIncidentService::record($error, ['legacy_id'=>$id,'operation'=>'legacy_sync_'.$operation]);
+            : ($operation === 'delete' ? 'Не удалось убрать рейс из реестра.' : 'Не удалось обработать данные рейса.').' Код ошибки: '.WasteTripIncidentService::record($error, ['legacy_id'=>$id,'operation'=>'legacy_sync_'.$operation]).'.';
         $result['errors'][] = 'Рейс #'.$id.': '.$message;
     }
 }

@@ -253,17 +253,16 @@ final class WasteTripService
                 foreach (array_keys(self::tripParams($data)) as $key) $assignments[] = substr($key,1).'='.$key;
                 $params = self::tripUpdateParams($data,$actor) + [':trip_id'=>$tripId];
                 $pdo->prepare('UPDATE waste_trips SET '.implode(',',$assignments).",source_system='legacy_sync',deleted_at=NULL,cancelled_at=NULL,cancelled_by_user_id=NULL,cancelled_by_role=NULL,updated_by_user_id=:user_id,updated_by_role=:role_code,lock_version=lock_version+1 WHERE id=:trip_id")->execute($params);
-                $pdo->prepare('DELETE FROM waste_trip_requests WHERE waste_trip_id=?')->execute([$tripId]);
             }
             self::writeLegacyMetadata($pdo, $tripId, $state);
             $stage = 'request_links';
-            self::insertRequestLinks($pdo, $tripId, $resolved);
+            self::reconcileRequestLinks($pdo, $tripId, $resolved);
             WasteTripStartStatisticsService::synchronizeTrip($pdo, $tripId);
             $stage = 'source_amounts';
             if ($trip !== null && !in_array((int)$trip['financial_model_version'], [2,3], true)) throw new RuntimeException('Требуется переход на три финансовые суммы.');
             WasteTripGeneralPaymentService::synchronizeCost($pdo,$tripId,$state['general_amount'],$actor);
             WasteTripCustomerPaymentService::synchronizeCost($pdo,$tripId,$state['carrier_cost'],$state['payment_terms'],$actor);
-            $warnings = array_filter([$manualExecutor === null ? ($state['executor_warning'] ?? null) : null, $data['destination_type']==='utilizer' && $data['utilizer_id']===null ? 'Утилизатор не определён однозначно по заявкам ФЭО.' : null]);
+            $warnings = array_filter([$data['destination_type']==='utilizer' && $data['utilizer_id']===null ? 'Утилизатор не определён однозначно по заявкам ФЭО.' : null]);
             $pdo->prepare('UPDATE waste_trips SET legacy_sync_error=?,legacy_last_checked_at=NOW(),legacy_last_success_at=NOW() WHERE id=?')->execute([$warnings === [] ? null : implode(' ', $warnings),$tripId]);
             $stage = 'finance_obligations';
             FinanceObligationService::syncWasteTrip($pdo, $tripId);
@@ -276,7 +275,7 @@ final class WasteTripService
             if ($pdo->inTransaction()) $pdo->rollBack();
             if (!$error instanceof RuntimeException || $error instanceof \PDOException) {
                 $incident = WasteTripIncidentService::record($error,['operation'=>'legacy_sync_upsert','legacy_id'=>$id,'stage'=>$stage,'actor_user_id'=>$actor['user_id'],'actor_role'=>$actor['role_code']]);
-                throw new RuntimeException('Синхронизация не выполнена. Код ошибки: '.$incident.'.',0,$error);
+                throw new RuntimeException(self::legacySyncFailureDescription($error,$stage).' Код ошибки: '.$incident.'.',0,$error);
             }
             throw $error;
         }
@@ -406,7 +405,7 @@ final class WasteTripService
 
     public static function fetchTrips(PDO $pdo,array $filters=[],bool $includeFinance=false): array
     {
-        $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');$where=[$access['sql'],'wt.deleted_at IS NULL'];$params=$access['params'];$status=trim((string)($filters['status']??''));if($status!==''&&isset(self::STATUS_LABELS[$status])){if(in_array($status,[self::STATUS_PLANNED,self::STATUS_SEARCHING],true)){$where[]="wt.status IN ('planned_route','searching_executor')";}else{$where[]='wt.status=?';$params[]=$status;}}$q=trim((string)($filters['q']??''));if($q!==''){$term='%'.$q.'%';$where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR wt.comment LIKE ? OR c.name LIKE ? OR u.full_name LIKE ? OR ct.name LIKE ? OR EXISTS (SELECT 1 FROM waste_trip_requests sqr JOIN feo_requests sqf ON sqf.id=sqr.feo_request_id WHERE sqr.waste_trip_id=wt.id AND sqf.zayavka_id LIKE ?) OR wt.status LIKE ?)';for($i=0;$i<7;$i++)$params[]=$term;}
+        $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');$where=[$access['sql'],'wt.deleted_at IS NULL'];$params=$access['params'];$status=trim((string)($filters['status']??''));if($status!==''&&isset(self::STATUS_LABELS[$status])){if(in_array($status,[self::STATUS_PLANNED,self::STATUS_SEARCHING],true)){$where[]="wt.status IN ('planned_route','searching_executor')";}else{$where[]='wt.status=?';$params[]=$status;}}$company=(string)($filters['company']??'');if(in_array($company,['mg_logistic','planex'],true)){$where[]='wt.legal_entity_code=?';$params[]=$company;}$q=trim((string)($filters['q']??''));if($q!==''){$term='%'.$q.'%';$where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR wt.comment LIKE ? OR c.name LIKE ? OR u.full_name LIKE ? OR ct.name LIKE ? OR EXISTS (SELECT 1 FROM waste_trip_requests sqr JOIN feo_requests sqf ON sqf.id=sqr.feo_request_id WHERE sqr.waste_trip_id=wt.id AND sqf.zayavka_id LIKE ?) OR wt.status LIKE ?)';for($i=0;$i<7;$i++)$params[]=$term;}
         $statusOrder="CASE wt.status WHEN 'planned_route' THEN 0 WHEN 'searching_executor' THEN 0 WHEN 'executor_assigned' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'completed' THEN 3 WHEN 'cancelled' THEN 4 ELSE 5 END";
         $orderBy=match ((string)($filters['sort']??'')) {
             'status' => $statusOrder.', wt.business_id DESC',
@@ -477,6 +476,19 @@ final class WasteTripService
         foreach($existing as $requestId=>$linkId)if(!isset($keep[$requestId]))$delete->execute([$linkId,$tripId]);
     }
     private static function fetchTripForUpdate(PDO $pdo,int $tripId): ?array { $stmt=$pdo->prepare('SELECT * FROM waste_trips WHERE id=? FOR UPDATE');$stmt->execute([$tripId]);return$stmt->fetch(PDO::FETCH_ASSOC)?:null; }
+    private static function legacySyncFailureDescription(Throwable $error,string $stage): string
+    {
+        if ($error instanceof \PDOException && (string)($error->errorInfo[1]??'')==='1451'
+            && str_contains($error->getMessage(),'fk_registration_journal_request')) {
+            return 'Нельзя убрать заявку из рейса: по ней уже есть записи в журнале регистрации.';
+        }
+        return match($stage) {
+            'request_resolution','claim_check','request_links' => 'Не удалось обновить заявки рейса.',
+            'source_amounts','finance_obligations' => 'Не удалось обновить суммы и расчёты по рейсу.',
+            'audit' => 'Не удалось записать историю изменений рейса.',
+            default => 'Не удалось сохранить данные рейса.',
+        };
+    }
     /** The latest ERP choice owns this field, including choices made before the explicit audit marker existed. */
     private static function manualExecutorChoice(PDO $pdo,int $tripId): ?array
     {

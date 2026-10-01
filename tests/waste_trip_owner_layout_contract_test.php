@@ -6,7 +6,7 @@ foreach(['index','synchronizeSubmit']as$m){if(!str_contains($source,'public func
 if(str_contains($source,'importIndex')||str_contains($source,'importSubmit'))$fail('old import controller actions remain');
 foreach(['index']as$m){$start=strpos($source,'public function '.$m.'(');$next=strpos($source,"\n    public function ",$start+20);$body=substr($source,$start,$next===false?null:$next-$start);if(!str_contains($body,"require base_path('app/View/layouts/main.php');")||!str_contains($body,'$config=$this->config;')||!str_contains($body,'$db=$this->db;'))$fail($m.' main layout bindings missing');}
 if(str_contains($routes,"/company/trips/departures/import"))$fail('old import route remains');
-if(!str_contains($page, 'waste-count')||!str_contains($page, 'Registry::executorUnmatched'))$fail('registry count/mismatch contract missing');
+if(!str_contains($page, 'waste-count')||!str_contains($page, "name=\"company\"")||str_contains($page, 'Registry::executorUnmatched'))$fail('registry count/company filter or quiet empty executor contract missing');
 if(substr_count($page,'id="waste-trip-view-modal"')!==1||str_contains($page,'id="waste-trip-edit-modal"'))$fail('Waste Trip edit must reuse the standard view modal shell');
 if(!str_contains($page,"data-waste-cancel-edit")||!str_contains($page,"loadModal('view',c.dataset.wasteCancelEdit)"))$fail('edit cancel must return to Waste Trip view in the same modal');
 if(!str_contains($page,"root.querySelector('form[data-linear-trip-form]')")||!str_contains($page,'window.initLinearTripForm(f)'))$fail('dynamically loaded edit form must initialize the existing Linear Trips form UX');
