@@ -112,6 +112,7 @@ final class RouteExecutorReviewController
             $action=(string)($_POST['action']??'');
             if ($action==='save') $this->saveCard($cards,$cardId,$accountId);
             if ($action==='delete') { $cards->delete($cardId);$this->json(['ok'=>true]); }
+            if ($action==='resend') $this->resendCard($cards,$central,$tenant,(int)$company['id'],$accountId,$cardId);
             $stage=(string)($_POST['stage']??'');
             if (!in_array($stage,['partial','final'],true)) throw new DomainException('Неизвестный этап отправки.');
             $card=$cards->load($cardId);
@@ -222,6 +223,48 @@ final class RouteExecutorReviewController
             }
             $this->failure($error);
         }
+    }
+
+    /** Temporary delivery-check action. It never advances the workflow or enqueues MAX. */
+    private function resendCard(RouteExecutorReviewCardService $cards,PDO $central,PDO $tenant,int $companyId,int $accountId,string $cardId): never
+    {
+        $lockName='route-review-resend:'.$cardId;
+        $lock=$tenant->prepare('SELECT GET_LOCK(?,0)');$lock->execute([$lockName]);
+        if ((int)$lock->fetchColumn()!==1) throw new DomainException('Повторная отправка этой карточки уже выполняется.');
+        try {
+            $card=$cards->load($cardId);
+            if (!$card) throw new DomainException('Карточка не найдена.');
+            $row=$this->row($tenant,$cardId);
+            $stage=(string)($row['stage']??'');
+            if (!in_array($stage,['partial','final'],true)) throw new DomainException('Повторить можно только подтверждённое письмо.');
+            $tripId=(string)($card['snapshot']['trip_id']??'');
+            if (!preg_match('/^[1-9][0-9]*$/D',$tripId)) throw new DomainException('Выберите рейс перед отправкой.');
+            $tripLabel=$this->selectedTrip($tenant,(int)$tripId);
+            $package=RouteExecutorReviewPackage::inspect($card['snapshot'],$cards->storedFiles($card),true);
+            if (!$package['ready']) throw new DomainException('В карточке недостаточно данных для отправки.');
+            $this->responsibleLogist($central,$companyId,(int)($card['snapshot']['logist']??0));
+            $recipients=['info@plan-ex.ru'];
+            $profiles=new EmployeeMailProfileService($central,$companyId);
+            $sender=$profiles->defaultSender($accountId);
+            $resolved=$profiles->resolve($accountId,(int)$sender['legal_entity_id']);
+            $credentials=$profiles->credentials($accountId,(int)$sender['legal_entity_id']);
+            if ((int)$credentials['id']!==(int)$sender['id'] || (int)$resolved['profile_id']!==(int)$sender['id']
+                || (string)$credentials['email']!==(string)$sender['email']) throw new DomainException('Рабочий ящик изменился. Обновите страницу.');
+            $domain=substr(strrchr((string)$sender['email'],'@')?:'',1);
+            $messageId='<route-executor-'.str_replace('-','',$cardId).'-'.$stage.'-retry-'.bin2hex(random_bytes(8)).'@'.$domain.'>';
+            $mail=RouteExecutorReviewEmail::build($package,$stage==='partial',$tripLabel);
+            $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
+                'subject'=>$tripLabel.' — исполнитель рейса — '.($stage==='partial'?'первичные данные':'полный комплект').' — повтор',
+                'text'=>$mail['text'],'html'=>$mail['html'],
+                'attachments'=>$package['attachments'] ? [RouteExecutorReviewArchive::build($package['attachments'],$tripLabel)] : []];
+            DocumentMailMime::build($message);
+            $mailStatus=(new DocumentMailTransport())->send($credentials,$message);
+            $result=['ok'=>$mailStatus==='accepted','mail_status'=>$mailStatus,'recipients'=>$recipients,
+                'error'=>$mailStatus==='accepted'?null:'Почтовый сервер не подтвердил повторную отправку. Не нажимайте повторно до проверки почты.'];
+        } finally {
+            $unlock=$tenant->prepare('SELECT RELEASE_LOCK(?)');$unlock->execute([$lockName]);
+        }
+        $this->json($result);
     }
 
     private function saveCard(RouteExecutorReviewCardService $cards,string $cardId,int $accountId): never

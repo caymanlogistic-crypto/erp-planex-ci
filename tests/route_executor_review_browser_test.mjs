@@ -15,6 +15,7 @@ try {
   const errors = [];
   const sends = [];
   let currentCardId = null;
+  let currentStage = 'new';
   page.on('pageerror', error => errors.push(error.message));
   await page.route('http://127.0.0.1:59999/**', route => {
     const path = new URL(route.request().url()).pathname;
@@ -28,11 +29,14 @@ try {
       if (request.body.includes('name="action"') && request.body.includes('save'))
         currentCardId = request.body.match(/name="card_id"\r?\n\r?\n([a-f0-9-]{36})/)?.[1] || currentCardId;
       if (request.body.includes('name="action"') && request.body.includes('delete')) currentCardId = null;
+      if (request.body.includes('name="action"') && request.body.includes('resend'))
+        return route.fulfill({ json: { ok: true, mail_status: 'accepted', recipients: ['info@plan-ex.ru'] } });
+      if (!request.body.includes('name="action"')) currentStage = 'partial';
       return route.fulfill({ json: request.body.includes('name="action"')
         ? { ok: true, revision: sends.filter(item => item.body.includes('name="action"') && item.body.includes('save')).length }
         : { ok: true, stage: 'partial', mail_status: 'accepted', max_status: 'sent' } });
     }
-    const row = currentCardId ? `<tr class="route-review-row" data-route-review-card-id="${currentCardId}" data-erp-pin="1" tabindex="0"><td>ИП Тестовый</td><td><button data-route-review-delete="${currentCardId}">Удалить</button></td></tr>` : '';
+    const row = currentCardId ? `<tr class="route-review-row" data-route-review-card-id="${currentCardId}" data-erp-pin="1" tabindex="0"><td>ИП Тестовый</td><td>${currentStage === 'partial' ? `<button data-route-review-resend="${currentCardId}">Повторить письмо</button>` : ''}<button data-route-review-delete="${currentCardId}">Удалить</button></td></tr>` : '';
     return route.fulfill({ status: 200, contentType: 'text/html', body: `<!doctype html><html><body><div data-route-executors-grid><table><tbody>${row}</tbody></table></div></body></html>` });
   });
   await page.goto('http://127.0.0.1:59999/');
@@ -104,6 +108,10 @@ try {
   await page.locator('[data-route-review-card-id] td').first().dblclick();
   assert.equal(await page.evaluate(() => window.__combinedOpened), true, 'Double click opens combined editor');
   page.on('dialog', dialog => dialog.accept());
+  await page.locator('[data-route-review-resend]').click();
+  await page.waitForTimeout(250);
+  assert.match(sends.at(-1).body, /name="action"\r?\n\r?\nresend/);
+  assert.equal(await page.locator('[data-route-review-resend]').isEnabled(), true);
   await page.locator('[data-route-review-delete]').click();
   await page.waitForTimeout(250);
   assert.match(sends.at(-1).body, /name="action"\r?\n\r?\ndelete/);
