@@ -28,7 +28,7 @@ final class RouteExecutorReviewPackage
             if (mb_strlen($label)>120 || preg_match('/[\r\n]/',$label)) $label=$name;
             $display=$item['displayValue']??$value;
             if (!is_string($display) || mb_strlen($display)>5000) $display=$value;
-            $rows[]=['name'=>$sections[$form].': '.$label,'value'=>$display];
+            $rows[]=['name'=>$sections[$form].': '.$label,'label'=>$label,'form'=>$form,'field'=>$name,'raw_value'=>$value,'value'=>$display];
         }
         $get=static fn(string $form,string $name):string=>trim((string)($values[$form][$name]??''));
         $contract=$values['lab-contractor-form']??[];$driver=$values['lab-driver-form']??[];$vehicle=$values['lab-vehicle-form']??[];

@@ -48,7 +48,25 @@ $assert(str_contains($mail['text'],'#123 Вывоз отходов') && str_cont
 $extra=$control('driver','extra_phones[]','+7 900 000-00-00');$extra['label']='+7 900 000-00-00';
 $extraPackage=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,$driver,[$extra])],[]);
 $extraMail=RouteExecutorReviewEmail::build($extraPackage,true,'#123 Вывоз отходов');
-$assert(str_contains($extraMail['text'],'Водитель: Доп контакты: +7 900 000-00-00'),'Additional phone has a meaningful label in email');
+$assert(str_contains($extraMail['text'],"ВОДИТЕЛЬ:\n") && str_contains($extraMail['text'],'Доп контакты: +7 900 000-00-00'),'Additional phone is in the driver block');
+$vehicles=[
+    $control('vehicle','set_type','coupling'),
+    $control('vehicle','units[primary][brand]','КамАЗ'),
+    $control('vehicle','units[secondary][plate_number]','А123ВС77'),
+];
+$vehicleMail=RouteExecutorReviewEmail::build(RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,$driver,$vehicles)],[]),true,'#123 Вывоз отходов');
+$assert(substr_count($vehicleMail['html'],'<table data-section=')===3,'Email has exactly three separate tables');
+$assert(strpos($vehicleMail['html'],'data-section="contractor"')<strpos($vehicleMail['html'],'data-section="driver"')
+    && strpos($vehicleMail['html'],'data-section="driver"')<strpos($vehicleMail['html'],'data-section="vehicle"'),'Email tables follow contractor, driver, vehicle order');
+$assert(str_contains($vehicleMail['html'],'Тягач') && str_contains($vehicleMail['html'],'Полуприцеп / прицеп')
+    && strpos($vehicleMail['html'],'КамАЗ')<strpos($vehicleMail['html'],'А123ВС77'),'Vehicle table separates tractor and trailer');
+$assert(str_contains($vehicleMail['text'],"ПОДРЯДЧИК:\n") && str_contains($vehicleMail['text'],"ВОДИТЕЛЬ:\n")
+    && str_contains($vehicleMail['text'],"ТРАНСПОРТНОЕ СРЕДСТВО:\n"),'Plain email has matching blocks');
+$singleMail=RouteExecutorReviewEmail::build(RouteExecutorReviewPackage::inspect(['controls'=>array_merge($driver,[
+    $control('vehicle','set_type','single'),$control('vehicle','units[primary][brand]','ГАЗ'),
+])],[]),true,'#124 Одиночка');
+$assert(str_contains($singleMail['html'],'Автомобиль') && !str_contains($singleMail['html'],'Полуприцеп / прицеп'),
+    'Single vehicle must not show a trailer section');
 $fullMail=RouteExecutorReviewEmail::build($extraPackage,false,'#123 Вывоз отходов');
 $assert(str_contains($fullMail['html'],'background:#eaf6e9') && str_contains($fullMail['html'],'background:#f5fff4'),'Full email has light green background');
 foreach (['route_executor.partial','route_executor.full'] as $event) {
