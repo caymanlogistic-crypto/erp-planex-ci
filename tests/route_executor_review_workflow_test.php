@@ -41,6 +41,15 @@ $package=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,
 $assert($package['ready']===['Обучение водителя'],'Training readiness should survive an incomplete contract');
 $assert(!$package['full'],'Incomplete package cannot be final');
 $assert(in_array('Файл: Паспорт водителя',$package['missing'],true),'Missing documents appear in MAX list');
+$existing=RouteExecutorReviewPackage::inspect(['controls'=>[], 'selected_entities'=>['contractor'=>11,'driver'=>12,'vehicle'=>13]],[]);
+$assert($existing['full'] && $existing['missing']===[], 'All selected existing blocks are complete without field or document checks');
+$existingContractor=RouteExecutorReviewPackage::inspect(['controls'=>$driver,'selected_entities'=>['contractor'=>11]],[]);
+$assert($existingContractor['contract_ready'] && !in_array('Подрядчик: Наименование подрядчика',$existingContractor['missing'],true)
+    && in_array('Файл: Паспорт водителя',$existingContractor['missing'],true), 'Selecting a contractor only bypasses that block');
+$existingDriver=RouteExecutorReviewPackage::inspect(['controls'=>[], 'selected_entities'=>['driver'=>12]],[]);
+$assert(in_array('Обучение водителя',$existingDriver['ready'],true)
+    && !in_array('Файл: Паспорт водителя',$existingDriver['missing'],true)
+    && in_array('Транспорт: тип комплекта ТС',$existingDriver['missing'],true), 'Selecting a driver does not bypass the unselected vehicle block');
 $package=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,[$control('contractor','legal_address','Москва, 1')],$driver)],[]);
 $assert(in_array('Подписание договора',$package['ready'],true),'IP contract requires legal address but not KPP');
 $assert($package['contract_ready'],'Contract can be ready before vehicle data');

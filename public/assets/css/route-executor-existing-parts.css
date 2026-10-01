@@ -16,7 +16,7 @@
 #route-executor-create-modal .lab-start-new { margin-top:8px; border:0; background:transparent; color:#7a4e23; padding:4px 2px; cursor:pointer; font:600 11px Arial,sans-serif; text-decoration:underline; }
 #route-executor-create-modal .lab-start-new[hidden] { display:none; }
 #route-executor-create-modal .lab-entity-locked { background:#f0f1f1; border:1px solid #d2d5d6; border-radius:3px; padding:9px; margin:0 -9px; }
-#route-executor-create-modal .lab-entity-locked input:not([type=file]), #route-executor-create-modal .lab-entity-locked select, #route-executor-create-modal .lab-entity-locked textarea { color:#4d5558 !important; background:#e8ebec !important; border-color:#cdd1d2 !important; opacity:1 !important; cursor:default; }
+#route-executor-create-modal .lab-entity-locked input:not([type=file]):not([type=checkbox]):not([type=radio]):not([type=hidden]), #route-executor-create-modal .lab-entity-locked select, #route-executor-create-modal .lab-entity-locked textarea { color:#4d5558 !important; background:#e8ebec !important; border-color:#cdd1d2 !important; opacity:1 !important; cursor:default; }
 #route-executor-create-modal .lab-entity-locked button { opacity:.55; cursor:not-allowed; }
 #route-executor-create-modal .lab-lock-caption { margin-bottom:9px; padding:6px 8px; border-left:3px solid #7794a1; color:#49616c; background:#e2eaed; font:11px/1.35 Arial,sans-serif; }
 #route-executor-create-modal .lab-file-state { display:inline-block; max-width:100%; overflow-wrap:anywhere; margin-top:4px; border-radius:3px; padding:3px 6px; font:600 10px/1.25 Arial,sans-serif; }
