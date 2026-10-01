@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `b8abba11d51fdb947248b8be88433b54aaa560f72620d11dd465e827b728115c`
+**Schema fingerprint:** `33b256cc39f1bee80904d4e090cb23754ba7895236ce8376f24d492dec4cf76b`
 
 ## `feo_utilizers`
 
@@ -210,6 +210,40 @@
 - `fk_max_message_logs_bot`: (`bot_id`) → `max_bots`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
 - `fk_max_message_logs_chat`: (`chat_config_id`) → `max_chats`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
 
+## `route_executor_review_cards`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `card_id` | `char(36)` | NO | NULL | — | `PRI` |
+| `actor_account_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `last_editor_account_id` | `bigint unsigned` | NO | NULL | — | — |
+| `revision` | `int unsigned` | NO | `1` | — | — |
+| `snapshot_json` | `mediumtext` | NO | NULL | — | — |
+| `files_json` | `mediumtext` | NO | NULL | — | — |
+| `responsible_membership_id` | `bigint unsigned` | YES | NULL | — | — |
+| `trip_business_id` | `bigint unsigned` | YES | NULL | — | — |
+| `contractor_name` | `varchar(255)` | NO | `` | — | — |
+| `driver_name` | `varchar(255)` | NO | `` | — | — |
+| `driver_phone` | `varchar(64)` | NO | `` | — | — |
+| `vehicle_type` | `varchar(40)` | NO | `` | — | — |
+| `plate` | `varchar(40)` | NO | `` | — | — |
+| `deleted_at` | `datetime(6)` | YES | NULL | — | `MUL` |
+| `created_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`card_id`)
+- **INDEX** `idx_route_executor_review_cards_active` (`deleted_at`, `updated_at`)
+- **INDEX** `idx_route_executor_review_cards_actor` (`actor_account_id`, `updated_at`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
 ## `route_executor_review_sends`
 
 **Domain:** Other tenant domain<br>
@@ -238,28 +272,3 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
-
-## `waste_trip_audit_log`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
-| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `action` | `enum('create','update','composition_correction','cancel')` | NO | NULL | — | — |
-| `before_json` | `longtext` | YES | NULL | — | — |
-| `after_json` | `longtext` | YES | NULL | — | — |
-| `actor_user_id` | `int unsigned` | YES | NULL | — | — |
-| `actor_role` | `varchar(20)` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`id`)
-- **INDEX** `idx_waste_trip_audit_trip` (`waste_trip_id`, `id`)
-
-### Physical foreign keys
-
-- `fk_waste_trip_audit_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
