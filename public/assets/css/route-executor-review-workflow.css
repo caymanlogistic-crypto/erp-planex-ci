@@ -65,3 +65,9 @@
   .lab-route-send-dialog .lab-review-foot { flex-wrap: wrap; }
   .lab-route-send-dialog .lab-review-foot button { flex: 1 1 auto; }
 }
+.route-review-row { background: #fff1b8; cursor: pointer; }
+.route-review-row:hover, .route-review-row:focus-visible { background: #ffe58a; outline: 2px solid #ad741a; outline-offset: -2px; }
+.route-review-row td { background: transparent !important; vertical-align: middle; }
+.route-review-row small { color: #75521b; font-weight: 600; }
+.route-review-badge { display: inline-block; background: #fff8db; color: #684612; border: 1px solid #d7af5a; }
+.route-review-delete { margin-left: 8px; min-height: 28px; }

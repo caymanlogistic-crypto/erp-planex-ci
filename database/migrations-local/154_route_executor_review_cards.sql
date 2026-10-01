@@ -1,0 +1,21 @@
+CREATE TABLE route_executor_review_cards (
+  card_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+  actor_account_id BIGINT UNSIGNED NOT NULL,
+  last_editor_account_id BIGINT UNSIGNED NOT NULL,
+  revision INT UNSIGNED NOT NULL DEFAULT 1,
+  snapshot_json MEDIUMTEXT NOT NULL,
+  files_json MEDIUMTEXT NOT NULL,
+  responsible_membership_id BIGINT UNSIGNED NULL,
+  trip_business_id BIGINT UNSIGNED NULL,
+  contractor_name VARCHAR(255) NOT NULL DEFAULT '',
+  driver_name VARCHAR(255) NOT NULL DEFAULT '',
+  driver_phone VARCHAR(64) NOT NULL DEFAULT '',
+  vehicle_type VARCHAR(40) NOT NULL DEFAULT '',
+  plate VARCHAR(40) NOT NULL DEFAULT '',
+  deleted_at DATETIME(6) NULL,
+  created_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6),
+  updated_at DATETIME(6) NOT NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6),
+  PRIMARY KEY (card_id),
+  KEY idx_route_executor_review_cards_active (deleted_at, updated_at),
+  KEY idx_route_executor_review_cards_actor (actor_account_id, updated_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

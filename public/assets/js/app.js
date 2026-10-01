@@ -925,6 +925,9 @@ window.getErpBasePath = function () {
         function sortRows() {
             var rows = Array.prototype.slice.call(tbody.querySelectorAll('tr'));
             rows.sort(function (a, b) {
+                var pinA = a.hasAttribute('data-erp-pin') ? 1 : 0;
+                var pinB = b.hasAttribute('data-erp-pin') ? 1 : 0;
+                if (pinA !== pinB) return pinB - pinA;
                 var va = getSortValue(a, sortMode);
                 var vb = getSortValue(b, sortMode);
                 if (sortMode === 'date') {
@@ -1004,6 +1007,12 @@ window.getErpBasePath = function () {
                 filterRows();
                 saveGridState();
             }
+        });
+
+        card.addEventListener('erp-grid-refresh', function () {
+            totalRows = tbody.querySelectorAll('tr').length;
+            sortRows();
+            filterRows();
         });
 
         // --- Initial sort + footer ---
