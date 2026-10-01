@@ -10,6 +10,8 @@ use App\Service\DocumentMailMime;
 use App\Service\DocumentMailTransport;
 use App\Service\EmployeeMailProfileService;
 use App\Service\MaxEventNotificationService;
+use App\Service\MaxEventCatalog;
+use App\Service\MaxMessagingService;
 use App\Service\RouteExecutorReviewEmail;
 use App\Service\RouteExecutorReviewArchive;
 use App\Service\RouteExecutorReviewCardService;
@@ -112,7 +114,7 @@ final class RouteExecutorReviewController
             $action=(string)($_POST['action']??'');
             if ($action==='save') $this->saveCard($cards,$cardId,$accountId);
             if ($action==='delete') { $cards->delete($cardId);$this->json(['ok'=>true]); }
-            if ($action==='resend') $this->resendCard($cards,$central,$tenant,(int)$company['id'],$accountId,$cardId);
+            if ($action==='resend') $this->resendCard($cards,$central,$tenant,(int)$company['id'],$accountId,$actorName,$cardId);
             $stage=(string)($_POST['stage']??'');
             if (!in_array($stage,['partial','final'],true)) throw new DomainException('Неизвестный этап отправки.');
             $card=$cards->load($cardId);
@@ -225,8 +227,8 @@ final class RouteExecutorReviewController
         }
     }
 
-    /** Temporary delivery-check action. It never advances the workflow or enqueues MAX. */
-    private function resendCard(RouteExecutorReviewCardService $cards,PDO $central,PDO $tenant,int $companyId,int $accountId,string $cardId): never
+    /** Temporary delivery-check action. It never advances the workflow. */
+    private function resendCard(RouteExecutorReviewCardService $cards,PDO $central,PDO $tenant,int $companyId,int $accountId,string $actorName,string $cardId): never
     {
         $lockName='route-review-resend:'.$cardId;
         $lock=$tenant->prepare('SELECT GET_LOCK(?,0)');$lock->execute([$lockName]);
@@ -242,7 +244,24 @@ final class RouteExecutorReviewController
             $tripLabel=$this->selectedTrip($tenant,(int)$tripId);
             $package=RouteExecutorReviewPackage::inspect($card['snapshot'],$cards->storedFiles($card),true);
             if (!$package['ready']) throw new DomainException('В карточке недостаточно данных для отправки.');
-            $this->responsibleLogist($central,$companyId,(int)($card['snapshot']['logist']??0));
+            $logist=$this->responsibleLogist($central,$companyId,(int)($card['snapshot']['logist']??0));
+            $testChat=$tenant->prepare("SELECT c.id,c.bot_id FROM max_chats c JOIN max_bots b ON b.id=c.bot_id WHERE c.chat_id=? AND b.name=? AND c.is_active=1 AND c.max_status='active' AND b.is_active=1 LIMIT 2");
+            $testChat->execute(['-70991778594913','Бэрримор']);
+            $testChats=$testChat->fetchAll(PDO::FETCH_ASSOC);
+            if (count($testChats)!==1) throw new DomainException('Тестовая группа MAX бота «Бэрримор» недоступна. Повторная отправка не начата.');
+            $event='route_executor.'.$stage;
+            $rule=null;
+            foreach ((new MaxEventNotificationService($tenant))->rules() as $candidate) {
+                if (($candidate['event_key']??'')===$event) { $rule=$candidate;break; }
+            }
+            $template=(string)($rule['message_template']??MaxEventCatalog::event($event)['template']);
+            $format=MaxEventCatalog::systemFormat($event,(string)($rule['message_format']??'markdown'));
+            $maxText="Повторная отправка для проверки доставки\n".MaxEventCatalog::render($event,$template,$format,[
+                'trip'=>$tripLabel,'contractor'=>$package['contractor']?:'—','driver'=>$package['driver']?:'—',
+                'plate'=>$package['plate']?:'—','responsible'=>$logist['name'],'ready'=>implode(', ',$package['ready']),
+                'author'=>$actorName,'missing'=>implode("\n",$package['missing']) ?: 'нет',
+            ]);
+            if (mb_strlen($maxText)>4000) throw new DomainException('Сообщение MAX слишком длинное. Повторная отправка не начата.');
             $recipients=['info@plan-ex.ru'];
             $profiles=new EmployeeMailProfileService($central,$companyId);
             $sender=$profiles->defaultSender($accountId);
@@ -259,7 +278,20 @@ final class RouteExecutorReviewController
                 'attachments'=>$package['attachments'] ? [RouteExecutorReviewArchive::build($package['attachments'],$tripLabel)] : []];
             DocumentMailMime::build($message);
             $mailStatus=(new DocumentMailTransport())->send($credentials,$message);
+            $maxStatus='not_sent';
+            if ($mailStatus==='accepted') {
+                try {
+                    (new MaxMessagingService($tenant))->sendToChat((int)$testChats[0]['id'],$maxText,$format,true,'test',$accountId,[
+                        'bot_id'=>(int)$testChats[0]['bot_id'],'external_chat_id'=>'-70991778594913',
+                    ]);
+                    $maxStatus='sent';
+                } catch (Throwable $maxError) {
+                    error_log('route executor retry MAX notification: '.$maxError->getMessage());
+                    $maxStatus='failed';
+                }
+            }
             $result=['ok'=>$mailStatus==='accepted','mail_status'=>$mailStatus,'recipients'=>$recipients,
+                'max_status'=>$maxStatus,
                 'error'=>$mailStatus==='accepted'?null:'Почтовый сервер не подтвердил повторную отправку. Не нажимайте повторно до проверки почты.'];
         } finally {
             $unlock=$tenant->prepare('SELECT RELEASE_LOCK(?)');$unlock->execute([$lockName]);
