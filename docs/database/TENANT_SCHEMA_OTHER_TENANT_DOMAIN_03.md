@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `33b256cc39f1bee80904d4e090cb23754ba7895236ce8376f24d492dec4cf76b`
+**Schema fingerprint:** `b523250935765dfe47b01b538db3e39b5a6bd12630aecdf656aa41e534bf7ebc`
 
 ## `feo_utilizers`
 
@@ -210,6 +210,32 @@
 - `fk_max_message_logs_bot`: (`bot_id`) → `max_bots`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
 - `fk_max_message_logs_chat`: (`chat_config_id`) → `max_chats`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
 
+## `route_executor_contract_mails`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `card_id` | `char(36)` | NO | NULL | — | `PRI` |
+| `actor_account_id` | `bigint unsigned` | NO | NULL | — | — |
+| `trip_business_id` | `bigint unsigned` | NO | NULL | — | — |
+| `recipient_email` | `varchar(254)` | NO | NULL | — | — |
+| `message_id` | `varchar(255)` | NO | NULL | — | — |
+| `mail_status` | `varchar(16)` | NO | NULL | — | `MUL` |
+| `sent_at` | `datetime(6)` | YES | NULL | — | — |
+| `created_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED` | — |
+| `updated_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`card_id`)
+- **INDEX** `idx_route_executor_contract_mail_status` (`mail_status`, `updated_at`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
 ## `route_executor_review_cards`
 
 **Domain:** Other tenant domain<br>
@@ -239,35 +265,6 @@
 - **PRIMARY** `PRIMARY` (`card_id`)
 - **INDEX** `idx_route_executor_review_cards_active` (`deleted_at`, `updated_at`)
 - **INDEX** `idx_route_executor_review_cards_actor` (`actor_account_id`, `updated_at`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.
-
-## `route_executor_review_sends`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `card_id` | `char(36)` | NO | NULL | — | `PRI` |
-| `actor_account_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `responsible_membership_id` | `bigint unsigned` | YES | NULL | — | — |
-| `stage` | `varchar(16)` | NO | NULL | — | — |
-| `partial_message_id` | `varchar(255)` | YES | NULL | — | — |
-| `partial_mail_status` | `varchar(16)` | YES | NULL | — | — |
-| `final_message_id` | `varchar(255)` | YES | NULL | — | — |
-| `final_mail_status` | `varchar(16)` | YES | NULL | — | — |
-| `partial_at` | `datetime(6)` | YES | NULL | — | — |
-| `final_at` | `datetime(6)` | YES | NULL | — | — |
-| `created_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`card_id`)
-- **INDEX** `idx_route_executor_review_actor` (`actor_account_id`, `updated_at`)
 
 ### Physical foreign keys
 
