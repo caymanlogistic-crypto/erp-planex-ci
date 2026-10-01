@@ -15,6 +15,7 @@ use App\Service\MaxMessagingService;
 use App\Service\RouteExecutorReviewEmail;
 use App\Service\RouteExecutorReviewArchive;
 use App\Service\RouteExecutorReviewCardService;
+use App\Service\RouteExecutorReviewMaterializationService;
 use App\Service\RouteExecutorContractMailService;
 use App\Service\RouteExecutorReviewMaxMessage;
 use App\Service\RouteExecutorReviewPackage;
@@ -119,6 +120,11 @@ final class RouteExecutorReviewController
             $action=(string)($_POST['action']??'');
             if ($action==='save') $this->saveCard($cards,$central,$tenant,(int)$company['id'],$cardId,$accountId);
             if ($action==='delete') { $cards->delete($cardId);$this->json(['ok'=>true]); }
+            if ($action==='materialize') {
+                $crewId=(new RouteExecutorReviewMaterializationService($tenant,$this->db,$this->config,(int)$company['id']))
+                    ->materialize($cardId,(int)($_SESSION['user_id']??0),(string)($_SESSION['role_code']??''));
+                $this->json(['ok'=>true,'crew_id'=>$crewId]);
+            }
             if ($action==='resend') $this->resendCard($cards,$central,$tenant,(int)$company['id'],$accountId,$actorName,$cardId);
             $stage=(string)($_POST['stage']??'');
             if (!in_array($stage,['partial','final'],true)) throw new DomainException('Неизвестный этап отправки.');
@@ -222,8 +228,19 @@ final class RouteExecutorReviewController
                     $maxStatus='failed';
                 }
             }
+            $materializationError=null;$crewId=null;
+            if ($mailStatus==='accepted' && $stage==='final') {
+                try {
+                    $crewId=(new RouteExecutorReviewMaterializationService($tenant,$this->db,$this->config,(int)$company['id']))
+                        ->materialize($cardId,(int)($_SESSION['user_id']??0),(string)($_SESSION['role_code']??''));
+                } catch (Throwable $conversionError) {
+                    error_log('route executor standard save: '.$conversionError->getMessage());
+                    $materializationError='Письмо отправлено, но данные не внесены в справочники: '.$conversionError->getMessage();
+                }
+            }
             $this->json(['ok'=>$mailStatus==='accepted','stage'=>$nextStage,'mail_status'=>$mailStatus,
-                'max_status'=>$maxStatus,'error'=>$mailStatus==='accepted'?null:'Письмо не подтверждено. Проверьте статус отправки у администратора.']);
+                'max_status'=>$maxStatus,'crew_id'=>$crewId,'materialization_error'=>$materializationError,
+                'error'=>$mailStatus==='accepted'?null:'Письмо не подтверждено. Проверьте статус отправки у администратора.']);
         } catch (Throwable $error) {
             if ($reserved && $tenant instanceof PDO && $cardId!=='' && $stage!=='') {
                 try {

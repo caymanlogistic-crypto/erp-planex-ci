@@ -6,11 +6,15 @@ use App\Core\Database;
 use App\Security\AccessRuntime;
 use App\Security\EffectiveAccess;
 use App\Service\RouteExecutorCombinedCreateService;
+use App\Service\RouteExecutorReviewMaterializationService;
 use App\Service\RouteExecutorDeletionService;
 
 $config = require dirname(__DIR__) . '/bootstrap/app.php';
 require_once BASE_PATH . '/app/Support/entrypoint_dependencies.php';
 require_once BASE_PATH . '/app/Support/crew_driver_helpers.php';
+require_once BASE_PATH . '/app/Service/RouteExecutorReviewMaterializationService.php';
+require_once BASE_PATH . '/app/Service/RouteExecutorReviewPackage.php';
+require_once BASE_PATH . '/app/Service/RouteExecutorReviewCardService.php';
 
 $dbName = trim((string) getenv('PLANEX_TEST_FIXED_DB'));
 $allowed = array_filter(array_map('trim', explode(',', (string) getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST'))));
@@ -118,4 +122,95 @@ if (isset($contractorService->validateContractor(['name' => 'Проверка', 
 $pdo->exec('UPDATE vehicle_sets SET deleted_at=NOW() WHERE id=1');
 $newCrewId = RouteExecutorCombinedCreateService::create($pdo, $central, $config, 7, $payload('7701234567', 'А123ВС77'), [], 101, 'company_owner');
 if ($newCrewId <= $recreatedCrewId) throw new RuntimeException('Previously deleted data could not be entered again.');
+$control=static fn(string $form,string $name,string $value):array=>['formId'=>'lab-'.$form.'-form','name'=>$name,'value'=>$value];
+$snapshot=['logist'=>'12','controls'=>[
+    $control('contractor','name','ИП Проверка Переноса'),$control('contractor','inn','7701234569'),
+    $control('contractor','contacts[0][contact_person]','Контакт'),$control('contractor','contacts[0][phone]','+7 900 111-22-33'),
+    $control('contractor','contacts[0][email]','contact@example.test'),
+    $control('driver','full_name','Петров Пётр Петрович'),$control('driver','phone','+7 900 000-00-01'),
+    $control('driver','passport_issue_date','01.02.2020'),$control('driver','license_issue_date','03.04.2021'),
+    $control('vehicle','set_type','single'),$control('vehicle','units[primary][plate_number]','А125ВС77'),
+    $control('vehicle','units[primary][brand]','КАМАЗ'),$control('vehicle','units[primary][vin]','XTC43100000000000'),
+    $control('vehicle','units[primary][capacity_tons]','10'),$control('vehicle','units[primary][volume_m3]','20'),
+]];
+$storedSource=tempnam(sys_get_temp_dir(),'route-review-doc-');
+file_put_contents($storedSource,'%PDF-1.4 review document');
+$stored=[];
+foreach ([['lab-contractor-form|predef_doc[company_card][]','contractor.pdf'],
+    ['lab-driver-form|predef_doc[passport][]','passport.pdf'],
+    ['lab-vehicle-form|predef_doc[primary][sts][]','sts.pdf']] as [$key,$name]) {
+    $stored[]=['key'=>$key,'index'=>0,'name'=>$name,'mime'=>'application/pdf','tmp_name'=>$storedSource,
+        'error'=>UPLOAD_ERR_OK,'size'=>filesize($storedSource)];
+}
+try {
+    [$post,$files]=RouteExecutorReviewMaterializationService::standardInput($snapshot,$stored);
+    if ($post['contractor']['contacts'][0]['email']!=='contact@example.test'
+        || $post['vehicle']['units']['primary']['plate_number']!=='А125ВС77'
+        || $files['vehicle_predef_doc']['name']['primary']['sts'][0]!=='sts.pdf') throw new RuntimeException('Review snapshot was not mapped to standard input.');
+    $movedCrewId=RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$post,$files,101,'company_owner',null,true);
+    if ($movedCrewId<=$newCrewId) throw new RuntimeException('Review crew was not created.');
+    $docs=$pdo->query("SELECT d.entity_type,d.relative_path FROM documents d WHERE d.original_name IN ('contractor.pdf','passport.pdf','sts.pdf') ORDER BY d.entity_type")->fetchAll(PDO::FETCH_ASSOC);
+    if (count($docs)!==3 || array_column($docs,'entity_type')!==['contractor','driver','vehicle_unit']) throw new RuntimeException('Review files did not enter all standard document directories.');
+    foreach ($docs as $doc) {
+        $file=storage_path($doc['relative_path']);
+        if (!is_file($file) || file_get_contents($file)!=='%PDF-1.4 review document') throw new RuntimeException('Stored review document was not copied into the standard location.');
+        @unlink($file);
+    }
+    if (!is_file($storedSource)) throw new RuntimeException('Review source document was moved instead of copied.');
+} finally { @unlink($storedSource); }
+$cardId='22222222-2222-4222-8222-222222222222';
+$reviewDir=storage_path('companies/7/route-executor-review/'.$cardId);
+if (!is_dir($reviewDir) && !mkdir($reviewDir,0750,true)) throw new RuntimeException('Review fixture directory unavailable.');
+$fullControls=[
+    $control('contractor','name','ИП Полный Комплект'),$control('contractor','inn','123456789012'),
+    $control('contractor','contractor_type','individual'),$control('contractor','ogrn','123456789012345'),
+    $control('contractor','director_full_name','Полный Комплект ИП'),$control('contractor','director_position','ИП'),
+    $control('contractor','legal_address','Тестовый адрес'),$control('contractor','bank_account','12345678901234567890'),
+    $control('contractor','bank_bik','123456789'),$control('contractor','bank_name','Тестовый банк'),
+    $control('contractor','bank_corr_account','12345678901234567890'),
+    $control('contractor','contacts[0][contact_person]','Контакт'),$control('contractor','contacts[0][phone]','+7 900 111-22-33'),
+    $control('contractor','contacts[0][email]','contact@example.test'),
+    $control('driver','full_name','Сидоров Сидор Сидорович'),$control('driver','phone','+7 900 000-00-02'),
+    $control('driver','snils','12345678900'),$control('driver','passport_number','1234567890'),
+    $control('driver','passport_issued_by','Тестовое ОВД'),$control('driver','passport_issue_date','01.02.2020'),
+    $control('driver','license_number','1234567890'),$control('driver','license_issue_date','03.04.2021'),
+    $control('driver','email','driver@example.test'),
+    $control('vehicle','set_type','single'),$control('vehicle','units[primary][plate_number]','А126ВС77'),
+    $control('vehicle','units[primary][brand]','КАМАЗ'),$control('vehicle','units[primary][vin]','XTC43100000000000'),
+    $control('vehicle','units[primary][capacity_tons]','10'),$control('vehicle','units[primary][volume_m3]','20'),
+];
+$fullFiles=[];$fixturePaths=[];
+foreach ([['lab-contractor-form','predef_doc[company_card][]'],['lab-driver-form','predef_doc[passport][]'],
+    ['lab-driver-form','predef_doc[driver_license][]'],['lab-vehicle-form','predef_doc[primary][sts][]'],
+    ['lab-vehicle-form','predef_doc[primary][photo][]']] as $index=>[$form,$field]) {
+    $filename='review-'.$index.'.pdf';$relative='companies/7/route-executor-review/'.$cardId.'/'.$filename;
+    $absolute=storage_path($relative);file_put_contents($absolute,'%PDF-1.4 full review '.$index);$fixturePaths[]=$absolute;
+    $fullFiles[]=['id'=>str_pad((string)$index,32,'0'),'formId'=>$form,'name'=>$field,'index'=>0,
+        'original_name'=>$filename,'mime'=>'application/pdf','size'=>filesize($absolute),'path'=>$relative];
+}
+$fullSnapshot=['controls'=>$fullControls,'logist'=>'12','trip_id'=>'285','trip_label'=>'#285 Тестовый рейс'];
+$pdo->prepare('INSERT INTO route_executor_review_cards(card_id,actor_account_id,last_editor_account_id,revision,snapshot_json,files_json) VALUES(?,?,?,1,?,?)')
+    ->execute([$cardId,101,101,json_encode($fullSnapshot,JSON_UNESCAPED_UNICODE),json_encode($fullFiles,JSON_UNESCAPED_UNICODE)]);
+$pdo->prepare("INSERT INTO route_executor_review_sends(card_id,actor_account_id,stage,final_mail_status) VALUES(?,?,'final','accepted')")
+    ->execute([$cardId,101]);
+try {
+    $materializer=new RouteExecutorReviewMaterializationService($pdo,$central,$config,7);
+    $converted=$materializer->materialize($cardId,101,'company_owner');
+    if ($converted<=$movedCrewId || (int)$pdo->query('SELECT COUNT(*) FROM route_executor_review_cards WHERE deleted_at IS NULL')->fetchColumn()!==0)
+        throw new RuntimeException('Final card was not converted to ordinary crew.');
+    $convertedDocs=$pdo->query("SELECT d.entity_type,d.relative_path FROM documents d WHERE d.original_name LIKE 'review-%.pdf' ORDER BY d.id")->fetchAll(PDO::FETCH_ASSOC);
+    if (count($convertedDocs)!==5) throw new RuntimeException('Full review files were not registered as standard documents.');
+    foreach ($convertedDocs as $doc) {
+        $absolute=storage_path($doc['relative_path']);
+        if (!is_file($absolute)) throw new RuntimeException('Full review file missing from standard storage.');
+        @unlink($absolute);
+    }
+    $crewCount=(int)$pdo->query('SELECT COUNT(*) FROM crews')->fetchColumn();
+    try { $materializer->materialize($cardId,101,'company_owner'); throw new RuntimeException('Final card converted twice.'); }
+    catch (DomainException $expected) {}
+    if ((int)$pdo->query('SELECT COUNT(*) FROM crews')->fetchColumn()!==$crewCount) throw new RuntimeException('Retry created duplicate crew.');
+} finally {
+    foreach ($fixturePaths as $path) @unlink($path);
+    @rmdir($reviewDir);
+}
 echo "ROUTE_EXECUTOR_COMBINED_TRANSACTION=PASS\n";

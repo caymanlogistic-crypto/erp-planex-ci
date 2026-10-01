@@ -9,6 +9,7 @@ require_once base_path('app/Service/MaxEventNotificationService.php');
 require_once base_path('app/Service/RouteExecutorReviewRecipientService.php');
 require_once base_path('app/Service/RouteExecutorReviewPackage.php');
 require_once base_path('app/Service/RouteExecutorReviewCardService.php');
+require_once base_path('app/Service/RouteExecutorReviewMaterializationService.php');
 require_once base_path('app/Service/RouteExecutorReviewArchive.php');
 require_once base_path('app/Service/RouteExecutorReviewEmail.php');
 require_once base_path('app/Service/RouteExecutorReviewMaxMessage.php');

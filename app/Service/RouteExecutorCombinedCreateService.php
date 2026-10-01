@@ -10,7 +10,7 @@ use Throwable;
 /** Creates the three source entities and their crew in one tenant transaction. */
 final class RouteExecutorCombinedCreateService
 {
-    public static function create(PDO $pdo, Database $centralDb, array $config, int $companyId, array $post, array $files, int $userId, string $role): int
+    public static function create(PDO $pdo, Database $centralDb, array $config, int $companyId, array $post, array $files, int $userId, string $role, ?callable $afterCreate = null, bool $storedFiles = false): int
     {
         $contractor = (array) ($post['contractor'] ?? []);
         $driver = (array) ($post['driver'] ?? []);
@@ -136,9 +136,10 @@ final class RouteExecutorCombinedCreateService
             $responsibilityInsert = $pdo->prepare('INSERT INTO entity_responsibilities (entity_type,entity_id,membership_id,assigned_by_membership_id) VALUES (?,?,?,?)');
             $responsibilityInsert->execute(['route_executor', $crewId, $responsibleLogistId, $actorMembershipId]);
 
-            self::storeDocuments($pdo, $companyId, 'contractor', $contractorId, $contractor, $files, 'contractor', $userId, $role, $savedPaths);
-            self::storeDocuments($pdo, $companyId, 'driver', $driverId, $driver, $files, 'driver', $userId, $role, $savedPaths);
-            foreach ($unitIds as $unitRole => $unitId) self::storeDocuments($pdo, $companyId, 'vehicle_unit', $unitId, $vehicle, $files, 'vehicle', $userId, $role, $savedPaths, $unitRole);
+            self::storeDocuments($pdo, $companyId, 'contractor', $contractorId, $contractor, $files, 'contractor', $userId, $role, $savedPaths, null, $storedFiles);
+            self::storeDocuments($pdo, $companyId, 'driver', $driverId, $driver, $files, 'driver', $userId, $role, $savedPaths, null, $storedFiles);
+            foreach ($unitIds as $unitRole => $unitId) self::storeDocuments($pdo, $companyId, 'vehicle_unit', $unitId, $vehicle, $files, 'vehicle', $userId, $role, $savedPaths, $unitRole, $storedFiles);
+            if ($afterCreate !== null) $afterCreate($crewId);
             $pdo->commit();
             return $crewId;
         } catch (Throwable $error) {
@@ -201,7 +202,7 @@ final class RouteExecutorCombinedCreateService
         }
     }
 
-    private static function storeDocuments(PDO $pdo, int $companyId, string $entityType, int $entityId, array $post, array $files, string $prefix, int $userId, string $role, array &$savedPaths, ?string $unitRole = null): void
+    private static function storeDocuments(PDO $pdo, int $companyId, string $entityType, int $entityId, array $post, array $files, string $prefix, int $userId, string $role, array &$savedPaths, ?string $unitRole = null, bool $storedFiles = false): void
     {
         foreach (['predef_doc' => 'predefined', 'custom_doc_file' => 'custom'] as $kind => $category) {
             foreach (self::leafFiles((array) ($files[$prefix . '_' . $kind] ?? [])) as $file) {
@@ -231,7 +232,10 @@ final class RouteExecutorCombinedCreateService
                 $absoluteDir = storage_path($relativeDir);
                 if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0755, true)) throw new RuntimeException('Не удалось создать папку документа.');
                 $absolutePath = $absoluteDir . DIRECTORY_SEPARATOR . $storedName;
-                if (!move_uploaded_file((string) $file['tmp_name'], $absolutePath)) throw new RuntimeException('Не удалось сохранить документ.');
+                $saved = $storedFiles
+                    ? copy((string) $file['tmp_name'], $absolutePath)
+                    : move_uploaded_file((string) $file['tmp_name'], $absolutePath);
+                if (!$saved) throw new RuntimeException('Не удалось сохранить документ.');
                 $savedPaths[] = $absolutePath;
                 $insert = $pdo->prepare('INSERT INTO documents (entity_type,entity_id,document_type,document_type_id,original_name,stored_name,relative_path,mime_type,file_size,status,uploaded_by_user_id,uploaded_by_role,created_by_user_id,created_by_role) VALUES (?,?,?,?,?,?,?,?,?,\'uploaded\',?,?,?,?)');
                 $insert->execute([$entityType,$entityId,$name,$typeId,$file['name'],$storedName,$relativeDir . '/' . $storedName,$file['type'],$file['size'],$userId,$role,$userId,$role]);
