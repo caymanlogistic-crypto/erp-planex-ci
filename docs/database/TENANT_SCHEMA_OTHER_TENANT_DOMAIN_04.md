@@ -2,7 +2,32 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `b8abba11d51fdb947248b8be88433b54aaa560f72620d11dd465e827b728115c`
+**Schema fingerprint:** `33b256cc39f1bee80904d4e090cb23754ba7895236ce8376f24d492dec4cf76b`
+
+## `waste_trip_audit_log`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `waste_trip_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `action` | `enum('create','update','composition_correction','cancel')` | NO | NULL | — | — |
+| `before_json` | `longtext` | YES | NULL | — | — |
+| `after_json` | `longtext` | YES | NULL | — | — |
+| `actor_user_id` | `int unsigned` | YES | NULL | — | — |
+| `actor_role` | `varchar(20)` | YES | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_waste_trip_audit_trip` (`waste_trip_id`, `id`)
+
+### Physical foreign keys
+
+- `fk_waste_trip_audit_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
 
 ## `waste_trip_carrier_payments`
 
@@ -218,26 +243,3 @@
 ### Physical foreign keys
 
 - `fk_waste_trip_general_payments_trip`: (`waste_trip_id`) → `waste_trips`.`id` ON UPDATE NO ACTION ON DELETE RESTRICT
-
-## `waste_trip_namespace_state`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `singleton_id` | `tinyint unsigned` | NO | NULL | — | `PRI` |
-| `legacy_high_water_at_cutover` | `bigint unsigned` | NO | NULL | — | — |
-| `last_issued_business_id` | `bigint unsigned` | NO | NULL | — | — |
-| `cutover_started_at` | `datetime` | YES | NULL | — | — |
-| `cutover_completed_at` | `datetime` | YES | NULL | — | — |
-| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`singleton_id`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.

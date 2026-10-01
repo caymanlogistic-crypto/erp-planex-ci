@@ -369,7 +369,7 @@
         if (element.type === 'file') {
           if (element.files?.length) files.push({ ...target, selected: [...element.files] });
         } else {
-          const label = element.closest('.field, .contact-cell-wrap, .vehicle-set-unit-card')
+          const label = element.name === 'extra_phones[]' ? 'Доп контакты' : element.name === 'extra_phone_comments[]' ? 'Комментарий к доп контактам' : element.closest('.field, .contact-cell-wrap, .vehicle-set-unit-card')
             ?.querySelector('.field-label')?.textContent?.replace('*', '').trim() || element.placeholder || element.name;
           const displayValue = element.tagName === 'SELECT' ? element.selectedOptions?.[0]?.textContent?.trim() || element.value : element.value;
           controls.push({ ...target, value: element.value, displayValue, checked: !!element.checked, type: element.type, label });
@@ -439,13 +439,40 @@
   }
 
   async function persistDraft(snapshot) {
+    const data = new FormData();
+    data.set('action', 'save');
+    data.set('card_id', DRAFT_ID);
+    data.set('revision', String(draft.revision));
+    data.set('snapshot', JSON.stringify(snapshot, (key, value) => key === 'selected' ? undefined : value));
+    for (const item of snapshot.files) for (const file of item.selected) {
+      data.append('attachments[]', file, file.name);
+      data.append('attachment_keys[]', item.formId + '|' + item.name + '|' + item.index);
+    }
+    const response = await fetch(base + '/company/route-executors/review/send', {
+      method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: data
+    });
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось сохранить карточку.');
     const next = {
-      ...draft, ...snapshot, revision: draft.revision + 1,
+      ...draft, ...snapshot, revision: result.revision,
       savedAt: new Date().toISOString(), signature: draftSignature(snapshot)
     };
-    await draftOperation('readwrite', store => store.put(next));
+    try { await draftOperation('readwrite', store => store.put(next)); }
+    catch (error) { console.warn('Локальный кэш карточки недоступен', error); }
     draft = next;
     renderWorkflow();
+  }
+
+  async function refreshReviewList() {
+    const current = document.querySelector('[data-route-executors-grid]');
+    if (!current) { sessionStorage.setItem('route-review-open-' + scope, DRAFT_ID); window.location.reload(); return; }
+    const response = await fetch(window.location.href, { credentials: 'same-origin' });
+    if (!response.ok) return;
+    const page = new DOMParser().parseFromString(await response.text(), 'text/html');
+    const next = page.querySelector('[data-route-executors-grid] tbody');
+    if (!next) { sessionStorage.setItem('route-review-open-' + scope, DRAFT_ID); window.location.reload(); return; }
+    current.querySelector('tbody')?.replaceWith(next);
+    current.dispatchEvent(new Event('erp-grid-refresh'));
   }
 
   function readyActions() {
@@ -542,29 +569,47 @@
     renderWorkflow();
     if (draftLoaded) return;
     draftLoaded = true;
-    draftOperation('readonly', store => store.get(DRAFT_ID)).then(async saved => {
-      if (saved) {
-        draft = saved;
-        restoreDraft(saved);
-      }
+    (async () => {
+      let saved = null;
+      try { saved = await draftOperation('readonly', store => store.get(DRAFT_ID)); }
+      catch (error) { console.warn('Локальный черновик недоступен', error); }
       try {
         const response = await fetch(base + '/company/route-executors/review/status?card_id=' + encodeURIComponent(DRAFT_ID), { credentials: 'same-origin' });
         const state = await response.json();
-        if (response.ok && state.ok && draft.stage !== state.stage) {
-          draft.stage = state.stage;
-          await draftOperation('readwrite', store => store.put(draft));
+        if (!response.ok || !state.ok) throw new Error(state.error || 'Карточка недоступна.');
+        if (state.card) {
+          const files = [];
+          for (const item of state.card.files) {
+            const fileResponse = await fetch(base + '/company/route-executors/review/config?file_card=' + encodeURIComponent(DRAFT_ID) + '&file_id=' + encodeURIComponent(item.id), { credentials: 'same-origin' });
+            if (!fileResponse.ok) throw new Error('Не удалось загрузить документы карточки.');
+            const file = new File([await fileResponse.blob()], item.original_name, { type: item.mime });
+            files.push({ formId: item.formId, name: item.name, index: item.index, selected: [file] });
+          }
+          draft = { ...draft, ...state.card.snapshot, files, revision: state.card.revision,
+            stage: state.stage, savedAt: state.card.updated_at, signature: '' };
+          restoreDraft(draft);
+          draft.signature = draftSignature(captureDraft());
+        } else if (saved?.savedAt) {
+          draft = { ...saved, revision: 0, stage: state.stage };
+          restoreDraft(saved);
+          await persistDraft(captureDraft());
         }
-      } catch (error) { console.warn('Не удалось проверить состояние отправки', error); }
+      } catch (error) {
+        status.querySelector('[data-lab-workflow-message]').textContent = 'Не удалось открыть карточку: ' + error.message;
+        console.warn('Не удалось открыть карточку', error);
+      }
       requestAnimationFrame(() => {
         syncIndividualFields();
         explainContractReadiness();
         explainTrainingReadiness();
         explainVehicleReadiness();
         renderWorkflow();
+        if (sessionStorage.getItem('route-review-open-' + scope) === DRAFT_ID) {
+          sessionStorage.removeItem('route-review-open-' + scope);
+          window.openCombinedRouteExecutorCreate?.();
+        }
       });
-    }).catch(error => {
-      status.querySelector('[data-lab-workflow-message]').textContent = 'Локальное сохранение недоступно: ' + error.message;
-    });
+    })();
   }
 
   function emailPayload(stage, snapshot) {
@@ -575,7 +620,8 @@
       .map(item => {
         const element = namedControl(item.formId, item.name, item.index);
         const section = { 'lab-contractor-form': 'Подрядчик', 'lab-driver-form': 'Водитель', 'lab-vehicle-form': 'Транспорт' }[item.formId];
-        const special = item.name === 'full_name' ? 'ФИО' : item.name === 'snils' ? 'СНИЛС' : item.name === 'set_type' ? 'Тип комплекта' : '';
+        const special = item.name === 'full_name' ? 'ФИО' : item.name === 'snils' ? 'СНИЛС' : item.name === 'set_type' ? 'Тип комплекта'
+          : item.name === 'extra_phones[]' ? 'Доп контакты' : item.name === 'extra_phone_comments[]' ? 'Комментарий к доп контактам' : '';
         const contact = item.name.match(/^contacts\[\d+\]\[(contact_person|phone|email)\]$/)?.[1];
         const contactLabel = { contact_person: 'Контактное лицо', phone: 'Телефон контакта', email: 'Email контакта' }[contact];
         const field = element?.closest('.field, .contact-cell-wrap, .vehicle-set-unit-card');
@@ -587,6 +633,10 @@
       });
     const files = snapshot.files.flatMap(item => item.selected.map(file => file.name));
     const ready = readyActions().map(key => readinessTitles[key]);
+    const missing = [...new Set(['contract', 'training', 'vehicle'].flatMap(key => {
+      const report = readinessReport(key);
+      return [...report.fields.map(value => `${readinessTitles[key]}: ${value}`), ...report.files.map(value => `Файл: ${value}`)];
+    }))];
     const subject = `${snapshot.trip_label} — исполнитель рейса — ${label.toLowerCase()}`;
     const find = (formId, name) => snapshot.controls.find(item => item.formId === formId && item.name === name)?.value?.trim();
     const max = [`${label} по исполнителю рейса`, `**Рейс ${snapshot.trip_label}**`,
@@ -595,8 +645,8 @@
       find('lab-vehicle-form', 'units[primary][plate_number]') ? `Госномер: ${find('lab-vehicle-form', 'units[primary][plate_number]')}` : '',
       `Готово: ${ready.join('; ')}.`,
       partial ? 'Это первичные данные. Ожидайте полный комплект вторым письмом.' : 'Полный комплект данных и файлов передан.',
-      `Поля: ${fields.length}; файлы: ${files.length}.`].filter(Boolean).join('\n');
-    return { stage, number, label, subject, max, fields, files, ready, signature: draftSignature(snapshot), snapshot };
+      `Поля: ${fields.length}; файлы: ${files.length}.`, `ДАННЫХ НЕХВАТАЕТ:\n${missing.join('\n') || 'нет'}`].filter(Boolean).join('\n');
+    return { stage, number, label, subject, max, fields, files, ready, missing, signature: draftSignature(snapshot), snapshot };
   }
 
   function ensureWorkflowDialog() {
@@ -663,11 +713,15 @@
       trip: snapshot.trip_label,
       contractor: find('lab-contractor-form', 'name'), driver: find('lab-driver-form', 'full_name'),
       plate: find('lab-vehicle-form', 'units[primary][plate_number]'), responsible: logist,
-      ready: pendingSend.ready.join(', '), author: config.author
+      ready: pendingSend.ready.join(', '), author: config.author, missing: pendingSend.missing.join('\n') || 'нет'
     };
-    pendingSend.max = (event?.template || pendingSend.max).replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, key) => variables[key] || '—');
+    let maxTemplate = event?.template || pendingSend.max;
+    if (!maxTemplate.includes('{{missing}}'))
+      maxTemplate = maxTemplate.trimEnd() + '\nДАННЫХ НЕХВАТАЕТ:\n{{missing}}';
+    pendingSend.max = maxTemplate.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, key) => variables[key] || '—');
     pendingSend.fields.unshift({ name: 'Рейс', value: snapshot.trip_label });
     dialog.querySelector('[data-lab-email-subject]').textContent = pendingSend.subject;
+    dialog.querySelector('.lab-email-preview').classList.toggle('is-full', stage === 'final');
     dialog.querySelector('[data-lab-email-lead]').textContent = stage === 'partial'
       ? 'Передаём первичные данные исполнителя рейса. Ожидайте полный комплект вторым письмом.'
       : `Передаём все актуальные данные исполнителя рейса${draft.stage === 'partial' ? ' с учётом первого письма' : ''}.`;
@@ -683,7 +737,7 @@
       body.appendChild(row);
     });
     dialog.querySelector('[data-lab-email-files]').textContent = pendingSend.files.length
-      ? `Файлы: ${pendingSend.files.join(', ')}` : 'Файлы не приложены.';
+      ? `Один архив с файлами: ${pendingSend.files.join(', ')}` : 'Файлы не приложены.';
     dialog.querySelector('[data-lab-max-text]').textContent = pendingSend.max;
     dialog.querySelector('[data-lab-review-result]').textContent = '';
     dialog.querySelector('[data-lab-review-confirm]').disabled = false;
@@ -699,8 +753,9 @@
     let failure = null;
     try {
       await persistDraft(captureDraft());
+      await refreshReviewList();
     } catch (error) {
-      console.error('DESIGN LAB draft save failed', error);
+      console.error('Route executor draft save failed', error);
       failure = error;
     } finally {
       workflowBusy = false;
@@ -726,13 +781,7 @@
       const data = new FormData();
       data.set('card_id', DRAFT_ID);
       data.set('stage', pendingSend.stage);
-      data.set('snapshot', JSON.stringify(pendingSend.snapshot, (key, value) => key === 'selected' ? undefined : value));
-      for (const item of pendingSend.snapshot.files) {
-        for (const file of item.selected) {
-          data.append('attachments[]', file, file.name);
-          data.append('attachment_keys[]', item.formId + '|' + item.name);
-        }
-      }
+      data.set('revision', String(draft.revision));
       const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
       const response = await fetch(base + '/company/route-executors/review/send', {
         method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf }, body: data
@@ -741,11 +790,11 @@
       if (result.stage && result.stage !== 'new') {
         const sent = { at: new Date().toISOString(), ...pendingSend, mailStatus: result.mail_status, maxStatus: result.max_status };
         draft = { ...draft, stage: result.stage, sends: [...draft.sends, sent] };
-        await draftOperation('readwrite', store => store.put(draft));
+        try { await draftOperation('readwrite', store => store.put(draft)); } catch (error) { console.warn('Локальный кэш недоступен', error); }
       }
       if (!response.ok || !result.ok) throw new Error(result.error || 'Отправка не подтверждена.');
       const next = draft;
-      await draftOperation('readwrite', store => store.put(next));
+      try { await draftOperation('readwrite', store => store.put(next)); } catch (error) { console.warn('Локальный кэш недоступен', error); }
       draft = next;
       dialog.querySelector('[data-lab-review-result]').textContent = result.max_status === 'sent'
         ? 'Письмо и уведомление MAX отправлены.'
@@ -753,6 +802,7 @@
           ? 'Письмо отправлено. Событие MAX выключено в настройках.'
           : 'Письмо отправлено. Проверьте статус уведомления MAX в настройках.';
       pendingSend = null;
+      await refreshReviewList();
     } catch (error) {
       dialog.querySelector('[data-lab-review-result]').textContent = error.message;
       confirm.disabled = !workflowStage();
@@ -768,6 +818,45 @@
     localStorage.setItem(activeKey, DRAFT_ID);
     window.location.reload();
   }
+
+  function openReviewRow(row) {
+    const id = row?.dataset.routeReviewCardId;
+    if (!id) return;
+    if (id === DRAFT_ID) { window.openCombinedRouteExecutorCreate?.(); return; }
+    localStorage.setItem(activeKey, id);
+    sessionStorage.setItem('route-review-open-' + scope, id);
+    window.location.reload();
+  }
+
+  async function deleteReviewRow(button) {
+    const id = button.dataset.routeReviewDelete;
+    if (!id || !window.confirm('Удалить карточку исполнителя рейса? История отправленных писем сохранится.')) return;
+    button.disabled = true;
+    try {
+      const data = new FormData();
+      data.set('action', 'delete');
+      data.set('card_id', id);
+      const response = await fetch(base + '/company/route-executors/review/send', {
+        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: data
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось удалить карточку.');
+      if (id === DRAFT_ID) localStorage.removeItem(activeKey);
+      window.location.reload();
+    } catch (error) { window.alert(error.message); button.disabled = false; }
+  }
+
+  document.addEventListener('dblclick', event => {
+    if (event.target.closest?.('[data-route-review-delete]')) return;
+    openReviewRow(event.target.closest?.('[data-route-review-card-id]'));
+  });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Enter' && event.target.matches?.('[data-route-review-card-id]')) openReviewRow(event.target);
+  });
+  document.addEventListener('click', event => {
+    const button = event.target.closest?.('[data-route-review-delete]');
+    if (button) { event.stopPropagation(); deleteReviewRow(button); }
+  });
 
   window.addEventListener('click', event => {
     const save = event.target.closest?.('#route-executor-create-modal [data-source-create-submit]');

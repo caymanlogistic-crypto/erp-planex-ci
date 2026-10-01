@@ -7,13 +7,14 @@ $pageStylesheets[] = '/assets/css/route-executor-review-workflow.css';
 $pageScripts[] = '/assets/js/route-executor-combined-create.js';
 $pageScripts[] = '/assets/js/route-executor-review-workflow.js';
 $pageScripts[] = '/assets/js/route-executor-delete.js';
-if($companyId<=0){$company=null;$executors=[];$dbError=null;ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
+if($companyId<=0){$company=null;$executors=[];$reviewCards=[];$dbError=null;ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
 try{
     $pdo=$db->connection();$stmt=$pdo->prepare('SELECT * FROM companies WHERE id=?');$stmt->execute([$companyId]);$company=$stmt->fetch(PDO::FETCH_ASSOC);
-    if(!$company){$company=null;$executors=[];$dbError=null;ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
+    if(!$company){$company=null;$executors=[];$reviewCards=[];$dbError=null;ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
     $pageContext='Исполнители рейса › Компания: '.$company['name'];
-    if(($company['status']??'')!=='active'){$executors=[];$dbError=null;ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
+    if(($company['status']??'')!=='active'){$executors=[];$reviewCards=[];$dbError=null;ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
     $localPdo=(new \App\Core\Database(companyDatabaseConfig($config,$company)))->connection();
+    $reviewCards=(new \App\Service\RouteExecutorReviewCardService($localPdo,$companyId))->listing();
     $responsibleLogists=\App\Service\EntityResponsibilityService::eligibleRecipients($db->connection(),$localPdo,$companyId);
     $responsibleLogistNames=[];
     foreach($responsibleLogists as $logist)$responsibleLogistNames[(int)$logist['membership_id']]=(string)$logist['full_name'];
@@ -27,5 +28,5 @@ try{
         $executor['driver_count']=count(loadCrewDriverIds($localPdo,(int)$executor['crew_id'],(int)($executor['driver_id']??0)));
     }unset($executor);
     $dbError=null;
-}catch(Throwable $e){$company=$company??null;$executors=[];$hasGrantsButAllArchived=false;$dbError='Не удалось подключиться к базе данных компании.';}
+}catch(Throwable $e){$company=$company??null;$executors=[];$reviewCards=[];$hasGrantsButAllArchived=false;$dbError='Не удалось подключиться к базе данных компании.';}
 ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');

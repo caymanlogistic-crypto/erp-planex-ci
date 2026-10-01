@@ -59,18 +59,19 @@ final class MaxEventCatalog
             'responsible'=>['Ответственный логист','Сидоров Сергей'],
             'ready'=>['Готовые действия','Подписание договора'],
             'author'=>['Отправитель','Иванова Анна'],
+            'missing'=>['Недостающие данные',"Водитель: СНИЛС\nФайл: Паспорт водителя"],
         ];
         return [
             'route_executor.partial'=>[
                 'title'=>'Исполнитель рейса — первичные данные',
                 'description'=>'После первой передачи неполных данных исполнителя рейса. Получатели письма задаются в «Ключи и сервисы».',
-                'template'=>"Первичные данные исполнителя рейса\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}\nЭто первичные данные. Ожидайте полный комплект вторым письмом.",
+                'template'=>"Первичные данные исполнителя рейса\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}\nЭто первичные данные. Ожидайте полный комплект вторым письмом.\nДАННЫХ НЕХВАТАЕТ:\n{{missing}}",
                 'variables'=>$variables,
             ],
             'route_executor.full'=>[
                 'title'=>'Исполнитель рейса — полный комплект',
                 'description'=>'После передачи полного комплекта данных исполнителя рейса.',
-                'template'=>"Полный комплект данных исполнителя рейса\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}",
+                'template'=>"Полный комплект данных исполнителя рейса\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}\nДАННЫХ НЕХВАТАЕТ:\n{{missing}}",
                 'variables'=>$variables,
             ],
         ];
@@ -147,12 +148,16 @@ final class MaxEventCatalog
 
     public static function currentTemplate(string $key, string $stored): string
     {
-        if (in_array($key,['route_executor.partial','route_executor.full'],true) && !str_contains($stored,'{{trip}}')) {
-            $tripLine="**Рейс {{trip}}**\n";
-            $contractor=strpos($stored,'Подрядчик:');
-            if ($contractor!==false) return substr_replace($stored,$tripLine,$contractor,0);
-            $newline=strpos($stored,"\n");
-            return $newline===false?$stored."\n".$tripLine:substr_replace($stored,$tripLine,$newline+1,0);
+        if (in_array($key,['route_executor.partial','route_executor.full'],true)) {
+            if (!str_contains($stored,'{{trip}}')) {
+                $tripLine="**Рейс {{trip}}**\n";
+                $contractor=strpos($stored,'Подрядчик:');
+                $newline=strpos($stored,"\n");
+                $stored=$contractor!==false?substr_replace($stored,$tripLine,$contractor,0)
+                    :($newline===false?$stored."\n".$tripLine:substr_replace($stored,$tripLine,$newline+1,0));
+            }
+            if (!str_contains($stored,'{{missing}}')) $stored=rtrim($stored)."\nДАННЫХ НЕХВАТАЕТ:\n{{missing}}";
+            return $stored;
         }
         if ($key === 'feo.placement.block_created') {
             if (str_starts_with(ltrim($stored), '{"feo_templates_version"')) return MaxFeoMessageTemplates::decode($stored)['main'];

@@ -3,17 +3,19 @@ declare(strict_types=1);
 
 require_once __DIR__.'/../app/Service/RouteExecutorReviewPackage.php';
 require_once __DIR__.'/../app/Service/RouteExecutorReviewEmail.php';
+require_once __DIR__.'/../app/Service/RouteExecutorReviewArchive.php';
 require_once __DIR__.'/../app/Service/MaxEventCatalog.php';
 
 use App\Service\MaxEventCatalog;
 use App\Service\RouteExecutorReviewEmail;
 use App\Service\RouteExecutorReviewPackage;
+use App\Service\RouteExecutorReviewArchive;
 
 $assert=static function(bool $condition,string $message):void { if (!$condition) throw new RuntimeException($message); };
 $routeSource=(string)file_get_contents(__DIR__.'/../app/Http/Routes/company_route_executors.php');
 foreach (['EmployeeMailProfileService.php','DocumentMailTransport.php','MaxEventCatalog.php',
     'MaxMessagingService.php','MaxEventNotificationService.php','RouteExecutorReviewRecipientService.php',
-    'RouteExecutorReviewPackage.php','RouteExecutorReviewEmail.php'] as $dependency) {
+    'RouteExecutorReviewPackage.php','RouteExecutorReviewCardService.php','RouteExecutorReviewArchive.php','RouteExecutorReviewEmail.php'] as $dependency) {
     $assert(str_contains($routeSource,"require_once base_path('app/Service/{$dependency}')"),
         "Review route must load {$dependency} before handling a send");
 }
@@ -31,6 +33,7 @@ $driver=[$control('driver','full_name','Петров Пётр Петрович')
 $package=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,$driver)],[]);
 $assert($package['ready']===['Обучение водителя'],'Training readiness should survive an incomplete contract');
 $assert(!$package['full'],'Incomplete package cannot be final');
+$assert(in_array('Файл: Паспорт водителя',$package['missing'],true),'Missing documents appear in MAX list');
 $package=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,[$control('contractor','legal_address','Москва, 1')],$driver)],[]);
 $assert(in_array('Подписание договора',$package['ready'],true),'IP contract requires legal address but not KPP');
 $legal=array_merge($contract,[$control('contractor','legal_address','Москва, 1'),$control('contractor','kpp','123456789')]);
@@ -42,9 +45,29 @@ $assert(!in_array('Подписание договора',$package['ready'],true
 $mail=RouteExecutorReviewEmail::build(RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,[$control('contractor','legal_address','Москва, 1')],$driver)],[]),true,'#123 Вывоз отходов');
 $assert(str_contains($mail['text'],'Ожидайте полный комплект вторым письмом'),'First email must explain the second package');
 $assert(str_contains($mail['text'],'#123 Вывоз отходов') && str_contains($mail['html'],'<strong>Рейс: #123 Вывоз отходов</strong>'),'Email must prominently include the selected trip');
+$extra=$control('driver','extra_phones[]','+7 900 000-00-00');$extra['label']='+7 900 000-00-00';
+$extraPackage=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,$driver,[$extra])],[]);
+$extraMail=RouteExecutorReviewEmail::build($extraPackage,true,'#123 Вывоз отходов');
+$assert(str_contains($extraMail['text'],'Водитель: Доп контакты: +7 900 000-00-00'),'Additional phone has a meaningful label in email');
+$fullMail=RouteExecutorReviewEmail::build($extraPackage,false,'#123 Вывоз отходов');
+$assert(str_contains($fullMail['html'],'background:#eaf6e9') && str_contains($fullMail['html'],'background:#f5fff4'),'Full email has light green background');
 foreach (['route_executor.partial','route_executor.full'] as $event) {
     $text=MaxEventCatalog::render($event,MaxEventCatalog::event($event)['template'],'plain',MaxEventCatalog::example($event));
     $assert(str_contains($text,'**Рейс \#123 Перевозка отходов**'),'MAX events must include the trip in bold before contractor');
     $assert(strpos($text,'**Рейс')<strpos($text,'Подрядчик:'),'Trip must precede contractor');
+    $assert(str_contains($text,'ДАННЫХ НЕХВАТАЕТ:'),'MAX must end with missing data section');
 }
+$old="Первичные данные исполнителя рейса\nПодрядчик: {{contractor}}";
+$upgraded=MaxEventCatalog::currentTemplate('route_executor.partial',$old);
+$assert(str_contains($upgraded,'**Рейс {{trip}}**') && str_ends_with($upgraded,"ДАННЫХ НЕХВАТАЕТ:\n{{missing}}"),'Saved MAX templates must be upgraded');
+$zip=RouteExecutorReviewArchive::build([
+    ['key'=>'lab-driver-form|predef_doc[passport][]','name'=>'123.pdf','bytes'=>'passport content'],
+    ['key'=>'lab-driver-form|predef_doc[driver_license][]','name'=>'scan.jpg','bytes'=>'license content'],
+], '#123 Вывоз отходов');
+$assert($zip['mime']==='application/zip' && $zip['name']==='Документы исполнителя рейса #123.zip','Email has one ZIP attachment');
+$path=tempnam(sys_get_temp_dir(),'route-review-test-');file_put_contents($path,$zip['bytes']);
+$archive=new ZipArchive();$assert($archive->open($path)===true,'ZIP opens');
+$assert($archive->getFromName('Паспорт водителя.pdf')==='passport content','Passport uses content label');
+$assert($archive->getFromName('Водительское удостоверение.jpg')==='license content','License uses content label');
+$archive->close();unlink($path);
 echo "route_executor_review_workflow_test: PASS\n";

@@ -8,7 +8,7 @@ use DomainException;
 /** Validates the review package independently of browser readiness indicators. */
 final class RouteExecutorReviewPackage
 {
-    public static function inspect(array $snapshot, array $files): array
+    public static function inspect(array $snapshot, array $files, bool $storedFiles=false): array
     {
         $controls=$snapshot['controls']??null;
         if (!is_array($controls) || count($controls)>350) throw new DomainException('Некорректные данные карточки.');
@@ -23,6 +23,8 @@ final class RouteExecutorReviewPackage
             $values[$form][$name]=$value;
             if (trim($value)==='' || in_array((string)($item['type']??''),['checkbox','radio'],true)) continue;
             $label=(string)($item['label']??$name);
+            if ($form==='lab-driver-form' && $name==='extra_phones[]') $label='Доп контакты';
+            if ($form==='lab-driver-form' && $name==='extra_phone_comments[]') $label='Комментарий к доп контактам';
             if (mb_strlen($label)>120 || preg_match('/[\r\n]/',$label)) $label=$name;
             $display=$item['displayValue']??$value;
             if (!is_string($display) || mb_strlen($display)>5000) $display=$value;
@@ -68,7 +70,8 @@ final class RouteExecutorReviewPackage
         if (count($files)>50) throw new DomainException('Слишком много файлов.');
         foreach ($files as $file) {
             if (!is_array($file) || !isset($file['key'],$file['name'],$file['tmp_name'],$file['error'],$file['size'])) throw new DomainException('Некорректный файл.');
-            if ((int)$file['error']!==UPLOAD_ERR_OK || (int)$file['size']<=0 || (int)$file['size']>20*1024*1024 || !is_uploaded_file((string)$file['tmp_name'])) throw new DomainException('Не удалось загрузить файл.');
+            if ((int)$file['error']!==UPLOAD_ERR_OK || (int)$file['size']<=0 || (int)$file['size']>20*1024*1024
+                || !($storedFiles ? is_file((string)$file['tmp_name']) : is_uploaded_file((string)$file['tmp_name']))) throw new DomainException('Не удалось загрузить файл.');
             $totalBytes+=(int)$file['size'];
             if ($totalBytes>18*1024*1024) throw new DomainException('Общий размер файлов превышает допустимый размер письма.');
             $key=(string)$file['key'];$name=basename((string)$file['name']);
@@ -78,16 +81,38 @@ final class RouteExecutorReviewPackage
             $bytes=file_get_contents((string)$file['tmp_name']);
             if ($bytes===false) throw new DomainException('Не удалось прочитать файл.');
             $mime=(new \finfo(FILEINFO_MIME_TYPE))->buffer($bytes)?:'application/octet-stream';
-            $attachments[]=['name'=>$name,'bytes'=>$bytes,'mime'=>$mime];
+            $attachments[]=['key'=>$key,'name'=>$name,'bytes'=>$bytes,'mime'=>$mime];
         }
         foreach ($requiredFiles as $key) $vehicleReady=$vehicleReady && isset($seen[$key]);
+        $missing=[];
+        $labels=['name'=>'Наименование подрядчика','inn'=>'ИНН','contractor_type'=>'Тип перевозчика','ogrn'=>'ОГРН / ОГРНИП',
+            'director_full_name'=>'Руководитель','director_position'=>'Должность руководителя','legal_address'=>'Юридический адрес',
+            'bank_account'=>'Расчётный счёт','bank_bik'=>'БИК','bank_name'=>'Банк','bank_corr_account'=>'Корреспондентский счёт','kpp'=>'КПП'];
+        foreach ($contractFields as $field) if (trim((string)($contract[$field]??''))==='') $missing[]='Подрядчик: '.($labels[$field]??$field);
+        if (!$contactRows) $missing[]='Подрядчик: контактное лицо, телефон и Email';
+        foreach (array_keys($contactRows) as $index) foreach (['contact_person'=>'контактное лицо','phone'=>'телефон контакта','email'=>'Email контакта'] as $field=>$label)
+            if (trim((string)($contract["contacts[$index][$field]"]??''))==='') $missing[]='Подрядчик: '.$label;
+        foreach (['full_name'=>'ФИО водителя','snils'=>'СНИЛС водителя','passport_number'=>'Серия и номер паспорта',
+            'passport_issued_by'=>'Кем выдан паспорт','passport_issue_date'=>'Дата выдачи паспорта',
+            'license_number'=>'Номер водительского удостоверения','license_issue_date'=>'Дата выдачи водительского удостоверения',
+            'email'=>'Email водителя'] as $field=>$label) if ($get('lab-driver-form',$field)==='') $missing[]='Водитель: '.$label;
+        if ($roles==='') $missing[]='Транспорт: тип комплекта ТС';
+        foreach (array_filter(explode(',',$roles)) as $role) foreach (['brand'=>'марка','plate_number'=>'госномер','vin'=>'VIN',
+            'capacity_tons'=>'грузоподъёмность','volume_m3'=>'объём'] as $field=>$label)
+            if ($get('lab-vehicle-form',"units[$role][$field]")==='') $missing[]='Транспорт '.($role==='primary'?'основной':'дополнительный').': '.$label;
+        foreach ($requiredFiles as $key) if (!isset($seen[$key])) {
+            $label=match (true) {
+                str_contains($key,'driver_license')=>'Водительское удостоверение',str_contains($key,'passport')=>'Паспорт водителя',
+                str_contains($key,'[sts]')=>'СТС',str_contains($key,'[photo]')=>'Фото ТС',default=>'Документ ТС'};
+            $missing[]='Файл: '.$label.(str_contains($key,'[secondary]')?' (дополнительный ТС)':'');
+        }
         $ready=array_values(array_filter([
             $contractReady?'Подписание договора':null,
             $trainingReady?'Обучение водителя':null,
             $vehicleReady?'Регистрация транспорта':null,
         ]));
         return ['ready'=>$ready,'full'=>$contractReady && $trainingReady && $vehicleReady,
-            'rows'=>$rows,'attachments'=>$attachments,
+            'rows'=>$rows,'attachments'=>$attachments,'missing'=>array_values(array_unique($missing)),
             'contractor'=>$get('lab-contractor-form','name'),'driver'=>$get('lab-driver-form','full_name'),
             'plate'=>$get('lab-vehicle-form','units[primary][plate_number]')];
     }

@@ -11,6 +11,8 @@ use App\Service\DocumentMailTransport;
 use App\Service\EmployeeMailProfileService;
 use App\Service\MaxEventNotificationService;
 use App\Service\RouteExecutorReviewEmail;
+use App\Service\RouteExecutorReviewArchive;
+use App\Service\RouteExecutorReviewCardService;
 use App\Service\RouteExecutorReviewPackage;
 use App\Service\RouteExecutorReviewRecipientService;
 use App\Service\RegulatedDataScopeService;
@@ -62,6 +64,7 @@ final class RouteExecutorReviewController
     public function config(): void
     {
         if (isset($_GET['trip_search'])) $this->trips();
+        if (isset($_GET['file_card'],$_GET['file_id'])) $this->downloadCardFile();
         header('Cache-Control: no-store');
         try {
             [$company,$central,$tenant,$actorAccountId,$actorName]=$this->context();
@@ -84,11 +87,15 @@ final class RouteExecutorReviewController
     {
         header('Cache-Control: no-store');
         try {
-            [,,$tenant,$accountId]=$this->context();$this->assertSchema($tenant);
+            [$company,,$tenant]=$this->context();$this->assertSchema($tenant);
             $cardId=$this->cardId((string)($_GET['card_id']??''));
+            $card=(new RouteExecutorReviewCardService($tenant,(int)$company['id']))->load($cardId);
             $row=$this->row($tenant,$cardId);
-            if ($row && (int)$row['actor_account_id']!==$accountId) throw new DomainException('Карточка принадлежит другому сотруднику.');
-            $this->json(['ok'=>true,'stage'=>$row['stage']??'new','mail_status'=>$row ? ($row['final_mail_status']??$row['partial_mail_status']) : null]);
+            $this->json(['ok'=>true,'stage'=>$row['stage']??'new','mail_status'=>$row ? ($row['final_mail_status']??$row['partial_mail_status']) : null,
+                'card'=>$card ? ['snapshot'=>$card['snapshot'],'files'=>array_map(static fn(array $file):array=>[
+                    'id'=>$file['id'],'formId'=>$file['formId'],'name'=>$file['name'],'index'=>$file['index'],
+                    'original_name'=>$file['original_name'],'mime'=>$file['mime'],'size'=>$file['size']],$card['files']),
+                    'revision'=>(int)$card['revision'],'updated_at'=>$card['updated_at']] : null]);
         } catch (Throwable $error) { $this->failure($error); }
     }
 
@@ -98,20 +105,23 @@ final class RouteExecutorReviewController
         $reserved=false;$messageId=null;$tenant=null;$cardId='';$stage='';
         try {
             [$company,$central,$tenant,$accountId,$actorName]=$this->context();$this->assertSchema($tenant);
+            $cards=new RouteExecutorReviewCardService($tenant,(int)$company['id']);
             if (isPostTruncated()) throw new DomainException('Размер данных превышает серверный лимит.');
             $sizeError=validateTotalUploadSize();if ($sizeError!=='') throw new DomainException($sizeError);
             $cardId=$this->cardId((string)($_POST['card_id']??''));
+            $action=(string)($_POST['action']??'');
+            if ($action==='save') $this->saveCard($cards,$cardId,$accountId);
+            if ($action==='delete') { $cards->delete($cardId);$this->json(['ok'=>true]); }
             $stage=(string)($_POST['stage']??'');
             if (!in_array($stage,['partial','final'],true)) throw new DomainException('Неизвестный этап отправки.');
-            $raw=(string)($_POST['snapshot']??'');
-            if (strlen($raw)>262144) throw new DomainException('Карточка слишком большая.');
-            $snapshot=json_decode($raw,true,512,JSON_THROW_ON_ERROR);
-            if (!is_array($snapshot)) throw new DomainException('Некорректная карточка.');
+            $card=$cards->load($cardId);
+            if (!$card) throw new DomainException('Сначала сохраните карточку.');
+            if ((int)($_POST['revision']??0)!==(int)$card['revision']) throw new DomainException('Карточка изменена другим сотрудником. Обновите страницу.');
+            $snapshot=$card['snapshot'];
             $tripId=(string)($snapshot['trip_id']??'');
             if (!preg_match('/^[1-9][0-9]*$/D',$tripId)) throw new DomainException('Выберите рейс перед отправкой.');
             $tripLabel=$this->selectedTrip($tenant,(int)$tripId);
-            $files=$this->files();
-            $package=RouteExecutorReviewPackage::inspect($snapshot,$files);
+            $package=RouteExecutorReviewPackage::inspect($snapshot,$cards->storedFiles($card),true);
             if (!$package['ready']) throw new DomainException('Пока недостаточно данных ни для одного действия. Сохраните черновик.');
             if ($stage==='partial' && $package['full']) throw new DomainException('Весь комплект уже готов. Отправьте его одним письмом.');
             if ($stage==='final' && !$package['full']) throw new DomainException('Для второго письма нужны все поля и обязательные файлы.');
@@ -133,7 +143,8 @@ final class RouteExecutorReviewController
             $mail=RouteExecutorReviewEmail::build($package,$stage==='partial',$tripLabel);
             $subject=$tripLabel.' — исполнитель рейса — '.($stage==='partial'?'первичные данные':'полный комплект');
             $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
-                'subject'=>$subject,'text'=>$mail['text'],'html'=>$mail['html'],'attachments'=>$package['attachments']];
+                'subject'=>$subject,'text'=>$mail['text'],'html'=>$mail['html'],
+                'attachments'=>$package['attachments'] ? [RouteExecutorReviewArchive::build($package['attachments'],$tripLabel)] : []];
             DocumentMailMime::build($message);
             $configuredEvent='route_executor.'.$stage;
             $rule=null;
@@ -145,8 +156,10 @@ final class RouteExecutorReviewController
             }
             $tenant->beginTransaction();
             try {
+                $locked=$tenant->prepare('SELECT revision FROM route_executor_review_cards WHERE card_id=? AND deleted_at IS NULL FOR UPDATE');
+                $locked->execute([$cardId]);
+                if ((int)$locked->fetchColumn()!==(int)$card['revision']) throw new DomainException('Карточка изменена другим сотрудником. Обновите страницу.');
                 $row=$this->lockedRow($tenant,$cardId);
-                if ($row && (int)$row['actor_account_id']!==$accountId) throw new DomainException('Карточка принадлежит другому сотруднику.');
                 if ($stage==='partial') {
                     if ($row && $row['stage']!=='partial_failed') throw new DomainException('Первичные данные уже переданы. Следующее письмо возможно только с полным комплектом.');
                     if ($row) {
@@ -177,6 +190,7 @@ final class RouteExecutorReviewController
                 $q=$tenant->prepare("UPDATE route_executor_review_sends SET stage=?,{$column}=? WHERE card_id=? AND stage=?");
                 $q->execute([$nextStage,$mailStatus,$cardId,$stage.'_sending']);
                 if ($q->rowCount()!==1) throw new DomainException('Состояние карточки изменилось.');
+                $cards->touch($cardId);
                 $tenant->commit();
             } catch (Throwable $error) { if ($tenant->inTransaction()) $tenant->rollBack();throw $error; }
             $maxStatus='disabled';
@@ -187,6 +201,7 @@ final class RouteExecutorReviewController
                         'trip'=>$tripLabel,
                         'contractor'=>$package['contractor']?:'—','driver'=>$package['driver']?:'—','plate'=>$package['plate']?:'—',
                         'responsible'=>$logist['name'],'ready'=>implode(', ',$package['ready']),'author'=>$actorName,
+                        'missing'=>implode("\n",$package['missing']) ?: 'нет',
                     ],$accountId);
                     $tenant->commit();
                     if ($deliveryId) $maxStatus=(string)$max->dispatch($deliveryId)['status'];
@@ -207,6 +222,37 @@ final class RouteExecutorReviewController
             }
             $this->failure($error);
         }
+    }
+
+    private function saveCard(RouteExecutorReviewCardService $cards,string $cardId,int $accountId): never
+    {
+        $raw=(string)($_POST['snapshot']??'');
+        if (strlen($raw)>262144) throw new DomainException('Карточка слишком большая.');
+        $snapshot=json_decode($raw,true,512,JSON_THROW_ON_ERROR);
+        if (!is_array($snapshot)) throw new DomainException('Некорректная карточка.');
+        $keys=$_POST['attachment_keys']??[];
+        if (!is_array($keys)) throw new DomainException('Некорректные вложения.');
+        $revision=$cards->save($cardId,$accountId,(int)($_POST['revision']??0),$snapshot,$_FILES['attachments']??[],array_values($keys));
+        $this->json(['ok'=>true,'revision'=>$revision]);
+    }
+
+    private function downloadCardFile(): never
+    {
+        try {
+            [$company,,$tenant]=$this->context();
+            $cardId=$this->cardId((string)$_GET['file_card']);
+            $cards=new RouteExecutorReviewCardService($tenant,(int)$company['id']);
+            $card=$cards->load($cardId);
+            if (!$card) throw new DomainException('Карточка не найдена.');
+            $file=$cards->file($card,(string)$_GET['file_id']);
+            header('Content-Type: '.(string)$file['mime']);
+            header('Content-Length: '.(int)$file['size']);
+            header('Content-Disposition: attachment; filename*=UTF-8\'\''.rawurlencode((string)$file['original_name']));
+            header('X-Content-Type-Options: nosniff');
+            header('Cache-Control: no-store');
+            readfile((string)$file['absolute_path']);
+            exit;
+        } catch (Throwable $error) { $this->failure($error); }
     }
 
     private function context(): array

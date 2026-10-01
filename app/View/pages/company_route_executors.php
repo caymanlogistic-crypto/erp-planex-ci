@@ -36,7 +36,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
     <?= e($dbError) ?>
 </div>
 
-<?php elseif (empty($executors)): ?>
+<?php elseif (empty($executors) && empty($reviewCards)): ?>
 <?php $isLogist = ($_SESSION['role_code'] ?? '') === 'logist'; ?>
 
 <div class="page-head">
@@ -87,7 +87,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
 
 <div class="table-card table-card--standard" data-erp-grid data-route-executors-grid>
     <div class="table-toolbar">
-        <div class="found-label">Найдено: <b><?= count($executors) ?></b> исполнителей</div>
+        <div class="found-label">Найдено: <b><?= count($executors) + count($reviewCards) ?></b> карточек</div>
         <div class="toolbar-right">
             <div class="toolbar-sort">
                 <span class="toolbar-sort-label">Сортировка по:</span>
@@ -113,6 +113,18 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
                 </tr>
             </thead>
             <tbody>
+                <?php foreach ($reviewCards as $card): ?>
+                <?php $reviewStage=(string)$card['stage']; $reviewLabel=in_array($reviewStage,['partial','partial_failed'],true)?'Отправлено первое письмо':($reviewStage==='final'?'Полный комплект отправлен':'Менеджер сохранил'); ?>
+                <tr class="route-review-row" data-route-review-card-id="<?= e($card['card_id']) ?>" data-erp-pin="1" data-erp-sort-date="<?= (int)strtotime((string)$card['updated_at']) ?>" tabindex="0" aria-label="<?= e($reviewLabel) ?>. Двойное нажатие открывает карточку">
+                    <td><strong><?= e($card['contractor_name'] ?: 'Без подрядчика') ?></strong><br><small><?= e($reviewLabel) ?></small></td>
+                    <td><?= e($card['driver_name'] ?: '—') ?></td>
+                    <td class="col-mono"><?= e($card['driver_phone'] ?: '—') ?></td>
+                    <td><?= e($card['vehicle_type'] ?: '—') ?></td>
+                    <td class="col-mono"><?= e($card['plate'] ?: '—') ?></td>
+                    <td><?= e($responsibleLogistNames[(int)($card['responsible_membership_id']??0)]??'—') ?></td>
+                    <td><span class="badge route-review-badge"><?= e($reviewLabel) ?></span><button type="button" class="btn btn-ghost route-review-delete" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Удалить карточку">Удалить</button></td>
+                </tr>
+                <?php endforeach; ?>
                 <?php foreach ($executors as $e): ?>
                 <tr data-route-executor-id="<?= (int) $e['crew_id'] ?>" data-erp-sort-date="<?= (int) $e['crew_id'] ?>">
                     <td><?= e($e['contractor_name'] ?? '—') ?></td>
@@ -136,7 +148,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
         </table>
     </div>
     <div class="table-footer">
-        <span class="footer-label">Показано <b class="footer-range">1–<?= count($executors) ?></b> из <b class="footer-total"><?= count($executors) ?></b></span>
+        <span class="footer-label">Показано <b class="footer-range">1–<?= count($executors) + count($reviewCards) ?></b> из <b class="footer-total"><?= count($executors) + count($reviewCards) ?></b></span>
     </div>
 </div>
 
