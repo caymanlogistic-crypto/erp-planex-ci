@@ -18,7 +18,7 @@
     async function search() {
       const serial = ++tripSearchSerial;
       try {
-        const response = await fetch(base + '/company/route-executors/review/trips?q=' + encodeURIComponent(input.value), { credentials: 'same-origin' });
+        const response = await fetch(base + '/company/route-executors/review/config?trip_search=1&q=' + encodeURIComponent(input.value), { credentials: 'same-origin' });
         const result = await response.json();
         if (!response.ok || !result.ok || serial !== tripSearchSerial) return;
         tripChoices.clear();

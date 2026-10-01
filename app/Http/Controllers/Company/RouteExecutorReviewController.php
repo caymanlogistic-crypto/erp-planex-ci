@@ -61,6 +61,7 @@ final class RouteExecutorReviewController
 
     public function config(): void
     {
+        if (isset($_GET['trip_search'])) $this->trips();
         header('Cache-Control: no-store');
         try {
             [$company,$central,$tenant,$actorAccountId,$actorName]=$this->context();

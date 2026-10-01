@@ -18,7 +18,7 @@ try {
   await page.route('http://127.0.0.1:59999/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/review/status')) return route.fulfill({ json: { ok: true, stage: 'new' } });
-    if (path.endsWith('/review/trips')) return route.fulfill({ json: { ok: true, trips: [{ id: 123, label: '#123 Вывоз отходов' }] } });
+    if (path.endsWith('/review/config') && new URL(route.request().url()).searchParams.has('trip_search')) return route.fulfill({ json: { ok: true, trips: [{ id: 123, label: '#123 Вывоз отходов' }] } });
     if (path.endsWith('/review/config')) return route.fulfill({ json: { ok: true, sender: 'sender@example.test', author: 'Отправитель', recipients: ['info@plan-ex.ru'], send_responsible_logist: false,
       max_events: { 'route_executor.partial': { enabled: true, chat_config_id: 1, template: 'Первичные данные\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nОжидайте полный комплект вторым письмом.' } } } });
     if (path.endsWith('/review/send')) {
