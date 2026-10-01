@@ -67,8 +67,17 @@ namespace {
     $expect($saved['debit_turnover'] === '886810.00' && $saved['closing_balance'] === '107622.23', 'Full day balance updated');
     $expect(count(\App\Service\FinanceBankReconciliationService::checkTransactionAggregates($pdo, 1)['mismatches']) === 0, 'Independent reconciliation');
 
+    // Replaying a saved bank file repairs a legacy first-write-wins snapshot.
+    $pdo->exec("UPDATE bank_daily_balances SET debit_turnover = 884000.00, closing_balance = 110432.23");
+    $pdo->exec("UPDATE bank_accounts SET closing_balance = 110432.23");
+    $r = \App\Service\BankFinanceService::importParsedData($pdo, $first, 'manual', null, 'first.xlsx', $hash('first'));
+    $expect($r['status'] === 'skipped', 'Older partial file can be retained without changing balance');
     $r = \App\Service\BankFinanceService::importParsedData($pdo, $late, 'imap', null, 'late.xlsx', $hash('late'));
-    $expect($r['status'] === 'skipped', 'Identical file skipped');
+    $expect($r['status'] === 'reconciled' && $r['balances_updated'] === 1, 'Replay repairs legacy mismatch from bank source');
+    $saved = $pdo->query('SELECT debit_turnover, closing_balance FROM bank_daily_balances')->fetch();
+    $expect($saved['debit_turnover'] === '886810.00' && $saved['closing_balance'] === '107622.23', 'Replay updates full-day balance');
+    $r = \App\Service\BankFinanceService::importParsedData($pdo, $late, 'imap', null, 'late.xlsx', $hash('late'));
+    $expect($r['status'] === 'skipped', 'Already repaired file skipped');
 
     $failed = false;
     try {

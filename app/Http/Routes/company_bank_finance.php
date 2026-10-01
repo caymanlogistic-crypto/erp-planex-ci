@@ -11,6 +11,7 @@ $router->post('/company/finance/bank-accounts/refresh-from-mail',[$controller,'r
 $router->post('/company/finance/bank-accounts/apply-rules',[$controller,'applyRules'], $bankAccountsPage);
 $router->post('/company/finance/bank-accounts/settings',[$controller,'settings'], $bankSettingsPage);
 $router->post('/company/finance/bank-accounts/import/delete',[$controller,'deleteImport'], $bankAccountsPage);
+$router->get('/company/finance/bank-accounts/import/{id}/download',[$controller,'downloadImport'], $bankAccountsPage);
 $router->get('/company/finance/bank-accounts/reconciliation/json',[$controller,'reconciliationJson'], $bankAccountsPage);
 $router->get('/company/finance/bank-transactions/{id}/settlement',[$controller,'settlementForm'], $bankAccountsPage);
 $router->post('/company/finance/bank-transactions/{id}/settlement',[$controller,'settlementSubmit'], $bankAccountsPage);

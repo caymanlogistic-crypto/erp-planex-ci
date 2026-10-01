@@ -21,6 +21,11 @@ if($companyId>0){
             $localPdo=(new \App\Core\Database(companyDatabaseConfig($config,$company)))->connection();
             $accounts=\App\Service\BankFinanceService::getAccounts($localPdo);
             $imports=\App\Service\BankFinanceService::getImports($localPdo);
+            $bankFileStore=new \App\Service\BankStatementFileStore(company_storage_path($company['storage_path']??null,$companyId));
+            foreach($imports as &$bankImport){
+                $bankImport['file_available']=$bankFileStore->has((string)($bankImport['file_hash']??''));
+            }
+            unset($bankImport);
             $dateFrom=$_GET['date_from']??null;
             $dateTo=$_GET['date_to']??null;
             $txPage=max(1,(int)($_GET['tx_page']??1));

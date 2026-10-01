@@ -106,7 +106,7 @@ try {
 
                 $importer = new \App\Service\HardenedBankStatementImapImporter($setting);
 
-                $results = $importer->importAllRecent($localPdo);
+                $results = $importer->importAllRecent($localPdo, company_storage_path($company['storage_path'] ?? null, (int)$company['id']));
 
                 $found = 0;
                 $imported = 0;

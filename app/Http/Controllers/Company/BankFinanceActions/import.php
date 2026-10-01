@@ -8,6 +8,9 @@
         redirect_to('/company/finance/bank-accounts');
     }
 
+    $fileStore = null;
+    $newFile = false;
+    $fileHash = null;
     try {
         $pdo = $db->connection();
         $stmt = $pdo->prepare('SELECT * FROM companies WHERE id = ?');
@@ -49,7 +52,14 @@
             redirect_to('/company/finance/bank-accounts');
         }
 
+        $fileStore = new \App\Service\BankStatementFileStore(company_storage_path($company['storage_path'] ?? null, $companyId));
+        $newFile = !$fileStore->has($fileHash);
+        $fileStore->save($tmpPath, $fileHash);
         $result = \App\Service\BankFinanceService::importParsedData($localPdo, $parsed, 'manual', null, $originalName, $fileHash);
+        if (($result['status'] ?? '') === 'error' && $newFile) {
+            $fileStore->remove($fileHash);
+            $newFile = false;
+        }
         $auto = ['operations'=>0,'allocations'=>0,'amount'=>'0.00'];
         if (($result['status'] ?? '') !== 'error') {
             try {
@@ -61,7 +71,7 @@
         }
 
         if ($result['status'] === 'skipped') {
-            $_SESSION['flash_info'] = 'Этот файл уже был импортирован ранее.';
+            $_SESSION['flash_info'] = 'Этот файл уже был импортирован ранее. Исходный XLSX сохранён для скачивания.';
         } elseif ($result['status'] === 'error') {
             $_SESSION['flash_error'] = $result['message'];
         } else {
@@ -70,6 +80,9 @@
         }
         redirect_to('/company/finance/bank-accounts');
     } catch (\Exception $e) {
+        if ($newFile && $fileStore !== null && is_string($fileHash)) {
+            try { $fileStore->remove($fileHash); } catch (\Throwable $cleanupError) { error_log('Bank statement file cleanup failed: ' . $cleanupError->getMessage()); }
+        }
         $_SESSION['flash_error'] = 'Ошибка импорта: ' . $e->getMessage();
         redirect_to('/company/finance/bank-accounts');
     }
