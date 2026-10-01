@@ -2,7 +2,11 @@
 
 declare(strict_types=1);
 
-require_once __DIR__ . '/../app/Service/BankStatementFileStore.php';
+require_once __DIR__ . '/../bootstrap/app.php';
+require_once __DIR__ . '/../app/Support/entrypoint_dependencies.php';
+if (!class_exists(\App\Service\BankStatementFileStore::class, false)) {
+    throw new RuntimeException('Bank statement file store is not registered by the application entrypoint');
+}
 
 $root = sys_get_temp_dir() . '/planex-bank-store-' . bin2hex(random_bytes(8));
 $source = tempnam(sys_get_temp_dir(), 'bank-xlsx-');

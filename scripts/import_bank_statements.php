@@ -56,6 +56,7 @@ require_once BASE_PATH . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Co
 require_once BASE_PATH . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'LocalMigrationService.php';
 require_once BASE_PATH . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'BankStatementXlsxParser.php';
 require_once BASE_PATH . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'BankFinanceService.php';
+require_once BASE_PATH . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'BankStatementFileStore.php';
 require_once BASE_PATH . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'HardenedBankStatementImapImporter.php';
 require_once BASE_PATH . DIRECTORY_SEPARATOR . 'app' . DIRECTORY_SEPARATOR . 'Service' . DIRECTORY_SEPARATOR . 'BankStatementSettingsService.php';
 
