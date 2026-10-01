@@ -164,8 +164,14 @@ final class WarehouseStockService
             $group['actual_end_date'] = $flight['actual_end_date'] ?? null;
             $group['request_ids'] = array_values(array_unique(array_column($group['requests'], 'id')));
             $group['request_count'] = count($group['request_ids']);
-            $group['display_request_ids'] = $group['request_ids'];
-            $group['skipped_request_ids'] = [];
+            $tripRequestIds = isset($erpFlights[$group['flight_id']])
+                ? array_map('strval', array_keys($erpFlights[$group['flight_id']]['requests'] ?? []))
+                : null;
+            $group['warehouse_only_request_ids'] = $tripRequestIds === null
+                ? [] : array_values(array_diff($group['request_ids'], $tripRequestIds));
+            $group['trip_only_request_ids'] = $tripRequestIds === null
+                ? [] : array_values(array_diff($tripRequestIds, $group['request_ids']));
+            $group['display_request_ids'] = array_values(array_unique(array_merge($group['request_ids'], $group['trip_only_request_ids'])));
         }
         unset($group);
         $byWarehouse = [];
@@ -224,6 +230,19 @@ final class WarehouseStockService
                 if ($onlyOld !== [] || $onlyErp !== []) {
                     $messages[] = 'Состав заявок: только в старой базе '.(implode(', ', $onlyOld) ?: '—')
                         .'; только в ERP '.(implode(', ', $onlyErp) ?: '—').'.';
+                }
+                foreach ($groups as $group) {
+                    if ($group['flight_id'] !== $flightId) continue;
+                    $where = ($names[$group['warehouse_id']] ?? 'Склад #'.$group['warehouse_id'])
+                        .' / '.($group['direction'] === 'in' ? 'приход' : 'вывоз');
+                    if ($group['warehouse_only_request_ids'] !== []) {
+                        $messages[] = $where.': на складе есть заявки вне рейса ERP: '
+                            .implode(', ', $group['warehouse_only_request_ids']).'.';
+                    }
+                    if ($group['trip_only_request_ids'] !== []) {
+                        $messages[] = $where.': в рейсе доп: '
+                            .implode(', ', $group['trip_only_request_ids']).'.';
+                    }
                 }
                 $directionMass = ['in'=>0, 'out'=>0];
                 $directionRequests = ['in'=>[], 'out'=>[]];
