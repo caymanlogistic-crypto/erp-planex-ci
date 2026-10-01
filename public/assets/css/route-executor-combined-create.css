@@ -32,8 +32,9 @@
 .source-combined-main { padding: 12px 14px; }
 .source-combined-docs { padding: 12px 14px; border-left: 1px solid var(--line); background: var(--surface-inspector); }
 .source-combined-main > .section-title { margin-bottom: 8px; }
-.source-combined-assignment { max-width: 425px; margin-bottom: 18px; }
+.source-combined-assignment { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-bottom: 18px; }
 .source-combined-assignment .field-input { width: 100%; }
+@media (max-width: 700px) { .source-combined-assignment { grid-template-columns: minmax(0, 1fr); } }
 .source-combined-main .entity-form-main { padding: 0; }
 .source-combined-docs .entity-form-docs { border: 0; padding: 0; }
 .source-combined-main .vehicle-set-unit-card-body { grid-template-columns: minmax(0, 1fr); }

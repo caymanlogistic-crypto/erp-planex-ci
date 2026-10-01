@@ -19,6 +19,7 @@ $router->get('/company/route-executors', [$controller, 'index'], $routeExecutors
 $router->get('/company/route-executors/create', [$controller, 'createForm'], $routeExecutorsPage);
 $router->post('/company/route-executors/create', [$controller, 'createSubmit'], $routeExecutorsPage);
 $router->get('/company/route-executors/review/config', [$reviewController, 'config'], $routeExecutorsPage);
+$router->get('/company/route-executors/review/trips', [$reviewController, 'trips'], $routeExecutorsPage);
 $router->get('/company/route-executors/review/status', [$reviewController, 'status'], $routeExecutorsPage);
 $router->post('/company/route-executors/review/send', [$reviewController, 'send'], $routeExecutorsPage);
 $router->get('/company/route-executors/{id}', [$controller, 'view'], $routeExecutorsPage);

@@ -18,8 +18,9 @@ try {
   await page.route('http://127.0.0.1:59999/**', route => {
     const path = new URL(route.request().url()).pathname;
     if (path.endsWith('/review/status')) return route.fulfill({ json: { ok: true, stage: 'new' } });
+    if (path.endsWith('/review/trips')) return route.fulfill({ json: { ok: true, trips: [{ id: 123, label: '#123 Вывоз отходов' }] } });
     if (path.endsWith('/review/config')) return route.fulfill({ json: { ok: true, sender: 'sender@example.test', author: 'Отправитель', recipients: ['info@plan-ex.ru'], send_responsible_logist: false,
-      max_events: { 'route_executor.partial': { enabled: true, chat_config_id: 1, template: 'Первичные данные: {{driver}}. Ожидайте полный комплект вторым письмом.' } } } });
+      max_events: { 'route_executor.partial': { enabled: true, chat_config_id: 1, template: 'Первичные данные\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nОжидайте полный комплект вторым письмом.' } } } });
     if (path.endsWith('/review/send')) {
       sends.push({ body: route.request().postData(), csrf: route.request().headers()['x-csrf-token'] });
       return route.fulfill({ json: { ok: true, stage: 'partial', mail_status: 'accepted', max_status: 'sent' } });
@@ -40,6 +41,7 @@ try {
         </div>
         <div id="route-executor-create-modal-content">
           <select id="route-executor-responsible-logist"><option value="">—</option><option value="12">Иван</option></select>
+          <input id="route-executor-trip-search" list="route-executor-trip-options"><datalist id="route-executor-trip-options"></datalist><input id="route-executor-trip-id" type="hidden">
           <form id="lab-contractor-form"><div class="entity-form-main"><div class="field"><label class="field-label">Наименование</label><input name="name"></div><input name="inn"><select name="contractor_type"><option value="">—</option><option value="individual">ИП</option></select><input name="kpp"><input name="ogrn"><input name="director_full_name"><input name="director_position"><textarea name="legal_address"></textarea></div></form>
           <form id="lab-driver-form"><input name="full_name"><input name="snils"><input name="phone"></form>
           <form id="lab-vehicle-form"><select name="set_type"><option value="">—</option><option value="single">Одиночка</option></select></form>
@@ -60,12 +62,21 @@ try {
   await page.waitForTimeout(300);
   assert.match(await modal.locator('[data-lab-workflow-message]').innerText(), /Черновик сохранён/);
   await modal.locator('#lab-driver-form [name="snils"]').fill('123-456-789 00');
+  assert.equal(await modal.locator('[data-lab-send]').isVisible(), false, 'No send without logist and trip');
   await modal.locator('#route-executor-responsible-logist').selectOption('12');
+  assert.equal(await modal.locator('[data-lab-send]').isVisible(), false, 'No send without trip');
+  await modal.locator('#route-executor-trip-search').focus();
+  await page.waitForTimeout(150);
+  await modal.locator('#route-executor-trip-search').fill('#123 Вывоз отходов');
+  await page.waitForTimeout(250);
+  assert.equal(await modal.locator('#route-executor-trip-id').inputValue(), '123');
   await modal.locator('[data-lab-send]').click();
   const dialog = page.locator('#lab-route-send-dialog');
   await dialog.waitFor({ state: 'visible' });
   assert.match(await dialog.locator('[data-lab-review-summary]').innerText(), /info@plan-ex\.ru/);
-  assert.doesNotMatch(await dialog.locator('[data-lab-email-subject]').innerText(), /№|LAB-001/);
+  assert.match(await dialog.locator('[data-lab-email-subject]').innerText(), /#123 Вывоз отходов/);
+  assert.match(await dialog.locator('[data-lab-email-fields]').innerText(), /#123 Вывоз отходов/);
+  assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /\*\*Рейс #123 Вывоз отходов\*\*/);
   assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /Ожидайте полный комплект вторым письмом/);
   await dialog.locator('[data-lab-review-confirm]').click();
   await page.waitForTimeout(300);

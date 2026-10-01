@@ -5,6 +5,44 @@
   if (!scope) return;
   let lastTrigger = null;
   let fillingIndividual = false;
+  let tripSearchTimer = null;
+  let tripSearchSerial = 0;
+  const tripChoices = new Map();
+
+  function bindTripPicker() {
+    const input = document.getElementById('route-executor-trip-search');
+    const hidden = document.getElementById('route-executor-trip-id');
+    const list = document.getElementById('route-executor-trip-options');
+    if (!input || !hidden || !list || input.dataset.tripBound) return;
+    input.dataset.tripBound = '1';
+    async function search() {
+      const serial = ++tripSearchSerial;
+      try {
+        const response = await fetch(base + '/company/route-executors/review/trips?q=' + encodeURIComponent(input.value), { credentials: 'same-origin' });
+        const result = await response.json();
+        if (!response.ok || !result.ok || serial !== tripSearchSerial) return;
+        tripChoices.clear();
+        list.replaceChildren();
+        for (const trip of result.trips) {
+          tripChoices.set(trip.label, String(trip.id));
+          const option = document.createElement('option');
+          option.value = trip.label;
+          list.appendChild(option);
+        }
+        if (tripChoices.has(input.value)) hidden.value = tripChoices.get(input.value);
+      } catch (error) { console.warn('Не удалось найти рейсы', error); }
+    }
+    input.addEventListener('input', () => {
+      hidden.value = tripChoices.get(input.value) || '';
+      clearTimeout(tripSearchTimer);
+      tripSearchTimer = setTimeout(search, 180);
+    });
+    input.addEventListener('change', () => {
+      hidden.value = tripChoices.get(input.value) || '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    });
+    input.addEventListener('focus', search);
+  }
 
   function flashReadiness(item) {
     item.classList.remove('lab-readiness-pulse');
@@ -338,7 +376,9 @@
         }
       }
     }
-    return { controls, files, logist: document.getElementById('route-executor-responsible-logist')?.value || '' };
+    return { controls, files, logist: document.getElementById('route-executor-responsible-logist')?.value || '',
+      trip_id: document.getElementById('route-executor-trip-id')?.value || '',
+      trip_label: document.getElementById('route-executor-trip-search')?.value || '' };
   }
 
   function draftSignature(snapshot) {
@@ -346,7 +386,7 @@
       controls: snapshot.controls.map(({ formId, name, index, value, checked }) => [formId, name, index, value, checked]),
       files: snapshot.files.map(({ formId, name, index, selected }) =>
         [formId, name, index, selected.map(file => [file.name, file.size, file.lastModified])]),
-      logist: snapshot.logist
+      logist: snapshot.logist, trip_id: snapshot.trip_id, trip_label: snapshot.trip_label
     });
   }
 
@@ -374,6 +414,10 @@
     }
     const logist = document.getElementById('route-executor-responsible-logist');
     if (logist) logist.value = snapshot.logist || '';
+    const tripInput = document.getElementById('route-executor-trip-search');
+    const tripId = document.getElementById('route-executor-trip-id');
+    if (tripInput) tripInput.value = snapshot.trip_label || '';
+    if (tripId) tripId.value = snapshot.trip_id || '';
     const first = snapshot.controls.filter(item => ['set_type', 'contractor_type'].includes(item.name));
     const rest = snapshot.controls.filter(item => !['set_type', 'contractor_type'].includes(item.name));
     for (const item of [...first, ...rest]) {
@@ -415,6 +459,7 @@
     const ready = readyActions();
     const full = ready.length === 3;
     if (!['new', 'partial', 'partial_failed', 'final_failed'].includes(draft.stage)) return null;
+    if (!document.getElementById('route-executor-responsible-logist')?.value || !document.getElementById('route-executor-trip-id')?.value) return null;
     if (draft.stage === 'partial' || draft.stage === 'final_failed') return full ? 'final' : null;
     return full ? 'final' : ready.length ? 'partial' : null;
   }
@@ -446,7 +491,12 @@
         : draft.savedAt
           ? 'Черновик сохранён · ' + when + (dirty ? '. Есть несохранённые изменения.' : '. Отправок пока не было.')
           : 'Новая карточка. Даже неполные данные можно сохранить как черновик.';
-    status.querySelector('[data-lab-workflow-message]').textContent = text;
+    const missingAssignment = [];
+    if (!document.getElementById('route-executor-responsible-logist')?.value) missingAssignment.push('логиста');
+    if (!document.getElementById('route-executor-trip-id')?.value) missingAssignment.push('рейс');
+    status.querySelector('[data-lab-workflow-message]').textContent = text +
+      (missingAssignment.length && readyActions().length && ['new', 'partial', 'partial_failed', 'final_failed'].includes(draft.stage)
+        ? ' Для отправки выберите ' + missingAssignment.join(' и ') + '.' : '');
     status.dataset.stage = draft.stage;
     save.textContent = draft.stage === 'final' ? 'Карточка завершена' : draft.savedAt ? 'Сохранить изменения' : 'Сохранить черновик';
     save.disabled = workflowBusy || draft.stage === 'final' || draft.stage.includes('unknown') || draft.stage.includes('sending');
@@ -465,6 +515,7 @@
     const modal = document.getElementById('route-executor-create-modal');
     if (!modal || modal.dataset.labWorkflowBound) return;
     modal.dataset.labWorkflowBound = '1';
+    bindTripPicker();
     modal.querySelector('.modal-title').textContent = 'Карточка исполнителя рейса';
     const status = document.createElement('div');
     status.className = 'lab-workflow-status';
@@ -536,9 +587,9 @@
       });
     const files = snapshot.files.flatMap(item => item.selected.map(file => file.name));
     const ready = readyActions().map(key => readinessTitles[key]);
-    const subject = `Исполнитель рейса — ${label.toLowerCase()}`;
+    const subject = `${snapshot.trip_label} — исполнитель рейса — ${label.toLowerCase()}`;
     const find = (formId, name) => snapshot.controls.find(item => item.formId === formId && item.name === name)?.value?.trim();
-    const max = [`${label} по исполнителю рейса`,
+    const max = [`${label} по исполнителю рейса`, `**Рейс ${snapshot.trip_label}**`,
       find('lab-contractor-form', 'name') ? `Подрядчик: ${find('lab-contractor-form', 'name')}` : '',
       find('lab-driver-form', 'full_name') ? `Водитель: ${find('lab-driver-form', 'full_name')}` : '',
       find('lab-vehicle-form', 'units[primary][plate_number]') ? `Госномер: ${find('lab-vehicle-form', 'units[primary][plate_number]')}` : '',
@@ -575,6 +626,11 @@
       document.querySelector('[data-lab-workflow-message]').textContent = 'Выберите ответственного логиста перед отправкой.';
       return;
     }
+    if (!document.getElementById('route-executor-trip-id')?.value) {
+      document.getElementById('route-executor-trip-search')?.focus();
+      document.querySelector('[data-lab-workflow-message]').textContent = 'Выберите рейс из списка перед отправкой.';
+      return;
+    }
     let config;
     try {
       const response = await fetch(base + '/company/route-executors/review/config', { credentials: 'same-origin' });
@@ -604,11 +660,13 @@
     const find = (formId, name) => snapshot.controls.find(item => item.formId === formId && item.name === name)?.value?.trim() || '—';
     const logist = document.getElementById('route-executor-responsible-logist')?.selectedOptions?.[0]?.textContent?.trim() || '—';
     const variables = {
+      trip: snapshot.trip_label,
       contractor: find('lab-contractor-form', 'name'), driver: find('lab-driver-form', 'full_name'),
       plate: find('lab-vehicle-form', 'units[primary][plate_number]'), responsible: logist,
       ready: pendingSend.ready.join(', '), author: config.author
     };
     pendingSend.max = (event?.template || pendingSend.max).replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, key) => variables[key] || '—');
+    pendingSend.fields.unshift({ name: 'Рейс', value: snapshot.trip_label });
     dialog.querySelector('[data-lab-email-subject]').textContent = pendingSend.subject;
     dialog.querySelector('[data-lab-email-lead]').textContent = stage === 'partial'
       ? 'Передаём первичные данные исполнителя рейса. Ожидайте полный комплект вторым письмом.'
