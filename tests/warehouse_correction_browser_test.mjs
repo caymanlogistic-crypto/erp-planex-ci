@@ -37,7 +37,16 @@ try {
         await page.locator('[name=show_all]').check({force:true});
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 2);
         assert.match(await page.locator('[data-wh-warehouse="2"] .wh-current-summary').innerText(), /Заявки на складе: —/);
-        assert.equal(await page.locator('[data-wh-trip="2:21:out"] .wh-request-cell').innerText(), '121');
+        const differentRow = page.locator('[data-wh-trip="2:21:out"]');
+        assert.match(await differentRow.locator('.wh-request-cell').innerText(), /121\s+В рейсе доп: 999/);
+        assert.equal(await differentRow.locator('.wh-request-id--outside-trip').innerText(), '121');
+        assert.equal(await differentRow.locator('.wh-request-id--outside-trip').evaluate(el => getComputedStyle(el).textDecorationLine), 'line-through');
+        await differentRow.dblclick();
+        assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /В рейсе доп: 999/);
+        await page.locator('#wh-trip-2-21-out [data-wh-close]').first().click();
+        await page.locator('[name=q]').fill('999');
+        assert.equal(await page.locator('[data-wh-trip]:visible').count(), 1);
+        await page.locator('[name=q]').fill('');
         await page.locator('[name=q]').fill('Первый');
         assert.equal(await page.locator('[data-wh-trip]:visible').count(), 1);
         await page.locator('[name=q]').fill('');
