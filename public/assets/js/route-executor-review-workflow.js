@@ -851,7 +851,7 @@
     if (!id || button.disabled) return;
     button.disabled = true;
     try {
-      if (!window.confirm('Повторно отправить актуальные данные карточки на info@plan-ex.ru?\nДругим получателям и в MAX повторное сообщение не уйдёт.')) return;
+      if (!window.confirm('Повторно отправить актуальные данные карточки на info@plan-ex.ru и уведомление в тестовую группу MAX бота «Бэрримор»?')) return;
       const data = new FormData();
       data.set('action', 'resend');
       data.set('card_id', id);
@@ -860,7 +860,9 @@
       });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось повторить письмо.');
-      window.alert('Повторное письмо принято почтовым сервером. Проверьте доставку по теме с пометкой «повтор».');
+      window.alert(result.max_status === 'sent'
+        ? 'Повторное письмо принято почтовым сервером, сообщение отправлено в тестовую группу MAX. Проверьте письмо с пометкой «повтор».'
+        : 'Повторное письмо принято почтовым сервером, но сообщение в тестовую группу MAX отправить не удалось. Сообщите администратору; повторное нажатие создаст ещё одно письмо.');
     } catch (error) { window.alert(error.message); }
     finally { button.disabled = false; }
   }

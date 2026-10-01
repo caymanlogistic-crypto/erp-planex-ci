@@ -14,6 +14,7 @@ try {
   const page = await context.newPage();
   const errors = [];
   const sends = [];
+  const dialogs = [];
   let currentCardId = null;
   let currentStage = 'new';
   page.on('pageerror', error => errors.push(error.message));
@@ -30,7 +31,7 @@ try {
         currentCardId = request.body.match(/name="card_id"\r?\n\r?\n([a-f0-9-]{36})/)?.[1] || currentCardId;
       if (request.body.includes('name="action"') && request.body.includes('delete')) currentCardId = null;
       if (request.body.includes('name="action"') && request.body.includes('resend'))
-        return route.fulfill({ json: { ok: true, mail_status: 'accepted', recipients: ['info@plan-ex.ru'] } });
+        return route.fulfill({ json: { ok: true, mail_status: 'accepted', max_status: 'sent', recipients: ['info@plan-ex.ru'] } });
       if (!request.body.includes('name="action"')) currentStage = 'partial';
       return route.fulfill({ json: request.body.includes('name="action"')
         ? { ok: true, revision: sends.filter(item => item.body.includes('name="action"') && item.body.includes('save')).length }
@@ -107,10 +108,12 @@ try {
   await page.evaluate(() => { window.openCombinedRouteExecutorCreate = () => { window.__combinedOpened = true; }; });
   await page.locator('[data-route-review-card-id] td').first().dblclick();
   assert.equal(await page.evaluate(() => window.__combinedOpened), true, 'Double click opens combined editor');
-  page.on('dialog', dialog => dialog.accept());
+  page.on('dialog', dialog => { dialogs.push(dialog.message()); dialog.accept(); });
   await page.locator('[data-route-review-resend]').click();
   await page.waitForTimeout(250);
   assert.match(sends.at(-1).body, /name="action"\r?\n\r?\nresend/);
+  assert.match(dialogs[0], /info@plan-ex\.ru.*тестовую группу MAX бота «Бэрримор»/);
+  assert.match(dialogs[1], /сообщение отправлено в тестовую группу MAX/);
   assert.equal(await page.locator('[data-route-review-resend]').isEnabled(), true);
   await page.locator('[data-route-review-delete]').click();
   await page.waitForTimeout(250);
