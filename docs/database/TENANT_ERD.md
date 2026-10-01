@@ -2,7 +2,7 @@
 
 > GENERATED from final disposable-MySQL `information_schema`. Only physical FK edges are drawn.
 
-**Schema fingerprint:** `b523250935765dfe47b01b538db3e39b5a6bd12630aecdf656aa41e534bf7ebc`
+**Schema fingerprint:** `0250abe9dbbce5cc0f55d9a37d09c82edc39af8579465d3789c66d52c619aae8`
 
 ## Architecture overview
 
@@ -172,7 +172,7 @@ erDiagram
   T_feo_utilizers ||--o{ T_waste_trips : "fk_waste_trips_utilizer"
 ```
 
-Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_share_import_requests`, `feo_share_import_totals`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `route_executor_contract_mails`, `route_executor_review_cards`, `route_executor_review_sends`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_closing_finance_links`, `waste_trip_closing_reviews`, `waste_trip_completion_items`, `waste_trip_completion_reviews`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_registration_journal`, `waste_trip_requests`, `waste_trip_start_statistics`, `waste_trips`
+Tables: `entity_responsibilities`, `feo_import_changes`, `feo_imports`, `feo_location_overrides`, `feo_placement_block_requests`, `feo_placement_blocks`, `feo_placement_current`, `feo_request_cost_block_requests`, `feo_request_cost_blocks`, `feo_request_utilizer_overrides`, `feo_requests`, `feo_share_import_requests`, `feo_share_import_totals`, `feo_transfer_batches`, `feo_transfer_items`, `feo_transfer_outbox`, `feo_utilizer_aliases`, `feo_utilizer_match_rules`, `feo_utilizers`, `geocoding_settings`, `max_bots`, `max_chats`, `max_event_deliveries`, `max_event_rules`, `max_message_logs`, `route_executor_contract_mails`, `route_executor_review_cards`, `route_executor_review_sends`, `warehouse_stock_issue_exceptions`, `waste_trip_audit_log`, `waste_trip_carrier_payments`, `waste_trip_closing_finance_links`, `waste_trip_closing_reviews`, `waste_trip_completion_items`, `waste_trip_completion_reviews`, `waste_trip_customer_payments`, `waste_trip_general_payments`, `waste_trip_namespace_state`, `waste_trip_registration_journal`, `waste_trip_requests`, `waste_trip_start_statistics`, `waste_trips`
 
 ## System / Migration metadata
 

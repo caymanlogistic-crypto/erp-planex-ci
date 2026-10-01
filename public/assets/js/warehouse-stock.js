@@ -245,3 +245,46 @@
         }
     });
 })();
+
+(function () {
+    const modal = document.querySelector('.wh-exception-modal');
+    const opener = document.querySelector('[data-wh-exceptions]');
+    if (!modal || !opener) return;
+    const csrf = document.querySelector('.wh-correction-modal [name="_csrf_token"]');
+    const close = () => {
+        modal.classList.remove('is-open');
+        document.body.classList.remove('modal-open');
+        opener.focus();
+    };
+    opener.addEventListener('click', () => {
+        modal.classList.add('is-open');
+        document.body.classList.add('modal-open');
+        modal.querySelector('[data-wh-exceptions-close]')?.focus();
+    });
+    modal.querySelectorAll('[data-wh-exceptions-close]').forEach(button => button.addEventListener('click', close));
+    modal.addEventListener('click', event => { if (event.target === modal) close(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && modal.classList.contains('is-open')) close(); });
+
+    async function post(url, fields, button) {
+        button.disabled = true;
+        try {
+            const body = new URLSearchParams(fields);
+            if (csrf) body.set(csrf.name, csrf.value);
+            const response = await fetch(url, {method: 'POST', credentials: 'same-origin', body});
+            const result = await response.json();
+            if (!response.ok) throw new Error(result.error || 'Изменение не сохранено.');
+            location.reload();
+        } catch (error) {
+            window.alert(error.message);
+            button.disabled = false;
+        }
+    }
+    document.querySelectorAll('[data-wh-exclude]').forEach(button => button.addEventListener('click', () => {
+        const message = button.closest('li')?.querySelector('span')?.textContent?.trim() || '';
+        if (!window.confirm(`Не считать ошибкой это расхождение рейса #${button.dataset.flightId}?\n\n${message}`)) return;
+        post(modal.dataset.excludeUrl, {flight_id: button.dataset.flightId, message_hash: button.dataset.messageHash}, button);
+    }));
+    modal.querySelectorAll('[data-wh-restore]').forEach(button => button.addEventListener('click', () => {
+        post(modal.dataset.restoreUrl, {exception_id: button.dataset.exceptionId}, button);
+    }));
+})();

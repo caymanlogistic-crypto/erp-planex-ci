@@ -17,11 +17,13 @@ try {
         page.on('pageerror', error => errors.push(error.message));
         let submitted = false;
         let matched = false;
+        let excluded = false;
+        let restored = false;
         await page.route('http://warehouse.test/**', async route => {
             const url = new URL(route.request().url());
             if (url.pathname === '/company/warehouses/stock') return route.fulfill({status:200, contentType:'text/html; charset=utf-8',body:rendered.stdout});
             if (url.pathname === '/assets/js/warehouse-stock.js') return route.fulfill({status:200, contentType:'text/javascript',body:fs.readFileSync(path.join(root,'public/assets/js/warehouse-stock.js'),'utf8')});
-            if (url.pathname.endsWith('.css')) return route.fulfill({status:200, contentType:'text/css',body:fs.readFileSync(path.join(root,'public/assets/css/warehouse-stock.css'),'utf8')});
+            if (url.pathname.endsWith('.css')) return route.fulfill({status:200, contentType:'text/css',body:fs.readFileSync(path.join(root,'public',url.pathname.replace(/^\//,'')),'utf8')});
             if (url.pathname.endsWith('/correction-preview')) {
                 const outgoing = url.searchParams.get('route_type') === 'warehouse_to_utilizer';
                 return route.fulfill({status:200, contentType:'application/json',body:JSON.stringify({flight_id:20,name:'Первый рейс',status:'completed',current_route:'generator_to_utilizer',request_count:2,movement_request_count:1,route_type:url.searchParams.get('route_type'),source_warehouse_id:outgoing?1:0,destination_warehouse_id:outgoing?0:1,warehouses:{1:'Иркутск'},rows:[{request_id:120,mass_netto:'1.000',will_move:true},{request_id:121,mass_netto:'0.500',will_move:false}],operation_count:1,errors:[],stock_warnings:outgoing?[{request_id:121,available_netto:0,required_netto:'0.500',absent:true}]:[],ready:true,fingerprint:'a'.repeat(64)})});
@@ -32,6 +34,14 @@ try {
             if (url.pathname.endsWith('/request-reconciliation')) {
                 matched = route.request().postData()?.includes('fingerprint=' + 'b'.repeat(64)) ?? false;
                 return route.fulfill({status:200, contentType:'application/json',body:JSON.stringify({flight_id:21,removed:1,created:1,updated:0})});
+            }
+            if (url.pathname.endsWith('/exclude-issue')) {
+                excluded = route.request().postData()?.includes('flight_id=21') ?? false;
+                return route.fulfill({status:200, contentType:'application/json', body:'{"ok":true}'});
+            }
+            if (url.pathname.endsWith('/restore-issue')) {
+                restored = route.request().postData()?.includes('exception_id=1') ?? false;
+                return route.fulfill({status:200, contentType:'application/json', body:'{"ok":true}'});
             }
             if (url.pathname.endsWith('/correction')) {
                 submitted = route.request().postData()?.includes('fingerprint=' + 'a'.repeat(64)) ?? false;
@@ -46,11 +56,12 @@ try {
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 2);
         assert.match(await page.locator('[data-wh-warehouse="2"] .wh-current-summary').innerText(), /Заявки на складе: —/);
         const differentRow = page.locator('[data-wh-trip="2:21:out"]');
-        assert.match(await differentRow.locator('.wh-request-cell').innerText(), /121\s+В рейсе доп: 999/);
+        assert.match(await differentRow.locator('.wh-request-cell').innerText(), /121\s+Не списаны заявки: 999/);
+        assert.equal(await differentRow.locator('.wh-trip-extra').evaluate(el => getComputedStyle(el).color), 'rgb(98, 90, 82)');
         assert.equal(await differentRow.locator('.wh-request-id--outside-trip').innerText(), '121');
         assert.equal(await differentRow.locator('.wh-request-id--outside-trip').evaluate(el => getComputedStyle(el).textDecorationLine), 'line-through');
         await differentRow.dblclick();
-        assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /В рейсе доп: 999/);
+        assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /Не списаны заявки: 999/);
         assert.equal(await page.locator('#wh-trip-2-21-out [data-wh-match-trip]').count(), 1);
         await page.locator('#wh-trip-2-21-out [data-wh-close]').first().click();
         await page.locator('[name=q]').fill('999');
@@ -82,6 +93,17 @@ try {
         await page.locator('[data-wh-match-confirm]').click();
         await page.waitForFunction(() => document.querySelector('[data-wh-match-preview]').textContent.includes('приведён к составу ERP'));
         assert.equal(matched, true);
+        const issueWidths = await page.locator('#warehouse-issues').evaluate(el => ({outer:el.clientWidth,scroll:el.scrollWidth,table:el.querySelector('table').getBoundingClientRect().width,td:[...el.querySelectorAll('td')].map(x=>x.getBoundingClientRect().width)}));
+        assert.equal(issueWidths.scroll <= issueWidths.outer, true, JSON.stringify(issueWidths));
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'Page must not scroll horizontally');
+        await page.locator('[data-wh-exceptions]').click();
+        assert.match(await page.locator('.wh-exception-modal').innerText(), /Ранее согласованное расхождение/);
+        await page.locator('[data-wh-restore]').click();
+        await page.waitForFunction(() => document.querySelector('.wh-exception-modal') === null || !document.querySelector('.wh-exception-modal').classList.contains('is-open'));
+        assert.equal(restored, true);
+        page.once('dialog', dialog => dialog.accept());
+        await page.locator('#warehouse-issues [data-wh-exclude]').first().click();
+        assert.equal(excluded, true);
         assert.deepEqual(errors, []);
         await page.close();
     }

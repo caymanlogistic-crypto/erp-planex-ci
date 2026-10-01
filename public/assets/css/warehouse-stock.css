@@ -27,7 +27,7 @@
 .wh-registry td.wh-name,.wh-registry td.wh-driver,.wh-registry td.wh-vehicle{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere;line-height:1.4;height:auto}
 .wh-registry .wh-traffic.in{color:var(--success);font-weight:700}
 .wh-registry .wh-traffic.out{color:var(--danger);font-weight:700}
-.wh-registry .wh-row-error .registry-id{color:var(--danger)}
+.wh-registry .wh-row-error .registry-id{color:var(--danger);font-weight:700}
 .wh-total{margin:0 0 8px}
 .wh-warehouse-table{margin-bottom:14px}
 .wh-current-summary{white-space:normal;line-height:1.5}
@@ -35,7 +35,7 @@
 .wh-registry td.wh-request-cell{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:normal;line-height:1.5;height:auto}
 .wh-request-id{display:inline-block;white-space:nowrap}
 .wh-request-id--outside-trip{color:var(--danger,#a94442);text-decoration:line-through;text-decoration-thickness:2px;font-weight:700}
-.wh-trip-extra{display:block;margin-top:3px;overflow-wrap:anywhere}
+.wh-trip-extra{display:block;margin-top:3px;overflow-wrap:anywhere;color:var(--text-muted,#625a52)}
 .wh-source{color:var(--text-muted,#625a52);font-size:11px;line-height:1.45;margin-top:10px}
 .wh-empty{text-align:center;padding:24px!important;color:var(--text-muted,#625a52)}
 .wh-page .waste-modal-scroll{max-height:min(70vh,720px);overflow:auto}
@@ -64,10 +64,23 @@
 .wh-correction-modal .modal-body{max-height:min(70vh,700px);overflow:auto}
 .wh-page [data-wh-errors][aria-expanded=true]{color:var(--danger,#a94442);border-color:var(--danger,#a94442)}
 .wh-issues{margin-top:16px}
-.wh-issue-table{min-width:680px}
-.wh-issue-table td:nth-child(3){min-width:300px;overflow-wrap:anywhere}
+.wh-issue-table{width:100%;min-width:0;table-layout:fixed}
+.wh-issue-table th:nth-child(1){width:19%}
+.wh-issue-table th:nth-child(2){width:17%}
+.wh-issue-table th:nth-child(3){width:46%}
+.wh-issue-table th:nth-child(4){width:18%}
+.wh-issue-table th,.wh-issue-table td{white-space:normal!important;overflow-wrap:anywhere;word-break:break-word;vertical-align:top}
+.wh-issue-table td:nth-child(3){min-width:0;overflow-wrap:anywhere}
 .wh-issue-details{margin:4px 0;padding-left:18px;line-height:1.5}
 .wh-issue-details li+li{margin-top:5px}
+.wh-issue-details li>span{display:block;overflow-wrap:anywhere}
+.wh-exclude-issue{display:inline-flex;align-items:center;min-height:24px;padding:3px 9px;margin:4px 0;font-size:11px;line-height:1.2;white-space:normal;text-align:left}
+.wh-exception-list{list-style:none;margin:8px 0;padding:0;display:grid;gap:10px}
+.wh-exception-list li{display:grid;gap:6px;border:1px solid var(--border,#d8d2ca);border-radius:6px;padding:10px;min-width:0;overflow-wrap:anywhere}
+.wh-exception-list li button{justify-self:start}
+.wh-exception-list small{color:var(--text-muted,#625a52)}
+.wh-exception-modal .modal{max-width:min(800px,calc(100vw - 24px))}
+.wh-exception-modal .modal-body{max-height:min(70vh,700px);overflow:auto}
 .wh-match-trip{display:inline-flex;align-items:center;min-height:24px;padding:3px 9px;margin:2px 0 2px 8px;font-size:11px;line-height:1.2;vertical-align:middle;white-space:nowrap}
 .wh-match-modal .modal{max-width:min(640px,calc(100vw - 24px))}
 .wh-match-modal .modal-body{line-height:1.5;max-height:min(70vh,700px);overflow:auto}
@@ -75,3 +88,4 @@
 .wh-page .waste-row:focus-visible,.wh-page :is(button,select,input):focus-visible{outline:2px solid var(--accent,#7c4718);outline-offset:2px}
 @media(max-width:700px){.wh-filter .toolbar-right{display:grid;grid-template-columns:1fr 1fr}.wh-filter .toolbar-search{grid-column:1/-1;min-width:0;width:100%;max-width:none;margin-left:0}.wh-filter .wh-show-all{grid-column:1/-1}.wh-filter .wh-correct-action{grid-column:1/-1;justify-self:end}.wh-filter .toolbar-select{width:100%;min-width:0}.wh-page .modal{max-height:calc(100dvh - 16px)}.wh-page .modal-body{min-width:0}.wh-request-table{min-width:480px}.wh-correction-grid{grid-template-columns:1fr}.wh-correction-types{display:grid;gap:10px}}
 @media(max-width:390px){.wh-filter .toolbar-right{grid-template-columns:1fr}.wh-filter .toolbar-search{grid-column:auto}.wh-filter .wh-correct-action{grid-column:1}}
+@media(max-width:700px){.wh-filter .wh-exception-action{grid-column:1/-1;justify-self:stretch}.wh-issue-table,.wh-issue-table tbody,.wh-issue-table tr,.wh-issue-table td{display:block;width:100%;box-sizing:border-box}.wh-issue-table thead{display:none}.wh-issue-table tr{border-bottom:1px solid var(--border,#d8d2ca);padding:8px 0}.wh-issue-table td{padding:4px 12px!important}.wh-issue-table td::before{display:block;font-size:10px;font-weight:700;color:var(--text-muted,#625a52)}.wh-issue-table td:nth-child(1)::before{content:'РЕЙС'}.wh-issue-table td:nth-child(2)::before{content:'СКЛАД'}.wh-issue-table td:nth-child(3)::before{content:'ПОДРОБНОСТИ РАСХОЖДЕНИЯ'}.wh-issue-table td:nth-child(4)::before{content:'ИСТОЧНИК ДВИЖЕНИЯ'}}

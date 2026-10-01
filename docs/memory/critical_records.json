@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "6009fdee93fc0525eeac0facad5edb2f7805fcec",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/6009fdee93fc0525eeac0facad5edb2f7805fcec/docs/database/TENANT_SCHEMA_OTHER_TENANT_DOMAIN_03.md",
+      "verified_sha": "2812978d00bf4e7369018989159e9b8f15ab4428",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2812978d00bf4e7369018989159e9b8f15ab4428/docs/database/TENANT_SCHEMA_OTHER_TENANT_DOMAIN_04.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9f32d63f715d4eb957a82e8d863c09071a391377",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/9f32d63f715d4eb957a82e8d863c09071a391377/tests/roles_access_route_registry_test.py",
+      "verified_sha": "5d76b503f0f1780e6c3b38aa6bcc41ca5c48b09c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/5d76b503f0f1780e6c3b38aa6bcc41ca5c48b09c/tests/roles_access_route_registry_test.py",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "fcc18f34213e562d388f4332b32fb6682d590bd5",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/fcc18f34213e562d388f4332b32fb6682d590bd5/tests/waste_trip_synchronization_mysql_test.php",
+      "verified_sha": "2812978d00bf4e7369018989159e9b8f15ab4428",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2812978d00bf4e7369018989159e9b8f15ab4428/tests/waste_trip_synchronization_mysql_test.php",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -268,8 +268,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "9f32d63f715d4eb957a82e8d863c09071a391377",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/705c49c4bbedfff5413f96059d68022a55aa35c/app/Http/Controllers/Company/WasteTripClosingController.php",
+      "verified_sha": "5d76b503f0f1780e6c3b38aa6bcc41ca5c48b09c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/5d76b503f0f1780e6c3b38aa6bcc41ca5c48b09c/tests/employee_mail_contract_test.php",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",

@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `b523250935765dfe47b01b538db3e39b5a6bd12630aecdf656aa41e534bf7ebc`
+**Schema fingerprint:** `0250abe9dbbce5cc0f55d9a37d09c82edc39af8579465d3789c66d52c619aae8`
 
 ## `route_executor_review_sends`
 
@@ -28,6 +28,34 @@
 
 - **PRIMARY** `PRIMARY` (`card_id`)
 - **INDEX** `idx_route_executor_review_actor` (`actor_account_id`, `updated_at`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `warehouse_stock_issue_exceptions`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `flight_id` | `bigint` | NO | NULL | — | `MUL` |
+| `message_hash` | `char(64)` | NO | NULL | — | — |
+| `message_text` | `text` | NO | NULL | — | — |
+| `trip_name` | `varchar(255)` | NO | `` | — | — |
+| `warehouse_name` | `varchar(255)` | NO | `` | — | — |
+| `approved_by_user_id` | `bigint` | NO | NULL | — | — |
+| `approved_at` | `datetime(6)` | NO | NULL | — | `MUL` |
+| `revoked_by_user_id` | `bigint` | YES | NULL | — | — |
+| `revoked_at` | `datetime(6)` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `ix_warehouse_stock_issue_exception_date` (`approved_at`)
+- **UNIQUE** `ux_warehouse_stock_issue_exception` (`flight_id`, `message_hash`)
 
 ### Physical foreign keys
 

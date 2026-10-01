@@ -1,4 +1,5 @@
 <?php
+require_once __DIR__.'/../../app/Service/WarehouseStockService.php';
 
 $_SESSION = ['role_code'=>'company_owner'];
 $_GET = [];
@@ -24,9 +25,12 @@ $data = [
     'warehouses'=>[1=>'Иркутск', 2=>'Краснодар'],
     'groups'=>[1=>[$group(20,1,'in','Первый рейс')],2=>[$skippedGroup]],
     'current'=>[1=>['request_count'=>1,'weight_kg'=>1000,'request_ids'=>[120]],2=>['request_count'=>0,'weight_kg'=>0,'request_ids'=>[]]],
-    'issues'=>[21=>['flight_id'=>21,'name'=>'Второй рейс','warehouse_id'=>2,'messages'=>['Краснодар / вывоз: на складе есть заявки вне рейса ERP: 121.'],
+    'issues'=>[21=>['flight_id'=>21,'name'=>'Второй рейс','warehouse_id'=>2,'messages'=>['Краснодар / вывоз: на складе есть заявки вне рейса ERP: 121.', 'Новосибирск / списание: со склада списано 12 из 23 заявок рейса. Не списаны: 306474, 309026, 309808, 310330, 310865, 310875, 310884, 312762, 312821, 313029, 315058. Проверьте, были ли эти заявки на складе и почему нет списания.'],
         'reconcile_targets'=>['Краснодар / вывоз: на складе есть заявки вне рейса ERP: 121.'=>['warehouse_id'=>2,'direction'=>'out']],
         'has_movements'=>true,'movement_label'=>'Есть в журнале']],'issue_count'=>1,
     'correction_flights'=>[['id'=>20,'name'=>'Первый рейс'],['id'=>21,'name'=>'Второй рейс']],
+    'exceptions'=>[['id'=>1,'flight_id'=>20,'message_hash'=>str_repeat('a',64),'message_text'=>'Ранее согласованное расхождение.',
+        'trip_name'=>'Первый рейс','warehouse_name'=>'Иркутск','approved_by_user_id'=>7,'approved_at'=>'2026-10-01 10:00:00',
+        'revoked_by_user_id'=>null,'revoked_at'=>null,'matches_current'=>false]],
 ];
 require base_path('app/View/pages/company_warehouse_stock.php');

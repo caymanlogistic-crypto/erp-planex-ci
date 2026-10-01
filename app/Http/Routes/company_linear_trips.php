@@ -32,6 +32,8 @@ $router->get('/company/warehouses/stock/cancellation-preview', [$warehouseStockC
 $router->post('/company/warehouses/stock/cancellation', [$warehouseStockController, 'cancellationSubmit'], 'company.warehouses.stock');
 $router->get('/company/warehouses/stock/request-reconciliation-preview', [$warehouseStockController, 'requestReconciliationPreview'], 'company.warehouses.stock');
 $router->post('/company/warehouses/stock/request-reconciliation', [$warehouseStockController, 'requestReconciliationSubmit'], 'company.warehouses.stock');
+  $router->post('/company/warehouses/stock/exclude-issue', [$warehouseStockController, 'excludeIssue'], 'company.warehouses.stock');
+  $router->post('/company/warehouses/stock/restore-issue', [$warehouseStockController, 'restoreIssue'], 'company.warehouses.stock');
 
 $router->get('/company/trips/linear', [$controller, 'index'], 'company.trips.linear');
 $router->get('/company/trips/linear/service-lines', [$controller, 'serviceLines'], 'company.trips.linear');
