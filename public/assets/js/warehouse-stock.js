@@ -170,3 +170,78 @@
         }
     }));
 })();
+
+(function () {
+    const modal = document.querySelector('.wh-match-modal');
+    if (!modal) return;
+    const preview = modal.querySelector('[data-wh-match-preview]');
+    const confirm = modal.querySelector('[data-wh-match-confirm]');
+    const csrf = document.querySelector('.wh-correction-modal [name="_csrf_token"]');
+    const escape = value => String(value ?? '').replace(/[&<>"']/g, char => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+    const format = value => Number(value || 0).toLocaleString('ru-RU');
+    let opener = null;
+    let parentModal = null;
+    let selection = null;
+    let fingerprint = '';
+
+    function close() {
+        modal.classList.remove('is-open');
+        if (parentModal) parentModal.classList.add('is-open');
+        else document.body.classList.remove('modal-open');
+        opener?.focus();
+        parentModal = null;
+        fingerprint = '';
+    }
+
+    document.querySelectorAll('[data-wh-match-trip]').forEach(button => button.addEventListener('click', async event => {
+        event.stopPropagation();
+        opener = button;
+        parentModal = button.closest('.wh-trip-modal.is-open');
+        parentModal?.classList.remove('is-open');
+        selection = {flight_id: button.dataset.flightId, warehouse_id: button.dataset.warehouseId, direction: button.dataset.direction};
+        fingerprint = '';
+        confirm.disabled = true;
+        preview.textContent = 'Проверяем состав рейса и последующие складские остатки…';
+        modal.classList.add('is-open');
+        document.body.classList.add('modal-open');
+        modal.querySelector('[data-wh-match-close]').focus();
+        try {
+            const response = await fetch(modal.dataset.previewUrl + '?' + new URLSearchParams(selection), {credentials:'same-origin', cache:'no-store'});
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Не удалось проверить рейс.');
+            const ids = items => items.map(id => '#'+escape(id)).join(', ') || '—';
+            preview.innerHTML = `<p><b>Рейс #${escape(data.flight_id)}.</b> Будут изменены только его складские движения. Движения других рейсов сохранятся.</p>
+                <ul class="wh-match-list"><li>Сейчас на складе: ${ids(data.before_ids)}.</li><li>В рейсе ERP: ${ids(data.after_ids)}.</li>
+                <li>Убрать из этого рейса: ${ids(data.remove_ids)}.</li><li>Добавить: ${ids(data.add_ids)}.</li>
+                <li>Пересчитать массу: ${ids(data.change_mass_ids)}.</li></ul>
+                <p>Масса движения: ${format(data.before_kg)} → <b>${format(data.after_kg)} кг</b>. Масса каждой заявки берётся из снимка рейса ERP.</p>
+                ${data.warnings?.length ? `<div class="notice warn" role="alert"><b>Проверьте связанные рейсы:</b><ul>${data.warnings.map(warning => `<li>${escape(warning)}</li>`).join('')}</ul></div>` : ''}
+                ${data.errors.length ? `<div class="notice warn" role="alert"><b>Сверка недоступна:</b><ul>${data.errors.map(error => `<li>${escape(error)}</li>`).join('')}</ul></div>` : ''}`;
+            fingerprint = data.ready ? data.fingerprint : '';
+            confirm.disabled = !data.ready;
+        } catch (error) {
+            preview.innerHTML = `<div class="notice warn" role="alert">${escape(error.message)}</div>`;
+        }
+    }));
+
+    modal.querySelectorAll('[data-wh-match-close]').forEach(button => button.addEventListener('click', close));
+    modal.addEventListener('click', event => { if (event.target === modal) close(); });
+    document.addEventListener('keydown', event => { if (event.key === 'Escape' && modal.classList.contains('is-open')) close(); });
+    confirm.addEventListener('click', async () => {
+        if (!fingerprint || !selection) return;
+        confirm.disabled = true;
+        preview.textContent = 'Сверяем складские движения…';
+        try {
+            const body = new URLSearchParams({...selection, fingerprint});
+            if (csrf) body.set(csrf.name, csrf.value);
+            const response = await fetch(modal.dataset.submitUrl, {method:'POST', credentials:'same-origin', body});
+            const data = await response.json();
+            if (!response.ok) throw new Error(data.error || 'Сверка не выполнена.');
+            preview.innerHTML = `<div class="notice success" role="status">Рейс #${escape(data.flight_id)} приведён к составу ERP. Убрано движений: ${escape(data.removed)}; добавлено: ${escape(data.created)}; пересчитано: ${escape(data.updated)}. Обновляем остатки…</div>`;
+            setTimeout(() => location.reload(), 1100);
+        } catch (error) {
+            fingerprint = '';
+            preview.innerHTML = `<div class="notice warn" role="alert">${escape(error.message)} Повторите предварительную проверку.</div>`;
+        }
+    });
+})();

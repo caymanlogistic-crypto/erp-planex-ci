@@ -68,6 +68,10 @@
 .wh-issue-table td:nth-child(3){min-width:300px;overflow-wrap:anywhere}
 .wh-issue-details{margin:4px 0;padding-left:18px;line-height:1.5}
 .wh-issue-details li+li{margin-top:5px}
+.wh-match-trip{display:inline-flex;align-items:center;min-height:24px;padding:3px 9px;margin:2px 0 2px 8px;font-size:11px;line-height:1.2;vertical-align:middle;white-space:nowrap}
+.wh-match-modal .modal{max-width:min(640px,calc(100vw - 24px))}
+.wh-match-modal .modal-body{line-height:1.5;max-height:min(70vh,700px);overflow:auto}
+.wh-match-modal .wh-match-list{margin:8px 0;padding-left:20px;overflow-wrap:anywhere}
 .wh-page .waste-row:focus-visible,.wh-page :is(button,select,input):focus-visible{outline:2px solid var(--accent,#7c4718);outline-offset:2px}
 @media(max-width:700px){.wh-filter .toolbar-right{display:grid;grid-template-columns:1fr 1fr}.wh-filter .toolbar-search{grid-column:1/-1;min-width:0;width:100%;max-width:none;margin-left:0}.wh-filter .wh-show-all{grid-column:1/-1}.wh-filter .wh-correct-action{grid-column:1/-1;justify-self:end}.wh-filter .toolbar-select{width:100%;min-width:0}.wh-page .modal{max-height:calc(100dvh - 16px)}.wh-page .modal-body{min-width:0}.wh-request-table{min-width:480px}.wh-correction-grid{grid-template-columns:1fr}.wh-correction-types{display:grid;gap:10px}}
 @media(max-width:390px){.wh-filter .toolbar-right{grid-template-columns:1fr}.wh-filter .toolbar-search{grid-column:auto}.wh-filter .wh-correct-action{grid-column:1}}

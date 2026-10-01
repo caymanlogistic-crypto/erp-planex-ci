@@ -216,6 +216,7 @@ final class WarehouseStockService
             $oldDestination = (int)($flight['destination_warehouse_id'] ?? 0);
             if ($oldSource <= 0 && $oldDestination <= 0 && !isset($movementFlightIds[$flightId])) continue;
             $messages = [];
+            $reconcileTargets = [];
             if (!isset($erp[$flightId])) {
                 // The ERP trip namespace starts after the legacy cutover boundary.
                 if ($flightId <= self::LEGACY_CUTOVER_FLIGHT_ID) continue;
@@ -236,8 +237,12 @@ final class WarehouseStockService
                     $where = ($names[$group['warehouse_id']] ?? 'Склад #'.$group['warehouse_id'])
                         .' / '.($group['direction'] === 'in' ? 'приход' : 'вывоз');
                     if ($group['warehouse_only_request_ids'] !== []) {
-                        $messages[] = $where.': на складе есть заявки вне рейса ERP: '
+                        $message = $where.': на складе есть заявки вне рейса ERP: '
                             .implode(', ', $group['warehouse_only_request_ids']).'.';
+                        $messages[] = $message;
+                        if (isset($journalFlightIds[$flightId]) && !$group['is_derived']) {
+                            $reconcileTargets[$message] = ['warehouse_id'=>$group['warehouse_id'],'direction'=>$group['direction']];
+                        }
                     }
                     if ($group['trip_only_request_ids'] !== []) {
                         $messages[] = $where.': в рейсе доп: '
@@ -247,9 +252,11 @@ final class WarehouseStockService
                 $directionMass = ['in'=>0, 'out'=>0];
                 $directionRequests = ['in'=>[], 'out'=>[]];
                 $directionRequestMass = ['in'=>[], 'out'=>[]];
+                $journalDirection = ['in'=>false, 'out'=>false];
                 foreach ($groups as $group) {
                     if ($group['flight_id'] === $flightId) {
                         $directionMass[$group['direction']] += $group['mass_kg'];
+                        $journalDirection[$group['direction']] = $journalDirection[$group['direction']] || !$group['is_derived'];
                         $directionRequests[$group['direction']] = array_merge($directionRequests[$group['direction']], $group['request_ids']);
                         foreach ($group['requests'] as $request) {
                             $requestId = $request['id'];
@@ -266,8 +273,13 @@ final class WarehouseStockService
                 }
                 if ($flightMass > 0 && abs($flightMass - $expectedMass) > 1) {
                     $difference = $flightMass - $expectedMass;
-                    $messages[] = 'Масса по рейсу: складской учёт '.$formatKg($flightMass).' кг, снимок рейса ERP '
+                    $massMessage = 'Масса по рейсу: складской учёт '.$formatKg($flightMass).' кг, снимок рейса ERP '
                         .$formatKg($expectedMass).' кг. Разница '.($difference > 0 ? '+' : '−').$formatKg(abs($difference)).' кг.';
+                    $messages[] = $massMessage;
+                    if ($reconcileTargets === [] && $journalDirection[$direction]) {
+                        $warehouseId = $direction === 'in' ? $oldDestination : $oldSource;
+                        $reconcileTargets[$massMessage] = ['warehouse_id'=>$warehouseId,'direction'=>$direction];
+                    }
                     foreach ($directionRequestMass[$direction] as $requestId => $movementMass) {
                         $erpMass = $erp[$flightId]['request_masses_kg'][$requestId] ?? 0;
                         if (abs($movementMass - $erpMass) <= 1) continue;
@@ -296,6 +308,7 @@ final class WarehouseStockService
                     'has_movements'=>isset($journalFlightIds[$flightId]),
                     'movement_label'=>isset($journalFlightIds[$flightId]) ? 'Есть в журнале'
                         : (isset($movementFlightIds[$flightId]) ? 'Расчётное движение' : 'Нет в журнале'),
+                    'reconcile_targets'=>$reconcileTargets,
                 ];
             }
         }
