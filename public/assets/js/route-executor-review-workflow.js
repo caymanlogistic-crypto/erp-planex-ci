@@ -369,7 +369,7 @@
         if (element.type === 'file') {
           if (element.files?.length) files.push({ ...target, selected: [...element.files] });
         } else {
-          const label = element.closest('.field, .contact-cell-wrap, .vehicle-set-unit-card')
+          const label = element.name === 'extra_phones[]' ? 'Доп контакты' : element.name === 'extra_phone_comments[]' ? 'Комментарий к доп контактам' : element.closest('.field, .contact-cell-wrap, .vehicle-set-unit-card')
             ?.querySelector('.field-label')?.textContent?.replace('*', '').trim() || element.placeholder || element.name;
           const displayValue = element.tagName === 'SELECT' ? element.selectedOptions?.[0]?.textContent?.trim() || element.value : element.value;
           controls.push({ ...target, value: element.value, displayValue, checked: !!element.checked, type: element.type, label });
@@ -620,7 +620,8 @@
       .map(item => {
         const element = namedControl(item.formId, item.name, item.index);
         const section = { 'lab-contractor-form': 'Подрядчик', 'lab-driver-form': 'Водитель', 'lab-vehicle-form': 'Транспорт' }[item.formId];
-        const special = item.name === 'full_name' ? 'ФИО' : item.name === 'snils' ? 'СНИЛС' : item.name === 'set_type' ? 'Тип комплекта' : '';
+        const special = item.name === 'full_name' ? 'ФИО' : item.name === 'snils' ? 'СНИЛС' : item.name === 'set_type' ? 'Тип комплекта'
+          : item.name === 'extra_phones[]' ? 'Доп контакты' : item.name === 'extra_phone_comments[]' ? 'Комментарий к доп контактам' : '';
         const contact = item.name.match(/^contacts\[\d+\]\[(contact_person|phone|email)\]$/)?.[1];
         const contactLabel = { contact_person: 'Контактное лицо', phone: 'Телефон контакта', email: 'Email контакта' }[contact];
         const field = element?.closest('.field, .contact-cell-wrap, .vehicle-set-unit-card');
@@ -720,6 +721,7 @@
     pendingSend.max = maxTemplate.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, key) => variables[key] || '—');
     pendingSend.fields.unshift({ name: 'Рейс', value: snapshot.trip_label });
     dialog.querySelector('[data-lab-email-subject]').textContent = pendingSend.subject;
+    dialog.querySelector('.lab-email-preview').classList.toggle('is-full', stage === 'final');
     dialog.querySelector('[data-lab-email-lead]').textContent = stage === 'partial'
       ? 'Передаём первичные данные исполнителя рейса. Ожидайте полный комплект вторым письмом.'
       : `Передаём все актуальные данные исполнителя рейса${draft.stage === 'partial' ? ' с учётом первого письма' : ''}.`;

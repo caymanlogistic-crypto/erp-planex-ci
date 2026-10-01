@@ -53,6 +53,8 @@
 .lab-route-send-dialog summary { cursor: pointer; padding: 9px 11px; font-weight: 700; background: #f4f0e9; }
 .lab-route-send-dialog summary:focus-visible { outline: 2px solid #805321; outline-offset: -2px; }
 .lab-route-send-dialog .lab-email-preview { padding: 15px; background: #f5efe6; color: #473525; }
+.lab-route-send-dialog .lab-email-preview.is-full { background: #eaf6e9; color: #24452a; }
+.lab-route-send-dialog .lab-email-preview.is-full > strong { border-color: #b7d8b4; color: #216a35; }
 .lab-route-send-dialog .lab-email-preview > strong { display: block; padding: 10px 12px; background: #fff; border: 1px solid #d7c6b3; color: #6a421e; font-size: 14px; overflow-wrap: anywhere; }
 .lab-route-send-dialog .lab-email-preview table { width: 100%; border-collapse: collapse; background: #fff; }
 .lab-route-send-dialog .lab-email-preview th, .lab-route-send-dialog .lab-email-preview td { padding: 7px 9px; text-align: left; border: 1px solid #e2d6c8; vertical-align: top; overflow-wrap: anywhere; }

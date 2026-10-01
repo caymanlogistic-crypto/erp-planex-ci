@@ -23,6 +23,8 @@ final class RouteExecutorReviewPackage
             $values[$form][$name]=$value;
             if (trim($value)==='' || in_array((string)($item['type']??''),['checkbox','radio'],true)) continue;
             $label=(string)($item['label']??$name);
+            if ($form==='lab-driver-form' && $name==='extra_phones[]') $label='Доп контакты';
+            if ($form==='lab-driver-form' && $name==='extra_phone_comments[]') $label='Комментарий к доп контактам';
             if (mb_strlen($label)>120 || preg_match('/[\r\n]/',$label)) $label=$name;
             $display=$item['displayValue']??$value;
             if (!is_string($display) || mb_strlen($display)>5000) $display=$value;

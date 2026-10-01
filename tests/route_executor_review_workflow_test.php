@@ -45,6 +45,12 @@ $assert(!in_array('Подписание договора',$package['ready'],true
 $mail=RouteExecutorReviewEmail::build(RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,[$control('contractor','legal_address','Москва, 1')],$driver)],[]),true,'#123 Вывоз отходов');
 $assert(str_contains($mail['text'],'Ожидайте полный комплект вторым письмом'),'First email must explain the second package');
 $assert(str_contains($mail['text'],'#123 Вывоз отходов') && str_contains($mail['html'],'<strong>Рейс: #123 Вывоз отходов</strong>'),'Email must prominently include the selected trip');
+$extra=$control('driver','extra_phones[]','+7 900 000-00-00');$extra['label']='+7 900 000-00-00';
+$extraPackage=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,$driver,[$extra])],[]);
+$extraMail=RouteExecutorReviewEmail::build($extraPackage,true,'#123 Вывоз отходов');
+$assert(str_contains($extraMail['text'],'Водитель: Доп контакты: +7 900 000-00-00'),'Additional phone has a meaningful label in email');
+$fullMail=RouteExecutorReviewEmail::build($extraPackage,false,'#123 Вывоз отходов');
+$assert(str_contains($fullMail['html'],'background:#eaf6e9') && str_contains($fullMail['html'],'background:#f5fff4'),'Full email has light green background');
 foreach (['route_executor.partial','route_executor.full'] as $event) {
     $text=MaxEventCatalog::render($event,MaxEventCatalog::event($event)['template'],'plain',MaxEventCatalog::example($event));
     $assert(str_contains($text,'**Рейс \#123 Перевозка отходов**'),'MAX events must include the trip in bold before contractor');

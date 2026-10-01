@@ -51,7 +51,7 @@ try {
           <select id="route-executor-responsible-logist"><option value="">—</option><option value="12">Иван</option></select>
           <input id="route-executor-trip-search" list="route-executor-trip-options"><datalist id="route-executor-trip-options"></datalist><input id="route-executor-trip-id" type="hidden">
           <form id="lab-contractor-form"><div class="entity-form-main"><div class="field"><label class="field-label">Наименование</label><input name="name"></div><input name="inn"><select name="contractor_type"><option value="">—</option><option value="individual">ИП</option></select><input name="kpp"><input name="ogrn"><input name="director_full_name"><input name="director_position"><textarea name="legal_address"></textarea></div></form>
-          <form id="lab-driver-form"><input name="full_name"><input name="snils"><input name="phone"></form>
+          <form id="lab-driver-form"><input name="full_name"><input name="snils"><input name="phone"><input name="extra_phones[]" placeholder="+7 900 000-00-00"></form>
           <form id="lab-vehicle-form"><select name="set_type"><option value="">—</option><option value="single">Одиночка</option></select></form>
         </div>
         <div class="modal-required-note"></div>
@@ -72,6 +72,7 @@ try {
   assert.equal(await page.locator('[data-route-review-card-id]').count(), 1, 'Shared yellow row appears after saving');
   assert.equal(await page.locator('[data-route-review-card-id]').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(255, 241, 184)');
   await modal.locator('#lab-driver-form [name="snils"]').fill('123-456-789 00');
+  await modal.locator('#lab-driver-form [name="extra_phones[]"]').fill('+7 900 000-00-00');
   assert.equal(await modal.locator('[data-lab-send]').isVisible(), false, 'No send without logist and trip');
   await modal.locator('#route-executor-responsible-logist').selectOption('12');
   assert.equal(await modal.locator('[data-lab-send]').isVisible(), false, 'No send without trip');
@@ -86,6 +87,7 @@ try {
   assert.match(await dialog.locator('[data-lab-review-summary]').innerText(), /info@plan-ex\.ru/);
   assert.match(await dialog.locator('[data-lab-email-subject]').innerText(), /#123 Вывоз отходов/);
   assert.match(await dialog.locator('[data-lab-email-fields]').innerText(), /#123 Вывоз отходов/);
+  assert.match(await dialog.locator('[data-lab-email-fields]').innerText(), /Водитель: Доп контакты/);
   assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /\*\*Рейс #123 Вывоз отходов\*\*/);
   assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /Ожидайте полный комплект вторым письмом/);
   assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /ДАННЫХ НЕХВАТАЕТ:/);

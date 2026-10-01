@@ -19,9 +19,13 @@ final class RouteExecutorReviewEmail
         $names=RouteExecutorReviewArchive::names($package['attachments']);
         $text.="\nАрхив документов: ".($names?implode(', ',$names):'не приложен')."\n";
         $text.='Готово: '.implode(', ',$package['ready'])."\n";
-        $html='<div style="font:14px Arial,sans-serif;color:#292622;background:#f5f2ec;padding:24px">'
-            .'<div style="max-width:760px;margin:auto;background:#fff;border:1px solid #d8d0c2;padding:24px">'
-            .'<h2 style="color:#70451f;margin-top:0">'.self::escape($heading).'</h2><p><strong>Рейс: '.self::escape($trip).'</strong></p><p>'.self::escape($lead).'</p>'
+        $background=$partial?'#f5f2ec':'#eaf6e9';
+        $cardBackground=$partial?'#fff':'#f5fff4';
+        $border=$partial?'#d8d0c2':'#b7d8b4';
+        $headingColor=$partial?'#70451f':'#216a35';
+        $html='<div style="font:14px Arial,sans-serif;color:#292622;background:'.$background.';padding:24px">'
+            .'<div style="max-width:760px;margin:auto;background:'.$cardBackground.';border:1px solid '.$border.';padding:24px">'
+            .'<h2 style="color:'.$headingColor.';margin-top:0">'.self::escape($heading).'</h2><p><strong>Рейс: '.self::escape($trip).'</strong></p><p>'.self::escape($lead).'</p>'
             .'<p><b>Готово:</b> '.self::escape(implode(', ',$package['ready'])).'</p>'
             .'<table style="width:100%;border-collapse:collapse">'.$rows.'</table>'
             .'<p><b>Архив документов:</b> '.self::escape($names?implode(', ',$names):'не приложен').'</p></div></div>';
