@@ -40,6 +40,12 @@
         $result = \App\Service\BankFinanceService::deleteImport($localPdo, $importId);
 
         if ($result['status'] === 'ok') {
+            try {
+                (new \App\Service\BankStatementFileStore(company_storage_path($company['storage_path'] ?? null, $companyId)))->remove((string)$import['file_hash']);
+            } catch (\Throwable $fileError) {
+                error_log('Bank statement file deletion failed: import=' . $importId . ' error=' . $fileError->getMessage());
+                $_SESSION['flash_info'] = 'Запись удалена, но исходный файл требует отдельной очистки.';
+            }
             $_SESSION['flash_success'] = $result['message'];
         } else {
             $_SESSION['flash_error'] = $result['message'];

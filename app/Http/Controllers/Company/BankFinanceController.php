@@ -11,6 +11,7 @@ final class BankFinanceController{
  public function settings():void{$this->action('settings');}
  public function bankStatementSettings():void{$this->action('bankStatementSettings');}
  public function deleteImport():void{$this->action('deleteImport');}
+ public function downloadImport(int $id):void{$this->action('downloadImport',['bankImportId'=>$id]);}
  public function reconciliationJson():void{$this->action('reconciliationJson');}
  public function classifyForm(int $id):void{$this->action('classifyForm',['bankTransactionId'=>$id]);}
  public function classifySubmit(int $id):void{$this->action('classifySubmit',['bankTransactionId'=>$id]);}

@@ -32,7 +32,7 @@ final class HardenedBankStatementImapImporter
         $this->subjectContains = (string) ($settings['subject_filter'] ?? getenv('BANK_IMAP_SUBJECT_CONTAINS') ?: 'Регулярная выписка');
     }
 
-    public function importAllRecent(PDO $localPdo): array
+    public function importAllRecent(PDO $localPdo, string $companyStorageRoot): array
     {
         if (!extension_loaded('imap')) {
             throw new \RuntimeException('PHP IMAP extension is not installed.');
@@ -55,7 +55,7 @@ final class HardenedBankStatementImapImporter
                 $emails = imap_search($mailbox, $criteria) ?: [];
                 rsort($emails, SORT_NUMERIC);
                 foreach (array_slice($emails, 0, 20) as $msgNo) {
-                    $results[] = $this->processEmail($mailbox, (int) $msgNo, $localPdo, $mailboxName);
+                    $results[] = $this->processEmail($mailbox, (int) $msgNo, $localPdo, $mailboxName, new BankStatementFileStore($companyStorageRoot));
                 }
             } finally {
                 imap_close($mailbox);
@@ -89,7 +89,7 @@ final class HardenedBankStatementImapImporter
         return @imap_open($path, $this->username, $this->password, OP_READONLY, 0);
     }
 
-    private function processEmail($mailbox, int $msgNo, PDO $localPdo, string $mailboxName): array
+    private function processEmail($mailbox, int $msgNo, PDO $localPdo, string $mailboxName, BankStatementFileStore $fileStore): array
     {
         $uid = sha1($mailboxName) . ':' . imap_uid($mailbox, $msgNo);
         $structure = imap_fetchstructure($mailbox, $msgNo, 0);
@@ -116,16 +116,25 @@ final class HardenedBankStatementImapImporter
                 $importResults[] = ['status' => 'error', 'message' => 'Cannot create temporary XLSX.', 'filename' => $attachment['filename']];
                 continue;
             }
+            $newFile = false;
+            $hash = null;
             try {
                 $parsed = (new BankStatementXlsxParser())->parse($tmpPath);
+                $hash = hash('sha256', $content);
+                $newFile = !$fileStore->has($hash);
+                $fileStore->save($tmpPath, $hash);
                 $result = BankFinanceService::importParsedData(
                     $localPdo,
                     $parsed,
                     'imap',
                     $uid,
                     $attachment['filename'],
-                    hash('sha256', $content)
+                    $hash
                 );
+                if (($result['status'] ?? '') === 'error' && $newFile) {
+                    $fileStore->remove($hash);
+                    $newFile = false;
+                }
                 if (($result['status'] ?? '') === 'error' && in_array($result['message'] ?? '', [
                     'No account number in file',
                     'No financial rows found in file',
@@ -134,6 +143,9 @@ final class HardenedBankStatementImapImporter
                 }
                 $importResults[] = $result;
             } catch (\Throwable $e) {
+                if ($newFile && is_string($hash)) {
+                    try { $fileStore->remove($hash); } catch (\Throwable $cleanupError) { error_log('Bank statement file cleanup failed: ' . $cleanupError->getMessage()); }
+                }
                 $importResults[] = ['status' => 'error', 'message' => 'Parse error: ' . $e->getMessage(), 'filename' => $attachment['filename']];
             } finally {
                 if (is_file($tmpPath)) {

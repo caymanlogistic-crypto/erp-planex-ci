@@ -382,7 +382,7 @@ final class BankFinanceService
             } catch (PDOException $e) {
                 if ($e->getCode() === '23000') {
                     $localPdo->rollBack();
-                    return ['status' => 'skipped', 'message' => 'File already imported', 'import_id' => null];
+                    return self::reconcilePreviouslyImportedFile($localPdo, $parsed, $fileHash, $accountNumber);
                 }
                 throw $e;
             }
@@ -519,6 +519,73 @@ final class BankFinanceService
         ];
 
         return hash('sha256', implode('|', $parts));
+    }
+
+    private static function reconcilePreviouslyImportedFile(PDO $pdo, array $parsed, string $fileHash, string $accountNumber): array
+    {
+        $pdo->beginTransaction();
+        try {
+            $importStmt = $pdo->prepare("SELECT * FROM `bank_statement_imports` WHERE `file_hash` = ? AND `status` = 'completed' FOR UPDATE");
+            $importStmt->execute([$fileHash]);
+            $import = $importStmt->fetch(PDO::FETCH_ASSOC);
+            if (!$import || (string)$import['account_number'] !== $accountNumber) {
+                throw new \RuntimeException('Ранее загруженная выписка не найдена или относится к другому счёту.');
+            }
+            $accountStmt = $pdo->prepare('SELECT `id` FROM `bank_accounts` WHERE `account_number` = ? FOR UPDATE');
+            $accountStmt->execute([$accountNumber]);
+            $accountId = (int)$accountStmt->fetchColumn();
+            if ($accountId <= 0) {
+                throw new \RuntimeException('Банковский счёт не найден.');
+            }
+            $linkedTx = $pdo->prepare('SELECT 1 FROM `bank_import_transactions` bit JOIN `bank_transactions` bt ON bt.`id` = bit.`transaction_id` WHERE bit.`import_id` = ? AND bt.`dedupe_hash` = ? LIMIT 1');
+            foreach (($parsed['transactions'] ?? []) as $tx) {
+                $linkedTx->execute([(int)$import['id'], self::transactionDedupeHash($accountNumber, $tx)]);
+                if ($linkedTx->fetchColumn() === false) {
+                    throw new \RuntimeException('Операции повторной выписки не совпадают с сохранённым импортом.');
+                }
+            }
+            $linkedBalance = $pdo->prepare('SELECT bdb.* FROM `bank_import_balances` bib JOIN `bank_daily_balances` bdb ON bdb.`id` = bib.`balance_id` WHERE bib.`import_id` = ? AND bdb.`dedupe_hash` = ? FOR UPDATE');
+            $dayTotals = $pdo->prepare('SELECT COALESCE(SUM(`debit_amount`), 0) AS debit, COALESCE(SUM(`credit_amount`), 0) AS credit FROM `bank_transactions` WHERE `account_id` = ? AND `operation_date` = ?');
+            $updated = 0;
+            foreach (($parsed['daily_balances'] ?? []) as $balance) {
+                $linkedBalance->execute([(int)$import['id'], self::balanceDedupeHash($accountNumber, $balance)]);
+                $saved = $linkedBalance->fetch(PDO::FETCH_ASSOC);
+                if (!$saved) {
+                    throw new \RuntimeException('Остаток повторной выписки не связан с сохранённым импортом.');
+                }
+                // An older, partial statement can be retained for download, but cannot
+                // certify the closing balance after later transactions were imported.
+                $dayTotals->execute([$accountId, (string)$balance['statement_date']]);
+                $totals = $dayTotals->fetch(PDO::FETCH_ASSOC);
+                $opening = $saved['opening_balance'] === null ? null : self::canonicalAmount($saved['opening_balance']);
+                $expected = $opening === null ? null : FinanceBankReconciliationService::sub(
+                    FinanceBankReconciliationService::add($opening, self::canonicalAmount($totals['credit'] ?? 0)),
+                    self::canonicalAmount($totals['debit'] ?? 0)
+                );
+                if ($expected === null || $balance['closing_balance'] === null
+                    || FinanceBankReconciliationService::compare($expected, self::canonicalAmount($balance['closing_balance'])) !== 0) {
+                    continue;
+                }
+                if (self::reconcileOverlappingBalance($pdo, $accountId, (string)$balance['statement_date'], $saved, $balance, false)) {
+                    $updated++;
+                }
+            }
+            if ($updated > 0) {
+                self::recomputeAccountSummary($pdo, $accountNumber);
+            }
+            $pdo->commit();
+            return [
+                'status' => $updated > 0 ? 'reconciled' : 'skipped',
+                'message' => $updated > 0 ? "Сверка обновлена по исходному файлу банка: {$updated} дн." : 'Файл уже был импортирован ранее.',
+                'import_id' => (int)$import['id'],
+                'balances_updated' => $updated,
+            ];
+        } catch (\Throwable $e) {
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
     }
 
     private static function balanceDedupeHash(string $accountNumber, array $balance): string

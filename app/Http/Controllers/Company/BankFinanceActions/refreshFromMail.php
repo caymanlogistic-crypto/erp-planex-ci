@@ -31,6 +31,7 @@ try {
         'balances' => 0,
         'imported_files' => 0,
         'skipped' => 0,
+        'reconciled' => 0,
         'errors' => 0,
     ];
 
@@ -41,6 +42,8 @@ try {
             $totals['imported_files']++;
             $totals['transactions'] += (int) ($item['transactions_imported'] ?? 0);
             $totals['balances'] += (int) ($item['balances_imported'] ?? 0);
+        } elseif ($status === 'reconciled') {
+            $totals['reconciled'] += (int)($item['balances_updated'] ?? 0);
         } elseif ($status === 'skipped' || $status === 'info') {
             $totals['skipped']++;
         } elseif ($status === 'error') {
@@ -56,7 +59,7 @@ try {
 
     foreach ($importers as $settings) {
         try {
-            $results = (new \App\Service\HardenedBankStatementImapImporter($settings))->importAllRecent($localPdo);
+            $results = (new \App\Service\HardenedBankStatementImapImporter($settings))->importAllRecent($localPdo, company_storage_path($company['storage_path'] ?? null, $companyId));
             foreach ($results as $result) {
                 if (is_array($result)) {
                     $walkResult($result);
@@ -68,12 +71,13 @@ try {
         }
     }
 
-    if ($totals['imported_files'] > 0) {
+    if ($totals['imported_files'] > 0 || $totals['reconciled'] > 0) {
         $_SESSION['flash_success'] = sprintf(
-            'Обновление завершено: новых выписок — %d, операций — %d, остатков — %d, пропущено — %d.',
+            'Обновление завершено: новых выписок — %d, операций — %d, остатков — %d, исправлено сверок — %d, пропущено — %d.',
             $totals['imported_files'],
             $totals['transactions'],
             $totals['balances'],
+            $totals['reconciled'],
             $totals['skipped']
         );
     } elseif ($totals['errors'] > 0) {

@@ -314,7 +314,14 @@ $deleteImportUrl = app_url('/company/finance/bank-accounts/import/delete');
                     <?php foreach ($imports as $imp): ?>
                     <tr>
                         <td class="col-mono"><?= $fmtDateTime($imp['created_at'] ?? '') ?></td>
-                        <td class="col-filename" title="<?= e($imp['filename'] ?? '') ?>"><?= e($imp['filename'] ?: '—') ?></td>
+                        <td class="col-filename" title="<?= e($imp['filename'] ?? '') ?>">
+                            <?= e($imp['filename'] ?: '—') ?>
+                            <?php if (!empty($imp['file_available'])): ?>
+                                <div class="field-note"><a href="<?= e(app_url('/company/finance/bank-accounts/import/' . (int)$imp['id'] . '/download')) ?>">Скачать XLSX</a></div>
+                            <?php else: ?>
+                                <div class="field-note">Исходный файл не сохранён</div>
+                            <?php endif; ?>
+                        </td>
                         <td><?= $imp['source'] === 'imap' ? 'IMAP' : 'Вручную' ?></td>
                         <td class="col-mono"><?= e($imp['account_number'] ?? '—') ?></td>
                         <td class="col-mono"><?= e(($imp['period_from'] ? $fmtDate($imp['period_from']) : '—') . ' — ' . ($imp['period_to'] ? $fmtDate($imp['period_to']) : '—')) ?></td>
