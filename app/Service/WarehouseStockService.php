@@ -62,7 +62,7 @@ final class WarehouseStockService
         try {
             $exceptions = $tenant->query('SELECT id,flight_id,message_hash,message_text,trip_name,warehouse_name,approved_by_user_id,approved_at,revoked_by_user_id,revoked_at FROM warehouse_stock_issue_exceptions ORDER BY approved_at DESC,id DESC')->fetchAll(PDO::FETCH_ASSOC);
         } catch (PDOException $error) {
-            if (($error->errorInfo[1] ?? null) !== 1146) throw $error;
+            if ((int)($error->errorInfo[1] ?? 0) !== 1146) throw $error;
             $exceptions = [];
             $exceptionsAvailable = false;
         }
