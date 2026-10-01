@@ -111,9 +111,10 @@ final class RouteExecutorReviewPackage
             $trainingReady?'Обучение водителя':null,
             $vehicleReady?'Регистрация транспорта':null,
         ]));
-        return ['ready'=>$ready,'full'=>$contractReady && $trainingReady && $vehicleReady,
+        return ['ready'=>$ready,'contract_ready'=>$contractReady,'full'=>$contractReady && $trainingReady && $vehicleReady,
             'rows'=>$rows,'attachments'=>$attachments,'missing'=>array_values(array_unique($missing)),
             'contractor'=>$get('lab-contractor-form','name'),'driver'=>$get('lab-driver-form','full_name'),
-            'plate'=>$get('lab-vehicle-form','units[primary][plate_number]')];
+            'plate'=>$get('lab-vehicle-form','units[primary][plate_number]'),
+            'secondary_plate'=>$get('lab-vehicle-form','units[secondary][plate_number]')];
     }
 }

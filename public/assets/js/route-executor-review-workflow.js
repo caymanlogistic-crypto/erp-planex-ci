@@ -329,6 +329,12 @@
   const DRAFT_STORE = 'cards';
   let draft = { id: DRAFT_ID, stage: 'new', revision: 0, savedAt: null, sends: [], controls: [], files: [], signature: '' };
   let draftLoaded = false;
+  function showWorkflowMessage(message) {
+    const notice = document.querySelector('#route-executor-create-modal [data-combined-feedback]');
+    if (!notice) return;
+    notice.textContent = message;
+    notice.classList.toggle('is-hidden', !message);
+  }
   let workflowBusy = false;
   let pendingSend = null;
 
@@ -455,12 +461,15 @@
     if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось сохранить карточку.');
     const next = {
       ...draft, ...snapshot, revision: result.revision,
-      savedAt: new Date().toISOString(), signature: draftSignature(snapshot)
+      savedAt: new Date().toISOString(), signature: draftSignature(snapshot),
+      contractStatus: result.contract_status || draft.contractStatus,
+      contractError: result.contract_error || ''
     };
     try { await draftOperation('readwrite', store => store.put(next)); }
     catch (error) { console.warn('Локальный кэш карточки недоступен', error); }
     draft = next;
     renderWorkflow();
+    return result;
   }
 
   async function refreshReviewList() {
@@ -485,6 +494,7 @@
   function workflowStage() {
     const ready = readyActions();
     const full = ready.length === 3;
+    if (!full && !ready.some(key => key === 'training' || key === 'vehicle')) return null;
     if (!['new', 'partial', 'partial_failed', 'final_failed'].includes(draft.stage)) return null;
     if (!document.getElementById('route-executor-responsible-logist')?.value || !document.getElementById('route-executor-trip-id')?.value) return null;
     if (draft.stage === 'partial' || draft.stage === 'final_failed') return full ? 'final' : null;
@@ -500,31 +510,10 @@
 
   function renderWorkflow() {
     const modal = document.getElementById('route-executor-create-modal');
-    const status = modal?.querySelector('[data-lab-workflow-status]');
     const save = modal?.querySelector('[data-source-create-submit]');
     const send = modal?.querySelector('[data-lab-send]');
-    if (!status || !save || !send) return;
+    if (!save || !send) return;
     const action = workflowStage();
-    const dirty = !!draft.savedAt && draft.signature !== draftSignature(captureDraft());
-    const when = formatSavedAt(draft.sends.at(-1)?.at || draft.savedAt);
-    const text = draft.stage === 'final'
-      ? 'Полный комплект отправлен · ' + when + '. Карточка завершена.'
-      : draft.stage.includes('unknown') || draft.stage.includes('sending')
-        ? 'Статус отправки требует проверки. Не повторяйте письмо до уточнения у администратора.'
-      : draft.stage.endsWith('_failed')
-        ? 'Отправка не состоялась. Проверьте данные и повторите.'
-      : draft.stage === 'partial'
-        ? 'Первичные данные отправлены · ' + when + '. Новые данные сохраняются; следующее письмо — только с полным комплектом.'
-        : draft.savedAt
-          ? 'Черновик сохранён · ' + when + (dirty ? '. Есть несохранённые изменения.' : '. Отправок пока не было.')
-          : 'Новая карточка. Даже неполные данные можно сохранить как черновик.';
-    const missingAssignment = [];
-    if (!document.getElementById('route-executor-responsible-logist')?.value) missingAssignment.push('логиста');
-    if (!document.getElementById('route-executor-trip-id')?.value) missingAssignment.push('рейс');
-    status.querySelector('[data-lab-workflow-message]').textContent = text +
-      (missingAssignment.length && readyActions().length && ['new', 'partial', 'partial_failed', 'final_failed'].includes(draft.stage)
-        ? ' Для отправки выберите ' + missingAssignment.join(' и ') + '.' : '');
-    status.dataset.stage = draft.stage;
     save.textContent = draft.stage === 'final' ? 'Карточка завершена' : draft.savedAt ? 'Сохранить изменения' : 'Сохранить черновик';
     save.disabled = workflowBusy || draft.stage === 'final' || draft.stage.includes('unknown') || draft.stage.includes('sending');
     const content = modal.querySelector('#route-executor-create-modal-content');
@@ -534,8 +523,6 @@
     if (action) send.textContent = action === 'partial'
       ? 'Сохранить и отправить первичные данные (1/2)'
       : 'Сохранить и отправить полный комплект ' + (draft.stage === 'partial' ? '(2/2)' : '(1/1)');
-    const create = document.querySelector('[data-source-create-open]');
-    if (create && draft.savedAt && draft.stage !== 'final') create.textContent = 'Продолжить карточку исполнителя';
   }
 
   function initWorkflow() {
@@ -544,13 +531,6 @@
     modal.dataset.labWorkflowBound = '1';
     bindTripPicker();
     modal.querySelector('.modal-title').textContent = 'Карточка исполнителя рейса';
-    const status = document.createElement('div');
-    status.className = 'lab-workflow-status';
-    status.dataset.labWorkflowStatus = '';
-    status.setAttribute('role', 'status');
-    status.setAttribute('aria-live', 'polite');
-    status.innerHTML = '<span data-lab-workflow-message></span><button type="button" class="btn btn-ghost lab-workflow-reset" data-lab-reset>Новая карточка</button>';
-    modal.querySelector('.modal-head').after(status);
     const foot = modal.querySelector('.modal-foot-actions');
     const send = document.createElement('button');
     send.type = 'button';
@@ -595,7 +575,7 @@
           await persistDraft(captureDraft());
         }
       } catch (error) {
-        status.querySelector('[data-lab-workflow-message]').textContent = 'Не удалось открыть карточку: ' + error.message;
+        showWorkflowMessage('Не удалось открыть карточку: ' + error.message);
         console.warn('Не удалось открыть карточку', error);
       }
       requestAnimationFrame(() => {
@@ -607,6 +587,9 @@
         if (sessionStorage.getItem('route-review-open-' + scope) === DRAFT_ID) {
           sessionStorage.removeItem('route-review-open-' + scope);
           window.openCombinedRouteExecutorCreate?.();
+        } else if (sessionStorage.getItem('route-review-new-' + scope) === DRAFT_ID) {
+          sessionStorage.removeItem('route-review-new-' + scope);
+          window.openCombinedRouteExecutorCreate?.();
         }
       });
     })();
@@ -616,7 +599,7 @@
     const partial = stage === 'partial';
     const number = partial ? '1/2' : draft.stage === 'partial' ? '2/2' : '1/1';
     const label = partial ? 'Первичные данные' : 'Полный комплект';
-    const fields = snapshot.controls.filter(item => item.value?.trim() && item.type !== 'checkbox' && item.type !== 'radio')
+    const fields = snapshot.controls.filter(item => item.formId !== 'lab-contractor-form' && item.value?.trim() && item.type !== 'checkbox' && item.type !== 'radio')
       .map(item => {
         const element = namedControl(item.formId, item.name, item.index);
         const section = { 'lab-contractor-form': 'Подрядчик', 'lab-driver-form': 'Водитель', 'lab-vehicle-form': 'Транспорт' }[item.formId];
@@ -631,21 +614,28 @@
         const value = element?.tagName === 'SELECT' ? element.selectedOptions[0]?.textContent?.trim() || item.value : item.value.trim();
         return { name, value };
       });
-    const files = snapshot.files.flatMap(item => item.selected.map(file => file.name));
+    const files = snapshot.files.filter(item => item.formId !== 'lab-contractor-form').flatMap(item => item.selected.map(file => file.name));
     const ready = readyActions().map(key => readinessTitles[key]);
-    const missing = [...new Set(['contract', 'training', 'vehicle'].flatMap(key => {
-      const report = readinessReport(key);
-      return [...report.fields.map(value => `${readinessTitles[key]}: ${value}`), ...report.files.map(value => `Файл: ${value}`)];
-    }))];
+    const contract = readinessReport('contract').fields;
+    const driver = [...new Set([...readinessReport('training').fields, ...readinessReport('vehicle').fields.filter(value => !value.includes(':') && value !== 'Тип комплекта ТС')])];
+    const vehicle = readinessReport('vehicle');
+    const grouped = {
+      'Подрядчик': contract.filter(value => !/счёт|БИК|банк|контакт|телефон|email/i.test(value)),
+      'Реквизиты': contract.filter(value => /счёт|БИК|банк/i.test(value)),
+      'Контакт': contract.filter(value => /контакт|телефон|email/i.test(value)),
+      'Водитель': driver,
+      'ТС': vehicle.fields.filter(value => value.includes(':') || value === 'Тип комплекта ТС'),
+      'Файлы': vehicle.files
+    };
+    const missing = Object.entries(grouped).filter(([, values]) => values.length)
+      .map(([group, values]) => `**• ${group}:** ${[...new Set(values)].join(', ')}`);
     const subject = `${snapshot.trip_label} — исполнитель рейса — ${label.toLowerCase()}`;
     const find = (formId, name) => snapshot.controls.find(item => item.formId === formId && item.name === name)?.value?.trim();
-    const max = [`${label} по исполнителю рейса`, `**Рейс ${snapshot.trip_label}**`,
-      find('lab-contractor-form', 'name') ? `Подрядчик: ${find('lab-contractor-form', 'name')}` : '',
-      find('lab-driver-form', 'full_name') ? `Водитель: ${find('lab-driver-form', 'full_name')}` : '',
-      find('lab-vehicle-form', 'units[primary][plate_number]') ? `Госномер: ${find('lab-vehicle-form', 'units[primary][plate_number]')}` : '',
-      `Готово: ${ready.join('; ')}.`,
-      partial ? 'Это первичные данные. Ожидайте полный комплект вторым письмом.' : 'Полный комплект данных и файлов передан.',
-      `Поля: ${fields.length}; файлы: ${files.length}.`, `ДАННЫХ НЕХВАТАЕТ:\n${missing.join('\n') || 'нет'}`].filter(Boolean).join('\n');
+    const surname=find('lab-driver-form','full_name')?.split(/\s+/)[0] || '';
+    const vehicleDriver=[find('lab-vehicle-form','units[primary][plate_number]'),surname ? `(${surname})` : ''].filter(Boolean).join(' ') || '—';
+    const max = [partial ? '🚚 Внесены частичные данные' : '🚛 ПОЛНЫЙ КОМПЛЕКТ',
+      `**${snapshot.trip_label}**`, vehicleDriver, partial ? `\n**Не хватает для полного комплекта**\n${missing.join('\n')}` : '',
+      'Логист: —'].filter(Boolean).join('\n');
     return { stage, number, label, subject, max, fields, files, ready, missing, signature: draftSignature(snapshot), snapshot };
   }
 
@@ -673,12 +663,12 @@
     if (!stage || workflowBusy) return;
     if (!document.getElementById('route-executor-responsible-logist')?.value) {
       document.getElementById('route-executor-responsible-logist')?.focus();
-      document.querySelector('[data-lab-workflow-message]').textContent = 'Выберите ответственного логиста перед отправкой.';
+      showWorkflowMessage('Выберите ответственного логиста перед отправкой.');
       return;
     }
     if (!document.getElementById('route-executor-trip-id')?.value) {
       document.getElementById('route-executor-trip-search')?.focus();
-      document.querySelector('[data-lab-workflow-message]').textContent = 'Выберите рейс из списка перед отправкой.';
+      showWorkflowMessage('Выберите рейс из списка перед отправкой.');
       return;
     }
     let config;
@@ -690,7 +680,7 @@
       const event = config.max_events?.['route_executor.' + stage];
       if (!event?.enabled || !event.chat_config_id) throw new Error('В настройках MAX включите событие «Исполнитель рейса» и выберите чат.');
     } catch (error) {
-      document.querySelector('[data-lab-workflow-message]').textContent = error.message;
+      showWorkflowMessage(error.message);
       return;
     }
     const snapshot = captureDraft();
@@ -709,15 +699,12 @@
     dialog.querySelector('[data-lab-max-heading]').textContent = event?.enabled ? 'MAX · настроенное событие' : 'MAX · событие выключено в настройках';
     const find = (formId, name) => snapshot.controls.find(item => item.formId === formId && item.name === name)?.value?.trim() || '—';
     const logist = document.getElementById('route-executor-responsible-logist')?.selectedOptions?.[0]?.textContent?.trim() || '—';
-    const variables = {
-      trip: snapshot.trip_label,
-      contractor: find('lab-contractor-form', 'name'), driver: find('lab-driver-form', 'full_name'),
-      plate: find('lab-vehicle-form', 'units[primary][plate_number]'), responsible: logist,
-      ready: pendingSend.ready.join(', '), author: config.author, missing: pendingSend.missing.join('\n') || 'нет'
-    };
+    const person=logist.replace(/\s*\([^)]*\)\s*$/,'').trim().split(/\s+/);
+    const variables = { trip: snapshot.trip_label,
+      vehicle_driver: [find('lab-vehicle-form', 'units[primary][plate_number]'),
+        `(${find('lab-driver-form', 'full_name').split(/\s+/)[0]})`].filter(value => value !== '—' && value !== '(—)').join(' ') || '—',
+      responsible: person[1] || person[0] || '—', missing: pendingSend.missing.join('\n') };
     let maxTemplate = event?.template || pendingSend.max;
-    if (!maxTemplate.includes('{{missing}}'))
-      maxTemplate = maxTemplate.trimEnd() + '\nДАННЫХ НЕХВАТАЕТ:\n{{missing}}';
     pendingSend.max = maxTemplate.replace(/\{\{\s*([a-z_]+)\s*\}\}/g, (_, key) => variables[key] || '—');
     pendingSend.fields.unshift({ name: 'Рейс', value: snapshot.trip_label });
     dialog.querySelector('[data-lab-email-subject]').textContent = pendingSend.subject;
@@ -749,10 +736,11 @@
     if (workflowBusy || draft.stage === 'final') return;
     workflowBusy = true;
     renderWorkflow();
-    document.querySelector('[data-lab-workflow-message]').textContent = 'Сохраняем черновик…';
+    showWorkflowMessage('Сохраняем карточку…');
     let failure = null;
+    let contractResult = null;
     try {
-      await persistDraft(captureDraft());
+      contractResult = await persistDraft(captureDraft());
       await refreshReviewList();
     } catch (error) {
       console.error('Route executor draft save failed', error);
@@ -760,7 +748,12 @@
     } finally {
       workflowBusy = false;
       renderWorkflow();
-      if (failure) document.querySelector('[data-lab-workflow-message]').textContent = `Не удалось сохранить черновик: ${failure.message}`;
+      showWorkflowMessage(failure ? `Не удалось сохранить карточку: ${failure.message}`
+        : contractResult?.contract_error ? `Карточка сохранена. ${contractResult.contract_error}`
+        : contractResult?.contract_status === 'unknown' ? 'Карточка сохранена. Доставка письма для договора не подтверждена; не отправляйте его повторно до проверки.'
+        : contractResult?.contract_status === 'sending' ? 'Карточка сохранена. Письмо для договора уже отправляется.'
+        : contractResult?.contract_status === 'accepted' ? 'Карточка сохранена. Письмо для договора принято почтовым сервером.'
+        : 'Карточка сохранена.');
     }
   }
 
@@ -812,12 +805,12 @@
     }
   }
 
-  async function resetWorkflow() {
-    if (draft.stage !== 'final' && !window.confirm('Начать новую карточку? Текущий черновик останется в этом браузере, но не будет открываться автоматически.')) return;
+  window.startNewRouteExecutorReview = function () {
     DRAFT_ID = crypto.randomUUID();
     localStorage.setItem(activeKey, DRAFT_ID);
+    sessionStorage.setItem('route-review-new-' + scope, DRAFT_ID);
     window.location.reload();
-  }
+  };
 
   function openReviewRow(row) {
     const id = row?.dataset.routeReviewCardId;
@@ -851,7 +844,7 @@
     if (!id || button.disabled) return;
     button.disabled = true;
     try {
-      if (!window.confirm('Повторно отправить актуальные данные карточки на info@plan-ex.ru и уведомление в тестовую группу MAX бота «Бэрримор»?')) return;
+      if (!window.confirm('Повторно отправить общее письмо и, если данные подрядчика готовы, отдельное письмо для договора на info@plan-ex.ru? Уведомление также уйдёт в тестовую группу MAX бота «Бэрримор».')) return;
       const data = new FormData();
       data.set('action', 'resend');
       data.set('card_id', id);
@@ -860,9 +853,10 @@
       });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось повторить письмо.');
+      const mailCount = result.contract_mail_status === 'accepted' ? 'Оба письма приняты' : 'Общее письмо принято';
       window.alert(result.max_status === 'sent'
-        ? 'Повторное письмо принято почтовым сервером, сообщение отправлено в тестовую группу MAX. Проверьте письмо с пометкой «повтор».'
-        : 'Повторное письмо принято почтовым сервером, но сообщение в тестовую группу MAX отправить не удалось. Сообщите администратору; повторное нажатие создаст ещё одно письмо.');
+        ? `${mailCount} почтовым сервером, сообщение отправлено в тестовую группу MAX. Проверьте письма с пометкой «повтор».`
+        : `${mailCount} почтовым сервером, но сообщение в тестовую группу MAX отправить не удалось. Сообщите администратору; повторное нажатие создаст ещё одно письмо.`);
     } catch (error) { window.alert(error.message); }
     finally { button.disabled = false; }
   }
@@ -901,7 +895,6 @@
   document.addEventListener('click', event => {
     if (event.target.closest?.('[data-lab-review-close]')) ensureWorkflowDialog().close();
     if (event.target.closest?.('[data-lab-review-confirm]')) confirmWorkflowSend();
-    if (event.target.closest?.('[data-lab-reset]')) resetWorkflow();
   }, true);
 
   initWorkflow();

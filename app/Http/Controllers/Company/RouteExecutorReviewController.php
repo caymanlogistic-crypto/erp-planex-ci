@@ -15,6 +15,8 @@ use App\Service\MaxMessagingService;
 use App\Service\RouteExecutorReviewEmail;
 use App\Service\RouteExecutorReviewArchive;
 use App\Service\RouteExecutorReviewCardService;
+use App\Service\RouteExecutorContractMailService;
+use App\Service\RouteExecutorReviewMaxMessage;
 use App\Service\RouteExecutorReviewPackage;
 use App\Service\RouteExecutorReviewRecipientService;
 use App\Service\RegulatedDataScopeService;
@@ -53,14 +55,17 @@ final class RouteExecutorReviewController
     { return '#'.(int)$row['business_id'].' '.(trim((string)($row['comment']??''))?:'Без наименования'); }
 
     private function selectedTrip(PDO $tenant,int $businessId): string
+    { return self::tripLabel($this->selectedTripData($tenant,$businessId)); }
+
+    private function selectedTripData(PDO $tenant,int $businessId): array
     {
         if ($businessId<=0) throw new DomainException('Выберите рейс перед отправкой.');
         $scope=RegulatedDataScopeService::condition('waste_trip','t.id','t.created_by_membership_id');
-        $q=$tenant->prepare("SELECT t.business_id,t.comment FROM waste_trips t WHERE t.business_id=? AND t.deleted_at IS NULL AND t.status NOT IN ('cancelled','archived') AND {$scope['sql']} LIMIT 1");
+        $q=$tenant->prepare("SELECT t.business_id,t.comment,t.legal_entity_code FROM waste_trips t WHERE t.business_id=? AND t.deleted_at IS NULL AND t.status NOT IN ('cancelled','archived') AND {$scope['sql']} LIMIT 1");
         $q->execute(array_merge([$businessId],$scope['params']));
         $row=$q->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new DomainException('Выбранный рейс недоступен. Выберите действующий рейс.');
-        return self::tripLabel($row);
+        return $row;
     }
 
     public function config(): void
@@ -112,7 +117,7 @@ final class RouteExecutorReviewController
             $sizeError=validateTotalUploadSize();if ($sizeError!=='') throw new DomainException($sizeError);
             $cardId=$this->cardId((string)($_POST['card_id']??''));
             $action=(string)($_POST['action']??'');
-            if ($action==='save') $this->saveCard($cards,$cardId,$accountId);
+            if ($action==='save') $this->saveCard($cards,$central,$tenant,(int)$company['id'],$cardId,$accountId);
             if ($action==='delete') { $cards->delete($cardId);$this->json(['ok'=>true]); }
             if ($action==='resend') $this->resendCard($cards,$central,$tenant,(int)$company['id'],$accountId,$actorName,$cardId);
             $stage=(string)($_POST['stage']??'');
@@ -126,8 +131,14 @@ final class RouteExecutorReviewController
             $tripLabel=$this->selectedTrip($tenant,(int)$tripId);
             $package=RouteExecutorReviewPackage::inspect($snapshot,$cards->storedFiles($card),true);
             if (!$package['ready']) throw new DomainException('Пока недостаточно данных ни для одного действия. Сохраните черновик.');
+            if ($stage==='partial' && !array_intersect($package['ready'],['Обучение водителя','Регистрация транспорта'])) {
+                throw new DomainException('Данные подрядчика передаются отдельным письмом. Для общего письма нужны данные водителя или транспорта.');
+            }
             if ($stage==='partial' && $package['full']) throw new DomainException('Весь комплект уже готов. Отправьте его одним письмом.');
             if ($stage==='final' && !$package['full']) throw new DomainException('Для второго письма нужны все поля и обязательные файлы.');
+            if ($stage==='final' && (new RouteExecutorContractMailService($tenant))->status($cardId)!=='accepted') {
+                throw new DomainException('Письмо для заключения договора не подтверждено. Сохраните карточку и проверьте его отправку.');
+            }
             $membershipId=(int)($snapshot['logist']??0);
             $logist=$this->responsibleLogist($central,(int)$company['id'],$membershipId);
             $settings=(new RouteExecutorReviewRecipientService($central,(int)$company['id']))->read();
@@ -145,9 +156,10 @@ final class RouteExecutorReviewController
             $messageId='<route-executor-'.str_replace('-','',$cardId).'-'.$stage.'@'.$domain.'>';
             $mail=RouteExecutorReviewEmail::build($package,$stage==='partial',$tripLabel);
             $subject=$tripLabel.' — исполнитель рейса — '.($stage==='partial'?'первичные данные':'полный комплект');
+            $generalFiles=self::filesFor($package['attachments'],'general');
             $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
                 'subject'=>$subject,'text'=>$mail['text'],'html'=>$mail['html'],
-                'attachments'=>$package['attachments'] ? [RouteExecutorReviewArchive::build($package['attachments'],$tripLabel)] : []];
+                'attachments'=>$generalFiles ? [RouteExecutorReviewArchive::build($generalFiles,$tripLabel,$package)] : []];
             DocumentMailMime::build($message);
             $configuredEvent='route_executor.'.$stage;
             $rule=null;
@@ -200,12 +212,8 @@ final class RouteExecutorReviewController
             if ($mailStatus==='accepted') {
                 try {
                     $tenant->beginTransaction();
-                    $deliveryId=$max->enqueue('route_executor.'.$stage,$cardId.':'.$stage,[
-                        'trip'=>$tripLabel,
-                        'contractor'=>$package['contractor']?:'—','driver'=>$package['driver']?:'—','plate'=>$package['plate']?:'—',
-                        'responsible'=>$logist['name'],'ready'=>implode(', ',$package['ready']),'author'=>$actorName,
-                        'missing'=>implode("\n",$package['missing']) ?: 'нет',
-                    ],$accountId);
+                    $deliveryId=$max->enqueue('route_executor.'.$stage,$cardId.':'.$stage,
+                        RouteExecutorReviewMaxMessage::values($package,$tripLabel,$logist['name']),$accountId);
                     $tenant->commit();
                     if ($deliveryId) $maxStatus=(string)$max->dispatch($deliveryId)['status'];
                 } catch (Throwable $maxError) {
@@ -256,11 +264,8 @@ final class RouteExecutorReviewController
             }
             $template=(string)($rule['message_template']??MaxEventCatalog::event($event)['template']);
             $format=MaxEventCatalog::systemFormat($event,(string)($rule['message_format']??'markdown'));
-            $maxText="Повторная отправка для проверки доставки\n".MaxEventCatalog::render($event,$template,$format,[
-                'trip'=>$tripLabel,'contractor'=>$package['contractor']?:'—','driver'=>$package['driver']?:'—',
-                'plate'=>$package['plate']?:'—','responsible'=>$logist['name'],'ready'=>implode(', ',$package['ready']),
-                'author'=>$actorName,'missing'=>implode("\n",$package['missing']) ?: 'нет',
-            ]);
+            $maxText="🔁 Повтор письма для проверки доставки\n".MaxEventCatalog::render($event,$template,$format,
+                RouteExecutorReviewMaxMessage::values($package,$tripLabel,$logist['name']));
             if (mb_strlen($maxText)>4000) throw new DomainException('Сообщение MAX слишком длинное. Повторная отправка не начата.');
             $recipients=['info@plan-ex.ru'];
             $profiles=new EmployeeMailProfileService($central,$companyId);
@@ -272,12 +277,29 @@ final class RouteExecutorReviewController
             $domain=substr(strrchr((string)$sender['email'],'@')?:'',1);
             $messageId='<route-executor-'.str_replace('-','',$cardId).'-'.$stage.'-retry-'.bin2hex(random_bytes(8)).'@'.$domain.'>';
             $mail=RouteExecutorReviewEmail::build($package,$stage==='partial',$tripLabel);
+            $generalFiles=self::filesFor($package['attachments'],'general');
             $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
                 'subject'=>$tripLabel.' — исполнитель рейса — '.($stage==='partial'?'первичные данные':'полный комплект').' — повтор',
                 'text'=>$mail['text'],'html'=>$mail['html'],
-                'attachments'=>$package['attachments'] ? [RouteExecutorReviewArchive::build($package['attachments'],$tripLabel)] : []];
+                'attachments'=>$generalFiles ? [RouteExecutorReviewArchive::build($generalFiles,$tripLabel,$package)] : []];
             DocumentMailMime::build($message);
+            $contractMessage=null;
+            if ($package['contract_ready']) {
+                $contractMail=RouteExecutorReviewEmail::build($package,false,$tripLabel,true);
+                $contractFiles=self::filesFor($package['attachments'],'contract');
+                $contractMessage=['from'=>(string)$sender['email'],'to'=>$recipients,
+                    'message_id'=>'<route-executor-contract-'.str_replace('-','',$cardId).'-retry-'.bin2hex(random_bytes(8)).'@'.$domain.'>',
+                    'subject'=>$tripLabel.' — Данные для заключения договора — повтор',
+                    'text'=>$contractMail['text'],'html'=>$contractMail['html'],
+                    'attachments'=>$contractFiles?[RouteExecutorReviewArchive::build($contractFiles,$tripLabel,$package)]:[]];
+                DocumentMailMime::build($contractMessage);
+            }
             $mailStatus=(new DocumentMailTransport())->send($credentials,$message);
+            $contractStatus='not_ready';
+            if ($mailStatus==='accepted' && $contractMessage!==null) {
+                try { $contractStatus=(new DocumentMailTransport())->send($credentials,$contractMessage); }
+                catch (Throwable $error) { error_log('route executor retry contract mail: '.$error->getMessage());$contractStatus='unknown'; }
+            }
             $maxStatus='not_sent';
             if ($mailStatus==='accepted') {
                 try {
@@ -290,16 +312,17 @@ final class RouteExecutorReviewController
                     $maxStatus='failed';
                 }
             }
-            $result=['ok'=>$mailStatus==='accepted','mail_status'=>$mailStatus,'recipients'=>$recipients,
-                'max_status'=>$maxStatus,
-                'error'=>$mailStatus==='accepted'?null:'Почтовый сервер не подтвердил повторную отправку. Не нажимайте повторно до проверки почты.'];
+            $result=['ok'=>$mailStatus==='accepted' && in_array($contractStatus,['accepted','not_ready'],true),
+                'mail_status'=>$mailStatus,'contract_mail_status'=>$contractStatus,'recipients'=>$recipients,'max_status'=>$maxStatus,
+                'error'=>$mailStatus!=='accepted'?'Почтовый сервер не подтвердил повторную отправку. Не нажимайте повторно до проверки почты.'
+                    :($contractStatus==='not_ready'?null:($contractStatus==='accepted'?null:'Общее письмо принято, но повтор письма о договоре не подтверждён. Не нажимайте повторно до проверки почты.'))];
         } finally {
             $unlock=$tenant->prepare('SELECT RELEASE_LOCK(?)');$unlock->execute([$lockName]);
         }
         $this->json($result);
     }
 
-    private function saveCard(RouteExecutorReviewCardService $cards,string $cardId,int $accountId): never
+    private function saveCard(RouteExecutorReviewCardService $cards,PDO $central,PDO $tenant,int $companyId,string $cardId,int $accountId): never
     {
         $raw=(string)($_POST['snapshot']??'');
         if (strlen($raw)>262144) throw new DomainException('Карточка слишком большая.');
@@ -308,7 +331,69 @@ final class RouteExecutorReviewController
         $keys=$_POST['attachment_keys']??[];
         if (!is_array($keys)) throw new DomainException('Некорректные вложения.');
         $revision=$cards->save($cardId,$accountId,(int)($_POST['revision']??0),$snapshot,$_FILES['attachments']??[],array_values($keys));
-        $this->json(['ok'=>true,'revision'=>$revision]);
+        $contractStatus='not_ready';$contractError=null;
+        try {
+            $card=$cards->load($cardId);
+            if ($card) $contractStatus=$this->sendContractIfReady($cards,$central,$tenant,$companyId,$accountId,$card);
+        } catch (Throwable $error) {
+            error_log('route executor contract mail: '.$error->getMessage());
+            $contractStatus='failed';$contractError=$error instanceof DomainException?$error->getMessage():'Не удалось отправить письмо для договора. Карточка сохранена.';
+        }
+        $this->json(['ok'=>true,'revision'=>$revision,'contract_status'=>$contractStatus,'contract_error'=>$contractError]);
+    }
+
+    private static function filesFor(array $attachments,string $kind): array
+    {
+        return array_values(array_filter($attachments,static fn(array $file):bool=>$kind==='contract'
+            ? str_starts_with((string)$file['key'],'lab-contractor-form|')
+            : !str_starts_with((string)$file['key'],'lab-contractor-form|')));
+    }
+
+    private function sendContractIfReady(RouteExecutorReviewCardService $cards,PDO $central,PDO $tenant,int $companyId,int $accountId,array $card): string
+    {
+        $snapshot=$card['snapshot'];
+        $tripId=(int)($snapshot['trip_id']??0);
+        if ($tripId<=0 || (int)($snapshot['logist']??0)<=0) return 'waiting_assignment';
+        $package=RouteExecutorReviewPackage::inspect($snapshot,$cards->storedFiles($card),true);
+        if (!$package['contract_ready']) return 'not_ready';
+        $log=new RouteExecutorContractMailService($tenant);
+        $existing=$log->status((string)$card['card_id']);
+        if ($existing==='accepted') return 'already_sent';
+        if (in_array($existing,['sending','unknown'],true)) return $existing;
+        $trip=$this->selectedTripData($tenant,$tripId);
+        $code=(string)($trip['legal_entity_code']??'');
+        $destination=RouteExecutorContractMailService::destination($code);
+        $login=$destination['login'];
+        $q=$central->prepare("SELECT a.id FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id WHERE m.company_id=? AND m.status='active' AND a.status='active' AND a.login=? LIMIT 2");
+        $q->execute([$companyId,$login]);$ids=$q->fetchAll(PDO::FETCH_COLUMN);
+        if (count($ids)!==1) throw new DomainException('Получатель письма для договора не найден среди действующих сотрудников.');
+        $profiles=new EmployeeMailProfileService($central,$companyId);
+        $entityCode=$destination['mail_entity'];
+        $q=$central->prepare('SELECT id FROM employee_mail_legal_entities WHERE company_id=? AND code=? LIMIT 1');
+        $q->execute([$companyId,$entityCode]);$entityId=(int)$q->fetchColumn();
+        if ($entityId<=0) throw new DomainException('Рабочая почта для юридического лица рейса не настроена.');
+        $recipient=$profiles->resolveRecipient((int)$ids[0],$entityId)['email'];
+        $sender=$profiles->defaultSender($accountId);
+        $resolved=$profiles->resolve($accountId,(int)$sender['legal_entity_id']);
+        $credentials=$profiles->credentials($accountId,(int)$sender['legal_entity_id']);
+        if ((int)$credentials['id']!==(int)$sender['id'] || (int)$resolved['profile_id']!==(int)$sender['id']) throw new DomainException('Рабочий ящик изменился. Обновите страницу.');
+        $domain=substr(strrchr((string)$sender['email'],'@')?:'',1);
+        $messageId='<route-executor-contract-'.str_replace('-','',(string)$card['card_id']).'-'.bin2hex(random_bytes(6)).'@'.$domain.'>';
+        $tripLabel=self::tripLabel($trip);
+        $mail=RouteExecutorReviewEmail::build($package,false,$tripLabel,true);
+        $files=self::filesFor($package['attachments'],'contract');
+        $message=['from'=>(string)$sender['email'],'to'=>[$recipient],'message_id'=>$messageId,
+            'subject'=>$tripLabel.' — Данные для заключения договора','text'=>$mail['text'],'html'=>$mail['html'],
+            'attachments'=>$files?[RouteExecutorReviewArchive::build($files,$tripLabel,$package)]:[]];
+        DocumentMailMime::build($message);
+        if (!$log->reserve((string)$card['card_id'],$accountId,$tripId,$recipient,$messageId)) {
+            $status=$log->status((string)$card['card_id']);
+            return $status==='accepted'?'already_sent':($status??'unknown');
+        }
+        try { $status=(new DocumentMailTransport())->send($credentials,$message); }
+        catch (Throwable $error) { $log->finish((string)$card['card_id'],$messageId,'unknown');throw $error; }
+        $log->finish((string)$card['card_id'],$messageId,$status);
+        return $status;
     }
 
     private function downloadCardFile(): never
@@ -358,6 +443,7 @@ final class RouteExecutorReviewController
     {
         $q=$tenant->query("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema=DATABASE() AND table_name='route_executor_review_sends'");
         if ((int)$q->fetchColumn()!==1) throw new DomainException('Передача данных ожидает обновления структуры базы данных (151).');
+        (new RouteExecutorContractMailService($tenant))->assertReady();
     }
 
     private function cardId(string $id): string

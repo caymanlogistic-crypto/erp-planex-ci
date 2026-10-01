@@ -11,6 +11,8 @@ require_once base_path('app/Service/RouteExecutorReviewPackage.php');
 require_once base_path('app/Service/RouteExecutorReviewCardService.php');
 require_once base_path('app/Service/RouteExecutorReviewArchive.php');
 require_once base_path('app/Service/RouteExecutorReviewEmail.php');
+require_once base_path('app/Service/RouteExecutorReviewMaxMessage.php');
+require_once base_path('app/Service/RouteExecutorContractMailService.php');
 require_once base_path('app/Http/Controllers/Company/RouteExecutorReviewController.php');
 
 $controller = new \App\Http\Controllers\Company\RouteExecutorController($config, $db);
