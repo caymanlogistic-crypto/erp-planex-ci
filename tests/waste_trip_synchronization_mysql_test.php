@@ -101,6 +101,26 @@ try {
     check($trip['planned_start_date_from']==='2026-09-01'&&$trip['planned_start_date_to']===null,'Open range');
     check((int)$pdo->query("SELECT membership_id FROM users WHERE id={$trip['responsible_user_id']}")->fetchColumn()===10,'Central membership projection, not legacy numeric ID');
     check((int)$pdo->query('SELECT COUNT(*) FROM waste_trip_requests')->fetchColumn()===3,'Duplicate membership retained');
+    $registeredLink=(int)$pdo->query("SELECT id FROM waste_trip_requests WHERE waste_trip_id=$id")->fetchColumn();
+    $pdo->prepare("INSERT INTO waste_trip_registration_journal(waste_trip_id,waste_trip_request_id,event_kind,action_text,actor_login) VALUES(?,?,'initial','Fixture registration','owner')")
+        ->execute([$id,$registeredLink]);
+    $registeredRefresh=$run();
+    check($registeredRefresh['failed']===0,'Existing registered request links synchronize: '.json_encode($registeredRefresh,JSON_UNESCAPED_UNICODE));
+    check((int)$pdo->query("SELECT id FROM waste_trip_requests WHERE waste_trip_id=$id")->fetchColumn()===$registeredLink,'Registration journal keeps its request link identity');
+    $pdo->exec("INSERT INTO feo_requests(zayavka_id,mass_netto,gruzopoluchatel) VALUES('700003','1.0000','Unknown'); UPDATE fixture_flights SET zayavki_ids='700003' WHERE id=226");
+    $registeredRemoval=$run();
+    check($registeredRemoval['failed']===1 && str_contains(implode(' ', $registeredRemoval['errors']),'Нельзя убрать заявку из рейса: по ней уже есть записи в журнале регистрации. Код ошибки: WT-'),'Protected registration failure explains the cause alongside its code');
+    $pdo->exec("UPDATE fixture_flights SET zayavki_ids='700001' WHERE id=226");
+    check($run()['failed']===0,'Restored registered request links synchronize');
+    check(count(Trips::fetchTrips($pdo,['company'=>'mg_logistic']))===1,'MG company filter');
+    check(count(Trips::fetchTrips($pdo,['company'=>'planex']))===0,'Planex company filter excludes MG');
+    check(count(Trips::fetchTrips($pdo,['company'=>'invalid']))===2,'Unknown company filter falls back to all trips');
+    $pdo->exec("INSERT INTO fixture_drivers(id,full_name,vehicle_make_plate) VALUES(81,'Другой Алексей','Hyundai С894НО193'); UPDATE fixture_flights SET driver_id=81,legal_entity_code='planex' WHERE id=227");
+    $unmatchedRefresh=$run();
+    check($unmatchedRefresh['failed']===0 && $unmatchedRefresh['warnings']===[],'Unmatched executor does not create repetitive sync notices');
+    check(count(Trips::fetchTrips($pdo,['company'=>'planex']))===1,'Planex company filter selects its flights');
+    check(count(Trips::fetchTrips($pdo,['company'=>'mg_logistic']))===1,'MG company filter excludes Planex flights');
+    $pdo->exec('UPDATE fixture_flights SET driver_id=NULL WHERE id=227');
     $filtered=Trips::fetchTrips($pdo,['q'=>'700002']);
     check(count($filtered)===1&&(int)$filtered[0]['request_count']===2&&(float)$filtered[0]['snapshot_total_mass_kg']===4000.0,'Search by one request keeps full trip count and mass');
     $pdo->exec("INSERT INTO contractors(id,name,inn,status) VALUES(2,'Manual carrier','7700000002','active');

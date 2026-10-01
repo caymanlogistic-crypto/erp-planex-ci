@@ -8,6 +8,7 @@ $openTripId=max(0,(int)($_GET['open_trip']??0));
 $openEditId=max(0,(int)($_GET['open_edit']??0));
 $oldResponsibleMembership=(int)($old['responsible_membership_id']??($currentMembershipId??0));
 $selectedStatus=WasteTripService::displayStatus(trim((string)($_GET['status']??''))); $searchQuery=trim((string)($_GET['q']??''));
+$selectedCompany=in_array((string)($_GET['company']??''),['mg_logistic','planex'],true)?(string)$_GET['company']:'';
 $selectedSort=in_array((string)($_GET['sort']??''),['id','status','manager'],true)?(string)$_GET['sort']:'status';
 $fmtDate=static fn($v):string=>trim((string)$v)!==''?ui_date((string)$v):'—';
 $fmtKg=static fn($v):string=>number_format((float)$v,0,',',' ');
@@ -36,7 +37,7 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
 <?php endif;?>
 <?php if(!empty($syncResult)):?><div class="notice">Синхронизация: создано <?= (int)$syncResult['created']?>, обновлено <?= (int)$syncResult['updated']?>, удалено <?= (int)$syncResult['deleted']?>, ошибок <?= (int)$syncResult['failed']?>.</div><?php foreach(array_merge($syncResult['warnings'],$syncResult['errors']) as $message):?><div class="notice warn"><?=e($message)?></div><?php endforeach;endif;?>
 <?php if($formSuccess):?><div class="notice success"><?=e($formSuccess)?></div><?php endif;?><?php if($formError):?><div class="notice warn"><?=e($formError)?></div><?php endif;?>
-<form method="get" action="<?=app_url('/company/trips/departures')?>" class="table-toolbar" style="margin-bottom:12px"><div class="toolbar-right" style="margin-left:0;width:100%"><select name="status" class="toolbar-select"><option value="">Все статусы</option><?php foreach(WasteTripService::STATUS_OPTIONS as $v=>$label):?><option value="<?=e($v)?>" <?=$selectedStatus===$v?'selected':''?>><?=e($label)?></option><?php endforeach;?></select><input name="q" class="toolbar-search" value="<?=e($searchQuery)?>" placeholder="ID, описание, заказчик, заявка, исполнитель, менеджер"><select name="sort" class="toolbar-select" aria-label="Сортировка рейсов"><option value="id" <?=$selectedSort==='id'?'selected':''?>>По ID (сначала новые)</option><option value="status" <?=$selectedSort==='status'?'selected':''?>>По статусу</option><option value="manager" <?=$selectedSort==='manager'?'selected':''?>>По менеджеру и статусу</option></select><button class="btn btn-secondary" type="submit">Найти</button><?php if($selectedStatus!==''||$searchQuery!==''||$selectedSort!=='status'):?><a class="btn btn-ghost" href="<?=app_url('/company/trips/departures')?>">Сбросить</a><?php endif;?></div></form>
+<form method="get" action="<?=app_url('/company/trips/departures')?>" class="table-toolbar waste-trip-filter" style="margin-bottom:12px"><div class="toolbar-right" style="margin-left:0;width:100%"><select name="status" class="toolbar-select"><option value="">Все статусы</option><?php foreach(WasteTripService::STATUS_OPTIONS as $v=>$label):?><option value="<?=e($v)?>" <?=$selectedStatus===$v?'selected':''?>><?=e($label)?></option><?php endforeach;?></select><select name="company" class="toolbar-select" aria-label="Компания рейса"><option value="">Все рейсы</option><option value="mg_logistic" <?=$selectedCompany==='mg_logistic'?'selected':''?>>МГ ЛОГИСТИК</option><option value="planex" <?=$selectedCompany==='planex'?'selected':''?>>ПЛАНЭКС</option></select><input name="q" class="toolbar-search" value="<?=e($searchQuery)?>" placeholder="ID, описание, заказчик, заявка, исполнитель, менеджер"><select name="sort" class="toolbar-select" aria-label="Сортировка рейсов"><option value="id" <?=$selectedSort==='id'?'selected':''?>>По ID (сначала новые)</option><option value="status" <?=$selectedSort==='status'?'selected':''?>>По статусу</option><option value="manager" <?=$selectedSort==='manager'?'selected':''?>>По менеджеру и статусу</option></select><button class="btn btn-secondary" type="submit">Найти</button><?php if($selectedStatus!==''||$selectedCompany!==''||$searchQuery!==''||$selectedSort!=='status'):?><a class="btn btn-ghost" href="<?=app_url('/company/trips/departures')?>">Сбросить</a><?php endif;?></div></form>
 <?php if($trips===[]):?><div class="panel"><div class="panel-body"><div class="empty-state"><p class="empty-title">Рейсов пока нет.</p></div></div></div><?php else:?>
 <div class="table-card table-card--standard" data-erp-grid><div class="table-toolbar"><div class="found-label">Найдено: <b><?=count($trips)?></b></div></div>
 <div class="table-scroll waste-table-scroll"><table class="table waste-registry"><thead><tr><th>ID</th><th>ОПИСАНИЕ РЕЙСА</th><th>СКЛАД</th><th>НАЧАЛО РЕЙСА</th><th>ОКОНЧАНИЕ РЕЙСА</th><th>СТАТУС</th><th>ПОДРЯД. / ВОД.</th><th>ЗАЯВКИ</th><th>ВЕС, КГ</th><th>ГЕН. ЗАКАЗЧИК</th><th>ПРОДАЖА</th><th>СЕБЕС, РУБ</th><th>МЕНЕДЖЕР</th></tr></thead><tbody>
@@ -46,7 +47,6 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
     $endPlanned=empty($trip['actual_end_date']) && !empty($trip['planned_finish_date']);
     $startLabel=!empty($trip['actual_start_date'])?$fmtDate($trip['actual_start_date']):$plan;
     $endLabel=$fmtDate(($trip['actual_end_date']??null)?:($trip['planned_finish_date']??null));
-    $unmatched=Registry::executorUnmatched($trip);
     $drivers=Registry::drivers((string)($trip['executor_driver_names']??''));
     $vehicle=trim((string)($trip['executor_vehicle_label']??''));
     $customerPayments=$isFinanceRealm?(array)($trip['customer_payments']??[]):[];
@@ -60,11 +60,11 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
     <td class="registry-date <?=$startPlanned?'registry-date-planned':''?>"><span class="registry-date-value"><?=e($startLabel)?></span><?php if($startPlanned):?><span class="registry-date-note">(плановая)</span><?php endif;?></td>
     <td class="registry-date <?=$endPlanned?'registry-date-planned':''?>"><span class="registry-date-value"><?=e($endLabel)?></span><?php if($endPlanned):?><span class="registry-date-note">(плановая)</span><?php endif;?></td>
     <td class="waste-status <?=e(WasteTripService::statusCellClass((string)$trip['status']))?>"><?=e(WasteTripService::statusLabel((string)$trip['status']))?></td>
-    <td class="registry-executor <?=$unmatched?'waste-executor-unmatched':''?>"><?php if($unmatched):?>не нашлось соответствия с новой базой<?php else:?>
+    <td class="registry-executor">
         <span class="registry-executor-line"><?=e(trim((string)($trip['executor_contractor_name']??''))?:'—')?></span>
         <?php if($drivers!==''):?><span class="registry-executor-line registry-executor-secondary"><?=e($drivers)?></span><?php endif;?>
         <?php if($vehicle!==''):?><span class="registry-executor-line registry-executor-secondary"><?=e($vehicle)?></span><?php endif;?>
-    <?php endif;?></td>
+    </td>
     <td class="waste-count"><?=(int)($trip['request_count']??0)?></td>
     <td class="waste-weight"><?=e($fmtKg($trip['snapshot_total_mass_kg']??0))?></td>
     <?php foreach([$generalPayments,$customerPayments,$carrierPayments] as $sideIndex=>$payments):
