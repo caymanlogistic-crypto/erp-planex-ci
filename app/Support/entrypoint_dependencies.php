@@ -51,6 +51,7 @@ require_once base_path('app/Service/LinearTripDocumentUploadService.php');
 require_once base_path('app/Service/LinearTripEditSaveService.php');
 require_once base_path('app/Service/BankStatementXlsxParser.php');
 require_once base_path('app/Service/BankFinanceService.php');
+require_once base_path('app/Service/BankStatementFileStore.php');
 require_once base_path('app/Service/HardenedBankStatementImapImporter.php');
 require_once base_path('app/Service/BankStatementSettingsService.php');
 require_once base_path('app/Service/CompanyDeletionService.php');
