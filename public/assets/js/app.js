@@ -3154,6 +3154,10 @@ window.initOwnerCreateForm = window.initPasswordControls;
 
     function openCreateModal() {
         if (!createModal) return;
+        if (typeof window.startNewRouteExecutorReview === 'function') {
+            window.startNewRouteExecutorReview();
+            return;
+        }
         if (typeof window.openCombinedRouteExecutorCreate === 'function') {
             window.openCombinedRouteExecutorCreate();
             return;

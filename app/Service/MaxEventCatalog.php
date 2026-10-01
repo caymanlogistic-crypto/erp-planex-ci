@@ -53,25 +53,21 @@ final class MaxEventCatalog
     {
         $variables = [
             'trip'=>['Номер и наименование рейса','#123 Перевозка отходов'],
-            'contractor'=>['Подрядчик','ИП Иванов Иван Иванович'],
-            'driver'=>['Водитель','Петров Пётр Петрович'],
-            'plate'=>['Госномер','А123ВС77'],
-            'responsible'=>['Ответственный логист','Сидоров Сергей'],
-            'ready'=>['Готовые действия','Подписание договора'],
-            'author'=>['Отправитель','Иванова Анна'],
-            'missing'=>['Недостающие данные',"Водитель: СНИЛС\nФайл: Паспорт водителя"],
+            'vehicle_driver'=>['Госномер и фамилия водителя','А123ВС77 (Петров)'],
+            'responsible'=>['Имя логиста','Карина'],
+            'missing'=>['Недостающие данные по группам',"**• Водитель:** СНИЛС\n**• Файлы:** Паспорт водителя"],
         ];
         return [
             'route_executor.partial'=>[
                 'title'=>'Исполнитель рейса — первичные данные',
                 'description'=>'После первой передачи неполных данных исполнителя рейса. Получатели письма задаются в «Ключи и сервисы».',
-                'template'=>"Первичные данные исполнителя рейса\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}\nЭто первичные данные. Ожидайте полный комплект вторым письмом.\nДАННЫХ НЕХВАТАЕТ:\n{{missing}}",
+                'template'=>"🚚 Внесены частичные данные\n**{{trip}}**\n{{vehicle_driver}}\n\n**Не хватает для полного комплекта**\n{{missing}}\nЛогист: {{responsible}}",
                 'variables'=>$variables,
             ],
             'route_executor.full'=>[
                 'title'=>'Исполнитель рейса — полный комплект',
                 'description'=>'После передачи полного комплекта данных исполнителя рейса.',
-                'template'=>"Полный комплект данных исполнителя рейса\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}\nДАННЫХ НЕХВАТАЕТ:\n{{missing}}",
+                'template'=>"🚛 ПОЛНЫЙ КОМПЛЕКТ\n**{{trip}}**\n{{vehicle_driver}}\nЛогист: {{responsible}}",
                 'variables'=>$variables,
             ],
         ];
@@ -149,14 +145,7 @@ final class MaxEventCatalog
     public static function currentTemplate(string $key, string $stored): string
     {
         if (in_array($key,['route_executor.partial','route_executor.full'],true)) {
-            if (!str_contains($stored,'{{trip}}')) {
-                $tripLine="**Рейс {{trip}}**\n";
-                $contractor=strpos($stored,'Подрядчик:');
-                $newline=strpos($stored,"\n");
-                $stored=$contractor!==false?substr_replace($stored,$tripLine,$contractor,0)
-                    :($newline===false?$stored."\n".$tripLine:substr_replace($stored,$tripLine,$newline+1,0));
-            }
-            if (!str_contains($stored,'{{missing}}')) $stored=rtrim($stored)."\nДАННЫХ НЕХВАТАЕТ:\n{{missing}}";
+            if ($stored==='' || !str_contains($stored,'{{vehicle_driver}}') || str_contains($stored,'{{contractor}}') || str_contains($stored,'{{ready}}')) return self::event($key)['template'];
             return $stored;
         }
         if ($key === 'feo.placement.block_created') {
@@ -206,11 +195,12 @@ final class MaxEventCatalog
         if (trim($template) === '' || mb_strlen($template) > 4000) throw new RuntimeException('Шаблон должен содержать от 1 до 4000 символов.');
         $literal = preg_replace('/\{\{\s*([^{}]+?)\s*\}\}/u', '', $template);
         if ($literal === null || str_contains($literal, '{{') || str_contains($literal, '}}')) throw new RuntimeException('Проверьте скобки переменных: {{название}}.');
-        $text = preg_replace_callback('/\{\{\s*([^{}]+?)\s*\}\}/u', static function (array $m) use ($event, $values, $format): string {
+        $text = preg_replace_callback('/\{\{\s*([^{}]+?)\s*\}\}/u', static function (array $m) use ($event, $values, $format, $key): string {
             $name = trim($m[1]);
             if (!isset($event['variables'][$name])) throw new RuntimeException('Неизвестная переменная: {{' . $name . '}}.');
             if (!array_key_exists($name, $values) || !is_scalar($values[$name])) throw new RuntimeException('Нет значения переменной: ' . $name . '.');
             $value = (string)$values[$name];
+            if (in_array($key,['route_executor.partial','route_executor.full'],true) && $name==='missing') return $value;
             if ($format === 'html') return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             if ($format === 'markdown') return preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $value);
             return $value;

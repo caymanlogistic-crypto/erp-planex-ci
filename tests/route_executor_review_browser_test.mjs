@@ -23,7 +23,7 @@ try {
     if (path.endsWith('/review/status')) return route.fulfill({ json: { ok: true, stage: 'new', card: null } });
     if (path.endsWith('/review/config') && new URL(route.request().url()).searchParams.has('trip_search')) return route.fulfill({ json: { ok: true, trips: [{ id: 123, label: '#123 Вывоз отходов' }] } });
     if (path.endsWith('/review/config')) return route.fulfill({ json: { ok: true, sender: 'sender@example.test', author: 'Отправитель', recipients: ['info@plan-ex.ru'], send_responsible_logist: false,
-      max_events: { 'route_executor.partial': { enabled: true, chat_config_id: 1, template: 'Первичные данные\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nОжидайте полный комплект вторым письмом.' } } } });
+      max_events: { 'route_executor.partial': { enabled: true, chat_config_id: 1, template: '🚚 Внесены частичные данные\n**{{trip}}**\n{{vehicle_driver}}\n\n**Не хватает для полного комплекта**\n{{missing}}\nЛогист: {{responsible}}' } } } });
     if (path.endsWith('/review/send')) {
       const request = { body: route.request().postData(), csrf: route.request().headers()['x-csrf-token'] };
       sends.push(request);
@@ -31,10 +31,10 @@ try {
         currentCardId = request.body.match(/name="card_id"\r?\n\r?\n([a-f0-9-]{36})/)?.[1] || currentCardId;
       if (request.body.includes('name="action"') && request.body.includes('delete')) currentCardId = null;
       if (request.body.includes('name="action"') && request.body.includes('resend'))
-        return route.fulfill({ json: { ok: true, mail_status: 'accepted', max_status: 'sent', recipients: ['info@plan-ex.ru'] } });
+        return route.fulfill({ json: { ok: true, mail_status: 'accepted', contract_mail_status: 'not_ready', max_status: 'sent', recipients: ['info@plan-ex.ru'] } });
       if (!request.body.includes('name="action"')) currentStage = 'partial';
       return route.fulfill({ json: request.body.includes('name="action"')
-        ? { ok: true, revision: sends.filter(item => item.body.includes('name="action"') && item.body.includes('save')).length }
+        ? { ok: true, revision: sends.filter(item => item.body.includes('name="action"') && item.body.includes('save')).length, contract_status: 'not_ready' }
         : { ok: true, stage: 'partial', mail_status: 'accepted', max_status: 'sent' } });
     }
     const row = currentCardId ? `<tr class="route-review-row" data-route-review-card-id="${currentCardId}" data-erp-pin="1" tabindex="0"><td>ИП Тестовый</td><td>${currentStage === 'partial' ? `<button data-route-review-resend="${currentCardId}">Повторить письмо</button>` : ''}<button data-route-review-delete="${currentCardId}">Удалить</button></td></tr>` : '';
@@ -52,7 +52,7 @@ try {
             <span class="route-readiness-item" data-readiness-key="vehicle" data-state="pending">Для регистрации транспорта</span>
           </div>
         </div>
-        <div id="route-executor-create-modal-content">
+        <div id="route-executor-create-modal-content"><div data-combined-feedback class="is-hidden"></div>
           <select id="route-executor-responsible-logist"><option value="">—</option><option value="12">Иван</option></select>
           <input id="route-executor-trip-search" list="route-executor-trip-options"><datalist id="route-executor-trip-options"></datalist><input id="route-executor-trip-id" type="hidden">
           <form id="lab-contractor-form"><div class="entity-form-main"><div class="field"><label class="field-label">Наименование</label><input name="name"></div><input name="inn"><select name="contractor_type"><option value="">—</option><option value="individual">ИП</option></select><input name="kpp"><input name="ogrn"><input name="director_full_name"><input name="director_position"><textarea name="legal_address"></textarea></div></form>
@@ -73,7 +73,9 @@ try {
   await modal.locator('#lab-driver-form [name="full_name"]').fill('Тестовый Водитель Тестович');
   await modal.locator('[data-source-create-submit]').click();
   await page.waitForTimeout(300);
-  assert.match(await modal.locator('[data-lab-workflow-message]').innerText(), /Черновик сохранён/);
+  assert.equal(await modal.locator('[data-lab-workflow-status]').count(), 0, 'Old status block is removed');
+  assert.equal(await modal.locator('[data-lab-reset]').count(), 0, 'New card button is removed from modal');
+  assert.match(await modal.locator('[data-combined-feedback]').innerText(), /Карточка сохранена/);
   assert.equal(await page.locator('[data-route-review-card-id]').count(), 1, 'Shared yellow row appears after saving');
   assert.equal(await page.locator('[data-route-review-card-id]').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(255, 241, 184)');
   await modal.locator('#lab-driver-form [name="snils"]').fill('123-456-789 00');
@@ -93,16 +95,17 @@ try {
   assert.match(await dialog.locator('[data-lab-email-subject]').innerText(), /#123 Вывоз отходов/);
   assert.match(await dialog.locator('[data-lab-email-fields]').innerText(), /#123 Вывоз отходов/);
   assert.match(await dialog.locator('[data-lab-email-fields]').innerText(), /Водитель: Доп контакты/);
-  assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /\*\*Рейс #123 Вывоз отходов\*\*/);
-  assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /Ожидайте полный комплект вторым письмом/);
-  assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /ДАННЫХ НЕХВАТАЕТ:/);
+  assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /🚚 Внесены частичные данные/);
+  assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /\*\*#123 Вывоз отходов\*\*/);
+  assert.match(await dialog.locator('[data-lab-max-text]').textContent(), /Не хватает для полного комплекта/);
+  assert.doesNotMatch(await dialog.locator('[data-lab-max-text]').textContent(), /Готово:|Отправил:|Подрядчик: —/);
   await dialog.locator('[data-lab-review-confirm]').click();
   await page.waitForTimeout(300);
   assert.equal(sends.length, 3);
   assert.equal(sends[0].csrf, 'test-csrf-token');
   assert.match(sends[0].body, /name="action"\r?\n\r?\nsave/);
   assert.match(sends[2].body, /name="revision"\r?\n\r?\n2/);
-  assert.match(await modal.locator('[data-lab-workflow-message]').innerText(), /Первичные данные отправлены/);
+  assert.equal(await modal.locator('[data-lab-workflow-status]').count(), 0);
   assert.equal(await modal.locator('[data-lab-send]').isVisible(), false);
   await dialog.locator('[data-lab-review-close]').first().click();
   await page.evaluate(() => { window.openCombinedRouteExecutorCreate = () => { window.__combinedOpened = true; }; });

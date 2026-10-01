@@ -8,7 +8,7 @@ use ZipArchive;
 
 final class RouteExecutorReviewArchive
 {
-    public static function build(array $attachments,string $trip): array
+    public static function build(array $attachments,string $trip,array $package=[]): array
     {
         if (!class_exists(ZipArchive::class)) throw new DomainException('Для отправки архива недоступно расширение ZIP.');
         $path=tempnam(sys_get_temp_dir(),'route-executor-');
@@ -16,7 +16,7 @@ final class RouteExecutorReviewArchive
         $zip=new ZipArchive();
         try {
             if ($zip->open($path,ZipArchive::CREATE|ZipArchive::OVERWRITE)!==true) throw new DomainException('Не удалось создать архив.');
-            $names=self::names($attachments);
+            $names=self::names($attachments,$package);
             foreach ($attachments as $index=>$attachment) {
                 $name=$names[$index];
                 if (!$zip->addFromString($name,(string)$attachment['bytes'])) throw new DomainException('Не удалось добавить файл в архив.');
@@ -31,11 +31,11 @@ final class RouteExecutorReviewArchive
         }
     }
 
-    public static function names(array $attachments): array
+    public static function names(array $attachments,array $package=[]): array
     {
         $used=[];$names=[];
         foreach ($attachments as $attachment) {
-            $base=self::label((string)($attachment['key']??''),(string)$attachment['name']);
+            $base=self::label((string)($attachment['key']??''),(string)$attachment['name'],$package);
             $extension=strtolower(pathinfo((string)$attachment['name'],PATHINFO_EXTENSION));
             $name=$base.'.'.$extension;
             for ($index=2;isset($used[mb_strtolower($name)]);$index++) $name=$base.' '.$index.'.'.$extension;
@@ -45,15 +45,23 @@ final class RouteExecutorReviewArchive
         return $names;
     }
 
-    private static function label(string $key,string $original): string
+    private static function label(string $key,string $original,array $package): string
     {
+        $driver=trim((string)($package['driver']??''));
+        $surname=$driver!==''?(preg_split('/\s+/u',$driver)[0]??'водителя'):'водителя';
+        $surname=mb_substr(preg_replace('/[^\p{L}\p{N}-]+/u','',$surname)?:'водителя',0,50);
+        $plate=trim((string)($package['plate']??''));
+        $plate=mb_substr(preg_replace('/[^\p{L}\p{N}-]+/u','',$plate)?:'без номера',0,30);
+        $secondaryPlate=trim((string)($package['secondary_plate']??''));
+        $secondaryPlate=mb_substr(preg_replace('/[^\p{L}\p{N}-]+/u','',$secondaryPlate)?:'без номера',0,30);
+        $vehiclePlate=str_contains($key,'[secondary]')?$secondaryPlate:$plate;
         return match (true) {
-            str_contains($key,'[passport]')=>'Паспорт водителя',
-            str_contains($key,'[driver_license]')=>'Водительское удостоверение',
-            str_contains($key,'[snils]')=>'СНИЛС водителя',
-            str_contains($key,'[sts]') || str_contains($key,'[registration_certificate]')=>'СТС'.(str_contains($key,'[secondary]')?' прицепа':' автомобиля'),
-            str_contains($key,'[diagnostic_card]')=>'Диагностическая карта'.(str_contains($key,'[secondary]')?' прицепа':' автомобиля'),
-            str_contains($key,'[photo]')=>'Фото'.(str_contains($key,'[secondary]')?' прицепа':' автомобиля'),
+            str_contains($key,'[passport]')=>'Паспорт '.$surname,
+            str_contains($key,'[driver_license]')=>'Водительское удостоверение '.$surname,
+            str_contains($key,'[snils]')=>'СНИЛС '.$surname,
+            str_contains($key,'[sts]') || str_contains($key,'[registration_certificate]')=>'СТС'.(str_contains($key,'[secondary]')?' прицепа':' автомобиля').' '.$vehiclePlate,
+            str_contains($key,'[diagnostic_card]')=>'Диагностическая карта'.(str_contains($key,'[secondary]')?' прицепа':' автомобиля').' '.$vehiclePlate,
+            str_contains($key,'[photo]')=>'Фото'.(str_contains($key,'[secondary]')?' прицепа':' автомобиля').' '.$vehiclePlate,
             str_contains($key,'[inn_cert]')=>'Свидетельство ИНН',
             str_contains($key,'[ogrn_cert]')=>'Свидетельство ОГРН',
             str_contains($key,'[contract]')=>'Договор',

@@ -35,10 +35,6 @@
   #route-executor-create-modal .source-create-modal .route-readiness-item.lab-readiness-pulse { transform-origin: left center; }
 }
 
-#route-executor-create-modal .lab-workflow-status { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 14px; border-bottom: 1px solid #d8cdbc; background: #fff7e9; color: #674927; font-size: 12px; line-height: 1.4; }
-#route-executor-create-modal .lab-workflow-status[data-stage="partial"] { background: #fff0db; }
-#route-executor-create-modal .lab-workflow-status[data-stage="final"] { background: #e9f5eb; color: #275b35; }
-#route-executor-create-modal .lab-workflow-reset { flex: none; font-size: 11px; }
 #route-executor-create-modal [data-lab-send][hidden] { display: none !important; }
 .lab-route-send-dialog { width: min(700px, calc(100vw - 24px)); max-width: none; max-height: min(78dvh, 760px); padding: 0; border: 1px solid #cabda9; background: #fffdfa; color: #332b22; box-shadow: 0 20px 55px #251b1380; font-size: 12px; line-height: 1.45; }
 .lab-route-send-dialog::backdrop { background: #18120db3; }
@@ -63,7 +59,6 @@
 .lab-route-send-dialog .lab-sandbox-note { color: #766654; font-size: 11px; }
 .lab-route-send-dialog .lab-review-result { margin-bottom: 0; color: #26623a; font-weight: 700; }
 @media (max-width: 700px) {
-  #route-executor-create-modal .lab-workflow-status { align-items: flex-start; flex-wrap: wrap; }
   .lab-route-send-dialog .lab-review-foot { flex-wrap: wrap; }
   .lab-route-send-dialog .lab-review-foot button { flex: 1 1 auto; }
 }

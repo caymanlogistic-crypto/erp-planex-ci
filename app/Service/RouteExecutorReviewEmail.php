@@ -5,10 +5,10 @@ namespace App\Service;
 
 final class RouteExecutorReviewEmail
 {
-    public static function build(array $package, bool $partial, string $trip): array
+    public static function build(array $package, bool $partial, string $trip, bool $contractOnly=false): array
     {
-        $heading=$partial?'Первичные данные исполнителя рейса':'Полный комплект данных исполнителя рейса';
-        $lead=$partial?'Это первичные данные. Ожидайте полный комплект вторым письмом.':'Передан полный актуальный комплект данных исполнителя рейса.';
+        $heading=$contractOnly?'Данные для заключения договора':($partial?'Первичные данные исполнителя рейса':'Полный комплект данных исполнителя рейса');
+        $lead=$contractOnly?'Переданы данные подрядчика для заключения договора.':($partial?'Это первичные данные. Ожидайте полный комплект вторым письмом.':'Передан полный актуальный комплект данных исполнителя рейса.');
         $text=$heading."\nРейс: ".$trip."\n".$lead."\n\n";
         $groups=['contractor'=>[],'driver'=>[],'vehicle'=>[]];
         $vehicleType='';
@@ -17,12 +17,13 @@ final class RouteExecutorReviewEmail
             $group=match ($form) {
                 'lab-contractor-form'=>'contractor','lab-driver-form'=>'driver','lab-vehicle-form'=>'vehicle',default=>null,
             };
-            if ($group===null) continue;
+            if ($group===null || ($contractOnly && $group!=='contractor') || (!$contractOnly && $group==='contractor')) continue;
             $groups[$group][]=$row;
             if ($group==='vehicle' && ($row['field']??'')==='set_type') $vehicleType=(string)($row['raw_value']??'');
         }
         $tables='';
-        foreach (['contractor'=>'ПОДРЯДЧИК','driver'=>'ВОДИТЕЛЬ','vehicle'=>'ТРАНСПОРТНОЕ СРЕДСТВО'] as $key=>$title) {
+        $sections=$contractOnly?['contractor'=>'ПОДРЯДЧИК']:['driver'=>'ВОДИТЕЛЬ','vehicle'=>'ТРАНСПОРТНОЕ СРЕДСТВО'];
+        foreach ($sections as $key=>$title) {
             $text.=$title.":\n";
             $rows='';
             if ($key==='vehicle') {
@@ -51,9 +52,12 @@ final class RouteExecutorReviewEmail
                 .'<tbody>'.$rows.'</tbody></table>';
             $text.="\n";
         }
-        $names=RouteExecutorReviewArchive::names($package['attachments']);
+        $attachments=array_values(array_filter($package['attachments'],static fn(array $file):bool=>$contractOnly
+            ? str_starts_with((string)$file['key'],'lab-contractor-form|')
+            : !str_starts_with((string)$file['key'],'lab-contractor-form|')));
+        $names=RouteExecutorReviewArchive::names($attachments,$package);
         $text.="\nАрхив документов: ".($names?implode(', ',$names):'не приложен')."\n";
-        $text.='Готово: '.implode(', ',$package['ready'])."\n";
+        if (!$contractOnly) $text.='Готово: '.implode(', ',$package['ready'])."\n";
         $background=$partial?'#f5f2ec':'#eaf6e9';
         $cardBackground=$partial?'#fff':'#f5fff4';
         $border=$partial?'#d8d0c2':'#b7d8b4';
@@ -61,7 +65,7 @@ final class RouteExecutorReviewEmail
         $html='<div style="font:14px Arial,sans-serif;color:#292622;background:'.$background.';padding:24px">'
             .'<div style="max-width:760px;margin:auto;background:'.$cardBackground.';border:1px solid '.$border.';padding:24px">'
             .'<h2 style="color:'.$headingColor.';margin-top:0">'.self::escape($heading).'</h2><p><strong>Рейс: '.self::escape($trip).'</strong></p><p>'.self::escape($lead).'</p>'
-            .'<p><b>Готово:</b> '.self::escape(implode(', ',$package['ready'])).'</p>'
+            .($contractOnly?'':'<p><b>Готово:</b> '.self::escape(implode(', ',$package['ready'])).'</p>')
             .$tables
             .'<p><b>Архив документов:</b> '.self::escape($names?implode(', ',$names):'не приложен').'</p></div></div>';
         return ['text'=>$text,'html'=>$html];
