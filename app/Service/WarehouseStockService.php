@@ -57,10 +57,16 @@ final class WarehouseStockService
               ORDER BY wt.business_id,wtr.position_no,wtr.id'
         )->fetchAll(PDO::FETCH_ASSOC);
         $erp = array_merge($erp, $erpOnly);
-        return self::build($warehouses, $movements, $flights, $erp);
+        $exceptions = $tenant->query('SELECT id,flight_id,message_hash,message_text,trip_name,warehouse_name,approved_by_user_id,approved_at,revoked_by_user_id,revoked_at FROM warehouse_stock_issue_exceptions ORDER BY approved_at DESC,id DESC')->fetchAll(PDO::FETCH_ASSOC);
+        return self::build($warehouses, $movements, $flights, $erp, $exceptions);
     }
 
-    public static function build(array $warehouses, array $movements, array $flights, array $erpRows): array
+    public static function messageHash(string $message): string
+    {
+        return hash('sha256', $message);
+    }
+
+    public static function build(array $warehouses, array $movements, array $flights, array $erpRows, array $exceptionRows = []): array
     {
         $names = [];
         foreach ($warehouses as $row) $names[(int)$row['id']] = (string)$row['name'];
@@ -336,11 +342,36 @@ final class WarehouseStockService
             ];
         }
         krsort($issues, SORT_NUMERIC);
+        $allIssues = $issues;
+        foreach ($exceptionRows as &$exception) {
+            $exception['matches_current'] = false;
+            if ($exception['revoked_at'] !== null) continue;
+            foreach ($allIssues[(int)$exception['flight_id']]['messages'] ?? [] as $currentMessage) {
+                if (hash_equals((string)$exception['message_hash'], self::messageHash($currentMessage))) {
+                    $exception['matches_current'] = true;
+                    break;
+                }
+            }
+        }
+        unset($exception);
+        $activeExceptions = [];
+        foreach ($exceptionRows as $exception) {
+            if ($exception['revoked_at'] !== null) continue;
+            $activeExceptions[(int)$exception['flight_id']][(string)$exception['message_hash']] = true;
+        }
+        foreach ($issues as $flightId => &$issue) {
+            $issue['messages'] = array_values(array_filter($issue['messages'], static function (string $message) use ($activeExceptions, $flightId): bool {
+                return !isset($activeExceptions[$flightId][self::messageHash($message)]);
+            }));
+            if ($issue['messages'] === []) unset($issues[$flightId]);
+        }
+        unset($issue);
         $correctionFlights = [];
         foreach ($flightMap as $flight) $correctionFlights[] = [
             'id'=>(int)$flight['id'], 'name'=>(string)($flight['comment'] ?? ''),
         ];
         usort($correctionFlights, static fn(array $a, array $b): int => $b['id'] <=> $a['id']);
-        return ['warehouses'=>$names,'groups'=>$byWarehouse,'current'=>$current,'issues'=>$issues,'issue_count'=>count($issues),'correction_flights'=>$correctionFlights];
+        return ['warehouses'=>$names,'groups'=>$byWarehouse,'current'=>$current,'issues'=>$issues,'all_issues'=>$allIssues,
+            'exceptions'=>$exceptionRows,'issue_count'=>count($issues),'correction_flights'=>$correctionFlights];
     }
 }

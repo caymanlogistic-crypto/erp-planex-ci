@@ -17,6 +17,8 @@ try {
         page.on('pageerror', error => errors.push(error.message));
         let submitted = false;
         let matched = false;
+        let excluded = false;
+        let restored = false;
         await page.route('http://warehouse.test/**', async route => {
             const url = new URL(route.request().url());
             if (url.pathname === '/company/warehouses/stock') return route.fulfill({status:200, contentType:'text/html; charset=utf-8',body:rendered.stdout});
@@ -33,6 +35,14 @@ try {
                 matched = route.request().postData()?.includes('fingerprint=' + 'b'.repeat(64)) ?? false;
                 return route.fulfill({status:200, contentType:'application/json',body:JSON.stringify({flight_id:21,removed:1,created:1,updated:0})});
             }
+            if (url.pathname.endsWith('/exclude-issue')) {
+                excluded = route.request().postData()?.includes('flight_id=21') ?? false;
+                return route.fulfill({status:200, contentType:'application/json', body:'{"ok":true}'});
+            }
+            if (url.pathname.endsWith('/restore-issue')) {
+                restored = route.request().postData()?.includes('exception_id=1') ?? false;
+                return route.fulfill({status:200, contentType:'application/json', body:'{"ok":true}'});
+            }
             if (url.pathname.endsWith('/correction')) {
                 submitted = route.request().postData()?.includes('fingerprint=' + 'a'.repeat(64)) ?? false;
                 return route.fulfill({status:200, contentType:'application/json',body:JSON.stringify({flight_id:20,created:1})});
@@ -46,11 +56,12 @@ try {
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 2);
         assert.match(await page.locator('[data-wh-warehouse="2"] .wh-current-summary').innerText(), /Заявки на складе: —/);
         const differentRow = page.locator('[data-wh-trip="2:21:out"]');
-        assert.match(await differentRow.locator('.wh-request-cell').innerText(), /121\s+В рейсе доп: 999/);
+        assert.match(await differentRow.locator('.wh-request-cell').innerText(), /121\s+Не списаны заявки: 999/);
+        assert.equal(await differentRow.locator('.wh-trip-extra').evaluate(el => getComputedStyle(el).color), 'rgb(98, 90, 82)');
         assert.equal(await differentRow.locator('.wh-request-id--outside-trip').innerText(), '121');
         assert.equal(await differentRow.locator('.wh-request-id--outside-trip').evaluate(el => getComputedStyle(el).textDecorationLine), 'line-through');
         await differentRow.dblclick();
-        assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /В рейсе доп: 999/);
+        assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /Не списаны заявки: 999/);
         assert.equal(await page.locator('#wh-trip-2-21-out [data-wh-match-trip]').count(), 1);
         await page.locator('#wh-trip-2-21-out [data-wh-close]').first().click();
         await page.locator('[name=q]').fill('999');
@@ -82,6 +93,16 @@ try {
         await page.locator('[data-wh-match-confirm]').click();
         await page.waitForFunction(() => document.querySelector('[data-wh-match-preview]').textContent.includes('приведён к составу ERP'));
         assert.equal(matched, true);
+        const issueWidths = await page.locator('#warehouse-issues').evaluate(el => ({outer:el.clientWidth,scroll:el.scrollWidth,table:el.querySelector('table').getBoundingClientRect().width,td:[...el.querySelectorAll('td')].map(x=>x.getBoundingClientRect().width)}));
+        assert.equal(issueWidths.scroll <= issueWidths.outer, true, JSON.stringify(issueWidths));
+        await page.locator('[data-wh-exceptions]').click();
+        assert.match(await page.locator('.wh-exception-modal').innerText(), /Ранее согласованное расхождение/);
+        await page.locator('[data-wh-restore]').click();
+        await page.waitForFunction(() => document.querySelector('.wh-exception-modal') === null || !document.querySelector('.wh-exception-modal').classList.contains('is-open'));
+        assert.equal(restored, true);
+        page.once('dialog', dialog => dialog.accept());
+        await page.locator('#warehouse-issues [data-wh-exclude]').first().click();
+        assert.equal(excluded, true);
         assert.deepEqual(errors, []);
         await page.close();
     }

@@ -73,4 +73,19 @@ $erp[] = ['business_id'=>309,'legacy_source_warehouse_id'=>1,'legacy_destination
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 $massTargets = array_values($data['issues'][309]['reconcile_targets'] ?? []);
 if ($massTargets !== [['warehouse_id'=>1,'direction'=>'out']]) throw new RuntimeException('Рейс с одной лишь разницей масс тоже можно сверить.');
+$original = $data;
+$message = $original['issues'][309]['messages'][0];
+$exception = ['id'=>1,'flight_id'=>309,'message_hash'=>WarehouseStockService::messageHash($message),
+    'message_text'=>$message,'trip_name'=>'Вывоз с другой массой','warehouse_name'=>'Краснодар',
+    'approved_by_user_id'=>7,'approved_at'=>'2026-10-01 10:00:00','revoked_by_user_id'=>null,'revoked_at'=>null];
+$excluded = WarehouseStockService::build($warehouses, $movements, $flights, $erp, [$exception]);
+if (in_array($message, $excluded['issues'][309]['messages'] ?? [], true)) throw new RuntimeException('Согласованное расхождение осталось ошибкой.');
+if ($excluded['current'] !== $original['current'] || $excluded['groups'] !== $original['groups']) throw new RuntimeException('Исключение изменило складской учёт.');
+$exception['message_hash'] = WarehouseStockService::messageHash($message.' изменено');
+$changed = WarehouseStockService::build($warehouses, $movements, $flights, $erp, [$exception]);
+if (!in_array($message, $changed['issues'][309]['messages'] ?? [], true)) throw new RuntimeException('Старое исключение скрывает изменившееся расхождение.');
+$exception['message_hash'] = WarehouseStockService::messageHash($message);
+$exception['revoked_at'] = '2026-10-01 11:00:00';
+$restored = WarehouseStockService::build($warehouses, $movements, $flights, $erp, [$exception]);
+if (!in_array($message, $restored['issues'][309]['messages'] ?? [], true)) throw new RuntimeException('Возвращённое расхождение не стало ошибкой.');
 echo "warehouse stock service OK\n";

@@ -174,6 +174,61 @@ final class WarehouseStockController
         }
     }
 
+    public function excludeIssue(): void
+    {
+        requireRole(['company_owner']);
+        verifyCsrfRequest();
+        try {
+            $flightId = (int)($_POST['flight_id'] ?? 0);
+            $hash = (string)($_POST['message_hash'] ?? '');
+            $userId = (int)($_SESSION['user_id'] ?? 0);
+            if ($flightId <= 0 || $userId <= 0 || !preg_match('/^[0-9a-f]{64}$/D', $hash)) {
+                throw new \RuntimeException('Некорректные данные исключения.');
+            }
+            $tenant = $this->tenant();
+            $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
+            if (!$legacy instanceof PDO) throw new \RuntimeException('Складской журнал недоступен.');
+            $data = WarehouseStockService::load($legacy, $tenant);
+            $issue = $data['issues'][$flightId] ?? null;
+            $message = null;
+            foreach ($issue['messages'] ?? [] as $candidate) {
+                if (hash_equals(WarehouseStockService::messageHash($candidate), $hash)) $message = $candidate;
+            }
+            if ($message === null) throw new \RuntimeException('Расхождение изменилось. Обновите страницу и проверьте его заново.');
+            $warehouseName = (string)($data['warehouses'][$issue['warehouse_id']] ?? '');
+            $stmt = $tenant->prepare('INSERT INTO warehouse_stock_issue_exceptions
+                (flight_id,message_hash,message_text,trip_name,warehouse_name,approved_by_user_id,approved_at)
+                VALUES (?,?,?,?,?,?,CURRENT_TIMESTAMP(6))
+                ON DUPLICATE KEY UPDATE message_text=VALUES(message_text),trip_name=VALUES(trip_name),
+                    warehouse_name=VALUES(warehouse_name),approved_by_user_id=VALUES(approved_by_user_id),
+                    approved_at=CURRENT_TIMESTAMP(6),revoked_by_user_id=NULL,revoked_at=NULL');
+            $stmt->execute([$flightId,$hash,$message,(string)$issue['name'],$warehouseName,$userId]);
+            $this->json(['ok'=>true]);
+        } catch (Throwable $error) {
+            error_log('warehouse issue exclusion failed: '.get_class($error));
+            $this->json(['error'=>$this->publicError($error)], 422);
+        }
+    }
+
+    public function restoreIssue(): void
+    {
+        requireRole(['company_owner']);
+        verifyCsrfRequest();
+        try {
+            $id = (int)($_POST['exception_id'] ?? 0);
+            $userId = (int)($_SESSION['user_id'] ?? 0);
+            if ($id <= 0 || $userId <= 0) throw new \RuntimeException('Некорректное исключение.');
+            $stmt = $this->tenant()->prepare('UPDATE warehouse_stock_issue_exceptions
+                SET revoked_by_user_id=?,revoked_at=CURRENT_TIMESTAMP(6) WHERE id=? AND revoked_at IS NULL');
+            $stmt->execute([$userId,$id]);
+            if ($stmt->rowCount() !== 1) throw new \RuntimeException('Исключение уже возвращено в ошибки. Обновите страницу.');
+            $this->json(['ok'=>true]);
+        } catch (Throwable $error) {
+            error_log('warehouse issue restore failed: '.get_class($error));
+            $this->json(['error'=>$this->publicError($error)], 422);
+        }
+    }
+
     private function tenant(): PDO
     {
         $companyId = (int)(getSessionCompanyId() ?? 0);
