@@ -23,6 +23,8 @@ use App\Service\RouteExecutorReviewRecipientService;
 use App\Service\RegulatedDataScopeService;
 use DomainException;
 use PDO;
+use PDOException;
+use RuntimeException;
 use Throwable;
 
 final class RouteExecutorReviewController
@@ -491,5 +493,18 @@ final class RouteExecutorReviewController
     private function json(array $data,int $status=200): never
     { http_response_code($status);header('Content-Type: application/json; charset=utf-8');echo json_encode($data,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES);exit; }
     private function failure(Throwable $error): never
-    { error_log('route executor review: '.$error->getMessage());$this->json(['ok'=>false,'error'=>$error instanceof DomainException?$error->getMessage():'Не удалось передать данные.'], $error instanceof DomainException?422:500); }
+    {
+        error_log('route executor review: '.$error->getMessage());
+        $materialization=(string)($_POST['action']??'')==='materialize';
+        if ($materialization && $error instanceof RuntimeException && !($error instanceof PDOException)) {
+            $this->json(['ok'=>false,'error'=>$error->getMessage()],422);
+        }
+        if ($materialization && $error instanceof PDOException) {
+            $this->json(['ok'=>false,'error'=>'Не удалось внести данные в справочники (код базы '.$error->getCode().').'],500);
+        }
+        if ($materialization && !($error instanceof DomainException)) {
+            $this->json(['ok'=>false,'error'=>'Не удалось внести данные в справочники (код '.(new \ReflectionClass($error))->getShortName().').'],500);
+        }
+        $this->json(['ok'=>false,'error'=>$error instanceof DomainException?$error->getMessage():'Не удалось передать данные.'], $error instanceof DomainException?422:500);
+    }
 }
