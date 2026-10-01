@@ -12,6 +12,9 @@ final class BankStatementFileStore
 
     public function has(string $hash): bool
     {
+        if (!self::validHash($hash)) {
+            return false;
+        }
         return is_file($this->path($hash));
     }
 
@@ -50,12 +53,18 @@ final class BankStatementFileStore
 
     public function verifiedPath(string $hash): ?string
     {
+        if (!self::validHash($hash)) {
+            return null;
+        }
         $path = $this->path($hash);
         return is_file($path) && hash_equals($hash, (string)hash_file('sha256', $path)) ? $path : null;
     }
 
     public function remove(string $hash): void
     {
+        if (!self::validHash($hash)) {
+            return;
+        }
         $path = $this->path($hash);
         if (is_file($path) && !unlink($path)) {
             throw new \RuntimeException('Не удалось удалить файл выписки.');
@@ -64,9 +73,14 @@ final class BankStatementFileStore
 
     private function path(string $hash): string
     {
-        if (!preg_match('/^[a-f0-9]{64}$/D', $hash)) {
+        if (!self::validHash($hash)) {
             throw new \InvalidArgumentException('Неверная контрольная сумма выписки.');
         }
         return rtrim($this->companyStorageRoot, '/\\') . DIRECTORY_SEPARATOR . 'bank-statements' . DIRECTORY_SEPARATOR . $hash . '.xlsx';
+    }
+
+    private static function validHash(string $hash): bool
+    {
+        return preg_match('/^[a-f0-9]{64}$/D', $hash) === 1;
     }
 }
