@@ -14,6 +14,9 @@ use App\Service\RouteExecutorReviewArchive;
 use App\Service\RouteExecutorReviewMaxMessage;
 
 $assert=static function(bool $condition,string $message):void { if (!$condition) throw new RuntimeException($message); };
+$assert(RouteExecutorReviewMaxMessage::eventKey('partial')==='route_executor.partial'
+    && RouteExecutorReviewMaxMessage::eventKey('final')==='route_executor.full',
+    'Sending stages must use the configured MAX events');
 $routeSource=(string)file_get_contents(__DIR__.'/../app/Http/Routes/company_route_executors.php');
 foreach (['EmployeeMailProfileService.php','DocumentMailTransport.php','MaxEventCatalog.php',
     'MaxMessagingService.php','MaxEventNotificationService.php','RouteExecutorReviewRecipientService.php',

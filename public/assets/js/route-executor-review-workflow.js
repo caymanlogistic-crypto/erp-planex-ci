@@ -501,6 +501,10 @@
     return full ? 'final' : ready.length ? 'partial' : null;
   }
 
+  function maxEventKey(stage) {
+    return stage === 'final' ? 'route_executor.full' : 'route_executor.partial';
+  }
+
   function formatSavedAt(value) {
     return value ? new Date(value).toLocaleString('ru-RU', {
       timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric',
@@ -677,7 +681,7 @@
       config = await response.json();
       if (!response.ok || !config.ok) throw new Error(config.error || 'Настройки отправки недоступны.');
       if (!config.recipients.length && !config.send_responsible_logist) throw new Error('В «Ключи и сервисы» добавьте получателей проверки исполнителей рейса.');
-      const event = config.max_events?.['route_executor.' + stage];
+      const event = config.max_events?.[maxEventKey(stage)];
       if (!event?.enabled || !event.chat_config_id) throw new Error('В настройках MAX включите событие «Исполнитель рейса» и выберите чат.');
     } catch (error) {
       showWorkflowMessage(error.message);
@@ -695,7 +699,7 @@
     if (config.send_responsible_logist) recipients.push('ответственный логист');
     dialog.querySelector('[data-lab-review-summary]').textContent = `Готово: ${pendingSend.ready.join('; ')}. Отправитель: ${config.sender}. Получатели: ${recipients.join(', ')}.`;
     dialog.querySelector('[data-lab-email-heading]').textContent = 'Письмо · ' + recipients.join(', ');
-    const event = config.max_events?.['route_executor.' + stage];
+    const event = config.max_events?.[maxEventKey(stage)];
     dialog.querySelector('[data-lab-max-heading]').textContent = event?.enabled ? 'MAX · настроенное событие' : 'MAX · событие выключено в настройках';
     const find = (formId, name) => snapshot.controls.find(item => item.formId === formId && item.name === name)?.value?.trim() || '—';
     const logist = document.getElementById('route-executor-responsible-logist')?.selectedOptions?.[0]?.textContent?.trim() || '—';
