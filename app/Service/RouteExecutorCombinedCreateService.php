@@ -7,6 +7,8 @@ use PDO;
 use RuntimeException;
 use Throwable;
 
+require_once base_path('app/Support/crew_driver_helpers.php');
+
 /** Creates the three source entities and their crew in one tenant transaction. */
 final class RouteExecutorCombinedCreateService
 {
