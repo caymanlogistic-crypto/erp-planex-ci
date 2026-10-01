@@ -32,6 +32,7 @@ if ($difference['groups'][1][1]['warehouse_only_request_ids'] !== ['456'] || $di
 if (!isset($difference['issues'][10]) || !str_contains(implode(' ', $difference['issues'][10]['messages']), 'на складе есть заявки вне рейса ERP: 456')) {
     throw new RuntimeException('Расхождение состава склада и рейса не попало в сверку.');
 }
+if ($difference['issues'][10]['name'] !== 'Прибытие') throw new RuntimeException('Наименование рейса не передано в расхождения.');
 $flights[1]['zayavki_ids'] = '123,456';
 $erp[] = ['business_id'=>11,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>456,'snapshot_mass_kg'=>500];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
@@ -41,9 +42,10 @@ if ($data['groups'][1][0]['request_count'] !== 1 || $data['groups'][1][0]['mass_
 $erp[0]['legacy_destination_warehouse_id'] = 2;
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 if ($data['issue_count'] !== 2 || !isset($data['issues'][10])) throw new RuntimeException('Не обнаружено расхождение складов.');
-$erp[] = ['business_id'=>12,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>999,'snapshot_mass_kg'=>100];
+$erp[] = ['business_id'=>12,'erp_name'=>'Рейс только в ERP','legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>999,'snapshot_mass_kg'=>100];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 if ($data['issue_count'] !== 3 || !isset($data['issues'][12])) throw new RuntimeException('Не обнаружен лишний складской рейс ERP.');
+if ($data['issues'][12]['name'] !== 'Рейс только в ERP') throw new RuntimeException('Наименование рейса только в ERP не показано.');
 
 $flights[] = ['id'=>13,'comment'=>'Начался','status'=>'started','source_warehouse_id'=>1,'destination_warehouse_id'=>null,'actual_start_date'=>'2026-09-03','zayavki_ids'=>'456,999','driver_name'=>'Петров','vehicle'=>'В 456 ВВ'];
 $erp[] = ['business_id'=>13,'status'=>'in_progress','actual_start_date'=>'2026-09-03','legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>456,'snapshot_mass_kg'=>500];
