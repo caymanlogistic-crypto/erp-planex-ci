@@ -87,8 +87,8 @@
             info.innerHTML = `<b>#${escape(data.flight_id)}</b> · ${escape(data.name || 'Без наименования')}<br>Статус: ${escape(data.status)} · Заявок: ${escape(data.request_count)}<br>Сейчас: ${escape(data.current_route)}`;
             const src = data.warehouses[data.source_warehouse_id] || '—';
             const dst = data.warehouses[data.destination_warehouse_id] || '—';
-            const operation = route === 'warehouse_to_warehouse' ? `Списание со склада «${escape(src)}» и приход на склад «${escape(dst)}»`
-                : route === 'warehouse_to_utilizer' ? `Списание со склада «${escape(src)}»` : `Приход на склад «${escape(dst)}»`;
+            const operation = route === 'warehouse_to_warehouse' ? `Списание со склада «${escape(src)}» и поступление на склад «${escape(dst)}»`
+                : route === 'warehouse_to_utilizer' ? `Списание со склада «${escape(src)}»` : `Поступление на склад «${escape(dst)}»`;
             const weight = data.rows.reduce((sum, row) => sum + Number(row.mass_netto || 0) * 1000, 0);
             const shortages = data.stock_warnings || [];
             const absent = shortages.filter(row => row.absent).map(row => `#${escape(row.request_id)}`);

@@ -236,7 +236,7 @@ final class WarehouseStockService
                 foreach ($groups as $group) {
                     if ($group['flight_id'] !== $flightId) continue;
                     $where = ($names[$group['warehouse_id']] ?? 'Склад #'.$group['warehouse_id'])
-                        .' / '.($group['direction'] === 'in' ? 'приход' : 'вывоз');
+                        .' / '.($group['direction'] === 'in' ? 'поступление' : 'списание');
                     if ($group['warehouse_only_request_ids'] !== []) {
                         $message = $where.': на складе есть заявки вне рейса ERP: '
                             .implode(', ', $group['warehouse_only_request_ids']).'.';
