@@ -31,10 +31,9 @@
         </div>
         <div class="field">
           <label class="field-label" for="route-executor-trip-search">Рейс <span class="req">*</span></label>
-          <input id="route-executor-trip-search" class="field-input" type="search" list="route-executor-trip-options" placeholder="#123 Наименование" autocomplete="off" aria-describedby="route-executor-trip-hint">
+          <input id="route-executor-trip-search" class="field-input" type="search" list="route-executor-trip-options" placeholder="#123 Наименование" autocomplete="off">
           <datalist id="route-executor-trip-options"></datalist>
           <input id="route-executor-trip-id" type="hidden" value="">
-          <p class="field-hint" id="route-executor-trip-hint">Начните вводить номер или наименование и выберите рейс из списка. Для сохранения черновика выбор не обязателен.</p>
         </div>
       </div>
       <div class="source-combined-grid">
