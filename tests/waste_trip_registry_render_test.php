@@ -40,7 +40,7 @@ $dom=new DOMDocument();@$dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);$xp=ne
 $assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th')->length===13,'Thirteen registry columns');
 $sort=$xp->query('//select[@name="sort"]')->item(0);
 $assert($sort!==null && $sort->getAttribute('aria-label')==='Сортировка рейсов','Registry sort control');
-$assert($xp->query('//select[@name="sort"]/option[@value="id" and @selected]')->length===1,'ID sort is selected by default');
+$assert($xp->query('//select[@name="sort"]/option[@value="status" and @selected]')->length===1,'Status sort is selected by default');
 $assert($xp->query('//select[@name="sort"]/option[@value="status"]')->length===1 && $xp->query('//select[@name="sort"]/option[@value="manager"]')->length===1,'Status and manager sort choices');
 $assert($xp->query('//tr[@data-waste-view="1"]/td')->length===13,'Thirteen data columns');
 $assert(trim($xp->query('//tr[@data-waste-view="1"]/td[3]')->item(0)->textContent)==="Выгрузка на склад:\nСклад Север" && $xp->query('//tr[@data-waste-view="1"]/td[3]/br')->length===1,'Warehouse destination has caption and name on separate lines');
