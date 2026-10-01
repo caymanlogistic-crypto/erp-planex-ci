@@ -800,6 +800,11 @@
           : 'Письмо отправлено. Проверьте статус уведомления MAX в настройках.';
       pendingSend = null;
       await refreshReviewList();
+      if (result.stage === 'final') {
+        lastTrigger = null;
+        dialog.close();
+        window.closeModal?.('route-executor-create-modal');
+      }
     } catch (error) {
       dialog.querySelector('[data-lab-review-result]').textContent = error.message;
       confirm.disabled = !workflowStage();
@@ -843,38 +848,14 @@
     } catch (error) { window.alert(error.message); button.disabled = false; }
   }
 
-  async function resendReviewRow(button) {
-    const id = button.dataset.routeReviewResend;
-    if (!id || button.disabled) return;
-    button.disabled = true;
-    try {
-      if (!window.confirm('Повторно отправить общее письмо и, если данные подрядчика готовы, отдельное письмо для договора на info@plan-ex.ru? Уведомление также уйдёт в тестовую группу MAX бота «Бэрримор».')) return;
-      const data = new FormData();
-      data.set('action', 'resend');
-      data.set('card_id', id);
-      const response = await fetch(base + '/company/route-executors/review/send', {
-        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: data
-      });
-      const result = await response.json();
-      if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось повторить письмо.');
-      const mailCount = result.contract_mail_status === 'accepted' ? 'Оба письма приняты' : 'Общее письмо принято';
-      window.alert(result.max_status === 'sent'
-        ? `${mailCount} почтовым сервером, сообщение отправлено в тестовую группу MAX. Проверьте письма с пометкой «повтор».`
-        : `${mailCount} почтовым сервером, но сообщение в тестовую группу MAX отправить не удалось. Сообщите администратору; повторное нажатие создаст ещё одно письмо.`);
-    } catch (error) { window.alert(error.message); }
-    finally { button.disabled = false; }
-  }
-
   document.addEventListener('dblclick', event => {
-    if (event.target.closest?.('[data-route-review-delete], [data-route-review-resend]')) return;
+    if (event.target.closest?.('[data-route-review-delete]')) return;
     openReviewRow(event.target.closest?.('[data-route-review-card-id]'));
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Enter' && event.target.matches?.('[data-route-review-card-id]')) openReviewRow(event.target);
   });
   document.addEventListener('click', event => {
-    const resend = event.target.closest?.('[data-route-review-resend]');
-    if (resend) { event.stopPropagation(); resendReviewRow(resend); return; }
     const remove = event.target.closest?.('[data-route-review-delete]');
     if (remove) { event.stopPropagation(); deleteReviewRow(remove); }
   });

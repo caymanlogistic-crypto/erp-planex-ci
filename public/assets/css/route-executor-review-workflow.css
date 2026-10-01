@@ -64,7 +64,11 @@
 }
 .route-review-row { background: #fff1b8; cursor: pointer; }
 .route-review-row:hover, .route-review-row:focus-visible { background: #ffe58a; outline: 2px solid #ad741a; outline-offset: -2px; }
+.route-review-row-final { background: transparent; }
+.route-review-row-final:hover, .route-review-row-final:focus-visible { background: #f6f4ef; }
 .route-review-row td { background: transparent !important; vertical-align: middle; }
 .route-review-row small { color: #75521b; font-weight: 600; }
-.route-review-badge { display: inline-block; background: #fff8db; color: #684612; border: 1px solid #d7af5a; }
-.route-review-delete, .route-review-resend { margin-left: 8px; min-height: 28px; }
+.route-review-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.route-review-badge { display: inline-flex; align-items: center; justify-content: center; min-height: 22px; padding: 2px 7px; line-height: 1.2; text-align: center; background: #fff8db; color: #684612; border: 1px solid #d7af5a; }
+.route-review-badge.badge-ok { background: #cfe2dc; color: #1e5247; border-color: #1e5247; }
+.route-review-delete { min-height: 28px; }
