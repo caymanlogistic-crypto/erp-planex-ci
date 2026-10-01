@@ -50,6 +50,10 @@ try {
             return route.fulfill({status:404,body:''});
         });
         await page.goto('http://warehouse.test/company/warehouses/stock');
+        assert.match(await page.locator('[data-wh-warehouse="1"] .wh-current-summary').innerText(), /^ИРКУТСК/);
+        assert.equal(await page.locator('[name=warehouse] option[value="2"]').innerText(), 'КРАСНОДАР');
+        assert.match(await page.locator('#warehouse-issues').innerText(), /КРАСНОДАР \/ вывоз/);
+        assert.equal(await page.getByText('Остаток рассчитан по активным движениям складского журнала.', {exact:false}).count(), 0);
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 1);
         assert.match(await page.locator('[data-wh-warehouse="1"] .wh-current-summary').innerText(), /Заявки на складе: 120/);
         await page.locator('[name=show_all]').check({force:true});
@@ -61,6 +65,7 @@ try {
         assert.equal(await differentRow.locator('.wh-request-id--outside-trip').innerText(), '121');
         assert.equal(await differentRow.locator('.wh-request-id--outside-trip').evaluate(el => getComputedStyle(el).textDecorationLine), 'line-through');
         await differentRow.dblclick();
+        assert.match(await page.locator('#wh-trip-2-21-out .wh-summary').innerText(), /КРАСНОДАР/);
         assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /Не списаны заявки: 999/);
         assert.equal(await page.locator('#wh-trip-2-21-out [data-wh-match-trip]').count(), 1);
         await page.locator('#wh-trip-2-21-out [data-wh-close]').first().click();
@@ -79,7 +84,7 @@ try {
         await page.locator('[name=source_warehouse_id]').selectOption('1');
         await page.locator('[data-correction-confirm]').waitFor({state:'visible'});
         await page.waitForFunction(() => !document.querySelector('[data-correction-confirm]').disabled);
-        assert.match(await page.locator('[data-correction-preview]').innerText(), /заявки, которых нет на складе «Иркутск»: #121/);
+        assert.match(await page.locator('[data-correction-preview]').innerText(), /заявки, которых нет на складе «ИРКУТСК»: #121/);
         assert.match(await page.locator('[data-correction-preview]').innerText(), /Складское движение: 1 заявок · 1\s?000 кг/);
         await page.locator('[data-correction-confirm]').click();
         await page.waitForFunction(() => document.querySelector('[data-correction-preview]').textContent.includes('Проведено складских движений: 1'));

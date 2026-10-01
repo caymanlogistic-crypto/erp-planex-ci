@@ -85,8 +85,8 @@
             if (pending !== controller) return;
             if (!response.ok) throw new Error(data.error || 'Проверка не выполнена.');
             info.innerHTML = `<b>#${escape(data.flight_id)}</b> · ${escape(data.name || 'Без наименования')}<br>Статус: ${escape(data.status)} · Заявок: ${escape(data.request_count)}<br>Сейчас: ${escape(data.current_route)}`;
-            const src = data.warehouses[data.source_warehouse_id] || '—';
-            const dst = data.warehouses[data.destination_warehouse_id] || '—';
+            const src = (data.warehouses[data.source_warehouse_id] || '—').toLocaleUpperCase('ru-RU');
+            const dst = (data.warehouses[data.destination_warehouse_id] || '—').toLocaleUpperCase('ru-RU');
             const operation = route === 'warehouse_to_warehouse' ? `Списание со склада «${escape(src)}» и поступление на склад «${escape(dst)}»`
                 : route === 'warehouse_to_utilizer' ? `Списание со склада «${escape(src)}»` : `Поступление на склад «${escape(dst)}»`;
             const weight = data.rows.reduce((sum, row) => sum + Number(row.mass_netto || 0) * 1000, 0);
