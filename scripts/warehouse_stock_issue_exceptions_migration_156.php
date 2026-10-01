@@ -11,7 +11,7 @@ try {
         || !preg_match('/^[a-f0-9]{40}$/D', $sha) || trim((string)file_get_contents($marker)) !== $sha) {
         throw new RuntimeException('Exact deployment guard required');
     }
-    $name = '155_warehouse_stock_issue_exceptions.sql';
+    $name = '156_warehouse_stock_issue_exceptions.sql';
     $sql = (string)file_get_contents($root.'/database/migrations-local/'.$name);
     $checksum = hash('sha256', $sql);
     if (!hash_equals((string)getenv('PLANEX_TENANT_SHA256'), $checksum)
@@ -19,8 +19,8 @@ try {
         || substr_count($sql, 'CREATE TABLE') !== 1 || substr_count($sql, ';') !== 1) {
         throw new RuntimeException('Migration checksum or SQL scope mismatch');
     }
-    $apply = getenv('WAREHOUSE_EXCEPTIONS_155_MODE') === 'apply';
-    if ($apply && getenv('WAREHOUSE_EXCEPTIONS_155_CONFIRM') !== 'APPLY_WAREHOUSE_EXCEPTIONS_155') {
+    $apply = getenv('WAREHOUSE_EXCEPTIONS_156_MODE') === 'apply';
+    if ($apply && getenv('WAREHOUSE_EXCEPTIONS_156_CONFIRM') !== 'APPLY_WAREHOUSE_EXCEPTIONS_156') {
         throw new RuntimeException('Explicit migration confirmation required');
     }
     $config = require $root.'/bootstrap/app.php';
@@ -64,9 +64,9 @@ try {
             $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lockName]);
         }
     }
-    echo 'WAREHOUSE_EXCEPTIONS_155_SNAPSHOT='.json_encode($results, JSON_THROW_ON_ERROR)."\n";
-    echo $apply ? "WAREHOUSE_EXCEPTIONS_155_APPLY_OK\n" : "WAREHOUSE_EXCEPTIONS_155_READ_ONLY_OK\n";
+    echo 'WAREHOUSE_EXCEPTIONS_156_SNAPSHOT='.json_encode($results, JSON_THROW_ON_ERROR)."\n";
+    echo $apply ? "WAREHOUSE_EXCEPTIONS_156_APPLY_OK\n" : "WAREHOUSE_EXCEPTIONS_156_READ_ONLY_OK\n";
 } catch (Throwable $error) {
-    fwrite(STDERR, 'WAREHOUSE_EXCEPTIONS_155_FAILED: '.$error->getMessage()."\n");
+    fwrite(STDERR, 'WAREHOUSE_EXCEPTIONS_156_FAILED: '.$error->getMessage()."\n");
     exit(1);
 }

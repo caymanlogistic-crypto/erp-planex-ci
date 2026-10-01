@@ -13,7 +13,7 @@ $pdo = new PDO(
     getenv('PLANEX_SCHEMA_DB_USER') ?: 'planex_ci', getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: 'planex_ci',
     [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC, PDO::ATTR_EMULATE_PREPARES=>false]
 );
-$migration = file_get_contents(__DIR__.'/../database/migrations-local/155_warehouse_stock_issue_exceptions.sql');
+$migration = file_get_contents(__DIR__.'/../database/migrations-local/156_warehouse_stock_issue_exceptions.sql');
 if ($migration === false) throw new RuntimeException('Migration missing.');
 $pdo->exec($migration);
 $pdo->exec($migration);

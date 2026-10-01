@@ -1,4 +1,4 @@
-name: Warehouse Exceptions 155 Production Migration
+name: Warehouse Exceptions 156 Production Migration
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       confirm_migration:
-        description: Type APPLY_WAREHOUSE_EXCEPTIONS_155
+        description: Type APPLY_WAREHOUSE_EXCEPTIONS_156
         required: true
         type: string
 
@@ -27,7 +27,7 @@ env:
 
 jobs:
   migrate:
-    if: ${{ inputs.confirm_migration == 'APPLY_WAREHOUSE_EXCEPTIONS_155' }}
+    if: ${{ inputs.confirm_migration == 'APPLY_WAREHOUSE_EXCEPTIONS_156' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -48,17 +48,17 @@ jobs:
           [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
-          php -l scripts/warehouse_stock_issue_exceptions_migration_155.php
-          test -s database/migrations-local/155_warehouse_stock_issue_exceptions.sql
+          php -l scripts/warehouse_stock_issue_exceptions_migration_156.php
+          test -s database/migrations-local/156_warehouse_stock_issue_exceptions.sql
           curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
-            "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/warehouse-exceptions-155-ci.json
+            "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/warehouse-exceptions-156-ci.json
           SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
           import json, os
-          rows = [r for r in json.load(open('/tmp/warehouse-exceptions-155-ci.json')).get('workflow_runs', [])
+          rows = [r for r in json.load(open('/tmp/warehouse-exceptions-156-ci.json')).get('workflow_runs', [])
                   if r.get('head_sha') == os.environ['SOURCE_SHA'] and r.get('event') == 'push']
           if not rows or max(rows, key=lambda r: r.get('run_number', 0)).get('conclusion') != 'success':
               raise SystemExit('Exact canonical ERP PLANEX CI is not green')
-          print('WAREHOUSE_EXCEPTIONS_155_CI_PASS=YES')
+          print('WAREHOUSE_EXCEPTIONS_156_CI_PASS=YES')
           PY
 
       - name: Configure isolated SSH transport
@@ -69,9 +69,9 @@ jobs:
         run: |
           set -euo pipefail
           install -d -m 700 "$HOME/.ssh"
-          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/warehouse_exceptions_155_key"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/warehouse_exceptions_156_key"
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/warehouse_exceptions_155_key" "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/warehouse_exceptions_156_key" "$HOME/.ssh/known_hosts"
 
       - name: Verify exact deployed code
         env:
@@ -82,11 +82,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/warehouse_exceptions_155_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/warehouse_exceptions_156_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
           test "$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
-          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "test -f '$LIVE_ROOT/scripts/warehouse_stock_issue_exceptions_migration_155.php'"
+          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "test -f '$LIVE_ROOT/scripts/warehouse_stock_issue_exceptions_migration_156.php'"
 
-      - name: Inspect apply and verify tenant 155
+      - name: Inspect apply and verify tenant 156
         env:
           SOURCE_SHA: ${{ inputs.source_sha }}
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
@@ -95,24 +95,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          tenant_hash="$(sha256sum database/migrations-local/155_warehouse_stock_issue_exceptions.sql | awk '{print $1}')"
-          remote=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/warehouse_exceptions_155_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
+          tenant_hash="$(sha256sum database/migrations-local/156_warehouse_stock_issue_exceptions.sql | awk '{print $1}')"
+          remote=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/warehouse_exceptions_156_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
           base="PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER' PLANEX_TENANT_SHA256='$tenant_hash'"
-          script="$LIVE_ROOT/scripts/warehouse_stock_issue_exceptions_migration_155.php"
+          script="$LIVE_ROOT/scripts/warehouse_stock_issue_exceptions_migration_156.php"
           "${remote[@]}" "$base /usr/bin/php8.5 '$script'" | tee before.txt
-          grep -q '^WAREHOUSE_EXCEPTIONS_155_READ_ONLY_OK$' before.txt
-          "${remote[@]}" "$base WAREHOUSE_EXCEPTIONS_155_MODE=apply WAREHOUSE_EXCEPTIONS_155_CONFIRM=APPLY_WAREHOUSE_EXCEPTIONS_155 /usr/bin/php8.5 '$script'" | tee apply.txt
-          grep -q '^WAREHOUSE_EXCEPTIONS_155_APPLY_OK$' apply.txt
+          grep -q '^WAREHOUSE_EXCEPTIONS_156_READ_ONLY_OK$' before.txt
+          "${remote[@]}" "$base WAREHOUSE_EXCEPTIONS_156_MODE=apply WAREHOUSE_EXCEPTIONS_156_CONFIRM=APPLY_WAREHOUSE_EXCEPTIONS_156 /usr/bin/php8.5 '$script'" | tee apply.txt
+          grep -q '^WAREHOUSE_EXCEPTIONS_156_APPLY_OK$' apply.txt
           "${remote[@]}" "$base /usr/bin/php8.5 '$script'" | tee after.txt
-          grep -q '^WAREHOUSE_EXCEPTIONS_155_READ_ONLY_OK$' after.txt
+          grep -q '^WAREHOUSE_EXCEPTIONS_156_READ_ONLY_OK$' after.txt
           test "$("${remote[@]}" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
-          echo 'WAREHOUSE_EXCEPTIONS_155_PRODUCTION_PASS=YES'
+          echo 'WAREHOUSE_EXCEPTIONS_156_PRODUCTION_PASS=YES'
 
       - name: Save migration evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: warehouse-exceptions-155-${{ github.run_id }}
+          name: warehouse-exceptions-156-${{ github.run_id }}
           path: |
             before.txt
             apply.txt
@@ -123,4 +123,4 @@ jobs:
         if: always()
         shell: bash
         run: |
-          rm -f "$HOME/.ssh/warehouse_exceptions_155_key"
+          rm -f "$HOME/.ssh/warehouse_exceptions_156_key"
