@@ -15,6 +15,7 @@ use App\Service\MaxMessagingService;
 use App\Service\RouteExecutorReviewEmail;
 use App\Service\RouteExecutorReviewArchive;
 use App\Service\RouteExecutorReviewCardService;
+use App\Service\RouteExecutorExistingEntityService;
 use App\Service\RouteExecutorReviewMaterializationService;
 use App\Service\RouteExecutorContractMailService;
 use App\Service\RouteExecutorReviewMaxMessage;
@@ -106,6 +107,20 @@ final class RouteExecutorReviewController
                     'id'=>$file['id'],'formId'=>$file['formId'],'name'=>$file['name'],'index'=>$file['index'],
                     'original_name'=>$file['original_name'],'mime'=>$file['mime'],'size'=>$file['size']],$card['files']),
                     'revision'=>(int)$card['revision'],'updated_at'=>$card['updated_at']] : null]);
+        } catch (Throwable $error) { $this->failure($error); }
+    }
+
+    public function existing(): void
+    {
+        header('Cache-Control: no-store');
+        try {
+            [$company, , $tenant] = $this->context();
+            $service = new RouteExecutorExistingEntityService($tenant, (int)$company['id']);
+            $kind = (string)($_GET['kind'] ?? '');
+            if (isset($_GET['id'])) {
+                $this->json(['ok' => true, 'item' => $service->detail($kind, (int)$_GET['id'])]);
+            }
+            $this->json(['ok' => true, 'items' => $service->search($kind, (string)($_GET['q'] ?? ''))]);
         } catch (Throwable $error) { $this->failure($error); }
     }
 
