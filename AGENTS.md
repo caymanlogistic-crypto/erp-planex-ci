@@ -93,6 +93,8 @@ Publication loop, once per ready batch:
 
 Normal publication is serialized by the local publisher. It refreshes canonical under the queue lock, merges non-conflicting canonical movement, runs one final exact-candidate preflight, rechecks canonical, and pushes only a clean fast-forward task branch. SentinelX and the persistent remote runner are outside the normal PLANEX task route.
 
+Task-branch publication, PR creation and GitHub CI may proceed in parallel across isolated tasks. They do not require `erp-production-release`. Acquire that production lease only after the exact PR candidate has a terminal green aggregate and is ready to merge, immediately before its final canonical refresh. Hold it through any checks invalidated by canonical movement, merge, exact-SHA deploy, separately authorized migration and production verification, then release it in `finally`. A busy production lease means `QUEUED_FOR_RELEASE`: leave the green PR ready and do not start an independent merge, deploy or migration.
+
 For CRITICAL repository-memory work:
 
 `IMPLEMENTATION_SHA → REPOSITORY_MEMORY_SHA → LOCAL_PREFLIGHT_PASS → LOCAL_PUBLISH_PASS`.
@@ -108,7 +110,7 @@ The implementation SHA must exist before repository-memory `Verified SHA` is upd
 - Never reset, delete or clean another task's branch, worktree, evidence, database, port or process.
 - Do not change common Git `core.worktree`, global RDC, PATH, PHP or MySQL configuration for a task-local issue.
 - `source` is a shared object-store checkout, not an implementation workspace.
-- Readiness and focused tests run in parallel per task; only publication and explicitly named external writes are serialized. A busy lease must report its owning TASK_ID/PID instead of inviting blind retries.
+- Readiness, focused tests, task-branch publication, PRs and GitHub CI run in parallel per task. The local publisher serializes only its short canonical-refresh/preflight/push transaction. Production merge/deploy/migration and explicitly named external writes use their dedicated leases. A busy lease must report its owning TASK_ID/PID instead of inviting blind retries.
 
 ## GitHub and correction discipline
 
