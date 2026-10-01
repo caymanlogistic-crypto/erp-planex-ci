@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+require_once __DIR__ . '/RouteExecutorExistingEntityService.php';
+
 use App\Core\Database;
 use DomainException;
 use PDO;
@@ -30,7 +32,16 @@ final class RouteExecutorReviewMaterializationService
             $stored=$cards->storedFiles($card);
             $package=RouteExecutorReviewPackage::inspect($card['snapshot'],$stored,true);
             if (!$package['full']) throw new DomainException('Карточка не содержит полный комплект данных.');
-            [$post,$files]=self::standardInput($card['snapshot'],$stored);
+            $uploads=$cards->storedFiles($card,false);
+            [$post,$files]=self::standardInput($card['snapshot'],$uploads);
+            $post['existing']=(array)($card['snapshot']['selected_entities']??[]);
+            $removed=array_map('intval',(array)($card['snapshot']['removed_documents']??[]));
+            $uploadedKeys=array_fill_keys(array_column($uploads,'key'),true);
+            $library=new RouteExecutorExistingEntityService($this->tenant,$this->companyId);
+            foreach ($post['existing'] as $kind=>$id) foreach ($library->detail((string)$kind,(int)$id)['files'] as $document) {
+                if (isset($uploadedKeys[$document['formId'].'|'.$document['field']])) $removed[]=(int)$document['id'];
+            }
+            $post['existing_removed_documents']=array_values(array_unique($removed));
             $finish=function (int $crewId) use ($cardId): void {
                 $q=$this->tenant->prepare("UPDATE route_executor_review_cards SET deleted_at=NOW(6),updated_at=NOW(6) WHERE card_id=? AND deleted_at IS NULL AND EXISTS (SELECT 1 FROM route_executor_review_sends s WHERE s.card_id=route_executor_review_cards.card_id AND s.stage='final' AND s.final_mail_status='accepted')");
                 $q->execute([$cardId]);

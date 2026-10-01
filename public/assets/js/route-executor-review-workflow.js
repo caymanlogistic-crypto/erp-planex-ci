@@ -97,8 +97,9 @@
     brand: 'Марка', plate_number: 'Госномер',
     vin: 'VIN код', capacity_tons: 'Грузоподъёмность', volume_m3: 'Объём'
   };
-  const filled = element => !!element && !element.disabled && !!String(element.value || '').trim();
+  const filled = element => !!element && (!element.disabled || element.dataset.existingLocked === '1') && !!String(element.value || '').trim();
   const hasFile = (form, name) => {
+    if (window.routeExecutorExistingParts?.hasFile(form?.id, name)) return true;
     const files = [...(form?.elements.namedItem(name)?.files || [])];
     const vehicleFile = name.includes('[primary]') || name.includes('[secondary]');
     const allowed = vehicleFile
@@ -382,7 +383,7 @@
         }
       }
     }
-    return { controls, files, logist: document.getElementById('route-executor-responsible-logist')?.value || '',
+    return { controls, files, ...window.routeExecutorExistingParts?.snapshot(), logist: document.getElementById('route-executor-responsible-logist')?.value || '',
       trip_id: document.getElementById('route-executor-trip-id')?.value || '',
       trip_label: document.getElementById('route-executor-trip-search')?.value || '' };
   }
@@ -392,7 +393,8 @@
       controls: snapshot.controls.map(({ formId, name, index, value, checked }) => [formId, name, index, value, checked]),
       files: snapshot.files.map(({ formId, name, index, selected }) =>
         [formId, name, index, selected.map(file => [file.name, file.size, file.lastModified])]),
-      logist: snapshot.logist, trip_id: snapshot.trip_id, trip_label: snapshot.trip_label
+      logist: snapshot.logist, trip_id: snapshot.trip_id, trip_label: snapshot.trip_label,
+      selected_entities: snapshot.selected_entities || {}, removed_documents: snapshot.removed_documents || []
     });
   }
 
@@ -572,10 +574,12 @@
           draft = { ...draft, ...state.card.snapshot, files, revision: state.card.revision,
             stage: state.stage, savedAt: state.card.updated_at, signature: '' };
           restoreDraft(draft);
+          await window.routeExecutorExistingParts?.restore(draft);
           draft.signature = draftSignature(captureDraft());
         } else if (saved?.savedAt) {
           draft = { ...saved, revision: 0, stage: state.stage };
           restoreDraft(saved);
+          await window.routeExecutorExistingParts?.restore(saved);
           await persistDraft(captureDraft());
         }
       } catch (error) {
@@ -618,7 +622,8 @@
         const value = element?.tagName === 'SELECT' ? element.selectedOptions[0]?.textContent?.trim() || item.value : item.value.trim();
         return { name, value };
       });
-    const files = snapshot.files.filter(item => item.formId !== 'lab-contractor-form').flatMap(item => item.selected.map(file => file.name));
+    const files = [...snapshot.files.filter(item => item.formId !== 'lab-contractor-form').flatMap(item => item.selected.map(file => file.name)),
+      ...(window.routeExecutorExistingParts?.fileNames('general') || [])];
     const ready = readyActions().map(key => readinessTitles[key]);
     const contract = readinessReport('contract').fields;
     const driver = [...new Set([...readinessReport('training').fields, ...readinessReport('vehicle').fields.filter(value => !value.includes(':') && value !== 'Тип комплекта ТС')])];

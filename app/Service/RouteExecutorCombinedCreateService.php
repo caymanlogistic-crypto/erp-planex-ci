@@ -2,6 +2,8 @@
 
 namespace App\Service;
 
+require_once __DIR__ . '/RouteExecutorExistingEntityService.php';
+
 use App\Core\Database;
 use PDO;
 use RuntimeException;
@@ -17,6 +19,12 @@ final class RouteExecutorCombinedCreateService
         $contractor = (array) ($post['contractor'] ?? []);
         $driver = (array) ($post['driver'] ?? []);
         $vehicle = (array) ($post['vehicle'] ?? []);
+        $existing = (array)($post['existing'] ?? []);
+        $library = new RouteExecutorExistingEntityService($pdo, $companyId);
+        foreach ($existing as $kind => $id) {
+            if (!in_array($kind, ['contractor','driver','vehicle'], true) || (!is_int($id) && !ctype_digit((string)$id)) || (int)$id <= 0) throw new RuntimeException('Некорректный выбор из справочника.');
+            $library->detail($kind, (int)$id);
+        }
         $requestedLogistId = filter_var($post['responsible_logist_membership_id'] ?? null, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
         if ($requestedLogistId === false || $requestedLogistId === null) throw new RuntimeException('Выберите ответственного логиста.');
         $responsibleLogistId = EntityResponsibilityService::eligibleRecipientMembershipId($centralDb->connection(), $pdo, $companyId, (int) $requestedLogistId);
@@ -25,37 +33,39 @@ final class RouteExecutorCombinedCreateService
         if ($actorMembershipId <= 0) throw new RuntimeException('Не удалось определить сотрудника, создающего исполнителя рейса.');
         $contractorService = new ContractorService($config, $centralDb);
         $driverService = new DriverService($config, $centralDb);
-        $errors = $contractorService->validateContractor($contractor, $pdo);
+        $errors = isset($existing['contractor']) ? [] : $contractorService->validateContractor($contractor, $pdo);
         if ($errors) throw new RuntimeException('Подрядчик: ' . implode('; ', array_map('strval', $errors)));
 
         $fullName = preg_replace('/\s+/u', ' ', trim((string) ($driver['full_name'] ?? '')));
-        if (count(preg_split('/\s+/u', $fullName ?: '') ?: []) !== 3) throw new RuntimeException('Укажите полное ФИО водителя.');
+        if (!isset($existing['driver']) && count(preg_split('/\s+/u', $fullName ?: '') ?: []) !== 3) throw new RuntimeException('Укажите полное ФИО водителя.');
         $phone = self::phone((string) ($driver['phone'] ?? ''));
-        if ($phone === null) throw new RuntimeException('Укажите телефон водителя в формате +7 900 000-00-00.');
+        if (!isset($existing['driver']) && $phone === null) throw new RuntimeException('Укажите телефон водителя в формате +7 900 000-00-00.');
         $extraPhones = (array) ($driver['extra_phones'] ?? []);
-        foreach ($extraPhones as $extra) {
+        foreach (isset($existing['driver']) ? [] : $extraPhones as $extra) {
             if (self::phone((string) $extra) === null) throw new RuntimeException('Заполните каждый дополнительный телефон или удалите пустую строку.');
         }
         $driver['full_name'] = $fullName;
         $driver['phone'] = $phone;
-        foreach (['passport_number', 'license_number'] as $field) {
+        foreach (isset($existing['driver']) ? [] : ['passport_number', 'license_number'] as $field) {
             $raw = preg_replace('/\D+/', '', (string) ($driver[$field] ?? ''));
             $driver[$field] = $raw === '' ? null : (strlen($raw) === 10 ? substr($raw, 0, 4) . ' ' . substr($raw, 4) : throw new RuntimeException('Неверный формат номера паспорта или ВУ.'));
         }
-        $department = preg_replace('/\D+/', '', (string) ($driver['passport_department_code'] ?? ''));
-        $driver['passport_department_code'] = $department === '' ? null : (strlen($department) === 6 ? substr($department, 0, 3) . '-' . substr($department, 3) : throw new RuntimeException('Неверный код подразделения.'));
-        $snils = preg_replace('/\D+/', '', (string) ($driver['snils'] ?? ''));
-        $driver['snils'] = $snils === '' ? null : (strlen($snils) === 11 ? substr($snils, 0, 3) . '-' . substr($snils, 3, 3) . '-' . substr($snils, 6, 3) . ' ' . substr($snils, 9) : throw new RuntimeException('Неверный СНИЛС.'));
-        foreach (['passport_issue_date', 'license_issue_date'] as $field) $driver[$field] = self::date((string) ($driver[$field] ?? ''));
-        $driver['email'] = strtolower(trim((string) ($driver['email'] ?? '')));
-        if ($driver['email'] !== '' && !filter_var($driver['email'], FILTER_VALIDATE_EMAIL)) throw new RuntimeException('Неверный email водителя.');
+        if (!isset($existing['driver'])) {
+            $department = preg_replace('/\D+/', '', (string) ($driver['passport_department_code'] ?? ''));
+            $driver['passport_department_code'] = $department === '' ? null : (strlen($department) === 6 ? substr($department, 0, 3) . '-' . substr($department, 3) : throw new RuntimeException('Неверный код подразделения.'));
+            $snils = preg_replace('/\D+/', '', (string) ($driver['snils'] ?? ''));
+            $driver['snils'] = $snils === '' ? null : (strlen($snils) === 11 ? substr($snils, 0, 3) . '-' . substr($snils, 3, 3) . '-' . substr($snils, 6, 3) . ' ' . substr($snils, 9) : throw new RuntimeException('Неверный СНИЛС.'));
+            foreach (['passport_issue_date', 'license_issue_date'] as $field) $driver[$field] = self::date((string) ($driver[$field] ?? ''));
+            $driver['email'] = strtolower(trim((string) ($driver['email'] ?? '')));
+            if ($driver['email'] !== '' && !filter_var($driver['email'], FILTER_VALIDATE_EMAIL)) throw new RuntimeException('Неверный email водителя.');
+        }
 
         $setType = (string) ($vehicle['set_type'] ?? '');
         $rules = vehicleSetTypeRules();
         $rule = $rules[$setType] ?? null;
-        if (!$rule) throw new RuntimeException('Выберите тип комплекта ТС.');
+        if (!$rule && !isset($existing['vehicle'])) throw new RuntimeException('Выберите тип комплекта ТС.');
         $units = (array) ($vehicle['units'] ?? []);
-        foreach ($rule['units'] as $unitRole => $unitRule) {
+        foreach (isset($existing['vehicle']) ? [] : $rule['units'] as $unitRole => $unitRule) {
             $unit = (array) ($units[$unitRole] ?? []);
             if (trim((string) ($unit['plate_number'] ?? '')) === '') throw new RuntimeException('Укажите госномер транспортной единицы.');
             $vin = strtoupper(trim((string) ($unit['vin'] ?? '')));
@@ -93,19 +103,30 @@ final class RouteExecutorCombinedCreateService
         $savedPaths = [];
         $pdo->beginTransaction();
         try {
-            $contractorId = $contractorService->createContractor($pdo, $contractor, $userId, $role);
-            $contacts = ContractorContactService::normalizeSubmittedContacts($contractor['contacts'] ?? []);
-            if ($contacts['errors']) throw new RuntimeException('Проверьте контакты подрядчика.');
-            ContractorContactService::replaceForContractor($pdo, $contractorId, $contacts['contacts'], $userId, $role);
+            $contractorId = isset($existing['contractor']) ? (int)$existing['contractor'] : $contractorService->createContractor($pdo, $contractor, $userId, $role);
+            if (!isset($existing['contractor'])) {
+                $contacts = ContractorContactService::normalizeSubmittedContacts($contractor['contacts'] ?? []);
+                if ($contacts['errors']) throw new RuntimeException('Проверьте контакты подрядчика.');
+                ContractorContactService::replaceForContractor($pdo, $contractorId, $contacts['contacts'], $userId, $role);
+            }
 
-            $driverId = $driverService->createDriver($pdo, $driver, $userId, $role);
-            if ($extraPhones) {
+            $driverId = isset($existing['driver']) ? (int)$existing['driver'] : $driverService->createDriver($pdo, $driver, $userId, $role);
+            if (!isset($existing['driver']) && $extraPhones) {
                 $phoneInsert = $pdo->prepare('INSERT INTO driver_phones (driver_id,phone,is_main,comment,created_by_user_id,created_by_role) VALUES (?, ?, 0, ?, ?, ?)');
                 foreach ($extraPhones as $index => $extra) $phoneInsert->execute([$driverId, self::phone((string) $extra), trim((string) ($driver['extra_phone_comments'][$index] ?? '')) ?: null, $userId, $role]);
             }
 
-            $membershipId = RegulatedDataScopeService::assertCanCreate('vehicle_unit');
             $unitIds = [];
+            if (isset($existing['vehicle'])) {
+                $vehicleSetId = (int)$existing['vehicle'];
+                $setRow = $pdo->prepare('SELECT primary_vehicle_unit_id,secondary_vehicle_unit_id FROM vehicle_sets WHERE id=? AND deleted_at IS NULL FOR UPDATE');
+                $setRow->execute([$vehicleSetId]);
+                $setRow = $setRow->fetch(PDO::FETCH_ASSOC);
+                if (!$setRow) throw new RuntimeException('Комплект ТС больше недоступен.');
+                $unitIds['primary'] = (int)$setRow['primary_vehicle_unit_id'];
+                if (!empty($setRow['secondary_vehicle_unit_id'])) $unitIds['secondary'] = (int)$setRow['secondary_vehicle_unit_id'];
+            } else {
+            $membershipId = RegulatedDataScopeService::assertCanCreate('vehicle_unit');
             $unitInsert = $pdo->prepare('INSERT INTO vehicle_units (plate_number,brand,model,unit_type,vin,capacity_tons,volume_m3,diagnostic_card_number,diagnostic_card_date,status,comments,created_by_user_id,created_by_role) VALUES (?,?,?,?,?,?,?,?,?,\'active\',NULL,?,?)');
             foreach ($rule['units'] as $unitRole => $unitRule) {
                 $unit = (array) $units[$unitRole];
@@ -127,10 +148,20 @@ final class RouteExecutorCombinedCreateService
             $setInsert = $pdo->prepare('INSERT INTO vehicle_sets (set_type,primary_vehicle_unit_id,secondary_vehicle_unit_id,status,comments,created_by_user_id,created_by_membership_id,created_by_role) VALUES (?,?,?,\'active\',?,?,?,?)');
             $setInsert->execute([$setType, $unitIds['primary'], $unitIds['secondary'] ?? null, trim((string) ($vehicle['comments'] ?? '')) ?: null, $userId, $membershipId, $role]);
             $vehicleSetId = (int) $pdo->lastInsertId();
+            }
 
-            $blockInsert = $pdo->prepare('INSERT INTO driver_vehicle_blocks (driver_id,vehicle_set_id,status,created_by_user_id,created_by_role) VALUES (?, ?, \'active\', ?, ?)');
-            $blockInsert->execute([$driverId, $vehicleSetId, $userId, $role]);
-            $blockId = (int) $pdo->lastInsertId();
+            $blockLookup = $pdo->prepare('SELECT id,status,deleted_at FROM driver_vehicle_blocks WHERE driver_id=? AND vehicle_set_id=? LIMIT 1 FOR UPDATE');
+            $blockLookup->execute([$driverId, $vehicleSetId]);
+            $block = $blockLookup->fetch(PDO::FETCH_ASSOC) ?: null;
+            $blockId = (int)($block['id'] ?? 0);
+            if ($blockId > 0 && ($block['deleted_at'] !== null || $block['status'] !== 'active')) {
+                $pdo->prepare("UPDATE driver_vehicle_blocks SET status='active',deleted_at=NULL WHERE id=?")->execute([$blockId]);
+            }
+            if ($blockId <= 0) {
+                $blockInsert = $pdo->prepare('INSERT INTO driver_vehicle_blocks (driver_id,vehicle_set_id,status,created_by_user_id,created_by_role) VALUES (?, ?, \'active\', ?, ?)');
+                $blockInsert->execute([$driverId, $vehicleSetId, $userId, $role]);
+                $blockId = (int)$pdo->lastInsertId();
+            }
             $crewInsert = $pdo->prepare('INSERT INTO crews (contractor_id,vehicle_id,driver_id,driver_vehicle_block_id,status,comments,created_by_user_id,created_by_role) VALUES (?,?,?,?,\'active\',NULL,?,?)');
             $crewInsert->execute([$contractorId, $unitIds['primary'], $driverId, $blockId, $userId, $role]);
             $crewId = (int) $pdo->lastInsertId();
@@ -138,6 +169,16 @@ final class RouteExecutorCombinedCreateService
             $responsibilityInsert = $pdo->prepare('INSERT INTO entity_responsibilities (entity_type,entity_id,membership_id,assigned_by_membership_id) VALUES (?,?,?,?)');
             $responsibilityInsert->execute(['route_executor', $crewId, $responsibleLogistId, $actorMembershipId]);
 
+            $removed = (array)($post['existing_removed_documents'] ?? []);
+            if ($removed) {
+                $allowed = [];
+                foreach ($existing as $kind => $id) foreach ($library->detail($kind, (int)$id)['files'] as $doc) $allowed[(int)$doc['id']] = true;
+                $removeDocument = $pdo->prepare("UPDATE documents SET deleted_at=NOW(),deleted_by_user_id=?,deleted_by_role=?,delete_comment='Replaced via route executor' WHERE id=? AND deleted_at IS NULL");
+                foreach (array_unique(array_map('intval', $removed)) as $documentId) {
+                    if (!isset($allowed[$documentId])) throw new RuntimeException('Документ для замены недоступен.');
+                    $removeDocument->execute([$userId,$role,$documentId]);
+                }
+            }
             self::storeDocuments($pdo, $companyId, 'contractor', $contractorId, $contractor, $files, 'contractor', $userId, $role, $savedPaths, null, $storedFiles);
             self::storeDocuments($pdo, $companyId, 'driver', $driverId, $driver, $files, 'driver', $userId, $role, $savedPaths, null, $storedFiles);
             foreach ($unitIds as $unitRole => $unitId) self::storeDocuments($pdo, $companyId, 'vehicle_unit', $unitId, $vehicle, $files, 'vehicle', $userId, $role, $savedPaths, $unitRole, $storedFiles);

@@ -9,6 +9,7 @@ require_once base_path('app/Service/MaxEventNotificationService.php');
 require_once base_path('app/Service/RouteExecutorReviewRecipientService.php');
 require_once base_path('app/Service/RouteExecutorReviewPackage.php');
 require_once base_path('app/Service/RouteExecutorReviewCardService.php');
+require_once base_path('app/Service/RouteExecutorExistingEntityService.php');
 require_once base_path('app/Service/RouteExecutorReviewMaterializationService.php');
 require_once base_path('app/Service/RouteExecutorReviewArchive.php');
 require_once base_path('app/Service/RouteExecutorReviewEmail.php');
@@ -25,6 +26,7 @@ $router->get('/company/route-executors/create', [$controller, 'createForm'], $ro
 $router->post('/company/route-executors/create', [$controller, 'createSubmit'], $routeExecutorsPage);
 $router->get('/company/route-executors/review/config', [$reviewController, 'config'], $routeExecutorsPage);
 $router->get('/company/route-executors/review/status', [$reviewController, 'status'], $routeExecutorsPage);
+$router->get('/company/route-executors/review/existing', [$reviewController, 'existing'], $routeExecutorsPage);
 $router->post('/company/route-executors/review/send', [$reviewController, 'send'], $routeExecutorsPage);
 $router->get('/company/route-executors/{id}', [$controller, 'view'], $routeExecutorsPage);
 $router->get('/company/route-executors/{id}/edit', [$controller, 'editForm'], $routeExecutorsPage);

@@ -37,11 +37,11 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 404, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 405, f"company route inventory drift: {len(company_routes)}"
 assert ("app/Http/Routes/company_bank_finance.php", "/company/finance/bank-accounts/import/{id}/download") in company_routes
 review_routes = (ROOT / 'app/Http/Routes/company_route_executors.php').read_text(encoding='utf-8')
-assert review_routes.count('$reviewController,') == 3
-assert review_routes.count('$routeExecutorsPage);') == 10, 'Review endpoints must retain the route executor role gate'
+assert review_routes.count('$reviewController,') == 4
+assert review_routes.count('$routeExecutorsPage);') == 11, 'Review endpoints must retain the route executor role gate'
 documents = (ROOT / 'app/Http/Routes/company_trip_documents.php').read_text(encoding="utf-8")
 assert documents.count('$router->') == 16
 assert "'company.documents.request'" in documents and "'company.documents.collection'" in documents
@@ -84,4 +84,4 @@ activation = index_source[index_source.index("if ($rolesAccessEnabled)"):index_s
 assert "catch (" not in activation
 for route_file in ("company_document_generator.php", "company_switch.php", "company_roles_access.php"):
     assert route_file in index_source
-print("roles access complete route registry: PASS (404 routes; three review endpoints; three statistics ACLs; 1 retired legacy writer)")
+print("roles access complete route registry: PASS (405 routes; four review endpoints; three statistics ACLs; 1 retired legacy writer)")

@@ -1,0 +1,31 @@
+/* DESIGN LAB overrides. Keep selectors scoped to the target page. */
+#route-executor-create-modal .lab-entity-heading { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; min-height:29px; }
+#route-executor-create-modal .lab-picker-trigger { appearance:none; border:1px solid #c7b594; border-radius:3px; background:#fffaf0; color:#785022; cursor:pointer; font:600 11px/1.25 Arial,sans-serif; padding:5px 9px; white-space:nowrap; }
+#route-executor-create-modal .lab-picker-trigger:hover, #route-executor-create-modal .lab-picker-trigger:focus-visible { background:#f7e7c9; border-color:#a67133; outline:2px solid #a67133; outline-offset:1px; }
+#route-executor-create-modal .lab-picker-trigger[data-selected] { border-color:#8ca8b8; background:#eaf3f7; color:#24566c; }
+#route-executor-create-modal .lab-entity-picker { margin:0 0 12px; border:1px solid #c3cbd0; background:#fff; box-shadow:0 5px 14px #1728331c; border-radius:3px; padding:10px; }
+#route-executor-create-modal .lab-entity-picker[hidden] { display:none; }
+#route-executor-create-modal .lab-picker-top { display:flex; align-items:end; gap:8px; }
+#route-executor-create-modal .lab-picker-top label { flex:1; min-width:0; color:#5d6264; font:600 11px/1.3 Arial,sans-serif; }
+#route-executor-create-modal .lab-picker-top input { display:block; box-sizing:border-box; width:100%; height:30px; margin-top:4px; border:1px solid #b9b7af; border-radius:2px; background:#fff; padding:5px 8px; font:12px Arial,sans-serif; }
+#route-executor-create-modal .lab-picker-close { width:30px; height:30px; flex:none; border:1px solid #c6c4bc; border-radius:2px; background:#f6f4ee; color:#4e4a43; cursor:pointer; }
+#route-executor-create-modal .lab-picker-results { margin-top:8px; max-height:170px; overflow-y:auto; }
+#route-executor-create-modal .lab-picker-results button { display:block; box-sizing:border-box; width:100%; min-height:32px; border:0; border-bottom:1px solid #e9e6df; background:#fff; color:#2c363b; text-align:left; padding:7px 8px; cursor:pointer; font:12px Arial,sans-serif; }
+#route-executor-create-modal .lab-picker-results button:hover, #route-executor-create-modal .lab-picker-results button:focus-visible { background:#edf3f6; outline:1px solid #62879b; }
+#route-executor-create-modal .lab-no-results { color:#777; padding:8px; font:12px Arial,sans-serif; }
+#route-executor-create-modal .lab-start-new { margin-top:8px; border:0; background:transparent; color:#7a4e23; padding:4px 2px; cursor:pointer; font:600 11px Arial,sans-serif; text-decoration:underline; }
+#route-executor-create-modal .lab-start-new[hidden] { display:none; }
+#route-executor-create-modal .lab-entity-locked { background:#f0f1f1; border:1px solid #d2d5d6; border-radius:3px; padding:9px; margin:0 -9px; }
+#route-executor-create-modal .lab-entity-locked input:not([type=file]), #route-executor-create-modal .lab-entity-locked select, #route-executor-create-modal .lab-entity-locked textarea { color:#4d5558 !important; background:#e8ebec !important; border-color:#cdd1d2 !important; opacity:1 !important; cursor:default; }
+#route-executor-create-modal .lab-entity-locked button { opacity:.55; cursor:not-allowed; }
+#route-executor-create-modal .lab-lock-caption { margin-bottom:9px; padding:6px 8px; border-left:3px solid #7794a1; color:#49616c; background:#e2eaed; font:11px/1.35 Arial,sans-serif; }
+#route-executor-create-modal .lab-file-state { display:inline-block; max-width:100%; overflow-wrap:anywhere; margin-top:4px; border-radius:3px; padding:3px 6px; font:600 10px/1.25 Arial,sans-serif; }
+#route-executor-create-modal .lab-file-existing .lab-file-state { color:#24566d; background:#dcecf4; }
+#route-executor-create-modal .lab-file-existing .file-meta,
+#route-executor-create-modal .lab-file-removed .file-meta { display:none; }
+#route-executor-create-modal .lab-file-added .lab-file-state { color:#216445; background:#d9f2e3; }
+#route-executor-create-modal .lab-file-replaced .lab-file-state { color:#80531a; background:#ffedc8; }
+#route-executor-create-modal .lab-file-removed .lab-file-state { color:#7b7772; background:#e8e6e3; text-decoration:line-through; }
+#route-executor-create-modal .lab-file-remove { flex:none; border:0; background:transparent; color:#745534; padding:4px; cursor:pointer; font:11px Arial,sans-serif; text-decoration:underline; }
+#route-executor-create-modal .lab-file-remove:focus-visible { outline:2px solid #a67133; }
+@media (max-width:520px) { #route-executor-create-modal .lab-picker-trigger { white-space:normal; text-align:center; } #route-executor-create-modal .lab-entity-locked { margin:0; } #route-executor-create-modal .lab-file-remove { padding-inline:2px; } }

@@ -8,6 +8,7 @@ use App\Security\EffectiveAccess;
 use App\Service\RouteExecutorCombinedCreateService;
 use App\Service\RouteExecutorReviewMaterializationService;
 use App\Service\RouteExecutorDeletionService;
+use App\Service\RouteExecutorExistingEntityService;
 
 $config = require dirname(__DIR__) . '/bootstrap/app.php';
 require_once BASE_PATH . '/app/Support/entrypoint_dependencies.php';
@@ -213,4 +214,43 @@ try {
     foreach ($fixturePaths as $path) @unlink($path);
     @rmdir($reviewDir);
 }
+$reuseContractorId=(int)$pdo->query('SELECT c.id FROM contractors c LEFT JOIN documents d ON d.entity_type=\'contractor\' AND d.entity_id=c.id AND d.deleted_at IS NULL WHERE c.deleted_at IS NULL AND d.id IS NULL ORDER BY c.id DESC LIMIT 1')->fetchColumn();
+$reuseDriverId=(int)$pdo->query('SELECT id FROM drivers WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 1')->fetchColumn();
+$reuseVehicleId=(int)$pdo->query('SELECT id FROM vehicle_sets WHERE deleted_at IS NULL ORDER BY id DESC LIMIT 1')->fetchColumn();
+$contractorCount=(int)$pdo->query('SELECT COUNT(*) FROM contractors')->fetchColumn();
+$driverCount=(int)$pdo->query('SELECT COUNT(*) FROM drivers')->fetchColumn();
+$vehicleCount=(int)$pdo->query('SELECT COUNT(*) FROM vehicle_sets')->fetchColumn();
+$reusePost=$payload('7701234591','А701ВС77');
+$reusePost['existing']=['contractor'=>$reuseContractorId];
+$reusedCrew=RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$reusePost,[],101,'company_owner');
+$reusedRow=$pdo->query('SELECT contractor_id FROM crews WHERE id='.$reusedCrew)->fetch(PDO::FETCH_ASSOC);
+if ((int)$reusedRow['contractor_id']!==$reuseContractorId || (int)$pdo->query('SELECT COUNT(*) FROM contractors')->fetchColumn()!==$contractorCount
+    || (int)$pdo->query('SELECT COUNT(*) FROM drivers')->fetchColumn()!==$driverCount+1
+    || (int)$pdo->query('SELECT COUNT(*) FROM vehicle_sets')->fetchColumn()!==$vehicleCount+1) throw new RuntimeException('Existing contractor was duplicated instead of linking a new driver.');
+$reusePost=$payload('7701234592','А702ВС77');
+$reusePost['existing']=['driver'=>$reuseDriverId,'vehicle'=>$reuseVehicleId];
+$reusedCrew=RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$reusePost,[],101,'company_owner');
+$reusedRow=$pdo->query('SELECT c.driver_id,b.vehicle_set_id FROM crews c JOIN driver_vehicle_blocks b ON b.id=c.driver_vehicle_block_id WHERE c.id='.$reusedCrew)->fetch(PDO::FETCH_ASSOC);
+if ((int)$reusedRow['driver_id']!==$reuseDriverId || (int)$reusedRow['vehicle_set_id']!==$reuseVehicleId
+    || (int)$pdo->query('SELECT COUNT(*) FROM drivers')->fetchColumn()!==$driverCount+1
+    || (int)$pdo->query('SELECT COUNT(*) FROM vehicle_sets')->fetchColumn()!==$vehicleCount+1) throw new RuntimeException('Existing driver or vehicle set was duplicated.');
+$existingDir=storage_path("companies/7/documents/contractor/$reuseContractorId");
+if (!is_dir($existingDir) && !mkdir($existingDir,0750,true)) throw new RuntimeException('Existing document fixture directory unavailable.');
+$existingPath=$existingDir.'/existing-card.pdf';
+file_put_contents($existingPath,'%PDF-1.4 existing card');
+$relative="companies/7/documents/contractor/$reuseContractorId/existing-card.pdf";
+try {
+    $q=$pdo->prepare("INSERT INTO documents(entity_type,entity_id,document_type,original_name,stored_name,relative_path,mime_type,file_size,status) VALUES('contractor',?,'Карточка предприятия','Карточка предприятия.pdf','existing-card.pdf',?,'application/pdf',?,'uploaded')");
+    $q->execute([$reuseContractorId,$relative,filesize($existingPath)]);
+    $library=new RouteExecutorExistingEntityService($pdo,7);
+    $detail=$library->detail('contractor',$reuseContractorId);
+    if (!in_array('predef_doc[company_card]',array_column($detail['files'],'field'),true)) throw new RuntimeException('Existing standard file did not appear in contractor form.');
+    $snapshot=$library->canonicalize(['controls'=>[['formId'=>'lab-contractor-form','name'=>'name','index'=>0,'value'=>'Подмена','label'=>'Наименование']],
+        'selected_entities'=>['contractor'=>$reuseContractorId],'removed_documents'=>[]]);
+    if (($snapshot['controls'][0]['value']??'')==='Подмена') throw new RuntimeException('Saved card trusted edited read-only data.');
+    $linked=$library->documentsForSnapshot($snapshot,[]);
+    if (count($linked)!==1 || file_get_contents($linked[0]['tmp_name'])!=='%PDF-1.4 existing card') throw new RuntimeException('Existing file was not linked to review package.');
+    $snapshot['removed_documents']=[(int)$detail['files'][0]['id']];
+    if ($library->documentsForSnapshot($snapshot,[])!==[]) throw new RuntimeException('Removed existing file remained in review package.');
+} finally { @unlink($existingPath); }
 echo "ROUTE_EXECUTOR_COMBINED_TRANSACTION=PASS\n";

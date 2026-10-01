@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+require_once __DIR__ . '/RouteExecutorExistingEntityService.php';
+
 use DomainException;
 use PDO;
 use Throwable;
@@ -39,9 +41,11 @@ final class RouteExecutorReviewCardService
     {
         if (!$this->ready()) throw new DomainException('Карточки ожидают обновления структуры базы данных (154).');
         if ($expectedRevision<0) throw new DomainException('Некорректная версия карточки.');
+        $snapshot=(new RouteExecutorExistingEntityService($this->tenant,$this->companyId))->canonicalize($snapshot);
         RouteExecutorReviewPackage::inspect($snapshot,[]);
         $clean=['controls'=>$snapshot['controls'],'logist'=>(string)($snapshot['logist']??''),
-            'trip_id'=>(string)($snapshot['trip_id']??''),'trip_label'=>(string)($snapshot['trip_label']??'')];
+            'trip_id'=>(string)($snapshot['trip_id']??''),'trip_label'=>(string)($snapshot['trip_label']??''),
+            'selected_entities'=>$snapshot['selected_entities'],'removed_documents'=>$snapshot['removed_documents']];
         if (mb_strlen($clean['trip_label'])>600 || !preg_match('/^\d{0,20}$/D',$clean['logist']) || !preg_match('/^\d{0,20}$/D',$clean['trip_id'])) throw new DomainException('Некорректный логист или рейс.');
         $snapshotJson=json_encode($clean,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
         if (strlen($snapshotJson)>262144) throw new DomainException('Карточка слишком большая.');
@@ -107,12 +111,14 @@ final class RouteExecutorReviewCardService
     public function touch(string $id): void
     { if ($this->ready()) $this->tenant->prepare('UPDATE route_executor_review_cards SET updated_at=NOW(6) WHERE card_id=? AND deleted_at IS NULL')->execute([$id]); }
 
-    public function storedFiles(array $card): array
+    public function storedFiles(array $card, bool $includeExisting=true): array
     {
         $out=[];
         foreach ($card['files'] as $file) $out[]=['key'=>$file['formId'].'|'.$file['name'],'index'=>(int)$file['index'],
             'name'=>$file['original_name'],'mime'=>(string)$file['mime'],
             'tmp_name'=>$this->absoluteFile((string)$file['path']),'error'=>UPLOAD_ERR_OK,'size'=>(int)$file['size']];
+        if ($includeExisting) $out=array_merge($out,(new RouteExecutorExistingEntityService($this->tenant,$this->companyId))
+            ->documentsForSnapshot($card['snapshot'],$out));
         return $out;
     }
 
