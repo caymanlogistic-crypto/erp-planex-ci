@@ -13,6 +13,7 @@ use App\Service\MaxEventNotificationService;
 use App\Service\RouteExecutorReviewEmail;
 use App\Service\RouteExecutorReviewPackage;
 use App\Service\RouteExecutorReviewRecipientService;
+use App\Service\RegulatedDataScopeService;
 use DomainException;
 use PDO;
 use Throwable;
@@ -21,8 +22,46 @@ final class RouteExecutorReviewController
 {
     public function __construct(private readonly array $config,private readonly Database $db) {}
 
+    public function trips(): void
+    {
+        header('Cache-Control: no-store');
+        try {
+            [,,$tenant]=$this->context();
+            $search=trim((string)($_GET['q']??''));
+            if (mb_strlen($search)>100) throw new DomainException('Слишком длинный запрос поиска.');
+            $scope=RegulatedDataScopeService::condition('waste_trip','t.id','t.created_by_membership_id');
+            $sql="SELECT t.business_id,t.comment FROM waste_trips t WHERE t.deleted_at IS NULL AND t.status NOT IN ('cancelled','archived') AND {$scope['sql']}";
+            $params=$scope['params'];
+            if ($search!=='') {
+                $sql.=' AND (CAST(t.business_id AS CHAR) LIKE ? OR t.comment LIKE ?)';
+                $term='%'.str_replace(['\\','%','_'],['\\\\','\\%','\\_'],ltrim($search,'#')).'%';
+                $params[]=$term;$params[]=$term;
+            }
+            $sql.=' ORDER BY t.business_id DESC LIMIT 30';
+            $q=$tenant->prepare($sql);$q->execute($params);
+            $this->json(['ok'=>true,'trips'=>array_map(static fn(array $row):array=>[
+                'id'=>(int)$row['business_id'],'label'=>self::tripLabel($row),
+            ],$q->fetchAll(PDO::FETCH_ASSOC))]);
+        } catch (Throwable $error) { $this->failure($error); }
+    }
+
+    private static function tripLabel(array $row): string
+    { return '#'.(int)$row['business_id'].' '.(trim((string)($row['comment']??''))?:'Без наименования'); }
+
+    private function selectedTrip(PDO $tenant,int $businessId): string
+    {
+        if ($businessId<=0) throw new DomainException('Выберите рейс перед отправкой.');
+        $scope=RegulatedDataScopeService::condition('waste_trip','t.id','t.created_by_membership_id');
+        $q=$tenant->prepare("SELECT t.business_id,t.comment FROM waste_trips t WHERE t.business_id=? AND t.deleted_at IS NULL AND t.status NOT IN ('cancelled','archived') AND {$scope['sql']} LIMIT 1");
+        $q->execute(array_merge([$businessId],$scope['params']));
+        $row=$q->fetch(PDO::FETCH_ASSOC);
+        if (!$row) throw new DomainException('Выбранный рейс недоступен. Выберите действующий рейс.');
+        return self::tripLabel($row);
+    }
+
     public function config(): void
     {
+        if (isset($_GET['trip_search'])) $this->trips();
         header('Cache-Control: no-store');
         try {
             [$company,$central,$tenant,$actorAccountId,$actorName]=$this->context();
@@ -68,6 +107,9 @@ final class RouteExecutorReviewController
             if (strlen($raw)>262144) throw new DomainException('Карточка слишком большая.');
             $snapshot=json_decode($raw,true,512,JSON_THROW_ON_ERROR);
             if (!is_array($snapshot)) throw new DomainException('Некорректная карточка.');
+            $tripId=(string)($snapshot['trip_id']??'');
+            if (!preg_match('/^[1-9][0-9]*$/D',$tripId)) throw new DomainException('Выберите рейс перед отправкой.');
+            $tripLabel=$this->selectedTrip($tenant,(int)$tripId);
             $files=$this->files();
             $package=RouteExecutorReviewPackage::inspect($snapshot,$files);
             if (!$package['ready']) throw new DomainException('Пока недостаточно данных ни для одного действия. Сохраните черновик.');
@@ -88,8 +130,8 @@ final class RouteExecutorReviewController
                 || (string)$credentials['email']!==(string)$sender['email']) throw new DomainException('Рабочий ящик изменился. Обновите страницу.');
             $domain=substr(strrchr((string)$sender['email'],'@')?:'',1);
             $messageId='<route-executor-'.str_replace('-','',$cardId).'-'.$stage.'@'.$domain.'>';
-            $mail=RouteExecutorReviewEmail::build($package,$stage==='partial');
-            $subject='Исполнитель рейса — '.($stage==='partial'?'первичные данные':'полный комплект');
+            $mail=RouteExecutorReviewEmail::build($package,$stage==='partial',$tripLabel);
+            $subject=$tripLabel.' — исполнитель рейса — '.($stage==='partial'?'первичные данные':'полный комплект');
             $message=['from'=>(string)$sender['email'],'to'=>$recipients,'message_id'=>$messageId,
                 'subject'=>$subject,'text'=>$mail['text'],'html'=>$mail['html'],'attachments'=>$package['attachments']];
             DocumentMailMime::build($message);
@@ -142,6 +184,7 @@ final class RouteExecutorReviewController
                 try {
                     $tenant->beginTransaction();
                     $deliveryId=$max->enqueue('route_executor.'.$stage,$cardId.':'.$stage,[
+                        'trip'=>$tripLabel,
                         'contractor'=>$package['contractor']?:'—','driver'=>$package['driver']?:'—','plate'=>$package['plate']?:'—',
                         'responsible'=>$logist['name'],'ready'=>implode(', ',$package['ready']),'author'=>$actorName,
                     ],$accountId);

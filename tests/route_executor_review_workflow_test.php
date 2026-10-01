@@ -39,11 +39,12 @@ unset($item);
 $legal=array_values(array_filter($legal,static fn(array $item):bool=>$item['name']!=='director_full_name'));
 $package=RouteExecutorReviewPackage::inspect(['controls'=>$legal],[]);
 $assert(!in_array('Подписание договора',$package['ready'],true),'Legal entity requires director');
-$mail=RouteExecutorReviewEmail::build(RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,[$control('contractor','legal_address','Москва, 1')],$driver)],[]),true);
+$mail=RouteExecutorReviewEmail::build(RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,[$control('contractor','legal_address','Москва, 1')],$driver)],[]),true,'#123 Вывоз отходов');
 $assert(str_contains($mail['text'],'Ожидайте полный комплект вторым письмом'),'First email must explain the second package');
-$assert(!str_contains($mail['text'],'номер рейса'),'Review email must not claim a trip number');
+$assert(str_contains($mail['text'],'#123 Вывоз отходов') && str_contains($mail['html'],'<strong>Рейс: #123 Вывоз отходов</strong>'),'Email must prominently include the selected trip');
 foreach (['route_executor.partial','route_executor.full'] as $event) {
     $text=MaxEventCatalog::render($event,MaxEventCatalog::event($event)['template'],'plain',MaxEventCatalog::example($event));
-    $assert(!str_contains($text,'Рейс #') && !str_contains($text,'№'),'MAX events must not require a trip number');
+    $assert(str_contains($text,'**Рейс \#123 Перевозка отходов**'),'MAX events must include the trip in bold before contractor');
+    $assert(strpos($text,'**Рейс')<strpos($text,'Подрядчик:'),'Trip must precede contractor');
 }
 echo "route_executor_review_workflow_test: PASS\n";

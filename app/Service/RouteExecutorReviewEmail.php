@@ -5,11 +5,11 @@ namespace App\Service;
 
 final class RouteExecutorReviewEmail
 {
-    public static function build(array $package, bool $partial): array
+    public static function build(array $package, bool $partial, string $trip): array
     {
         $heading=$partial?'Первичные данные исполнителя рейса':'Полный комплект данных исполнителя рейса';
         $lead=$partial?'Это первичные данные. Ожидайте полный комплект вторым письмом.':'Передан полный актуальный комплект данных исполнителя рейса.';
-        $text=$heading."\n".$lead."\n\n";
+        $text=$heading."\nРейс: ".$trip."\n".$lead."\n\n";
         $rows='';
         foreach ($package['rows'] as $row) {
             $name=(string)$row['name'];$value=(string)$row['value'];
@@ -21,7 +21,7 @@ final class RouteExecutorReviewEmail
         $text.='Готово: '.implode(', ',$package['ready'])."\n";
         $html='<div style="font:14px Arial,sans-serif;color:#292622;background:#f5f2ec;padding:24px">'
             .'<div style="max-width:760px;margin:auto;background:#fff;border:1px solid #d8d0c2;padding:24px">'
-            .'<h2 style="color:#70451f;margin-top:0">'.self::escape($heading).'</h2><p>'.self::escape($lead).'</p>'
+            .'<h2 style="color:#70451f;margin-top:0">'.self::escape($heading).'</h2><p><strong>Рейс: '.self::escape($trip).'</strong></p><p>'.self::escape($lead).'</p>'
             .'<p><b>Готово:</b> '.self::escape(implode(', ',$package['ready'])).'</p>'
             .'<table style="width:100%;border-collapse:collapse">'.$rows.'</table>'
             .'<p><b>Файлы:</b> '.self::escape($names?implode(', ',$names):'не приложены').'</p></div></div>';

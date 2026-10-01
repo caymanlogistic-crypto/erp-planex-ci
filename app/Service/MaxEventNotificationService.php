@@ -35,6 +35,7 @@ final class MaxEventNotificationService
                 $row['message_template'] = $row['feo_templates']['main'];
             }
             $row['message_template'] = MaxEventCatalog::currentTemplate($key, (string)$row['message_template']);
+            $row['message_format'] = MaxEventCatalog::systemFormat($key, (string)$row['message_format']);
             if (MaxEventCatalog::isSystemRequired($key)) {
                 $row['is_enabled'] = 1;
                 $row['message_format'] = MaxEventCatalog::systemFormat($key, (string)$row['message_format']);

@@ -52,6 +52,7 @@ final class MaxEventCatalog
     private static function routeExecutorEvents(): array
     {
         $variables = [
+            'trip'=>['Номер и наименование рейса','#123 Перевозка отходов'],
             'contractor'=>['Подрядчик','ИП Иванов Иван Иванович'],
             'driver'=>['Водитель','Петров Пётр Петрович'],
             'plate'=>['Госномер','А123ВС77'],
@@ -63,13 +64,13 @@ final class MaxEventCatalog
             'route_executor.partial'=>[
                 'title'=>'Исполнитель рейса — первичные данные',
                 'description'=>'После первой передачи неполных данных исполнителя рейса. Получатели письма задаются в «Ключи и сервисы».',
-                'template'=>"Первичные данные исполнителя рейса\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}\nЭто первичные данные. Ожидайте полный комплект вторым письмом.",
+                'template'=>"Первичные данные исполнителя рейса\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}\nЭто первичные данные. Ожидайте полный комплект вторым письмом.",
                 'variables'=>$variables,
             ],
             'route_executor.full'=>[
                 'title'=>'Исполнитель рейса — полный комплект',
                 'description'=>'После передачи полного комплекта данных исполнителя рейса.',
-                'template'=>"Полный комплект данных исполнителя рейса\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}",
+                'template'=>"Полный комплект данных исполнителя рейса\n**Рейс {{trip}}**\nПодрядчик: {{contractor}}\nВодитель: {{driver}}\nГосномер: {{plate}}\nЛогист: {{responsible}}\nГотово: {{ready}}\nОтправил: {{author}}",
                 'variables'=>$variables,
             ],
         ];
@@ -146,6 +147,13 @@ final class MaxEventCatalog
 
     public static function currentTemplate(string $key, string $stored): string
     {
+        if (in_array($key,['route_executor.partial','route_executor.full'],true) && !str_contains($stored,'{{trip}}')) {
+            $tripLine="**Рейс {{trip}}**\n";
+            $contractor=strpos($stored,'Подрядчик:');
+            if ($contractor!==false) return substr_replace($stored,$tripLine,$contractor,0);
+            $newline=strpos($stored,"\n");
+            return $newline===false?$stored."\n".$tripLine:substr_replace($stored,$tripLine,$newline+1,0);
+        }
         if ($key === 'feo.placement.block_created') {
             if (str_starts_with(ltrim($stored), '{"feo_templates_version"')) return MaxFeoMessageTemplates::decode($stored)['main'];
             if ($stored === '' || $stored === self::LEGACY_FEO_TEMPLATE
@@ -165,7 +173,7 @@ final class MaxEventCatalog
 
     public static function systemFormat(string $key, string $stored): string
     {
-        return self::isSystemRequired($key) ? 'markdown' : $stored;
+        return self::isSystemRequired($key) || in_array($key,['route_executor.partial','route_executor.full'],true) ? 'markdown' : $stored;
     }
 
     public static function requestCountText(int $count): string
