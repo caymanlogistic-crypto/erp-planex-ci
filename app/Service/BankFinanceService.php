@@ -395,9 +395,15 @@ final class BankFinanceService
             if ($accountId <= 0) {
                 throw new \RuntimeException('Cannot resolve bank account');
             }
+            // Serialize overlapping imports for one account, including their balance check.
+            $lock = $localPdo->prepare('SELECT `id` FROM `bank_accounts` WHERE `id` = ? FOR UPDATE');
+            $lock->execute([$accountId]);
 
             $importedTx = 0;
             $importedBal = 0;
+            $updatedBal = 0;
+            $newTransactionDates = [];
+            $balanceDates = [];
 
             foreach ($transactions as $tx) {
                 $tx['account_id'] = $accountId;
@@ -405,6 +411,7 @@ final class BankFinanceService
                 $txId = null;
                 if (self::insertTransaction($localPdo, $tx, $txId)) {
                     $importedTx++;
+                    $newTransactionDates[(string)$tx['operation_date']] = true;
                 }
                 if ($txId === null) {
                     $txId = self::findTransactionIdByDedupeHash($localPdo, $tx['dedupe_hash']);
@@ -431,15 +438,38 @@ final class BankFinanceService
             foreach ($dailyBalances as $balance) {
                 $balance['account_id'] = $accountId;
                 $balance['dedupe_hash'] = self::balanceDedupeHash($accountNumber, $balance);
+                $date = (string)$balance['statement_date'];
+                $balanceDates[$date] = true;
                 $balId = null;
-                if (self::insertDailyBalance($localPdo, $balance, $balId)) {
-                    $importedBal++;
-                }
-                if ($balId === null) {
-                    $balId = self::findBalanceIdByDedupeHash($localPdo, $balance['dedupe_hash']);
+                $existing = $localPdo->prepare('SELECT * FROM `bank_daily_balances` WHERE `dedupe_hash` = ? FOR UPDATE');
+                $existing->execute([$balance['dedupe_hash']]);
+                $saved = $existing->fetch(PDO::FETCH_ASSOC);
+                if ($saved) {
+                    $balId = (int)$saved['id'];
+                    if (self::reconcileOverlappingBalance($localPdo, $accountId, $date, $saved, $balance, isset($newTransactionDates[$date]))) {
+                        $updatedBal++;
+                    }
+                } else {
+                    if (self::insertDailyBalance($localPdo, $balance, $balId)) {
+                        $importedBal++;
+                    }
+                    if ($balId === null) {
+                        $balId = self::findBalanceIdByDedupeHash($localPdo, $balance['dedupe_hash']);
+                    }
                 }
                 if ($balId !== null) {
                     self::linkBalanceToImport($localPdo, $importId, $balId);
+                }
+            }
+
+            foreach (array_keys($newTransactionDates) as $date) {
+                if (isset($balanceDates[$date])) {
+                    continue;
+                }
+                $existing = $localPdo->prepare('SELECT 1 FROM `bank_daily_balances` WHERE `account_id` = ? AND `statement_date` = ? LIMIT 1');
+                $existing->execute([$accountId, $date]);
+                if ($existing->fetchColumn() !== false) {
+                    throw new \RuntimeException("Повторная выписка за {$date} содержит новые операции без подтверждённого остатка. Импорт отменён; загрузите полную выписку банка.");
                 }
             }
 
@@ -464,11 +494,12 @@ final class BankFinanceService
 
         return [
             'status' => 'imported',
-            'message' => "Imported {$importedTx} transactions, {$importedBal} daily balances",
+            'message' => "Imported {$importedTx} transactions, {$importedBal} daily balances; updated {$updatedBal} daily balances",
             'import_id' => $importId,
             'account_id' => $accountId,
             'transactions_imported' => $importedTx,
             'balances_imported' => $importedBal,
+            'balances_updated' => $updatedBal,
         ];
     }
 
@@ -497,6 +528,38 @@ final class BankFinanceService
             (string) ($balance['statement_date'] ?? ''),
             strtoupper(trim((string) ($balance['currency'] ?? 'RUR'))),
         ]));
+    }
+
+    private static function reconcileOverlappingBalance(PDO $pdo, int $accountId, string $date, array $saved, array $incoming, bool $hasNewTransactions): bool
+    {
+        $stmt = $pdo->prepare('SELECT COALESCE(SUM(`debit_amount`), 0) AS debit, COALESCE(SUM(`credit_amount`), 0) AS credit FROM `bank_transactions` WHERE `account_id` = ? AND `operation_date` = ?');
+        $stmt->execute([$accountId, $date]);
+        $totals = $stmt->fetch(PDO::FETCH_ASSOC);
+        $debit = self::canonicalAmount($totals['debit'] ?? 0);
+        $credit = self::canonicalAmount($totals['credit'] ?? 0);
+        $opening = $saved['opening_balance'] === null ? null : self::canonicalAmount($saved['opening_balance']);
+        $expectedClosing = $opening === null ? null : FinanceBankReconciliationService::sub(FinanceBankReconciliationService::add($opening, $credit), $debit);
+        $savedConsistent = $expectedClosing !== null
+            && FinanceBankReconciliationService::compare($expectedClosing, self::canonicalAmount($saved['closing_balance'])) === 0
+            && FinanceBankReconciliationService::compare($debit, self::canonicalAmount($saved['debit_turnover'])) === 0
+            && FinanceBankReconciliationService::compare($credit, self::canonicalAmount($saved['credit_turnover'])) === 0;
+
+        // Repeated operations and the same confirmed closing balance need no update.
+        if (!$hasNewTransactions && $savedConsistent) {
+            if ($incoming['closing_balance'] !== null
+                && FinanceBankReconciliationService::compare(self::canonicalAmount($incoming['closing_balance']), self::canonicalAmount($saved['closing_balance'])) !== 0) {
+                throw new \RuntimeException("Повторная выписка за {$date} сообщает другой остаток без новых операций. Импорт отменён; проверьте банковский файл.");
+            }
+            return false;
+        }
+        if ($expectedClosing === null || $incoming['closing_balance'] === null
+            || FinanceBankReconciliationService::compare($expectedClosing, self::canonicalAmount($incoming['closing_balance'])) !== 0) {
+            throw new \RuntimeException("Обороты повторной выписки за {$date} не сходятся с итогом банка. Импорт отменён; проверьте пересекающиеся файлы.");
+        }
+
+        $update = $pdo->prepare('UPDATE `bank_daily_balances` SET `debit_turnover` = ?, `credit_turnover` = ?, `closing_balance` = ? WHERE `id` = ?');
+        $update->execute([$debit, $credit, $expectedClosing, (int)$saved['id']]);
+        return true;
     }
 
     private static function canonicalAmount(mixed $amount): string
@@ -535,6 +598,14 @@ final class BankFinanceService
             $balIds = $localPdo->prepare('SELECT `balance_id` FROM `bank_import_balances` WHERE `import_id` = ?');
             $balIds->execute([$importId]);
             $capturedBalIds = $balIds->fetchAll(PDO::FETCH_COLUMN);
+            $affectedDates = $localPdo->prepare(
+                'SELECT DISTINCT bt.`operation_date` AS `day` FROM `bank_import_transactions` bit
+                 JOIN `bank_transactions` bt ON bt.`id` = bit.`transaction_id` WHERE bit.`import_id` = ?
+                 UNION SELECT DISTINCT bdb.`statement_date` AS `day` FROM `bank_import_balances` bib
+                 JOIN `bank_daily_balances` bdb ON bdb.`id` = bib.`balance_id` WHERE bib.`import_id` = ?'
+            );
+            $affectedDates->execute([$importId, $importId]);
+            $dates = $affectedDates->fetchAll(PDO::FETCH_COLUMN);
 
             // Remove links for this import
             $linkTxStmt = $localPdo->prepare('DELETE FROM `bank_import_transactions` WHERE `import_id` = ?');
@@ -560,6 +631,23 @@ final class BankFinanceService
                 }
             }
 
+            $accountStmt = $localPdo->prepare('SELECT `id` FROM `bank_accounts` WHERE `account_number` = ? LIMIT 1');
+            $accountStmt->execute([$accountNumber]);
+            $accountId = (int)$accountStmt->fetchColumn();
+            foreach ($dates as $date) {
+                $balanceStmt = $localPdo->prepare('SELECT * FROM `bank_daily_balances` WHERE `account_id` = ? AND `statement_date` = ?');
+                $balanceStmt->execute([$accountId, $date]);
+                foreach ($balanceStmt->fetchAll(PDO::FETCH_ASSOC) as $balance) {
+                    $totalsStmt = $localPdo->prepare('SELECT COALESCE(SUM(`debit_amount`), 0) AS debit, COALESCE(SUM(`credit_amount`), 0) AS credit FROM `bank_transactions` WHERE `account_id` = ? AND `operation_date` = ?');
+                    $totalsStmt->execute([$accountId, $date]);
+                    $totals = $totalsStmt->fetch(PDO::FETCH_ASSOC);
+                    if (FinanceBankReconciliationService::compare(self::canonicalAmount($balance['debit_turnover']), self::canonicalAmount($totals['debit'])) !== 0
+                        || FinanceBankReconciliationService::compare(self::canonicalAmount($balance['credit_turnover']), self::canonicalAmount($totals['credit'])) !== 0) {
+                        throw new \RuntimeException('Удаление создаст расхождение оборотов за ' . $date . '. Сначала загрузите корректную полную выписку.');
+                    }
+                }
+            }
+
             $delStmt = $localPdo->prepare('DELETE FROM `bank_statement_imports` WHERE `id` = ?');
             $delStmt->execute([$importId]);
 
@@ -572,7 +660,7 @@ final class BankFinanceService
             if ($localPdo->inTransaction()) {
                 $localPdo->rollBack();
             }
-            return ['status' => 'error', 'message' => 'Ошибка удаления импорта.'];
+            return ['status' => 'error', 'message' => $e instanceof \RuntimeException ? $e->getMessage() : 'Ошибка удаления импорта.'];
         }
     }
 
