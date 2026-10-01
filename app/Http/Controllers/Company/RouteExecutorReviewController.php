@@ -161,7 +161,7 @@ final class RouteExecutorReviewController
                 'subject'=>$subject,'text'=>$mail['text'],'html'=>$mail['html'],
                 'attachments'=>$generalFiles ? [RouteExecutorReviewArchive::build($generalFiles,$tripLabel,$package)] : []];
             DocumentMailMime::build($message);
-            $configuredEvent='route_executor.'.$stage;
+            $configuredEvent=RouteExecutorReviewMaxMessage::eventKey($stage);
             $rule=null;
             foreach ((new MaxEventNotificationService($tenant))->rules() as $candidate) {
                 if (($candidate['event_key']??'')===$configuredEvent) { $rule=$candidate;break; }
@@ -212,7 +212,7 @@ final class RouteExecutorReviewController
             if ($mailStatus==='accepted') {
                 try {
                     $tenant->beginTransaction();
-                    $deliveryId=$max->enqueue('route_executor.'.$stage,$cardId.':'.$stage,
+                    $deliveryId=$max->enqueue($configuredEvent,$cardId.':'.$stage,
                         RouteExecutorReviewMaxMessage::values($package,$tripLabel,$logist['name']),$accountId);
                     $tenant->commit();
                     if ($deliveryId) $maxStatus=(string)$max->dispatch($deliveryId)['status'];
@@ -257,7 +257,7 @@ final class RouteExecutorReviewController
             $testChat->execute(['-70991778594913','Бэрримор']);
             $testChats=$testChat->fetchAll(PDO::FETCH_ASSOC);
             if (count($testChats)!==1) throw new DomainException('Тестовая группа MAX бота «Бэрримор» недоступна. Повторная отправка не начата.');
-            $event='route_executor.'.$stage;
+            $event=RouteExecutorReviewMaxMessage::eventKey($stage);
             $rule=null;
             foreach ((new MaxEventNotificationService($tenant))->rules() as $candidate) {
                 if (($candidate['event_key']??'')===$event) { $rule=$candidate;break; }

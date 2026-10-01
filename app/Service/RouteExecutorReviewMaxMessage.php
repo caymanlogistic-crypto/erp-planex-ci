@@ -5,6 +5,15 @@ namespace App\Service;
 
 final class RouteExecutorReviewMaxMessage
 {
+    public static function eventKey(string $stage): string
+    {
+        return match ($stage) {
+            'partial' => 'route_executor.partial',
+            'final' => 'route_executor.full',
+            default => throw new \InvalidArgumentException('Неизвестный этап отправки.'),
+        };
+    }
+
     public static function values(array $package, string $trip, string $logist): array
     {
         $surname=preg_split('/\s+/u',trim((string)($package['driver']??'')))[0]??'';
