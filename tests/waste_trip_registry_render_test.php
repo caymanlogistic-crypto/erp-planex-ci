@@ -54,7 +54,9 @@ $assert(str_contains($html,'ГЕН. ЗАКАЗЧИК') && !str_contains($html,'�
 $assert(str_contains($xp->query('//tr[@data-waste-view="3"]/td[10]')->item(0)->textContent,'200 ₽'),'Utilizer trip retains general amount');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[11]')->item(0)->textContent,'100 ₽'),'Sale column');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[12]')->item(0)->textContent,'120 ₽'),'Manual cost column');
-$assert($xp->query('//td[contains(@class,"waste-executor-unmatched")]')->length===1,'Only unmatched row yellow');
+$assert($xp->query('//td[contains(@class,"waste-executor-unmatched")]')->length===0,'Missing executor has no warning highlight');
+$assert(trim($xp->query('//tr[@data-waste-view="2"]/td[7]')->item(0)->textContent)==='—','Missing executor is shown as a dash');
+$assert($xp->query('//select[@name="company"]/option')->length===3,'Company filter offers all, MG and Planex');
 $assert($xp->query('//tr[@data-waste-view="1"]/td[8]')->item(0)->textContent==='22','Request count');
 $assert(trim($xp->query('//tr[@data-waste-view="1"]/td[9]')->item(0)->textContent)==='1 500','Total mass rounded to kilograms');
 $assert(trim($xp->query('//tr[@data-waste-view="4"]/td[10]')->item(0)->textContent)==='—','Unknown amount hides default terms');
