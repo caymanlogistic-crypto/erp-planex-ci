@@ -846,16 +846,37 @@
     } catch (error) { window.alert(error.message); button.disabled = false; }
   }
 
+  async function resendReviewRow(button) {
+    const id = button.dataset.routeReviewResend;
+    if (!id || button.disabled) return;
+    button.disabled = true;
+    try {
+      if (!window.confirm('Повторно отправить актуальные данные карточки на info@plan-ex.ru?\nДругим получателям и в MAX повторное сообщение не уйдёт.')) return;
+      const data = new FormData();
+      data.set('action', 'resend');
+      data.set('card_id', id);
+      const response = await fetch(base + '/company/route-executors/review/send', {
+        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: data
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось повторить письмо.');
+      window.alert('Повторное письмо принято почтовым сервером. Проверьте доставку по теме с пометкой «повтор».');
+    } catch (error) { window.alert(error.message); }
+    finally { button.disabled = false; }
+  }
+
   document.addEventListener('dblclick', event => {
-    if (event.target.closest?.('[data-route-review-delete]')) return;
+    if (event.target.closest?.('[data-route-review-delete], [data-route-review-resend]')) return;
     openReviewRow(event.target.closest?.('[data-route-review-card-id]'));
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Enter' && event.target.matches?.('[data-route-review-card-id]')) openReviewRow(event.target);
   });
   document.addEventListener('click', event => {
-    const button = event.target.closest?.('[data-route-review-delete]');
-    if (button) { event.stopPropagation(); deleteReviewRow(button); }
+    const resend = event.target.closest?.('[data-route-review-resend]');
+    if (resend) { event.stopPropagation(); resendReviewRow(resend); return; }
+    const remove = event.target.closest?.('[data-route-review-delete]');
+    if (remove) { event.stopPropagation(); deleteReviewRow(remove); }
   });
 
   window.addEventListener('click', event => {

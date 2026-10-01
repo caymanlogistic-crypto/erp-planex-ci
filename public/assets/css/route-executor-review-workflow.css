@@ -72,4 +72,4 @@
 .route-review-row td { background: transparent !important; vertical-align: middle; }
 .route-review-row small { color: #75521b; font-weight: 600; }
 .route-review-badge { display: inline-block; background: #fff8db; color: #684612; border: 1px solid #d7af5a; }
-.route-review-delete { margin-left: 8px; min-height: 28px; }
+.route-review-delete, .route-review-resend { margin-left: 8px; min-height: 28px; }
