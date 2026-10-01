@@ -115,10 +115,11 @@ try {
         INSERT INTO waste_trips (business_id,client_id,responsible_user_id,destination_type,status,planned_start_mode,source_system)
         SELECT 903,client_id,responsible_user_id,destination_type,'completed',planned_start_mode,'erp' FROM waste_trips WHERE business_id=227");
     $ids=static fn(array $rows):array=>array_map(static fn(array $row):int=>(int)$row['business_id'],$rows);
-    check($ids(Trips::fetchTrips($pdo))===[903,902,901,900,227,226],'Default ID order');
+    check($ids(Trips::fetchTrips($pdo))===[902,226,227,901,903,900],'Default status order');
     check($ids(Trips::fetchTrips($pdo,['sort'=>'status']))===[902,226,227,901,903,900],'Status order with ID tie break');
     check($ids(Trips::fetchTrips($pdo,['sort'=>'manager']))===[902,227,903,226,901,900],'Manager groups contain status order');
-    check($ids(Trips::fetchTrips($pdo,['sort'=>'unknown']))===[903,902,901,900,227,226],'Unknown sort falls back to ID');
+    check($ids(Trips::fetchTrips($pdo,['sort'=>'id']))===[903,902,901,900,227,226],'Explicit ID order');
+    check($ids(Trips::fetchTrips($pdo,['sort'=>'unknown']))===[902,226,227,901,903,900],'Unknown sort falls back to status');
     $pdo->exec('DELETE FROM waste_trips WHERE business_id BETWEEN 900 AND 903');
     $payment=$pdo->query("SELECT * FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetch();
     $obligation=$pdo->query("SELECT * FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND direction='RECEIVABLE'")->fetch();
