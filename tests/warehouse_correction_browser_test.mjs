@@ -50,6 +50,15 @@ try {
             return route.fulfill({status:404,body:''});
         });
         await page.goto('http://warehouse.test/company/warehouses/stock');
+        const summaryLayout = await page.locator('[data-wh-warehouse="1"] .wh-current-summary').evaluate(el => ({
+            leadLines: new Set([...el.querySelector('.wh-current-lead').getClientRects()].map(rect => Math.round(rect.top))).size,
+            requestLines: el.querySelector('.wh-current-request-ids').getClientRects().length,
+        }));
+        if (width === 1440) {
+            assert.equal(summaryLayout.leadLines, 1, 'Warehouse totals and request label must stay on one line');
+            assert.ok(summaryLayout.requestLines > 1, 'Long request list may wrap onto following lines');
+        }
+        assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, 'Summary must not cause horizontal page scroll');
         assert.match(await page.locator('[data-wh-warehouse="1"] .wh-current-summary').innerText(), /^ИРКУТСК/);
         assert.equal(await page.locator('[name=warehouse] option[value="2"]').innerText(), 'КРАСНОДАР');
         assert.match(await page.locator('#warehouse-issues').innerText(), /КРАСНОДАР \/ вывоз/);

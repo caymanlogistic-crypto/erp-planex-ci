@@ -30,8 +30,10 @@
 .wh-registry .wh-row-error .registry-id{color:var(--danger);font-weight:700}
 .wh-total{margin:0 0 8px}
 .wh-warehouse-table{margin-bottom:14px}
-.wh-current-summary{white-space:normal;line-height:1.5}
-.wh-current-request-ids{overflow-wrap:anywhere}
+.wh-current-summary{display:block;white-space:normal;line-height:1.5;min-width:0}
+.wh-current-summary::before{display:inline-block;vertical-align:middle;margin-right:7px}
+.wh-current-lead{white-space:nowrap}
+.wh-current-request-ids{overflow-wrap:normal}
 .wh-registry td.wh-request-cell{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:normal;line-height:1.5;height:auto}
 .wh-request-id{display:inline-block;white-space:nowrap}
 .wh-request-id--outside-trip{color:var(--danger,#a94442);text-decoration:line-through;text-decoration-thickness:2px;font-weight:700}
@@ -89,3 +91,4 @@
 @media(max-width:700px){.wh-filter .toolbar-right{display:grid;grid-template-columns:1fr 1fr}.wh-filter .toolbar-search{grid-column:1/-1;min-width:0;width:100%;max-width:none;margin-left:0}.wh-filter .wh-show-all{grid-column:1/-1}.wh-filter .wh-correct-action{grid-column:1/-1;justify-self:end}.wh-filter .toolbar-select{width:100%;min-width:0}.wh-page .modal{max-height:calc(100dvh - 16px)}.wh-page .modal-body{min-width:0}.wh-request-table{min-width:480px}.wh-correction-grid{grid-template-columns:1fr}.wh-correction-types{display:grid;gap:10px}}
 @media(max-width:390px){.wh-filter .toolbar-right{grid-template-columns:1fr}.wh-filter .toolbar-search{grid-column:auto}.wh-filter .wh-correct-action{grid-column:1}}
 @media(max-width:700px){.wh-filter .wh-exception-action{grid-column:1/-1;justify-self:stretch}.wh-issue-table,.wh-issue-table tbody,.wh-issue-table tr,.wh-issue-table td{display:block;width:100%;box-sizing:border-box}.wh-issue-table thead{display:none}.wh-issue-table tr{border-bottom:1px solid var(--border,#d8d2ca);padding:8px 0}.wh-issue-table td{padding:4px 12px!important}.wh-issue-table td::before{display:block;font-size:10px;font-weight:700;color:var(--text-muted,#625a52)}.wh-issue-table td:nth-child(1)::before{content:'РЕЙС'}.wh-issue-table td:nth-child(2)::before{content:'СКЛАД'}.wh-issue-table td:nth-child(3)::before{content:'ПОДРОБНОСТИ РАСХОЖДЕНИЯ'}.wh-issue-table td:nth-child(4)::before{content:'ИСТОЧНИК ДВИЖЕНИЯ'}}
+@media(max-width:700px){.wh-current-lead{white-space:normal}}
