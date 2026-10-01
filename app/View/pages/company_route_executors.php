@@ -122,7 +122,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
                     <td><?= e($card['vehicle_type'] ?: '—') ?></td>
                     <td class="col-mono"><?= e($card['plate'] ?: '—') ?></td>
                     <td><?= e($responsibleLogistNames[(int)($card['responsible_membership_id']??0)]??'—') ?></td>
-                    <td><div class="route-review-actions"><span class="badge route-review-badge<?= $reviewFinal ? ' badge-ok' : '' ?>"><?= e($reviewLabel) ?></span><button type="button" class="btn btn-ghost route-review-delete" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Удалить карточку">Удалить</button></div></td>
+                    <td><div class="route-review-actions"><span class="badge route-review-badge<?= $reviewFinal ? ' badge-ok' : '' ?>"><?= e($reviewLabel) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="btn btn-ghost route-review-delete" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Удалить карточку">Удалить</button></div></td>
                 </tr>
                 <?php endforeach; ?>
                 <?php foreach ($executors as $e): ?>

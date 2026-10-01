@@ -110,7 +110,8 @@ final class RouteExecutorReviewCardService
     public function storedFiles(array $card): array
     {
         $out=[];
-        foreach ($card['files'] as $file) $out[]=['key'=>$file['formId'].'|'.$file['name'],'name'=>$file['original_name'],
+        foreach ($card['files'] as $file) $out[]=['key'=>$file['formId'].'|'.$file['name'],'index'=>(int)$file['index'],
+            'name'=>$file['original_name'],'mime'=>(string)$file['mime'],
             'tmp_name'=>$this->absoluteFile((string)$file['path']),'error'=>UPLOAD_ERR_OK,'size'=>(int)$file['size']];
         return $out;
     }

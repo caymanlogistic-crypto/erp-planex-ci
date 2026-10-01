@@ -21,7 +21,8 @@ $routeSource=(string)file_get_contents(__DIR__.'/../app/Http/Routes/company_rout
 foreach (['EmployeeMailProfileService.php','DocumentMailTransport.php','MaxEventCatalog.php',
     'MaxMessagingService.php','MaxEventNotificationService.php','RouteExecutorReviewRecipientService.php',
     'RouteExecutorReviewPackage.php','RouteExecutorReviewCardService.php','RouteExecutorReviewArchive.php','RouteExecutorReviewEmail.php',
-    'RouteExecutorReviewMaxMessage.php','RouteExecutorContractMailService.php'] as $dependency) {
+    'RouteExecutorReviewMaxMessage.php','RouteExecutorContractMailService.php',
+    'RouteExecutorReviewMaterializationService.php'] as $dependency) {
     $assert(str_contains($routeSource,"require_once base_path('app/Service/{$dependency}')"),
         "Review route must load {$dependency} before handling a send");
 }

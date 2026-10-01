@@ -798,9 +798,10 @@
         : result.max_status === 'disabled'
           ? 'Письмо отправлено. Событие MAX выключено в настройках.'
           : 'Письмо отправлено. Проверьте статус уведомления MAX в настройках.';
+      if (result.materialization_error) dialog.querySelector('[data-lab-review-result]').textContent = result.materialization_error;
       pendingSend = null;
       await refreshReviewList();
-      if (result.stage === 'final') {
+      if (result.stage === 'final' && !result.materialization_error) {
         lastTrigger = null;
         dialog.close();
         window.closeModal?.('route-executor-create-modal');
@@ -848,14 +849,33 @@
     } catch (error) { window.alert(error.message); button.disabled = false; }
   }
 
+  async function materializeReviewRow(button) {
+    const id = button.dataset.routeReviewMaterialize;
+    if (!id || !window.confirm('Внести отправленный полный комплект в справочники подрядчиков, водителей, ТС и исполнителей? Письма повторно не отправляются.')) return;
+    button.disabled = true;
+    try {
+      const data = new FormData();
+      data.set('action', 'materialize');
+      data.set('card_id', id);
+      const response = await fetch(base + '/company/route-executors/review/send', {
+        method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: data
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось внести данные в справочники.');
+      window.location.reload();
+    } catch (error) { window.alert(error.message); button.disabled = false; }
+  }
+
   document.addEventListener('dblclick', event => {
-    if (event.target.closest?.('[data-route-review-delete]')) return;
+    if (event.target.closest?.('[data-route-review-delete], [data-route-review-materialize]')) return;
     openReviewRow(event.target.closest?.('[data-route-review-card-id]'));
   });
   document.addEventListener('keydown', event => {
     if (event.key === 'Enter' && event.target.matches?.('[data-route-review-card-id]')) openReviewRow(event.target);
   });
   document.addEventListener('click', event => {
+    const materialize = event.target.closest?.('[data-route-review-materialize]');
+    if (materialize) { event.stopPropagation(); materializeReviewRow(materialize); return; }
     const remove = event.target.closest?.('[data-route-review-delete]');
     if (remove) { event.stopPropagation(); deleteReviewRow(remove); }
   });
