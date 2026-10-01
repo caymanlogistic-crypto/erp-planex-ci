@@ -34,7 +34,7 @@ final class WarehouseStockService
             foreach (array_chunk($ids, 300) as $chunk) {
                 $marks = implode(',', array_fill(0, count($chunk), '?'));
                 $query = $tenant->prepare(
-                    "SELECT wt.business_id,wt.status,wt.actual_start_date,wt.legacy_source_warehouse_id,wt.legacy_destination_warehouse_id,
+                    "SELECT wt.business_id,wt.comment AS erp_name,wt.status,wt.actual_start_date,wt.legacy_source_warehouse_id,wt.legacy_destination_warehouse_id,
                             fr.zayavka_id,wtr.snapshot_mass_kg
                        FROM waste_trips wt
                        LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
@@ -47,7 +47,7 @@ final class WarehouseStockService
             }
         }
         $erpOnly = $tenant->query(
-            'SELECT wt.business_id,wt.status,wt.actual_start_date,wt.legacy_source_warehouse_id,wt.legacy_destination_warehouse_id,
+            'SELECT wt.business_id,wt.comment AS erp_name,wt.status,wt.actual_start_date,wt.legacy_source_warehouse_id,wt.legacy_destination_warehouse_id,
                     fr.zayavka_id,wtr.snapshot_mass_kg
                FROM waste_trips wt
                LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
@@ -190,6 +190,7 @@ final class WarehouseStockService
             if ($id <= 0) continue;
             if (!isset($erp[$id])) {
                 $erp[$id] = [
+                    'name'=>(string)($row['erp_name'] ?? ''),
                     'source'=>(int)($row['legacy_source_warehouse_id'] ?? 0),
                     'destination'=>(int)($row['legacy_destination_warehouse_id'] ?? 0),
                     'requests'=>[], 'mass_kg'=>0, 'request_masses_kg'=>[],
@@ -303,7 +304,9 @@ final class WarehouseStockService
             }
             if ($messages !== []) {
                 $issues[$flightId] = [
-                    'flight_id'=>$flightId,'warehouse_id'=>$oldDestination ?: $oldSource,
+                    'flight_id'=>$flightId,
+                    'name'=>trim((string)($flight['comment'] ?? '')) ?: trim((string)($erp[$flightId]['name'] ?? '')),
+                    'warehouse_id'=>$oldDestination ?: $oldSource,
                     'messages'=>$messages,
                     'has_movements'=>isset($journalFlightIds[$flightId]),
                     'movement_label'=>isset($journalFlightIds[$flightId]) ? 'Есть в журнале'
@@ -316,6 +319,7 @@ final class WarehouseStockService
             if (isset($flightMap[$flightId]) || ($row['source'] <= 0 && $row['destination'] <= 0)) continue;
             $issues[$flightId] = [
                 'flight_id'=>$flightId,
+                'name'=>trim((string)($row['name'] ?? '')),
                 'warehouse_id'=>$row['destination'] ?: $row['source'],
                 'messages'=>['Складской рейс есть в ERP, но отсутствует в старой базе.'],
                 'has_movements'=>false, 'movement_label'=>'Нет в журнале',
