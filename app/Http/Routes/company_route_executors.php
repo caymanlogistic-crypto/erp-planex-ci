@@ -3,6 +3,7 @@
 require_once base_path('app/Http/Controllers/Company/RouteExecutorController.php');
 require_once base_path('app/Service/EmployeeMailProfileService.php');
 require_once base_path('app/Service/DocumentMailTransport.php');
+require_once base_path('app/Service/RouteExecutorReviewIndividualMail.php');
 require_once base_path('app/Service/MaxEventCatalog.php');
 require_once base_path('app/Service/MaxMessagingService.php');
 require_once base_path('app/Service/MaxEventNotificationService.php');
