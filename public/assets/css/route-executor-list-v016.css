@@ -93,7 +93,7 @@
   padding: 0;
   border: 1px solid #c8bfb2;
   border-radius: 2px;
-  background: #fffdfa;
+  background: #fff;
   box-shadow: none;
   z-index: 30;
 }
@@ -110,6 +110,7 @@
   padding: 0 9px;
   border: 0;
   border-radius: 0;
+  background: #fff;
   color: #2e2923;
   font: 500 12px var(--font);
   white-space: nowrap;
@@ -117,16 +118,15 @@
 }
 .route-executors-card .route-sort-option:hover,
 .route-executors-card .route-sort-option.is-active:not([aria-selected="true"]) {
-  background: #eae7e1;
+  background: #f2f2f0;
 }
 .route-executors-card .route-sort-option[aria-selected="true"] {
-  background: #eeebe5;
+  background: #f2e8dc;
   color: #2e2923;
   font-weight: 500;
 }
-.route-executors-card .route-sort-option[aria-selected="true"]:hover,
-.route-executors-card .route-sort-option[aria-selected="true"].is-active {
-  background: #e6e2db;
+.route-executors-card .route-sort-option[aria-selected="true"]:hover {
+  background: #e9d9c7;
 }
 
 /* Presentation only: retain original vehicle brand/model input values. */
