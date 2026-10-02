@@ -1,0 +1,184 @@
+/* Route Executors list refinement — accepted Design Lab v016 delta from v009.
+   Tabler search SVG: @tabler/icons 3.48.0, MIT notice in
+   app/View/pages/company_route_executors.tabler.LICENSE.txt. */
+/* Vertical spacing experiment: keep the existing 12px above the header. */
+.route-executors-page-head + .route-executors-card {
+  margin-top: 8px;
+}
+
+/* Route Executors table top: toolbar and column headings only. */
+.route-executors-card > .table-toolbar {
+  padding-left: 12px;
+  padding-right: 12px;
+  background: #f7f5f0;
+  border-bottom: 1px solid #d5cec3;
+}
+.route-executors-card .table thead,
+.route-executors-card .table thead tr,
+.route-executors-card .table thead th {
+  border-top: 0;
+}
+.route-executors-card .table thead th {
+  background: #e3ded5;
+  border-bottom: 1px solid #9d9386;
+  border-right-color: rgba(168, 161, 150, .08);
+}
+.route-executors-card .table-toolbar .toolbar-sort-label {
+  color: #817b72;
+}
+.route-executors-card .table-toolbar .toolbar-select {
+  background-color: #f0ede7;
+  border-color: #d7d1c7;
+  color: #4d4942;
+}
+.route-executors-card .table-toolbar .toolbar-search {
+  padding-left: 31px;
+  background-color: #fffdf9;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/%3E%3Cpath d='M21 21l-6 -6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: 9px center;
+  background-size: 15px 15px;
+  border-color: #c8c0b5;
+}
+.route-executors-card .table-toolbar .toolbar-search::placeholder {
+  color: #777168;
+}
+.route-executors-card .table-toolbar .toolbar-select:focus,
+.route-executors-card .table-toolbar .toolbar-search:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px rgba(124, 71, 24, .1);
+}
+
+/* Only this sort select uses a locally styled, keyboard-operable listbox. */
+.route-executors-card .toolbar-sort.route-sort-enhanced {
+  position: relative;
+  z-index: 25;
+}
+.route-executors-card .route-sort-enhanced > select[data-erp-grid-sort] {
+  display: none;
+}
+.route-executors-card .route-sort-trigger {
+  width: 171px;
+  height: 26px;
+  min-height: 26px;
+  padding: 0 24px 0 8px;
+  border: 1px solid #d7d1c7;
+  border-radius: 2px;
+  background: #f0ede7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23827b70' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") calc(100% - 7px) center / 10px 6px no-repeat;
+  color: #4d4942;
+  font: 500 12px var(--font);
+  text-align: left;
+  white-space: nowrap;
+  cursor: default;
+  box-shadow: none;
+}
+.route-executors-card .route-sort-trigger:hover {
+  background-color: #eae3d8;
+  border-color: #c9bdae;
+}
+.route-executors-card .route-sort-trigger:active {
+  background-color: #e4d8ca;
+  border-color: #b8a48e;
+}
+.route-executors-card .route-sort-trigger:focus-visible {
+  outline: 2px solid #9a5a22 !important;
+  outline-offset: 2px !important;
+  border-color: var(--accent);
+}
+.route-executors-card .route-sort-list {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 171px;
+  padding: 0;
+  border: 1px solid #c8bfb2;
+  border-radius: 2px;
+  background: #fffdfa;
+  box-shadow: none;
+  z-index: 30;
+}
+.route-executors-card .route-sort-list[hidden] { display: none; }
+.route-executors-card .route-sort-list:focus-visible {
+  outline: 2px solid #9a5a22;
+  outline-offset: 1px;
+}
+.route-executors-card .route-sort-option {
+  min-height: 28px;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 0;
+  color: #2e2923;
+  font: 500 12px var(--font);
+  white-space: nowrap;
+  cursor: default;
+}
+.route-executors-card .route-sort-option:hover,
+.route-executors-card .route-sort-option.is-active:not([aria-selected="true"]) {
+  background: #eae7e1;
+}
+.route-executors-card .route-sort-option[aria-selected="true"] {
+  background: #eeebe5;
+  color: #2e2923;
+  font-weight: 500;
+}
+.route-executors-card .route-sort-option[aria-selected="true"]:hover,
+.route-executors-card .route-sort-option[aria-selected="true"].is-active {
+  background: #e6e2db;
+}
+
+/* Presentation only: retain original vehicle brand/model input values. */
+.route-executors-card .route-vehicle-brand,
+input[name^="units["][name$="[brand]"],
+input[name^="units["][name$="[model]"] {
+  text-transform: uppercase;
+}
+
+/* Neutral row trigger; the menu item carries the destructive meaning. */
+.route-executors-card .row-actions-btn:hover {
+  color: #68625b;
+  background: #eeeae3;
+  border-color: #d5cec4;
+}
+.route-review-action-menu {
+  position: fixed;
+  z-index: 1000;
+  width: 150px;
+  padding: 2px;
+  border: 1px solid #d5ccc0;
+  border-radius: 2px;
+  background: #fffdf9;
+  box-shadow: 0 3px 9px rgba(49, 35, 28, .1);
+}
+.route-review-action-menu[hidden] { display: none; }
+.route-review-action-delete {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 2px;
+  background: transparent;
+  color: #9b5b55;
+  font: 600 12px var(--font);
+  text-align: left;
+  cursor: pointer;
+}
+.route-review-action-delete svg {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 15px;
+}
+.route-review-action-delete:hover,
+.route-review-action-delete:focus-visible {
+  background: #fff0ee;
+  color: #8d443e;
+}
+.route-review-action-delete:focus-visible {
+  outline: 2px solid #ad6258 !important;
+  outline-offset: -2px !important;
+}

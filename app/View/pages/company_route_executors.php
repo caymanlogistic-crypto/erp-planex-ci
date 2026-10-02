@@ -156,7 +156,7 @@ $routeListVehicles = static function (array $row): void {
                     <td class="route-person-cell"><strong><?= e($card['driver_name'] ?: '—') ?></strong><?php $routeListContact($card['driver_phone']??'', $card['driver_email']??''); ?></td>
                     <td class="route-vehicle-cell"><?php $routeListVehicles($card); ?></td>
                     <td><?= e($responsibleLogistNames[(int)($card['responsible_membership_id']??0)]??'—') ?></td>
-                    <td><div class="route-review-actions"><span class="route-status route-status--<?= $reviewStatusClass ?>" title="<?= e($reviewLabel) ?>"><?= e($reviewStatusText) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="route-review-delete row-actions-btn" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Удалить карточку" title="Удалить карточку">⋯</button></div></td>
+                    <td><div class="route-review-actions"><span class="route-status route-status--<?= $reviewStatusClass ?>" title="<?= e($reviewLabel) ?>"><?= e($reviewStatusText) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="route-review-delete row-actions-btn" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Действия с карточкой" aria-haspopup="menu" aria-expanded="false">⋯</button></div></td>
                 </tr>
                 <?php endforeach; ?>
                 <?php foreach ($executors as $e): ?>
