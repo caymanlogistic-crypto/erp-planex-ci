@@ -7,10 +7,12 @@ $pageStylesheets[] = '/assets/css/route-executor-combined-create.css';
 $pageStylesheets[] = '/assets/css/route-executor-review-workflow.css';
 $pageStylesheets[] = '/assets/css/route-executor-existing-parts.css';
 $pageStylesheets[] = '/assets/css/route-executor-header.css';
+$pageStylesheets[] = '/assets/css/route-executor-list-v016.css';
 $pageScripts[] = '/assets/js/route-executor-combined-create.js';
 $pageScripts[] = '/assets/js/route-executor-existing-parts.js';
 $pageScripts[] = '/assets/js/route-executor-review-workflow.js';
 $pageScripts[] = '/assets/js/route-executor-delete.js';
+$pageScripts[] = '/assets/js/route-executor-list-v016.js';
 if($companyId<=0){$company=null;$executors=[];$reviewCards=[];$dbError=null;ob_start();require base_path('app/View/pages/company_route_executors.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
 try{
     $pdo=$db->connection();$stmt=$pdo->prepare('SELECT * FROM companies WHERE id=?');$stmt->execute([$companyId]);$company=$stmt->fetch(PDO::FETCH_ASSOC);
