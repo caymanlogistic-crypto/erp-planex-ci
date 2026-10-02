@@ -3,6 +3,8 @@ declare(strict_types=1);
 
 namespace App\Service;
 
+require_once __DIR__.'/../Support/core_runtime.php';
+
 use DomainException;
 
 /** Validates the review package independently of browser readiness indicators. */
@@ -56,17 +58,15 @@ final class RouteExecutorReviewPackage
         $vehicleReady=true;
         if (!$existingDriver) foreach ($driverFields as $field) $vehicleReady=$vehicleReady && trim((string)($driver[$field]??''))!=='';
         $setType=$get('lab-vehicle-form','set_type');
-        $roles=match ($setType) {
-            'single'=>'primary',
-            'coupling','road_train'=>'primary,secondary',
-            default=>'',
-        };
-        if (!$existingVehicle && $roles==='') $vehicleReady=false;
+        $unitRules=\vehicleSetTypeRules()[$setType]['units']??[];
+        if (!$existingVehicle && !$unitRules) $vehicleReady=false;
         $requiredFiles=$existingDriver?[]:['lab-driver-form|predef_doc[passport][]','lab-driver-form|predef_doc[driver_license][]'];
-        foreach ($existingVehicle ? [] : array_filter(explode(',',$roles)) as $role) {
-            foreach (['brand','plate_number','vin','capacity_tons','volume_m3'] as $field) {
+        foreach ($existingVehicle ? [] : $unitRules as $role=>$unitRule) {
+            foreach (['brand','plate_number','vin'] as $field) {
                 $vehicleReady=$vehicleReady && $get('lab-vehicle-form',"units[$role][$field]")!=='';
             }
+            if (!empty($unitRule['show_capacity'])) $vehicleReady=$vehicleReady && $get('lab-vehicle-form',"units[$role][capacity_tons]")!=='';
+            if (!empty($unitRule['show_volume'])) $vehicleReady=$vehicleReady && $get('lab-vehicle-form',"units[$role][volume_m3]")!=='';
             $requiredFiles[]="lab-vehicle-form|predef_doc[$role][sts][]";
             $requiredFiles[]="lab-vehicle-form|predef_doc[$role][photo][]";
         }
@@ -100,10 +100,14 @@ final class RouteExecutorReviewPackage
             'passport_issued_by'=>'Кем выдан паспорт','passport_issue_date'=>'Дата выдачи паспорта',
             'license_number'=>'Номер водительского удостоверения','license_issue_date'=>'Дата выдачи водительского удостоверения',
             'email'=>'Email водителя'] as $field=>$label) if ($get('lab-driver-form',$field)==='') $missing[]='Водитель: '.$label;
-        if (!$existingVehicle && $roles==='') $missing[]='Транспорт: тип комплекта ТС';
-        foreach ($existingVehicle ? [] : array_filter(explode(',',$roles)) as $role) foreach (['brand'=>'марка','plate_number'=>'госномер','vin'=>'VIN',
-            'capacity_tons'=>'грузоподъёмность','volume_m3'=>'объём'] as $field=>$label)
-            if ($get('lab-vehicle-form',"units[$role][$field]")==='') $missing[]='Транспорт '.($role==='primary'?'основной':'дополнительный').': '.$label;
+        if (!$existingVehicle && !$unitRules) $missing[]='Транспорт: тип комплекта ТС';
+        foreach ($existingVehicle ? [] : $unitRules as $role=>$unitRule) {
+            $requiredUnitFields=['brand'=>'марка','plate_number'=>'госномер','vin'=>'VIN'];
+            if (!empty($unitRule['show_capacity'])) $requiredUnitFields['capacity_tons']='грузоподъёмность';
+            if (!empty($unitRule['show_volume'])) $requiredUnitFields['volume_m3']='объём';
+            foreach ($requiredUnitFields as $field=>$label) if ($get('lab-vehicle-form',"units[$role][$field]")==='')
+                $missing[]='Транспорт '.($role==='primary'?'основной':'дополнительный').': '.$label;
+        }
         foreach ($requiredFiles as $key) if (!isset($seen[$key])) {
             $label=match (true) {
                 str_contains($key,'driver_license')=>'Водительское удостоверение',str_contains($key,'passport')=>'Паспорт водителя',

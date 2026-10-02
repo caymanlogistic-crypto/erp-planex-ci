@@ -17,6 +17,7 @@ try {
   let currentCardId = null;
   let currentStage = 'new';
   let contractSent = false;
+  let rejectNextFinal = false;
   page.on('pageerror', error => errors.push(error.message));
   await page.route('http://127.0.0.1:59999/**', route => {
     const path = new URL(route.request().url()).pathname;
@@ -33,7 +34,14 @@ try {
         currentCardId = request.body.match(/name="card_id"\r?\n\r?\n([a-f0-9-]{36})/)?.[1] || currentCardId;
       if (action === 'delete') currentCardId = null;
       if (action === 'contract') contractSent = true;
-      if (!action) currentStage = request.body.match(/name="stage"\r?\n\r?\n(final|partial)/)?.[1] || 'partial';
+      if (!action) {
+        const requested = request.body.match(/name="stage"\r?\n\r?\n(final|partial)/)?.[1] || 'partial';
+        if (requested === 'final' && rejectNextFinal) {
+          rejectNextFinal = false;
+          return route.fulfill({ status: 422, json: { ok: false, error: 'Для полного комплекта не хватает: пример' } });
+        }
+        currentStage = requested;
+      }
       return route.fulfill({ json: action === 'save'
         ? { ok: true, revision: sends.filter(item => /name="action"\r?\n\r?\nsave/.test(item.body)).length, contract_status: contractSent ? 'accepted' : 'not_sent' }
         : action === 'contract' ? { ok: true, contract_status: 'accepted' }
@@ -170,6 +178,11 @@ try {
     await modal.locator(`#lab-vehicle-form [name="${name}"]`).setInputFiles(testFile);
   await modal.locator('[data-lab-send]').click();
   await dialog.waitFor({ state: 'visible' });
+  rejectNextFinal = true;
+  await dialog.locator('[data-lab-review-confirm]').click();
+  await page.waitForTimeout(100);
+  assert.equal(await dialog.evaluate(node => node.open), true, 'Rejected send leaves confirmation visible');
+  assert.match(await dialog.locator('.lab-review-foot [data-lab-review-result].is-error').innerText(), /не хватает: пример/, 'Server refusal is shown prominently as an error');
   await dialog.locator('[data-lab-review-confirm]').click();
   await dialog.waitFor({ state: 'hidden' });
   assert.equal(await modal.evaluate(node => node.classList.contains('is-open')), false, 'Full send closes the main popup');

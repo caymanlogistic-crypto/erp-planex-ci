@@ -675,8 +675,8 @@
       <details open><summary data-lab-email-heading>Письмо</summary><div class="lab-email-preview"><strong data-lab-email-subject></strong><p data-lab-email-lead></p><table><thead><tr><th>Поле</th><th>Значение</th></tr></thead><tbody data-lab-email-fields></tbody></table><p data-lab-email-files></p></div></details>
       <details><summary data-lab-max-heading>MAX</summary><pre data-lab-max-text></pre></details>
       <p class="lab-sandbox-note">Получатели берутся из настроек «Ключи и сервисы». Текст MAX — из шаблона события.</p>
-      <p class="lab-review-result" data-lab-review-result role="status" aria-live="polite"></p></div>
-      <div class="lab-review-foot"><button type="button" class="btn btn-ghost" data-lab-review-close>Вернуться к форме</button><button type="button" class="btn btn-primary" data-lab-review-confirm>Всё верно, передать</button></div>`;
+      </div>
+      <div class="lab-review-foot"><p class="lab-review-result" data-lab-review-result role="status" aria-live="polite" tabindex="-1"></p><button type="button" class="btn btn-ghost" data-lab-review-close>Вернуться к форме</button><button type="button" class="btn btn-primary" data-lab-review-confirm>Всё верно, передать</button></div>`;
     document.body.appendChild(dialog);
     dialog.addEventListener('close', () => lastTrigger?.focus());
     return dialog;
@@ -759,6 +759,7 @@
       ? `Один архив с файлами: ${pendingSend.files.join(', ')}` : 'Файлы не приложены.';
     dialog.querySelector('[data-lab-max-text]').textContent = pendingSend.max;
     dialog.querySelector('[data-lab-review-result]').textContent = '';
+    dialog.querySelector('[data-lab-review-result]').classList.remove('is-error');
     dialog.querySelector('[data-lab-review-confirm]').disabled = false;
     dialog.showModal();
     dialog.querySelector('[data-lab-review-confirm]').focus();
@@ -798,7 +799,10 @@
     const confirm = dialog.querySelector('[data-lab-review-confirm]');
     if (!pendingSend || workflowBusy) return;
     if (workflowStage() !== pendingSend.stage || draftSignature(captureDraft()) !== pendingSend.signature) {
-      dialog.querySelector('[data-lab-review-result]').textContent = 'Данные изменились. Закройте окно и проверьте отправку заново.';
+      const result=dialog.querySelector('[data-lab-review-result]');
+      result.textContent = 'Данные изменились. Закройте окно и проверьте отправку заново.';
+      result.classList.add('is-error');
+      result.focus();
       confirm.disabled = true;
       return;
     }
@@ -835,12 +839,20 @@
         : result.max_status === 'disabled'
           ? 'Письмо отправлено. Событие MAX выключено в настройках.'
           : 'Письмо отправлено. Проверьте статус уведомления MAX в настройках.';
-      if (result.materialization_error) dialog.querySelector('[data-lab-review-result]').textContent = result.materialization_error;
+      if (result.materialization_error) {
+        const notice=dialog.querySelector('[data-lab-review-result]');
+        notice.textContent = result.materialization_error;
+        notice.classList.add('is-error');
+        notice.focus();
+      }
       pendingSend = null;
       try { await refreshReviewList(); } catch (error) { console.warn('Не удалось обновить список карточек', error); }
       if (!result.materialization_error) closeReviewPopups();
     } catch (error) {
-      dialog.querySelector('[data-lab-review-result]').textContent = error.message;
+      const result=dialog.querySelector('[data-lab-review-result]');
+      result.textContent = error.message;
+      result.classList.add('is-error');
+      result.focus();
       confirm.disabled = !workflowStage();
     } finally {
       workflowBusy = false;

@@ -50,6 +50,35 @@ $existingDriver=RouteExecutorReviewPackage::inspect(['controls'=>[], 'selected_e
 $assert(in_array('Обучение водителя',$existingDriver['ready'],true)
     && !in_array('Файл: Паспорт водителя',$existingDriver['missing'],true)
     && in_array('Транспорт: тип комплекта ТС',$existingDriver['missing'],true), 'Selecting a driver does not bypass the unselected vehicle block');
+$couplingControls=[
+    $control('vehicle','set_type','coupling'),
+    $control('vehicle','units[primary][brand]','SHACMAN'),
+    $control('vehicle','units[primary][plate_number]','М836СУ797'),
+    $control('vehicle','units[primary][vin]','LZGJD3X11RX059189'),
+    $control('vehicle','units[secondary][brand]','WIELTON'),
+    $control('vehicle','units[secondary][plate_number]','УС498277'),
+    $control('vehicle','units[secondary][vin]','SUDNS300000090930'),
+    $control('vehicle','units[secondary][capacity_tons]','20'),
+    $control('vehicle','units[secondary][volume_m3]','86'),
+];
+$temporaryFile=tempnam(sys_get_temp_dir(),'route-review-');
+file_put_contents($temporaryFile,'test document');
+try {
+    $couplingFiles=[];
+    foreach (['primary','secondary'] as $role) foreach (['sts','photo'] as $kind)
+        $couplingFiles[]=['key'=>"lab-vehicle-form|predef_doc[$role][$kind][]",'name'=>'scan.pdf',
+            'tmp_name'=>$temporaryFile,'error'=>UPLOAD_ERR_OK,'size'=>13];
+    $coupling=RouteExecutorReviewPackage::inspect(['controls'=>$couplingControls,
+        'selected_entities'=>['contractor'=>11,'driver'=>12]],$couplingFiles,true);
+    $assert($coupling['full'] && $coupling['missing']===[],
+        'Coupling tractor does not require hidden capacity and volume; trailer values complete the package');
+    $roadTrainControls=$couplingControls;
+    $roadTrainControls[0]['value']='road_train';
+    $roadTrain=RouteExecutorReviewPackage::inspect(['controls'=>$roadTrainControls,
+        'selected_entities'=>['contractor'=>11,'driver'=>12]],$couplingFiles,true);
+    $assert(!$roadTrain['full'] && in_array('Транспорт основной: грузоподъёмность',$roadTrain['missing'],true),
+        'Road train still requires visible primary capacity and volume');
+} finally { unlink($temporaryFile); }
 $package=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,[$control('contractor','legal_address','Москва, 1')],$driver)],[]);
 $assert(in_array('Подписание договора',$package['ready'],true),'IP contract requires legal address but not KPP');
 $assert($package['contract_ready'],'Contract can be ready before vehicle data');

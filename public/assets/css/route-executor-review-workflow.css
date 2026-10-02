@@ -57,7 +57,10 @@
 .lab-route-send-dialog .lab-email-preview tr:nth-child(even) { background: #f8f4ee; }
 .lab-route-send-dialog pre { margin: 0; padding: 12px; white-space: pre-wrap; overflow-wrap: anywhere; font: inherit; }
 .lab-route-send-dialog .lab-sandbox-note { color: #766654; font-size: 11px; }
-.lab-route-send-dialog .lab-review-result { margin-bottom: 0; color: #26623a; font-weight: 700; }
+.lab-route-send-dialog .lab-review-result { order: -1; flex: 1 0 100%; margin: 0; color: #26623a; font-weight: 700; }
+.lab-route-send-dialog .lab-review-result:empty { display: none; }
+.lab-route-send-dialog .lab-review-result.is-error { padding: 8px 10px; border: 1px solid #d9a29a; background: #fff0ee; color: #9a271b; }
+.lab-route-send-dialog .lab-review-foot { flex-wrap: wrap; }
 @media (max-width: 700px) {
   .lab-route-send-dialog .lab-review-foot { flex-wrap: wrap; }
   .lab-route-send-dialog .lab-review-foot button { flex: 1 1 auto; }
