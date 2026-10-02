@@ -37,6 +37,18 @@ final class RouteExecutorReviewCardService
         return $row;
     }
 
+    /** Read a materialized final card solely to rebuild a diagnostic mail. */
+    public function loadSentFinal(string $id): ?array
+    {
+        if (!$this->ready()) throw new DomainException('Карточки ожидают обновления структуры базы данных (154).');
+        $q=$this->tenant->prepare("SELECT c.*,'final' stage FROM route_executor_review_cards c JOIN route_executor_review_sends s ON s.card_id=c.card_id WHERE c.card_id=? AND c.deleted_at IS NOT NULL AND s.stage='final' AND s.final_mail_status='accepted' LIMIT 1");
+        $q->execute([$id]);$row=$q->fetch(PDO::FETCH_ASSOC);
+        if (!$row) return null;
+        $row['snapshot']=json_decode((string)$row['snapshot_json'],true,512,JSON_THROW_ON_ERROR);
+        $row['files']=json_decode((string)$row['files_json'],true,512,JSON_THROW_ON_ERROR);
+        return $row;
+    }
+
     public function save(string $id, int $actorId, int $expectedRevision, array $snapshot, array $uploads, array $keys): int
     {
         if (!$this->ready()) throw new DomainException('Карточки ожидают обновления структуры базы данных (154).');

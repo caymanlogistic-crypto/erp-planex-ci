@@ -36,5 +36,13 @@ catch (DomainException $expected) { $assert(str_contains($expected->getMessage()
 $pdo->prepare("INSERT INTO route_executor_review_sends(card_id,actor_account_id,stage,partial_mail_status) VALUES(?,?,'partial','accepted')")->execute([$id,101]);
 $cards->delete($id);
 $assert($cards->listing()===[] && $cards->load($id)===null,'Deleted card disappears for all users');
+$assert($cards->loadSentFinal($id)===null,'Deleted partial card cannot be used for final mail redelivery');
 $assert((int)$pdo->query('SELECT COUNT(*) FROM route_executor_review_sends')->fetchColumn()===1,'Sent email log survives deletion');
+$finalId='22222222-2222-4222-8222-222222222222';
+$cards->save($finalId,101,0,$snapshot,[],[]);
+$pdo->prepare("INSERT INTO route_executor_review_sends(card_id,actor_account_id,stage,final_mail_status) VALUES(?,?,'final','accepted')")->execute([$finalId,101]);
+$cards->delete($finalId);
+$archived=$cards->loadSentFinal($finalId);
+$assert($archived!==null && $archived['snapshot']['trip_id']==='123' && $archived['stage']==='final',
+    'Accepted final card remains readable solely for diagnostic mail preparation');
 echo "route_executor_review_cards_mysql_test: PASS\n";
