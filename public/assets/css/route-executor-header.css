@@ -1,0 +1,66 @@
+/* Route Executors Page Header — accepted Design Lab checkpoint v009. */
+.route-executors-page-head .page-head-actions { gap: 6px; }
+.route-executors-page-head .page-head-actions .btn-ghost {
+  height: var(--btn-h);
+  padding: 0 12px;
+  border: 1px solid #bfb5a8;
+  border-radius: 2px;
+  background: #f7f4ee;
+  color: #3f3a33;
+  font-weight: 600;
+  box-shadow: none;
+}
+.route-executors-page-head .page-head-actions .btn-ghost:hover {
+  background: #eee8de;
+  border-color: #a99b8b;
+  color: #24211d;
+}
+.route-executors-page-head .page-head-actions .btn-ghost:focus-visible {
+  background: #fbf8f2;
+  border-color: #9a6a3b;
+  color: #24211d;
+  outline: 2px solid #9a5a22 !important;
+  outline-offset: 2px !important;
+  box-shadow: none !important;
+}
+.route-executors-page-head .page-head-actions .btn-ghost:active {
+  background: #e3dbcf;
+  border-color: #998875;
+  color: #24211d;
+}
+.route-executors-page-head .page-head-left {
+  display: grid;
+  grid-template-columns: 30px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 4px;
+  align-items: center;
+}
+.route-executors-page-head .page-head-tabler-icon {
+  grid-column: 1;
+  grid-row: 1 / 3;
+  display: block;
+  width: 30px;
+  height: 30px;
+  color: var(--accent);
+  flex: none;
+}
+.route-executors-page-head .page-head-left > .page-title { grid-column: 2; grid-row: 1; }
+.route-executors-page-head .page-head-left > .page-summary { grid-column: 2; grid-row: 2; }
+@media (max-width: 1100px) {
+  .route-executors-page-head {
+    height: auto;
+    min-height: 56px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    flex-wrap: wrap;
+    column-gap: 12px;
+    row-gap: 6px;
+  }
+  .route-executors-page-head .page-head-left { min-width: 0; flex: 1 1 350px; }
+  .route-executors-page-head .page-head-actions {
+    margin-left: auto;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+}

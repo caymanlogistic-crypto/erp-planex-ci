@@ -2,6 +2,18 @@
 $routeExecutorCreateButton = '<button type="button" class="btn btn-primary" data-route-executor-create-btn>Создать исполнителя рейса</button>';
 $routeExecutorExistingButton = '<button type="button" class="btn btn-ghost" data-route-executor-existing-create>Выбрать из имеющихся</button>';
 $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/company/document-generator') . '">Создать документ</a>';
+// Tabler Icons users-group (@tabler/icons 3.48.0); MIT notice: company_route_executors.tabler.LICENSE.txt.
+$routeExecutorHeaderIcon = <<<'SVG'
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-users-group page-head-tabler-icon" aria-hidden="true" focusable="false">
+  <path stroke="none" d="M0 0h24v24H0z" fill="none" />
+  <path d="M10 13a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+  <path d="M8 21v-1a2 2 0 0 1 2 -2h4a2 2 0 0 1 2 2v1" />
+  <path d="M15 5a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+  <path d="M17 10h2a2 2 0 0 1 2 2v1" />
+  <path d="M5 5a2 2 0 1 0 4 0a2 2 0 0 0 -4 0" />
+  <path d="M3 13v-1a2 2 0 0 1 2 -2h2" />
+</svg>
+SVG;
 $routeListContact = static function (?string $phone, ?string $email): void {
     foreach ([$phone, $email] as $value) if (trim((string)$value)!=='') echo '<span class="route-cell-secondary">'.e($value).'</span>';
 };
@@ -33,8 +45,9 @@ $routeListVehicles = static function (array $row): void {
 
 <?php elseif ($company['status'] !== 'active'): ?>
 
-<div class="page-head">
+<div class="page-head route-executors-page-head">
     <div class="page-head-left">
+        <?= $routeExecutorHeaderIcon ?>
         <h1 class="page-title">Исполнители рейса</h1>
         <div class="page-summary"><span>Исполнитель рейса: подрядчик + водитель + транспорт</span></div>
     </div>
@@ -46,8 +59,9 @@ $routeListVehicles = static function (array $row): void {
 
 <?php elseif (isset($dbError)): ?>
 
-<div class="page-head">
+<div class="page-head route-executors-page-head">
     <div class="page-head-left">
+        <?= $routeExecutorHeaderIcon ?>
         <h1 class="page-title">Исполнители рейса</h1>
         <div class="page-summary"><span>Исполнитель рейса: подрядчик + водитель + транспорт</span></div>
     </div>
@@ -60,8 +74,9 @@ $routeListVehicles = static function (array $row): void {
 <?php elseif (empty($executors) && empty($reviewCards)): ?>
 <?php $isLogist = ($_SESSION['role_code'] ?? '') === 'logist'; ?>
 
-<div class="page-head">
+<div class="page-head route-executors-page-head">
     <div class="page-head-left">
+        <?= $routeExecutorHeaderIcon ?>
         <h1 class="page-title">Исполнители рейса</h1>
         <div class="page-summary"><span>Исполнитель рейса: подрядчик + водитель + транспорт</span></div>
     </div>
@@ -94,8 +109,9 @@ $routeListVehicles = static function (array $row): void {
 
 <?php else: ?>
 
-<div class="page-head">
+<div class="page-head route-executors-page-head">
     <div class="page-head-left">
+        <?= $routeExecutorHeaderIcon ?>
         <h1 class="page-title">Исполнители рейса</h1>
         <div class="page-summary"><span>Исполнитель рейса: подрядчик + водитель + транспорт</span></div>
     </div>
