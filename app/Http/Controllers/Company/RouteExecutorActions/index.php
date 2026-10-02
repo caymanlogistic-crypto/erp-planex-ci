@@ -6,6 +6,7 @@ $pageTitle='Исполнители рейса';$pageContext='Исполните�
 $pageStylesheets[] = '/assets/css/route-executor-combined-create.css';
 $pageStylesheets[] = '/assets/css/route-executor-review-workflow.css';
 $pageStylesheets[] = '/assets/css/route-executor-existing-parts.css';
+$pageStylesheets[] = '/assets/css/route-executor-header.css';
 $pageScripts[] = '/assets/js/route-executor-combined-create.js';
 $pageScripts[] = '/assets/js/route-executor-existing-parts.js';
 $pageScripts[] = '/assets/js/route-executor-review-workflow.js';

@@ -18,7 +18,7 @@ $reviewCards=[
 ];
 $executors=[['crew_id'=>9,'crew_status'=>'active','contractor_name'=>'ООО Действующий','contractor_phone'=>'+7 900 000-00-04','contractor_email'=>'active@example.test','driver_name'=>'Иванов Иван','driver_phone'=>'+7 900 000-00-05','driver_email'=>'ivanov@example.test','primary_brand'=>'КАМАЗ','primary_plate'=>'А123АА77','primary_capacity'=>'20','primary_volume'=>'86','secondary_brand'=>'ТОНАР','secondary_plate'=>'А1213334','secondary_capacity'=>'24','secondary_volume'=>'92','responsible_name'=>'Карина Гладких']];
 ?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/assets/css/erp-ui.css"><link rel="stylesheet" href="/assets/css/app-base.css"><link rel="stylesheet" href="/assets/css/route-executor-review-workflow.css">
+<link rel="stylesheet" href="/assets/css/erp-ui.css"><link rel="stylesheet" href="/assets/css/app-base.css"><link rel="stylesheet" href="/assets/css/route-executor-review-workflow.css"><link rel="stylesheet" href="/assets/css/route-executor-header.css">
 <style>html,body{margin:0}.test-workspace{box-sizing:border-box;width:calc(100% - 220px);margin-left:220px;padding:12px 16px;min-width:0}.modal-overlay{display:none!important}</style></head><body><main class="test-workspace">
 <?php require BASE_PATH.'/app/View/pages/company_route_executors.php'; ?>
 </main></body></html>
