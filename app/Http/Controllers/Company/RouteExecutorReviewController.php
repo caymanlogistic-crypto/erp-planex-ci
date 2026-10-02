@@ -13,6 +13,7 @@ use App\Service\MaxEventNotificationService;
 use App\Service\MaxEventCatalog;
 use App\Service\MaxMessagingService;
 use App\Service\RouteExecutorReviewEmail;
+use App\Service\RouteExecutorReviewIndividualMail;
 use App\Service\RouteExecutorReviewArchive;
 use App\Service\RouteExecutorReviewCardService;
 use App\Service\RouteExecutorExistingEntityService;
@@ -225,7 +226,11 @@ final class RouteExecutorReviewController
                 }
                 $tenant->commit();$reserved=true;
             } catch (Throwable $error) { if ($tenant->inTransaction()) $tenant->rollBack();throw $error; }
-            $mailStatus=(new DocumentMailTransport())->send($credentials,$message);
+            $mailDelivery=RouteExecutorReviewIndividualMail::send(new DocumentMailTransport(),$credentials,$message);
+            $mailStatus=$mailDelivery['status'];
+            foreach ($mailDelivery['recipients'] as $recipient=>$outcome) {
+                error_log('route executor mail '.$cardId.' '.$stage.' '.$recipient.' '.$outcome);
+            }
             $max=new MaxEventNotificationService($tenant);$deliveryId=null;
             $tenant->beginTransaction();
             try {
@@ -262,6 +267,7 @@ final class RouteExecutorReviewController
                 }
             }
             $this->json(['ok'=>$mailStatus==='accepted','stage'=>$nextStage,'mail_status'=>$mailStatus,
+                'recipient_statuses'=>$mailDelivery['recipients'],
                 'max_status'=>$maxStatus,'crew_id'=>$crewId,'materialization_error'=>$materializationError,
                 'error'=>$mailStatus==='accepted'?null:'Письмо не подтверждено. Проверьте статус отправки у администратора.']);
         } catch (Throwable $error) {

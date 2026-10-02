@@ -721,8 +721,8 @@
       : 'Это полный комплект. После передачи карточка будет завершена.';
     const recipients = stage === 'contract' ? ['ответственный за договор по юрлицу рейса'] : [...config.recipients];
     if (stage !== 'contract' && config.send_responsible_logist) recipients.push('ответственный логист');
-    dialog.querySelector('[data-lab-review-summary]').textContent = `Готово: ${pendingSend.ready.join('; ')}. Отправитель: ${config.sender}. Получатели: ${recipients.join(', ')}.`;
-    dialog.querySelector('[data-lab-email-heading]').textContent = 'Письмо · ' + recipients.join(', ');
+    dialog.querySelector('[data-lab-review-summary]').textContent = `Готово: ${pendingSend.ready.join('; ')}. Отправитель: ${config.sender}. ${stage === 'contract' ? 'Получатель' : 'Отдельное письмо каждому получателю'}: ${recipients.join(', ')}.`;
+    dialog.querySelector('[data-lab-email-heading]').textContent = (stage === 'contract' ? 'Письмо · ' : 'Отдельные письма · ') + recipients.join(', ');
     const event = config.max_events?.[maxEventKey(stage)];
     dialog.querySelector('[data-lab-max-heading]').closest('details').hidden = stage === 'contract';
     dialog.querySelector('.lab-sandbox-note').hidden = stage === 'contract';
@@ -828,17 +828,21 @@
         draft = { ...draft, stage: result.stage, sends: [...draft.sends, sent] };
         try { await draftOperation('readwrite', store => store.put(draft)); } catch (error) { console.warn('Локальный кэш недоступен', error); }
       }
-      if (!response.ok || !result.ok) throw new Error(result.error || 'Отправка не подтверждена.');
+      if (!response.ok || !result.ok) {
+        const recipients = Object.entries(result.recipient_statuses || {})
+          .map(([address, status]) => `${address}: ${status === 'accepted' ? 'принято сервером' : status === 'failed' ? 'не принято' : 'неизвестно'}`);
+        throw new Error([result.error || 'Отправка не подтверждена.', ...recipients].join(' '));
+      }
       const next = draft;
       try { await draftOperation('readwrite', store => store.put(next)); } catch (error) { console.warn('Локальный кэш недоступен', error); }
       draft = next;
       dialog.querySelector('[data-lab-review-result]').textContent = pendingSend.stage === 'contract'
         ? 'Письмо для договора отправлено.'
         : result.max_status === 'sent'
-        ? 'Письмо и уведомление MAX отправлены.'
+        ? 'Отдельные письма приняты почтовым сервером, уведомление MAX отправлено.'
         : result.max_status === 'disabled'
-          ? 'Письмо отправлено. Событие MAX выключено в настройках.'
-          : 'Письмо отправлено. Проверьте статус уведомления MAX в настройках.';
+          ? 'Отдельные письма приняты почтовым сервером. Событие MAX выключено в настройках.'
+          : 'Отдельные письма приняты почтовым сервером. Проверьте статус уведомления MAX в настройках.';
       if (result.materialization_error) {
         const notice=dialog.querySelector('[data-lab-review-result]');
         notice.textContent = result.materialization_error;
