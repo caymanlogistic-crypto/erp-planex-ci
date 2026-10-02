@@ -146,6 +146,9 @@ final class RouteExecutorReviewController
                     ->materialize($cardId,(int)($_SESSION['user_id']??0),(string)($_SESSION['role_code']??''));
                 $this->json(['ok'=>true,'crew_id'=>$crewId]);
             }
+            if (in_array($action,['diagnostic_mail_preview','diagnostic_mail_send'],true)) {
+                $this->diagnosticMail($cards,$central,$tenant,(int)$company['id'],$accountId,$cardId,$action==='diagnostic_mail_send');
+            }
             if ($action==='resend') $this->resendCard($cards,$central,$tenant,(int)$company['id'],$accountId,$actorName,$cardId);
             $stage=(string)($_POST['stage']??'');
             if (!in_array($stage,['partial','final'],true)) throw new DomainException('Неизвестный этап отправки.');
@@ -279,6 +282,76 @@ final class RouteExecutorReviewController
             }
             $this->failure($error);
         }
+    }
+
+    /** Owner-only redelivery from a completed card and its current standard records; no workflow or MAX mutation. */
+    private function diagnosticMail(RouteExecutorReviewCardService $cards,PDO $central,PDO $tenant,int $companyId,int $accountId,string $cardId,bool $send): never
+    {
+        $profiles=new EmployeeMailProfileService($central,$companyId);
+        $profiles->assertOwner($accountId,$companyId);
+        $card=$cards->loadSentFinal($cardId);
+        if (!$card) throw new DomainException('Отправленный полный комплект не найден.');
+        $contractorId=(int)($_POST['contractor_id']??0);
+        $driverId=(int)($_POST['driver_id']??0);
+        $vehicleSetId=(int)($_POST['vehicle_set_id']??0);
+        if ($contractorId<=0 || $driverId<=0 || $vehicleSetId<=0) throw new DomainException('Укажите штатные записи подрядчика, водителя и комплекта ТС.');
+        $q=$tenant->prepare("SELECT c.id FROM crews c JOIN driver_vehicle_blocks b ON b.id=c.driver_vehicle_block_id WHERE c.contractor_id=? AND b.driver_id=? AND b.vehicle_set_id=? AND c.deleted_at IS NULL LIMIT 1");
+        $q->execute([$contractorId,$driverId,$vehicleSetId]);
+        if (!$q->fetchColumn()) throw new DomainException('Указанные записи не образуют действующего исполнителя рейса.');
+        $existing=new RouteExecutorExistingEntityService($tenant,$companyId);
+        $contractor=$existing->detail('contractor',$contractorId);
+        $driver=$existing->detail('driver',$driverId);
+        $vehicle=$existing->detail('vehicle',$vehicleSetId);
+        if (trim((string)$card['contractor_name'])!==trim((string)$contractor['values']['name'])
+            || trim((string)$card['driver_name'])!==trim((string)$driver['values']['full_name'])
+            || trim((string)$card['plate'])!==trim((string)$vehicle['values']['units[primary][plate_number]'])) {
+            throw new DomainException('Штатные записи не совпадают с отправленной карточкой.');
+        }
+        $snapshot=$card['snapshot'];
+        $snapshot['selected_entities']=['contractor'=>$contractorId,'driver'=>$driverId,'vehicle'=>$vehicleSetId];
+        $snapshot['removed_documents']=[];
+        $snapshot=$existing->canonicalize($snapshot);
+        $package=RouteExecutorReviewPackage::inspect($snapshot,$existing->documentsForSnapshot($snapshot,[]),true);
+        if (!$package['full']) throw new DomainException('Данные штатного исполнителя неполные.');
+        $tripLabel=trim((string)($snapshot['trip_label']??''));
+        if (!preg_match('/^#[1-9][0-9]*\s.+$/uD',$tripLabel)) throw new DomainException('В карточке нет сохранённого номера и наименования рейса.');
+        $logist=$this->responsibleLogist($central,$companyId,(int)($snapshot['logist']??0));
+        $settings=(new RouteExecutorReviewRecipientService($central,$companyId))->read();
+        $recipients=array_map(static fn(array $row):string=>(string)$row['email'],$settings['recipients']);
+        if ($settings['send_responsible_logist'] && filter_var($logist['email'],FILTER_VALIDATE_EMAIL)) $recipients[]=$logist['email'];
+        $recipients=array_values(array_unique(array_map(DocumentMailMime::address(...),$recipients)));
+        if (!$recipients) throw new DomainException('Получатели проверки исполнителей рейса не настроены.');
+        $sender=$profiles->defaultSender($accountId);
+        $mail=RouteExecutorReviewEmail::build($package,false,$tripLabel);
+        $generalFiles=self::filesFor($package['attachments'],'general');
+        $archive=$generalFiles ? RouteExecutorReviewArchive::build($generalFiles,$tripLabel,$package) : null;
+        $subject=$tripLabel.' — исполнитель рейса — полный комплект — проверка доставки';
+        if (!$send) $this->json(['ok'=>true,'card_id'=>$cardId,'trip'=>$tripLabel,
+            'entities'=>['contractor'=>$contractor['label'],'driver'=>$driver['label'],'vehicle'=>$vehicle['label']],
+            'sender'=>(string)$sender['email'],'recipients'=>$recipients,'subject'=>$subject,
+            'archive'=>$archive ? ['name'=>$archive['name'],'bytes'=>strlen($archive['bytes'])] : null]);
+        if ((string)($_POST['confirmation']??'')!=='SEND_ROUTE_EXECUTOR_DIAGNOSTIC') throw new DomainException('Подтвердите проверочную отправку.');
+        $lockName='route-review-diagnostic:'.$cardId;
+        $lock=$tenant->prepare('SELECT GET_LOCK(?,0)');$lock->execute([$lockName]);
+        if ((int)$lock->fetchColumn()!==1) throw new DomainException('Проверочная отправка уже выполняется.');
+        try {
+            $resolved=$profiles->resolve($accountId,(int)$sender['legal_entity_id']);
+            $credentials=$profiles->credentials($accountId,(int)$sender['legal_entity_id']);
+            if ((int)$credentials['id']!==(int)$sender['id'] || (int)$resolved['profile_id']!==(int)$sender['id']
+                || (string)$credentials['email']!==(string)$sender['email']) throw new DomainException('Рабочий ящик изменился. Обновите страницу.');
+            $domain=substr(strrchr((string)$sender['email'],'@')?:'',1);
+            $message=['from'=>(string)$sender['email'],'to'=>$recipients,
+                'message_id'=>'<route-executor-'.str_replace('-','',$cardId).'-diagnostic-'.bin2hex(random_bytes(8)).'@'.$domain.'>',
+                'subject'=>$subject,'text'=>$mail['text'],'html'=>$mail['html'],
+                'attachments'=>$archive?[$archive]:[]];
+            $result=RouteExecutorReviewIndividualMail::send(new DocumentMailTransport(),$credentials,$message);
+            foreach ($result['recipients'] as $recipient=>$outcome) error_log('route executor diagnostic mail '.$cardId.' '.$recipient.' '.$outcome);
+        } finally {
+            $tenant->prepare('SELECT RELEASE_LOCK(?)')->execute([$lockName]);
+        }
+        $this->json(['ok'=>$result['status']==='accepted','mail_status'=>$result['status'],
+            'recipient_statuses'=>$result['recipients'],'max_status'=>'not_sent',
+            'error'=>$result['status']==='accepted'?null:'Не все письма приняты почтовым сервером. Не повторяйте отправку до проверки почты.']);
     }
 
     /** Temporary delivery-check action. It never advances the workflow. */
