@@ -85,9 +85,9 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
     </div>
 </div>
 
-<div class="table-card table-card--standard" data-erp-grid data-route-executors-grid>
+<div class="table-card table-card--standard route-executors-card" data-erp-grid data-route-executors-grid>
     <div class="table-toolbar">
-        <div class="found-label">Найдено: <b><?= count($executors) + count($reviewCards) ?></b> карточек</div>
+        <div class="found-label">Исполнители · <b><?= count($executors) + count($reviewCards) ?></b></div>
         <div class="toolbar-right">
             <div class="toolbar-sort">
                 <span class="toolbar-sort-label">Сортировка по:</span>
@@ -108,28 +108,28 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
                     <th>Телефон</th>
                     <th>ТС</th>
                     <th>Госномер</th>
-                    <th>Ответственный логист</th>
+                    <th>Логист</th>
                     <th>Статус</th>
                 </tr>
             </thead>
             <tbody>
                 <?php foreach ($reviewCards as $card): ?>
-                <?php $reviewStage=(string)$card['stage']; $reviewFinal=$reviewStage==='final'; $reviewLabel=in_array($reviewStage,['partial','partial_failed'],true)?'Отправлено первое письмо':($reviewFinal?'Полный комплект отправлен':'Менеджер сохранил'); ?>
+                <?php $reviewStage=(string)$card['stage']; $reviewFinal=$reviewStage==='final'; $reviewLabel=in_array($reviewStage,['partial','partial_failed'],true)?'Отправлено первое письмо':($reviewFinal?'Полный комплект отправлен':'Менеджер сохранил'); $reviewStatusText=$reviewFinal?'Полный комплект':(in_array($reviewStage,['partial','partial_failed'],true)?'Первое письмо':'Черновик'); $reviewStatusClass=$reviewFinal?'active':($reviewStage==='partial_failed'?'danger':($reviewStage==='partial'?'mail':'draft')); ?>
                 <tr class="route-review-row<?= $reviewFinal ? ' route-review-row-final' : '' ?>" data-route-review-card-id="<?= e($card['card_id']) ?>" <?= $reviewFinal ? '' : 'data-erp-pin="1"' ?> data-erp-sort-date="<?= (int)strtotime((string)$card['updated_at']) ?>" tabindex="0" aria-label="<?= e($reviewLabel) ?>. Двойное нажатие открывает карточку">
                     <td><strong><?= e($card['contractor_name'] ?: 'Без подрядчика') ?></strong><?php if (!$reviewFinal): ?><br><small><?= e($reviewLabel) ?></small><?php endif; ?></td>
                     <td><?= e($card['driver_name'] ?: '—') ?></td>
-                    <td class="col-mono"><?= e($card['driver_phone'] ?: '—') ?></td>
+                    <td class="col-mono cell-secondary"><?= e($card['driver_phone'] ?: '—') ?></td>
                     <td><?= e($card['vehicle_type'] ?: '—') ?></td>
                     <td class="col-mono"><?= e($card['plate'] ?: '—') ?></td>
                     <td><?= e($responsibleLogistNames[(int)($card['responsible_membership_id']??0)]??'—') ?></td>
-                    <td><div class="route-review-actions"><span class="badge route-review-badge<?= $reviewFinal ? ' badge-ok' : '' ?>"><?= e($reviewLabel) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="btn btn-ghost route-review-delete" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Удалить карточку">Удалить</button></div></td>
+                    <td><div class="route-review-actions"><span class="route-status route-status--<?= $reviewStatusClass ?>" title="<?= e($reviewLabel) ?>"><?= e($reviewStatusText) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="route-review-delete row-actions-btn" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Удалить карточку" title="Удалить карточку">⋯</button></div></td>
                 </tr>
                 <?php endforeach; ?>
                 <?php foreach ($executors as $e): ?>
                 <tr data-route-executor-id="<?= (int) $e['crew_id'] ?>" data-erp-sort-date="<?= (int) $e['crew_id'] ?>">
                     <td><?= e($e['contractor_name'] ?? '—') ?></td>
                     <td><?= e($e['driver_name'] ?? '—') ?></td>
-                    <td class="col-mono"><?= e($e['driver_phone'] ?? '—') ?></td>
+                    <td class="col-mono cell-secondary"><?= e($e['driver_phone'] ?? '—') ?></td>
                     <td class="cell-double">
                         <span class="cell-main"><?= e(ui_set_type($e['set_type'] ?? null)) ?></span>
                         <span class="cell-sub"><?= e($e['plates'] ?? '—') ?></span>
@@ -137,8 +137,7 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
                     <td class="col-mono"><?= e($e['primary_plate'] ?? '—') ?></td>
                     <td><?= e($e['responsible_name'] ?? '—') ?></td>
                     <td>
-                        <span class="badge<?= $e['crew_status'] === 'active' ? ' badge-ok' : '' ?>">
-                            <span class="dot"></span>
+                        <span class="route-status route-status--<?= $e['crew_status'] === 'active' ? 'active' : 'neutral' ?>">
                             <?= $e['crew_status'] === 'active' ? 'Активен' : 'Неактивен' ?>
                         </span>
                     </td>

@@ -65,13 +65,26 @@
   .lab-route-send-dialog .lab-review-foot { flex-wrap: wrap; }
   .lab-route-send-dialog .lab-review-foot button { flex: 1 1 auto; }
 }
-.route-review-row { background: #fff1b8; cursor: pointer; }
-.route-review-row:hover, .route-review-row:focus-visible { background: #ffe58a; outline: 2px solid #ad741a; outline-offset: -2px; }
-.route-review-row-final { background: transparent; }
-.route-review-row-final:hover, .route-review-row-final:focus-visible { background: #f6f4ef; }
-.route-review-row td { background: transparent !important; vertical-align: middle; }
-.route-review-row small { color: #75521b; font-weight: 600; }
-.route-review-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-.route-review-badge { display: inline-flex; align-items: center; justify-content: center; min-height: 22px; padding: 2px 7px; line-height: 1.2; text-align: center; background: #fff8db; color: #684612; border: 1px solid #d7af5a; }
-.route-review-badge.badge-ok { background: #cfe2dc; color: #1e5247; border-color: #1e5247; }
-.route-review-delete { min-height: 28px; }
+.route-executors-card .toolbar-search { width: 230px; }
+.route-executors-card .table th,
+.route-executors-card .table td { border-right-color: rgba(168, 161, 150, .12); }
+.route-executors-card .table td { border-bottom-color: rgba(190, 184, 174, .42); }
+.route-executors-card .cell-secondary { font-size: 11px; line-height: 13px; font-weight: 400; color: #68625a; }
+.route-executors-card .route-status { display: inline-flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; border-radius: 0; height: auto; min-height: 18px; font-size: 11px; line-height: 18px; font-weight: 600; white-space: nowrap; color: #4c4840; }
+.route-executors-card .route-status::before { content: ""; width: 6px; height: 6px; flex: 0 0 6px; border-radius: 1px; background: #827b70; }
+.route-executors-card .route-status--active::before { background: #3a8278; }
+.route-executors-card .route-status--draft::before { background: #b89228; }
+.route-executors-card .route-status--mail::before { background: #c07830; }
+.route-executors-card .route-status--danger::before { background: #b84c3a; }
+.route-executors-card .route-status--neutral::before { background: #827b70; }
+.route-executors-card .route-review-row { cursor: pointer; }
+.route-executors-card .route-review-row:not(.route-review-row-final) > td { background: #fff1bd !important; }
+.route-executors-card .route-review-row:not(.route-review-row-final):hover > td,
+.route-executors-card .route-review-row:not(.route-review-row-final):focus-visible > td { background: #ffecae !important; }
+.route-executors-card .route-review-row:focus-visible { outline: 2px solid #ad741a; outline-offset: -2px; }
+.route-executors-card .route-review-row-final:hover > td { background: #f6f4ef; }
+.route-executors-card .route-review-row small { color: #75521b; font-weight: 600; }
+.route-executors-card .route-review-actions { display: flex; align-items: center; gap: 4px 6px; flex-wrap: wrap; }
+.route-executors-card .row-actions-btn { width: 24px; height: 24px; display: inline-grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 2px; background: transparent; color: #78726a; font: inherit; font-size: 15px; line-height: 1; cursor: pointer; }
+.route-executors-card .row-actions-btn:hover { background: #e8e4db; border-color: #c9c3b8; color: #131210; }
+.route-executors-card .row-actions-btn:focus-visible { outline: 2px solid #ad741a; outline-offset: 1px; }
