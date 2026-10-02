@@ -99,7 +99,7 @@
   };
   const filled = element => !!element && (!element.disabled || element.dataset.existingLocked === '1') && !!String(element.value || '').trim();
   const hasFile = (form, name) => {
-    if (window.routeExecutorExistingParts?.hasFile(form?.id, name)) return true;
+    if (window.routeExecutorExistingParts?.hasFile?.(form?.id, name)) return true;
     const files = [...(form?.elements.namedItem(name)?.files || [])];
     const vehicleFile = name.includes('[primary]') || name.includes('[secondary]');
     const allowed = vehicleFile
@@ -502,11 +502,13 @@
   function workflowStage() {
     const ready = readyActions();
     const full = ready.length === 3;
-    if (!full && !ready.some(key => key === 'training' || key === 'vehicle')) return null;
     if (!['new', 'partial', 'partial_failed', 'final_failed'].includes(draft.stage)) return null;
     if (!document.getElementById('route-executor-responsible-logist')?.value || !document.getElementById('route-executor-trip-id')?.value) return null;
-    if (draft.stage === 'partial' || draft.stage === 'final_failed') return full ? 'final' : null;
-    return full ? 'final' : ready.length ? 'partial' : null;
+    if (full) return 'final';
+    if (draft.stage === 'new' || draft.stage === 'partial_failed') {
+      if (ready.some(key => key === 'training' || key === 'vehicle')) return 'partial';
+    }
+    return ready.includes('contract') && draft.contractStatus !== 'accepted' ? 'contract' : null;
   }
 
   function maxEventKey(stage) {
@@ -532,8 +534,8 @@
     if (content) content.inert = draft.stage === 'final';
     send.hidden = !action;
     send.disabled = workflowBusy || !action;
-    if (action) send.textContent = action === 'partial'
-      ? 'Сохранить и отправить первичные данные (1/2)'
+    if (action) send.textContent = action === 'contract' ? 'Сохранить и отправить данные для договора'
+      : action === 'partial' ? 'Сохранить и отправить первичные данные (1/2)'
       : 'Сохранить и отправить полный комплект ' + (draft.stage === 'partial' ? '(2/2)' : '(1/1)');
   }
 
@@ -558,6 +560,9 @@
     modal.querySelector('.modal-required-note').textContent = 'Черновик можно сохранить с неполными данными';
     modal.addEventListener('input', () => requestAnimationFrame(renderWorkflow));
     modal.addEventListener('change', () => requestAnimationFrame(renderWorkflow));
+    const readiness = modal.querySelector('[data-route-readiness]');
+    if (readiness) new MutationObserver(() => requestAnimationFrame(renderWorkflow))
+      .observe(readiness, { subtree: true, attributes: true, attributeFilter: ['data-state'] });
     renderWorkflow();
     if (draftLoaded) return;
     draftLoaded = true;
@@ -578,12 +583,12 @@
             files.push({ formId: item.formId, name: item.name, index: item.index, selected: [file] });
           }
           draft = { ...draft, ...state.card.snapshot, files, revision: state.card.revision,
-            stage: state.stage, savedAt: state.card.updated_at, signature: '' };
+            stage: state.stage, contractStatus: state.contract_status, savedAt: state.card.updated_at, signature: '' };
           restoreDraft(draft);
           await window.routeExecutorExistingParts?.restore(draft);
           draft.signature = draftSignature(captureDraft());
         } else if (saved?.savedAt) {
-          draft = { ...saved, revision: 0, stage: state.stage };
+          draft = { ...saved, revision: 0, stage: state.stage, contractStatus: state.contract_status };
           restoreDraft(saved);
           await window.routeExecutorExistingParts?.restore(saved);
           await persistDraft(captureDraft());
@@ -611,9 +616,11 @@
 
   function emailPayload(stage, snapshot) {
     const partial = stage === 'partial';
-    const number = partial ? '1/2' : draft.stage === 'partial' ? '2/2' : '1/1';
-    const label = partial ? 'Первичные данные' : 'Полный комплект';
-    const fields = snapshot.controls.filter(item => item.formId !== 'lab-contractor-form' && item.value?.trim() && item.type !== 'checkbox' && item.type !== 'radio')
+    const contract = stage === 'contract';
+    const number = contract ? '' : partial ? '1/2' : draft.stage === 'partial' ? '2/2' : '1/1';
+    const label = contract ? 'Данные для заключения договора' : partial ? 'Первичные данные' : 'Полный комплект';
+    const fields = snapshot.controls.filter(item => (contract ? item.formId === 'lab-contractor-form' : item.formId !== 'lab-contractor-form')
+      && item.value?.trim() && item.type !== 'checkbox' && item.type !== 'radio')
       .map(item => {
         const element = namedControl(item.formId, item.name, item.index);
         const section = { 'lab-contractor-form': 'Подрядчик', 'lab-driver-form': 'Водитель', 'lab-vehicle-form': 'Транспорт' }[item.formId];
@@ -628,27 +635,29 @@
         const value = element?.tagName === 'SELECT' ? element.selectedOptions[0]?.textContent?.trim() || item.value : item.value.trim();
         return { name, value };
       });
-    const files = [...snapshot.files.filter(item => item.formId !== 'lab-contractor-form').flatMap(item => item.selected.map(file => file.name)),
-      ...(window.routeExecutorExistingParts?.fileNames('general') || [])];
+    const files = [...snapshot.files.filter(item => contract ? item.formId === 'lab-contractor-form' : item.formId !== 'lab-contractor-form')
+      .flatMap(item => item.selected.map(file => file.name)),
+      ...(window.routeExecutorExistingParts?.fileNames?.(contract ? 'contract' : 'general') || [])];
     const ready = readyActions().map(key => readinessTitles[key]);
-    const contract = readinessReport('contract').fields;
+    const contractMissing = readinessReport('contract').fields;
     const driver = [...new Set([...readinessReport('training').fields, ...readinessReport('vehicle').fields.filter(value => !value.includes(':') && value !== 'Тип комплекта ТС')])];
     const vehicle = readinessReport('vehicle');
     const grouped = {
-      'Подрядчик': contract.filter(value => !/счёт|БИК|банк|контакт|телефон|email/i.test(value)),
-      'Реквизиты': contract.filter(value => /счёт|БИК|банк/i.test(value)),
-      'Контакт': contract.filter(value => /контакт|телефон|email/i.test(value)),
+      'Подрядчик': contractMissing.filter(value => !/счёт|БИК|банк|контакт|телефон|email/i.test(value)),
+      'Реквизиты': contractMissing.filter(value => /счёт|БИК|банк/i.test(value)),
+      'Контакт': contractMissing.filter(value => /контакт|телефон|email/i.test(value)),
       'Водитель': driver,
       'ТС': vehicle.fields.filter(value => value.includes(':') || value === 'Тип комплекта ТС'),
       'Файлы': vehicle.files
     };
     const missing = Object.entries(grouped).filter(([, values]) => values.length)
       .map(([group, values]) => `**• ${group}:** ${[...new Set(values)].join(', ')}`);
-    const subject = `${snapshot.trip_label} — исполнитель рейса — ${label.toLowerCase()}`;
+    const subject = contract ? `${snapshot.trip_label} — Данные для заключения договора`
+      : `${snapshot.trip_label} — исполнитель рейса — ${label.toLowerCase()}`;
     const find = (formId, name) => snapshot.controls.find(item => item.formId === formId && item.name === name)?.value?.trim();
     const surname=find('lab-driver-form','full_name')?.split(/\s+/)[0] || '';
     const vehicleDriver=[find('lab-vehicle-form','units[primary][plate_number]'),surname ? `(${surname})` : ''].filter(Boolean).join(' ') || '—';
-    const max = [partial ? '🚚 Внесены частичные данные' : '🚛 ПОЛНЫЙ КОМПЛЕКТ',
+    const max = contract ? '' : [partial ? '🚚 Внесены частичные данные' : '🚛 ПОЛНЫЙ КОМПЛЕКТ',
       `**${snapshot.trip_label}**`, vehicleDriver, partial ? `\n**Не хватает для полного комплекта**\n${missing.join('\n')}` : '',
       'Логист: —'].filter(Boolean).join('\n');
     return { stage, number, label, subject, max, fields, files, ready, missing, signature: draftSignature(snapshot), snapshot };
@@ -691,9 +700,11 @@
       const response = await fetch(base + '/company/route-executors/review/config', { credentials: 'same-origin' });
       config = await response.json();
       if (!response.ok || !config.ok) throw new Error(config.error || 'Настройки отправки недоступны.');
-      if (!config.recipients.length && !config.send_responsible_logist) throw new Error('В «Ключи и сервисы» добавьте получателей проверки исполнителей рейса.');
-      const event = config.max_events?.[maxEventKey(stage)];
-      if (!event?.enabled || !event.chat_config_id) throw new Error('В настройках MAX включите событие «Исполнитель рейса» и выберите чат.');
+      if (stage !== 'contract') {
+        if (!config.recipients.length && !config.send_responsible_logist) throw new Error('В «Ключи и сервисы» добавьте получателей проверки исполнителей рейса.');
+        const event = config.max_events?.[maxEventKey(stage)];
+        if (!event?.enabled || !event.chat_config_id) throw new Error('В настройках MAX включите событие «Исполнитель рейса» и выберите чат.');
+      }
     } catch (error) {
       showWorkflowMessage(error.message);
       return;
@@ -702,15 +713,19 @@
     pendingSend = emailPayload(stage, snapshot);
     lastTrigger = trigger;
     const dialog = ensureWorkflowDialog();
-    dialog.querySelector('[data-lab-review-title]').textContent = `${pendingSend.label} · ${pendingSend.number}`;
-    dialog.querySelector('[data-lab-review-warning]').textContent = stage === 'partial'
+    dialog.querySelector('[data-lab-review-title]').textContent = pendingSend.number ? `${pendingSend.label} · ${pendingSend.number}` : pendingSend.label;
+    dialog.querySelector('[data-lab-review-warning]').textContent = stage === 'contract'
+      ? 'Будет отправлено только письмо для заключения договора. Общая рассылка и MAX не запускаются.'
+      : stage === 'partial'
       ? 'Это первичные данные. Ожидайте полный комплект вторым письмом. После этой отправки обновления можно сохранять, но повторно отправить частичный пакет нельзя.'
       : 'Это полный комплект. После передачи карточка будет завершена.';
-    const recipients = [...config.recipients];
-    if (config.send_responsible_logist) recipients.push('ответственный логист');
+    const recipients = stage === 'contract' ? ['ответственный за договор по юрлицу рейса'] : [...config.recipients];
+    if (stage !== 'contract' && config.send_responsible_logist) recipients.push('ответственный логист');
     dialog.querySelector('[data-lab-review-summary]').textContent = `Готово: ${pendingSend.ready.join('; ')}. Отправитель: ${config.sender}. Получатели: ${recipients.join(', ')}.`;
     dialog.querySelector('[data-lab-email-heading]').textContent = 'Письмо · ' + recipients.join(', ');
     const event = config.max_events?.[maxEventKey(stage)];
+    dialog.querySelector('[data-lab-max-heading]').closest('details').hidden = stage === 'contract';
+    dialog.querySelector('.lab-sandbox-note').hidden = stage === 'contract';
     dialog.querySelector('[data-lab-max-heading]').textContent = event?.enabled ? 'MAX · настроенное событие' : 'MAX · событие выключено в настройках';
     const find = (formId, name) => snapshot.controls.find(item => item.formId === formId && item.name === name)?.value?.trim() || '—';
     const logist = document.getElementById('route-executor-responsible-logist')?.selectedOptions?.[0]?.textContent?.trim() || '—';
@@ -724,7 +739,9 @@
     pendingSend.fields.unshift({ name: 'Рейс', value: snapshot.trip_label });
     dialog.querySelector('[data-lab-email-subject]').textContent = pendingSend.subject;
     dialog.querySelector('.lab-email-preview').classList.toggle('is-full', stage === 'final');
-    dialog.querySelector('[data-lab-email-lead]').textContent = stage === 'partial'
+    dialog.querySelector('[data-lab-email-lead]').textContent = stage === 'contract'
+      ? 'Передаём данные подрядчика для заключения договора.'
+      : stage === 'partial'
       ? 'Передаём первичные данные исполнителя рейса. Ожидайте полный комплект вторым письмом.'
       : `Передаём все актуальные данные исполнителя рейса${draft.stage === 'partial' ? ' с учётом первого письма' : ''}.`;
     const body = dialog.querySelector('[data-lab-email-fields]');
@@ -753,22 +770,26 @@
     renderWorkflow();
     showWorkflowMessage('Сохраняем карточку…');
     let failure = null;
-    let contractResult = null;
     try {
-      contractResult = await persistDraft(captureDraft());
-      await refreshReviewList();
+      await persistDraft(captureDraft());
+      try { await refreshReviewList(); } catch (error) { console.warn('Не удалось обновить список карточек', error); }
     } catch (error) {
       console.error('Route executor draft save failed', error);
       failure = error;
     } finally {
       workflowBusy = false;
       renderWorkflow();
-      showWorkflowMessage(failure ? `Не удалось сохранить карточку: ${failure.message}`
-        : contractResult?.contract_error ? `Карточка сохранена. ${contractResult.contract_error}`
-        : contractResult?.contract_status === 'unknown' ? 'Карточка сохранена. Доставка письма для договора не подтверждена; не отправляйте его повторно до проверки.'
-        : contractResult?.contract_status === 'sending' ? 'Карточка сохранена. Письмо для договора уже отправляется.'
-        : contractResult?.contract_status === 'accepted' ? 'Карточка сохранена. Письмо для договора принято почтовым сервером.'
-        : 'Карточка сохранена.');
+      showWorkflowMessage(failure ? `Не удалось сохранить карточку: ${failure.message}` : 'Карточка сохранена.');
+      if (!failure) closeReviewPopups();
+    }
+  }
+
+  function closeReviewPopups() {
+    lastTrigger = null;
+    const dialog = document.getElementById('lab-route-send-dialog');
+    if (dialog?.open) dialog.close();
+    for (const id of ['route-executor-create-modal', 'route-executor-existing-modal', 'route-executor-view-modal']) {
+      if (document.getElementById(id)?.classList.contains('is-open')) window.closeModal?.(id);
     }
   }
 
@@ -788,14 +809,17 @@
       await persistDraft(captureDraft());
       const data = new FormData();
       data.set('card_id', DRAFT_ID);
-      data.set('stage', pendingSend.stage);
+      if (pendingSend.stage === 'contract') data.set('action', 'contract');
+      else data.set('stage', pendingSend.stage);
       data.set('revision', String(draft.revision));
       const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
       const response = await fetch(base + '/company/route-executors/review/send', {
         method: 'POST', credentials: 'same-origin', headers: { 'X-CSRF-Token': csrf }, body: data
       });
       const result = await response.json();
-      if (result.stage && result.stage !== 'new') {
+      if (pendingSend.stage === 'contract' && result.contract_status === 'accepted') {
+        draft = { ...draft, contractStatus: 'accepted' };
+      } else if (result.stage && result.stage !== 'new') {
         const sent = { at: new Date().toISOString(), ...pendingSend, mailStatus: result.mail_status, maxStatus: result.max_status };
         draft = { ...draft, stage: result.stage, sends: [...draft.sends, sent] };
         try { await draftOperation('readwrite', store => store.put(draft)); } catch (error) { console.warn('Локальный кэш недоступен', error); }
@@ -804,19 +828,17 @@
       const next = draft;
       try { await draftOperation('readwrite', store => store.put(next)); } catch (error) { console.warn('Локальный кэш недоступен', error); }
       draft = next;
-      dialog.querySelector('[data-lab-review-result]').textContent = result.max_status === 'sent'
+      dialog.querySelector('[data-lab-review-result]').textContent = pendingSend.stage === 'contract'
+        ? 'Письмо для договора отправлено.'
+        : result.max_status === 'sent'
         ? 'Письмо и уведомление MAX отправлены.'
         : result.max_status === 'disabled'
           ? 'Письмо отправлено. Событие MAX выключено в настройках.'
           : 'Письмо отправлено. Проверьте статус уведомления MAX в настройках.';
       if (result.materialization_error) dialog.querySelector('[data-lab-review-result]').textContent = result.materialization_error;
       pendingSend = null;
-      await refreshReviewList();
-      if (result.stage === 'final' && !result.materialization_error) {
-        lastTrigger = null;
-        dialog.close();
-        window.closeModal?.('route-executor-create-modal');
-      }
+      try { await refreshReviewList(); } catch (error) { console.warn('Не удалось обновить список карточек', error); }
+      if (!result.materialization_error) closeReviewPopups();
     } catch (error) {
       dialog.querySelector('[data-lab-review-result]').textContent = error.message;
       confirm.disabled = !workflowStage();

@@ -16,10 +16,11 @@ try {
   const sends = [];
   let currentCardId = null;
   let currentStage = 'new';
+  let contractSent = false;
   page.on('pageerror', error => errors.push(error.message));
   await page.route('http://127.0.0.1:59999/**', route => {
     const path = new URL(route.request().url()).pathname;
-    if (path.endsWith('/review/status')) return route.fulfill({ json: { ok: true, stage: 'new', card: null } });
+    if (path.endsWith('/review/status')) return route.fulfill({ json: { ok: true, stage: 'new', contract_status: contractSent ? 'accepted' : 'not_sent', card: null } });
     if (path.endsWith('/review/config') && new URL(route.request().url()).searchParams.has('trip_search')) return route.fulfill({ json: { ok: true, trips: [{ id: 123, label: '#123 Вывоз отходов' }] } });
     if (path.endsWith('/review/config')) return route.fulfill({ json: { ok: true, sender: 'sender@example.test', author: 'Отправитель', recipients: ['info@plan-ex.ru'], send_responsible_logist: false,
       max_events: { 'route_executor.partial': { enabled: true, chat_config_id: 1, template: '🚚 Внесены частичные данные\n**{{trip}}**\n{{vehicle_driver}}\n\n**Не хватает для полного комплекта**\n{{missing}}\nЛогист: {{responsible}}' },
@@ -27,13 +28,16 @@ try {
     if (path.endsWith('/review/send')) {
       const request = { body: route.request().postData(), csrf: route.request().headers()['x-csrf-token'] };
       sends.push(request);
-      if (request.body.includes('name="action"') && request.body.includes('save'))
+      const action = request.body.match(/name="action"\r?\n\r?\n([a-z]+)/)?.[1];
+      if (action === 'save')
         currentCardId = request.body.match(/name="card_id"\r?\n\r?\n([a-f0-9-]{36})/)?.[1] || currentCardId;
-      if (request.body.includes('name="action"') && request.body.includes('delete')) currentCardId = null;
-      if (!request.body.includes('name="action"')) currentStage = request.body.match(/name="stage"\r?\n\r?\n(final|partial)/)?.[1] || 'partial';
-      return route.fulfill({ json: request.body.includes('name="action"')
-        ? { ok: true, revision: sends.filter(item => item.body.includes('name="action"') && item.body.includes('save')).length, contract_status: 'not_ready' }
-        : { ok: true, stage: currentStage, mail_status: 'accepted', max_status: 'sent' } });
+      if (action === 'delete') currentCardId = null;
+      if (action === 'contract') contractSent = true;
+      if (!action) currentStage = request.body.match(/name="stage"\r?\n\r?\n(final|partial)/)?.[1] || 'partial';
+      return route.fulfill({ json: action === 'save'
+        ? { ok: true, revision: sends.filter(item => /name="action"\r?\n\r?\nsave/.test(item.body)).length, contract_status: contractSent ? 'accepted' : 'not_sent' }
+        : action === 'contract' ? { ok: true, contract_status: 'accepted' }
+          : action ? { ok: true } : { ok: true, stage: currentStage, mail_status: 'accepted', max_status: 'sent' } });
     }
     const row = currentCardId ? `<tr class="route-review-row${currentStage === 'final' ? ' route-review-row-final' : ''}" data-route-review-card-id="${currentCardId}" ${currentStage === 'final' ? '' : 'data-erp-pin="1"'} tabindex="0"><td>ИП Тестовый</td><td><button data-route-review-delete="${currentCardId}">Удалить</button></td></tr>` : '';
     return route.fulfill({ status: 200, contentType: 'text/html', body: `<!doctype html><html><body><div data-route-executors-grid><table><tbody>${row}</tbody></table></div></body></html>` });
@@ -62,7 +66,10 @@ try {
       </div>
     </div>`);
   await page.addScriptTag({ content: script });
-  await page.evaluate(() => { window.closeModal = id => document.getElementById(id)?.classList.remove('is-open'); });
+  await page.evaluate(() => {
+    window.closeModal = id => document.getElementById(id)?.classList.remove('is-open');
+    window.openModal = id => document.getElementById(id)?.classList.add('is-open');
+  });
   if (errors.length) throw new Error('Browser script errors: ' + errors.join(' | '));
   const modal = page.locator('#route-executor-create-modal');
   await modal.locator('[data-source-create-submit]').waitFor();
@@ -86,10 +93,11 @@ try {
   assert.equal(await modal.locator('[data-lab-workflow-status]').count(), 0, 'Old status block is removed');
   assert.equal(await modal.locator('[data-lab-reset]').count(), 0, 'New card button is removed from modal');
   assert.match(await modal.locator('[data-combined-feedback]').innerText(), /Карточка сохранена/);
+  assert.equal(await modal.evaluate(node => node.classList.contains('is-open')), false, 'Save closes the main popup');
+  assert.equal(sends.filter(item => /name="action"\r?\n\r?\ncontract/.test(item.body)).length, 0, 'Save never sends contract mail');
   assert.equal(await page.locator('[data-route-review-card-id]').count(), 1, 'Shared yellow row appears after saving');
   assert.equal(await page.locator('[data-route-review-card-id]').evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(255, 241, 184)');
-  await modal.locator('#lab-driver-form [name="snils"]').fill('123-456-789 00');
-  await modal.locator('#lab-driver-form [name="extra_phones[]"]').fill('+7 900 000-00-00');
+  await page.evaluate(() => window.openModal('route-executor-create-modal'));
   assert.equal(await modal.locator('[data-lab-send]').isVisible(), false, 'No send without logist and trip');
   await modal.locator('#route-executor-responsible-logist').selectOption('12');
   assert.equal(await modal.locator('[data-lab-send]').isVisible(), false, 'No send without trip');
@@ -98,8 +106,29 @@ try {
   await modal.locator('#route-executor-trip-search').fill('#123 Вывоз отходов');
   await page.waitForTimeout(250);
   assert.equal(await modal.locator('#route-executor-trip-id').inputValue(), '123');
+  await page.evaluate(() => {
+    window.routeExecutorExistingParts = { snapshot: () => ({ selected_entities: { contractor: 11 } }) };
+    document.querySelector('#route-executor-create-modal').dispatchEvent(new Event('change', { bubbles: true }));
+  });
+  await page.waitForTimeout(100);
+  assert.match(await modal.locator('[data-lab-send]').innerText(), /данные для договора/, 'Contract-only send is explicit');
   await modal.locator('[data-lab-send]').click();
   const dialog = page.locator('#lab-route-send-dialog');
+  await dialog.waitFor({ state: 'visible' });
+  assert.equal(await dialog.locator('[data-lab-max-heading]').isVisible(), false, 'Contract-only letter has no MAX preview');
+  await dialog.locator('[data-lab-review-confirm]').click();
+  await dialog.waitFor({ state: 'hidden' });
+  assert.equal(await modal.evaluate(node => node.classList.contains('is-open')), false, 'Contract send closes every popup');
+  assert.equal(sends.filter(item => /name="action"\r?\n\r?\ncontract/.test(item.body)).length, 1, 'Contract mail uses its own explicit action');
+  await page.evaluate(() => {
+    delete window.routeExecutorExistingParts;
+    window.openModal('route-executor-create-modal');
+    document.querySelector('#lab-driver-form [name=full_name]').dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await modal.locator('#lab-driver-form [name="snils"]').fill('123-456-789 00');
+  await modal.locator('#lab-driver-form [name="extra_phones[]"]').fill('+7 900 000-00-00');
+  await page.waitForTimeout(50);
+  await modal.locator('[data-lab-send]').click();
   await dialog.waitFor({ state: 'visible' });
   assert.match(await dialog.locator('[data-lab-review-summary]').innerText(), /info@plan-ex\.ru/);
   assert.match(await dialog.locator('[data-lab-email-subject]').innerText(), /#123 Вывоз отходов/);
@@ -111,13 +140,15 @@ try {
   assert.doesNotMatch(await dialog.locator('[data-lab-max-text]').textContent(), /Готово:|Отправил:|Подрядчик: —/);
   await dialog.locator('[data-lab-review-confirm]').click();
   await page.waitForTimeout(300);
-  assert.equal(sends.length, 3);
+  assert.equal(sends.length, 5);
   assert.equal(sends[0].csrf, 'test-csrf-token');
   assert.match(sends[0].body, /name="action"\r?\n\r?\nsave/);
-  assert.match(sends[2].body, /name="revision"\r?\n\r?\n2/);
+  assert.match(sends[4].body, /name="revision"\r?\n\r?\n3/);
   assert.equal(await modal.locator('[data-lab-workflow-status]').count(), 0);
+  assert.equal(await dialog.evaluate(node => node.open), false, 'Partial send closes confirmation');
+  assert.equal(await modal.evaluate(node => node.classList.contains('is-open')), false, 'Partial send closes form');
+  await page.evaluate(() => window.openModal('route-executor-create-modal'));
   assert.equal(await modal.locator('[data-lab-send]').isVisible(), false);
-  await dialog.locator('[data-lab-review-close]').first().click();
   await modal.locator('#lab-contractor-form [name="name"]').fill('ИП Тестовый');
   await modal.locator('#lab-contractor-form [name="inn"]').fill('123456789012');
   await modal.locator('#lab-contractor-form [name="contractor_type"]').selectOption('individual');

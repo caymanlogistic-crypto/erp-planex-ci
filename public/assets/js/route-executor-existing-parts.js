@@ -247,7 +247,7 @@
       value.item.files.some(file => file.field === field && !value.removed.has(Number(file.id)) &&
         !rowFor(formFor(value.item.kind), field)?.querySelector('input[type=file]')?.files?.length)),
     fileNames: kind => Object.values(state).flatMap(value => (value.item?.files || [])
-      .filter(file => kind !== 'general' || file.formId !== 'lab-contractor-form')
+      .filter(file => kind === 'contract' ? file.formId === 'lab-contractor-form' : kind !== 'general' || file.formId !== 'lab-contractor-form')
       .filter(file => !value.removed.has(Number(file.id)) && !rowFor(formFor(value.item.kind), file.field)?.querySelector('input[type=file]')?.files?.length)
       .map(file => file.original_name)),
     restore: async snapshot => {

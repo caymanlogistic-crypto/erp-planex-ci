@@ -102,7 +102,9 @@ final class RouteExecutorReviewController
             $cardId=$this->cardId((string)($_GET['card_id']??''));
             $card=(new RouteExecutorReviewCardService($tenant,(int)$company['id']))->load($cardId);
             $row=$this->row($tenant,$cardId);
+            $contractStatus=(new RouteExecutorContractMailService($tenant))->status($cardId);
             $this->json(['ok'=>true,'stage'=>$row['stage']??'new','mail_status'=>$row ? ($row['final_mail_status']??$row['partial_mail_status']) : null,
+                'contract_status'=>$contractStatus??'not_sent',
                 'card'=>$card ? ['snapshot'=>$card['snapshot'],'files'=>array_map(static fn(array $file):array=>[
                     'id'=>$file['id'],'formId'=>$file['formId'],'name'=>$file['name'],'index'=>$file['index'],
                     'original_name'=>$file['original_name'],'mime'=>$file['mime'],'size'=>$file['size']],$card['files']),
@@ -135,7 +137,8 @@ final class RouteExecutorReviewController
             $sizeError=validateTotalUploadSize();if ($sizeError!=='') throw new DomainException($sizeError);
             $cardId=$this->cardId((string)($_POST['card_id']??''));
             $action=(string)($_POST['action']??'');
-            if ($action==='save') $this->saveCard($cards,$central,$tenant,(int)$company['id'],$cardId,$accountId);
+            if ($action==='save') $this->saveCard($cards,$tenant,$cardId,$accountId);
+            if ($action==='contract') $this->sendContractCard($cards,$central,$tenant,(int)$company['id'],$cardId,$accountId);
             if ($action==='delete') { $cards->delete($cardId);$this->json(['ok'=>true]); }
             if ($action==='materialize') {
                 $crewId=(new RouteExecutorReviewMaterializationService($tenant,$this->db,$this->config,(int)$company['id']))
@@ -159,9 +162,6 @@ final class RouteExecutorReviewController
             }
             if ($stage==='partial' && $package['full']) throw new DomainException('Весь комплект уже готов. Отправьте его одним письмом.');
             if ($stage==='final' && !$package['full']) throw new DomainException('Для второго письма нужны все поля и обязательные файлы.');
-            if ($stage==='final' && (new RouteExecutorContractMailService($tenant))->status($cardId)!=='accepted') {
-                throw new DomainException('Письмо для заключения договора не подтверждено. Сохраните карточку и проверьте его отправку.');
-            }
             $membershipId=(int)($snapshot['logist']??0);
             $logist=$this->responsibleLogist($central,(int)$company['id'],$membershipId);
             $settings=(new RouteExecutorReviewRecipientService($central,(int)$company['id']))->read();
@@ -191,6 +191,12 @@ final class RouteExecutorReviewController
             }
             if (!$rule || empty($rule['is_enabled']) || empty($rule['chat_config_id'])) {
                 throw new DomainException('В настройках MAX включите событие «Исполнитель рейса» и выберите чат.');
+            }
+            if ($package['contract_ready']) {
+                $contractStatus=$this->sendContractIfReady($cards,$central,$tenant,(int)$company['id'],$accountId,$card);
+                if (!in_array($contractStatus,['accepted','already_sent'],true)) {
+                    throw new DomainException('Письмо для заключения договора не подтверждено. Проверьте его отправку перед общей рассылкой.');
+                }
             }
             $tenant->beginTransaction();
             try {
@@ -356,7 +362,7 @@ final class RouteExecutorReviewController
         $this->json($result);
     }
 
-    private function saveCard(RouteExecutorReviewCardService $cards,PDO $central,PDO $tenant,int $companyId,string $cardId,int $accountId): never
+    private function saveCard(RouteExecutorReviewCardService $cards,PDO $tenant,string $cardId,int $accountId): never
     {
         $raw=(string)($_POST['snapshot']??'');
         if (strlen($raw)>262144) throw new DomainException('Карточка слишком большая.');
@@ -365,15 +371,20 @@ final class RouteExecutorReviewController
         $keys=$_POST['attachment_keys']??[];
         if (!is_array($keys)) throw new DomainException('Некорректные вложения.');
         $revision=$cards->save($cardId,$accountId,(int)($_POST['revision']??0),$snapshot,$_FILES['attachments']??[],array_values($keys));
-        $contractStatus='not_ready';$contractError=null;
-        try {
-            $card=$cards->load($cardId);
-            if ($card) $contractStatus=$this->sendContractIfReady($cards,$central,$tenant,$companyId,$accountId,$card);
-        } catch (Throwable $error) {
-            error_log('route executor contract mail: '.$error->getMessage());
-            $contractStatus='failed';$contractError=$error instanceof DomainException?$error->getMessage():'Не удалось отправить письмо для договора. Карточка сохранена.';
-        }
-        $this->json(['ok'=>true,'revision'=>$revision,'contract_status'=>$contractStatus,'contract_error'=>$contractError]);
+        $contractStatus=(new RouteExecutorContractMailService($tenant))->status($cardId);
+        $this->json(['ok'=>true,'revision'=>$revision,'contract_status'=>$contractStatus??'not_sent']);
+    }
+
+    private function sendContractCard(RouteExecutorReviewCardService $cards,PDO $central,PDO $tenant,int $companyId,string $cardId,int $accountId): never
+    {
+        $card=$cards->load($cardId);
+        if (!$card) throw new DomainException('Сначала сохраните карточку.');
+        if ((int)($_POST['revision']??0)!==(int)$card['revision']) throw new DomainException('Карточка изменена другим сотрудником. Обновите страницу.');
+        $package=RouteExecutorReviewPackage::inspect($card['snapshot'],$cards->storedFiles($card),true);
+        if (!$package['contract_ready']) throw new DomainException('Для письма о договоре заполните данные подрядчика.');
+        $status=$this->sendContractIfReady($cards,$central,$tenant,$companyId,$accountId,$card);
+        if (!in_array($status,['accepted','already_sent'],true)) throw new DomainException('Письмо для заключения договора не подтверждено. Проверьте статус отправки.');
+        $this->json(['ok'=>true,'contract_status'=>'accepted']);
     }
 
     private static function filesFor(array $attachments,string $kind): array
