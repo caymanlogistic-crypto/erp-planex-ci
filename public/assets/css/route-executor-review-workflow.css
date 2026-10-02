@@ -88,3 +88,19 @@
 .route-executors-card .row-actions-btn { width: 24px; height: 24px; display: inline-grid; place-items: center; padding: 0; border: 1px solid transparent; border-radius: 2px; background: transparent; color: #78726a; font: inherit; font-size: 15px; line-height: 1; cursor: pointer; }
 .route-executors-card .row-actions-btn:hover { background: #e8e4db; border-color: #c9c3b8; color: #131210; }
 .route-executors-card .row-actions-btn:focus-visible { outline: 2px solid #ad741a; outline-offset: 1px; }
+.route-executors-card .table { table-layout: fixed; }
+.route-executors-card .table th,
+.route-executors-card .table td { overflow-wrap: anywhere; }
+.route-executors-card .table td { white-space: normal; text-overflow: clip; padding-top: 5px; padding-bottom: 5px; }
+.route-executors-card .route-person-cell strong,
+.route-executors-card .route-person-cell small,
+.route-executors-card .route-cell-secondary { display: block; }
+.route-executors-card .route-person-cell strong { color: #131210; }
+.route-executors-card .route-cell-secondary { color: #68625a; font-size: 11px; line-height: 15px; font-weight: 400; }
+.route-executors-card .route-vehicle-cell { padding-left: 5px; padding-right: 5px; color: #131210; }
+.route-executors-card .route-vehicle-line { display: flex; align-items: baseline; flex-wrap: wrap; gap: 0 3px; color: #131210; font-size: 11px; line-height: 16px; }
+.route-executors-card .route-vehicle-line + .route-vehicle-line { margin-top: 2px; }
+.route-executors-card .route-vehicle-brand { font-weight: 500; }
+.route-executors-card .route-vehicle-plate { font-weight: 600; white-space: nowrap; }
+.route-executors-card .route-vehicle-metric { font-weight: 700; white-space: nowrap; }
+.route-executors-card .route-vehicle-dot { color: #8b857d; font-weight: 400; }

@@ -23,7 +23,7 @@ final class RouteExecutorReviewCardService
     public function listing(): array
     {
         if (!$this->ready()) return [];
-        return $this->tenant->query("SELECT c.card_id,c.actor_account_id,c.last_editor_account_id,c.revision,c.responsible_membership_id,c.trip_business_id,c.contractor_name,c.driver_name,c.driver_phone,c.vehicle_type,c.plate,c.updated_at,COALESCE(s.stage,'new') stage FROM route_executor_review_cards c LEFT JOIN route_executor_review_sends s ON s.card_id=c.card_id WHERE c.deleted_at IS NULL ORDER BY c.updated_at DESC,c.card_id DESC LIMIT 300")->fetchAll(PDO::FETCH_ASSOC);
+        return $this->tenant->query("SELECT c.card_id,c.actor_account_id,c.last_editor_account_id,c.revision,c.snapshot_json,c.responsible_membership_id,c.trip_business_id,c.contractor_name,c.driver_name,c.driver_phone,c.vehicle_type,c.plate,c.updated_at,COALESCE(s.stage,'new') stage FROM route_executor_review_cards c LEFT JOIN route_executor_review_sends s ON s.card_id=c.card_id WHERE c.deleted_at IS NULL ORDER BY c.updated_at DESC,c.card_id DESC LIMIT 300")->fetchAll(PDO::FETCH_ASSOC);
     }
 
     public function load(string $id): ?array

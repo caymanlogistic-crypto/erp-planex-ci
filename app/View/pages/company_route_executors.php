@@ -2,6 +2,27 @@
 $routeExecutorCreateButton = '<button type="button" class="btn btn-primary" data-route-executor-create-btn>Создать исполнителя рейса</button>';
 $routeExecutorExistingButton = '<button type="button" class="btn btn-ghost" data-route-executor-existing-create>Выбрать из имеющихся</button>';
 $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/company/document-generator') . '">Создать документ</a>';
+$routeListContact = static function (?string $phone, ?string $email): void {
+    foreach ([$phone, $email] as $value) if (trim((string)$value)!=='') echo '<span class="route-cell-secondary">'.e($value).'</span>';
+};
+$routeListVehicles = static function (array $row): void {
+    $shown=false;
+    foreach (['primary','secondary'] as $role) {
+        $brand=trim((string)($row[$role.'_brand']??''));
+        $plate=trim((string)($row[$role.'_plate']??''));
+        $capacity=\App\Service\RouteExecutorListPresentation::metric($row[$role.'_capacity']??null);
+        $volume=\App\Service\RouteExecutorListPresentation::metric($row[$role.'_volume']??null);
+        if ($brand==='' && $plate==='' && $capacity==='' && $volume==='') continue;
+        $shown=true;
+        echo '<span class="route-vehicle-line">';
+        if ($brand!=='') echo '<span class="route-vehicle-brand">'.e($brand).'</span>';
+        if ($plate!=='') echo '<span class="route-vehicle-plate">'.e(\App\Service\RouteExecutorListPresentation::plate($plate,$role==='secondary')).'</span>';
+        if ($capacity!=='') echo '<span class="route-vehicle-metric"><span class="route-vehicle-dot">·</span> '.e($capacity).' т</span>';
+        if ($volume!=='') echo '<span class="route-vehicle-metric"><span class="route-vehicle-dot">·</span> '.e($volume).' м³</span>';
+        echo '</span>';
+    }
+    if (!$shown) echo '—';
+};
 ?>
 
 <?php if ($company === null): ?>
@@ -101,13 +122,12 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
     </div>
     <div class="table-scroll">
         <table class="table">
+            <colgroup><col style="width:26%"><col style="width:23%"><col style="width:22%"><col style="width:13%"><col style="width:16%"></colgroup>
             <thead>
                 <tr>
                     <th>Подрядчик</th>
                     <th>Водитель</th>
-                    <th>Телефон</th>
-                    <th>ТС</th>
-                    <th>Госномер</th>
+                    <th>Комплект ТС</th>
                     <th>Логист</th>
                     <th>Статус</th>
                 </tr>
@@ -116,25 +136,18 @@ $routeExecutorDocumentButton = '<a class="btn btn-ghost" href="' . app_url('/com
                 <?php foreach ($reviewCards as $card): ?>
                 <?php $reviewStage=(string)$card['stage']; $reviewFinal=$reviewStage==='final'; $reviewLabel=in_array($reviewStage,['partial','partial_failed'],true)?'Отправлено первое письмо':($reviewFinal?'Полный комплект отправлен':'Менеджер сохранил'); $reviewStatusText=$reviewFinal?'Полный комплект':(in_array($reviewStage,['partial','partial_failed'],true)?'Первое письмо':'Черновик'); $reviewStatusClass=$reviewFinal?'active':($reviewStage==='partial_failed'?'danger':($reviewStage==='partial'?'mail':'draft')); ?>
                 <tr class="route-review-row<?= $reviewFinal ? ' route-review-row-final' : '' ?>" data-route-review-card-id="<?= e($card['card_id']) ?>" <?= $reviewFinal ? '' : 'data-erp-pin="1"' ?> data-erp-sort-date="<?= (int)strtotime((string)$card['updated_at']) ?>" tabindex="0" aria-label="<?= e($reviewLabel) ?>. Двойное нажатие открывает карточку">
-                    <td><strong><?= e($card['contractor_name'] ?: 'Без подрядчика') ?></strong><?php if (!$reviewFinal): ?><br><small><?= e($reviewLabel) ?></small><?php endif; ?></td>
-                    <td><?= e($card['driver_name'] ?: '—') ?></td>
-                    <td class="col-mono cell-secondary"><?= e($card['driver_phone'] ?: '—') ?></td>
-                    <td><?= e($card['vehicle_type'] ?: '—') ?></td>
-                    <td class="col-mono"><?= e($card['plate'] ?: '—') ?></td>
+                    <td class="route-person-cell"><strong><?= e($card['contractor_name'] ?: 'Без подрядчика') ?></strong><?php if (!$reviewFinal): ?><small><?= e($reviewLabel) ?></small><?php endif; ?><?php $routeListContact($card['contractor_phone']??'', $card['contractor_email']??''); ?></td>
+                    <td class="route-person-cell"><strong><?= e($card['driver_name'] ?: '—') ?></strong><?php $routeListContact($card['driver_phone']??'', $card['driver_email']??''); ?></td>
+                    <td class="route-vehicle-cell"><?php $routeListVehicles($card); ?></td>
                     <td><?= e($responsibleLogistNames[(int)($card['responsible_membership_id']??0)]??'—') ?></td>
                     <td><div class="route-review-actions"><span class="route-status route-status--<?= $reviewStatusClass ?>" title="<?= e($reviewLabel) ?>"><?= e($reviewStatusText) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="route-review-delete row-actions-btn" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Удалить карточку" title="Удалить карточку">⋯</button></div></td>
                 </tr>
                 <?php endforeach; ?>
                 <?php foreach ($executors as $e): ?>
                 <tr data-route-executor-id="<?= (int) $e['crew_id'] ?>" data-erp-sort-date="<?= (int) $e['crew_id'] ?>">
-                    <td><?= e($e['contractor_name'] ?? '—') ?></td>
-                    <td><?= e($e['driver_name'] ?? '—') ?></td>
-                    <td class="col-mono cell-secondary"><?= e($e['driver_phone'] ?? '—') ?></td>
-                    <td class="cell-double">
-                        <span class="cell-main"><?= e(ui_set_type($e['set_type'] ?? null)) ?></span>
-                        <span class="cell-sub"><?= e($e['plates'] ?? '—') ?></span>
-                    </td>
-                    <td class="col-mono"><?= e($e['primary_plate'] ?? '—') ?></td>
+                    <td class="route-person-cell"><strong><?= e($e['contractor_name'] ?? '—') ?></strong><?php $routeListContact($e['contractor_phone']??'', $e['contractor_email']??''); ?></td>
+                    <td class="route-person-cell"><strong><?= e($e['driver_name'] ?? '—') ?></strong><?php $routeListContact($e['driver_phone']??'', $e['driver_email']??''); ?></td>
+                    <td class="route-vehicle-cell"><?php $routeListVehicles($e); ?></td>
                     <td><?= e($e['responsible_name'] ?? '—') ?></td>
                     <td>
                         <span class="route-status route-status--<?= $e['crew_status'] === 'active' ? 'active' : 'neutral' ?>">
