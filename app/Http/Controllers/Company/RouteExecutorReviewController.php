@@ -161,7 +161,7 @@ final class RouteExecutorReviewController
                 throw new DomainException('Данные подрядчика передаются отдельным письмом. Для общего письма нужны данные водителя или транспорта.');
             }
             if ($stage==='partial' && $package['full']) throw new DomainException('Весь комплект уже готов. Отправьте его одним письмом.');
-            if ($stage==='final' && !$package['full']) throw new DomainException('Для второго письма нужны все поля и обязательные файлы.');
+            if ($stage==='final' && !$package['full']) throw new DomainException('Для полного комплекта не хватает: '.implode('; ',$package['missing']));
             $membershipId=(int)($snapshot['logist']??0);
             $logist=$this->responsibleLogist($central,(int)$company['id'],$membershipId);
             $settings=(new RouteExecutorReviewRecipientService($central,(int)$company['id']))->read();
