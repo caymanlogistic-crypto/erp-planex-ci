@@ -175,9 +175,6 @@ $routeListVehicles = static function (array $row): void {
             </tbody>
         </table>
     </div>
-    <div class="table-footer">
-        <span class="footer-label">Показано <b class="footer-range">1–<?= count($executors) + count($reviewCards) ?></b> из <b class="footer-total"><?= count($executors) + count($reviewCards) ?></b></span>
-    </div>
 </div>
 
 <?php endif; ?>
