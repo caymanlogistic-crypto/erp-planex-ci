@@ -37,6 +37,7 @@
 .wh-registry td.wh-request-cell{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:normal;line-height:1.5;height:auto}
 .wh-request-id{display:inline-block;white-space:nowrap}
 .wh-request-id--outside-trip{color:var(--danger,#a94442);text-decoration:line-through;text-decoration-thickness:2px;font-weight:700}
+.wh-request-id--added{color:#1d7a42;font-weight:700}
 .wh-trip-extra{display:block;margin-top:3px;overflow-wrap:anywhere;color:var(--text-muted,#625a52)}
 .wh-source{color:var(--text-muted,#625a52);font-size:11px;line-height:1.45;margin-top:10px}
 .wh-empty{text-align:center;padding:24px!important;color:var(--text-muted,#625a52)}
