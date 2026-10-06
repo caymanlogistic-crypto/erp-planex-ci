@@ -62,6 +62,8 @@ try {
         assert.match(await page.locator('[data-wh-warehouse="1"] .wh-current-summary').innerText(), /^ИРКУТСК/);
         assert.equal(await page.locator('[name=warehouse] option[value="2"]').innerText(), 'КРАСНОДАР');
         assert.match(await page.locator('#warehouse-issues').innerText(), /КРАСНОДАР \/ вывоз/);
+        assert.match(await page.locator('#warehouse-issues').innerText(), /Рассинхронизация баз: в рейсе ERP есть заявки 302980, 303129/);
+        assert.doesNotMatch(await page.locator('#warehouse-issues').innerText(), /Состав заявок: только в старой базе/);
         assert.equal(await page.getByText('Остаток рассчитан по активным движениям складского журнала.', {exact:false}).count(), 0);
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 1);
         assert.match(await page.locator('[data-wh-warehouse="1"] .wh-current-summary').innerText(), /Заявки на складе: 120/);
@@ -76,6 +78,7 @@ try {
         await differentRow.dblclick();
         assert.match(await page.locator('#wh-trip-2-21-out .wh-summary').innerText(), /КРАСНОДАР/);
         assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /Не списаны заявки: 999/);
+        assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /Рассинхронизация баз: в рейсе ERP есть заявки 302980, 303129/);
         assert.equal(await page.locator('#wh-trip-2-21-out [data-wh-match-trip]').count(), 1);
         await page.locator('#wh-trip-2-21-out [data-wh-close]').first().click();
         await page.locator('[name=q]').fill('999');
