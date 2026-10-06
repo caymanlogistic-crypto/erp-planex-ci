@@ -273,6 +273,12 @@ final class WarehouseStockService
                 ? [] : array_values(array_diff($group['request_ids'], $tripRequestIds));
             $group['trip_only_request_ids'] = $tripRequestIds === null
                 ? [] : array_values(array_diff($tripRequestIds, $group['journal_request_ids']));
+            $derivedRequestIds = array_values(array_unique(array_column(array_filter(
+                $group['requests'],
+                static fn(array $request): bool => $request['derived_receipt'] || $request['derived_issue']
+            ), 'id')));
+            $group['added_request_ids'] = array_values(array_intersect($group['trip_only_request_ids'], $derivedRequestIds));
+            $group['unmoved_request_ids'] = array_values(array_diff($group['trip_only_request_ids'], $group['added_request_ids']));
             $group['display_request_ids'] = array_values(array_unique(array_merge($group['request_ids'], $group['trip_only_request_ids'])));
         }
         unset($group);
