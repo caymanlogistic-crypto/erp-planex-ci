@@ -29,10 +29,55 @@ $difference = WarehouseStockService::build($warehouses, $movements, $flights, $w
 if ($difference['groups'][1][1]['warehouse_only_request_ids'] !== ['456'] || $difference['groups'][1][1]['trip_only_request_ids'] !== []) {
     throw new RuntimeException('Не выявлена заявка склада вне состава рейса ERP.');
 }
+if ($difference['current'][1] !== ['request_count'=>0,'weight_kg'=>0,'request_ids'=>[]]
+    || $difference['groups'][1][1]['mass_kg'] !== 1500
+    || $difference['groups'][1][1]['request_count'] !== 1
+    || !$difference['groups'][1][1]['requests'][1]['excluded']
+    || $difference['groups'][1][1]['requests'][1]['before_kg'] !== $difference['groups'][1][1]['requests'][1]['after_kg']) {
+    throw new RuntimeException('Удалённая из рейса заявка должна остаться видимой, но не влиять на движения и остаток.');
+}
 if (!isset($difference['issues'][10]) || !str_contains(implode(' ', $difference['issues'][10]['messages']), 'на складе есть заявки вне рейса ERP: 456')) {
     throw new RuntimeException('Расхождение состава склада и рейса не попало в сверку.');
 }
+if (!str_contains(implode(' ', array_map([WarehouseStockService::class, 'displayMessage'], $difference['issues'][10]['messages'])), 'не участвуют в остатке')) {
+    throw new RuntimeException('Удалённая заявка не объяснена в сверке.');
+}
 if ($difference['issues'][10]['name'] !== 'Прибытие') throw new RuntimeException('Наименование рейса не передано в расхождения.');
+$withAddedReceipt = $withoutWarehouseRequest;
+$withAddedReceipt[] = ['business_id'=>10,'legacy_source_warehouse_id'=>null,'legacy_destination_warehouse_id'=>1,'zayavka_id'=>789,'snapshot_mass_kg'=>750];
+$added = WarehouseStockService::build($warehouses, $movements, $flights, $withAddedReceipt);
+if ($added['current'][1] !== ['request_count'=>1,'weight_kg'=>750,'request_ids'=>[789]]
+    || $added['groups'][1][1]['mass_kg'] !== 2250
+    || $added['groups'][1][1]['request_count'] !== 2
+    || $added['groups'][1][1]['trip_only_request_ids'] !== ['789']
+    || !$added['groups'][1][1]['is_derived_receipt']) {
+    throw new RuntimeException('Добавленная в рейс заявка не учтена сразу по снимку ERP.');
+}
+$legacyDestination = array_map(static function (array $row): array {
+    if ((int)$row['business_id'] === 10) $row['legacy_destination_warehouse_id'] = null;
+    return $row;
+}, $withAddedReceipt);
+$addedWithLegacyDestination = WarehouseStockService::build($warehouses, $movements, $flights, $legacyDestination);
+if ($addedWithLegacyDestination['current'][1] !== $added['current'][1]) {
+    throw new RuntimeException('Новая заявка не учтена, когда склад назначения известен только старой базе.');
+}
+$differentErpDestination = array_map(static function (array $row): array {
+    if ((int)$row['business_id'] === 10) $row['legacy_destination_warehouse_id'] = 2;
+    return $row;
+}, $withAddedReceipt);
+$addedWithDifferentDestination = WarehouseStockService::build($warehouses, $movements, $flights, $differentErpDestination);
+if ($addedWithDifferentDestination['current'][1] !== $added['current'][1]
+    || isset($addedWithDifferentDestination['current'][2])
+    || !str_contains(implode(' ', $addedWithDifferentDestination['issues'][10]['messages']), 'Склад рейса в ERP отличается от старой базы.')) {
+    throw new RuntimeException('Новая заявка должна учитываться на складе фактического поступления при расхождении складов.');
+}
+$recordedAdded = $movements;
+$recordedAdded[] = ['id'=>4,'movement_type'=>'receipt','warehouse_id'=>1,'flight_id'=>10,'zayavka_id'=>789,
+    'mass_netto'=>'0.750','movement_date'=>'2026-09-01','status'=>'active'];
+$recorded = WarehouseStockService::build($warehouses, $recordedAdded, $flights, $withAddedReceipt);
+if ($recorded['current'][1]['weight_kg'] !== 750 || $recorded['groups'][1][1]['is_derived_receipt']) {
+    throw new RuntimeException('Появившееся реальное поступление задвоило расчётную заявку.');
+}
 $flights[1]['zayavki_ids'] = '123,456';
 $erp[] = ['business_id'=>11,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>456,'snapshot_mass_kg'=>500];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);

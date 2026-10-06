@@ -12,14 +12,15 @@ function csrfField(): string { return '<input type="hidden" name="_csrf_token" v
 $group = static fn(int $id, int $warehouse, string $direction, string $name): array => [
     'key'=>$warehouse.':'.$id.':'.$direction,'flight_id'=>$id,'warehouse_id'=>$warehouse,
     'direction'=>$direction,'date'=>'2026-09-01','name'=>$name,'driver'=>'Водитель',
-    'vehicle'=>'А 123 ВС','request_ids'=>[(string)(100 + $id)],'display_request_ids'=>[(string)(100 + $id)],'warehouse_only_request_ids'=>[],'trip_only_request_ids'=>[],'is_correction'=>false,'request_count'=>1,
+    'vehicle'=>'А 123 ВС','request_ids'=>[(string)(100 + $id)],'journal_request_ids'=>[(string)(100 + $id)],'display_request_ids'=>[(string)(100 + $id)],'warehouse_only_request_ids'=>[],'trip_only_request_ids'=>[],'is_correction'=>false,'request_count'=>1,
     'mass_kg'=>1000,'stock_count'=>$warehouse === 1 ? 1 : 0,'stock_kg'=>$warehouse === 1 ? 1000 : 0,
-    'actual_end_date'=>'2026-09-01','requests'=>[['id'=>(string)(100 + $id),'mass_kg'=>1000,'before_kg'=>0,'after_kg'=>1000]],
+    'actual_end_date'=>'2026-09-01','requests'=>[['id'=>(string)(100 + $id),'mass_kg'=>1000,'before_kg'=>0,'after_kg'=>1000,'excluded'=>false,'derived_receipt'=>false,'derived_issue'=>false]],
 ];
 $skippedGroup = $group(21,2,'out','Второй рейс');
 $skippedGroup['display_request_ids'] = ['121','999'];
 $skippedGroup['warehouse_only_request_ids'] = ['121'];
 $skippedGroup['trip_only_request_ids'] = ['999'];
+$skippedGroup['requests'][0]['excluded'] = true;
 $skippedGroup['is_correction'] = true;
 $data = [
     'warehouses'=>[1=>'Иркутск', 2=>'Краснодар'],

@@ -78,6 +78,18 @@ final class WarehouseStockService
 
     public static function displayMessage(string $message): string
     {
+        if (preg_match('/^(.* \/ (?:поступление|списание)): на складе есть заявки вне рейса ERP: (.*)\.$/u', $message, $matches)) {
+            return $matches[1].': в складском журнале остались удалённые из рейса ERP заявки '
+                .$matches[2].'. Их движения не участвуют в остатке.';
+        }
+        if (preg_match('/^(.* \/ поступление): на склад поступило \d+ из \d+ заявок рейса\. Не поступили: (.*)\. Проверьте складские записи\.$/u', $message, $matches)) {
+            return $matches[1].': заявки '.$matches[2]
+                .' добавлены в рейс ERP, но отсутствуют в складском журнале. Их масса учтена в остатке по снимку ERP.';
+        }
+        if (preg_match('/^(.* \/ списание): со склада списано \d+ из \d+ заявок рейса\. Не списаны: (.*)\. Проверьте, были ли эти заявки на складе и почему нет списания\.$/u', $message, $matches)) {
+            return $matches[1].': заявки '.$matches[2]
+                .' есть в рейсе ERP, но отсутствуют в журнале списания. Списание рассчитывается при наличии остатка.';
+        }
         if (!preg_match('/^Состав заявок: только в старой базе (.*); только в ERP (.*)\.$/u', $message, $matches)) {
             return $message;
         }
@@ -119,7 +131,39 @@ final class WarehouseStockService
             $erpFlights[$id]['status'] = (string)($row['status'] ?? '');
             $erpFlights[$id]['start_date'] = (string)($row['actual_start_date'] ?? '');
             $erpFlights[$id]['source'] = (int)($row['legacy_source_warehouse_id'] ?? 0);
-            if (($row['zayavka_id'] ?? null) !== null) $erpFlights[$id]['requests'][(string)$row['zayavka_id']] = true;
+            $erpFlights[$id]['destination'] = (int)($row['legacy_destination_warehouse_id'] ?? 0);
+            if (($row['zayavka_id'] ?? null) !== null) {
+                $requestId = (string)$row['zayavka_id'];
+                $erpFlights[$id]['requests'][$requestId] = true;
+                $erpFlights[$id]['masses'][$requestId] = (int)round((float)($row['snapshot_mass_kg'] ?? 0));
+            }
+        }
+        $receiptDates = $recordedReceipts = [];
+        foreach ($movements as $row) {
+            if (($row['status'] ?? 'active') !== 'active' || !in_array((string)$row['movement_type'], ['receipt', 'transfer_in'], true)) continue;
+            $flightId = (int)$row['flight_id'];
+            $warehouseId = (int)$row['warehouse_id'];
+            $receiptDates[$flightId][$warehouseId] = max($receiptDates[$flightId][$warehouseId] ?? '', (string)$row['movement_date']);
+            $recordedReceipts[$flightId][$warehouseId][(string)$row['zayavka_id']] = true;
+        }
+        foreach ($erpFlights as $flightId => $erpFlight) {
+            $erpWarehouseId = (int)($erpFlight['destination'] ?? 0);
+            $legacyWarehouseId = (int)($flightMap[$flightId]['destination_warehouse_id'] ?? 0);
+            $warehouseId = isset($receiptDates[$flightId][$erpWarehouseId]) ? $erpWarehouseId
+                : (isset($receiptDates[$flightId][$legacyWarehouseId]) ? $legacyWarehouseId : 0);
+            // A journal receipt proves that this trip delivered to this warehouse.
+            // Newly added ERP requests join that receipt in the read-only ledger.
+            if ($warehouseId <= 0 || !isset($flightMap[$flightId], $receiptDates[$flightId][$warehouseId])) continue;
+            foreach (array_keys($erpFlight['requests'] ?? []) as $requestId) {
+                if (isset($recordedReceipts[$flightId][$warehouseId][$requestId])) continue;
+                $movements[] = [
+                    'id'=>PHP_INT_MAX,'movement_type'=>'receipt','warehouse_id'=>$warehouseId,
+                    'flight_id'=>$flightId,'zayavka_id'=>$requestId,
+                    'mass_netto'=>($erpFlight['masses'][$requestId] ?? 0) / 1000,
+                    'movement_date'=>$receiptDates[$flightId][$warehouseId],
+                    'status'=>'active','derived_receipt'=>true,
+                ];
+            }
         }
         $alreadyIssued = [];
         foreach ($movements as $row) {
@@ -164,8 +208,9 @@ final class WarehouseStockService
             if (!empty($row['derived']) && $before <= 0) continue;
             $weight = !empty($row['derived']) ? $before : (int)round((float)$row['mass_netto'] * 1000);
             if ($weight < 0) throw new RuntimeException('Отрицательная масса складского движения.');
-            $after = $before + $sign * $weight;
-            $balances[$warehouseId][$requestId] = $after;
+            $excluded = isset($erpFlights[$flightId]) && !isset($erpFlights[$flightId]['requests'][$requestId]);
+            $after = $excluded ? $before : $before + $sign * $weight;
+            if (!$excluded) $balances[$warehouseId][$requestId] = $after;
             $direction = $sign > 0 ? 'in' : 'out';
             $key = $warehouseId.':'.$flightId.':'.$direction;
             if (!isset($groups[$key])) {
@@ -177,11 +222,14 @@ final class WarehouseStockService
             }
             $group =& $groups[$key];
             $group['date'] = max($group['date'], (string)$row['movement_date']);
-            $group['requests'][] = ['id'=>$requestId,'mass_kg'=>$weight,'before_kg'=>$before,'after_kg'=>$after];
-            $group['mass_kg'] += $weight;
-            $group['is_derived'] = $group['is_derived'] || !empty($row['derived']);
+            $group['requests'][] = ['id'=>$requestId,'mass_kg'=>$weight,'before_kg'=>$before,'after_kg'=>$after,
+                'excluded'=>$excluded,'derived_receipt'=>!empty($row['derived_receipt']),'derived_issue'=>!empty($row['derived'])];
+            if (!$excluded) $group['mass_kg'] += $weight;
+            $group['is_derived'] = $group['is_derived'] || !empty($row['derived']) || !empty($row['derived_receipt']);
+            $group['is_derived_receipt'] = ($group['is_derived_receipt'] ?? false) || !empty($row['derived_receipt']);
             $group['is_correction'] = $group['is_correction']
                 && empty($row['derived'])
+                && empty($row['derived_receipt'])
                 && str_starts_with((string)($row['comment'] ?? ''), 'Исправление складского направления рейса #'.$flightId.' в ERP PLANEX пользователем #');
             $group['stock_count'] = count(array_filter($balances[$warehouseId], static fn(int $value): bool => $value > 0));
             $group['stock_kg'] = array_sum($balances[$warehouseId]);
@@ -212,14 +260,19 @@ final class WarehouseStockService
             $group['flight_status'] = (string)($flight['status'] ?? '');
             $group['actual_end_date'] = $flight['actual_end_date'] ?? null;
             $group['request_ids'] = array_values(array_unique(array_column($group['requests'], 'id')));
-            $group['request_count'] = count($group['request_ids']);
+            $activeRequests = array_values(array_filter($group['requests'], static fn(array $request): bool => !$request['excluded']));
+            $group['active_request_ids'] = array_values(array_unique(array_column($activeRequests, 'id')));
+            $group['request_count'] = count($group['active_request_ids']);
+            $journalRequests = array_values(array_filter($group['requests'], static fn(array $request): bool => !$request['derived_receipt'] && !$request['derived_issue']));
+            $group['journal_request_ids'] = array_values(array_unique(array_column($journalRequests, 'id')));
+            $group['has_journal'] = $group['journal_request_ids'] !== [];
             $tripRequestIds = isset($erpFlights[$group['flight_id']])
                 ? array_map('strval', array_keys($erpFlights[$group['flight_id']]['requests'] ?? []))
                 : null;
             $group['warehouse_only_request_ids'] = $tripRequestIds === null
                 ? [] : array_values(array_diff($group['request_ids'], $tripRequestIds));
             $group['trip_only_request_ids'] = $tripRequestIds === null
-                ? [] : array_values(array_diff($tripRequestIds, $group['request_ids']));
+                ? [] : array_values(array_diff($tripRequestIds, $group['journal_request_ids']));
             $group['display_request_ids'] = array_values(array_unique(array_merge($group['request_ids'], $group['trip_only_request_ids'])));
         }
         unset($group);
@@ -255,6 +308,7 @@ final class WarehouseStockService
         foreach ($groups as $group) {
             if ($group['direction'] !== 'in') continue;
             foreach ($group['requests'] as $request) {
+                if ($request['excluded']) continue;
                 $receipts[$group['warehouse_id']][$request['id']][$group['flight_id']] =
                     ($receipts[$group['warehouse_id']][$request['id']][$group['flight_id']] ?? 0) + $request['mass_kg'];
             }
@@ -290,12 +344,12 @@ final class WarehouseStockService
                         $message = $where.': на складе есть заявки вне рейса ERP: '
                             .implode(', ', $group['warehouse_only_request_ids']).'.';
                         $messages[] = $message;
-                        if (isset($journalFlightIds[$flightId]) && !$group['is_derived']) {
+                        if ($group['has_journal']) {
                             $reconcileTargets[$message] = ['warehouse_id'=>$group['warehouse_id'],'direction'=>$group['direction']];
                         }
                     }
                     if ($group['trip_only_request_ids'] !== []) {
-                        $recorded = count(array_intersect($group['request_ids'], $erp[$flightId]['requests']));
+                        $recorded = count(array_intersect($group['journal_request_ids'], $erp[$flightId]['requests']));
                         $total = count($erp[$flightId]['requests']);
                         $missing = implode(', ', $group['trip_only_request_ids']);
                         $messages[] = $group['direction'] === 'out'
@@ -312,9 +366,10 @@ final class WarehouseStockService
                 foreach ($groups as $group) {
                     if ($group['flight_id'] === $flightId) {
                         $directionMass[$group['direction']] += $group['mass_kg'];
-                        $journalDirection[$group['direction']] = $journalDirection[$group['direction']] || !$group['is_derived'];
-                        $directionRequests[$group['direction']] = array_merge($directionRequests[$group['direction']], $group['request_ids']);
+                        $journalDirection[$group['direction']] = $journalDirection[$group['direction']] || $group['has_journal'];
+                        $directionRequests[$group['direction']] = array_merge($directionRequests[$group['direction']], $group['active_request_ids']);
                         foreach ($group['requests'] as $request) {
+                            if ($request['excluded']) continue;
                             $requestId = $request['id'];
                             $directionRequestMass[$group['direction']][$requestId] =
                                 ($directionRequestMass[$group['direction']][$requestId] ?? 0) + $request['mass_kg'];
