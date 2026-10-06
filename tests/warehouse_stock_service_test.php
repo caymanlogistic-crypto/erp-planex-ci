@@ -38,7 +38,14 @@ $erp[] = ['business_id'=>11,'legacy_source_warehouse_id'=>1,'legacy_destination_
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 if ($data['groups'][1][0]['request_ids'] !== ['123'] || $data['groups'][1][0]['trip_only_request_ids'] !== ['456']) throw new RuntimeException('Не выявлена дополнительная заявка рейса.');
 if (!str_contains(implode(' ', $data['issues'][11]['messages']), 'со склада списано 1 из 2 заявок рейса. Не списаны: 456.')) throw new RuntimeException('Недостающее списание не объяснено понятным текстом.');
-if ($data['issues'][11]['movement_label'] !== 'В журнале: 1 из 2 заявок') throw new RuntimeException('Частичный журнал показан как полный.');
+if ($data['issues'][11]['movement_label'] !== 'Складской журнал: 1 заявка · ERP: 2 заявки') throw new RuntimeException('Источники состава не разделены в подписи журнала.');
+if (WarehouseStockService::displayMessage('Состав заявок: только в старой базе —; только в ERP 302980, 303129.')
+    !== 'Рассинхронизация баз: в рейсе ERP есть заявки 302980, 303129, которых нет в списке рейса старой базы.') throw new RuntimeException('Рассинхронизация при заявках только в ERP не объяснена.');
+if (WarehouseStockService::displayMessage('Состав заявок: только в старой базе 302980; только в ERP —.')
+    !== 'Рассинхронизация баз: в списке рейса старой базы есть заявки 302980, которых нет в рейсе ERP.') throw new RuntimeException('Рассинхронизация при заявках только в старой базе не объяснена.');
+if (WarehouseStockService::displayMessage('Состав заявок: только в старой базе 302980; только в ERP 303129.')
+    !== 'Рассинхронизация баз: состав заявок рейса различается. Только в старой базе: 302980. Только в ERP: 303129.') throw new RuntimeException('Двусторонняя рассинхронизация не объяснена.');
+if (WarehouseStockService::displayMessage('Масса по рейсу: без изменений.') !== 'Масса по рейсу: без изменений.') throw new RuntimeException('Другая ошибка изменила текст.');
 if ($data['groups'][1][0]['request_count'] !== 1 || $data['groups'][1][0]['mass_kg'] !== 1500 || $data['issue_count'] !== 1) throw new RuntimeException('Дополнительная заявка изменила складской итог или не попала в сверку.');
 $erp[0]['legacy_destination_warehouse_id'] = 2;
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);

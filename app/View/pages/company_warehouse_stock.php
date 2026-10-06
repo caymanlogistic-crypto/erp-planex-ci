@@ -9,6 +9,7 @@ $canCorrect = (string)($_SESSION['role_code'] ?? '') === 'company_owner';
 $canExclude = $canCorrect && ($data['exceptions_available'] ?? true);
 $upperWarehouse = static fn(string $name): string => mb_strtoupper($name, 'UTF-8');
 $upperWarehouseInMessage = static function (string $message) use ($data, $upperWarehouse): string {
+    $message = \App\Service\WarehouseStockService::displayMessage($message);
     foreach ($data['warehouses'] as $name) {
         $prefix = $name.' / ';
         if (str_starts_with($message, $prefix)) {
