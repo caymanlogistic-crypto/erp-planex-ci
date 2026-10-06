@@ -52,7 +52,7 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec("CREATE TABLE waste_trip_requests(
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,waste_trip_id BIGINT UNSIGNED NOT NULL,
-        feo_request_id BIGINT UNSIGNED NOT NULL
+        feo_request_id BIGINT UNSIGNED NOT NULL,is_active TINYINT(1) NOT NULL DEFAULT 1
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
     $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-local/123_create_feo_map_placement.sql'));
     foreach(['133_create_max_integration.sql','136_create_max_event_notifications.sql'] as $migration) {

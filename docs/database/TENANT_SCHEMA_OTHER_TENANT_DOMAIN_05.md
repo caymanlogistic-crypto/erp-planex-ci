@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `37c65083a5dc2da607210a01f87d579a6b5cc0e06fc1eb2f10f1c50dd3cbe861`
+**Schema fingerprint:** `8fe7fd74e7eeb9cd463427a2e1a33e4b3c6dc487fad276feb1bd7a5449300b4c`
 
 ## `waste_trip_general_payments`
 
@@ -108,6 +108,7 @@
 | `feo_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
 | `snapshot_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
 | `position_no` | `int unsigned` | NO | `0` | — | — |
+| `is_active` | `tinyint(1)` | NO | `1` | — | — |
 | `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 
 ### Indexes / constraints
