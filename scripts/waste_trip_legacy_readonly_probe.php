@@ -204,7 +204,7 @@ if ($requestIds !== []) {
             "SELECT wt.business_id,wt.status
                FROM waste_trip_requests wtr
                JOIN waste_trips wt ON wt.id=wtr.waste_trip_id
-              WHERE wtr.feo_request_id=? AND wt.status<>'cancelled'
+              WHERE wtr.feo_request_id=? AND wtr.is_active=1 AND wt.status<>'cancelled'
               ORDER BY wt.id LIMIT 5"
         );
         $claimStmt->execute([(int) $row['id']]);

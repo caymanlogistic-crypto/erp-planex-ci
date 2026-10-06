@@ -23,7 +23,7 @@ final class CargoBalanceStatisticsService
             WHERE b.status='applied' ORDER BY b.id,br.position_no,br.id")->fetchAll(PDO::FETCH_ASSOC);
         $starts = $pdo->query("SELECT fr.zayavka_id,MIN(wt.actual_start_date) day
             FROM waste_trips wt
-            JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+            JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.is_active=1
             JOIN feo_requests fr ON fr.id=wtr.feo_request_id
             WHERE wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed')
               AND wt.actual_start_date IS NOT NULL

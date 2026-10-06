@@ -73,7 +73,7 @@ final class WasteTripStartStatisticsService
                     COALESCE(SUM(wtr.snapshot_mass_kg),0) AS total_mass_kg
                FROM waste_trips wt
                JOIN users u ON u.id=wt.responsible_user_id
-          LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+          LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.is_active=1
               WHERE wt.id=?
               GROUP BY wt.id,wt.actual_start_date,wt.status,wt.responsible_user_id,u.membership_id,u.full_name"
         );

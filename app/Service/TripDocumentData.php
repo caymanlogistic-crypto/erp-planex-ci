@@ -116,7 +116,7 @@ final class TripDocumentData
         $trip['loading_dates']=(string)($trip['planned_start_date']??'')?:trim(($trip['planned_start_date_from']??'').' — '.($trip['planned_start_date_to']??''),' —');
         $trip['points']=[];
         {
-            $q=$this->tenant->prepare('SELECT DISTINCT f.mno_adres_pogruzki address_text FROM waste_trip_requests w JOIN feo_requests f ON f.id=w.feo_request_id WHERE w.waste_trip_id=? ORDER BY f.mno_adres_pogruzki');
+            $q=$this->tenant->prepare('SELECT DISTINCT f.mno_adres_pogruzki address_text FROM waste_trip_requests w JOIN feo_requests f ON f.id=w.feo_request_id WHERE w.waste_trip_id=? AND w.is_active=1 ORDER BY f.mno_adres_pogruzki');
             $q->execute([$id]);
             foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $point) $trip['points'][]=['point_type'=>'loading']+$point;
             if (!empty($trip['utilizer_id'])) {
