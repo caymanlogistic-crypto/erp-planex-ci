@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "2812978d00bf4e7369018989159e9b8f15ab4428",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2812978d00bf4e7369018989159e9b8f15ab4428/docs/database/TENANT_SCHEMA_OTHER_TENANT_DOMAIN_04.md",
+      "verified_sha": "d27a944c41821bd13745dfb71c959afe9e8360a8",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d27a944c41821bd13745dfb71c959afe9e8360a8/docs/database/TENANT_SCHEMA_OTHER_TENANT_DOMAIN_05.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "2812978d00bf4e7369018989159e9b8f15ab4428",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2812978d00bf4e7369018989159e9b8f15ab4428/tests/waste_trip_synchronization_mysql_test.php",
+      "verified_sha": "f943e2de1c4634d77aa1dc45bad34a1937f7c37a",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/f943e2de1c4634d77aa1dc45bad34a1937f7c37a/tests/waste_trip_carrier_finance_regression_test.php",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
