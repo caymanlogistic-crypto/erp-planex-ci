@@ -71,13 +71,15 @@ try {
         assert.equal(await page.locator('[data-wh-warehouse]:visible').count(), 2);
         assert.match(await page.locator('[data-wh-warehouse="2"] .wh-current-summary').innerText(), /Заявки на складе: —/);
         const differentRow = page.locator('[data-wh-trip="2:21:out"]');
-        assert.match(await differentRow.locator('.wh-request-cell').innerText(), /121,\s*\+ 999/);
+        assert.match(await differentRow.locator('.wh-request-cell').innerText(), /121,\s*\+ 998\s+Не списаны заявки: 999/);
         assert.equal(await differentRow.locator('.wh-request-id--added').evaluate(el => getComputedStyle(el).color), 'rgb(29, 122, 66)');
+        assert.equal(await differentRow.locator('.wh-request-cell .wh-trip-extra').evaluate(el => getComputedStyle(el).color), 'rgb(98, 90, 82)');
         assert.equal(await differentRow.locator('.wh-request-id--outside-trip').innerText(), '121');
         assert.equal(await differentRow.locator('.wh-request-id--outside-trip').evaluate(el => getComputedStyle(el).textDecorationLine), 'line-through');
         await differentRow.dblclick();
         assert.match(await page.locator('#wh-trip-2-21-out .wh-summary').innerText(), /КРАСНОДАР/);
         assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /журнале списания/);
+        assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /Не списаны заявки: 999/);
         assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /не влияют на движения и остаток/);
         assert.match(await page.locator('#wh-trip-2-21-out').innerText(), /Рассинхронизация баз: в рейсе ERP есть заявки 302980, 303129/);
         assert.equal(await page.locator('#wh-trip-2-21-out [data-wh-match-trip]').count(), 1);
