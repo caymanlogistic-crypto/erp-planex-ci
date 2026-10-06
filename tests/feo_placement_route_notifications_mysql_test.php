@@ -43,7 +43,7 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $pdo->exec("CREATE TABLE waste_trip_requests(
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY, waste_trip_id BIGINT UNSIGNED NOT NULL,
-        feo_request_id BIGINT UNSIGNED NOT NULL
+        feo_request_id BIGINT UNSIGNED NOT NULL,is_active TINYINT(1) NOT NULL DEFAULT 1
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4");
     $statuses = [
         1=>WasteTripService::STATUS_PLANNED,

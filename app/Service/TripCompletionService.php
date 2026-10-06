@@ -35,6 +35,9 @@ final class TripCompletionService
             $stmt=$this->tenant->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='waste_trip_completion_items' AND column_name='tn_absent'");
             $stmt->execute();
             if ((int)$stmt->fetchColumn()!==1) return false;
+            $stmt=$this->tenant->prepare("SELECT COUNT(*) FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='waste_trip_requests' AND column_name='is_active'");
+            $stmt->execute();
+            if ((int)$stmt->fetchColumn()!==1) return false;
             return true;
         } catch (Throwable) { return false; }
     }
@@ -66,7 +69,7 @@ final class TripCompletionService
                      COUNT(DISTINCT CASE WHEN COALESCE(i.driver_signature_present,0)=0 THEN wtr.id END) missing_driver_signature_count,
                      COUNT(DISTINCT CASE WHEN COALESCE(i.sender_signature_present,0)=0 THEN wtr.id END) missing_sender_signature_count
                 FROM waste_trips wt
-                LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+                LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.is_active=1
                 LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id
                 LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
                 LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
@@ -114,7 +117,7 @@ final class TripCompletionService
               FROM waste_trip_requests wtr
               JOIN feo_requests fr ON fr.id=wtr.feo_request_id
               LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
-             WHERE wtr.waste_trip_id=?
+             WHERE wtr.waste_trip_id=? AND wtr.is_active=1
              ORDER BY CAST(fr.zayavka_id AS UNSIGNED) DESC,fr.zayavka_id DESC,wtr.id DESC");
         $stmt->execute([$tripId]); $requests=$stmt->fetchAll(PDO::FETCH_ASSOC);
         $ids=array_map('intval',array_column($requests,'id')); $documents=[];
@@ -365,7 +368,8 @@ final class TripCompletionService
             $like='%'.str_replace(['%','_'],['\\%','\\_'],$query).'%';
             $params[]=$like;$params[]=$like;
         }
-        $condition=$where?' WHERE '.implode(' AND ',$where):'';
+        $where[]='(j.waste_trip_request_id IS NULL OR wtr.is_active=1)';
+        $condition=' WHERE '.implode(' AND ',$where);
         $from=' FROM waste_trip_registration_journal j JOIN waste_trips wt ON wt.id=j.waste_trip_id LEFT JOIN waste_trip_requests wtr ON wtr.id=j.waste_trip_request_id LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id';
         $count=$this->tenant->prepare('SELECT COUNT(*)'.$from.$condition);
         $count->execute($params);$total=(int)$count->fetchColumn();
@@ -398,7 +402,7 @@ final class TripCompletionService
     /** @return array<string,mixed> */
     public function document(int $tripId,int $documentId): array
     {
-        $stmt=$this->tenant->prepare("SELECT doc.* FROM waste_trip_completion_documents doc JOIN waste_trip_requests wtr ON wtr.id=doc.waste_trip_request_id JOIN waste_trips wt ON wt.id=wtr.waste_trip_id WHERE doc.id=? AND wt.id=? AND doc.deleted_at IS NULL LIMIT 1");
+        $stmt=$this->tenant->prepare("SELECT doc.* FROM waste_trip_completion_documents doc JOIN waste_trip_requests wtr ON wtr.id=doc.waste_trip_request_id JOIN waste_trips wt ON wt.id=wtr.waste_trip_id WHERE doc.id=? AND wt.id=? AND wtr.is_active=1 AND doc.deleted_at IS NULL LIMIT 1");
         $stmt->execute([$documentId,$tripId]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new DomainException('Файл не найден.');
         return $row;
@@ -467,7 +471,7 @@ final class TripCompletionService
     /** @return array{business_id:int|string,zayavka_id:string} */
     private function assertRequest(int $tripId,int $requestId): array
     {
-        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id,COALESCE(cr.review_status,'work') review_status FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id WHERE wtr.id=? AND wt.id=? AND wt.status IN ('in_progress','completed') AND wt.deleted_at IS NULL LIMIT 1");
+        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id,COALESCE(cr.review_status,'work') review_status FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id WHERE wtr.id=? AND wt.id=? AND wtr.is_active=1 AND wt.status IN ('in_progress','completed') AND wt.deleted_at IS NULL LIMIT 1");
         $stmt->execute([$requestId,$tripId]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new DomainException('Заявка рейса не найдена.');
         if ($row['review_status']!==$this->editableReviewStatus) throw new DomainException('Изменять заявки можно только в доступном для вашей роли состоянии рейса.');

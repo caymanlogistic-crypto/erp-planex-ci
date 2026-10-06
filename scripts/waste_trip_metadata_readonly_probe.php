@@ -41,7 +41,7 @@ $sourceRequestIds = $sourceRequestsRaw === false ? null
 $targetRequestsQuery = $tenant->prepare(
     'SELECT wt.id AS trip_id,fr.zayavka_id,wtr.position_no
        FROM waste_trips wt
-       LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+       LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.is_active=1
        LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id
       WHERE wt.business_id=? OR wt.legacy_flight_id=?
       ORDER BY wt.id,wtr.position_no,wtr.id'
@@ -65,7 +65,7 @@ if ($tenantOnlyRequestIds !== []) {
                 MAX(j.occurred_at) AS last_event_at,
                 GROUP_CONCAT(DISTINCT j.event_kind ORDER BY j.event_kind SEPARATOR ',') AS event_kinds
            FROM waste_trips wt
-           JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+           JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.is_active=1
            JOIN feo_requests fr ON fr.id=wtr.feo_request_id
            LEFT JOIN waste_trip_registration_journal j ON j.waste_trip_request_id=wtr.id
           WHERE wt.business_id=? AND fr.zayavka_id IN ({$marks})

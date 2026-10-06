@@ -38,7 +38,7 @@ final class WarehouseStockService
                     "SELECT wt.business_id,wt.comment AS erp_name,wt.status,wt.actual_start_date,wt.legacy_source_warehouse_id,wt.legacy_destination_warehouse_id,
                             fr.zayavka_id,wtr.snapshot_mass_kg
                        FROM waste_trips wt
-                       LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+                       LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.is_active=1
                        LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id
                       WHERE wt.deleted_at IS NULL AND wt.business_id IN ($marks)
                       ORDER BY wt.business_id,wtr.position_no,wtr.id"
@@ -51,7 +51,7 @@ final class WarehouseStockService
             'SELECT wt.business_id,wt.comment AS erp_name,wt.status,wt.actual_start_date,wt.legacy_source_warehouse_id,wt.legacy_destination_warehouse_id,
                     fr.zayavka_id,wtr.snapshot_mass_kg
                FROM waste_trips wt
-               LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+               LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.is_active=1
                LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id
               WHERE wt.deleted_at IS NULL
                 AND (wt.legacy_source_warehouse_id IS NOT NULL OR wt.legacy_destination_warehouse_id IS NOT NULL)

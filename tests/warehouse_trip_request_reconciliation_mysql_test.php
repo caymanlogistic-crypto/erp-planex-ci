@@ -27,12 +27,12 @@ CREATE TABLE feo(zayavka_id INT PRIMARY KEY,mass_netto DECIMAL(12,4),mass_brutto
 CREATE TABLE warehouse_movements(id INT AUTO_INCREMENT PRIMARY KEY,movement_type VARCHAR(30),warehouse_id INT,source_warehouse_id INT NULL,destination_warehouse_id INT NULL,flight_id INT,zayavka_id INT,fkko_code VARCHAR(20),mass_netto DECIMAL(12,4),mass_brutto DECIMAL(12,4),volume DECIMAL(12,4),movement_date DATETIME,status VARCHAR(20),comment VARCHAR(255),created_at DATETIME,updated_at DATETIME,UNIQUE KEY uniq_flight_movement_zayavka(flight_id,movement_type,warehouse_id,zayavka_id)) ENGINE=InnoDB;
 CREATE TABLE waste_trips(id INT PRIMARY KEY,business_id INT,status VARCHAR(30),source_system VARCHAR(30),legacy_flight_id INT,lock_version INT,deleted_at DATETIME NULL) ENGINE=InnoDB;
 CREATE TABLE feo_requests(id INT PRIMARY KEY,zayavka_id INT) ENGINE=InnoDB;
-CREATE TABLE waste_trip_requests(id INT PRIMARY KEY,waste_trip_id INT,feo_request_id INT,snapshot_mass_kg DECIMAL(18,3),position_no INT) ENGINE=InnoDB;
+CREATE TABLE waste_trip_requests(id INT PRIMARY KEY,waste_trip_id INT,feo_request_id INT,snapshot_mass_kg DECIMAL(18,3),position_no INT,is_active TINYINT(1) NOT NULL DEFAULT 1) ENGINE=InnoDB;
 INSERT INTO feo VALUES(311706,2.1290,2.3000,3.0000,'A'),(295036,1.3890,1.5000,2.0000,'B'),(296555,3.2800,3.5000,4.0000,'C');
 INSERT INTO feo_requests VALUES(1,311706),(2,295036),(3,296555);
 INSERT INTO flights VALUES(286,'completed','generator_to_warehouse',NULL,1,'311706,295036'),(290,'completed','generator_to_warehouse',NULL,1,'311706'),(309,'completed','generator_to_warehouse',NULL,1,'295036');
 INSERT INTO waste_trips VALUES(1,286,'completed','legacy_sync',286,1,NULL),(2,309,'completed','legacy_sync',309,1,NULL);
-INSERT INTO waste_trip_requests VALUES(1,1,2,669.000,1),(2,2,2,1389.000,1),(3,2,3,3280.000,2);
+INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) VALUES(1,1,2,669.000,1),(2,2,2,1389.000,1),(3,2,3,3280.000,2);
 INSERT INTO warehouse_movements(movement_type,warehouse_id,destination_warehouse_id,flight_id,zayavka_id,mass_netto,mass_brutto,volume,movement_date,status,comment,created_at,updated_at) VALUES
 ('receipt',1,1,286,311706,2.1290,2.3000,3.0000,'2026-09-18 12:00:00','active','старый приход',NOW(),NOW()),
 ('receipt',1,1,286,295036,1.3890,1.5000,2.0000,'2026-09-18 12:00:00','active','старый приход',NOW(),NOW()),
@@ -58,7 +58,7 @@ checkMatch((string)$legacy->query('SELECT zayavki_ids FROM flights WHERE id=309'
 
 $legacy->exec("INSERT INTO flights VALUES(288,'completed','generator_to_warehouse',NULL,1,'311706');
 INSERT INTO waste_trips VALUES(3,288,'completed','legacy_sync',288,1,NULL);
-INSERT INTO waste_trip_requests VALUES(4,3,2,669.000,1);
+INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) VALUES(4,3,2,669.000,1);
 INSERT INTO warehouse_movements(movement_type,warehouse_id,destination_warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment,created_at,updated_at) VALUES
 ('receipt',1,1,288,311706,2.1290,'2026-09-10 12:00:00','active','старый приход',NOW(),NOW()),
 ('issue',1,NULL,500,311706,2.1290,'2026-09-11 12:00:00','active','дальнейший вывоз',NOW(),NOW());");
@@ -69,7 +69,7 @@ checkMatch((int)$legacy->query("SELECT COUNT(*) FROM warehouse_movements WHERE f
 
 $legacy->exec("INSERT INTO flights VALUES(320,'completed','warehouse_to_warehouse',1,2,'295036'),(321,'completed','warehouse_to_utilizer',2,NULL,'296555');
 INSERT INTO waste_trips VALUES(4,320,'completed','legacy_sync',320,1,NULL),(5,321,'completed','legacy_sync',321,1,NULL);
-INSERT INTO waste_trip_requests VALUES(5,4,3,3280.000,1),(6,5,3,3280.000,1);
+INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) VALUES(5,4,3,3280.000,1),(6,5,3,3280.000,1);
 INSERT INTO warehouse_movements(movement_type,warehouse_id,source_warehouse_id,destination_warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment,created_at,updated_at) VALUES
 ('transfer_out',1,1,2,320,295036,0.6690,'2026-09-23 12:00:00','active','старый перевод',NOW(),NOW()),
 ('transfer_in',2,1,2,320,295036,0.6690,'2026-09-23 12:00:00','active','старый перевод',NOW(),NOW()),
@@ -91,7 +91,7 @@ checkMatch((float)$legacy->query("SELECT mass_netto FROM warehouse_movements WHE
 
 $legacy->exec("INSERT INTO flights VALUES(330,'completed','generator_to_warehouse',NULL,1,'295036');
 INSERT INTO waste_trips VALUES(6,330,'completed','legacy_sync',330,1,NULL);
-INSERT INTO waste_trip_requests VALUES(7,6,3,3280.000,1);
+INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) VALUES(7,6,3,3280.000,1);
 INSERT INTO warehouse_movements(movement_type,warehouse_id,destination_warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment,created_at,updated_at) VALUES
 ('receipt',1,1,330,295036,1.3890,'2026-09-25 12:00:00','active','старый приход',NOW(),NOW()),
 ('receipt',1,1,330,296555,3.2800,'2026-09-25 12:00:00','cancelled','чужая отмена',NOW(),NOW());");
@@ -102,7 +102,7 @@ checkMatch((int)$legacy->query("SELECT COUNT(*) FROM warehouse_movements WHERE f
 
 $legacy->exec("INSERT INTO flights VALUES(340,'completed','generator_to_warehouse',NULL,1,'295036');
 INSERT INTO waste_trips VALUES(7,340,'completed','legacy_sync',340,1,NULL);
-INSERT INTO waste_trip_requests VALUES(8,7,3,3280.000,1);
+INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) VALUES(8,7,3,3280.000,1);
 INSERT INTO warehouse_movements(movement_type,warehouse_id,destination_warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment,created_at,updated_at) VALUES
 ('receipt',1,1,340,295036,1.3890,'2026-09-26 12:00:00','active','старый приход',NOW(),NOW());");
 $sameConnection = Reconcile::preview($legacy, $legacy, $database, 340, 1, 'in');

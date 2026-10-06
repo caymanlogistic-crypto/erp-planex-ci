@@ -37,7 +37,7 @@ final class WasteTripController
         $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; $old=$_SESSION['waste_trip_old']??[];
         unset($_SESSION['waste_trip_error'],$_SESSION['waste_trip_success'],$_SESSION['waste_trip_old']);
         if ($company!==null && $localPdo instanceof PDO && $dbError===null) {
-            if (!WasteTripService::schemaReady($localPdo)) $dbError='Модуль ожидает обновление схемы рейсов (157).';
+            if (!WasteTripService::schemaReady($localPdo)) $dbError='Модуль ожидает обновление схемы рейсов (158).';
             else try {
                 $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','company'=>$_GET['company']??'','q'=>$_GET['q']??'','sort'=>$_GET['sort']??'status'],$isFinanceRealm);
                 $trips=array_values(array_filter($trips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
@@ -168,7 +168,7 @@ final class WasteTripController
     private function requireTenantPdo(array $context): PDO
     { if(!($context['localPdo']??null) instanceof PDO)throw new RuntimeException((string)($context['error']??'База данных компании недоступна.')); return $context['localPdo']; }
     private function assertSchemaReady(PDO $pdo): void
-    { if(!WasteTripService::schemaReady($pdo))throw new RuntimeException('Схема рейсов не готова: требуется обновление 157.'); }
+    { if(!WasteTripService::schemaReady($pdo))throw new RuntimeException('Схема рейсов не готова: требуется обновление 158.'); }
     private function assertParsedRequests(array $parsed): void
     { if(($parsed['invalid']??[])!==[])throw new RuntimeException('Некорректные номера заявок: '.implode(', ',$parsed['invalid']).'.'); if(($parsed['duplicates']??[])!==[])throw new RuntimeException('В списке повторяются заявки: '.implode(', ',$parsed['duplicates']).'.'); }
     private function publicError(Throwable $e,string $fallback,array $context=[]): string
