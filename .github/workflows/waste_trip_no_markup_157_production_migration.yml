@@ -15,6 +15,7 @@ on:
 permissions:
   contents: read
   actions: read
+  statuses: read
 
 concurrency:
   group: erpv2-controlled-deploy
