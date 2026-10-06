@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "46fd17dd222e416643272f44bd80b9f8864929ea",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/46fd17dd222e416643272f44bd80b9f8864929ea/scripts/waste_trip_metadata_readonly_probe.php",
+      "verified_sha": "72ed28b6e991f50fe53bd53d3cb7fbf853e49299",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/72ed28b6e991f50fe53bd53d3cb7fbf853e49299/tests/waste_trip_synchronization_mysql_test.php",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -128,6 +128,7 @@
         "scripts/waste_trip*.php",
         "tests/waste_trip*.php",
         ".github/workflows/waste_trips*.yml",
+        ".github/workflows/waste_trip_request_active_158_production_migration.yml",
         "database/migrations-local/*waste_trip*.sql",
         "docs/WASTE_TRIP_SYNCHRONIZATION.md",
         "docs/WASTE_TRIP_MANAGER_STATISTICS.md",
