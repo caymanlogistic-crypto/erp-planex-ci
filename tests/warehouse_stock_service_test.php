@@ -61,6 +61,16 @@ $addedWithLegacyDestination = WarehouseStockService::build($warehouses, $movemen
 if ($addedWithLegacyDestination['current'][1] !== $added['current'][1]) {
     throw new RuntimeException('Новая заявка не учтена, когда склад назначения известен только старой базе.');
 }
+$differentErpDestination = array_map(static function (array $row): array {
+    if ((int)$row['business_id'] === 10) $row['legacy_destination_warehouse_id'] = 2;
+    return $row;
+}, $withAddedReceipt);
+$addedWithDifferentDestination = WarehouseStockService::build($warehouses, $movements, $flights, $differentErpDestination);
+if ($addedWithDifferentDestination['current'][1] !== $added['current'][1]
+    || isset($addedWithDifferentDestination['current'][2])
+    || !str_contains(implode(' ', $addedWithDifferentDestination['issues'][10]['messages']), 'Склад рейса в ERP отличается от старой базы.')) {
+    throw new RuntimeException('Новая заявка должна учитываться на складе фактического поступления при расхождении складов.');
+}
 $recordedAdded = $movements;
 $recordedAdded[] = ['id'=>4,'movement_type'=>'receipt','warehouse_id'=>1,'flight_id'=>10,'zayavka_id'=>789,
     'mass_netto'=>'0.750','movement_date'=>'2026-09-01','status'=>'active'];
