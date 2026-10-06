@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "d27a944c41821bd13745dfb71c959afe9e8360a8",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d27a944c41821bd13745dfb71c959afe9e8360a8/docs/database/TENANT_SCHEMA_OTHER_TENANT_DOMAIN_05.md",
+      "verified_sha": "5266dcbea27465ee262393de9b60ba473a11bf33",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/5266dcbea27465ee262393de9b60ba473a11bf33/docs/database/TENANT_SCHEMA_OTHER_TENANT_DOMAIN_05.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
@@ -292,8 +292,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ed237d7ab202c6ecdf0063c4184b4f0d752e4bca",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/090cb43777f3db568e9e70a7d594a565025413e7/tests/trip_review_browser_test.mjs",
+      "verified_sha": "5266dcbea27465ee262393de9b60ba473a11bf33",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/5266dcbea27465ee262393de9b60ba473a11bf33/app/Service/TripCompletionService.php",
       "owning_paths": [
         "app/Service/TripDocument*.php",
         "app/Service/TripCompletionService.php",
