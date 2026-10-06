@@ -40,7 +40,7 @@ foreach (['6 798 кг', '4 669 кг', '#311706', '2 129 кг', '#286 (2 129 кг
 foreach (['4 258 кг', '2 129 кг', '#311706', '#286 (2 129 кг)', '#290 (2 129 кг)'] as $text) {
     if (!str_contains($out, $text)) throw new RuntimeException('В вывозе не раскрыто: '.$text);
 }
-if ($data['issues'][286]['movement_label'] !== 'В журнале: 3 из 3 заявок'
+if ($data['issues'][286]['movement_label'] !== 'Складской журнал: 3 заявки · ERP: 3 заявки'
     || $data['issues'][309]['movement_label'] !== 'Расчётное движение'
     || $data['issues'][309]['has_movements']) {
     throw new RuntimeException('Расчётное списание показано как фактическая запись журнала.');

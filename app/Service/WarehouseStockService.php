@@ -76,6 +76,36 @@ final class WarehouseStockService
         return hash('sha256', $message);
     }
 
+    public static function displayMessage(string $message): string
+    {
+        if (!preg_match('/^Состав заявок: только в старой базе (.*); только в ERP (.*)\.$/u', $message, $matches)) {
+            return $message;
+        }
+        $onlyOld = $matches[1];
+        $onlyErp = $matches[2];
+        if ($onlyOld === '—') {
+            return 'Рассинхронизация баз: в рейсе ERP есть заявки '.$onlyErp
+                .', которых нет в списке рейса старой базы.';
+        }
+        if ($onlyErp === '—') {
+            return 'Рассинхронизация баз: в списке рейса старой базы есть заявки '.$onlyOld
+                .', которых нет в рейсе ERP.';
+        }
+        return 'Рассинхронизация баз: состав заявок рейса различается. Только в старой базе: '
+            .$onlyOld.'. Только в ERP: '.$onlyErp.'.';
+    }
+
+    private static function requestCountLabel(int $count): string
+    {
+        $lastTwo = $count % 100;
+        $word = $lastTwo >= 11 && $lastTwo <= 14 ? 'заявок' : match ($count % 10) {
+            1 => 'заявка',
+            2, 3, 4 => 'заявки',
+            default => 'заявок',
+        };
+        return $count.' '.$word;
+    }
+
     public static function build(array $warehouses, array $movements, array $flights, array $erpRows, array $exceptionRows = []): array
     {
         $names = [];
@@ -335,7 +365,8 @@ final class WarehouseStockService
                     'messages'=>$messages,
                     'has_movements'=>isset($journalFlightIds[$flightId]),
                     'movement_label'=>isset($journalFlightIds[$flightId])
-                        ? 'В журнале: '.count($journalRequestIds[$flightId]).' из '.count($erp[$flightId]['requests'] ?? $journalRequestIds[$flightId]).' заявок'
+                        ? 'Складской журнал: '.self::requestCountLabel(count($journalRequestIds[$flightId]))
+                            .(isset($erp[$flightId]) ? ' · ERP: '.self::requestCountLabel(count($erp[$flightId]['requests'])) : '')
                         : (isset($movementFlightIds[$flightId]) ? 'Расчётное движение' : 'Нет в журнале'),
                     'reconcile_targets'=>$reconcileTargets,
                 ];
