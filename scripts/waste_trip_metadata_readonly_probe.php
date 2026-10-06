@@ -54,6 +54,27 @@ foreach ($targetRequestsQuery->fetchAll() as $row) {
     if ($row['zayavka_id'] !== null) $targetRequestIdsByTrip[$tripId][] = (string) $row['zayavka_id'];
 }
 $targetRequestIds = count($targetRequestIdsByTrip) === 1 ? reset($targetRequestIdsByTrip) : null;
+$tenantOnlyRequestIds = $sourceRequestIds !== null && $targetRequestIds !== null
+    ? array_values(array_diff($targetRequestIds, $sourceRequestIds)) : [];
+$journalBlockers = [];
+if ($tenantOnlyRequestIds !== []) {
+    $marks = implode(',', array_fill(0, count($tenantOnlyRequestIds), '?'));
+    $query = $tenant->prepare(
+        "SELECT fr.zayavka_id,wtr.id AS trip_request_id,wtr.position_no,
+                COUNT(j.id) AS journal_entries,MIN(j.occurred_at) AS first_event_at,
+                MAX(j.occurred_at) AS last_event_at,
+                GROUP_CONCAT(DISTINCT j.event_kind ORDER BY j.event_kind SEPARATOR ',') AS event_kinds
+           FROM waste_trips wt
+           JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+           JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+           LEFT JOIN waste_trip_registration_journal j ON j.waste_trip_request_id=wtr.id
+          WHERE wt.business_id=? AND fr.zayavka_id IN ({$marks})
+          GROUP BY fr.zayavka_id,wtr.id,wtr.position_no
+          ORDER BY wtr.position_no,wtr.id"
+    );
+    $query->execute(array_merge([$flightId], $tenantOnlyRequestIds));
+    $journalBlockers = $query->fetchAll();
+}
 
 $sourceColumns = $legacy->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='flights'")->fetchAll(PDO::FETCH_COLUMN);
 $required = ['legal_entity_code', 'route_type', 'unload_type', 'source_warehouse_id', 'destination_warehouse_id'];
@@ -91,6 +112,7 @@ $out = [
     'tenant_request_ids_by_trip' => $targetRequestIdsByTrip,
     'source_only_request_ids' => $sourceRequestIds !== null && $targetRequestIds !== null ? array_values(array_diff($sourceRequestIds, $targetRequestIds)) : null,
     'tenant_only_request_ids' => $sourceRequestIds !== null && $targetRequestIds !== null ? array_values(array_diff($targetRequestIds, $sourceRequestIds)) : null,
+    'tenant_only_journal_links' => $journalBlockers,
     'tenant_missing_columns' => $missingTenant, 'tenant_rows' => $target,
     'migration_149_journaled' => $journal->fetchColumn() !== false,
 ];
