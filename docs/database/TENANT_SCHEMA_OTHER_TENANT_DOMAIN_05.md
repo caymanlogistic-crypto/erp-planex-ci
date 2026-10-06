@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `0250abe9dbbce5cc0f55d9a37d09c82edc39af8579465d3789c66d52c619aae8`
+**Schema fingerprint:** `37c65083a5dc2da607210a01f87d579a6b5cc0e06fc1eb2f10f1c50dd3cbe861`
 
 ## `waste_trip_general_payments`
 
@@ -194,6 +194,7 @@
 | `updated_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP` | — |
 | `deleted_at` | `datetime` | YES | NULL | — | `MUL` |
 | `financial_model_version` | `tinyint unsigned` | NO | `2` | — | — |
+| `no_markup` | `tinyint(1)` | NO | `0` | — | — |
 | `legal_entity_code` | `varchar(32)` | YES | NULL | — | — |
 | `legacy_route_type` | `varchar(64)` | YES | NULL | — | — |
 | `legacy_unload_type` | `varchar(32)` | YES | NULL | — | — |
