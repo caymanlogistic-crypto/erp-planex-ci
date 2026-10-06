@@ -53,6 +53,14 @@ if ($added['current'][1] !== ['request_count'=>1,'weight_kg'=>750,'request_ids'=
     || !$added['groups'][1][1]['is_derived_receipt']) {
     throw new RuntimeException('Добавленная в рейс заявка не учтена сразу по снимку ERP.');
 }
+$legacyDestination = array_map(static function (array $row): array {
+    if ((int)$row['business_id'] === 10) $row['legacy_destination_warehouse_id'] = null;
+    return $row;
+}, $withAddedReceipt);
+$addedWithLegacyDestination = WarehouseStockService::build($warehouses, $movements, $flights, $legacyDestination);
+if ($addedWithLegacyDestination['current'][1] !== $added['current'][1]) {
+    throw new RuntimeException('Новая заявка не учтена, когда склад назначения известен только старой базе.');
+}
 $recordedAdded = $movements;
 $recordedAdded[] = ['id'=>4,'movement_type'=>'receipt','warehouse_id'=>1,'flight_id'=>10,'zayavka_id'=>789,
     'mass_netto'=>'0.750','movement_date'=>'2026-09-01','status'=>'active'];

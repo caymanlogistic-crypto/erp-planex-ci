@@ -147,7 +147,8 @@ final class WarehouseStockService
             $recordedReceipts[$flightId][$warehouseId][(string)$row['zayavka_id']] = true;
         }
         foreach ($erpFlights as $flightId => $erpFlight) {
-            $warehouseId = (int)($erpFlight['destination'] ?? 0);
+            $warehouseId = (int)($erpFlight['destination'] ?? 0)
+                ?: (int)($flightMap[$flightId]['destination_warehouse_id'] ?? 0);
             // A journal receipt proves that this trip delivered to this warehouse.
             // Newly added ERP requests join that receipt in the read-only ledger.
             if ($warehouseId <= 0 || !isset($flightMap[$flightId], $receiptDates[$flightId][$warehouseId])) continue;
