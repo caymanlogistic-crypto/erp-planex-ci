@@ -30,5 +30,5 @@
 .waste-registry tbody tr td.waste-general-disabled, .waste-registry tbody tr:hover td.waste-general-disabled { background:#e5e7eb; }
 .waste-general-disabled-notice { background:#e5e7eb; padding:10px 12px; border-radius:4px; }
 .waste-form-field .waste-cost-toggle { display:inline-flex; align-items:center; gap:8px; margin-top:4px; font-weight:400; cursor:pointer; }
-.waste-form-field .waste-cost-toggle input { width:16px; height:16px; margin:0; flex:none; }
+.waste-form-field .waste-cost-toggle input[type=checkbox] { appearance:auto; width:16px; height:16px; margin:0; flex:none; accent-color:var(--accent,#95500f); }
 .waste-no-markup-preview { background:#e5e7eb; padding:8px 10px; border-radius:4px; }

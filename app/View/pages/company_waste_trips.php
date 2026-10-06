@@ -99,7 +99,7 @@ function syncCost(root){
  if(preview){preview.hidden=!toggle.checked;if(toggle.checked){
    var amounts=Array.from(root.querySelectorAll('[data-payment-container="customer_payments"] input[name$="[amount]"]')).map(function(input){return input.value.trim().replace(/\s/g,'').replace(',','.');});
    var valid=amounts.length>0&&amounts.every(function(v){return /^\d+(\.\d{1,2})?$/.test(v);});
-   preview.querySelector('[data-waste-no-markup-total]').textContent=valid?amounts.reduce(function(sum,v){return sum+Math.round(Number(v)*100);},0).toLocaleString('ru-RU',{style:'currency',currency:'RUB',maximumFractionDigits:2}):'—';
+   preview.querySelector('[data-waste-no-markup-total]').textContent=valid?(amounts.reduce(function(sum,v){return sum+Math.round(Number(v)*100);},0)/100).toLocaleString('ru-RU',{style:'currency',currency:'RUB',minimumFractionDigits:2,maximumFractionDigits:2}):'—';
  }}
 }
 function syncPlan(root){var m=root.querySelector('[data-waste-plan-mode]');if(!m)return;var e=root.querySelector('[data-waste-plan-exact]'),f=root.querySelector('[data-waste-plan-from]'),t=root.querySelector('[data-waste-plan-to]');var exact=m.value==='exact',range=m.value==='range';if(e){e.style.display=exact?'block':'none';e.required=exact;}if(f){f.style.display=range?'block':'none';f.required=range;}if(t){t.style.display=range?'block':'none';t.required=range;}}
