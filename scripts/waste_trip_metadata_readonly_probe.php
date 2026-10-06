@@ -30,6 +30,30 @@ if (!is_array($company)) { throw new RuntimeException('Active company unavailabl
 $tenant = $connect(companyDatabaseConfig($config, $company));
 $legacy = \App\Service\WasteTripLegacySourceService::connectionFromEnvironment();
 if (!$legacy instanceof PDO) { throw new RuntimeException('Legacy connection unavailable'); }
+$legacy->exec('SET SESSION TRANSACTION READ ONLY');
+
+$sourceRequestsQuery = $legacy->prepare('SELECT zayavki_ids FROM flights WHERE id=? LIMIT 1');
+$sourceRequestsQuery->execute([$flightId]);
+$sourceRequestsRaw = $sourceRequestsQuery->fetchColumn();
+$sourceRequestIds = $sourceRequestsRaw === false ? null
+    : \App\Service\WasteTripLegacySourceService::parseRequestIdsStrict((string) $sourceRequestsRaw);
+
+$targetRequestsQuery = $tenant->prepare(
+    'SELECT wt.id AS trip_id,fr.zayavka_id,wtr.position_no
+       FROM waste_trips wt
+       LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+       LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+      WHERE wt.business_id=? OR wt.legacy_flight_id=?
+      ORDER BY wt.id,wtr.position_no,wtr.id'
+);
+$targetRequestsQuery->execute([$flightId, $flightId]);
+$targetRequestIdsByTrip = [];
+foreach ($targetRequestsQuery->fetchAll() as $row) {
+    $tripId = (int) $row['trip_id'];
+    $targetRequestIdsByTrip[$tripId] ??= [];
+    if ($row['zayavka_id'] !== null) $targetRequestIdsByTrip[$tripId][] = (string) $row['zayavka_id'];
+}
+$targetRequestIds = count($targetRequestIdsByTrip) === 1 ? reset($targetRequestIdsByTrip) : null;
 
 $sourceColumns = $legacy->query("SELECT COLUMN_NAME FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='flights'")->fetchAll(PDO::FETCH_COLUMN);
 $required = ['legal_entity_code', 'route_type', 'unload_type', 'source_warehouse_id', 'destination_warehouse_id'];
@@ -63,6 +87,10 @@ $out = [
     'company_id' => $companyId, 'flight_id' => $flightId,
     'source_missing_columns' => $missingSource, 'source_raw' => $raw,
     'source_metadata' => $source, 'source_fetch_error' => $sourceError,
+    'source_request_ids' => $sourceRequestIds,
+    'tenant_request_ids_by_trip' => $targetRequestIdsByTrip,
+    'source_only_request_ids' => $sourceRequestIds !== null && $targetRequestIds !== null ? array_values(array_diff($sourceRequestIds, $targetRequestIds)) : null,
+    'tenant_only_request_ids' => $sourceRequestIds !== null && $targetRequestIds !== null ? array_values(array_diff($targetRequestIds, $sourceRequestIds)) : null,
     'tenant_missing_columns' => $missingTenant, 'tenant_rows' => $target,
     'migration_149_journaled' => $journal->fetchColumn() !== false,
 ];
