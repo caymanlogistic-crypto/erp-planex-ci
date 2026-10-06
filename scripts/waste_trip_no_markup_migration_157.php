@@ -1,18 +1,24 @@
 <?php
 declare(strict_types=1);
 
-// Read-only by default. Apply requires the exact deployed SHA and separate owner authorization.
+// Read-only by default. Apply requires the guarded canonical source and separate owner authorization.
 if (PHP_SAPI !== 'cli') exit(1);
 try {
     $root = rtrim((string)getenv('PLANEX_ROOT'), '/');
     $sha = (string)getenv('PLANEX_SOURCE_SHA');
+    $deployed = (string)getenv('PLANEX_DEPLOYED_BEFORE');
     $marker = (string)getenv('PLANEX_DEPLOY_MARKER');
     if (!is_file($root.'/.env') || !is_file($root.'/bootstrap/app.php') || !is_file($marker)
-        || !preg_match('/^[a-f0-9]{40}$/D', $sha) || trim((string)file_get_contents($marker)) !== $sha) {
-        throw new RuntimeException('Exact deployment guard required');
+        || !preg_match('/^[a-f0-9]{40}$/D', $sha) || !preg_match('/^[a-f0-9]{40}$/D', $deployed)
+        || trim((string)file_get_contents($marker)) !== $deployed) {
+        throw new RuntimeException('Canonical/ancestor deployment guard required');
     }
     $name = '157_waste_trip_no_markup.sql';
-    $sql = (string)file_get_contents($root.'/database/migrations-local/'.$name);
+    $path = (string)getenv('PLANEX_TENANT_MIGRATION_PATH');
+    if (!preg_match('#^/tmp/waste_trip_no_markup_157_[0-9]+\.sql$#D', $path) || !is_file($path)) {
+        throw new RuntimeException('Guarded migration file required');
+    }
+    $sql = (string)file_get_contents($path);
     $checksum = hash('sha256', $sql);
     if (!hash_equals((string)getenv('PLANEX_TENANT_SHA256'), $checksum)
         || !preg_match('/^ALTER TABLE waste_trips\\s+ADD COLUMN no_markup TINYINT\\(1\\) NOT NULL DEFAULT 0 AFTER financial_model_version;\\s*$/D', trim($sql))) {
@@ -61,7 +67,14 @@ try {
             if ($exists && (!$column || $column['DATA_TYPE'] !== 'tinyint' || $column['IS_NULLABLE'] !== 'NO' || (string)$column['COLUMN_DEFAULT'] !== '0')) {
                 throw new RuntimeException('no_markup column shape mismatch');
             }
-            $results[] = ['company_id'=>(int)$company['id'],'ready'=>$exists];
+            $results[] = [
+                'company_id'=>(int)$company['id'], 'ready'=>$exists,
+                'trip_count'=>(int)$pdo->query('SELECT COUNT(*) FROM waste_trips')->fetchColumn(),
+                'customer_count'=>(int)$pdo->query('SELECT COUNT(*) FROM waste_trip_customer_payments')->fetchColumn(),
+                'customer_total'=>(string)$pdo->query('SELECT COALESCE(SUM(amount),0) FROM waste_trip_customer_payments')->fetchColumn(),
+                'carrier_count'=>(int)$pdo->query('SELECT COUNT(*) FROM waste_trip_carrier_payments')->fetchColumn(),
+                'carrier_total'=>(string)$pdo->query('SELECT COALESCE(SUM(amount),0) FROM waste_trip_carrier_payments')->fetchColumn(),
+            ];
         } finally {
             $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lockName]);
         }
