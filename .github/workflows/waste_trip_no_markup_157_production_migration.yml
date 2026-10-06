@@ -73,8 +73,11 @@ jobs:
           printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/waste_trip_no_markup_157_key" "$HOME/.ssh/known_hosts"
 
-      - name: Verify exact deployed code
+      - name: Verify deployed ancestor and upload migration tooling
         env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
           SOURCE_SHA: ${{ inputs.source_sha }}
           SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
           SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
@@ -83,8 +86,20 @@ jobs:
         run: |
           set -euo pipefail
           SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_trip_no_markup_157_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
-          test "$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
-          "${SSH[@]}" "$SSH_USER@$SSH_HOST" "test -f '$LIVE_ROOT/scripts/waste_trip_no_markup_migration_157.php'"
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/waste_trip_no_markup_157_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          DEPLOYED="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          [[ "$DEPLOYED" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$DEPLOYED" "$SOURCE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$DEPLOYED/status" > /tmp/waste-trip-no-markup-157-deployed-status.json
+          python3 - <<'PY'
+          import json
+          rows=[row for row in json.load(open('/tmp/waste-trip-no-markup-157-deployed-status.json')).get('statuses',[]) if row.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success': raise SystemExit('Deployed ancestor lacks successful deploy status')
+          PY
+          printf 'DEPLOYED_BEFORE=%s\n' "$DEPLOYED" >> "$GITHUB_ENV"
+          "${SCP[@]}" scripts/waste_trip_no_markup_migration_157.php "$SSH_USER@$SSH_HOST:/tmp/waste_trip_no_markup_157_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" database/migrations-local/157_waste_trip_no_markup.sql "$SSH_USER@$SSH_HOST:/tmp/waste_trip_no_markup_157_${GITHUB_RUN_ID}.sql"
 
       - name: Inspect apply and verify tenant 157
         env:
@@ -97,15 +112,29 @@ jobs:
           set -euo pipefail
           tenant_hash="$(sha256sum database/migrations-local/157_waste_trip_no_markup.sql | awk '{print $1}')"
           remote=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_trip_no_markup_157_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
-          base="PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER' PLANEX_TENANT_SHA256='$tenant_hash'"
-          script="$LIVE_ROOT/scripts/waste_trip_no_markup_migration_157.php"
+          base="PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOYED_BEFORE='$DEPLOYED_BEFORE' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER' PLANEX_TENANT_SHA256='$tenant_hash' PLANEX_TENANT_MIGRATION_PATH='/tmp/waste_trip_no_markup_157_${GITHUB_RUN_ID}.sql'"
+          script="/tmp/waste_trip_no_markup_157_${GITHUB_RUN_ID}.php"
           "${remote[@]}" "$base /usr/bin/php8.5 '$script'" | tee before.txt
           grep -q '^WASTE_TRIP_NO_MARKUP_157_READ_ONLY_OK$' before.txt
           "${remote[@]}" "$base WASTE_TRIP_NO_MARKUP_157_MODE=apply WASTE_TRIP_NO_MARKUP_157_CONFIRM=APPLY_WASTE_TRIP_NO_MARKUP_157 /usr/bin/php8.5 '$script'" | tee apply.txt
           grep -q '^WASTE_TRIP_NO_MARKUP_157_APPLY_OK$' apply.txt
           "${remote[@]}" "$base /usr/bin/php8.5 '$script'" | tee after.txt
           grep -q '^WASTE_TRIP_NO_MARKUP_157_READ_ONLY_OK$' after.txt
-          test "$("${remote[@]}" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
+          test "$("${remote[@]}" "cat '$DEPLOY_MARKER'")" = "$DEPLOYED_BEFORE"
+          python3 - <<'PY'
+          import json,re
+          def rows(path):
+              match=re.search(r'^WASTE_TRIP_NO_MARKUP_157_SNAPSHOT=(.+)$',open(path).read(),re.M)
+              if not match: raise SystemExit(f'{path}: snapshot missing')
+              return {row['company_id']:row for row in json.loads(match.group(1))}
+          before,after=rows('before.txt'),rows('after.txt')
+          if not before or set(before)!=set(after): raise SystemExit('Tenant set changed')
+          for company_id,row in after.items():
+              if not row['ready']: raise SystemExit(f'{company_id}: migration not ready')
+              for key in ('trip_count','customer_count','customer_total','carrier_count','carrier_total'):
+                  if row[key]!=before[company_id][key]: raise SystemExit(f'{company_id}: {key} changed')
+          print('WASTE_TRIP_NO_MARKUP_157_BUSINESS_DATA_UNCHANGED=YES')
+          PY
           echo 'WASTE_TRIP_NO_MARKUP_157_PRODUCTION_PASS=YES'
 
       - name: Save migration evidence
