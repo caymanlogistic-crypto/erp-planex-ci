@@ -50,6 +50,8 @@ if ($added['current'][1] !== ['request_count'=>1,'weight_kg'=>750,'request_ids'=
     || $added['groups'][1][1]['mass_kg'] !== 2250
     || $added['groups'][1][1]['request_count'] !== 2
     || $added['groups'][1][1]['trip_only_request_ids'] !== ['789']
+    || $added['groups'][1][1]['added_request_ids'] !== ['789']
+    || $added['groups'][1][1]['unmoved_request_ids'] !== []
     || !$added['groups'][1][1]['is_derived_receipt']) {
     throw new RuntimeException('Добавленная в рейс заявка не учтена сразу по снимку ERP.');
 }
@@ -82,6 +84,9 @@ $flights[1]['zayavki_ids'] = '123,456';
 $erp[] = ['business_id'=>11,'legacy_source_warehouse_id'=>1,'legacy_destination_warehouse_id'=>null,'zayavka_id'=>456,'snapshot_mass_kg'=>500];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 if ($data['groups'][1][0]['request_ids'] !== ['123'] || $data['groups'][1][0]['trip_only_request_ids'] !== ['456']) throw new RuntimeException('Не выявлена дополнительная заявка рейса.');
+if ($data['groups'][1][0]['added_request_ids'] !== [] || $data['groups'][1][0]['unmoved_request_ids'] !== ['456']) {
+    throw new RuntimeException('Несписанная заявка не должна показываться зелёной с плюсом.');
+}
 if (!str_contains(implode(' ', $data['issues'][11]['messages']), 'со склада списано 1 из 2 заявок рейса. Не списаны: 456.')) throw new RuntimeException('Недостающее списание не объяснено понятным текстом.');
 if ($data['issues'][11]['movement_label'] !== 'Складской журнал: 1 заявка · ERP: 2 заявки') throw new RuntimeException('Источники состава не разделены в подписи журнала.');
 if (WarehouseStockService::displayMessage('Состав заявок: только в старой базе —; только в ERP 302980, 303129.')
@@ -106,6 +111,9 @@ $erp[] = ['business_id'=>13,'status'=>'in_progress','actual_start_date'=>'2026-0
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
 if ($data['current'][1] !== ['request_count'=>0,'weight_kg'=>0,'request_ids'=>[]]) throw new RuntimeException('Начатый рейс не списал складской остаток.');
 if ($data['groups'][1][0]['request_ids'] !== ['456'] || !$data['groups'][1][0]['is_derived']) throw new RuntimeException('Рейс должен показывать только списанную складскую заявку.');
+if ($data['groups'][1][0]['added_request_ids'] !== ['456'] || $data['groups'][1][0]['unmoved_request_ids'] !== ['999']) {
+    throw new RuntimeException('Расчётное списание и несписанная заявка должны различаться.');
+}
 $flights[2]['status'] = 'completed';
 $erp[5]['status'] = 'completed';
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
