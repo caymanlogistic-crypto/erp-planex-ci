@@ -7,6 +7,70 @@ use RuntimeException;
 
 final class WasteTripCarrierPaymentService
 {
+    /** Keep the carrier schedule and row identities while matching the sale total. */
+    public static function synchronizeNoMarkup(PDO $pdo, int $tripId, array $actor): void
+    {
+        $customer = WasteTripCustomerPaymentService::fetchForTrip($pdo, $tripId);
+        $target = self::noMarkupCents($customer);
+        $old = self::fetchForTrip($pdo, $tripId);
+        if ($old === []) {
+            $rows = self::parseRows([[
+                'amount' => number_format(intdiv($target, 100), 0, '', '') . '.' . str_pad((string)($target % 100), 2, '0', STR_PAD_LEFT),
+                'payment_method' => 'cashless', 'vat_rate' => '', 'condition_type' => 'after_end',
+                'days_count' => '7', 'days_kind' => 'calendar',
+            ]]);
+            self::store($pdo, $tripId, $rows, $actor);
+            return;
+        }
+        $weights = array_map(static fn(array $row): int => self::amountCents((string)($row['amount'] ?? '0')), $old);
+        $weightTotal = array_sum($weights);
+        if ($weightTotal === $target) return;
+        if ($weightTotal !== $target) {
+            $ids = array_map(static fn(array $row): int => (int)$row['id'], $old);
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            $linked = $pdo->prepare("SELECT COUNT(*) FROM finance_obligations o WHERE o.source_type='WASTE_TRIP_CARRIER_PAYMENT' AND o.source_parent_id=? AND o.source_id IN ({$marks}) AND (
+                EXISTS(SELECT 1 FROM finance_invoice_links l WHERE l.obligation_id=o.id)
+                OR EXISTS(SELECT 1 FROM finance_operation_allocations a JOIN finance_operations op ON op.id=a.operation_id WHERE a.obligation_id=o.id AND a.cancelled_at IS NULL AND op.status='POSTED'))");
+            $linked->execute(array_merge([$tripId], $ids));
+            if ((int)$linked->fetchColumn() > 0) throw new RuntimeException('Себестоимость связана со счётом или проведённой оплатой. Изменение без наценки требует отдельной сверки расчётов.');
+        }
+        $remaining = $target;
+        $last = count($old) - 1;
+        $update = $pdo->prepare('UPDATE waste_trip_carrier_payments SET amount=?,updated_by_user_id=?,updated_by_role=? WHERE id=?');
+        foreach ($old as $index => $row) {
+            $cents = $index === $last ? $remaining : ($weightTotal > 0 ? (int)floor($target * ($weights[$index] / $weightTotal)) : 0);
+            $remaining -= $cents;
+            $amount = intdiv($cents, 100) . '.' . str_pad((string)($cents % 100), 2, '0', STR_PAD_LEFT);
+            if ((string)$row['amount'] === $amount) continue;
+            $update->execute([$amount, (int)($actor['user_id'] ?? 0) ?: null, (string)($actor['role_code'] ?? '') ?: null, (int)$row['id']]);
+        }
+        $new = self::fetchForTrip($pdo, $tripId);
+        if ($old !== $new && (int)($actor['user_id'] ?? 0) > 0) {
+            LinearRouteService::logFinanceAudit($pdo, 'waste_trip', $tripId, 'carrier_payments_update',
+                ['payments'=>$old], ['payments'=>$new, 'no_markup'=>true], (int)$actor['user_id'], (string)$actor['role_code']);
+        }
+    }
+
+    public static function noMarkupCents(array $customer): int
+    {
+        if ($customer === []) throw new RuntimeException('Для режима «Без наценки» сначала укажите сумму продажи.');
+        $cents = 0;
+        foreach ($customer as $row) {
+            if (($row['amount'] ?? null) === null || trim((string)$row['amount']) === '')
+                throw new RuntimeException('Для режима «Без наценки» сумма продажи должна быть известна.');
+            $cents += self::amountCents((string)$row['amount']);
+        }
+        return $cents;
+    }
+
+    private static function amountCents(string $raw): int
+    {
+        $amount = LinearRouteService::parseAmount($raw);
+        if ($amount === null) throw new RuntimeException('Некорректная сумма продажи для режима «Без наценки».');
+        [$whole, $fraction] = array_pad(explode('.', $amount, 2), 2, '00');
+        return (int)$whole * 100 + (int)str_pad(substr($fraction, 0, 2), 2, '0');
+    }
+
     public static function parseRows(array $rows, bool $required = false): array
     {
         $result = [];

@@ -36,6 +36,11 @@ $rows=WasteTripCarrierPaymentService::parseRows([['amount'=>'70 000','payment_me
 $ok(count($rows)===1&&$rows[0]['amount']==='70000.00','carrier payment parse failed');
 $ok(WasteTripCarrierPaymentService::total($rows)==='70 000 ₽','carrier total format failed');
 $ok(WasteTripCarrierPaymentService::parseRows([],false)===[],'empty carrier terms must stay backward-compatible');
+$ok(WasteTripCarrierPaymentService::noMarkupCents([['amount'=>'100.50'],['amount'=>'20.25']])===12075,'No markup must add sale installments exactly in kopecks');
+$unknownSaleBlocked=false;try{WasteTripCarrierPaymentService::noMarkupCents([['amount'=>null]]);}catch(RuntimeException){$unknownSaleBlocked=true;}
+$ok($unknownSaleBlocked,'No markup requires a known sale amount');
+$noMarkupMigration=(string)file_get_contents($root.'/database/migrations-local/157_waste_trip_no_markup.sql');
+$ok(str_contains($noMarkupMigration,'no_markup TINYINT(1) NOT NULL DEFAULT 0'),'No markup flag must default off for existing trips');
 echo "WASTE_TRIP_CARRIER_FINANCE_STATIC=PASS\n";
 
 if ((string)(getenv('PLANEX_SKIP_MYSQL')?:'')==='1') exit(0);
@@ -73,6 +78,18 @@ try{
     $ok(($by['RECEIVABLE']['counterparty_name']??'')==='Waste Customer'&&(string)$by['RECEIVABLE']['amount']==='100000.00','customer receivable projection failed');
     $ok(($by['PAYABLE']['counterparty_name']??'')==='Waste Carrier'&&(string)$by['PAYABLE']['amount']==='70000.00','carrier payable projection failed');
     $ok((string)$by['RECEIVABLE']['due_date']==='2026-09-08'&&(string)$by['PAYABLE']['due_date']==='2026-09-13','Waste due-date projection failed');
+    $pdo->exec("UPDATE waste_trips SET no_markup=1 WHERE id={$tripId}");
+    WasteTripCarrierPaymentService::synchronizeNoMarkup($pdo,$tripId,$actor);FinanceObligationService::syncWasteTrip($pdo,$tripId);
+    $noMarkupCost=WasteTripCarrierPaymentService::fetchForTrip($pdo,$tripId);
+    $noMarkupPayable=$pdo->query("SELECT amount FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND direction='PAYABLE' AND cancelled_at IS NULL LIMIT 1")->fetchColumn();
+    $ok(count($noMarkupCost)===1&&(string)$noMarkupCost[0]['amount']==='100000.00'&&(string)$noMarkupPayable==='100000.00','No markup must change carrier cost and payable to sale total');
+    $higherSale=WasteTripCustomerPaymentService::parseRows([['amount'=>'120000','payment_method'=>'cashless','vat_rate'=>'','condition_type'=>'after_end','days_count'=>'5','days_kind'=>'calendar']],true);
+    WasteTripCustomerPaymentService::store($pdo,$tripId,$higherSale,$actor);WasteTripCarrierPaymentService::synchronizeNoMarkup($pdo,$tripId,$actor);FinanceObligationService::syncWasteTrip($pdo,$tripId);
+    $ok((string)WasteTripCarrierPaymentService::fetchForTrip($pdo,$tripId)[0]['amount']==='120000.00','No markup cost must follow a changed sale amount');
+    $pdo->exec("UPDATE waste_trips SET no_markup=0 WHERE id={$tripId}");
+    WasteTripCustomerPaymentService::store($pdo,$tripId,$customer,$actor);
+    $pdo->prepare('UPDATE waste_trip_carrier_payments SET amount=? WHERE waste_trip_id=?')->execute(['70000.00',$tripId]);
+    FinanceObligationService::syncWasteTrip($pdo,$tripId);
     $oldObligationIds=array_map('intval',array_column($ob,'id'));$oldSourceIds=array_map('intval',array_column($ob,'source_id'));
     WasteTripCustomerPaymentService::store($pdo,$tripId,$customer,$actor);WasteTripCarrierPaymentService::store($pdo,$tripId,$carrier,$actor);FinanceObligationService::syncWasteTrip($pdo,$tripId);
     $resynced=$pdo->query("SELECT id,source_id FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND cancelled_at IS NULL ORDER BY direction")->fetchAll(PDO::FETCH_ASSOC);

@@ -22,7 +22,9 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
         <div class="linear-trip-block-head">
             <div>
                 <div class="linear-trip-block-title">Себес · оплата подрядчику</div>
-                <div class="field-msg">Сумма вводится вручную. По умолчанию — 7 дней после выгрузки.</div>
+                <label class="waste-cost-toggle"><input type="checkbox" name="no_markup" value="1" data-waste-no-markup <?= !empty($noMarkup) ? 'checked' : '' ?> <?= !empty($noMarkupDisabled) ? 'disabled' : '' ?>> Без наценки</label>
+                <?php if (!empty($noMarkupDisabled)): ?><div class="field-msg">Недоступно для рейса с сохранёнными историческими расчётами.</div><?php endif; ?>
+                <div class="field-msg waste-no-markup-preview" data-waste-no-markup-preview hidden>Себес равен продаже: <strong data-waste-no-markup-total>—</strong></div>
             </div>
             <button type="button" class="btn btn-ghost" data-add-payment-row="carrier_payments">+ Добавить оплату</button>
         </div>
