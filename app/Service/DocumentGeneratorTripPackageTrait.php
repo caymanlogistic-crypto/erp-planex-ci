@@ -112,7 +112,8 @@ trait DocumentGeneratorTripPackageTrait
         ?string $invoiceDate = null,
         ?string $actDate = null,
         ?GoogleSheetsRequestContactService $contactService = null,
-        string $variant = 'act'
+        string $variant = 'act',
+        ?string $contractNumberInput = null
     ): array {
         if (!isset(self::CLIENT_PACKAGE_VARIANTS[$variant])) return self::failed(['Неизвестный вид комплекта документов.']);
         $types = self::CLIENT_PACKAGE_VARIANTS[$variant];
@@ -158,6 +159,11 @@ trait DocumentGeneratorTripPackageTrait
         if ($finishDate === null) return self::failed(['В выбранном рейсе не указана дата завершения для договора.']);
 
         $packageNumber = date('y') . '-' . (int)($trip['business_id'] ?? 0);
+        $contractNumber = trim((string)$contractNumberInput);
+        if ($contractNumber === '') $contractNumber = $packageNumber;
+        if (mb_strlen($contractNumber) > 50 || !preg_match('/^[\p{L}\p{N}][\p{L}\p{N} ._\/-]*$/u', $contractNumber)) {
+            return self::failed(['Номер договора: до 50 символов; допустимы буквы, цифры, пробел, точка, дефис, подчёркивание и косая черта.']);
+        }
         $paymentTerms = self::paymentTermsText($payments);
         if ($paymentTerms === '') $paymentTerms = 'Согласно условиям выбранного рейса.';
         $context = [
@@ -165,6 +171,7 @@ trait DocumentGeneratorTripPackageTrait
             'trip' => self::tripSnapshot($trip),
             'package' => [
                 'number' => $packageNumber,
+                'contract_number' => $contractNumber,
                 'variant' => $variant,
                 'date' => $contractDate,
                 'contract_date' => $contractDate,
@@ -175,7 +182,7 @@ trait DocumentGeneratorTripPackageTrait
             ],
         ];
         $params = [
-            'contract_number' => $packageNumber,
+            'contract_number' => $contractNumber,
             'contract_date' => $contractDate,
             'invoice_date' => $invoiceDate,
             'act_date' => $actDate,
@@ -205,7 +212,7 @@ trait DocumentGeneratorTripPackageTrait
         $snapshot = is_array($prepared['snapshot'] ?? null) ? $prepared['snapshot'] : [];
         $snapshot['package'] = $context['package'];
         $snapshot['service'] = [
-            'description' => self::clientServiceDescription($snapshot, $packageNumber, $contractDate),
+            'description' => self::clientServiceDescription($snapshot, $contractNumber, $contractDate),
             'amount' => $amount,
             'vat_mode' => 'Без НДС',
         ];
@@ -226,6 +233,7 @@ trait DocumentGeneratorTripPackageTrait
         }
 
         $prepared['package_number'] = $packageNumber;
+        $prepared['contract_number'] = $contractNumber;
         $prepared['package_dates'] = [$contractType=>$contractDate, $invoiceType=>$invoiceDate, $transferType=>$actDate];
         $prepared['package_variant'] = $variant;
         $prepared['package_amount'] = $amount;
@@ -233,7 +241,19 @@ trait DocumentGeneratorTripPackageTrait
         $prepared['package_templates'] = $templates;
         $prepared['client'] = $client;
         $prepared['trip'] = $trip;
-        $prepared['existing_package_documents'] = self::existingClientPackageDocuments($pdo, $packageNumber, array_keys($types));
+        $prepared['existing_package_documents'] = array_merge(
+            self::existingClientPackageContractDocuments($pdo, $packageNumber, $contractType),
+            self::existingClientPackageDocuments($pdo, $packageNumber, [$invoiceType, $transferType])
+        );
+        $contractIds = array_map(
+            static fn(array $row): int => (int)$row['id'],
+            array_filter($prepared['existing_package_documents'], static fn(array $row): bool => (string)$row['document_type'] === $contractType)
+        );
+        foreach (self::existingClientPackageDocuments($pdo, $contractNumber, [$contractType]) as $row) {
+            if (!in_array((int)$row['id'], $contractIds, true)) {
+                return self::failed(['Номер договора уже используется в другом комплекте. Укажите другой номер.']);
+            }
+        }
         $prepared['package_exists'] = $prepared['existing_package_documents'] !== [];
         return $prepared;
     }
@@ -246,6 +266,7 @@ trait DocumentGeneratorTripPackageTrait
         if (!self::runtimeSchemaReady($pdo)) throw new RuntimeException('Схема генератора документов не готова.');
 
         $number = trim((string)($prepared['package_number'] ?? ''));
+        $contractNumber = trim((string)($prepared['contract_number'] ?? $number));
         $dates = (array)($prepared['package_dates'] ?? []);
         if (!preg_match('/^\d{2}-\d+$/', $number)) {
             throw new RuntimeException('Номер комплекта документов не определён.');
@@ -282,10 +303,16 @@ trait DocumentGeneratorTripPackageTrait
         try {
             $existing = [];
             foreach (array_keys($types) as $type) {
-                $dup = $pdo->prepare('SELECT * FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
-                $dup->execute([$type, $number]);
-                $row = $dup->fetch(PDO::FETCH_ASSOC) ?: null;
-                if ($row !== null) $existing[] = $row;
+                if ($type === ($variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew')) {
+                    $dup = $pdo->prepare("SELECT * FROM generated_documents WHERE document_type=? AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.package.number'))=? FOR UPDATE");
+                    $dup->execute([$type, $number]);
+                    array_push($existing, ...$dup->fetchAll(PDO::FETCH_ASSOC));
+                } else {
+                    $dup = $pdo->prepare('SELECT * FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
+                    $dup->execute([$type, $number]);
+                    $row = $dup->fetch(PDO::FETCH_ASSOC) ?: null;
+                    if ($row !== null) $existing[] = $row;
+                }
             }
             if ($existing !== [] && !$overwriteExisting) {
                 throw new RuntimeException('Комплект № ' . $number . ' уже был создан. Подтвердите перезапись комплекта.');
@@ -312,6 +339,7 @@ trait DocumentGeneratorTripPackageTrait
 
             foreach (array_keys($types) as $type) {
                 [$template, $templatePath] = $resolvedTemplates[$type];
+                $documentNumber = $type === ($variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew') ? $contractNumber : $number;
                 $date = (string)$dates[$type];
                 $snapshot = $baseSnapshot;
                 $snapshot['template'] = [
@@ -323,7 +351,7 @@ trait DocumentGeneratorTripPackageTrait
                     'sha256'=>(string)$template['sha256'],
                 ];
                 $snapshot['document'] = [
-                    'number'=>$number,
+                    'number'=>$documentNumber,
                     'number_mode'=>'trip_based',
                     'date'=>$date,
                     'type'=>$type,
@@ -339,7 +367,7 @@ trait DocumentGeneratorTripPackageTrait
                     'client_upd_status2' => 'УПД-статус-2',
                     default => 'Документ',
                 };
-                $downloadName = DocumentService::safeDownloadName($baseName . '_' . $number . '.docx');
+                $downloadName = DocumentService::safeDownloadName($baseName . '_' . $documentNumber . '.docx');
                 $relativeDir = sprintf('companies/%d/document-generator/generated/%s', $companyId, date('Y/m'));
                 $absoluteDir = storage_path($relativeDir);
                 if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0775, true) && !is_dir($absoluteDir)) {
@@ -359,7 +387,7 @@ trait DocumentGeneratorTripPackageTrait
                     'INSERT INTO generated_documents(document_type,document_number,document_date,template_id,template_version_id,route_executor_id,request_ids_json,total_mass_kg,unload_address,parameters_json,snapshot_json,stored_path,original_name,sha256,created_by_user_id,created_by_role) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)'
                 );
                 $stmt->execute([
-                    $type,$number,$date,(int)$template['template_id'],(int)$template['version_id'],
+                    $type,$documentNumber,$date,(int)$template['template_id'],(int)$template['version_id'],
                     (int)($snapshot['executor']['crew_id'] ?? 0),self::json($summary['input_ids'] ?? []),
                     (float)($summary['total_mass_kg'] ?? 0),(string)($summary['unload_address'] ?? ''),
                     self::json($params),self::json($snapshot),$relativePath,$downloadName,$sha,$userId,$role,
@@ -392,6 +420,15 @@ trait DocumentGeneratorTripPackageTrait
             "SELECT id,document_type,document_number,document_date,created_at FROM generated_documents WHERE document_type IN ({$placeholders}) AND document_number=? ORDER BY id"
         );
         $stmt->execute([...$types, $number]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private static function existingClientPackageContractDocuments(PDO $pdo, string $packageNumber, string $contractType): array
+    {
+        $stmt = $pdo->prepare(
+            "SELECT id,document_type,document_number,document_date,created_at FROM generated_documents WHERE document_type=? AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.package.number'))=? ORDER BY id"
+        );
+        $stmt->execute([$contractType, $packageNumber]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
