@@ -154,4 +154,3 @@ jobs:
         shell: bash
         run: |
           rm -f "$HOME/.ssh/waste_trip_request_archival_158_key"
-

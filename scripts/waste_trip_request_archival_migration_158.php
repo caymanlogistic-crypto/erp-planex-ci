@@ -94,4 +94,3 @@ try {
     fwrite(STDERR, 'WASTE_TRIP_REQUEST_ARCHIVAL_158_FAILED: '.$error->getMessage()."\n");
     exit(1);
 }
-
