@@ -33,6 +33,8 @@ $assert(!str_contains($view, 'name="crew_id"'), 'manual executor selector is rem
 $assert(!str_contains($view, 'name="request_input"'), 'manual FEO request input is removed');
 $assert(str_contains($view, 'data-docgen-carrier-trip'), 'carrier flow selects a Waste Trip');
 $assert(str_contains($view, 'data-docgen-client-trip'), 'client package selects a Waste Trip');
+$assert(str_contains($view, 'data-docgen-client-trip-search') && str_contains($view, 'aria-controls="docgen-client-trip"'), 'client trip has an accessible search field tied to the choices');
+$assert(str_contains($view, "tripSearch?.addEventListener('input'") && str_contains($view, 'clientTrip.replaceChildren('), 'typing filters available client trips');
 $assert(str_contains($view, "result.dataset.docgenState='error'"), 'visible validation failure exposes error state');
 $assert(str_contains($view, "result.dataset.docgenState='checking'"), 'active preview exposes checking state');
 $assert(str_contains($view, "result.dataset.docgenState='success'"), 'successful preview exposes success state');

@@ -490,23 +490,7 @@ trait DocumentGeneratorTripPackageTrait
     public static function suggestClientPackageDates(PDO $pdo, array $trip): array
     {
         [$start, $finish] = self::tripDocumentDates($trip);
-        $contract = $start === null ? '' : self::nearestWorkingDate($pdo, $start, -1);
-        $act = $finish === null ? '' : self::nearestWorkingDate($pdo, $finish, 1);
-        return ['contract_date'=>$contract, 'invoice_date'=>$contract, 'act_date'=>$act];
-    }
-
-    private static function nearestWorkingDate(PDO $pdo, string $date, int $direction): string
-    {
-        $day = new \DateTimeImmutable($date);
-        for ($attempt = 0; $attempt < 366; $attempt++) {
-            try {
-                if (ProductionCalendarService::isWorkingDay($pdo, $day->format('Y-m-d'))) return $day->format('Y-m-d');
-            } catch (RuntimeException) {
-                return '';
-            }
-            $day = $day->modify(($direction < 0 ? '-1' : '+1') . ' day');
-        }
-        return '';
+        return ['contract_date'=>$start ?? '', 'invoice_date'=>$finish ?? '', 'act_date'=>$finish ?? ''];
     }
 
     private static function firstDate(array $values): ?string
