@@ -113,9 +113,6 @@ final class WasteTripLegacyMappingService
         if ($state['actual_start_date'] !== null && $state['actual_end_date'] !== null && $state['actual_start_date'] > $state['actual_end_date']) {
             throw new RuntimeException('Фактическое начало рейса позже окончания.');
         }
-        if (in_array($state['status'], [WasteTripService::STATUS_IN_PROGRESS, WasteTripService::STATUS_COMPLETED], true)
-            && $state['actual_start_date'] === null) throw new RuntimeException('Не указана фактическая дата начала рейса.');
-        if ($state['status'] === WasteTripService::STATUS_COMPLETED && $state['actual_end_date'] === null) throw new RuntimeException('Не указана фактическая дата окончания рейса.');
         $state['comment'] = mb_substr(trim((string)($flight['comment'] ?? '')), 0, 500, 'UTF-8') ?: null;
         $rawCost = trim((string)($flight['cost'] ?? ''));
         if ($rawCost !== '' && (!preg_match('/^\d{1,10}$/D', $rawCost))) throw new RuntimeException('Некорректная стоимость перевозчика в старом рейсе.');

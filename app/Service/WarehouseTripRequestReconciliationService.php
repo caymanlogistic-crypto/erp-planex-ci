@@ -27,7 +27,7 @@ final class WarehouseTripRequestReconciliationService
         }
         $trip = $trips[0];
         if ($trip['status'] === 'cancelled') throw new RuntimeException('Отменённый рейс сверять нельзя.');
-        $query = $tenant->prepare('SELECT wtr.id,fr.zayavka_id,wtr.snapshot_mass_kg FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.waste_trip_id=? ORDER BY wtr.position_no,wtr.id'.$suffix);
+        $query = $tenant->prepare('SELECT wtr.id,fr.zayavka_id,wtr.snapshot_mass_kg FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.waste_trip_id=? AND wtr.removed_at IS NULL ORDER BY wtr.position_no,wtr.id'.$suffix);
         $query->execute([(int)$trip['id']]);
         $tripRequests = $query->fetchAll(PDO::FETCH_ASSOC);
         if ($tripRequests === [] || count($tripRequests) > 1000) throw new RuntimeException('В рейсе ERP нет пригодного состава заявок.');

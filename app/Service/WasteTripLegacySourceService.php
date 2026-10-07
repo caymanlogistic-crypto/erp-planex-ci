@@ -7,6 +7,7 @@ use PDO;
 use RuntimeException;
 
 require_once __DIR__.'/WasteTripLegacyMetadataService.php';
+require_once __DIR__.'/WasteTripLegacyMappingService.php';
 
 final class WasteTripLegacySourceService
 {
@@ -50,7 +51,7 @@ final class WasteTripLegacySourceService
         $mode=$exact!==null?'exact':(($from!==null||$to!==null)?'range':'unspecified');
         $actualStart=self::dateStrict($flight['actual_start_date']??null,'actual_start_date');$actualEnd=self::dateStrict($flight['actual_end_date']??null,'actual_end_date');
         if($actualStart!==null&&$actualEnd!==null&&$actualStart>$actualEnd)throw new RuntimeException('Legacy факт содержит начало позже окончания.');
-        return ['business_id'=>$businessId,'comment'=>self::text($flight['comment']??null,500),'planned_start_mode'=>$mode,'planned_start_date'=>$exact,'planned_start_date_from'=>$from,'planned_start_date_to'=>$to,'planned_finish_date'=>null,'actual_start_date'=>$actualStart,'actual_end_date'=>$actualEnd,'request_ids'=>$requestIds] + WasteTripLegacyMetadataService::fromFlight($flight);
+        return ['business_id'=>$businessId,'status'=>WasteTripLegacyMappingService::status((string)($flight['status']??'')),'comment'=>self::text($flight['comment']??null,500),'planned_start_mode'=>$mode,'planned_start_date'=>$exact,'planned_start_date_from'=>$from,'planned_start_date_to'=>$to,'planned_finish_date'=>null,'actual_start_date'=>$actualStart,'actual_end_date'=>$actualEnd,'request_ids'=>$requestIds] + WasteTripLegacyMetadataService::fromFlight($flight);
     }
 
     public static function parseRequestIdsStrict(string $raw): array
@@ -61,7 +62,7 @@ final class WasteTripLegacySourceService
     }
 
     private static function baseSql(PDO $legacyPdo): string
-    { return 'SELECT f.id,f.zayavki_ids,f.comment,f.planned_start_date,f.planned_start_date_from,f.planned_start_date_to,f.actual_start_date,f.actual_end_date'.WasteTripLegacyMetadataService::sourceSql($legacyPdo).' FROM flights f'.WasteTripLegacyMetadataService::joins(); }
+    { return 'SELECT f.id,f.zayavki_ids,f.status,f.comment,f.planned_start_date,f.planned_start_date_from,f.planned_start_date_to,f.actual_start_date,f.actual_end_date'.WasteTripLegacyMetadataService::sourceSql($legacyPdo).' FROM flights f'.WasteTripLegacyMetadataService::joins(); }
 
     private static function dateStrict(mixed $value,string $field): ?string
     {

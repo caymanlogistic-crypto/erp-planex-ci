@@ -214,7 +214,7 @@ final class FeoPlacementRouteNotificationService
                     u.membership_id,u.full_name responsible_name,
                     fr.id feo_request_id,fr.zayavka_id,fr.mass_netto,fr.mno_d,fr.mno_sh
              FROM waste_trips wt
-             JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+             JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.removed_at IS NULL
              JOIN feo_requests fr ON fr.id=wtr.feo_request_id
              JOIN users u ON u.id=wt.responsible_user_id
              WHERE wt.deleted_at IS NULL AND wt.status IN (" . $marks . ")
