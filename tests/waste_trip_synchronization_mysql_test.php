@@ -101,6 +101,11 @@ try {
     check($trip['planned_start_date_from']==='2026-09-01'&&$trip['planned_start_date_to']===null,'Open range');
     check((int)$pdo->query("SELECT membership_id FROM users WHERE id={$trip['responsible_user_id']}")->fetchColumn()===10,'Central membership projection, not legacy numeric ID');
     check((int)$pdo->query('SELECT COUNT(*) FROM waste_trip_requests')->fetchColumn()===3,'Duplicate membership retained');
+    $pdo->exec("UPDATE fixture_flights SET status='completed' WHERE id=226");
+    $withoutDates=$run();check($withoutDates['failed']===0,'Legacy completed status synchronizes even when factual dates are absent: '.json_encode($withoutDates,JSON_UNESCAPED_UNICODE));
+    check((string)$pdo->query("SELECT status FROM waste_trips WHERE id=$id")->fetchColumn()==='completed','Source status remains authoritative without factual dates');
+    $pdo->exec("UPDATE fixture_flights SET status='planned_route' WHERE id=226");
+    check($run()['failed']===0,'Legacy status reversal synchronizes');
     $registeredLink=(int)$pdo->query("SELECT id FROM waste_trip_requests WHERE waste_trip_id=$id")->fetchColumn();
     $pdo->prepare("INSERT INTO waste_trip_registration_journal(waste_trip_id,waste_trip_request_id,event_kind,action_text,actor_login) VALUES(?,?,'initial','Fixture registration','owner')")
         ->execute([$id,$registeredLink]);
@@ -109,9 +114,13 @@ try {
     check((int)$pdo->query("SELECT id FROM waste_trip_requests WHERE waste_trip_id=$id")->fetchColumn()===$registeredLink,'Registration journal keeps its request link identity');
     $pdo->exec("INSERT INTO feo_requests(zayavka_id,mass_netto,gruzopoluchatel) VALUES('700003','1.0000','Unknown'); UPDATE fixture_flights SET zayavki_ids='700003' WHERE id=226");
     $registeredRemoval=$run();
-    check($registeredRemoval['failed']===1 && str_contains(implode(' ', $registeredRemoval['errors']),'Нельзя убрать заявку из рейса: по ней уже есть записи в журнале регистрации. Код ошибки: WT-'),'Protected registration failure explains the cause alongside its code');
+    check($registeredRemoval['failed']===0,'Registered request may leave the current composition without deleting its history');
+    check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_requests WHERE id=$registeredLink AND removed_at IS NOT NULL")->fetchColumn()===1,'Registered request link is archived');
+    check((int)$pdo->query("SELECT waste_trip_request_id FROM waste_trip_registration_journal WHERE waste_trip_id=$id")->fetchColumn()===$registeredLink,'Registration journal keeps the archived link');
+    check((string)$pdo->query("SELECT request_ids FROM (SELECT GROUP_CONCAT(fr.zayavka_id) AS request_ids FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id WHERE wtr.waste_trip_id=$id AND wtr.removed_at IS NULL) current_requests")->fetchColumn()==='700003','Current composition follows the source');
     $pdo->exec("UPDATE fixture_flights SET zayavki_ids='700001' WHERE id=226");
     check($run()['failed']===0,'Restored registered request links synchronize');
+    check((int)$pdo->query("SELECT id FROM waste_trip_requests WHERE waste_trip_id=$id AND removed_at IS NULL")->fetchColumn()===$registeredLink,'Restored request reuses the registered link');
     check(count(Trips::fetchTrips($pdo,['company'=>'mg_logistic']))===1,'MG company filter');
     check(count(Trips::fetchTrips($pdo,['company'=>'planex']))===0,'Planex company filter excludes MG');
     check(count(Trips::fetchTrips($pdo,['company'=>'invalid']))===2,'Unknown company filter falls back to all trips');
@@ -221,7 +230,7 @@ try {
         $pdo->failAt=null;
         check($failed['failed']>=1,'Injected stage failure expected: '.$failure);
         check($pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()==='1.00','Stage rollback kept prior rate');
-        check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_requests WHERE waste_trip_id=$id")->fetchColumn()===1,'Stage rollback kept composition');
+        check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_requests WHERE waste_trip_id=$id AND removed_at IS NULL")->fetchColumn()===1,'Stage rollback kept composition');
     }
     $pdo->exec('UPDATE fixture_flights SET cost=1 WHERE id=226');
     // A bad source row does not silently trim composition or partially change its cost/status.

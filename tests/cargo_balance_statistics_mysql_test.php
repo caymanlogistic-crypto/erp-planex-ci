@@ -20,7 +20,7 @@ $pdo->exec("CREATE TABLE feo_placement_blocks (id INT PRIMARY KEY,block_type VAR
 CREATE TABLE feo_placement_block_requests (id INT PRIMARY KEY,block_id INT,zayavka_id VARCHAR(64),position_no INT);
 CREATE TABLE feo_placement_current (zayavka_id VARCHAR(64) PRIMARY KEY);
 CREATE TABLE waste_trips (id INT PRIMARY KEY,status VARCHAR(30),actual_start_date DATE,deleted_at DATETIME NULL);
-CREATE TABLE waste_trip_requests (id INT PRIMARY KEY,waste_trip_id INT,feo_request_id INT);
+CREATE TABLE waste_trip_requests (id INT PRIMARY KEY,waste_trip_id INT,feo_request_id INT,removed_at DATETIME NULL);
 CREATE TABLE feo_requests (id INT PRIMARY KEY,zayavka_id VARCHAR(64));");
 $yesterday = (new DateTimeImmutable('yesterday'))->format('Y-m-d');
 $today = (new DateTimeImmutable('today'))->format('Y-m-d');
@@ -36,7 +36,7 @@ foreach ([[1,'in_progress',$yesterday,null],[2,'completed',$today,null],[3,'comp
           [4,'cancelled',$today,null],[5,'searching_executor',null,null],[6,'in_progress',$today,$today.' 12:00:00']] as $row) {
     $trips->execute($row);
 }
-$pdo->exec("INSERT INTO waste_trip_requests VALUES (1,1,1),(2,2,2),(3,3,1),(4,4,3),(5,5,4),(6,6,4)");
+$pdo->exec("INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id) VALUES (1,1,1),(2,2,2),(3,3,1),(4,4,3),(5,5,4),(6,6,4)");
 if (!CargoBalanceStatisticsService::schemaReady($pdo)) throw new RuntimeException('Schema check failed');
 $daily = CargoBalanceStatisticsService::dashboard($pdo)['daily'];
 $last = end($daily);

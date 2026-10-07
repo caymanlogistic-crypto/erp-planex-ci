@@ -66,7 +66,7 @@ final class TripCompletionService
                      COUNT(DISTINCT CASE WHEN COALESCE(i.driver_signature_present,0)=0 THEN wtr.id END) missing_driver_signature_count,
                      COUNT(DISTINCT CASE WHEN COALESCE(i.sender_signature_present,0)=0 THEN wtr.id END) missing_sender_signature_count
                 FROM waste_trips wt
-                LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id
+                LEFT JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.removed_at IS NULL
                 LEFT JOIN feo_requests fr ON fr.id=wtr.feo_request_id
                 LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
                 LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
@@ -114,7 +114,7 @@ final class TripCompletionService
               FROM waste_trip_requests wtr
               JOIN feo_requests fr ON fr.id=wtr.feo_request_id
               LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
-             WHERE wtr.waste_trip_id=?
+             WHERE wtr.waste_trip_id=? AND wtr.removed_at IS NULL
              ORDER BY CAST(fr.zayavka_id AS UNSIGNED) DESC,fr.zayavka_id DESC,wtr.id DESC");
         $stmt->execute([$tripId]); $requests=$stmt->fetchAll(PDO::FETCH_ASSOC);
         $ids=array_map('intval',array_column($requests,'id')); $documents=[];
@@ -241,7 +241,7 @@ final class TripCompletionService
         $this->tenant->beginTransaction();
         try {
         $this->lockEditableTrip($tripId,$requestId);
-        $lock=$this->tenant->prepare('SELECT id FROM waste_trip_requests WHERE id=? FOR UPDATE');
+        $lock=$this->tenant->prepare('SELECT id FROM waste_trip_requests WHERE id=? AND removed_at IS NULL FOR UPDATE');
         $lock->execute([$requestId]);
         $oldStmt=$this->tenant->prepare('SELECT * FROM waste_trip_completion_items WHERE waste_trip_request_id=? FOR UPDATE');
         $oldStmt->execute([$requestId]);
@@ -288,7 +288,7 @@ final class TripCompletionService
         $this->tenant->beginTransaction();
         try {
             $identity=$this->lockEditableTrip($tripId,$requestId);
-            $lock=$this->tenant->prepare('SELECT id FROM waste_trip_requests WHERE id=? FOR UPDATE');$lock->execute([$requestId]);
+            $lock=$this->tenant->prepare('SELECT id FROM waste_trip_requests WHERE id=? AND removed_at IS NULL FOR UPDATE');$lock->execute([$requestId]);
             $stmt=$this->tenant->prepare('SELECT COUNT(*) FROM waste_trip_completion_documents WHERE waste_trip_request_id=? AND deleted_at IS NULL');$stmt->execute([$requestId]);
             $activeCount=(int)$stmt->fetchColumn();
             if ($activeCount>=2) throw new DomainException('К заявке можно добавить не более двух сканов ТН.');
@@ -467,7 +467,7 @@ final class TripCompletionService
     /** @return array{business_id:int|string,zayavka_id:string} */
     private function assertRequest(int $tripId,int $requestId): array
     {
-        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id,COALESCE(cr.review_status,'work') review_status FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id WHERE wtr.id=? AND wt.id=? AND wt.status IN ('in_progress','completed') AND wt.deleted_at IS NULL LIMIT 1");
+        $stmt=$this->tenant->prepare("SELECT wt.business_id,fr.zayavka_id,COALESCE(cr.review_status,'work') review_status FROM waste_trip_requests wtr JOIN waste_trips wt ON wt.id=wtr.waste_trip_id JOIN feo_requests fr ON fr.id=wtr.feo_request_id LEFT JOIN waste_trip_completion_reviews cr ON cr.waste_trip_id=wt.id WHERE wtr.id=? AND wtr.removed_at IS NULL AND wt.id=? AND wt.status IN ('in_progress','completed') AND wt.deleted_at IS NULL LIMIT 1");
         $stmt->execute([$requestId,$tripId]); $row=$stmt->fetch(PDO::FETCH_ASSOC);
         if (!$row) throw new DomainException('Заявка рейса не найдена.');
         if ($row['review_status']!==$this->editableReviewStatus) throw new DomainException('Изменять заявки можно только в доступном для вашей роли состоянии рейса.');
