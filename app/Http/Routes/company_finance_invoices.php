@@ -17,6 +17,8 @@ $router->get('/company/finance/invoices', [$controller, 'index'], $invoicesPage)
 $router->get('/company/finance/receivables', [$controller, 'receivables'], $invoicesPage);
 $router->get('/company/finance/payables', [$controller, 'payables'], $invoicesPage);
 $router->post('/company/finance/invoices/create', [$controller, 'createSubmit'], $invoicesPage);
+$router->post('/company/finance/invoices/import', [$controller, 'importSubmit'], $invoicesPage);
+$router->get('/company/finance/invoices/{id}/imported-file', [$controller, 'importDownload'], $invoicesPage);
 $router->get('/company/finance/invoices/{id}/modal-view', [$controller, 'modalView'], $invoicesPage);
 $router->get('/company/finance/invoices/{id}/modal-edit', [$controller, 'modalEditForm'], $invoicesPage);
 $router->post('/company/finance/invoices/{id}/modal-edit', [$controller, 'modalEditSubmit'], $invoicesPage);

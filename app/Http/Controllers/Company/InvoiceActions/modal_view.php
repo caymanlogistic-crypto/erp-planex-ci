@@ -9,6 +9,7 @@ use App\Service\FinanceObligationService;
 $invoice = null;
 $links = [];
 $settlements = [];
+$importedDocument = null;
 $error = null;
 
 try {
@@ -30,6 +31,9 @@ try {
     }
     $links = FinanceObligationService::invoiceLinks($localPdo, $invoiceId);
     $settlements = FinanceInvoiceSettlementHistoryService::forInvoice($localPdo, $invoiceId);
+    $documentStmt = $localPdo->prepare("SELECT id,original_name FROM documents WHERE entity_type='finance_invoice' AND entity_id=? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1");
+    $documentStmt->execute([$invoiceId]);
+    $importedDocument = $documentStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
     $isCancelled = ($invoice['cancelled_at'] ?? null) !== null || ($invoice['status'] ?? '') === 'cancelled';
     $canEdit = !$isCancelled;
