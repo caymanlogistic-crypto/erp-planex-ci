@@ -17,10 +17,11 @@ const html = `
   <div data-docgen-mode-section="client_package">
     <div class="field"><select name="client_id" data-docgen-client><option value="">Клиент</option><option value="1">Ромашка</option><option value="2">Вектор</option></select></div>
     <div class="field"><input type="search" list="trip-options" data-docgen-client-trip-search><input type="hidden" name="trip_id" data-docgen-client-trip><datalist id="trip-options" data-docgen-client-trip-options>
-      <option value="#144 · Ромашка · 05.09–06.09" data-trip-id="1" data-client-id="1" data-contract-date="2026-09-05" data-invoice-date="2026-09-06" data-act-date="2026-09-06"></option>
-      <option value="#145 · Ромашка · 10.10–12.10" data-trip-id="2" data-client-id="1" data-contract-date="2026-10-10" data-invoice-date="2026-10-12" data-act-date="2026-10-12"></option>
-      <option value="#146 · Вектор · 14.10–15.10" data-trip-id="3" data-client-id="2" data-contract-date="2026-10-14" data-invoice-date="2026-10-15" data-act-date="2026-10-15"></option>
+      <option value="#144 · Ромашка · 05.09–06.09" data-trip-id="1" data-client-id="1" data-contract-number="26-144" data-contract-date="2026-09-05" data-invoice-date="2026-09-06" data-act-date="2026-09-06"></option>
+      <option value="#145 · Ромашка · 10.10–12.10" data-trip-id="2" data-client-id="1" data-contract-number="26-145" data-contract-date="2026-10-10" data-invoice-date="2026-10-12" data-act-date="2026-10-12"></option>
+      <option value="#146 · Вектор · 14.10–15.10" data-trip-id="3" data-client-id="2" data-contract-number="26-146" data-contract-date="2026-10-14" data-invoice-date="2026-10-15" data-act-date="2026-10-15"></option>
     </datalist></div>
+    <div class="field"><input name="client_contract_number" type="text"></div>
     <div class="field"><input name="client_contract_date" type="date"></div>
     <div class="field"><input name="client_invoice_date" type="date"></div>
     <div class="field"><input name="client_act_date" type="date"></div>
@@ -57,6 +58,10 @@ try {
   assert.equal(await trip.inputValue(), '2');
   assert.equal(await page.locator('form').evaluate(form => new FormData(form).get('trip_id')), '2');
   assert.deepEqual(await page.locator('input[type="date"]').evaluateAll(inputs => inputs.map(i => i.value)), ['2026-10-10','2026-10-12','2026-10-12']);
+  const contractNumber = page.locator('input[name="client_contract_number"]');
+  assert.equal(await contractNumber.inputValue(), '26-145');
+  await contractNumber.fill('КЛ-2026/145');
+  assert.equal(await page.locator('form').evaluate(form => new FormData(form).get('client_contract_number')), 'КЛ-2026/145');
   await search.fill('нет');
   assert.equal(await trip.inputValue(), '');
   assert.deepEqual(await page.locator('input[type="date"]').evaluateAll(inputs => inputs.map(i => i.value)), ['', '', '']);

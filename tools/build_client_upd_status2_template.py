@@ -1,116 +1,85 @@
-"""Build the bundled paper UPD status 2 template for the client package.
-
-The layout follows the recommended FNS UPD form and filling guidance in
-letter 21.10.2013 No. MMV-20-3/96@ (nalog.gov.ru/rn77/about_fts/about_nalog/4319219/).
-Status 2 is a primary transfer document, not a VAT invoice. The DOCX is for
-printing and signatures; it is not the regulated electronic XML format.
-"""
-
+"""Insert ERP fields into the owner's UPD DOCX without rebuilding its layout."""
 import base64
 import hashlib
 import io
 import zipfile
 from pathlib import Path
-
-from docx import Document
-from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Cm, Pt
-
+from lxml import etree
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "resources" / "document-templates"
+SOURCE = OUT / "client_upd_owner_reference.docx"
 NAME = "client_upd_status2_v1.docx"
+SOURCE_SHA256 = "00eafa6e333e160f8ed7afa6049e6bf1a3a25b881d70d8e53405e0027d88867f"
+NS = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
 
-doc = Document()
-section = doc.sections[0]
-section.page_width, section.page_height = Cm(29.7), Cm(21)
-section.left_margin = section.right_margin = Cm(1.2)
-section.top_margin = section.bottom_margin = Cm(1.1)
-normal = doc.styles["Normal"]
-normal.font.name = "Times New Roman"
-normal.font.size = Pt(8)
-normal.paragraph_format.space_after = Pt(2)
+# Paragraph positions in word/document.xml of the exact supplied reference.
+FIELDS = {
+    2: "{{upd.number}}", 4: "{{upd.date}}",
+    18: "{{company.name}}", 21: "{{client.name}}",
+    25: "{{company.legal_address}}", 28: "{{client.legal_address}}",
+    34: "{{company.inn_kpp}}", 37: "{{client.inn_kpp}}",
+    41: "—", 62: "{{upd.number}} от {{upd.date}}",
+    121: "{{service.description}}", 124: "усл.", 125: "1",
+    126: "{{service.amount_ru}}", 127: "{{service.amount_ru}}",
+    131: "{{service.amount_ru}}", 144: "{{service.amount_ru_compact}}",
+    148: "{{service.amount_ru}}",
+    153: "{{company.signature_name}}", 157: "",
+    183: "Договор субаренды транспортного средства с экипажем № {{contract.number}} от {{contract.date_plain}}",
+    189: "Рейс № {{trip.business_id}}",
+    199: "{{company.director_position}}", 203: "{{company.signature_name}}",
+    227: "{{upd.day}}»", 229: "{{upd.month}}", 232: "{{upd.year_suffix}}",
+    262: "{{company.director_position}}", 266: "{{company.signature_name}}",
+}
 
+def replace_paragraph(paragraph, value):
+    texts = paragraph.xpath(".//w:t", namespaces=NS)
+    if not texts:
+        run = paragraph.find("w:r", namespaces=NS)
+        if run is None:
+            run = etree.SubElement(paragraph, "{%s}r" % NS["w"])
+        texts = [etree.SubElement(run, "{%s}t" % NS["w"])]
+    texts[0].text = value
+    for item in texts[1:]:
+        item.text = ""
 
-def para(text="", bold=False, size=8, align=None):
-    p = doc.add_paragraph()
-    if align is not None:
-        p.alignment = align
-    r = p.add_run(text)
-    r.bold = bold
-    r.font.name = "Times New Roman"
-    r.font.size = Pt(size)
-    return p
+def main():
+    source = SOURCE.read_bytes()
+    if hashlib.sha256(source).hexdigest() != SOURCE_SHA256:
+        raise SystemExit("Owner reference DOCX changed; audit field positions again")
+    output = io.BytesIO()
+    with zipfile.ZipFile(io.BytesIO(source)) as original, zipfile.ZipFile(output, "w") as rendered:
+        for member in original.infolist():
+            data = original.read(member.filename)
+            if member.filename == "word/document.xml":
+                root = etree.fromstring(data)
+                paragraphs = root.xpath("//w:body//w:p", namespaces=NS)
+                for index, value in FIELDS.items():
+                    replace_paragraph(paragraphs[index], value)
+                # The supplied total cell is narrow; fit a real amount on one line.
+                for run in paragraphs[144].xpath("./w:r", namespaces=NS):
+                    props = run.find("w:rPr", namespaces=NS)
+                    if props is None:
+                        props = etree.Element("{%s}rPr" % NS["w"])
+                        run.insert(0, props)
+                    size = props.find("w:sz", namespaces=NS)
+                    if size is None:
+                        size = etree.SubElement(props, "{%s}sz" % NS["w"])
+                    size.set("{%s}val" % NS["w"], "10")
+                service_row = root.xpath("//w:body//w:tr", namespaces=NS)[14]
+                height = service_row.xpath("./w:trPr/w:trHeight", namespaces=NS)[0]
+                height.set("{%s}val" % NS["w"], "960")
+                height.set("{%s}hRule" % NS["w"], "atLeast")
+                data = etree.tostring(root, encoding="UTF-8", xml_declaration=True, standalone=True)
+            fixed = zipfile.ZipInfo(member.filename, (1980, 1, 1, 0, 0, 0))
+            fixed.compress_type = member.compress_type
+            fixed.external_attr = member.external_attr
+            rendered.writestr(fixed, data)
+    data = output.getvalue()
+    encoded = base64.b64encode(data).decode("ascii")
+    for index, offset in enumerate(range(0, len(encoded), 60000), 1):
+        (OUT / f"{NAME}.b64.part{index:03d}").write_bytes((encoded[offset:offset + 60000] + "\n").encode("ascii"))
+    print(f"{NAME} SHA256={hashlib.sha256(data).hexdigest()} parts={(len(encoded) + 59999) // 60000}")
 
-
-def cell_text(cell, text, bold=False):
-    cell.text = ""
-    p = cell.paragraphs[0]
-    p.paragraph_format.space_after = Pt(0)
-    r = p.add_run(text)
-    r.bold = bold
-    r.font.name = "Times New Roman"
-    r.font.size = Pt(7.5)
-    cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
-
-
-para("УНИВЕРСАЛЬНЫЙ ПЕРЕДАТОЧНЫЙ ДОКУМЕНТ", True, 12, WD_ALIGN_PARAGRAPH.CENTER)
-para("Статус: 2 — передаточный документ (акт); не является счётом-фактурой", True, 9)
-para("Документ № {{upd.number}} от {{upd.date}}    Исправление № — от —")
-para("Продавец (исполнитель): {{company.name}}")
-para("Адрес: {{company.legal_address}}    ИНН: {{company.inn}}    {{company.kpp_line}}")
-para("Покупатель (заказчик): {{client.name}}")
-para("Адрес: {{client.legal_address}}    ИНН: {{client.inn}}    {{client.kpp_line}}")
-para("Грузоотправитель и грузополучатель: — (документ об оказании услуг)")
-para("Валюта: российский рубль, код 643")
-
-headers = [
-    "№ п/п", "Наименование товара, описание работ или услуг", "Ед. изм.",
-    "Кол-во", "Цена, ₽", "Стоимость без налога, ₽", "Ставка НДС / сумма налога", "Стоимость всего, ₽",
-]
-table = doc.add_table(rows=3, cols=len(headers))
-table.style = "Table Grid"
-widths = [Cm(1), Cm(10), Cm(1.6), Cm(1.6), Cm(2.7), Cm(3.4), Cm(3.4), Cm(3.4)]
-for row in table.rows:
-    for i, cell in enumerate(row.cells):
-        cell.width = widths[i]
-for i, value in enumerate(headers):
-    cell_text(table.cell(0, i), value, True)
-for i, value in enumerate([
-    "1", "{{service.description}}", "усл.", "1", "{{service.amount}}",
-    "{{service.amount}}", "Без НДС / —", "{{service.amount}}",
-]):
-    cell_text(table.cell(1, i), value)
-for i, value in enumerate(["", "Всего к передаче", "", "", "", "{{service.amount}}", "—", "{{service.amount}}"]):
-    cell_text(table.cell(2, i), value, True)
-
-para("Всего к оплате: {{service.amount_words}}. НДС не предъявляется.", True)
-para("Основание передачи (сдачи): договор субаренды транспортного средства с экипажем № {{contract.number}} от {{contract.date_plain}}")
-para("Услуги оказаны по рейсу № {{trip.business_id}}. Иные сведения: —")
-
-sign = doc.add_table(rows=2, cols=2)
-sign.style = "Table Grid"
-cell_text(sign.cell(0, 0), "Услуги оказал / передал")
-cell_text(sign.cell(0, 1), "Услуги принял / получил")
-cell_text(sign.cell(1, 0), "{{company.director_position}}  __________________  {{company.director_full_name}}\nДата передачи: {{upd.date}}\n{{company.name}}")
-cell_text(sign.cell(1, 1), "__________________  ______________________________\nДолжность / подпись / расшифровка\nДата получения: «____» ______________ 20____ г.\n{{client.name}}")
-para("Экземпляр для подписания сторонами. Дата приёмки и подпись получателя заполняются при фактическом принятии услуг.", size=7)
-
-tmp = OUT / NAME
-doc.save(tmp)
-source = tmp.read_bytes()
-buffer = io.BytesIO()
-with zipfile.ZipFile(io.BytesIO(source)) as original, zipfile.ZipFile(buffer, "w") as stable:
-    for member in original.infolist():
-        fixed = zipfile.ZipInfo(member.filename, (1980, 1, 1, 0, 0, 0))
-        fixed.compress_type = member.compress_type
-        fixed.external_attr = member.external_attr
-        stable.writestr(fixed, original.read(member.filename))
-data = buffer.getvalue()
-tmp.write_bytes(data)
-digest = hashlib.sha256(data).hexdigest()
-encoded = base64.b64encode(data).decode("ascii")
-for index, offset in enumerate(range(0, len(encoded), 60000), 1):
-    (OUT / f"{NAME}.b64.part{index:03d}").write_text(encoded[offset:offset + 60000] + "\n", encoding="ascii")
-print(f"{NAME} SHA256={digest} parts={(len(encoded) + 59999) // 60000}")
+if __name__ == "__main__":
+    main()
