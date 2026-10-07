@@ -47,6 +47,20 @@ final class FinanceInvoiceController
         require base_path('app/Http/Controllers/Company/InvoiceActions/create_submit.php');
     }
 
+    public function importSubmit(): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+        require base_path('app/Http/Controllers/Company/InvoiceActions/import_submit.php');
+    }
+
+    public function importDownload(string $id): void
+    {
+        $config = $this->config;
+        $db = $this->db;
+        require base_path('app/Http/Controllers/Company/InvoiceActions/import_download.php');
+    }
+
     public function modalView(string $id): void
     {
         $config = $this->config;

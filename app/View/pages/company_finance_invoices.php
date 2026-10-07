@@ -39,6 +39,8 @@ $centsToMoney = static function (int $cents): string {
 };
 $successFlash = $_SESSION['invoice_success'] ?? null;
 unset($_SESSION['invoice_success']);
+$errorFlash = $_SESSION['invoice_error'] ?? null;
+unset($_SESSION['invoice_error']);
 $currentDirection = $_GET['direction'] ?? '';
 $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTION_OUTGOING, FinanceInvoiceService::DIRECTION_INCOMING], true) ? $currentDirection : '';
 ?>
@@ -82,11 +84,13 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
     <div class="page-head-actions">
         <a class="btn btn-secondary" href="<?= e(app_url('/company/finance/receivables')) ?>">Дебиторка</a>
         <a class="btn btn-secondary" href="<?= e(app_url('/company/finance/payables')) ?>">Кредиторка</a>
+        <button type="button" class="btn btn-secondary" data-open-modal="invoice-import-modal">Загрузить счёт</button>
         <button type="button" class="btn btn-primary" data-open-modal="invoice-create-modal">Создать счёт</button>
     </div>
 </div>
 
 <?php if ($successFlash): ?><div class="notice success"><?= e($successFlash) ?></div><?php endif; ?>
+<?php if ($errorFlash): ?><div class="notice warn"><?= e($errorFlash) ?></div><?php endif; ?>
 <?php if (!empty($formError)): ?><div class="notice warn"><?= e($formError) ?></div><?php endif; ?>
 
 <?php if (empty($invoices)): ?>
@@ -281,6 +285,20 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
     </div>
 </div>
 
+<div id="invoice-import-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="invoice-import-title" data-close-on-overlay="1" data-close-on-escape="1">
+    <div class="modal modal-md">
+        <div class="modal-head"><span class="modal-title" id="invoice-import-title">Загрузить счёт</span><button type="button" class="modal-close" data-close-modal="invoice-import-modal" aria-label="Закрыть">&times;</button></div>
+        <form method="post" action="<?= e(app_url('/company/finance/invoices/import')) ?>" enctype="multipart/form-data">
+            <?= csrfField() ?>
+            <div class="modal-body">
+                <div class="field"><label class="field-label" for="invoice-import-file">Счёт из генератора документов ERP, DOCX</label><input class="field-input" id="invoice-import-file" type="file" name="invoice_file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required></div>
+                <div class="form-hint mt-half">Система проверит реквизиты, найдёт клиента по ИНН и добавит счёт в реестр. Если платёжное обязательство нельзя определить однозначно, его можно привязать после загрузки.</div>
+            </div>
+            <div class="modal-foot is-spaced"><button type="button" class="btn btn-ghost" data-close-modal="invoice-import-modal">Отмена</button><button type="submit" class="btn btn-primary">Загрузить</button></div>
+        </form>
+    </div>
+</div>
+
 <div id="invoice-view-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
     <div class="modal modal-lg">
         <div class="modal-head"><span class="modal-title">Счёт</span><button type="button" class="modal-close" data-close-modal="invoice-view-modal">&times;</button></div>
@@ -358,6 +376,8 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     var createBtn = document.querySelector('[data-open-modal="invoice-create-modal"]');
     if (createBtn) createBtn.addEventListener('click', function() { window.openModal('invoice-create-modal'); });
+    var importBtn = document.querySelector('[data-open-modal="invoice-import-modal"]');
+    if (importBtn) importBtn.addEventListener('click', function() { window.openModal('invoice-import-modal'); });
 });
 </script>
 <?php endif; ?>
