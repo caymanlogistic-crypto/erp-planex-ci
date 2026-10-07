@@ -236,6 +236,7 @@ $eq(App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$updIds['client
 $customContract=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$customIds['client_upd_contract']);$eq($customContract['document_number'],'КЛ-2026/144','contract document stores custom number');
 $customUpd=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$customIds['client_upd_status2']);$eq($customUpd['document_number'],date('y').'-144','UPD stores package number');
 $customUpdPath=App\Service\DocumentService::resolveStoredPath($cid,(string)$customUpd['stored_path']);$customZip=new ZipArchive();$customZip->open($customUpdPath);$customText=App\Service\DocumentTemplateService::visibleText((string)$customZip->getFromName('word/document.xml'));$customZip->close();$has($customText,'№ КЛ-2026/144','UPD basis uses custom contract number');
+$updPath=$customUpdPath;
 $frozen=(string)$packageRows['client_invoice']['snapshot_json'];$pdo->exec("UPDATE clients SET name='ИЗМЕНЁННЫЙ КЛИЕНТ' WHERE id=1");$oldPackage=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$packageIds['client_invoice']);$eq((string)$oldPackage['snapshot_json'],$frozen,'client package immutable snapshot');
 echo "DOCUMENT_GENERATOR_TRIP_SOURCE=PASS\nDOCUMENT_GENERATOR_CLIENT_PACKAGE=PASS\nDOCUMENT_GENERATOR_CLIENT_PACKAGE_DOCX=PASS\nDOCUMENT_GENERATOR_CLIENT_PACKAGE_IMMUTABLE=PASS\nDOCUMENT_GENERATOR_CLIENT_PACKAGE_OVERWRITE=PASS\n";
 
