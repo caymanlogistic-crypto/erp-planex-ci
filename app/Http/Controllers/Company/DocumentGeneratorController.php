@@ -42,7 +42,7 @@ final class DocumentGeneratorController
             $this->requireSchema($localPdo);
             DocumentGeneratorService::seedDefaultTemplates($localPdo, $companyId, 0, 'system');
             $mode = $this->generatorMode($_POST);
-            if ($mode === 'client_package') {
+            if ($this->isClientPackageMode($mode)) {
                 $prepared = DocumentGeneratorService::prepareClientPackage(
                     $localPdo,
                     $company,
@@ -53,7 +53,9 @@ final class DocumentGeneratorController
                     (int)($_POST['trip_id'] ?? 0),
                     (string)($_POST['client_contract_date'] ?? ''),
                     (string)($_POST['client_invoice_date'] ?? ''),
-                    (string)($_POST['client_act_date'] ?? '')
+                    (string)($_POST['client_act_date'] ?? ''),
+                    null,
+                    $mode === 'client_package_upd' ? 'upd' : 'act'
                 );
                 if (!($prepared['ok'] ?? false)) {
                     $this->renderGenerator(true, 'Формирование комплекта заблокировано: исправьте ошибки проверки.');
@@ -62,9 +64,10 @@ final class DocumentGeneratorController
                 $overwriteExisting = (string)($_POST['overwrite_existing'] ?? '') === '1';
                 $didOverwrite = $overwriteExisting && ($prepared['package_exists'] ?? false);
                 $ids = DocumentGeneratorService::generateClientPackage($localPdo, $companyId, $userId, $role, $prepared, $overwriteExisting);
+                $lastName = $mode === 'client_package_upd' ? 'УПД' : 'акт';
                 $_SESSION['document_generator_flash'] = $didOverwrite
-                    ? 'Комплект клиенту перезаписан: договор, счёт и акт обновлены в истории.'
-                    : 'Комплект клиенту сформирован: договор, счёт и акт сохранены в истории.';
+                    ? 'Комплект клиенту перезаписан: договор, счёт и ' . $lastName . ' обновлены в истории.'
+                    : 'Комплект клиенту сформирован: договор, счёт и ' . $lastName . ' сохранены в истории.';
                 redirect_to('/company/document-generator/history?created_package=' . implode(',', array_map('intval', array_values($ids))));
             }
 
@@ -280,9 +283,10 @@ final class DocumentGeneratorController
                     $snapshot = json_decode((string)($generated['snapshot_json'] ?? ''), true);
                     $snapshot = is_array($snapshot) ? $snapshot : [];
                     $docType = (string)($generated['document_type'] ?? '');
-                    $packageType = in_array($docType, ['client_sublease_crew','client_invoice','client_act'], true);
+                    $updPackageType = in_array($docType, ['client_upd_contract','client_upd_invoice','client_upd_status2'], true);
+                    $packageType = $updPackageType || in_array($docType, ['client_sublease_crew','client_invoice','client_act'], true);
                     $old = $this->formState([
-                        'generator_mode' => $packageType ? 'client_package' : 'carrier',
+                        'generator_mode' => $packageType ? ($updPackageType ? 'client_package_upd' : 'client_package') : 'carrier',
                         'template_id' => $seed['template_id'] ?? 0,
                         'trip_id' => (int)($snapshot['trip']['id'] ?? 0),
                         'client_id' => (int)($snapshot['client']['id'] ?? 0),
@@ -297,7 +301,7 @@ final class DocumentGeneratorController
             if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 if (trim((string)$old['contract_date']) === '') $old['contract_date'] = date('Y-m-d');
                 if (trim((string)$old['waybill_date']) === '') $old['waybill_date'] = date('Y-m-d');
-                if ($old['generator_mode'] === 'client_package') {
+                if ($this->isClientPackageMode($old['generator_mode'])) {
                     foreach ($trips as $trip) {
                         if ((int)$trip['id'] !== (int)$old['trip_id']) continue;
                         foreach ((array)($trip['_package_dates'] ?? []) as $key => $value) {
@@ -309,7 +313,7 @@ final class DocumentGeneratorController
                 }
             }
             if ($doPreview) {
-                if ($old['generator_mode'] === 'client_package') {
+                if ($this->isClientPackageMode($old['generator_mode'])) {
                     $preview = DocumentGeneratorService::prepareClientPackage(
                         $localPdo,
                         $company,
@@ -320,7 +324,9 @@ final class DocumentGeneratorController
                         (int)$old['trip_id'],
                         (string)$old['client_contract_date'],
                         (string)$old['client_invoice_date'],
-                        (string)$old['client_act_date']
+                        (string)$old['client_act_date'],
+                        null,
+                        $old['generator_mode'] === 'client_package_upd' ? 'upd' : 'act'
                     );
                 } else {
                     $preview = DocumentGeneratorService::prepareFromTrip(
@@ -440,7 +446,13 @@ final class DocumentGeneratorController
 
     private function generatorMode(array $source): string
     {
-        return (string)($source['generator_mode'] ?? '') === 'client_package' ? 'client_package' : 'carrier';
+        $mode = (string)($source['generator_mode'] ?? '');
+        return $this->isClientPackageMode($mode) ? $mode : 'carrier';
+    }
+
+    private function isClientPackageMode(string $mode): bool
+    {
+        return in_array($mode, ['client_package','client_package_upd'], true);
     }
 
     private function sendDocx(string $path, string $name): never

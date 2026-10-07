@@ -44,6 +44,9 @@ trait DocumentGeneratorTemplateTrait
                 'client_sublease_crew' => ['Договор субаренды транспортного средства с экипажем', 'client_sublease_contract_v1.docx'],
                 'client_invoice' => ['Счёт клиенту', 'client_invoice_v1.docx'],
                 'client_act' => ['Акт клиенту', 'client_act_v1.docx'],
+                'client_upd_contract' => ['Договор клиенту для комплекта с УПД', 'client_sublease_contract_v1.docx'],
+                'client_upd_invoice' => ['Счёт клиенту для комплекта с УПД', 'client_invoice_v1.docx'],
+                'client_upd_status2' => ['УПД клиенту, статус 2', 'client_upd_status2_v1.docx'],
             ];
             foreach ($defaults as $type => [$name, $filename]) {
                 $stmt = $pdo->prepare('SELECT id FROM document_templates WHERE document_type=? ORDER BY id LIMIT 1');
@@ -90,6 +93,7 @@ trait DocumentGeneratorTemplateTrait
             'client_sublease_contract_v1.docx' => '01ebdc8bb56beb11b20abc787bd6067c7ae3379274e1143cf3e4cf1258f7230c',
             'client_invoice_v1.docx' => '10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
             'client_act_v1.docx' => '246b3394254d58a22d6ea492f9db56b2efcabef56d43de495766c2c902c6a1f9',
+            'client_upd_status2_v1.docx' => 'ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312',
         ];
         if (!isset($expected[$filename])) {
             throw new RuntimeException('Неизвестный встроенный DOCX-шаблон: ' . $filename);
@@ -216,7 +220,7 @@ trait DocumentGeneratorTemplateTrait
         $validation = DocumentTemplateService::validateDocxFile($sourcePath);
         if (!($validation['ok'] ?? false)) throw new RuntimeException(implode(' ', $validation['errors'] ?? ['Некорректный DOCX.']));
         $repeatRows = (int)($validation['repeat_rows'] ?? 0);
-        $expectedRepeatRows = in_array($documentType, ['client_invoice','client_act'], true) ? 0 : 1;
+        $expectedRepeatRows = in_array($documentType, ['client_invoice','client_act','client_upd_invoice','client_upd_status2'], true) ? 0 : 1;
         if ($repeatRows !== $expectedRepeatRows) {
             $message = $expectedRepeatRows === 1
                 ? 'Для выбранного типа документа шаблон должен содержать одну repeat-строку {{request.*}}.'

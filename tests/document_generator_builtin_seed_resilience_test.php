@@ -62,19 +62,19 @@ try{
 
     $reset();
     App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
-    $eq(count($rows()),5,'A all built-ins seeded');$eq(count($warnings()),0,'A warnings');
+    $eq(count($rows()),8,'A all built-ins seeded');$eq(count($warnings()),0,'A warnings');$renderSaved('client_upd_status2');
     echo "SEED_CASE_A=PASS\n";
 
     $reset();
     $userTemplate('vehicle_lease_crew','Пользовательский договор','contract_vehicle_lease_crew_v1.docx');
     $s=$stash('waybill_driver_assignment_v1.docx');
-    try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),4,'B all except missing waybill visible');$eq(count($warnings()),1,'B warning');$renderSaved('vehicle_lease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{$restore($s);}
+    try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),7,'B all except missing waybill visible');$eq(count($warnings()),1,'B warning');$renderSaved('vehicle_lease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{$restore($s);}
     echo "SEED_CASE_B=PASS\n";
 
     $reset();
     $userTemplate('waybill_driver_assignment','Пользовательский waybill','waybill_driver_assignment_v1.docx');
     $s=$stash('contract_vehicle_lease_crew_v3.docx');
-    try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),4,'C all except missing carrier contract visible');$eq(count($warnings()),1,'C warning');$renderSaved('waybill_driver_assignment');$renderSaved('client_sublease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{$restore($s);}
+    try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),7,'C all except missing carrier contract visible');$eq(count($warnings()),1,'C warning');$renderSaved('waybill_driver_assignment');$renderSaved('client_sublease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{$restore($s);}
     echo "SEED_CASE_C=PASS\n";
 
     $reset();
@@ -82,7 +82,7 @@ try{
     $s=$stash('waybill_driver_assignment_v1.docx');
     $fake=$root.'/resources/document-templates/waybill_driver_assignment_v1.docx.b64.part001';
     file_put_contents($fake,base64_encode('bad sha'));
-    try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),4,'D all except corrupt waybill visible');$eq(count($warnings()),1,'D warning');$ok(str_contains((string)$warnings()[0]['message'],'SHA-256 mismatch'),'D SHA fail closed');$renderSaved('vehicle_lease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{@unlink($fake);$restore($s);}
+    try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),7,'D all except corrupt waybill visible');$eq(count($warnings()),1,'D warning');$ok(str_contains((string)$warnings()[0]['message'],'SHA-256 mismatch'),'D SHA fail closed');$renderSaved('vehicle_lease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{@unlink($fake);$restore($s);}
     echo "SEED_CASE_D=PASS\n";
 
     $reset();
@@ -100,8 +100,8 @@ try{
 
     $reset();
     $s=$stash('client_act_v1.docx');
-    try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq((int)$pdo->query("SELECT COUNT(*) FROM document_templates WHERE document_type='client_act'")->fetchColumn(),0,'G missing client act');$eq(count($rows()),4,'G other built-ins survive');$eq(count($warnings()),1,'G warning while missing client act');}finally{$restore($s);}
+    try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq((int)$pdo->query("SELECT COUNT(*) FROM document_templates WHERE document_type='client_act'")->fetchColumn(),0,'G missing client act');$eq(count($rows()),7,'G other built-ins survive');$eq(count($warnings()),1,'G warning while missing client act');}finally{$restore($s);}
     App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
-    $eq((int)$pdo->query("SELECT COUNT(*) FROM document_templates WHERE document_type='client_act'")->fetchColumn(),1,'G client act recovered');$eq(count($rows()),5,'G all built-ins recovered');$eq(count($warnings()),0,'G warnings cleared');$renderSaved('client_act');
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM document_templates WHERE document_type='client_act'")->fetchColumn(),1,'G client act recovered');$eq(count($rows()),8,'G all built-ins recovered');$eq(count($warnings()),0,'G warnings cleared');$renderSaved('client_act');
     echo "SEED_CASE_G=PASS\nDOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS\n";
 }finally{$rm($store);try{if($ownsDatabase)$admin->exec("DROP DATABASE IF EXISTS $qd");elseif(isset($pdo))cleanCompanyPoolDatabase($pdo);}catch(Throwable){}}

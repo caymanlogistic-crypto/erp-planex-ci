@@ -7,6 +7,8 @@ foreach ($templates as $template) {
     }
 }
 $mode=(string)($old['generator_mode'] ?? 'carrier');
+$isClientPackage=in_array($mode,['client_package','client_package_upd'],true);
+$isUpdPackage=$mode==='client_package_upd';
 $showContract=$selectedDocumentType==='vehicle_lease_crew';
 $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 ?>
@@ -28,7 +30,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 <div class="notice warn">Компания недоступна.</div>
 <?php elseif ($trips === []): ?>
 <div class="notice warn">Нет доступных рейсов, по которым можно сформировать документы.</div>
-<?php elseif ($templates === [] && $mode !== 'client_package'): ?>
+<?php elseif ($templates === [] && !$isClientPackage): ?>
 <div class="notice warn">Нет активных шаблонов документов перевозчику.</div>
 <?php else: ?>
 <form id="document-generator-form" method="post" action="<?= app_url('/company/document-generator/preview') ?>" data-docgen-form novalidate>
@@ -41,6 +43,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
       <select id="docgen-mode" name="generator_mode" class="field-select" data-docgen-mode>
         <option value="carrier" <?= $mode==='carrier'?'selected':'' ?>>Перевозчика</option>
         <?php if ($canGenerateClientPackage): ?><option value="client_package" <?= $mode==='client_package'?'selected':'' ?>>Клиента — договор + счёт + акт</option><?php endif; ?>
+        <?php if ($canGenerateClientPackage): ?><option value="client_package_upd" <?= $isUpdPackage?'selected':'' ?>>Клиента — договор + счёт + УПД (статус 2)</option><?php endif; ?>
       </select>
       <div class="text-muted docgen-mode-note">Данные исполнителя и заявки ФЭО берутся из выбранного рейса и вручную не вводятся.</div>
     </div>
@@ -93,7 +96,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 </div>
 
 <?php if ($canGenerateClientPackage): ?>
-<div data-docgen-mode-section="client_package" class="<?= $mode==='client_package'?'':'is-hidden' ?>">
+<div data-docgen-mode-section="client_package" class="<?= $isClientPackage?'':'is-hidden' ?>">
   <div class="panel mb-3">
     <div class="panel-head"><h3 class="panel-head-title">Комплект документов клиенту</h3></div>
     <div class="panel-body">
@@ -117,10 +120,10 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
         </div>
         <div class="field"><label class="field-label" for="docgen-client-contract-date">Дата договора</label><input id="docgen-client-contract-date" type="date" name="client_contract_date" value="<?= e($old['client_contract_date']) ?>" class="field-input"></div>
         <div class="field"><label class="field-label" for="docgen-client-invoice-date">Дата счёта</label><input id="docgen-client-invoice-date" type="date" name="client_invoice_date" value="<?= e($old['client_invoice_date']) ?>" class="field-input"></div>
-        <div class="field"><label class="field-label" for="docgen-client-act-date">Дата акта</label><input id="docgen-client-act-date" type="date" name="client_act_date" value="<?= e($old['client_act_date']) ?>" class="field-input"></div>
+        <div class="field"><label class="field-label" for="docgen-client-act-date">Дата <span data-docgen-transfer-label><?= $isUpdPackage?'УПД':'акта' ?></span></label><input id="docgen-client-act-date" type="date" name="client_act_date" value="<?= e($old['client_act_date']) ?>" class="field-input"></div>
       </div>
       <div class="text-muted mt-2">Даты подставляются по рейсу и подтверждённому производственному календарю. Если дата не определилась, укажите её вручную.</div>
-      <div class="notice info mt-3">Одной операцией будут сформированы три отдельных DOCX: <strong>Договор субаренды транспортного средства с экипажем</strong>, <strong>Счёт</strong> и <strong>Акт</strong>. Номер комплекта формируется как <strong>ГГ-ID рейса</strong>, например № 26-144.</div>
+      <div class="notice info mt-3">Одной операцией будут сформированы три отдельных DOCX: <strong>Договор субаренды транспортного средства с экипажем</strong>, <strong>Счёт</strong> и <strong data-docgen-transfer-name><?= $isUpdPackage?'УПД (статус 2)':'Акт' ?></strong>. Номер комплекта формируется как <strong>ГГ-ID рейса</strong>, например № 26-144. УПД со статусом 2 подтверждает передачу услуг и не является счётом-фактурой.</div>
     </div>
   </div>
 </div>
@@ -131,7 +134,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
 </form>
 
 <?php if (is_array($preview)): ?>
-<?php $packagePreview=$old['generator_mode']==='client_package'; ?>
+<?php $packagePreview=$isClientPackage; ?>
 <div class="modal-overlay" id="document-generator-preview-modal" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1">
  <div class="modal modal-lg docgen-preview-modal">
   <div class="modal-head"><span class="modal-title"><?= $packagePreview?'Проверка комплекта клиенту':'Проверка документа' ?></span><button type="button" class="modal-close" onclick="closeModal('document-generator-preview-modal')">✕</button></div>
@@ -141,13 +144,13 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
     <?php if (!empty($preview['warnings'])): ?><div class="notice warn mb-3"><strong>Внешний источник данных:</strong><ul class="docgen-error-list mt-2"><?php foreach ($preview['warnings'] as $warning): ?><li><?= e((string)$warning) ?></li><?php endforeach; ?></ul></div><?php endif; ?>
     <div class="kv">
       <?php if ($packagePreview): ?>
-        <div class="kv-row"><span class="kv-key">Комплект</span><span class="kv-value">Договор + Счёт + Акт</span></div>
+        <div class="kv-row"><span class="kv-key">Комплект</span><span class="kv-value">Договор + Счёт + <?= $isUpdPackage?'УПД (статус 2)':'Акт' ?></span></div>
         <div class="kv-row"><span class="kv-key">Номер</span><span class="kv-value">№ <?= e((string)($preview['package_number'] ?? '—')) ?></span></div>
         <div class="kv-row"><span class="kv-key">Клиент</span><span class="kv-value"><?= e((string)($preview['client']['name'] ?? '—')) ?></span></div>
         <div class="kv-row"><span class="kv-key">Рейс</span><span class="kv-value">#<?= (int)($preview['trip']['business_id'] ?? 0) ?></span></div>
-        <div class="kv-row"><span class="kv-key">Даты документов</span><span class="kv-value">Договор <?= e((string)($preview['package_dates']['client_sublease_crew'] ?? '')) ?> · Счёт <?= e((string)($preview['package_dates']['client_invoice'] ?? '')) ?> · Акт <?= e((string)($preview['package_dates']['client_act'] ?? '')) ?></span></div>
+        <div class="kv-row"><span class="kv-key">Даты документов</span><span class="kv-value">Договор <?= e((string)($preview['package_dates'][$isUpdPackage?'client_upd_contract':'client_sublease_crew'] ?? '')) ?> · Счёт <?= e((string)($preview['package_dates'][$isUpdPackage?'client_upd_invoice':'client_invoice'] ?? '')) ?> · <?= $isUpdPackage?'УПД':'Акт' ?> <?= e((string)($preview['package_dates'][$isUpdPackage?'client_upd_status2':'client_act'] ?? '')) ?></span></div>
         <div class="kv-row"><span class="kv-key">Сумма</span><span class="kv-value"><?= e((string)($preview['package_amount_formatted'] ?? '0')) ?> ₽ · Без НДС</span></div>
-        <?php if ($preview['package_exists'] ?? false): ?><div class="notice warn mt-3"><strong>Комплект № <?= e((string)($preview['package_number'] ?? '')) ?> уже был создан.</strong><br>При подтверждении договор, счёт и акт будут сформированы заново и заменят прежний комплект.</div><?php endif; ?>
+        <?php if ($preview['package_exists'] ?? false): ?><div class="notice warn mt-3"><strong>Комплект № <?= e((string)($preview['package_number'] ?? '')) ?> уже был создан.</strong><br>При подтверждении договор, счёт и <?= $isUpdPackage?'УПД':'акт' ?> будут сформированы заново и заменят прежний комплект этого вида.</div><?php endif; ?>
       <?php else: ?>
         <div class="kv-row"><span class="kv-key">Шаблон</span><span class="kv-value"><?= e((string)($preview['template']['template_name'] ?? '')) ?> · v<?= (int)($preview['template']['version_no'] ?? 0) ?></span></div>
         <div class="kv-row"><span class="kv-key">Рейс</span><span class="kv-value">#<?= (int)($preview['snapshot']['trip']['business_id'] ?? 0) ?></span></div>
@@ -176,15 +179,15 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
  const clear=()=>{form.querySelectorAll('.field.is-error').forEach(n=>n.classList.remove('is-error'));form.querySelectorAll('[aria-invalid=true]').forEach(n=>n.removeAttribute('aria-invalid'));};
  const mark=(n)=>{const c=control(n),f=field(n);if(f)f.classList.add('is-error');if(c)c.setAttribute('aria-invalid','true');};
  const currentType=()=>template?.options[template.selectedIndex]?.dataset.documentType||'';
- const syncMode=()=>{const m=mode.value;form.querySelectorAll('[data-docgen-mode-section]').forEach(s=>{const active=s.dataset.docgenModeSection===m;s.classList.toggle('is-hidden',!active);s.querySelectorAll('input,select,textarea').forEach(n=>n.disabled=!active);});syncType();filterTrips();};
+ const syncMode=()=>{const m=mode.value,clientMode=m==='client_package'||m==='client_package_upd';form.querySelectorAll('[data-docgen-mode-section]').forEach(s=>{const active=s.dataset.docgenModeSection===(clientMode?'client_package':m);s.classList.toggle('is-hidden',!active);s.querySelectorAll('input,select,textarea').forEach(n=>n.disabled=!active);});form.querySelectorAll('[data-docgen-transfer-label]').forEach(n=>n.textContent=m==='client_package_upd'?'УПД':'акта');form.querySelectorAll('[data-docgen-transfer-name]').forEach(n=>n.textContent=m==='client_package_upd'?'УПД (статус 2)':'Акт');syncType();filterTrips();};
  const syncType=()=>{if(mode.value!=='carrier')return;const t=currentType();form.querySelectorAll('[data-docgen-section]').forEach(s=>{const active=s.dataset.docgenSection===t;s.classList.toggle('is-hidden',!active);s.querySelectorAll('input,select,textarea').forEach(n=>n.disabled=!active);});};
  const filterTrips=()=>{if(!client||!clientTrip)return;const cid=String(client.value||'');Array.from(clientTrip.options).forEach((o,i)=>{if(i===0)return;o.hidden=cid!==''&&o.dataset.clientId!==cid;});const selected=clientTrip.options[clientTrip.selectedIndex];if(selected&&selected.hidden)clientTrip.value='';};
  const fillPackageDates=()=>{const option=clientTrip?.options[clientTrip.selectedIndex];for(const [name,key] of [['client_contract_date','contractDate'],['client_invoice_date','invoiceDate'],['client_act_date','actDate']]){const input=control(name);if(input)input.value=option?.dataset[key]||'';}};
- const errors=()=>{clear();const out=[],add=(n,m)=>{if(!String(control(n)?.value||'').trim()){out.push(m);mark(n);}};if(mode.value==='client_package'){add('client_id','Не выбран клиент.');add('trip_id','Не выбран рейс.');add('client_contract_date','Не указана дата договора.');add('client_invoice_date','Не указана дата счёта.');add('client_act_date','Не указана дата акта.');}else{add('template_id','Не выбран шаблон.');add('trip_id','Не выбран рейс.');if(currentType()==='vehicle_lease_crew'){add('contract_date','Не указана дата договора.');add('start_date','Не указана дата начала.');add('finish_date','Не указана дата завершения.');add('price','Не указана стоимость.');add('vat_mode','Не указан режим НДС.');}else if(currentType()==='waybill_driver_assignment'){add('waybill_number','Не указан номер путевого листа.');add('waybill_date','Не указана дата путевого листа.');}}return out;};
+ const errors=()=>{clear();const out=[],add=(n,m)=>{if(!String(control(n)?.value||'').trim()){out.push(m);mark(n);}};if(mode.value==='client_package'||mode.value==='client_package_upd'){add('client_id','Не выбран клиент.');add('trip_id','Не выбран рейс.');add('client_contract_date','Не указана дата договора.');add('client_invoice_date','Не указана дата счёта.');add('client_act_date',mode.value==='client_package_upd'?'Не указана дата УПД.':'Не указана дата акта.');}else{add('template_id','Не выбран шаблон.');add('trip_id','Не выбран рейс.');if(currentType()==='vehicle_lease_crew'){add('contract_date','Не указана дата договора.');add('start_date','Не указана дата начала.');add('finish_date','Не указана дата завершения.');add('price','Не указана стоимость.');add('vat_mode','Не указан режим НДС.');}else if(currentType()==='waybill_driver_assignment'){add('waybill_number','Не указан номер путевого листа.');add('waybill_date','Не указана дата путевого листа.');}}return out;};
  const notice=(msgs,title='Проверка не пройдена')=>{const n=document.createElement('div');n.className='notice danger';const b=document.createElement('strong');b.textContent=title;n.appendChild(b);if(msgs.length){const ul=document.createElement('ul');ul.className='docgen-error-list mt-2';msgs.forEach(x=>{const li=document.createElement('li');li.textContent=x;ul.appendChild(li)});n.appendChild(ul)}result.replaceChildren(n);result.dataset.docgenState='error';result.scrollIntoView({behavior:'smooth',block:'nearest'});};
  const setBusy=(v)=>{checking=v;check.disabled=v;check.setAttribute('aria-busy',v?'true':'false');check.textContent=v?'Проверяем…':'Проверить';if(v)result.dataset.docgenState='checking';};
  const run=async()=>{if(checking)return;const e=errors();if(e.length){notice(e);return}setBusy(true);try{const r=await fetch(check.formAction||form.action,{method:'POST',body:new FormData(form),credentials:'same-origin',headers:{'X-Requested-With':'XMLHttpRequest'}});if(!r.ok)throw new Error('HTTP '+r.status);const doc=new DOMParser().parseFromString(await r.text(),'text/html'),modal=doc.querySelector('#document-generator-preview-modal');if(!modal)throw new Error('preview missing');const serverErrors=Array.from(modal.querySelectorAll('.docgen-error-list li')).map(x=>x.textContent.trim()).filter(Boolean);if(serverErrors.length||modal.querySelector('.notice.danger')){notice(serverErrors.length?serverErrors:['Документ пока нельзя сформировать.']);return}const body=modal.querySelector('.modal-body'),generate=modal.querySelector('[data-docgen-generate]');if(!body||!generate)throw new Error('preview incomplete');const panel=document.createElement('div');panel.className='panel';panel.innerHTML='<div class="panel-head"><h3 class="panel-head-title">Результат проверки</h3></div>';const pb=document.createElement('div');pb.className='panel-body';Array.from(body.childNodes).forEach(n=>pb.appendChild(n.cloneNode(true)));const a=document.createElement('div');a.className='form-actions';a.appendChild(generate.cloneNode(true));pb.appendChild(a);panel.appendChild(pb);result.replaceChildren(panel);result.dataset.docgenState='success';result.scrollIntoView({behavior:'smooth',block:'nearest'});}catch(err){console.error('Document generator preview failed',err);notice([],'Не удалось выполнить проверку');}finally{setBusy(false)}};
- const resetResult=()=>{if(result.childNodes.length)result.replaceChildren();result.dataset.docgenState='';};form.addEventListener('submit',e=>{if(e.submitter?.matches('[data-docgen-overwrite]')){const message=e.submitter.dataset.docgenOverwriteKind==='contract'?'Договор уже был создан. Перезаписать договор?':'Комплект уже был создан. Перезаписать договор, счёт и акт?';if(!confirm(message)){e.preventDefault();return}}if(!e.submitter?.matches('[data-docgen-check]'))return;e.preventDefault();run();});form.addEventListener('input',e=>{e.target?.closest?.('.field')?.classList.remove('is-error');e.target?.removeAttribute?.('aria-invalid');resetResult();});mode.addEventListener('change',()=>{syncMode();clear();resetResult();});template?.addEventListener('change',()=>{syncType();clear();resetResult();});client?.addEventListener('change',()=>{filterTrips();fillPackageDates();resetResult();});clientTrip?.addEventListener('change',()=>{fillPackageDates();resetResult();});syncMode();
+ const resetResult=()=>{if(result.childNodes.length)result.replaceChildren();result.dataset.docgenState='';};form.addEventListener('submit',e=>{if(e.submitter?.matches('[data-docgen-overwrite]')){const message=e.submitter.dataset.docgenOverwriteKind==='contract'?'Договор уже был создан. Перезаписать договор?':'Комплект уже был создан. Перезаписать договор, счёт и '+(mode.value==='client_package_upd'?'УПД':'акт')+'?';if(!confirm(message)){e.preventDefault();return}}if(!e.submitter?.matches('[data-docgen-check]'))return;e.preventDefault();run();});form.addEventListener('input',e=>{e.target?.closest?.('.field')?.classList.remove('is-error');e.target?.removeAttribute?.('aria-invalid');resetResult();});mode.addEventListener('change',()=>{syncMode();clear();resetResult();});template?.addEventListener('change',()=>{syncType();clear();resetResult();});client?.addEventListener('change',()=>{filterTrips();fillPackageDates();resetResult();});clientTrip?.addEventListener('change',()=>{fillPackageDates();resetResult();});syncMode();
  <?php if (is_array($preview)): ?>if(typeof openModal==='function')openModal('document-generator-preview-modal');<?php endif; ?>
 })();
 </script>

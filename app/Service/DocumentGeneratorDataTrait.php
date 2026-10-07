@@ -6,7 +6,7 @@ trait DocumentGeneratorDataTrait
 {
     private static function normalizeParameters(string $type, array $params): array
     {
-        if ($type==='vehicle_lease_crew' || $type==='client_sublease_crew') {
+        if (in_array($type, ['vehicle_lease_crew','client_sublease_crew','client_upd_contract'], true)) {
             $out = [
                 'contract_date'=>trim((string)($params['contract_date'] ?? '')),
                 'start_date'=>trim((string)($params['start_date'] ?? '')),
@@ -15,7 +15,7 @@ trait DocumentGeneratorDataTrait
                 'price'=>trim((string)($params['price'] ?? '')),
                 'vat_mode'=>trim((string)($params['vat_mode'] ?? 'без НДС')),
             ];
-            if ($type==='client_sublease_crew') {
+            if (in_array($type, ['client_sublease_crew','client_upd_contract'], true)) {
                 $out['contract_number']=trim((string)($params['contract_number'] ?? ''));
                 $out['payment_terms']=trim((string)($params['payment_terms'] ?? ''));
                 $out['invoice_date']=trim((string)($params['invoice_date'] ?? ''));
@@ -36,7 +36,7 @@ trait DocumentGeneratorDataTrait
             if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/',$value,$m)) return false;
             return checkdate((int)$m[2],(int)$m[3],(int)$m[1]);
         };
-        if ($type==='vehicle_lease_crew' || $type==='client_sublease_crew') {
+        if (in_array($type, ['vehicle_lease_crew','client_sublease_crew','client_upd_contract'], true)) {
             foreach (['contract_date'=>'дату договора','start_date'=>'дату начала аренды','finish_date'=>'плановую дату завершения'] as $field=>$label) {
                 $value=trim((string)($params[$field] ?? ''));
                 if (!$validDate($value)) $errors[]='Укажите корректную ' . $label . '.';
@@ -46,7 +46,7 @@ trait DocumentGeneratorDataTrait
             $price=str_replace(["\u{00A0}",' '],'',str_replace(',','.',trim((string)($params['price'] ?? ''))));
             if ($price==='' || !is_numeric($price) || (float)$price<0) $errors[]='Укажите корректную стоимость договора.';
             if (trim((string)($params['vat_mode'] ?? ''))==='') $errors[]='Укажите режим НДС.';
-            if ($type==='client_sublease_crew') {
+            if (in_array($type, ['client_sublease_crew','client_upd_contract'], true)) {
                 if (!preg_match('/^\d{2}-\d+$/',trim((string)($params['contract_number'] ?? '')))) $errors[]='Номер договора клиента должен иметь формат ГГ-ID рейса.';
                 if (trim((string)($params['payment_terms'] ?? ''))==='') $errors[]='Не определены условия оплаты заказчика по рейсу.';
             }
@@ -136,6 +136,8 @@ trait DocumentGeneratorDataTrait
             'invoice.date'=>self::formatRuDatePlain($invoiceDate),
             'act.number'=>$number,
             'act.date'=>self::formatRuDatePlain($actDate),
+            'upd.number'=>$number,
+            'upd.date'=>self::formatRuDatePlain($actDate),
             'waybill.number'=>(string)($p['waybill_number'] ?? ''),
             'waybill.date'=>self::formatRuDate((string)($p['waybill_date'] ?? '')),
             'company.name'=>(string)($c['name'] ?? ''),
@@ -273,7 +275,7 @@ trait DocumentGeneratorDataTrait
             'vehicle.label'=>'Тип транспортного средства','vehicle.model'=>'Марка/модель транспортного средства','vehicle.plate'=>'Государственный номер транспортного средства','vehicle.vin'=>'VIN транспортного средства',
             'trailer.label'=>'Тип прицепа/полуприцепа','trailer.model'=>'Марка/модель прицепа/полуприцепа','trailer.plate'=>'Государственный номер прицепа/полуприцепа','trailer.vin'=>'VIN прицепа/полуприцепа','trailer.display'=>'Данные прицепа/полуприцепа',
             'contract.date'=>'Дата договора','contract.start_date'=>'Дата начала аренды','contract.finish_date'=>'Плановая дата завершения','contract.price'=>'Стоимость','contract.vat_mode'=>'Режим НДС','contract.payment_terms'=>'Условия оплаты',
-            'invoice.number'=>'Номер счёта','invoice.date'=>'Дата счёта','act.number'=>'Номер акта','act.date'=>'Дата акта','service.description'=>'Описание услуги','service.amount'=>'Сумма услуги','service.amount_words'=>'Сумма прописью','service.vat_mode'=>'Режим НДС',
+            'invoice.number'=>'Номер счёта','invoice.date'=>'Дата счёта','act.number'=>'Номер акта','act.date'=>'Дата акта','upd.number'=>'Номер УПД','upd.date'=>'Дата УПД','service.description'=>'Описание услуги','service.amount'=>'Сумма услуги','service.amount_words'=>'Сумма прописью','service.vat_mode'=>'Режим НДС',
             'waybill.number'=>'Номер путевого листа','waybill.date'=>'Дата путевого листа','requests.count'=>'Количество заявок','requests.total_mass_kg'=>'Общая масса заявок','requests.unload_address'=>'Адрес выгрузки',
         ];
         $label=$labels[$name] ?? $name;
@@ -293,7 +295,7 @@ trait DocumentGeneratorDataTrait
         if (str_starts_with($name,'driver.')) return 'Не заполнено поле «' . $label . '». Заполните его в карточке водителя.';
         if (str_starts_with($name,'vehicle.') || str_starts_with($name,'trailer.')) return 'Не заполнено поле «' . $label . '». Заполните его в карточке транспорта.';
         if (str_starts_with($name,'contract.')) return 'Не заполнен параметр договора «' . $label . '».';
-        if (str_starts_with($name,'invoice.') || str_starts_with($name,'act.') || str_starts_with($name,'service.')) return 'Не заполнено поле клиентского документа «' . $label . '».';
+        if (str_starts_with($name,'invoice.') || str_starts_with($name,'act.') || str_starts_with($name,'upd.') || str_starts_with($name,'service.')) return 'Не заполнено поле клиентского документа «' . $label . '».';
         if (str_starts_with($name,'waybill.')) return 'Не заполнен параметр путевого листа «' . $label . '».';
         if (str_starts_with($name,'requests.')) return 'Не заполнены данные заявок ФЭО: «' . $label . '».';
         return 'Не заполнено обязательное поле документа «' . $label . '».';

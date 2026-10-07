@@ -46,7 +46,7 @@ $assert(str_contains($view, "e.submitter?.matches('[data-docgen-check]')"), 'AJA
 $assert(str_contains($view, '[data-docgen-generate]'), 'successful preview preserves canonical generation action');
 $assert(str_contains($view, 'Комплект №') && str_contains($view, 'уже был создан.'), 'existing package preview explains the conflict');
 $assert(str_contains($view, 'data-docgen-overwrite name="overwrite_existing" value="1"'), 'overwrite action carries explicit server confirmation');
-$assert(str_contains($view, "'Комплект уже был создан. Перезаписать договор, счёт и акт?'"), 'package overwrite asks for confirmation');
+$assert(str_contains($view, "'Комплект уже был создан. Перезаписать договор, счёт и '") && str_contains($view, "mode.value==='client_package_upd'?'УПД':'акт'"), 'package overwrite names the selected transfer document');
 $assert(str_contains($view, 'if(!confirm(message))'), 'overwrite action requires user confirmation');
 $assert(str_contains($view, "'Перезаписать комплект'"), 'existing package action has an explicit overwrite label');
 $assert(str_contains($view, "'contract_exists'"), 'existing carrier contract is shown as a warning');
