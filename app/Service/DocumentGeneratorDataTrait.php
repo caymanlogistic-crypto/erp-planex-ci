@@ -47,7 +47,8 @@ trait DocumentGeneratorDataTrait
             if ($price==='' || !is_numeric($price) || (float)$price<0) $errors[]='Укажите корректную стоимость договора.';
             if (trim((string)($params['vat_mode'] ?? ''))==='') $errors[]='Укажите режим НДС.';
             if (in_array($type, ['client_sublease_crew','client_upd_contract'], true)) {
-                if (!preg_match('/^\d{2}-\d+$/',trim((string)($params['contract_number'] ?? '')))) $errors[]='Номер договора клиента должен иметь формат ГГ-ID рейса.';
+                $contractNumber = trim((string)($params['contract_number'] ?? ''));
+                if ($contractNumber === '' || mb_strlen($contractNumber) > 50 || !preg_match('/^[\p{L}\p{N}][\p{L}\p{N} ._\/-]*$/u', $contractNumber)) $errors[]='Укажите корректный номер договора клиента (до 50 символов).';
                 if (trim((string)($params['payment_terms'] ?? ''))==='') $errors[]='Не определены условия оплаты заказчика по рейсу.';
             }
         } elseif ($type==='waybill_driver_assignment') {
@@ -123,7 +124,7 @@ trait DocumentGeneratorDataTrait
         $clientOgrn=trim((string)($client['ogrn'] ?? ''));
         $clientOgrnPrefix=strlen($clientOgrn)===15?'ОГРНИП: ':'ОГРН: ';
         return [
-            'contract.number'=>$number,
+            'contract.number'=>trim((string)($p['contract_number'] ?? '')) ?: $number,
             'contract.date'=>self::formatRuDate($contractDate),
             'contract.date_plain'=>self::formatRuDatePlain($contractDate),
             'contract.start_date'=>self::formatRuDate((string)($p['start_date'] ?? '')),
@@ -138,10 +139,14 @@ trait DocumentGeneratorDataTrait
             'act.date'=>self::formatRuDatePlain($actDate),
             'upd.number'=>$number,
             'upd.date'=>self::formatRuDatePlain($actDate),
+            'upd.day'=>substr($actDate, 8, 2),
+            'upd.month'=>self::formatRuDatePlain($actDate) !== '' ? explode(' ', self::formatRuDatePlain($actDate))[1] : '',
+            'upd.year_suffix'=>substr($actDate, 2, 2),
             'waybill.number'=>(string)($p['waybill_number'] ?? ''),
             'waybill.date'=>self::formatRuDate((string)($p['waybill_date'] ?? '')),
             'company.name'=>(string)($c['name'] ?? ''),
             'company.inn'=>(string)($c['inn'] ?? ''),
+            'company.inn_kpp'=>(string)($c['inn'] ?? '') . ($companyKpp !== '' ? '/' . $companyKpp : ''),
             'company.kpp'=>$companyKpp,
             'company.kpp_line'=>$companyKpp!==''?'КПП: '.$companyKpp:'',
             'company.ogrn_line'=>$companyOgrn!==''?'ОГРН: '.$companyOgrn:'',
@@ -159,6 +164,7 @@ trait DocumentGeneratorDataTrait
             'company.summary'=>self::partySummary($c),
             'client.name'=>(string)($client['name'] ?? ''),
             'client.inn'=>(string)($client['inn'] ?? ''),
+            'client.inn_kpp'=>(string)($client['inn'] ?? '') . ($clientKpp !== '' ? '/' . $clientKpp : ''),
             'client.kpp'=>$clientKpp,
             'client.kpp_line'=>$clientKpp!==''?'КПП: '.$clientKpp:'',
             'client.ogrn_line'=>$clientOgrn!==''?$clientOgrnPrefix.$clientOgrn:'',
@@ -201,6 +207,8 @@ trait DocumentGeneratorDataTrait
             'trailer.display'=>(string)($t['display'] ?? ''),
             'service.description'=>(string)($service['description'] ?? ''),
             'service.amount'=>self::formatMoneyAccounting($serviceAmountRaw),
+            'service.amount_ru'=>str_replace('.', ',', self::formatMoneyAccounting($serviceAmountRaw)),
+            'service.amount_ru_compact'=>str_replace(' ', '', str_replace('.', ',', self::formatMoneyAccounting($serviceAmountRaw))),
             'service.amount_words'=>self::moneyToWordsRu($serviceAmountRaw),
             'service.vat_mode'=>(string)($service['vat_mode'] ?? $p['vat_mode'] ?? ''),
             'trip.business_id'=>(string)($trip['business_id'] ?? ''),

@@ -49,9 +49,21 @@ trait DocumentGeneratorTemplateTrait
                 'client_upd_status2' => ['УПД клиенту, статус 2', 'client_upd_status2_v1.docx'],
             ];
             foreach ($defaults as $type => [$name, $filename]) {
-                $stmt = $pdo->prepare('SELECT id FROM document_templates WHERE document_type=? ORDER BY id LIMIT 1');
+                $stmt = $pdo->prepare('SELECT t.id,v.sha256 FROM document_templates t LEFT JOIN document_template_versions v ON v.id=t.active_version_id WHERE t.document_type=? ORDER BY t.id LIMIT 1');
                 $stmt->execute([$type]);
-                if ((int)$stmt->fetchColumn() > 0) continue;
+                $existing = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+                if ($existing !== null) {
+                    // Upgrade only the original ERP builtin; leave owner-uploaded versions untouched.
+                    if ($type === 'client_upd_status2' && (string)($existing['sha256'] ?? '') === 'ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312') {
+                        $source = self::materializeBuiltInTemplate($filename);
+                        try {
+                            self::createTemplateVersionFromFile($pdo, $companyId, (int)$existing['id'], $type, $name, $source, $filename, $userId, $role);
+                        } finally {
+                            @unlink($source);
+                        }
+                    }
+                    continue;
+                }
                 try {
                     $source = self::materializeBuiltInTemplate($filename);
                 } catch (RuntimeException $e) {
@@ -93,7 +105,7 @@ trait DocumentGeneratorTemplateTrait
             'client_sublease_contract_v1.docx' => '01ebdc8bb56beb11b20abc787bd6067c7ae3379274e1143cf3e4cf1258f7230c',
             'client_invoice_v1.docx' => '10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
             'client_act_v1.docx' => '246b3394254d58a22d6ea492f9db56b2efcabef56d43de495766c2c902c6a1f9',
-            'client_upd_status2_v1.docx' => 'ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312',
+            'client_upd_status2_v1.docx' => 'cfb1669b79400014c2a3244e0c6f7c942213105938dc5253972115fdc88b91c6',
         ];
         if (!isset($expected[$filename])) {
             throw new RuntimeException('Неизвестный встроенный DOCX-шаблон: ' . $filename);

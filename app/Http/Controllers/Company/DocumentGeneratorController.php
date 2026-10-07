@@ -55,7 +55,8 @@ final class DocumentGeneratorController
                     (string)($_POST['client_invoice_date'] ?? ''),
                     (string)($_POST['client_act_date'] ?? ''),
                     null,
-                    $mode === 'client_package_upd' ? 'upd' : 'act'
+                    $mode === 'client_package_upd' ? 'upd' : 'act',
+                    (string)($_POST['client_contract_number'] ?? '')
                 );
                 if (!($prepared['ok'] ?? false)) {
                     $this->renderGenerator(true, 'Формирование комплекта заблокировано: исправьте ошибки проверки.');
@@ -293,6 +294,7 @@ final class DocumentGeneratorController
                         'client_contract_date' => (string)($snapshot['parameters']['contract_date'] ?? $generated['document_date'] ?? ''),
                         'client_invoice_date' => (string)($snapshot['parameters']['invoice_date'] ?? $generated['document_date'] ?? ''),
                         'client_act_date' => (string)($snapshot['parameters']['act_date'] ?? $generated['document_date'] ?? ''),
+                        'client_contract_number' => (string)($snapshot['parameters']['contract_number'] ?? ''),
                         ...($seed['params'] ?? []),
                     ]);
                 }
@@ -304,6 +306,7 @@ final class DocumentGeneratorController
                 if ($this->isClientPackageMode($old['generator_mode'])) {
                     foreach ($trips as $trip) {
                         if ((int)$trip['id'] !== (int)$old['trip_id']) continue;
+                        if ($old['client_contract_number'] === '') $old['client_contract_number'] = date('y') . '-' . (int)$trip['business_id'];
                         foreach ((array)($trip['_package_dates'] ?? []) as $key => $value) {
                             $stateKey = 'client_' . $key;
                             if (isset($old[$stateKey]) && $old[$stateKey] === '') $old[$stateKey] = $value;
@@ -326,7 +329,8 @@ final class DocumentGeneratorController
                         (string)$old['client_invoice_date'],
                         (string)$old['client_act_date'],
                         null,
-                        $old['generator_mode'] === 'client_package_upd' ? 'upd' : 'act'
+                        $old['generator_mode'] === 'client_package_upd' ? 'upd' : 'act',
+                        (string)$old['client_contract_number']
                     );
                 } else {
                     $preview = DocumentGeneratorService::prepareFromTrip(
@@ -440,6 +444,7 @@ final class DocumentGeneratorController
             'client_contract_date' => (string)($source['client_contract_date'] ?? ''),
             'client_invoice_date' => (string)($source['client_invoice_date'] ?? ''),
             'client_act_date' => (string)($source['client_act_date'] ?? ''),
+            'client_contract_number' => (string)($source['client_contract_number'] ?? ''),
             ...$params,
         ];
     }
