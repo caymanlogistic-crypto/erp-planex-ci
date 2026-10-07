@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `37c65083a5dc2da607210a01f87d579a6b5cc0e06fc1eb2f10f1c50dd3cbe861`
+**Schema fingerprint:** `d1f3b89c8256240f27aaaf66542789707c0186015a9e962ebe01c0f3483e0b67`
 
 ## `waste_trip_general_payments`
 
@@ -108,11 +108,13 @@
 | `feo_request_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
 | `snapshot_mass_kg` | `decimal(18,3)` | NO | NULL | — | — |
 | `position_no` | `int unsigned` | NO | `0` | — | — |
+| `removed_at` | `datetime` | YES | NULL | — | — |
 | `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
 
 ### Indexes / constraints
 
 - **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_waste_trip_requests_active` (`waste_trip_id`, `removed_at`, `position_no`, `id`)
 - **INDEX** `idx_waste_trip_requests_position` (`waste_trip_id`, `position_no`, `id`)
 - **INDEX** `idx_waste_trip_requests_request` (`feo_request_id`, `waste_trip_id`)
 - **UNIQUE** `uk_waste_trip_request` (`waste_trip_id`, `feo_request_id`)

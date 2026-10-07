@@ -36,7 +36,7 @@ $reject(static fn()=>Mapping::state(array_replace($base,['cost'=>-1])));
 $reject(static fn()=>Mapping::state(array_replace($base,['planned_start_date'=>'2026-02-30'])));
 $openRange=Mapping::state(array_replace($base,['planned_start_date_from'=>'2026-09-01']));
 $check($openRange['planned_start_mode']==='range' && $openRange['planned_start_date_from']==='2026-09-01' && $openRange['planned_start_date_to']===null, 'Open legacy range must not invent an end or exact date');
-$reject(static fn()=>Mapping::state(array_replace($base,['status'=>'completed'])));
+$check(Mapping::state(array_replace($base,['status'=>'completed']))['status']==='completed','Completed source status is authoritative without factual dates');
 $reject(static fn()=>Mapping::state(array_replace($base,['zayavki_ids'=>'100,100'])));
 $check(Mapping::status('found') === 'executor_assigned', 'Formed mapping');
 $check(Mapping::status('started') === 'in_progress', 'Started mapping');
