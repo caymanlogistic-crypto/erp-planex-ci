@@ -6,6 +6,7 @@ require_once base_path('app/Service/FinanceInvoiceSettlementHistoryService.php')
 require_once base_path('app/Service/FinanceInvoiceSettlementDateService.php');
 require_once base_path('app/Service/FinancePayablesReportService.php');
 require_once base_path('app/Service/FinanceReceivedPaidService.php');
+require_once base_path('app/Service/GeneratedClientInvoiceDocxParser.php');
 require_once base_path('app/Http/Controllers/Company/FinanceInvoiceController.php');
 
 $controller = new \App\Http\Controllers\Company\FinanceInvoiceController($config, $db);

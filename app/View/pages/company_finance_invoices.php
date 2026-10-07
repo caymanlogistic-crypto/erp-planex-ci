@@ -41,6 +41,8 @@ $successFlash = $_SESSION['invoice_success'] ?? null;
 unset($_SESSION['invoice_success']);
 $errorFlash = $_SESSION['invoice_error'] ?? null;
 unset($_SESSION['invoice_error']);
+$importMessages = $_SESSION['invoice_import_messages'] ?? [];
+unset($_SESSION['invoice_import_messages']);
 $currentDirection = $_GET['direction'] ?? '';
 $selectedDirection = in_array($currentDirection, [FinanceInvoiceService::DIRECTION_OUTGOING, FinanceInvoiceService::DIRECTION_INCOMING], true) ? $currentDirection : '';
 ?>
@@ -91,6 +93,7 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
 
 <?php if ($successFlash): ?><div class="notice success"><?= e($successFlash) ?></div><?php endif; ?>
 <?php if ($errorFlash): ?><div class="notice warn"><?= e($errorFlash) ?></div><?php endif; ?>
+<?php foreach ($importMessages as $importMessage): ?><div class="notice <?= $importMessage['type'] === 'success' ? 'success' : 'warn' ?>"><?= e($importMessage['text']) ?></div><?php endforeach; ?>
 <?php if (!empty($formError)): ?><div class="notice warn"><?= e($formError) ?></div><?php endif; ?>
 
 <?php if (empty($invoices)): ?>
@@ -287,11 +290,11 @@ td:has(> .invoice-stages > .invoice-stage-card.is-paid):not(:has(> .invoice-stag
 
 <div id="invoice-import-modal" class="modal-overlay" role="dialog" aria-modal="true" aria-labelledby="invoice-import-title" data-close-on-overlay="1" data-close-on-escape="1">
     <div class="modal modal-md">
-        <div class="modal-head"><span class="modal-title" id="invoice-import-title">Загрузить счёт</span><button type="button" class="modal-close" data-close-modal="invoice-import-modal" aria-label="Закрыть">&times;</button></div>
+        <div class="modal-head"><span class="modal-title" id="invoice-import-title">Загрузить счета</span><button type="button" class="modal-close" data-close-modal="invoice-import-modal" aria-label="Закрыть">&times;</button></div>
         <form method="post" action="<?= e(app_url('/company/finance/invoices/import')) ?>" enctype="multipart/form-data">
             <?= csrfField() ?>
             <div class="modal-body">
-                <div class="field"><label class="field-label" for="invoice-import-file">Счёт из генератора документов ERP, DOCX</label><input class="field-input" id="invoice-import-file" type="file" name="invoice_file" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" required></div>
+                <div class="field"><label class="field-label" for="invoice-import-file">Счета из генератора документов ERP, DOCX</label><input class="field-input" id="invoice-import-file" type="file" name="invoice_files[]" accept=".docx,application/vnd.openxmlformats-officedocument.wordprocessingml.document" multiple required></div>
                 <div class="form-hint mt-half">Система проверит реквизиты, найдёт клиента по ИНН и добавит счёт в реестр. Если платёжное обязательство нельзя определить однозначно, его можно привязать после загрузки.</div>
             </div>
             <div class="modal-foot is-spaced"><button type="button" class="btn btn-ghost" data-close-modal="invoice-import-modal">Отмена</button><button type="submit" class="btn btn-primary">Загрузить</button></div>
