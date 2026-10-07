@@ -10,6 +10,7 @@ $invoice = null;
 $links = [];
 $settlements = [];
 $importedDocument = null;
+$generatedDocument = null;
 $error = null;
 
 try {
@@ -34,6 +35,9 @@ try {
     $documentStmt = $localPdo->prepare("SELECT id,original_name FROM documents WHERE entity_type='finance_invoice' AND entity_id=? AND deleted_at IS NULL ORDER BY id DESC LIMIT 1");
     $documentStmt->execute([$invoiceId]);
     $importedDocument = $documentStmt->fetch(PDO::FETCH_ASSOC) ?: null;
+    $generatedStmt = $localPdo->prepare("SELECT id,original_name FROM generated_documents WHERE document_type IN ('client_invoice','client_upd_invoice') AND document_number=? AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.client.id'))=? ORDER BY id DESC LIMIT 1");
+    $generatedStmt->execute([(string)$invoice['number'], (string)$invoice['counterparty_entity_id']]);
+    $generatedDocument = $generatedStmt->fetch(PDO::FETCH_ASSOC) ?: null;
 
     $isCancelled = ($invoice['cancelled_at'] ?? null) !== null || ($invoice['status'] ?? '') === 'cancelled';
     $canEdit = !$isCancelled;

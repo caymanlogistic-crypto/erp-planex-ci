@@ -159,6 +159,11 @@ trait DocumentGeneratorTripPackageTrait
         if ($finishDate === null) return self::failed(['В выбранном рейсе не указана дата завершения для договора.']);
 
         $packageNumber = date('y') . '-' . (int)($trip['business_id'] ?? 0);
+        $previousNumber = $pdo->prepare("SELECT DISTINCT document_number FROM generated_documents WHERE document_type IN ('client_invoice','client_upd_invoice') AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.trip.id'))=? ORDER BY document_number");
+        $previousNumber->execute([(string)$tripId]);
+        $previousNumbers = $previousNumber->fetchAll(PDO::FETCH_COLUMN);
+        if (count($previousNumbers) > 1) return self::failed(['Для рейса найдены счета с разными номерами. Уточните историю документов.']);
+        if ($previousNumbers !== []) $packageNumber = (string)$previousNumbers[0];
         $contractNumber = trim((string)$contractNumberInput);
         if ($contractNumber === '') $contractNumber = $packageNumber;
         if (mb_strlen($contractNumber) > 50 || !preg_match('/^[\p{L}\p{N}][\p{L}\p{N} ._\/-]*$/u', $contractNumber)) {
@@ -299,8 +304,12 @@ trait DocumentGeneratorTripPackageTrait
         $createdFiles = [];
         $replacedFiles = [];
         $ids = [];
-        $pdo->beginTransaction();
+        $lockName = 'invoice-import-' . substr(hash('sha256', $companyId . ':' . (string)($prepared['client']['inn'] ?? '') . ':' . $number), 0, 40);
+        $lock = $pdo->prepare('SELECT GET_LOCK(?, 10)');
+        $lock->execute([$lockName]);
+        if ((int)$lock->fetchColumn() !== 1) throw new RuntimeException('Комплект этого рейса уже формируется. Повторите позже.');
         try {
+            $pdo->beginTransaction();
             $existing = [];
             foreach (array_keys($types) as $type) {
                 if ($type === ($variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew')) {
@@ -399,6 +408,7 @@ trait DocumentGeneratorTripPackageTrait
                     $child->execute([$documentId,(string)($request['zayavka_id'] ?? ''),$pos+1,self::json($request)]);
                 }
             }
+            ClientPackageInvoiceSyncService::synchronize($pdo, $prepared, $userId, $role);
             $pdo->commit();
             foreach (array_unique($replacedFiles) as $file) {
                 if (is_file($file) && !unlink($file)) {
@@ -410,6 +420,9 @@ trait DocumentGeneratorTripPackageTrait
             if ($pdo->inTransaction()) $pdo->rollBack();
             foreach ($createdFiles as $file) @unlink($file);
             throw $e;
+        } finally {
+            $release = $pdo->prepare('SELECT RELEASE_LOCK(?)');
+            $release->execute([$lockName]);
         }
     }
 
