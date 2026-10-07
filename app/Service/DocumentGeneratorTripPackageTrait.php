@@ -8,10 +8,17 @@ use Throwable;
 
 trait DocumentGeneratorTripPackageTrait
 {
-    private const CLIENT_PACKAGE_TYPES = [
-        'client_sublease_crew' => 'Договор субаренды транспортного средства с экипажем',
-        'client_invoice' => 'Счёт клиенту',
-        'client_act' => 'Акт клиенту',
+    private const CLIENT_PACKAGE_VARIANTS = [
+        'act' => [
+            'client_sublease_crew' => 'Договор субаренды транспортного средства с экипажем',
+            'client_invoice' => 'Счёт клиенту',
+            'client_act' => 'Акт клиенту',
+        ],
+        'upd' => [
+            'client_upd_contract' => 'Договор субаренды транспортного средства с экипажем',
+            'client_upd_invoice' => 'Счёт клиенту',
+            'client_upd_status2' => 'УПД клиенту, статус 2',
+        ],
     ];
 
     public static function canGenerateClientPackage(string $role): bool
@@ -104,14 +111,20 @@ trait DocumentGeneratorTripPackageTrait
         string $contractDate,
         ?string $invoiceDate = null,
         ?string $actDate = null,
-        ?GoogleSheetsRequestContactService $contactService = null
+        ?GoogleSheetsRequestContactService $contactService = null,
+        string $variant = 'act'
     ): array {
+        if (!isset(self::CLIENT_PACKAGE_VARIANTS[$variant])) return self::failed(['Неизвестный вид комплекта документов.']);
+        $types = self::CLIENT_PACKAGE_VARIANTS[$variant];
+        $contractType = $variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew';
+        $invoiceType = $variant === 'upd' ? 'client_upd_invoice' : 'client_invoice';
+        $transferType = $variant === 'upd' ? 'client_upd_status2' : 'client_act';
         $invoiceDate ??= $contractDate;
         $actDate ??= $contractDate;
         if (!self::canGenerateClientPackage($role)) {
             return self::failed(['Комплект документов клиенту доступен только руководителю компании.']);
         }
-        foreach (['договора' => $contractDate, 'счёта' => $invoiceDate, 'акта' => $actDate] as $label => $date) {
+        foreach (['договора' => $contractDate, 'счёта' => $invoiceDate, $variant === 'upd' ? 'УПД' : 'акта' => $actDate] as $label => $date) {
             if (!self::validIsoDate($date)) return self::failed(['Укажите корректную дату ' . $label . '.']);
         }
 
@@ -122,7 +135,7 @@ trait DocumentGeneratorTripPackageTrait
             }
             $client = self::loadClientForDocument($pdo, $clientId, $userId, $role);
             $templates = [];
-            foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
+            foreach (array_keys($types) as $type) {
                 $templates[$type] = self::getUniqueActiveTemplateByType($pdo, $type);
             }
         } catch (RuntimeException $e) {
@@ -152,6 +165,7 @@ trait DocumentGeneratorTripPackageTrait
             'trip' => self::tripSnapshot($trip),
             'package' => [
                 'number' => $packageNumber,
+                'variant' => $variant,
                 'date' => $contractDate,
                 'contract_date' => $contractDate,
                 'invoice_date' => $invoiceDate,
@@ -179,7 +193,7 @@ trait DocumentGeneratorTripPackageTrait
             $companyId,
             $userId,
             $role,
-            (int)$templates['client_sublease_crew']['template_id'],
+            (int)$templates[$contractType]['template_id'],
             $crewId,
             implode("\n", $requestIds),
             $params,
@@ -199,7 +213,7 @@ trait DocumentGeneratorTripPackageTrait
         $prepared['values'] = self::buildFixedValues($snapshot);
 
         $extraErrors = [];
-        foreach (['client_invoice','client_act'] as $type) {
+        foreach ([$invoiceType,$transferType] as $type) {
             $placeholders = json_decode((string)($templates[$type]['placeholders_json'] ?? '[]'), true);
             if (!is_array($placeholders)) $placeholders = [];
             array_push($extraErrors, ...self::validateFixedPlaceholders($placeholders, $prepared['values'], $snapshot));
@@ -212,13 +226,14 @@ trait DocumentGeneratorTripPackageTrait
         }
 
         $prepared['package_number'] = $packageNumber;
-        $prepared['package_dates'] = ['client_sublease_crew'=>$contractDate, 'client_invoice'=>$invoiceDate, 'client_act'=>$actDate];
+        $prepared['package_dates'] = [$contractType=>$contractDate, $invoiceType=>$invoiceDate, $transferType=>$actDate];
+        $prepared['package_variant'] = $variant;
         $prepared['package_amount'] = $amount;
         $prepared['package_amount_formatted'] = self::formatMoneyText($amount);
         $prepared['package_templates'] = $templates;
         $prepared['client'] = $client;
         $prepared['trip'] = $trip;
-        $prepared['existing_package_documents'] = self::existingClientPackageDocuments($pdo, $packageNumber);
+        $prepared['existing_package_documents'] = self::existingClientPackageDocuments($pdo, $packageNumber, array_keys($types));
         $prepared['package_exists'] = $prepared['existing_package_documents'] !== [];
         return $prepared;
     }
@@ -235,11 +250,14 @@ trait DocumentGeneratorTripPackageTrait
         if (!preg_match('/^\d{2}-\d+$/', $number)) {
             throw new RuntimeException('Номер комплекта документов не определён.');
         }
-        foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
+        $variant = (string)($prepared['package_variant'] ?? 'act');
+        if (!isset(self::CLIENT_PACKAGE_VARIANTS[$variant])) throw new RuntimeException('Неизвестный вид комплекта документов.');
+        $types = self::CLIENT_PACKAGE_VARIANTS[$variant];
+        foreach (array_keys($types) as $type) {
             if (!self::validIsoDate((string)($dates[$type] ?? ''))) throw new RuntimeException('Дата документа не определена: ' . $type . '.');
         }
         $templates = is_array($prepared['package_templates'] ?? null) ? $prepared['package_templates'] : [];
-        foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
+        foreach (array_keys($types) as $type) {
             if (!is_array($templates[$type] ?? null)) throw new RuntimeException('Шаблон комплекта не определён: ' . $type . '.');
         }
         $baseSnapshot = is_array($prepared['snapshot'] ?? null) ? $prepared['snapshot'] : null;
@@ -247,12 +265,12 @@ trait DocumentGeneratorTripPackageTrait
 
         $resolvedTemplates = [];
         foreach ($templates as $type => $template) {
-            if (!isset(self::CLIENT_PACKAGE_TYPES[$type])) continue;
+            if (!isset($types[$type])) continue;
             $path = DocumentService::resolveStoredPath($companyId, (string)($template['stored_path'] ?? ''));
-            if ($path === null) throw new RuntimeException('Файл шаблона недоступен: ' . self::CLIENT_PACKAGE_TYPES[$type] . '.');
+            if ($path === null) throw new RuntimeException('Файл шаблона недоступен: ' . $types[$type] . '.');
             $actual = hash_file('sha256', $path) ?: '';
             if ($actual === '' || !hash_equals((string)($template['sha256'] ?? ''), $actual)) {
-                throw new RuntimeException('Контрольная сумма шаблона не совпадает: ' . self::CLIENT_PACKAGE_TYPES[$type] . '.');
+                throw new RuntimeException('Контрольная сумма шаблона не совпадает: ' . $types[$type] . '.');
             }
             $resolvedTemplates[$type] = [$template, $path];
         }
@@ -263,7 +281,7 @@ trait DocumentGeneratorTripPackageTrait
         $pdo->beginTransaction();
         try {
             $existing = [];
-            foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
+            foreach (array_keys($types) as $type) {
                 $dup = $pdo->prepare('SELECT * FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
                 $dup->execute([$type, $number]);
                 $row = $dup->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -292,7 +310,7 @@ trait DocumentGeneratorTripPackageTrait
                 foreach ($existing as $row) $delete->execute([(int)$row['id']]);
             }
 
-            foreach (array_keys(self::CLIENT_PACKAGE_TYPES) as $type) {
+            foreach (array_keys($types) as $type) {
                 [$template, $templatePath] = $resolvedTemplates[$type];
                 $date = (string)$dates[$type];
                 $snapshot = $baseSnapshot;
@@ -316,6 +334,9 @@ trait DocumentGeneratorTripPackageTrait
                     'client_sublease_crew' => 'Договор-субаренды',
                     'client_invoice' => 'Счет',
                     'client_act' => 'Акт',
+                    'client_upd_contract' => 'Договор-субаренды-УПД',
+                    'client_upd_invoice' => 'Счет-УПД',
+                    'client_upd_status2' => 'УПД-статус-2',
                     default => 'Документ',
                 };
                 $downloadName = DocumentService::safeDownloadName($baseName . '_' . $number . '.docx');
@@ -364,9 +385,8 @@ trait DocumentGeneratorTripPackageTrait
         }
     }
 
-    private static function existingClientPackageDocuments(PDO $pdo, string $number): array
+    private static function existingClientPackageDocuments(PDO $pdo, string $number, array $types): array
     {
-        $types = array_keys(self::CLIENT_PACKAGE_TYPES);
         $placeholders = implode(',', array_fill(0, count($types), '?'));
         $stmt = $pdo->prepare(
             "SELECT id,document_type,document_number,document_date,created_at FROM generated_documents WHERE document_type IN ({$placeholders}) AND document_number=? ORDER BY id"

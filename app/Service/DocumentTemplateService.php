@@ -17,13 +17,16 @@ final class DocumentTemplateService
         'client_sublease_crew' => 'Договор субаренды транспортного средства с экипажем',
         'client_invoice' => 'Счёт клиенту',
         'client_act' => 'Акт клиенту',
+        'client_upd_contract' => 'Договор клиенту для комплекта с УПД',
+        'client_upd_invoice' => 'Счёт клиенту для комплекта с УПД',
+        'client_upd_status2' => 'УПД клиенту, статус 2',
     ];
 
     private const PLACEHOLDERS = [
         'contract.number', 'contract.date', 'contract.date_plain', 'contract.start_date', 'contract.start_time',
         'contract.finish_date', 'contract.price', 'contract.vat_mode', 'contract.payment_terms',
         'waybill.number', 'waybill.date',
-        'invoice.number', 'invoice.date', 'act.number', 'act.date',
+        'invoice.number', 'invoice.date', 'act.number', 'act.date', 'upd.number', 'upd.date',
         'company.name', 'company.inn', 'company.kpp', 'company.kpp_line', 'company.ogrn_line',
         'company.legal_address', 'company.physical_address', 'company.bank_name',
         'company.bank_account', 'company.bank_corr_account', 'company.bank_bik',
