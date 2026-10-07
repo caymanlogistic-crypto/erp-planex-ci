@@ -183,9 +183,11 @@ $pdo->exec("INSERT INTO waste_trip_general_payments(waste_trip_id,amount,payment
 $applySql($root.'/database/migrations-local/070_production_calendar.sql');
 $eq(App\Service\ProductionCalendarService::seedOfficial2026($pdo),'seeded','official production calendar seeded');
 $suggested=App\Service\DocumentGeneratorService::suggestClientPackageDates($pdo,['actual_start_date'=>'2026-03-09','actual_end_date'=>'2026-05-11']);
-$eq($suggested,['contract_date'=>'2026-03-06','invoice_date'=>'2026-03-06','act_date'=>'2026-05-12'],'holidays and transferred days adjust in opposite directions');
+$eq($suggested,['contract_date'=>'2026-03-09','invoice_date'=>'2026-05-11','act_date'=>'2026-05-11'],'client dates use exact trip start and finish even on holidays');
 $suggestedWeekend=App\Service\DocumentGeneratorService::suggestClientPackageDates($pdo,['actual_start_date'=>'2026-09-05','actual_end_date'=>'2026-09-06']);
-$eq($suggestedWeekend,['contract_date'=>'2026-09-04','invoice_date'=>'2026-09-04','act_date'=>'2026-09-07'],'weekend start and unloading adjust in opposite directions');
+$eq($suggestedWeekend,['contract_date'=>'2026-09-05','invoice_date'=>'2026-09-06','act_date'=>'2026-09-06'],'client dates preserve weekend trip dates');
+$suggestedPlanned=App\Service\DocumentGeneratorService::suggestClientPackageDates($pdo,['planned_start_date'=>'2026-10-10','planned_finish_date'=>'2026-10-12']);
+$eq($suggestedPlanned,['contract_date'=>'2026-10-10','invoice_date'=>'2026-10-12','act_date'=>'2026-10-12'],'planned dates are used when actual trip dates are absent');
 
 App\Security\AccessRuntime::setCurrent($ownerAccess);
 $docTrips=App\Service\DocumentGeneratorService::listDocumentTrips($pdo,true);$trip144=null;foreach($docTrips as$t)if((int)$t['business_id']===144)$trip144=$t;$ok(is_array($trip144),'document trip 144 visible');$eq((string)$trip144['_customer_amount'],'230000.00','customer amount from Waste Trip');
