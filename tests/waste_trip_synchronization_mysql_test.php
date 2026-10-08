@@ -179,10 +179,12 @@ try {
     $obligation=$pdo->query("SELECT * FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND direction='RECEIVABLE'")->fetch();
     check($payment['amount']==='1000.00'&&$payment['payment_method']===''&&$obligation['due_date']===null,'Sale with default terms waits for factual unload');
     check($pdo->query("SELECT amount FROM waste_trip_general_payments WHERE waste_trip_id=$id")->fetchColumn()==='1500.00','General amount from weight share');
-    check((int)$payment['days_count']===3 && $payment['condition_type']==='after_end','Three-day default sale');
+    check((int)$payment['days_count']===4 && $payment['days_kind']==='working' && $payment['condition_type']==='after_end' && $payment['specific_due_date']===null,'New synchronized sale defaults to four working days after unloading');
+    $general=$pdo->query("SELECT condition_type,days_count,days_kind FROM waste_trip_general_payments WHERE waste_trip_id=$id")->fetch();
+    check($general['condition_type']==='after_end' && (int)$general['days_count']===3 && $general['days_kind']==='calendar','General customer keeps its separate three-calendar-day default');
     check((int)$pdo->query("SELECT COUNT(*) FROM waste_trip_carrier_payments")->fetchColumn()===0,'Sync never creates carrier costs');
     $pdo->exec("INSERT INTO waste_trip_carrier_payments(waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type,days_count,days_kind) VALUES($id,1,700,'cash','cash','after_end',7,'calendar');
-        UPDATE waste_trip_customer_payments SET days_count=11 WHERE waste_trip_id=$id;
+        UPDATE waste_trip_customer_payments SET days_count=11,days_kind='calendar' WHERE waste_trip_id=$id;
         UPDATE waste_trip_general_payments SET days_count=5 WHERE waste_trip_id=$id");
     $pdo->exec("INSERT INTO finance_money_accounts(id,type,name) VALUES(1,'CASH','Synthetic cash');
         INSERT INTO finance_operations(id,operation_type,status,source,money_account_id,operation_date,amount) VALUES(1,'INCOME','POSTED','MANUAL',1,'2026-09-01',1);
@@ -219,6 +221,7 @@ try {
     check($pdo->query("SELECT amount FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()==='1.00','Literal cost 1');
     check($pdo->query("SELECT amount FROM waste_trip_carrier_payments WHERE waste_trip_id=$id")->fetchColumn()==='700.00','Manual carrier cost never overwritten');
     check((int)$pdo->query("SELECT days_count FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()===11,'Manual sale terms survive source changes');
+    check($pdo->query("SELECT days_kind FROM waste_trip_customer_payments WHERE waste_trip_id=$id")->fetchColumn()==='calendar','Manual calendar-day choice survives source changes');
     check((int)$pdo->query("SELECT days_count FROM waste_trip_general_payments WHERE waste_trip_id=$id")->fetchColumn()===5,'Manual general terms survive sync');
     check($pdo->query("SELECT due_date FROM finance_obligations WHERE id={$obligation['id']}")->fetchColumn()==='2026-09-13','Sale uses factual unloading plus manual offset');
     check((int)$pdo->query("SELECT id FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$id AND direction='RECEIVABLE' AND cancelled_at IS NULL")->fetchColumn()===(int)$obligation['id'],'Stable payable identity');

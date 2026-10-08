@@ -28,8 +28,10 @@ final class WasteTripPaymentSyncService
             self::assertUnlinked($pdo, $tripId, array_column($removed, 'id'));
         }
         if ($old === []) {
-            $pdo->prepare("INSERT INTO {$table} (waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type,days_count,days_kind,condition_comment,created_by_user_id,created_by_role,updated_by_user_id,updated_by_role) VALUES (?,1,?,'','','after_end',3,'calendar',?,?,?,?,?)")
-                ->execute([$tripId,$amount,$comment,$actor['user_id'],$actor['role_code'],$actor['user_id'],$actor['role_code']]);
+            $daysCount = $side === 'customer' ? 4 : 3;
+            $daysKind = $side === 'customer' ? 'working' : 'calendar';
+            $pdo->prepare("INSERT INTO {$table} (waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type,days_count,days_kind,condition_comment,created_by_user_id,created_by_role,updated_by_user_id,updated_by_role) VALUES (?,1,?,'','','after_end',?,?,?,?,?,?,?)")
+                ->execute([$tripId,$amount,$daysCount,$daysKind,$comment,$actor['user_id'],$actor['role_code'],$actor['user_id'],$actor['role_code']]);
         } else {
             // The first installment keeps its identity and all manually edited terms.
             $pdo->prepare("UPDATE {$table} SET amount=?,updated_by_user_id=?,updated_by_role=? WHERE id=?")

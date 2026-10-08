@@ -2114,7 +2114,7 @@ document.addEventListener('click', function (e) {
                 if (defaultDays) {
                     paymentRow.querySelector('[name$="[condition_type]"]').value = 'after_end';
                     paymentRow.querySelector('[name$="[days_count]"]').value = defaultDays;
-                    paymentRow.querySelector('[name$="[days_kind]"]').value = 'calendar';
+                    paymentRow.querySelector('[name$="[days_kind]"]').value = container.getAttribute('data-default-days-kind') || 'calendar';
                     syncDueFields(paymentRow);
                 }
                 container.appendChild(paymentRow);

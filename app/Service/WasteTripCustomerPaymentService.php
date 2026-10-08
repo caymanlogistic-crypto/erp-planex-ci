@@ -16,7 +16,7 @@ final class WasteTripCustomerPaymentService
 
             $amountRaw = trim((string) ($row['amount'] ?? ''));
             if ($amountRaw === '' && !$allowUnknownAmount) continue;
-            $row += ['condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar'];
+            $row += ['condition_type'=>'after_end','days_count'=>4,'days_kind'=>'working'];
             $paymentMethod = trim((string) ($row['payment_method'] ?? ''));
             $vatRateRaw = trim((string) ($row['vat_rate'] ?? ''));
             $conditionType = trim((string) ($row['condition_type'] ?? ''));

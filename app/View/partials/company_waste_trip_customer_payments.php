@@ -9,8 +9,8 @@ if ($paymentRows === []) {
         'payment_method' => 'cashless',
         'vat_rate' => '',
         'condition_type' => 'after_end',
-        'days_count' => '3',
-        'days_kind' => 'calendar',
+        'days_count' => '4',
+        'days_kind' => 'working',
         'specific_due_date' => '',
         'condition_comment' => '',
     ]];
@@ -22,14 +22,14 @@ $vatRateOptions = ['', '0', '5', '7', '20', '22'];
         <div class="linear-trip-block-head">
             <div>
                 <div class="linear-trip-block-title">Продажа · оплата клиента</div>
-                <div class="field-msg">Сумма для взаиморасчётов с клиентом. По умолчанию — 3 дня после выгрузки.</div>
+                <div class="field-msg">Сумма для взаиморасчётов с клиентом. По умолчанию — 4 рабочих дня после выгрузки.</div>
                 <?php if (!empty($sourceAmountsLocked)): ?>
                     <div class="field-msg"><?= !empty($trip['customer_amount_sync_disabled']) ? 'Сумма задана вручную. Синхронизация суммы отключена.' : 'После изменения и сохранения сумма больше не будет обновляться из старой БД.' ?></div>
                 <?php endif; ?>
             </div>
             <?php if(empty($sourceAmountsLocked)):?><button type="button" class="btn btn-ghost" data-add-payment-row="customer_payments">+ Добавить оплату</button><?php endif;?>
         </div>
-        <div class="linear-trip-payment-rows" data-payment-container="customer_payments" data-default-days="3">
+        <div class="linear-trip-payment-rows" data-payment-container="customer_payments" data-default-days="4" data-default-days-kind="working">
             <?php foreach ($paymentRows as $paymentIndex => $payment): ?>
                 <?php
                 $fieldBase = 'customer_payments[' . $paymentIndex . ']';

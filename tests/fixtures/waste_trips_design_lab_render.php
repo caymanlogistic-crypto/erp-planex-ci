@@ -75,9 +75,9 @@ for ($i = 0; $i < 38; $i++) {
     $status = $statuses[$index];
     $hasExecutor = !in_array($status, ['planned_route'], true);
     $amount = 9789 + (($i * 27341) % 750000);
-    $payment = static fn(int $value, int $days): array => [
+    $payment = static fn(int $value, int $days, string $daysKind = 'calendar'): array => [
         'amount'=>(string)$value,'condition_type'=>'after_end',
-        'days_count'=>$days,'days_kind'=>'calendar','specific_due_date'=>null,
+        'days_count'=>$days,'days_kind'=>$daysKind,'specific_due_date'=>null,
         'payment_method'=>'cashless','payment_type'=>null,'vat_rate'=>null,'condition_comment'=>'',
     ];
     $trips[] = [
@@ -101,8 +101,8 @@ for ($i = 0; $i < 38; $i++) {
         'executor_vehicle_label'=>$hasExecutor?'ISUZU А123ВС77':'',
         'request_count'=>1+($i*7)%35,'snapshot_total_mass_kg'=>251+($i*1471)%25400,
         'general_payments'=>[$payment($amount,3)],
-        'customer_payments'=>$hasExecutor?[$payment((int)($amount*0.75),3)]:[],
-        'carrier_payments'=>($i%9===0)?[$payment((int)($amount*0.5),7)]:[],
+        'customer_payments'=>$hasExecutor?[$payment((int)($amount*0.75),4,'working')]:[],
+        'carrier_payments'=>($i%9===0)?[$payment((int)($amount*0.5),7,'working')]:[],
         'responsible_name'=>($i%4===0?'Соколова Анна':'Петров Иван'),
         'financial_model_version'=>2,
     ];
