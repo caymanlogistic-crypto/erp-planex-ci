@@ -32,6 +32,7 @@ final class FinanceReceivedPaidService
                 'customer' => ['rate' => null, 'invoices' => [], 'payments' => []],
                 'carrier' => ['rate' => null, 'invoices' => [], 'payments' => []],
             ];
+            $row['planned_receipt'] = null;
             $byId[(int)$row['id']] = $index;
         }
         unset($row);
@@ -107,6 +108,56 @@ final class FinanceReceivedPaidService
                 $rows[$index]['sides'][$side]['payments'][] = $payment;
             }
         }
+
+        // The register shows the next unpaid customer stage. A forecast remains
+        // visible, but only an established due date can become overdue.
+        $planned = $pdo->prepare("SELECT o.id,o.source_parent_id AS trip_id,o.due_date,o.forecast_due_date,
+                o.status,GREATEST(o.amount-COALESCE(SUM(CASE
+                    WHEN a.cancelled_at IS NULL AND fo.status='POSTED'
+                      AND (a.invoice_id IS NULL OR (fi.id IS NOT NULL AND fi.cancelled_at IS NULL AND fi.status<>'cancelled'))
+                    THEN a.amount ELSE 0 END),0),0) AS remaining_amount
+            FROM finance_obligations o
+            LEFT JOIN finance_operation_allocations a ON a.obligation_id=o.id
+            LEFT JOIN finance_operations fo ON fo.id=a.operation_id
+            LEFT JOIN finance_invoices fi ON fi.id=a.invoice_id
+            WHERE o.source_parent_type='WASTE_TRIP' AND o.party_role='customer'
+              AND o.cancelled_at IS NULL AND o.status<>'cancelled'
+              AND o.source_parent_id IN ($marks)
+            GROUP BY o.id,o.source_parent_id,o.due_date,o.forecast_due_date,o.status,o.amount");
+        $planned->execute($ids);
+        $plansByTrip = [];
+        foreach ($planned->fetchAll(PDO::FETCH_ASSOC) as $plan) {
+            $dueDate = self::validDate($plan['due_date'] ?? null);
+            $displayDate = $dueDate ?? self::validDate($plan['forecast_due_date'] ?? null);
+            if ($displayDate === null) continue;
+            $plansByTrip[(int)$plan['trip_id']][] = [
+                'date' => $displayDate,
+                'due_date' => $dueDate,
+                'remaining' => (float)$plan['remaining_amount'] > 0,
+                'status' => (string)$plan['status'],
+                'id' => (int)$plan['id'],
+            ];
+        }
+        foreach ($rows as &$row) {
+            $plans = $plansByTrip[(int)$row['id']] ?? [];
+            usort($plans, static fn(array $a, array $b): int => [$a['date'], $a['id']] <=> [$b['date'], $b['id']]);
+            foreach ($plans as $plan) {
+                if ($plan['remaining']) {
+                    $row['planned_receipt'] = $plan;
+                    break;
+                }
+            }
+            $row['planned_receipt'] ??= $plans[0] ?? null;
+        }
+        unset($row);
         return $rows;
+    }
+
+    private static function validDate(mixed $value): ?string
+    {
+        $value = trim((string)($value ?? ''));
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value)) return null;
+        $date = \DateTimeImmutable::createFromFormat('!Y-m-d', $value);
+        return $date !== false && $date->format('Y-m-d') === $value ? $value : null;
     }
 }

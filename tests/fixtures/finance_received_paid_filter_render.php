@@ -21,7 +21,7 @@ $side = static fn(?int $rate, array $payments = [], array $invoices = []): array
     'payments' => $payments,
     'invoices' => $invoices,
 ];
-$trip = static fn(int $id, array $customer, array $carrier): array => [
+$trip = static fn(int $id, array $customer, array $carrier, ?array $planned = null): array => [
     'business_id' => $id,
     'comment' => 'Рейс ' . $id,
     'actual_start_date' => '2026-09-28',
@@ -33,13 +33,18 @@ $trip = static fn(int $id, array $customer, array $carrier): array => [
     'client_name' => 'Заказчик',
     'carrier_id' => 2,
     'carrier_name' => 'Перевозчик',
+    'planned_receipt' => $planned,
     'sides' => ['customer' => $customer, 'carrier' => $carrier],
 ];
+$today = new DateTimeImmutable('today', new DateTimeZone('Europe/Moscow'));
+$past = $today->modify('-1 day')->format('Y-m-d');
+$dueToday = $today->format('Y-m-d');
+$future = $today->modify('+2 days')->format('Y-m-d');
 $trips = array_reverse([
-    $trip(101, $side(100, [$payment(100, 1)], [$invoice(1, 100)]), $side(80, [$payment(80, 2)], [$invoice(2, 80)])),
-    $trip(102, $side(100, [$payment(100)]), $side(80, [$payment(20)])),
-    $trip(103, $side(100), $side(80)),
-    $trip(104, $side(100, [$payment(100)]), $side(null)),
+    $trip(101, $side(100, [$payment(100, 1)], [$invoice(1, 100)]), $side(80, [$payment(80, 2)], [$invoice(2, 80)]), ['date' => $past, 'due_date' => $past, 'remaining' => false, 'status' => 'paid']),
+    $trip(102, $side(100, [$payment(40)]), $side(80, [$payment(20)]), ['date' => $dueToday, 'due_date' => $dueToday, 'remaining' => true, 'status' => 'partially_paid']),
+    $trip(103, $side(100), $side(80), ['date' => $past, 'due_date' => $past, 'remaining' => true, 'status' => 'overdue']),
+    $trip(104, $side(100, [$payment(100)]), $side(null), ['date' => $future, 'due_date' => null, 'remaining' => true, 'status' => 'waiting_event']),
     $trip(105, $side(0), $side(80, [$payment(80)])),
 ]);
 $localPdo = null;

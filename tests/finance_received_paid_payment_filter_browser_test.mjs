@@ -22,7 +22,13 @@ try{
   const visibleIds=()=>page.locator('.rp-compact-row:visible').evaluateAll(items=>items.map(item=>item.dataset.id));
   assert.deepEqual(await visibleIds(),['105','104','103','102','101'],'all completed trips are visible initially, sorted newest first');
   assert.deepEqual(await page.locator('.rp-compact-row').evaluateAll(items=>items.map(item=>item.dataset.paymentStatus)),['paid','unknown-rate','unpaid','underpaid','paid'],'posted payments are classified against both rates');
-  assert.equal(await page.locator('.rp-compact-row').first().locator('td').count(),11,'one trip occupies one table row');
+  assert.equal(await page.locator('.rp-compact-row').first().locator('td').count(),12,'one trip occupies one table row');
+  assert.equal(await page.locator('.rp-compact-table thead .rp-col-payment-date').innerText(),'ОПЛАТА');
+  assert.equal(await page.locator('.rp-col-payment-date input').count(),0,'planned date is plain text');
+  assert.equal(await page.locator('.rp-compact-row[data-id="102"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date rp-payment-due-today');
+  assert.equal(await page.locator('.rp-compact-row[data-id="103"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date rp-payment-overdue');
+  assert.equal(await page.locator('.rp-compact-row[data-id="101"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date','fully received payment is neutral');
+  assert.equal(await page.locator('.rp-compact-row[data-id="104"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date','forecast without established due date is neutral');
   await page.selectOption('#rp-payment-filter','paid');
   assert.deepEqual(await visibleIds(),['105','101'],'both sides are covered, including an explicit zero-rate side');
   await page.selectOption('#rp-payment-filter','underpaid');
