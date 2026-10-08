@@ -35,9 +35,9 @@ function raceExpectFailure(callable $fn, string $message, ?string $contains = nu
     throw new RuntimeException('FAIL: '.$message);
 }
 
-$dsn = getenv('PLANEX_FINANCE_TEST_DSN') ?: 'mysql:host=127.0.0.1;port=3306;dbname=erp_obligations_test;charset=utf8mb4';
-$dbUser = getenv('PLANEX_FINANCE_TEST_USER') ?: 'root';
-$dbPass = getenv('PLANEX_FINANCE_TEST_PASSWORD') ?: 'root';
+$dsn = getenv('PLANEX_FINANCE_TEST_DSN') ?: 'mysql:host='.(getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1').';port='.(getenv('PLANEX_SCHEMA_DB_PORT') ?: '3306').';dbname='.(getenv('PLANEX_TEST_FIXED_DB') ?: 'erp_obligations_test').';charset=utf8mb4';
+$dbUser = getenv('PLANEX_FINANCE_TEST_USER') ?: getenv('PLANEX_SCHEMA_DB_USER') ?: 'root';
+$dbPass = getenv('PLANEX_FINANCE_TEST_PASSWORD') ?: getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: 'root';
 $options = [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION, PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC];
 $pdo = new PDO($dsn,$dbUser,$dbPass,$options);
 $editorPdo = new PDO($dsn,$dbUser,$dbPass,$options);
@@ -174,6 +174,24 @@ $pdo->beginTransaction();
 FinanceObligationService::replaceInvoiceLinks($pdo,2,[['obligation_id'=>2,'amount'=>'20.00']],$userCtx);
 $pdo->commit();
 raceCheck((int)$pdo->query("SELECT COUNT(*) FROM finance_invoice_links WHERE invoice_id=2 AND obligation_id=2 AND amount=20")->fetchColumn()===1,'identical canonical link map is allowed after factual POSTED payment');
+
+// Re-generating a package may re-save the same invoice after another invoice has occupied
+// the obligation. Keep the existing link unchanged, but reject any changed allocation.
+$pdo->exec("INSERT INTO finance_invoices(direction,number,invoice_date,counterparty_entity_type,counterparty_entity_id,counterparty_name,counterparty_inn,amount,status) VALUES('INCOMING','RACE-OTHER-10','2026-08-27','contractor',50,'Race Supplier','7755000005',10,'received')");
+$otherInvoiceId=(int)$pdo->lastInsertId();
+$pdo->exec("INSERT INTO finance_invoice_links(invoice_id,obligation_id,amount,side) VALUES($otherInvoiceId,2,10,'carrier')");
+$originalLinkId=(int)$pdo->query('SELECT id FROM finance_invoice_links WHERE invoice_id=2 AND obligation_id=2')->fetchColumn();
+$pdo->beginTransaction();
+FinanceObligationService::replaceInvoiceLinks($pdo,2,[['obligation_id'=>2,'amount'=>'20.00']],$userCtx);
+$pdo->commit();
+raceCheck((int)$pdo->query("SELECT COUNT(*) FROM finance_invoice_links WHERE invoice_id=2 AND obligation_id=2 AND amount=20")->fetchColumn()===1,'unchanged invoice link survives a later overlapping invoice');
+raceCheck((int)$pdo->query('SELECT id FROM finance_invoice_links WHERE invoice_id=2 AND obligation_id=2')->fetchColumn()===$originalLinkId,'identical re-save preserves physical link identity');
+raceCheck((int)$pdo->query("SELECT COUNT(*) FROM finance_invoice_links WHERE invoice_id=$otherInvoiceId AND obligation_id=2 AND amount=10")->fetchColumn()===1,'other invoice remains untouched');
+raceExpectFailure(
+    fn()=>FinanceObligationService::replaceInvoiceLinks($pdo,$otherInvoiceId,[['obligation_id'=>2,'amount'=>'9.00']],$userCtx),
+    'a different invoice cannot reallocate the overbooked obligation',
+    'Сумма связи превышает свободный остаток обязательства'
+);
 
 // Order B: link transaction acquires the invoice lock first. Standalone writer must wait/fail while the lock is held.
 $editorPdo->beginTransaction();

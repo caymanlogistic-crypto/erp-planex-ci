@@ -460,13 +460,14 @@ final class FinanceObligationService
             $currentStmt = $pdo->prepare(
                 'SELECT obligation_id,amount
                    FROM finance_invoice_links
-                  WHERE invoice_id=? AND obligation_id IS NOT NULL
+                  WHERE invoice_id=?
                   ORDER BY obligation_id,id
                   FOR UPDATE'
             );
             $currentStmt->execute([$invoiceId]);
             $currentLinkMap = [];
-            foreach ($currentStmt->fetchAll(PDO::FETCH_ASSOC) as $currentLink) {
+            $currentLinkRows = $currentStmt->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($currentLinkRows as $currentLink) {
                 $obligationId = (int)($currentLink['obligation_id'] ?? 0);
                 if ($obligationId <= 0) {
                     continue;
@@ -485,6 +486,8 @@ final class FinanceObligationService
                 }
             }
             ksort($currentLinkMap, SORT_NUMERIC);
+            $sameCanonicalLinks = $currentLinkMap === $requestedLinkMap
+                && count($currentLinkRows) === count($requestedLinkMap);
 
             if (self::compareMoney($actualPaid, '0.00') > 0 && $currentLinkMap !== $requestedLinkMap) {
                 throw new RuntimeException('После поступления оплаты нельзя менять привязки счёта к платёжным обязательствам.');
@@ -522,7 +525,9 @@ final class FinanceObligationService
                 $capStmt->execute([$obligationId, $invoiceId]);
                 $already = (string)$capStmt->fetchColumn();
                 $capacity = self::subMoney((string)$ob['amount'], $already);
-                if (self::compareMoney($amount, $capacity) > 0) {
+                // An identical re-save does not consume any additional capacity. Another invoice
+                // may have claimed the obligation since this invoice was originally linked.
+                if (!$sameCanonicalLinks && self::compareMoney($amount, $capacity) > 0) {
                     throw new RuntimeException('Сумма связи превышает свободный остаток обязательства «' . ($ob['counterparty_name'] ?? '') . '».');
                 }
                 $cleanRows[$obligationId] = ['obligation' => $ob, 'amount' => $amount];
@@ -531,6 +536,13 @@ final class FinanceObligationService
 
             if ($cleanRows !== [] && self::compareMoney($total, (string)$invoice['amount']) !== 0) {
                 throw new RuntimeException('Сумма связей с обязательствами должна быть равна сумме счёта.');
+            }
+
+            if ($sameCanonicalLinks) {
+                if ($ownsTransaction) {
+                    $pdo->commit();
+                }
+                return;
             }
 
             $pdo->prepare('DELETE FROM finance_invoice_links WHERE invoice_id=?')->execute([$invoiceId]);
