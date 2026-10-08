@@ -8,6 +8,7 @@ use App\Security\AccessRuntime;
 use App\Service\AccessControlService;
 use App\Service\DocumentMailTransport;
 use App\Service\EmployeeMailProfileService;
+use App\Service\FinanceInvoiceService;
 use App\Service\WasteTripClosingPackageStore;
 use App\Service\WasteTripClosingService;
 use DomainException;
@@ -21,7 +22,7 @@ final class WasteTripClosingController
     public function index(): void
     {
         header('Cache-Control: no-store');
-        $trips=[];$error=null;$schemaReady=false;
+        $trips=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];
         $success=$_SESSION['waste_trip_closing_success']??null;
         $flashError=$_SESSION['waste_trip_closing_error']??null;
         unset($_SESSION['waste_trip_closing_success'],$_SESSION['waste_trip_closing_error']);
@@ -29,6 +30,11 @@ final class WasteTripClosingController
             [, $pdo]=$this->context();
             $schemaReady=WasteTripClosingService::ready($pdo);
             if ($schemaReady) $trips=WasteTripClosingService::trips($pdo);
+            $canCreateInvoice=AccessControlService::canAccessPage('company.finance.invoices');
+            if ($canCreateInvoice) {
+                $contractors=FinanceInvoiceService::fetchContractorsForSelect($pdo);
+                $clients=FinanceInvoiceService::fetchClientsForSelect($pdo);
+            }
         } catch (Throwable $exception) {
             error_log('waste trip closing index: '.$exception->getMessage());
             $error='Не удалось загрузить закрывающие документы рейсов.';
@@ -84,7 +90,8 @@ final class WasteTripClosingController
             if ($root===false || $resolved===false || !str_starts_with($resolved,$root.DIRECTORY_SEPARATOR) || !is_file($resolved)) throw new DomainException('Документ недоступен.');
             header('Content-Type: '.(string)$doc['mime_type']);
             header('X-Content-Type-Options: nosniff');
-            header('Content-Disposition: attachment; filename*=UTF-8\'\''.rawurlencode((string)$doc['original_name']));
+            $disposition=in_array(strtolower((string)$doc['mime_type']),['application/pdf','image/jpeg','image/png','image/webp','image/tiff'],true)?'inline':'attachment';
+            header('Content-Disposition: '.$disposition.'; filename*=UTF-8\'\''.rawurlencode((string)$doc['original_name']));
             header('Content-Length: '.filesize($resolved));readfile($resolved);
         } catch (Throwable) {http_response_code(404);echo 'Документ недоступен.';}
     }

@@ -1,5 +1,8 @@
 <?php
 /** @var list<array<string,mixed>> $trips */
+$canCreateInvoice=$canCreateInvoice??false;
+$contractors=$contractors??[];
+$clients=$clients??[];
 $all=count($trips);
 $selectedTrip=(int)($_GET['trip_id']??0);
 if ($selectedTrip<=0 && $trips) $selectedTrip=(int)$trips[0]['id'];
@@ -12,6 +15,7 @@ $progressColor=static function(int $percent):string {
 };
 ?>
 <link rel="stylesheet" href="<?= e(app_url('/assets/css/waste-trip-closing.css')) ?>?v=<?= filemtime(base_path('public/assets/css/waste-trip-closing.css')) ?>">
+<?php if(!empty($_SESSION['invoice_success'])):?><div class="notice success" role="status"><?= e((string)$_SESSION['invoice_success']) ?></div><?php unset($_SESSION['invoice_success']);endif;?>
 <?php if(in_array($success,['Документ добавлен.','Документ убран из комплекта.'],true)):?><span data-closing-action-result="success" hidden></span><?php elseif($success):?><div class="notice success" role="status"><?= e((string)$success) ?></div><?php endif;?>
 <?php if($flashError||$error):?><div class="notice warn" role="alert"><?= e((string)($flashError?:$error)) ?></div><?php endif;?>
 <div class="closing-page">
@@ -30,6 +34,10 @@ $progressColor=static function(int $percent):string {
         $count=count($docs);$total=4+count($extras);$percent=$total?min(100,(int)round($count/$total*100)):0;
         $state=$trip['review_state']==='review'?'review':($count===0?'new':($missing?'partial':'ready'));
         $paid=$trip['paid_bank_transactions'];
+        $requestCount=(int)($trip['request_count']??0);$processedCount=(int)($trip['processed_count']??0);
+        $requestPercent=$requestCount>0?min(100,(int)round($processedCount/$requestCount*100)):0;
+        $pendingRequests=max(0,$requestCount-$processedCount);
+        $missingDocuments=count($missing);
         $search=mb_strtolower($trip['business_id'].' '.$trip['carrier_name'].' '.$trip['manager_name'].' '.$executorLabel((string)$trip['legal_entity_code']),'UTF-8');
     ?>
     <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-state="<?= e($state) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
@@ -38,7 +46,8 @@ $progressColor=static function(int $percent):string {
         <span class="closing-carrier"><small>ПЕРЕВОЗЧИК</small><b><?= e((string)$trip['carrier_name']) ?></b><span>Менеджер: <?= e((string)$trip['manager_name']) ?></span></span>
         <span class="closing-executor"><small>ИСПОЛНИТЕЛЬ</small><b><?= e($executorLabel((string)$trip['legal_entity_code'])) ?></b><span><?= e((string)$trip['recipient_email']) ?></span></span>
         <span class="closing-progress"><small>ДОКУМЕНТЫ</small><b><?= $count ?> из <?= $total ?> получено</b><span class="closing-track" aria-label="<?= $count ?> из <?= $total ?> документов получено"><i style="width:<?= $percent ?>%;--closing-progress-color:<?= e($progressColor($percent)) ?>"></i></span></span>
-        <?php if($count>0):?><span class="closing-missing"><small>НЕ ХВАТАЕТ ДОКУМЕНТОВ</small><?php if($missing):?><span><?= e(implode(' · ',$missing)) ?></span><?php else:?><b>Все документы получены</b><?php endif;?></span><?php endif;?>
+        <span class="closing-requests"><small>ОБРАБОТАНО ЗАЯВОК</small><b><?= $processedCount ?> из <?= $requestCount ?> обработано</b><span class="closing-track closing-requests-track" aria-label="<?= $processedCount ?> из <?= $requestCount ?> заявок обработано"><i style="width:<?= $requestPercent ?>%"></i></span></span>
+        <span class="closing-shared-issues"><small>ОШИБКИ</small><span class="closing-shared-issues-list"><?php if($missingDocuments):?><span><b>Документы:</b> <?= $missingDocuments ?></span><?php endif;?><?php if($pendingRequests):?><span><b>Проверка ТН:</b> <?= $pendingRequests ?></span><?php endif;?><?php if(!$missingDocuments&&!$pendingRequests):?><span class="closing-shared-issues-clear">Нет ошибок</span><?php endif;?></span></span>
       </summary>
       <div class="closing-trip-body">
         <div class="closing-body-head"><div><h2>Закрывающие документы рейса #<?= e((string)$trip['business_id']) ?></h2><p>Добавьте файлы и передайте комплект на проверку.</p></div><span class="closing-note">Получатель письма: <?= e((string)$trip['recipient_email']) ?></span></div>
@@ -48,14 +57,14 @@ $progressColor=static function(int $percent):string {
           <?php foreach(\App\Service\WasteTripClosingService::SLOTS as $slot=>$label):$document=$bySlot[$slot]??null;
             $defaultCode=$slot==='contract'?'application':($slot==='act'?'upd':$slot);
           ?><div class="closing-doc-row">
-            <div><strong><?= e($label) ?></strong><small>Файл PDF или изображение</small></div>
-            <span class="closing-file-name<?= $document?' is-present':'' ?>"><?php if($document):?><a href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a><?php else:?>Файл не получен<?php endif;?></span>
+            <div><strong><?= e($label) ?></strong><small>Файл PDF или изображение</small><?php if($slot==='invoice'&&$canCreateInvoice&&(int)($trip['carrier_id']??0)>0):?><button type="button" class="btn btn-secondary closing-invoice-open" data-invoice-open data-carrier-id="<?= (int)$trip['carrier_id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>">Внести счёт перевозчика</button><?php endif;?></div>
+            <span class="closing-file-name<?= $document?' is-present':'' ?>"><?php if($document):?><a target="_blank" rel="noopener noreferrer" href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a><?php else:?>Файл не получен<?php endif;?></span>
             <div class="closing-doc-actions"><form class="closing-upload-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents')) ?>">
               <?= csrfField() ?><input type="hidden" name="slot_code" value="<?= e($slot) ?>"><input type="hidden" name="requirement_code" value="<?= e($defaultCode) ?>">
               <label class="btn btn-secondary closing-upload"><?= $document?'Заменить':'Добавить' ?><input type="file" name="document_file" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx,.xls,.xlsx" required></label>
             </form><?php if($document):?><form class="closing-remove-form" method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'/remove')) ?>"><?= csrfField() ?><button class="btn btn-secondary closing-remove" type="submit">Удалить</button></form><?php endif;?></div>
           </div><?php endforeach;?>
-          <?php foreach($extras as $document):?><div class="closing-doc-row"><div><strong><?= e((string)$document['custom_title']) ?></strong><small>Другой документ</small></div><span class="closing-file-name is-present"><a href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a></span><form class="closing-remove-form" method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'/remove')) ?>"><?= csrfField() ?><button class="btn btn-secondary closing-remove" type="submit">Удалить</button></form></div><?php endforeach;?>
+          <?php foreach($extras as $document):?><div class="closing-doc-row"><div><strong><?= e((string)$document['custom_title']) ?></strong><small>Другой документ</small></div><span class="closing-file-name is-present"><a target="_blank" rel="noopener noreferrer" href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a></span><form class="closing-remove-form" method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'/remove')) ?>"><?= csrfField() ?><button class="btn btn-secondary closing-remove" type="submit">Удалить</button></form></div><?php endforeach;?>
         </div>
         <form class="closing-extra-upload" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents')) ?>">
           <?= csrfField() ?><input type="hidden" name="slot_code" value="extra"><input type="hidden" name="requirement_code" value="supporting">
@@ -84,4 +93,5 @@ $progressColor=static function(int $percent):string {
     <div class="closing-review-foot"><button type="button" class="btn btn-secondary" data-review-close>Отмена</button><button type="submit" class="btn btn-primary">Передать на проверку</button></div>
   </form>
 </dialog>
+<?php if($canCreateInvoice):?><dialog class="closing-invoice-dialog" data-invoice-dialog aria-labelledby="closing-invoice-title"><div class="modal modal-lg"><div class="modal-head"><span class="modal-title" id="closing-invoice-title">Создать счёт</span><button type="button" class="modal-close" data-invoice-close aria-label="Закрыть">&times;</button></div><?php $invoice=['direction'=>'INCOMING'];$isEdit=false;$returnTo='/company/trips/closing-documents';require base_path('app/View/partials/company_invoice_create_form.php'); ?></div></dialog><?php endif;?>
 <script src="<?= e(app_url('/assets/js/waste-trip-closing.js')) ?>?v=<?= filemtime(base_path('public/assets/js/waste-trip-closing.js')) ?>" defer></script>

@@ -45,7 +45,7 @@ final class WasteTripClosingService
     {
         $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
         $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.actual_end_date,wt.legal_entity_code,
-                COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
+                ct.id carrier_id,COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
                 COALESCE(r.state,'work') review_state,COALESCE(r.version,0) review_version,
                 r.mail_status,r.submitted_at
               FROM waste_trips wt
@@ -68,6 +68,22 @@ final class WasteTripClosingService
         $documentQuery->execute($ids);
         $byTrip=[];
         foreach ($documentQuery->fetchAll(PDO::FETCH_ASSOC) as $document) $byTrip[(int)$document['waste_trip_id']][]=$document;
+        $completionQuery=$pdo->prepare("SELECT wtr.waste_trip_id,
+                COUNT(DISTINCT wtr.id) request_count,
+                COUNT(DISTINCT CASE WHEN COALESCE(i.tn_absent,0)=1 OR (
+                    i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
+                    AND i.driver_signature_present=1 AND i.sender_signature_present=1
+                    AND (i.tn_datetime_status='full' OR (i.tn_datetime_status IN ('partial','no') AND i.recovery_source IS NOT NULL) OR i.tn_datetime_status IS NULL)
+                    AND doc.waste_trip_request_id IS NOT NULL
+                ) THEN wtr.id END) processed_count
+            FROM waste_trip_requests wtr
+            LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+            LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
+            WHERE wtr.removed_at IS NULL AND wtr.waste_trip_id IN ($placeholders)
+            GROUP BY wtr.waste_trip_id");
+        $completionQuery->execute($ids);
+        $completion=[];
+        foreach ($completionQuery->fetchAll(PDO::FETCH_ASSOC) as $progress) $completion[(int)$progress['waste_trip_id']]=$progress;
         $paid=[];
         $amountQuery=$pdo->prepare("SELECT source_parent_id,COUNT(*) obligations,SUM(amount) due,SUM(paid_amount) paid
             FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND party_role='customer'
@@ -98,6 +114,8 @@ final class WasteTripClosingService
             $row['documents'] = $byTrip[(int)$row['id']] ?? [];
             $row['recipient_email'] = self::RECIPIENTS[(string)$row['legal_entity_code']] ?? '';
             $row['paid_bank_transactions'] = $paid[(int)$row['id']] ?? [];
+            $row['request_count'] = (int)($completion[(int)$row['id']]['request_count'] ?? 0);
+            $row['processed_count'] = (int)($completion[(int)$row['id']]['processed_count'] ?? 0);
         }
         unset($row);
         return $rows;
