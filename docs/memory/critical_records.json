@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c1964181c94c261134276fd829f160044e33ac36",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c1964181c94c261134276fd829f160044e33ac36/tests/waste_trip_synchronization_mysql_test.php",
+      "verified_sha": "6b88c473d457a09c38c93a1da54e2e1ee36004bf",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/6b88c473d457a09c38c93a1da54e2e1ee36004bf/tests/waste_trip_closing_view_test.php",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -151,8 +151,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "5402a546e29691793b1ceeb0a48d2472f68a681e",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/5402a546e29691793b1ceeb0a48d2472f68a681e/AGENTS.md",
+      "verified_sha": "6b88c473d457a09c38c93a1da54e2e1ee36004bf",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/6b88c473d457a09c38c93a1da54e2e1ee36004bf/tests/design_lab_contract_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
