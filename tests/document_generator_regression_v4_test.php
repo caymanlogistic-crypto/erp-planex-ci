@@ -300,21 +300,52 @@ foreach ([[78,244,'26-106-1','275000.00'],[79,246,'26-105','180000.00'],[80,255,
     $pdo->exec("INSERT INTO finance_invoices(direction,number,invoice_date,counterparty_entity_type,counterparty_entity_id,amount,paid_amount,status) VALUES('OUTGOING','$number','2026-09-11','client',1,$amount,$amount,'paid')");
     $historicalId=(int)$pdo->lastInsertId();
     $pdo->exec("INSERT INTO finance_invoice_links(invoice_id,obligation_id,amount,side) VALUES($historicalId,$obligation,$amount,'customer')");
+    if ($publicId===244) {
+        foreach (['client_sublease_crew','client_invoice','client_act','client_upd_contract','client_upd_invoice','client_upd_status2'] as $oldType) {
+            $source=$pdo->prepare("SELECT * FROM generated_documents WHERE document_type=? AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.trip.id'))='77' ORDER BY id DESC LIMIT 1");
+            $source->execute([$oldType]);$oldDoc=$source->fetch(PDO::FETCH_ASSOC);
+            $ok(is_array($oldDoc),'prior generated document source '.$oldType);
+            $oldSnapshot=json_decode((string)$oldDoc['snapshot_json'],true,512,JSON_THROW_ON_ERROR);
+            $oldSnapshot['trip']['id']=$tripId;
+            $oldSnapshot['trip']['business_id']=$publicId;
+            $oldSnapshot['package']['number']='26-244';
+            $oldSnapshot['package']['contract_number']='26-244';
+            $oldSnapshot['package']['transfer_number']='26-244';
+            $oldSnapshot['document']['number']='26-244';
+            $insertOld=$pdo->prepare('INSERT INTO generated_documents(document_type,document_number,document_date,template_id,template_version_id,route_executor_id,request_ids_json,total_mass_kg,unload_address,parameters_json,snapshot_json,stored_path,original_name,sha256,created_by_user_id,created_by_role) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
+            $insertOld->execute([$oldType,'26-244',$oldDoc['document_date'],$oldDoc['template_id'],$oldDoc['template_version_id'],$oldDoc['route_executor_id'],$oldDoc['request_ids_json'],$oldDoc['total_mass_kg'],$oldDoc['unload_address'],$oldDoc['parameters_json'],json_encode($oldSnapshot,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR),$oldDoc['stored_path'],$oldDoc['original_name'],$oldDoc['sha256'],$oldDoc['created_by_user_id'],$oldDoc['created_by_role']]);
+        }
+    }
     $suggested=App\Service\DocumentGeneratorService::suggestClientPackageDates($pdo,App\Service\WasteTripService::fetchTrip($pdo,$tripId,true));
     $eq($suggested['invoice_date'],'2026-09-11','historical invoice date is suggested '.$publicId);
     $wrongDate=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,$tripId,'2026-08-31','2026-09-05','2026-09-05');
     $ok(!($wrongDate['ok']??true),'historical invoice date mismatch is rejected '.$publicId);
     $preparedHistorical=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,$tripId,'2026-08-31','2026-09-11','2026-09-05');
     $ok($preparedHistorical['ok']??false,'historical package prepares '.$publicId);
+    if ($publicId===244) {$ok($preparedHistorical['package_exists']??false,'old numbered package requests confirmation');$eq(count($preparedHistorical['existing_package_documents']),3,'old act package found by trip');}
     $eq($preparedHistorical['package_number'],$number,'historical package number '.$publicId);
     $eq($preparedHistorical['contract_number'],'26-'.$publicId,'historical contract follows trip '.$publicId);
     $eq($preparedHistorical['transfer_number'],'26-'.$publicId,'historical transfer follows trip '.$publicId);
-    $generatedHistorical=App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$preparedHistorical);
+    if ($publicId===244) {
+        $oldRequiresConfirmation=false;
+        try{App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$preparedHistorical);}
+        catch(RuntimeException $e){$oldRequiresConfirmation=str_contains($e->getMessage(),'Подтвердите перезапись');}
+        $ok($oldRequiresConfirmation,'old numbered package cannot overwrite silently');
+        $pdo->exec("UPDATE finance_invoice_links SET amount=274999.00 WHERE invoice_id=$historicalId");
+        $badLinkBlocked=false;
+        try{App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$preparedHistorical,true);}
+        catch(RuntimeException $e){$badLinkBlocked=str_contains($e->getMessage(),'Связи исторического счёта');}
+        $ok($badLinkBlocked,'mismatched historical link blocks replacement');
+        $eq((int)$pdo->query("SELECT COUNT(*) FROM generated_documents WHERE document_type IN ('client_sublease_crew','client_invoice','client_act') AND document_number='26-244'")->fetchColumn(),3,'failed replacement preserves old documents');
+        $pdo->exec("UPDATE finance_invoice_links SET amount=$amount WHERE invoice_id=$historicalId");
+    }
+    $generatedHistorical=App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$preparedHistorical,$publicId===244);
     $eq(count($generatedHistorical),3,'historical package generates three documents '.$publicId);
     $eq((int)$pdo->query("SELECT COUNT(*) FROM finance_invoices WHERE direction='OUTGOING' AND number='$number' AND amount=$amount")->fetchColumn(),1,'historical electronic invoice is reused '.$publicId);
     $eq((string)$pdo->query("SELECT invoice_date FROM finance_invoices WHERE id=$historicalId")->fetchColumn(),'2026-09-11','historical invoice date is preserved '.$publicId);
     $invoiceDoc=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$generatedHistorical['client_invoice']);
     $eq((string)$invoiceDoc['document_number'],$number,'printed historical invoice number '.$publicId);
+    if ($publicId===244) $eq((int)$pdo->query("SELECT COUNT(*) FROM generated_documents WHERE document_type='client_invoice' AND document_number='26-244'")->fetchColumn(),0,'old printed invoice removed after confirmed overwrite');
     $contractDoc=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$generatedHistorical['client_sublease_crew']);
     $actDoc=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$generatedHistorical['client_act']);
     $eq((string)$contractDoc['document_number'],'26-'.$publicId,'printed contract follows trip '.$publicId);
@@ -333,11 +364,13 @@ foreach ([[78,244,'26-106-1','275000.00'],[79,246,'26-105','180000.00'],[80,255,
     $eq((int)$pdo->query("SELECT COUNT(*) FROM finance_invoice_links WHERE invoice_id=$historicalId AND obligation_id=$obligation")->fetchColumn(),1,'repeat preserves historical obligation link '.$publicId);
     $updHistorical=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,$tripId,'2026-08-31','2026-09-11','2026-09-05',null,'upd');
     $ok($updHistorical['ok']??false,'historical UPD package prepares '.$publicId);
-    $updHistoricalIds=App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$updHistorical);
+    if ($publicId===244) {$ok($updHistorical['package_exists']??false,'old UPD package requests confirmation');$eq(count($updHistorical['existing_package_documents']),3,'old UPD package found by trip');}
+    $updHistoricalIds=App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$updHistorical,$publicId===244);
     $eq(count($updHistoricalIds),3,'historical UPD package generates three documents '.$publicId);
     $updInvoice=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$updHistoricalIds['client_upd_invoice']);
     $updTransfer=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$updHistoricalIds['client_upd_status2']);
     $eq((string)$updInvoice['document_number'],$number,'historical UPD package invoice keeps old number '.$publicId);
+    if ($publicId===244) $eq((int)$pdo->query("SELECT COUNT(*) FROM generated_documents WHERE document_type='client_upd_invoice' AND document_number='26-244'")->fetchColumn(),0,'old printed UPD invoice removed after confirmed overwrite');
     $eq((string)$updTransfer['document_number'],'26-'.$publicId,'historical UPD follows trip '.$publicId);
     $eq((int)$pdo->query("SELECT COUNT(*) FROM finance_invoices WHERE direction='OUTGOING' AND number='$number' AND amount=$amount")->fetchColumn(),1,'UPD variant reuses historical electronic invoice '.$publicId);
 }

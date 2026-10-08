@@ -167,13 +167,21 @@ trait DocumentGeneratorTripPackageTrait
         $previousNumber = $pdo->prepare("SELECT DISTINCT document_number FROM generated_documents WHERE document_type IN ('client_invoice','client_upd_invoice') AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.trip.id'))=? ORDER BY document_number");
         $previousNumber->execute([(string)$tripId]);
         $previousNumbers = $previousNumber->fetchAll(PDO::FETCH_COLUMN);
-        if (count($previousNumbers) > 1) return self::failed(['Для рейса найдены счета с разными номерами. Уточните историю документов.']);
-        if ($previousNumbers !== [] && ClientPackageInvoiceNumberPolicy::historical((int)($trip['business_id'] ?? 0)) === null) {
-            $packageNumber = (string)$previousNumbers[0];
-        } elseif ($previousNumbers !== [] && (string)$previousNumbers[0] !== $packageNumber) {
-            return self::failed(['Ранее сформированный счёт рейса имеет номер ' . $previousNumbers[0] . ', а установленное исключение требует ' . $packageNumber . '. Сначала требуется сверка истории документов.']);
+        $historical = ClientPackageInvoiceNumberPolicy::historical((int)($trip['business_id'] ?? 0));
+        $supersededNumber = ClientPackageInvoiceNumberPolicy::tripDocumentNumber((int)($trip['business_id'] ?? 0));
+        if ($historical !== null) {
+            foreach ($previousNumbers as $previous) {
+                if (!in_array((string)$previous, [$packageNumber, $supersededNumber], true)) {
+                    return self::failed(['Для рейса найден счёт с неожиданным номером ' . $previous . '. Уточните историю документов.']);
+                }
+            }
+        } elseif (count($previousNumbers) > 1) {
+            return self::failed(['Для рейса найдены счета с разными номерами. Уточните историю документов.']);
         }
-        if (ClientPackageInvoiceNumberPolicy::historical((int)($trip['business_id'] ?? 0)) !== null) {
+        if ($previousNumbers !== [] && $historical === null) {
+            $packageNumber = (string)$previousNumbers[0];
+        }
+        if ($historical !== null) {
             try {
                 $historicalInvoice = ClientPackageInvoiceNumberPolicy::existingHistoricalInvoice(
                     $pdo, (int)$trip['business_id'], $tripId, $clientId
@@ -270,11 +278,13 @@ trait DocumentGeneratorTripPackageTrait
         $prepared['package_templates'] = $templates;
         $prepared['client'] = $client;
         $prepared['trip'] = $trip;
-        $prepared['existing_package_documents'] = array_merge(
-            self::existingClientPackageContractDocuments($pdo, $packageNumber, $contractType),
-            self::existingClientPackageDocuments($pdo, $packageNumber, [$invoiceType]),
-            self::existingClientPackageDocuments($pdo, $transferNumber, [$transferType])
-        );
+        $prepared['existing_package_documents'] = $historical !== null
+            ? self::existingClientPackageTripDocuments($pdo, $tripId, array_keys($types))
+            : array_merge(
+                self::existingClientPackageContractDocuments($pdo, $packageNumber, $contractType),
+                self::existingClientPackageDocuments($pdo, $packageNumber, [$invoiceType]),
+                self::existingClientPackageDocuments($pdo, $transferNumber, [$transferType])
+            );
         $contractIds = array_map(
             static fn(array $row): int => (int)$row['id'],
             array_filter($prepared['existing_package_documents'], static fn(array $row): bool => (string)$row['document_type'] === $contractType)
@@ -340,16 +350,45 @@ trait DocumentGeneratorTripPackageTrait
         try {
             $pdo->beginTransaction();
             $existing = [];
-            foreach (array_keys($types) as $type) {
-                if ($type === ($variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew')) {
-                    $dup = $pdo->prepare("SELECT * FROM generated_documents WHERE document_type=? AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.package.number'))=? FOR UPDATE");
-                    $dup->execute([$type, $number]);
-                    array_push($existing, ...$dup->fetchAll(PDO::FETCH_ASSOC));
-                } else {
-                    $dup = $pdo->prepare('SELECT * FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
-                    $dup->execute([$type, $type === ($variant === 'upd' ? 'client_upd_invoice' : 'client_invoice') ? $number : $transferNumber]);
-                    $row = $dup->fetch(PDO::FETCH_ASSOC) ?: null;
-                    if ($row !== null) $existing[] = $row;
+            $businessId = (int)($prepared['trip']['business_id'] ?? 0);
+            if (ClientPackageInvoiceNumberPolicy::historical($businessId) !== null) {
+                $tripId = (int)($prepared['trip']['id'] ?? 0);
+                $existing = self::existingClientPackageTripDocuments($pdo, $tripId, array_keys($types), true);
+                $seenTypes = [];
+                foreach ($existing as $row) {
+                    $type = (string)$row['document_type'];
+                    if (isset($seenTypes[$type])) {
+                        throw new RuntimeException('Для рейса найдено несколько документов одного вида. Перезапись остановлена.');
+                    }
+                    $seenTypes[$type] = true;
+                    if ($type === ($variant === 'upd' ? 'client_upd_invoice' : 'client_invoice')
+                        && !in_array((string)$row['document_number'], [$number, $transferNumber], true)) {
+                        throw new RuntimeException('Ранее сформированный счёт рейса имеет неожиданный номер. Перезапись остановлена.');
+                    }
+                }
+                foreach (array_keys($types) as $type) {
+                    $targetNumber = $type === ($variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew')
+                        ? $contractNumber
+                        : ($type === ($variant === 'upd' ? 'client_upd_invoice' : 'client_invoice') ? $number : $transferNumber);
+                    $collision = $pdo->prepare('SELECT id FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
+                    $collision->execute([$type, $targetNumber]);
+                    $collisionId = $collision->fetchColumn();
+                    if ($collisionId !== false && !in_array((int)$collisionId, array_map('intval', array_column($existing, 'id')), true)) {
+                        throw new RuntimeException('Номер документа № ' . $targetNumber . ' уже занят другим рейсом. Перезапись остановлена.');
+                    }
+                }
+            } else {
+                foreach (array_keys($types) as $type) {
+                    if ($type === ($variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew')) {
+                        $dup = $pdo->prepare("SELECT * FROM generated_documents WHERE document_type=? AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.package.number'))=? FOR UPDATE");
+                        $dup->execute([$type, $number]);
+                        array_push($existing, ...$dup->fetchAll(PDO::FETCH_ASSOC));
+                    } else {
+                        $dup = $pdo->prepare('SELECT * FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
+                        $dup->execute([$type, $type === ($variant === 'upd' ? 'client_upd_invoice' : 'client_invoice') ? $number : $transferNumber]);
+                        $row = $dup->fetch(PDO::FETCH_ASSOC) ?: null;
+                        if ($row !== null) $existing[] = $row;
+                    }
                 }
             }
             if ($existing !== [] && !$overwriteExisting) {
@@ -464,6 +503,19 @@ trait DocumentGeneratorTripPackageTrait
             "SELECT id,document_type,document_number,document_date,created_at FROM generated_documents WHERE document_type IN ({$placeholders}) AND document_number=? ORDER BY id"
         );
         $stmt->execute([...$types, $number]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+
+    private static function existingClientPackageTripDocuments(PDO $pdo, int $tripId, array $types, bool $lock = false): array
+    {
+        $placeholders = implode(',', array_fill(0, count($types), '?'));
+        $stmt = $pdo->prepare(
+            "SELECT id,document_type,document_number,document_date,created_at,stored_path FROM generated_documents
+              WHERE document_type IN ({$placeholders})
+                AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.trip.id'))=?
+              ORDER BY id" . ($lock ? ' FOR UPDATE' : '')
+        );
+        $stmt->execute([...$types, (string)$tripId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
