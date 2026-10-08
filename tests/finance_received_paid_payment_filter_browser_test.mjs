@@ -9,76 +9,85 @@ const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/finance_received_paid_filter_render.php')],{encoding:'utf8'});
 const css=fs.readFileSync(path.join(root,'public/assets/css/finance-received-paid.css'),'utf8');
+const appCss=fs.readFileSync(path.join(root,'public/assets/css/app.css'),'utf8');
+const erpCss=fs.readFileSync(path.join(root,'public/assets/css/erp-ui.css'),'utf8');
+const fontCss=[[400,'Regular'],[500,'Medium'],[600,'SemiBold'],[700,'Bold']].map(([weight,name])=>`@font-face{font-family:"IBM Plex Sans";src:url(data:font/woff2;base64,${fs.readFileSync(path.join(root,`public/assets/fonts/IBMPlexSans-${name}.woff2`)).toString('base64')}) format("woff2");font-weight:${weight}}`).join('\n');
+const js=fs.readFileSync(path.join(root,'public/assets/js/finance-received-paid.js'),'utf8');
 const browser=await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_EXECUTABLE?{executablePath:process.env.PLANEX_BROWSER_EXECUTABLE}:{})});
 try{
-  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
-  page.on('pageerror',error=>errors.push(error.message));
-  await page.setContent(html);
-  await page.addStyleTag({content:css+'\nbody{margin:0}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
-  await page.evaluate(()=>{
-    window.openModal=id=>document.getElementById(id).classList.add('is-open');
-    window.closeModal=id=>document.getElementById(id).classList.remove('is-open');
-  });
-  const visibleIds=()=>page.locator('.rp-compact-row:visible').evaluateAll(items=>items.map(item=>item.dataset.id));
-  assert.deepEqual(await visibleIds(),['105','104','103','102','101'],'all completed trips are visible initially, sorted newest first');
-  assert.deepEqual(await page.locator('.rp-compact-row').evaluateAll(items=>items.map(item=>item.dataset.paymentStatus)),['paid','unknown-rate','unpaid','underpaid','paid'],'posted payments are classified against both rates');
-  assert.equal(await page.locator('.rp-compact-row').first().locator('td').count(),12,'one trip occupies one table row');
-  assert.equal(await page.locator('.rp-compact-table thead .rp-col-payment-date').innerText(),'ОПЛАТА');
-  assert.equal(await page.locator('.rp-col-payment-date input').count(),0,'planned date is plain text');
-  assert.equal(await page.locator('.rp-compact-row[data-id="102"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date rp-payment-due-today');
-  assert.equal(await page.locator('.rp-compact-row[data-id="103"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date rp-payment-overdue');
-  assert.equal(await page.locator('.rp-compact-row[data-id="101"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date','fully received payment is neutral');
-  assert.equal((await page.locator('.rp-compact-row[data-id="101"] .rp-col-payment-date').innerText()).trim(),'—','fully received trip has no upcoming payment date');
-  assert.equal(await page.locator('.rp-compact-row[data-id="104"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date','forecast without established due date is neutral');
-  await page.selectOption('#rp-payment-filter','paid');
-  assert.deepEqual(await visibleIds(),['105','101'],'both sides are covered, including an explicit zero-rate side');
-  await page.selectOption('#rp-payment-filter','underpaid');
-  assert.deepEqual(await visibleIds(),['102'],'one side with a shortfall appears');
-  await page.selectOption('#rp-payment-filter','unpaid');
-  assert.deepEqual(await visibleIds(),['103'],'zero payments on both sides appear only in unpaid');
-  await page.selectOption('#rp-payment-filter','unknown-rate');
-  assert.deepEqual(await visibleIds(),['104'],'a missing rate is not called fully paid');
-  await page.selectOption('#rp-payment-filter','paid');
-  await page.selectOption('#rp-filter','closed');
-  assert.deepEqual(await visibleIds(),['101'],'payment and existing state filters combine');
-  await page.locator('#rp-search').fill('105');
-  assert.deepEqual(await visibleIds(),[],'search combines with both filters');
-  assert.equal(await page.locator('#rp-count').innerText(),'0');
-  assert.equal(await page.locator('#rp-empty').isVisible(),true);
-  await page.locator('#rp-search').clear();
-  await page.selectOption('#rp-filter','all');
-  await page.locator('.rp-compact-row').first().click();
-  assert.equal(await page.locator('#rp-detail-modal').isVisible(),false,'single desktop click leaves details closed');
-  await page.locator('.rp-compact-row').first().dblclick();
-  assert.equal(await page.locator('#rp-detail-title').innerText(),'Рейс #105 · Рейс 105 · 28.09.2026 — 29.09.2026');
-  assert.equal(await page.locator('.rp-details-trip').count(),0,'dates have no separate block');
-  assert.equal(await page.locator('.rp-finance-pane').count(),2,'customer and carrier appear side by side');
-  const heights=await page.locator('.rp-finance-pane').evaluateAll(items=>items.map(item=>Math.round(item.getBoundingClientRect().height)));
-  assert.equal(heights[0],heights[1],'parallel blocks have equal height');
-  await page.evaluate(()=>window.closeModal('rp-detail-modal'));
-  for(const width of [1280,390]){
-    await page.setViewportSize({width,height:900});
-    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`no horizontal overflow at ${width}px`);
-  }
-  await page.locator('.rp-compact-row').first().click();
-  assert.equal(await page.locator('#rp-detail-modal').isVisible(),true,'mobile tap opens details');
-  await page.evaluate(()=>window.closeModal('rp-detail-modal'));
-  assert.equal(await page.locator('.rp-compact-row').first().evaluate(row=>document.activeElement===row),true,'focus returns to the trip row');
-  await page.setViewportSize({width:1280,height:900});
-  await page.locator('.rp-compact-row').last().dblclick();
-  await page.evaluate(()=>{window.fetch=async()=>({ok:true,text:async()=>'<p>Счёт открыт</p>'});});
-  await page.locator('#rp-detail-modal [data-view-invoice]').first().click();
-  assert.equal(await page.locator('#invoice-view-modal-body').innerText(),'Счёт открыт','invoice action works inside the copied details');
-  await page.evaluate(()=>{
-    window.closeModal('invoice-view-modal');window.closeModal('rp-detail-modal');
-    document.querySelector('#invoice-create-modal').insertAdjacentHTML('beforeend','<form class="invoice-form"><select class="js-inv-direction"><option value="OUTGOING">Клиенту</option><option value="INCOMING">От перевозчика</option></select><select class="js-inv-cparty-select"><option value="1">Заказчик</option><option value="2">Перевозчик</option></select></form>');
-  });
-  await page.selectOption('#rp-payment-filter','all');
-  await page.locator('.rp-compact-row').nth(2).dblclick();
-  await page.locator('#rp-detail-modal [data-create-trip]').first().click();
-  assert.equal(await page.locator('#invoice-create-modal form').getAttribute('data-preferred-trip-id'),'103','new invoice retains the selected trip');
-  assert.equal(await page.locator('#invoice-create-modal .js-inv-direction').inputValue(),'OUTGOING');
-  assert.equal(await page.locator('#invoice-create-modal .js-inv-cparty-select').inputValue(),'1');
-  assert.deepEqual(errors,[],'filter has no browser errors');
-  console.log('FINANCE_RECEIVED_PAID_PAYMENT_FILTER_BROWSER_OK');
+ const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
+ page.on('pageerror',error=>errors.push(error.message));
+ await page.setContent(html);
+ await page.addStyleTag({content:appCss+'\n'+erpCss+'\n'+css+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
+ await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
+ await page.addScriptTag({content:js});
+ const ids=()=>page.locator('#rp-list tr:visible').evaluateAll(items=>items.map(item=>item.dataset.id));
+ assert.deepEqual(await ids(),['105','104','103','102']);
+ assert.equal(await page.locator('#rp-count').innerText(),'4');
+ assert.equal(await page.locator('#rp-ledger-table thead').innerText().then(s=>s.includes('СЧЁТ')),false,'headers use Е');
+ assert.equal(await page.locator('#rp-list tr[data-id="104"] .rp-v015-driver').count(),0,'unknown driver is hidden');
+ assert.equal(await page.locator('#rp-list tr[data-id="103"]').getAttribute('data-carrier-due'),'overdue');
+ assert.equal(await page.locator('#rp-list tr[data-id="102"] .rp-v010-doc-list').first().locator('li').count(),2,'multiple trip invoices remain separate');
+ assert.equal(await page.locator('#rp-list tr[data-id="102"] .rp-v012-doc-date').first().innerText(),'29.09.2026','real invoice_date is below the number');
+ assert.equal(await page.locator('[data-total="customer-invoices"]').innerText(),'100 ₽','visible invoice links sum once');
+ await page.locator('[data-rp-filter="carrier-due"]').click();
+ assert.deepEqual(await ids(),['103'],'real carrier deadline filter');
+ await page.locator('[data-rp-filter="all"]').click();
+ await page.locator('#rp-search').fill('101');
+ assert.deepEqual(await ids(),[],'search composes with completion toggle');
+ assert.equal(await page.locator('[data-total="customer-invoices"]').innerText(),'—','empty invoice total is unknown');
+ await page.locator('#rp-hide-complete').uncheck();
+ assert.deepEqual(await ids(),['101']);
+ assert.equal(await page.locator('[data-total="customer-invoices"]').innerText(),'100 ₽');
+ await page.locator('#rp-search').clear();
+ await page.selectOption('#rp-sort','id-new');
+ assert.deepEqual(await ids(),['105','104','103','102','101']);
+ assert.equal(await page.locator('#rp-list tr[data-id="101"] td').count(),12);
+ await page.locator('#rp-list tr[data-id="101"]').dblclick();
+ assert.equal(await page.locator('#rp-detail-modal').isVisible(),true);
+ assert.equal(await page.locator('#rp-detail-modal .rp-v015-detail-driver').count(),1);
+ await page.evaluate(()=>{window.fetch=async url=>{window.__invoiceUrl=url;return {ok:true,text:async()=>'<p>Счёт открыт</p>'};};});
+ await page.locator('#rp-detail-modal [data-view-invoice]').first().click();
+ assert.equal(await page.locator('#rp-detail-modal').isVisible(),false,'invoice view replaces trip details');
+ assert.equal(await page.locator('#invoice-view-modal').isVisible(),true);
+ assert.equal(await page.evaluate(()=>window.__invoiceUrl),'/erpv2/company/finance/invoices/1/modal-view','invoice uses the ERP base path');
+ await page.evaluate(()=>window.closeModal('invoice-view-modal'));
+ assert.equal(await page.locator('#rp-list tr[data-id="101"]').evaluate(row=>document.activeElement===row),true,'focus returns to row');
+ await page.locator('#rp-hide-complete').check();
+ await page.selectOption('#rp-sort','date-new');
+ for(const width of [390,768,1051,1280,1600,1920]){
+   await page.setViewportSize({width,height:900});
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`no horizontal overflow at ${width}`);
+   assert.equal(await page.locator('.rp-v010-table-wrap').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,`ledger wrapper has no horizontal scroll at ${width}`);
+   if(width===390){
+     const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[3,4,5,6,9,10,11,12].map(index=>Math.round(row.cells[index-1].querySelector('span')?.getBoundingClientRect().left||0)));
+     assert.equal(new Set(columns).size,1,'mobile values share one aligned column');
+   }
+   if(width===1280){
+     const geometry=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>({rowBottom:row.getBoundingClientRect().bottom,docsBottom:row.querySelector('.rp-v010-doc-list').getBoundingClientRect().bottom}));
+     assert.equal(geometry.docsBottom<=geometry.rowBottom+1,true,'two invoices stay inside the compact trip row');
+     assert.equal(await page.locator('#rp-ledger-table tfoot tr').evaluate(row=>Math.round(row.getBoundingClientRect().height))<=34,true,'compact totals stay one line');
+   }
+   if(width===1920){
+     const fonts=await page.locator('#rp-ledger-table').evaluate(table=>({td:getComputedStyle(table.tBodies[0].rows[0].cells[0]).fontSize,th:getComputedStyle(table.tHead.rows[0].cells[0]).fontSize}));
+     assert.deepEqual(fonts,{td:'12px',th:'10px'},'ERP table typography matches v015');
+   }
+   if(process.env.PLANEX_VISUAL_EVIDENCE_DIR&&[390,1280,1920].includes(width)){
+     fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR,{recursive:true});
+     await page.screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,`received-paid-v015-${width}.png`),fullPage:true});
+     if(width===390){
+       await page.locator('#rp-list tr[data-id="102"]').screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,'received-paid-v015-390-multiple-invoices.png')});
+       await page.locator('#rp-ledger-table tfoot').screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,'received-paid-v015-390-footer.png')});
+       await page.locator('#rp-list tr[data-id="103"]').dblclick();
+       assert.equal(await page.locator('#rp-detail-title').innerText(),'Рейс #103 · Рейс 103');
+       assert.equal(await page.locator('#rp-detail-modal .rp-details-meta').innerText().then(text=>text.includes('Груз сдан')),true);
+       assert.equal(await page.locator('#rp-detail-modal .rp-finance-metrics dt').allInnerTexts().then(labels=>labels.join('|')),'Ставка в рейсе|Получено|Остаток|Ставка в рейсе|Оплачено|Остаток');
+       assert.deepEqual(await page.locator('#rp-detail-modal .rp-v011-detail-due small').allInnerTexts(),['Просрочено на 1 день','Просрочено на 1 день']);
+       await page.locator('#rp-detail-modal .modal').screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,'received-paid-v015-390-details.png')});
+       await page.evaluate(()=>window.closeModal('rp-detail-modal'));
+     }
+   }
+ }
+ assert.deepEqual(errors,[]);
+ console.log('FINANCE_RECEIVED_PAID_PAYMENT_FILTER_BROWSER_OK');
 }finally{await browser.close();}
