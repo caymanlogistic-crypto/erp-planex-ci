@@ -252,6 +252,27 @@ trait DocumentGeneratorWorkflowTrait
         return self::loadExecutorForAccess($pdo,(int)($row['route_executor_id'] ?? 0),$userId,$role)!==null ? $row : null;
     }
 
+    public static function generatedDownloadName(array $row): string
+    {
+        $labels = [
+            'client_sublease_crew' => 'Договор-субаренды',
+            'client_invoice' => 'Счет',
+            'client_act' => 'Акт',
+            'client_upd_contract' => 'Договор-субаренды-УПД',
+            'client_upd_invoice' => 'Счет-УПД',
+            'client_upd_status2' => 'УПД-статус-2',
+        ];
+        $type = (string)($row['document_type'] ?? '');
+        if (isset($labels[$type])) {
+            $snapshot = json_decode((string)($row['snapshot_json'] ?? ''), true);
+            $tripNumber = is_array($snapshot) ? (int)($snapshot['trip']['business_id'] ?? 0) : 0;
+            if ($tripNumber > 0) {
+                return DocumentService::safeDownloadName('#' . $tripNumber . '__' . $labels[$type] . '.docx');
+            }
+        }
+        return DocumentService::safeDownloadName((string)($row['original_name'] ?? 'document.docx'));
+    }
+
     /** @return array{path:string,count:int} Temporary ZIP owned by the caller, which must delete it. */
     public static function createHistoryArchive(PDO $pdo, int $companyId, int $userId, string $role, array $requestedIds): array
     {
@@ -279,7 +300,7 @@ trait DocumentGeneratorWorkflowTrait
             if ($actual === '' || !hash_equals((string)$row['sha256'], $actual)) {
                 throw new RuntimeException('Контрольная сумма одного из документов не совпадает. Скачивание заблокировано.');
             }
-            $files[] = ['path' => $path, 'name' => $id . '__' . DocumentService::safeDownloadName((string)$row['original_name'])];
+            $files[] = ['path' => $path, 'name' => self::generatedDownloadName($row), 'id' => $id];
         }
 
         $temporaryPath = tempnam(sys_get_temp_dir(), 'planex_docgen_');
@@ -291,8 +312,14 @@ trait DocumentGeneratorWorkflowTrait
                 throw new RuntimeException('Не удалось создать ZIP-архив.');
             }
             $opened = true;
+            $usedNames = [];
             foreach ($files as $file) {
-                if (!$zip->addFile($file['path'], $file['name'])) throw new RuntimeException('Не удалось добавить документ в ZIP-архив.');
+                $name = $file['name'];
+                if (isset($usedNames[$name])) {
+                    $name = substr($name, 0, -5) . '__ID-' . $file['id'] . '.docx';
+                }
+                $usedNames[$name] = true;
+                if (!$zip->addFile($file['path'], $name)) throw new RuntimeException('Не удалось добавить документ в ZIP-архив.');
             }
             $closed = $zip->close();
             $opened = false;
