@@ -17,7 +17,7 @@ final class WasteTripCarrierPaymentService
             $rows = self::parseRows([[
                 'amount' => number_format(intdiv($target, 100), 0, '', '') . '.' . str_pad((string)($target % 100), 2, '0', STR_PAD_LEFT),
                 'payment_method' => 'cashless', 'vat_rate' => '', 'condition_type' => 'after_end',
-                'days_count' => '7', 'days_kind' => 'calendar',
+                'days_count' => '7', 'days_kind' => 'working',
             ]]);
             self::store($pdo, $tripId, $rows, $actor);
             return;
@@ -80,7 +80,7 @@ final class WasteTripCarrierPaymentService
 
             $amountRaw = trim((string) ($row['amount'] ?? ''));
             if ($amountRaw === '') continue;
-            $row += ['condition_type'=>'after_end','days_count'=>7,'days_kind'=>'calendar'];
+            $row += ['condition_type'=>'after_end','days_count'=>7,'days_kind'=>'working'];
             $paymentMethod = trim((string) ($row['payment_method'] ?? ''));
             $vatRateRaw = trim((string) ($row['vat_rate'] ?? ''));
             $conditionType = trim((string) ($row['condition_type'] ?? ''));

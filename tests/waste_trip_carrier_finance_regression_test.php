@@ -25,6 +25,7 @@ $migration=(string)file_get_contents($root.'/database/migrations-local/135_creat
 foreach(['CREATE TABLE IF NOT EXISTS `waste_trip_carrier_payments`','`amount` DECIMAL(12,2) NOT NULL','fk_waste_trip_carrier_payments_trip','ON DELETE RESTRICT'] as $n)$ok(str_contains($migration,$n),'migration 135 missing '.$n);
 $carrierPartial=(string)file_get_contents($root.'/app/View/partials/company_waste_trip_carrier_payments.php');
 foreach(['Себес · оплата подрядчику','data-payment-container="carrier_payments"','data-add-payment-row="carrier_payments"','Срок оплаты','НДС'] as$n)$ok(str_contains($carrierPartial,$n),'carrier UI missing '.$n);
+$ok(str_contains($carrierPartial,'data-default-days="7" data-default-days-kind="working"') && str_contains($carrierPartial,'7 рабочих дней после выгрузки'),'new carrier form default and guidance');
 $page=(string)file_get_contents($root.'/app/View/pages/company_waste_trips.php');
 $ok(str_contains($page,'СЕБЕС, РУБ'),'registry carrier rate column missing');
 $view=(string)file_get_contents($root.'/app/View/partials/company_waste_trip_modal_view.php');
@@ -33,6 +34,8 @@ $finance=(string)file_get_contents($root.'/app/Service/FinanceObligationService.
 foreach(['WASTE_TRIP_CUSTOMER_PAYMENT','WASTE_TRIP_CARRIER_PAYMENT','syncAllOperationalObligations','syncWasteTrip','Перевозка отходов #'] as$n)$ok(str_contains($finance,$n),'finance projection missing '.$n);
 
 $rows=WasteTripCarrierPaymentService::parseRows([['amount'=>'70 000','payment_method'=>'cashless','vat_rate'=>'','condition_type'=>'after_end','days_count'=>'10','days_kind'=>'calendar','specific_due_date'=>'','condition_comment'=>'После выгрузки']],false);
+$defaultCarrier=WasteTripCarrierPaymentService::parseRows([['amount'=>'70000']],true);
+$ok($defaultCarrier[0]['condition_type']==='after_end' && $defaultCarrier[0]['days_count']===7 && $defaultCarrier[0]['days_kind']==='working','new carrier row defaults to seven working days');
 $ok(count($rows)===1&&$rows[0]['amount']==='70000.00','carrier payment parse failed');
 $ok(WasteTripCarrierPaymentService::total($rows)==='70 000 ₽','carrier total format failed');
 $ok(WasteTripCarrierPaymentService::parseRows([],false)===[],'empty carrier terms must stay backward-compatible');
@@ -83,6 +86,7 @@ try{
     $noMarkupCost=WasteTripCarrierPaymentService::fetchForTrip($pdo,$tripId);
     $noMarkupPayable=$pdo->query("SELECT amount FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND direction='PAYABLE' AND cancelled_at IS NULL LIMIT 1")->fetchColumn();
     $ok(count($noMarkupCost)===1&&(string)$noMarkupCost[0]['amount']==='100000.00'&&(string)$noMarkupPayable==='100000.00','No markup must change carrier cost and payable to sale total');
+    $ok((int)$noMarkupCost[0]['days_count']===10 && $noMarkupCost[0]['days_kind']==='calendar','Existing manual carrier deadline survives no-markup synchronization');
     $higherSale=WasteTripCustomerPaymentService::parseRows([['amount'=>'120000','payment_method'=>'cashless','vat_rate'=>'','condition_type'=>'after_end','days_count'=>'5','days_kind'=>'calendar']],true);
     WasteTripCustomerPaymentService::store($pdo,$tripId,$higherSale,$actor);WasteTripCarrierPaymentService::synchronizeNoMarkup($pdo,$tripId,$actor);FinanceObligationService::syncWasteTrip($pdo,$tripId);
     $ok((string)WasteTripCarrierPaymentService::fetchForTrip($pdo,$tripId)[0]['amount']==='120000.00','No markup cost must follow a changed sale amount');
@@ -148,5 +152,13 @@ try{
     $pdo->exec("UPDATE waste_trips SET status='cancelled' WHERE id={$tripId}");FinanceObligationService::syncWasteTrip($pdo,$tripId);
     $ok((int)$pdo->query("SELECT COUNT(*) FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND cancelled_at IS NULL")->fetchColumn()===0,'cancelled Waste Trip must expose no active finance obligations');
     $ok((int)$pdo->query("SELECT COUNT(*) FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id={$tripId} AND cancelled_at IS NOT NULL")->fetchColumn()===2,'cancelled Waste Trip must retain two cancelled obligation audit rows');
+    $pdo->exec("INSERT INTO waste_trips(business_id,client_id,route_executor_id,responsible_user_id,destination_type,status,planned_start_mode,actual_end_date,no_markup) VALUES (501,{$clientId},{$crewId},{$userId},'warehouse','completed','unspecified','2026-09-04',1)");
+    $newNoMarkupTrip=(int)$pdo->lastInsertId();
+    WasteTripCustomerPaymentService::store($pdo,$newNoMarkupTrip,WasteTripCustomerPaymentService::parseRows([['amount'=>'80000']],true),$actor);
+    WasteTripCarrierPaymentService::synchronizeNoMarkup($pdo,$newNoMarkupTrip,$actor);
+    $newNoMarkupCarrier=WasteTripCarrierPaymentService::fetchForTrip($pdo,$newNoMarkupTrip);
+    $ok(count($newNoMarkupCarrier)===1 && $newNoMarkupCarrier[0]['condition_type']==='after_end' && (int)$newNoMarkupCarrier[0]['days_count']===7 && $newNoMarkupCarrier[0]['days_kind']==='working' && $newNoMarkupCarrier[0]['specific_due_date']===null,'No-markup auto-created carrier term uses seven working days');
+    FinanceObligationService::syncWasteTrip($pdo,$newNoMarkupTrip);
+    $ok($pdo->query("SELECT due_date FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$newNoMarkupTrip AND direction='PAYABLE' AND cancelled_at IS NULL")->fetchColumn()==='2026-09-15','New no-markup carrier due date counts working days');
     echo "WASTE_TRIP_CARRIER_FINANCE_MYSQL=PASS\n";
 } finally { if($fixedMode){cleanCompanyPoolDatabase($pdo);}else{$pdo=null;$admin->exec("DROP DATABASE IF EXISTS `{$db}`");} }

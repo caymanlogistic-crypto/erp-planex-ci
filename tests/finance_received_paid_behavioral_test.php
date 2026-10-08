@@ -6,6 +6,7 @@ require_once __DIR__ . '/../app/Security/EffectiveAccess.php';
 require_once __DIR__ . '/../app/Security/AccessRuntime.php';
 require_once __DIR__ . '/../app/Service/RegulatedDataScopeService.php';
 require_once __DIR__ . '/../app/Service/DateCalculationService.php';
+require_once __DIR__ . '/../app/Service/ProductionCalendarService.php';
 require_once __DIR__ . '/../app/Service/FinanceReceivedPaidService.php';
 
 use App\Service\FinanceReceivedPaidService;
@@ -17,6 +18,9 @@ if (!str_contains($invoiceRoutes, "require_once base_path('app/Service/FinanceRe
 }
 if (!str_contains($invoiceRoutes, "require_once base_path('app/Service/DateCalculationService.php')")) {
     throw new RuntimeException('The production route must load the trip deadline calculator.');
+}
+if (!str_contains($invoiceRoutes, "require_once base_path('app/Service/ProductionCalendarService.php')")) {
+    throw new RuntimeException('The production route must load the official working-day calendar.');
 }
 
 $invoiceAccess = EffectiveAccess::member(1, 1, ['company.finance.invoices' => true], ['waste_trip' => 'all']);
@@ -95,4 +99,22 @@ $editedDue = $today->modify('+1 day')->format('Y-m-d');
 $pdo->exec("UPDATE waste_trips SET actual_end_date='$editedUnload' WHERE id=2");
 $rows = FinanceReceivedPaidService::fetch($pdo);
 if ($rows[1]['planned_receipt']['date'] !== $editedDue) throw new RuntimeException('Editing the trip unloading date must update the displayed deadline without obligation sync.');
+$pdo->exec("UPDATE waste_trips SET actual_end_date='2026-11-02' WHERE id=2");
+$pdo->exec("UPDATE waste_trip_customer_payments SET days_count=4,days_kind='working' WHERE id=2");
+$rows=FinanceReceivedPaidService::fetch($pdo);
+if ($rows[1]['planned_receipt'] !== null) throw new RuntimeException('Without an approved production calendar, working-day terms must not become a false overdue date.');
+$pdo->exec('CREATE TABLE production_calendar_years(calendar_year INT PRIMARY KEY,status VARCHAR(20))');
+$pdo->exec('CREATE TABLE production_calendar_days(calendar_year INT,calendar_date DATE PRIMARY KEY,is_working_day TINYINT)');
+$pdo->exec("INSERT INTO production_calendar_years VALUES(2026,'READY')");
+$calendarDay=$pdo->prepare('INSERT INTO production_calendar_days VALUES(2026,?,?)');
+for($day=new DateTimeImmutable('2026-01-01');$day<new DateTimeImmutable('2027-01-01');$day=$day->modify('+1 day')) {
+    $value=$day->format('Y-m-d');
+    $calendarDay->execute([$value,(int)$day->format('N')<=5 && $value!=='2026-11-04' ? 1 : 0]);
+}
+$pdo->exec("UPDATE waste_trips SET actual_end_date='2026-11-02' WHERE id=1");
+$pdo->exec("UPDATE waste_trip_carrier_payments SET condition_type='after_end',days_count=7,days_kind='working',specific_due_date=NULL WHERE id=1");
+$pdo->exec("UPDATE waste_trip_carrier_payments SET specific_due_date='2026-12-01' WHERE id=2");
+$rows=FinanceReceivedPaidService::fetch($pdo);
+if ($rows[1]['planned_receipt']['date'] !== '2026-11-09' || $rows[1]['planned_receipt']['due_date'] !== '2026-11-09') throw new RuntimeException('Four working days must skip the official 4 November holiday.');
+if ($rows[0]['planned_carrier_payment']['date'] !== '2026-11-12') throw new RuntimeException('Seven carrier working days must skip the official 4 November holiday.');
 echo "FINANCE_RECEIVED_PAID_BEHAVIORAL_OK\n";

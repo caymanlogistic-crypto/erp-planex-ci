@@ -145,12 +145,8 @@ final class FinanceReceivedPaidService
             $days = $plan['days_count'] === null ? null : (int)$plan['days_count'];
             $daysKind = (string)($plan['days_kind'] ?: DateCalculationService::DAYS_KIND_CALENDAR);
             $specificDate = self::validDate($plan['specific_due_date'] ?? null);
-            $dueDate = DateCalculationService::calculateFinalDueDate(
-                $condition, $actualStart, $actualEnd, null, $days, $daysKind, $specificDate
-            );
-            $displayDate = $dueDate ?? DateCalculationService::calculateForecastDueDate(
-                $condition, $plannedStart, $plannedEnd, $days, $daysKind, $specificDate
-            );
+            $dueDate = self::paymentDueDate($pdo, $condition, $actualStart, $actualEnd, $days, $daysKind, $specificDate, false);
+            $displayDate = $dueDate ?? self::paymentDueDate($pdo, $condition, $plannedStart, $plannedEnd, $days, $daysKind, $specificDate, true);
             if ($displayDate === null) continue;
             $plansByTrip[$tripId][] = [
                 'date' => $displayDate,
@@ -200,14 +196,10 @@ final class FinanceReceivedPaidService
             $days = $plan['days_count'] === null ? null : (int)$plan['days_count'];
             $daysKind = (string)($plan['days_kind'] ?: DateCalculationService::DAYS_KIND_CALENDAR);
             $specificDate = self::validDate($plan['specific_due_date'] ?? null);
-            $dueDate = DateCalculationService::calculateFinalDueDate(
-                $condition, self::validDate($trip['actual_start_date'] ?? null),
-                self::validDate($trip['actual_end_date'] ?? null), null, $days, $daysKind, $specificDate
-            );
-            $displayDate = $dueDate ?? DateCalculationService::calculateForecastDueDate(
-                $condition, self::validDate($trip['planned_start_date'] ?? null),
-                self::validDate($trip['planned_finish_date'] ?? null), $days, $daysKind, $specificDate
-            );
+            $dueDate = self::paymentDueDate($pdo, $condition, self::validDate($trip['actual_start_date'] ?? null),
+                self::validDate($trip['actual_end_date'] ?? null), $days, $daysKind, $specificDate, false);
+            $displayDate = $dueDate ?? self::paymentDueDate($pdo, $condition, self::validDate($trip['planned_start_date'] ?? null),
+                self::validDate($trip['planned_finish_date'] ?? null), $days, $daysKind, $specificDate, true);
             if ($displayDate === null) continue;
             $carrierByTrip[$tripId][] = [
                 'date' => $displayDate,
@@ -227,6 +219,29 @@ final class FinanceReceivedPaidService
         }
         unset($row);
         return $rows;
+    }
+
+    private static function paymentDueDate(PDO $pdo, string $condition, ?string $start, ?string $end,
+        ?int $days, string $daysKind, ?string $specificDate, bool $forecast): ?string
+    {
+        if ($daysKind === DateCalculationService::DAYS_KIND_WORKING && $days !== null && $days > 0) {
+            $base = match ($condition) {
+                DateCalculationService::CONDITION_AFTER_START => $start,
+                DateCalculationService::CONDITION_AFTER_END => $end,
+                default => null,
+            };
+            if ($base !== null) {
+                try {
+                    return ProductionCalendarService::addWorkingDays($pdo, $base, $days);
+                } catch (\RuntimeException $error) {
+                    if (str_contains($error->getMessage(), 'Производственный календарь') || str_contains($error->getMessage(), 'производственном календаре')) return null;
+                    throw $error;
+                }
+            }
+        }
+        return $forecast
+            ? DateCalculationService::calculateForecastDueDate($condition, $start, $end, $days, $daysKind, $specificDate)
+            : DateCalculationService::calculateFinalDueDate($condition, $start, $end, null, $days, $daysKind, $specificDate);
     }
 
     private static function validDate(mixed $value): ?string

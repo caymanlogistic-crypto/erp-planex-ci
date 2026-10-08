@@ -45,6 +45,7 @@ foreach (['Продажа · оплата клиента', 'WasteTripCustomerPay
 foreach (['data-payment-container="customer_payments"', 'data-add-payment-row="customer_payments"', 'Срок оплаты', 'Способ оплаты', 'НДС'] as $needle) {
     $ok(str_contains($paymentPartial, $needle), 'shared payment form missing ' . $needle);
 }
+$ok(str_contains($paymentPartial, 'data-default-days="4" data-default-days-kind="working"') && str_contains($paymentPartial, '4 рабочих дня после выгрузки'), 'new customer form default and guidance');
 $ok(
     str_contains($routeBootstrap, "require_once base_path('app/Service/WasteTripCustomerPaymentService.php');"),
     'Waste Trip route bootstrap must load customer payment service before owner registry finance access'
@@ -61,6 +62,8 @@ $validRows = [[
     'condition_comment' => 'По оригиналам документов',
 ]];
 $parsed = WasteTripCustomerPaymentService::parseRows($validRows, true);
+$defaultParsed = WasteTripCustomerPaymentService::parseRows([['amount'=>'125000']], true);
+$ok($defaultParsed[0]['condition_type']==='after_end' && $defaultParsed[0]['days_count']===4 && $defaultParsed[0]['days_kind']==='working', 'new customer row defaults to four working days');
 $ok(count($parsed) === 1, 'valid payment row count');
 $ok($parsed[0]['amount'] === '125000.00', 'amount normalization');
 $ok($parsed[0]['condition_type'] === 'after_end' && $parsed[0]['days_count'] === 5 && $parsed[0]['days_kind'] === 'calendar', 'payment term normalization');
