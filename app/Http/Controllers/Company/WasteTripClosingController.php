@@ -11,6 +11,7 @@ use App\Service\EmployeeMailProfileService;
 use App\Service\FinanceInvoiceService;
 use App\Service\WasteTripClosingPackageStore;
 use App\Service\WasteTripClosingService;
+use App\Service\WasteTripClosingInvoiceService;
 use DomainException;
 use PDO;
 use Throwable;
@@ -59,6 +60,36 @@ final class WasteTripClosingController
             $_SESSION['waste_trip_closing_success']='Документ добавлен.';
         } catch (Throwable $exception) { $this->fail($exception,'Не удалось добавить документ.'); }
         $this->back((int)$tripId);
+    }
+
+    public function invoiceCandidates(string $tripId): void
+    {
+        header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store');
+        try {
+            if(!AccessControlService::canAccessPage('company.finance.invoices')) throw new DomainException('Нет доступа к счетам.');
+            [, $pdo]=$this->context();
+            $items=WasteTripClosingInvoiceService::candidates($pdo,(int)$tripId);
+            echo json_encode(['items'=>$items],JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR);
+        } catch(Throwable $error) {
+            http_response_code($error instanceof DomainException?400:500);
+            echo json_encode(['error'=>$error instanceof DomainException?$error->getMessage():'Не удалось загрузить счета.'],JSON_UNESCAPED_UNICODE);
+        }
+    }
+
+    public function linkInvoice(string $tripId): void
+    {
+        verifyCsrfRequest();
+        header('Content-Type: application/json; charset=utf-8');header('Cache-Control: no-store');
+        try {
+            if(!AccessControlService::canAccessPage('company.finance.invoices')) throw new DomainException('Нет доступа к счетам.');
+            [, $pdo,$userId,$role]=$this->context();
+            WasteTripClosingInvoiceService::linkExisting($pdo,(int)$tripId,(int)($_POST['invoice_id']??0),['user_id'=>$userId,'role_code'=>$role]);
+            echo json_encode(['ok'=>true]);
+        } catch(Throwable $error) {
+            http_response_code($error instanceof DomainException?400:500);
+            error_log('waste trip closing invoice link: '.$error->getMessage());
+            echo json_encode(['error'=>$error instanceof DomainException?$error->getMessage():'Не удалось связать счёт с рейсом.'],JSON_UNESCAPED_UNICODE);
+        }
     }
 
     public function remove(string $tripId,string $documentId): void
