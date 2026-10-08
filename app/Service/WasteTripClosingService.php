@@ -84,6 +84,29 @@ final class WasteTripClosingService
         $completionQuery->execute($ids);
         $completion=[];
         foreach ($completionQuery->fetchAll(PDO::FETCH_ASSOC) as $progress) $completion[(int)$progress['waste_trip_id']]=$progress;
+        $issueQuery=$pdo->prepare("SELECT wtr.waste_trip_id,fr.zayavka_id,
+                COALESCE(i.tn_absent,0) tn_absent,i.arrived_at,i.departed_at,
+                i.driver_signature_present,i.sender_signature_present,i.tn_datetime_status,i.recovery_source,
+                COUNT(doc.id) scan_count
+            FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+            LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+            LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
+            WHERE wtr.removed_at IS NULL AND wtr.waste_trip_id IN ($placeholders)
+            GROUP BY wtr.id,wtr.waste_trip_id,fr.zayavka_id,i.tn_absent,i.arrived_at,i.departed_at,
+                i.driver_signature_present,i.sender_signature_present,i.tn_datetime_status,i.recovery_source");
+        $issueQuery->execute($ids);
+        $tnIssues=[];
+        foreach($issueQuery->fetchAll(PDO::FETCH_ASSOC) as $item) {
+            if((int)$item['tn_absent']===1) continue;
+            $issues=[];
+            if((int)$item['scan_count']===0) $issues[]='нет скана ТН';
+            if(!$item['arrived_at']||!$item['departed_at']) $issues[]='нет даты или времени';
+            if(in_array($item['tn_datetime_status'],['partial','no'],true)&&!$item['recovery_source']) $issues[]='не указан источник восстановления';
+            if((int)$item['driver_signature_present']!==1) $issues[]='нет подписи водителя';
+            if((int)$item['sender_signature_present']!==1) $issues[]='нет подписи отправителя';
+            if($issues) $tnIssues[(int)$item['waste_trip_id']][]='Заявка №'.$item['zayavka_id'].': '.implode(', ',$issues);
+        }
+        $invoiceSummaries=WasteTripClosingInvoiceService::summaries($pdo,$ids);
         $paid=[];
         $amountQuery=$pdo->prepare("SELECT source_parent_id,COUNT(*) obligations,SUM(amount) due,SUM(paid_amount) paid
             FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND party_role='customer'
@@ -116,6 +139,8 @@ final class WasteTripClosingService
             $row['paid_bank_transactions'] = $paid[(int)$row['id']] ?? [];
             $row['request_count'] = (int)($completion[(int)$row['id']]['request_count'] ?? 0);
             $row['processed_count'] = (int)($completion[(int)$row['id']]['processed_count'] ?? 0);
+            $row['tn_issues']=$tnIssues[(int)$row['id']]??[];
+            $row['invoice_summary']=$invoiceSummaries[(int)$row['id']]??['status'=>'missing','detail'=>'—','invoice_id'=>0];
         }
         unset($row);
         return $rows;

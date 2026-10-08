@@ -34,6 +34,12 @@
     const input=event.target;
     if (input.matches?.('.closing-upload-form input[type=file]')&&input.files?.length) input.form.requestSubmit();
   });
+  page.addEventListener('click',event=>{
+    const link=event.target.closest?.('a[data-document-preview]');
+    if(!link) return;
+    event.preventDefault();
+    window.open(link.href,`planex-document-${Date.now()}`,'popup=yes,width=1120,height=780,resizable=yes,scrollbars=yes');
+  });
   page.addEventListener('submit',async event=>{
     const uploadForm=event.target;
     if (!uploadForm.matches?.('.closing-upload-form,.closing-extra-upload,.closing-remove-form')) return;
@@ -90,6 +96,80 @@
     });
     invoiceDialog.querySelectorAll('[data-invoice-close],[data-close-modal]').forEach(button=>button.addEventListener('click',()=>invoiceDialog.close()));
     invoiceDialog.addEventListener('close',()=>invoiceOpener?.focus());
+  }
+  const picker=document.querySelector('[data-invoice-picker]');
+  if(picker){
+    const pickerForm=picker.querySelector('[data-invoice-picker-form]');
+    const pickerOptions=picker.querySelector('[data-invoice-picker-options]');
+    const pickerError=picker.querySelector('.closing-picker-error');
+    let pickerOpener=null;
+    page.addEventListener('click',async event=>{
+      const button=event.target.closest('[data-invoice-choose]');
+      if(!button) return;
+      pickerOpener=button;
+      pickerForm.action=`${window.getErpBasePath()}/company/trips/closing-documents/${encodeURIComponent(button.dataset.tripId)}/invoices/link`;
+      pickerOptions.textContent='Загрузка…';pickerError.hidden=true;
+      picker.showModal();
+      try{
+        const response=await fetch(`${window.getErpBasePath()}/company/trips/closing-documents/${encodeURIComponent(button.dataset.tripId)}/invoices`,{credentials:'same-origin'});
+        const result=await response.json();
+        if(!response.ok) throw new Error(result.error||'Не удалось загрузить счета.');
+        pickerOptions.replaceChildren();
+        if(!result.items.length){pickerOptions.textContent='Доступных счетов нет.';return;}
+        result.items.forEach((item,index)=>{
+          const label=document.createElement('label');label.className='closing-picker-option';
+          const input=document.createElement('input');input.type='radio';input.name='invoice_id';input.value=item.id;input.checked=index===0;input.required=true;
+          const info=document.createElement('span');const title=document.createElement('b');title.textContent=`Счёт №${item.number}`;
+          const meta=document.createElement('small');meta.textContent=`${item.invoice_date} · ${item.amount} ₽`;
+          info.append(title,meta);label.append(input,info);pickerOptions.append(label);
+        });
+        pickerOptions.querySelector('input')?.focus();
+      }catch(error){pickerOptions.textContent='';pickerError.textContent=error.message;pickerError.hidden=false;}
+    });
+    picker.querySelectorAll('[data-invoice-picker-close]').forEach(button=>button.addEventListener('click',()=>picker.close()));
+    picker.addEventListener('close',()=>pickerOpener?.focus());
+    pickerForm.addEventListener('submit',async event=>{
+      event.preventDefault();pickerError.hidden=true;
+      const submit=pickerForm.querySelector('[type=submit]');submit.disabled=true;
+      try{
+        const response=await fetch(pickerForm.action,{method:'POST',body:new FormData(pickerForm),credentials:'same-origin'});
+        const result=await response.json();
+        if(!response.ok||!result.ok) throw new Error(result.error||'Не удалось связать счёт.');
+        location.href=`${window.getErpBasePath()}/company/trips/closing-documents?trip_id=${encodeURIComponent(pickerOpener.dataset.tripId)}`;
+      }catch(error){pickerError.textContent=error.message;pickerError.hidden=false;submit.disabled=false;}
+    });
+  }
+  const editDialog=document.querySelector('[data-invoice-edit-dialog]');
+  if(editDialog){
+    const editBody=editDialog.querySelector('[data-invoice-edit-body]');
+    let editOpener=null;
+    const setForm=html=>{
+      editBody.innerHTML=html;
+      editBody.querySelectorAll('script').forEach(old=>{const script=document.createElement('script');script.textContent=old.textContent;old.replaceWith(script);});
+      const form=editBody.querySelector('form.invoice-form');
+      if(form){const hidden=document.createElement('input');hidden.type='hidden';hidden.name='return_to';hidden.value=`/company/trips/closing-documents?trip_id=${editOpener.closest('[data-closing-trip]').dataset.tripId}`;form.append(hidden);}
+    };
+    page.addEventListener('click',async event=>{
+      const button=event.target.closest('[data-invoice-edit]');if(!button)return;
+      editOpener=button;editBody.textContent='Загрузка…';editDialog.showModal();
+      try{
+        const response=await fetch(`${window.getErpBasePath()}/company/finance/invoices/${encodeURIComponent(button.dataset.invoiceId)}/modal-edit`,{credentials:'same-origin'});
+        if(!response.ok)throw new Error('Не удалось загрузить счёт.');
+        setForm(await response.text());
+      }catch(error){editBody.textContent=error.message;}
+    });
+    editDialog.querySelectorAll('[data-invoice-edit-close]').forEach(button=>button.addEventListener('click',()=>editDialog.close()));
+    editDialog.addEventListener('close',()=>editOpener?.focus());
+    editBody.addEventListener('click',event=>{if(event.target.closest('[data-close-modal]'))editDialog.close();});
+    editBody.addEventListener('submit',async event=>{
+      const form=event.target.closest('form.invoice-form');if(!form)return;
+      event.preventDefault();
+      try{
+        const response=await fetch(form.action,{method:'POST',body:new FormData(form),credentials:'same-origin'});
+        if(response.redirected){location.href=response.url;return;}
+        setForm(await response.text());
+      }catch(error){const alert=document.createElement('div');alert.className='form-alert alert-error';alert.textContent=error.message;form.prepend(alert);}
+    });
   }
   const dialog=document.querySelector('[data-review-dialog]');
   if (!dialog) return;
