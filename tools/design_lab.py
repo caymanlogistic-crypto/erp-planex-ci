@@ -67,6 +67,17 @@ UI_QUALITY_CONTRACT = {
 }
 
 PRESETS = {
+    "trip-closing-documents": {
+        "label": "Сбор закрывающих документов",
+        "target_route": "/company/trips/closing-documents",
+        "renderer": ["php", "tests/fixtures/trip_closing_design_lab_render.php"],
+        "source_paths": [
+            "app/View/pages/company_waste_trip_closing.php",
+            "public/assets/css/waste-trip-closing.css",
+            "public/assets/js/waste-trip-closing.js",
+            "tests/fixtures/trip_closing_design_lab_render.php",
+        ],
+    },
     "waste-trips": {
         "label": "Перевозка отходов",
         "target_route": "/company/trips/departures",

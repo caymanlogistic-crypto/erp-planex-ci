@@ -69,6 +69,28 @@
       uploadForm.removeAttribute('aria-busy');
     }
   });
+  const invoiceDialog=document.querySelector('[data-invoice-dialog]');
+  if(invoiceDialog){
+    const invoiceForm=invoiceDialog.querySelector('form.invoice-form');
+    let invoiceOpener=null;
+    page.addEventListener('click',event=>{
+      const button=event.target.closest('[data-invoice-open]');
+      if(!button) return;
+      invoiceOpener=button;
+      invoiceForm.reset();
+      invoiceForm.dataset.preferredTripId=button.dataset.businessId;
+      const direction=invoiceForm.querySelector('.js-inv-direction');
+      direction.value='INCOMING';
+      direction.dispatchEvent(new Event('change',{bubbles:true}));
+      const counterparty=invoiceForm.querySelector('.js-inv-cparty-select');
+      counterparty.value=button.dataset.carrierId;
+      counterparty.dispatchEvent(new Event('change',{bubbles:true}));
+      invoiceDialog.showModal();
+      invoiceForm.querySelector('[name=number]').focus();
+    });
+    invoiceDialog.querySelectorAll('[data-invoice-close],[data-close-modal]').forEach(button=>button.addEventListener('click',()=>invoiceDialog.close()));
+    invoiceDialog.addEventListener('close',()=>invoiceOpener?.focus());
+  }
   const dialog=document.querySelector('[data-review-dialog]');
   if (!dialog) return;
   const form=dialog.querySelector('[data-review-form]');

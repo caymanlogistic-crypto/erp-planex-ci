@@ -27,6 +27,14 @@ assert "data-lab-modal=\"view\"" in waste_html
 assert "data-lab-modal=\"edit\"" in waste_html
 assert "ООО «Вектор»" in waste_html
 
+closing_preset = design_lab.PRESETS["trip-closing-documents"]
+assert closing_preset["target_route"] == "/company/trips/closing-documents"
+closing_html = design_lab.render_preset(ROOT, closing_preset).decode("utf-8")
+assert 'data-closing-count>35<' in closing_html
+assert 'data-review-dialog' in closing_html
+assert 'office@example.test' in closing_html
+assert 'data-closing-trip' in closing_html
+
 
 def run(*arguments: str, ok: bool = True) -> subprocess.CompletedProcess[str]:
     process = subprocess.run(
