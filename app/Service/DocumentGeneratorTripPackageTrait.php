@@ -41,6 +41,7 @@ trait DocumentGeneratorTripPackageTrait
             $trip['_customer_amount'] = $includeFinance
                 ? self::sumPaymentRows(WasteTripService::financialCustomerPayments($pdo, $trip))
                 : null;
+            $trip['_contract_number'] = ClientPackageInvoiceNumberPolicy::tripDocumentNumber((int)($trip['business_id'] ?? 0));
             $out[] = $trip;
         }
         return $out;
@@ -158,14 +159,35 @@ trait DocumentGeneratorTripPackageTrait
         if ($startDate === null) return self::failed(['В выбранном рейсе не указана дата начала для договора.']);
         if ($finishDate === null) return self::failed(['В выбранном рейсе не указана дата завершения для договора.']);
 
-        $packageNumber = date('y') . '-' . (int)($trip['business_id'] ?? 0);
+        try {
+            $packageNumber = ClientPackageInvoiceNumberPolicy::number((int)($trip['business_id'] ?? 0), $amount);
+        } catch (RuntimeException $e) {
+            return self::failed([$e->getMessage()]);
+        }
         $previousNumber = $pdo->prepare("SELECT DISTINCT document_number FROM generated_documents WHERE document_type IN ('client_invoice','client_upd_invoice') AND JSON_UNQUOTE(JSON_EXTRACT(snapshot_json,'$.trip.id'))=? ORDER BY document_number");
         $previousNumber->execute([(string)$tripId]);
         $previousNumbers = $previousNumber->fetchAll(PDO::FETCH_COLUMN);
         if (count($previousNumbers) > 1) return self::failed(['Для рейса найдены счета с разными номерами. Уточните историю документов.']);
-        if ($previousNumbers !== []) $packageNumber = (string)$previousNumbers[0];
+        if ($previousNumbers !== [] && ClientPackageInvoiceNumberPolicy::historical((int)($trip['business_id'] ?? 0)) === null) {
+            $packageNumber = (string)$previousNumbers[0];
+        } elseif ($previousNumbers !== [] && (string)$previousNumbers[0] !== $packageNumber) {
+            return self::failed(['Ранее сформированный счёт рейса имеет номер ' . $previousNumbers[0] . ', а установленное исключение требует ' . $packageNumber . '. Сначала требуется сверка истории документов.']);
+        }
+        if (ClientPackageInvoiceNumberPolicy::historical((int)($trip['business_id'] ?? 0)) !== null) {
+            try {
+                $historicalInvoice = ClientPackageInvoiceNumberPolicy::existingHistoricalInvoice(
+                    $pdo, (int)$trip['business_id'], $tripId, $clientId
+                );
+            } catch (RuntimeException $e) {
+                return self::failed([$e->getMessage()]);
+            }
+            if ((string)$historicalInvoice['invoice_date'] !== $invoiceDate) {
+                return self::failed(['Для исторического счёта № ' . $packageNumber . ' укажите его исходную дату: ' . $historicalInvoice['invoice_date'] . '.']);
+            }
+        }
+        $transferNumber = ClientPackageInvoiceNumberPolicy::tripDocumentNumber((int)($trip['business_id'] ?? 0));
         $contractNumber = trim((string)$contractNumberInput);
-        if ($contractNumber === '') $contractNumber = $packageNumber;
+        if ($contractNumber === '') $contractNumber = $transferNumber;
         if (mb_strlen($contractNumber) > 50 || !preg_match('/^[\p{L}\p{N}][\p{L}\p{N} ._\/-]*$/u', $contractNumber)) {
             return self::failed(['Номер договора: до 50 символов; допустимы буквы, цифры, пробел, точка, дефис, подчёркивание и косая черта.']);
         }
@@ -176,6 +198,7 @@ trait DocumentGeneratorTripPackageTrait
             'trip' => self::tripSnapshot($trip),
             'package' => [
                 'number' => $packageNumber,
+                'transfer_number' => $transferNumber,
                 'contract_number' => $contractNumber,
                 'variant' => $variant,
                 'date' => $contractDate,
@@ -238,6 +261,7 @@ trait DocumentGeneratorTripPackageTrait
         }
 
         $prepared['package_number'] = $packageNumber;
+        $prepared['transfer_number'] = $transferNumber;
         $prepared['contract_number'] = $contractNumber;
         $prepared['package_dates'] = [$contractType=>$contractDate, $invoiceType=>$invoiceDate, $transferType=>$actDate];
         $prepared['package_variant'] = $variant;
@@ -248,7 +272,8 @@ trait DocumentGeneratorTripPackageTrait
         $prepared['trip'] = $trip;
         $prepared['existing_package_documents'] = array_merge(
             self::existingClientPackageContractDocuments($pdo, $packageNumber, $contractType),
-            self::existingClientPackageDocuments($pdo, $packageNumber, [$invoiceType, $transferType])
+            self::existingClientPackageDocuments($pdo, $packageNumber, [$invoiceType]),
+            self::existingClientPackageDocuments($pdo, $transferNumber, [$transferType])
         );
         $contractIds = array_map(
             static fn(array $row): int => (int)$row['id'],
@@ -272,9 +297,13 @@ trait DocumentGeneratorTripPackageTrait
 
         $number = trim((string)($prepared['package_number'] ?? ''));
         $contractNumber = trim((string)($prepared['contract_number'] ?? $number));
+        $transferNumber = trim((string)($prepared['transfer_number'] ?? $number));
         $dates = (array)($prepared['package_dates'] ?? []);
-        if (!preg_match('/^\d{2}-\d+$/', $number)) {
+        if (!preg_match('/^\d{2}-\d+(?:-\d+)?$/', $number)) {
             throw new RuntimeException('Номер комплекта документов не определён.');
+        }
+        if (!preg_match('/^\d{2}-\d+$/', $transferNumber)) {
+            throw new RuntimeException('Номер УПД или акта не определён.');
         }
         $variant = (string)($prepared['package_variant'] ?? 'act');
         if (!isset(self::CLIENT_PACKAGE_VARIANTS[$variant])) throw new RuntimeException('Неизвестный вид комплекта документов.');
@@ -318,7 +347,7 @@ trait DocumentGeneratorTripPackageTrait
                     array_push($existing, ...$dup->fetchAll(PDO::FETCH_ASSOC));
                 } else {
                     $dup = $pdo->prepare('SELECT * FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
-                    $dup->execute([$type, $number]);
+                    $dup->execute([$type, $type === ($variant === 'upd' ? 'client_upd_invoice' : 'client_invoice') ? $number : $transferNumber]);
                     $row = $dup->fetch(PDO::FETCH_ASSOC) ?: null;
                     if ($row !== null) $existing[] = $row;
                 }
@@ -348,7 +377,9 @@ trait DocumentGeneratorTripPackageTrait
 
             foreach (array_keys($types) as $type) {
                 [$template, $templatePath] = $resolvedTemplates[$type];
-                $documentNumber = $type === ($variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew') ? $contractNumber : $number;
+                $documentNumber = $type === ($variant === 'upd' ? 'client_upd_contract' : 'client_sublease_crew')
+                    ? $contractNumber
+                    : ($type === ($variant === 'upd' ? 'client_upd_invoice' : 'client_invoice') ? $number : $transferNumber);
                 $date = (string)$dates[$type];
                 $snapshot = $baseSnapshot;
                 $snapshot['template'] = [
@@ -540,7 +571,19 @@ trait DocumentGeneratorTripPackageTrait
     public static function suggestClientPackageDates(PDO $pdo, array $trip): array
     {
         [$start, $finish] = self::tripDocumentDates($trip);
-        return ['contract_date'=>$start ?? '', 'invoice_date'=>$finish ?? '', 'act_date'=>$finish ?? ''];
+        $invoiceDate = $finish ?? '';
+        $businessId = (int)($trip['business_id'] ?? 0);
+        if (ClientPackageInvoiceNumberPolicy::historical($businessId) !== null) {
+            try {
+                $invoice = ClientPackageInvoiceNumberPolicy::existingHistoricalInvoice(
+                    $pdo, $businessId, (int)($trip['id'] ?? 0), (int)($trip['client_id'] ?? 0)
+                );
+                $invoiceDate = (string)$invoice['invoice_date'];
+            } catch (RuntimeException) {
+                // The preview reports the missing historical link explicitly.
+            }
+        }
+        return ['contract_date'=>$start ?? '', 'invoice_date'=>$invoiceDate, 'act_date'=>$finish ?? ''];
     }
 
     private static function firstDate(array $values): ?string

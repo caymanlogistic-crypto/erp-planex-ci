@@ -17,6 +17,7 @@ require_once __DIR__ . '/FinanceSettlementCascadeService.php';
 require_once __DIR__ . '/FinanceInvoiceService.php';
 require_once __DIR__ . '/FinanceObligationService.php';
 require_once __DIR__ . '/FinanceInvoicePrepaymentService.php';
+require_once __DIR__ . '/ClientPackageInvoiceNumberPolicy.php';
 require_once __DIR__ . '/ClientPackageInvoiceSyncService.php';
 require_once __DIR__ . '/DocumentGeneratorTemplateTrait.php';
 require_once __DIR__ . '/DocumentGeneratorWorkflowTrait.php';
