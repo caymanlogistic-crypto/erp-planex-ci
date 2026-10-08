@@ -103,9 +103,11 @@ final class DocumentGeneratorController
         $pageTitle = 'История документов';
         $pageContext = 'Генератор договоров';
         $history = [];
-        $formError = null;
+        $formError = $_SESSION['document_generator_history_error'] ?? null;
+        unset($_SESSION['document_generator_history_error']);
         $flash = $_SESSION['document_generator_flash'] ?? null;
         unset($_SESSION['document_generator_flash']);
+        $csrfToken = $this->csrfToken();
         try {
             [$company, $localPdo, , $userId, $role] = $this->companyContext();
             $this->requireSchema($localPdo);
@@ -150,6 +152,31 @@ final class DocumentGeneratorController
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
             echo $e->getMessage();
+        }
+    }
+
+    public function downloadHistoryArchive(): void
+    {
+        $temporaryPath = null;
+        try {
+            $this->assertCsrf();
+            [, $localPdo, $companyId, $userId, $role] = $this->companyContext();
+            $this->requireSchema($localPdo);
+            $requestedIds = $_POST['document_ids'] ?? [];
+            if (!is_array($requestedIds)) throw new RuntimeException('Выберите документы для скачивания.');
+            $archive = DocumentGeneratorService::createHistoryArchive($localPdo, $companyId, $userId, $role, $requestedIds);
+            $temporaryPath = $archive['path'];
+            header('Content-Type: application/zip');
+            header('Content-Length: ' . (string)filesize($temporaryPath));
+            header("Content-Disposition: attachment; filename*=UTF-8''" . rawurlencode('Документы-' . date('Y-m-d-His') . '.zip'));
+            header('Cache-Control: private, no-store');
+            header('X-Content-Type-Options: nosniff');
+            readfile($temporaryPath);
+        } catch (Throwable $e) {
+            $_SESSION['document_generator_history_error'] = 'Не удалось скачать архив: ' . $e->getMessage();
+            redirect_to('/company/document-generator/history');
+        } finally {
+            if ($temporaryPath !== null) @unlink($temporaryPath);
         }
     }
 

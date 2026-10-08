@@ -13,6 +13,7 @@ $router->get('/company/document-generator', [$documentGeneratorController, 'inde
 $router->post('/company/document-generator/preview', [$documentGeneratorController, 'preview'], $documentCreatePage);
 $router->post('/company/document-generator/generate', [$documentGeneratorController, 'generate'], $documentCreatePage);
 $router->get('/company/document-generator/history', [$documentGeneratorController, 'history'], $documentHistoryPage);
+$router->post('/company/document-generator/history/download', [$documentGeneratorController, 'downloadHistoryArchive'], $documentHistoryPage);
 $router->get('/company/document-generator/generated/{id}/download', [$documentGeneratorController, 'downloadGenerated'], $documentHistoryPage);
 $router->get('/company/document-generator/templates', [$documentGeneratorController, 'templates'], $documentTemplatesPage);
 $router->post('/company/document-generator/templates/upload', [$documentGeneratorController, 'uploadTemplate'], $documentTemplatesPage);
