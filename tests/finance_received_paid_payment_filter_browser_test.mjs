@@ -28,6 +28,7 @@ try{
   assert.equal(await page.locator('.rp-compact-row[data-id="102"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date rp-payment-due-today');
   assert.equal(await page.locator('.rp-compact-row[data-id="103"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date rp-payment-overdue');
   assert.equal(await page.locator('.rp-compact-row[data-id="101"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date','fully received payment is neutral');
+  assert.equal((await page.locator('.rp-compact-row[data-id="101"] .rp-col-payment-date').innerText()).trim(),'—','fully received trip has no upcoming payment date');
   assert.equal(await page.locator('.rp-compact-row[data-id="104"] .rp-col-payment-date').getAttribute('class'),'rp-col-payment-date','forecast without established due date is neutral');
   await page.selectOption('#rp-payment-filter','paid');
   assert.deepEqual(await visibleIds(),['105','101'],'both sides are covered, including an explicit zero-rate side');
