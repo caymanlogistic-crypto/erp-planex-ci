@@ -22,16 +22,23 @@
     </div>
 </div>
 <?php else: ?>
+<form method="post" action="<?= app_url('/company/document-generator/history/download') ?>" data-document-archive-form>
+    <input type="hidden" name="_csrf" value="<?= e($csrfToken) ?>">
 <div class="table-card table-card--standard" data-erp-grid>
     <div class="table-toolbar">
         <div class="found-label">Найдено: <b><?= count($history) ?></b> документов</div>
+        <div class="toolbar-right">
+            <span class="text-muted" data-document-selected-count>Выбрано: 0</span>
+            <button class="btn btn-primary" type="submit" data-document-archive-button>Скачать выбранные (ZIP)</button>
+        </div>
     </div>
     <div class="table-scroll">
         <table class="table">
-            <thead><tr><th>ID</th><th>Документ</th><th>Исполнитель</th><th>Заявки / масса</th><th>Создан</th><th></th></tr></thead>
+            <thead><tr><th class="col-check-width text-center"><input type="checkbox" data-document-select-all aria-label="Выбрать все показанные документы"></th><th>ID</th><th>Документ</th><th>Исполнитель</th><th>Заявки / масса</th><th>Создан</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($history as $row): ?>
                 <tr>
+                    <td class="text-center"><input type="checkbox" name="document_ids[]" value="<?= (int)$row['id'] ?>" data-document-select aria-label="Выбрать документ #<?= (int)$row['id'] ?>"></td>
                     <td>#<?= (int)$row['id'] ?></td>
                     <td>
                         <strong><?= e((string)($row['_template_name'] ?? $row['document_type'])) ?></strong><br>
@@ -53,4 +60,25 @@
         <span class="footer-label">Показано <b>1–<?= count($history) ?></b> из <b><?= count($history) ?></b></span>
     </div>
 </div>
+</form>
+<script>
+(() => {
+    const form = document.querySelector('[data-document-archive-form]');
+    if (!form) return;
+    const items = Array.from(form.querySelectorAll('[data-document-select]'));
+    const all = form.querySelector('[data-document-select-all]');
+    const count = form.querySelector('[data-document-selected-count]');
+    const button = form.querySelector('[data-document-archive-button]');
+    const update = () => {
+        const selected = items.filter(item => item.checked).length;
+        count.textContent = `Выбрано: ${selected}`;
+        button.disabled = selected === 0;
+        all.checked = selected === items.length;
+        all.indeterminate = selected > 0 && selected < items.length;
+    };
+    all.addEventListener('change', () => { items.forEach(item => { item.checked = all.checked; }); update(); });
+    items.forEach(item => item.addEventListener('change', update));
+    update();
+})();
+</script>
 <?php endif; ?>

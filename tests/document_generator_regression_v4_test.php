@@ -154,6 +154,14 @@ $ownerAccess=App\Security\EffectiveAccess::systemOwner(11,$cid,[]);App\Security\
 $ownerHistoryIds=array_map('intval',array_column(App\Service\DocumentGeneratorService::listHistory($pdo,200,101,'company_owner'),'id'));
 $ok(in_array($foreignId,$ownerHistoryIds,true),'system owner retains company-wide document history');
 $ok(App\Service\DocumentGeneratorService::getAccessibleGenerated($pdo,$foreignId,101,'company_owner')!==null,'system owner retains company-wide generated document access');
+$archive=App\Service\DocumentGeneratorService::createHistoryArchive($pdo,$cid,101,'company_owner',[$id1,$foreignId]);
+$archiveZip=new ZipArchive();$ok($archiveZip->open($archive['path'])===true,'bulk history ZIP opens');$eq($archiveZip->numFiles,2,'bulk history ZIP contains both documents');
+$ok($archiveZip->locateName($id1.'__'.App\Service\DocumentService::safeDownloadName((string)App\Service\DocumentGeneratorService::getGenerated($pdo,$id1)['original_name']))!==false,'bulk ZIP names first document with ID');
+$ok($archiveZip->locateName($foreignId.'__'.App\Service\DocumentService::safeDownloadName((string)App\Service\DocumentGeneratorService::getGenerated($pdo,$foreignId)['original_name']))!==false,'bulk ZIP names second document with ID');
+$archiveZip->close();unlink($archive['path']);
+$archiveDenied=false;App\Security\AccessRuntime::setCurrent($managerAccess);try{App\Service\DocumentGeneratorService::createHistoryArchive($pdo,$cid,$managerUserId,'custom_role',[$id1,$foreignId]);}catch(RuntimeException){$archiveDenied=true;}$ok($archiveDenied,'bulk ZIP rejects one inaccessible document without partial archive');App\Security\AccessRuntime::setCurrent($ownerAccess);
+$oldSha=(string)$pdo->query("SELECT sha256 FROM generated_documents WHERE id=$id1")->fetchColumn();$pdo->exec("UPDATE generated_documents SET sha256='incorrect' WHERE id=$id1");
+$archiveCorrupt=false;try{App\Service\DocumentGeneratorService::createHistoryArchive($pdo,$cid,101,'company_owner',[$id1,$foreignId]);}catch(RuntimeException $e){$archiveCorrupt=str_contains($e->getMessage(),'Контрольная сумма');}$ok($archiveCorrupt,'bulk ZIP rejects mismatched document checksum');$pdo->prepare('UPDATE generated_documents SET sha256=? WHERE id=?')->execute([$oldSha,$id1]);
 App\Security\AccessRuntime::setCurrent($managerAccess);
 echo "DOCUMENT_GENERATOR_MANAGER_HISTORY_CREATOR_SCOPE=PASS\nDOCUMENT_GENERATOR_MANAGER_DIRECT_DOWNLOAD_SCOPE=PASS\n";
 $beforeSnapshot=(string)$row1['snapshot_json'];$beforeSha=(string)$row1['sha256'];$pdo->exec("UPDATE contractors SET name='ООО После Изменения',bank_inn='7700000000' WHERE id=1");$pdo->exec("UPDATE feo_requests SET mass_netto=2.0 WHERE zayavka_id='300001'");$old=App\Service\DocumentGeneratorService::getGenerated($pdo,$id1);$eq((string)$old['snapshot_json'],$beforeSnapshot,'immutable snapshot');$eq((string)$old['sha256'],$beforeSha,'immutable SHA');echo "DOCUMENT_GENERATOR_HISTORY_SNAPSHOT=PASS\n";

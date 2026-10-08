@@ -252,6 +252,61 @@ trait DocumentGeneratorWorkflowTrait
         return self::loadExecutorForAccess($pdo,(int)($row['route_executor_id'] ?? 0),$userId,$role)!==null ? $row : null;
     }
 
+    /** @return array{path:string,count:int} Temporary ZIP owned by the caller, which must delete it. */
+    public static function createHistoryArchive(PDO $pdo, int $companyId, int $userId, string $role, array $requestedIds): array
+    {
+        if (!class_exists(\ZipArchive::class)) throw new RuntimeException('На сервере недоступно создание ZIP-архивов.');
+        if ($requestedIds === [] || count($requestedIds) > 200) throw new RuntimeException('Выберите от 1 до 200 документов.');
+        $ids = [];
+        foreach ($requestedIds as $value) {
+            if (!is_scalar($value) || !preg_match('/^[1-9][0-9]*$/D', (string)$value)) {
+                throw new RuntimeException('Список выбранных документов некорректен.');
+            }
+            $id = (int)$value;
+            if ($id <= 0 || (string)$id !== (string)$value || isset($ids[$id])) {
+                throw new RuntimeException('Список выбранных документов некорректен.');
+            }
+            $ids[$id] = true;
+        }
+
+        $files = [];
+        foreach (array_keys($ids) as $id) {
+            $row = self::getAccessibleGenerated($pdo, $id, $userId, $role);
+            if ($row === null) throw new RuntimeException('Один из выбранных документов недоступен. Обновите историю.');
+            $path = DocumentService::resolveStoredPath($companyId, (string)$row['stored_path']);
+            if ($path === null || !is_readable($path)) throw new RuntimeException('Файл одного из выбранных документов недоступен.');
+            $actual = hash_file('sha256', $path) ?: '';
+            if ($actual === '' || !hash_equals((string)$row['sha256'], $actual)) {
+                throw new RuntimeException('Контрольная сумма одного из документов не совпадает. Скачивание заблокировано.');
+            }
+            $files[] = ['path' => $path, 'name' => $id . '__' . DocumentService::safeDownloadName((string)$row['original_name'])];
+        }
+
+        $temporaryPath = tempnam(sys_get_temp_dir(), 'planex_docgen_');
+        if ($temporaryPath === false) throw new RuntimeException('Не удалось подготовить ZIP-архив.');
+        $zip = new \ZipArchive();
+        $opened = false;
+        try {
+            if ($zip->open($temporaryPath, \ZipArchive::CREATE | \ZipArchive::OVERWRITE) !== true) {
+                throw new RuntimeException('Не удалось создать ZIP-архив.');
+            }
+            $opened = true;
+            foreach ($files as $file) {
+                if (!$zip->addFile($file['path'], $file['name'])) throw new RuntimeException('Не удалось добавить документ в ZIP-архив.');
+            }
+            $closed = $zip->close();
+            $opened = false;
+            if (!$closed || !is_file($temporaryPath) || filesize($temporaryPath) === 0) {
+                throw new RuntimeException('Не удалось завершить ZIP-архив.');
+            }
+            return ['path' => $temporaryPath, 'count' => count($files)];
+        } catch (\Throwable $e) {
+            if ($opened) $zip->close();
+            @unlink($temporaryPath);
+            throw $e;
+        }
+    }
+
     public static function copySeedFromGenerated(array $generated): array
     {
         $snapshot=json_decode((string)($generated['snapshot_json'] ?? ''),true);
