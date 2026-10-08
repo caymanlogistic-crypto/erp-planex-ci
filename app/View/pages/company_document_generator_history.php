@@ -1,3 +1,7 @@
+<style>
+.docgen-history-check{cursor:pointer;align-items:center}
+.docgen-history-check input:focus-visible+.checkbox-mark{outline:2px solid var(--accent-deep);outline-offset:2px}
+</style>
 <div class="page-head">
     <div class="page-head-left">
         <h1 class="page-title">История сформированных документов</h1>
@@ -34,11 +38,11 @@
     </div>
     <div class="table-scroll">
         <table class="table">
-            <thead><tr><th class="col-check-width text-center"><input type="checkbox" data-document-select-all aria-label="Выбрать все показанные документы"></th><th>ID</th><th>Документ</th><th>Исполнитель</th><th>Заявки / масса</th><th>Создан</th><th></th></tr></thead>
+            <thead><tr><th class="col-check-width text-center"><label class="checkbox-item docgen-history-check"><input type="checkbox" data-document-select-all aria-label="Выбрать все показанные документы"><span class="checkbox-mark" aria-hidden="true"></span></label></th><th>ID</th><th>Документ</th><th>Исполнитель</th><th>Заявки / масса</th><th>Создан</th><th></th></tr></thead>
             <tbody>
             <?php foreach ($history as $row): ?>
                 <tr>
-                    <td class="text-center"><input type="checkbox" name="document_ids[]" value="<?= (int)$row['id'] ?>" data-document-select aria-label="Выбрать документ #<?= (int)$row['id'] ?>"></td>
+                    <td class="text-center"><label class="checkbox-item docgen-history-check"><input type="checkbox" name="document_ids[]" value="<?= (int)$row['id'] ?>" data-document-select aria-label="Выбрать документ #<?= (int)$row['id'] ?>"><span class="checkbox-mark" aria-hidden="true"></span></label></td>
                     <td>#<?= (int)$row['id'] ?></td>
                     <td>
                         <strong><?= e((string)($row['_template_name'] ?? $row['document_type'])) ?></strong><br>
