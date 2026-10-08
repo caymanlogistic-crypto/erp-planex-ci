@@ -152,3 +152,37 @@
   .rp-finance-metrics dt{font-size:9px}.rp-finance-metrics dd{font-size:11px}
   .rp-detail-line{font-size:10px;gap:5px}
 }
+/* Planned customer receipt date, shown as text in the compact ledger. */
+.rp-compact-table col.rp-w-id{width:4%}
+.rp-compact-table col.rp-w-desc{width:12%}
+.rp-compact-table col.rp-w-date{width:5%}
+.rp-compact-table col.rp-w-party{width:11.5%}
+.rp-compact-table col.rp-w-rate{width:7%}
+.rp-compact-table col.rp-w-payment-date{width:10%}
+.rp-compact-table col.rp-w-invoice{width:6.5%}
+.rp-compact-table col.rp-w-paid{width:7%}
+.rp-compact-table thead th.rp-col-payment-date{text-align:center}
+.rp-compact-table .rp-col-payment-date{text-align:center;cursor:default}
+.rp-payment-date-text{font-size:10px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
+.rp-compact-table td.rp-payment-due-today{background:#ffe59a;color:#5b4200}
+.rp-compact-table td.rp-payment-overdue{background:#f7b6af;color:#7d1e17}
+.rp-compact-table tbody tr:hover td.rp-payment-due-today,.rp-compact-table tbody tr:focus-visible td.rp-payment-due-today{background:#ffdf80}
+.rp-compact-table tbody tr:hover td.rp-payment-overdue,.rp-compact-table tbody tr:focus-visible td.rp-payment-overdue{background:#f3a59b}
+@media(max-width:1400px){
+  .rp-compact-table col.rp-w-desc{width:15%}
+  .rp-compact-table col.rp-w-party{width:15%}
+}
+@media(max-width:900px){
+  .rp-compact-table col.rp-w-payment-date{display:table-column;width:30%}
+  .rp-compact-table th.rp-col-payment-date,.rp-compact-table td.rp-col-payment-date{display:table-cell}
+  .rp-compact-table col:nth-child(13){display:none}
+  .rp-compact-table col.rp-w-id{width:11%}
+  .rp-compact-table col.rp-w-desc{width:39%}
+  .rp-compact-table col.rp-w-paid{width:20%}
+  .rp-compact-table th:nth-child(9),.rp-compact-table td:nth-child(9){display:table-cell}
+  .rp-compact-table th:nth-child(8),.rp-compact-table td:nth-child(8),
+  .rp-compact-table th:nth-child(10),.rp-compact-table td:nth-child(10),
+  .rp-compact-table th:nth-child(11),.rp-compact-table td:nth-child(11),
+  .rp-compact-table th:nth-child(12),.rp-compact-table td:nth-child(12),
+  .rp-compact-table th:nth-child(13),.rp-compact-table td:nth-child(13){display:none}
+}
