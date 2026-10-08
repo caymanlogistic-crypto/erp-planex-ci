@@ -110,8 +110,8 @@ $renderSide = static function (array $trip, string $side) use ($stats, $money, $
             $customer = $stats($trip, 'customer');
             $carrier = $stats($trip, 'carrier');
             $plannedReceipt = $trip['planned_receipt'] ?? null;
-            $plannedDate = is_array($plannedReceipt) ? (string)($plannedReceipt['date'] ?? '') : '';
             $customerFullyReceived = $customer['rate'] !== null && $customer['rate'] > 0 && $customer['paid'] >= $customer['rate'];
+            $plannedDate = !$customerFullyReceived && is_array($plannedReceipt) ? (string)($plannedReceipt['date'] ?? '') : '';
             $paymentDateState = '';
             if ($plannedDate !== '' && !empty($plannedReceipt['remaining']) && !$customerFullyReceived
                 && (string)($plannedReceipt['due_date'] ?? '') === $plannedDate

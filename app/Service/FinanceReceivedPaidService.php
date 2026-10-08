@@ -109,32 +109,50 @@ final class FinanceReceivedPaidService
             }
         }
 
-        // The register shows the next unpaid customer stage. A forecast remains
-        // visible, but only an established due date can become overdue.
-        $planned = $pdo->prepare("SELECT o.id,o.source_parent_id AS trip_id,o.due_date,o.forecast_due_date,
-                o.status,GREATEST(o.amount-COALESCE(SUM(CASE
+        // Derive the deadline from the payment terms saved on the trip, not from
+        // an obligation snapshot that may predate an edited unloading date.
+        $planned = $pdo->prepare("SELECT p.id,p.waste_trip_id AS trip_id,p.amount,p.condition_type,
+                p.days_count,p.days_kind,p.specific_due_date,
+                COALESCE(SUM(CASE
                     WHEN a.cancelled_at IS NULL AND fo.status='POSTED'
                       AND (a.invoice_id IS NULL OR (fi.id IS NOT NULL AND fi.cancelled_at IS NULL AND fi.status<>'cancelled'))
-                    THEN a.amount ELSE 0 END),0),0) AS remaining_amount
-            FROM finance_obligations o
+                    THEN a.amount ELSE 0 END),0) AS paid_amount
+            FROM waste_trip_customer_payments p
+            LEFT JOIN finance_obligations o ON o.source_type='WASTE_TRIP_CUSTOMER_PAYMENT'
+              AND o.source_id=p.id AND o.source_parent_type='WASTE_TRIP'
+              AND o.source_parent_id=p.waste_trip_id AND o.party_role='customer'
+              AND o.cancelled_at IS NULL AND o.status<>'cancelled'
             LEFT JOIN finance_operation_allocations a ON a.obligation_id=o.id
             LEFT JOIN finance_operations fo ON fo.id=a.operation_id
             LEFT JOIN finance_invoices fi ON fi.id=a.invoice_id
-            WHERE o.source_parent_type='WASTE_TRIP' AND o.party_role='customer'
-              AND o.cancelled_at IS NULL AND o.status<>'cancelled'
-              AND o.source_parent_id IN ($marks)
-            GROUP BY o.id,o.source_parent_id,o.due_date,o.forecast_due_date,o.status,o.amount");
+            WHERE p.waste_trip_id IN ($marks)
+            GROUP BY p.id,p.waste_trip_id,p.amount,p.condition_type,
+                p.days_count,p.days_kind,p.specific_due_date");
         $planned->execute($ids);
         $plansByTrip = [];
         foreach ($planned->fetchAll(PDO::FETCH_ASSOC) as $plan) {
-            $dueDate = self::validDate($plan['due_date'] ?? null);
-            $displayDate = $dueDate ?? self::validDate($plan['forecast_due_date'] ?? null);
+            $tripId = (int)$plan['trip_id'];
+            $trip = $rows[$byId[$tripId]];
+            $actualEnd = self::validDate($trip['actual_end_date'] ?? null);
+            $plannedEnd = self::validDate($trip['planned_finish_date'] ?? null);
+            $actualStart = self::validDate($trip['actual_start_date'] ?? null);
+            $plannedStart = self::validDate($trip['planned_start_date'] ?? null);
+            $condition = (string)$plan['condition_type'];
+            $days = $plan['days_count'] === null ? null : (int)$plan['days_count'];
+            $daysKind = (string)($plan['days_kind'] ?: DateCalculationService::DAYS_KIND_CALENDAR);
+            $specificDate = self::validDate($plan['specific_due_date'] ?? null);
+            $dueDate = DateCalculationService::calculateFinalDueDate(
+                $condition, $actualStart, $actualEnd, null, $days, $daysKind, $specificDate
+            );
+            $displayDate = $dueDate ?? DateCalculationService::calculateForecastDueDate(
+                $condition, $plannedStart, $plannedEnd, $days, $daysKind, $specificDate
+            );
             if ($displayDate === null) continue;
-            $plansByTrip[(int)$plan['trip_id']][] = [
+            $plansByTrip[$tripId][] = [
                 'date' => $displayDate,
                 'due_date' => $dueDate,
-                'remaining' => (float)$plan['remaining_amount'] > 0,
-                'status' => (string)$plan['status'],
+                'remaining' => (float)$plan['amount'] - (float)$plan['paid_amount'] > 0.005,
+                'status' => $dueDate === null ? 'waiting_event' : 'ready',
                 'id' => (int)$plan['id'],
             ];
         }
