@@ -42,6 +42,16 @@ final class ClientPackageInvoiceNumberPolicy
     {
         $historical = self::historical($businessId);
         if ($historical === null) return null;
+        $matches = self::linkedInvoice($pdo, $historical['number'], $historical['amount'], $tripId, $clientId, $lock);
+        if ($matches === null) {
+            throw new RuntimeException('Для рейса #' . $businessId . ' не найден единственный действующий счёт № '
+                . $historical['number'] . ' на ' . $historical['amount'] . ' ₽, связанный с обязательством этого рейса. Проверьте номер и связь счёта в финансах.');
+        }
+        return $matches;
+    }
+
+    public static function linkedInvoice(PDO $pdo, string $number, string $amount, int $tripId, int $clientId, bool $lock = false): ?array
+    {
         $query = $pdo->prepare(
             "SELECT i.* FROM finance_invoices i
               WHERE i.direction='OUTGOING' AND i.number=? AND i.amount=?
@@ -54,12 +64,9 @@ final class ClientPackageInvoiceNumberPolicy
                        AND o.party_role='customer')
               LIMIT 2" . ($lock ? ' FOR UPDATE' : '')
         );
-        $query->execute([$historical['number'], $historical['amount'], $clientId, $tripId]);
+        $query->execute([$number, $amount, $clientId, $tripId]);
         $matches = $query->fetchAll(PDO::FETCH_ASSOC);
-        if (count($matches) !== 1) {
-            throw new RuntimeException('Для рейса #' . $businessId . ' не найден единственный действующий счёт № '
-                . $historical['number'] . ' на ' . $historical['amount'] . ' ₽, связанный с обязательством этого рейса. Проверьте номер и связь счёта в финансах.');
-        }
-        return $matches[0];
+        if (count($matches) > 1) throw new RuntimeException('Найдено несколько действующих счетов № ' . $number . ' для одного рейса.');
+        return $matches[0] ?? null;
     }
 }

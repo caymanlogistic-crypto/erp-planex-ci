@@ -58,23 +58,7 @@ final class ClientPackageInvoiceSyncService
             if ((string)$historical['invoice_date'] !== $date) {
                 throw new RuntimeException('Дата исторического счёта изменилась после проверки. Повторите проверку комплекта.');
             }
-            $actual = $pdo->prepare('SELECT obligation_id,amount,linear_route_id,linear_route_payment_id FROM finance_invoice_links WHERE invoice_id=? ORDER BY obligation_id,id FOR UPDATE');
-            $actual->execute([(int)$historical['id']]);
-            $actualLinks = $actual->fetchAll(PDO::FETCH_ASSOC);
-            $expectedById = [];
-            foreach ($links as $link) $expectedById[(int)$link['obligation_id']] = $link['amount'];
-            $actualById = [];
-            foreach ($actualLinks as $link) {
-                $obligationId = (int)($link['obligation_id'] ?? 0);
-                if ($obligationId <= 0 || $link['linear_route_id'] !== null || $link['linear_route_payment_id'] !== null
-                    || isset($actualById[$obligationId])) {
-                    throw new RuntimeException('Исторический счёт связан с другими обязательствами. Комплект не создан.');
-                }
-                $actualById[$obligationId] = FinanceInvoiceService::normalizeMoneyInput((string)$link['amount']);
-            }
-            if ($actualById !== $expectedById) {
-                throw new RuntimeException('Связи исторического счёта не совпадают с обязательствами рейса. Комплект не создан.');
-            }
+            self::assertExactLinks($pdo, (int)$historical['id'], $links, true);
             return (int)$historical['id'];
         }
 
@@ -138,10 +122,11 @@ final class ClientPackageInvoiceSyncService
             if ((float)$paid->fetchColumn() > 0.0 || (float)$existing['paid_amount'] > 0.0) {
                 if ((string)$existing['invoice_date'] !== $date
                     || (string)$existing['amount'] !== $amount
-                    || (int)$existing['counterparty_entity_id'] !== $clientId
-                    || (string)($existing['basis'] ?? '') !== $basis) {
-                    throw new RuntimeException('По счёту уже есть оплата. Изменение даты, суммы, покупателя или основания требует отдельной сверки; комплект не перезаписан.');
+                    || (int)$existing['counterparty_entity_id'] !== $clientId) {
+                    throw new RuntimeException('По счёту уже есть оплата. Дата, сумма или покупатель отличаются от сохранённого счёта; комплект не перезаписан.');
                 }
+                self::assertExactLinks($pdo, (int)$existing['id'], $links);
+                return (int)$existing['id'];
             }
         }
 
@@ -170,5 +155,22 @@ final class ClientPackageInvoiceSyncService
         FinanceObligationService::replaceInvoiceLinks($pdo, $invoiceId, $links, $user);
         FinanceInvoicePrepaymentService::reconcileInvoice($pdo, $invoiceId, $user);
         return $invoiceId;
+    }
+
+    private static function assertExactLinks(PDO $pdo, int $invoiceId, array $links, bool $historical = false): void
+    {
+        $query = $pdo->prepare('SELECT obligation_id,amount,linear_route_id,linear_route_payment_id FROM finance_invoice_links WHERE invoice_id=? ORDER BY obligation_id,id FOR UPDATE');
+        $query->execute([$invoiceId]);
+        $expected = [];
+        foreach ($links as $link) $expected[(int)$link['obligation_id']] = $link['amount'];
+        $actual = [];
+        foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $link) {
+            $id = (int)($link['obligation_id'] ?? 0);
+            if ($id <= 0 || $link['linear_route_id'] !== null || $link['linear_route_payment_id'] !== null || isset($actual[$id])) {
+                throw new RuntimeException(($historical ? 'Исторический счёт' : 'Счёт') . ' связан с другими обязательствами. Комплект не создан.');
+            }
+            $actual[$id] = FinanceInvoiceService::normalizeMoneyInput((string)$link['amount']);
+        }
+        if ($actual !== $expected) throw new RuntimeException('Связи ' . ($historical ? 'исторического счёта' : 'счёта') . ' не совпадают с обязательствами рейса. Комплект не создан.');
     }
 }

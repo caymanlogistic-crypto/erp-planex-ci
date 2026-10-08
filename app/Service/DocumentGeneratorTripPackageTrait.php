@@ -625,15 +625,17 @@ trait DocumentGeneratorTripPackageTrait
         [$start, $finish] = self::tripDocumentDates($trip);
         $invoiceDate = $finish ?? '';
         $businessId = (int)($trip['business_id'] ?? 0);
-        if (ClientPackageInvoiceNumberPolicy::historical($businessId) !== null) {
-            try {
-                $invoice = ClientPackageInvoiceNumberPolicy::existingHistoricalInvoice(
-                    $pdo, $businessId, (int)($trip['id'] ?? 0), (int)($trip['client_id'] ?? 0)
+        try {
+            $amount = self::sumPaymentRows(WasteTripService::financialCustomerPayments($pdo, $trip));
+            if ($amount !== null) {
+                $number = ClientPackageInvoiceNumberPolicy::number($businessId, $amount);
+                $invoice = ClientPackageInvoiceNumberPolicy::linkedInvoice(
+                    $pdo, $number, $amount, (int)($trip['id'] ?? 0), (int)($trip['client_id'] ?? 0)
                 );
-                $invoiceDate = (string)$invoice['invoice_date'];
-            } catch (RuntimeException) {
-                // The preview reports the missing historical link explicitly.
+                if ($invoice !== null) $invoiceDate = (string)$invoice['invoice_date'];
             }
+        } catch (RuntimeException) {
+            // The preview reports missing historical links or amount conflicts explicitly.
         }
         return ['contract_date'=>$start ?? '', 'invoice_date'=>$invoiceDate, 'act_date'=>$finish ?? ''];
     }
