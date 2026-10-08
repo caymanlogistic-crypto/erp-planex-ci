@@ -47,7 +47,11 @@ $assert(str_contains($view, 'await fetch(check.formAction||form.action'), 'AJAX 
 $assert(str_contains($view, "new DOMParser().parseFromString(await r.text(),'text/html')"), 'AJAX consumes canonical server-rendered preview instead of duplicating backend prepare logic');
 $assert(str_contains($view, "e.submitter?.matches('[data-docgen-check]')"), 'AJAX intercepts preview only and leaves generation submit untouched');
 $assert(str_contains($view, '[data-docgen-generate]'), 'successful preview preserves canonical generation action');
-$assert(str_contains($view, 'Комплект №') && str_contains($view, 'уже был создан.'), 'existing package preview explains the conflict');
+$assert(str_contains($view, 'По этому рейсу уже есть документы комплекта.')
+    && str_contains($view, 'будут сформированы заново и заменят прежний комплект'),
+    'existing package preview explains the replacement');
+$assert(str_contains($view, 'Исторический электронный счёт и его оплаты сохранятся.'),
+    'historical invoice preview explains financial preservation');
 $assert(str_contains($view, 'data-docgen-overwrite name="overwrite_existing" value="1"'), 'overwrite action carries explicit server confirmation');
 $assert(str_contains($view, "'Комплект уже был создан. Перезаписать договор, счёт и '") && str_contains($view, "mode.value==='client_package_upd'?'УПД':'акт'"), 'package overwrite names the selected transfer document');
 $assert(str_contains($view, 'if(!confirm(message))'), 'overwrite action requires user confirmation');
