@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 function e(string $value): string { return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 function app_url(string $path): string { return '/erpv2' . $path; }
+function base_path(string $path): string { return dirname(__DIR__, 2) . '/' . $path; }
 
 $payment = static fn(int $amount, int $invoiceId = 0): array => [
     'amount' => (string)$amount,
@@ -21,7 +22,7 @@ $side = static fn(?int $rate, array $payments = [], array $invoices = []): array
     'payments' => $payments,
     'invoices' => $invoices,
 ];
-$trip = static fn(int $id, array $customer, array $carrier, ?array $planned = null): array => [
+$trip = static fn(int $id, array $customer, array $carrier, ?array $planned = null, ?array $carrierPlan = null): array => [
     'business_id' => $id,
     'comment' => 'Рейс ' . $id,
     'actual_start_date' => '2026-09-28',
@@ -33,7 +34,9 @@ $trip = static fn(int $id, array $customer, array $carrier, ?array $planned = nu
     'client_name' => 'Заказчик',
     'carrier_id' => 2,
     'carrier_name' => 'Перевозчик',
+    'driver_full_name' => $id === 104 ? null : 'Иванов Иван Иванович',
     'planned_receipt' => $planned,
+    'planned_carrier_payment' => $carrierPlan,
     'sides' => ['customer' => $customer, 'carrier' => $carrier],
 ];
 $today = new DateTimeImmutable('today', new DateTimeZone('Europe/Moscow'));
@@ -41,9 +44,9 @@ $past = $today->modify('-1 day')->format('Y-m-d');
 $dueToday = $today->format('Y-m-d');
 $future = $today->modify('+2 days')->format('Y-m-d');
 $trips = array_reverse([
-    $trip(101, $side(100, [$payment(100, 1)], [$invoice(1, 100)]), $side(80, [$payment(80, 2)], [$invoice(2, 80)]), ['date' => $past, 'due_date' => $past, 'remaining' => false, 'status' => 'paid']),
-    $trip(102, $side(100, [$payment(40)]), $side(80, [$payment(20)]), ['date' => $dueToday, 'due_date' => $dueToday, 'remaining' => true, 'status' => 'partially_paid']),
-    $trip(103, $side(100), $side(80), ['date' => $past, 'due_date' => $past, 'remaining' => true, 'status' => 'overdue']),
+    $trip(101, $side(100, [$payment(100, 1)], [$invoice(1, 100)]), $side(80, [$payment(80, 2)], [$invoice(2, 80)]), ['date' => $past, 'due_date' => $past, 'remaining' => false, 'status' => 'ready']),
+    $trip(102, $side(100, [$payment(40)], [$invoice(3, 70), $invoice(4, 30)]), $side(80, [$payment(20)], [$invoice(5, 80)]), ['date' => $dueToday, 'due_date' => $dueToday, 'remaining' => true, 'status' => 'ready']),
+    $trip(103, $side(100), $side(80), ['date' => $past, 'due_date' => $past, 'remaining' => true, 'status' => 'ready'], ['date' => $past, 'due_date' => $past, 'remaining' => true, 'status' => 'ready']),
     $trip(104, $side(100, [$payment(100)]), $side(null), ['date' => $future, 'due_date' => null, 'remaining' => true, 'status' => 'waiting_event']),
     $trip(105, $side(0), $side(80, [$payment(80)])),
 ]);
@@ -51,6 +54,7 @@ $localPdo = null;
 $dbError = null;
 $_SESSION = [];
 
-echo '<!doctype html><html lang="ru"><head><meta charset="utf-8"></head><body>';
+echo '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>';
+echo '<div class="app"><header class="topbar"><div class="topbar-brand"><div class="logo-mark"></div><span class="brand-name">ERP PLANEX</span><span class="brand-tag">ERP</span></div><div class="topbar-crumbs"><b>КОМПАНИЯ</b></div></header><aside class="sidebar" aria-label="Основная навигация"><div class="nav-group"><div class="nav-section-label">ОПЕРАЦИИ</div><a class="nav-item" href="#">Клиенты</a><a class="nav-item" href="#">Рейсы</a><a class="nav-item" href="#">Финансы</a></div></aside><main class="content content--wide-workspace"><div class="workspace-shell-1690">';
 require __DIR__ . '/../../app/View/pages/company_finance_received_paid.php';
-echo '</body></html>';
+echo '</div></main></div></body></html>';

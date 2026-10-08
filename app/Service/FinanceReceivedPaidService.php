@@ -13,11 +13,14 @@ final class FinanceReceivedPaidService
         $stmt = $pdo->prepare("SELECT wt.id, wt.business_id, wt.comment, wt.actual_start_date,
                 wt.planned_start_date, wt.planned_start_date_from, wt.actual_end_date,
                 wt.planned_finish_date, wt.client_id, c.name AS client_name,
-                ct.id AS carrier_id, ct.name AS carrier_name
+                ct.id AS carrier_id, ct.name AS carrier_name,
+                d.full_name AS driver_full_name
             FROM waste_trips wt
             JOIN clients c ON c.id=wt.client_id
             LEFT JOIN crews cr ON cr.id=wt.route_executor_id
             LEFT JOIN contractors ct ON ct.id=cr.contractor_id
+            LEFT JOIN driver_vehicle_blocks dvb ON dvb.id=cr.driver_vehicle_block_id
+            LEFT JOIN drivers d ON d.id=dvb.driver_id
             WHERE wt.deleted_at IS NULL AND wt.legal_entity_code='planex'
               AND wt.status='completed' AND {$scope['sql']}
             ORDER BY wt.business_id DESC");
@@ -33,6 +36,7 @@ final class FinanceReceivedPaidService
                 'carrier' => ['rate' => null, 'invoices' => [], 'payments' => []],
             ];
             $row['planned_receipt'] = null;
+            $row['planned_carrier_payment'] = null;
             $byId[(int)$row['id']] = $index;
         }
         unset($row);
@@ -166,6 +170,60 @@ final class FinanceReceivedPaidService
                 }
             }
             $row['planned_receipt'] ??= $plans[0] ?? null;
+        }
+        unset($row);
+        // Carrier payment terms have the same trip date basis as customer terms.
+        // Only an actual due_date can make a deadline overdue; forecast remains informational.
+        $carrierPlans = $pdo->prepare("SELECT p.id,p.waste_trip_id AS trip_id,p.amount,p.condition_type,
+                p.days_count,p.days_kind,p.specific_due_date,
+                COALESCE(SUM(CASE
+                    WHEN a.cancelled_at IS NULL AND fo.status='POSTED'
+                      AND (a.invoice_id IS NULL OR (fi.id IS NOT NULL AND fi.cancelled_at IS NULL AND fi.status<>'cancelled'))
+                    THEN a.amount ELSE 0 END),0) AS paid_amount
+            FROM waste_trip_carrier_payments p
+            LEFT JOIN finance_obligations o ON o.source_type='WASTE_TRIP_CARRIER_PAYMENT'
+              AND o.source_id=p.id AND o.source_parent_type='WASTE_TRIP'
+              AND o.source_parent_id=p.waste_trip_id AND o.party_role='carrier'
+              AND o.cancelled_at IS NULL AND o.status<>'cancelled'
+            LEFT JOIN finance_operation_allocations a ON a.obligation_id=o.id
+            LEFT JOIN finance_operations fo ON fo.id=a.operation_id
+            LEFT JOIN finance_invoices fi ON fi.id=a.invoice_id
+            WHERE p.waste_trip_id IN ($marks)
+            GROUP BY p.id,p.waste_trip_id,p.amount,p.condition_type,
+                p.days_count,p.days_kind,p.specific_due_date");
+        $carrierPlans->execute($ids);
+        $carrierByTrip = [];
+        foreach ($carrierPlans->fetchAll(PDO::FETCH_ASSOC) as $plan) {
+            $tripId = (int)$plan['trip_id'];
+            $trip = $rows[$byId[$tripId]];
+            $condition = (string)$plan['condition_type'];
+            $days = $plan['days_count'] === null ? null : (int)$plan['days_count'];
+            $daysKind = (string)($plan['days_kind'] ?: DateCalculationService::DAYS_KIND_CALENDAR);
+            $specificDate = self::validDate($plan['specific_due_date'] ?? null);
+            $dueDate = DateCalculationService::calculateFinalDueDate(
+                $condition, self::validDate($trip['actual_start_date'] ?? null),
+                self::validDate($trip['actual_end_date'] ?? null), null, $days, $daysKind, $specificDate
+            );
+            $displayDate = $dueDate ?? DateCalculationService::calculateForecastDueDate(
+                $condition, self::validDate($trip['planned_start_date'] ?? null),
+                self::validDate($trip['planned_finish_date'] ?? null), $days, $daysKind, $specificDate
+            );
+            if ($displayDate === null) continue;
+            $carrierByTrip[$tripId][] = [
+                'date' => $displayDate,
+                'due_date' => $dueDate,
+                'remaining' => (float)$plan['amount'] - (float)$plan['paid_amount'] > 0.005,
+                'status' => $dueDate === null ? 'waiting_event' : 'ready',
+                'id' => (int)$plan['id'],
+            ];
+        }
+        foreach ($rows as &$row) {
+            $plans = $carrierByTrip[(int)$row['id']] ?? [];
+            usort($plans, static fn(array $a, array $b): int => [$a['date'], $a['id']] <=> [$b['date'], $b['id']]);
+            foreach ($plans as $plan) {
+                if ($plan['remaining']) { $row['planned_carrier_payment'] = $plan; break; }
+            }
+            $row['planned_carrier_payment'] ??= $plans[0] ?? null;
         }
         unset($row);
         return $rows;
