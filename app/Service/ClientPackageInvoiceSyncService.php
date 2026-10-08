@@ -49,6 +49,49 @@ final class ClientPackageInvoiceSyncService
             throw new RuntimeException('Сумма обязательств рейса не совпадает с печатным счётом. Проверьте финансовые условия рейса.');
         }
 
+        $businessId = (int)($trip['business_id'] ?? 0);
+        if (ClientPackageInvoiceNumberPolicy::historical($businessId) !== null) {
+            if (ClientPackageInvoiceNumberPolicy::number($businessId, $amount) !== $number) {
+                throw new RuntimeException('Номер исторического счёта рейса изменился после проверки. Повторите проверку комплекта.');
+            }
+            $historical = ClientPackageInvoiceNumberPolicy::existingHistoricalInvoice($pdo, $businessId, $tripId, $clientId, true);
+            if ((string)$historical['invoice_date'] !== $date) {
+                throw new RuntimeException('Дата исторического счёта изменилась после проверки. Повторите проверку комплекта.');
+            }
+            $actual = $pdo->prepare('SELECT obligation_id,amount,linear_route_id,linear_route_payment_id FROM finance_invoice_links WHERE invoice_id=? ORDER BY obligation_id,id FOR UPDATE');
+            $actual->execute([(int)$historical['id']]);
+            $actualLinks = $actual->fetchAll(PDO::FETCH_ASSOC);
+            $expectedById = [];
+            foreach ($links as $link) $expectedById[(int)$link['obligation_id']] = $link['amount'];
+            $actualById = [];
+            foreach ($actualLinks as $link) {
+                $obligationId = (int)($link['obligation_id'] ?? 0);
+                if ($obligationId <= 0 || $link['linear_route_id'] !== null || $link['linear_route_payment_id'] !== null
+                    || isset($actualById[$obligationId])) {
+                    throw new RuntimeException('Исторический счёт связан с другими обязательствами. Комплект не создан.');
+                }
+                $actualById[$obligationId] = FinanceInvoiceService::normalizeMoneyInput((string)$link['amount']);
+            }
+            if ($actualById !== $expectedById) {
+                throw new RuntimeException('Связи исторического счёта не совпадают с обязательствами рейса. Комплект не создан.');
+            }
+            return (int)$historical['id'];
+        }
+
+        $linkedNumbers = $pdo->prepare(
+            "SELECT DISTINCT i.number FROM finance_invoice_links l
+               JOIN finance_invoices i ON i.id=l.invoice_id
+              WHERE l.obligation_id IN (" . implode(',', array_fill(0, count($links), '?')) . ")
+                AND i.direction='OUTGOING' AND i.cancelled_at IS NULL AND i.status<>'cancelled'"
+        );
+        $linkedNumbers->execute(array_column($links, 'obligation_id'));
+        $alreadyLinkedNumbers = array_map('strval', $linkedNumbers->fetchAll(PDO::FETCH_COLUMN));
+        if ($alreadyLinkedNumbers !== [] && !in_array($number, $alreadyLinkedNumbers, true)) {
+            throw new RuntimeException('Для рейса #' . $businessId . ' уже связан выставленный счёт № '
+                . implode(', ', $alreadyLinkedNumbers) . ' вместо ожидаемого № ' . $number
+                . '. Проверьте, не пропущено ли исключение в нумерации; комплект не создан.');
+        }
+
         $query = $pdo->prepare(
             "SELECT * FROM finance_invoices WHERE direction='OUTGOING' AND number=?
                ORDER BY id FOR UPDATE"

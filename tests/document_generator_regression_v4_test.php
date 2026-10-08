@@ -49,6 +49,19 @@ require_once $root.'/app/Service/FeoRequestInteractionService.php';
 require_once $root.'/app/Service/ProductionCalendarService.php';
 require_once $root.'/app/Service/DocumentGeneratorService.php';
 
+$invoiceNumbers=App\Service\ClientPackageInvoiceNumberPolicy::class;
+$eq($invoiceNumbers::number(244,'275000.00'),'26-106-1','historical invoice number for trip 244');
+$eq($invoiceNumbers::number(246,'180000.00'),'26-105','historical invoice number for trip 246');
+$eq($invoiceNumbers::number(255,'404827.00'),'26-106','historical invoice number for trip 255');
+$eq($invoiceNumbers::number(256,'123000.00'),date('y').'-256','all other trips use YY-public-trip number');
+$eq($invoiceNumbers::tripDocumentNumber(244),'26-244','historical trip document keeps invoice year');
+$eq($invoiceNumbers::tripDocumentNumber(246),'26-246','second historical trip document keeps invoice year');
+$eq($invoiceNumbers::tripDocumentNumber(255),'26-255','third historical trip document keeps invoice year');
+$historicalAmountRejected=false;
+try{$invoiceNumbers::number(244,'275001.00');}catch(RuntimeException){$historicalAmountRejected=true;}
+$ok($historicalAmountRejected,'historical amount mismatch fails closed');
+echo "DOCUMENT_GENERATOR_INVOICE_NUMBER_POLICY=PASS\n";
+
 $p=new App\Service\FeoRequestInteractionService();
 $eq($p->extractRequestIds('300001 300002 300001'),['300001','300002'],'parser dedupe');
 $eq($p->extractRequestIds("| 300003 | 399999 |\n300004\t399998"),['300003','300004'],'structured parser');
@@ -276,6 +289,75 @@ $pdo->exec('DELETE FROM waste_trip_audit_log WHERE waste_trip_id=77');
 $missingAudit=false;try{App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,77,'2026-09-09');}catch(RuntimeException $e){$missingAudit=str_contains($e->getMessage(),'сохранённые финансовые условия');}
 $ok($missingAudit,'missing historical contract fails closed');
 echo "DOCUMENT_GENERATOR_PRESERVED_SETTLEMENTS=PASS\n";
+
+foreach ([[78,244,'26-106-1','275000.00'],[79,246,'26-105','180000.00'],[80,255,'26-106','404827.00']] as [$tripId,$publicId,$number,$amount]) {
+    $pdo->exec("INSERT INTO waste_trips(id,business_id,client_id,route_executor_id,responsible_user_id,destination_type,status,planned_start_mode,planned_start_date,planned_finish_date,actual_start_date,actual_end_date,comment,created_by_user_id,created_by_membership_id,created_by_role) VALUES($tripId,$publicId,1,1,$managerUserId,'warehouse','completed','exact','2026-08-31','2026-09-05','2026-08-31','2026-09-09','Исторический счёт',$managerUserId,12,'custom_role')");
+    $pdo->exec("INSERT INTO waste_trip_requests(waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) SELECT $tripId,feo_request_id,snapshot_mass_kg,position_no FROM waste_trip_requests WHERE waste_trip_id=77");
+    $pdo->exec("INSERT INTO waste_trip_customer_payments(waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type,days_count,days_kind) VALUES($tripId,1,$amount,'Без НДС','cashless','after_documents',7,'calendar')");
+    App\Service\FinanceObligationService::syncWasteTrip($pdo,$tripId);
+    $obligation=(int)$pdo->query("SELECT id FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=$tripId AND direction='RECEIVABLE' AND party_role='customer' AND cancelled_at IS NULL LIMIT 1")->fetchColumn();
+    $ok($obligation>0,'historical obligation '.$publicId);
+    $pdo->exec("INSERT INTO finance_invoices(direction,number,invoice_date,counterparty_entity_type,counterparty_entity_id,amount,paid_amount,status) VALUES('OUTGOING','$number','2026-09-11','client',1,$amount,$amount,'paid')");
+    $historicalId=(int)$pdo->lastInsertId();
+    $pdo->exec("INSERT INTO finance_invoice_links(invoice_id,obligation_id,amount,side) VALUES($historicalId,$obligation,$amount,'customer')");
+    $suggested=App\Service\DocumentGeneratorService::suggestClientPackageDates($pdo,App\Service\WasteTripService::fetchTrip($pdo,$tripId,true));
+    $eq($suggested['invoice_date'],'2026-09-11','historical invoice date is suggested '.$publicId);
+    $wrongDate=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,$tripId,'2026-08-31','2026-09-05','2026-09-05');
+    $ok(!($wrongDate['ok']??true),'historical invoice date mismatch is rejected '.$publicId);
+    $preparedHistorical=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,$tripId,'2026-08-31','2026-09-11','2026-09-05');
+    $ok($preparedHistorical['ok']??false,'historical package prepares '.$publicId);
+    $eq($preparedHistorical['package_number'],$number,'historical package number '.$publicId);
+    $eq($preparedHistorical['contract_number'],'26-'.$publicId,'historical contract follows trip '.$publicId);
+    $eq($preparedHistorical['transfer_number'],'26-'.$publicId,'historical transfer follows trip '.$publicId);
+    $generatedHistorical=App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$preparedHistorical);
+    $eq(count($generatedHistorical),3,'historical package generates three documents '.$publicId);
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM finance_invoices WHERE direction='OUTGOING' AND number='$number' AND amount=$amount")->fetchColumn(),1,'historical electronic invoice is reused '.$publicId);
+    $eq((string)$pdo->query("SELECT invoice_date FROM finance_invoices WHERE id=$historicalId")->fetchColumn(),'2026-09-11','historical invoice date is preserved '.$publicId);
+    $invoiceDoc=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$generatedHistorical['client_invoice']);
+    $eq((string)$invoiceDoc['document_number'],$number,'printed historical invoice number '.$publicId);
+    $contractDoc=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$generatedHistorical['client_sublease_crew']);
+    $actDoc=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$generatedHistorical['client_act']);
+    $eq((string)$contractDoc['document_number'],'26-'.$publicId,'printed contract follows trip '.$publicId);
+    $eq((string)$actDoc['document_number'],'26-'.$publicId,'printed act follows trip '.$publicId);
+    foreach ([['row'=>$invoiceDoc,'needle'=>'Счёт на оплату № '.$number],['row'=>$actDoc,'needle'=>'Акт № 26-'.$publicId]] as $check) {
+        $docPath=App\Service\DocumentService::resolveStoredPath($cid,(string)$check['row']['stored_path']);
+        $docZip=new ZipArchive();$ok($docZip->open($docPath)===true,'historical DOCX opens '.$publicId);
+        $visible=App\Service\DocumentTemplateService::visibleText((string)$docZip->getFromName('word/document.xml'));$docZip->close();
+        $has($visible,$check['needle'],'historical DOCX visible number '.$publicId);
+    }
+    $repeat=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,$tripId,'2026-08-31','2026-09-11','2026-09-05');
+    $ok($repeat['package_exists']??false,'historical package is detected for overwrite '.$publicId);
+    $repeatIds=App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$repeat,true);
+    $eq(count($repeatIds),3,'historical package repeats '.$publicId);
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM finance_invoices WHERE direction='OUTGOING' AND number='$number' AND amount=$amount")->fetchColumn(),1,'repeat preserves one electronic invoice '.$publicId);
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM finance_invoice_links WHERE invoice_id=$historicalId AND obligation_id=$obligation")->fetchColumn(),1,'repeat preserves historical obligation link '.$publicId);
+    $updHistorical=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,$tripId,'2026-08-31','2026-09-11','2026-09-05',null,'upd');
+    $ok($updHistorical['ok']??false,'historical UPD package prepares '.$publicId);
+    $updHistoricalIds=App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$updHistorical);
+    $eq(count($updHistoricalIds),3,'historical UPD package generates three documents '.$publicId);
+    $updInvoice=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$updHistoricalIds['client_upd_invoice']);
+    $updTransfer=App\Service\DocumentGeneratorService::getGenerated($pdo,(int)$updHistoricalIds['client_upd_status2']);
+    $eq((string)$updInvoice['document_number'],$number,'historical UPD package invoice keeps old number '.$publicId);
+    $eq((string)$updTransfer['document_number'],'26-'.$publicId,'historical UPD follows trip '.$publicId);
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM finance_invoices WHERE direction='OUTGOING' AND number='$number' AND amount=$amount")->fetchColumn(),1,'UPD variant reuses historical electronic invoice '.$publicId);
+}
+echo "DOCUMENT_GENERATOR_HISTORICAL_INVOICES=PASS\n";
+
+$pdo->exec("INSERT INTO waste_trips(id,business_id,client_id,route_executor_id,responsible_user_id,destination_type,status,planned_start_mode,planned_start_date,planned_finish_date,actual_start_date,actual_end_date,comment,created_by_user_id,created_by_membership_id,created_by_role) VALUES(81,300,1,1,$managerUserId,'warehouse','completed','exact','2026-08-31','2026-09-05','2026-08-31','2026-09-09','Неучтённый старый номер',$managerUserId,12,'custom_role')");
+$pdo->exec("INSERT INTO waste_trip_requests(waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) SELECT 81,feo_request_id,snapshot_mass_kg,position_no FROM waste_trip_requests WHERE waste_trip_id=77");
+$pdo->exec("INSERT INTO waste_trip_customer_payments(waste_trip_id,sort_order,amount,payment_type,payment_method,condition_type,days_count,days_kind) VALUES(81,1,123000.00,'Без НДС','cashless','after_documents',7,'calendar')");
+App\Service\FinanceObligationService::syncWasteTrip($pdo,81);
+$unknownObligation=(int)$pdo->query("SELECT id FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND source_parent_id=81 AND direction='RECEIVABLE' AND party_role='customer' AND cancelled_at IS NULL LIMIT 1")->fetchColumn();
+$pdo->exec("INSERT INTO finance_invoices(direction,number,invoice_date,counterparty_entity_type,counterparty_entity_id,amount,status) VALUES('OUTGOING','OLD-300','2026-09-11','client',1,123000.00,'issued')");
+$unknownInvoiceId=(int)$pdo->lastInsertId();
+$pdo->exec("INSERT INTO finance_invoice_links(invoice_id,obligation_id,amount,side) VALUES($unknownInvoiceId,$unknownObligation,123000.00,'customer')");
+$unknown=App\Service\DocumentGeneratorService::prepareClientPackage($pdo,$company,$cid,101,'company_owner',1,81,'2026-08-31','2026-09-11','2026-09-05');
+$ok($unknown['ok']??false,'unlisted exception can be previewed');
+$eq($unknown['package_number'],date('y').'-300','unlisted exception defaults to YY-trip');
+$unknownBlocked=false;try{App\Service\DocumentGeneratorService::generateClientPackage($pdo,$cid,101,'company_owner',$unknown);}catch(RuntimeException $e){$unknownBlocked=str_contains($e->getMessage(),'не пропущено ли исключение');}
+$ok($unknownBlocked,'unlisted historical invoice is identified without duplicate');
+$eq((int)$pdo->query("SELECT COUNT(*) FROM generated_documents WHERE document_type='client_invoice' AND document_number='".date('y')."-300'")->fetchColumn(),0,'unlisted exception leaves no printed invoice');
+echo "DOCUMENT_GENERATOR_UNLISTED_EXCEPTION_GUARD=PASS\n";
 
 $ad=trim((string)(getenv('PLANEX_DOCGEN_ARTIFACT_DIR')?:''));if($ad!==''){if(!str_starts_with($ad,DIRECTORY_SEPARATOR))$ad=$root.'/'.$ad;if(!is_dir($ad))mkdir($ad,0775,true);foreach(['contract_vehicle_lease_crew_regression.docx'=>$path1,'waybill_driver_assignment_regression.docx'=>$wpath,'client_upd_status2_regression.docx'=>$updPath]as$n=>$s){$t=rtrim($ad,DIRECTORY_SEPARATOR).DIRECTORY_SEPARATOR.$n;$ok(copy($s,$t),'artifact '.$n);}}
 echo "DOCUMENT_GENERATOR_REGRESSION=PASS\n";

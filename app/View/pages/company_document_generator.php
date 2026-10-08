@@ -115,7 +115,7 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
           <datalist id="docgen-client-trip-options" data-docgen-client-trip-options>
             <?php foreach ($trips as $trip): ?>
               <?php $amount=(string)($trip['_customer_amount'] ?? ''); $label='#'.(int)$trip['business_id'].' · '.(string)($trip['client_name'] ?? '—').' · '.(string)($trip['_document_period'] ?? '').($amount!==''?' · '.number_format((float)$amount,2,',',' ').' ₽':''); ?>
-              <option value="<?= e($label) ?>" data-trip-id="<?= (int)$trip['id'] ?>" data-client-id="<?= (int)$trip['client_id'] ?>" data-contract-number="<?= date('y') . '-' . (int)$trip['business_id'] ?>" data-contract-date="<?= e((string)($trip['_package_dates']['contract_date'] ?? '')) ?>" data-invoice-date="<?= e((string)($trip['_package_dates']['invoice_date'] ?? '')) ?>" data-act-date="<?= e((string)($trip['_package_dates']['act_date'] ?? '')) ?>"></option>
+              <option value="<?= e($label) ?>" data-trip-id="<?= (int)$trip['id'] ?>" data-client-id="<?= (int)$trip['client_id'] ?>" data-contract-number="<?= e((string)($trip['_contract_number'] ?? '')) ?>" data-contract-date="<?= e((string)($trip['_package_dates']['contract_date'] ?? '')) ?>" data-invoice-date="<?= e((string)($trip['_package_dates']['invoice_date'] ?? '')) ?>" data-act-date="<?= e((string)($trip['_package_dates']['act_date'] ?? '')) ?>"></option>
             <?php endforeach; ?>
           </datalist>
         </div>
@@ -147,8 +147,9 @@ $showWaybill=$selectedDocumentType==='waybill_driver_assignment';
     <div class="kv">
       <?php if ($packagePreview): ?>
         <div class="kv-row"><span class="kv-key">Комплект</span><span class="kv-value">Договор + Счёт + <?= $isUpdPackage?'УПД (статус 2)':'Акт' ?></span></div>
-        <div class="kv-row"><span class="kv-key">Номер</span><span class="kv-value">№ <?= e((string)($preview['package_number'] ?? '—')) ?></span></div>
+        <div class="kv-row"><span class="kv-key">Номер счёта</span><span class="kv-value">№ <?= e((string)($preview['package_number'] ?? '—')) ?></span></div>
         <div class="kv-row"><span class="kv-key">Номер договора</span><span class="kv-value">№ <?= e((string)($preview['contract_number'] ?? '—')) ?></span></div>
+        <div class="kv-row"><span class="kv-key">Номер <?= $isUpdPackage?'УПД':'акта' ?></span><span class="kv-value">№ <?= e((string)($preview['transfer_number'] ?? '—')) ?></span></div>
         <div class="kv-row"><span class="kv-key">Клиент</span><span class="kv-value"><?= e((string)($preview['client']['name'] ?? '—')) ?></span></div>
         <div class="kv-row"><span class="kv-key">Рейс</span><span class="kv-value">#<?= (int)($preview['trip']['business_id'] ?? 0) ?></span></div>
         <div class="kv-row"><span class="kv-key">Даты документов</span><span class="kv-value">Договор <?= e((string)($preview['package_dates'][$isUpdPackage?'client_upd_contract':'client_sublease_crew'] ?? '')) ?> · Счёт <?= e((string)($preview['package_dates'][$isUpdPackage?'client_upd_invoice':'client_invoice'] ?? '')) ?> · <?= $isUpdPackage?'УПД':'Акт' ?> <?= e((string)($preview['package_dates'][$isUpdPackage?'client_upd_status2':'client_act'] ?? '')) ?></span></div>
