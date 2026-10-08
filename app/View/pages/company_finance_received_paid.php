@@ -15,6 +15,7 @@ $date = static function ($value): string {
     $value = trim((string)($value ?? ''));
     return preg_match('/^\d{4}-\d{2}-\d{2}$/D', $value) ? date('d.m.Y', strtotime($value)) : '—';
 };
+$todayMoscow = (new DateTimeImmutable('now', new DateTimeZone('Europe/Moscow')))->format('Y-m-d');
 $sideTotal = static fn(array $items): int => array_sum(array_map(static fn(array $item): int => $moneyCents($item['amount'] ?? 0), $items));
 $stats = static function (array $trip, string $side) use ($sideTotal, $moneyCents): array {
     $block = $trip['sides'][$side];
@@ -94,8 +95,8 @@ $renderSide = static function (array $trip, string $side) use ($stats, $money, $
         <label class="rp-filter-field rp-search"><span>Поиск</span><input class="field-input" id="rp-search" placeholder="ID, описание, контрагент или счёт"></label>
         <label class="rp-filter-field"><span>Сортировка</span><select class="field-select" id="rp-sort"><option value="new">По ID (сначала новые)</option><option value="old">По ID (сначала старые)</option></select></label></div>
     <div class="table-toolbar"><div class="found-label">Найдено: <b id="rp-count"><?= count($trips) ?></b></div><div class="rp-toolbar-note"><span class="rp-hint-desktop">Двойной щелчок по строке — подробности</span><span class="rp-hint-mobile">Нажмите на строку — подробности</span></div></div>
-    <div class="rp-table-wrap"><table class="rp-compact-table"><colgroup><col class="rp-w-id"><col class="rp-w-desc"><col class="rp-w-date"><col class="rp-w-date"><col class="rp-w-party"><col class="rp-w-rate"><col class="rp-w-invoice"><col class="rp-w-paid"><col class="rp-w-party"><col class="rp-w-rate"><col class="rp-w-invoice"><col class="rp-w-paid"></colgroup>
-        <thead><tr><th scope="col">ID</th><th scope="col">Описание рейса</th><th scope="col">Начало</th><th scope="col">Окончание</th><th scope="col">Заказчик</th><th scope="col">Ставка</th><th scope="col">Счёт клиенту</th><th scope="col">Получено</th><th scope="col">Перевозчик</th><th scope="col">Себес</th><th scope="col">Счёт перевозчика</th><th scope="col">Оплачено</th></tr></thead>
+    <div class="rp-table-wrap"><table class="rp-compact-table"><colgroup><col class="rp-w-id"><col class="rp-w-desc"><col class="rp-w-date"><col class="rp-w-date"><col class="rp-w-party"><col class="rp-w-rate"><col class="rp-w-payment-date"><col class="rp-w-invoice"><col class="rp-w-paid"><col class="rp-w-party"><col class="rp-w-rate"><col class="rp-w-invoice"><col class="rp-w-paid"></colgroup>
+        <thead><tr><th scope="col">ID</th><th scope="col">Описание рейса</th><th scope="col">Начало</th><th scope="col">Окончание</th><th scope="col">Заказчик</th><th scope="col">Ставка</th><th scope="col" class="rp-col-payment-date" title="Планируемая дата получения денег от заказчика">Оплата</th><th scope="col">Счёт клиенту</th><th scope="col">Получено</th><th scope="col">Перевозчик</th><th scope="col">Себес</th><th scope="col">Счёт перевозчика</th><th scope="col">Оплачено</th></tr></thead>
         <tbody id="rp-list">
         <?php foreach ($trips as $trip):
             $businessId = (int)$trip['business_id'];
@@ -108,6 +109,16 @@ $renderSide = static function (array $trip, string $side) use ($stats, $money, $
             $detailTitle = 'Рейс #' . $businessId . ' · ' . $description . ' · ' . $startLabel . ($endLabel === '—' ? '' : ' — ' . $endLabel);
             $customer = $stats($trip, 'customer');
             $carrier = $stats($trip, 'carrier');
+            $plannedReceipt = $trip['planned_receipt'] ?? null;
+            $plannedDate = is_array($plannedReceipt) ? (string)($plannedReceipt['date'] ?? '') : '';
+            $customerFullyReceived = $customer['rate'] !== null && $customer['rate'] > 0 && $customer['paid'] >= $customer['rate'];
+            $paymentDateState = '';
+            if ($plannedDate !== '' && !empty($plannedReceipt['remaining']) && !$customerFullyReceived
+                && (string)($plannedReceipt['due_date'] ?? '') === $plannedDate
+                && !in_array((string)($plannedReceipt['status'] ?? ''), ['waiting_event', 'calendar_missing'], true)) {
+                if ($plannedDate < $todayMoscow) $paymentDateState = ' rp-payment-overdue';
+                elseif ($plannedDate === $todayMoscow) $paymentDateState = ' rp-payment-due-today';
+            }
             $search = '#' . $businessId . ' ' . $description . ' ' . $trip['client_name'] . ' ' . $trip['carrier_name'] . ' ' . implode(' ', array_map(static fn(array $i): string => (string)$i['number'], array_merge($trip['sides']['customer']['invoices'], $trip['sides']['carrier']['invoices'])));
             $invoiceSummary = static function (array $invoices): string {
                 if (!$invoices) return '—';
@@ -125,6 +136,7 @@ $renderSide = static function (array $trip, string $side) use ($stats, $money, $
                 <td class="rp-col-date"><?= e($startLabel) ?></td><td class="rp-col-date"><?= e($endLabel) ?></td>
                 <td class="rp-col-party"><span class="rp-summary-clip" title="<?= e((string)$trip['client_name']) ?>"><?= e((string)$trip['client_name']) ?></span></td>
                 <td class="rp-col-money"><?= $customer['rate'] === null ? '<span class="rp-summary-empty">—</span>' : e($money($customer['rate'])) ?></td>
+                <td class="rp-col-payment-date<?= $paymentDateState ?>" title="<?= e($paymentDateState === ' rp-payment-overdue' ? 'Срок получения оплаты прошёл' : ($paymentDateState === ' rp-payment-due-today' ? 'Срок получения оплаты сегодня' : 'Планируемая дата получения оплаты')) ?>"><span class="rp-payment-date-text"><?= e($plannedDate === '' ? '—' : $date($plannedDate)) ?></span></td>
                 <td class="rp-col-invoice"><span class="rp-summary-clip" title="<?= e(implode(', ', array_map(static fn(array $i): string => '№ ' . $i['number'], $trip['sides']['customer']['invoices']))) ?>"><?= e($invoiceSummary($trip['sides']['customer']['invoices'])) ?></span></td>
                 <td class="rp-col-money rp-paid--<?= $paidClass($customer) ?>" title="Получено: <?= e($money($customer['paid'])) ?>"><?= e($money($customer['paid'])) ?></td>
                 <td class="rp-col-party"><span class="rp-summary-clip" title="<?= e((string)$trip['carrier_name']) ?>"><?= e(trim((string)$trip['carrier_name']) ?: '—') ?></span></td>
