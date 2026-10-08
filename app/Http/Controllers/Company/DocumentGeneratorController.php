@@ -147,7 +147,7 @@ final class DocumentGeneratorController
             if ($actual === '' || !hash_equals((string)$row['sha256'], $actual)) {
                 throw new RuntimeException('Контрольная сумма документа не совпадает. Скачивание заблокировано.');
             }
-            $this->sendDocx($path, (string)$row['original_name']);
+            $this->sendDocx($path, DocumentGeneratorService::generatedDownloadName($row));
         } catch (Throwable $e) {
             http_response_code(404);
             header('Content-Type: text/plain; charset=utf-8');
