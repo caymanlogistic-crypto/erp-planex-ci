@@ -130,6 +130,11 @@ final class WasteTripClosingController
     public function submit(string $tripId): void
     {
         verifyCsrfRequest();
+        if (!WasteTripClosingService::REVIEW_EMAIL_ENABLED) {
+            http_response_code(403);
+            echo 'Отправка закрывающих документов на почту временно отключена.';
+            return;
+        }
         $token=null;$store=null;$messageId=null;$mailStarted=false;
         try {
             [$company,$pdo,$userId,,$accountId]=$this->context();
