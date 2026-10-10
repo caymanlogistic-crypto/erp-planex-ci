@@ -42,7 +42,7 @@
   });
   page.addEventListener('submit',async event=>{
     const uploadForm=event.target;
-    if (!uploadForm.matches?.('.closing-upload-form,.closing-extra-upload,.closing-remove-form')) return;
+    if (!uploadForm.matches?.('.closing-upload-form,.closing-extra-upload,.closing-remove-form,.closing-card-form')) return;
     event.preventDefault();
     if (uploadForm.dataset.updating==='1') return;
     const trip=uploadForm.closest('[data-closing-trip]');

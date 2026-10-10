@@ -175,31 +175,20 @@ final class WasteTripClosingService
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    public static function addFile(PDO $pdo, int $companyId, int $tripId, string $slot, string $code,
-        string $title, array $file, int $userId, string $role): void
+    public static function addFiles(PDO $pdo, int $companyId, int $tripId, string $slot, string $code,
+        string $title, array $files, int $userId, string $role): void
     {
         self::trip($pdo, $tripId);
         if ($tripId > 4294967295) throw new DomainException('Номер рейса превышает диапазон хранилища документов.');
         if (!isset(self::CODES[$slot]) || !in_array($code, self::CODES[$slot], true)) throw new DomainException('Выберите вид документа.');
         $title = trim($title);
         if ($slot === 'extra' && ($title === '' || mb_strlen($title) > 255)) throw new DomainException('Укажите название документа до 255 символов.');
-        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) throw new DomainException('Выберите файл.');
-        $size = (int)($file['size'] ?? 0);
-        if ($size <= 0 || $size > 20 * 1024 * 1024) throw new DomainException('Размер файла должен быть не больше 20 МБ.');
-        $name = basename((string)($file['name'] ?? ''));
-        $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
-        if (!in_array($extension, ['pdf','jpg','jpeg','png','webp','tif','tiff','doc','docx','xls','xlsx'], true)) {
-            throw new DomainException('Недопустимый формат файла.');
-        }
-        $temporary = (string)($file['tmp_name'] ?? '');
-        if (!is_uploaded_file($temporary)) throw new DomainException('Файл не загружен.');
+        if ($files === [] || count($files) > 10) throw new DomainException('Выберите от одного до десяти файлов.');
+        foreach ($files as $file) self::validateFile($file);
         $relativeDir = 'companies/'.$companyId.'/documents/waste_trip/'.$tripId;
         $absoluteDir = storage_path($relativeDir);
         if (!is_dir($absoluteDir) && !mkdir($absoluteDir, 0700, true) && !is_dir($absoluteDir)) throw new DomainException('Хранилище файлов недоступно.');
-        $stored = bin2hex(random_bytes(16)).'.'.$extension;
-        $absolute = $absoluteDir.DIRECTORY_SEPARATOR.$stored;
-        if (!move_uploaded_file($temporary, $absolute)) throw new DomainException('Не удалось сохранить файл.');
-        $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($absolute) ?: 'application/octet-stream';
+        $storedPaths=[];
         $own = !$pdo->inTransaction();
         try {
             if ($own) $pdo->beginTransaction();
@@ -207,28 +196,39 @@ final class WasteTripClosingService
             $lock->execute([$tripId]);
             if (!$lock->fetchColumn()) throw new DomainException('Рейс изменился. Обновите страницу.');
             self::assertEditable($pdo, $tripId);
-            if ($slot !== 'extra') {
-                $old = $pdo->prepare('SELECT id,document_id FROM waste_trip_closing_documents WHERE waste_trip_id=? AND slot_code=? AND deleted_at IS NULL FOR UPDATE');
-                $old->execute([$tripId,$slot]);
-                foreach ($old->fetchAll(PDO::FETCH_ASSOC) as $item) {
-                    $pdo->prepare('UPDATE waste_trip_closing_documents SET deleted_at=NOW() WHERE id=?')->execute([(int)$item['id']]);
-                    $pdo->prepare('UPDATE documents SET deleted_at=NOW() WHERE id=?')->execute([(int)$item['document_id']]);
-                }
+            foreach ($files as $file) {
+                $name = basename((string)$file['name']);
+                $extension = strtolower(pathinfo($name, PATHINFO_EXTENSION));
+                $stored = bin2hex(random_bytes(16)).'.'.$extension;
+                $absolute = $absoluteDir.DIRECTORY_SEPARATOR.$stored;
+                if (!move_uploaded_file((string)$file['tmp_name'], $absolute)) throw new DomainException('Не удалось сохранить файл.');
+                $storedPaths[]=$absolute;
+                $mime = (new \finfo(FILEINFO_MIME_TYPE))->file($absolute) ?: 'application/octet-stream';
+                $insert = $pdo->prepare('INSERT INTO documents (entity_type,entity_id,document_type,original_name,stored_name,relative_path,mime_type,file_size,status,uploaded_by_user_id,uploaded_by_role,created_by_user_id,created_by_role) VALUES (?,?,?,?,?,?,?,? ,?,?,?,?,?)');
+                $insert->execute(['waste_trip',$tripId,self::SLOTS[$slot]??$title,$name,$stored,$relativeDir.'/'.$stored,$mime,(int)$file['size'],'uploaded',$userId?:null,$role,$userId?:null,$role]);
+                $documentId = (int)$pdo->lastInsertId();
+                $pdo->prepare('INSERT INTO waste_trip_closing_documents (waste_trip_id,document_id,slot_code,requirement_code,custom_title) VALUES (?,?,?,?,?)')
+                    ->execute([$tripId,$documentId,$slot,$code,$slot==='extra'?$title:null]);
             }
-            $insert = $pdo->prepare('INSERT INTO documents (entity_type,entity_id,document_type,original_name,stored_name,relative_path,mime_type,file_size,status,uploaded_by_user_id,uploaded_by_role,created_by_user_id,created_by_role) VALUES (?,?,?,?,?,?,?,? ,?,?,?,?,?)');
-            $insert->execute(['waste_trip',$tripId,self::SLOTS[$slot]??$title,$name,$stored,$relativeDir.'/'.$stored,$mime,$size,'uploaded',$userId?:null,$role,$userId?:null,$role]);
-            $documentId = (int)$pdo->lastInsertId();
-            $pdo->prepare('INSERT INTO waste_trip_closing_documents (waste_trip_id,document_id,slot_code,requirement_code,custom_title) VALUES (?,?,?,?,?)')
-                ->execute([$tripId,$documentId,$slot,$code,$slot==='extra'?$title:null]);
             $pdo->prepare("INSERT INTO waste_trip_closing_reviews (waste_trip_id,state,version) VALUES (?,'work',1) ON DUPLICATE KEY UPDATE state='work',version=version+1")
                 ->execute([$tripId]);
             self::syncFinance($pdo, $tripId);
             if ($own) $pdo->commit();
         } catch (Throwable $error) {
             if ($own && $pdo->inTransaction()) $pdo->rollBack();
-            @unlink($absolute);
+            foreach ($storedPaths as $path) @unlink($path);
             throw $error;
         }
+    }
+
+    private static function validateFile(array $file): void
+    {
+        if (($file['error'] ?? UPLOAD_ERR_NO_FILE) !== UPLOAD_ERR_OK) throw new DomainException('Не удалось загрузить файл.');
+        $size=(int)($file['size']??0);
+        if ($size<=0 || $size>20*1024*1024) throw new DomainException('Размер каждого файла должен быть не больше 20 МБ.');
+        $extension=strtolower(pathinfo(basename((string)($file['name']??'')),PATHINFO_EXTENSION));
+        if (!in_array($extension,['pdf','jpg','jpeg','png','webp','tif','tiff','doc','docx','xls','xlsx'],true)) throw new DomainException('Недопустимый формат файла.');
+        if (!is_uploaded_file((string)($file['tmp_name']??''))) throw new DomainException('Файл не загружен.');
     }
 
     public static function removeFile(PDO $pdo, int $tripId, int $closingDocumentId): void

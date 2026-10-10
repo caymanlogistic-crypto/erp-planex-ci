@@ -17,13 +17,21 @@ $trip=static function(int $id,array $documents):array {
     ];
 };
 $trips=[
-    $trip(1,[]),
+    array_replace($trip(1,[]),['transport'=>['set_type'=>'single','set_label'=>'Одиночка','units'=>[
+        ['id'=>8,'label'=>'Транспортная единица','brand'=>'ГАЗ','plate'=>'А111АА','number'=>'','date'=>'','documents'=>[]],
+    ]]]),
     array_replace($trip(2,[
         ['id'=>11,'slot_code'=>'contract','requirement_code'=>'agreement','original_name'=>'signed.pdf'],
+        ['id'=>15,'slot_code'=>'contract','requirement_code'=>'agreement','original_name'=>'signed-page-2.pdf'],
         ['id'=>12,'slot_code'=>'invoice','requirement_code'=>'invoice','original_name'=>'invoice.pdf'],
         ['id'=>13,'slot_code'=>'act','requirement_code'=>'upd','original_name'=>'act.pdf'],
         ['id'=>14,'slot_code'=>'waybill','requirement_code'=>'waybill','original_name'=>'waybill.pdf'],
-    ]),['tn_issues'=>[],'request_count'=>3,'processed_count'=>3]),
+        ['id'=>16,'slot_code'=>'extra','custom_title'=>'Реестр','original_name'=>'registry-1.pdf'],
+        ['id'=>17,'slot_code'=>'extra','custom_title'=>'Реестр','original_name'=>'registry-2.pdf'],
+    ]),['tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
+        ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','number'=>'','date'=>'','documents'=>[]],
+        ['id'=>10,'label'=>'Полуприцеп','brand'=>'ТОНАР','plate'=>'С333СС','number'=>'42','date'=>'2026-09-20','documents'=>[['id'=>88,'original_name'=>'card.pdf']]],
+    ]]]),
 ];
 $success='Документ добавлен.';
 $flashError=$error=null;
@@ -52,6 +60,13 @@ $assert(!str_contains($html,'<select name="requirement_code"'),'document subtype
 $assert(str_contains($html,'name="requirement_code" value="application"'),'combined contract slot must keep finance code');
 $assert(str_contains($html,'name="requirement_code" value="upd"'),'combined act slot must keep finance code');
 $assert(str_contains($html,'class="closing-remove-form"'),'uploaded document must offer removal');
+$assert(str_contains($html,'signed.pdf')&&str_contains($html,'signed-page-2.pdf'),'one document category must display every file');
+$assert(str_contains($html,'4 из 5 получено')===false && str_contains($html,'5 из 5 получено'),'progress counts categories and grouped extras');
+$assert(substr_count($html,'<strong>Реестр</strong>')===1,'extra files with the same title must form one document');
+$assert(substr_count($html,'name="document_files[]"')>=5,'document uploads must accept multiple files');
+$assert(str_contains($html,'Тягач · МАЗ В222ВВ')&&str_contains($html,'Полуприцеп · ТОНАР С333СС'),'coupling cards must target separate units');
+$assert(str_contains($html,'name="vehicle_unit_id" value="9"')&&str_contains($html,'name="vehicle_unit_id" value="10"'),'each card form must bind its own vehicle unit');
+$assert(str_contains($html,'Тип комплекта: Одиночка'),'single vehicle must be labelled');
 $assert(str_contains($html,'data-closing-action-result="success" hidden'),'successful action marker must remain available to inline update');
 $assert(!str_contains($html,'class="notice success"'),'upload success banner must not be visible');
 $assert(str_contains($html,'Отправка комплекта на почту временно отключена.'),'email pause must be visible');

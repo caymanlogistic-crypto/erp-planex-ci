@@ -11,6 +11,7 @@ $router->get('/company/trips/closing-documents',[$tripClosingController,'index']
 $router->get('/company/trips/closing-documents/{tripId}/invoices',[$tripClosingController,'invoiceCandidates'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/invoices/link',[$tripClosingController,'linkInvoice'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/documents',[$tripClosingController,'upload'],$tripClosingPage);
+$router->post('/company/trips/closing-documents/{tripId}/diagnostic-card',[$tripClosingController,'uploadDiagnosticCard'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/documents/{documentId}/remove',[$tripClosingController,'remove'],$tripClosingPage);
 $router->get('/company/trips/closing-documents/{tripId}/documents/{documentId}',[$tripClosingController,'download'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/review',[$tripClosingController,'submit'],$tripClosingPage);
