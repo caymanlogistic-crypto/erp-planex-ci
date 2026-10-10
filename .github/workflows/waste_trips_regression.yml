@@ -5,6 +5,7 @@ on:
     branches: [chatgpt/production-stabilization-20260802]
     paths:
       - 'app/Http/Controllers/Company/WasteTripController.php'
+      - 'app/Http/Controllers/Company/WasteTripClosingController.php'
       - 'app/Http/Routes/company_linear_trips.php'
       - 'app/Service/WasteTrip*.php'
       - 'app/Service/WasteTripCustomerPaymentService.php'
@@ -31,6 +32,7 @@ on:
     branches: [chatgpt/production-stabilization-20260802]
     paths:
       - 'app/Http/Controllers/Company/WasteTripController.php'
+      - 'app/Http/Controllers/Company/WasteTripClosingController.php'
       - 'app/Http/Routes/company_linear_trips.php'
       - 'app/Service/WasteTrip*.php'
       - 'app/Service/WasteTripCustomerPaymentService.php'
@@ -77,8 +79,10 @@ jobs:
             scripts/waste_trips_apply_137.php scripts/waste_trips_verify_137.php \
             tests/waste_trip_legacy_mapping_test.php tests/waste_trip_synchronization_mysql_test.php tests/waste_trips_137_migration_mysql_test.php tests/waste_trips_137_production_migration_contract_test.php \
             app/Http/Controllers/Company/WasteTripController.php \
+            app/Http/Controllers/Company/WasteTripClosingController.php \
             app/Http/Routes/company_linear_trips.php \
             app/Service/WasteTripService.php \
+            app/Service/WasteTripClosingService.php \
             app/Service/WasteTripCustomerPaymentService.php \
             app/Service/WasteTripCarrierPaymentService.php \
             app/Service/WasteTripIncidentService.php \
@@ -88,12 +92,14 @@ jobs:
             app/Service/WasteTripLegacyMappingService.php \
             app/Service/UserSyncService.php \
             app/View/pages/company_waste_trips.php \
+            app/View/pages/company_waste_trip_closing.php \
             app/View/partials/company_waste_trip_modal_view.php \
             app/View/partials/company_waste_trip_modal_edit.php \
             app/View/partials/company_waste_trip_customer_payments.php \
             app/View/partials/company_waste_trip_carrier_payments.php \
             scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php scripts/waste_trips_apply_134.php scripts/waste_trips_verify_134.php scripts/waste_trips_apply_135.php scripts/waste_trips_verify_135.php scripts/waste_trip_244_readonly_probe.php scripts/waste_trip_legacy_readonly_probe.php \
             tests/waste_trip_incident_service_test.php tests/waste_trip_customer_payment_regression_test.php tests/waste_trip_carrier_finance_regression_test.php tests/waste_trip_legacy_readonly_probe_contract_test.php tests/waste_trip_regression_test.php tests/waste_trip_manager_membership_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_runtime_diagnostic_contract_test.php tests/waste_trip_244_readonly_probe_contract_test.php tests/waste_trips_128_production_migration_contract_test.php tests/waste_trips_130_production_migration_contract_test.php tests/waste_trips_134_production_migration_contract_test.php tests/waste_trips_135_production_migration_contract_test.php
+            tests/waste_trip_closing_email_block_test.php tests/waste_trip_closing_view_test.php
           do php -l "$f"; done
       - name: Static target contracts
         shell: bash
@@ -101,6 +107,8 @@ jobs:
           set -euo pipefail
           php tests/waste_trip_incident_service_test.php | tee /tmp/incident.out
           grep -Fqx 'WASTE_TRIP_INCIDENT_SERVICE=PASS' /tmp/incident.out
+          php tests/waste_trip_closing_email_block_test.php
+          php tests/waste_trip_closing_view_test.php
           php tests/waste_trip_legacy_readonly_probe_contract_test.php | tee /tmp/legacy-probe.out
           grep -Fqx 'WASTE_TRIP_LEGACY_READ_ONLY_PROBE_CONTRACT=PASS' /tmp/legacy-probe.out
           php tests/waste_trip_legacy_linked_contract_test.php | tee /tmp/legacy.out

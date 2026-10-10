@@ -54,4 +54,7 @@ $assert(str_contains($html,'name="requirement_code" value="upd"'),'combined act 
 $assert(str_contains($html,'class="closing-remove-form"'),'uploaded document must offer removal');
 $assert(str_contains($html,'data-closing-action-result="success" hidden'),'successful action marker must remain available to inline update');
 $assert(!str_contains($html,'class="notice success"'),'upload success banner must not be visible');
+$assert(str_contains($html,'Отправка комплекта на почту временно отключена.'),'email pause must be visible');
+$assert(str_contains($html,'class="btn btn-primary closing-submit" disabled'),'review action must be disabled');
+$assert(!str_contains($html,'data-review-form'),'email form must not be rendered');
 echo "waste_trip_closing_view: PASS\n";

@@ -10,6 +10,8 @@ use Throwable;
 /** Closing files belong to a completed waste trip; finance links only reference them. */
 final class WasteTripClosingService
 {
+    public const REVIEW_EMAIL_ENABLED = false;
+
     public const SLOTS = [
         'contract' => 'Подписанный договор / заявка',
         'invoice' => 'Счёт',
