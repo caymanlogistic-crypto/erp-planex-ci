@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "dba614b9a3e06cccd7958a1b7b7c13c9047974a0",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/dba614b9a3e06cccd7958a1b7b7c13c9047974a0/tests/roles_access_endpoint_integration_test.php",
+      "verified_sha": "0d40a43589e4dfad4054231021331588e87ec43e",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/0d40a43589e4dfad4054231021331588e87ec43e/tests/roles_access_route_registry_test.py",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "a17bf97e6373e9c73b2e73a19c8ca87feadcc5c1",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/a17bf97e6373e9c73b2e73a19c8ca87feadcc5c1/tests/waste_trip_closing_email_block_test.php",
+      "verified_sha": "0d40a43589e4dfad4054231021331588e87ec43e",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/0d40a43589e4dfad4054231021331588e87ec43e/tests/waste_trip_closing_transport_mysql_test.php",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -268,8 +268,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "dba614b9a3e06cccd7958a1b7b7c13c9047974a0",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/dba614b9a3e06cccd7958a1b7b7c13c9047974a0/tests/employee_mail_contract_test.php",
+      "verified_sha": "0d40a43589e4dfad4054231021331588e87ec43e",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/0d40a43589e4dfad4054231021331588e87ec43e/tests/employee_mail_contract_test.php",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",
