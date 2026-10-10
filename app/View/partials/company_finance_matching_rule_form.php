@@ -90,7 +90,13 @@ if ($allowedMapJson === false) $allowedMapJson = '{}';
     <?php endif; ?>
 
     <div class="modal-foot matching-rule-foot">
-        <div><?php if ($isEdit): ?><button type="button" class="btn btn-ghost" data-rule-preview-from-edit="<?= $ruleId ?>">Проверить</button><?php endif; ?></div>
+        <div>
+            <?php if ($isEdit): ?>
+            <button type="button" class="btn btn-ghost" data-rule-preview-from-edit="<?= $ruleId ?>">Проверить</button>
+            <button type="button" class="btn btn-secondary" data-rule-toggle-from-edit="<?= $ruleId ?>" data-rule-active="<?= !empty($rule['active']) ? '1' : '0' ?>"><?= !empty($rule['active']) ? 'Отключить' : 'Включить' ?></button>
+            <button type="button" class="btn btn-danger" data-rule-delete-from-edit="<?= $ruleId ?>">Удалить</button>
+            <?php endif; ?>
+        </div>
         <div>
             <?php if ($isEditable): ?><button type="submit" class="btn btn-primary"><?= $isEdit ? 'Сохранить' : 'Создать правило' ?></button><?php endif; ?>
             <button type="button" class="btn btn-ghost" data-close-modal="<?= $isEdit ? 'matching-rule-edit-modal' : 'matching-rule-create-modal' ?>">Отмена</button>
