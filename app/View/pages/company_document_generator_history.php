@@ -1,5 +1,6 @@
 <style>
-.docgen-history-check{cursor:pointer;align-items:center}
+.docgen-history-check{position:relative;cursor:pointer;align-items:center}
+.docgen-history-check input[type=checkbox]{inset:0;width:14px;height:14px}
 .docgen-history-check input:focus-visible+.checkbox-mark{outline:2px solid var(--accent-deep);outline-offset:2px}
 </style>
 <div class="page-head">
