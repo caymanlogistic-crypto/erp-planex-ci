@@ -11,6 +11,7 @@ use App\Service\EmployeeMailProfileService;
 use App\Service\FinanceInvoiceService;
 use App\Service\WasteTripClosingPackageStore;
 use App\Service\WasteTripClosingService;
+use App\Service\WasteTripClosingTransportService;
 use App\Service\WasteTripClosingInvoiceService;
 use DomainException;
 use PDO;
@@ -30,7 +31,12 @@ final class WasteTripClosingController
         try {
             [, $pdo]=$this->context();
             $schemaReady=WasteTripClosingService::ready($pdo);
-            if ($schemaReady) $trips=WasteTripClosingService::trips($pdo);
+            if ($schemaReady) {
+                $trips=WasteTripClosingService::trips($pdo);
+                $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
+                foreach ($trips as &$trip) $trip['transport']=$transport[(int)$trip['id']]??null;
+                unset($trip);
+            }
             $canCreateInvoice=AccessControlService::canAccessPage('company.finance.invoices');
             if ($canCreateInvoice) {
                 $contractors=FinanceInvoiceService::fetchContractorsForSelect($pdo);
@@ -54,11 +60,24 @@ final class WasteTripClosingController
         try {
             [$company,$pdo,$userId,$role]=$this->context();
             if (!WasteTripClosingService::ready($pdo)) throw new DomainException('Раздел ожидает обновление схемы.');
-            WasteTripClosingService::addFile($pdo,(int)$company['id'],(int)$tripId,
+            WasteTripClosingService::addFiles($pdo,(int)$company['id'],(int)$tripId,
                 trim((string)($_POST['slot_code']??'')),trim((string)($_POST['requirement_code']??'')),
-                trim((string)($_POST['custom_title']??'')),(array)($_FILES['document_file']??[]),$userId,$role);
+                trim((string)($_POST['custom_title']??'')),$this->uploadedFiles('document_files'),$userId,$role);
             $_SESSION['waste_trip_closing_success']='Документ добавлен.';
         } catch (Throwable $exception) { $this->fail($exception,'Не удалось добавить документ.'); }
+        $this->back((int)$tripId);
+    }
+
+    public function uploadDiagnosticCard(string $tripId): void
+    {
+        verifyCsrfRequest();
+        try {
+            [$company,$pdo,$userId,$role]=$this->context();
+            WasteTripClosingTransportService::addDiagnosticCard($pdo,(int)$company['id'],(int)$tripId,
+                (int)($_POST['vehicle_unit_id']??0),trim((string)($_POST['card_number']??'')),
+                trim((string)($_POST['card_date']??'')),$this->uploadedFiles('card_files'),$userId,$role);
+            $_SESSION['waste_trip_closing_success']='Диагностическая карта добавлена.';
+        } catch (Throwable $exception) { $this->fail($exception,'Не удалось добавить диагностическую карту.'); }
         $this->back((int)$tripId);
     }
 
@@ -154,8 +173,13 @@ final class WasteTripClosingController
             $store=new WasteTripClosingPackageStore((int)$company['id']);
             $token=$store->publish((int)$tripId,(string)$trip['business_id'],$trip['documents']);
             $url=$origin.app_url('/trip-closing-package/'.(int)$company['id'].'/'.$token);
-            $missing=[];$present=array_column($trip['documents'],'slot_code');
-            foreach (WasteTripClosingService::SLOTS as $slot=>$label) if (!in_array($slot,$present,true)) $missing[]=$label;
+            $missing=[];$present=[];
+            foreach ($trip['documents'] as $document) {
+                $key=(string)$document['slot_code'];
+                if ($key==='extra') $key.=':'.(string)$document['custom_title'];
+                $present[$key]=true;
+            }
+            foreach (WasteTripClosingService::SLOTS as $slot=>$label) if (!isset($present[$slot])) $missing[]=$label;
             $title='Рейс #'.$trip['business_id'].' — закрывающие документы на проверку';
             $summary='Получено '.count($present).' документов. '.($missing?'Не хватает: '.implode(', ',$missing).'.':'Комплект собран.');
             $plain=$title."\n".$summary."\nАрхив документов (хранится 30 дней): ".$url;
@@ -223,6 +247,22 @@ final class WasteTripClosingController
     {
         error_log('waste trip closing action: '.$exception->getMessage());
         $_SESSION['waste_trip_closing_error']=$exception instanceof DomainException?$exception->getMessage():$fallback;
+    }
+    /** @return list<array<string,mixed>> */
+    private function uploadedFiles(string $key): array
+    {
+        $input=$_FILES[$key]??null;
+        if (!is_array($input) || !is_array($input['name']??null)) return [];
+        $files=[];
+        foreach ($input['name'] as $index=>$name) {
+            if (($input['error'][$index]??UPLOAD_ERR_NO_FILE)===UPLOAD_ERR_NO_FILE) continue;
+            $files[]=[
+                'name'=>(string)$name,'type'=>(string)($input['type'][$index]??''),
+                'tmp_name'=>(string)($input['tmp_name'][$index]??''),
+                'size'=>(int)($input['size'][$index]??0),'error'=>(int)($input['error'][$index]??UPLOAD_ERR_NO_FILE),
+            ];
+        }
+        return $files;
     }
     private function back(int $tripId): never {header('Location: '.app_url('/company/trips/closing-documents?trip_id='.$tripId));exit;}
 }
