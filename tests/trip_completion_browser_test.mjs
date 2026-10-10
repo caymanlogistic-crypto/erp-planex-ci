@@ -9,6 +9,7 @@ import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php')],{encoding:'utf8'});
+const timeOnlyHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/trip_completion_render.php'),'time-only'],{encoding:'utf8'});
 let postCount=0;
 let lastSaveBody='';
 let documents=[];
@@ -32,6 +33,7 @@ const server=http.createServer((req,res)=>{
     });return;
   }
   if(req.url==='/'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html);}
+  if(req.url==='/time-only'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(timeOnlyHtml);}
   if(req.url?.startsWith('/download/')){res.setHeader('Content-Type','image/jpeg');return res.end('test');}
   const file=path.resolve(root,'public','.'+req.url.split('?')[0]);
   if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
@@ -92,6 +94,9 @@ try{
   await interval.press('a');
   assert.equal(await interval.inputValue(),'01.09.26 09:40 - 10:00','letters blocked');
   assert.equal(await row.locator('.logistics-time').getAttribute('data-interval-state'),'valid','complete interval turns green');
+  assert.match(await progress.innerText(),/3 из 3 обработано/,'recording both times processes the request without scans or signatures');
+  await page.waitForFunction(()=>{const segment=document.querySelector('.logistics-trip .lab-trip-progress-fill');return segment&&segment.getBoundingClientRect().width/segment.parentElement.getBoundingClientRect().width>.665;});
+  assert.equal(await progress.locator('.lab-trip-progress-fill').evaluate(element=>Math.round(element.getBoundingClientRect().width/element.parentElement.getBoundingClientRect().width*100)),67,'recorded time contributes to progress without a complete document set');
   await row.locator('.lab-choice--driver input[value="yes"]').check();
   await row.locator('[data-save-label]').filter({hasText:/Сохранено|Собрано/}).waitFor();
   assert.ok(postCount>=1,'checkbox change saved automatically');
@@ -124,5 +129,11 @@ try{
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=document.documentElement.clientWidth),true,`${width}px has no horizontal overflow`);
   }
   assert.equal(errors.length,0,'page errors: '+errors.join('; '));
+  const timeOnlyPage=await browser.newPage();
+  await timeOnlyPage.goto('http://127.0.0.1:'+server.address().port+'/time-only',{waitUntil:'networkidle'});
+  const timeOnlyProgress=timeOnlyPage.locator('.logistics-trip').first().locator('.lab-trip-progress');
+  assert.match(await timeOnlyProgress.innerText(),/2 из 3 обработано/,'a request with recorded times and missing sender signature counts on initial render');
+  assert.match(await timeOnlyProgress.locator('.lab-trip-progress-track').getAttribute('aria-label'),/Время внесено: 2; нет ТН: 0/,'time and missing TN remain distinct progress categories');
+  await timeOnlyPage.close();
   console.log('TRIP_COMPLETION_BROWSER=PASS');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

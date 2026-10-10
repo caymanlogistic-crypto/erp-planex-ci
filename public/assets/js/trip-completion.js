@@ -129,7 +129,7 @@
   const updateTripSummary = (trip) => {
     const rows = [...trip.querySelectorAll('[data-request-row]')];
     const partial = [], unfilled = [], noTn = [], tracker = [], driverSource = [];
-    let ready = 0;
+    let ready = 0, timeEntered = 0;
     rows.forEach((row) => {
       const id = (row.querySelector('.logistics-request-route b')?.textContent.trim() || row.dataset.requestId).replace(/^№\s*/, '');
       const scans = row.querySelectorAll('.lab-docs-item').length;
@@ -144,13 +144,14 @@
       if (recovery === 'driver') driverSource.push(id);
       if (tnAbsent) noTn.push(id);
       const complete = scans && !tnAbsent && interval === 'valid' && (date === 'full' || ((date === 'partial' || date === 'no') && recovery)) && oo === 'yes' && driver === 'yes';
+      if (interval === 'valid' && !tnAbsent) timeEntered++;
       if (complete) ready++;
       else if (row.querySelector('.logistics-time input')?.value.trim() || date || recovery || oo || driver || scans || comment || tnAbsent) partial.push(id);
       else unfilled.push(id);
     });
     const progress = trip.querySelector('.lab-trip-progress');
-    progress.querySelector('[data-trip-progress]').textContent = `${ready + noTn.length} из ${rows.length} обработано`;
-    const percent = rows.length ? ready / rows.length * 100 : 0;
+    progress.querySelector('[data-trip-progress]').textContent = `${timeEntered + noTn.length} из ${rows.length} обработано`;
+    const percent = rows.length ? timeEntered / rows.length * 100 : 0;
     const noTnPercent = rows.length ? noTn.length / rows.length * 100 : 0;
     const fill = progress.querySelector('.lab-trip-progress-fill');
     fill.style.width = `${percent}%`;
@@ -159,8 +160,8 @@
     noTnFill.title = `Нет ТН: ${noTn.length}`;
     const track = progress.querySelector('.lab-trip-progress-track');
     track.classList.toggle('has-no-tn', noTn.length > 0);
-    track.classList.toggle('has-no-ready', ready === 0);
-    track.setAttribute('aria-label', `Собрано: ${ready}; нет ТН: ${noTn.length}`);
+    track.classList.toggle('has-no-ready', timeEntered === 0);
+    track.setAttribute('aria-label', `Время внесено: ${timeEntered}; нет ТН: ${noTn.length}`);
     const share = percent <= 50 ? percent / 50 : (percent - 50) / 50;
     const first = percent <= 50 ? 'var(--danger)' : 'var(--warning-border)';
     const second = percent <= 50 ? 'var(--warning-border)' : 'var(--success)';

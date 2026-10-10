@@ -39,6 +39,7 @@ foreach($trips as &$trip){
 }
 unset($trip);
 $fixtureMode=$argv[1]??'registration';
+if($fixtureMode==='time-only') $trips[0]['requests'][2]['tn_absent']=0;
 $reviewerMode=in_array($fixtureMode,['reviewer','reviewer-empty'],true);
 if(in_array($fixtureMode,['reviewer','registration-readonly'],true)){
  $trips[0]['review_status']='review';$trips[0]['review_version']=1;
