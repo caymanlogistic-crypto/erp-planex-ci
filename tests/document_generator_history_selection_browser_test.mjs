@@ -13,7 +13,7 @@ const viewStyle = view.match(/<style>\s*([\s\S]*?)\s*<\/style>/)?.[1] || '';
 assert(script.includes('data-document-select'), 'history selection script must be present');
 const css = ['erp-ui.css', 'app-base.css', 'focus-trace-reset.css']
   .map(file => readFileSync(join(root, 'public/assets/css', file), 'utf8')).join('\n');
-const rows = Array.from({length: 100}, (_, index) => `<tr><td class="text-center"><label class="checkbox-item docgen-history-check"><input type="checkbox" name="document_ids[]" value="${index + 1}" data-document-select aria-label="Выбрать документ #${index + 1}"><span class="checkbox-mark" aria-hidden="true"></span></label></td><td>#${index + 1}</td><td>Документ ${index + 1}</td><td>Исполнитель</td><td>1 · 1000 кг</td><td>2026-10-10</td><td>DOCX</td></tr>`).join('');
+const rows = Array.from({length: 100}, (_, index) => `<tr><td class="text-center docgen-history-check-cell"><label class="checkbox-item docgen-history-check"><input type="checkbox" name="document_ids[]" value="${index + 1}" data-document-select aria-label="Выбрать документ #${index + 1}"><span class="checkbox-mark" aria-hidden="true"></span></label></td><td>#${index + 1}</td><td>Документ ${index + 1}</td><td>Исполнитель</td><td>1 · 1000 кг</td><td>2026-10-10</td><td>DOCX</td></tr>`).join('');
 const html = `<style>${css}\n${viewStyle}</style>
 <div class="app"><div class="topbar">ERP PLANEX</div><aside class="sidebar">Ключи и сервисы</aside><main class="content"><div class="workspace-shell-1690">
 <div class="page-head"><h1 class="page-title">История сформированных документов</h1></div>
@@ -33,7 +33,14 @@ try {
   assert.equal(initial.windowY, 0);
   assert.equal(initial.appBottom, 800);
   for (const index of [0, 20, 60, 99]) {
-    await page.locator('.docgen-history-check').nth(index + 1).click();
+    const label = page.locator('.docgen-history-check').nth(index + 1);
+    await label.scrollIntoViewIfNeeded();
+    const before = {box: await label.locator('.checkbox-mark').boundingBox(), scroll: await state(), cellY: await label.evaluate(el => el.closest('td,th').scrollTop)};
+    await label.click();
+    const after = {box: await label.locator('.checkbox-mark').boundingBox(), scroll: await state(), cellY: await label.evaluate(el => el.closest('td,th').scrollTop)};
+    assert.deepEqual(after.box, before.box, `checkbox in row ${index + 1} must keep its position after selection`);
+    assert.equal(after.cellY, 0, `cell in row ${index + 1} must not scroll on focus`);
+    assert.equal(after.scroll.contentY, before.scroll.contentY, `selecting row ${index + 1} must not scroll the list`);
     const current = await state();
     assert.equal(current.windowY, 0, `selecting row ${index + 1} must not scroll the document`);
     assert.equal(current.appBottom, 800, `app shell must remain in the viewport after row ${index + 1}`);
@@ -51,6 +58,7 @@ try {
   await last.focus();
   await last.press('Space');
   assert.equal((await state()).windowY, 0);
+  assert.equal(await last.evaluate(el => el.closest('td').scrollTop), 0);
   assert.equal((await state()).selected, 'Выбрано: 1');
   assert.equal(await page.locator('[data-document-archive-button]').isEnabled(), true);
   console.log('DOCUMENT_GENERATOR_HISTORY_SELECTION_BROWSER=PASS');

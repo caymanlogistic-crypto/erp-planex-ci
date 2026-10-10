@@ -1,6 +1,7 @@
 <style>
 .docgen-history-check{position:relative;cursor:pointer;align-items:center}
 .docgen-history-check input[type=checkbox]{inset:0;width:14px;height:14px}
+.table td.docgen-history-check-cell{overflow:clip}
 .docgen-history-check input:focus-visible+.checkbox-mark{outline:2px solid var(--accent-deep);outline-offset:2px}
 </style>
 <div class="page-head">
@@ -43,7 +44,7 @@
             <tbody>
             <?php foreach ($history as $row): ?>
                 <tr>
-                    <td class="text-center"><label class="checkbox-item docgen-history-check"><input type="checkbox" name="document_ids[]" value="<?= (int)$row['id'] ?>" data-document-select aria-label="Выбрать документ #<?= (int)$row['id'] ?>"><span class="checkbox-mark" aria-hidden="true"></span></label></td>
+                    <td class="text-center docgen-history-check-cell"><label class="checkbox-item docgen-history-check"><input type="checkbox" name="document_ids[]" value="<?= (int)$row['id'] ?>" data-document-select aria-label="Выбрать документ #<?= (int)$row['id'] ?>"><span class="checkbox-mark" aria-hidden="true"></span></label></td>
                     <td>#<?= (int)$row['id'] ?></td>
                     <td>
                         <strong><?= e((string)($row['_template_name'] ?? $row['document_type'])) ?></strong><br>
