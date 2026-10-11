@@ -86,6 +86,7 @@ final class WasteTripClosingTransportService
             $tripLock=$pdo->prepare("SELECT id FROM waste_trips WHERE id=? AND deleted_at IS NULL AND status='completed' FOR UPDATE");
             $tripLock->execute([$tripId]);
             if (!$tripLock->fetchColumn()) throw new DomainException('Рейс изменился. Обновите страницу.');
+            WasteTripClosingService::assertEditable($pdo,$tripId);
             $transport=self::forTrips($pdo,[$tripId])[$tripId]??null;
             $unit=null;
             foreach ($transport['units']??[] as $item) if ((int)$item['id']===$unitId) $unit=$item;
@@ -106,6 +107,8 @@ final class WasteTripClosingTransportService
                 $insert=$pdo->prepare('INSERT INTO documents (entity_type,entity_id,document_type,document_type_id,original_name,stored_name,relative_path,mime_type,file_size,status,uploaded_by_user_id,uploaded_by_role,created_by_user_id,created_by_role) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
                 $insert->execute(['vehicle_unit',$unitId,'Диагностическая карта',$typeId,$name,$stored,$relativeDir.'/'.$stored,$mime,(int)$file['size'],'uploaded',$userId?:null,$role,$userId?:null,$role]);
             }
+            $pdo->prepare("INSERT INTO waste_trip_closing_reviews (waste_trip_id,state,version) VALUES (?,'work',1) ON DUPLICATE KEY UPDATE state='work',version=version+1")
+                ->execute([$tripId]);
             $pdo->commit();
         } catch (Throwable $error) {
             if ($pdo->inTransaction()) $pdo->rollBack();

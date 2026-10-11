@@ -74,6 +74,7 @@
       trip.dataset.state=updated.dataset.state;
       trip.dataset.paymentReady=updated.dataset.paymentReady;
       trip.replaceChildren(...updated.children);
+      render();
       window.scrollTo(scrollX,scrollY);
       requestAnimationFrame(()=>window.scrollTo(scrollX,scrollY));
     } catch (error) {
