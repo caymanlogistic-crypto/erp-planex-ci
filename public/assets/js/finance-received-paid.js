@@ -3,12 +3,21 @@
   if (!list) return;
   const rows = [...list.querySelectorAll('tr[data-id]')];
   const buttons = [...document.querySelectorAll('[data-rp-filter]')];
+  const filters = document.getElementById('rp-filters');
   const search = document.getElementById('rp-search');
   const sort = document.getElementById('rp-sort');
   const hideComplete = document.getElementById('rp-hide-complete');
   const money = cents => new Intl.NumberFormat('ru-RU', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(cents / 100) + ' ₽';
   const amount = (row, key) => row.dataset[key] === '' ? null : Number(row.dataset[key]);
   let selected = 'all';
+  const revealSelected = () => {
+    const active = buttons.find(button => button.dataset.rpFilter === selected);
+    if (!active) return;
+    const strip = filters.getBoundingClientRect();
+    const tab = active.getBoundingClientRect();
+    if (tab.left < strip.left) filters.scrollLeft += tab.left - strip.left;
+    else if (tab.right > strip.right) filters.scrollLeft += tab.right - strip.right;
+  };
   const matches = (row, filter) => {
     const customerRate = amount(row, 'customerRate');
     const carrierRate = amount(row, 'carrierRate');
@@ -48,12 +57,14 @@
       cell.title = values.length < visible.length ? 'Сумма только по известным значениям' : '';
     }
   }
-  document.getElementById('rp-filters').addEventListener('click', event => {
+  filters.addEventListener('click', event => {
     const button = event.target.closest('[data-rp-filter]');
     if (!button) return;
     selected = selected === button.dataset.rpFilter && selected !== 'all' ? 'all' : button.dataset.rpFilter;
     render();
+    revealSelected();
   });
+  window.addEventListener('resize', revealSelected);
   hideComplete.addEventListener('change', render);
   sort.addEventListener('change', render);
   search.addEventListener('input', render);
