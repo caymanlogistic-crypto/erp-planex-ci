@@ -25,12 +25,13 @@ final class WasteTripClosingController
     public function index(): void
     {
         header('Cache-Control: no-store');
-        $trips=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];
+        $trips=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
         $success=$_SESSION['waste_trip_closing_success']??null;
         $flashError=$_SESSION['waste_trip_closing_error']??null;
         unset($_SESSION['waste_trip_closing_success'],$_SESSION['waste_trip_closing_error']);
         try {
-            [$company, $pdo]=$this->context();
+            [$company, $pdo,,,$accountId]=$this->context();
+            $viewStateKey='planex:trip-closing:v1:'.(int)$company['id'].':'.$accountId;
             $responsibleUsers=EntityResponsibilityService::eligibleRecipients($this->db->connection(),$pdo,(int)$company['id']);
             $schemaReady=WasteTripClosingService::ready($pdo);
             if ($schemaReady) {
