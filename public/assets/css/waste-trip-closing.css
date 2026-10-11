@@ -1,4 +1,5 @@
 .closing-page{width:100%;max-width:1690px;margin:0 auto;color:var(--text-main)}
+.closing-edit-fieldset{min-width:0;margin:0;padding:0;border:0}.closing-edit-fieldset[disabled] .closing-upload,.closing-edit-fieldset[disabled] button{opacity:.5;cursor:not-allowed}.closing-payment-badge{display:inline-flex;width:max-content;margin-top:4px;padding:3px 6px;border-radius:4px;background:#e7f3ea;color:#267044;font-weight:700}.closing-payment-note{margin:0 0 12px;padding:9px 11px;border-left:3px solid #32834e;background:#f0f8f2;font-size:11px}.closing-trip-actions{gap:8px;align-items:center}.closing-trip-actions form{margin:0}
 .closing-toolbar{flex-wrap:wrap}
 .closing-extra-filters{display:flex;align-items:end;gap:12px;margin-left:12px;padding-left:18px;border-left:1px solid var(--line);min-width:0}
 .closing-filter-field{display:flex;flex-direction:column;gap:4px;min-width:0;color:var(--text-muted);font-size:9px;font-weight:700;letter-spacing:.04em;white-space:nowrap}

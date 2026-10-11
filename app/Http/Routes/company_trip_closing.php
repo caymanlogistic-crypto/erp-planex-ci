@@ -18,4 +18,5 @@ $router->post('/company/trips/closing-documents/{tripId}/documents/{documentId}/
 $router->get('/company/trips/closing-documents/{tripId}/documents/{documentId}',[$tripClosingController,'download'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/review',[$tripClosingController,'submit'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/review/confirm-not-sent',[$tripClosingController,'confirmNotSent'],$tripClosingPage);
+$router->post('/company/trips/closing-documents/{tripId}/payment-stage',[$tripClosingController,'paymentStage'],$tripClosingPage);
 $router->get('/trip-closing-package/{companyId}/{token}',[$tripClosingController,'sharedPackage']);

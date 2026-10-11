@@ -36,6 +36,7 @@ $trips=[
 $success='Документ добавлен.';
 $flashError=$error=null;
 $schemaReady=true;
+$paymentQueueReady=true;
 $canCreateInvoice=true;
 $contractors=[['id'=>42,'name'=>'Перевозчик','inn'=>'1234567890']];
 $clients=[];
@@ -50,6 +51,9 @@ $assert=static function(bool $condition,string $message):void {if(!$condition)th
 $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must show common issues block');
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
 $assert(str_contains($html,'data-closing-payment-ready')&&str_contains($html,'data-closing-manager'),'payment and manager filters must be rendered');
+$assert(str_contains($html,'data-closing-filter="payment"')&&str_contains($html,'На оплату'),'payment queue must have its own section');
+$assert(str_contains($html,'Готово к оплате')&&str_contains($html,'payment-stage'),'ready trip must offer payment queue action');
+$assert((bool)preg_match('/name="action" value="queue"[^>]*><button[^>]*>Готово к оплате<\/button>/', $html),'payment action must be enabled for clean trip');
 $assert(str_contains($html,'data-payment-ready="no"')&&str_contains($html,'data-payment-ready="yes"'),'payment readiness must match document and TN issues');
 $assert(str_contains($html,'<option value="71">Менеджер</option>'),'manager must be selectable by membership ID');
 $assert(str_contains($html,'<option value="72">Без рейсов</option>'),'active user without trips must remain selectable');
@@ -61,6 +65,10 @@ $assert(str_contains($html,'<b>ТН:</b> нет подписи водителя 
 $assert(substr_count($html,'<b>ТН:</b> нет скана ТН')===1,'repeated TN reason must be shown once');
 $assert(str_contains($html,'нет скана ТН · заявки №123, №124'),'expanded trip must retain every affected request number');
 $assert(str_contains($html,'Нет ошибок, счет можно оплачивать'),'clean trip must show payment readiness');
+$trips[1]['review_state']='payment';$trips[1]['review_version']=3;
+ob_start();require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';$paymentHtml=(string)ob_get_clean();
+$assert(str_contains($paymentHtml,'name="action" value="rework"')&&str_contains($paymentHtml,'Вернуть на доработку'),'queued trip must offer return to rework');
+$assert(str_contains($paymentHtml,'class="closing-edit-fieldset" disabled'),'queued trip document editing must be disabled');
 $assert(str_contains($html,'2 из 3 обработано'),'processed requests must follow document progress');
 $assert(str_contains($html,'data-invoice-open data-carrier-id="42"'),'invoice action must use the trip carrier');
 $assert(str_contains($html,'name="direction"')&&str_contains($html,'Полученный (от перевозчика)'),'invoice form must be reused');

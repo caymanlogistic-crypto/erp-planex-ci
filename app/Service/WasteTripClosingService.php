@@ -37,9 +37,79 @@ final class WasteTripClosingService
         } catch (Throwable) { return false; }
     }
 
+    public static function paymentQueueReady(PDO $pdo): bool
+    {
+        try {
+            $state=$pdo->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='waste_trip_closing_reviews' AND COLUMN_NAME='state'")->fetchColumn();
+            return str_contains((string)$state,"'payment'");
+        } catch (Throwable) { return false; }
+    }
+
     public static function recipient(string $legalEntityCode): string
     {
         return self::RECIPIENTS[$legalEntityCode] ?? throw new DomainException('Для исполнителя рейса не настроен получатель письма.');
+    }
+
+    public static function paymentReady(array $trip, ?array $transport): bool
+    {
+        $present=[];
+        foreach ($trip['documents']??[] as $document) $present[(string)$document['slot_code']]=true;
+        foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;
+        $units=$transport['units']??[];
+        if (!$units || !empty($trip['tn_issues'])) return false;
+        foreach ($units as $unit) if (empty($unit['documents'])) return false;
+        return true;
+    }
+
+    public static function changePaymentStage(PDO $pdo, int $tripId, int $expectedVersion, string $action): void
+    {
+        if (!in_array($action,['queue','rework'],true)) throw new DomainException('Неизвестное действие.');
+        self::trip($pdo,$tripId);
+        $own=!$pdo->inTransaction();
+        if ($own) $pdo->beginTransaction();
+        try {
+            $lock=$pdo->prepare("SELECT id FROM waste_trips WHERE id=? AND deleted_at IS NULL AND status='completed' FOR UPDATE");
+            $lock->execute([$tripId]);
+            if (!$lock->fetchColumn()) throw new DomainException('Рейс изменился. Обновите страницу.');
+            $pdo->prepare("INSERT IGNORE INTO waste_trip_closing_reviews (waste_trip_id,state,version) VALUES (?,'work',0)")->execute([$tripId]);
+            $state=$pdo->prepare('SELECT state,version FROM waste_trip_closing_reviews WHERE waste_trip_id=? FOR UPDATE');
+            $state->execute([$tripId]);$row=$state->fetch(PDO::FETCH_ASSOC);
+            if (!$row || (int)$row['version']!==$expectedVersion) throw new DomainException('Данные рейса изменились. Обновите страницу.');
+            if ($action==='queue') {
+                if (!in_array($row['state'],['work','failed','review'],true)) throw new DomainException('Рейс уже передан на оплату или ожидает проверки отправки.');
+                if (!self::paymentReadyForTrip($pdo,$tripId)) throw new DomainException('Устраните ошибки ТН и добавьте все обязательные документы перед передачей на оплату.');
+                $next='payment';
+            } else {
+                if ($row['state']!=='payment') throw new DomainException('Рейс уже возвращён на доработку. Обновите страницу.');
+                $next='work';
+            }
+            $pdo->prepare('UPDATE waste_trip_closing_reviews SET state=?,version=version+1 WHERE waste_trip_id=?')->execute([$next,$tripId]);
+            if ($own) $pdo->commit();
+        } catch (Throwable $error) {
+            if ($own && $pdo->inTransaction()) $pdo->rollBack();
+            throw $error;
+        }
+    }
+
+    private static function paymentReadyForTrip(PDO $pdo, int $tripId): bool
+    {
+        $transport=WasteTripClosingTransportService::forTrips($pdo,[$tripId])[$tripId]??null;
+        if (!$transport || empty($transport['units'])) return false;
+        foreach ($transport['units'] as $unit) if (empty($unit['documents'])) return false;
+        $present=[];
+        foreach (self::documents($pdo,$tripId) as $document) $present[(string)$document['slot_code']]=true;
+        foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;
+        $issues=$pdo->prepare("SELECT COUNT(*) FROM waste_trip_requests wtr
+            JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+            LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+            WHERE wtr.waste_trip_id=? AND wtr.removed_at IS NULL AND COALESCE(i.tn_absent,0)<>1
+              AND (i.arrived_at IS NULL OR i.departed_at IS NULL
+                OR COALESCE(i.driver_signature_present,0)<>1 OR COALESCE(i.sender_signature_present,0)<>1
+                OR (i.tn_datetime_status IN ('partial','no') AND i.recovery_source IS NULL)
+                OR NOT EXISTS (SELECT 1 FROM waste_trip_completion_documents d
+                    WHERE d.waste_trip_request_id=wtr.id AND d.deleted_at IS NULL))");
+        $issues->execute([$tripId]);
+        return (int)$issues->fetchColumn()===0;
     }
 
     /** @return list<array<string,mixed>> */
@@ -71,22 +141,7 @@ final class WasteTripClosingService
         $documentQuery->execute($ids);
         $byTrip=[];
         foreach ($documentQuery->fetchAll(PDO::FETCH_ASSOC) as $document) $byTrip[(int)$document['waste_trip_id']][]=$document;
-        $completionQuery=$pdo->prepare("SELECT wtr.waste_trip_id,
-                COUNT(DISTINCT wtr.id) request_count,
-                COUNT(DISTINCT CASE WHEN COALESCE(i.tn_absent,0)=1 OR (
-                    i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL
-                    AND i.driver_signature_present=1 AND i.sender_signature_present=1
-                    AND (i.tn_datetime_status='full' OR (i.tn_datetime_status IN ('partial','no') AND i.recovery_source IS NOT NULL) OR i.tn_datetime_status IS NULL)
-                    AND doc.waste_trip_request_id IS NOT NULL
-                ) THEN wtr.id END) processed_count
-            FROM waste_trip_requests wtr
-            LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
-            LEFT JOIN waste_trip_completion_documents doc ON doc.waste_trip_request_id=wtr.id AND doc.deleted_at IS NULL
-            WHERE wtr.removed_at IS NULL AND wtr.waste_trip_id IN ($placeholders)
-            GROUP BY wtr.waste_trip_id");
-        $completionQuery->execute($ids);
-        $completion=[];
-        foreach ($completionQuery->fetchAll(PDO::FETCH_ASSOC) as $progress) $completion[(int)$progress['waste_trip_id']]=$progress;
+        $completion=self::processedCounts($pdo,$ids);
         $issueQuery=$pdo->prepare("SELECT wtr.waste_trip_id,fr.zayavka_id,
                 COALESCE(i.tn_absent,0) tn_absent,i.arrived_at,i.departed_at,
                 i.driver_signature_present,i.sender_signature_present,i.tn_datetime_status,i.recovery_source,
@@ -147,6 +202,25 @@ final class WasteTripClosingService
         }
         unset($row);
         return $rows;
+    }
+
+    /** Matches the processed-request count shown by TripCompletionService's logistics assistant view. */
+    public static function processedCounts(PDO $pdo, array $tripIds): array
+    {
+        if (!$tripIds) return [];
+        $placeholders=implode(',',array_fill(0,count($tripIds),'?'));
+        $query=$pdo->prepare("SELECT wtr.waste_trip_id,COUNT(DISTINCT wtr.id) request_count,
+                COUNT(DISTINCT CASE WHEN COALESCE(i.tn_absent,0)=1 OR
+                    (i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL) THEN wtr.id END) processed_count
+            FROM waste_trip_requests wtr
+            JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+            LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
+            WHERE wtr.removed_at IS NULL AND wtr.waste_trip_id IN ($placeholders)
+            GROUP BY wtr.waste_trip_id");
+        $query->execute($tripIds);
+        $result=[];
+        foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) $result[(int)$row['waste_trip_id']]=$row;
+        return $result;
     }
 
     public static function trip(PDO $pdo, int $tripId): array
@@ -268,7 +342,7 @@ final class WasteTripClosingService
                 ->execute([$tripId]);
             $stmt=$pdo->prepare('SELECT state,version FROM waste_trip_closing_reviews WHERE waste_trip_id=? FOR UPDATE');
             $stmt->execute([$tripId]);$row=$stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$row || (int)$row['version']!==$expectedVersion || in_array($row['state'],['sending','unknown'],true)) {
+            if (!$row || (int)$row['version']!==$expectedVersion || in_array($row['state'],['sending','unknown','payment'],true)) {
                 throw new DomainException('Данные рейса изменились. Обновите страницу.');
             }
             $version=$expectedVersion+1;
@@ -353,7 +427,9 @@ final class WasteTripClosingService
     {
         $stmt=$pdo->prepare('SELECT state FROM waste_trip_closing_reviews WHERE waste_trip_id=? FOR UPDATE');
         $stmt->execute([$tripId]);
-        if (in_array($stmt->fetchColumn(), ['sending','unknown'], true)) {
+        $state=$stmt->fetchColumn();
+        if ($state==='payment') throw new DomainException('Сначала верните рейс с оплаты на доработку.');
+        if (in_array($state, ['sending','unknown'], true)) {
             throw new DomainException('Результат отправки письма нужно проверить перед изменением комплекта.');
         }
     }
