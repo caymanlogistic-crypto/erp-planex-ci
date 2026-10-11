@@ -124,7 +124,7 @@ $routeListVehicles = static function (array $row): void {
 
 <div class="table-card table-card--standard route-executors-card" data-erp-grid data-route-executors-grid>
     <div class="table-toolbar">
-        <div class="found-label">Исполнители · <b><?= count($executors) + count($reviewCards) ?></b></div>
+        <div class="found-label">Найдено: <b><?= count($executors) + count($reviewCards) ?></b></div>
         <div class="toolbar-right">
             <div class="toolbar-sort">
                 <span class="toolbar-sort-label">Сортировка по:</span>

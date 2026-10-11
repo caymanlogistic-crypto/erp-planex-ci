@@ -70,8 +70,9 @@ try {
   }
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
-  await page.locator('[data-waste-filter] .lab-reference-select[data-name=status] .lab-reference-trigger').click();
-  await page.locator('[data-waste-filter] .lab-reference-select[data-name=status] [role=option][data-value=completed]').click();
+  assert.equal(await page.locator('[data-waste-status-tabs] button').count(), 5, 'five flat status choices');
+  assert.equal(await page.locator('[data-waste-filter] select[name=status]').isHidden(), true, 'native status value remains in GET form');
+  await page.locator('[data-waste-status-tabs] button[data-status=completed]').click();
   await page.waitForURL(/status=completed/);
   assert.equal(new URL(page.url()).searchParams.get('status'), 'completed', 'status filter submits GET automatically');
   await page.close();

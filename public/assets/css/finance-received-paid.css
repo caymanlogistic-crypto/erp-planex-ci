@@ -541,3 +541,34 @@
     min-width:0;
   }
 }
+
+/* Approved registry scroll pattern: controls stay below the app bar; tabs and page header scroll away. */
+.rp-action-design.rp-ledger-v015 > .table-toolbar {
+  position:sticky;
+  top:-12px;
+  z-index:20;
+  background:#f7f5f0;
+}
+@media(min-width:1051px) {
+  .rp-action-design.rp-ledger-v015 > .rp-v010-table-wrap {overflow:visible}
+  .rp-action-design.rp-ledger-v015 .rp-v010-table thead {
+    position:sticky;
+    top:37px;
+    z-index:19;
+    background:#e3ded5;
+  }
+  .rp-action-design.rp-ledger-v015 .rp-v010-table thead th {top:auto}
+}
+
+/* The active tab underline ends 6px above the framed toolbar. */
+.rp-action-design.rp-ledger-v015 > .rp-v010-quick {margin-bottom:6px}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .found-label {font:500 12px/16px var(--font);color:#4c4840}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .found-label b {color:#2e2923}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-sort-label {font:500 12px/16px var(--font);color:#4c4840}
+
+/* One continuous divider above totals, with no duplicate last-row border. */
+.rp-action-design.rp-ledger-v015 .rp-v010-table tbody tr:not([hidden]):not(:has(~ tr:not([hidden]))) td {border-bottom:0}
+.rp-action-design.rp-ledger-v015 .rp-v010-table tfoot {border-top:1px solid #bfb8ae}
+@media(max-width:1050px) {
+  .rp-action-design.rp-ledger-v015 .rp-v010-table tbody tr:not([hidden]):not(:has(~ tr:not([hidden]))) {border-bottom:0}
+}

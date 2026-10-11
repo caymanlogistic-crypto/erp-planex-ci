@@ -45,7 +45,7 @@ $dueHtml = static function (array $item): string {
     </nav>
     <div class="table-toolbar rp-v015-toolbar"><div class="found-label">Найдено: <b id="rp-count">0</b></div><div class="toolbar-right">
         <label class="rp-v014-hide-complete"><input type="checkbox" id="rp-hide-complete" checked><span>Скрыть завершённые</span></label>
-        <label class="toolbar-sort"><span class="toolbar-sort-label">Сортировка по</span><select class="field-select toolbar-select" id="rp-sort" aria-label="Сортировка по дате выгрузки или ID"><option value="date-new">Дата выгрузки</option><option value="id-new">ID</option></select></label>
+        <label class="toolbar-sort"><span class="toolbar-sort-label">Сортировка по:</span><select class="field-select toolbar-select" id="rp-sort" aria-label="Сортировка по дате выгрузки или ID"><option value="date-new">Дата выгрузки</option><option value="id-new">ID</option></select></label>
         <input class="field-input" id="rp-search" type="search" placeholder="Поиск" aria-label="Поиск по рейсам и счетам">
     </div></div>
     <div class="rp-v010-table-wrap"><table class="table rp-v010-table" id="rp-ledger-table"><colgroup><?php foreach ([8,7,8,9,8,9,10,7,8,9,8,9] as $width): ?><col style="width:<?= $width ?>%"> <?php endforeach; ?></colgroup>
