@@ -76,8 +76,7 @@ final class WasteTripClosingController
         try {
             [$company,$pdo,$userId,$role]=$this->context();
             WasteTripClosingTransportService::addDiagnosticCard($pdo,(int)$company['id'],(int)$tripId,
-                (int)($_POST['vehicle_unit_id']??0),trim((string)($_POST['card_number']??'')),
-                trim((string)($_POST['card_date']??'')),$this->uploadedFiles('card_files'),$userId,$role);
+                (int)($_POST['vehicle_unit_id']??0),$this->uploadedFiles('card_files'),$userId,$role);
             $_SESSION['waste_trip_closing_success']='Диагностическая карта добавлена.';
         } catch (Throwable $exception) { $this->fail($exception,'Не удалось добавить диагностическую карту.'); }
         $this->back((int)$tripId);

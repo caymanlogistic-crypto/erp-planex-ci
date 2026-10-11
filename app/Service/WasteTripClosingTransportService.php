@@ -19,9 +19,7 @@ final class WasteTripClosingTransportService
         $marks=implode(',',array_fill(0,count($tripIds),'?'));
         $stmt=$pdo->prepare("SELECT wt.id trip_id,vs.id set_id,vs.set_type,
                 vu1.id primary_id,vu1.plate_number primary_plate,vu1.brand primary_brand,
-                vu1.diagnostic_card_number primary_number,vu1.diagnostic_card_date primary_date,
-                vu2.id secondary_id,vu2.plate_number secondary_plate,vu2.brand secondary_brand,
-                vu2.diagnostic_card_number secondary_number,vu2.diagnostic_card_date secondary_date
+                vu2.id secondary_id,vu2.plate_number secondary_plate,vu2.brand secondary_brand
             FROM waste_trips wt
             LEFT JOIN crews c ON c.id=wt.route_executor_id AND c.deleted_at IS NULL
             LEFT JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id AND dvb.deleted_at IS NULL
@@ -61,7 +59,6 @@ final class WasteTripClosingTransportService
                 $units[]=[
                     'id'=>$unitId,'role'=>$role,'label'=>(string)$rule['label'],
                     'plate'=>(string)($row[$role.'_plate']??''),'brand'=>(string)($row[$role.'_brand']??''),
-                    'number'=>(string)($row[$role.'_number']??''),'date'=>(string)($row[$role.'_date']??''),
                     'documents'=>$documents[$unitId]??[],
                 ];
             }
@@ -71,14 +68,9 @@ final class WasteTripClosingTransportService
     }
 
     public static function addDiagnosticCard(PDO $pdo, int $companyId, int $tripId, int $unitId,
-        string $number, string $date, array $files, int $userId, string $role): void
+        array $files, int $userId, string $role): void
     {
         WasteTripClosingService::trip($pdo,$tripId);
-        $number=trim($number);
-        if (mb_strlen($number)>50) throw new DomainException('Номер диагностической карты слишком длинный.');
-        if ($date!=='' && (!preg_match('/^\d{4}-\d{2}-\d{2}$/D',$date) || !checkdate((int)substr($date,5,2),(int)substr($date,8,2),(int)substr($date,0,4)))) {
-            throw new DomainException('Укажите корректную дату диагностической карты.');
-        }
         if ($files===[] || count($files)>10) throw new DomainException('Выберите от одного до десяти файлов диагностической карты.');
         foreach ($files as $file) {
             if (($file['error']??UPLOAD_ERR_NO_FILE)!==UPLOAD_ERR_OK || !is_uploaded_file((string)($file['tmp_name']??''))) throw new DomainException('Не удалось загрузить файл диагностической карты.');
@@ -113,10 +105,6 @@ final class WasteTripClosingTransportService
                 $mime=(new \finfo(FILEINFO_MIME_TYPE))->file($path)?:'application/octet-stream';
                 $insert=$pdo->prepare('INSERT INTO documents (entity_type,entity_id,document_type,document_type_id,original_name,stored_name,relative_path,mime_type,file_size,status,uploaded_by_user_id,uploaded_by_role,created_by_user_id,created_by_role) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)');
                 $insert->execute(['vehicle_unit',$unitId,'Диагностическая карта',$typeId,$name,$stored,$relativeDir.'/'.$stored,$mime,(int)$file['size'],'uploaded',$userId?:null,$role,$userId?:null,$role]);
-            }
-            if ($number!=='' || $date!=='') {
-                $pdo->prepare('UPDATE vehicle_units SET diagnostic_card_number=COALESCE(NULLIF(?,\'\'),diagnostic_card_number),diagnostic_card_date=COALESCE(NULLIF(?,\'\'),diagnostic_card_date),updated_by_user_id=?,updated_by_role=? WHERE id=?')
-                    ->execute([$number,$date,$userId?:null,$role,$unitId]);
             }
             $pdo->commit();
         } catch (Throwable $error) {
