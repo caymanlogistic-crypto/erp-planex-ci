@@ -60,9 +60,17 @@ try{
  await page.locator('.rp-standard-box .lab-reference-trigger').click();
  await page.locator('.rp-standard-box [role=option][data-value="date-new"]').click();
  assert.equal(await page.locator('#rp-sort').inputValue(),'date-new','visible listbox keeps the native sort value');
+ const tabs=page.locator('#rp-filters [data-rp-filter]');
+ assert.equal(await tabs.count(),6,'all six real finance presets remain available');
  for(const width of [390,768,1051,1280,1600,1920]){
    await page.setViewportSize({width,height:900});
+   const tabLayout=await page.locator('#rp-filters').evaluate(nav=>({height:Math.round(nav.getBoundingClientRect().height),nowrap:getComputedStyle(nav).flexWrap,overflow:getComputedStyle(nav).overflowX,buttons:[...nav.querySelectorAll('button')].map(button=>({height:Math.round(button.getBoundingClientRect().height),radius:getComputedStyle(button).borderRadius}))}));
+   assert.equal(tabLayout.height,38,`flat tab strip height at ${width}`);
+   assert.equal(tabLayout.nowrap,'nowrap',`tabs stay on one line at ${width}`);
+   assert.equal(tabLayout.overflow,'auto',`tabs scroll locally at ${width}`);
+   assert.deepEqual(tabLayout.buttons.map(button=>[button.height,button.radius]),Array(6).fill(0).map(()=>[37,'0px']),`six equal flat tabs at ${width}`);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`no horizontal overflow at ${width}`);
+   if(width===390) assert.equal(await page.locator('.rp-v015-toolbar .lab-reference-trigger').evaluate(control=>control.getBoundingClientRect().right<=control.closest('.rp-v015-toolbar').getBoundingClientRect().right-8),true,'mobile sort control stays inside the toolbar');
    assert.deepEqual(await page.locator('.rp-standard-box .lab-reference-trigger, .rp-standard-box #rp-search').evaluateAll(items=>items.map(el=>getComputedStyle(el).borderRadius)),['2px','2px'],`accepted control radius at ${width}`);
    assert.equal(await page.locator('.rp-v010-table-wrap').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,`ledger wrapper has no horizontal scroll at ${width}`);
    if(width===390){
@@ -94,6 +102,19 @@ try{
      }
    }
  }
+ await page.setViewportSize({width:320,height:900});
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,'no page overflow at 320');
+ assert.equal(await page.locator('.rp-v015-toolbar .lab-reference-trigger').evaluate(control=>control.getBoundingClientRect().right<=control.closest('.rp-v015-toolbar').getBoundingClientRect().right-8),true,'sort control stays inside the toolbar at 320');
+ const lastTab=tabs.last();
+ await lastTab.click();
+ assert.equal(await lastTab.getAttribute('aria-pressed'),'true','last preset remains functional at 320');
+ assert.equal(await lastTab.evaluate(button=>{const tab=button.getBoundingClientRect(),strip=button.parentElement.getBoundingClientRect();return tab.left>=strip.left-1&&tab.right<=strip.right+1}),true,'selected tab is visible in the strip');
+ await page.keyboard.press('Tab');
+ await page.keyboard.press('Shift+Tab');
+ assert.equal(await lastTab.evaluate(button=>document.activeElement===button&&getComputedStyle(button).outlineStyle==='solid'),true,'keyboard focus is visible');
+ await page.keyboard.press('Space');
+ assert.equal(await lastTab.getAttribute('aria-pressed'),'false','keyboard activation toggles the preset');
+ assert.equal(await lastTab.evaluate(button=>document.activeElement===button),true,'keyboard focus remains on the tab');
  assert.deepEqual(errors,[]);
  console.log('FINANCE_RECEIVED_PAID_PAYMENT_FILTER_BROWSER_OK');
 }finally{await browser.close();}

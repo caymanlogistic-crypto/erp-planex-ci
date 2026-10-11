@@ -450,3 +450,94 @@
   background-position:9px center;
   background-size:15px 15px;
 }
+
+/* Accepted Design Lab v010: six flat finance tabs above the framed ledger. */
+.workspace-shell-1690 > .rp-standard-box.table-card--standard.rp-ledger-v015 {
+  display:flow-root;
+  border:0;
+  background:transparent;
+  box-shadow:none;
+  overflow:visible;
+}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick {
+  box-sizing:border-box;
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:flex-end;
+  gap:18px;
+  width:100%;
+  height:38px;
+  min-height:38px;
+  margin:0;
+  padding:0 12px;
+  border:0;
+  border-bottom:1px solid #bfb8ae;
+  background:transparent;
+  overflow-x:auto;
+  overflow-y:hidden;
+  scrollbar-width:none;
+  overscroll-behavior-inline:contain;
+}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick::-webkit-scrollbar {display:none}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick button {
+  box-sizing:border-box;
+  display:inline-flex;
+  flex:none;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  height:37px;
+  min-height:37px;
+  margin:0;
+  padding:0;
+  border:0;
+  border-bottom:2px solid transparent;
+  border-radius:0;
+  background:transparent;
+  color:#625a50;
+  font:500 11px/1.2 var(--font);
+  white-space:nowrap;
+  cursor:pointer;
+  box-shadow:none;
+}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick button b {
+  margin-left:4px;
+  color:#80776b;
+  font:600 11px/1 var(--font);
+  font-variant-numeric:tabular-nums;
+}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick button:hover:not(.is-active) {
+  border-color:transparent;
+  background:transparent;
+  color:#744a28;
+}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick button.is-active {
+  border:0;
+  border-bottom:2px solid #7c4718;
+  background:transparent;
+  color:#563516;
+  font-weight:600;
+}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick button.is-active b {color:#563516}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick button:focus-visible {
+  outline:2px solid #7c4718 !important;
+  outline-offset:-3px !important;
+}
+.rp-action-design.rp-ledger-v015 > .table-toolbar {
+  border-left:1px solid var(--line);
+  border-right:1px solid var(--line);
+}
+.rp-action-design.rp-ledger-v015 > .rp-v010-table-wrap {
+  border-left:1px solid var(--line);
+  border-right:1px solid var(--line);
+  border-bottom:1px solid var(--line);
+}
+@media(max-width:700px) {
+  .rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-sort {
+    display:grid;
+    grid-template-columns:max-content minmax(0,1fr);
+  }
+  .rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-sort .lab-reference-select {
+    min-width:0;
+  }
+}
