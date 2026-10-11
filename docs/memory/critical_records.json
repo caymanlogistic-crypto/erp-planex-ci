@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "288edc03938aff4bb3c8d6f95986af29aa110cd8",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/288edc03938aff4bb3c8d6f95986af29aa110cd8/tests/roles_access_endpoint_integration_test.php",
+      "verified_sha": "fc4b4a4c4435cab74f7c43d7a80fe4f348a11752",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/fc4b4a4c4435cab74f7c43d7a80fe4f348a11752/tests/roles_access_route_registry_test.py",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -151,8 +151,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "a17bf97e6373e9c73b2e73a19c8ca87feadcc5c1",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/a17bf97e6373e9c73b2e73a19c8ca87feadcc5c1/tests/design_lab_contract_test.py",
+      "verified_sha": "fc4b4a4c4435cab74f7c43d7a80fe4f348a11752",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/fc4b4a4c4435cab74f7c43d7a80fe4f348a11752/tests/design_lab_contract_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -268,8 +268,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "288edc03938aff4bb3c8d6f95986af29aa110cd8",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/288edc03938aff4bb3c8d6f95986af29aa110cd8/tests/employee_mail_contract_test.php",
+      "verified_sha": "fc4b4a4c4435cab74f7c43d7a80fe4f348a11752",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/fc4b4a4c4435cab74f7c43d7a80fe4f348a11752/tests/employee_mail_contract_test.php",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",
