@@ -161,7 +161,9 @@
           const label=document.createElement('label');label.className='closing-picker-option';
           const input=document.createElement('input');input.type='radio';input.name='invoice_id';input.value=item.id;input.checked=index===0;input.required=true;
           const info=document.createElement('span');const title=document.createElement('b');title.textContent=`Счёт №${item.number}`;
-          const meta=document.createElement('small');meta.textContent=`${item.invoice_date} · ${item.amount} ₽`;
+          const paid=Number(item.paid_amount||0),amount=Number(item.amount||0);
+          const payment=paid>=amount&&amount>0?' · Оплачен · оплата перейдёт на рейс':paid>0?' · Оплачен частично · оплата перейдёт на рейс':'';
+          const meta=document.createElement('small');meta.textContent=`${item.invoice_date} · ${item.amount} ₽${payment}`;
           info.append(title,meta);label.append(input,info);pickerOptions.append(label);
         });
         pickerOptions.querySelector('input')?.focus();
