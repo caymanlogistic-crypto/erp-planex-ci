@@ -28,8 +28,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "af65ee8571783e991480a361b2d17d35c07d7c80",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/af65ee8571783e991480a361b2d17d35c07d7c80/database/migrations-local/159_waste_trip_closing_payment_queue.sql",
+      "verified_sha": "fc4b4a4c4435cab74f7c43d7a80fe4f348a11752",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/fc4b4a4c4435cab74f7c43d7a80fe4f348a11752/docs/database/TENANT_SCHEMA.md",
       "owning_paths": [
         "database/migrations-local/**",
         "app/Service/LocalMigrationService.php",
