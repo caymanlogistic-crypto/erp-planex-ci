@@ -26,8 +26,8 @@ $progressColor=static function(int $percent):string {
     <button type="button" class="closing-filter" data-closing-filter="open" aria-pressed="false">Не хватает документов</button>
     <button type="button" class="closing-filter" data-closing-filter="review" aria-pressed="false">На проверке</button>
   </div><div class="closing-extra-filters">
-    <label class="closing-filter-field"><span>ГОТОВ К ОПЛАТЕ</span><select data-closing-payment-ready><option value="all">Все рейсы</option><option value="yes">Да</option><option value="no">Нет</option></select></label>
-    <label class="closing-filter-field"><span>ОТВЕТСТВЕННЫЙ МЕНЕДЖЕР</span><select data-closing-manager><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label>
+    <label class="closing-filter-field"><span class="sr-only">Готов к оплате</span><select data-closing-payment-ready><option value="all">Все рейсы</option><option value="yes">Да</option><option value="no">Нет</option></select></label>
+    <label class="closing-filter-field"><span class="sr-only">Ответственный менеджер</span><select data-closing-manager><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label>
   </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейс или перевозчик"></label></div>
   <section class="closing-list panel" aria-label="Завершённые рейсы"><div class="closing-list-head">ЗАВЕРШЁННЫЕ РЕЙСЫ <span data-closing-count><?= $all ?></span></div>
     <?php foreach($trips as $trip):
