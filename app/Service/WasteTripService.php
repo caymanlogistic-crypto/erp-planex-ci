@@ -439,6 +439,8 @@ final class WasteTripService
     public static function fetchTrips(PDO $pdo,array $filters=[],bool $includeFinance=false): array
     {
         $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');$where=[$access['sql'],'wt.deleted_at IS NULL'];$params=$access['params'];$status=trim((string)($filters['status']??''));if($status!==''&&isset(self::STATUS_LABELS[$status])){if(in_array($status,[self::STATUS_PLANNED,self::STATUS_SEARCHING],true)){$where[]="wt.status IN ('planned_route','searching_executor')";}else{$where[]='wt.status=?';$params[]=$status;}}$company=(string)($filters['company']??'');if(in_array($company,['mg_logistic','planex'],true)){$where[]='wt.legal_entity_code=?';$params[]=$company;}$q=trim((string)($filters['q']??''));if($q!==''){$term='%'.$q.'%';$where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR wt.comment LIKE ? OR c.name LIKE ? OR u.full_name LIKE ? OR ct.name LIKE ? OR EXISTS (SELECT 1 FROM waste_trip_requests sqr JOIN feo_requests sqf ON sqf.id=sqr.feo_request_id WHERE sqr.waste_trip_id=wt.id AND sqr.removed_at IS NULL AND sqf.zayavka_id LIKE ?) OR wt.status LIKE ?)';for($i=0;$i<7;$i++)$params[]=$term;}
+        $manager=(int)($filters['manager']??0);
+        if($manager>0){$where[]='wt.responsible_user_id=?';$params[]=$manager;}
         $statusOrder="CASE wt.status WHEN 'planned_route' THEN 0 WHEN 'searching_executor' THEN 0 WHEN 'executor_assigned' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'completed' THEN 3 WHEN 'cancelled' THEN 4 ELSE 5 END";
         $orderBy=match ((string)($filters['sort']??'')) {
             'status' => $statusOrder.', wt.business_id DESC',
@@ -453,6 +455,13 @@ final class WasteTripService
     { $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');$stmt=$pdo->prepare('SELECT wt.*,c.name AS client_name,u.full_name AS responsible_name,u.membership_id AS responsible_membership_id,fu.short_name AS utilizer_short_name,fu.full_name AS utilizer_full_name,ct.name AS executor_contractor_name FROM waste_trips wt JOIN clients c ON c.id=wt.client_id JOIN users u ON u.id=wt.responsible_user_id LEFT JOIN feo_utilizers fu ON fu.id=wt.utilizer_id LEFT JOIN crews cr ON cr.id=wt.route_executor_id LEFT JOIN contractors ct ON ct.id=cr.contractor_id WHERE wt.id=? AND wt.deleted_at IS NULL AND '.$access['sql'].' LIMIT 1');$stmt->execute(array_merge([$tripId],$access['params']));$trip=$stmt->fetch(PDO::FETCH_ASSOC)?:null;if($trip===null)return null;$rows=[$trip];self::enrichExecutorDisplay($pdo,$rows);$trip=$rows[0];$trip['requests']=self::fetchRequestLinks($pdo,$tripId,false);if($includeFinance){$trip['customer_amount_sync_disabled']=WasteTripCustomerPaymentService::amountSyncDisabled($pdo,$tripId);$trip['general_payments']=WasteTripGeneralPaymentService::fetchForTrip($pdo,$tripId);$trip['customer_payments']=WasteTripCustomerPaymentService::fetchForTrip($pdo,$tripId);$trip['carrier_payments']=WasteTripCarrierPaymentService::fetchForTrip($pdo,$tripId);}return$trip; }
 
     public static function fetchActiveUsers(PDO $pdo): array { return$pdo->query("SELECT id,full_name,role_code FROM users WHERE status='active' AND deleted_at IS NULL ORDER BY full_name")->fetchAll(PDO::FETCH_ASSOC); }
+    public static function fetchRegistryManagers(PDO $pdo): array
+    {
+        $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');
+        $stmt=$pdo->prepare('SELECT DISTINCT u.id,u.full_name FROM waste_trips wt JOIN users u ON u.id=wt.responsible_user_id WHERE wt.deleted_at IS NULL AND '.$access['sql'].' ORDER BY u.full_name,u.id');
+        $stmt->execute($access['params']);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
     public static function fetchActiveUtilizers(PDO $pdo): array { return$pdo->query('SELECT id,short_name,full_name,address FROM feo_utilizers WHERE is_active=1 ORDER BY sort_order,short_name,id')->fetchAll(PDO::FETCH_ASSOC); }
 
     public static function canAccessTrip(PDO $pdo,array $trip,array $sessionUser): bool

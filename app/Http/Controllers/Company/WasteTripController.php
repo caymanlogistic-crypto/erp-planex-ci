@@ -31,7 +31,7 @@ final class WasteTripController
         $currentMembershipId=AccessControlService::effectiveMembershipId()??0;
         $isFinanceRealm=(string)($sessionUser['role_code']??'')==='company_owner';
         $pageTitle='Перевозка отходов'; $pageContext='Рейсы › Перевозка отходов'; $dbError=$context['error'];
-        $trips=$clients=$routeExecutors=$responsibleUsers=$utilizers=[];
+        $trips=$clients=$routeExecutors=$responsibleUsers=$utilizers=$registryManagers=[];
         $tripStatusCounts=[];
         $tripParity=null;
         $syncResult=$_SESSION['waste_trip_sync_result']??null; unset($_SESSION['waste_trip_sync_result']);
@@ -40,10 +40,15 @@ final class WasteTripController
         if ($company!==null && $localPdo instanceof PDO && $dbError===null) {
             if (!WasteTripService::schemaReady($localPdo)) $dbError='Модуль ожидает обновление схемы рейсов (158).';
             else try {
-                $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','company'=>$_GET['company']??'','q'=>$_GET['q']??'','sort'=>$_GET['sort']??'status'],$isFinanceRealm);
+                $registryManagers=WasteTripService::fetchRegistryManagers($localPdo);
+                $requestedManager=max(0,(int)($_GET['manager']??0));
+                $availableManagerIds=array_map(static fn(array $row):int=>(int)$row['id'],$registryManagers);
+                $selectedManager=in_array($requestedManager,$availableManagerIds,true)?$requestedManager:0;
+                $filters=['status'=>$_GET['status']??'','company'=>$_GET['company']??'','manager'=>$selectedManager,'q'=>$_GET['q']??'','sort'=>$_GET['sort']??'status'];
+                $trips=WasteTripService::fetchTrips($localPdo,$filters,$isFinanceRealm);
                 $trips=array_values(array_filter($trips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
                 $statusFilterActive=trim((string)($_GET['status']??''))!=='';
-                $statusTrips=$statusFilterActive ? WasteTripService::fetchTrips($localPdo,['status'=>'','company'=>$_GET['company']??'','q'=>$_GET['q']??'','sort'=>$_GET['sort']??'status'],$isFinanceRealm) : $trips;
+                $statusTrips=$statusFilterActive ? WasteTripService::fetchTrips($localPdo,array_replace($filters,['status'=>'']),false) : $trips;
                 if($statusFilterActive)$statusTrips=array_values(array_filter($statusTrips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
                 $tripStatusCounts['']=count($statusTrips);
                 foreach($statusTrips as $statusTrip){$status=WasteTripService::displayStatus((string)($statusTrip['status']??''));$tripStatusCounts[$status]=($tripStatusCounts[$status]??0)+1;}

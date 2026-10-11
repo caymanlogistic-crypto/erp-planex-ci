@@ -172,6 +172,13 @@ try {
     check($ids(Trips::fetchTrips($pdo))===[902,226,227,901,903,900],'Default status order');
     check($ids(Trips::fetchTrips($pdo,['sort'=>'status']))===[902,226,227,901,903,900],'Status order with ID tie break');
     check($ids(Trips::fetchTrips($pdo,['sort'=>'manager']))===[902,227,903,226,901,900],'Manager groups contain status order');
+    $managerOptions=Trips::fetchRegistryManagers($pdo);
+    check(count($managerOptions)===2,'Registry manager choices come from visible trips');
+    $trip226=$pdo->query('SELECT responsible_user_id FROM waste_trips WHERE business_id=226')->fetch();
+    $combined=Trips::fetchTrips($pdo,['status'=>'planned_route','company'=>'mg_logistic','manager'=>(int)$trip226['responsible_user_id'],'q'=>'226','sort'=>'status']);
+    check($ids($combined)===[226],'Status, company, manager and search filter together');
+    $otherManager=(int)array_values(array_filter($managerOptions,static fn(array $row):bool=>(int)$row['id']!==(int)$trip226['responsible_user_id']))[0]['id'];
+    check(Trips::fetchTrips($pdo,['status'=>'planned_route','company'=>'mg_logistic','manager'=>$otherManager,'q'=>'226'])===[],'Manager filter excludes another manager without dropping other filters');
     check($ids(Trips::fetchTrips($pdo,['sort'=>'id']))===[903,902,901,900,227,226],'Explicit ID order');
     check($ids(Trips::fetchTrips($pdo,['sort'=>'unknown']))===[902,226,227,901,903,900],'Unknown sort falls back to status');
     $pdo->exec('DELETE FROM waste_trips WHERE business_id BETWEEN 900 AND 903');
