@@ -32,6 +32,7 @@ final class WasteTripController
         $isFinanceRealm=(string)($sessionUser['role_code']??'')==='company_owner';
         $pageTitle='Перевозка отходов'; $pageContext='Рейсы › Перевозка отходов'; $dbError=$context['error'];
         $trips=$clients=$routeExecutors=$responsibleUsers=$utilizers=[];
+        $tripStatusCounts=[];
         $tripParity=null;
         $syncResult=$_SESSION['waste_trip_sync_result']??null; unset($_SESSION['waste_trip_sync_result']);
         $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; $old=$_SESSION['waste_trip_old']??[];
@@ -41,6 +42,11 @@ final class WasteTripController
             else try {
                 $trips=WasteTripService::fetchTrips($localPdo,['status'=>$_GET['status']??'','company'=>$_GET['company']??'','q'=>$_GET['q']??'','sort'=>$_GET['sort']??'status'],$isFinanceRealm);
                 $trips=array_values(array_filter($trips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
+                $statusFilterActive=trim((string)($_GET['status']??''))!=='';
+                $statusTrips=$statusFilterActive ? WasteTripService::fetchTrips($localPdo,['status'=>'','company'=>$_GET['company']??'','q'=>$_GET['q']??'','sort'=>$_GET['sort']??'status'],$isFinanceRealm) : $trips;
+                if($statusFilterActive)$statusTrips=array_values(array_filter($statusTrips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
+                $tripStatusCounts['']=count($statusTrips);
+                foreach($statusTrips as $statusTrip){$status=WasteTripService::displayStatus((string)($statusTrip['status']??''));$tripStatusCounts[$status]=($tripStatusCounts[$status]??0)+1;}
                 $tripParity=WasteTripParityService::state($localPdo);
                 [$clients,$routeExecutors,$responsibleUsers,$utilizers]=$this->loadOptions($localPdo,$sessionUser,$central,$companyId);
                 $pageContext.=' › Компания: '.(string)$company['name'];

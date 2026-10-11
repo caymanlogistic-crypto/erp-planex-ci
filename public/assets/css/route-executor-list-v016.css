@@ -300,3 +300,7 @@ input[name^="units["][name$="[model]"] {
 .route-executors-card .route-sort-trigger,
 .route-executors-card .route-sort-list,
 .route-executors-card .route-sort-option {border-radius:2px}
+
+.route-executors-card > .table-toolbar .found-label {font:500 12px/16px var(--font);color:#4c4840}
+.route-executors-card > .table-toolbar .found-label b {color:#2e2923}
+.route-executors-card > .table-toolbar .toolbar-sort-label {font:500 12px/16px var(--font);color:#4c4840}
