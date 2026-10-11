@@ -42,7 +42,7 @@ try {
       const money = [9, 10, 11].map(index => first.cells[index].getBoundingClientRect().width);
       const filter = document.querySelector('[data-waste-filter]');
       const search = filter.querySelector('[name=q]').getBoundingClientRect();
-      const sort = filter.querySelector('[name=sort]').getBoundingClientRect();
+      const sort = filter.querySelector('.lab-reference-select[data-name=sort] .lab-reference-trigger').getBoundingClientRect();
       return {
         scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         tableScroll: document.querySelector('.waste-table-scroll').scrollWidth - document.querySelector('.waste-table-scroll').clientWidth,
@@ -70,7 +70,8 @@ try {
   }
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
-  await page.selectOption('[data-waste-filter] select[name=status]', 'completed');
+  await page.locator('[data-waste-filter] .lab-reference-select[data-name=status] .lab-reference-trigger').click();
+  await page.locator('[data-waste-filter] .lab-reference-select[data-name=status] [role=option][data-value=completed]').click();
   await page.waitForURL(/status=completed/);
   assert.equal(new URL(page.url()).searchParams.get('status'), 'completed', 'status filter submits GET automatically');
   await page.close();

@@ -111,9 +111,9 @@ $routeListVehicles = static function (array $row): void {
 
 <div class="page-head route-executors-page-head">
     <div class="page-head-left">
-        <?= $routeExecutorHeaderIcon ?>
-        <h1 class="page-title">Исполнители рейса</h1>
-        <div class="page-summary"><span>Исполнитель рейса: подрядчик + водитель + транспорт</span></div>
+        <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
+        <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
+        <span class="page-summary">Исполнитель рейса: подрядчик + водитель + транспорт</span></span>
     </div>
     <div class="page-head-actions">
         <?= $routeExecutorDocumentButton ?>

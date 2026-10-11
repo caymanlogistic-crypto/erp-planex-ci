@@ -82,9 +82,9 @@ try {
     const initial = await read();
     assert.equal(initial.footerCount, 0);
     assert.equal(initial.bottomPadding, '8px');
-    assert.equal(initial.toolbarHeight, 36);
+    assert.equal(initial.toolbarHeight, 49);
     assert.equal(initial.headingHeight, 30);
-    assert.ok(initial.cardHeight >= initial.tableHeight + 36, 'rows keep content height');
+    assert.ok(initial.cardHeight >= initial.tableHeight + 49, 'rows keep content height');
     assert.equal(initial.pageOverflow, false);
     if (width === 1920 && process.env.PLANEX_VISUAL_EVIDENCE_DIR) {
       fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR, { recursive: true });
@@ -96,7 +96,7 @@ try {
     assert.ok(scrolled.pageHeadBottom < scrolled.topbarBottom, 'Page Header scrolls away');
     assert.equal(scrolled.toolbarTop, scrolled.topbarBottom, 'toolbar sits below the ERP topbar');
     assert.equal(scrolled.toolbarBottom, scrolled.headingTop, 'toolbar and headings form one block');
-    assert.equal(scrolled.headingBottom - scrolled.toolbarTop, 66);
+    assert.equal(scrolled.headingBottom - scrolled.toolbarTop, 79);
     assert.deepEqual(scrolled.headingWidths, initial.headingWidths, 'column widths stay fixed while scrolling');
     assert.deepEqual(scrolled.headingWidths, scrolled.cellWidths, 'headings remain aligned with cells');
     assert.equal(scrolled.pageOverflow, false);

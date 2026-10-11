@@ -89,3 +89,4 @@ $renderSide = static function (array $trip, string $side) use ($stats, $money, $
 </div></div>
 <div id="invoice-view-modal" class="modal-overlay" role="dialog" aria-modal="true" data-close-on-overlay="1" data-close-on-escape="1"><div class="modal modal-lg"><div class="modal-head"><span class="modal-title">Счёт</span><button type="button" class="modal-close" data-close-modal="invoice-view-modal">&times;</button></div><div class="modal-body" id="invoice-view-modal-body"></div></div></div>
 <script src="<?= e(app_url('/assets/js/finance-received-paid.js')) ?>?v=<?= filemtime(base_path('public/assets/js/finance-received-paid.js')) ?>" defer></script>
+<script src="<?= e(app_url('/assets/js/table-reference-select.js')) ?>?v=<?= filemtime(base_path('public/assets/js/table-reference-select.js')) ?>" defer></script>
