@@ -28,9 +28,11 @@ $dueHtml = static function (array $item): string {
     return '<span class="rp-v010-date is-' . e($item[0]) . '"><strong>' . e($item[1]) . '</strong><small>' . e($item[2]) . '</small></span>';
 };
 ?>
-<div class="table-card table-card--standard rp-standard-box rp-action-design rp-ledger-v010 rp-ledger-v015">
+<div class="rp-lab-header-wrap rp-action-design rp-ledger-v015">
     <div class="page-head"><div class="page-head-left"><span class="rp-identity-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h14l-4 -4"/><path d="M17 14h-14l4 4"/></svg></span><span class="rp-head-text"><h1 class="page-title">Получено/оплачено</h1><span class="page-summary">Счета и фактические оплаты по рейсам ООО «Планэкс» со статусом «Груз сдан».</span></span></div>
         <div class="page-head-actions"><button type="button" class="btn btn-primary" data-open-modal="invoice-create-modal"<?= $localPdo === null ? ' disabled' : '' ?>>Создать счёт</button></div></div>
+</div>
+<div class="table-card table-card--standard rp-standard-box rp-action-design rp-ledger-v010 rp-ledger-v015">
     <?php if ($dbError !== null): ?><div class="notice warn"><?= e($dbError) ?></div><?php endif; ?>
     <?php if (!empty($_SESSION['invoice_success'])): ?><div class="notice success"><?= e((string)$_SESSION['invoice_success']) ?></div><?php unset($_SESSION['invoice_success']); endif; ?>
     <nav class="rp-v010-quick" id="rp-filters" aria-label="Отбор рейсов">

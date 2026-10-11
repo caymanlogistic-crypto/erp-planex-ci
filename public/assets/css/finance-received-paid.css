@@ -347,3 +347,106 @@
 #rp-detail-modal .rp-invoice-link{justify-self:start;white-space:normal;text-align:left;font-size:12px;font-weight:700;color:#7c4718}
 #rp-detail-modal .rp-detail-empty{margin:0;font-size:12px;line-height:1.45;color:#817b72}
 @media(max-width:900px){#rp-detail-modal .rp-details-sides{grid-template-columns:1fr}#rp-detail-modal .rp-finance-pane+.rp-finance-pane{border-left:0;border-top:1px solid #d5cec3}}
+
+/* OWNER accepted Design Lab finance v006; production ledger retained. */
+/* Separate Page Header: use the common ERP frame and spacing. */
+.workspace-shell-1690 > .rp-lab-header-wrap > .page-head {
+  box-sizing:border-box;
+  width:100%;
+  height:58px;
+  min-height:58px;
+  margin:0;
+  padding:7px 12px;
+  border:1px solid var(--line);
+  border-radius:0;
+  background:linear-gradient(180deg,var(--surface-strong) 0%,#ece8de 100%);
+}
+.workspace-shell-1690 > .rp-lab-header-wrap + .rp-standard-box {margin-top:12px}
+@media(max-width:600px) {
+  .workspace-shell-1690 > .rp-lab-header-wrap > .page-head {height:auto;min-height:58px}
+}
+
+/* Match the data card's outer frame to the Page Header. */
+.workspace-shell-1690 > .rp-standard-box.table-card--standard {
+  border: 1px solid var(--line);
+}
+
+/* Experimental shared table controls; finance tabs and filtering logic stay intact. */
+.rp-action-design.rp-ledger-v015 > .table-toolbar {
+  box-sizing:border-box;
+  height:auto;
+  min-height:49px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:8px 16px;
+  padding:8px 12px;
+  border:0;
+  border-bottom:1px solid #d5cec3;
+  background:#f7f5f0;
+  box-shadow:none;
+}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .found-label {flex:none;white-space:nowrap}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .found-label::before {background:var(--accent)}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .found-label b {font-weight:600}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-right {display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;margin-left:auto}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-sort {display:flex;align-items:center;gap:8px}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-select {box-sizing:border-box;width:180px;height:32px;min-height:32px;border:1px solid #d7d1c7;border-radius:4px}
+.rp-action-design.rp-ledger-v015 > .table-toolbar #rp-search {box-sizing:border-box;width:230px;height:32px;min-height:32px;flex:0 0 230px;border:1px solid #c8c0b5;border-radius:4px}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .rp-v014-hide-complete {display:inline-flex;align-items:center;gap:8px;min-height:32px;margin:0;padding:0;border:0;background:transparent;white-space:nowrap}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .rp-v014-hide-complete.is-focused {border:0;background:transparent}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .rp-v014-hide-complete input {appearance:auto;width:16px;height:16px;min-width:16px;min-height:16px;max-width:16px;max-height:16px;flex:0 0 16px;margin:0;accent-color:var(--accent)}
+.rp-action-design.rp-ledger-v015 > .table-toolbar .rp-v014-hide-complete input:focus-visible {outline:2px solid var(--accent) !important;outline-offset:2px}
+@media(max-width:700px) {
+  .rp-action-design.rp-ledger-v015 > .table-toolbar {align-items:stretch}
+  .rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-right {display:grid;grid-template-columns:minmax(0,1fr);width:100%;margin-left:0}
+  .rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-sort,
+  .rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-select,
+  .rp-action-design.rp-ledger-v015 > .table-toolbar #rp-search {width:100%;min-width:0}
+  .rp-action-design.rp-ledger-v015 > .table-toolbar #rp-search {flex:auto}
+}
+
+/* Design Lab: route reference styling for open/closed native-backed controls. */
+.lab-reference-select {position:relative;display:inline-block;flex:none;vertical-align:middle;width:180px;min-width:0;z-index:25}
+.lab-reference-select[data-name="company"],.lab-reference-select[data-name="status"] {width:150px}
+.lab-reference-select.is-ready > select {display:none}
+.lab-reference-trigger {box-sizing:border-box;display:block;width:100%;height:32px;min-height:32px;padding:0 24px 0 8px;border:1px solid #d7d1c7;border-radius:4px;background:#f0ede7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23827b70' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") calc(100% - 7px) center / 10px 6px no-repeat;color:#4d4942;font:500 12px var(--font);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;box-shadow:none}
+.lab-reference-trigger:hover {background-color:#eae3d8;border-color:#c9bdae}
+.lab-reference-trigger:active {background-color:#e4d8ca;border-color:#b8a48e}
+.lab-reference-trigger:focus-visible {outline:2px solid #9a5a22 !important;outline-offset:2px !important;border-color:var(--accent)}
+.lab-reference-list {box-sizing:border-box;position:absolute;top:calc(100% + 4px);right:0;width:100%;padding:0;border:1px solid #c8bfb2;border-radius:2px;background:#fff;color:#131210;font-size:13px;box-shadow:none;z-index:30}
+.lab-reference-list[hidden] {display:none}
+.lab-reference-list:focus-visible {outline:2px solid #9a5a22;outline-offset:1px}
+.lab-reference-option {box-sizing:border-box;min-height:28px;display:flex;align-items:center;width:100%;padding:0 9px;border:0;border-radius:0;background:#fff;color:#2e2923;font:500 12px var(--font);white-space:nowrap;cursor:default}
+.lab-reference-option:hover,.lab-reference-option.is-active:not([aria-selected="true"]) {background:#f2f2f0}
+.lab-reference-option[aria-selected="true"] {background:#f2e8dc;color:#2e2923;font-weight:500}
+.lab-reference-option[aria-selected="true"]:hover {background:#e9d9c7}
+.rp-action-design.rp-ledger-v015 > .table-toolbar #rp-search {font:500 12px/1.4 var(--font)}
+@media(max-width:700px){.rp-action-design.rp-ledger-v015 > .table-toolbar .lab-reference-select {width:100%}}
+/* OWNER correction: approved Page Header button radius for table controls. */
+.rp-action-design.rp-ledger-v015 > .table-toolbar #rp-search,
+.rp-action-design.rp-ledger-v015 > .table-toolbar .toolbar-select,
+.rp-action-design.rp-ledger-v015 > .table-toolbar .lab-reference-trigger,
+.rp-action-design.rp-ledger-v015 > .table-toolbar .lab-reference-list,
+.rp-action-design.rp-ledger-v015 > .table-toolbar .lab-reference-option {border-radius:2px}
+
+/* Accepted route reference search treatment on the live ledger input. */
+.rp-action-design.rp-ledger-v015 > .table-toolbar #rp-search {
+  padding:0 9px 0 31px;
+  background-color:#fffdf9;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/%3E%3Cpath d='M21 21l-6 -6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:9px center;
+  background-size:15px 15px;
+}
+.rp-action-design.rp-ledger-v015 > .table-toolbar #rp-search::placeholder {color:#777168}
+.rp-action-design.rp-ledger-v015 > .table-toolbar #rp-search:focus {
+  border-color:var(--accent);
+  box-shadow:0 0 0 2px rgba(124,71,24,.1);
+  background-color:#fffdf9;
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/%3E%3Cpath d='M21 21l-6 -6'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;
+  background-position:9px center;
+  background-size:15px 15px;
+}

@@ -13,6 +13,7 @@ const appCss=fs.readFileSync(path.join(root,'public/assets/css/app.css'),'utf8')
 const erpCss=fs.readFileSync(path.join(root,'public/assets/css/erp-ui.css'),'utf8');
 const fontCss=[[400,'Regular'],[500,'Medium'],[600,'SemiBold'],[700,'Bold']].map(([weight,name])=>`@font-face{font-family:"IBM Plex Sans";src:url(data:font/woff2;base64,${fs.readFileSync(path.join(root,`public/assets/fonts/IBMPlexSans-${name}.woff2`)).toString('base64')}) format("woff2");font-weight:${weight}}`).join('\n');
 const js=fs.readFileSync(path.join(root,'public/assets/js/finance-received-paid.js'),'utf8');
+const referenceSelectJs=fs.readFileSync(path.join(root,'public/assets/js/table-reference-select.js'),'utf8');
 const browser=await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_EXECUTABLE?{executablePath:process.env.PLANEX_BROWSER_EXECUTABLE}:{})});
 try{
  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
@@ -21,6 +22,7 @@ try{
  await page.addStyleTag({content:appCss+'\n'+erpCss+'\n'+css+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
  await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
  await page.addScriptTag({content:js});
+ await page.addScriptTag({content:referenceSelectJs});
  const ids=()=>page.locator('#rp-list tr:visible').evaluateAll(items=>items.map(item=>item.dataset.id));
  assert.deepEqual(await ids(),['105','104','103','102']);
  assert.equal(await page.locator('#rp-count').innerText(),'4');
@@ -40,7 +42,8 @@ try{
  assert.deepEqual(await ids(),['101']);
  assert.equal(await page.locator('[data-total="customer-invoices"]').innerText(),'100 ₽');
  await page.locator('#rp-search').clear();
- await page.selectOption('#rp-sort','id-new');
+ await page.locator('.rp-standard-box .lab-reference-trigger').click();
+ await page.locator('.rp-standard-box [role=option][data-value="id-new"]').click();
  assert.deepEqual(await ids(),['105','104','103','102','101']);
  assert.equal(await page.locator('#rp-list tr[data-id="101"] td').count(),12);
  await page.locator('#rp-list tr[data-id="101"]').dblclick();
@@ -54,10 +57,13 @@ try{
  await page.evaluate(()=>window.closeModal('invoice-view-modal'));
  assert.equal(await page.locator('#rp-list tr[data-id="101"]').evaluate(row=>document.activeElement===row),true,'focus returns to row');
  await page.locator('#rp-hide-complete').check();
- await page.selectOption('#rp-sort','date-new');
+ await page.locator('.rp-standard-box .lab-reference-trigger').click();
+ await page.locator('.rp-standard-box [role=option][data-value="date-new"]').click();
+ assert.equal(await page.locator('#rp-sort').inputValue(),'date-new','visible listbox keeps the native sort value');
  for(const width of [390,768,1051,1280,1600,1920]){
    await page.setViewportSize({width,height:900});
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`no horizontal overflow at ${width}`);
+   assert.deepEqual(await page.locator('.rp-standard-box .lab-reference-trigger, .rp-standard-box #rp-search').evaluateAll(items=>items.map(el=>getComputedStyle(el).borderRadius)),['2px','2px'],`accepted control radius at ${width}`);
    assert.equal(await page.locator('.rp-v010-table-wrap').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,`ledger wrapper has no horizontal scroll at ${width}`);
    if(width===390){
      const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[3,4,5,6,9,10,11,12].map(index=>Math.round(row.cells[index-1].querySelector('span')?.getBoundingClientRect().left||0)));
