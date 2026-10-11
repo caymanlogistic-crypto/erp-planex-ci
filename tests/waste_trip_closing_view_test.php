@@ -12,7 +12,7 @@ $trip=static function(int $id,array $documents):array {
         'carrier_id'=>42,'carrier_name'=>'Перевозчик','manager_name'=>'Менеджер','manager_membership_id'=>71,'legal_entity_code'=>'planex',
         'recipient_email'=>'info@plan-ex.ru','review_state'=>'work','review_version'=>0,
         'documents'=>$documents,'paid_bank_transactions'=>[],'request_count'=>3,'processed_count'=>2,
-        'tn_issues'=>['Заявка №123: нет скана ТН'],
+        'tn_issues'=>['Заявка №123: нет скана ТН','Заявка №124: нет скана ТН','Заявка №125: нет подписи водителя'],
         'invoice_summary'=>['status'=>'missing','detail'=>'—','invoice_id'=>0],
     ];
 };
@@ -52,8 +52,12 @@ $assert(str_contains($html,'data-payment-ready="no"')&&str_contains($html,'data-
 $assert(str_contains($html,'<option value="71">Менеджер</option>'),'manager must be selectable by membership ID');
 $assert(str_contains($html,'<option value="72">Без рейсов</option>'),'active user without trips must remain selectable');
 $assert(str_contains($html,'data-manager-id="71"'),'trip must expose its responsible membership ID');
-$assert(str_contains($html,'<b>Документы:</b> Не получены: Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист'),'missing documents must be named');
-$assert(str_contains($html,'<b>Проверка ТН:</b> Заявка №123: нет скана ТН'),'TN error must identify request');
+$assert(str_contains($html,'data-business-id="1"'),'trip must expose its exact business number for list search');
+$assert(str_contains($html,'<b>Нет документов:</b> Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист'),'missing documents must be named');
+$assert(str_contains($html,'<b>ТН:</b> нет скана ТН · заявок: 2'),'same TN problem must show one compact summary');
+$assert(str_contains($html,'<b>ТН:</b> нет подписи водителя · заявок: 1'),'different TN problem must stay separate');
+$assert(substr_count($html,'<b>ТН:</b> нет скана ТН')===1,'repeated TN reason must be shown once');
+$assert(str_contains($html,'нет скана ТН · заявки №123, №124'),'expanded trip must retain every affected request number');
 $assert(str_contains($html,'Нет ошибок, счет можно оплачивать'),'clean trip must show payment readiness');
 $assert(str_contains($html,'2 из 3 обработано'),'processed requests must follow document progress');
 $assert(str_contains($html,'data-invoice-open data-carrier-id="42"'),'invoice action must use the trip carrier');

@@ -11,13 +11,16 @@
   let filter='all';
   function render() {
     const query=search.value.trim().toLocaleLowerCase('ru');
+    const requestedIds=query.includes(',')?query.split(',').map(part=>part.trim()).filter(Boolean).map(part=>part.match(/^(?:рейс\s*)?[№#]?(\d+)$/iu)?.[1]):null;
+    const idSearch=requestedIds?.length&&requestedIds.every(Boolean)?new Set(requestedIds):null;
     let visible=0;
     for (const trip of trips) {
       const state=trip.dataset.state;
       const matches=filter==='all'||(filter==='review'?state==='review':state==='new'||state==='partial');
       const matchesPayment=!paymentReady||paymentReady.value==='all'||trip.dataset.paymentReady===paymentReady.value;
       const matchesManager=!manager||!manager.value||trip.dataset.managerId===manager.value;
-      trip.hidden=!(matches&&matchesPayment&&matchesManager&&trip.dataset.search.includes(query));
+      const matchesSearch=requestedIds&&!idSearch?false:idSearch?idSearch.has(trip.dataset.businessId):trip.dataset.search.includes(query);
+      trip.hidden=!(matchesSearch&&matches&&matchesPayment&&matchesManager);
       if (!trip.hidden) visible++;
     }
     count.textContent=String(visible);

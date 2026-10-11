@@ -28,7 +28,7 @@ $progressColor=static function(int $percent):string {
   </div><div class="closing-extra-filters">
     <label class="closing-filter-field"><span class="sr-only">Готов к оплате</span><select data-closing-payment-ready><option value="all">Все рейсы</option><option value="yes">Да</option><option value="no">Нет</option></select></label>
     <label class="closing-filter-field"><span class="sr-only">Ответственный менеджер</span><select data-closing-manager><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label>
-  </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейс или перевозчик"></label></div>
+  </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику; несколько номеров рейсов через запятую</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейсы: 322, 310"></label></div>
   <section class="closing-list panel" aria-label="Завершённые рейсы"><div class="closing-list-head">ЗАВЕРШЁННЫЕ РЕЙСЫ <span data-closing-count><?= $all ?></span></div>
     <?php foreach($trips as $trip):
         $docs=$trip['documents'];$bySlot=[];$extras=[];
@@ -40,11 +40,17 @@ $progressColor=static function(int $percent):string {
         $requestCount=(int)($trip['request_count']??0);$processedCount=(int)($trip['processed_count']??0);
         $requestPercent=$requestCount>0?min(100,(int)round($processedCount/$requestCount*100)):0;
         $tnIssues=$trip['tn_issues']??[];
+        $tnIssueGroups=[];
+        foreach($tnIssues as $issue){
+            if(preg_match('/^Заявка №(\d+):\s*(.+)$/u',(string)$issue,$parts)){
+                $reason=$parts[2];$tnIssueGroups[$reason]??=[];$tnIssueGroups[$reason][]=$parts[1];
+            }else{$tnIssueGroups[(string)$issue]??=[];}
+        }
         $invoiceSummary=$trip['invoice_summary']??['status'=>'missing','detail'=>'—','invoice_id'=>0];
         $invoiceStatus=match($invoiceSummary['status']){'paid'=>'Оплачен','waiting'=>'Ожидает оплаты',default=>'Не введён'};
         $search=mb_strtolower($trip['business_id'].' '.$trip['carrier_name'].' '.$trip['manager_name'].' '.$executorLabel((string)$trip['legal_entity_code']),'UTF-8');
     ?>
-    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-state="<?= e($state) ?>" data-payment-ready="<?= !$missing&&!$tnIssues?'yes':'no' ?>" data-manager-id="<?= (int)($trip['manager_membership_id']??0) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
+    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>" data-state="<?= e($state) ?>" data-payment-ready="<?= !$missing&&!$tnIssues?'yes':'no' ?>" data-manager-id="<?= (int)($trip['manager_membership_id']??0) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
       <summary class="closing-trip-summary"><span class="closing-chevron" aria-hidden="true"></span>
         <span class="closing-identity"><b>Рейс #<?= e((string)$trip['business_id']) ?></b><small>Завершён <?= e($trip['actual_end_date']?date('d.m.Y',strtotime((string)$trip['actual_end_date'])):'—') ?></small></span>
         <span class="closing-carrier"><small>ПЕРЕВОЗЧИК</small><b><?= e((string)$trip['carrier_name']) ?></b><span>Менеджер: <?= e((string)$trip['manager_name']) ?></span></span>
@@ -52,10 +58,11 @@ $progressColor=static function(int $percent):string {
         <span class="closing-invoice-status" data-status="<?= e($invoiceSummary['status']) ?>"><small>СЧЕТА</small><b><?= e($invoiceStatus) ?></b><span class="closing-invoice-detail"><?= e((string)$invoiceSummary['detail']) ?></span></span>
         <span class="closing-progress"><small>ДОКУМЕНТЫ</small><b><?= $count ?> из <?= $total ?> получено</b><span class="closing-track" aria-label="<?= $count ?> из <?= $total ?> документов получено"><i style="width:<?= $percent ?>%;--closing-progress-color:<?= e($progressColor($percent)) ?>"></i></span></span>
         <span class="closing-requests"><small>ОБРАБОТАНО ЗАЯВОК</small><b><?= $processedCount ?> из <?= $requestCount ?> обработано</b><span class="closing-track closing-requests-track" aria-label="<?= $processedCount ?> из <?= $requestCount ?> заявок обработано"><i style="width:<?= $requestPercent ?>%"></i></span></span>
-        <span class="closing-shared-issues"><small>ОШИБКИ</small><span class="closing-shared-issues-list"><?php if($missing):?><span><b>Документы:</b> Не получены: <?= e(implode(', ',$missing)) ?></span><?php endif;?><?php foreach($tnIssues as $issue):?><span><b>Проверка ТН:</b> <?= e($issue) ?></span><?php endforeach;?><?php if(!$missing&&!$tnIssues):?><span class="closing-shared-issues-clear">Нет ошибок, счет можно оплачивать</span><?php endif;?></span></span>
+        <span class="closing-shared-issues"><small>ОШИБКИ</small><span class="closing-shared-issues-list"><?php if($missing):?><span><b>Нет документов:</b> <?= e(implode(', ',$missing)) ?></span><?php endif;?><?php foreach($tnIssueGroups as $reason=>$requestIds):?><span><b>ТН:</b> <?= e((string)$reason) ?><?php if($requestIds):?> · заявок: <?= count($requestIds) ?><?php endif;?></span><?php endforeach;?><?php if(!$missing&&!$tnIssues):?><span class="closing-shared-issues-clear">Нет ошибок, счет можно оплачивать</span><?php endif;?></span></span>
       </summary>
       <div class="closing-trip-body">
         <div class="closing-body-head"><div><h2>Закрывающие документы рейса #<?= e((string)$trip['business_id']) ?></h2><p>Добавьте файлы. <?= \App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED?'Затем передайте комплект на проверку.':'Отправка комплекта на почту временно отключена.' ?></p></div><?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><span class="closing-note">Получатель письма: <?= e((string)$trip['recipient_email']) ?></span><?php endif;?></div>
+        <?php if($tnIssueGroups):?><div class="closing-tn-details"><strong>Ошибки проверки ТН</strong><?php foreach($tnIssueGroups as $reason=>$requestIds):?><p><?= e((string)$reason) ?><?php if($requestIds):?> · <?= count($requestIds)===1?'заявка':'заявки' ?> №<?= e(implode(', №',$requestIds)) ?><?php endif;?></p><?php endforeach;?></div><?php endif;?>
         <?php if($paid):?><div class="closing-finance-handoff"><strong>Оплата отражена · <?= count($paid) ?> банковских операций</strong><span>Собранные файлы связаны с платежами в «Финансы → Закрывающие документы». Договор/заявка и акт/УПД учитываются в обязательных категориях, остальные доступны как приложения.</span></div><?php endif;?>
         <p class="closing-upload-feedback" role="alert" hidden></p>
         <div class="closing-doc-table">

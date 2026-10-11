@@ -7,8 +7,8 @@ import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 let documentPresent=false,uploadedNames=[];
-const trip=()=>`<details data-closing-trip data-trip-id="7" data-state="${documentPresent?'partial':'new'}" data-payment-ready="no" data-manager-id="71" data-search="рейс 7" open>
-  <summary>Рейс #7 ${documentPresent?'<span class="closing-missing">НЕ ХВАТАЕТ ДОКУМЕНТОВ</span>':''}</summary>
+const trip=()=>`<details data-closing-trip data-trip-id="7" data-business-id="322" data-state="${documentPresent?'partial':'new'}" data-payment-ready="no" data-manager-id="71" data-search="322 перевозчик николаенко" open>
+  <summary>Рейс #322 ${documentPresent?'<span class="closing-missing">НЕ ХВАТАЕТ ДОКУМЕНТОВ</span>':''}</summary>
   <div class="closing-trip-body"><p class="closing-upload-feedback" role="alert" hidden></p>
     <div class="closing-doc-row"><span class="closing-file-name">${documentPresent?uploadedNames.join(', '):'Файл не получен'}</span>
       <form class="closing-upload-form" action="/documents" method="post"><input type="file" name="document_files[]" multiple required></form>
@@ -17,12 +17,12 @@ const trip=()=>`<details data-closing-trip data-trip-id="7" data-state="${docume
   </div>
 </details>`;
 const pageHtml=success=>`<!doctype html><html><body><div style="height:800px"></div><div class="closing-page">
-  <input data-closing-search><button data-closing-filter="all"></button><button data-closing-filter="review"></button>
+  <input data-closing-search><button data-closing-filter="all"></button><button data-closing-filter="open"></button><button data-closing-filter="review"></button>
   <select data-closing-payment-ready><option value="all">Все</option><option value="yes">Да</option><option value="no">Нет</option></select>
   <select data-closing-manager><option value="">Не выбран</option><option value="71">Анна</option><option value="72">Борис</option><option value="73">Без рейсов</option></select>
   <span data-closing-count>2</span>
   ${success?'<span data-closing-action-result="success" hidden></span>':''}${trip()}
-  <details data-closing-trip data-trip-id="8" data-state="review" data-payment-ready="yes" data-manager-id="72" data-search="рейс 8"><summary>Рейс #8</summary></details>
+  <details data-closing-trip data-trip-id="8" data-business-id="310" data-state="review" data-payment-ready="yes" data-manager-id="72" data-search="310 перевозчик гайнутдинов"><summary>Рейс #310</summary></details>
   <p data-closing-empty hidden></p>
 </div><div style="height:900px"></div></body></html>`;
 const server=http.createServer((request,response)=>{
@@ -46,6 +46,23 @@ try {
   const url=`http://127.0.0.1:${server.address().port}/`;
   await page.goto(url);
   await page.addScriptTag({path:path.join(root,'public/assets/js/waste-trip-closing.js')});
+  await page.locator('[data-closing-search]').fill('322, 310');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),2,'comma-separated trip IDs keep requested trips');
+  await page.locator('[data-closing-search]').fill('32, 310');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'trip IDs match exactly, not by substring');
+  await page.locator('[data-closing-search]').fill('Рейс #322, №310,');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),2,'pasted trip labels and a trailing comma work');
+  await page.locator('[data-closing-filter="review"]').click();
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'state filter narrows the requested trip list');
+  await page.locator('[data-closing-filter="all"]').click();
+  await page.selectOption('[data-closing-manager]','71');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'manager filter narrows the requested trip list');
+  await page.selectOption('[data-closing-manager]','');
+  await page.selectOption('[data-closing-payment-ready]','yes');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'payment filter narrows the requested trip list');
+  await page.locator('[data-closing-search]').fill('николаенко');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),0,'carrier text search still combines with payment filter');
+  await page.locator('[data-closing-search]').fill('');
   await page.selectOption('[data-closing-payment-ready]','yes');
   assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'payment readiness narrows trips');
   await page.selectOption('[data-closing-manager]','71');
