@@ -8,7 +8,27 @@
   const filters=[...page.querySelectorAll('[data-closing-filter]')];
   const count=page.querySelector('[data-closing-count]');
   const empty=page.querySelector('[data-closing-empty]');
+  if(!search || !count || !empty) return;
+  const stateKey=page.dataset.closingStateKey;
+  let savedState=null;
+  try { if(stateKey) savedState=JSON.parse(localStorage.getItem(stateKey)||'null'); } catch (_) {}
   let filter='all';
+  if(savedState && typeof savedState==='object') {
+    if(typeof savedState.search==='string') search.value=savedState.search.slice(0,1000);
+    if(['all','open','review'].includes(savedState.filter)) filter=savedState.filter;
+    if(paymentReady && [...paymentReady.options].some(option=>option.value===savedState.paymentReady)) paymentReady.value=savedState.paymentReady;
+    if(manager && [...manager.options].some(option=>option.value===savedState.manager)) manager.value=savedState.manager;
+  }
+  filters.forEach(button=>{const active=button.dataset.closingFilter===filter;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));});
+  const requestedTripId=new URLSearchParams(location.search).get('trip_id');
+  const openTripId=requestedTripId||savedState?.openTripId;
+  if(openTripId || (savedState && Object.hasOwn(savedState,'openTripId'))) {
+    trips.forEach(trip=>{trip.open=trip.dataset.tripId===openTripId;});
+  }
+  function saveState() {
+    if(!stateKey) return;
+    try { localStorage.setItem(stateKey,JSON.stringify({search:search.value,filter,paymentReady:paymentReady?.value||'all',manager:manager?.value||'',openTripId:trips.find(trip=>trip.open)?.dataset.tripId||null})); } catch (_) {}
+  }
   function render() {
     const query=search.value.trim().toLocaleLowerCase('ru');
     const requestedIds=query.includes(',')?query.split(',').map(part=>part.trim()).filter(Boolean).map(part=>part.match(/^(?:рейс\s*)?[№#]?(\d+)$/iu)?.[1]):null;
@@ -26,18 +46,22 @@
     count.textContent=String(visible);
     empty.hidden=visible>0;
   }
-  search.addEventListener('input',render);
-  paymentReady?.addEventListener('change',render);
-  manager?.addEventListener('change',render);
+  render();
+  if(requestedTripId && trips.some(trip=>trip.dataset.tripId===requestedTripId)) saveState();
+  search.addEventListener('input',()=>{render();saveState();});
+  paymentReady?.addEventListener('change',()=>{render();saveState();});
+  manager?.addEventListener('change',()=>{render();saveState();});
   filters.forEach(button=>button.addEventListener('click',()=>{
     filter=button.dataset.closingFilter;
     filters.forEach(item=>{const active=item===button;item.classList.toggle('is-active',active);item.setAttribute('aria-pressed',String(active));});
     render();
+    saveState();
   }));
   page.addEventListener('toggle',event=>{
     const opened=event.target;
-    if (!opened.matches?.('[data-closing-trip][open]')) return;
-    trips.forEach(item=>{if(item!==opened)item.open=false;});
+    if (!opened.matches?.('[data-closing-trip]')) return;
+    if(opened.open) trips.forEach(item=>{if(item!==opened)item.open=false;});
+    saveState();
   },true);
   page.addEventListener('change',event=>{
     const input=event.target;

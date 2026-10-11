@@ -19,7 +19,7 @@ const trip=()=>`<details data-closing-trip data-trip-id="7" data-business-id="32
     </div>
   </div>
 </details>`;
-const pageHtml=success=>`<!doctype html><html><body><div style="height:800px"></div><div class="closing-page">
+const pageHtml=success=>`<!doctype html><html><body><div style="height:800px"></div><div class="closing-page" data-closing-state-key="planex:trip-closing:v1:fixture-user">
   <input data-closing-search><button data-closing-filter="all"></button><button data-closing-filter="open"></button><button data-closing-filter="review"></button>
   <select data-closing-payment-ready><option value="all">Все</option><option value="yes">Да</option><option value="no">Нет</option></select>
   <select data-closing-manager><option value="">Не выбран</option><option value="71">Анна</option><option value="72">Борис</option><option value="73">Без рейсов</option></select>
@@ -78,6 +78,30 @@ try {
   assert.equal(await page.locator('[data-closing-trip]:visible').count(),0,'user without trips gives an empty result');
   await page.selectOption('[data-closing-manager]','');
   await page.selectOption('[data-closing-payment-ready]','all');
+  await page.locator('[data-closing-search]').fill('310');
+  await page.locator('[data-closing-filter="review"]').click();
+  await page.selectOption('[data-closing-payment-ready]','yes');
+  await page.selectOption('[data-closing-manager]','72');
+  await page.locator('[data-trip-id="8"] summary').click();
+  await page.waitForFunction(()=>JSON.parse(localStorage.getItem('planex:trip-closing:v1:fixture-user')).openTripId==='8');
+  await page.reload();
+  await page.addScriptTag({path:path.join(root,'public/assets/js/waste-trip-closing.js')});
+  assert.equal(await page.locator('[data-closing-search]').inputValue(),'310','search survives page reload');
+  assert.equal(await page.locator('[data-closing-filter="review"]').getAttribute('aria-pressed'),'true','state filter survives page reload');
+  assert.equal(await page.locator('[data-closing-payment-ready]').inputValue(),'yes','payment filter survives page reload');
+  assert.equal(await page.locator('[data-closing-manager]').inputValue(),'72','manager filter survives page reload');
+  assert.equal(await page.locator('[data-trip-id="8"]').getAttribute('open'),'','expanded trip survives page reload');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'restored filters are applied');
+  await page.goto(`${url}?trip_id=7`);
+  await page.addScriptTag({path:path.join(root,'public/assets/js/waste-trip-closing.js')});
+  assert.equal(await page.locator('[data-trip-id="7"]').getAttribute('open'),'','explicit trip link overrides saved expansion');
+  await page.goto(url);
+  await page.addScriptTag({path:path.join(root,'public/assets/js/waste-trip-closing.js')});
+  assert.equal(await page.locator('[data-trip-id="7"]').getAttribute('open'),'','explicitly opened trip remains expanded on return');
+  await page.locator('[data-closing-search]').fill('');
+  await page.locator('[data-closing-filter="all"]').click();
+  await page.selectOption('[data-closing-payment-ready]','all');
+  await page.selectOption('[data-closing-manager]','');
   await page.evaluate(()=>window.scrollTo(0,750));
   const before=await page.evaluate(()=>window.scrollY);
   await page.locator('[name="document_files[]"]').setInputFiles([
