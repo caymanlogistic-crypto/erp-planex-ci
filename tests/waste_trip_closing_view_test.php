@@ -9,7 +9,7 @@ require_once BASE_PATH.'/app/Support/http_runtime.php';
 $trip=static function(int $id,array $documents):array {
     return [
         'id'=>$id,'business_id'=>$id,'actual_end_date'=>'2026-09-30',
-        'carrier_id'=>42,'carrier_name'=>'Перевозчик','manager_name'=>'Менеджер','legal_entity_code'=>'planex',
+        'carrier_id'=>42,'carrier_name'=>'Перевозчик','manager_name'=>'Менеджер','manager_membership_id'=>71,'legal_entity_code'=>'planex',
         'recipient_email'=>'info@plan-ex.ru','review_state'=>'work','review_version'=>0,
         'documents'=>$documents,'paid_bank_transactions'=>[],'request_count'=>3,'processed_count'=>2,
         'tn_issues'=>['Заявка №123: нет скана ТН'],
@@ -39,6 +39,7 @@ $schemaReady=true;
 $canCreateInvoice=true;
 $contractors=[['id'=>42,'name'=>'Перевозчик','inn'=>'1234567890']];
 $clients=[];
+$responsibleUsers=[['membership_id'=>71,'full_name'=>'Менеджер','login'=>'manager'],['membership_id'=>72,'full_name'=>'Без рейсов','login'=>'idle']];
 unset($_GET['trip_id']);
 ob_start();
 require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
@@ -48,7 +49,9 @@ $assert=static function(bool $condition,string $message):void {if(!$condition)th
 $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must show common issues block');
 $assert(str_contains($html,'data-closing-payment-ready')&&str_contains($html,'data-closing-manager'),'payment and manager filters must be rendered');
 $assert(str_contains($html,'data-payment-ready="no"')&&str_contains($html,'data-payment-ready="yes"'),'payment readiness must match document and TN issues');
-$assert(str_contains($html,'<option value="Менеджер">Менеджер</option>'),'manager must be selectable');
+$assert(str_contains($html,'<option value="71">Менеджер</option>'),'manager must be selectable by membership ID');
+$assert(str_contains($html,'<option value="72">Без рейсов</option>'),'active user without trips must remain selectable');
+$assert(str_contains($html,'data-manager-id="71"'),'trip must expose its responsible membership ID');
 $assert(str_contains($html,'<b>Документы:</b> Не получены: Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист'),'missing documents must be named');
 $assert(str_contains($html,'<b>Проверка ТН:</b> Заявка №123: нет скана ТН'),'TN error must identify request');
 $assert(str_contains($html,'Нет ошибок, счет можно оплачивать'),'clean trip must show payment readiness');
