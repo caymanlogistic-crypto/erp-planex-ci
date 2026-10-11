@@ -506,9 +506,9 @@
 .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-select[name="sort"] {width:180px}
 .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-search {width:230px}
 @media(max-width:1100px) {
-  .table-card[data-erp-grid] > .waste-trip-toolbar {flex-wrap:wrap}
-  .table-card[data-erp-grid] > .waste-trip-toolbar .waste-trip-filter--integrated {flex:1 1 100%;width:100%}
-  .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-right {flex-wrap:wrap}
+  .table-card[data-erp-grid] > .waste-trip-toolbar {flex-wrap:wrap;align-items:stretch}
+  .table-card[data-erp-grid] > .waste-trip-toolbar .waste-trip-filter--integrated {flex:1 1 100%;width:100%;max-width:100%}
+  .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-right {flex-wrap:wrap;width:100%;max-width:100%}
 }
 @media(max-width:700px) {
   .table-card[data-erp-grid] > .waste-trip-toolbar {flex-direction:column;align-items:stretch}
