@@ -29,7 +29,7 @@ $trips=[
         ['id'=>16,'slot_code'=>'extra','custom_title'=>'Реестр','original_name'=>'registry-1.pdf'],
         ['id'=>17,'slot_code'=>'extra','custom_title'=>'Реестр','original_name'=>'registry-2.pdf'],
     ]),['tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
-        ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','number'=>'','date'=>'','documents'=>[]],
+        ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','number'=>'','date'=>'','documents'=>[['id'=>89,'original_name'=>'tractor-card.pdf']]],
         ['id'=>10,'label'=>'Полуприцеп','brand'=>'ТОНАР','plate'=>'С333СС','number'=>'42','date'=>'2026-09-20','documents'=>[['id'=>88,'original_name'=>'card.pdf']]],
     ]]]),
 ];
@@ -53,7 +53,7 @@ $assert(str_contains($html,'<option value="71">Менеджер</option>'),'mana
 $assert(str_contains($html,'<option value="72">Без рейсов</option>'),'active user without trips must remain selectable');
 $assert(str_contains($html,'data-manager-id="71"'),'trip must expose its responsible membership ID');
 $assert(str_contains($html,'data-business-id="1"'),'trip must expose its exact business number for list search');
-$assert(str_contains($html,'<b>Нет документов:</b> Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист'),'missing documents must be named');
+$assert(str_contains($html,'<b>Нет документов:</b> Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист, Диагностическая карта: Транспортная единица А111АА'),'missing documents must include the vehicle card');
 $assert(str_contains($html,'<b>ТН:</b> нет скана ТН · заявок: 2'),'same TN problem must show one compact summary');
 $assert(str_contains($html,'<b>ТН:</b> нет подписи водителя · заявок: 1'),'different TN problem must stay separate');
 $assert(substr_count($html,'<b>ТН:</b> нет скана ТН')===1,'repeated TN reason must be shown once');
@@ -71,14 +71,17 @@ $assert(str_contains($html,'name="requirement_code" value="application"'),'combi
 $assert(str_contains($html,'name="requirement_code" value="upd"'),'combined act slot must keep finance code');
 $assert(str_contains($html,'class="closing-remove-form"'),'uploaded document must offer removal');
 $assert(str_contains($html,'signed.pdf')&&str_contains($html,'signed-page-2.pdf'),'one document category must display every file');
-$assert(str_contains($html,'4 из 5 получено')===false && str_contains($html,'5 из 5 получено'),'progress counts categories and grouped extras');
+$assert(str_contains($html,'0 из 5 получено')&&str_contains($html,'7 из 7 получено'),'progress counts required cards for every vehicle unit and grouped extras');
 $assert(substr_count($html,'<strong>Реестр</strong>')===1,'extra files with the same title must form one document');
 $assert(substr_count($html,'name="document_files[]"')>=5,'document uploads must accept multiple files');
 $assert(str_contains($html,'Тягач · МАЗ В222ВВ')&&str_contains($html,'Полуприцеп · ТОНАР С333СС'),'coupling cards must target separate units');
 $assert(str_contains($html,'name="vehicle_unit_id" value="9"')&&str_contains($html,'name="vehicle_unit_id" value="10"'),'each card form must bind its own vehicle unit');
 $assert(!str_contains($html,'name="card_number"')&&!str_contains($html,'name="card_date"'),'diagnostic card form must ask for files only');
 $assert(str_contains($html,'name="card_files[]"')&&str_contains($html,'name="card_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx" multiple required'),'diagnostic card must accept one or several files');
-$assert(str_contains($html,'Тип комплекта: Одиночка'),'single vehicle must be labelled');
+$assert(substr_count($html,'<strong>Диагностическая карта транспорта</strong>')===3,'every linked vehicle unit must have a required document row');
+$assert(str_contains($html,'class="closing-upload-form closing-card-form"'),'diagnostic cards must use the same automatic upload form as other documents');
+$assert(!str_contains($html,'Сохранить карту')&&!str_contains($html,'class="closing-transport"'),'separate card section and save button must be absent');
+$assert(strpos($html,'<strong>Путевой лист</strong>')<strpos($html,'<strong>Диагностическая карта транспорта</strong>') && strpos($html,'<strong>Диагностическая карта транспорта</strong>')<strpos($html,'<strong>Реестр</strong>'),'required cards must appear before optional documents');
 $assert(str_contains($html,'data-closing-action-result="success" hidden'),'successful action marker must remain available to inline update');
 $assert(!str_contains($html,'class="notice success"'),'upload success banner must not be visible');
 $assert(str_contains($html,'Отправка комплекта на почту временно отключена.'),'email pause must be visible');

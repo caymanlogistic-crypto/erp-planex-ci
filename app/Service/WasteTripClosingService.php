@@ -349,7 +349,7 @@ final class WasteTripClosingService
         }
     }
 
-    private static function assertEditable(PDO $pdo, int $tripId): void
+    public static function assertEditable(PDO $pdo, int $tripId): void
     {
         $stmt=$pdo->prepare('SELECT state FROM waste_trip_closing_reviews WHERE waste_trip_id=? FOR UPDATE');
         $stmt->execute([$tripId]);

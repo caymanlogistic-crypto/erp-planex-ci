@@ -6,13 +6,16 @@ import {fileURLToPath} from 'node:url';
 
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-let documentPresent=false,uploadedNames=[];
-const trip=()=>`<details data-closing-trip data-trip-id="7" data-business-id="322" data-state="${documentPresent?'partial':'new'}" data-payment-ready="no" data-manager-id="71" data-search="322 перевозчик николаенко" open>
+let documentPresent=false,cardPresent=false,uploadedNames=[];
+const trip=()=>`<details data-closing-trip data-trip-id="7" data-business-id="322" data-state="${documentPresent?'partial':'new'}" data-payment-ready="${cardPresent?'yes':'no'}" data-manager-id="71" data-search="322 перевозчик николаенко" open>
   <summary>Рейс #322 ${documentPresent?'<span class="closing-missing">НЕ ХВАТАЕТ ДОКУМЕНТОВ</span>':''}</summary>
   <div class="closing-trip-body"><p class="closing-upload-feedback" role="alert" hidden></p>
     <div class="closing-doc-row"><span class="closing-file-name">${documentPresent?uploadedNames.join(', '):'Файл не получен'}</span>
       <form class="closing-upload-form" action="/documents" method="post"><input type="file" name="document_files[]" multiple required></form>
       ${documentPresent?'<form class="closing-remove-form" action="/remove" method="post"><button type="submit">Удалить</button></form>':''}
+    </div>
+    <div class="closing-doc-row"><strong>Диагностическая карта транспорта</strong><span class="card-file-name">${cardPresent?'card.pdf':'Файл не получен'}</span>
+      <form class="closing-upload-form closing-card-form" action="/card" method="post"><input type="hidden" name="vehicle_unit_id" value="9"><input type="file" name="card_files[]" multiple required></form>
     </div>
   </div>
 </details>`;
@@ -30,9 +33,11 @@ const server=http.createServer((request,response)=>{
   request.on('data',chunk=>chunks.push(chunk));
   request.on('end',()=>{
     if(request.method==='POST') {
-      documentPresent=request.url==='/documents';
-      if(documentPresent) uploadedNames=[...Buffer.concat(chunks).toString('utf8').matchAll(/filename="([^"]+)"/g)].map(match=>match[1]);
-      else uploadedNames=[];
+      if(request.url==='/documents') {
+        documentPresent=true;
+        uploadedNames=[...Buffer.concat(chunks).toString('utf8').matchAll(/filename="([^"]+)"/g)].map(match=>match[1]);
+      } else if(request.url==='/card') cardPresent=true;
+      else {documentPresent=false;uploadedNames=[];}
     }
     response.setHeader('Content-Type','text/html; charset=utf-8');
     response.end(pageHtml(request.method==='POST'));
@@ -75,7 +80,7 @@ try {
   await page.selectOption('[data-closing-payment-ready]','all');
   await page.evaluate(()=>window.scrollTo(0,750));
   const before=await page.evaluate(()=>window.scrollY);
-  await page.locator('input[type=file]').setInputFiles([
+  await page.locator('[name="document_files[]"]').setInputFiles([
     {name:'file.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4')},
     {name:'second.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4')},
   ]);
@@ -89,6 +94,13 @@ try {
   assert.equal(await page.evaluate(()=>window.scrollY),before,'removal keeps scroll position');
   assert.equal(page.url(),url,'removal does not navigate');
   assert.equal(await page.locator('.closing-missing').count(),0,'empty trip has no missing-documents warning');
+  await page.selectOption('[data-closing-payment-ready]','no');
+  await page.locator('[name="card_files[]"]').setInputFiles({name:'card.pdf',mimeType:'application/pdf',buffer:Buffer.from('%PDF-1.4')});
+  await page.locator('[data-closing-count]').getByText('0').waitFor();
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),0,'upload reapplies the active payment filter');
+  await page.selectOption('[data-closing-payment-ready]','yes');
+  assert.equal(await page.locator('.card-file-name').getByText('card.pdf').count(),1);
+  assert.equal(page.url(),url,'diagnostic card upload uses the same inline flow');
   assert.deepEqual(errors,[]);
   await page.close();
   console.log('waste_trip_closing_ui_browser: PASS');
