@@ -501,9 +501,15 @@
 .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-search {box-sizing:border-box;height:32px;min-height:32px;border-width:1px;border-style:solid;border-radius:4px}
 .table-card[data-erp-grid] > .waste-trip-toolbar .waste-trip-filter--integrated .btn {box-sizing:border-box;height:32px;min-height:32px;border-radius:4px}
 .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-select[name="company"] {width:150px}
+.table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-select[name="manager"] {width:170px}
 .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-select[name="status"] {width:150px}
 .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-select[name="sort"] {width:180px}
 .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-search {width:230px}
+@media(max-width:1100px) {
+  .table-card[data-erp-grid] > .waste-trip-toolbar {flex-wrap:wrap;align-items:stretch}
+  .table-card[data-erp-grid] > .waste-trip-toolbar .waste-trip-filter--integrated {flex:1 1 100%;width:100%;max-width:100%}
+  .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-right {flex-wrap:wrap;width:100%;max-width:100%}
+}
 @media(max-width:700px) {
   .table-card[data-erp-grid] > .waste-trip-toolbar {flex-direction:column;align-items:stretch}
   .table-card[data-erp-grid] > .waste-trip-toolbar .waste-trip-filter--integrated {width:100%}
@@ -533,6 +539,7 @@
 /* Design Lab: route reference styling for open/closed native-backed controls. */
 .lab-reference-select {position:relative;display:inline-block;flex:none;vertical-align:middle;width:180px;min-width:0;z-index:25}
 .lab-reference-select[data-name="company"],.lab-reference-select[data-name="status"] {width:150px}
+.lab-reference-select[data-name="manager"] {width:170px}
 .lab-reference-select.is-ready > select {display:none}
 .lab-reference-trigger {box-sizing:border-box;display:block;width:100%;height:32px;min-height:32px;padding:0 24px 0 8px;border:1px solid #d7d1c7;border-radius:4px;background:#f0ede7 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%23827b70' stroke-width='1.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") calc(100% - 7px) center / 10px 6px no-repeat;color:#4d4942;font:500 12px var(--font);text-align:left;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default;box-shadow:none}
 .lab-reference-trigger:hover {background-color:#eae3d8;border-color:#c9bdae}
@@ -585,7 +592,7 @@
   height:38px;
   margin:12px 0 6px;
   padding:0 12px;
-  border-bottom:1px solid #bfb8ae;
+  border-bottom:0;
   background:transparent;
   overflow-x:auto;
   overflow-y:hidden;
@@ -635,7 +642,8 @@
 @media(max-width:700px) {
   .table-card[data-erp-grid] > .waste-trip-toolbar .waste-trip-filter--integrated .toolbar-right .lab-reference-select[data-name="sort"] {grid-column:auto}
   .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-right .lab-reference-select[data-name="company"],
+  .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-right .lab-reference-select[data-name="manager"],
   .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-right .toolbar-sort {grid-column:1/-1}
-  .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-sort {display:grid;grid-template-columns:1fr;width:100%;gap:6px}
+  .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-sort {display:block;width:100%}
   .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-sort .lab-reference-select {width:100%}
 }

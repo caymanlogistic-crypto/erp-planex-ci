@@ -43,11 +43,14 @@ try {
       const filter = document.querySelector('[data-waste-filter]');
       const search = filter.querySelector('[name=q]').getBoundingClientRect();
       const sort = filter.querySelector('.lab-reference-select[data-name=sort] .lab-reference-trigger').getBoundingClientRect();
+      const manager = filter.querySelector('.lab-reference-select[data-name=manager] .lab-reference-trigger').getBoundingClientRect();
       return {
         scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         tableScroll: document.querySelector('.waste-table-scroll').scrollWidth - document.querySelector('.waste-table-scroll').clientWidth,
         money,
         searchRightOfSort: search.left >= sort.left,
+        managerBeforeSort: manager.top < sort.top || (Math.abs(manager.top - sort.top) < 1 && manager.left < sort.left),
+        managerFits: manager.right <= document.documentElement.clientWidth + 1,
         statusIndex: first.cells[2].classList.contains('waste-status'),
         rowCount: table.tBodies[0].rows.length,
       };
@@ -56,6 +59,12 @@ try {
     assert.equal(metrics.statusIndex, true, `${width}: status column`);
     assert.equal(metrics.rowCount, 5, `${width}: real rows preserved`);
     assert.equal(metrics.searchRightOfSort, true, `${width}: search follows sort`);
+    assert.equal(metrics.managerBeforeSort, true, `${width}: manager filter precedes sort`);
+    assert.equal(metrics.managerFits, true, `${width}: manager filter stays inside viewport ${JSON.stringify(metrics)}`);
+    if (width === 390 && process.env.PLANEX_VISUAL_EVIDENCE_DIR) {
+      fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR, 'departures-interactive-390.png') });
+    }
     if (width > 640) assert.ok(Math.max(...metrics.money) - Math.min(...metrics.money) <= 1, `${width}: equal financial widths ${JSON.stringify(metrics.money)}`);
     if (width > 640) {
       const amountFits = await page.evaluate(() => {
@@ -72,6 +81,20 @@ try {
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   assert.equal(await page.locator('[data-waste-status-tabs] button').count(), 5, 'five flat status choices');
   assert.equal(await page.locator('[data-waste-filter] select[name=status]').isHidden(), true, 'native status value remains in GET form');
+  await page.evaluate(() => {
+    const form = document.querySelector('[data-waste-filter]');
+    form.querySelector('[name=company]').value = 'mg_logistic';
+    form.querySelector('[name=status]').value = 'planned_route';
+    form.querySelector('[name=q]').value = 'First';
+  });
+  await page.locator('.lab-reference-select[data-name=manager] .lab-reference-trigger').click();
+  await page.locator('.lab-reference-select[data-name=manager] .lab-reference-option[data-value="1"]').click();
+  await page.waitForURL(/manager=1/);
+  const combinedParams = new URL(page.url()).searchParams;
+  assert.equal(combinedParams.get('company'), 'mg_logistic', 'manager choice retains company');
+  assert.equal(combinedParams.get('status'), 'planned_route', 'manager choice retains status');
+  assert.equal(combinedParams.get('q'), 'First', 'manager choice retains search');
+  await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.locator('[data-waste-status-tabs] button[data-status=completed]').click();
   await page.waitForURL(/status=completed/);
   assert.equal(new URL(page.url()).searchParams.get('status'), 'completed', 'status filter submits GET automatically');
