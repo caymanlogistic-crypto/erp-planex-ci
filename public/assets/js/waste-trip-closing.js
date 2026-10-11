@@ -3,6 +3,8 @@
   if (!page) return;
   const trips=[...page.querySelectorAll('[data-closing-trip]')];
   const search=page.querySelector('[data-closing-search]');
+  const paymentReady=page.querySelector('[data-closing-payment-ready]');
+  const manager=page.querySelector('[data-closing-manager]');
   const filters=[...page.querySelectorAll('[data-closing-filter]')];
   const count=page.querySelector('[data-closing-count]');
   const empty=page.querySelector('[data-closing-empty]');
@@ -13,13 +15,17 @@
     for (const trip of trips) {
       const state=trip.dataset.state;
       const matches=filter==='all'||(filter==='review'?state==='review':state==='new'||state==='partial');
-      trip.hidden=!(matches&&trip.dataset.search.includes(query));
+      const matchesPayment=!paymentReady||paymentReady.value==='all'||trip.dataset.paymentReady===paymentReady.value;
+      const matchesManager=!manager||!manager.value||trip.dataset.manager===manager.value;
+      trip.hidden=!(matches&&matchesPayment&&matchesManager&&trip.dataset.search.includes(query));
       if (!trip.hidden) visible++;
     }
     count.textContent=String(visible);
     empty.hidden=visible>0;
   }
   search.addEventListener('input',render);
+  paymentReady?.addEventListener('change',render);
+  manager?.addEventListener('change',render);
   filters.forEach(button=>button.addEventListener('click',()=>{
     filter=button.dataset.closingFilter;
     filters.forEach(item=>{const active=item===button;item.classList.toggle('is-active',active);item.setAttribute('aria-pressed',String(active));});
@@ -63,6 +69,7 @@
       const updated=[...result.querySelectorAll('[data-closing-trip]')].find(item=>item.dataset.tripId===trip.dataset.tripId);
       if (!updated) throw new Error('Не удалось обновить строку рейса. Обновите страницу.');
       trip.dataset.state=updated.dataset.state;
+      trip.dataset.paymentReady=updated.dataset.paymentReady;
       trip.replaceChildren(...updated.children);
       window.scrollTo(scrollX,scrollY);
       requestAnimationFrame(()=>window.scrollTo(scrollX,scrollY));

@@ -46,6 +46,9 @@ $html=(string)ob_get_clean();
 
 $assert=static function(bool $condition,string $message):void {if(!$condition)throw new RuntimeException($message);};
 $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must show common issues block');
+$assert(str_contains($html,'data-closing-payment-ready')&&str_contains($html,'data-closing-manager'),'payment and manager filters must be rendered');
+$assert(str_contains($html,'data-payment-ready="no"')&&str_contains($html,'data-payment-ready="yes"'),'payment readiness must match document and TN issues');
+$assert(str_contains($html,'<option value="Менеджер">Менеджер</option>'),'manager must be selectable');
 $assert(str_contains($html,'<b>Документы:</b> Не получены: Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист'),'missing documents must be named');
 $assert(str_contains($html,'<b>Проверка ТН:</b> Заявка №123: нет скана ТН'),'TN error must identify request');
 $assert(str_contains($html,'Нет ошибок, счет можно оплачивать'),'clean trip must show payment readiness');

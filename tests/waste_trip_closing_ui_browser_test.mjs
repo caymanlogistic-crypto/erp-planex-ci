@@ -7,7 +7,7 @@ import {fileURLToPath} from 'node:url';
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 let documentPresent=false,uploadedNames=[];
-const trip=()=>`<details data-closing-trip data-trip-id="7" data-state="${documentPresent?'partial':'new'}" data-search="рейс 7" open>
+const trip=()=>`<details data-closing-trip data-trip-id="7" data-state="${documentPresent?'partial':'new'}" data-payment-ready="no" data-manager="Анна" data-search="рейс 7" open>
   <summary>Рейс #7 ${documentPresent?'<span class="closing-missing">НЕ ХВАТАЕТ ДОКУМЕНТОВ</span>':''}</summary>
   <div class="closing-trip-body"><p class="closing-upload-feedback" role="alert" hidden></p>
     <div class="closing-doc-row"><span class="closing-file-name">${documentPresent?uploadedNames.join(', '):'Файл не получен'}</span>
@@ -17,8 +17,13 @@ const trip=()=>`<details data-closing-trip data-trip-id="7" data-state="${docume
   </div>
 </details>`;
 const pageHtml=success=>`<!doctype html><html><body><div style="height:800px"></div><div class="closing-page">
-  <input data-closing-search><button data-closing-filter="all"></button><span data-closing-count>1</span>
-  ${success?'<span data-closing-action-result="success" hidden></span>':''}${trip()}<p data-closing-empty hidden></p>
+  <input data-closing-search><button data-closing-filter="all"></button><button data-closing-filter="review"></button>
+  <select data-closing-payment-ready><option value="all">Все</option><option value="yes">Да</option><option value="no">Нет</option></select>
+  <select data-closing-manager><option value="">Все</option><option value="Анна">Анна</option><option value="Борис">Борис</option></select>
+  <span data-closing-count>2</span>
+  ${success?'<span data-closing-action-result="success" hidden></span>':''}${trip()}
+  <details data-closing-trip data-trip-id="8" data-state="review" data-payment-ready="yes" data-manager="Борис" data-search="рейс 8"><summary>Рейс #8</summary></details>
+  <p data-closing-empty hidden></p>
 </div><div style="height:900px"></div></body></html>`;
 const server=http.createServer((request,response)=>{
   const chunks=[];
@@ -41,6 +46,14 @@ try {
   const url=`http://127.0.0.1:${server.address().port}/`;
   await page.goto(url);
   await page.addScriptTag({path:path.join(root,'public/assets/js/waste-trip-closing.js')});
+  await page.selectOption('[data-closing-payment-ready]','yes');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'payment readiness narrows trips');
+  await page.selectOption('[data-closing-manager]','Анна');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),0,'manager combines with payment readiness');
+  await page.selectOption('[data-closing-payment-ready]','no');
+  assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'manager and payment readiness combine');
+  await page.selectOption('[data-closing-manager]','');
+  await page.selectOption('[data-closing-payment-ready]','all');
   await page.evaluate(()=>window.scrollTo(0,750));
   const before=await page.evaluate(()=>window.scrollY);
   await page.locator('input[type=file]').setInputFiles([
