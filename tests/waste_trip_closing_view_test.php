@@ -72,6 +72,8 @@ $assert(substr_count($html,'<strong>Реестр</strong>')===1,'extra files wit
 $assert(substr_count($html,'name="document_files[]"')>=5,'document uploads must accept multiple files');
 $assert(str_contains($html,'Тягач · МАЗ В222ВВ')&&str_contains($html,'Полуприцеп · ТОНАР С333СС'),'coupling cards must target separate units');
 $assert(str_contains($html,'name="vehicle_unit_id" value="9"')&&str_contains($html,'name="vehicle_unit_id" value="10"'),'each card form must bind its own vehicle unit');
+$assert(!str_contains($html,'name="card_number"')&&!str_contains($html,'name="card_date"'),'diagnostic card form must ask for files only');
+$assert(str_contains($html,'name="card_files[]"')&&str_contains($html,'name="card_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx" multiple required'),'diagnostic card must accept one or several files');
 $assert(str_contains($html,'Тип комплекта: Одиночка'),'single vehicle must be labelled');
 $assert(str_contains($html,'data-closing-action-result="success" hidden'),'successful action marker must remain available to inline update');
 $assert(!str_contains($html,'class="notice success"'),'upload success banner must not be visible');

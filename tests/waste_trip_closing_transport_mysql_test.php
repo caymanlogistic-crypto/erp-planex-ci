@@ -41,6 +41,9 @@ try {
         || count($result[2]['units'][1]['documents'])!==2 || $result[2]['units'][0]['documents']!==[]) {
         throw new RuntimeException('Coupling cards must belong to their own units and allow several files');
     }
+    if (array_key_exists('number',$result[2]['units'][1]) || array_key_exists('date',$result[2]['units'][1])) {
+        throw new RuntimeException('Stored card number and date must not be exposed in closing documents');
+    }
     if (count($result[3]['units'])!==2 || $result[3]['units'][1]['label']!=='Прицеп') {
         throw new RuntimeException('Road train must expose truck and trailer separately');
     }
