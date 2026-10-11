@@ -25,7 +25,7 @@ final class WasteTripClosingController
     public function index(): void
     {
         header('Cache-Control: no-store');
-        $trips=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
+        $trips=[];$error=null;$schemaReady=false;$paymentQueueReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
         $success=$_SESSION['waste_trip_closing_success']??null;
         $flashError=$_SESSION['waste_trip_closing_error']??null;
         unset($_SESSION['waste_trip_closing_success'],$_SESSION['waste_trip_closing_error']);
@@ -35,6 +35,7 @@ final class WasteTripClosingController
             $responsibleUsers=EntityResponsibilityService::eligibleRecipients($this->db->connection(),$pdo,(int)$company['id']);
             $schemaReady=WasteTripClosingService::ready($pdo);
             if ($schemaReady) {
+                $paymentQueueReady=WasteTripClosingService::paymentQueueReady($pdo);
                 $trips=WasteTripClosingService::trips($pdo);
                 $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
                 foreach ($trips as &$trip) $trip['transport']=$transport[(int)$trip['id']]??null;
@@ -217,6 +218,21 @@ final class WasteTripClosingController
         $this->back((int)$tripId);
     }
 
+    public function paymentStage(string $tripId): void
+    {
+        verifyCsrfRequest();
+        $action=(string)($_POST['action']??'');
+        $stage=null;
+        try {
+            [, $pdo]=$this->context();
+            if (!WasteTripClosingService::paymentQueueReady($pdo)) throw new DomainException('Передача на оплату ожидает обновление схемы.');
+            WasteTripClosingService::changePaymentStage($pdo,(int)$tripId,(int)($_POST['version']??-1),$action);
+            $_SESSION['waste_trip_closing_success']=$action==='queue'?'Рейс передан на оплату.':'Рейс возвращён на доработку.';
+            $stage=$action==='queue'?'payment':'all';
+        } catch (Throwable $exception) {$this->fail($exception,'Не удалось изменить этап рейса.');}
+        $this->back((int)$tripId,$stage);
+    }
+
     public function sharedPackage(string $companyId,string $token): void
     {
         try {
@@ -266,5 +282,5 @@ final class WasteTripClosingController
         }
         return $files;
     }
-    private function back(int $tripId): never {header('Location: '.app_url('/company/trips/closing-documents?trip_id='.$tripId));exit;}
+    private function back(int $tripId, ?string $stage=null): never {header('Location: '.app_url('/company/trips/closing-documents?trip_id='.$tripId.($stage?'&stage='.$stage:'')));exit;}
 }

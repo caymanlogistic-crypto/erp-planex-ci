@@ -4,6 +4,7 @@ $canCreateInvoice=$canCreateInvoice??false;
 $contractors=$contractors??[];
 $clients=$clients??[];
 $responsibleUsers=$responsibleUsers??[];
+$paymentQueueReady=$paymentQueueReady??false;
 $all=count($trips);
 $selectedTrip=(int)($_GET['trip_id']??0);
 $executorLabel=static fn(string $code):string=>match($code){'planex'=>'ООО «Планэкс»','mg_logistic'=>'ООО «МГ Логистик»',default=>'Не определён'};
@@ -25,11 +26,12 @@ $progressColor=static function(int $percent):string {
     <button type="button" class="closing-filter is-active" data-closing-filter="all" aria-pressed="true">Все рейсы</button>
     <button type="button" class="closing-filter" data-closing-filter="open" aria-pressed="false">Не хватает документов</button>
     <button type="button" class="closing-filter" data-closing-filter="review" aria-pressed="false">На проверке</button>
+    <?php if($paymentQueueReady):?><button type="button" class="closing-filter" data-closing-filter="payment" aria-pressed="false">На оплату</button><?php endif;?>
   </div><div class="closing-extra-filters">
     <label class="closing-filter-field"><span class="sr-only">Готов к оплате</span><select data-closing-payment-ready><option value="all">Все рейсы</option><option value="yes">Да</option><option value="no">Нет</option></select></label>
     <label class="closing-filter-field"><span class="sr-only">Ответственный менеджер</span><select data-closing-manager><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label>
   </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику; несколько номеров рейсов через запятую</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейсы: 322, 310"></label></div>
-  <section class="closing-list panel" aria-label="Завершённые рейсы"><div class="closing-list-head">ЗАВЕРШЁННЫЕ РЕЙСЫ <span data-closing-count><?= $all ?></span></div>
+  <section class="closing-list panel" aria-label="Завершённые рейсы"><div class="closing-list-head"><span data-closing-list-label>ЗАВЕРШЁННЫЕ РЕЙСЫ</span> <span data-closing-count><?= $all ?></span></div>
     <?php foreach($trips as $trip):
         $docs=$trip['documents'];$bySlot=[];$extras=[];
         foreach($docs as $document){if($document['slot_code']==='extra')$extras[(string)$document['custom_title']][]=$document;else $bySlot[$document['slot_code']][]=$document;}
@@ -42,7 +44,9 @@ $progressColor=static function(int $percent):string {
             else $missing[]='Диагностическая карта: '.trim((string)$unit['label'].' '.(string)$unit['plate']);
         }
         $count=count($bySlot)+count($extras)+$cardsPresent;$total=4+count($extras)+$cardRequired;$percent=$total?min(100,(int)round($count/$total*100)):0;
-        $state=$trip['review_state']==='review'?'review':($count===0?'new':($missing?'partial':'ready'));
+        $paymentReady=\App\Service\WasteTripClosingService::paymentReady($trip,$transport);
+        $onPayment=$trip['review_state']==='payment';
+        $state=$onPayment?'payment':($trip['review_state']==='review'?'review':($count===0?'new':($missing?'partial':'ready')));
         $paid=$trip['paid_bank_transactions'];
         $requestCount=(int)($trip['request_count']??0);$processedCount=(int)($trip['processed_count']??0);
         $requestPercent=$requestCount>0?min(100,(int)round($processedCount/$requestCount*100)):0;
@@ -57,9 +61,9 @@ $progressColor=static function(int $percent):string {
         $invoiceStatus=match($invoiceSummary['status']){'paid'=>'Оплачен','waiting'=>'Ожидает оплаты',default=>'Не введён'};
         $search=mb_strtolower($trip['business_id'].' '.$trip['carrier_name'].' '.$trip['manager_name'].' '.$executorLabel((string)$trip['legal_entity_code']),'UTF-8');
     ?>
-    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>" data-state="<?= e($state) ?>" data-payment-ready="<?= !$missing&&!$tnIssues?'yes':'no' ?>" data-manager-id="<?= (int)($trip['manager_membership_id']??0) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
+    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>" data-state="<?= e($state) ?>" data-payment-ready="<?= $paymentReady?'yes':'no' ?>" data-manager-id="<?= (int)($trip['manager_membership_id']??0) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
       <summary class="closing-trip-summary"><span class="closing-chevron" aria-hidden="true"></span>
-        <span class="closing-identity"><b>Рейс #<?= e((string)$trip['business_id']) ?></b><small>Завершён <?= e($trip['actual_end_date']?date('d.m.Y',strtotime((string)$trip['actual_end_date'])):'—') ?></small></span>
+        <span class="closing-identity"><b>Рейс #<?= e((string)$trip['business_id']) ?></b><small>Завершён <?= e($trip['actual_end_date']?date('d.m.Y',strtotime((string)$trip['actual_end_date'])):'—') ?></small><?php if($onPayment):?><small class="closing-payment-badge">На оплату</small><?php endif;?></span>
         <span class="closing-carrier"><small>ПЕРЕВОЗЧИК</small><b><?= e((string)$trip['carrier_name']) ?></b><span>Менеджер: <?= e((string)$trip['manager_name']) ?></span></span>
         <span class="closing-executor"><small>ИСПОЛНИТЕЛЬ</small><b><?= e($executorLabel((string)$trip['legal_entity_code'])) ?></b><span><?= e((string)$trip['recipient_email']) ?></span></span>
         <span class="closing-invoice-status" data-status="<?= e($invoiceSummary['status']) ?>"><small>СЧЕТА</small><b><?= e($invoiceStatus) ?></b><span class="closing-invoice-detail"><?= e((string)$invoiceSummary['detail']) ?></span></span>
@@ -72,6 +76,8 @@ $progressColor=static function(int $percent):string {
         <?php if($tnIssueGroups):?><div class="closing-tn-details"><strong>Ошибки проверки ТН</strong><?php foreach($tnIssueGroups as $reason=>$requestIds):?><p><?= e((string)$reason) ?><?php if($requestIds):?> · <?= count($requestIds)===1?'заявка':'заявки' ?> №<?= e(implode(', №',$requestIds)) ?><?php endif;?></p><?php endforeach;?></div><?php endif;?>
         <?php if($paid):?><div class="closing-finance-handoff"><strong>Оплата отражена · <?= count($paid) ?> банковских операций</strong><span>Собранные файлы связаны с платежами в «Финансы → Закрывающие документы». Договор/заявка и акт/УПД учитываются в обязательных категориях, остальные доступны как приложения.</span></div><?php endif;?>
         <p class="closing-upload-feedback" role="alert" hidden></p>
+        <?php if($onPayment):?><p class="closing-payment-note">Рейс передан на оплату. Чтобы изменить комплект документов, верните его на доработку.</p><?php endif;?>
+        <fieldset class="closing-edit-fieldset"<?= $onPayment?' disabled':'' ?>>
         <div class="closing-doc-table">
           <?php foreach(\App\Service\WasteTripClosingService::SLOTS as $slot=>$label):$files=$bySlot[$slot]??[];
             $defaultCode=$slot==='contract'?'application':($slot==='act'?'upd':$slot);
@@ -96,7 +102,11 @@ $progressColor=static function(int $percent):string {
           <label class="btn btn-secondary closing-upload">Файлы<input type="file" name="document_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx,.xls,.xlsx" multiple required></label>
           <button type="submit" class="btn btn-secondary">+ Добавить другой документ</button>
         </form>
-        <div class="closing-trip-actions"><?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><button type="button" class="btn btn-primary closing-submit" data-review-open data-trip-id="<?= (int)$trip['id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>" data-recipient="<?= e((string)$trip['recipient_email']) ?>" data-version="<?= (int)$trip['review_version'] ?>" data-missing="<?= e(implode(', ',$missing)) ?>"<?= $trip['review_state']==='sending'||$trip['review_state']==='unknown'?' disabled':'' ?>><?= $trip['review_state']==='review'?'Передать повторно':'Передать на проверку' ?></button><?php else:?><button type="button" class="btn btn-primary closing-submit" disabled>Передача на проверку временно отключена</button><?php endif;?></div>
+        </fieldset>
+        <div class="closing-trip-actions">
+          <?php if($paymentQueueReady):?><form method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/payment-stage')) ?>"><?= csrfField() ?><input type="hidden" name="version" value="<?= (int)$trip['review_version'] ?>"><input type="hidden" name="action" value="<?= $onPayment?'rework':'queue' ?>"><button type="submit" class="btn <?= $onPayment?'btn-secondary':'btn-primary' ?> closing-submit"<?= !$onPayment&&!$paymentReady?' disabled title="Добавьте обязательные документы и устраните ошибки ТН"':'' ?>><?= $onPayment?'Вернуть на доработку':'Готово к оплате' ?></button></form><?php endif;?>
+          <?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><button type="button" class="btn btn-secondary closing-submit" data-review-open data-trip-id="<?= (int)$trip['id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>" data-recipient="<?= e((string)$trip['recipient_email']) ?>" data-version="<?= (int)$trip['review_version'] ?>" data-missing="<?= e(implode(', ',$missing)) ?>"<?= $onPayment||$trip['review_state']==='sending'||$trip['review_state']==='unknown'?' disabled':'' ?>><?= $trip['review_state']==='review'?'Передать повторно':'Передать на проверку' ?></button><?php endif;?>
+        </div>
         <?php if($trip['review_state']==='unknown'):?><form class="closing-unknown" method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/review/confirm-not-sent')) ?>">
           <?= csrfField() ?><input type="hidden" name="version" value="<?= (int)$trip['review_version'] ?>">
           <p class="closing-feedback">Результат отправки неизвестен. Проверьте исходящие письма рабочего ящика.</p>
