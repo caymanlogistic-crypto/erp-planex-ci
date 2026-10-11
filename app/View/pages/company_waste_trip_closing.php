@@ -4,6 +4,13 @@ $canCreateInvoice=$canCreateInvoice??false;
 $contractors=$contractors??[];
 $clients=$clients??[];
 $all=count($trips);
+$managers=[];
+foreach($trips as $trip){
+    $manager=trim((string)($trip['manager_name']??''));
+    if($manager!=='')$managers[$manager]=true;
+}
+$managers=array_keys($managers);
+sort($managers,SORT_NATURAL|SORT_FLAG_CASE);
 $selectedTrip=(int)($_GET['trip_id']??0);
 $executorLabel=static fn(string $code):string=>match($code){'planex'=>'ООО «Планэкс»','mg_logistic'=>'ООО «МГ Логистик»',default=>'Не определён'};
 $progressColor=static function(int $percent):string {
@@ -24,6 +31,9 @@ $progressColor=static function(int $percent):string {
     <button type="button" class="closing-filter is-active" data-closing-filter="all" aria-pressed="true">Все рейсы</button>
     <button type="button" class="closing-filter" data-closing-filter="open" aria-pressed="false">Не хватает документов</button>
     <button type="button" class="closing-filter" data-closing-filter="review" aria-pressed="false">На проверке</button>
+  </div><div class="closing-extra-filters">
+    <label class="closing-filter-field"><span>ГОТОВ К ОПЛАТЕ</span><select data-closing-payment-ready><option value="all">Все рейсы</option><option value="yes">Да</option><option value="no">Нет</option></select></label>
+    <label class="closing-filter-field"><span>ОТВЕТСТВЕННЫЙ МЕНЕДЖЕР</span><select data-closing-manager><option value="">Все менеджеры</option><?php foreach($managers as $manager):?><option value="<?= e($manager) ?>"><?= e($manager) ?></option><?php endforeach;?></select></label>
   </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейс или перевозчик"></label></div>
   <section class="closing-list panel" aria-label="Завершённые рейсы"><div class="closing-list-head">ЗАВЕРШЁННЫЕ РЕЙСЫ <span data-closing-count><?= $all ?></span></div>
     <?php foreach($trips as $trip):
@@ -40,7 +50,7 @@ $progressColor=static function(int $percent):string {
         $invoiceStatus=match($invoiceSummary['status']){'paid'=>'Оплачен','waiting'=>'Ожидает оплаты',default=>'Не введён'};
         $search=mb_strtolower($trip['business_id'].' '.$trip['carrier_name'].' '.$trip['manager_name'].' '.$executorLabel((string)$trip['legal_entity_code']),'UTF-8');
     ?>
-    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-state="<?= e($state) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
+    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-state="<?= e($state) ?>" data-payment-ready="<?= !$missing&&!$tnIssues?'yes':'no' ?>" data-manager="<?= e(trim((string)$trip['manager_name'])) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
       <summary class="closing-trip-summary"><span class="closing-chevron" aria-hidden="true"></span>
         <span class="closing-identity"><b>Рейс #<?= e((string)$trip['business_id']) ?></b><small>Завершён <?= e($trip['actual_end_date']?date('d.m.Y',strtotime((string)$trip['actual_end_date'])):'—') ?></small></span>
         <span class="closing-carrier"><small>ПЕРЕВОЗЧИК</small><b><?= e((string)$trip['carrier_name']) ?></b><span>Менеджер: <?= e((string)$trip['manager_name']) ?></span></span>
