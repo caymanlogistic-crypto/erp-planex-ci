@@ -48,6 +48,7 @@ final class WasteTripClosingService
         $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
         $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.actual_end_date,wt.legal_entity_code,
                 ct.id carrier_id,COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
+                u.membership_id manager_membership_id,
                 COALESCE(r.state,'work') review_state,COALESCE(r.version,0) review_version,
                 r.mail_status,r.submitted_at
               FROM waste_trips wt

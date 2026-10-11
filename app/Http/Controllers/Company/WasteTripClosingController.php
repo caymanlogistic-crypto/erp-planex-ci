@@ -8,6 +8,7 @@ use App\Security\AccessRuntime;
 use App\Service\AccessControlService;
 use App\Service\DocumentMailTransport;
 use App\Service\EmployeeMailProfileService;
+use App\Service\EntityResponsibilityService;
 use App\Service\FinanceInvoiceService;
 use App\Service\WasteTripClosingPackageStore;
 use App\Service\WasteTripClosingService;
@@ -24,12 +25,13 @@ final class WasteTripClosingController
     public function index(): void
     {
         header('Cache-Control: no-store');
-        $trips=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];
+        $trips=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];
         $success=$_SESSION['waste_trip_closing_success']??null;
         $flashError=$_SESSION['waste_trip_closing_error']??null;
         unset($_SESSION['waste_trip_closing_success'],$_SESSION['waste_trip_closing_error']);
         try {
-            [, $pdo]=$this->context();
+            [$company, $pdo]=$this->context();
+            $responsibleUsers=EntityResponsibilityService::eligibleRecipients($this->db->connection(),$pdo,(int)$company['id']);
             $schemaReady=WasteTripClosingService::ready($pdo);
             if ($schemaReady) {
                 $trips=WasteTripClosingService::trips($pdo);

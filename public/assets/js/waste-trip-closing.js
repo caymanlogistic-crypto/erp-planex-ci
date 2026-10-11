@@ -16,7 +16,7 @@
       const state=trip.dataset.state;
       const matches=filter==='all'||(filter==='review'?state==='review':state==='new'||state==='partial');
       const matchesPayment=!paymentReady||paymentReady.value==='all'||trip.dataset.paymentReady===paymentReady.value;
-      const matchesManager=!manager||!manager.value||trip.dataset.manager===manager.value;
+      const matchesManager=!manager||!manager.value||trip.dataset.managerId===manager.value;
       trip.hidden=!(matches&&matchesPayment&&matchesManager&&trip.dataset.search.includes(query));
       if (!trip.hidden) visible++;
     }
