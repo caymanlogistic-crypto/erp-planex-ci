@@ -585,7 +585,7 @@
   height:38px;
   margin:12px 0 6px;
   padding:0 12px;
-  border-bottom:1px solid #bfb8ae;
+  border-bottom:0;
   background:transparent;
   overflow-x:auto;
   overflow-y:hidden;
