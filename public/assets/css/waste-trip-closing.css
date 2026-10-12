@@ -61,6 +61,9 @@
 .closing-page .closing-invoice-status[data-status=paid]>b{color:#327348}
 .closing-page .closing-invoice-detail{font-size:10px;line-height:1.25;color:var(--text-muted);overflow-wrap:anywhere}
 .closing-page .closing-invoice-status[data-status=waiting] .closing-invoice-detail{color:#99601e}
+.closing-page .closing-invoice-status[data-status=paid]>b,.closing-page .closing-invoice-status[data-status=paid] .closing-invoice-detail{color:#267044;font-weight:700}
+.closing-page .closing-carrier-debt{color:#b42318;font-size:10px;font-weight:700;line-height:1.25}
+.closing-page .closing-optional-card{color:var(--text-muted);font-weight:400}
 .closing-page .closing-shared-issues-list>span{line-height:1.28}
 .closing-page .closing-invoice-actions{display:flex;flex-wrap:wrap;gap:5px;margin-top:3px}
 .closing-page .closing-invoice-control{min-height:29px;padding:0 10px;font-size:11px;line-height:1.15;white-space:normal;text-align:center}

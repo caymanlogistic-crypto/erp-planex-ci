@@ -29,7 +29,6 @@ $pageContext = 'Рейсы › Сбор закрывающих документ�
 $topbarCrumbs = [['label'=>'Рейсы','url'=>null],['label'=>'Сбор закрывающих документов','url'=>null]];
 $success = $flashError = $error = null;
 $schemaReady = true;
-$paymentQueueReady = true;
 $_GET = [];
 
 $carriers = [

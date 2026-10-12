@@ -31,10 +31,10 @@ closing_preset = design_lab.PRESETS["trip-closing-documents"]
 assert closing_preset["target_route"] == "/company/trips/closing-documents"
 closing_html = design_lab.render_preset(ROOT, closing_preset).decode("utf-8")
 assert 'data-closing-count>35<' in closing_html
-assert 'data-closing-filter="payment"' in closing_html
-assert 'payment-stage' in closing_html
+assert 'data-closing-filter="ready"' in closing_html
+assert 'data-closing-filter="paid_complete"' in closing_html
+assert 'payment-stage' not in closing_html
 assert 'data-review-form' not in closing_html
-assert 'office@example.test' in closing_html
 assert 'data-closing-trip' in closing_html
 
 

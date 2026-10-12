@@ -41,7 +41,6 @@ $trips=[
 $success='Документ добавлен.';
 $flashError=$error=null;
 $schemaReady=true;
-$paymentQueueReady=true;
 $canCreateInvoice=true;
 $contractors=[['id'=>42,'name'=>'Перевозчик','inn'=>'1234567890']];
 $clients=[];
@@ -70,7 +69,8 @@ $assert(\App\Service\WasteTripClosingService::customerSettlementDisplay(['custom
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
 $assert(str_contains($html,'data-closing-report-open')&&str_contains($html,'data-closing-report-dialog')&&str_contains($html,'data-closing-report-download'),'summary report must open in a popup with Excel download');
 $assert(substr_count($html,'data-report-trip-id=')===2,'summary report must include both accessible trips');
-$assert(str_contains($sheet,'Рейс №')&&str_contains($sheet,'Название рейса')&&str_contains($sheet,'Вывоз отходов с площадки А')&&str_contains($sheet,'ПЛАНЭКС')&&str_contains($sheet,'МГ Логистика')&&str_contains($sheet,'autoFilter ref="A1:O3"'),'Excel report must contain trip title, both executors and filter');
+$assert(str_contains($sheet,'Рейс №')&&str_contains($sheet,'Название рейса')&&str_contains($sheet,'Вывоз отходов с площадки А')&&str_contains($sheet,'ПЛАНЭКС')&&str_contains($sheet,'МГ Логистика')&&str_contains($sheet,'autoFilter ref="A1:P3"'),'Excel report must contain trip title, both executors and filter');
+$assert(str_contains($sheet,'<t xml:space="preserve">Раздел</t>')&&str_contains($sheet,'<t xml:space="preserve">Оплаченные полные комплекты</t>'),'Excel must include the automatically assigned section');
 $assert(str_contains($sheet,'<t xml:space="preserve">Статус</t>')&&str_contains($sheet,'<t xml:space="preserve">Дата</t>')&&!str_contains($sheet,'Оплачено, документы не все'),'Excel must have separate payment status and date columns without removed flag');
 $assert(str_contains($html,'Название рейса')&&str_contains($html,'Вывоз отходов с площадки А')&&!str_contains($html,'Направление</th>'),'popup must display the saved trip title');
 $assert(str_contains($html,'<th scope="col">Статус</th><th scope="col">Дата</th>')&&!str_contains($html,'Оплачено, документы не все'),'popup must have separate payment status and date columns without removed flag');
@@ -90,7 +90,7 @@ $assert(str_contains($partialSheet,'r="J2" s="3"')&&str_contains($sheet,'r="L2" 
 $partlyPaid=$trips[0];$partlyPaid['carrier_paid_amount']='5000.00';
 $partlyPaid['carrier_paid_date']='2026-10-10';$partlyPaid['carrier_payment_plan']['remaining']=true;
 $partialPaymentRow=\App\Service\WasteTripClosingReportService::rows([$partlyPaid],'2026-10-12')[0];
-$assert($partialPaymentRow['payment_status']==='План'&&$partialPaymentRow['payment_date']==='15.10.2026','partial payment keeps the outstanding planned deadline');
+$assert($partialPaymentRow['payment_status']==='Оплачено частично'&&$partialPaymentRow['payment_date']==='10.10.2026','partial payment uses its actual payment date');
 $overdueTrip=$trips[0];$overdueTrip['carrier_payment_plan']['date']='2026-10-03';$overdueTrip['carrier_payment_plan']['due_date']='2026-10-03';
 $overdueRow=\App\Service\WasteTripClosingReportService::rows([$overdueTrip],'2026-10-12')[0];
 $assert($overdueRow['payment_status']==='Просрочка (9 дней)'&&$overdueRow['payment_date']==='03.10.2026'&&$overdueRow['payment_state']==='missing','overdue status and date must refer to the confirmed due date');
@@ -105,27 +105,25 @@ $assert($forecastRow['payment_status']==='План'&&$forecastRow['payment_date'
 $mgPaid=$trips[1];$mgPaid['carrier_rate']=null;$mgPaid['carrier_payment_plan']=null;
 $mgPaidRow=\App\Service\WasteTripClosingReportService::rows([$mgPaid],'2026-10-12')[0];
 $assert($mgPaidRow['payment_status']==='Оплачено'&&$mgPaidRow['payment_date']==='10.10.2026','MG posted carrier payment must have an actual paid status without a Себес rate');
-$assert(str_contains($html,'data-closing-payment-ready')&&str_contains($html,'data-closing-manager'),'payment and manager filters must be rendered');
+$assert(str_contains($html,'data-closing-manager')&&!str_contains($html,'data-closing-payment-ready'),'manager filter remains without redundant payment readiness selector');
 $assert(str_contains($html,'data-closing-entity')&&str_contains($html,'<option value="planex">ПЛАНЭКС</option>')&&str_contains($html,'<option value="mg_logistic">МГ Логистика</option>'),'all trips selector must offer both legal entities');
 $assert(str_contains($html,'data-entity="planex"')&&str_contains($html,'data-entity="mg_logistic"'),'each trip must expose its legal entity for filtering');
-$assert(str_contains($html,'data-closing-filter="payment"')&&str_contains($html,'На оплату'),'payment queue must have its own section');
-$assert(str_contains($html,'Готово к оплате')&&str_contains($html,'payment-stage'),'ready trip must offer payment queue action');
-$assert((bool)preg_match('/name="action" value="queue"[^>]*><button[^>]*>Готово к оплате<\/button>/', $html),'payment action must be enabled for clean trip');
-$assert(str_contains($html,'data-payment-ready="no"')&&str_contains($html,'data-payment-ready="yes"'),'payment readiness must match document and TN issues');
+$assert(str_contains($html,'data-closing-filter="ready"')&&str_contains($html,'data-closing-filter="paid_incomplete"')&&str_contains($html,'data-closing-filter="paid_complete"'),'automatic payment sections must be rendered');
+$assert(!str_contains($html,'payment-stage')&&!str_contains($html,'Вернуть на доработку')&&!str_contains($html,'data-closing-filter="payment"'),'manual payment stage must be absent');
+$assert(str_contains($html,'data-state="incomplete"')&&str_contains($html,'data-state="paid_complete"'),'trip sections must follow documents, TN and posted carrier payment');
 $assert(str_contains($html,'<option value="71">Менеджер</option>'),'manager must be selectable by membership ID');
 $assert(str_contains($html,'<option value="72">Без рейсов</option>'),'active user without trips must remain selectable');
 $assert(str_contains($html,'data-manager-id="71"'),'trip must expose its responsible membership ID');
 $assert(str_contains($html,'data-business-id="1"'),'trip must expose its exact business number for list search');
-$assert(str_contains($html,'<b>Нет документов:</b> Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист, Диагностическая карта: Транспортная единица А111АА'),'missing documents must include the vehicle card');
+$assert(str_contains($html,'<b>Нет документов:</b> Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист')&&str_contains($html,'Диагностическая карта: Транспортная единица А111АА (необязательно)'),'missing required documents and optional card must be separate');
 $assert(str_contains($html,'<b>ТН:</b> нет скана ТН · заявок: 2'),'same TN problem must show one compact summary');
 $assert(str_contains($html,'<b>ТН:</b> нет подписи водителя · заявок: 1'),'different TN problem must stay separate');
 $assert(substr_count($html,'<b>ТН:</b> нет скана ТН')===1,'repeated TN reason must be shown once');
 $assert(str_contains($html,'нет скана ТН · заявки №123, №124'),'expanded trip must retain every affected request number');
-$assert(str_contains($html,'Нет ошибок, счет можно оплачивать'),'clean trip must show payment readiness');
+$assert(str_contains($html,'Обязательные документы собраны'),'clean trip must show complete required set');
 $trips[1]['review_state']='payment';$trips[1]['review_version']=3;
 ob_start();require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';$paymentHtml=(string)ob_get_clean();
-$assert(str_contains($paymentHtml,'name="action" value="rework"')&&str_contains($paymentHtml,'Вернуть на доработку'),'queued trip must offer return to rework');
-$assert(str_contains($paymentHtml,'class="closing-edit-fieldset" disabled'),'queued trip document editing must be disabled');
+$assert(!str_contains($paymentHtml,'Вернуть на доработку')&&str_contains($paymentHtml,'class="closing-edit-fieldset">'),'legacy queued trip must remain editable without manual return');
 $assert(str_contains($html,'2 из 3 обработано'),'processed requests must follow document progress');
 $assert(str_contains($html,'data-invoice-open data-carrier-id="42"'),'invoice action must use the trip carrier');
 $assert(str_contains($html,'name="direction"')&&str_contains($html,'Полученный (от перевозчика)'),'invoice form must be reused');
@@ -138,7 +136,7 @@ $assert(str_contains($html,'name="requirement_code" value="application"'),'combi
 $assert(str_contains($html,'name="requirement_code" value="upd"'),'combined act slot must keep finance code');
 $assert(str_contains($html,'class="closing-remove-form"'),'uploaded document must offer removal');
 $assert(str_contains($html,'signed.pdf')&&str_contains($html,'signed-page-2.pdf'),'one document category must display every file');
-$assert(str_contains($html,'0 из 5 получено')&&str_contains($html,'5 из 5 получено'),'existing vehicle cards must not count as trip closing files');
+$assert(str_contains($html,'0 из 4 получено')&&str_contains($html,'4 из 4 получено'),'optional diagnostic cards and extra files must not affect required document progress');
 $assert(substr_count($html,'<strong>Реестр</strong>')===1,'extra files with the same title must form one document');
 $assert(substr_count($html,'name="document_files[]"')>=5,'document uploads must accept multiple files');
 $assert(!str_contains($html,'Тягач · МАЗ В222ВВ')&&!str_contains($html,'Полуприцеп · ТОНАР С333СС'),'existing vehicle cards must not be requested again');
@@ -162,6 +160,27 @@ $overdueTrip=$trips[0];$overdueTrip['carrier_payment_plan']['date']='2026-10-10'
 $assert(str_contains(\App\Service\WasteTripClosingService::carrierPaymentDisplay($overdueTrip,'2026-10-12')['text'],'Просрочено на 2 дня'),'confirmed unpaid deadline must show overdue days');
 $overdueTrip['carrier_payment_plan']['due_date']=null;
 $assert(\App\Service\WasteTripClosingService::carrierPaymentDisplay($overdueTrip,'2026-10-12')['status']==='forecast','forecast date must not be marked overdue');
-$assert(str_contains($html,'class="btn btn-primary closing-submit" disabled'),'review action must be disabled');
+$assert(!str_contains($html,'class="btn btn-primary closing-submit"'),'manual payment action must be removed');
 $assert(!str_contains($html,'data-review-form'),'email form must not be rendered');
+$trips=[$trips[1]];
+$trips[0]['review_state']='work';
+$trips[0]['transport']['units'][1]['has_card']=false;
+$reportRows=\App\Service\WasteTripClosingReportService::rows($trips,'2026-10-12');
+ob_start();
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+$missingCardHtml=(string)ob_get_clean();
+$assert(str_contains($missingCardHtml,'data-state="paid_complete"')
+    && str_contains($missingCardHtml,'Диагностическая карта: Полуприцеп С333СС (необязательно)'),
+    'missing diagnostic card stays visible but does not change the automatic paid complete section');
+$trips[0]['carrier_paid_amount']='5000.00';
+ob_start();
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+$partlyPaidHtml=(string)ob_get_clean();
+$assert(str_contains($partlyPaidHtml,'data-status="paid"><small>СЧЕТА</small><b>Оплачен частично</b><span class="closing-invoice-detail">Оплата: 10.10.2026</span><span class="closing-carrier-debt">Долг 20 000 ₽</span>')
+    && str_contains($partlyPaidHtml,'data-state="paid_complete"'),
+    'partial carrier payment stays in paid section and shows its debt');
+$css=(string)file_get_contents(BASE_PATH.'/public/assets/css/waste-trip-closing.css');
+$assert(str_contains($css,'.closing-invoice-status[data-status=paid] .closing-invoice-detail{color:#267044;font-weight:700}')
+    && str_contains($css,'.closing-carrier-debt{color:#b42318'),
+    'paid status and date are green and bold, while remaining debt is red');
 echo "waste_trip_closing_view: PASS\n";

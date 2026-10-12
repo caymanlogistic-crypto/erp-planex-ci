@@ -37,79 +37,45 @@ final class WasteTripClosingService
         } catch (Throwable) { return false; }
     }
 
-    public static function paymentQueueReady(PDO $pdo): bool
-    {
-        try {
-            $state=$pdo->query("SELECT COLUMN_TYPE FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='waste_trip_closing_reviews' AND COLUMN_NAME='state'")->fetchColumn();
-            return str_contains((string)$state,"'payment'");
-        } catch (Throwable) { return false; }
-    }
-
     public static function recipient(string $legalEntityCode): string
     {
         return self::RECIPIENTS[$legalEntityCode] ?? throw new DomainException('Для исполнителя рейса не настроен получатель письма.');
     }
 
-    public static function paymentReady(array $trip, ?array $transport): bool
+    private static function hasCompleteSet(array $trip): bool
     {
         $present=[];
         foreach ($trip['documents']??[] as $document) $present[(string)$document['slot_code']]=true;
         foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;
-        $units=$transport['units']??[];
-        if (!$units || !empty($trip['tn_issues'])) return false;
-        foreach ($units as $unit) if (empty($unit['has_card']) && empty($unit['documents'])) return false;
-        return true;
+        $requests=(int)($trip['request_count']??0);
+        return $requests>0&&(int)($trip['processed_count']??0)>=$requests&&empty($trip['tn_issues']);
     }
 
-    public static function changePaymentStage(PDO $pdo, int $tripId, int $expectedVersion, string $action): void
+    public static function section(array $trip): string
     {
-        if (!in_array($action,['queue','rework'],true)) throw new DomainException('Неизвестное действие.');
-        self::trip($pdo,$tripId);
-        $own=!$pdo->inTransaction();
-        if ($own) $pdo->beginTransaction();
-        try {
-            $lock=$pdo->prepare("SELECT id FROM waste_trips WHERE id=? AND deleted_at IS NULL AND status='completed' FOR UPDATE");
-            $lock->execute([$tripId]);
-            if (!$lock->fetchColumn()) throw new DomainException('Рейс изменился. Обновите страницу.');
-            $pdo->prepare("INSERT IGNORE INTO waste_trip_closing_reviews (waste_trip_id,state,version) VALUES (?,'work',0)")->execute([$tripId]);
-            $state=$pdo->prepare('SELECT state,version FROM waste_trip_closing_reviews WHERE waste_trip_id=? FOR UPDATE');
-            $state->execute([$tripId]);$row=$state->fetch(PDO::FETCH_ASSOC);
-            if (!$row || (int)$row['version']!==$expectedVersion) throw new DomainException('Данные рейса изменились. Обновите страницу.');
-            if ($action==='queue') {
-                if (!in_array($row['state'],['work','failed','review'],true)) throw new DomainException('Рейс уже передан на оплату или ожидает проверки отправки.');
-                if (!self::paymentReadyForTrip($pdo,$tripId)) throw new DomainException('Устраните ошибки ТН и добавьте все обязательные документы перед передачей на оплату.');
-                $next='payment';
-            } else {
-                if ($row['state']!=='payment') throw new DomainException('Рейс уже возвращён на доработку. Обновите страницу.');
-                $next='work';
-            }
-            $pdo->prepare('UPDATE waste_trip_closing_reviews SET state=?,version=version+1 WHERE waste_trip_id=?')->execute([$next,$tripId]);
-            if ($own) $pdo->commit();
-        } catch (Throwable $error) {
-            if ($own && $pdo->inTransaction()) $pdo->rollBack();
-            throw $error;
-        }
+        $complete=self::hasCompleteSet($trip);
+        $paid=(int)round((float)($trip['carrier_paid_amount']??0)*100)>0;
+        return $paid?($complete?'paid_complete':'paid_incomplete'):($complete?'ready':'incomplete');
     }
 
-    private static function paymentReadyForTrip(PDO $pdo, int $tripId): bool
+    public static function sectionLabel(string $section): string
     {
-        $transport=WasteTripClosingTransportService::forTrips($pdo,[$tripId])[$tripId]??null;
-        if (!$transport || empty($transport['units'])) return false;
-        foreach ($transport['units'] as $unit) if (empty($unit['has_card']) && empty($unit['documents'])) return false;
-        $present=[];
-        foreach (self::documents($pdo,$tripId) as $document) $present[(string)$document['slot_code']]=true;
-        foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;
-        $issues=$pdo->prepare("SELECT COUNT(*) FROM waste_trip_requests wtr
-            JOIN feo_requests fr ON fr.id=wtr.feo_request_id
-            LEFT JOIN waste_trip_completion_items i ON i.waste_trip_request_id=wtr.id
-            WHERE wtr.waste_trip_id=? AND wtr.removed_at IS NULL AND COALESCE(i.tn_absent,0)<>1
-              AND (i.arrived_at IS NULL OR i.departed_at IS NULL
-                OR COALESCE(i.driver_signature_present,0)<>1 OR COALESCE(i.sender_signature_present,0)<>1
-                OR (i.tn_datetime_status IN ('partial','no') AND i.recovery_source IS NULL)
-                OR NOT EXISTS (SELECT 1 FROM waste_trip_completion_documents d
-                    WHERE d.waste_trip_request_id=wtr.id AND d.deleted_at IS NULL))");
-        $issues->execute([$tripId]);
-        return (int)$issues->fetchColumn()===0;
+        return match($section){
+            'incomplete'=>'Не хватает документов',
+            'ready'=>'Готово к оплате',
+            'paid_incomplete'=>'Оплачено, но не полный комплект',
+            'paid_complete'=>'Оплаченные полные комплекты',
+            default=>'Все рейсы',
+        };
+    }
+
+    public static function carrierDebt(array $trip): ?string
+    {
+        $rate=$trip['carrier_rate']??null;
+        if($rate===null||(float)$rate<=0)return null;
+        $debt=(int)round((float)$rate*100)-(int)round((float)($trip['carrier_paid_amount']??0)*100);
+        if($debt<=0)return null;
+        return 'Долг '.number_format($debt/100,$debt%100===0?0:2,',',' ').' ₽';
     }
 
     /** @return list<array<string,mixed>> */
@@ -415,7 +381,7 @@ final class WasteTripClosingService
                 ->execute([$tripId]);
             $stmt=$pdo->prepare('SELECT state,version FROM waste_trip_closing_reviews WHERE waste_trip_id=? FOR UPDATE');
             $stmt->execute([$tripId]);$row=$stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$row || (int)$row['version']!==$expectedVersion || in_array($row['state'],['sending','unknown','payment'],true)) {
+            if (!$row || (int)$row['version']!==$expectedVersion || in_array($row['state'],['sending','unknown'],true)) {
                 throw new DomainException('Данные рейса изменились. Обновите страницу.');
             }
             $version=$expectedVersion+1;
@@ -501,7 +467,6 @@ final class WasteTripClosingService
         $stmt=$pdo->prepare('SELECT state FROM waste_trip_closing_reviews WHERE waste_trip_id=? FOR UPDATE');
         $stmt->execute([$tripId]);
         $state=$stmt->fetchColumn();
-        if ($state==='payment') throw new DomainException('Сначала верните рейс с оплаты на доработку.');
         if (in_array($state, ['sending','unknown'], true)) {
             throw new DomainException('Результат отправки письма нужно проверить перед изменением комплекта.');
         }

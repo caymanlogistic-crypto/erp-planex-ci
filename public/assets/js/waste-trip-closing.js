@@ -4,7 +4,6 @@
   const trips=[...page.querySelectorAll('[data-closing-trip]')];
   const search=page.querySelector('[data-closing-search]');
   const entity=page.querySelector('[data-closing-entity]');
-  const paymentReady=page.querySelector('[data-closing-payment-ready]');
   const manager=page.querySelector('[data-closing-manager]');
   const filters=[...page.querySelectorAll('[data-closing-filter]')];
   const count=page.querySelector('[data-closing-count]');
@@ -19,13 +18,13 @@
   let filter='all';
   if(savedState && typeof savedState==='object') {
     if(typeof savedState.search==='string') search.value=savedState.search.slice(0,1000);
-    if(['all','open','review','payment'].includes(savedState.filter)) filter=savedState.filter;
+    if(['all','incomplete','ready','paid_incomplete','paid_complete'].includes(savedState.filter)) filter=savedState.filter;
+    if(savedState.filter==='open') filter='incomplete';
     if(entity && [...entity.options].some(option=>option.value===savedState.entity)) entity.value=savedState.entity;
-    if(paymentReady && [...paymentReady.options].some(option=>option.value===savedState.paymentReady)) paymentReady.value=savedState.paymentReady;
     if(manager && [...manager.options].some(option=>option.value===savedState.manager)) manager.value=savedState.manager;
   }
   const stage=new URLSearchParams(location.search).get('stage');
-  if(['all','payment'].includes(stage)) filter=stage;
+  if(['all','incomplete','ready','paid_incomplete','paid_complete'].includes(stage)) filter=stage;
   if(!filters.some(button=>button.dataset.closingFilter===filter)) filter='all';
   filters.forEach(button=>{const active=button.dataset.closingFilter===filter;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));});
   const requestedTripId=new URLSearchParams(location.search).get('trip_id');
@@ -35,7 +34,7 @@
   }
   function saveState() {
     if(!stateKey) return;
-    try { localStorage.setItem(stateKey,JSON.stringify({search:search.value,filter,entity:entity?.value||'all',paymentReady:paymentReady?.value||'all',manager:manager?.value||'',openTripId:trips.find(trip=>trip.open)?.dataset.tripId||null})); } catch (_) {}
+    try { localStorage.setItem(stateKey,JSON.stringify({search:search.value,filter,entity:entity?.value||'all',manager:manager?.value||'',openTripId:trips.find(trip=>trip.open)?.dataset.tripId||null})); } catch (_) {}
   }
   function render() {
     const query=search.value.trim().toLocaleLowerCase('ru');
@@ -44,16 +43,15 @@
     let visible=0;
     for (const trip of trips) {
       const state=trip.dataset.state;
-      const matches=filter==='all'||(filter==='review'?state==='review':filter==='payment'?state==='payment':state==='new'||state==='partial');
-      const matchesPayment=!paymentReady||paymentReady.value==='all'||trip.dataset.paymentReady===paymentReady.value;
+      const matches=filter==='all'||state===filter;
       const matchesEntity=!entity||entity.value==='all'||trip.dataset.entity===entity.value;
       const matchesManager=!manager||!manager.value||trip.dataset.managerId===manager.value;
       const matchesSearch=requestedIds&&!idSearch?false:idSearch?idSearch.has(trip.dataset.businessId):trip.dataset.search.includes(query);
-      trip.hidden=!(matchesSearch&&matches&&matchesEntity&&matchesPayment&&matchesManager);
+      trip.hidden=!(matchesSearch&&matches&&matchesEntity&&matchesManager);
       if (!trip.hidden) visible++;
     }
     count.textContent=String(visible);
-    if(listLabel) listLabel.textContent=filter==='payment'?'НА ОПЛАТУ':'ЗАВЕРШЁННЫЕ РЕЙСЫ';
+    if(listLabel) listLabel.textContent=filter==='all'?'ЗАВЕРШЁННЫЕ РЕЙСЫ':filters.find(button=>button.dataset.closingFilter===filter)?.textContent.trim().toLocaleUpperCase('ru');
     empty.hidden=visible>0;
     if(reportDialog?.open) updateReport();
   }
@@ -88,7 +86,6 @@
   if(stage){const url=new URL(location.href);url.searchParams.delete('stage');history.replaceState(history.state,'',url);}
   search.addEventListener('input',()=>{render();saveState();});
   entity?.addEventListener('change',()=>{render();saveState();});
-  paymentReady?.addEventListener('change',()=>{render();saveState();});
   manager?.addEventListener('change',()=>{render();saveState();});
   filters.forEach(button=>button.addEventListener('click',()=>{
     filter=button.dataset.closingFilter;
@@ -135,7 +132,6 @@
       const updated=[...result.querySelectorAll('[data-closing-trip]')].find(item=>item.dataset.tripId===trip.dataset.tripId);
       if (!updated) throw new Error('Не удалось обновить строку рейса. Обновите страницу.');
       trip.dataset.state=updated.dataset.state;
-      trip.dataset.paymentReady=updated.dataset.paymentReady;
       trip.replaceChildren(...updated.children);
       const updatedReport=result.querySelector('[data-closing-report-dialog] tbody');
       const reportBody=reportDialog?.querySelector('tbody');
