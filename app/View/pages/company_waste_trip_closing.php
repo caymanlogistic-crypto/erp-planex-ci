@@ -6,6 +6,8 @@ $clients=$clients??[];
 $responsibleUsers=$responsibleUsers??[];
 $reportRows=$reportRows??[];
 $all=count($trips);
+$tabCounts=['all'=>$all,'incomplete'=>0,'ready'=>0,'paid_incomplete'=>0,'paid_complete'=>0];
+foreach($trips as $trip){$state=\App\Service\WasteTripClosingService::section($trip);if(isset($tabCounts[$state]))$tabCounts[$state]++;}
 $selectedTrip=(int)($_GET['trip_id']??0);
 $executorLabel=static fn(string $code):string=>match($code){'planex'=>'ООО «Планэкс»','mg_logistic'=>'ООО «МГ Логистик»',default=>'Не определён'};
 $progressColor=static function(int $percent):string {
@@ -15,6 +17,8 @@ $progressColor=static function(int $percent):string {
     return 'color-mix(in srgb, '.$first.' '.round((1-$share)*100).'%, '.$second.')';
 };
 ?>
+<link rel="stylesheet" href="<?= e(app_url('/assets/css/waste-trip-registry.css')) ?>?v=<?= filemtime(base_path('public/assets/css/waste-trip-registry.css')) ?>">
+<link rel="stylesheet" href="<?= e(app_url('/assets/css/route-executor-list-v016.css')) ?>?v=<?= filemtime(base_path('public/assets/css/route-executor-list-v016.css')) ?>">
 <link rel="stylesheet" href="<?= e(app_url('/assets/css/waste-trip-closing.css')) ?>?v=<?= filemtime(base_path('public/assets/css/waste-trip-closing.css')) ?>">
 <?php if(!empty($_SESSION['invoice_success'])):?><div class="notice success" role="status"><?= e((string)$_SESSION['invoice_success']) ?></div><?php unset($_SESSION['invoice_success']);endif;?>
 <?php if(in_array($success,['Документ добавлен.','Документ убран из комплекта.','Диагностическая карта добавлена.'],true)):?><span data-closing-action-result="success" hidden></span><?php elseif($success):?><div class="notice success" role="status"><?= e((string)$success) ?></div><?php endif;?>
@@ -22,17 +26,18 @@ $progressColor=static function(int $percent):string {
 <div class="closing-page" data-closing-state-key="<?= e($viewStateKey??'') ?>">
   <div class="page-head"><div class="page-head-left"><h1 class="page-title">Сбор закрывающих документов</h1><div class="page-summary">Документы по завершённым рейсам.</div></div><?php if($schemaReady):?><div class="page-head-actions"><button type="button" class="btn btn-primary" data-closing-report-open>Сводный отчёт</button></div><?php endif;?></div>
   <?php if(!$schemaReady):?><div class="notice warn">Раздел ожидает обновление схемы данных.</div><?php else:?>
-  <div class="table-toolbar closing-toolbar"><div class="closing-filters" role="group" aria-label="Фильтр по состоянию">
-    <button type="button" class="closing-filter is-active" data-closing-filter="all" aria-pressed="true">Все рейсы</button>
-    <button type="button" class="closing-filter" data-closing-filter="incomplete" aria-pressed="false">Не хватает документов</button>
-    <button type="button" class="closing-filter" data-closing-filter="ready" aria-pressed="false">Готово к оплате</button>
-    <button type="button" class="closing-filter" data-closing-filter="paid_incomplete" aria-pressed="false">Оплачено, но не полный комплект</button>
-    <button type="button" class="closing-filter" data-closing-filter="paid_complete" aria-pressed="false">Оплаченные полные комплекты</button>
-  </div><div class="closing-extra-filters">
-    <label class="closing-filter-field"><span class="sr-only">Исполнитель рейса</span><select data-closing-entity><option value="all">Все рейсы</option><option value="planex">ПЛАНЭКС</option><option value="mg_logistic">МГ Логистика</option></select></label>
-    <label class="closing-filter-field"><span class="sr-only">Ответственный менеджер</span><select data-closing-manager><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label>
-  </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику; несколько номеров рейсов через запятую</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейсы: 322, 310"></label></div>
-  <section class="closing-list panel" aria-label="Завершённые рейсы"><div class="closing-list-head"><span data-closing-list-label>ЗАВЕРШЁННЫЕ РЕЙСЫ</span> <span data-closing-count><?= $all ?></span></div>
+  <div class="closing-registry-tabs"><div class="closing-filters" role="group" aria-label="Фильтр по состоянию">
+    <button type="button" class="closing-filter is-active" data-closing-filter="all" aria-pressed="true">Все рейсы <b data-closing-filter-count="all"><?= $tabCounts['all'] ?></b></button>
+    <button type="button" class="closing-filter" data-closing-filter="incomplete" aria-pressed="false">Не хватает документов <b data-closing-filter-count="incomplete"><?= $tabCounts['incomplete'] ?></b></button>
+    <button type="button" class="closing-filter" data-closing-filter="ready" aria-pressed="false">Готово к оплате <b data-closing-filter-count="ready"><?= $tabCounts['ready'] ?></b></button>
+    <button type="button" class="closing-filter" data-closing-filter="paid_incomplete" aria-pressed="false">Оплачено, но не полный комплект <b data-closing-filter-count="paid_incomplete"><?= $tabCounts['paid_incomplete'] ?></b></button>
+    <button type="button" class="closing-filter" data-closing-filter="paid_complete" aria-pressed="false">Оплаченные полные комплекты <b data-closing-filter-count="paid_complete"><?= $tabCounts['paid_complete'] ?></b></button>
+  </div></div>
+  <div class="closing-registry-card route-executors-card"><div class="table-toolbar closing-toolbar"><span class="closing-found">Найдено: <span data-closing-count><?= $all ?></span></span><div class="closing-toolbar-right"><div class="closing-extra-filters">
+    <label class="closing-filter-field"><span class="sr-only">Исполнитель рейса</span><select class="toolbar-select" name="company" data-table-reference-select="closing" data-closing-entity aria-label="Исполнитель рейса"><option value="all">Все рейсы</option><option value="planex">ПЛАНЭКС</option><option value="mg_logistic">МГ Логистика</option></select></label>
+    <label class="closing-filter-field"><span class="sr-only">Ответственный менеджер</span><select class="toolbar-select" data-table-reference-select="closing" data-closing-manager aria-label="Ответственный менеджер"><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label>
+  </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику; несколько номеров рейсов через запятую</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейсы: 322, 310"></label></div></div>
+  <section class="closing-list panel" aria-label="Завершённые рейсы"><div class="closing-list-head"><span data-closing-list-label>ЗАВЕРШЁННЫЕ РЕЙСЫ</span></div>
     <?php foreach($trips as $trip):
         $docs=$trip['documents'];$bySlot=[];$extras=[];
         foreach($docs as $document){if($document['slot_code']==='extra')$extras[(string)$document['custom_title']][]=$document;else $bySlot[$document['slot_code']][]=$document;}
@@ -131,7 +136,7 @@ $progressColor=static function(int $percent):string {
     </details>
     <?php endforeach;?>
     <p class="closing-empty" data-closing-empty<?= $trips?' hidden':'' ?>>Рейсы по запросу не найдены.</p>
-  </section>
+  </section></div>
   <?php endif;?>
 </div>
 <?php if($schemaReady):?>
@@ -163,3 +168,4 @@ $progressColor=static function(int $percent):string {
 <?php if($canCreateInvoice):?><dialog class="closing-invoice-dialog" data-invoice-dialog aria-labelledby="closing-invoice-title"><div class="modal modal-lg"><div class="modal-head"><span class="modal-title" id="closing-invoice-title">Создать счёт</span><button type="button" class="modal-close" data-invoice-close aria-label="Закрыть">&times;</button></div><?php $invoice=['direction'=>'INCOMING'];$isEdit=false;$returnTo='/company/trips/closing-documents';require base_path('app/View/partials/company_invoice_create_form.php'); ?></div></dialog><?php endif;?>
 <?php if($canCreateInvoice):?><dialog class="closing-invoice-picker" data-invoice-picker aria-labelledby="closing-picker-title"><form method="post" data-invoice-picker-form><?= csrfField() ?><div class="closing-picker-head"><strong id="closing-picker-title">Выбрать счёт перевозчика</strong><button type="button" class="modal-close" data-invoice-picker-close aria-label="Закрыть">×</button></div><div class="closing-picker-body"><p>Ранее внесённые счета выбранного перевозчика</p><fieldset><legend>Счета перевозчика</legend><div data-invoice-picker-options></div></fieldset><p class="closing-picker-error" role="alert" hidden></p></div><div class="closing-picker-foot"><button type="button" class="btn btn-secondary" data-invoice-picker-close>Отмена</button><button type="submit" class="btn btn-primary">Связать с рейсом</button></div></form></dialog><dialog class="closing-invoice-dialog" data-invoice-edit-dialog aria-label="Редактировать счёт перевозчика"><div class="modal modal-lg"><div class="modal-head"><span class="modal-title">Редактировать счёт перевозчика</span><button type="button" class="modal-close" data-invoice-edit-close aria-label="Закрыть">×</button></div><div data-invoice-edit-body></div></div></dialog><?php endif;?>
 <script src="<?= e(app_url('/assets/js/waste-trip-closing.js')) ?>?v=<?= filemtime(base_path('public/assets/js/waste-trip-closing.js')) ?>" defer></script>
+<script src="<?= e(app_url('/assets/js/table-reference-select.js')) ?>?v=<?= filemtime(base_path('public/assets/js/table-reference-select.js')) ?>" defer></script>

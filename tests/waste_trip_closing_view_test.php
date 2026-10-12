@@ -109,6 +109,12 @@ $assert(str_contains($html,'data-closing-manager')&&!str_contains($html,'data-cl
 $assert(str_contains($html,'data-closing-entity')&&str_contains($html,'<option value="planex">ПЛАНЭКС</option>')&&str_contains($html,'<option value="mg_logistic">МГ Логистика</option>'),'all trips selector must offer both legal entities');
 $assert(str_contains($html,'data-entity="planex"')&&str_contains($html,'data-entity="mg_logistic"'),'each trip must expose its legal entity for filtering');
 $assert(str_contains($html,'data-closing-filter="ready"')&&str_contains($html,'data-closing-filter="paid_incomplete"')&&str_contains($html,'data-closing-filter="paid_complete"'),'automatic payment sections must be rendered');
+$assert(preg_match('/data-closing-filter-count="all">2<\/b>/',$html)===1
+    && preg_match('/data-closing-filter-count="incomplete">1<\/b>/',$html)===1
+    && preg_match('/data-closing-filter-count="ready">0<\/b>/',$html)===1
+    && preg_match('/data-closing-filter-count="paid_incomplete">0<\/b>/',$html)===1
+    && preg_match('/data-closing-filter-count="paid_complete">1<\/b>/',$html)===1,
+    'five section counters must reflect actual trip sections');
 $assert(!str_contains($html,'payment-stage')&&!str_contains($html,'Вернуть на доработку')&&!str_contains($html,'data-closing-filter="payment"'),'manual payment stage must be absent');
 $assert(str_contains($html,'data-state="incomplete"')&&str_contains($html,'data-state="paid_complete"'),'trip sections must follow documents, TN and posted carrier payment');
 $assert(str_contains($html,'<option value="71">Менеджер</option>'),'manager must be selectable by membership ID');

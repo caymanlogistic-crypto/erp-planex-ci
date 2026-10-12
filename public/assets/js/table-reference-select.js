@@ -2,7 +2,7 @@
 (() => {
   const pageKey = document.querySelector('.rp-action-design.rp-ledger-v015 > .table-toolbar') ? 'finance' : 'departures';
   const scope = pageKey === 'finance' ? '.rp-action-design.rp-ledger-v015 > .table-toolbar' : '.table-card[data-erp-grid] > .waste-trip-toolbar';
-  const selects = [...document.querySelectorAll(scope + ' .toolbar-select')];
+  const selects = [...new Set([...document.querySelectorAll(scope + ' .toolbar-select'), ...document.querySelectorAll('select[data-table-reference-select]')])];
   selects.forEach((native, selectIndex) => {
     if (native.closest('.lab-reference-select')) return;
     const wrap = document.createElement('span');
@@ -11,13 +11,13 @@
     native.before(wrap); wrap.append(native);
     const button = document.createElement('button'); button.type='button'; button.className='lab-reference-trigger';
     button.setAttribute('aria-haspopup','listbox'); button.setAttribute('aria-expanded','false');
-    const list = document.createElement('div'); list.className='lab-reference-list'; list.id='lab-'+pageKey+'-select-'+selectIndex;
+    const list = document.createElement('div'); list.className='lab-reference-list'; list.id='lab-'+(native.dataset.tableReferenceSelect||pageKey)+'-select-'+selectIndex;
     list.setAttribute('role','listbox'); list.setAttribute('aria-label',native.getAttribute('aria-label')||'Выбор значения');
     list.tabIndex=-1; list.hidden=true; button.setAttribute('aria-controls',list.id);
     const options=[...native.options]; let active=Math.max(0,native.selectedIndex);
-    const items=options.map((choice,index)=>{const item=document.createElement('div');item.className='lab-reference-option';item.id=list.id+'-option-'+index;item.setAttribute('role','option');item.dataset.value=choice.value;item.textContent=choice.textContent.trim();list.append(item);return item;});
+    const items=options.map((choice,index)=>{const item=document.createElement('div');item.className='lab-reference-option';item.id=list.id+'-option-'+index;item.setAttribute('role','option');item.dataset.value=choice.value;item.textContent=choice.textContent.trim();item.title=item.textContent;list.append(item);return item;});
     const setActive=index=>{active=(index+items.length)%items.length;items.forEach((item,i)=>item.classList.toggle('is-active',i===active));list.setAttribute('aria-activedescendant',items[active].id);};
-    const sync=()=>{const selected=Math.max(0,native.selectedIndex);button.textContent=options[selected].textContent.trim();button.setAttribute('aria-label',(native.getAttribute('aria-label')||'Выбор значения')+': '+button.textContent);items.forEach((item,i)=>item.setAttribute('aria-selected',String(i===selected)));setActive(selected);};
+    const sync=()=>{const selected=Math.max(0,native.selectedIndex);button.textContent=options[selected].textContent.trim();button.title=button.textContent;button.setAttribute('aria-label',(native.getAttribute('aria-label')||'Выбор значения')+': '+button.textContent);items.forEach((item,i)=>item.setAttribute('aria-selected',String(i===selected)));setActive(selected);};
     const close=(focus=false)=>{list.hidden=true;button.setAttribute('aria-expanded','false');if(focus)button.focus();};
     const open=()=>{sync();list.hidden=false;button.setAttribute('aria-expanded','true');list.focus();};
     const choose=index=>{native.value=options[index].value;native.dispatchEvent(new Event('change',{bubbles:true}));sync();close(true);};

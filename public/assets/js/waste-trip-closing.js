@@ -27,6 +27,9 @@
   if(['all','incomplete','ready','paid_incomplete','paid_complete'].includes(stage)) filter=stage;
   if(!filters.some(button=>button.dataset.closingFilter===filter)) filter='all';
   filters.forEach(button=>{const active=button.dataset.closingFilter===filter;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));});
+  const tabs=page.querySelector('.closing-registry-tabs');
+  const activeTab=filters.find(button=>button.dataset.closingFilter===filter);
+  if(tabs&&activeTab) requestAnimationFrame(()=>{const delta=activeTab.getBoundingClientRect().right-tabs.getBoundingClientRect().right;if(delta>0)tabs.scrollLeft+=delta;});
   const requestedTripId=new URLSearchParams(location.search).get('trip_id');
   const openTripId=requestedTripId||savedState?.openTripId;
   if(openTripId || (savedState && Object.hasOwn(savedState,'openTripId'))) {
@@ -40,16 +43,19 @@
     const query=search.value.trim().toLocaleLowerCase('ru');
     const requestedIds=query.includes(',')?query.split(',').map(part=>part.trim()).filter(Boolean).map(part=>part.match(/^(?:рейс\s*)?[№#]?(\d+)$/iu)?.[1]):null;
     const idSearch=requestedIds?.length&&requestedIds.every(Boolean)?new Set(requestedIds):null;
+    const tabCounts={all:0,incomplete:0,ready:0,paid_incomplete:0,paid_complete:0};
     let visible=0;
     for (const trip of trips) {
       const state=trip.dataset.state;
-      const matches=filter==='all'||state===filter;
       const matchesEntity=!entity||entity.value==='all'||trip.dataset.entity===entity.value;
       const matchesManager=!manager||!manager.value||trip.dataset.managerId===manager.value;
       const matchesSearch=requestedIds&&!idSearch?false:idSearch?idSearch.has(trip.dataset.businessId):trip.dataset.search.includes(query);
+      if(matchesEntity&&matchesManager&&matchesSearch){tabCounts.all++;if(Object.hasOwn(tabCounts,state))tabCounts[state]++;}
+      const matches=filter==='all'||state===filter;
       trip.hidden=!(matchesSearch&&matches&&matchesEntity&&matchesManager);
       if (!trip.hidden) visible++;
     }
+    filters.forEach(button=>{const badge=button.querySelector('[data-closing-filter-count]');if(badge)badge.textContent=String(tabCounts[button.dataset.closingFilter]??0);});
     count.textContent=String(visible);
     if(listLabel) listLabel.textContent=filter==='all'?'ЗАВЕРШЁННЫЕ РЕЙСЫ':filters.find(button=>button.dataset.closingFilter===filter)?.textContent.trim().toLocaleUpperCase('ru');
     empty.hidden=visible>0;
