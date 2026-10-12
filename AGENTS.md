@@ -11,6 +11,8 @@ For one new ERP task:
 3. Open only code and semantic-memory records owned by the changed paths.
 4. Never implement in the shared `source` checkout.
 
+For any new or edited ERP page header, registry toolbar, tabs or table, read `docs/ui/REGISTRY_CANON.md` before coding. Treat its exact values and acceptance checks as a required design gate: compare actual computed styles and screenshots with the three approved references, preserve page behavior, and fix deviations before reporting completion. Older `FINAL3.html` examples and historical Notion sections do not override this OWNER-approved rule. Apply it with scoped CSS; do not globally restyle legacy pages.
+
 Do not read the whole repository, the whole Notion memory, release history or a stack of manuals before a scoped change.
 
 Do not re-fetch canonical HEAD after ordinary edits, tests or Notion writes. Repeat search/fetch is forbidden without ambiguity, drift or a state-changing event.
