@@ -136,7 +136,7 @@ $assert(str_contains($html,'name="requirement_code" value="application"'),'combi
 $assert(str_contains($html,'name="requirement_code" value="upd"'),'combined act slot must keep finance code');
 $assert(str_contains($html,'class="closing-remove-form"'),'uploaded document must offer removal');
 $assert(str_contains($html,'signed.pdf')&&str_contains($html,'signed-page-2.pdf'),'one document category must display every file');
-$assert(str_contains($html,'0 из 4 получено')&&str_contains($html,'4 из 4 получено'),'optional diagnostic cards and extra files must not affect required document progress');
+$assert(str_contains($html,'0 из 5 получено')&&str_contains($html,'6 из 6 получено'),'document progress must count diagnostic cards for each vehicle unit without counting extra files');
 $assert(substr_count($html,'<strong>Реестр</strong>')===1,'extra files with the same title must form one document');
 $assert(substr_count($html,'name="document_files[]"')>=5,'document uploads must accept multiple files');
 $assert(!str_contains($html,'Тягач · МАЗ В222ВВ')&&!str_contains($html,'Полуприцеп · ТОНАР С333СС'),'existing vehicle cards must not be requested again');
@@ -170,8 +170,18 @@ ob_start();
 require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
 $missingCardHtml=(string)ob_get_clean();
 $assert(str_contains($missingCardHtml,'data-state="paid_complete"')
+    && str_contains($missingCardHtml,'5 из 6 получено')
     && str_contains($missingCardHtml,'Диагностическая карта: Полуприцеп С333СС (необязательно)'),
     'missing diagnostic card stays visible but does not change the automatic paid complete section');
+$trips[0]['transport']['units']=[$trips[0]['transport']['units'][1]];
+$trips[0]['carrier_paid_amount']='0.00';
+ob_start();
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+$readyWithoutCardHtml=(string)ob_get_clean();
+$assert(str_contains($readyWithoutCardHtml,'data-state="ready"')
+    && str_contains($readyWithoutCardHtml,'4 из 5 получено')
+    && str_contains($readyWithoutCardHtml,'aria-label="4 из 5 документов получено"'),
+    'one missing diagnostic card must show 4 of 5 while the trip stays ready for payment');
 $trips[0]['carrier_paid_amount']='5000.00';
 ob_start();
 require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';

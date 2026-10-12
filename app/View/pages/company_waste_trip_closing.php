@@ -43,7 +43,11 @@ $progressColor=static function(int $percent):string {
             if(!empty($unit['has_card'])||!empty($unit['documents']))continue;
             $missingCards[]=$unit;
         }
-        $count=count(array_intersect(array_keys($bySlot),array_keys(\App\Service\WasteTripClosingService::SLOTS)));$total=count(\App\Service\WasteTripClosingService::SLOTS);$percent=(int)round($count/$total*100);
+        $cardTotal=max(1,count($cardUnits));
+        $cardCount=$cardUnits?$cardTotal-count($missingCards):0;
+        $count=count(array_intersect(array_keys($bySlot),array_keys(\App\Service\WasteTripClosingService::SLOTS)))+$cardCount;
+        $total=count(\App\Service\WasteTripClosingService::SLOTS)+$cardTotal;
+        $percent=(int)round($count/$total*100);
         $section=\App\Service\WasteTripClosingService::section($trip);
         $paid=$trip['paid_bank_transactions'];
         $requestCount=(int)($trip['request_count']??0);$processedCount=(int)($trip['processed_count']??0);
