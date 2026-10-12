@@ -140,11 +140,11 @@ $progressColor=static function(int $percent):string {
   <div class="closing-report-body"><div class="closing-report-scroll"><table class="closing-report-table">
     <thead><tr><?php foreach(\App\Service\WasteTripClosingReportService::HEADERS as $header):?><th scope="col"><?= e($header) ?></th><?php endforeach;?></tr></thead>
     <tbody><?php foreach($reportRows as $row):?><tr data-report-trip-id="<?= (int)$row['id'] ?>">
-      <?php foreach(['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_date','company','manager','paid_missing_documents'] as $key):?>
+      <?php foreach(['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager'] as $key):?>
         <?php if($key==='diagnostic_card' && count($row['diagnostic_card_details'])>1):?>
           <td class="closing-report-status is-<?= e($row['diagnostic_card_state']) ?>"><?php foreach($row['diagnostic_card_details'] as $unit):?><span class="closing-report-unit"><?= e($unit['label']) ?>: <b class="<?= $unit['status']==='Есть'?'is-present':'is-missing' ?>"><?= e($unit['status']) ?></b></span><?php endforeach;?></td>
-        <?php elseif(in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','paid_missing_documents'],true)):?>
-          <?php $state=$key==='diagnostic_card'?$row['diagnostic_card_state']:($key==='paid_missing_documents'?($row[$key]==='Да'?'missing':'present'):($row[$key]==='Есть'?'present':'missing'));?>
+        <?php elseif(in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','payment_status'],true)):?>
+          <?php $state=$key==='diagnostic_card'?$row['diagnostic_card_state']:($key==='payment_status'?$row['payment_state']:($row[$key]==='Есть'?'present':'missing'));?>
           <td class="closing-report-status is-<?= e($state) ?>"><?= e((string)$row[$key]) ?></td>
         <?php else:?><td><?= e((string)$row[$key]) ?></td><?php endif;?>
       <?php endforeach;?>

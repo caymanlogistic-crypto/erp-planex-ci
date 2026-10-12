@@ -84,6 +84,7 @@
 .closing-report-table td.closing-report-status.is-present{background:#e0f3e7;color:#17603a}
 .closing-report-table td.closing-report-status.is-missing{background:#fce5e3;color:#9b2929}
 .closing-report-table td.closing-report-status.is-partial{background:#fff0c2;color:#805500;text-align:left}
+.closing-report-table td.closing-report-status:nth-child(12){text-align:center}
 .closing-report-unit{display:block;white-space:nowrap}
 .closing-report-unit b.is-present{color:#17603a}
 .closing-report-unit b.is-missing{color:#9b2929}

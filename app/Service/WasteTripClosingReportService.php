@@ -8,11 +8,12 @@ use ZipArchive;
 
 final class WasteTripClosingReportService
 {
-    public const HEADERS = ['Рейс №','Название рейса','Водитель','Юр. лицо','ТН','Счёт','Акт','Договор','Путевой лист','Диагностическая карта','Ставка перевозчика, ₽','Дата оплаты перевозчика','Компания','Менеджер','Оплачено, документы не все'];
+    public const HEADERS = ['Рейс №','Название рейса','Водитель','Юр. лицо','ТН','Счёт','Акт','Договор','Путевой лист','Диагностическая карта','Ставка перевозчика, ₽','Статус','Дата','Компания','Менеджер'];
 
     /** @param list<array<string,mixed>> $trips @return list<array<string,mixed>> */
-    public static function rows(array $trips): array
+    public static function rows(array $trips, ?string $today = null): array
     {
+        $today ??= (new \DateTimeImmutable('now',new \DateTimeZone('Europe/Moscow')))->format('Y-m-d');
         $rows=[];
         foreach($trips as $trip){
             $slots=[];
@@ -29,14 +30,23 @@ final class WasteTripClosingReportService
             $rate=$trip['display_rate']??($trip['carrier_rate']??null);
             $carrierRate=$trip['carrier_rate']??null;
             $paid=(float)($trip['carrier_paid_amount']??0);
-            $isPaid=$carrierRate!==null&&(float)$carrierRate>0&&$paid+0.001>=(float)$carrierRate;
+            $plan=$trip['carrier_payment_plan']??null;
+            $isPaid=$paid>0&&(
+                ($carrierRate!==null&&(float)$carrierRate>0&&$paid+0.001>=(float)$carrierRate)
+                || (is_array($plan)&&array_key_exists('remaining',$plan)&&!$plan['remaining'])
+                || (($carrierRate===null||(float)$carrierRate<=0)&&!is_array($plan))
+            );
             $paidDate=(string)($trip['carrier_paid_date']??'');
-            $due=(string)($trip['carrier_payment_due']??'');
-            $date=$paid>0&&$paidDate!==''
-                ?($isPaid?'Оплачено: ':'Выплата: ').date('d.m.Y',strtotime($paidDate))
-                :($due!==''?'План: '.date('d.m.Y',strtotime($due)):'—');
+            $due=is_array($plan)?(string)($plan['date']??''):(string)($trip['carrier_payment_due']??'');
+            $confirmed=is_array($plan)&&!empty($plan['due_date'])&&($plan['status']??'')==='ready';
+            $overdue=!$isPaid&&$confirmed&&$due!==''&&$due<$today;
+            $days=$overdue?(new \DateTimeImmutable($due,new \DateTimeZone('Europe/Moscow')))->diff(new \DateTimeImmutable($today,new \DateTimeZone('Europe/Moscow')))->days:0;
+            $dayWord=($days%100>=11&&$days%100<=14)?'дней':($days%10===1?'день':($days%10>=2&&$days%10<=4?'дня':'дней'));
+            $paymentStatus=$isPaid?'Оплачено':($overdue?'Просрочка ('.$days.' '.$dayWord.')':'План');
+            $paymentState=$isPaid?'present':($overdue?'missing':'partial');
+            $paymentDate=$isPaid?$paidDate:$due;
+            $paymentDate=$paymentDate!==''?date('d.m.Y',strtotime($paymentDate)):'—';
             $tn=(int)($trip['tn_required']??0)>0 && (int)($trip['tn_scanned']??0)>=(int)$trip['tn_required'];
-            $documentsComplete=$tn&&isset($slots['invoice'],$slots['act'],$slots['contract'],$slots['waybill'])&&$cards;
             $rows[]=[
                 'id'=>(string)($trip['id']??''),
                 'number'=>(string)($trip['business_id']??''),
@@ -52,10 +62,11 @@ final class WasteTripClosingReportService
                 'diagnostic_card_state'=>$cardState,
                 'diagnostic_card_details'=>$cardDetails,
                 'rate'=>$rate===null?'—':number_format((float)$rate,2,',',' '),
-                'payment_date'=>$date,
+                'payment_status'=>$paymentStatus,
+                'payment_state'=>$paymentState,
+                'payment_date'=>$paymentDate,
                 'company'=>match((string)($trip['legal_entity_code']??'')){'planex'=>'ПЛАНЭКС','mg_logistic'=>'МГ Логистика',default=>'—'},
                 'manager'=>(string)(($trip['manager_name']??'')?:'—'),
-                'paid_missing_documents'=>$paid>0&&!$documentsComplete?'Да':'Нет',
             ];
         }
         return $rows;
@@ -69,16 +80,15 @@ final class WasteTripClosingReportService
         if($path===false)throw new RuntimeException('Не удалось подготовить Excel.');
         $zip=new ZipArchive();
         if($zip->open($path,ZipArchive::OVERWRITE)!==true){@unlink($path);throw new RuntimeException('Не удалось создать Excel.');}
-        $keys=['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_date','company','manager','paid_missing_documents'];
+        $keys=['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager'];
         $lines=[];$number=1;
         foreach(array_merge([array_combine($keys,self::HEADERS)],$rows) as $row){
             $cells=[];
             foreach($keys as $index=>$key){
                 $column=self::column($index+1);$value=htmlspecialchars((string)($row[$key]??''),ENT_XML1|ENT_QUOTES,'UTF-8');
                 $style='';
-                if($number>1&&in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','paid_missing_documents'],true)){
-                    $status=$key==='diagnostic_card'?($row['diagnostic_card_state']??'missing'):(($row[$key]??'')==='Есть'?'present':'missing');
-                    if($key==='paid_missing_documents')$status=($row[$key]??'')==='Да'?'missing':'present';
+                if($number>1&&in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','payment_status'],true)){
+                    $status=$key==='diagnostic_card'?($row['diagnostic_card_state']??'missing'):($key==='payment_status'?($row['payment_state']??'partial'):(($row[$key]??'')==='Есть'?'present':'missing'));
                     $style=' s="'.match($status){'present'=>1,'partial'=>3,default=>2}.'"';
                 }
                 $cells[]='<c r="'.$column.$number.'"'.$style.' t="inlineStr"><is><t xml:space="preserve">'.$value.'</t></is></c>';
@@ -87,7 +97,7 @@ final class WasteTripClosingReportService
         }
         $last=max(1,$number-1);
         $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:O'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>';
-        foreach([12,48,28,30,10,10,10,10,15,42,20,24,20,27,31] as $i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
+        foreach([12,48,28,30,10,10,10,10,15,42,20,23,19,20,27] as $i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
         $sheet.='</cols><sheetData>'.implode('',$lines).'</sheetData><autoFilter ref="A1:O'.$last.'"/></worksheet>';
         $parts=[
             '[Content_Types].xml'=>'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
