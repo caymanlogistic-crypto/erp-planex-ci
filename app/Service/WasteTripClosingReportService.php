@@ -8,7 +8,7 @@ use ZipArchive;
 
 final class WasteTripClosingReportService
 {
-    public const HEADERS = ['Рейс №','Название рейса','Водитель','Юр. лицо','ТН','Счёт','Акт','Договор','Путевой лист','Диагностическая карта','Ставка перевозчика, ₽','Статус','Дата','Компания','Менеджер'];
+    public const HEADERS = ['Рейс №','Название рейса','Водитель','Юр. лицо','ТН','Счёт','Акт','Договор','Путевой лист','Диагностическая карта','Ставка перевозчика, ₽','Статус','Дата','Компания','Менеджер','Раздел'];
 
     /** @param list<array<string,mixed>> $trips @return list<array<string,mixed>> */
     public static function rows(array $trips, ?string $today = null): array
@@ -31,22 +31,22 @@ final class WasteTripClosingReportService
             $carrierRate=$trip['carrier_rate']??null;
             $paid=(float)($trip['carrier_paid_amount']??0);
             $plan=$trip['carrier_payment_plan']??null;
-            $isPaid=$paid>0&&(
-                ($carrierRate!==null&&(float)$carrierRate>0&&$paid+0.001>=(float)$carrierRate)
-                || (is_array($plan)&&array_key_exists('remaining',$plan)&&!$plan['remaining'])
-                || (($carrierRate===null||(float)$carrierRate<=0)&&!is_array($plan))
-            );
+            $isPaid=$paid>0&&($carrierRate!==null&&(float)$carrierRate>0
+                ? $paid+0.001>=(float)$carrierRate
+                : (!is_array($plan)||array_key_exists('remaining',$plan)&&!$plan['remaining']));
             $paidDate=(string)($trip['carrier_paid_date']??'');
             $due=is_array($plan)?(string)($plan['date']??''):(string)($trip['carrier_payment_due']??'');
             $confirmed=is_array($plan)&&!empty($plan['due_date'])&&($plan['status']??'')==='ready';
-            $overdue=!$isPaid&&$confirmed&&$due!==''&&$due<$today;
+            $partlyPaid=$paid>0&&!$isPaid;
+            $overdue=!$isPaid&&!$partlyPaid&&$confirmed&&$due!==''&&$due<$today;
             $days=$overdue?(new \DateTimeImmutable($due,new \DateTimeZone('Europe/Moscow')))->diff(new \DateTimeImmutable($today,new \DateTimeZone('Europe/Moscow')))->days:0;
             $dayWord=($days%100>=11&&$days%100<=14)?'дней':($days%10===1?'день':($days%10>=2&&$days%10<=4?'дня':'дней'));
-            $paymentStatus=$isPaid?'Оплачено':($overdue?'Просрочка ('.$days.' '.$dayWord.')':'План');
-            $paymentState=$isPaid?'present':($overdue?'missing':'partial');
-            $paymentDate=$isPaid?$paidDate:$due;
+            $paymentStatus=$isPaid?'Оплачено':($partlyPaid?'Оплачено частично':($overdue?'Просрочка ('.$days.' '.$dayWord.')':'План'));
+            $paymentState=$isPaid?'present':($partlyPaid?'partial':($overdue?'missing':'partial'));
+            $paymentDate=$isPaid||$partlyPaid?$paidDate:$due;
             $paymentDate=$paymentDate!==''?date('d.m.Y',strtotime($paymentDate)):'—';
-            $tn=(int)($trip['tn_required']??0)>0 && (int)($trip['tn_scanned']??0)>=(int)$trip['tn_required'];
+            $requests=(int)($trip['request_count']??0);
+            $tn=$requests>0&&(int)($trip['processed_count']??0)>=$requests&&empty($trip['tn_issues']);
             $rows[]=[
                 'id'=>(string)($trip['id']??''),
                 'number'=>(string)($trip['business_id']??''),
@@ -67,6 +67,7 @@ final class WasteTripClosingReportService
                 'payment_date'=>$paymentDate,
                 'company'=>match((string)($trip['legal_entity_code']??'')){'planex'=>'ПЛАНЭКС','mg_logistic'=>'МГ Логистика',default=>'—'},
                 'manager'=>(string)(($trip['manager_name']??'')?:'—'),
+                'section'=>WasteTripClosingService::sectionLabel(WasteTripClosingService::section($trip)),
             ];
         }
         return $rows;
@@ -80,7 +81,7 @@ final class WasteTripClosingReportService
         if($path===false)throw new RuntimeException('Не удалось подготовить Excel.');
         $zip=new ZipArchive();
         if($zip->open($path,ZipArchive::OVERWRITE)!==true){@unlink($path);throw new RuntimeException('Не удалось создать Excel.');}
-        $keys=['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager'];
+        $keys=['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager','section'];
         $lines=[];$number=1;
         foreach(array_merge([array_combine($keys,self::HEADERS)],$rows) as $row){
             $cells=[];
@@ -96,9 +97,9 @@ final class WasteTripClosingReportService
             $lines[]='<row r="'.$number.'">'.implode('',$cells).'</row>';$number++;
         }
         $last=max(1,$number-1);
-        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:O'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>';
-        foreach([12,48,28,30,10,10,10,10,15,42,20,23,19,20,27] as $i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
-        $sheet.='</cols><sheetData>'.implode('',$lines).'</sheetData><autoFilter ref="A1:O'.$last.'"/></worksheet>';
+        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:P'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>';
+        foreach([12,48,28,30,10,10,10,10,15,42,20,23,19,20,27,38] as $i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
+        $sheet.='</cols><sheetData>'.implode('',$lines).'</sheetData><autoFilter ref="A1:P'.$last.'"/></worksheet>';
         $parts=[
             '[Content_Types].xml'=>'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
             '_rels/.rels'=>'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',

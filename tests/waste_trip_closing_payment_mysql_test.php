@@ -51,32 +51,22 @@ try {
         INSERT INTO waste_trip_requests VALUES(1,1,1,NULL);
         INSERT INTO waste_trip_completion_items VALUES(1,0,'2026-10-11 10:00:00','2026-10-11 11:00:00',1,1,'full',NULL);
         INSERT INTO waste_trip_completion_documents VALUES(1,1,NULL);");
-    try {Closing::assertEditable($pdo,1);throw new RuntimeException('Queued trip must reject document edits');}
-    catch (DomainException $error) {if (!str_contains($error->getMessage(),'верните')) throw $error;}
-    try {Closing::changePaymentStage($pdo,1,3,'rework');throw new RuntimeException('Stale action must fail');}
-    catch (DomainException $error) {if (!str_contains($error->getMessage(),'изменились')) throw $error;}
-    Closing::changePaymentStage($pdo,1,4,'rework');
+    Closing::assertEditable($pdo,1);
     $row=$pdo->query('SELECT state,version FROM waste_trip_closing_reviews WHERE waste_trip_id=1')->fetch(PDO::FETCH_ASSOC);
-    if ($row['state']!=='work' || (int)$row['version']!==5) throw new RuntimeException('Return to rework must persist and advance version');
+    if ($row['state']!=='payment' || (int)$row['version']!==4) throw new RuntimeException('Legacy payment state must not block editing or mutate itself');
     $pdo->exec('UPDATE documents SET deleted_at=NOW() WHERE id=1');
-    Closing::changePaymentStage($pdo,1,5,'queue');
-    $row=$pdo->query('SELECT state,version FROM waste_trip_closing_reviews WHERE waste_trip_id=1')->fetch(PDO::FETCH_ASSOC);
-    if ($row['state']!=='payment' || (int)$row['version']!==6) throw new RuntimeException('Missing diagnostic card must not block payment queue');
-    Closing::changePaymentStage($pdo,1,6,'rework');
-    $pdo->exec('UPDATE waste_trip_completion_documents SET deleted_at=NOW() WHERE id=1');
-    try {Closing::changePaymentStage($pdo,1,7,'queue');throw new RuntimeException('Trip with a missing TN scan must not enter payment queue');}
-    catch (DomainException $error) {if (!str_contains($error->getMessage(),'ошибки ТН')) throw $error;}
-    $pdo->exec('UPDATE waste_trip_completion_documents SET deleted_at=NULL WHERE id=1');
-    $pdo->exec('UPDATE waste_trip_closing_documents SET deleted_at=NOW() WHERE id=4');
-    try {Closing::changePaymentStage($pdo,1,7,'queue');throw new RuntimeException('Incomplete trip must not enter payment queue');}
-    catch (DomainException $error) {if (!str_contains($error->getMessage(),'обязательные документы')) throw $error;}
     $docs=array_map(static fn(string $slot):array=>['slot_code'=>$slot],array_keys(Closing::SLOTS));
-    $trip=['documents'=>$docs,'tn_issues'=>[]];$transport=['units'=>[['documents'=>[['id'=>1]]]]];
-    if (!Closing::paymentReady($trip,$transport) || !Closing::paymentReady($trip,['units'=>[['has_card'=>true,'documents'=>[]]]])
-        || !Closing::paymentReady($trip,['units'=>[['has_card'=>false,'documents'=>[]]]])
-        || !Closing::paymentReady($trip,null)
-        || Closing::paymentReady(['documents'=>$docs,'tn_issues'=>['missing scan']],$transport)) {
-        throw new RuntimeException('Payment readiness must require closing documents and no TN issues, regardless of diagnostic card');
-    }
+    $trip=['documents'=>$docs,'tn_issues'=>[],'request_count'=>1,'processed_count'=>1,'carrier_paid_amount'=>'0.00','carrier_rate'=>'250000.00'];
+    if (Closing::section($trip)!=='ready') throw new RuntimeException('Complete unpaid trip must be ready automatically');
+    $trip['carrier_paid_amount']='50000.00';
+    if (Closing::section($trip)!=='paid_complete' || Closing::carrierDebt($trip)!=='Долг 200 000 ₽') throw new RuntimeException('Partial carrier payment must count as paid with red debt');
+    $trip['documents']=array_slice($docs,0,3);
+    if (Closing::section($trip)!=='paid_incomplete') throw new RuntimeException('Paid trip without a required document must be incomplete');
+    $trip['carrier_paid_amount']='0.00';
+    if (Closing::section($trip)!=='incomplete') throw new RuntimeException('Unpaid trip without a required document must be incomplete');
+    $trip['documents']=$docs;$trip['processed_count']=0;
+    if (Closing::section($trip)!=='incomplete') throw new RuntimeException('All TN must be processed');
+    $trip['processed_count']=1;$trip['tn_issues']=['missing scan'];
+    if (Closing::section($trip)!=='incomplete') throw new RuntimeException('TN errors must prevent full kit');
     echo "WASTE_TRIP_CLOSING_PAYMENT=PASS\n";
 } finally {cleanCompanyPoolDatabase($pdo);}

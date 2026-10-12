@@ -30,9 +30,9 @@ try {
         INSERT INTO finance_obligations VALUES(21,'WASTE_TRIP',1,'customer',100.00,50.00,NULL,'partially_paid'),(22,'WASTE_TRIP',1,'carrier',100.00,100.00,NULL,'paid');
         INSERT INTO finance_operation_allocations VALUES(31,21,11,50.00,NULL),(32,22,12,100.00,NULL);");
     $pdo->exec((string)file_get_contents(BASE_PATH.'/database/migrations-local/152_waste_trip_closing_documents.sql'));
-    $assert(Closing::ready($pdo) && !Closing::paymentQueueReady($pdo),'existing closing documents must remain available before payment migration');
+    $assert(Closing::ready($pdo),'existing closing documents must remain available before legacy payment migration');
     $pdo->exec((string)file_get_contents(BASE_PATH.'/database/migrations-local/159_waste_trip_closing_payment_queue.sql'));
-    $assert(Closing::ready($pdo) && Closing::paymentQueueReady($pdo),'payment migration readiness');
+    $assert(Closing::ready($pdo),'closing documents must remain available after legacy payment migration');
     $assert(Closing::recipient('planex')==='info@plan-ex.ru' && Closing::recipient('mg_logistic')==='shibanov@mg-log.ru','executor routing');
     foreach (['contract'=>'application','invoice'=>'invoice','act'=>'upd','waybill'=>'waybill'] as $slot=>$code) {
         $pdo->prepare("INSERT INTO documents(entity_type,entity_id,original_name,relative_path,mime_type,file_size) VALUES('waste_trip',1,?,?,'application/pdf',100)")
