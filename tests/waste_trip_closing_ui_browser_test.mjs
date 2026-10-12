@@ -20,6 +20,7 @@ const trip=()=>`<details data-closing-trip data-trip-id="7" data-business-id="32
   </div>
 </details>`;
 const pageHtml=(success,payment=false)=>`<!doctype html><html><body><div style="height:800px"></div><div class="closing-page" data-closing-state-key="planex:trip-closing:v1:fixture-user">
+  <button type="button" data-closing-report-open>Сводный отчёт</button>
   <input data-closing-search><button data-closing-filter="all"></button><button data-closing-filter="open"></button><button data-closing-filter="review"></button><button data-closing-filter="payment"></button>
   <select data-closing-entity><option value="all">Все рейсы</option><option value="planex">ПЛАНЭКС</option><option value="mg_logistic">МГ Логистика</option></select>
   <select data-closing-payment-ready><option value="all">Все</option><option value="yes">Да</option><option value="no">Нет</option></select>
@@ -28,7 +29,7 @@ const pageHtml=(success,payment=false)=>`<!doctype html><html><body><div style="
   ${success?'<span data-closing-action-result="success" hidden></span>':''}${trip()}
   <details data-closing-trip data-trip-id="8" data-business-id="310" data-state="${payment?'payment':'review'}" data-payment-ready="yes" data-entity="mg_logistic" data-manager-id="72" data-search="310 перевозчик гайнутдинов"><summary>Рейс #310</summary></details>
   <p data-closing-empty hidden></p>
-</div><div style="height:900px"></div></body></html>`;
+</div><dialog data-closing-report-dialog><button type="button" data-closing-report-close>Закрыть</button><table><tbody><tr data-report-trip-id="7"><td>322</td></tr><tr data-report-trip-id="8"><td>310</td></tr></tbody></table><p data-closing-report-empty hidden></p><span data-closing-report-count></span><a data-closing-report-download href="/company/trips/closing-documents/summary.xlsx">Скачать Excel</a></dialog><div style="height:900px"></div></body></html>`;
 const server=http.createServer((request,response)=>{
   const chunks=[];
   request.on('data',chunk=>chunks.push(chunk));
@@ -60,6 +61,10 @@ try {
   assert.equal(await page.locator('[data-closing-trip]:visible').count(),2,'pasted trip labels and a trailing comma work');
   await page.selectOption('[data-closing-entity]','planex');
   assert.equal(await page.locator('[data-closing-trip]:visible').count(),1,'PLANEX selection keeps only its trips');
+  await page.locator('[data-closing-report-open]').click();
+  assert.equal(await page.locator('[data-report-trip-id]:visible').count(),1,'report uses current trip filters');
+  assert.match(await page.locator('[data-closing-report-download]').getAttribute('href'),/ids=7$/,'Excel download selects visible trip');
+  await page.locator('[data-closing-report-close]').click();
   await page.selectOption('[data-closing-entity]','mg_logistic');
   assert.equal(await page.locator('[data-trip-id="8"]:visible').count(),1,'MG Logistics selection keeps only its trips');
   await page.selectOption('[data-closing-entity]','all');

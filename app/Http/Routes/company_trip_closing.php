@@ -2,6 +2,7 @@
 require_once base_path('app/Service/WasteTripClosingService.php');
 require_once base_path('app/Service/EntityResponsibilityService.php');
 require_once base_path('app/Service/WasteTripClosingTransportService.php');
+require_once base_path('app/Service/WasteTripClosingReportService.php');
 require_once base_path('app/Service/FinanceInvoicePaymentTimelineService.php');
 require_once base_path('app/Service/FinanceObligationService.php');
 require_once base_path('app/Service/WasteTripClosingInvoiceService.php');
@@ -10,6 +11,7 @@ require_once base_path('app/Http/Controllers/Company/WasteTripClosingController.
 $tripClosingController=new \App\Http\Controllers\Company\WasteTripClosingController($config,$db);
 $tripClosingPage='company.documents.trip_closing';
 $router->get('/company/trips/closing-documents',[$tripClosingController,'index'],$tripClosingPage);
+$router->get('/company/trips/closing-documents/summary.xlsx',[$tripClosingController,'summaryXlsx'],$tripClosingPage);
 $router->get('/company/trips/closing-documents/{tripId}/invoices',[$tripClosingController,'invoiceCandidates'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/invoices/link',[$tripClosingController,'linkInvoice'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/documents',[$tripClosingController,'upload'],$tripClosingPage);

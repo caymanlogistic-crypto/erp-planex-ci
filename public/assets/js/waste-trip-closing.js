@@ -10,6 +10,8 @@
   const count=page.querySelector('[data-closing-count]');
   const listLabel=page.querySelector('[data-closing-list-label]');
   const empty=page.querySelector('[data-closing-empty]');
+  const reportDialog=document.querySelector('[data-closing-report-dialog]');
+  let reportRows=[...reportDialog?.querySelectorAll('[data-report-trip-id]')||[]];
   if(!search || !count || !empty) return;
   const stateKey=page.dataset.closingStateKey;
   let savedState=null;
@@ -53,8 +55,35 @@
     count.textContent=String(visible);
     if(listLabel) listLabel.textContent=filter==='payment'?'НА ОПЛАТУ':'ЗАВЕРШЁННЫЕ РЕЙСЫ';
     empty.hidden=visible>0;
+    if(reportDialog?.open) updateReport();
+  }
+  function updateReport(){
+    if(!reportDialog)return;
+    const ids=new Set(trips.filter(trip=>!trip.hidden).map(trip=>trip.dataset.tripId));
+    let visible=0;
+    reportRows.forEach(row=>{row.hidden=!ids.has(row.dataset.reportTripId);if(!row.hidden)visible++;});
+    reportDialog.querySelector('[data-closing-report-empty]').hidden=visible>0;
+    reportDialog.querySelector('[data-closing-report-count]').textContent=`Рейсов: ${visible}`;
+    const download=reportDialog.querySelector('[data-closing-report-download]');
+    const url=new URL(download.href,location.href);
+    url.searchParams.set('ids',trips.filter(trip=>!trip.hidden).map(trip=>trip.dataset.tripId).join(','));
+    download.href=url.toString();
+    download.toggleAttribute('aria-disabled',visible===0);
   }
   render();
+  if(reportDialog){
+    let reportOpener=null;
+    page.querySelector('[data-closing-report-open]')?.addEventListener('click',event=>{
+      reportOpener=event.currentTarget;updateReport();reportDialog.showModal();
+      reportDialog.querySelector('[data-closing-report-close]')?.focus();
+    });
+    reportDialog.querySelectorAll('[data-closing-report-close]').forEach(button=>button.addEventListener('click',()=>reportDialog.close()));
+    reportDialog.addEventListener('click',event=>{if(event.target===reportDialog)reportDialog.close();});
+    reportDialog.addEventListener('close',()=>reportOpener?.focus());
+    reportDialog.querySelector('[data-closing-report-download]')?.addEventListener('click',event=>{
+      if(event.currentTarget.getAttribute('aria-disabled')==='true')event.preventDefault();
+    });
+  }
   if((requestedTripId && trips.some(trip=>trip.dataset.tripId===requestedTripId)) || stage) saveState();
   if(stage){const url=new URL(location.href);url.searchParams.delete('stage');history.replaceState(history.state,'',url);}
   search.addEventListener('input',()=>{render();saveState();});
@@ -108,6 +137,13 @@
       trip.dataset.state=updated.dataset.state;
       trip.dataset.paymentReady=updated.dataset.paymentReady;
       trip.replaceChildren(...updated.children);
+      const updatedReport=result.querySelector('[data-closing-report-dialog] tbody');
+      const reportBody=reportDialog?.querySelector('tbody');
+      if(updatedReport&&reportBody){
+        reportBody.replaceChildren(...[...updatedReport.children].map(row=>document.importNode(row,true)));
+        reportRows=[...reportBody.querySelectorAll('[data-report-trip-id]')];
+        if(reportDialog.open)updateReport();
+      }
       render();
       window.scrollTo(scrollX,scrollY);
       requestAnimationFrame(()=>window.scrollTo(scrollX,scrollY));

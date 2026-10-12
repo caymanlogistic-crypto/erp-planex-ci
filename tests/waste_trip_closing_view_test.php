@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Service/WasteTripClosingService.php';
+require_once BASE_PATH.'/app/Service/WasteTripClosingReportService.php';
 require_once BASE_PATH.'/app/Service/FinanceInvoiceService.php';
 require_once BASE_PATH.'/app/Support/http_runtime.php';
 
@@ -11,6 +12,8 @@ $trip=static function(int $id,array $documents):array {
         'id'=>$id,'business_id'=>$id,'actual_end_date'=>'2026-09-30',
         'carrier_id'=>42,'carrier_name'=>'Перевозчик','manager_name'=>'Менеджер','manager_membership_id'=>71,'legal_entity_code'=>'planex',
         'recipient_email'=>'info@plan-ex.ru','review_state'=>'work','review_version'=>0,
+        'carrier_rate'=>'25000.00','carrier_paid_amount'=>'0.00','carrier_payment_due'=>'2026-10-15','carrier_paid_date'=>null,
+        'direction'=>'Москва → Тверь','driver_names'=>'Иванов Иван','tn_required'=>2,'tn_scanned'=>0,
         'documents'=>$documents,'paid_bank_transactions'=>[],'request_count'=>3,'processed_count'=>2,
         'tn_issues'=>['Заявка №123: нет скана ТН','Заявка №124: нет скана ТН','Заявка №125: нет подписи водителя'],
         'invoice_summary'=>['status'=>'missing','detail'=>'—','invoice_id'=>0],
@@ -31,7 +34,7 @@ $trips=[
     ]),['legal_entity_code'=>'mg_logistic','tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
         ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','has_card'=>true,'can_upload'=>true,'documents'=>[['id'=>89,'original_name'=>'tractor-card.pdf']]],
         ['id'=>10,'label'=>'Полуприцеп','brand'=>'ТОНАР','plate'=>'С333СС','has_card'=>true,'can_upload'=>false,'documents'=>[]],
-    ]]]),
+    ]],'carrier_paid_amount'=>'25000.00','carrier_paid_date'=>'2026-10-10','tn_scanned'=>2]),
 ];
 $success='Документ добавлен.';
 $flashError=$error=null;
@@ -42,6 +45,12 @@ $contractors=[['id'=>42,'name'=>'Перевозчик','inn'=>'1234567890']];
 $clients=[];
 $responsibleUsers=[['membership_id'=>71,'full_name'=>'Менеджер','login'=>'manager'],['membership_id'=>72,'full_name'=>'Без рейсов','login'=>'idle']];
 $viewStateKey='planex:trip-closing:v1:1:42';
+$reportRows=\App\Service\WasteTripClosingReportService::rows($trips);
+$xlsx=\App\Service\WasteTripClosingReportService::xlsx($reportRows);
+$archive=new ZipArchive();
+if($archive->open($xlsx)!==true)throw new RuntimeException('Excel report is not a valid XLSX archive');
+$sheet=(string)$archive->getFromName('xl/worksheets/sheet1.xml');
+$archive->close();@unlink($xlsx);
 unset($_GET['trip_id']);
 ob_start();
 require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
@@ -50,6 +59,12 @@ $html=(string)ob_get_clean();
 $assert=static function(bool $condition,string $message):void {if(!$condition)throw new RuntimeException($message);};
 $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must show common issues block');
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
+$assert(str_contains($html,'data-closing-report-open')&&str_contains($html,'data-closing-report-dialog')&&str_contains($html,'data-closing-report-download'),'summary report must open in a popup with Excel download');
+$assert(substr_count($html,'data-report-trip-id=')===2,'summary report must include both accessible trips');
+$assert(str_contains($sheet,'Рейс №')&&str_contains($sheet,'ПЛАНЭКС')&&str_contains($sheet,'МГ Логистика')&&str_contains($sheet,'autoFilter ref="A1:N3"'),'Excel report must contain headers, both executors and filter');
+$assert($reportRows[1]['diagnostic_card']==='Есть'&&$reportRows[0]['diagnostic_card']==='Нет','report must reuse vehicle card availability');
+$assert($reportRows[0]['payment_date']==='План: 15.10.2026'&&$reportRows[1]['payment_date']==='Оплачено: 10.10.2026','report must distinguish planned and actual carrier payment date');
+$assert($reportRows[0]['tn']==='Нет'&&$reportRows[1]['tn']==='Есть','report TN status must follow scans');
 $assert(str_contains($html,'data-closing-payment-ready')&&str_contains($html,'data-closing-manager'),'payment and manager filters must be rendered');
 $assert(str_contains($html,'data-closing-entity')&&str_contains($html,'<option value="planex">ПЛАНЭКС</option>')&&str_contains($html,'<option value="mg_logistic">МГ Логистика</option>'),'all trips selector must offer both legal entities');
 $assert(str_contains($html,'data-entity="planex"')&&str_contains($html,'data-entity="mg_logistic"'),'each trip must expose its legal entity for filtering');
