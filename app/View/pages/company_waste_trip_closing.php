@@ -37,13 +37,14 @@ $progressColor=static function(int $percent):string {
         foreach($docs as $document){if($document['slot_code']==='extra')$extras[(string)$document['custom_title']][]=$document;else $bySlot[$document['slot_code']][]=$document;}
         $missing=[];foreach(\App\Service\WasteTripClosingService::SLOTS as $slot=>$label)if(!isset($bySlot[$slot]))$missing[]=$label;
         $transport=$trip['transport']??null;$cardUnits=$transport['units']??[];
-        $cardRequired=max(1,count($cardUnits));$cardsPresent=0;
+        $missingCards=[];
         if(!$cardUnits)$missing[]='Диагностическая карта транспорта';
         foreach($cardUnits as $unit){
-            if($unit['documents'])$cardsPresent++;
-            else $missing[]='Диагностическая карта: '.trim((string)$unit['label'].' '.(string)$unit['plate']);
+            if(!empty($unit['has_card'])||!empty($unit['documents']))continue;
+            $missingCards[]=$unit;
+            $missing[]='Диагностическая карта: '.trim((string)$unit['label'].' '.(string)$unit['plate']);
         }
-        $count=count($bySlot)+count($extras)+$cardsPresent;$total=4+count($extras)+$cardRequired;$percent=$total?min(100,(int)round($count/$total*100)):0;
+        $count=count($bySlot)+count($extras);$total=4+count($extras)+($cardUnits?count($missingCards):1);$percent=$total?min(100,(int)round($count/$total*100)):0;
         $paymentReady=\App\Service\WasteTripClosingService::paymentReady($trip,$transport);
         $onPayment=$trip['review_state']==='payment';
         $state=$onPayment?'payment':($trip['review_state']==='review'?'review':($count===0?'new':($missing?'partial':'ready')));
@@ -89,10 +90,10 @@ $progressColor=static function(int $percent):string {
               <label class="btn btn-secondary closing-upload">Добавить файлы<input type="file" name="document_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx,.xls,.xlsx" multiple required></label>
             </form></div>
           </div><?php endforeach;?>
-          <?php if(!$cardUnits):?><div class="closing-doc-row"><div><strong>Диагностическая карта транспорта</strong><small>Обязательный документ</small></div><div class="closing-file-list"><?= $transport?'Нет доступа к загрузке карты для этого транспорта':'Укажите транспорт в рейсе, чтобы загрузить карту' ?></div></div><?php else:foreach($cardUnits as $unit):?>
-          <div class="closing-doc-row"><div><strong>Диагностическая карта транспорта</strong><small><?= e((string)$unit['label']) ?> · <?= e(trim((string)$unit['brand'].' '.(string)$unit['plate'])) ?> · Можно добавить несколько файлов</small></div>
-            <div class="closing-file-list"><?php if($unit['documents']):foreach($unit['documents'] as $card):?><div class="closing-file-entry"><a data-document-preview target="_blank" rel="noopener noreferrer" href="<?= e(app_url('/company/documents/view?id='.(int)$card['id'])) ?>"><?= e((string)$card['original_name']) ?></a></div><?php endforeach;else:?>Файл не получен<?php endif;?></div>
-            <div class="closing-doc-actions"><form class="closing-upload-form closing-card-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/diagnostic-card')) ?>"><?= csrfField() ?><input type="hidden" name="vehicle_unit_id" value="<?= (int)$unit['id'] ?>"><label class="btn btn-secondary closing-upload">Добавить файлы<input type="file" name="card_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx" multiple required></label></form></div>
+          <?php if(!$cardUnits):?><div class="closing-doc-row"><div><strong>Диагностическая карта транспорта</strong><small>Документ ТС</small></div><div class="closing-file-list">Укажите транспорт в рейсе, чтобы проверить карту</div></div><?php else:foreach($missingCards as $unit):?>
+          <div class="closing-doc-row"><div><strong>Диагностическая карта транспорта</strong><small><?= e((string)$unit['label']) ?> · <?= e(trim((string)$unit['brand'].' '.(string)$unit['plate'])) ?><?= !empty($unit['can_upload'])?' · Можно добавить несколько файлов':'' ?></small></div>
+            <div class="closing-file-list"><?= !empty($unit['can_upload'])?'Файл не получен':'Нет доступа к загрузке карты этого ТС' ?></div>
+            <?php if(!empty($unit['can_upload'])):?><div class="closing-doc-actions"><form class="closing-upload-form closing-card-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/diagnostic-card')) ?>"><?= csrfField() ?><input type="hidden" name="vehicle_unit_id" value="<?= (int)$unit['id'] ?>"><label class="btn btn-secondary closing-upload">Добавить файлы<input type="file" name="card_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx" multiple required></label></form></div><?php endif;?>
           </div><?php endforeach;endif;?>
           <?php foreach($extras as $extraTitle=>$files):?><div class="closing-doc-row"><div><strong><?= e($extraTitle) ?></strong><small>Другой документ</small></div><div class="closing-file-list"><?php foreach($files as $document):?><div class="closing-file-entry"><a data-document-preview target="_blank" rel="noopener noreferrer" href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a><form class="closing-remove-form" method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'/remove')) ?>"><?= csrfField() ?><button class="closing-file-remove" type="submit" aria-label="Удалить файл <?= e((string)$document['original_name']) ?>">×</button></form></div><?php endforeach;?></div><form class="closing-upload-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents')) ?>"><?= csrfField() ?><input type="hidden" name="slot_code" value="extra"><input type="hidden" name="requirement_code" value="supporting"><input type="hidden" name="custom_title" value="<?= e($extraTitle) ?>"><label class="btn btn-secondary closing-upload">Добавить файлы<input type="file" name="document_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx,.xls,.xlsx" multiple required></label></form></div><?php endforeach;?>
         </div>

@@ -57,7 +57,7 @@ final class WasteTripClosingService
         foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;
         $units=$transport['units']??[];
         if (!$units || !empty($trip['tn_issues'])) return false;
-        foreach ($units as $unit) if (empty($unit['documents'])) return false;
+        foreach ($units as $unit) if (empty($unit['has_card']) && empty($unit['documents'])) return false;
         return true;
     }
 
@@ -95,7 +95,7 @@ final class WasteTripClosingService
     {
         $transport=WasteTripClosingTransportService::forTrips($pdo,[$tripId])[$tripId]??null;
         if (!$transport || empty($transport['units'])) return false;
-        foreach ($transport['units'] as $unit) if (empty($unit['documents'])) return false;
+        foreach ($transport['units'] as $unit) if (empty($unit['has_card']) && empty($unit['documents'])) return false;
         $present=[];
         foreach (self::documents($pdo,$tripId) as $document) $present[(string)$document['slot_code']]=true;
         foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;

@@ -71,7 +71,8 @@ try {
     catch (DomainException $error) {if (!str_contains($error->getMessage(),'обязательные документы')) throw $error;}
     $docs=array_map(static fn(string $slot):array=>['slot_code'=>$slot],array_keys(Closing::SLOTS));
     $trip=['documents'=>$docs,'tn_issues'=>[]];$transport=['units'=>[['documents'=>[['id'=>1]]]]];
-    if (!Closing::paymentReady($trip,$transport) || Closing::paymentReady($trip,['units'=>[['documents'=>[]]]])
+    if (!Closing::paymentReady($trip,$transport) || !Closing::paymentReady($trip,['units'=>[['has_card'=>true,'documents'=>[]]]])
+        || Closing::paymentReady($trip,['units'=>[['has_card'=>false,'documents'=>[]]]])
         || Closing::paymentReady(['documents'=>$docs,'tn_issues'=>['missing scan']],$transport)) {
         throw new RuntimeException('Payment readiness must require all documents, cards and no TN issues');
     }

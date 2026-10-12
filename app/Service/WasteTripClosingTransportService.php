@@ -55,11 +55,12 @@ final class WasteTripClosingTransportService
                 if ($unitId<=0) continue;
                 $accessKey=(int)$row['set_id'].':'.$unitId;
                 $editable[$accessKey]??=self::canEditUnit($pdo,(int)$row['set_id'],$unitId);
-                if (!$editable[$accessKey]) continue;
+                $canUpload=$editable[$accessKey];
                 $units[]=[
                     'id'=>$unitId,'role'=>$role,'label'=>(string)$rule['label'],
                     'plate'=>(string)($row[$role.'_plate']??''),'brand'=>(string)($row[$role.'_brand']??''),
-                    'documents'=>$documents[$unitId]??[],
+                    'has_card'=>!empty($documents[$unitId]),'can_upload'=>$canUpload,
+                    'documents'=>$canUpload?($documents[$unitId]??[]):[],
                 ];
             }
             $result[(int)$row['trip_id']]=['set_type'=>$setType,'set_label'=>(string)$rules[$setType]['label'],'units'=>$units];
@@ -90,7 +91,7 @@ final class WasteTripClosingTransportService
             $transport=self::forTrips($pdo,[$tripId])[$tripId]??null;
             $unit=null;
             foreach ($transport['units']??[] as $item) if ((int)$item['id']===$unitId) $unit=$item;
-            if ($unit===null) throw new DomainException('Транспортная единица недоступна для изменения.');
+            if ($unit===null || empty($unit['can_upload'])) throw new DomainException('Транспортная единица недоступна для изменения.');
             $lock=$pdo->prepare('SELECT id FROM vehicle_units WHERE id=? AND deleted_at IS NULL FOR UPDATE');
             $lock->execute([$unitId]);
             if (!$lock->fetchColumn()) throw new DomainException('Транспорт изменился. Обновите страницу.');
