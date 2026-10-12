@@ -79,3 +79,11 @@
 @media(max-width:1180px){.closing-page .closing-trip-summary,.closing-page .closing-trip[data-state=new]>.closing-trip-summary{grid-template-columns:16px minmax(0,1fr);grid-template-rows:none;row-gap:10px;padding:12px}.closing-page .closing-chevron{grid-column:1;grid-row:1;align-self:start;margin-top:7px}.closing-page .closing-identity,.closing-page .closing-carrier,.closing-page .closing-executor,.closing-page .closing-invoice-status,.closing-page .closing-progress,.closing-page .closing-requests,.closing-page .closing-shared-issues{grid-column:2;grid-row:auto}.closing-page .closing-invoice-status,.closing-page .closing-progress,.closing-page .closing-requests,.closing-page .closing-shared-issues{padding-top:9px;border-top:1px solid var(--line-soft,#e4e7ec)}.closing-page .closing-shared-issues{padding-left:0;border-left:0}}
 @media(max-width:1180px){.closing-page .closing-list .closing-trip>.closing-trip-summary{grid-template-columns:16px minmax(0,1fr);grid-template-rows:none}.closing-page .closing-trip-summary>.closing-identity,.closing-page .closing-trip-summary>.closing-carrier,.closing-page .closing-trip-summary>.closing-executor,.closing-page .closing-trip-summary>.closing-invoice-status,.closing-page .closing-trip-summary>.closing-progress,.closing-page .closing-trip-summary>.closing-requests,.closing-page .closing-trip-summary>.closing-shared-issues{grid-column:2;grid-row:auto}}
 @media(max-width:700px){.closing-page .closing-invoice-actions{align-items:stretch}.closing-page .closing-invoice-control{max-width:100%;min-height:32px}.closing-picker-foot .btn{flex:1}.closing-picker-head,.closing-picker-body,.closing-picker-foot{padding-left:12px;padding-right:12px}}
+/* Document availability in the summary popup. */
+.closing-report-table td.closing-report-status{font-weight:700;text-align:center}
+.closing-report-table td.closing-report-status.is-present{background:#e0f3e7;color:#17603a}
+.closing-report-table td.closing-report-status.is-missing{background:#fce5e3;color:#9b2929}
+.closing-report-table td.closing-report-status.is-partial{background:#fff0c2;color:#805500;text-align:left}
+.closing-report-unit{display:block;white-space:nowrap}
+.closing-report-unit b.is-present{color:#17603a}
+.closing-report-unit b.is-missing{color:#9b2929}

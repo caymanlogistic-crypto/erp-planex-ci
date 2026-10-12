@@ -123,7 +123,25 @@ $progressColor=static function(int $percent):string {
   </section>
   <?php endif;?>
 </div>
-<?php if($schemaReady):?><dialog class="closing-report-dialog" data-closing-report-dialog aria-labelledby="closing-report-title"><div class="closing-report-head"><div><strong id="closing-report-title">Сводный отчёт по рейсам</strong><small>Рейсы из текущей выборки</small></div><button type="button" data-closing-report-close aria-label="Закрыть">×</button></div><div class="closing-report-body"><div class="closing-report-scroll"><table class="closing-report-table"><thead><tr><?php foreach(\App\Service\WasteTripClosingReportService::HEADERS as $header):?><th scope="col"><?= e($header) ?></th><?php endforeach;?></tr></thead><tbody><?php foreach($reportRows as $row):?><tr data-report-trip-id="<?= (int)$row['id'] ?>"><?php foreach(['number','direction','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_date','company','manager'] as $key):?><td><?= e((string)$row[$key]) ?></td><?php endforeach;?></tr><?php endforeach;?></tbody></table></div><p class="closing-report-empty" data-closing-report-empty hidden>Рейсы по текущим фильтрам не найдены.</p></div><div class="closing-report-foot"><span data-closing-report-count></span><div><button type="button" class="btn btn-secondary" data-closing-report-close>Закрыть</button><a class="btn btn-primary" data-closing-report-download href="<?= e(app_url('/company/trips/closing-documents/summary.xlsx')) ?>">Скачать Excel</a></div></div></dialog><?php endif;?>
+<?php if($schemaReady):?>
+<dialog class="closing-report-dialog" data-closing-report-dialog aria-labelledby="closing-report-title">
+  <div class="closing-report-head"><div><strong id="closing-report-title">Сводный отчёт по рейсам</strong><small>Рейсы из текущей выборки</small></div><button type="button" data-closing-report-close aria-label="Закрыть">×</button></div>
+  <div class="closing-report-body"><div class="closing-report-scroll"><table class="closing-report-table">
+    <thead><tr><?php foreach(\App\Service\WasteTripClosingReportService::HEADERS as $header):?><th scope="col"><?= e($header) ?></th><?php endforeach;?></tr></thead>
+    <tbody><?php foreach($reportRows as $row):?><tr data-report-trip-id="<?= (int)$row['id'] ?>">
+      <?php foreach(['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_date','company','manager','paid_missing_documents'] as $key):?>
+        <?php if($key==='diagnostic_card' && count($row['diagnostic_card_details'])>1):?>
+          <td class="closing-report-status is-<?= e($row['diagnostic_card_state']) ?>"><?php foreach($row['diagnostic_card_details'] as $unit):?><span class="closing-report-unit"><?= e($unit['label']) ?>: <b class="<?= $unit['status']==='Есть'?'is-present':'is-missing' ?>"><?= e($unit['status']) ?></b></span><?php endforeach;?></td>
+        <?php elseif(in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','paid_missing_documents'],true)):?>
+          <?php $state=$key==='diagnostic_card'?$row['diagnostic_card_state']:($key==='paid_missing_documents'?($row[$key]==='Да'?'missing':'present'):($row[$key]==='Есть'?'present':'missing'));?>
+          <td class="closing-report-status is-<?= e($state) ?>"><?= e((string)$row[$key]) ?></td>
+        <?php else:?><td><?= e((string)$row[$key]) ?></td><?php endif;?>
+      <?php endforeach;?>
+    </tr><?php endforeach;?></tbody>
+  </table></div><p class="closing-report-empty" data-closing-report-empty hidden>Рейсы по текущим фильтрам не найдены.</p></div>
+  <div class="closing-report-foot"><span data-closing-report-count></span><div><button type="button" class="btn btn-secondary" data-closing-report-close>Закрыть</button><a class="btn btn-primary" data-closing-report-download href="<?= e(app_url('/company/trips/closing-documents/summary.xlsx')) ?>">Скачать Excel</a></div></div>
+</dialog>
+<?php endif;?>
 <?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><dialog class="closing-review-dialog" data-review-dialog aria-labelledby="closing-review-title">
   <form method="post" data-review-form><div class="closing-review-head"><strong id="closing-review-title">Передать на проверку</strong><button type="button" data-review-close aria-label="Закрыть">×</button></div>
     <div class="closing-review-body"><p data-review-missing></p><div class="closing-review-mail"><strong>Письмо при передаче</strong><span data-review-recipient></span><span data-review-subject></span><span>В письме: сводка комплекта и защищённая ссылка на архив файлов рейса.</span><span class="closing-review-archive">Архив документов рейса <small>Хранится 30 дней</small></span></div></div>
