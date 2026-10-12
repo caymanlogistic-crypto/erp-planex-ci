@@ -182,6 +182,10 @@ $assert(str_contains($readyWithoutCardHtml,'data-state="ready"')
     && str_contains($readyWithoutCardHtml,'4 из 5 получено')
     && str_contains($readyWithoutCardHtml,'aria-label="4 из 5 документов получено"'),
     'one missing diagnostic card must show 4 of 5 while the trip stays ready for payment');
+$trips[0]['tn_issues']=['Заявка №123: нет подписи водителя'];
+$reportWithProcessedRemarks=\App\Service\WasteTripClosingReportService::rows($trips,'2026-10-12');
+$assert($reportWithProcessedRemarks[0]['tn']==='Есть'&&$reportWithProcessedRemarks[0]['section']==='Готово к оплате',
+    'processed TN must count as present in the report despite signature remarks');
 $trips[0]['carrier_paid_amount']='5000.00';
 ob_start();
 require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
