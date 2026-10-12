@@ -26,12 +26,15 @@ final class WasteTripClosingReportService
             }
             $cardStatus=$units===[]?'Нет':(count($units)===1?($cards?'Есть':'Нет'):implode('; ',array_map(static fn(array $unit):string=>$unit['label'].': '.$unit['status'],$cardDetails)));
             $cardState=$cards?'present':($cardsFound>0?'partial':'missing');
-            $rate=$trip['carrier_rate']??null;
+            $rate=$trip['display_rate']??($trip['carrier_rate']??null);
+            $carrierRate=$trip['carrier_rate']??null;
             $paid=(float)($trip['carrier_paid_amount']??0);
-            $isPaid=$rate!==null&&(float)$rate>0&&$paid+0.001>=(float)$rate;
+            $isPaid=$carrierRate!==null&&(float)$carrierRate>0&&$paid+0.001>=(float)$carrierRate;
             $paidDate=(string)($trip['carrier_paid_date']??'');
             $due=(string)($trip['carrier_payment_due']??'');
-            $date=$isPaid?($paidDate!==''?'Оплачено: '.date('d.m.Y',strtotime($paidDate)):'—'):($due!==''?'План: '.date('d.m.Y',strtotime($due)):'—');
+            $date=$paid>0&&$paidDate!==''
+                ?($isPaid?'Оплачено: ':'Выплата: ').date('d.m.Y',strtotime($paidDate))
+                :($due!==''?'План: '.date('d.m.Y',strtotime($due)):'—');
             $tn=(int)($trip['tn_required']??0)>0 && (int)($trip['tn_scanned']??0)>=(int)$trip['tn_required'];
             $documentsComplete=$tn&&isset($slots['invoice'],$slots['act'],$slots['contract'],$slots['waybill'])&&$cards;
             $rows[]=[

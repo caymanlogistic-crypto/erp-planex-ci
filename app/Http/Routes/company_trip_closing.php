@@ -1,5 +1,8 @@
 <?php
 require_once base_path('app/Service/WasteTripClosingService.php');
+require_once base_path('app/Service/DateCalculationService.php');
+require_once base_path('app/Service/ProductionCalendarService.php');
+require_once base_path('app/Service/FinanceReceivedPaidService.php');
 require_once base_path('app/Service/EntityResponsibilityService.php');
 require_once base_path('app/Service/WasteTripClosingTransportService.php');
 require_once base_path('app/Service/WasteTripClosingReportService.php');

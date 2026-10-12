@@ -12,7 +12,8 @@ $trip=static function(int $id,array $documents):array {
         'id'=>$id,'business_id'=>$id,'actual_end_date'=>'2026-09-30',
         'carrier_id'=>42,'carrier_name'=>'Перевозчик','manager_name'=>'Менеджер','manager_membership_id'=>71,'legal_entity_code'=>'planex',
         'recipient_email'=>'info@plan-ex.ru','review_state'=>'work','review_version'=>0,
-        'carrier_rate'=>'25000.00','carrier_paid_amount'=>'0.00','carrier_payment_due'=>'2026-10-15','carrier_paid_date'=>null,
+        'carrier_rate'=>'25000.00','display_rate'=>'25000.00','carrier_paid_amount'=>'0.00','carrier_payment_due'=>'2026-10-15','carrier_paid_date'=>null,
+        'carrier_payment_plan'=>['date'=>'2026-10-15','due_date'=>'2026-10-15','status'=>'ready'],
         'comment'=>'Вывоз отходов с площадки А','driver_names'=>'Иванов Иван','tn_required'=>2,'tn_scanned'=>0,
         'documents'=>$documents,'paid_bank_transactions'=>[],'request_count'=>3,'processed_count'=>2,
         'tn_issues'=>['Заявка №123: нет скана ТН','Заявка №124: нет скана ТН','Заявка №125: нет подписи водителя'],
@@ -34,7 +35,7 @@ $trips=[
     ]),['legal_entity_code'=>'mg_logistic','tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
         ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','has_card'=>true,'can_upload'=>true,'documents'=>[['id'=>89,'original_name'=>'tractor-card.pdf']]],
         ['id'=>10,'label'=>'Полуприцеп','brand'=>'ТОНАР','plate'=>'С333СС','has_card'=>true,'can_upload'=>false,'documents'=>[]],
-    ]],'carrier_paid_amount'=>'25000.00','carrier_paid_date'=>'2026-10-10','tn_scanned'=>2]),
+    ]],'display_rate'=>'35000.00','carrier_paid_amount'=>'25000.00','carrier_paid_date'=>'2026-10-10','tn_scanned'=>2]),
 ];
 $success='Документ добавлен.';
 $flashError=$error=null;
@@ -127,9 +128,16 @@ $assert(strpos($html,'<strong>Путевой лист</strong>')<strpos($html,'<
 $assert(str_contains($html,'data-closing-action-result="success" hidden'),'successful action marker must remain available to inline update');
 $assert(!str_contains($html,'class="notice success"'),'upload success banner must not be visible');
 $assert(!str_contains($html,'Добавьте файлы. Отправка комплекта на почту временно отключена.'),'obsolete closing documents hint must be removed');
-$assert(substr_count($html,'class="closing-trip-facts"')===2,'each expanded trip must display its carrier, driver and transport price');
+$assert(substr_count($html,'class="closing-trip-facts"')===2,'each expanded trip must display company and carrier finance facts');
+$assert(str_contains($html,'<small>Компания рейса</small><b>ПЛАНЭКС</b>')&&str_contains($html,'<small>Компания рейса</small><b>МГ Логистика</b>'),'trip details must identify the operating company');
 $assert(str_contains($html,'<small>Название перевозчика</small><b>Перевозчик</b>')&&str_contains($html,'<small>ФИО водителя</small><b>Иванов Иван</b>'),'trip details must show the carrier and full driver name');
+$assert(str_contains($html,'<small>Ставка перевозчика · Себес, руб</small><b>25 000,00 ₽</b>')&&str_contains($html,'<small>Ставка перевозчика · Продажа</small><b>35 000,00 ₽</b>'),'trip rate must use Себес for PLANEX and sale for MG');
 $assert(str_contains($html,'<small>Оплачено перевозчику</small><b>0,00 ₽</b>')&&str_contains($html,'<small>Оплачено перевозчику</small><b>25 000,00 ₽</b>')&&!str_contains($html,'<small>Стоимость перевозки</small>'),'trip details must show factual carrier payment instead of planned cost');
+$assert(str_contains($html,'Срок оплаты: 15.10.2026')&&str_contains($html,'Оплачено: 10.10.2026'),'trip details must show payment term and actual payment date');
+$overdueTrip=$trips[0];$overdueTrip['carrier_payment_plan']['date']='2026-10-10';$overdueTrip['carrier_payment_plan']['due_date']='2026-10-10';
+$assert(str_contains(\App\Service\WasteTripClosingService::carrierPaymentDisplay($overdueTrip,'2026-10-12')['text'],'Просрочено на 2 дня'),'confirmed unpaid deadline must show overdue days');
+$overdueTrip['carrier_payment_plan']['due_date']=null;
+$assert(\App\Service\WasteTripClosingService::carrierPaymentDisplay($overdueTrip,'2026-10-12')['status']==='forecast','forecast date must not be marked overdue');
 $assert(str_contains($html,'class="btn btn-primary closing-submit" disabled'),'review action must be disabled');
 $assert(!str_contains($html,'data-review-form'),'email form must not be rendered');
 echo "waste_trip_closing_view: PASS\n";

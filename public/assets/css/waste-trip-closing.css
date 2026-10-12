@@ -87,4 +87,6 @@
 .closing-report-unit{display:block;white-space:nowrap}
 .closing-report-unit b.is-present{color:#17603a}
 .closing-report-unit b.is-missing{color:#9b2929}
+.closing-payment-fact.is-overdue b{color:#a3362a}.closing-payment-fact.is-paid b{color:#266544}.closing-payment-fact.is-forecast b{color:#805500}
+@media(max-width:900px){.closing-trip-facts{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:700px){.closing-trip-facts{grid-template-columns:minmax(0,1fr)}}
