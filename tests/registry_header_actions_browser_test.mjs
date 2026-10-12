@@ -56,6 +56,7 @@ try {
     assert.equal(basic[1].color, 'rgb(255, 255, 255)', `${name}: primary text`);
     assert.match(basic[1].background, /linear-gradient/, `${name}: primary gradient`);
     await buttons.nth(0).hover();
+    await page.waitForTimeout(120);
     assert.equal(await buttons.nth(0).evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(238, 232, 222)', `${name}: secondary hover`);
     await buttons.nth(0).focus();
     assert.equal(await buttons.nth(0).evaluate(node => getComputedStyle(node).outlineWidth), '2px', `${name}: keyboard focus`);
