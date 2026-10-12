@@ -128,7 +128,8 @@ $assert(str_contains($html,'data-closing-action-result="success" hidden'),'succe
 $assert(!str_contains($html,'class="notice success"'),'upload success banner must not be visible');
 $assert(!str_contains($html,'Добавьте файлы. Отправка комплекта на почту временно отключена.'),'obsolete closing documents hint must be removed');
 $assert(substr_count($html,'class="closing-trip-facts"')===2,'each expanded trip must display its carrier, driver and transport price');
-$assert(str_contains($html,'<small>Название перевозчика</small><b>Перевозчик</b>')&&str_contains($html,'<small>ФИО водителя</small><b>Иванов Иван</b>')&&str_contains($html,'<small>Стоимость перевозки</small><b>25 000,00 ₽</b>'),'trip details must show the carrier, full driver name and carrier rate');
+$assert(str_contains($html,'<small>Название перевозчика</small><b>Перевозчик</b>')&&str_contains($html,'<small>ФИО водителя</small><b>Иванов Иван</b>'),'trip details must show the carrier and full driver name');
+$assert(str_contains($html,'<small>Оплачено перевозчику</small><b>0,00 ₽</b>')&&str_contains($html,'<small>Оплачено перевозчику</small><b>25 000,00 ₽</b>')&&!str_contains($html,'<small>Стоимость перевозки</small>'),'trip details must show factual carrier payment instead of planned cost');
 $assert(str_contains($html,'class="btn btn-primary closing-submit" disabled'),'review action must be disabled');
 $assert(!str_contains($html,'data-review-form'),'email form must not be rendered');
 echo "waste_trip_closing_view: PASS\n";
