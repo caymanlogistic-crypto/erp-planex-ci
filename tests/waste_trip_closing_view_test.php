@@ -28,7 +28,7 @@ $trips=[
         ['id'=>14,'slot_code'=>'waybill','requirement_code'=>'waybill','original_name'=>'waybill.pdf'],
         ['id'=>16,'slot_code'=>'extra','custom_title'=>'Реестр','original_name'=>'registry-1.pdf'],
         ['id'=>17,'slot_code'=>'extra','custom_title'=>'Реестр','original_name'=>'registry-2.pdf'],
-    ]),['tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
+    ]),['legal_entity_code'=>'mg_logistic','tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
         ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','has_card'=>true,'can_upload'=>true,'documents'=>[['id'=>89,'original_name'=>'tractor-card.pdf']]],
         ['id'=>10,'label'=>'Полуприцеп','brand'=>'ТОНАР','plate'=>'С333СС','has_card'=>true,'can_upload'=>false,'documents'=>[]],
     ]]]),
@@ -51,6 +51,8 @@ $assert=static function(bool $condition,string $message):void {if(!$condition)th
 $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must show common issues block');
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
 $assert(str_contains($html,'data-closing-payment-ready')&&str_contains($html,'data-closing-manager'),'payment and manager filters must be rendered');
+$assert(str_contains($html,'data-closing-entity')&&str_contains($html,'<option value="planex">ПЛАНЭКС</option>')&&str_contains($html,'<option value="mg_logistic">МГ Логистика</option>'),'all trips selector must offer both legal entities');
+$assert(str_contains($html,'data-entity="planex"')&&str_contains($html,'data-entity="mg_logistic"'),'each trip must expose its legal entity for filtering');
 $assert(str_contains($html,'data-closing-filter="payment"')&&str_contains($html,'На оплату'),'payment queue must have its own section');
 $assert(str_contains($html,'Готово к оплате')&&str_contains($html,'payment-stage'),'ready trip must offer payment queue action');
 $assert((bool)preg_match('/name="action" value="queue"[^>]*><button[^>]*>Готово к оплате<\/button>/', $html),'payment action must be enabled for clean trip');
