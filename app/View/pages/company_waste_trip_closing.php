@@ -80,7 +80,7 @@ $progressColor=static function(int $percent):string {
           <div class="closing-trip-facts">
             <span><small>Название перевозчика</small><b><?= e(trim((string)($trip['carrier_name']??''))?:'—') ?></b></span>
             <span><small>ФИО водителя</small><b><?= e(trim((string)($trip['driver_names']??''))?:'—') ?></b></span>
-            <span><small>Стоимость перевозки</small><b><?= isset($trip['carrier_rate'])?e(number_format((float)$trip['carrier_rate'],2,',',' ')).' ₽':'—' ?></b></span>
+            <span><small>Оплачено перевозчику</small><b><?= e(number_format((float)($trip['carrier_paid_amount']??0),2,',',' ')) ?> ₽</b></span>
           </div>
           <?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><span class="closing-note">Получатель письма: <?= e((string)$trip['recipient_email']) ?></span><?php endif;?>
         </div>
