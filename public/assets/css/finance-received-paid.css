@@ -1,3 +1,4 @@
+@import url("./erp-registry-header-actions.css");
 .rp-nav-link.is-active{background:var(--nav-active-bg,#3a2b1d);color:var(--nav-active-text,#d4a66a)}
 .table-card.table-card--standard.rp-standard-box{display:block;width:100%;max-width:1690px;min-width:0;margin-inline:auto}
 .rp-standard-box>.page-head{height:auto;min-height:58px;margin:0;border:0;border-bottom:1px solid var(--line-soft);padding:10px 14px}

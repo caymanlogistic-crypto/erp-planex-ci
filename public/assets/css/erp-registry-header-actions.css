@@ -1,0 +1,56 @@
+/* Approved Page Header action states for the three canonical ERP registries. */
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions .btn {
+  height:30px;
+  padding:0 12px;
+  border-radius:2px;
+  font:600 12px/12px var(--font);
+  text-shadow:none;
+  box-shadow:none;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions .btn:active {
+  transform:none;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions .btn:focus-visible {
+  outline:2px solid #9a5a22;
+  outline-offset:2px;
+  box-shadow:none;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions :is(.btn-secondary, .btn-ghost) {
+  background:#f7f4ee;
+  border:1px solid #bfb5a8;
+  color:#3f3a33;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions :is(.btn-secondary, .btn-ghost):hover {
+  background:#eee8de;
+  border-color:#a99b8b;
+  color:#24211d;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions :is(.btn-secondary, .btn-ghost):active {
+  background:#e3dbcf;
+  border-color:#998875;
+  color:#24211d;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions :is(.btn-secondary, .btn-ghost):focus-visible {
+  background:#fbf8f2;
+  border-color:#9a6a3b;
+  color:#24211d;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions .btn-primary {
+  background:linear-gradient(180deg,#9a5a22 0%,#7c4718 100%);
+  border:1px solid #4e2d0e;
+  color:#fff;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions .btn-primary:hover {
+  background:linear-gradient(180deg,#8a5020 0%,#683c13 100%);
+  border-color:#4e2d0e;
+  color:#fff;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions .btn-primary:active {
+  background:#4e2d0e;
+  border-color:#4e2d0e;
+  color:#fff;
+}
+:is(.route-executors-page-head, .waste-trips-page-head, .rp-lab-header-wrap > .page-head) .page-head-actions .btn-primary:focus-visible {
+  border-color:#4e2d0e;
+  color:#fff;
+}
