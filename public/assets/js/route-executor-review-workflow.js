@@ -458,7 +458,7 @@
     data.set('card_id', DRAFT_ID);
     data.set('revision', String(draft.revision));
     data.set('snapshot', JSON.stringify(snapshot, (key, value) => key === 'selected' ? undefined : value));
-    for (const item of snapshot.files) for (const file of item.selected) {
+    if (draft.stage !== 'final_edit') for (const item of snapshot.files) for (const file of item.selected) {
       data.append('attachments[]', file, file.name);
       data.append('attachment_keys[]', item.formId + '|' + item.name + '|' + item.index);
     }
@@ -526,12 +526,27 @@
     const modal = document.getElementById('route-executor-create-modal');
     const save = modal?.querySelector('[data-source-create-submit]');
     const send = modal?.querySelector('[data-lab-send]');
+    const correction = modal?.querySelector('[data-lab-final-correction]');
     if (!save || !send) return;
     const action = workflowStage();
-    save.textContent = draft.stage === 'final' ? 'Карточка завершена' : draft.savedAt ? 'Сохранить изменения' : 'Сохранить черновик';
+    save.textContent = draft.stage === 'final' ? 'Карточка завершена' : draft.stage === 'final_edit' ? 'Сохранить исправления' : draft.savedAt ? 'Сохранить изменения' : 'Сохранить черновик';
     save.disabled = workflowBusy || draft.stage === 'final' || draft.stage.includes('unknown') || draft.stage.includes('sending');
     const content = modal.querySelector('#route-executor-create-modal-content');
     if (content) content.inert = draft.stage === 'final';
+    if (draft.stage === 'final_edit') {
+      for (const formId of ['lab-contractor-form', 'lab-driver-form', 'lab-vehicle-form']) {
+        for (const field of document.getElementById(formId)?.elements || []) {
+          const editable = (formId === 'lab-contractor-form' && field.name === 'bank_corr_account')
+            || (formId === 'lab-driver-form' && field.name === 'phone');
+          if (!editable) field.disabled = true;
+        }
+      }
+    }
+    if (correction) {
+      correction.hidden = !draft.canCorrect || !['final', 'final_edit'].includes(draft.stage);
+      correction.disabled = workflowBusy;
+      correction.textContent = draft.stage === 'final_edit' ? 'Сохранить и завершить исправление' : 'Открыть исправление';
+    }
     send.hidden = !action;
     send.disabled = workflowBusy || !action;
     if (action) send.textContent = action === 'contract' ? 'Сохранить и отправить данные для договора'
@@ -552,11 +567,18 @@
     send.dataset.labSend = '';
     send.hidden = true;
     foot.appendChild(send);
+    const correction = document.createElement('button');
+    correction.type = 'button';
+    correction.className = 'btn btn-secondary';
+    correction.dataset.labFinalCorrection = '';
+    correction.hidden = true;
+    foot.appendChild(correction);
     const save = foot.querySelector('[data-source-create-submit]');
     save.classList.remove('btn-primary');
     save.classList.add('btn-secondary');
     save.addEventListener('click', event => { save.dataset.labClicked = String(Number(save.dataset.labClicked || 0) + 1); event.preventDefault(); event.stopPropagation(); saveDraft(); });
     send.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); openWorkflowPreview(send); });
+    correction.addEventListener('click', event => { event.preventDefault(); event.stopPropagation(); toggleFinalCorrection(); });
     modal.querySelector('.modal-required-note').textContent = 'Черновик можно сохранить с неполными данными';
     modal.addEventListener('input', () => requestAnimationFrame(renderWorkflow));
     modal.addEventListener('change', () => requestAnimationFrame(renderWorkflow));
@@ -583,7 +605,7 @@
             files.push({ formId: item.formId, name: item.name, index: item.index, selected: [file] });
           }
           draft = { ...draft, ...state.card.snapshot, files, revision: state.card.revision,
-            stage: state.stage, contractStatus: state.contract_status, savedAt: state.card.updated_at, signature: '' };
+            stage: state.stage, canCorrect: state.correction_allowed, contractStatus: state.contract_status, savedAt: state.card.updated_at, signature: '' };
           restoreDraft(draft);
           await window.routeExecutorExistingParts?.restore(draft);
           draft.signature = draftSignature(captureDraft());
@@ -782,6 +804,41 @@
       renderWorkflow();
       showWorkflowMessage(failure ? `Не удалось сохранить карточку: ${failure.message}` : 'Карточка сохранена.');
       if (!failure) closeReviewPopups();
+    }
+  }
+
+  async function toggleFinalCorrection() {
+    if (workflowBusy || !draft.canCorrect || !['final', 'final_edit'].includes(draft.stage)) return;
+    workflowBusy = true;
+    renderWorkflow();
+    let failure = null;
+    try {
+      if (draft.stage === 'final_edit') await persistDraft(captureDraft());
+      const data = new FormData();
+      data.set('action', draft.stage === 'final_edit' ? 'finish_final_correction' : 'open_final_correction');
+      data.set('card_id', DRAFT_ID);
+      data.set('revision', String(draft.revision));
+      const response = await fetch(base + '/company/route-executors/review/send', {
+        method: 'POST', credentials: 'same-origin',
+        headers: { 'X-CSRF-Token': document.querySelector('meta[name="csrf-token"]')?.content || '' }, body: data
+      });
+      const result = await response.json();
+      if (!response.ok || !result.ok) throw new Error(result.error || 'Не удалось изменить режим карточки.');
+      draft.stage = result.stage;
+      if (result.crew_id) {
+        showWorkflowMessage(result.verified ? 'Подрядчик, водитель и ТС сохранены и проверены.' : 'Карточка внесена, но проверка записей требует внимания.');
+        try { await refreshReviewList(); } catch (error) { console.warn('Не удалось обновить список исполнителей', error); }
+        if (!result.verified) window.alert('Карточка внесена в справочники, но проверка подрядчика, водителя и ТС не прошла. Повторно не отправляйте данные; сообщите администратору номер исполнителя ' + result.crew_id + '.');
+        closeReviewPopups();
+      } else {
+        showWorkflowMessage('Карточка открыта. Измените корсчёт и телефон водителя, затем завершите исправление.');
+      }
+    } catch (error) {
+      failure = error;
+    } finally {
+      workflowBusy = false;
+      renderWorkflow();
+      if (failure) showWorkflowMessage('Не удалось завершить исправление: ' + failure.message);
     }
   }
 

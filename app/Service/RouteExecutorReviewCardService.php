@@ -49,6 +49,30 @@ final class RouteExecutorReviewCardService
         return $row;
     }
 
+    /** Temporarily opens one accepted, unmaterialized final card for a two-field correction. */
+    public function setFinalCorrection(string $id,bool $open,?int $expectedRevision=null): void
+    {
+        if (!AccessControlService::isEffectiveSystemOwner()) throw new DomainException('Исправление завершённой карточки доступно только руководителю.');
+        $this->tenant->beginTransaction();
+        try {
+            $q=$this->tenant->prepare('SELECT revision,deleted_at FROM route_executor_review_cards WHERE card_id=? FOR UPDATE');
+            $q->execute([$id]);$card=$q->fetch(PDO::FETCH_ASSOC);
+            if (!$card || $card['deleted_at']!==null) throw new DomainException('Карточка уже внесена в справочники или удалена.');
+            if (!$open && ($expectedRevision===null || (int)$card['revision']!==$expectedRevision)) throw new DomainException('Карточка изменилась. Обновите страницу.');
+            $q=$this->tenant->prepare('SELECT stage,final_mail_status FROM route_executor_review_sends WHERE card_id=? FOR UPDATE');
+            $q->execute([$id]);$send=$q->fetch(PDO::FETCH_ASSOC);
+            $expected=$open?'final':'final_edit';
+            if (!$send || $send['stage']!==$expected || $send['final_mail_status']!=='accepted') throw new DomainException('Состояние отправки карточки изменилось. Обновите страницу.');
+            $q=$this->tenant->prepare('UPDATE route_executor_review_sends SET stage=? WHERE card_id=? AND stage=? AND final_mail_status=?');
+            $q->execute([$open?'final_edit':'final',$id,$expected,'accepted']);
+            if ($q->rowCount()!==1) throw new DomainException('Не удалось изменить режим карточки.');
+            $this->tenant->commit();
+        } catch (Throwable $error) {
+            if ($this->tenant->inTransaction()) $this->tenant->rollBack();
+            throw $error;
+        }
+    }
+
     public function save(string $id, int $actorId, int $expectedRevision, array $snapshot, array $uploads, array $keys): int
     {
         if (!$this->ready()) throw new DomainException('Карточки ожидают обновления структуры базы данных (154).');
@@ -72,18 +96,31 @@ final class RouteExecutorReviewCardService
         $vehicleType=mb_substr(trim($fields['lab-vehicle-form']['set_type']??''),0,40);
         $plate=mb_substr(trim($fields['lab-vehicle-form']['units[primary][plate_number]']??''),0,40);
         $newPaths=[];
+        $stageQuery=$this->tenant->prepare('SELECT stage FROM route_executor_review_sends WHERE card_id=?');
+        $stageQuery->execute([$id]);
+        $correctionMode=(string)$stageQuery->fetchColumn()==='final_edit';
         try {
-            $files=$this->storeUploads($id,$uploads,$keys,$newPaths);
-            $filesJson=json_encode($files,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+            $filesJson='';
+            if (!$correctionMode) {
+                $files=$this->storeUploads($id,$uploads,$keys,$newPaths);
+                $filesJson=json_encode($files,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
+            }
             $this->tenant->beginTransaction();
-            $q=$this->tenant->prepare('SELECT revision,files_json,deleted_at FROM route_executor_review_cards WHERE card_id=? FOR UPDATE');
+            $q=$this->tenant->prepare('SELECT revision,snapshot_json,files_json,deleted_at FROM route_executor_review_cards WHERE card_id=? FOR UPDATE');
             $q->execute([$id]);$previous=$q->fetch(PDO::FETCH_ASSOC)?:null;
             if ($previous && $previous['deleted_at']!==null) throw new DomainException('Карточка удалена.');
             $revision=$previous?(int)$previous['revision']:0;
             if ($revision!==$expectedRevision) throw new DomainException('Карточка изменена другим сотрудником. Обновите страницу.');
             $q=$this->tenant->prepare('SELECT stage FROM route_executor_review_sends WHERE card_id=? FOR UPDATE');
             $q->execute([$id]);$stage=(string)($q->fetchColumn()?:'new');
+            if (($stage==='final_edit')!==$correctionMode) throw new DomainException('Режим карточки изменился. Обновите страницу.');
             if ($stage==='final' || str_contains($stage,'sending') || str_contains($stage,'unknown')) throw new DomainException('Карточка сейчас недоступна для изменения.');
+            if ($correctionMode) {
+                if (!$previous) throw new DomainException('Карточка для исправления не найдена.');
+                if (!AccessControlService::isEffectiveSystemOwner()) throw new DomainException('Исправление завершённой карточки доступно только руководителю.');
+                self::assertFinalCorrection(json_decode((string)$previous['snapshot_json'],true,512,JSON_THROW_ON_ERROR),$clean);
+                $filesJson=(string)$previous['files_json'];
+            }
             if ($previous) {
                 $q=$this->tenant->prepare('UPDATE route_executor_review_cards SET last_editor_account_id=?,revision=revision+1,snapshot_json=?,files_json=?,responsible_membership_id=?,trip_business_id=?,contractor_name=?,driver_name=?,driver_phone=?,vehicle_type=?,plate=?,updated_at=NOW(6) WHERE card_id=?');
                 $q->execute([$actorId,$snapshotJson,$filesJson,$clean['logist']!==''?(int)$clean['logist']:null,$clean['trip_id']!==''?(int)$clean['trip_id']:null,$contractor,$driver,$phone,$vehicleType,$plate,$id]);
@@ -92,7 +129,7 @@ final class RouteExecutorReviewCardService
                 $q->execute([$id,$actorId,$actorId,$snapshotJson,$filesJson,$clean['logist']!==''?(int)$clean['logist']:null,$clean['trip_id']!==''?(int)$clean['trip_id']:null,$contractor,$driver,$phone,$vehicleType,$plate]);
             }
             $this->tenant->commit();
-            if ($previous) {
+            if ($previous && !$correctionMode) {
                 foreach (json_decode((string)$previous['files_json'],true)?:[] as $old) {
                     try { $path=$this->absoluteFile((string)$old['path']); if (is_file($path)) unlink($path); } catch (Throwable) {}
                 }
@@ -103,6 +140,30 @@ final class RouteExecutorReviewCardService
             foreach ($newPaths as $path) if (is_file($path)) @unlink($path);
             throw $error;
         }
+    }
+
+    /** An accepted card may only correct its bank correspondent account and driver phone. */
+    private static function assertFinalCorrection(array $before,array $after): void
+    {
+        $stripEditableValues=static function (array &$snapshot): array {
+            $values=[];
+            foreach ($snapshot['controls'] as &$control) {
+                $key=(string)($control['formId']??'').'|'.(string)($control['name']??'');
+                if (!in_array($key,['lab-contractor-form|bank_corr_account','lab-driver-form|phone'],true)) continue;
+                if (isset($values[$key])) throw new DomainException('Поле для исправления повторяется.');
+                $values[$key]=(string)($control['value']??'');
+                unset($control['value'],$control['displayValue']);
+            }
+            unset($control);
+            if (count($values)!==2) throw new DomainException('Не найдены оба поля для исправления.');
+            return $values;
+        };
+        $stripEditableValues($before);
+        $values=$stripEditableValues($after);
+        if ($before!==$after) throw new DomainException('В этом режиме можно изменить только корсчёт подрядчика и телефон водителя.');
+        if (!preg_match('/^\d{20}$/D',$values['lab-contractor-form|bank_corr_account'])) throw new DomainException('Корр. счёт должен содержать 20 цифр.');
+        $phone=preg_replace('/\D+/','',$values['lab-driver-form|phone']);
+        if (strlen($phone)!==11 || !in_array($phone[0],['7','8'],true)) throw new DomainException('Укажите телефон водителя в формате +7 900 000-00-00.');
     }
 
     public function delete(string $id): void
