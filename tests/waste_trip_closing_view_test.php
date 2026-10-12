@@ -18,7 +18,7 @@ $trip=static function(int $id,array $documents):array {
 };
 $trips=[
     array_replace($trip(1,[]),['transport'=>['set_type'=>'single','set_label'=>'Одиночка','units'=>[
-        ['id'=>8,'label'=>'Транспортная единица','brand'=>'ГАЗ','plate'=>'А111АА','number'=>'','date'=>'','documents'=>[]],
+        ['id'=>8,'label'=>'Транспортная единица','brand'=>'ГАЗ','plate'=>'А111АА','can_upload'=>true,'documents'=>[]],
     ]]]),
     array_replace($trip(2,[
         ['id'=>11,'slot_code'=>'contract','requirement_code'=>'agreement','original_name'=>'signed.pdf'],
@@ -28,9 +28,9 @@ $trips=[
         ['id'=>14,'slot_code'=>'waybill','requirement_code'=>'waybill','original_name'=>'waybill.pdf'],
         ['id'=>16,'slot_code'=>'extra','custom_title'=>'Реестр','original_name'=>'registry-1.pdf'],
         ['id'=>17,'slot_code'=>'extra','custom_title'=>'Реестр','original_name'=>'registry-2.pdf'],
-    ]),['tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
-        ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','number'=>'','date'=>'','documents'=>[['id'=>89,'original_name'=>'tractor-card.pdf']]],
-        ['id'=>10,'label'=>'Полуприцеп','brand'=>'ТОНАР','plate'=>'С333СС','number'=>'42','date'=>'2026-09-20','documents'=>[['id'=>88,'original_name'=>'card.pdf']]],
+    ]),['legal_entity_code'=>'mg_logistic','tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
+        ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','has_card'=>true,'can_upload'=>true,'documents'=>[['id'=>89,'original_name'=>'tractor-card.pdf']]],
+        ['id'=>10,'label'=>'Полуприцеп','brand'=>'ТОНАР','plate'=>'С333СС','has_card'=>true,'can_upload'=>false,'documents'=>[]],
     ]]]),
 ];
 $success='Документ добавлен.';
@@ -51,6 +51,8 @@ $assert=static function(bool $condition,string $message):void {if(!$condition)th
 $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must show common issues block');
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
 $assert(str_contains($html,'data-closing-payment-ready')&&str_contains($html,'data-closing-manager'),'payment and manager filters must be rendered');
+$assert(str_contains($html,'data-closing-entity')&&str_contains($html,'<option value="planex">ПЛАНЭКС</option>')&&str_contains($html,'<option value="mg_logistic">МГ Логистика</option>'),'all trips selector must offer both legal entities');
+$assert(str_contains($html,'data-entity="planex"')&&str_contains($html,'data-entity="mg_logistic"'),'each trip must expose its legal entity for filtering');
 $assert(str_contains($html,'data-closing-filter="payment"')&&str_contains($html,'На оплату'),'payment queue must have its own section');
 $assert(str_contains($html,'Готово к оплате')&&str_contains($html,'payment-stage'),'ready trip must offer payment queue action');
 $assert((bool)preg_match('/name="action" value="queue"[^>]*><button[^>]*>Готово к оплате<\/button>/', $html),'payment action must be enabled for clean trip');
@@ -81,14 +83,14 @@ $assert(str_contains($html,'name="requirement_code" value="application"'),'combi
 $assert(str_contains($html,'name="requirement_code" value="upd"'),'combined act slot must keep finance code');
 $assert(str_contains($html,'class="closing-remove-form"'),'uploaded document must offer removal');
 $assert(str_contains($html,'signed.pdf')&&str_contains($html,'signed-page-2.pdf'),'one document category must display every file');
-$assert(str_contains($html,'0 из 5 получено')&&str_contains($html,'7 из 7 получено'),'progress counts required cards for every vehicle unit and grouped extras');
+$assert(str_contains($html,'0 из 5 получено')&&str_contains($html,'5 из 5 получено'),'existing vehicle cards must not count as trip closing files');
 $assert(substr_count($html,'<strong>Реестр</strong>')===1,'extra files with the same title must form one document');
 $assert(substr_count($html,'name="document_files[]"')>=5,'document uploads must accept multiple files');
-$assert(str_contains($html,'Тягач · МАЗ В222ВВ')&&str_contains($html,'Полуприцеп · ТОНАР С333СС'),'coupling cards must target separate units');
-$assert(str_contains($html,'name="vehicle_unit_id" value="9"')&&str_contains($html,'name="vehicle_unit_id" value="10"'),'each card form must bind its own vehicle unit');
+$assert(!str_contains($html,'Тягач · МАЗ В222ВВ')&&!str_contains($html,'Полуприцеп · ТОНАР С333СС'),'existing vehicle cards must not be requested again');
+$assert(str_contains($html,'name="vehicle_unit_id" value="8"')&&!str_contains($html,'name="vehicle_unit_id" value="9"')&&!str_contains($html,'name="vehicle_unit_id" value="10"'),'only missing card can be uploaded from the trip');
 $assert(!str_contains($html,'name="card_number"')&&!str_contains($html,'name="card_date"'),'diagnostic card form must ask for files only');
 $assert(str_contains($html,'name="card_files[]"')&&str_contains($html,'name="card_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx" multiple required'),'diagnostic card must accept one or several files');
-$assert(substr_count($html,'<strong>Диагностическая карта транспорта</strong>')===3,'every linked vehicle unit must have a required document row');
+$assert(substr_count($html,'<strong>Диагностическая карта транспорта</strong>')===1,'only missing vehicle cards need a document row');
 $assert(str_contains($html,'class="closing-upload-form closing-card-form"'),'diagnostic cards must use the same automatic upload form as other documents');
 $assert(!str_contains($html,'Сохранить карту')&&!str_contains($html,'class="closing-transport"'),'separate card section and save button must be absent');
 $assert(strpos($html,'<strong>Путевой лист</strong>')<strpos($html,'<strong>Диагностическая карта транспорта</strong>') && strpos($html,'<strong>Диагностическая карта транспорта</strong>')<strpos($html,'<strong>Реестр</strong>'),'required cards must appear before optional documents');

@@ -28,7 +28,8 @@ $progressColor=static function(int $percent):string {
     <button type="button" class="closing-filter" data-closing-filter="review" aria-pressed="false">На проверке</button>
     <?php if($paymentQueueReady):?><button type="button" class="closing-filter" data-closing-filter="payment" aria-pressed="false">На оплату</button><?php endif;?>
   </div><div class="closing-extra-filters">
-    <label class="closing-filter-field"><span class="sr-only">Готов к оплате</span><select data-closing-payment-ready><option value="all">Все рейсы</option><option value="yes">Да</option><option value="no">Нет</option></select></label>
+    <label class="closing-filter-field"><span class="sr-only">Исполнитель рейса</span><select data-closing-entity><option value="all">Все рейсы</option><option value="planex">ПЛАНЭКС</option><option value="mg_logistic">МГ Логистика</option></select></label>
+    <label class="closing-filter-field"><span class="sr-only">Готов к оплате</span><select data-closing-payment-ready><option value="all">Готовность: все</option><option value="yes">Готовность: да</option><option value="no">Готовность: нет</option></select></label>
     <label class="closing-filter-field"><span class="sr-only">Ответственный менеджер</span><select data-closing-manager><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label>
   </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику; несколько номеров рейсов через запятую</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейсы: 322, 310"></label></div>
   <section class="closing-list panel" aria-label="Завершённые рейсы"><div class="closing-list-head"><span data-closing-list-label>ЗАВЕРШЁННЫЕ РЕЙСЫ</span> <span data-closing-count><?= $all ?></span></div>
@@ -37,13 +38,14 @@ $progressColor=static function(int $percent):string {
         foreach($docs as $document){if($document['slot_code']==='extra')$extras[(string)$document['custom_title']][]=$document;else $bySlot[$document['slot_code']][]=$document;}
         $missing=[];foreach(\App\Service\WasteTripClosingService::SLOTS as $slot=>$label)if(!isset($bySlot[$slot]))$missing[]=$label;
         $transport=$trip['transport']??null;$cardUnits=$transport['units']??[];
-        $cardRequired=max(1,count($cardUnits));$cardsPresent=0;
+        $missingCards=[];
         if(!$cardUnits)$missing[]='Диагностическая карта транспорта';
         foreach($cardUnits as $unit){
-            if($unit['documents'])$cardsPresent++;
-            else $missing[]='Диагностическая карта: '.trim((string)$unit['label'].' '.(string)$unit['plate']);
+            if(!empty($unit['has_card'])||!empty($unit['documents']))continue;
+            $missingCards[]=$unit;
+            $missing[]='Диагностическая карта: '.trim((string)$unit['label'].' '.(string)$unit['plate']);
         }
-        $count=count($bySlot)+count($extras)+$cardsPresent;$total=4+count($extras)+$cardRequired;$percent=$total?min(100,(int)round($count/$total*100)):0;
+        $count=count($bySlot)+count($extras);$total=4+count($extras)+($cardUnits?count($missingCards):1);$percent=$total?min(100,(int)round($count/$total*100)):0;
         $paymentReady=\App\Service\WasteTripClosingService::paymentReady($trip,$transport);
         $onPayment=$trip['review_state']==='payment';
         $state=$onPayment?'payment':($trip['review_state']==='review'?'review':($count===0?'new':($missing?'partial':'ready')));
@@ -61,7 +63,7 @@ $progressColor=static function(int $percent):string {
         $invoiceStatus=match($invoiceSummary['status']){'paid'=>'Оплачен','waiting'=>'Ожидает оплаты',default=>'Не введён'};
         $search=mb_strtolower($trip['business_id'].' '.$trip['carrier_name'].' '.$trip['manager_name'].' '.$executorLabel((string)$trip['legal_entity_code']),'UTF-8');
     ?>
-    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>" data-state="<?= e($state) ?>" data-payment-ready="<?= $paymentReady?'yes':'no' ?>" data-manager-id="<?= (int)($trip['manager_membership_id']??0) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
+    <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>" data-state="<?= e($state) ?>" data-payment-ready="<?= $paymentReady?'yes':'no' ?>" data-entity="<?= e((string)$trip['legal_entity_code']) ?>" data-manager-id="<?= (int)($trip['manager_membership_id']??0) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
       <summary class="closing-trip-summary"><span class="closing-chevron" aria-hidden="true"></span>
         <span class="closing-identity"><b>Рейс #<?= e((string)$trip['business_id']) ?></b><small>Завершён <?= e($trip['actual_end_date']?date('d.m.Y',strtotime((string)$trip['actual_end_date'])):'—') ?></small><?php if($onPayment):?><small class="closing-payment-badge">На оплату</small><?php endif;?></span>
         <span class="closing-carrier"><small>ПЕРЕВОЗЧИК</small><b><?= e((string)$trip['carrier_name']) ?></b><span>Менеджер: <?= e((string)$trip['manager_name']) ?></span></span>
@@ -89,10 +91,10 @@ $progressColor=static function(int $percent):string {
               <label class="btn btn-secondary closing-upload">Добавить файлы<input type="file" name="document_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx,.xls,.xlsx" multiple required></label>
             </form></div>
           </div><?php endforeach;?>
-          <?php if(!$cardUnits):?><div class="closing-doc-row"><div><strong>Диагностическая карта транспорта</strong><small>Обязательный документ</small></div><div class="closing-file-list"><?= $transport?'Нет доступа к загрузке карты для этого транспорта':'Укажите транспорт в рейсе, чтобы загрузить карту' ?></div></div><?php else:foreach($cardUnits as $unit):?>
-          <div class="closing-doc-row"><div><strong>Диагностическая карта транспорта</strong><small><?= e((string)$unit['label']) ?> · <?= e(trim((string)$unit['brand'].' '.(string)$unit['plate'])) ?> · Можно добавить несколько файлов</small></div>
-            <div class="closing-file-list"><?php if($unit['documents']):foreach($unit['documents'] as $card):?><div class="closing-file-entry"><a data-document-preview target="_blank" rel="noopener noreferrer" href="<?= e(app_url('/company/documents/view?id='.(int)$card['id'])) ?>"><?= e((string)$card['original_name']) ?></a></div><?php endforeach;else:?>Файл не получен<?php endif;?></div>
-            <div class="closing-doc-actions"><form class="closing-upload-form closing-card-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/diagnostic-card')) ?>"><?= csrfField() ?><input type="hidden" name="vehicle_unit_id" value="<?= (int)$unit['id'] ?>"><label class="btn btn-secondary closing-upload">Добавить файлы<input type="file" name="card_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx" multiple required></label></form></div>
+          <?php if(!$cardUnits):?><div class="closing-doc-row"><div><strong>Диагностическая карта транспорта</strong><small>Документ ТС</small></div><div class="closing-file-list">Укажите транспорт в рейсе, чтобы проверить карту</div></div><?php else:foreach($missingCards as $unit):?>
+          <div class="closing-doc-row"><div><strong>Диагностическая карта транспорта</strong><small><?= e((string)$unit['label']) ?> · <?= e(trim((string)$unit['brand'].' '.(string)$unit['plate'])) ?><?= !empty($unit['can_upload'])?' · Можно добавить несколько файлов':'' ?></small></div>
+            <div class="closing-file-list"><?= !empty($unit['can_upload'])?'Файл не получен':'Нет доступа к загрузке карты этого ТС' ?></div>
+            <?php if(!empty($unit['can_upload'])):?><div class="closing-doc-actions"><form class="closing-upload-form closing-card-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/diagnostic-card')) ?>"><?= csrfField() ?><input type="hidden" name="vehicle_unit_id" value="<?= (int)$unit['id'] ?>"><label class="btn btn-secondary closing-upload">Добавить файлы<input type="file" name="card_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx" multiple required></label></form></div><?php endif;?>
           </div><?php endforeach;endif;?>
           <?php foreach($extras as $extraTitle=>$files):?><div class="closing-doc-row"><div><strong><?= e($extraTitle) ?></strong><small>Другой документ</small></div><div class="closing-file-list"><?php foreach($files as $document):?><div class="closing-file-entry"><a data-document-preview target="_blank" rel="noopener noreferrer" href="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'])) ?>"><?= e((string)$document['original_name']) ?></a><form class="closing-remove-form" method="post" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents/'.(int)$document['id'].'/remove')) ?>"><?= csrfField() ?><button class="closing-file-remove" type="submit" aria-label="Удалить файл <?= e((string)$document['original_name']) ?>">×</button></form></div><?php endforeach;?></div><form class="closing-upload-form" method="post" enctype="multipart/form-data" action="<?= e(app_url('/company/trips/closing-documents/'.(int)$trip['id'].'/documents')) ?>"><?= csrfField() ?><input type="hidden" name="slot_code" value="extra"><input type="hidden" name="requirement_code" value="supporting"><input type="hidden" name="custom_title" value="<?= e($extraTitle) ?>"><label class="btn btn-secondary closing-upload">Добавить файлы<input type="file" name="document_files[]" accept=".pdf,.jpg,.jpeg,.png,.webp,.tif,.tiff,.doc,.docx,.xls,.xlsx" multiple required></label></form></div><?php endforeach;?>
         </div>
