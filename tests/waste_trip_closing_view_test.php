@@ -13,7 +13,7 @@ $trip=static function(int $id,array $documents):array {
         'carrier_id'=>42,'carrier_name'=>'Перевозчик','manager_name'=>'Менеджер','manager_membership_id'=>71,'legal_entity_code'=>'planex',
         'recipient_email'=>'info@plan-ex.ru','review_state'=>'work','review_version'=>0,
         'carrier_rate'=>'25000.00','carrier_paid_amount'=>'0.00','carrier_payment_due'=>'2026-10-15','carrier_paid_date'=>null,
-        'direction'=>'Москва → Тверь','driver_names'=>'Иванов Иван','tn_required'=>2,'tn_scanned'=>0,
+        'comment'=>'Вывоз отходов с площадки А','driver_names'=>'Иванов Иван','tn_required'=>2,'tn_scanned'=>0,
         'documents'=>$documents,'paid_bank_transactions'=>[],'request_count'=>3,'processed_count'=>2,
         'tn_issues'=>['Заявка №123: нет скана ТН','Заявка №124: нет скана ТН','Заявка №125: нет подписи водителя'],
         'invoice_summary'=>['status'=>'missing','detail'=>'—','invoice_id'=>0],
@@ -50,6 +50,7 @@ $xlsx=\App\Service\WasteTripClosingReportService::xlsx($reportRows);
 $archive=new ZipArchive();
 if($archive->open($xlsx)!==true)throw new RuntimeException('Excel report is not a valid XLSX archive');
 $sheet=(string)$archive->getFromName('xl/worksheets/sheet1.xml');
+$styles=(string)$archive->getFromName('xl/styles.xml');
 $archive->close();@unlink($xlsx);
 unset($_GET['trip_id']);
 ob_start();
@@ -61,10 +62,24 @@ $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must 
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
 $assert(str_contains($html,'data-closing-report-open')&&str_contains($html,'data-closing-report-dialog')&&str_contains($html,'data-closing-report-download'),'summary report must open in a popup with Excel download');
 $assert(substr_count($html,'data-report-trip-id=')===2,'summary report must include both accessible trips');
-$assert(str_contains($sheet,'Рейс №')&&str_contains($sheet,'ПЛАНЭКС')&&str_contains($sheet,'МГ Логистика')&&str_contains($sheet,'autoFilter ref="A1:N3"'),'Excel report must contain headers, both executors and filter');
-$assert($reportRows[1]['diagnostic_card']==='Есть'&&$reportRows[0]['diagnostic_card']==='Нет','report must reuse vehicle card availability');
+$assert(str_contains($sheet,'Рейс №')&&str_contains($sheet,'Название рейса')&&str_contains($sheet,'Вывоз отходов с площадки А')&&str_contains($sheet,'ПЛАНЭКС')&&str_contains($sheet,'МГ Логистика')&&str_contains($sheet,'autoFilter ref="A1:O3"'),'Excel report must contain trip title, both executors and filter');
+$assert(str_contains($html,'Название рейса')&&str_contains($html,'Вывоз отходов с площадки А')&&!str_contains($html,'Направление</th>'),'popup must display the saved trip title');
+$assert(str_contains($html,'closing-report-status is-present')&&str_contains($html,'closing-report-status is-missing'),'popup must color available and missing documents');
+$assert(str_contains($styles,'FFE0F3E7')&&str_contains($styles,'FFFCE5E3')&&str_contains($styles,'FFFFF0C2')&&str_contains($sheet,'r="E2" s="2"')&&str_contains($sheet,'r="E3" s="1"'),'Excel must color document statuses');
+$assert($reportRows[1]['diagnostic_card_state']==='present'&&str_contains($reportRows[1]['diagnostic_card'],'Тягач В222ВВ: Есть')&&str_contains($reportRows[1]['diagnostic_card'],'Полуприцеп С333СС: Есть')&&$reportRows[0]['diagnostic_card']==='Нет','report must reuse vehicle card availability for every unit');
 $assert($reportRows[0]['payment_date']==='План: 15.10.2026'&&$reportRows[1]['payment_date']==='Оплачено: 10.10.2026','report must distinguish planned and actual carrier payment date');
 $assert($reportRows[0]['tn']==='Нет'&&$reportRows[1]['tn']==='Есть','report TN status must follow scans');
+$partialTrip=$trips[1];$partialTrip['transport']['units'][1]['has_card']=false;
+$partialRows=\App\Service\WasteTripClosingReportService::rows([$partialTrip]);
+$assert($partialRows[0]['diagnostic_card_state']==='partial'&&str_contains($partialRows[0]['diagnostic_card'],'Тягач В222ВВ: Есть')&&str_contains($partialRows[0]['diagnostic_card'],'Полуприцеп С333СС: Нет'),'both diagnostic cards must be shown separately');
+$assert($partialRows[0]['paid_missing_documents']==='Да'&&$reportRows[1]['paid_missing_documents']==='Нет','paid trip with missing documents must be flagged');
+$partialXlsx=\App\Service\WasteTripClosingReportService::xlsx($partialRows);
+$partialArchive=new ZipArchive();$partialArchive->open($partialXlsx);
+$partialSheet=(string)$partialArchive->getFromName('xl/worksheets/sheet1.xml');
+$partialArchive->close();@unlink($partialXlsx);
+$assert(str_contains($partialSheet,'r="J2" s="3"')&&str_contains($partialSheet,'r="O2" s="2"'),'Excel must distinguish a partial diagnostic set and flag payment without documents');
+$partlyPaid=$trips[0];$partlyPaid['carrier_paid_amount']='5000.00';
+$assert(\App\Service\WasteTripClosingReportService::rows([$partlyPaid])[0]['paid_missing_documents']==='Да','partial carrier payment with missing documents must also be flagged');
 $assert(str_contains($html,'data-closing-payment-ready')&&str_contains($html,'data-closing-manager'),'payment and manager filters must be rendered');
 $assert(str_contains($html,'data-closing-entity')&&str_contains($html,'<option value="planex">ПЛАНЭКС</option>')&&str_contains($html,'<option value="mg_logistic">МГ Логистика</option>'),'all trips selector must offer both legal entities');
 $assert(str_contains($html,'data-entity="planex"')&&str_contains($html,'data-entity="mg_logistic"'),'each trip must expose its legal entity for filtering');

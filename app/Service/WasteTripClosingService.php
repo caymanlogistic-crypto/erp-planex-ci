@@ -116,9 +116,8 @@ final class WasteTripClosingService
     public static function trips(PDO $pdo): array
     {
         $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
-        $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.actual_end_date,wt.legal_entity_code,
-                wt.route_executor_id,wt.legacy_source_warehouse_name,wt.legacy_destination_warehouse_name,
-                wt.destination_type,fu.short_name utilizer_name,
+        $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.comment,wt.actual_end_date,wt.legal_entity_code,
+                wt.route_executor_id,
                 ct.id carrier_id,COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
                 u.membership_id manager_membership_id,
                 COALESCE(r.state,'work') review_state,COALESCE(r.version,0) review_version,
@@ -127,7 +126,6 @@ final class WasteTripClosingService
               LEFT JOIN crews c ON c.id=wt.route_executor_id
               LEFT JOIN contractors ct ON ct.id=c.contractor_id
               LEFT JOIN users u ON u.id=wt.responsible_user_id
-              LEFT JOIN feo_utilizers fu ON fu.id=wt.utilizer_id
               LEFT JOIN waste_trip_closing_reviews r ON r.waste_trip_id=wt.id
              WHERE wt.deleted_at IS NULL AND wt.status='completed' AND {$scope['sql']}
              ORDER BY wt.business_id DESC LIMIT 500");
@@ -146,12 +144,6 @@ final class WasteTripClosingService
             $driverQuery->execute($crewIds);
             foreach($driverQuery->fetchAll(PDO::FETCH_ASSOC) as $driver)$drivers[(int)$driver['crew_id']]=(string)$driver['driver_names'];
         }
-        $routeQuery=$pdo->prepare("SELECT wtr.waste_trip_id,fr.mno_adres_pogruzki pickup,COALESCE(NULLIF(fr.adres_dostavki_otkhodov,''),fr.adres_vygruzki_otkhodov) delivery
-            FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id
-            WHERE wtr.removed_at IS NULL AND wtr.waste_trip_id IN ($placeholders)
-            ORDER BY wtr.waste_trip_id,wtr.position_no,wtr.id");
-        $routeQuery->execute($ids);$routes=[];
-        foreach($routeQuery->fetchAll(PDO::FETCH_ASSOC) as $route)$routes[(int)$route['waste_trip_id']]??=$route;
         $documentQuery=$pdo->prepare("SELECT c.id,c.waste_trip_id,c.document_id,c.slot_code,c.requirement_code,c.custom_title,
                 d.original_name,d.relative_path,d.mime_type,d.file_size,d.created_at
               FROM waste_trip_closing_documents c JOIN documents d ON d.id=c.document_id AND d.deleted_at IS NULL
@@ -229,10 +221,6 @@ final class WasteTripClosingService
         }
         foreach ($rows as &$row) {
             $row['driver_names']=$drivers[(int)($row['route_executor_id']??0)]??'';
-            $route=$routes[(int)$row['id']]??[];
-            $origin=trim((string)($row['legacy_source_warehouse_name']?:($route['pickup']??'')));
-            $destination=trim((string)($row['legacy_destination_warehouse_name']?:($row['utilizer_name']?:($route['delivery']??''))));
-            $row['direction']=($origin!==''?$origin:'—').' → '.($destination!==''?$destination:'—');
             $row['documents'] = $byTrip[(int)$row['id']] ?? [];
             $row['recipient_email'] = self::RECIPIENTS[(string)$row['legal_entity_code']] ?? '';
             $row['paid_bank_transactions'] = $paid[(int)$row['id']] ?? [];
