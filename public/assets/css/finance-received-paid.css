@@ -13,7 +13,6 @@
 .rp-trip-item:last-child{border-bottom:0}
 .rp-trip-head{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px;padding:10px 13px;background:var(--surface-form,#f5f2ec);border-bottom:1px solid var(--line-soft)}
 .rp-trip-name{display:flex;align-items:baseline;gap:10px;min-width:0}
-.rp-trip-id{font-size:12px;font-weight:800;white-space:nowrap;color:var(--accent,#855d34)}
 .rp-trip-name h2{margin:0;min-width:0;font-size:12px;line-height:1.35;overflow-wrap:anywhere}
 .rp-trip-dates{display:flex;gap:18px;min-width:0}
 .rp-trip-dates>div{display:flex;gap:6px;align-items:baseline}
@@ -174,7 +173,7 @@
 .rp-ledger-v015 .rp-v010-table-wrap{width:100%;min-width:0;overflow-x:hidden}
 .rp-ledger-v015 .rp-v010-table{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:11px;line-height:1.25}
 .rp-ledger-v015 .rp-v010-table th,.rp-ledger-v015 .rp-v010-table td{box-sizing:border-box;min-width:0;padding:6px 7px;vertical-align:middle;border-right:1px solid rgba(168,161,150,.15);border-bottom:1px solid rgba(190,184,174,.42);overflow-wrap:anywhere}
-.rp-ledger-v015 .rp-v010-table th{height:30px;background:#d0ccc4;color:#34322f;text-align:left;text-transform:uppercase;font-size:10px;font-weight:800;letter-spacing:.02em}
+.rp-ledger-v015 .rp-v010-table th{height:30px;background:#d0ccc4;color:#34322f;text-align:left;text-transform:uppercase;font-size:10px;font-weight:700;line-height:14px;letter-spacing:.02em}
 .rp-ledger-v015 .rp-v010-table th:nth-child(8){white-space:nowrap;padding-inline:4px}
 .rp-ledger-v015 .rp-v010-table tbody tr{cursor:pointer}
 .rp-ledger-v015 .rp-v010-table tbody td{background:var(--table-row,#fafaf6)}
@@ -182,7 +181,6 @@
 .rp-ledger-v015 .rp-v010-table tr[hidden]{display:none!important}
 .rp-ledger-v015 .rp-v012-compact-head,.rp-ledger-v015 .rp-v010-mobile-group{display:none}
 .rp-ledger-v015 .rp-v010-trip span,.rp-ledger-v015 .rp-v015-carrier-name,.rp-ledger-v015 .rp-v015-driver{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.rp-ledger-v015 .rp-v010-trip strong{color:#815a34}
 .rp-ledger-v015 .rp-v015-driver{margin-top:2px;color:var(--text-faint,#756e65);font-size:11px}
 .rp-ledger-v015 .rp-v010-doc-list{list-style:none;margin:0;padding:0}
 .rp-ledger-v015 .rp-v010-doc-list li+li{margin-top:5px}
@@ -524,6 +522,7 @@
   outline-offset:-3px !important;
 }
 .rp-action-design.rp-ledger-v015 > .table-toolbar {
+  border-top:1px solid var(--line);
   border-left:1px solid var(--line);
   border-right:1px solid var(--line);
 }
@@ -574,9 +573,9 @@
 }
 
 /* Registry identity: ID and trip description occupy distinct cells, as in departures. */
-.rp-ledger-v015 .rp-v010-table .rp-v010-id {white-space:nowrap;font-variant-numeric:tabular-nums}
-.rp-ledger-v015 .rp-v010-table .rp-v010-id strong {color:#815a34}
-.rp-ledger-v015 .rp-v010-table .rp-v010-trip span {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.rp-ledger-v015 .rp-v010-table .rp-v010-id {color:#131210;font-family:"IBM Plex Mono","Cascadia Code",Consolas,monospace;font-size:12px;font-weight:700;line-height:16.8px;white-space:nowrap;font-variant-numeric:tabular-nums}
+.rp-ledger-v015 .rp-v010-table .rp-v010-id strong {color:inherit;font-weight:inherit}
+.rp-ledger-v015 .rp-v010-table .rp-v010-trip span {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:400;line-height:16.8px}
 @media(min-width:1600px) {
   .rp-ledger-v015 .rp-v010-table th:nth-child(9) {white-space:nowrap;padding-inline:4px}
 }
