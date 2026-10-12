@@ -5,6 +5,7 @@ $contractors=$contractors??[];
 $clients=$clients??[];
 $responsibleUsers=$responsibleUsers??[];
 $paymentQueueReady=$paymentQueueReady??false;
+$reportRows=$reportRows??[];
 $all=count($trips);
 $selectedTrip=(int)($_GET['trip_id']??0);
 $executorLabel=static fn(string $code):string=>match($code){'planex'=>'ООО «Планэкс»','mg_logistic'=>'ООО «МГ Логистик»',default=>'Не определён'};
@@ -20,7 +21,7 @@ $progressColor=static function(int $percent):string {
 <?php if(in_array($success,['Документ добавлен.','Документ убран из комплекта.','Диагностическая карта добавлена.'],true)):?><span data-closing-action-result="success" hidden></span><?php elseif($success):?><div class="notice success" role="status"><?= e((string)$success) ?></div><?php endif;?>
 <?php if($flashError||$error):?><div class="notice warn" role="alert"><?= e((string)($flashError?:$error)) ?></div><?php endif;?>
 <div class="closing-page" data-closing-state-key="<?= e($viewStateKey??'') ?>">
-  <div class="page-head"><div class="page-head-left"><h1 class="page-title">Сбор закрывающих документов</h1><div class="page-summary">Документы по завершённым рейсам.</div></div></div>
+  <div class="page-head"><div class="page-head-left"><h1 class="page-title">Сбор закрывающих документов</h1><div class="page-summary">Документы по завершённым рейсам.</div></div><?php if($schemaReady):?><div class="page-head-actions"><button type="button" class="btn btn-primary" data-closing-report-open>Сводный отчёт</button></div><?php endif;?></div>
   <?php if(!$schemaReady):?><div class="notice warn">Раздел ожидает обновление схемы данных.</div><?php else:?>
   <div class="table-toolbar closing-toolbar"><div class="closing-filters" role="group" aria-label="Фильтр по состоянию">
     <button type="button" class="closing-filter is-active" data-closing-filter="all" aria-pressed="true">Все рейсы</button>
@@ -122,6 +123,7 @@ $progressColor=static function(int $percent):string {
   </section>
   <?php endif;?>
 </div>
+<?php if($schemaReady):?><dialog class="closing-report-dialog" data-closing-report-dialog aria-labelledby="closing-report-title"><div class="closing-report-head"><div><strong id="closing-report-title">Сводный отчёт по рейсам</strong><small>Рейсы из текущей выборки</small></div><button type="button" data-closing-report-close aria-label="Закрыть">×</button></div><div class="closing-report-body"><div class="closing-report-scroll"><table class="closing-report-table"><thead><tr><?php foreach(\App\Service\WasteTripClosingReportService::HEADERS as $header):?><th scope="col"><?= e($header) ?></th><?php endforeach;?></tr></thead><tbody><?php foreach($reportRows as $row):?><tr data-report-trip-id="<?= (int)$row['id'] ?>"><?php foreach(['number','direction','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_date','company','manager'] as $key):?><td><?= e((string)$row[$key]) ?></td><?php endforeach;?></tr><?php endforeach;?></tbody></table></div><p class="closing-report-empty" data-closing-report-empty hidden>Рейсы по текущим фильтрам не найдены.</p></div><div class="closing-report-foot"><span data-closing-report-count></span><div><button type="button" class="btn btn-secondary" data-closing-report-close>Закрыть</button><a class="btn btn-primary" data-closing-report-download href="<?= e(app_url('/company/trips/closing-documents/summary.xlsx')) ?>">Скачать Excel</a></div></div></dialog><?php endif;?>
 <?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><dialog class="closing-review-dialog" data-review-dialog aria-labelledby="closing-review-title">
   <form method="post" data-review-form><div class="closing-review-head"><strong id="closing-review-title">Передать на проверку</strong><button type="button" data-review-close aria-label="Закрыть">×</button></div>
     <div class="closing-review-body"><p data-review-missing></p><div class="closing-review-mail"><strong>Письмо при передаче</strong><span data-review-recipient></span><span data-review-subject></span><span>В письме: сводка комплекта и защищённая ссылка на архив файлов рейса.</span><span class="closing-review-archive">Архив документов рейса <small>Хранится 30 дней</small></span></div></div>

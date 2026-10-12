@@ -12,6 +12,7 @@ use App\Service\EntityResponsibilityService;
 use App\Service\FinanceInvoiceService;
 use App\Service\WasteTripClosingPackageStore;
 use App\Service\WasteTripClosingService;
+use App\Service\WasteTripClosingReportService;
 use App\Service\WasteTripClosingTransportService;
 use App\Service\WasteTripClosingInvoiceService;
 use DomainException;
@@ -25,7 +26,7 @@ final class WasteTripClosingController
     public function index(): void
     {
         header('Cache-Control: no-store');
-        $trips=[];$error=null;$schemaReady=false;$paymentQueueReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
+        $trips=[];$reportRows=[];$error=null;$schemaReady=false;$paymentQueueReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
         $success=$_SESSION['waste_trip_closing_success']??null;
         $flashError=$_SESSION['waste_trip_closing_error']??null;
         unset($_SESSION['waste_trip_closing_success'],$_SESSION['waste_trip_closing_error']);
@@ -40,6 +41,7 @@ final class WasteTripClosingController
                 $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
                 foreach ($trips as &$trip) $trip['transport']=$transport[(int)$trip['id']]??null;
                 unset($trip);
+                $reportRows=WasteTripClosingReportService::rows($trips);
             }
             $canCreateInvoice=AccessControlService::canAccessPage('company.finance.invoices');
             if ($canCreateInvoice) {
@@ -56,6 +58,34 @@ final class WasteTripClosingController
         $config=$this->config;$db=$this->db;
         ob_start();require base_path('app/View/pages/company_waste_trip_closing.php');$content=(string)ob_get_clean();
         require base_path('app/View/layouts/main.php');
+    }
+
+    public function summaryXlsx(): void
+    {
+        header('Cache-Control: no-store');
+        $path=null;
+        try{
+            [,$pdo]=$this->context();
+            if(!WasteTripClosingService::ready($pdo))throw new DomainException('Раздел ожидает обновление схемы.');
+            $raw=(string)($_GET['ids']??'');
+            if($raw!==''&&!preg_match('/^[1-9][0-9]*(?:,[1-9][0-9]*)*$/D',$raw))throw new DomainException('Некорректный список рейсов.');
+            $ids=$raw===''?[]:array_values(array_unique(array_map('intval',explode(',',$raw))));
+            if(count($ids)>500)throw new DomainException('Слишком много рейсов в отчёте.');
+            $trips=WasteTripClosingService::trips($pdo);
+            $trips=array_values(array_filter($trips,static fn(array $trip):bool=>in_array((int)$trip['id'],$ids,true)));
+            $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
+            foreach($trips as &$trip)$trip['transport']=$transport[(int)$trip['id']]??null;
+            unset($trip);
+            $path=WasteTripClosingReportService::xlsx(WasteTripClosingReportService::rows($trips));
+            header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+            header('Content-Disposition: attachment; filename="trip-closing-summary.xlsx"');
+            header('Content-Length: '.filesize($path));
+            readfile($path);
+        }catch(Throwable $exception){
+            error_log('waste trip closing summary: '.$exception->getMessage());
+            http_response_code(400);header('Content-Type: text/plain; charset=UTF-8');
+            echo $exception instanceof DomainException?$exception->getMessage():'Не удалось сформировать Excel.';
+        }finally{if($path!==null)@unlink($path);}
     }
 
     public function upload(string $tripId): void

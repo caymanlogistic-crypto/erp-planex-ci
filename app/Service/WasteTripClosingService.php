@@ -117,6 +117,8 @@ final class WasteTripClosingService
     {
         $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
         $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.actual_end_date,wt.legal_entity_code,
+                wt.route_executor_id,wt.legacy_source_warehouse_name,wt.legacy_destination_warehouse_name,
+                wt.destination_type,fu.short_name utilizer_name,
                 ct.id carrier_id,COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
                 u.membership_id manager_membership_id,
                 COALESCE(r.state,'work') review_state,COALESCE(r.version,0) review_version,
@@ -125,6 +127,7 @@ final class WasteTripClosingService
               LEFT JOIN crews c ON c.id=wt.route_executor_id
               LEFT JOIN contractors ct ON ct.id=c.contractor_id
               LEFT JOIN users u ON u.id=wt.responsible_user_id
+              LEFT JOIN feo_utilizers fu ON fu.id=wt.utilizer_id
               LEFT JOIN waste_trip_closing_reviews r ON r.waste_trip_id=wt.id
              WHERE wt.deleted_at IS NULL AND wt.status='completed' AND {$scope['sql']}
              ORDER BY wt.business_id DESC LIMIT 500");
@@ -133,6 +136,22 @@ final class WasteTripClosingService
         if (!$rows) return [];
         $ids=array_map(static fn(array $row):int=>(int)$row['id'],$rows);
         $placeholders=implode(',',array_fill(0,count($ids),'?'));
+        $crewIds=array_values(array_unique(array_filter(array_map('intval',array_column($rows,'route_executor_id')))));
+        $drivers=[];
+        if($crewIds){
+            $crewPlaceholders=implode(',',array_fill(0,count($crewIds),'?'));
+            $driverQuery=$pdo->prepare("SELECT c.id crew_id,GROUP_CONCAT(d.full_name ORDER BY cd.position SEPARATOR ' / ') driver_names
+                FROM crews c JOIN crew_drivers cd ON cd.crew_id=c.id JOIN drivers d ON d.id=cd.driver_id
+                WHERE c.id IN ($crewPlaceholders) GROUP BY c.id");
+            $driverQuery->execute($crewIds);
+            foreach($driverQuery->fetchAll(PDO::FETCH_ASSOC) as $driver)$drivers[(int)$driver['crew_id']]=(string)$driver['driver_names'];
+        }
+        $routeQuery=$pdo->prepare("SELECT wtr.waste_trip_id,fr.mno_adres_pogruzki pickup,COALESCE(NULLIF(fr.adres_dostavki_otkhodov,''),fr.adres_vygruzki_otkhodov) delivery
+            FROM waste_trip_requests wtr JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+            WHERE wtr.removed_at IS NULL AND wtr.waste_trip_id IN ($placeholders)
+            ORDER BY wtr.waste_trip_id,wtr.position_no,wtr.id");
+        $routeQuery->execute($ids);$routes=[];
+        foreach($routeQuery->fetchAll(PDO::FETCH_ASSOC) as $route)$routes[(int)$route['waste_trip_id']]??=$route;
         $documentQuery=$pdo->prepare("SELECT c.id,c.waste_trip_id,c.document_id,c.slot_code,c.requirement_code,c.custom_title,
                 d.original_name,d.relative_path,d.mime_type,d.file_size,d.created_at
               FROM waste_trip_closing_documents c JOIN documents d ON d.id=c.document_id AND d.deleted_at IS NULL
@@ -153,9 +172,12 @@ final class WasteTripClosingService
             GROUP BY wtr.id,wtr.waste_trip_id,fr.zayavka_id,i.tn_absent,i.arrived_at,i.departed_at,
                 i.driver_signature_present,i.sender_signature_present,i.tn_datetime_status,i.recovery_source");
         $issueQuery->execute($ids);
-        $tnIssues=[];
+        $tnIssues=[];$tnRequired=[];$tnScanned=[];
         foreach($issueQuery->fetchAll(PDO::FETCH_ASSOC) as $item) {
             if((int)$item['tn_absent']===1) continue;
+            $tripId=(int)$item['waste_trip_id'];
+            $tnRequired[$tripId]=($tnRequired[$tripId]??0)+1;
+            if((int)$item['scan_count']>0)$tnScanned[$tripId]=($tnScanned[$tripId]??0)+1;
             $issues=[];
             if((int)$item['scan_count']===0) $issues[]='нет скана ТН';
             if(!$item['arrived_at']||!$item['departed_at']) $issues[]='нет даты или времени';
@@ -165,6 +187,20 @@ final class WasteTripClosingService
             if($issues) $tnIssues[(int)$item['waste_trip_id']][]='Заявка №'.$item['zayavka_id'].': '.implode(', ',$issues);
         }
         $invoiceSummaries=WasteTripClosingInvoiceService::summaries($pdo,$ids);
+        $carrierQuery=$pdo->prepare("SELECT source_parent_id,SUM(amount) rate,SUM(paid_amount) paid_amount,
+                MIN(COALESCE(due_date,forecast_due_date,specific_due_date)) payment_due
+            FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND party_role='carrier'
+              AND cancelled_at IS NULL AND status<>'cancelled' AND source_parent_id IN ($placeholders)
+            GROUP BY source_parent_id");
+        $carrierQuery->execute($ids);$carrierPayments=[];
+        foreach($carrierQuery->fetchAll(PDO::FETCH_ASSOC) as $payment)$carrierPayments[(int)$payment['source_parent_id']]=$payment;
+        $carrierPaidQuery=$pdo->prepare("SELECT o.source_parent_id,MAX(fo.operation_date) paid_date
+            FROM finance_obligations o JOIN finance_operation_allocations a ON a.obligation_id=o.id AND a.cancelled_at IS NULL AND a.amount>0
+            JOIN finance_operations fo ON fo.id=a.operation_id AND fo.status='POSTED'
+            WHERE o.source_parent_type='WASTE_TRIP' AND o.party_role='carrier' AND o.cancelled_at IS NULL
+              AND o.source_parent_id IN ($placeholders) GROUP BY o.source_parent_id");
+        $carrierPaidQuery->execute($ids);$carrierPaidDates=[];
+        foreach($carrierPaidQuery->fetchAll(PDO::FETCH_ASSOC) as $payment)$carrierPaidDates[(int)$payment['source_parent_id']]=(string)$payment['paid_date'];
         $paid=[];
         $amountQuery=$pdo->prepare("SELECT source_parent_id,COUNT(*) obligations,SUM(amount) due,SUM(paid_amount) paid
             FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND party_role='customer'
@@ -192,13 +228,24 @@ final class WasteTripClosingService
             foreach ($paymentQuery->fetchAll(PDO::FETCH_ASSOC) as $payment) $paid[(int)$payment['source_parent_id']][]=$payment;
         }
         foreach ($rows as &$row) {
+            $row['driver_names']=$drivers[(int)($row['route_executor_id']??0)]??'';
+            $route=$routes[(int)$row['id']]??[];
+            $origin=trim((string)($row['legacy_source_warehouse_name']?:($route['pickup']??'')));
+            $destination=trim((string)($row['legacy_destination_warehouse_name']?:($row['utilizer_name']?:($route['delivery']??''))));
+            $row['direction']=($origin!==''?$origin:'—').' → '.($destination!==''?$destination:'—');
             $row['documents'] = $byTrip[(int)$row['id']] ?? [];
             $row['recipient_email'] = self::RECIPIENTS[(string)$row['legal_entity_code']] ?? '';
             $row['paid_bank_transactions'] = $paid[(int)$row['id']] ?? [];
             $row['request_count'] = (int)($completion[(int)$row['id']]['request_count'] ?? 0);
             $row['processed_count'] = (int)($completion[(int)$row['id']]['processed_count'] ?? 0);
             $row['tn_issues']=$tnIssues[(int)$row['id']]??[];
+            $row['tn_required']=$tnRequired[(int)$row['id']]??0;
+            $row['tn_scanned']=$tnScanned[(int)$row['id']]??0;
             $row['invoice_summary']=$invoiceSummaries[(int)$row['id']]??['status'=>'missing','detail'=>'—','invoice_id'=>0];
+            $row['carrier_rate']=$carrierPayments[(int)$row['id']]['rate']??null;
+            $row['carrier_paid_amount']=$carrierPayments[(int)$row['id']]['paid_amount']??null;
+            $row['carrier_payment_due']=$carrierPayments[(int)$row['id']]['payment_due']??null;
+            $row['carrier_paid_date']=$carrierPaidDates[(int)$row['id']]??null;
         }
         unset($row);
         return $rows;
