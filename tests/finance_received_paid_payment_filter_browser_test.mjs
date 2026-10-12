@@ -86,6 +86,13 @@ try{
      assert.equal(await page.locator('#rp-ledger-table tfoot tr').evaluate(row=>Math.round(row.getBoundingClientRect().height))<=34,true,'compact totals stay one line');
    }
    if(width===1920){
+     const frame=await page.locator('.rp-standard-box.rp-ledger-v015').evaluate(card=>{
+       const toolbar=getComputedStyle(card.querySelector(':scope > .table-toolbar'));
+       const table=getComputedStyle(card.querySelector(':scope > .rp-v010-table-wrap'));
+       const tabs=getComputedStyle(card.querySelector(':scope > .rp-v010-quick'));
+       return {top:toolbar.borderTopWidth,left:toolbar.borderLeftWidth,right:toolbar.borderRightWidth,tableLeft:table.borderLeftWidth,tableRight:table.borderRightWidth,bottom:table.borderBottomWidth,tabsTop:tabs.borderTopWidth,tabsLeft:tabs.borderLeftWidth,tabsRight:tabs.borderRightWidth};
+     });
+     assert.deepEqual(frame,{top:'1px',left:'1px',right:'1px',tableLeft:'1px',tableRight:'1px',bottom:'1px',tabsTop:'0px',tabsLeft:'0px',tabsRight:'0px'},'ledger working area has one continuous outer frame while tabs remain frameless');
      const fonts=await page.locator('#rp-ledger-table').evaluate(table=>({td:getComputedStyle(table.tBodies[0].rows[0].cells[0]).fontSize,th:getComputedStyle(table.tHead.rows[0].cells[0]).fontSize}));
      assert.deepEqual(fonts,{td:'12px',th:'10px'},'ERP table typography matches v015');
      const canonicalTripType=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>{

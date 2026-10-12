@@ -522,6 +522,7 @@
   outline-offset:-3px !important;
 }
 .rp-action-design.rp-ledger-v015 > .table-toolbar {
+  border-top:1px solid var(--line);
   border-left:1px solid var(--line);
   border-right:1px solid var(--line);
 }
