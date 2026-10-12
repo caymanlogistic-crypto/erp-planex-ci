@@ -4,8 +4,13 @@ declare(strict_types=1);
 require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Service/RouteExecutorReviewPackage.php';
 require_once BASE_PATH.'/app/Service/RouteExecutorReviewCardService.php';
+require_once BASE_PATH.'/app/Security/EffectiveAccess.php';
+require_once BASE_PATH.'/app/Security/AccessRuntime.php';
+require_once BASE_PATH.'/app/Service/AccessControlService.php';
 
 use App\Service\RouteExecutorReviewCardService;
+use App\Security\AccessRuntime;
+use App\Security\EffectiveAccess;
 
 $database=(string)getenv('PLANEX_TEST_FIXED_DB');
 if (getenv('APP_ENV')!=='test' || $database==='' || !in_array($database,explode(',',(string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')),true)) {
@@ -45,4 +50,30 @@ $cards->delete($finalId);
 $archived=$cards->loadSentFinal($finalId);
 $assert($archived!==null && $archived['snapshot']['trip_id']==='123' && $archived['stage']==='final',
     'Accepted final card remains readable solely for diagnostic mail preparation');
+$editId='33333333-3333-4333-8333-333333333333';
+$editable=['controls'=>[
+    ['formId'=>'lab-contractor-form','name'=>'name','value'=>'ИП Тестовый','type'=>'text'],
+    ['formId'=>'lab-contractor-form','name'=>'bank_corr_account','value'=>'30101810300000000601 ','type'=>'text'],
+    ['formId'=>'lab-driver-form','name'=>'full_name','value'=>'Тестовый Водитель Тестович','type'=>'text'],
+    ['formId'=>'lab-driver-form','name'=>'phone','value'=>'','type'=>'text'],
+    ['formId'=>'lab-vehicle-form','name'=>'units[primary][plate_number]','value'=>'А123АА32','type'=>'text'],
+], 'logist'=>'12','trip_id'=>'123','trip_label'=>'#123 Тестовый рейс'];
+$cards->save($editId,101,0,$editable,[],[]);
+$pdo->prepare("INSERT INTO route_executor_review_sends(card_id,actor_account_id,stage,final_mail_status) VALUES(?,?,'final','accepted')")->execute([$editId,101]);
+AccessRuntime::setCurrent(EffectiveAccess::systemOwner(1,1,[]));
+$cards->setFinalCorrection($editId,true);
+$stored='[{"id":"kept-document","path":"not-read-in-correction"}]';
+$pdo->prepare('UPDATE route_executor_review_cards SET files_json=? WHERE card_id=?')->execute([$stored,$editId]);
+$editable['controls'][1]['value']='30101810300000000601';
+$editable['controls'][3]['value']='+7 920 855-66-89';
+$assert($cards->save($editId,101,1,$editable,[],[])===2,'Owner can save two corrected fields');
+$row=$cards->load($editId);
+$assert($row!==null && $row['files_json']===$stored && $row['driver_phone']==='+7 920 855-66-89',
+    'Correction keeps all stored documents and updates driver phone');
+$other=$editable;$other['controls'][4]['value']='В456ВВ32';
+try { $cards->save($editId,101,2,$other,[],[]); throw new RuntimeException('Unexpected vehicle edit accepted'); }
+catch (DomainException $expected) { $assert(str_contains($expected->getMessage(),'только'),'Correction rejects edits to vehicle data'); }
+$cards->setFinalCorrection($editId,false,2);
+$assert($cards->load($editId)['stage']==='final','Accepted final stage restored after correction');
+AccessRuntime::clear();
 echo "route_executor_review_cards_mysql_test: PASS\n";

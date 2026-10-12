@@ -105,6 +105,7 @@ final class RouteExecutorReviewController
             $row=$this->row($tenant,$cardId);
             $contractStatus=(new RouteExecutorContractMailService($tenant))->status($cardId);
             $this->json(['ok'=>true,'stage'=>$row['stage']??'new','mail_status'=>$row ? ($row['final_mail_status']??$row['partial_mail_status']) : null,
+                'correction_allowed'=>AccessControlService::isEffectiveSystemOwner(),
                 'contract_status'=>$contractStatus??'not_sent',
                 'card'=>$card ? ['snapshot'=>$card['snapshot'],'files'=>array_map(static fn(array $file):array=>[
                     'id'=>$file['id'],'formId'=>$file['formId'],'name'=>$file['name'],'index'=>$file['index'],
@@ -139,6 +140,38 @@ final class RouteExecutorReviewController
             $cardId=$this->cardId((string)($_POST['card_id']??''));
             $action=(string)($_POST['action']??'');
             if ($action==='save') $this->saveCard($cards,$tenant,$cardId,$accountId);
+            if ($action==='open_final_correction') {
+                $cards->setFinalCorrection($cardId,true);
+                $this->json(['ok'=>true,'stage'=>'final_edit']);
+            }
+            if ($action==='finish_final_correction') {
+                $card=$cards->load($cardId);
+                if (!$card || $card['stage']!=='final_edit' || (int)($_POST['revision']??0)!==(int)$card['revision']) {
+                    throw new DomainException('Карточка изменилась. Обновите страницу.');
+                }
+                $cards->setFinalCorrection($cardId,false,(int)$card['revision']);
+                try {
+                    $crewId=(new RouteExecutorReviewMaterializationService($tenant,$this->db,$this->config,(int)$company['id']))
+                        ->materialize($cardId,(int)($_SESSION['user_id']??0),(string)($_SESSION['role_code']??''));
+                } catch (Throwable $error) {
+                    try { $cards->setFinalCorrection($cardId,true); } catch (Throwable $restoreError) {
+                        error_log('route executor final correction restore: '.$restoreError->getMessage());
+                    }
+                    throw $error;
+                }
+                [$expected]=RouteExecutorReviewMaterializationService::standardInput($card['snapshot'],[]);
+                $q=$tenant->prepare('SELECT c.name contractor_name,c.bank_corr_account,d.full_name driver_name,d.phone driver_phone,v.plate_number primary_plate FROM crews r JOIN contractors c ON c.id=r.contractor_id JOIN drivers d ON d.id=r.driver_id JOIN vehicle_units v ON v.id=r.vehicle_id WHERE r.id=? LIMIT 1');
+                $q->execute([$crewId]);$created=$q->fetch(PDO::FETCH_ASSOC);
+                $selected=(array)($card['snapshot']['selected_entities']??[]);
+                $expectedPhone=preg_replace('/\D+/','',(string)($expected['driver']['phone']??''));
+                if (strlen($expectedPhone)===11 && $expectedPhone[0]==='8') $expectedPhone[0]='7';
+                if (strlen($expectedPhone)===10) $expectedPhone='7'.$expectedPhone;
+                $verified=$created!==false
+                    && (isset($selected['contractor']) || ((string)$created['contractor_name']===(string)($expected['contractor']['name']??'') && (string)$created['bank_corr_account']===(string)($expected['contractor']['bank_corr_account']??'')))
+                    && (isset($selected['driver']) || ((string)$created['driver_name']===(string)($expected['driver']['full_name']??'') && preg_replace('/\D+/','',(string)$created['driver_phone'])===$expectedPhone))
+                    && (isset($selected['vehicle']) || (string)$created['primary_plate']===(string)($expected['vehicle']['units']['primary']['plate_number']??''));
+                $this->json(['ok'=>true,'stage'=>'final','crew_id'=>$crewId,'verified'=>$verified]);
+            }
             if ($action==='contract') $this->sendContractCard($cards,$central,$tenant,(int)$company['id'],$cardId,$accountId);
             if ($action==='delete') { $cards->delete($cardId);$this->json(['ok'=>true]); }
             if ($action==='materialize') {
