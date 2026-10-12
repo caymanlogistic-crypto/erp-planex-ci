@@ -78,9 +78,12 @@ $progressColor=static function(int $percent):string {
         <div class="closing-body-head">
           <h2>Закрывающие документы рейса #<?= e((string)$trip['business_id']) ?></h2>
           <div class="closing-trip-facts">
+            <span><small>Компания рейса</small><b><?= e(match((string)($trip['legal_entity_code']??'')){'planex'=>'ПЛАНЭКС','mg_logistic'=>'МГ Логистика',default=>'—'}) ?></b></span>
             <span><small>Название перевозчика</small><b><?= e(trim((string)($trip['carrier_name']??''))?:'—') ?></b></span>
             <span><small>ФИО водителя</small><b><?= e(trim((string)($trip['driver_names']??''))?:'—') ?></b></span>
+            <span><small><?= ($trip['legal_entity_code']??'')==='mg_logistic'?'Ставка перевозчика · Продажа':'Ставка перевозчика · Себес, руб' ?></small><b><?= ($trip['display_rate']??null)===null?'—':e(number_format((float)$trip['display_rate'],2,',',' ')).' ₽' ?></b></span>
             <span><small>Оплачено перевозчику</small><b><?= e(number_format((float)($trip['carrier_paid_amount']??0),2,',',' ')) ?> ₽</b></span>
+            <?php $paymentDisplay=$trip['carrier_payment_display']??\App\Service\WasteTripClosingService::carrierPaymentDisplay($trip);?><span class="closing-payment-fact is-<?= e($paymentDisplay['status']) ?>"><small>Дата оплаты / срок</small><b><?= e($paymentDisplay['text']) ?></b></span>
           </div>
           <?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><span class="closing-note">Получатель письма: <?= e((string)$trip['recipient_email']) ?></span><?php endif;?>
         </div>

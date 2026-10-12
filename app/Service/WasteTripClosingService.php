@@ -179,20 +179,8 @@ final class WasteTripClosingService
             if($issues) $tnIssues[(int)$item['waste_trip_id']][]='Заявка №'.$item['zayavka_id'].': '.implode(', ',$issues);
         }
         $invoiceSummaries=WasteTripClosingInvoiceService::summaries($pdo,$ids);
-        $carrierQuery=$pdo->prepare("SELECT source_parent_id,SUM(amount) rate,SUM(paid_amount) paid_amount,
-                MIN(COALESCE(due_date,forecast_due_date,specific_due_date)) payment_due
-            FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND party_role='carrier'
-              AND cancelled_at IS NULL AND status<>'cancelled' AND source_parent_id IN ($placeholders)
-            GROUP BY source_parent_id");
-        $carrierQuery->execute($ids);$carrierPayments=[];
-        foreach($carrierQuery->fetchAll(PDO::FETCH_ASSOC) as $payment)$carrierPayments[(int)$payment['source_parent_id']]=$payment;
-        $carrierPaidQuery=$pdo->prepare("SELECT o.source_parent_id,MAX(fo.operation_date) paid_date
-            FROM finance_obligations o JOIN finance_operation_allocations a ON a.obligation_id=o.id AND a.cancelled_at IS NULL AND a.amount>0
-            JOIN finance_operations fo ON fo.id=a.operation_id AND fo.status='POSTED'
-            WHERE o.source_parent_type='WASTE_TRIP' AND o.party_role='carrier' AND o.cancelled_at IS NULL
-              AND o.source_parent_id IN ($placeholders) GROUP BY o.source_parent_id");
-        $carrierPaidQuery->execute($ids);$carrierPaidDates=[];
-        foreach($carrierPaidQuery->fetchAll(PDO::FETCH_ASSOC) as $payment)$carrierPaidDates[(int)$payment['source_parent_id']]=(string)$payment['paid_date'];
+        $financeByTrip=[];
+        foreach(FinanceReceivedPaidService::fetch($pdo,$ids) as $financeTrip)$financeByTrip[(int)$financeTrip['id']]=$financeTrip;
         $paid=[];
         $amountQuery=$pdo->prepare("SELECT source_parent_id,COUNT(*) obligations,SUM(amount) due,SUM(paid_amount) paid
             FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND party_role='customer'
@@ -230,13 +218,45 @@ final class WasteTripClosingService
             $row['tn_required']=$tnRequired[(int)$row['id']]??0;
             $row['tn_scanned']=$tnScanned[(int)$row['id']]??0;
             $row['invoice_summary']=$invoiceSummaries[(int)$row['id']]??['status'=>'missing','detail'=>'—','invoice_id'=>0];
-            $row['carrier_rate']=$carrierPayments[(int)$row['id']]['rate']??null;
-            $row['carrier_paid_amount']=$carrierPayments[(int)$row['id']]['paid_amount']??null;
-            $row['carrier_payment_due']=$carrierPayments[(int)$row['id']]['payment_due']??null;
-            $row['carrier_paid_date']=$carrierPaidDates[(int)$row['id']]??null;
+            $finance=$financeByTrip[(int)$row['id']]??null;
+            $carrierSide=$finance['sides']['carrier']??['rate'=>null,'payments'=>[]];
+            $customerSide=$finance['sides']['customer']??['rate'=>null];
+            $row['carrier_rate']=$carrierSide['rate'];
+            $row['display_rate']=$row['legal_entity_code']==='mg_logistic'?($customerSide['source_rate']??$customerSide['rate']):$carrierSide['rate'];
+            $row['carrier_paid_amount']=array_sum(array_map(static fn(array $payment):float=>(float)$payment['amount'],$carrierSide['payments']));
+            $paymentDates=array_column($carrierSide['payments'],'payment_date');
+            $row['carrier_paid_date']=$paymentDates?max($paymentDates):null;
+            $row['carrier_payment_plan']=$finance['planned_carrier_payment']??null;
+            $row['carrier_payment_due']=$row['carrier_payment_plan']['date']??null;
+            $row['carrier_payment_display']=self::carrierPaymentDisplay($row);
         }
         unset($row);
         return $rows;
+    }
+
+    /** @return array{status:string,text:string} */
+    public static function carrierPaymentDisplay(array $trip, ?string $today = null): array
+    {
+        $today ??= (new \DateTimeImmutable('now',new \DateTimeZone('Europe/Moscow')))->format('Y-m-d');
+        $paid=(float)($trip['carrier_paid_amount']??0);
+        $carrierRate=$trip['carrier_rate']??null;
+        $paidDate=(string)($trip['carrier_paid_date']??'');
+        $paidLabel=$paidDate!==''?date('d.m.Y',strtotime($paidDate)):'дату уточните';
+        if($carrierRate!==null&&(float)$carrierRate>0&&$paid+0.005>=(float)$carrierRate)
+            return ['status'=>'paid','text'=>'Оплачено: '.$paidLabel];
+        $prefix=$paid>0?'Частично оплачено: '.$paidLabel.' · ':'';
+        $plan=$trip['carrier_payment_plan']??null;
+        $date=is_array($plan)?(string)($plan['date']??''):'';
+        if($date==='')return ['status'=>$paid>0?'partial':'none','text'=>$paid>0?'Выплата: '.$paidLabel:'Срок оплаты не указан'];
+        $label=date('d.m.Y',strtotime($date));
+        if(empty($plan['due_date'])||($plan['status']??'')!=='ready')
+            return ['status'=>'forecast','text'=>$prefix.'Ожидается событие · план '.$label];
+        if($date<$today){
+            $days=(new \DateTimeImmutable($date))->diff(new \DateTimeImmutable($today))->days;
+            $word=($days%100>=11&&$days%100<=14)?'дней':($days%10===1?'день':($days%10>=2&&$days%10<=4?'дня':'дней'));
+            return ['status'=>'overdue','text'=>$prefix.'Просрочено на '.$days.' '.$word.' · срок '.$label];
+        }
+        return ['status'=>$paid>0?'partial':'planned','text'=>$prefix.($date===$today?'Сегодня · срок '.$label:'Срок оплаты: '.$label)];
     }
 
     /** Matches the processed-request count shown by TripCompletionService's logistics assistant view. */

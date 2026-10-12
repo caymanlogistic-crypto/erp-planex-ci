@@ -117,4 +117,12 @@ $pdo->exec("UPDATE waste_trip_carrier_payments SET specific_due_date='2026-12-01
 $rows=FinanceReceivedPaidService::fetch($pdo);
 if ($rows[1]['planned_receipt']['date'] !== '2026-11-09' || $rows[1]['planned_receipt']['due_date'] !== '2026-11-09') throw new RuntimeException('Four working days must skip the official 4 November holiday.');
 if ($rows[0]['planned_carrier_payment']['date'] !== '2026-11-12') throw new RuntimeException('Seven carrier working days must skip the official 4 November holiday.');
+$pdo->exec("INSERT INTO finance_obligations VALUES(6,'WASTE_TRIP_CARRIER_PAYMENT',3,'WASTE_TRIP',3,'carrier',240000,'planned',NULL,NULL,NULL)");
+$pdo->exec("INSERT INTO finance_obligations VALUES(7,'WASTE_TRIP_CUSTOMER_PAYMENT',3,'WASTE_TRIP',3,'customer',990000,'planned',NULL,NULL,NULL)");
+$pdo->exec("INSERT INTO finance_operations VALUES(3,'$dueToday','POSTED',NULL)");
+$pdo->exec("INSERT INTO finance_operation_allocations VALUES(3,NULL,6,'$dueToday',50000,NULL)");
+$closingRows=FinanceReceivedPaidService::fetch($pdo,[1,3]);
+if (count($closingRows)!==2 || (int)$closingRows[0]['id']!==1 || (int)$closingRows[1]['id']!==3) throw new RuntimeException('Closing projection must include requested PLANEX and MG trips only.');
+if ((string)$closingRows[1]['sides']['customer']['source_rate']!=='280000.00' || (string)$closingRows[1]['sides']['customer']['rate']!=='990000.00' || (string)$closingRows[1]['sides']['carrier']['rate']!=='240000.00') throw new RuntimeException('MG trip sale must remain distinguishable from a preserved customer obligation and carrier cost.');
+if ((string)$closingRows[1]['sides']['carrier']['payments'][0]['amount']!=='50000.00' || $closingRows[1]['sides']['customer']['payments']!==[]) throw new RuntimeException('MG carrier payments must use posted carrier allocations, not customer receipts.');
 echo "FINANCE_RECEIVED_PAID_BEHAVIORAL_OK\n";

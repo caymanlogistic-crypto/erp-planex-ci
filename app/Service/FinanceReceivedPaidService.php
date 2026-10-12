@@ -7,9 +7,18 @@ use PDO;
 /** Read-only, trip-scoped projection of contractual rates, invoices and posted settlements. */
 final class FinanceReceivedPaidService
 {
-    public static function fetch(PDO $pdo): array
+    /** Without IDs this is the PLANEX finance page; IDs provide the same projection for closing documents. */
+    public static function fetch(PDO $pdo, ?array $tripIds = null): array
     {
+        if ($tripIds === []) return [];
         $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
+        $filter = "wt.legal_entity_code='planex'";
+        $params = $scope['params'];
+        if ($tripIds !== null) {
+            $tripIds = array_values(array_unique(array_map('intval', $tripIds)));
+            $filter = 'wt.id IN (' . implode(',', array_fill(0, count($tripIds), '?')) . ')';
+            $params = array_merge($tripIds, $params);
+        }
         $stmt = $pdo->prepare("SELECT wt.id, wt.business_id, wt.comment, wt.actual_start_date,
                 wt.planned_start_date, wt.planned_start_date_from, wt.actual_end_date,
                 wt.planned_finish_date, wt.client_id, c.name AS client_name,
@@ -21,10 +30,10 @@ final class FinanceReceivedPaidService
             LEFT JOIN contractors ct ON ct.id=cr.contractor_id
             LEFT JOIN driver_vehicle_blocks dvb ON dvb.id=cr.driver_vehicle_block_id
             LEFT JOIN drivers d ON d.id=dvb.driver_id
-            WHERE wt.deleted_at IS NULL AND wt.legal_entity_code='planex'
+            WHERE wt.deleted_at IS NULL AND {$filter}
               AND wt.status='completed' AND {$scope['sql']}
             ORDER BY wt.business_id DESC");
-        $stmt->execute($scope['params']);
+        $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         if ($rows === []) return [];
         $ids = array_map(static fn(array $row): int => (int)$row['id'], $rows);
@@ -32,8 +41,8 @@ final class FinanceReceivedPaidService
         $byId = [];
         foreach ($rows as $index => &$row) {
             $row['sides'] = [
-                'customer' => ['rate' => null, 'invoices' => [], 'payments' => []],
-                'carrier' => ['rate' => null, 'invoices' => [], 'payments' => []],
+                'customer' => ['rate' => null, 'source_rate' => null, 'invoices' => [], 'payments' => []],
+                'carrier' => ['rate' => null, 'source_rate' => null, 'invoices' => [], 'payments' => []],
             ];
             $row['planned_receipt'] = null;
             $row['planned_carrier_payment'] = null;
@@ -65,6 +74,7 @@ final class FinanceReceivedPaidService
         foreach ($sourceRates->fetchAll(PDO::FETCH_ASSOC) as $rate) {
             $index = $byId[(int)$rate['trip_id']] ?? null;
             $side = (string)$rate['party_role'];
+            if ($index !== null) $rows[$index]['sides'][$side]['source_rate'] = (string)$rate['amount'];
             if ($index !== null && ($side === 'carrier' || $rows[$index]['sides'][$side]['rate'] === null)) {
                 $rows[$index]['sides'][$side]['rate'] = (string)$rate['amount'];
             }
