@@ -88,7 +88,7 @@
     vehicle: 'Для регистрации транспорта'
   };
   const vehicleDriverFields = {
-    full_name: 'ФИО водителя', passport_number: 'Серия и номер паспорта',
+    full_name: 'ФИО водителя', phone: 'Телефон водителя', passport_number: 'Серия и номер паспорта',
     passport_issued_by: 'Кем выдан паспорт',
     passport_issue_date: 'Дата выдачи паспорта', license_number: 'Номер водительского удостоверения',
     license_issue_date: 'Дата выдачи водительского удостоверения', email: 'Email водителя'

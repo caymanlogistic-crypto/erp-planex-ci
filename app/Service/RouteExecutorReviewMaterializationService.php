@@ -19,6 +19,19 @@ final class RouteExecutorReviewMaterializationService
         private readonly int $companyId,
     ) {}
 
+    /** Check the exact combined-create input before any final email is sent. No records are written. */
+    public function validateBeforeFinalSend(array $card, int $userId, string $role): void
+    {
+        $cards = new RouteExecutorReviewCardService($this->tenant, $this->companyId);
+        $uploads = $cards->storedFiles($card, false);
+        [$post, $files] = self::standardInput($card['snapshot'], $uploads);
+        $post['existing'] = (array) ($card['snapshot']['selected_entities'] ?? []);
+        RouteExecutorCombinedCreateService::create(
+            $this->tenant, $this->central, $this->config, $this->companyId,
+            $post, $files, $userId, $role, null, true, true
+        );
+    }
+
     public function materialize(string $cardId, int $userId, string $role): int
     {
         $lockName='route-review-materialize:'.$cardId;

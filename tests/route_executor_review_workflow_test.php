@@ -41,6 +41,7 @@ $package=RouteExecutorReviewPackage::inspect(['controls'=>array_merge($contract,
 $assert($package['ready']===['Обучение водителя'],'Training readiness should survive an incomplete contract');
 $assert(!$package['full'],'Incomplete package cannot be final');
 $assert(in_array('Файл: Паспорт водителя',$package['missing'],true),'Missing documents appear in MAX list');
+$assert(in_array('Водитель: Телефон водителя',$package['missing'],true),'Missing driver phone blocks a full package');
 $existing=RouteExecutorReviewPackage::inspect(['controls'=>[], 'selected_entities'=>['contractor'=>11,'driver'=>12,'vehicle'=>13]],[]);
 $assert($existing['full'] && $existing['missing']===[], 'All selected existing blocks are complete without field or document checks');
 $existingContractor=RouteExecutorReviewPackage::inspect(['controls'=>$driver,'selected_entities'=>['contractor'=>11]],[]);

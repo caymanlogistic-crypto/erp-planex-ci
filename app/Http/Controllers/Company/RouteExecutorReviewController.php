@@ -199,6 +199,14 @@ final class RouteExecutorReviewController
             }
             if ($stage==='partial' && $package['full']) throw new DomainException('Весь комплект уже готов. Отправьте его одним письмом.');
             if ($stage==='final' && !$package['full']) throw new DomainException('Для полного комплекта не хватает: '.implode('; ',$package['missing']));
+            if ($stage==='final') {
+                try {
+                    (new RouteExecutorReviewMaterializationService($tenant,$this->db,$this->config,(int)$company['id']))
+                        ->validateBeforeFinalSend($card,(int)($_SESSION['user_id']??0),(string)($_SESSION['role_code']??''));
+                } catch (Throwable $validationError) {
+                    throw new DomainException('Исправьте карточку перед отправкой: '.$validationError->getMessage(),0,$validationError);
+                }
+            }
             $membershipId=(int)($snapshot['logist']??0);
             $logist=$this->responsibleLogist($central,(int)$company['id'],$membershipId);
             $settings=(new RouteExecutorReviewRecipientService($central,(int)$company['id']))->read();
