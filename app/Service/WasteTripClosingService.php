@@ -55,10 +55,7 @@ final class WasteTripClosingService
         $present=[];
         foreach ($trip['documents']??[] as $document) $present[(string)$document['slot_code']]=true;
         foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;
-        $units=$transport['units']??[];
-        if (!$units || !empty($trip['tn_issues'])) return false;
-        foreach ($units as $unit) if (empty($unit['has_card']) && empty($unit['documents'])) return false;
-        return true;
+        return empty($trip['tn_issues']);
     }
 
     public static function changePaymentStage(PDO $pdo, int $tripId, int $expectedVersion, string $action): void
@@ -93,9 +90,6 @@ final class WasteTripClosingService
 
     private static function paymentReadyForTrip(PDO $pdo, int $tripId): bool
     {
-        $transport=WasteTripClosingTransportService::forTrips($pdo,[$tripId])[$tripId]??null;
-        if (!$transport || empty($transport['units'])) return false;
-        foreach ($transport['units'] as $unit) if (empty($unit['has_card']) && empty($unit['documents'])) return false;
         $present=[];
         foreach (self::documents($pdo,$tripId) as $document) $present[(string)$document['slot_code']]=true;
         foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;

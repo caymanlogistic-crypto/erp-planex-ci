@@ -58,9 +58,10 @@ try {
     Closing::changePaymentStage($pdo,1,4,'rework');
     $row=$pdo->query('SELECT state,version FROM waste_trip_closing_reviews WHERE waste_trip_id=1')->fetch(PDO::FETCH_ASSOC);
     if ($row['state']!=='work' || (int)$row['version']!==5) throw new RuntimeException('Return to rework must persist and advance version');
+    $pdo->exec('UPDATE documents SET deleted_at=NOW() WHERE id=1');
     Closing::changePaymentStage($pdo,1,5,'queue');
     $row=$pdo->query('SELECT state,version FROM waste_trip_closing_reviews WHERE waste_trip_id=1')->fetch(PDO::FETCH_ASSOC);
-    if ($row['state']!=='payment' || (int)$row['version']!==6) throw new RuntimeException('Ready trip must move to payment queue');
+    if ($row['state']!=='payment' || (int)$row['version']!==6) throw new RuntimeException('Missing diagnostic card must not block payment queue');
     Closing::changePaymentStage($pdo,1,6,'rework');
     $pdo->exec('UPDATE waste_trip_completion_documents SET deleted_at=NOW() WHERE id=1');
     try {Closing::changePaymentStage($pdo,1,7,'queue');throw new RuntimeException('Trip with a missing TN scan must not enter payment queue');}
@@ -72,9 +73,10 @@ try {
     $docs=array_map(static fn(string $slot):array=>['slot_code'=>$slot],array_keys(Closing::SLOTS));
     $trip=['documents'=>$docs,'tn_issues'=>[]];$transport=['units'=>[['documents'=>[['id'=>1]]]]];
     if (!Closing::paymentReady($trip,$transport) || !Closing::paymentReady($trip,['units'=>[['has_card'=>true,'documents'=>[]]]])
-        || Closing::paymentReady($trip,['units'=>[['has_card'=>false,'documents'=>[]]]])
+        || !Closing::paymentReady($trip,['units'=>[['has_card'=>false,'documents'=>[]]]])
+        || !Closing::paymentReady($trip,null)
         || Closing::paymentReady(['documents'=>$docs,'tn_issues'=>['missing scan']],$transport)) {
-        throw new RuntimeException('Payment readiness must require all documents, cards and no TN issues');
+        throw new RuntimeException('Payment readiness must require closing documents and no TN issues, regardless of diagnostic card');
     }
     echo "WASTE_TRIP_CLOSING_PAYMENT=PASS\n";
 } finally {cleanCompanyPoolDatabase($pdo);}

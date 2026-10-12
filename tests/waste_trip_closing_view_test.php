@@ -164,4 +164,15 @@ $overdueTrip['carrier_payment_plan']['due_date']=null;
 $assert(\App\Service\WasteTripClosingService::carrierPaymentDisplay($overdueTrip,'2026-10-12')['status']==='forecast','forecast date must not be marked overdue');
 $assert(str_contains($html,'class="btn btn-primary closing-submit" disabled'),'review action must be disabled');
 $assert(!str_contains($html,'data-review-form'),'email form must not be rendered');
+$trips=[$trips[1]];
+$trips[0]['review_state']='work';
+$trips[0]['transport']['units'][1]['has_card']=false;
+$reportRows=\App\Service\WasteTripClosingReportService::rows($trips,'2026-10-12');
+ob_start();
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+$missingCardHtml=(string)ob_get_clean();
+$assert(str_contains($missingCardHtml,'data-payment-ready="yes"')
+    && (bool)preg_match('/name="action" value="queue"[^>]*><button[^>]*>Готово к оплате<\/button>/', $missingCardHtml)
+    && str_contains($missingCardHtml,'Диагностическая карта: Полуприцеп С333СС'),
+    'missing diagnostic card stays visible but does not disable payment action');
 echo "waste_trip_closing_view: PASS\n";
