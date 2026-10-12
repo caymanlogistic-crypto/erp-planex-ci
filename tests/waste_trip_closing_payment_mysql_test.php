@@ -67,6 +67,8 @@ try {
     $trip['documents']=$docs;$trip['processed_count']=0;
     if (Closing::section($trip)!=='incomplete') throw new RuntimeException('All TN must be processed');
     $trip['processed_count']=1;$trip['tn_issues']=['missing scan'];
-    if (Closing::section($trip)!=='incomplete') throw new RuntimeException('TN errors must prevent full kit');
+    if (Closing::section($trip)!=='ready') throw new RuntimeException('Processed TN must allow readiness despite validation remarks');
+    $trip['carrier_paid_amount']='50000.00';
+    if (Closing::section($trip)!=='paid_complete') throw new RuntimeException('Processed TN with remarks must remain in paid complete');
     echo "WASTE_TRIP_CLOSING_PAYMENT=PASS\n";
 } finally {cleanCompanyPoolDatabase($pdo);}
