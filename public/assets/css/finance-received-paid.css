@@ -485,7 +485,7 @@
   flex:none;
   align-items:center;
   justify-content:center;
-  gap:5px;
+  gap:8px;
   height:37px;
   min-height:37px;
   margin:0;
@@ -494,31 +494,31 @@
   border-bottom:2px solid transparent;
   border-radius:0;
   background:transparent;
-  color:#625a50;
-  font:500 11px/1.2 var(--font);
+  color:#625c54;
+  font:500 12px/16px var(--font);
   white-space:nowrap;
   cursor:pointer;
   box-shadow:none;
 }
 .rp-action-design.rp-ledger-v015 .rp-v010-quick button b {
-  margin-left:4px;
-  color:#80776b;
-  font:600 11px/1 var(--font);
+  margin-left:0;
+  color:inherit;
+  font:600 12px/16px var(--font);
   font-variant-numeric:tabular-nums;
 }
 .rp-action-design.rp-ledger-v015 .rp-v010-quick button:hover:not(.is-active) {
   border-color:transparent;
   background:transparent;
-  color:#744a28;
+  color:#7c4718;
 }
 .rp-action-design.rp-ledger-v015 .rp-v010-quick button.is-active {
   border:0;
   border-bottom:2px solid #7c4718;
   background:transparent;
-  color:#563516;
+  color:#7c4718;
   font-weight:600;
 }
-.rp-action-design.rp-ledger-v015 .rp-v010-quick button.is-active b {color:#563516}
+.rp-action-design.rp-ledger-v015 .rp-v010-quick button.is-active b {color:inherit}
 .rp-action-design.rp-ledger-v015 .rp-v010-quick button:focus-visible {
   outline:2px solid #7c4718 !important;
   outline-offset:-3px !important;
@@ -571,4 +571,52 @@
 .rp-action-design.rp-ledger-v015 .rp-v010-table tfoot {border-top:1px solid #bfb8ae}
 @media(max-width:1050px) {
   .rp-action-design.rp-ledger-v015 .rp-v010-table tbody tr:not([hidden]):not(:has(~ tr:not([hidden]))) {border-bottom:0}
+}
+
+/* Registry identity: ID and trip description occupy distinct cells, as in departures. */
+.rp-ledger-v015 .rp-v010-table .rp-v010-id {white-space:nowrap;font-variant-numeric:tabular-nums}
+.rp-ledger-v015 .rp-v010-table .rp-v010-id strong {color:#815a34}
+.rp-ledger-v015 .rp-v010-table .rp-v010-trip span {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media(min-width:1600px) {
+  .rp-ledger-v015 .rp-v010-table th:nth-child(9) {white-space:nowrap;padding-inline:4px}
+}
+@media(min-width:1051px) and (max-width:1599px) {
+  .rp-ledger-v015 .rp-v012-compact-head,
+  .rp-ledger-v015 .rp-v010-table tbody tr {grid-template-columns:5% 18% 14% 14% 18% 14% 17%}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(4),
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(6),
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(7),
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(10),
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(12),
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(13) {justify-content:flex-end}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(7) {display:flex;border-top:0}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) {grid-column:1/3;display:block;align-content:center}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) .rp-v010-mobile-group {display:inline}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) .rp-v010-mobile-group:after {content:' · '}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) .rp-v015-carrier-name {display:inline-block;vertical-align:middle;max-width:calc(100% - 82px)}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) .rp-v015-driver {display:block}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(7) .rp-v010-mobile-group {display:none}
+}
+@media(max-width:1050px) {
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(2) {grid-column:1/-1;border-top:0}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(2):before {display:block}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(2)>span {grid-column:2}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(3),
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) {grid-column:1/-1;border-top:1px solid #e5ded4}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(3):before,
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8):before {display:none}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(3) .rp-v010-mobile-group,
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) .rp-v010-mobile-group {display:block;grid-column:1;color:#60584f;font-size:11px;text-transform:uppercase;letter-spacing:.02em}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(3)>:last-child,
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) .rp-v015-carrier-name,
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) .rp-v015-driver {grid-column:2}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) .rp-v015-driver {grid-row:2}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(7) {grid-column:auto;border-top:0}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(7):before {display:block}
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(7)>span {grid-column:2}
+}
+@media(max-width:600px) {
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(2),
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(3),
+  .rp-ledger-v015 .rp-v010-table tbody td:nth-child(8) {grid-column:1}
 }

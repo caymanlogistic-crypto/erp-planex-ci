@@ -45,7 +45,10 @@ try{
  await page.locator('.rp-standard-box .lab-reference-trigger').click();
  await page.locator('.rp-standard-box [role=option][data-value="id-new"]').click();
  assert.deepEqual(await ids(),['105','104','103','102','101']);
- assert.equal(await page.locator('#rp-list tr[data-id="101"] td').count(),12);
+ assert.equal(await page.locator('#rp-list tr[data-id="101"] td').count(),13);
+ assert.deepEqual(await page.locator('.rp-v012-wide-head th').allInnerTexts().then(values=>values.slice(0,2)),['ID','ОПИСАНИЕ РЕЙСА']);
+ assert.equal(await page.locator('#rp-list tr[data-id="102"] td').nth(0).innerText(),'#102');
+ assert.equal(await page.locator('#rp-list tr[data-id="102"] td').nth(1).innerText(),'Рейс 102');
  await page.locator('#rp-list tr[data-id="101"]').dblclick();
  assert.equal(await page.locator('#rp-detail-modal').isVisible(),true);
  assert.equal(await page.locator('#rp-detail-modal .rp-v015-detail-driver').count(),1);
@@ -62,7 +65,7 @@ try{
  assert.equal(await page.locator('#rp-sort').inputValue(),'date-new','visible listbox keeps the native sort value');
  const tabs=page.locator('#rp-filters [data-rp-filter]');
  assert.equal(await tabs.count(),6,'all six real finance presets remain available');
- for(const width of [390,768,1051,1280,1600,1920]){
+ for(const width of [390,768,1051,1280,1600,1920,3840]){
    await page.setViewportSize({width,height:900});
    const tabLayout=await page.locator('#rp-filters').evaluate(nav=>({height:Math.round(nav.getBoundingClientRect().height),nowrap:getComputedStyle(nav).flexWrap,overflow:getComputedStyle(nav).overflowX,buttons:[...nav.querySelectorAll('button')].map(button=>({height:Math.round(button.getBoundingClientRect().height),radius:getComputedStyle(button).borderRadius}))}));
    assert.equal(tabLayout.height,38,`flat tab strip height at ${width}`);
@@ -74,7 +77,7 @@ try{
    assert.deepEqual(await page.locator('.rp-standard-box .lab-reference-trigger, .rp-standard-box #rp-search').evaluateAll(items=>items.map(el=>getComputedStyle(el).borderRadius)),['2px','2px'],`accepted control radius at ${width}`);
    assert.equal(await page.locator('.rp-v010-table-wrap').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,`ledger wrapper has no horizontal scroll at ${width}`);
    if(width===390){
-     const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[3,4,5,6,9,10,11,12].map(index=>Math.round(row.cells[index-1].querySelector('span')?.getBoundingClientRect().left||0)));
+     const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[4,5,6,7,10,11,12,13].map(index=>Math.round(row.cells[index-1].querySelector('span')?.getBoundingClientRect().left||0)));
      assert.equal(new Set(columns).size,1,'mobile values share one aligned column');
    }
    if(width===1280){
@@ -85,6 +88,8 @@ try{
    if(width===1920){
      const fonts=await page.locator('#rp-ledger-table').evaluate(table=>({td:getComputedStyle(table.tBodies[0].rows[0].cells[0]).fontSize,th:getComputedStyle(table.tHead.rows[0].cells[0]).fontSize}));
      assert.deepEqual(fonts,{td:'12px',th:'10px'},'ERP table typography matches v015');
+     const tabFont=await tabs.first().evaluate(button=>({size:getComputedStyle(button).fontSize,line:getComputedStyle(button).lineHeight,countSize:getComputedStyle(button.querySelector('b')).fontSize}));
+     assert.deepEqual(tabFont,{size:'12px',line:'16px',countSize:'12px'},'finance tabs use the approved status-tab typography');
    }
    if(process.env.PLANEX_VISUAL_EVIDENCE_DIR&&[390,1280,1920].includes(width)){
      fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR,{recursive:true});
