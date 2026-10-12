@@ -9,10 +9,11 @@ require_once BASE_PATH.'/app/Support/http_runtime.php';
 
 $trip=static function(int $id,array $documents):array {
     return [
-        'id'=>$id,'business_id'=>$id,'actual_end_date'=>'2026-09-30',
+        'id'=>$id,'business_id'=>$id,'actual_start_date'=>'2026-09-29','actual_end_date'=>'2026-09-30',
         'carrier_id'=>42,'carrier_name'=>'Перевозчик','manager_name'=>'Менеджер','manager_membership_id'=>71,'legal_entity_code'=>'planex',
         'recipient_email'=>'info@plan-ex.ru','review_state'=>'work','review_version'=>0,
         'carrier_rate'=>'25000.00','display_rate'=>'25000.00','carrier_paid_amount'=>'0.00','carrier_payment_due'=>'2026-10-15','carrier_paid_date'=>null,
+        'customer_rate'=>'250000.00','customer_paid_amount'=>'0.00','customer_paid_date'=>null,
         'carrier_payment_plan'=>['date'=>'2026-10-15','due_date'=>'2026-10-15','status'=>'ready'],
         'comment'=>'Вывоз отходов с площадки А','driver_names'=>'Иванов Иван','tn_required'=>2,'tn_scanned'=>0,
         'documents'=>$documents,'paid_bank_transactions'=>[],'request_count'=>3,'processed_count'=>2,
@@ -35,7 +36,7 @@ $trips=[
     ]),['legal_entity_code'=>'mg_logistic','tn_issues'=>[],'request_count'=>3,'processed_count'=>3,'transport'=>['set_type'=>'coupling','set_label'=>'Сцепка','units'=>[
         ['id'=>9,'label'=>'Тягач','brand'=>'МАЗ','plate'=>'В222ВВ','has_card'=>true,'can_upload'=>true,'documents'=>[['id'=>89,'original_name'=>'tractor-card.pdf']]],
         ['id'=>10,'label'=>'Полуприцеп','brand'=>'ТОНАР','plate'=>'С333СС','has_card'=>true,'can_upload'=>false,'documents'=>[]],
-    ]],'display_rate'=>'35000.00','carrier_paid_amount'=>'25000.00','carrier_paid_date'=>'2026-10-10','tn_scanned'=>2]),
+    ]],'display_rate'=>'35000.00','carrier_paid_amount'=>'25000.00','carrier_paid_date'=>'2026-10-10','customer_paid_amount'=>'250000.00','customer_paid_date'=>'2026-10-12','tn_scanned'=>2]),
 ];
 $success='Документ добавлен.';
 $flashError=$error=null;
@@ -60,6 +61,12 @@ $html=(string)ob_get_clean();
 
 $assert=static function(bool $condition,string $message):void {if(!$condition)throw new RuntimeException($message);};
 $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must show common issues block');
+$assert(substr_count($html,'Начало: 29.09.2026')===2 && substr_count($html,'Завершён 30.09.2026')===2,'summary shows actual start and end dates');
+$assert(substr_count($html,'Водитель: Иванов Иван')===2,'summary shows driver beside carrier');
+$assert(str_contains($html,'closing-customer-settlement is-debt">Долг 250 000 ₽') && str_contains($html,'closing-customer-settlement is-paid">Оплачено 250 000 ₽ · 12.10.2026'),'executor shows customer debt or posted receipt');
+$assert(\App\Service\WasteTripClosingService::customerSettlementDisplay(['customer_rate'=>'250000.00','customer_paid_amount'=>'50000.00'])===['status'=>'debt','text'=>'Долг 200 000 ₽'],'partial customer receipt leaves remaining debt');
+$assert(\App\Service\WasteTripClosingService::customerSettlementDisplay(['customer_rate'=>'250000.25','customer_paid_amount'=>'250000.00'])===['status'=>'debt','text'=>'Долг 0,25 ₽'],'customer debt keeps kopecks');
+$assert(\App\Service\WasteTripClosingService::customerSettlementDisplay(['customer_rate'=>null,'customer_paid_amount'=>'0.00'])===['status'=>'unknown','text'=>'Сумма рейса не указана'],'missing customer amount must not invent a debt');
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
 $assert(str_contains($html,'data-closing-report-open')&&str_contains($html,'data-closing-report-dialog')&&str_contains($html,'data-closing-report-download'),'summary report must open in a popup with Excel download');
 $assert(substr_count($html,'data-report-trip-id=')===2,'summary report must include both accessible trips');

@@ -116,7 +116,7 @@ final class WasteTripClosingService
     public static function trips(PDO $pdo): array
     {
         $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
-        $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.comment,wt.actual_end_date,wt.legal_entity_code,
+        $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.comment,wt.actual_start_date,wt.actual_end_date,wt.legal_entity_code,
                 wt.route_executor_id,
                 ct.id carrier_id,COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
                 u.membership_id manager_membership_id,
@@ -223,6 +223,11 @@ final class WasteTripClosingService
             $customerSide=$finance['sides']['customer']??['rate'=>null];
             $row['carrier_rate']=$carrierSide['rate'];
             $row['display_rate']=$row['legal_entity_code']==='mg_logistic'?($customerSide['source_rate']??$customerSide['rate']):$carrierSide['rate'];
+            $row['customer_rate']=$customerSide['rate']??$customerSide['source_rate']??null;
+            $row['customer_paid_amount']=array_sum(array_map(static fn(array $payment):float=>(float)$payment['amount'],$customerSide['payments']));
+            $customerPaymentDates=array_filter(array_column($customerSide['payments'],'payment_date'));
+            $row['customer_paid_date']=$customerPaymentDates?max($customerPaymentDates):null;
+            $row['customer_settlement']=self::customerSettlementDisplay($row);
             $row['carrier_paid_amount']=array_sum(array_map(static fn(array $payment):float=>(float)$payment['amount'],$carrierSide['payments']));
             $paymentDates=array_column($carrierSide['payments'],'payment_date');
             $row['carrier_paid_date']=$paymentDates?max($paymentDates):null;
@@ -232,6 +237,19 @@ final class WasteTripClosingService
         }
         unset($row);
         return $rows;
+    }
+
+    /** @return array{status:string,text:string} */
+    public static function customerSettlementDisplay(array $trip): array
+    {
+        $rate=$trip['customer_rate']??null;
+        $paid=(int)round((float)($trip['customer_paid_amount']??0)*100);
+        $money=static fn(int $cents):string=>number_format($cents/100,$cents%100===0?0:2,',',' ').' ₽';
+        if($rate===null||(float)$rate<=0)return ['status'=>'unknown','text'=>$paid>0?'Оплачено '.$money($paid).' · сумма рейса не указана':'Сумма рейса не указана'];
+        $due=max(0,(int)round((float)$rate*100)-$paid);
+        if($due>0)return ['status'=>'debt','text'=>'Долг '.$money($due)];
+        $date=(string)($trip['customer_paid_date']??'');
+        return ['status'=>'paid','text'=>'Оплачено '.$money($paid).($date!==''?' · '.date('d.m.Y',strtotime($date)):'')];
     }
 
     /** @return array{status:string,text:string} */
