@@ -75,7 +75,15 @@ $progressColor=static function(int $percent):string {
         <span class="closing-shared-issues"><small>ОШИБКИ</small><span class="closing-shared-issues-list"><?php if($missing):?><span><b>Нет документов:</b> <?= e(implode(', ',$missing)) ?></span><?php endif;?><?php foreach($tnIssueGroups as $reason=>$requestIds):?><span><b>ТН:</b> <?= e((string)$reason) ?><?php if($requestIds):?> · заявок: <?= count($requestIds) ?><?php endif;?></span><?php endforeach;?><?php if(!$missing&&!$tnIssues):?><span class="closing-shared-issues-clear">Нет ошибок, счет можно оплачивать</span><?php endif;?></span></span>
       </summary>
       <div class="closing-trip-body">
-        <div class="closing-body-head"><div><h2>Закрывающие документы рейса #<?= e((string)$trip['business_id']) ?></h2><p>Добавьте файлы. <?= \App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED?'Затем передайте комплект на проверку.':'Отправка комплекта на почту временно отключена.' ?></p></div><?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><span class="closing-note">Получатель письма: <?= e((string)$trip['recipient_email']) ?></span><?php endif;?></div>
+        <div class="closing-body-head">
+          <h2>Закрывающие документы рейса #<?= e((string)$trip['business_id']) ?></h2>
+          <div class="closing-trip-facts">
+            <span><small>Название перевозчика</small><b><?= e(trim((string)($trip['carrier_name']??''))?:'—') ?></b></span>
+            <span><small>ФИО водителя</small><b><?= e(trim((string)($trip['driver_names']??''))?:'—') ?></b></span>
+            <span><small>Стоимость перевозки</small><b><?= isset($trip['carrier_rate'])?e(number_format((float)$trip['carrier_rate'],2,',',' ')).' ₽':'—' ?></b></span>
+          </div>
+          <?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><span class="closing-note">Получатель письма: <?= e((string)$trip['recipient_email']) ?></span><?php endif;?>
+        </div>
         <?php if($tnIssueGroups):?><div class="closing-tn-details"><strong>Ошибки проверки ТН</strong><?php foreach($tnIssueGroups as $reason=>$requestIds):?><p><?= e((string)$reason) ?><?php if($requestIds):?> · <?= count($requestIds)===1?'заявка':'заявки' ?> №<?= e(implode(', №',$requestIds)) ?><?php endif;?></p><?php endforeach;?></div><?php endif;?>
         <?php if($paid):?><div class="closing-finance-handoff"><strong>Оплата отражена · <?= count($paid) ?> банковских операций</strong><span>Собранные файлы связаны с платежами в «Финансы → Закрывающие документы». Договор/заявка и акт/УПД учитываются в обязательных категориях, остальные доступны как приложения.</span></div><?php endif;?>
         <p class="closing-upload-feedback" role="alert" hidden></p>
