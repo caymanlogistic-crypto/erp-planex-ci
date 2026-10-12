@@ -48,7 +48,7 @@ final class WasteTripClosingService
         foreach ($trip['documents']??[] as $document) $present[(string)$document['slot_code']]=true;
         foreach (array_keys(self::SLOTS) as $slot) if (!isset($present[$slot])) return false;
         $requests=(int)($trip['request_count']??0);
-        return $requests>0&&(int)($trip['processed_count']??0)>=$requests&&empty($trip['tn_issues']);
+        return $requests>0&&(int)($trip['processed_count']??0)>=$requests;
     }
 
     public static function section(array $trip): string

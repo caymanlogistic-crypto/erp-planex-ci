@@ -46,7 +46,7 @@ final class WasteTripClosingReportService
             $paymentDate=$isPaid||$partlyPaid?$paidDate:$due;
             $paymentDate=$paymentDate!==''?date('d.m.Y',strtotime($paymentDate)):'—';
             $requests=(int)($trip['request_count']??0);
-            $tn=$requests>0&&(int)($trip['processed_count']??0)>=$requests&&empty($trip['tn_issues']);
+            $tn=$requests>0&&(int)($trip['processed_count']??0)>=$requests;
             $rows[]=[
                 'id'=>(string)($trip['id']??''),
                 'number'=>(string)($trip['business_id']??''),
