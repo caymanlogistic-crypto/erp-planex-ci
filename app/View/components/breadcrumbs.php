@@ -288,6 +288,13 @@ function company_breadcrumbs(array $route, string $companyName, ?array $company 
         return $crumbs;
     }
 
+    // /company/finance/received-paid
+    if ($page === 'finance' && ($parts[2] ?? '') === 'received-paid') {
+        $crumbs[] = ['label' => 'Финансы', 'url' => null];
+        $crumbs[] = ['label' => 'Получено/оплачено', 'url' => null];
+        return $crumbs;
+    }
+
     // /company/finance/bank-accounts and its nested matching-rules workflow
     if ($page === 'finance' && ($parts[2] ?? '') === 'bank-accounts') {
         $crumbs[] = ['label' => 'Финансы', 'url' => null];

@@ -88,6 +88,15 @@ try{
    if(width===1920){
      const fonts=await page.locator('#rp-ledger-table').evaluate(table=>({td:getComputedStyle(table.tBodies[0].rows[0].cells[0]).fontSize,th:getComputedStyle(table.tHead.rows[0].cells[0]).fontSize}));
      assert.deepEqual(fonts,{td:'12px',th:'10px'},'ERP table typography matches v015');
+     const canonicalTripType=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>{
+       const id=getComputedStyle(row.cells[0]),description=getComputedStyle(row.cells[1].querySelector('span'));
+       const header=getComputedStyle(document.querySelector('.rp-v012-wide-head th'));
+       return {id:{family:id.fontFamily,size:id.fontSize,weight:id.fontWeight,line:id.lineHeight,color:id.color},description:{size:description.fontSize,weight:description.fontWeight,line:description.lineHeight},header:{size:header.fontSize,weight:header.fontWeight,line:header.lineHeight}};
+     });
+     assert.equal(canonicalTripType.id.family.includes('IBM Plex Mono'),true,'trip ID uses canonical mono font');
+     assert.deepEqual({...canonicalTripType.id,family:'IBM Plex Mono'},{family:'IBM Plex Mono',size:'12px',weight:'700',line:'16.8px',color:'rgb(19, 18, 16)'},'trip ID is canonical black');
+     assert.deepEqual(canonicalTripType.description,{size:'12px',weight:'400',line:'16.8px'},'trip description matches departures');
+     assert.deepEqual(canonicalTripType.header,{size:'10px',weight:'700',line:'14px'},'table header matches departures');
      const tabFont=await tabs.first().evaluate(button=>({size:getComputedStyle(button).fontSize,line:getComputedStyle(button).lineHeight,countSize:getComputedStyle(button.querySelector('b')).fontSize}));
      assert.deepEqual(tabFont,{size:'12px',line:'16px',countSize:'12px'},'finance tabs use the approved status-tab typography');
    }
