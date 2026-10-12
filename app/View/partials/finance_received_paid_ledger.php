@@ -48,9 +48,9 @@ $dueHtml = static function (array $item): string {
         <label class="toolbar-sort"><span class="toolbar-sort-label">Сортировка по:</span><select class="field-select toolbar-select" id="rp-sort" aria-label="Сортировка по дате выгрузки или ID"><option value="date-new">Дата выгрузки</option><option value="id-new">ID</option></select></label>
         <input class="field-input" id="rp-search" type="search" placeholder="Поиск" aria-label="Поиск по рейсам и счетам">
     </div></div>
-    <div class="rp-v010-table-wrap"><table class="table rp-v010-table" id="rp-ledger-table"><colgroup><?php foreach ([8,7,8,9,8,9,10,7,8,9,8,9] as $width): ?><col style="width:<?= $width ?>%"> <?php endforeach; ?></colgroup>
-        <thead><tr class="rp-v012-wide-head"><th>Рейс</th><th>СЧЕТ КЛИЕНТУ</th><th>СУММА СЧЕТА</th><th>ПОЛУЧИТЬ ДО</th><th>ПОЛУЧЕНО</th><th>К ПОЛУЧЕНИЮ</th><th>ПЕРЕВОЗЧИК</th><th>СЧЕТ ПОДРЯД.</th><th>СУММА СЧЕТА</th><th>ОПЛАТИТЬ ДО</th><th>ОПЛАЧЕНО</th><th>К ВЫПЛАТЕ</th></tr>
-            <tr class="rp-v012-compact-head"><th>Рейс / перевозчик</th><th>Счет</th><th>Сумма счета</th><th>Срок</th><th>Получено / оплачено</th><th>Остаток</th></tr></thead>
+    <div class="rp-v010-table-wrap"><table class="table rp-v010-table" id="rp-ledger-table"><colgroup><?php foreach ([4,9,7,8,9,7,8,10,7,8,9,7,7] as $width): ?><col style="width:<?= $width ?>%"> <?php endforeach; ?></colgroup>
+        <thead><tr class="rp-v012-wide-head"><th>ID</th><th>ОПИСАНИЕ РЕЙСА</th><th>СЧЕТ КЛИЕНТУ</th><th>СУММА СЧЕТА</th><th>ПОЛУЧИТЬ ДО</th><th>ПОЛУЧЕНО</th><th>К ПОЛУЧЕНИЮ</th><th>ПЕРЕВОЗЧИК</th><th>СЧЕТ ПОДРЯД.</th><th>СУММА СЧЕТА</th><th>ОПЛАТИТЬ ДО</th><th>ОПЛАЧЕНО</th><th>К ВЫПЛАТЕ</th></tr>
+            <tr class="rp-v012-compact-head"><th>ID</th><th>ОПИСАНИЕ РЕЙСА / ПЕРЕВОЗЧИК</th><th>Счет</th><th>Сумма счета</th><th>Срок</th><th>Получено / оплачено</th><th>Остаток</th></tr></thead>
         <tbody id="rp-list">
         <?php foreach ($trips as $trip):
             $id = (int)$trip['business_id'];
@@ -68,7 +68,8 @@ $dueHtml = static function (array $item): string {
             $driver = trim((string)($trip['driver_full_name'] ?? ''));
         ?>
             <tr class="rp-v010-row" tabindex="0" data-id="<?= $id ?>" data-end="<?= e((string)$end) ?>" data-search="<?= e($search) ?>" data-complete="<?= $complete ? '1' : '0' ?>" data-unbilled="<?= $unbilled ? '1' : '0' ?>" data-client-due="<?= e($customerDue[0]) ?>" data-carrier-due="<?= e($carrierDue[0]) ?>" data-customer-rate="<?= $customer['rate'] === null ? '' : $customer['rate'] ?>" data-carrier-rate="<?= $carrier['rate'] === null ? '' : $carrier['rate'] ?>" data-customer-invoices="<?= $trip['sides']['customer']['invoices'] ? $customer['billed'] : '' ?>" data-carrier-invoices="<?= $trip['sides']['carrier']['invoices'] ? $carrier['billed'] : '' ?>" data-received="<?= $customer['paid'] ?>" data-paid="<?= $carrier['paid'] ?>" data-customer-balance="<?= $customerBalance === null ? '' : $customerBalance ?>" data-carrier-balance="<?= $carrierBalance === null ? '' : $carrierBalance ?>" aria-label="Рейс #<?= $id ?> · <?= e($description) ?>. Двойной щелчок или Enter — подробности">
-                <td class="rp-v010-trip" data-mobile-label="Рейс"><span title="#<?= $id ?> · <?= e($description) ?>" aria-label="#<?= $id ?> · <?= e($description) ?>"><strong>#<?= $id ?></strong> · <?= e($description) ?></span></td>
+                <td class="rp-v010-id" data-mobile-label="ID"><strong>#<?= $id ?></strong></td>
+                <td class="rp-v010-trip" data-mobile-label="Описание рейса"><span title="<?= e($description) ?>"><?= e($description) ?></span></td>
                 <td data-mobile-label="Счёт клиенту"><span class="rp-v010-mobile-group">Клиент</span><?= $invoiceList($trip['sides']['customer']['invoices']) ?></td>
                 <td class="rp-v010-money" data-mobile-label="Сумма счёта"><?= $invoiceAmount($trip['sides']['customer']['invoices']) ?></td>
                 <td data-mobile-label="Получить до"><?= $dueHtml($customerDue) ?></td>
@@ -82,6 +83,6 @@ $dueHtml = static function (array $item): string {
                 <td class="rp-v010-money" data-mobile-label="К выплате"><?= $carrierBalance === null ? '<span class="rp-v010-missing">нет ставки</span>' : '<span>' . e($money($carrierBalance)) . '</span>' ?></td>
             </tr>
         <?php endforeach; ?>
-        </tbody><tfoot><tr><td>Итого · <b id="rp-total-count">0</b></td><td></td><td data-total="customer-invoices" data-mobile-label="Счета клиенту"><strong></strong></td><td></td><td data-total="received" data-mobile-label="Получено"><strong></strong></td><td data-total="customer-balance" data-mobile-label="К получению"><strong></strong></td><td></td><td></td><td data-total="carrier-invoices" data-mobile-label="Счета подрядчика"><strong></strong></td><td></td><td data-total="paid" data-mobile-label="Оплачено"><strong></strong></td><td data-total="carrier-balance" data-mobile-label="К выплате"><strong></strong></td></tr></tfoot>
+        </tbody><tfoot><tr><td>Итого · <b id="rp-total-count">0</b></td><td></td><td></td><td data-total="customer-invoices" data-mobile-label="Счета клиенту"><strong></strong></td><td></td><td data-total="received" data-mobile-label="Получено"><strong></strong></td><td data-total="customer-balance" data-mobile-label="К получению"><strong></strong></td><td></td><td></td><td data-total="carrier-invoices" data-mobile-label="Счета подрядчика"><strong></strong></td><td></td><td data-total="paid" data-mobile-label="Оплачено"><strong></strong></td><td data-total="carrier-balance" data-mobile-label="К выплате"><strong></strong></td></tr></tfoot>
     </table><div class="rp-v010-empty" id="rp-empty" hidden>По выбранным условиям рейсов нет.</div></div>
 </div>
