@@ -14,7 +14,7 @@ require_once base_path('app/Support/crew_driver_helpers.php');
 /** Creates the three source entities and their crew in one tenant transaction. */
 final class RouteExecutorCombinedCreateService
 {
-    public static function create(PDO $pdo, Database $centralDb, array $config, int $companyId, array $post, array $files, int $userId, string $role, ?callable $afterCreate = null, bool $storedFiles = false): int
+    public static function create(PDO $pdo, Database $centralDb, array $config, int $companyId, array $post, array $files, int $userId, string $role, ?callable $afterCreate = null, bool $storedFiles = false, bool $validateOnly = false): int
     {
         $contractor = (array) ($post['contractor'] ?? []);
         $driver = (array) ($post['driver'] ?? []);
@@ -100,13 +100,20 @@ final class RouteExecutorCombinedCreateService
             catch (Throwable $missing) { throw new RuntimeException('Необходимые таблицы компании ещё не обновлены: ' . $table); }
         }
 
+        if (!isset($existing['contractor'])) {
+            $contacts = ContractorContactService::normalizeSubmittedContacts($contractor['contacts'] ?? []);
+            if ($contacts['errors']) throw new RuntimeException('Проверьте контакты подрядчика.');
+            RegulatedDataScopeService::assertCanCreate('contractor');
+        }
+        if (!isset($existing['driver'])) RegulatedDataScopeService::assertCanCreate('driver');
+        if (!isset($existing['vehicle'])) RegulatedDataScopeService::assertCanCreate('vehicle_unit');
+        if ($validateOnly) return 0;
+
         $savedPaths = [];
         $pdo->beginTransaction();
         try {
             $contractorId = isset($existing['contractor']) ? (int)$existing['contractor'] : $contractorService->createContractor($pdo, $contractor, $userId, $role);
             if (!isset($existing['contractor'])) {
-                $contacts = ContractorContactService::normalizeSubmittedContacts($contractor['contacts'] ?? []);
-                if ($contacts['errors']) throw new RuntimeException('Проверьте контакты подрядчика.');
                 ContractorContactService::replaceForContractor($pdo, $contractorId, $contacts['contacts'], $userId, $role);
             }
 

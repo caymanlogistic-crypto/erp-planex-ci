@@ -176,6 +176,8 @@ try {
     await modal.locator(`#lab-driver-form [name="${name}"]`).setInputFiles(testFile);
   for (const name of ['predef_doc[primary][sts][]', 'predef_doc[primary][photo][]'])
     await modal.locator(`#lab-vehicle-form [name="${name}"]`).setInputFiles(testFile);
+  assert.equal(await modal.locator('[data-lab-send]').isVisible(), false, 'Full send requires the driver phone');
+  await modal.locator('#lab-driver-form [name="phone"]').fill('+7 900 000-00-00');
   await modal.locator('[data-lab-send]').click();
   await dialog.waitFor({ state: 'visible' });
   rejectNextFinal = true;

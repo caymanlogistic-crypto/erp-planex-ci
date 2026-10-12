@@ -54,7 +54,7 @@ final class RouteExecutorReviewPackage
             }
         }
         $trainingReady=$existingDriver || ($get('lab-driver-form','full_name')!=='' && $get('lab-driver-form','snils')!=='');
-        $driverFields=['full_name','passport_number','passport_issued_by','passport_issue_date','license_number','license_issue_date','email'];
+        $driverFields=['full_name','phone','passport_number','passport_issued_by','passport_issue_date','license_number','license_issue_date','email'];
         $vehicleReady=true;
         if (!$existingDriver) foreach ($driverFields as $field) $vehicleReady=$vehicleReady && trim((string)($driver[$field]??''))!=='';
         $setType=$get('lab-vehicle-form','set_type');
@@ -96,7 +96,7 @@ final class RouteExecutorReviewPackage
         if (!$existingContractor && !$contactRows) $missing[]='Подрядчик: контактное лицо, телефон и Email';
         foreach ($existingContractor ? [] : array_keys($contactRows) as $index) foreach (['contact_person'=>'контактное лицо','phone'=>'телефон контакта','email'=>'Email контакта'] as $field=>$label)
             if (trim((string)($contract["contacts[$index][$field]"]??''))==='') $missing[]='Подрядчик: '.$label;
-        foreach ($existingDriver ? [] : ['full_name'=>'ФИО водителя','snils'=>'СНИЛС водителя','passport_number'=>'Серия и номер паспорта',
+        foreach ($existingDriver ? [] : ['full_name'=>'ФИО водителя','phone'=>'Телефон водителя','snils'=>'СНИЛС водителя','passport_number'=>'Серия и номер паспорта',
             'passport_issued_by'=>'Кем выдан паспорт','passport_issue_date'=>'Дата выдачи паспорта',
             'license_number'=>'Номер водительского удостоверения','license_issue_date'=>'Дата выдачи водительского удостоверения',
             'email'=>'Email водителя'] as $field=>$label) if ($get('lab-driver-form',$field)==='') $missing[]='Водитель: '.$label;

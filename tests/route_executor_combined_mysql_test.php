@@ -43,6 +43,29 @@ $payload = static function (string $inn, string $plate): array {
     ];
 };
 $central = new Database(['host' => getenv('PLANEX_SCHEMA_DB_HOST') ?: '127.0.0.1', 'port' => getenv('PLANEX_SCHEMA_DB_PORT') ?: '3306', 'database' => $dbName, 'username' => getenv('PLANEX_SCHEMA_DB_USER'), 'password' => getenv('PLANEX_SCHEMA_DB_PASSWORD')]);
+$preflight = $payload('7701234567', 'А123ВС77');
+$preflight['contractor']['bank_corr_account'] = '30101810300000000601 ';
+$rejected = false;
+try {
+    RouteExecutorCombinedCreateService::create($pdo, $central, $config, 7, $preflight, [], 101, 'company_owner', null, false, true);
+} catch (RuntimeException $expected) {
+    $rejected = str_contains($expected->getMessage(), 'Корр');
+}
+if (!$rejected) throw new RuntimeException('Final-send preflight accepted a malformed correspondent account.');
+$preflight['contractor']['bank_corr_account'] = '30101810300000000601';
+$preflight['driver']['phone'] = '';
+$rejected = false;
+try {
+    RouteExecutorCombinedCreateService::create($pdo, $central, $config, 7, $preflight, [], 101, 'company_owner', null, false, true);
+} catch (RuntimeException $expected) {
+    $rejected = str_contains($expected->getMessage(), 'телефон водителя');
+}
+if (!$rejected) throw new RuntimeException('Final-send preflight accepted a missing driver phone.');
+$preflight['driver']['phone'] = '+7 900 000-00-00';
+RouteExecutorCombinedCreateService::create($pdo, $central, $config, 7, $preflight, [], 101, 'company_owner', null, false, true);
+foreach (['contractors', 'drivers', 'vehicle_units', 'crews'] as $table) {
+    if ((int) $pdo->query("SELECT COUNT(*) FROM `$table`")->fetchColumn() !== 0) throw new RuntimeException("Preflight wrote to $table.");
+}
 $crewId = RouteExecutorCombinedCreateService::create($pdo, $central, $config, 7, $payload('7701234567', 'А123ВС77'), [], 101, 'company_owner');
 if ($crewId <= 0) throw new RuntimeException('No crew id returned.');
 foreach (['contractors','contractor_contacts','drivers','driver_phones','vehicle_units','vehicle_sets','driver_vehicle_blocks','crews','crew_drivers'] as $table) {
