@@ -114,8 +114,8 @@ final class MaxEventCatalog
         return [
             'feo.request.weight_changed' => [
                 'title' => 'ФЭО — изменён вес заявок',
-                'description' => 'После фактического изменения массы существующих заявок вручную либо через применение, откат, возврат или удаление импорта.',
-                'template' => "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}",
+                'description' => 'После фактического изменения массы нетто или брутто существующих заявок вручную, блоком либо через применение, откат, возврат или удаление импорта.',
+                'template' => "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nНетто: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\nБрутто: {{old_gross_kg}} → {{new_gross_kg}} кг ({{gross_difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}",
                 'variables' => [
                     'source'=>['Источник изменения','Импорт ФЭО #42'],
                     'part'=>['Часть сообщения','Часть 1 из 2'],
@@ -123,6 +123,9 @@ final class MaxEventCatalog
                     'old_mass_kg'=>['Общая масса до изменения, кг','25 400'],
                     'new_mass_kg'=>['Общая масса после изменения, кг','26 100'],
                     'difference_kg'=>['Изменение общей массы, кг','+700'],
+                    'old_gross_kg'=>['Общая масса брутто до изменения, кг','25 900'],
+                    'new_gross_kg'=>['Общая масса брутто после изменения, кг','26 600'],
+                    'gross_difference_kg'=>['Изменение общей массы брутто, кг','+700'],
                     'changes'=>['Заявки и изменение веса','№123456: 1 000 → 1 200 кг (+200 кг)'],
                     'author'=>['Ответственный','Владимир С.'],
                     'company'=>['Компания','Пример компании'],
@@ -157,6 +160,7 @@ final class MaxEventCatalog
         }
         if ($key === 'feo.transfer.created' && ($stored === '' || $stored === self::LEGACY_TRANSFER_CREATED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_CREATED_TEMPLATE)) return self::event($key)['template'];
         if ($key === 'feo.transfer.reverted' && ($stored === '' || $stored === self::LEGACY_TRANSFER_REVERTED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_REVERTED_TEMPLATE)) return self::event($key)['template'];
+        if ($key === 'feo.request.weight_changed' && ($stored === '' || $stored === "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}")) return self::event($key)['template'];
         return $stored;
     }
 

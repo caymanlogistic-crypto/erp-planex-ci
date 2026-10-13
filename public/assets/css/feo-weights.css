@@ -1,0 +1,9 @@
+.weight-dialog { width: min(1000px, calc(100vw - 24px)); max-width: 1000px; }
+.weight-form-body { display: grid; gap: 16px; }
+.weight-form-body .field { min-width: 0; }
+.weight-edit-table { min-width: 720px; }
+.weight-edit-table th, .weight-edit-table td { vertical-align: middle; }
+.weight-edit-table input { width: 140px; max-width: 100%; }
+.weight-save-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.weight-detail-table { min-width: 640px; }
+@media (max-width: 600px) { .weight-dialog { width: calc(100vw - 16px); } .weight-edit-table input { width: 110px; } }

@@ -37,7 +37,9 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 424, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 429, f"company route inventory drift: {len(company_routes)}"
+for endpoint in ('/company/feo/requests/weights', '/company/feo/requests/weights/preview', '/company/feo/requests/weights/create', '/company/feo/requests/weights/{id}/json', '/company/feo/requests/weights/{id}/revert'):
+    assert ('app/Http/Routes/company_feo_weights.php', endpoint) in company_routes
 assert ("app/Http/Routes/company_linear_trips.php", "/company/trips/gps-coverage") in company_routes
 assert ("app/Http/Routes/company_linear_trips.php", "/company/trips/gps-coverage/{id}/coverage") in company_routes
 assert ("app/Http/Routes/company_document_generator.php", "/company/document-generator/history/download") in company_routes
@@ -101,4 +103,4 @@ activation = index_source[index_source.index("if ($rolesAccessEnabled)"):index_s
 assert "catch (" not in activation
 for route_file in ("company_document_generator.php", "company_switch.php", "company_roles_access.php"):
     assert route_file in index_source
-print("roles access complete route registry: PASS (424 routes; four review endpoints; three statistics ACLs; 1 retired legacy writer)")
+print(f"roles access complete route registry: PASS ({len(company_routes)} routes; four review endpoints; three statistics ACLs; 1 retired legacy writer)")
