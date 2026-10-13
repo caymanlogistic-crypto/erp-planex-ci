@@ -68,6 +68,7 @@ final class PageRegistry
             self::definition('company.feo.map_placement', 'Размещение на карте', 'Операции', 'Заявки ФЭО', 60, '/company/feo/requests/map-placement', badgeProvider: 'feo_placement_problem', badgeDisplay: 'self_parent'),
             self::definition('company.feo.utilizers', 'Утилизаторы', 'Операции', 'Заявки ФЭО', 80, '/company/feo/utilizers', badgeProvider: 'feo_utilizer_problem', badgeDisplay: 'self_parent'),
             self::definition('company.feo.transfers', 'Перемещение заявок', 'Операции', 'Заявки ФЭО', 62, '/company/feo/requests/transfers'),
+            self::definition('company.feo.weights', 'Изменение веса', 'Операции', 'Заявки ФЭО', 63, '/company/feo/requests/weights'),
             self::definition('company.feo.coordinates', 'Определение координат', 'Операции', 'Заявки ФЭО', 64, '/company/feo/requests/coordinates'),
             self::definition('company.route_executors', 'Исполнители рейса', 'Операции', '', 100, '/company/route-executors'),
             self::definition('company.documents.create', 'Создать документ', 'Операции', 'Генератор договоров', 110, '/company/document-generator'),

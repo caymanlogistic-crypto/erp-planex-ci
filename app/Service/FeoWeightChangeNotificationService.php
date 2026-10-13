@@ -21,12 +21,17 @@ final class FeoWeightChangeNotificationService
         if ($requestId === '') return null;
         $beforeKg = self::kilograms($before['mass_netto'] ?? null);
         $afterKg = self::kilograms($after['mass_netto'] ?? null);
-        if ($beforeKg === $afterKg) return null;
+        $beforeGrossKg = self::kilograms($before['mass_brutto'] ?? null);
+        $afterGrossKg = self::kilograms($after['mass_brutto'] ?? null);
+        if ($beforeKg === $afterKg && $beforeGrossKg === $afterGrossKg) return null;
         return [
             'request_id' => $requestId,
             'before_kg' => $beforeKg,
             'after_kg' => $afterKg,
             'difference_kg' => round($afterKg - $beforeKg, 3),
+            'before_gross_kg' => $beforeGrossKg,
+            'after_gross_kg' => $afterGrossKg,
+            'gross_difference_kg' => round($afterGrossKg - $beforeGrossKg, 3),
         ];
     }
 
@@ -70,6 +75,8 @@ final class FeoWeightChangeNotificationService
         foreach ($chunks as $index => $chunk) {
             $beforeKg = array_sum(array_column($chunk, 'before_kg'));
             $afterKg = array_sum(array_column($chunk, 'after_kg'));
+            $beforeGrossKg = array_sum(array_column($chunk, 'before_gross_kg'));
+            $afterGrossKg = array_sum(array_column($chunk, 'after_gross_kg'));
             $lines = array_column($chunk, 'message_line');
             $part = count($chunks) > 1 ? 'Часть ' . ($index + 1) . ' из ' . count($chunks) : '';
             $deliveryId = $events->enqueue(
@@ -82,6 +89,9 @@ final class FeoWeightChangeNotificationService
                     'old_mass_kg' => self::formatKg((float)$beforeKg),
                     'new_mass_kg' => self::formatKg((float)$afterKg),
                     'difference_kg' => self::formatSignedKg((float)($afterKg - $beforeKg)),
+                    'old_gross_kg' => self::formatKg((float)$beforeGrossKg),
+                    'new_gross_kg' => self::formatKg((float)$afterGrossKg),
+                    'gross_difference_kg' => self::formatSignedKg((float)($afterGrossKg - $beforeGrossKg)),
                     'changes' => implode("\n", $lines),
                     'author' => (string)($actor['created_by_display_name'] ?? '—'),
                     'company' => (string)($company['name'] ?? '—'),
@@ -128,9 +138,17 @@ final class FeoWeightChangeNotificationService
 
     private static function changeLine(array $change): string
     {
-        return '№' . $change['request_id'] . ': '
-            . self::formatKg((float)$change['before_kg']) . ' → '
-            . self::formatKg((float)$change['after_kg']) . ' кг ('
-            . self::formatSignedKg((float)$change['difference_kg']) . ' кг)';
+        $parts = [];
+        if ((float)$change['before_kg'] !== (float)$change['after_kg']) {
+            $parts[] = 'нетто ' . self::formatKg((float)$change['before_kg']) . ' → '
+                . self::formatKg((float)$change['after_kg']) . ' кг ('
+                . self::formatSignedKg((float)$change['difference_kg']) . ' кг)';
+        }
+        if (isset($change['before_gross_kg'], $change['after_gross_kg']) && (float)$change['before_gross_kg'] !== (float)$change['after_gross_kg']) {
+            $parts[] = 'брутто ' . self::formatKg((float)$change['before_gross_kg']) . ' → '
+                . self::formatKg((float)$change['after_gross_kg']) . ' кг ('
+                . self::formatSignedKg((float)$change['gross_difference_kg']) . ' кг)';
+        }
+        return '№' . $change['request_id'] . ': ' . implode('; ', $parts);
     }
 }

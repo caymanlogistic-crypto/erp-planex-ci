@@ -287,3 +287,4 @@ $router->post('/company/feo/requests/map-placement/delete/commit', static functi
 $router->post('/company/feo/requests/map-placement/reconcile/preview', [$feoPlacementController, 'previewReconcile'], $feoPlacementPage);
 $router->post('/company/feo/requests/map-placement/reconcile/commit', [$feoPlacementController, 'commitReconcile'], $feoPlacementPage);
 require_once base_path('app/Http/Routes/company_feo_transfers.php');
+require_once base_path('app/Http/Routes/company_feo_weights.php');

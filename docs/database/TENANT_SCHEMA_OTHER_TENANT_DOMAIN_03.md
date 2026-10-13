@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `82daee4af192235d400d5f4c625e239d9e77450678d96acf5f1235eb60d5d198`
+**Schema fingerprint:** `43126ce5ea815be277e650a400012d7fd4e4aae437682ed6723bd79dcfb12786`
 
 ## `feo_utilizers`
 
@@ -36,6 +36,61 @@
 ### Physical foreign keys
 
 - None enforced by MySQL.
+
+## `feo_weight_batches`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `name` | `varchar(180)` | NO | NULL | — | — |
+| `comment` | `text` | YES | NULL | — | — |
+| `request_count` | `int unsigned` | NO | NULL | — | — |
+| `operation_key` | `char(64)` | NO | NULL | — | `UNI` |
+| `status` | `enum('applied','reverted')` | NO | `applied` | — | — |
+| `created_by_user_id` | `int unsigned` | NO | NULL | — | — |
+| `created_by_name` | `varchar(255)` | NO | NULL | — | — |
+| `created_at` | `datetime` | NO | `CURRENT_TIMESTAMP` | `DEFAULT_GENERATED` | — |
+| `reverted_by_user_id` | `int unsigned` | YES | NULL | — | — |
+| `reverted_by_name` | `varchar(255)` | YES | NULL | — | — |
+| `reverted_at` | `datetime` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **UNIQUE** `uk_feo_weight_operation` (`operation_key`)
+
+### Physical foreign keys
+
+- None enforced by MySQL.
+
+## `feo_weight_items`
+
+**Domain:** Other tenant domain<br>
+**Purpose:** Physical tenant table; semantics follow owning application module.
+
+| Column | Type | Null | Default | Extra | Key |
+|---|---|---|---|---|---|
+| `id` | `bigint unsigned` | NO | NULL | `auto_increment` | `PRI` |
+| `batch_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
+| `zayavka_id` | `varchar(64)` | NO | NULL | — | `MUL` |
+| `request_row_id` | `bigint unsigned` | NO | NULL | — | — |
+| `before_netto` | `decimal(14,4)` | YES | NULL | — | — |
+| `before_brutto` | `decimal(14,4)` | YES | NULL | — | — |
+| `after_netto` | `decimal(14,4)` | YES | NULL | — | — |
+| `after_brutto` | `decimal(14,4)` | YES | NULL | — | — |
+
+### Indexes / constraints
+
+- **PRIMARY** `PRIMARY` (`id`)
+- **INDEX** `idx_feo_weight_request` (`zayavka_id`, `batch_id`)
+- **UNIQUE** `uk_feo_weight_item` (`batch_id`, `zayavka_id`)
+
+### Physical foreign keys
+
+- `fk_feo_weight_item_batch`: (`batch_id`) → `feo_weight_batches`.`id` ON UPDATE NO ACTION ON DELETE NO ACTION
 
 ## `geocoding_settings`
 
@@ -209,63 +264,3 @@
 
 - `fk_max_message_logs_bot`: (`bot_id`) → `max_bots`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
 - `fk_max_message_logs_chat`: (`chat_config_id`) → `max_chats`.`id` ON UPDATE NO ACTION ON DELETE SET NULL
-
-## `route_executor_contract_mails`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `card_id` | `char(36)` | NO | NULL | — | `PRI` |
-| `actor_account_id` | `bigint unsigned` | NO | NULL | — | — |
-| `trip_business_id` | `bigint unsigned` | NO | NULL | — | — |
-| `recipient_email` | `varchar(254)` | NO | NULL | — | — |
-| `message_id` | `varchar(255)` | NO | NULL | — | — |
-| `mail_status` | `varchar(16)` | NO | NULL | — | `MUL` |
-| `sent_at` | `datetime(6)` | YES | NULL | — | — |
-| `created_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`card_id`)
-- **INDEX** `idx_route_executor_contract_mail_status` (`mail_status`, `updated_at`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.
-
-## `route_executor_review_cards`
-
-**Domain:** Other tenant domain<br>
-**Purpose:** Physical tenant table; semantics follow owning application module.
-
-| Column | Type | Null | Default | Extra | Key |
-|---|---|---|---|---|---|
-| `card_id` | `char(36)` | NO | NULL | — | `PRI` |
-| `actor_account_id` | `bigint unsigned` | NO | NULL | — | `MUL` |
-| `last_editor_account_id` | `bigint unsigned` | NO | NULL | — | — |
-| `revision` | `int unsigned` | NO | `1` | — | — |
-| `snapshot_json` | `mediumtext` | NO | NULL | — | — |
-| `files_json` | `mediumtext` | NO | NULL | — | — |
-| `responsible_membership_id` | `bigint unsigned` | YES | NULL | — | — |
-| `trip_business_id` | `bigint unsigned` | YES | NULL | — | — |
-| `contractor_name` | `varchar(255)` | NO | `` | — | — |
-| `driver_name` | `varchar(255)` | NO | `` | — | — |
-| `driver_phone` | `varchar(64)` | NO | `` | — | — |
-| `vehicle_type` | `varchar(40)` | NO | `` | — | — |
-| `plate` | `varchar(40)` | NO | `` | — | — |
-| `deleted_at` | `datetime(6)` | YES | NULL | — | `MUL` |
-| `created_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED` | — |
-| `updated_at` | `datetime(6)` | NO | `CURRENT_TIMESTAMP(6)` | `DEFAULT_GENERATED on update CURRENT_TIMESTAMP(6)` | — |
-
-### Indexes / constraints
-
-- **PRIMARY** `PRIMARY` (`card_id`)
-- **INDEX** `idx_route_executor_review_cards_active` (`deleted_at`, `updated_at`)
-- **INDEX** `idx_route_executor_review_cards_actor` (`actor_account_id`, `updated_at`)
-
-### Physical foreign keys
-
-- None enforced by MySQL.
