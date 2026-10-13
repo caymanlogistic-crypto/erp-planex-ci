@@ -55,10 +55,22 @@ $styles=(string)$archive->getFromName('xl/styles.xml');
 $archive->close();@unlink($xlsx);
 unset($_GET['trip_id']);
 ob_start();
-require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing_registry.php';
 $html=(string)ob_get_clean();
 
 $assert=static function(bool $condition,string $message):void {if(!$condition)throw new RuntimeException($message);};
+ob_start();
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+$legacyHtml=(string)ob_get_clean();
+$assert(str_contains($legacyHtml,'Сбор закрывающих документов')
+    && str_contains($legacyHtml,'data-closing-report-open')
+    && str_contains($legacyHtml,'data-closing-report-dialog')
+    && str_contains($legacyHtml,'/assets/js/waste-trip-closing.js')
+    && !str_contains($legacyHtml,'class="closing-grid lab-grid table-scroll"'),
+    'original collection route must retain its accordion and popup report');
+$assert(str_contains($html,'/assets/js/waste-trip-closing-registry.js')
+    && str_contains($html,'/company/logistics/closing-documents/summary.xlsx'),
+    'logistics registry must use its independent route and script');
 $assert(substr_count($html,'class="closing-shared-issues"')===2,'each trip must show common issues block');
 $assert(substr_count($html,'Начало: 29.09.2026')===2 && substr_count($html,'Завершён 30.09.2026')===2,'summary shows actual start and end dates');
 $assert(substr_count($html,'Водитель: Иванов Иван')===2,'summary shows driver beside carrier');
@@ -129,7 +141,7 @@ $assert(substr_count($html,'<b>ТН:</b> нет скана ТН')===1,'repeated 
 $assert(str_contains($html,'нет скана ТН · заявки №123, №124'),'expanded trip must retain every affected request number');
 $assert(str_contains($html,'Обязательные документы собраны'),'clean trip must show complete required set');
 $trips[1]['review_state']='payment';$trips[1]['review_version']=3;
-ob_start();require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';$paymentHtml=(string)ob_get_clean();
+ob_start();require BASE_PATH.'/app/View/pages/company_waste_trip_closing_registry.php';$paymentHtml=(string)ob_get_clean();
 $assert(!str_contains($paymentHtml,'Вернуть на доработку')&&str_contains($paymentHtml,'class="closing-edit-fieldset">'),'legacy queued trip must remain editable without manual return');
 $assert(str_contains($html,'2 из 3 обработано'),'processed requests must follow document progress');
 $assert(str_contains($html,'data-invoice-open data-carrier-id="42"'),'invoice action must use the trip carrier');
@@ -174,7 +186,7 @@ $trips[0]['review_state']='work';
 $trips[0]['transport']['units'][1]['has_card']=false;
 $reportRows=\App\Service\WasteTripClosingReportService::rows($trips,'2026-10-12');
 ob_start();
-require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing_registry.php';
 $missingCardHtml=(string)ob_get_clean();
 $assert(str_contains($missingCardHtml,'data-state="paid_complete"')
     && str_contains($missingCardHtml,'4 из 5 получено')
@@ -183,7 +195,7 @@ $assert(str_contains($missingCardHtml,'data-state="paid_complete"')
 $trips[0]['transport']['units']=[$trips[0]['transport']['units'][1]];
 $trips[0]['carrier_paid_amount']='0.00';
 ob_start();
-require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing_registry.php';
 $readyWithoutCardHtml=(string)ob_get_clean();
 $assert(str_contains($readyWithoutCardHtml,'data-state="ready"')
     && str_contains($readyWithoutCardHtml,'4 из 5 получено')
@@ -195,7 +207,7 @@ $assert($reportWithProcessedRemarks[0]['tn']==='Есть'&&$reportWithProcessedR
     'processed TN must count as present in the report despite signature remarks');
 $trips[0]['carrier_paid_amount']='5000.00';
 ob_start();
-require BASE_PATH.'/app/View/pages/company_waste_trip_closing.php';
+require BASE_PATH.'/app/View/pages/company_waste_trip_closing_registry.php';
 $partlyPaidHtml=(string)ob_get_clean();
 $assert(str_contains($partlyPaidHtml,'data-status="paid"><small>СЧЕТА</small><b>Оплачен частично</b><span class="closing-invoice-detail">Оплата: 10.10.2026</span><span class="closing-carrier-debt">Долг 20 000 ₽</span>')
     && str_contains($partlyPaidHtml,'data-state="paid_complete"'),

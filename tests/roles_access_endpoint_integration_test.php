@@ -56,7 +56,7 @@ $routePages = [
     'company_document_generator.php' => ['company.documents.create', 'company.documents.history', 'company.documents.templates'],
     'company_trip_documents.php' => ['company.documents.request', 'company.documents.collection'],
     'company_trip_completion.php' => ['company.documents.collection', 'company.registration_journal'],
-    'company_trip_closing.php' => ['company.documents.trip_closing'],
+    'company_trip_closing.php' => ['company.documents.trip_closing', 'company.documents.trip_closing_registry'],
     'company_documents.php' => ['company.clients', 'company.contractors', 'company.drivers', 'company.vehicle_sets', 'company.route_executors', 'company.trips.linear'],
     'company_feo_map.php' => ['company.feo.map', 'company.feo.utilizers'],
     'company_feo_request_costs.php' => ['company.feo.costs'],
@@ -87,7 +87,7 @@ foreach ($routePages as $file => $pageKeys) {
     foreach ($pageKeys as $pageKey) endpointExpect(str_contains($source, $pageKey), "{$file} missing {$pageKey}");
     $declarationCount += count($counts);
 }
-endpointExpect($declarationCount === 243, 'owned inventory must contain exactly 241 protected and two token-gated archive declarations');
+endpointExpect($declarationCount === 253, 'owned inventory must contain exactly 251 protected and two token-gated archive declarations');
 
 $ownedSources = '';
 foreach (array_keys($routePages) as $file) $ownedSources .= file_get_contents($root . '/app/Http/Routes/' . $file);

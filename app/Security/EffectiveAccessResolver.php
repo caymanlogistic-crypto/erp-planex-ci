@@ -67,6 +67,15 @@ final class EffectiveAccessResolver
             }
         }
 
+        // Existing trip-closing grants also open the new registry until a role
+        // explicitly grants or denies its dedicated permission.
+        $registryKey = 'company.documents.trip_closing_registry';
+        if (($pages['company.documents.trip_closing'] ?? false)
+            && !in_array($registryKey, $snapshot->rolePageKeys, true)
+            && ($snapshot->pageOverrides[$registryKey] ?? 'inherit') === 'inherit') {
+            $pages[$registryKey] = true;
+        }
+
         $scopes = [];
         foreach (['client', 'contractor', 'vehicle_unit', 'driver', 'linear_trip', 'waste_trip'] as $entityType) {
             $roleScope = $snapshot->roleDataScopes[$entityType] ?? EffectiveAccess::SCOPE_NONE;

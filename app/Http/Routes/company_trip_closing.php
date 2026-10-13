@@ -23,4 +23,15 @@ $router->post('/company/trips/closing-documents/{tripId}/documents/{documentId}/
 $router->get('/company/trips/closing-documents/{tripId}/documents/{documentId}',[$tripClosingController,'download'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/review',[$tripClosingController,'submit'],$tripClosingPage);
 $router->post('/company/trips/closing-documents/{tripId}/review/confirm-not-sent',[$tripClosingController,'confirmNotSent'],$tripClosingPage);
+$tripClosingRegistryPage='company.documents.trip_closing_registry';
+$router->get('/company/logistics/closing-documents',[$tripClosingController,'index'],$tripClosingRegistryPage);
+$router->get('/company/logistics/closing-documents/summary.xlsx',[$tripClosingController,'summaryXlsx'],$tripClosingRegistryPage);
+$router->get('/company/logistics/closing-documents/{tripId}/invoices',[$tripClosingController,'invoiceCandidates'],$tripClosingRegistryPage);
+$router->post('/company/logistics/closing-documents/{tripId}/invoices/link',[$tripClosingController,'linkInvoice'],$tripClosingRegistryPage);
+$router->post('/company/logistics/closing-documents/{tripId}/documents',[$tripClosingController,'upload'],$tripClosingRegistryPage);
+$router->post('/company/logistics/closing-documents/{tripId}/diagnostic-card',[$tripClosingController,'uploadDiagnosticCard'],$tripClosingRegistryPage);
+$router->post('/company/logistics/closing-documents/{tripId}/documents/{documentId}/remove',[$tripClosingController,'remove'],$tripClosingRegistryPage);
+$router->get('/company/logistics/closing-documents/{tripId}/documents/{documentId}',[$tripClosingController,'download'],$tripClosingRegistryPage);
+$router->post('/company/logistics/closing-documents/{tripId}/review',[$tripClosingController,'submit'],$tripClosingRegistryPage);
+$router->post('/company/logistics/closing-documents/{tripId}/review/confirm-not-sent',[$tripClosingController,'confirmNotSent'],$tripClosingRegistryPage);
 $router->get('/trip-closing-package/{companyId}/{token}',[$tripClosingController,'sharedPackage']);

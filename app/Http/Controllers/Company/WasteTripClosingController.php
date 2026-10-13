@@ -26,6 +26,7 @@ final class WasteTripClosingController
     public function index(): void
     {
         header('Cache-Control: no-store');
+        $registryView=current_app_path()==='/company/logistics/closing-documents';
         $trips=[];$reportRows=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
         $success=$_SESSION['waste_trip_closing_success']??null;
         $flashError=$_SESSION['waste_trip_closing_error']??null;
@@ -51,11 +52,13 @@ final class WasteTripClosingController
             error_log('waste trip closing index: '.$exception->getMessage());
             $error='Не удалось загрузить закрывающие документы рейсов.';
         }
-        $pageTitle='Закрывающие документы';
-        $pageContext='Логисты › Закрывающие документы';
-        $topbarCrumbs=[['label'=>'Логисты','url'=>null],['label'=>'Закрывающие документы','url'=>null]];
+        $pageTitle=$registryView?'Закрывающие документы':'Сбор закрывающих документов';
+        $pageContext=$registryView?'Логисты › Закрывающие документы':'Операции › Сбор закрывающих документов';
+        $topbarCrumbs=$registryView
+            ?[['label'=>'Логисты','url'=>null],['label'=>'Закрывающие документы','url'=>null]]
+            :[['label'=>'Операции','url'=>null],['label'=>'Сбор закрывающих документов','url'=>null]];
         $config=$this->config;$db=$this->db;
-        ob_start();require base_path('app/View/pages/company_waste_trip_closing.php');$content=(string)ob_get_clean();
+        ob_start();require base_path($registryView?'app/View/pages/company_waste_trip_closing_registry.php':'app/View/pages/company_waste_trip_closing.php');$content=(string)ob_get_clean();
         require base_path('app/View/layouts/main.php');
     }
 
@@ -296,5 +299,9 @@ final class WasteTripClosingController
         }
         return $files;
     }
-    private function back(int $tripId, ?string $stage=null): never {header('Location: '.app_url('/company/trips/closing-documents?trip_id='.$tripId.($stage?'&stage='.$stage:'')));exit;}
+    private function back(int $tripId, ?string $stage=null): never {
+        $base=str_starts_with(current_app_path(),'/company/logistics/closing-documents')
+            ?'/company/logistics/closing-documents':'/company/trips/closing-documents';
+        header('Location: '.app_url($base.'?trip_id='.$tripId.($stage?'&stage='.$stage:'')));exit;
+    }
 }

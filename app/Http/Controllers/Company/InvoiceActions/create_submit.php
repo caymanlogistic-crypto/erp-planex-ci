@@ -178,7 +178,7 @@ try {
         }
         $_SESSION['invoice_success'] = 'Счёт №' . $number . ' создан.';
         $returnTo=(string)($_POST['return_to']??'');
-        redirect_to(in_array($returnTo,['/company/finance/received-paid','/company/trips/closing-documents'],true)
+        redirect_to(in_array($returnTo,['/company/finance/received-paid','/company/trips/closing-documents','/company/logistics/closing-documents'],true)
             ? $returnTo : '/company/finance/invoices');
     }
 
