@@ -1,0 +1,25 @@
+/* Only GPS gap visualization has no counterpart in the approved ERP registry.
+   Header, shell, toolbar, controls, table and mobile scroll use original ERP CSS. */
+.gps-progress{height:6px;margin-top:4px;background:var(--badge-danger-bg)}
+.gps-progress i{display:block;height:100%;background:var(--chart-3)}
+.gps-detail-row[hidden]{display:none!important}
+.gps-detail-row>td{padding:0}
+.gps-detail{display:grid;grid-template-columns:minmax(0,1fr) 300px;gap:20px;padding:14px;border-top:1px solid var(--line-soft);background:var(--surface-form)}
+.gps-detail h2{margin:0 0 8px;font:700 12px/17px var(--font)}
+.gps-detail p{margin:8px 0 0;color:var(--text-muted);font:400 11px/16px var(--font)}
+.gps-timeline{display:flex;height:20px;overflow:hidden;border:1px solid var(--line);background:var(--table-row)}
+.gps-timeline span.covered{background:var(--chart-3)}
+.gps-timeline span.gap{background:var(--chart-4)}
+.gps-timeline span.edge{background:repeating-linear-gradient(45deg,var(--badge-danger-bg) 0,var(--badge-danger-bg) 5px,var(--table-row) 5px,var(--table-row) 10px)}
+.gps-legend{display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;color:var(--text-muted);font:400 11px/15px var(--font)}
+.gps-legend i{display:inline-block;width:10px;height:10px;margin-right:4px;vertical-align:-1px}
+.gps-legend i.covered{background:var(--chart-3)}
+.gps-legend i.gap{background:var(--chart-4)}
+.gps-legend i.edge{background:repeating-linear-gradient(45deg,var(--badge-danger-bg) 0,var(--badge-danger-bg) 3px,var(--table-row) 3px,var(--table-row) 6px)}
+.gps-gap-list{max-height:230px;overflow:auto;border:1px solid var(--line-soft);background:var(--table-row)}
+.gps-gap{display:flex;justify-content:space-between;gap:10px;padding:6px 8px;border-bottom:1px solid var(--line-hair);font:500 11px/15px var(--font)}
+.gps-gap:last-child{border:0}
+.gps-gap em{color:var(--text-faint);font-style:normal}
+.gps-gap b{white-space:nowrap}
+@media(max-width:700px){.gps-detail{grid-template-columns:1fr}.gps-gap{display:block}.gps-gap b{display:block}}
+.gps-card [data-gps-empty][hidden],.gps-card [data-gps-row][hidden]{display:none!important}

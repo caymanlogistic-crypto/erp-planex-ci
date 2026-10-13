@@ -1,6 +1,8 @@
 <?php
 
 require_once base_path('app/Service/WasteTripLegacySourceService.php');
+require_once base_path('app/Service/GpsCoverageService.php');
+require_once base_path('app/Http/Controllers/Company/GpsCoverageController.php');
 require_once base_path('app/Service/WarehouseStockService.php');
 require_once base_path('app/Service/WarehouseTripCorrectionService.php');
 require_once base_path('app/Service/WarehouseTripRequestReconciliationService.php');
@@ -23,6 +25,7 @@ require_once base_path('app/Http/Controllers/Company/WasteTripController.php');
 
 $controller = new \App\Http\Controllers\Company\LinearTripController($config, $db);
 $wasteTripController = new \App\Http\Controllers\Company\WasteTripController($config, $db);
+$gpsCoverageController = new \App\Http\Controllers\Company\GpsCoverageController($config, $db);
 $warehouseStockController = new \App\Http\Controllers\Company\WarehouseStockController($config, $db);
 
 $router->get('/company/warehouses/stock', [$warehouseStockController, 'index'], 'company.warehouses.stock');
@@ -45,6 +48,8 @@ $router->post('/company/trips/linear/{id}/modal-delete', [$controller, 'modalDel
 $router->get('/company/trips/linear/cargo-types', [$controller, 'cargoTypes'], 'company.trips.linear');
 
 $router->get('/company/trips/departures', [$wasteTripController, 'index'], 'company.trips.waste');
+$router->get('/company/trips/gps-coverage', [$gpsCoverageController, 'index'], 'company.trips.gps_coverage');
+$router->get('/company/trips/gps-coverage/{id}/coverage', [$gpsCoverageController, 'flight'], 'company.trips.gps_coverage');
 $router->post('/company/trips/departures/preview', [$wasteTripController, 'previewSelection'], 'company.trips.waste');
 $router->post('/company/trips/departures/create', [$wasteTripController, 'createSubmit'], 'company.trips.waste');
 $router->get('/company/trips/departures/{id}/modal-view', [$wasteTripController, 'modalView'], 'company.trips.waste');
