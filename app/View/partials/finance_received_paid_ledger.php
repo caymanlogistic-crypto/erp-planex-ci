@@ -28,6 +28,7 @@ $dueHtml = static function (array $item): string {
     return '<span class="rp-v010-date is-' . e($item[0]) . '"><strong>' . e($item[1]) . '</strong><small>' . e($item[2]) . '</small></span>';
 };
 ?>
+<link rel="stylesheet" href="<?= e(app_url('/assets/css/erp-ledger-table.css')) ?>?v=<?= filemtime(base_path('public/assets/css/erp-ledger-table.css')) ?>">
 <div class="rp-lab-header-wrap rp-action-design rp-ledger-v015">
     <div class="page-head"><div class="page-head-left"><span class="rp-identity-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h14l-4 -4"/><path d="M17 14h-14l4 4"/></svg></span><span class="rp-head-text"><h1 class="page-title">Получено/оплачено</h1><span class="page-summary">Счета и фактические оплаты по рейсам ООО «Планэкс» со статусом «Груз сдан».</span></span></div>
         <div class="page-head-actions"><button type="button" class="btn btn-primary" data-open-modal="invoice-create-modal"<?= $localPdo === null ? ' disabled' : '' ?>>Создать счёт</button></div></div>
@@ -48,7 +49,7 @@ $dueHtml = static function (array $item): string {
         <label class="toolbar-sort"><span class="toolbar-sort-label">Сортировка по:</span><select class="field-select toolbar-select" id="rp-sort" aria-label="Сортировка по дате выгрузки или ID"><option value="date-new">Дата выгрузки</option><option value="id-new">ID</option></select></label>
         <input class="field-input" id="rp-search" type="search" placeholder="Поиск" aria-label="Поиск по рейсам и счетам">
     </div></div>
-    <div class="rp-v010-table-wrap"><table class="table rp-v010-table" id="rp-ledger-table"><colgroup><?php foreach ([4,9,7,8,9,7,8,10,7,8,9,7,7] as $width): ?><col style="width:<?= $width ?>%"> <?php endforeach; ?></colgroup>
+    <div class="rp-v010-table-wrap"><table class="table rp-v010-table erp-ledger-table" id="rp-ledger-table"><colgroup><?php foreach ([4,9,7,8,9,7,8,10,7,8,9,7,7] as $width): ?><col style="width:<?= $width ?>%"> <?php endforeach; ?></colgroup>
         <thead><tr class="rp-v012-wide-head"><th>ID</th><th>ОПИСАНИЕ РЕЙСА</th><th>СЧЕТ КЛИЕНТУ</th><th>СУММА СЧЕТА</th><th>ПОЛУЧИТЬ ДО</th><th>ПОЛУЧЕНО</th><th>К ПОЛУЧЕНИЮ</th><th>ПЕРЕВОЗЧИК</th><th>СЧЕТ ПОДРЯД.</th><th>СУММА СЧЕТА</th><th>ОПЛАТИТЬ ДО</th><th>ОПЛАЧЕНО</th><th>К ВЫПЛАТЕ</th></tr>
             <tr class="rp-v012-compact-head"><th>ID</th><th>ОПИСАНИЕ РЕЙСА / ПЕРЕВОЗЧИК</th><th>Счет</th><th>Сумма счета</th><th>Срок</th><th>Получено / оплачено</th><th>Остаток</th></tr></thead>
         <tbody id="rp-list">

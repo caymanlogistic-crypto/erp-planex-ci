@@ -1,0 +1,9 @@
+/* Shared table typography and rows from the received/paid ledger. */
+.erp-ledger-table{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:11px;line-height:1.25}
+.erp-ledger-table th,.erp-ledger-table td{box-sizing:border-box;min-width:0;padding:6px 7px;vertical-align:middle;border-right:1px solid rgba(168,161,150,.15);border-bottom:1px solid rgba(190,184,174,.42);overflow-wrap:anywhere}
+.erp-ledger-table th{height:30px;background:#d0ccc4;color:#34322f;text-align:left;text-transform:uppercase;font-size:10px;font-weight:700;line-height:14px;letter-spacing:.02em}
+.erp-ledger-table tbody tr{cursor:pointer}
+.erp-ledger-table tbody td{background:var(--table-row,#fafaf6)}
+.erp-ledger-table tbody tr:hover td,.erp-ledger-table tbody tr:focus-visible td{background:var(--table-row-hover,#ece9e2)}
+.erp-ledger-table tr[hidden]{display:none!important}
+.erp-ledger-table .erp-ledger-carrier-name{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

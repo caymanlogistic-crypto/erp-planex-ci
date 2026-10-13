@@ -133,6 +133,7 @@ $wideWorkspacePrefixes = [
     '/company/document-generator',
     '/company/trips/linear',
     '/company/trips/departures',
+    '/company/trips/closing-documents',
     '/company/warehouses/stock',
     '/company/statistics/managers',
     '/company/statistics/feo-share',
@@ -492,6 +493,14 @@ if (empty($topbarCrumbs)) {
                     <a class="nav-sub-item<?= $feoShareStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/feo-share') ?>"><span>Доля компаний в ФЭО</span></a>
                     <a class="nav-sub-item<?= $cargoBalanceStatisticsActive ? ' is-active' : '' ?>" href="<?= app_url('/company/statistics/cargo-balance') ?>"><span>Баланс заявок</span></a>
                 </div>
+            </div>
+
+            <div class="nav-group">
+                <div class="nav-section-label">ЛОГИСТЫ</div>
+                <a class="nav-item<?= $requestPath === '/company/trips/closing-documents' ? ' is-active' : '' ?>" href="<?= app_url('/company/trips/closing-documents') ?>">
+                    <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 2h7l3 3v9H3zM10 2v3h3M5 8h6M5 11h6" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
+                    <span class="nav-label">Закрывающие документы</span>
+                </a>
             </div>
 
             <div class="nav-group">
