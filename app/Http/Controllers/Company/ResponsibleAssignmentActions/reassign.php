@@ -44,7 +44,11 @@ try {
     if ($targetMembershipId === null) throw new RuntimeException('responsibility recipient is not eligible');
 
     $actorMembershipId = (int)(AccessControlService::effectiveMembershipId() ?? 0);
-    $result = EntityResponsibilityService::transfer($tenant, $entityType, $entityIds, $targetMembershipId, $actorMembershipId);
+    if ($entityType === 'route_executor') {
+        EntityResponsibilityService::transferRouteExecutorCascade($tenant, $entityIds, $targetMembershipId, $actorMembershipId);
+    } else {
+        EntityResponsibilityService::transfer($tenant, $entityType, $entityIds, $targetMembershipId, $actorMembershipId);
+    }
 
     if ($cascade && in_array($entityType, ['contractor','driver','vehicle_set'], true)) {
         $ids = array_values(array_unique(array_filter(array_map('intval', $entityIds), static fn(int $id): bool => $id > 0)));
