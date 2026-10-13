@@ -35,7 +35,7 @@ namespace {
         $pdo->exec("CREATE TABLE {$table}(id BIGINT PRIMARY KEY,created_by_membership_id BIGINT{$extra}) ENGINE=InnoDB");
     }
     $pdo->exec('CREATE TABLE driver_vehicle_blocks(id BIGINT PRIMARY KEY,driver_id BIGINT,vehicle_set_id BIGINT) ENGINE=InnoDB');
-    $pdo->exec('CREATE TABLE crews(id BIGINT PRIMARY KEY,contractor_id BIGINT,driver_vehicle_block_id BIGINT,created_by_user_id BIGINT) ENGINE=InnoDB');
+    $pdo->exec("CREATE TABLE crews(id BIGINT PRIMARY KEY,contractor_id BIGINT,driver_vehicle_block_id BIGINT,created_by_user_id BIGINT,status VARCHAR(16) NOT NULL DEFAULT 'active') ENGINE=InnoDB");
     $pdo->exec('CREATE TABLE crew_drivers(id BIGINT PRIMARY KEY,crew_id BIGINT,driver_id BIGINT) ENGINE=InnoDB');
     $pdo->exec('CREATE TABLE entity_responsibilities(entity_type VARCHAR(32),entity_id BIGINT,membership_id BIGINT,assigned_by_membership_id BIGINT,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(entity_type,entity_id)) ENGINE=InnoDB');
     $pdo->exec('INSERT INTO users VALUES(1,11)');
@@ -44,7 +44,7 @@ namespace {
     $pdo->exec('INSERT INTO vehicle_units VALUES(1,11),(2,11),(3,11)');
     $pdo->exec('INSERT INTO vehicle_sets VALUES(1,11,1,2),(2,11,3,NULL)');
     $pdo->exec('INSERT INTO driver_vehicle_blocks VALUES(1,1,1),(2,3,2)');
-    $pdo->exec('INSERT INTO crews VALUES(1,1,1,1),(2,2,2,1)');
+    $pdo->exec('INSERT INTO crews(id,contractor_id,driver_vehicle_block_id,created_by_user_id) VALUES(1,1,1,1),(2,2,2,1)');
     $pdo->exec('INSERT INTO crew_drivers VALUES(1,1,1),(2,1,2),(3,2,3)');
 
     EntityResponsibilityService::transferRouteExecutorCascade($pdo, [1,1], 12, 11);
@@ -54,6 +54,13 @@ namespace {
     if ($actual !== $expected) {
         throw new RuntimeException('Executor cascade mismatch: ' . json_encode($actual));
     }
+
+    // A historical executor assignment may already point at the target.
+    // Repeating it must still reconcile its linked reference records.
+    $pdo->exec("DELETE FROM entity_responsibilities WHERE entity_type <> 'route_executor'");
+    EntityResponsibilityService::transferRouteExecutorCascade($pdo, [1], 12, 11);
+    $reconciled = (int)$pdo->query("SELECT COUNT(*) FROM entity_responsibilities WHERE entity_type <> 'route_executor' AND membership_id=12")->fetchColumn();
+    if ($reconciled !== 6) throw new RuntimeException('Existing executor assignment did not reconcile linked records.');
 
     // Failure after the crew transfer must roll the entire cascade back.
     $pdo->exec('UPDATE vehicle_sets SET primary_vehicle_unit_id=999 WHERE id=2');
@@ -66,6 +73,35 @@ namespace {
     $count = (int)$pdo->query("SELECT COUNT(*) FROM entity_responsibilities WHERE (entity_type='route_executor' AND entity_id=2) OR (entity_type='contractor' AND entity_id=2) OR (entity_type='driver' AND entity_id=3) OR (entity_type='vehicle_set' AND entity_id=2)")->fetchColumn();
     if ($count !== 0) throw new RuntimeException('Failed cascade did not roll back.');
 
+    // A contractor shared across different executor owners must not move.
+    $pdo->exec('UPDATE vehicle_sets SET primary_vehicle_unit_id=3 WHERE id=2');
+    $pdo->exec('INSERT INTO crews(id,contractor_id,driver_vehicle_block_id,created_by_user_id) VALUES(3,1,1,1)');
+    $pdo->exec("INSERT INTO entity_responsibilities(entity_type,entity_id,membership_id,assigned_by_membership_id) VALUES('route_executor',3,13,11)");
+    $pdo->exec("UPDATE entity_responsibilities SET membership_id=14 WHERE entity_type='contractor' AND entity_id=1");
+    $result = EntityResponsibilityService::transferRouteExecutorCascade($pdo, [1], 12, 11);
+    $owner = (int)$pdo->query("SELECT membership_id FROM entity_responsibilities WHERE entity_type='contractor' AND entity_id=1")->fetchColumn();
+    $conflictTypes = array_unique(array_column($result['conflicts'], 'entity_type'));
+    sort($conflictTypes);
+    if ($owner !== 14 || $conflictTypes !== ['contractor','driver','vehicle_set','vehicle_unit']) {
+        throw new RuntimeException('Shared contractor, driver or vehicle conflict was overwritten or hidden.');
+    }
+
+    // Historical drift for a uniquely owned executor can be repaired in bulk.
+    $pdo->exec("DELETE FROM entity_responsibilities WHERE entity_type='contractor' AND entity_id=2");
+    $pdo->exec("INSERT INTO entity_responsibilities(entity_type,entity_id,membership_id,assigned_by_membership_id) VALUES('route_executor',2,12,11)");
+    $preview = EntityResponsibilityService::reconcileRouteExecutorLinks($pdo, 11, null, false);
+    $before = (int)$pdo->query("SELECT COUNT(*) FROM entity_responsibilities WHERE entity_type='contractor' AND entity_id=2")->fetchColumn();
+    if ($before !== 0 || $preview['changed'] < 1 || count($preview['conflicts']) < 1) {
+        throw new RuntimeException('Read-only preview changed data or omitted drift and conflicts.');
+    }
+    $result = EntityResponsibilityService::reconcileRouteExecutorLinks($pdo, 11);
+    $owner = (int)$pdo->query("SELECT membership_id FROM entity_responsibilities WHERE entity_type='contractor' AND entity_id=2")->fetchColumn();
+    if ($owner !== 12 || $result['changed'] < 1) throw new RuntimeException('Bulk reconciliation did not repair historical drift.');
+
     echo "ROUTE_EXECUTOR_CASCADE=PASS\n";
+    echo "ROUTE_EXECUTOR_EXISTING_ASSIGNMENT_RECONCILE=PASS\n";
     echo "ROUTE_EXECUTOR_CASCADE_ATOMIC=PASS\n";
+    echo "ROUTE_EXECUTOR_SHARED_CONFLICT=PASS\n";
+    echo "ROUTE_EXECUTOR_BULK_RECONCILE=PASS\n";
+    echo "ROUTE_EXECUTOR_PREVIEW_READ_ONLY=PASS\n";
 }

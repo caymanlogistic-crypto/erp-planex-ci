@@ -18,10 +18,13 @@ $entityType = trim((string)($_POST['entity_type'] ?? ''));
 $entityIds = $_POST['entity_ids'] ?? [];
 if (!is_array($entityIds)) $entityIds = [$entityIds];
 $newLogistMembershipId = filter_var($_POST['new_logist_id'] ?? null, FILTER_VALIDATE_INT, ['options'=>['min_range'=>1]]);
+$operation = (string)($_POST['operation'] ?? 'transfer');
 $cascade = (string)($_POST['cascade'] ?? '0') === '1';
 $tab = in_array($entityType, ['route_executor','contractor','driver','vehicle_set'], true) ? $entityType : 'route_executor';
 
-if ($companyId <= 0 || !EntityResponsibilityService::isSupported($entityType) || $newLogistMembershipId === false || $newLogistMembershipId === null) {
+if ($companyId <= 0 || !EntityResponsibilityService::isSupported($entityType)
+    || ($operation !== 'reconcile' && ($newLogistMembershipId === false || $newLogistMembershipId === null))
+    || ($operation === 'reconcile' && $entityType !== 'route_executor')) {
     redirect_to('/company/responsible-assignments?tab=' . rawurlencode($tab) . '&msg=error', 303);
 }
 
@@ -35,6 +38,11 @@ try {
     $tenant = (new Database(companyDatabaseConfig($config, $company)))->connection();
     applyLocalMigrations($tenant);
 
+    $actorMembershipId = (int)(AccessControlService::effectiveMembershipId() ?? 0);
+    if ($operation === 'reconcile') {
+        $_SESSION['responsibility_reconcile_result'] = EntityResponsibilityService::reconcileRouteExecutorLinks($tenant, $actorMembershipId);
+        redirect_to('/company/responsible-assignments?tab=route_executor&preview=1&msg=reconciled', 303);
+    }
     $targetMembershipId = EntityResponsibilityService::eligibleRecipientMembershipId(
         $central,
         $tenant,
@@ -42,10 +50,8 @@ try {
         (int)$newLogistMembershipId
     );
     if ($targetMembershipId === null) throw new RuntimeException('responsibility recipient is not eligible');
-
-    $actorMembershipId = (int)(AccessControlService::effectiveMembershipId() ?? 0);
     if ($entityType === 'route_executor') {
-        EntityResponsibilityService::transferRouteExecutorCascade($tenant, $entityIds, $targetMembershipId, $actorMembershipId);
+        $_SESSION['responsibility_reconcile_result'] = EntityResponsibilityService::transferRouteExecutorCascade($tenant, $entityIds, $targetMembershipId, $actorMembershipId);
     } else {
         EntityResponsibilityService::transfer($tenant, $entityType, $entityIds, $targetMembershipId, $actorMembershipId);
     }

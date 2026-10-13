@@ -272,19 +272,15 @@ final class EntityResponsibilityService
         }
     }
 
-    /**
-     * Move an executor and every linked reference record as one operation.
-     * A contractor, driver or vehicle shared with another executor has one
-     * responsibility record, so its new owner is visible there as well.
-     *
-     * @param list<int|string> $crewIds
+    /** @param list<int|string> $crewIds
+     *  @return array{changed:int,conflicts:list<array{entity_type:string,entity_id:int,crew_ids:list<int>,membership_ids:list<int>}>,unassigned:list<array{entity_type:string,entity_id:int,crew_ids:list<int>}>}
      */
     public static function transferRouteExecutorCascade(
         PDO $pdo,
         array $crewIds,
         int $targetMembershipId,
         int $actorMembershipId
-    ): void {
+    ): array {
         $ids = array_values(array_unique(array_filter(
             array_map('intval', $crewIds),
             static fn(int $id): bool => $id > 0
@@ -298,49 +294,130 @@ final class EntityResponsibilityService
             $pdo->beginTransaction();
         }
         try {
-            $marks = implode(',', array_fill(0, count($ids), '?'));
-            $stmt = $pdo->prepare(
-                "SELECT c.id, c.contractor_id, dvb.driver_id, dvb.vehicle_set_id,
-                        vs.primary_vehicle_unit_id, vs.secondary_vehicle_unit_id
-                   FROM crews c
-                   JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id
-                   JOIN vehicle_sets vs ON vs.id=dvb.vehicle_set_id
-                  WHERE c.id IN ({$marks}) FOR UPDATE"
-            );
-            $stmt->execute($ids);
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            if (count($rows) !== count($ids)) {
-                throw new RuntimeException('Один из исполнителей рейса не найден. Обновите страницу.');
-            }
-
-            $related = ['contractor'=>[], 'driver'=>[], 'vehicle_set'=>[], 'vehicle_unit'=>[]];
-            foreach ($rows as $row) {
-                $related['contractor'][] = (int)$row['contractor_id'];
-                $related['driver'][] = (int)$row['driver_id'];
-                $related['vehicle_set'][] = (int)$row['vehicle_set_id'];
-                $related['vehicle_unit'][] = (int)$row['primary_vehicle_unit_id'];
-                $related['vehicle_unit'][] = (int)$row['secondary_vehicle_unit_id'];
-            }
-            $drivers = $pdo->prepare("SELECT DISTINCT driver_id FROM crew_drivers WHERE crew_id IN ({$marks})");
-            $drivers->execute($ids);
-            foreach ($drivers->fetchAll(PDO::FETCH_COLUMN) as $driverId) {
-                $related['driver'][] = (int)$driverId;
-            }
-
             self::transfer($pdo, 'route_executor', $ids, $targetMembershipId, $actorMembershipId);
-            foreach ($related as $entityType => $entityIds) {
-                $entityIds = array_values(array_unique(array_filter($entityIds)));
-                if ($entityIds !== []) {
-                    self::transfer($pdo, $entityType, $entityIds, $targetMembershipId, $actorMembershipId);
-                }
-            }
+            $result = self::reconcileRouteExecutorLinks($pdo, $actorMembershipId, $ids);
             if ($ownsTransaction) {
                 $pdo->commit();
             }
+            return $result;
         } catch (\Throwable $e) {
             if ($ownsTransaction && $pdo->inTransaction()) {
                 $pdo->rollBack();
             }
+            throw $e;
+        }
+    }
+
+    /**
+     * Align linked records with current executor owners. A reference shared by
+     * executors of different owners is left untouched and returned as a conflict.
+     * When crewIds is null, reconcile every active executor.
+     *
+     * @param list<int>|null $crewIds
+     * @return array{changed:int,conflicts:list<array{entity_type:string,entity_id:int,crew_ids:list<int>,membership_ids:list<int>}>,unassigned:list<array{entity_type:string,entity_id:int,crew_ids:list<int>}>}
+     */
+    public static function reconcileRouteExecutorLinks(PDO $pdo, int $actorMembershipId, ?array $crewIds = null, bool $apply = true): array
+    {
+        if ($actorMembershipId <= 0 || !AccessControlService::isEffectiveSystemOwner()
+            || AccessControlService::effectiveMembershipId() !== $actorMembershipId) {
+            throw new RuntimeException('Сверку ответственности может выполнить только Руководитель.');
+        }
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) $pdo->beginTransaction();
+        try {
+            $rows = $pdo->query(
+                "SELECT c.id, c.contractor_id, dvb.driver_id, dvb.vehicle_set_id,
+                        vs.primary_vehicle_unit_id, vs.secondary_vehicle_unit_id,
+                        COALESCE(er.membership_id, u.membership_id) AS membership_id
+                   FROM crews c
+                   JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id
+                   JOIN vehicle_sets vs ON vs.id=dvb.vehicle_set_id
+              LEFT JOIN users u ON u.id=c.created_by_user_id
+              LEFT JOIN entity_responsibilities er ON er.entity_type='route_executor' AND er.entity_id=c.id
+                  WHERE c.status <> 'archived'
+                  ORDER BY c.id" . ($apply ? ' FOR UPDATE' : '')
+            )->fetchAll(PDO::FETCH_ASSOC);
+            $activeIds = array_fill_keys(array_map(static fn(array $r): int => (int)$r['id'], $rows), true);
+            if ($crewIds !== null) {
+                foreach ($crewIds as $id) {
+                    if (!isset($activeIds[(int)$id])) {
+                        throw new RuntimeException('Один из исполнителей рейса не найден или архивирован. Обновите страницу.');
+                    }
+                }
+            }
+            $extraDrivers = [];
+            if ($rows !== []) {
+                $driverRows = $pdo->query(
+                    "SELECT cd.crew_id, cd.driver_id FROM crew_drivers cd
+                       JOIN crews c ON c.id=cd.crew_id AND c.status <> 'archived'"
+                )->fetchAll(PDO::FETCH_ASSOC);
+                foreach ($driverRows as $driverRow) {
+                    $extraDrivers[(int)$driverRow['crew_id']][] = (int)$driverRow['driver_id'];
+                }
+            }
+            $links = [];
+            $selected = $crewIds === null ? null : array_fill_keys(array_map('intval', $crewIds), true);
+            $selectedLinks = [];
+            foreach ($rows as $row) {
+                $crewId = (int)$row['id'];
+                $refs = [
+                    'contractor' => [(int)$row['contractor_id']],
+                    'driver' => array_merge([(int)$row['driver_id']], $extraDrivers[$crewId] ?? []),
+                    'vehicle_set' => [(int)$row['vehicle_set_id']],
+                    'vehicle_unit' => [(int)$row['primary_vehicle_unit_id'], (int)$row['secondary_vehicle_unit_id']],
+                ];
+                foreach ($refs as $type => $entityIds) {
+                    foreach (array_unique($entityIds) as $entityId) {
+                        if ($entityId <= 0) continue;
+                        $key = $type . ':' . $entityId;
+                        $links[$key]['entity_type'] = $type;
+                        $links[$key]['entity_id'] = $entityId;
+                        $links[$key]['crew_ids'][$crewId] = $crewId;
+                        if ((int)$row['membership_id'] > 0) {
+                            $membershipId = (int)$row['membership_id'];
+                            $links[$key]['membership_ids'][$membershipId] = $membershipId;
+                        } else {
+                            $links[$key]['unknown'] = true;
+                        }
+                        if ($selected === null || isset($selected[$crewId])) $selectedLinks[$key] = true;
+                    }
+                }
+            }
+            $assignments = [];
+            $conflicts = [];
+            $unassigned = [];
+            foreach ($selectedLinks as $key => $_) {
+                $link = $links[$key];
+                $owners = array_values($link['membership_ids'] ?? []);
+                sort($owners, SORT_NUMERIC);
+                $crewIdsForLink = array_values($link['crew_ids']);
+                sort($crewIdsForLink, SORT_NUMERIC);
+                $detail = ['entity_type'=>$link['entity_type'], 'entity_id'=>$link['entity_id'], 'crew_ids'=>$crewIdsForLink];
+                if (count($owners) > 1) {
+                    $conflicts[] = $detail + ['membership_ids'=>$owners];
+                } elseif (count($owners) === 1 && empty($link['unknown'])) {
+                    $assignments[$link['entity_type']][$owners[0]][] = $link['entity_id'];
+                } else {
+                    $unassigned[] = $detail;
+                }
+            }
+            $changed = 0;
+            foreach ($assignments as $type => $byOwner) {
+                foreach ($byOwner as $membershipId => $entityIds) {
+                    if ($apply) {
+                        $result = self::transfer($pdo, $type, $entityIds, (int)$membershipId, $actorMembershipId);
+                        $changed += $result['changed'];
+                    } else {
+                        foreach ($entityIds as $entityId) {
+                            if (self::effectiveBaseMembershipId($pdo, $type, $entityId) !== (int)$membershipId) $changed++;
+                        }
+                    }
+                }
+            }
+            if ($ownsTransaction) $pdo->commit();
+            return ['changed'=>$changed, 'conflicts'=>$conflicts, 'unassigned'=>$unassigned];
+        } catch (\Throwable $e) {
+            if ($ownsTransaction && $pdo->inTransaction()) $pdo->rollBack();
             throw $e;
         }
     }
