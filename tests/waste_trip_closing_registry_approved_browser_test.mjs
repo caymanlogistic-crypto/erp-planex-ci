@@ -28,7 +28,9 @@ try{
   await page.addInitScript(()=>localStorage.setItem('fixture:closing-registry',JSON.stringify({filter:'paid_complete',sort:'unloading'})));
   await page.goto(`http://127.0.0.1:${server.address().port}/company/logistics/closing-documents`);
   const table=page.locator('.closing-page .lab-table');
-  assert.equal(await table.locator('thead th').count(),13);
+  assert.equal(await table.locator('thead th').count(),14);
+  assert.deepEqual(await table.locator('thead th').allInnerTexts().then(values=>values.slice(0,4)),['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ПОДРЯД. / ВОД.']);
+  assert.equal(await table.locator('thead th').nth(11).innerText(),'ДАТА ОПЛ.');
   assert.equal(await table.locator('tbody tr').count(),35);
   assert.equal(await page.locator('[data-closing-filter="all"]').getAttribute('aria-pressed'),'true');
   assert.equal(await page.locator('[data-closing-count]').textContent(),'35');
@@ -36,7 +38,7 @@ try{
   assert.equal(await page.locator('[data-closing-entity]').count(),0);
   assert.equal(await page.locator('[data-closing-sort]').inputValue(),'unloading');
   assert.equal(await table.locator('tbody tr').first().locator('td').first().textContent(),'#322');
-  assert.equal(await page.locator('.closing-sort-field .lab-reference-trigger').evaluate(el=>getComputedStyle(el).backgroundImage),'none');
+  assert.notEqual(await page.locator('.closing-sort-field .lab-reference-trigger').evaluate(el=>getComputedStyle(el).backgroundImage),'none');
   await page.locator('.closing-sort-field .lab-reference-trigger').click();
   await page.locator('.closing-sort-field [role="option"][data-value="id"]').click();
   assert.equal(await table.locator('tbody tr').first().locator('td').first().textContent(),'#322');
