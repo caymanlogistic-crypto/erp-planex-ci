@@ -144,7 +144,7 @@ require_once __DIR__ . '/../components/status_badge.php';
         <div class="form-section">
             <h3 class="panel-head-title">Действия</h3>
             <form method="post" action="/company/logists/<?= $logist['id'] ?>/reset-password" class="mb-3">
-                <p class="text-muted muted-copy">Вы уверены? Текущий пароль будет заменён. Новый пароль будет показан только один раз.</p>
+                <p class="text-muted muted-copy">Вы уверены? Текущий пароль будет заменён. Новый пароль будет показан только один раз. Если пользователь состоит в нескольких компаниях, новый пароль действует для всех.</p>
                 <button type="submit" class="btn btn-secondary">Сбросить пароль</button>
             </form>
             <?php if ($logist['status'] !== 'archived'): ?>
