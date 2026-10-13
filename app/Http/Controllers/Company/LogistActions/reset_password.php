@@ -98,10 +98,16 @@ try {
     $pageTitle = 'Пользователь: ' . $logist['full_name'];
 
     $newPassword = generatePassword(10);
-    $passwordHash = password_hash($newPassword, PASSWORD_BCRYPT);
-
-    $update = $localPdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
-    $update->execute([$passwordHash, (int) $logist['id']]);
+    if (filter_var(env('ERP_ROLES_ACCESS_ENABLED', false), FILTER_VALIDATE_BOOL)) {
+        require_once base_path('app/Service/IdentityNormalizer.php');
+        require_once base_path('app/Service/CompanyAccountPasswordResetService.php');
+        (new \App\Service\CompanyAccountPasswordResetService($pdo, $localPdo))
+            ->reset($companyId, (int) $logist['id'], $newPassword);
+    } else {
+        $passwordHash = password_hash($newPassword, PASSWORD_BCRYPT);
+        $update = $localPdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?');
+        $update->execute([$passwordHash, (int) $logist['id']]);
+    }
 
     $passwordReset = true;
     $dbError = null;
