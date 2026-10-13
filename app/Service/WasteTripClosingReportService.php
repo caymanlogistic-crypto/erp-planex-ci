@@ -9,8 +9,8 @@ use ZipArchive;
 final class WasteTripClosingReportService
 {
     public const HEADERS = ['Рейс №','Название рейса','Водитель','Юр. лицо','ТН','Счёт','Акт','Договор','Путевой лист','Диагностическая карта','Ставка перевозчика, ₽','Статус','Дата','Компания','Менеджер','Раздел'];
-    public const REGISTRY_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ПОДРЯД. / ВОД.','ТН','СЧЁТ','АКТ','ДОГ.','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА','МЕНЕДЖЕР','РАЗДЕЛ'];
-    public const REGISTRY_XLSX_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ИСПОЛНИТЕЛЬ','ПОДРЯД. / ВОД.','ТН','СЧЁТ','АКТ','ДОГ.','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА','МЕНЕДЖЕР','РАЗДЕЛ'];
+    public const REGISTRY_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ПОДРЯД. / ВОД.','ТН','СЧЁТ','АКТ','ДОГ.','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА ОПЛ.','МЕНЕДЖЕР','РАЗДЕЛ'];
+    public const REGISTRY_XLSX_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ИСПОЛНИТЕЛЬ','ПОДРЯД. / ВОД.','ТН','СЧЁТ','АКТ','ДОГ.','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА ОПЛ.','МЕНЕДЖЕР','РАЗДЕЛ'];
 
     /** @param list<array<string,mixed>> $trips @return list<array<string,mixed>> */
     public static function rows(array $trips, ?string $today = null): array
@@ -97,8 +97,10 @@ final class WasteTripClosingReportService
         if($diagnostic==='Нет')$diagnostic='НЕТ';
         $status=match($section){'incomplete'=>'Оплата заблокирована','ready'=>'Ожидает оплаты','paid_complete','paid_incomplete'=>'Оплачено',default=>(string)($row['payment_status']??'')};
         $sectionLabel=match($section){'paid_complete'=>'Оплачено · Полный комплект','paid_incomplete'=>'Оплачено · Неполный комплект',default=>(string)($row['section']??'')};
+        $unloadingDate=(string)($row['unloading_date']??'');
+        $unloadingDate=$unloadingDate!==''?date('d.m.Y',strtotime($unloadingDate)):'—';
         return [
-            '#'.(string)($row['number']??''),(string)($row['title']??''),$company,
+            '#'.(string)($row['number']??''),(string)($row['title']??''),$unloadingDate,$company,
             trim((string)($row['legal_entity']??'')."\n".(string)($row['driver']??'')),
             ...array_map(static fn(string $key):string=>($row[$key]??'')==='Есть'?'Есть':'НЕТ',['tn','invoice','act','contract','waybill']),
             $diagnostic,$status,(string)($row['payment_date']??''),$managerShort,$sectionLabel,
@@ -113,7 +115,7 @@ final class WasteTripClosingReportService
         if($path===false)throw new RuntimeException('Не удалось подготовить Excel.');
         $zip=new ZipArchive();
         if($zip->open($path,ZipArchive::OVERWRITE)!==true){@unlink($path);throw new RuntimeException('Не удалось создать Excel.');}
-        $keys=$registry?range(0,13):['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager','section'];
+        $keys=$registry?range(0,14):['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager','section'];
         $headers=$registry?self::REGISTRY_XLSX_HEADERS:self::HEADERS;
         $exportRows=$registry?array_map(self::registryValues(...),$rows):$rows;
         $lines=[];$number=1;
@@ -125,7 +127,7 @@ final class WasteTripClosingReportService
                 if(!$registry&&$number>1&&in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','payment_status'],true)){
                     $status=$key==='diagnostic_card'?($row['diagnostic_card_state']??'missing'):($key==='payment_status'?($row['payment_state']??'partial'):(($row[$key]??'')==='Есть'?'present':'missing'));
                     $style=' s="'.match($status){'present'=>1,'partial'=>3,default=>2}.'"';
-                }elseif($registry&&$number>1&&$index>=4&&$index<=10){
+                }elseif($registry&&$number>1&&$index>=5&&$index<=11){
                     $state=match((string)($row[$key]??'')){'Есть','Оплачено'=>1,'НЕТ','Оплата заблокирована'=>2,'Ожидает оплаты'=>3,default=>0};
                     if($state>0)$style=' s="'.$state.'"';
                 }
@@ -134,9 +136,9 @@ final class WasteTripClosingReportService
             $lines[]='<row r="'.$number.'">'.implode('',$cells).'</row>';$number++;
         }
         $last=max(1,$number-1);
-        $lastColumn=$registry?'N':'P';
+        $lastColumn=$registry?'O':'P';
         $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:'.$lastColumn.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>';
-        $widths=$registry?[12,35,24,38,12,12,12,12,12,23,24,17,18,26]:[12,48,28,30,10,10,10,10,15,42,20,23,19,20,27,38];
+        $widths=$registry?[12,35,18,24,38,12,12,12,12,12,23,24,17,18,26]:[12,48,28,30,10,10,10,10,15,42,20,23,19,20,27,38];
         foreach($widths as $i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
         $sheet.='</cols><sheetData>'.implode('',$lines).'</sheetData><autoFilter ref="A1:'.$lastColumn.$last.'"/></worksheet>';
         $parts=[

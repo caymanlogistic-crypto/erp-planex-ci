@@ -20,7 +20,7 @@
 .lab-grid .lab-table td{height:44px}
 .lab-grid .lab-table tbody tr:focus-visible{outline:2px solid #9a5a22;outline-offset:-2px}
 .lab-grid .lab-table td:first-child{font-weight:700;font-variant-numeric:tabular-nums}
-.lab-grid .lab-table th:nth-child(11),.lab-grid .lab-table td:nth-child(11){text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
+.lab-grid .lab-table th:nth-child(12),.lab-grid .lab-table td:nth-child(12){text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
 .lab-grid .lab-table td.closing-report-status.is-present,.lab-grid .lab-table .closing-report-unit.is-present{color:#17643b;font-weight:600}
 .lab-grid .lab-table td.closing-report-status.is-missing,.lab-grid .lab-table .closing-report-unit.is-missing{color:#a0322d;font-weight:600}
 .lab-grid .lab-table td.closing-report-status.is-partial{color:#835a08;font-weight:600}
@@ -77,8 +77,8 @@
 }
 /* Reference: current /company/trips/departures table. */
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] {
-  width: max(100%, 1522px);
-  min-width: 1522px;
+  width: max(100%, 1630px);
+  min-width: 1630px;
   table-layout: fixed;
   font: 400 12px/1.4 "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
 }
@@ -92,7 +92,7 @@
   letter-spacing: .8px;
   white-space: nowrap;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] thead th:nth-child(11) {
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] thead th:nth-child(12) {
   text-align: left;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td {
@@ -132,23 +132,24 @@
   font-weight: 400;
   line-height: 15.4px;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] :is(th, td):nth-child(10) {
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] :is(th, td):nth-child(11) {
   text-align: left;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(10).closing-report-status {
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(11).closing-report-status {
   vertical-align: middle;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] :is(th, td):nth-child(n+4):nth-child(-n+8) {
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] :is(th, td):nth-child(n+5):nth-child(-n+9) {
   text-align: center;
   vertical-align: middle;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(9) {
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(10) {
   vertical-align: middle;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(n+11):nth-child(-n+13) {
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(n+12):nth-child(-n+14),
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td.registry-unloading-date {
   vertical-align: middle;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .lab-section-paid {
@@ -162,18 +163,18 @@
   font-size: 11px;
   line-height: 15.4px;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(n+4):nth-child(-n+8).is-missing {
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(n+5):nth-child(-n+9).is-missing {
   font-size: 12px;
   line-height: 16.8px;
   font-weight: 700;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(n+4):nth-child(-n+8).is-present,
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(9).closing-report-status,
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(n+5):nth-child(-n+9).is-present,
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(10).closing-report-status,
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .closing-report-unit {
   font-size: 12px;
   line-height: 16.8px;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(9).closing-report-status.is-missing {
+.closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(10).closing-report-status.is-missing {
   font-weight: 700;
 }
 @media (min-width: 641px) and (max-width: 1400px) {
@@ -181,15 +182,7 @@
     display: none;
   }
 }
-.closing-page .closing-sort-field > .toolbar-select {
-  width: max-content;
-  height: 32px;
-  appearance: none;
-  padding-right: 9px;
-  background-image: none;
-}
-.closing-page .closing-sort-field .lab-reference-select { width: max-content !important; }
-.closing-page .closing-sort-field .lab-reference-trigger { width: max-content; padding-right: 9px; background-image: none; }
+.closing-page .closing-sort-field > .toolbar-select { height: 32px; }
 .closing-page .closing-registry-card .closing-search .toolbar-search {
   box-sizing: border-box;
   width: 100%;
@@ -215,5 +208,4 @@
   .closing-page .closing-registry-card .closing-extra-filters .closing-filter-field:last-child {
     grid-column: 1 / -1;
   }
-  .closing-page .closing-sort-field > .toolbar-select { width: max-content; }
 }

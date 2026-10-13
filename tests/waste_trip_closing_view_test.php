@@ -89,13 +89,15 @@ $registryXlsx=\App\Service\WasteTripClosingReportService::xlsx($reportRows,true)
 $registryArchive=new ZipArchive();$registryArchive->open($registryXlsx);
 $registrySheet=(string)$registryArchive->getFromName('xl/worksheets/sheet1.xml');
 $registryArchive->close();@unlink($registryXlsx);
-$assert(str_contains($registrySheet,'autoFilter ref="A1:N3"')
+$assert(str_contains($registrySheet,'autoFilter ref="A1:O3"')
     && str_contains($registrySheet,'r="B2" t="inlineStr"><is><t xml:space="preserve">Вывоз отходов с площадки А</t>')
-    && str_contains($registrySheet,'r="C2" t="inlineStr"><is><t xml:space="preserve">ООО «Планэкс»</t>')
-    && str_contains($registrySheet,'r="C3" t="inlineStr"><is><t xml:space="preserve">ООО «МГ Логистик»</t>'),
+    && str_contains($registrySheet,'r="C2" t="inlineStr"><is><t xml:space="preserve">30.09.2026</t>')
+    && str_contains($registrySheet,'r="D2" t="inlineStr"><is><t xml:space="preserve">ООО «Планэкс»</t>')
+    && str_contains($registrySheet,'r="D3" t="inlineStr"><is><t xml:space="preserve">ООО «МГ Логистик»</t>')
+    && str_contains($registrySheet,'<t xml:space="preserve">ДАТА ОПЛ.</t>'),
     'registry Excel separates description and executor and follows the visible table columns');
-$assert(str_contains($html,'ОПИСАНИЕ РЕЙСА')&&str_contains($html,'Вывоз отходов с площадки А')&&!str_contains($html,'Направление</th>'),'registry must display the saved trip title');
-$assert(str_contains($html,'<th scope="col">СТАТУС</th><th scope="col">ДАТА</th>')&&!str_contains($html,'Оплачено, документы не все'),'registry must have separate payment status and date columns without removed flag');
+$assert(str_contains($html,'<th scope="col">ОПИСАНИЕ РЕЙСА</th><th scope="col">ДАТА ВЫГРУЗКИ</th>')&&str_contains($html,'class="registry-unloading-date">30.09.2026')&&str_contains($html,'Вывоз отходов с площадки А')&&!str_contains($html,'Направление</th>'),'registry must display the trip title followed by unloading date');
+$assert(str_contains($html,'<th scope="col">СТАТУС</th><th scope="col">ДАТА ОПЛ.</th>')&&!str_contains($html,'Оплачено, документы не все'),'registry must have separate payment status and date columns without removed flag');
 $assert(str_contains($html,'closing-report-status is-present')&&str_contains($html,'closing-report-status is-missing'),'registry must color available and missing documents');
 $assert(str_contains($styles,'FFE0F3E7')&&str_contains($styles,'FFFCE5E3')&&str_contains($styles,'FFFFF0C2')&&str_contains($sheet,'r="E2" s="2"')&&str_contains($sheet,'r="E3" s="1"'),'Excel must color document statuses');
 $assert($reportRows[1]['diagnostic_card_state']==='present'&&str_contains($reportRows[1]['diagnostic_card'],'Тягач В222ВВ: Есть')&&str_contains($reportRows[1]['diagnostic_card'],'Полуприцеп С333СС: Есть')&&$reportRows[0]['diagnostic_card']==='Нет','report must reuse vehicle card availability for every unit');
