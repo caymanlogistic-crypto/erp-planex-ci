@@ -8,10 +8,11 @@ use PDO;
 final class FinanceReceivedPaidService
 {
     /** Without IDs this is the PLANEX finance page; IDs provide the same projection for closing documents. */
-    public static function fetch(PDO $pdo, ?array $tripIds = null): array
+    /** $closingScope is the already resolved manager visibility condition for the closing register. */
+    public static function fetch(PDO $pdo, ?array $tripIds = null, ?array $closingScope = null): array
     {
         if ($tripIds === []) return [];
-        $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
+        $scope = $closingScope ?? RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
         $filter = "wt.legal_entity_code='planex'";
         $params = $scope['params'];
         if ($tripIds !== null) {

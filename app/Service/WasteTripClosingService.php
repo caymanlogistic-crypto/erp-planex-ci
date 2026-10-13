@@ -7,7 +7,7 @@ use DomainException;
 use PDO;
 use Throwable;
 
-/** Closing files belong to a completed waste trip; finance links only reference them. */
+/** Closing files belong to a started or completed waste trip; finance links only reference them. */
 final class WasteTripClosingService
 {
     public const REVIEW_EMAIL_ENABLED = false;
@@ -53,6 +53,7 @@ final class WasteTripClosingService
 
     public static function section(array $trip): string
     {
+        if (($trip['status']??'completed')==='in_progress') return 'incomplete';
         $complete=self::hasCompleteSet($trip);
         $paid=(int)round((float)($trip['carrier_paid_amount']??0)*100)>0;
         return $paid?($complete?'paid_complete':'paid_incomplete'):($complete?'ready':'incomplete');
@@ -82,7 +83,7 @@ final class WasteTripClosingService
     public static function trips(PDO $pdo): array
     {
         $scope = self::closingVisibilityScope();
-        $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.comment,wt.actual_start_date,wt.actual_end_date,wt.legal_entity_code,
+        $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.comment,wt.status,wt.actual_start_date,wt.actual_end_date,wt.legal_entity_code,
                 wt.route_executor_id,
                 ct.id carrier_id,COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
                 u.membership_id manager_membership_id,
@@ -93,7 +94,7 @@ final class WasteTripClosingService
               LEFT JOIN contractors ct ON ct.id=c.contractor_id
               LEFT JOIN users u ON u.id=wt.responsible_user_id
               LEFT JOIN waste_trip_closing_reviews r ON r.waste_trip_id=wt.id
-             WHERE wt.deleted_at IS NULL AND wt.status='completed' AND {$scope['sql']}
+             WHERE wt.deleted_at IS NULL AND ".self::allowedStatusesSql()." AND {$scope['sql']}
              ORDER BY wt.business_id DESC LIMIT 500");
         $stmt->execute($scope['params']);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -146,7 +147,7 @@ final class WasteTripClosingService
         }
         $invoiceSummaries=WasteTripClosingInvoiceService::summaries($pdo,$ids);
         $financeByTrip=[];
-        foreach(FinanceReceivedPaidService::fetch($pdo,$ids) as $financeTrip)$financeByTrip[(int)$financeTrip['id']]=$financeTrip;
+        foreach(FinanceReceivedPaidService::fetch($pdo,$ids,$scope) as $financeTrip)$financeByTrip[(int)$financeTrip['id']]=$financeTrip;
         $paid=[];
         $amountQuery=$pdo->prepare("SELECT source_parent_id,COUNT(*) obligations,SUM(amount) due,SUM(paid_amount) paid
             FROM finance_obligations WHERE source_parent_type='WASTE_TRIP' AND party_role='customer'
@@ -186,7 +187,7 @@ final class WasteTripClosingService
             $row['invoice_summary']=$invoiceSummaries[(int)$row['id']]??['status'=>'missing','detail'=>'—','invoice_id'=>0];
             $finance=$financeByTrip[(int)$row['id']]??null;
             $carrierSide=$finance['sides']['carrier']??['rate'=>null,'payments'=>[]];
-            $customerSide=$finance['sides']['customer']??['rate'=>null];
+            $customerSide=$finance['sides']['customer']??['rate'=>null,'payments'=>[]];
             $row['carrier_rate']=$carrierSide['rate'];
             $row['display_rate']=$row['legal_entity_code']==='mg_logistic'?($customerSide['source_rate']??$customerSide['rate']):$carrierSide['rate'];
             $row['customer_rate']=$customerSide['rate']??$customerSide['source_rate']??null;
@@ -265,13 +266,13 @@ final class WasteTripClosingService
     public static function trip(PDO $pdo, int $tripId): array
     {
         $scope = self::closingVisibilityScope();
-        $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.legal_entity_code,wt.actual_end_date,
+        $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.status,wt.legal_entity_code,wt.actual_end_date,
                 COALESCE(r.state,'work') review_state,COALESCE(r.version,0) review_version
               FROM waste_trips wt LEFT JOIN waste_trip_closing_reviews r ON r.waste_trip_id=wt.id
-             WHERE wt.id=? AND wt.deleted_at IS NULL AND wt.status='completed' AND {$scope['sql']} LIMIT 1");
+             WHERE wt.id=? AND wt.deleted_at IS NULL AND ".self::allowedStatusesSql()." AND {$scope['sql']} LIMIT 1");
         $stmt->execute(array_merge([$tripId], $scope['params']));
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
-        if (!$row) throw new DomainException('Завершённый рейс недоступен.');
+        if (!$row) throw new DomainException('Рейс недоступен.');
         $row['documents'] = self::documents($pdo, $tripId);
         $row['recipient_email'] = self::recipient((string)$row['legal_entity_code']);
         return $row;
@@ -306,7 +307,7 @@ final class WasteTripClosingService
         $own = !$pdo->inTransaction();
         try {
             if ($own) $pdo->beginTransaction();
-            $lock = $pdo->prepare("SELECT id FROM waste_trips WHERE id=? AND deleted_at IS NULL AND status='completed' FOR UPDATE");
+            $lock = $pdo->prepare("SELECT id FROM waste_trips wt WHERE id=? AND deleted_at IS NULL AND ".self::allowedStatusesSql()." FOR UPDATE");
             $lock->execute([$tripId]);
             if (!$lock->fetchColumn()) throw new DomainException('Рейс изменился. Обновите страницу.');
             self::assertEditable($pdo, $tripId);
@@ -351,7 +352,7 @@ final class WasteTripClosingService
         $own = !$pdo->inTransaction();
         if ($own) $pdo->beginTransaction();
         try {
-            $lock=$pdo->prepare("SELECT id FROM waste_trips WHERE id=? AND deleted_at IS NULL AND status='completed' FOR UPDATE");
+            $lock=$pdo->prepare("SELECT id FROM waste_trips wt WHERE id=? AND deleted_at IS NULL AND ".self::allowedStatusesSql()." FOR UPDATE");
             $lock->execute([$tripId]);
             if (!$lock->fetchColumn()) throw new DomainException('Рейс изменился. Обновите страницу.');
             self::assertEditable($pdo, $tripId);
@@ -478,7 +479,12 @@ final class WasteTripClosingService
         if (\App\Security\AccessRuntime::current()->isActive()) {
             $scope=AccessControlService::effectiveDataScope('waste_trip');
             if ($scope==='all') return ['sql'=>'1 = 1','params'=>[]];
-            if ($scope!=='own') return ['sql'=>'1 = 0','params'=>[]];
+            // The dedicated closing page grants a manager access to assigned documents,
+            // without granting access to the general waste-trip editor.
+            if ($scope!=='own' && !(self::isRegistryRoute()
+                && AccessControlService::canAccessPage('company.documents.trip_closing_registry'))) {
+                return ['sql'=>'1 = 0','params'=>[]];
+            }
             $membershipId=AccessControlService::effectiveMembershipId();
             if ($membershipId===null||$membershipId<=0) return ['sql'=>'1 = 0','params'=>[]];
             return ['sql'=>'EXISTS (SELECT 1 FROM users responsible WHERE responsible.id=wt.responsible_user_id AND responsible.membership_id=?)','params'=>[$membershipId]];
@@ -489,6 +495,19 @@ final class WasteTripClosingService
         return $role==='logist'&&$userId>0
             ? ['sql'=>'wt.responsible_user_id=?','params'=>[$userId]]
             : ['sql'=>'1 = 0','params'=>[]];
+    }
+
+    public static function isRegistryRoute(): bool
+    {
+        return function_exists('current_app_path')
+            && str_starts_with(current_app_path(),'/company/logistics/closing-documents');
+    }
+
+    public static function allowedStatusesSql(): string
+    {
+        return self::isRegistryRoute()
+            ? "wt.status IN ('in_progress','completed')"
+            : "wt.status='completed'";
     }
 
     private static function moneyCents(string $amount): int
