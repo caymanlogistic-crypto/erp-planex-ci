@@ -37,7 +37,7 @@ try{
   assert.equal(await page.locator('[data-closing-list-label]').textContent(),'РЕЙСЫ В РАБОТЕ И ЗАВЕРШЁННЫЕ');
   assert.equal(await page.locator('[data-closing-entity]').count(),0);
   assert.equal(await page.locator('[data-closing-sort]').inputValue(),'unloading');
-  assert.equal(await table.locator('tbody tr').first().locator('td').first().textContent(),'#322');
+  assert.deepEqual(await table.locator('tbody tr').evaluateAll(rows=>rows.slice(0,2).map(row=>[row.cells[0].textContent,row.cells[2].textContent])),[['#312','—'],['#311','—']]);
   assert.notEqual(await page.locator('.closing-sort-field .lab-reference-trigger').evaluate(el=>getComputedStyle(el).backgroundImage),'none');
   await page.locator('.closing-sort-field .lab-reference-trigger').click();
   await page.locator('.closing-sort-field [role="option"][data-value="id"]').click();

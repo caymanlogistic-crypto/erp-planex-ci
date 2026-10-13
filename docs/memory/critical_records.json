@@ -44,8 +44,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "1bec86f7a8a6fb71fe2195d5e81a32581c63e03a",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/1bec86f7a8a6fb71fe2195d5e81a32581c63e03a/tests/roles_access_route_executor_cascade_mysql_test.php",
+      "verified_sha": "ed644792c6c743d5573348555f2936ed8f6810b4",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed644792c6c743d5573348555f2936ed8f6810b4/tests/navigation_registry_badges_contract_test.php",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -116,8 +116,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "14b49038c9b662c110ba25371aa42a13528431ae",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/14b49038c9b662c110ba25371aa42a13528431ae/tests/waste_trip_closing_view_test.php",
+      "verified_sha": "ed644792c6c743d5573348555f2936ed8f6810b4",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed644792c6c743d5573348555f2936ed8f6810b4/tests/waste_trip_closing_payment_mysql_test.php",
       "owning_paths": [
         "app/Service/WasteTrip*.php",
         "app/Http/Controllers/Company/WasteTripController.php",
@@ -270,8 +270,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "60ceb1e3614988cefbcd53ca4e91b68fbc8cc96f",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/60ceb1e3614988cefbcd53ca4e91b68fbc8cc96f/tests/employee_mail_contract_test.php",
+      "verified_sha": "ed644792c6c743d5573348555f2936ed8f6810b4",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ed644792c6c743d5573348555f2936ed8f6810b4/tests/employee_mail_contract_test.php",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",

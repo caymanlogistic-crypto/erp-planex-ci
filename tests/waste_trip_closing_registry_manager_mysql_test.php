@@ -62,6 +62,7 @@ try {
     }
     $GLOBALS['closingRegistryTestPath']='/company/trips/closing-documents';
     if(WasteTripClosingService::trips($pdo)!==[])throw new RuntimeException('Old route must keep denied data scope');
+    if(WasteTripClosingService::blockedUnloadedCount($pdo)!==1)throw new RuntimeException('Logistics badge must count only the manager\'s unloaded blocked trip, independently of current route');
     echo "WASTE_TRIP_CLOSING_REGISTRY_MANAGER=PASS\n";
 } finally {
     AccessRuntime::clear();

@@ -81,7 +81,7 @@ $feoRequestCostsActive = str_starts_with($requestPath, '/company/feo/requests/co
 $feoRequestsActive = str_starts_with($requestPath, '/company/feo/requests') && !$feoRequestCostsActive;
 
 $navigationCounters = [
-    'bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0,
+    'bank_attention' => 0, 'cash_attention' => 0, 'closing_documents_problem' => 0, 'trip_closing_blocked_unloaded' => 0,
     'linear_trips_problem' => 0, 'departures_problem' => 0, 'warehouse_stock_problem' => 0, 'trip_completion_problem' => 0, 'tn_review_pending' => 0,
     'feo_freshness' => 0, 'feo_placement_problem' => 0, 'feo_map_problem' => 0, 'feo_utilizer_problem' => 0, 'feo_cost_problem' => 0, 'production_calendar_warning' => 0,
 ];
@@ -105,6 +105,7 @@ $navigationBadgeTitle = static function (array $page): string {
         'bank_attention' => 'Требуют разнесения',
         'cash_attention' => 'Неразнесённые позиции кассы',
         'closing_documents_problem' => 'Требуют закрывающих документов',
+        'trip_closing_blocked_unloaded' => 'Выгруженные рейсы: оплата заблокирована из-за документов',
         'linear_trips_problem' => 'Требуется актуализировать дату выгрузки',
         'departures_problem' => 'Ошибки в рейсах отходов',
         'warehouse_stock_problem' => 'Расхождения складских рейсов со старой базой',
@@ -504,6 +505,7 @@ if (empty($topbarCrumbs)) {
                 <a class="nav-item<?= $requestPath === '/company/logistics/closing-documents' ? ' is-active' : '' ?>" href="<?= app_url('/company/logistics/closing-documents') ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 2h7l3 3v9H3zM10 2v3h3M5 8h6M5 11h6" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"/></svg>
                     <span class="nav-label">Закрывающие документы</span>
+                    <?php if (($navigationCounters['trip_closing_blocked_unloaded'] ?? 0) > 0): ?><span class="nav-count is-alert" title="Выгруженные рейсы: оплата заблокирована из-за документов"><?= (int)$navigationCounters['trip_closing_blocked_unloaded'] > 999 ? '999+' : (int)$navigationCounters['trip_closing_blocked_unloaded'] ?></span><?php endif; ?>
                 </a>
             </div>
 
