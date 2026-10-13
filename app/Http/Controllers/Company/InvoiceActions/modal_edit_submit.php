@@ -172,7 +172,7 @@ try {
         }
         $_SESSION['invoice_success'] = 'Счёт №' . $number . ' сохранён.';
         $returnTo=(string)($_POST['return_to']??'');
-        if(preg_match('~^/company/trips/closing-documents\?trip_id=[1-9][0-9]*$~D',$returnTo)) redirect_to($returnTo);
+        if(preg_match('~^/company/(?:trips|logistics)/closing-documents\?trip_id=[1-9][0-9]*$~D',$returnTo)) redirect_to($returnTo);
         redirect_to('/company/finance/invoices?direction=' . rawurlencode($direction));
     }
 

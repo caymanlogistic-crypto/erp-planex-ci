@@ -12,7 +12,7 @@ spl_autoload_register(static function (string $class) use ($root): void {
 function base_path(string $path = ''): string { global $root; return $root.($path !== '' ? '/'.ltrim($path, '/') : ''); }
 function app_url(string $path): string { return $path; }
 function app_base_path(): string { return ''; }
-function current_app_path(): string { return '/company/trips/closing-documents'; }
+function current_app_path(): string { return '/company/logistics/closing-documents'; }
 function csrfToken(): string { return 'DESIGN-LAB-REDACTED'; }
 function csrfField(): string { return '<input type="hidden" name="csrf_token" value="DESIGN-LAB-REDACTED">'; }
 function e(mixed $value): string { return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
@@ -72,7 +72,7 @@ for ($index = 0; $index < 35; $index++) {
 }
 
 ob_start();
-require $root.'/app/View/pages/company_waste_trip_closing.php';
+require $root.'/app/View/pages/company_waste_trip_closing_registry.php';
 $content = (string)ob_get_clean();
 ob_start();
 require $root.'/app/View/layouts/main.php';

@@ -86,6 +86,16 @@ expect(($registry->page('company.vehicle_sets')['label'] ?? '') === 'ТС', 'Veh
 expect(in_array('company.vehicle_sets', array_column($registry->navigationPages(), 'key'), true), 'VehicleSet must remain visible in navigation.');
 expect(in_array('company.vehicle_sets', $registry->grantablePageKeys(), true), 'VehicleSet must remain configurable in role administration.');
 expect(count($registry->pageKeys()) === count(array_unique($registry->pageKeys())), 'Page keys must be unique.');
+expect(($registry->page('company.documents.trip_closing')['path'] ?? '') === '/company/trips/closing-documents', 'Original collection route must remain unchanged.');
+expect(($registry->page('company.documents.trip_closing_registry')['path'] ?? '') === '/company/logistics/closing-documents', 'New logistics registry must have its own route.');
+expect(in_array('company.documents.trip_closing_registry', $registry->grantablePageKeys(), true), 'Logistics registry must be configurable in roles.');
+
+$provider->snapshot = memberSnapshot(['company.documents.trip_closing']);
+$closingAccess = $resolver->resolve(new AccessRequestContext(4, 7));
+expect($closingAccess->canAccessPage('company.documents.trip_closing') && $closingAccess->canAccessPage('company.documents.trip_closing_registry'), 'Existing collection grant must preserve access to both pages.');
+$provider->snapshot = memberSnapshot(['company.documents.trip_closing'], ['company.documents.trip_closing_registry' => 'deny']);
+$closingAccess = $resolver->resolve(new AccessRequestContext(4, 7));
+expect($closingAccess->canAccessPage('company.documents.trip_closing') && !$closingAccess->canAccessPage('company.documents.trip_closing_registry'), 'Explicit registry denial must override compatibility grant.');
 
 $provider->snapshot = memberSnapshot(
     ['company.clients', 'company.drivers'],

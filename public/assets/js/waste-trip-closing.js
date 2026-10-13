@@ -9,9 +9,8 @@
   const count=page.querySelector('[data-closing-count]');
   const listLabel=page.querySelector('[data-closing-list-label]');
   const empty=page.querySelector('[data-closing-empty]');
-  const reportGrid=page.querySelector('.lab-grid');
-  const exportLink=page.querySelector('[data-closing-report-download]');
-  let reportRows=[...reportGrid?.querySelectorAll('[data-report-trip-id]')||[]];
+  const reportDialog=document.querySelector('[data-closing-report-dialog]');
+  let reportRows=[...reportDialog?.querySelectorAll('[data-report-trip-id]')||[]];
   if(!search || !count || !empty) return;
   const stateKey=page.dataset.closingStateKey;
   let savedState=null;
@@ -60,51 +59,35 @@
     count.textContent=String(visible);
     if(listLabel) listLabel.textContent=filter==='all'?'ЗАВЕРШЁННЫЕ РЕЙСЫ':filters.find(button=>button.dataset.closingFilter===filter)?.textContent.trim().toLocaleUpperCase('ru');
     empty.hidden=visible>0;
-    updateReport();
+    if(reportDialog?.open) updateReport();
   }
   function updateReport(){
-    if(!reportGrid)return;
+    if(!reportDialog)return;
     const ids=new Set(trips.filter(trip=>!trip.hidden).map(trip=>trip.dataset.tripId));
     let visible=0;
     reportRows.forEach(row=>{row.hidden=!ids.has(row.dataset.reportTripId);if(!row.hidden)visible++;});
-    if(exportLink){
-      const url=new URL(exportLink.href,location.href);
-      url.searchParams.set('ids',trips.filter(trip=>!trip.hidden).map(trip=>trip.dataset.tripId).join(','));
-      exportLink.href=url.toString();
-      exportLink.toggleAttribute('aria-disabled',visible===0);
-    }
+    reportDialog.querySelector('[data-closing-report-empty]').hidden=visible>0;
+    reportDialog.querySelector('[data-closing-report-count]').textContent=`Рейсов: ${visible}`;
+    const download=reportDialog.querySelector('[data-closing-report-download]');
+    const url=new URL(download.href,location.href);
+    url.searchParams.set('ids',trips.filter(trip=>!trip.hidden).map(trip=>trip.dataset.tripId).join(','));
+    download.href=url.toString();
+    download.toggleAttribute('aria-disabled',visible===0);
   }
   render();
-  exportLink?.addEventListener('click',event=>{if(exportLink.getAttribute('aria-disabled')==='true')event.preventDefault();});
-  const docDialog=page.querySelector('[data-closing-doc-dialog]');
-  const sourceList=page.querySelector('.closing-source-list');
-  let docOpener=null;
-  let activeTrip=null;
-  const openDocuments=row=>{
-    const trip=trips.find(item=>item.dataset.tripId===row.dataset.reportTripId);
-    if(!trip||!docDialog||!sourceList)return;
-    docOpener=row;
-    activeTrip=trip;
-    trip.open=true;
-    docDialog.querySelector('#closing-doc-title').textContent=`Закрывающие документы рейса №${trip.dataset.businessId}`;
-    docDialog.querySelector('[data-closing-doc-body]').replaceChildren(trip);
-    docDialog.showModal();
-    docDialog.querySelector('[data-closing-doc-close]')?.focus();
-    saveState();
-  };
-  reportGrid?.addEventListener('dblclick',event=>{const row=event.target.closest('tbody tr[data-report-trip-id]');if(row)openDocuments(row);});
-  reportGrid?.addEventListener('keydown',event=>{
-    if((event.key==='Enter'||event.key===' ')&&event.target.matches('tbody tr[data-report-trip-id]')){
-      event.preventDefault();openDocuments(event.target);
-    }
-  });
-  docDialog?.querySelectorAll('[data-closing-doc-close]').forEach(button=>button.addEventListener('click',()=>docDialog.close()));
-  docDialog?.addEventListener('click',event=>{if(event.target===docDialog)docDialog.close();});
-  docDialog?.addEventListener('close',()=>{
-    if(activeTrip){sourceList.append(activeTrip);activeTrip.open=false;activeTrip=null;}
-    saveState();docOpener?.focus();docOpener=null;
-  });
-  if(openTripId){const row=reportRows.find(item=>item.dataset.reportTripId===openTripId&&!item.hidden);if(row)openDocuments(row);}
+  if(reportDialog){
+    let reportOpener=null;
+    page.querySelector('[data-closing-report-open]')?.addEventListener('click',event=>{
+      reportOpener=event.currentTarget;updateReport();reportDialog.showModal();
+      reportDialog.querySelector('[data-closing-report-close]')?.focus();
+    });
+    reportDialog.querySelectorAll('[data-closing-report-close]').forEach(button=>button.addEventListener('click',()=>reportDialog.close()));
+    reportDialog.addEventListener('click',event=>{if(event.target===reportDialog)reportDialog.close();});
+    reportDialog.addEventListener('close',()=>reportOpener?.focus());
+    reportDialog.querySelector('[data-closing-report-download]')?.addEventListener('click',event=>{
+      if(event.currentTarget.getAttribute('aria-disabled')==='true')event.preventDefault();
+    });
+  }
   if((requestedTripId && trips.some(trip=>trip.dataset.tripId===requestedTripId)) || stage) saveState();
   if(stage){const url=new URL(location.href);url.searchParams.delete('stage');history.replaceState(history.state,'',url);}
   search.addEventListener('input',()=>{render();saveState();});
@@ -156,13 +139,12 @@
       if (!updated) throw new Error('Не удалось обновить строку рейса. Обновите страницу.');
       trip.dataset.state=updated.dataset.state;
       trip.replaceChildren(...updated.children);
-      const updatedReport=result.querySelector('.lab-grid tbody');
-      const reportBody=reportGrid?.querySelector('tbody');
+      const updatedReport=result.querySelector('[data-closing-report-dialog] tbody');
+      const reportBody=reportDialog?.querySelector('tbody');
       if(updatedReport&&reportBody){
-        const openerTripId=docOpener?.dataset.reportTripId;
         reportBody.replaceChildren(...[...updatedReport.children].map(row=>document.importNode(row,true)));
         reportRows=[...reportBody.querySelectorAll('[data-report-trip-id]')];
-        if(openerTripId)docOpener=reportRows.find(row=>row.dataset.reportTripId===openerTripId)||null;
+        if(reportDialog.open)updateReport();
       }
       render();
       window.scrollTo(scrollX,scrollY);
