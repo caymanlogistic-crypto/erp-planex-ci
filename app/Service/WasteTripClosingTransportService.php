@@ -84,7 +84,7 @@ final class WasteTripClosingTransportService
         $paths=[];
         try {
             $pdo->beginTransaction();
-            $tripLock=$pdo->prepare("SELECT id FROM waste_trips WHERE id=? AND deleted_at IS NULL AND status='completed' FOR UPDATE");
+            $tripLock=$pdo->prepare("SELECT id FROM waste_trips wt WHERE id=? AND deleted_at IS NULL AND ".WasteTripClosingService::allowedStatusesSql()." FOR UPDATE");
             $tripLock->execute([$tripId]);
             if (!$tripLock->fetchColumn()) throw new DomainException('Рейс изменился. Обновите страницу.');
             WasteTripClosingService::assertEditable($pdo,$tripId);

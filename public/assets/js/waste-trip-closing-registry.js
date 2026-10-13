@@ -18,6 +18,7 @@
   let savedState=null;
   try { if(stateKey) savedState=JSON.parse(localStorage.getItem(stateKey)||'null'); } catch (_) {}
   let filter='all';
+  let firstRender=true;
   if(savedState && typeof savedState==='object') {
     if(typeof savedState.search==='string') search.value=savedState.search.slice(0,1000);
     if(['all','incomplete','ready','paid_incomplete','paid_complete'].includes(savedState.filter)) filter=savedState.filter;
@@ -70,9 +71,16 @@
       trip.hidden=!(matchesSearch&&matches&&matchesEntity&&matchesManager);
       if (!trip.hidden) visible++;
     }
+    if(firstRender&&filter!=='all'&&tabCounts.all>0&&tabCounts[filter]===0&&!query){
+      filter='all';
+      filters.forEach(button=>{const active=button.dataset.closingFilter==='all';button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));});
+      for(const trip of trips)trip.hidden=!(trip.dataset.search.includes(query)&&(!entity||entity.value==='all'||trip.dataset.entity===entity.value)&&(!manager||!manager.value||trip.dataset.managerId===manager.value));
+      visible=tabCounts.all;
+    }
+    firstRender=false;
     filters.forEach(button=>{const badge=button.querySelector('[data-closing-filter-count]');if(badge)badge.textContent=String(tabCounts[button.dataset.closingFilter]??0);});
     count.textContent=String(visible);
-    if(listLabel) listLabel.textContent=filter==='all'?'ЗАВЕРШЁННЫЕ РЕЙСЫ':filters.find(button=>button.dataset.closingFilter===filter)?.textContent.trim().toLocaleUpperCase('ru');
+    if(listLabel) listLabel.textContent=filter==='all'?'РЕЙСЫ В РАБОТЕ И ЗАВЕРШЁННЫЕ':filters.find(button=>button.dataset.closingFilter===filter)?.textContent.trim().toLocaleUpperCase('ru');
     empty.hidden=visible>0;
     updateReport();
   }

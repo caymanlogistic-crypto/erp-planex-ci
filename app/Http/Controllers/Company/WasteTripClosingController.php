@@ -37,7 +37,9 @@ final class WasteTripClosingController
             $canFilterManagers=AccessRuntime::current()->isActive()
                 ? AccessControlService::effectiveDataScope('waste_trip')==='all'
                 : in_array((string)($_SESSION['role_code']??''),['superadmin','company_owner','senior_logist'],true);
-            $responsibleUsers=EntityResponsibilityService::eligibleRecipients($this->db->connection(),$pdo,(int)$company['id']);
+            if (!$registryView || $canFilterManagers) {
+                $responsibleUsers=EntityResponsibilityService::eligibleRecipients($this->db->connection(),$pdo,(int)$company['id']);
+            }
             $schemaReady=WasteTripClosingService::ready($pdo);
             if ($schemaReady) {
                 $trips=WasteTripClosingService::trips($pdo);
