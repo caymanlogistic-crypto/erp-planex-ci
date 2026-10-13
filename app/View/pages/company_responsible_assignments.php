@@ -12,6 +12,19 @@ $unassignedCount=count(array_filter($items??[],static fn(array $i):bool=>empty($
  <?php if($successMessage):?><div class="notice ok mb-section"><?=e($successMessage)?></div><?php endif;?><?php if($formError):?><div class="notice warn mb-section"><?=e($formError)?></div><?php endif;?>
  <div class="ux-summary-strip"><div><strong>Важно:</strong> переназначение меняет владельца рабочей записи. Массовую операцию используйте для передачи портфеля между сотрудниками.</div><div><?=count($items??[])?> записей · <?=$unassignedCount?> без ответственного</div></div>
  <nav class="ux-segmented" aria-label="Тип данных"><?php foreach($tabs as $key=>$tab):?><a href="<?=app_url($tab['url'])?>" class="<?=$activeTab===$key?'is-active':''?>"><?=e($tab['label'])?></a><?php endforeach;?></nav>
+ <?php if($activeTab==='route_executor'):?>
+ <div class="ux-action-zone">
+  <div><div class="ux-action-zone-title">Сверка связанных записей</div><div class="ux-action-zone-sub">Проверить подрядчиков, всех водителей, составы и единицы ТС по текущим ответственным исполнителей. Общие записи с разными логистами останутся без изменений.</div></div>
+  <div class="ux-action-zone-controls"><a class="btn btn-secondary btn-sm" href="<?=app_url('/company/responsible-assignments?tab=route_executor&preview=1')?>">Показать расхождения</a></div>
+ </div>
+ <?php $report=$reconcileResult??$reconcilePreview??null;if(is_array($report)):$isPreview=$reconcileResult===null;$typeNames=['contractor'=>'Подрядчик','driver'=>'Водитель','vehicle_set'=>'Состав ТС','vehicle_unit'=>'Единица ТС'];$managerNames=[];foreach($logists as $logist){$managerNames[(int)$logist['membership_id']]=(string)$logist['full_name'];}?>
+ <div class="ux-section"><strong><?=$isPreview?'Ожидают исправления':'Исправлено'?>: <?=(int)($report['changed']??0)?></strong> · Конфликтов: <?=count($report['conflicts']??[])?> · Без ответственного исполнителя: <?=count($report['unassigned']??[])?>.
+ <?php if(!empty($report['conflicts'])):?><div class="notice warn mb-section"><strong>Конфликты: общая запись связана с исполнителями разных логистов. Назначение не изменено.</strong><ul><?php foreach($report['conflicts'] as $conflict):?><li><?=e($typeNames[$conflict['entity_type']]??$conflict['entity_type'])?> #<?=(int)$conflict['entity_id']?> · исполнители #<?=e(implode(', #',$conflict['crew_ids']))?> · логисты: <?=e(implode(', ',array_map(static fn(int $id):string=>$managerNames[$id]??('#'.$id),$conflict['membership_ids'])))?></li><?php endforeach;?></ul></div><?php endif;?>
+ <?php if(!empty($report['unassigned'])):?><div class="notice warn mb-section">Есть связи с исполнителями без ответственного. Они оставлены без изменений.</div><?php endif;?>
+ <?php if($isPreview&&(int)($report['changed']??0)>0):?><form method="post" action="<?=app_url('/company/responsible-assignments/reassign')?>" onsubmit="return confirm('Привести связанные записи к ответственным исполнителей рейса? Конфликты останутся без изменений.')"><?=csrfField()?><input type="hidden" name="entity_type" value="route_executor"><input type="hidden" name="operation" value="reconcile"><button type="submit" class="btn btn-primary btn-sm">Исправить <?= (int)$report['changed'] ?> расхождений</button></form><?php endif;?>
+ </div>
+ <?php endif;?>
+ <?php endif;?>
  <?php if(empty($items)):?><div class="ux-section"><div class="ux-empty"><strong>Нет записей</strong>В разделе «<?=e($tabLabel)?>» нет активных записей для переназначения.</div></div>
  <?php else:?>
  <form id="massReassignToolbarForm" method="post" action="<?=app_url('/company/responsible-assignments/reassign')?>" onsubmit="return massReassignConfirm(this)" class="ux-action-zone">

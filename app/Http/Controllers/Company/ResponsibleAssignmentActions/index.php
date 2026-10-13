@@ -13,10 +13,16 @@
     // Query params for after-redirect messages
     $successMessage = null;
     $formError = null;
+    $reconcileResult = $_SESSION['responsibility_reconcile_result'] ?? null;
+    unset($_SESSION['responsibility_reconcile_result']);
+    $reconcilePreview = null;
     if (isset($_GET['msg'])) {
         switch ($_GET['msg']) {
             case 'assigned':
                 $successMessage = 'Ответственность успешно переназначена.';
+                break;
+            case 'reconciled':
+                $successMessage = 'Связанные записи сверены с ответственными исполнителей рейса.';
                 break;
             case 'already_assigned':
                 $formError = 'Выбранный логист уже является ответственным для некоторых записей.';
@@ -82,6 +88,15 @@
             $localPdo,
             $companyId
         );
+
+        if ($activeTab === 'route_executor' && (string)($_GET['preview'] ?? '') === '1') {
+            $reconcilePreview = \App\Service\EntityResponsibilityService::reconcileRouteExecutorLinks(
+                $localPdo,
+                (int)(\App\Service\AccessControlService::effectiveMembershipId() ?? 0),
+                null,
+                false
+            );
+        }
 
         // Load items based on active tab
         switch ($activeTab) {
