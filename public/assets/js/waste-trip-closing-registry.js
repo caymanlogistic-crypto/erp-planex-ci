@@ -48,7 +48,11 @@
     if(!body)return;
     reportRows.sort((left,right)=>{
       if(sort?.value==='unloading'){
-        const dateOrder=(right.dataset.unloadingDate||'').localeCompare(left.dataset.unloadingDate||'');
+        const leftDate=left.dataset.unloadingDate||'';
+        const rightDate=right.dataset.unloadingDate||'';
+        if(!leftDate && rightDate)return -1;
+        if(leftDate && !rightDate)return 1;
+        const dateOrder=rightDate.localeCompare(leftDate);
         if(dateOrder)return dateOrder;
       }
       return Number(right.cells[0].textContent.replace(/\D/g,''))-Number(left.cells[0].textContent.replace(/\D/g,''));

@@ -88,6 +88,13 @@ final class NavigationCounterService
         }
 
         try {
+            if (!class_exists(WasteTripClosingService::class)) require_once __DIR__.'/WasteTripClosingService.php';
+            $counters['trip_closing_blocked_unloaded'] = WasteTripClosingService::blockedUnloadedCount($tenant);
+        } catch (Throwable) {
+            $counters['trip_closing_blocked_unloaded'] = 0;
+        }
+
+        try {
             // A linear trip needs attention when the actual unloading date is not
             // recorded and its planned unloading date has already arrived.
             $counters['linear_trips_problem'] = max(0, (int)$tenant->query(
@@ -247,6 +254,7 @@ final class NavigationCounterService
             'bank_attention' => 0,
             'cash_attention' => 0,
             'closing_documents_problem' => 0,
+            'trip_closing_blocked_unloaded' => 0,
             'linear_trips_problem' => 0,
             'departures_problem' => 0,
             'warehouse_stock_problem' => 0,

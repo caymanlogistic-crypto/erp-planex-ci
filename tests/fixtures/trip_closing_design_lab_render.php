@@ -59,7 +59,8 @@ for ($index = 0; $index < 35; $index++) {
     $trips[] = [
         'id' => $index + 1,
         'business_id' => $businessId,
-        'actual_end_date' => '2026-10-'.str_pad((string)(6 - ($index % 6)), 2, '0', STR_PAD_LEFT),
+        'status' => in_array($index, [10, 11], true) ? 'in_progress' : 'completed',
+        'actual_end_date' => in_array($index, [10, 11], true) ? null : '2026-10-'.str_pad((string)(6 - ($index % 6)), 2, '0', STR_PAD_LEFT),
         'carrier_name' => $carriers[$index % count($carriers)],
         'manager_name' => $managers[$index % count($managers)],
         'legal_entity_code' => $index % 7 === 5 ? 'mg_logistic' : 'planex',

@@ -19,6 +19,7 @@ foreach ([
     "'company.trips.waste'", "badgeProvider: 'departures_problem'",
     "'company.documents.collection'", "badgeProvider: 'trip_completion_problem'",
     "'company.documents.tn_review'", "badgeProvider: 'tn_review_pending'",
+    "'company.documents.trip_closing_registry'", "badgeProvider: 'trip_closing_blocked_unloaded'",
     "'company.feo.requests'", "badgeProvider: 'feo_freshness'",
     "'company.feo.map_placement'", "badgeProvider: 'feo_placement_problem'",
     "'company.feo.map'", "badgeProvider: 'feo_map_problem'",
@@ -27,7 +28,7 @@ foreach ([
     "'company.production_calendar'", "badgeProvider: 'production_calendar_warning'",
 ] as $token) $must(str_contains($registry, $token), 'PageRegistry badge metadata missing: ' . $token);
 
-foreach (['bank_attention','cash_attention','closing_documents_problem','linear_trips_problem','departures_problem','trip_completion_problem','tn_review_pending','feo_freshness','feo_placement_problem','feo_map_problem','feo_utilizer_problem','feo_cost_problem','production_calendar_warning'] as $counter) {
+foreach (['bank_attention','cash_attention','closing_documents_problem','trip_closing_blocked_unloaded','linear_trips_problem','departures_problem','trip_completion_problem','tn_review_pending','feo_freshness','feo_placement_problem','feo_map_problem','feo_utilizer_problem','feo_cost_problem','production_calendar_warning'] as $counter) {
     $must(str_contains($service, "'{$counter}'"), 'NavigationCounterService missing counter ' . $counter);
 }
 $must(str_contains($service, 'currentPlacementProblemSummary($tenant)'), 'FEO utilizer badge must use canonical classifier.');

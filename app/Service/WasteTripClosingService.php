@@ -70,6 +70,43 @@ final class WasteTripClosingService
         };
     }
 
+    /** Count completed, unloaded trips whose missing closing files or TN processing still block payment. */
+    public static function blockedUnloadedCount(PDO $pdo): int
+    {
+        $scope=self::closingVisibilityScope(true);
+        $stmt=$pdo->prepare("SELECT COUNT(*) FROM waste_trips wt
+            WHERE wt.deleted_at IS NULL AND wt.status='completed'
+              AND wt.actual_end_date IS NOT NULL
+              AND {$scope['sql']}
+              AND COALESCE((SELECT SUM(a.amount)
+                  FROM finance_obligations o
+                  JOIN finance_operation_allocations a ON a.obligation_id=o.id AND a.cancelled_at IS NULL
+                  JOIN finance_operations fo ON fo.id=a.operation_id AND fo.status='POSTED'
+                  LEFT JOIN finance_invoices fi ON fi.id=a.invoice_id
+                  WHERE o.source_parent_type='WASTE_TRIP' AND o.source_parent_id=wt.id
+                    AND o.party_role='carrier' AND o.cancelled_at IS NULL
+                    AND (fi.id IS NULL OR (fi.cancelled_at IS NULL AND fi.status<>'cancelled'))),0)<=0
+              AND (
+                  (SELECT COUNT(DISTINCT cd.slot_code)
+                     FROM waste_trip_closing_documents cd
+                     JOIN documents d ON d.id=cd.document_id AND d.deleted_at IS NULL
+                    WHERE cd.waste_trip_id=wt.id AND cd.deleted_at IS NULL
+                      AND cd.slot_code IN ('contract','invoice','act','waybill'))<4
+                  OR NOT EXISTS (SELECT 1 FROM waste_trip_requests wtr
+                      JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+                      WHERE wtr.waste_trip_id=wt.id AND wtr.removed_at IS NULL)
+                  OR EXISTS (SELECT 1 FROM waste_trip_requests wtr
+                      JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+                      WHERE wtr.waste_trip_id=wt.id AND wtr.removed_at IS NULL
+                        AND NOT EXISTS (SELECT 1 FROM waste_trip_completion_items i
+                            WHERE i.waste_trip_request_id=wtr.id
+                              AND (COALESCE(i.tn_absent,0)=1 OR
+                                   (i.arrived_at IS NOT NULL AND i.departed_at IS NOT NULL))))
+              )");
+        $stmt->execute($scope['params']);
+        return max(0,(int)$stmt->fetchColumn());
+    }
+
     public static function carrierDebt(array $trip): ?string
     {
         $rate=$trip['carrier_rate']??null;
@@ -474,14 +511,14 @@ final class WasteTripClosingService
     }
 
     /** The closing register belongs to the responsible manager, even when another user created the trip. */
-    private static function closingVisibilityScope(): array
+    private static function closingVisibilityScope(bool $forRegistry=false): array
     {
         if (\App\Security\AccessRuntime::current()->isActive()) {
             $scope=AccessControlService::effectiveDataScope('waste_trip');
             if ($scope==='all') return ['sql'=>'1 = 1','params'=>[]];
             // The dedicated closing page grants a manager access to assigned documents,
             // without granting access to the general waste-trip editor.
-            if ($scope!=='own' && !(self::isRegistryRoute()
+            if ($scope!=='own' && !(($forRegistry||self::isRegistryRoute())
                 && AccessControlService::canAccessPage('company.documents.trip_closing_registry'))) {
                 return ['sql'=>'1 = 0','params'=>[]];
             }
