@@ -214,6 +214,7 @@ jobs:
           php tests/feo_transfers_mysql_test.php
           php tests/feo_transfers_access_mysql_test.php
           php tests/feo_transfers_139_production_migration_contract_test.php
+          php tests/feo_weights_160_production_migration_contract_test.php
           php tests/feo_transfers_139_migration_mysql_test.php
           php tests/feo_transfers_activation_contract_test.php
           php tests/feo_transfers_activation_mysql_test.php
