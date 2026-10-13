@@ -27,13 +27,16 @@ final class WasteTripClosingController
     {
         header('Cache-Control: no-store');
         $registryView=current_app_path()==='/company/logistics/closing-documents';
-        $trips=[];$reportRows=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
+        $trips=[];$reportRows=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$canFilterManagers=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
         $success=$_SESSION['waste_trip_closing_success']??null;
         $flashError=$_SESSION['waste_trip_closing_error']??null;
         unset($_SESSION['waste_trip_closing_success'],$_SESSION['waste_trip_closing_error']);
         try {
             [$company, $pdo,,,$accountId]=$this->context();
             $viewStateKey='planex:trip-closing:v1:'.(int)$company['id'].':'.$accountId;
+            $canFilterManagers=AccessRuntime::current()->isActive()
+                ? AccessControlService::effectiveDataScope('waste_trip')==='all'
+                : in_array((string)($_SESSION['role_code']??''),['superadmin','company_owner','senior_logist'],true);
             $responsibleUsers=EntityResponsibilityService::eligibleRecipients($this->db->connection(),$pdo,(int)$company['id']);
             $schemaReady=WasteTripClosingService::ready($pdo);
             if ($schemaReady) {
@@ -75,10 +78,13 @@ final class WasteTripClosingController
             if(count($ids)>500)throw new DomainException('Слишком много рейсов в отчёте.');
             $trips=WasteTripClosingService::trips($pdo);
             $trips=array_values(array_filter($trips,static fn(array $trip):bool=>in_array((int)$trip['id'],$ids,true)));
+            $position=array_flip($ids);
+            usort($trips,static fn(array $left,array $right):int=>($position[(int)$left['id']]??PHP_INT_MAX)<=>($position[(int)$right['id']]??PHP_INT_MAX));
             $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
             foreach($trips as &$trip)$trip['transport']=$transport[(int)$trip['id']]??null;
             unset($trip);
-            $path=WasteTripClosingReportService::xlsx(WasteTripClosingReportService::rows($trips));
+            $registryView=current_app_path()==='/company/logistics/closing-documents/summary.xlsx';
+            $path=WasteTripClosingReportService::xlsx(WasteTripClosingReportService::rows($trips),$registryView);
             header('Content-Type: application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
             header('Content-Disposition: attachment; filename="trip-closing-summary.xlsx"');
             header('Content-Length: '.filesize($path));
