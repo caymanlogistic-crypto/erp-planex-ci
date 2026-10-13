@@ -81,7 +81,7 @@ final class WasteTripClosingService
     /** @return list<array<string,mixed>> */
     public static function trips(PDO $pdo): array
     {
-        $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
+        $scope = self::closingVisibilityScope();
         $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.comment,wt.actual_start_date,wt.actual_end_date,wt.legal_entity_code,
                 wt.route_executor_id,
                 ct.id carrier_id,COALESCE(ct.name,'—') carrier_name,COALESCE(u.full_name,'—') manager_name,
@@ -264,7 +264,7 @@ final class WasteTripClosingService
 
     public static function trip(PDO $pdo, int $tripId): array
     {
-        $scope = RegulatedDataScopeService::condition('waste_trip', 'wt.id', 'wt.created_by_membership_id');
+        $scope = self::closingVisibilityScope();
         $stmt = $pdo->prepare("SELECT wt.id,wt.business_id,wt.legal_entity_code,wt.actual_end_date,
                 COALESCE(r.state,'work') review_state,COALESCE(r.version,0) review_version
               FROM waste_trips wt LEFT JOIN waste_trip_closing_reviews r ON r.waste_trip_id=wt.id
@@ -470,6 +470,25 @@ final class WasteTripClosingService
         if (in_array($state, ['sending','unknown'], true)) {
             throw new DomainException('Результат отправки письма нужно проверить перед изменением комплекта.');
         }
+    }
+
+    /** The closing register belongs to the responsible manager, even when another user created the trip. */
+    private static function closingVisibilityScope(): array
+    {
+        if (\App\Security\AccessRuntime::current()->isActive()) {
+            $scope=AccessControlService::effectiveDataScope('waste_trip');
+            if ($scope==='all') return ['sql'=>'1 = 1','params'=>[]];
+            if ($scope!=='own') return ['sql'=>'1 = 0','params'=>[]];
+            $membershipId=AccessControlService::effectiveMembershipId();
+            if ($membershipId===null||$membershipId<=0) return ['sql'=>'1 = 0','params'=>[]];
+            return ['sql'=>'EXISTS (SELECT 1 FROM users responsible WHERE responsible.id=wt.responsible_user_id AND responsible.membership_id=?)','params'=>[$membershipId]];
+        }
+        $role=(string)($_SESSION['role_code']??'');
+        if (in_array($role,['superadmin','company_owner','senior_logist'],true)) return ['sql'=>'1 = 1','params'=>[]];
+        $userId=(int)($_SESSION['user_id']??0);
+        return $role==='logist'&&$userId>0
+            ? ['sql'=>'wt.responsible_user_id=?','params'=>[$userId]]
+            : ['sql'=>'1 = 0','params'=>[]];
     }
 
     private static function moneyCents(string $amount): int

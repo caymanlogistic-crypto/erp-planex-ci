@@ -9,6 +9,7 @@ const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/finance_received_paid_filter_render.php')],{encoding:'utf8'});
 const css=fs.readFileSync(path.join(root,'public/assets/css/finance-received-paid.css'),'utf8');
+const ledgerCss=fs.readFileSync(path.join(root,'public/assets/css/erp-ledger-table.css'),'utf8');
 const appCss=fs.readFileSync(path.join(root,'public/assets/css/app.css'),'utf8');
 const erpCss=fs.readFileSync(path.join(root,'public/assets/css/erp-ui.css'),'utf8');
 const fontCss=[[400,'Regular'],[500,'Medium'],[600,'SemiBold'],[700,'Bold']].map(([weight,name])=>`@font-face{font-family:"IBM Plex Sans";src:url(data:font/woff2;base64,${fs.readFileSync(path.join(root,`public/assets/fonts/IBMPlexSans-${name}.woff2`)).toString('base64')}) format("woff2");font-weight:${weight}}`).join('\n');
@@ -19,7 +20,7 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
  page.on('pageerror',error=>errors.push(error.message));
  await page.setContent(html);
- await page.addStyleTag({content:appCss+'\n'+erpCss+'\n'+css+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
+ await page.addStyleTag({content:appCss+'\n'+erpCss+'\n'+css+'\n'+ledgerCss+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
  await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
  await page.addScriptTag({content:js});
  await page.addScriptTag({content:referenceSelectJs});

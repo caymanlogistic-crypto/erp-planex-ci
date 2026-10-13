@@ -171,14 +171,7 @@
 .rp-ledger-v015 .toolbar-select{width:171px;padding:0 24px 0 8px}
 .rp-ledger-v015 #rp-search{width:230px;min-width:0;padding:0 8px}
 .rp-ledger-v015 .rp-v010-table-wrap{width:100%;min-width:0;overflow-x:hidden}
-.rp-ledger-v015 .rp-v010-table{width:100%;min-width:0;table-layout:fixed;border-collapse:collapse;font-size:11px;line-height:1.25}
-.rp-ledger-v015 .rp-v010-table th,.rp-ledger-v015 .rp-v010-table td{box-sizing:border-box;min-width:0;padding:6px 7px;vertical-align:middle;border-right:1px solid rgba(168,161,150,.15);border-bottom:1px solid rgba(190,184,174,.42);overflow-wrap:anywhere}
-.rp-ledger-v015 .rp-v010-table th{height:30px;background:#d0ccc4;color:#34322f;text-align:left;text-transform:uppercase;font-size:10px;font-weight:700;line-height:14px;letter-spacing:.02em}
 .rp-ledger-v015 .rp-v010-table th:nth-child(8){white-space:nowrap;padding-inline:4px}
-.rp-ledger-v015 .rp-v010-table tbody tr{cursor:pointer}
-.rp-ledger-v015 .rp-v010-table tbody td{background:var(--table-row,#fafaf6)}
-.rp-ledger-v015 .rp-v010-table tbody tr:hover td,.rp-ledger-v015 .rp-v010-table tbody tr:focus-visible td{background:var(--table-row-hover,#ece9e2)}
-.rp-ledger-v015 .rp-v010-table tr[hidden]{display:none!important}
 .rp-ledger-v015 .rp-v012-compact-head,.rp-ledger-v015 .rp-v010-mobile-group{display:none}
 .rp-ledger-v015 .rp-v010-trip span,.rp-ledger-v015 .rp-v015-carrier-name,.rp-ledger-v015 .rp-v015-driver{display:block;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .rp-ledger-v015 .rp-v015-driver{margin-top:2px;color:var(--text-faint,#756e65);font-size:11px}

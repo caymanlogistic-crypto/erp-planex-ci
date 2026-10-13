@@ -51,9 +51,9 @@ final class WasteTripClosingController
             error_log('waste trip closing index: '.$exception->getMessage());
             $error='Не удалось загрузить закрывающие документы рейсов.';
         }
-        $pageTitle='Сбор закрывающих документов';
-        $pageContext='Рейсы › Сбор закрывающих документов';
-        $topbarCrumbs=[['label'=>'Рейсы','url'=>null],['label'=>'Сбор закрывающих документов','url'=>null]];
+        $pageTitle='Закрывающие документы';
+        $pageContext='Логисты › Закрывающие документы';
+        $topbarCrumbs=[['label'=>'Логисты','url'=>null],['label'=>'Закрывающие документы','url'=>null]];
         $config=$this->config;$db=$this->db;
         ob_start();require base_path('app/View/pages/company_waste_trip_closing.php');$content=(string)ob_get_clean();
         require base_path('app/View/layouts/main.php');
