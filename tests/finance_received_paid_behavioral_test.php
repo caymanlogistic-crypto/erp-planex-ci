@@ -38,7 +38,7 @@ $pdo = new PDO(
 );
 foreach (['finance_operation_allocations','finance_operations','bank_transactions','finance_invoice_links',
           'finance_invoices','finance_obligations','waste_trip_carrier_payments','waste_trip_customer_payments',
-          'waste_trips','crews','driver_vehicle_blocks','drivers','contractors','clients'] as $table) {
+          'waste_trips','crews','driver_vehicle_blocks','drivers','contractors','clients','users'] as $table) {
     $pdo->exec("DROP TABLE IF EXISTS `$table`");
 }
 $pdo->exec('CREATE TABLE clients(id INT PRIMARY KEY,name VARCHAR(100))');
@@ -125,4 +125,14 @@ $closingRows=FinanceReceivedPaidService::fetch($pdo,[1,3]);
 if (count($closingRows)!==2 || (int)$closingRows[0]['id']!==1 || (int)$closingRows[1]['id']!==3) throw new RuntimeException('Closing projection must include requested PLANEX and MG trips only.');
 if ((string)$closingRows[1]['sides']['customer']['source_rate']!=='280000.00' || (string)$closingRows[1]['sides']['customer']['rate']!=='990000.00' || (string)$closingRows[1]['sides']['carrier']['rate']!=='240000.00') throw new RuntimeException('MG trip sale must remain distinguishable from a preserved customer obligation and carrier cost.');
 if ((string)$closingRows[1]['sides']['carrier']['payments'][0]['amount']!=='50000.00' || $closingRows[1]['sides']['customer']['payments']!==[]) throw new RuntimeException('MG carrier payments must use posted carrier allocations, not customer receipts.');
+require_once __DIR__.'/../app/Service/AccessControlService.php';
+$pdo->exec('ALTER TABLE waste_trips ADD COLUMN responsible_user_id INT NULL');
+$pdo->exec('CREATE TABLE users(id INT PRIMARY KEY,membership_id INT NOT NULL)');
+$pdo->exec('INSERT INTO users VALUES(9,99)');
+$pdo->exec('UPDATE waste_trips SET responsible_user_id=9 WHERE id IN (1,3)');
+\App\Security\AccessRuntime::setCurrent(EffectiveAccess::member(99,1,[],['waste_trip'=>'own']));
+if(FinanceReceivedPaidService::fetch($pdo,[1,3])!==[])throw new RuntimeException('Creator scope must not expose trips assigned to another manager.');
+$managerScope=['sql'=>'EXISTS (SELECT 1 FROM users responsible WHERE responsible.id=wt.responsible_user_id AND responsible.membership_id=?)','params'=>[99]];
+$managerRows=FinanceReceivedPaidService::fetch($pdo,[1,3],$managerScope);
+if(count($managerRows)!==2)throw new RuntimeException('Closing projection must use the responsible manager scope for assigned trips.');
 echo "FINANCE_RECEIVED_PAID_BEHAVIORAL_OK\n";

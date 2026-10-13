@@ -25,10 +25,14 @@ const browser=await chromium.launch({headless:true});
 try{
   const page=await browser.newPage({viewport:{width:1419,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.addInitScript(()=>localStorage.setItem('fixture:closing-registry',JSON.stringify({filter:'paid_complete',sort:'unloading'})));
   await page.goto(`http://127.0.0.1:${server.address().port}/company/logistics/closing-documents`);
   const table=page.locator('.closing-page .lab-table');
   assert.equal(await table.locator('thead th').count(),13);
   assert.equal(await table.locator('tbody tr').count(),35);
+  assert.equal(await page.locator('[data-closing-filter="all"]').getAttribute('aria-pressed'),'true');
+  assert.equal(await page.locator('[data-closing-count]').textContent(),'35');
+  assert.equal(await page.locator('[data-closing-list-label]').textContent(),'РЕЙСЫ В РАБОТЕ И ЗАВЕРШЁННЫЕ');
   assert.equal(await page.locator('[data-closing-entity]').count(),0);
   assert.equal(await page.locator('[data-closing-sort]').inputValue(),'unloading');
   assert.equal(await table.locator('tbody tr').first().locator('td').first().textContent(),'#322');
