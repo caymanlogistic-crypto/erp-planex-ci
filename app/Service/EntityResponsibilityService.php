@@ -272,6 +272,79 @@ final class EntityResponsibilityService
         }
     }
 
+    /**
+     * Move an executor and every linked reference record as one operation.
+     * A contractor, driver or vehicle shared with another executor has one
+     * responsibility record, so its new owner is visible there as well.
+     *
+     * @param list<int|string> $crewIds
+     */
+    public static function transferRouteExecutorCascade(
+        PDO $pdo,
+        array $crewIds,
+        int $targetMembershipId,
+        int $actorMembershipId
+    ): void {
+        $ids = array_values(array_unique(array_filter(
+            array_map('intval', $crewIds),
+            static fn(int $id): bool => $id > 0
+        )));
+        if ($ids === []) {
+            throw new InvalidArgumentException('Выберите хотя бы одного исполнителя рейса.');
+        }
+
+        $ownsTransaction = !$pdo->inTransaction();
+        if ($ownsTransaction) {
+            $pdo->beginTransaction();
+        }
+        try {
+            $marks = implode(',', array_fill(0, count($ids), '?'));
+            $stmt = $pdo->prepare(
+                "SELECT c.id, c.contractor_id, dvb.driver_id, dvb.vehicle_set_id,
+                        vs.primary_vehicle_unit_id, vs.secondary_vehicle_unit_id
+                   FROM crews c
+                   JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id
+                   JOIN vehicle_sets vs ON vs.id=dvb.vehicle_set_id
+                  WHERE c.id IN ({$marks}) FOR UPDATE"
+            );
+            $stmt->execute($ids);
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            if (count($rows) !== count($ids)) {
+                throw new RuntimeException('Один из исполнителей рейса не найден. Обновите страницу.');
+            }
+
+            $related = ['contractor'=>[], 'driver'=>[], 'vehicle_set'=>[], 'vehicle_unit'=>[]];
+            foreach ($rows as $row) {
+                $related['contractor'][] = (int)$row['contractor_id'];
+                $related['driver'][] = (int)$row['driver_id'];
+                $related['vehicle_set'][] = (int)$row['vehicle_set_id'];
+                $related['vehicle_unit'][] = (int)$row['primary_vehicle_unit_id'];
+                $related['vehicle_unit'][] = (int)$row['secondary_vehicle_unit_id'];
+            }
+            $drivers = $pdo->prepare("SELECT DISTINCT driver_id FROM crew_drivers WHERE crew_id IN ({$marks})");
+            $drivers->execute($ids);
+            foreach ($drivers->fetchAll(PDO::FETCH_COLUMN) as $driverId) {
+                $related['driver'][] = (int)$driverId;
+            }
+
+            self::transfer($pdo, 'route_executor', $ids, $targetMembershipId, $actorMembershipId);
+            foreach ($related as $entityType => $entityIds) {
+                $entityIds = array_values(array_unique(array_filter($entityIds)));
+                if ($entityIds !== []) {
+                    self::transfer($pdo, $entityType, $entityIds, $targetMembershipId, $actorMembershipId);
+                }
+            }
+            if ($ownsTransaction) {
+                $pdo->commit();
+            }
+        } catch (\Throwable $e) {
+            if ($ownsTransaction && $pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
+            throw $e;
+        }
+    }
+
     /** @return list<int> */
     public static function entityIdsForBaseMembership(PDO $pdo, string $entityType, int $membershipId): array
     {
