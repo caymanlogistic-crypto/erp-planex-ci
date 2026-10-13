@@ -5,6 +5,7 @@
   const search=page.querySelector('[data-closing-search]');
   const entity=page.querySelector('[data-closing-entity]');
   const manager=page.querySelector('[data-closing-manager]');
+  const sort=page.querySelector('[data-closing-sort]');
   const filters=[...page.querySelectorAll('[data-closing-filter]')];
   const count=page.querySelector('[data-closing-count]');
   const listLabel=page.querySelector('[data-closing-list-label]');
@@ -22,6 +23,7 @@
     if(['all','incomplete','ready','paid_incomplete','paid_complete'].includes(savedState.filter)) filter=savedState.filter;
     if(savedState.filter==='open') filter='incomplete';
     if(entity && [...entity.options].some(option=>option.value===savedState.entity)) entity.value=savedState.entity;
+    if(sort && ['id','unloading'].includes(savedState.sort)) sort.value=savedState.sort;
     if(manager && [...manager.options].some(option=>option.value===savedState.manager)) manager.value=savedState.manager;
   }
   const stage=new URLSearchParams(location.search).get('stage');
@@ -38,7 +40,19 @@
   }
   function saveState() {
     if(!stateKey) return;
-    try { localStorage.setItem(stateKey,JSON.stringify({search:search.value,filter,entity:entity?.value||'all',manager:manager?.value||'',openTripId:trips.find(trip=>trip.open)?.dataset.tripId||null})); } catch (_) {}
+    try { localStorage.setItem(stateKey,JSON.stringify({search:search.value,filter,entity:entity?.value||'all',sort:sort?.value||'unloading',manager:manager?.value||'',openTripId:trips.find(trip=>trip.open)?.dataset.tripId||null})); } catch (_) {}
+  }
+  function sortReportRows(){
+    const body=reportGrid?.querySelector('tbody');
+    if(!body)return;
+    reportRows.sort((left,right)=>{
+      if(sort?.value==='unloading'){
+        const dateOrder=(right.dataset.unloadingDate||'').localeCompare(left.dataset.unloadingDate||'');
+        if(dateOrder)return dateOrder;
+      }
+      return Number(right.cells[0].textContent.replace(/\D/g,''))-Number(left.cells[0].textContent.replace(/\D/g,''));
+    });
+    body.append(...reportRows);
   }
   function render() {
     const query=search.value.trim().toLocaleLowerCase('ru');
@@ -69,11 +83,12 @@
     reportRows.forEach(row=>{row.hidden=!ids.has(row.dataset.reportTripId);if(!row.hidden)visible++;});
     if(exportLink){
       const url=new URL(exportLink.href,location.href);
-      url.searchParams.set('ids',trips.filter(trip=>!trip.hidden).map(trip=>trip.dataset.tripId).join(','));
+      url.searchParams.set('ids',reportRows.filter(row=>!row.hidden).map(row=>row.dataset.reportTripId).join(','));
       exportLink.href=url.toString();
       exportLink.toggleAttribute('aria-disabled',visible===0);
     }
   }
+  sortReportRows();
   render();
   exportLink?.addEventListener('click',event=>{if(exportLink.getAttribute('aria-disabled')==='true')event.preventDefault();});
   const docDialog=page.querySelector('[data-closing-doc-dialog]');
@@ -109,6 +124,7 @@
   if(stage){const url=new URL(location.href);url.searchParams.delete('stage');history.replaceState(history.state,'',url);}
   search.addEventListener('input',()=>{render();saveState();});
   entity?.addEventListener('change',()=>{render();saveState();});
+  sort?.addEventListener('change',()=>{sortReportRows();updateReport();saveState();});
   manager?.addEventListener('change',()=>{render();saveState();});
   filters.forEach(button=>button.addEventListener('click',()=>{
     filter=button.dataset.closingFilter;
@@ -162,6 +178,7 @@
         const openerTripId=docOpener?.dataset.reportTripId;
         reportBody.replaceChildren(...[...updatedReport.children].map(row=>document.importNode(row,true)));
         reportRows=[...reportBody.querySelectorAll('[data-report-trip-id]')];
+        sortReportRows();
         if(openerTripId)docOpener=reportRows.find(row=>row.dataset.reportTripId===openerTripId)||null;
       }
       render();

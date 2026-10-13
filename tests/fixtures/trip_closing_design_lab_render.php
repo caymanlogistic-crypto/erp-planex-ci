@@ -70,6 +70,11 @@ for ($index = 0; $index < 35; $index++) {
         'review_version' => 1,
     ];
 }
+$reportRows = \App\Service\WasteTripClosingReportService::rows($trips, '2026-10-13');
+$responsibleUsers = [];
+$canFilterManagers = true;
+$canCreateInvoice = false;
+$viewStateKey = 'fixture:closing-registry';
 
 ob_start();
 require $root.'/app/View/pages/company_waste_trip_closing_registry.php';

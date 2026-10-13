@@ -9,6 +9,8 @@ use ZipArchive;
 final class WasteTripClosingReportService
 {
     public const HEADERS = ['Рейс №','Название рейса','Водитель','Юр. лицо','ТН','Счёт','Акт','Договор','Путевой лист','Диагностическая карта','Ставка перевозчика, ₽','Статус','Дата','Компания','Менеджер','Раздел'];
+    public const REGISTRY_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ПОДРЯД. / ВОД.','ТН','СЧЁТ','АКТ','ДОГ.','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА','МЕНЕДЖЕР','РАЗДЕЛ'];
+    public const REGISTRY_XLSX_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ИСПОЛНИТЕЛЬ','ПОДРЯД. / ВОД.','ТН','СЧЁТ','АКТ','ДОГ.','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА','МЕНЕДЖЕР','РАЗДЕЛ'];
 
     /** @param list<array<string,mixed>> $trips @return list<array<string,mixed>> */
     public static function rows(array $trips, ?string $today = null): array
@@ -68,38 +70,75 @@ final class WasteTripClosingReportService
                 'company'=>match((string)($trip['legal_entity_code']??'')){'planex'=>'ПЛАНЭКС','mg_logistic'=>'МГ Логистика',default=>'—'},
                 'manager'=>(string)(($trip['manager_name']??'')?:'—'),
                 'section'=>WasteTripClosingService::sectionLabel(WasteTripClosingService::section($trip)),
+                'section_state'=>WasteTripClosingService::section($trip),
+                'unloading_date'=>(string)($trip['actual_end_date']??''),
             ];
         }
         return $rows;
     }
 
+    /** @param array<string,mixed> $row @return list<string> */
+    public static function registryValues(array $row): array
+    {
+        $section=(string)($row['section_state']??'');
+        $manager=preg_split('/\s+/u',trim((string)($row['manager']??'')))?:[];
+        $managerShort=count($manager)>=2?$manager[1].' '.mb_substr($manager[0],0,1,'UTF-8').'.':(string)($row['manager']??'—');
+        $company=match((string)($row['company']??'')){'ПЛАНЭКС'=>'ООО «Планэкс»','МГ Логистика'=>'ООО «МГ Логистик»',default=>(string)($row['company']??'—')};
+        $diagnostic=(string)($row['diagnostic_card']??'Нет');
+        if(count($row['diagnostic_card_details']??[])>1){
+            $parts=[];
+            foreach($row['diagnostic_card_details'] as $unit){
+                $label=(string)$unit['label'];
+                if(preg_match('/^(Первая часть|Тягач|Прицеп|Полуприцеп)\s+(.+)$/u',$label,$match))$label=(str_contains(mb_strtolower($match[1],'UTF-8'),'прицеп')?'ПП ':'').$match[2];
+                $parts[]=$label;
+            }
+            $diagnostic=implode("\n",$parts);
+        }
+        if($diagnostic==='Нет')$diagnostic='НЕТ';
+        $status=match($section){'incomplete'=>'Оплата заблокирована','ready'=>'Ожидает оплаты','paid_complete','paid_incomplete'=>'Оплачено',default=>(string)($row['payment_status']??'')};
+        $sectionLabel=match($section){'paid_complete'=>'Оплачено · Полный комплект','paid_incomplete'=>'Оплачено · Неполный комплект',default=>(string)($row['section']??'')};
+        return [
+            '#'.(string)($row['number']??''),(string)($row['title']??''),$company,
+            trim((string)($row['legal_entity']??'')."\n".(string)($row['driver']??'')),
+            ...array_map(static fn(string $key):string=>($row[$key]??'')==='Есть'?'Есть':'НЕТ',['tn','invoice','act','contract','waybill']),
+            $diagnostic,$status,(string)($row['payment_date']??''),$managerShort,$sectionLabel,
+        ];
+    }
+
     /** @param list<array<string,mixed>> $rows */
-    public static function xlsx(array $rows): string
+    public static function xlsx(array $rows, bool $registry = false): string
     {
         if(!class_exists(ZipArchive::class))throw new RuntimeException('На сервере недоступно создание Excel.');
         $path=tempnam(sys_get_temp_dir(),'trip_closing_report_');
         if($path===false)throw new RuntimeException('Не удалось подготовить Excel.');
         $zip=new ZipArchive();
         if($zip->open($path,ZipArchive::OVERWRITE)!==true){@unlink($path);throw new RuntimeException('Не удалось создать Excel.');}
-        $keys=['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager','section'];
+        $keys=$registry?range(0,13):['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager','section'];
+        $headers=$registry?self::REGISTRY_XLSX_HEADERS:self::HEADERS;
+        $exportRows=$registry?array_map(self::registryValues(...),$rows):$rows;
         $lines=[];$number=1;
-        foreach(array_merge([array_combine($keys,self::HEADERS)],$rows) as $row){
+        foreach(array_merge([array_combine($keys,$headers)],$exportRows) as $row){
             $cells=[];
             foreach($keys as $index=>$key){
                 $column=self::column($index+1);$value=htmlspecialchars((string)($row[$key]??''),ENT_XML1|ENT_QUOTES,'UTF-8');
                 $style='';
-                if($number>1&&in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','payment_status'],true)){
+                if(!$registry&&$number>1&&in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','payment_status'],true)){
                     $status=$key==='diagnostic_card'?($row['diagnostic_card_state']??'missing'):($key==='payment_status'?($row['payment_state']??'partial'):(($row[$key]??'')==='Есть'?'present':'missing'));
                     $style=' s="'.match($status){'present'=>1,'partial'=>3,default=>2}.'"';
+                }elseif($registry&&$number>1&&$index>=4&&$index<=10){
+                    $state=match((string)($row[$key]??'')){'Есть','Оплачено'=>1,'НЕТ','Оплата заблокирована'=>2,'Ожидает оплаты'=>3,default=>0};
+                    if($state>0)$style=' s="'.$state.'"';
                 }
                 $cells[]='<c r="'.$column.$number.'"'.$style.' t="inlineStr"><is><t xml:space="preserve">'.$value.'</t></is></c>';
             }
             $lines[]='<row r="'.$number.'">'.implode('',$cells).'</row>';$number++;
         }
         $last=max(1,$number-1);
-        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:P'.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>';
-        foreach([12,48,28,30,10,10,10,10,15,42,20,23,19,20,27,38] as $i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
-        $sheet.='</cols><sheetData>'.implode('',$lines).'</sheetData><autoFilter ref="A1:P'.$last.'"/></worksheet>';
+        $lastColumn=$registry?'N':'P';
+        $sheet='<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><dimension ref="A1:'.$lastColumn.$last.'"/><sheetViews><sheetView workbookViewId="0"><pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/></sheetView></sheetViews><cols>';
+        $widths=$registry?[12,35,24,38,12,12,12,12,12,23,24,17,18,26]:[12,48,28,30,10,10,10,10,15,42,20,23,19,20,27,38];
+        foreach($widths as $i=>$width)$sheet.='<col min="'.($i+1).'" max="'.($i+1).'" width="'.$width.'" customWidth="1"/>';
+        $sheet.='</cols><sheetData>'.implode('',$lines).'</sheetData><autoFilter ref="A1:'.$lastColumn.$last.'"/></worksheet>';
         $parts=[
             '[Content_Types].xml'=>'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>',
             '_rels/.rels'=>'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>',

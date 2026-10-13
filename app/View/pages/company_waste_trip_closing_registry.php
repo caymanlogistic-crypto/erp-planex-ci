@@ -4,6 +4,7 @@ $canCreateInvoice=$canCreateInvoice??false;
 $contractors=$contractors??[];
 $clients=$clients??[];
 $responsibleUsers=$responsibleUsers??[];
+$canFilterManagers=$canFilterManagers??true;
 $reportRows=$reportRows??[];
 $all=count($trips);
 $tabCounts=['all'=>$all,'incomplete'=>0,'ready'=>0,'paid_incomplete'=>0,'paid_complete'=>0];
@@ -31,25 +32,23 @@ $progressColor=static function(int $percent):string {
     <button type="button" class="closing-filter is-active" data-closing-filter="all" aria-pressed="true">Все рейсы <b data-closing-filter-count="all"><?= $tabCounts['all'] ?></b></button>
     <button type="button" class="closing-filter" data-closing-filter="incomplete" aria-pressed="false">Не хватает документов <b data-closing-filter-count="incomplete"><?= $tabCounts['incomplete'] ?></b></button>
     <button type="button" class="closing-filter" data-closing-filter="ready" aria-pressed="false">Готово к оплате <b data-closing-filter-count="ready"><?= $tabCounts['ready'] ?></b></button>
-    <button type="button" class="closing-filter" data-closing-filter="paid_incomplete" aria-pressed="false">Оплачено, но не полный комплект <b data-closing-filter-count="paid_incomplete"><?= $tabCounts['paid_incomplete'] ?></b></button>
-    <button type="button" class="closing-filter" data-closing-filter="paid_complete" aria-pressed="false">Оплаченные полные комплекты <b data-closing-filter-count="paid_complete"><?= $tabCounts['paid_complete'] ?></b></button>
+    <button type="button" class="closing-filter" data-closing-filter="paid_complete" aria-pressed="false">Оплачено <b data-closing-filter-count="paid_complete"><?= $tabCounts['paid_complete'] ?></b></button>
   </div>
   <div class="closing-registry-card table-card table-card--standard lab-registry-card" data-erp-grid><div class="table-toolbar closing-toolbar waste-trip-toolbar"><span class="closing-found found-label">Найдено: <span data-closing-count><?= $all ?></span></span><div class="closing-toolbar-right toolbar-right"><div class="closing-extra-filters">
-    <label class="closing-filter-field"><span class="sr-only">Исполнитель рейса</span><select class="toolbar-select" name="company" data-table-reference-select="closing" data-closing-entity aria-label="Исполнитель рейса"><option value="all">Все рейсы</option><option value="planex">ПЛАНЭКС</option><option value="mg_logistic">МГ Логистика</option></select></label>
-    <label class="closing-filter-field"><span class="sr-only">Ответственный менеджер</span><select class="toolbar-select" data-table-reference-select="closing" data-closing-manager aria-label="Ответственный менеджер"><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label>
+    <label class="closing-filter-field closing-sort-field"><span class="sr-only">Сортировка рейсов</span><select class="toolbar-select" name="sort" data-table-reference-select="closing" data-closing-sort aria-label="Сортировка рейсов"><option value="unloading" selected>Дата выгрузки</option><option value="id">ID</option></select></label>
+    <?php if($canFilterManagers):?><label class="closing-filter-field"><span class="sr-only">Ответственный менеджер</span><select class="toolbar-select" data-table-reference-select="closing" data-closing-manager aria-label="Ответственный менеджер"><option value="">Все менеджеры</option><?php foreach($responsibleUsers as $user):?><option value="<?= (int)$user['membership_id'] ?>"><?= e(trim((string)$user['full_name'])?:((string)$user['login'])) ?></option><?php endforeach;?></select></label><?php endif;?>
   </div><label class="closing-search"><span class="sr-only">Поиск по рейсу или перевозчику; несколько номеров рейсов через запятую</span><input class="toolbar-search" type="search" data-closing-search placeholder="Рейсы: 322, 310"></label></div></div>
-  <div class="closing-grid lab-grid table-scroll" role="region" aria-label="Таблица закрывающих документов"><table class="closing-table lab-table table erp-ledger-table">
-    <thead><tr><?php foreach(\App\Service\WasteTripClosingReportService::HEADERS as $header):?><th scope="col"><?= e($header) ?></th><?php endforeach;?></tr></thead>
-    <tbody><?php foreach($reportRows as $row):?><tr data-report-trip-id="<?= (int)$row['id'] ?>" tabindex="0" aria-label="Открыть документы рейса №<?= e((string)$row['number']) ?>" title="Двойной щелчок или Enter — открыть документы">
-      <?php foreach(['number','title','driver','legal_entity','tn','invoice','act','contract','waybill','diagnostic_card','rate','payment_status','payment_date','company','manager','section'] as $key):?>
-        <?php if($key==='diagnostic_card' && count($row['diagnostic_card_details'])>1):?>
-          <td class="closing-report-status is-<?= e($row['diagnostic_card_state']) ?>"><?php foreach($row['diagnostic_card_details'] as $unit):?><span class="closing-report-unit is-<?= $unit['status']==='Есть'?'present':'missing' ?>"><?= e($unit['label']) ?>: <?= e($unit['status']) ?></span><?php endforeach;?></td>
-        <?php elseif(in_array($key,['tn','invoice','act','contract','waybill','diagnostic_card','payment_status'],true)):?>
-          <?php $state=$key==='diagnostic_card'?$row['diagnostic_card_state']:($key==='payment_status'?$row['payment_state']:($row[$key]==='Есть'?'present':'missing'));?>
-          <td class="closing-report-status is-<?= e($state) ?>"><?= e((string)$row[$key]) ?></td>
-        <?php elseif($key==='legal_entity'):?><td><span class="erp-ledger-carrier-name" title="<?= e((string)$row[$key]) ?>"><?= e((string)$row[$key]) ?></span></td>
-        <?php else:?><td><?= e((string)$row[$key]) ?></td><?php endif;?>
-      <?php endforeach;?>
+  <div class="closing-grid lab-grid table-scroll" role="region" aria-label="Таблица закрывающих документов"><table class="closing-table lab-table table erp-ledger-table" data-reference-columns="departures"><colgroup><?php foreach([52,165,190,74,74,74,74,74,135,160,100,165,185] as $width):?><col style="width:<?= $width ?>px"><?php endforeach;?></colgroup>
+    <thead><tr><?php foreach(\App\Service\WasteTripClosingReportService::REGISTRY_HEADERS as $header):?><th scope="col"><?= e($header) ?></th><?php endforeach;?></tr></thead>
+    <tbody><?php foreach($reportRows as $row):$display=\App\Service\WasteTripClosingReportService::registryValues($row);$sectionState=(string)$row['section_state'];?><tr data-report-trip-id="<?= (int)$row['id'] ?>" data-unloading-date="<?= e((string)$row['unloading_date']) ?>" tabindex="0" aria-label="Открыть документы рейса №<?= e((string)$row['number']) ?>" title="Двойной щелчок или Enter — открыть документы">
+      <td class="col-mono registry-id"><?= e($display[0]) ?></td>
+      <td class="waste-description"><span class="waste-description-text" title="<?= e($display[1]) ?>"><?= e($display[1]) ?></span><span class="waste-legal-entity"><?= e($display[2]) ?></span></td>
+      <td class="registry-executor"><span class="registry-executor-line" title="<?= e((string)$row['legal_entity']) ?>"><?= e((string)$row['legal_entity']) ?></span><span class="registry-executor-line registry-executor-secondary" title="<?= e((string)$row['driver']) ?>"><?= e((string)$row['driver']) ?></span></td>
+      <?php foreach(['tn','invoice','act','contract','waybill'] as $key):$present=$row[$key]==='Есть';?><td class="closing-report-status is-<?= $present?'present':'missing' ?>"><?= $present?'Есть':'НЕТ' ?></td><?php endforeach;?>
+      <?php if(count($row['diagnostic_card_details'])>1):?><td class="closing-report-status is-<?= e((string)$row['diagnostic_card_state']) ?>"><?php foreach(explode("\n",$display[9]) as $index=>$unitLabel):$unit=$row['diagnostic_card_details'][$index];?><span class="closing-report-unit is-<?= $unit['status']==='Есть'?'present':'missing' ?>" title="<?= e($unit['label'].': '.$unit['status']) ?>"><?= e($unitLabel) ?></span><?php endforeach;?></td><?php else:?><td class="closing-report-status is-<?= e((string)$row['diagnostic_card_state']) ?>"><?= $display[9]==='Нет'?'НЕТ':e($display[9]) ?></td><?php endif;?>
+      <td class="closing-report-status is-<?= $sectionState==='incomplete'?'missing':($sectionState==='ready'?'partial':'present') ?>" title="<?= e((string)$row['payment_status']) ?>"><?= e($display[10]) ?></td>
+      <td><?= e($display[11]) ?></td><td title="<?= e((string)$row['manager']) ?>"><?= e($display[12]) ?></td>
+      <td title="<?= e((string)$row['section']) ?>"><?php if(str_starts_with($sectionState,'paid_')):?><span class="lab-section-paid">Оплачено</span><span class="lab-section-detail"><?= $sectionState==='paid_complete'?'Полный комплект':'Неполный комплект' ?></span><?php else:?><?= e($display[13]) ?><?php endif;?></td>
     </tr><?php endforeach;?></tbody>
   </table><p class="closing-empty" data-closing-empty<?= $reportRows?' hidden':'' ?>>Рейсы по запросу не найдены.</p></div>
   <p class="closing-table-hint lab-table-hint">Дважды щёлкните по рейсу, чтобы открыть документы. Для клавиатуры — Enter.</p>
@@ -101,19 +100,13 @@ $progressColor=static function(int $percent):string {
       </summary>
       <div class="closing-trip-body">
         <div class="closing-body-head">
-          <h2>Закрывающие документы рейса #<?= e((string)$trip['business_id']) ?></h2>
           <div class="closing-trip-facts">
             <span><small>Компания рейса</small><b><?= e(match((string)($trip['legal_entity_code']??'')){'planex'=>'ПЛАНЭКС','mg_logistic'=>'МГ Логистика',default=>'—'}) ?></b></span>
             <span><small>Название перевозчика</small><b><?= e(trim((string)($trip['carrier_name']??''))?:'—') ?></b></span>
             <span><small>ФИО водителя</small><b><?= e(trim((string)($trip['driver_names']??''))?:'—') ?></b></span>
-            <span><small><?= ($trip['legal_entity_code']??'')==='mg_logistic'?'Ставка перевозчика · Продажа':'Ставка перевозчика · Себес, руб' ?></small><b><?= ($trip['display_rate']??null)===null?'—':e(number_format((float)$trip['display_rate'],2,',',' ')).' ₽' ?></b></span>
-            <span><small>Оплачено перевозчику</small><b><?= e(number_format((float)($trip['carrier_paid_amount']??0),2,',',' ')) ?> ₽</b></span>
-            <?php $paymentDisplay=$trip['carrier_payment_display']??\App\Service\WasteTripClosingService::carrierPaymentDisplay($trip);?><span class="closing-payment-fact is-<?= e($paymentDisplay['status']) ?>"><small>Дата оплаты / срок</small><b><?= e($paymentDisplay['text']) ?></b></span>
           </div>
           <?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><span class="closing-note">Получатель письма: <?= e((string)$trip['recipient_email']) ?></span><?php endif;?>
         </div>
-        <div class="closing-tn-details"><strong>ТН</strong><p><?= $tnUnprocessed?'Нет':'Есть' ?> по рейсу · обработка в разделе «Проверка ТН»</p><?php foreach($tnIssueGroups as $reason=>$requestIds):?><p><?= e((string)$reason) ?><?php if($requestIds):?> · <?= count($requestIds)===1?'заявка':'заявки' ?> №<?= e(implode(', №',$requestIds)) ?><?php endif;?></p><?php endforeach;?></div>
-        <?php if($paid):?><div class="closing-finance-handoff"><strong>Оплата отражена · <?= count($paid) ?> банковских операций</strong><span>Собранные файлы связаны с платежами в «Финансы → Закрывающие документы». Договор/заявка и акт/УПД учитываются в обязательных категориях, остальные доступны как приложения.</span></div><?php endif;?>
         <p class="closing-upload-feedback" role="alert" hidden></p>
         <fieldset class="closing-edit-fieldset">
         <div class="closing-doc-table">
