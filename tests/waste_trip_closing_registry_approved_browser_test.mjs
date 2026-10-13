@@ -30,6 +30,7 @@ try{
   const table=page.locator('.closing-page .lab-table');
   assert.equal(await table.locator('thead th').count(),14);
   assert.deepEqual(await table.locator('thead th').allInnerTexts().then(values=>values.slice(0,4)),['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ПОДРЯД. / ВОД.']);
+  assert.deepEqual(await table.locator('thead th').allInnerTexts().then(values=>values.slice(4,10)),['ТН','ДОГ.','СЧЁТ','АКТ','ПУТ. Л.','ДИАГН. К.']);
   assert.equal(await table.locator('thead th').nth(11).innerText(),'ДАТА ОПЛ.');
   assert.equal(await table.locator('tbody tr').count(),35);
   assert.equal(await page.locator('[data-closing-filter="all"]').getAttribute('aria-pressed'),'true');

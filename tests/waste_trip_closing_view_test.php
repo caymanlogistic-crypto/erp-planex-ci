@@ -96,6 +96,15 @@ $assert(str_contains($registrySheet,'autoFilter ref="A1:O3"')
     && str_contains($registrySheet,'r="D3" t="inlineStr"><is><t xml:space="preserve">ООО «МГ Логистик»</t>')
     && str_contains($registrySheet,'<t xml:space="preserve">ДАТА ОПЛ.</t>'),
     'registry Excel separates description and executor and follows the visible table columns');
+$expectedDocuments=['ТН','ДОГ.','СЧЁТ','АКТ','ПУТ. Л.','ДИАГН. К.'];
+$assert(array_slice(\App\Service\WasteTripClosingReportService::REGISTRY_HEADERS,4,6)===$expectedDocuments
+    && array_slice(\App\Service\WasteTripClosingReportService::REGISTRY_XLSX_HEADERS,5,6)===$expectedDocuments
+    && str_contains($html,implode('',array_map(static fn(string $header):string=>'<th scope="col">'.$header.'</th>',$expectedDocuments))),
+    'registry and Excel document headers must follow the approved order');
+$orderedRow=$reportRows[0];
+$orderedRow['tn']='Есть';$orderedRow['contract']='Есть';$orderedRow['invoice']='Нет';$orderedRow['act']='Есть';$orderedRow['waybill']='Нет';
+$assert(array_slice(\App\Service\WasteTripClosingReportService::registryValues($orderedRow),5,5)===['Есть','Есть','НЕТ','Есть','НЕТ'],
+    'registry document values must match their reordered headers');
 $assert(str_contains($html,'<th scope="col">ОПИСАНИЕ РЕЙСА</th><th scope="col">ДАТА ВЫГРУЗКИ</th>')&&str_contains($html,'class="registry-unloading-date">30.09.2026')&&str_contains($html,'Вывоз отходов с площадки А')&&!str_contains($html,'Направление</th>'),'registry must display the trip title followed by unloading date');
 $assert(str_contains($html,'<th scope="col">СТАТУС</th><th scope="col">ДАТА ОПЛ.</th>')&&!str_contains($html,'Оплачено, документы не все'),'registry must have separate payment status and date columns without removed flag');
 $assert(str_contains($html,'closing-report-status is-present')&&str_contains($html,'closing-report-status is-missing'),'registry must color available and missing documents');

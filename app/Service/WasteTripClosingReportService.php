@@ -9,8 +9,8 @@ use ZipArchive;
 final class WasteTripClosingReportService
 {
     public const HEADERS = ['Рейс №','Название рейса','Водитель','Юр. лицо','ТН','Счёт','Акт','Договор','Путевой лист','Диагностическая карта','Ставка перевозчика, ₽','Статус','Дата','Компания','Менеджер','Раздел'];
-    public const REGISTRY_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ПОДРЯД. / ВОД.','ТН','СЧЁТ','АКТ','ДОГ.','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА ОПЛ.','МЕНЕДЖЕР','РАЗДЕЛ'];
-    public const REGISTRY_XLSX_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ИСПОЛНИТЕЛЬ','ПОДРЯД. / ВОД.','ТН','СЧЁТ','АКТ','ДОГ.','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА ОПЛ.','МЕНЕДЖЕР','РАЗДЕЛ'];
+    public const REGISTRY_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ПОДРЯД. / ВОД.','ТН','ДОГ.','СЧЁТ','АКТ','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА ОПЛ.','МЕНЕДЖЕР','РАЗДЕЛ'];
+    public const REGISTRY_XLSX_HEADERS = ['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ИСПОЛНИТЕЛЬ','ПОДРЯД. / ВОД.','ТН','ДОГ.','СЧЁТ','АКТ','ПУТ. Л.','ДИАГН. К.','СТАТУС','ДАТА ОПЛ.','МЕНЕДЖЕР','РАЗДЕЛ'];
 
     /** @param list<array<string,mixed>> $trips @return list<array<string,mixed>> */
     public static function rows(array $trips, ?string $today = null): array
@@ -102,7 +102,7 @@ final class WasteTripClosingReportService
         return [
             '#'.(string)($row['number']??''),(string)($row['title']??''),$unloadingDate,$company,
             trim((string)($row['legal_entity']??'')."\n".(string)($row['driver']??'')),
-            ...array_map(static fn(string $key):string=>($row[$key]??'')==='Есть'?'Есть':'НЕТ',['tn','invoice','act','contract','waybill']),
+            ...array_map(static fn(string $key):string=>($row[$key]??'')==='Есть'?'Есть':'НЕТ',['tn','contract','invoice','act','waybill']),
             $diagnostic,$status,(string)($row['payment_date']??''),$managerShort,$sectionLabel,
         ];
     }
