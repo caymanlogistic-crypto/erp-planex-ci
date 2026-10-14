@@ -42,6 +42,17 @@ try {
     $results = [];
     foreach ($companies as $company) {
         $pdo = $connect(companyDatabaseConfig($config, $company));
+        $serverVersion = (string)$pdo->query('SELECT VERSION()')->fetchColumn();
+        $isMariaDb = str_contains($serverVersion, 'MariaDB');
+        $versionParts = [];
+        $versionPattern = $isMariaDb ? '/(\d+)\.(\d+)\.(\d+)-MariaDB/' : '/^(\d+)\.(\d+)\.(\d+)/';
+        if (!preg_match($versionPattern, $serverVersion, $versionParts)) {
+            throw new RuntimeException('Unrecognized database version');
+        }
+        $numericVersion = $versionParts[1].'.'.$versionParts[2].'.'.$versionParts[3];
+        $checkUnsupported = $isMariaDb
+            ? version_compare($numericVersion, '10.2.1', '<')
+            : version_compare($numericVersion, '8.0.16', '<');
         if ((string)$pdo->query('SELECT DATABASE()')->fetchColumn() !== (string)$company['db_identifier']) {
             throw new RuntimeException('Unexpected tenant database');
         }
@@ -59,10 +70,12 @@ try {
             $createTable = (string)$pdo->query('SHOW CREATE TABLE vehicle_units')->fetch(PDO::FETCH_NUM)[1];
             $constraintDefined = preg_match('/CONSTRAINT\s+`?chk_vehicle_unit_vin_absent`?\s+CHECK\s*\(/i', $createTable) === 1;
             $constraint = $constraintReported || $constraintDefined;
-            if (($stored !== false) !== (bool)$column || (bool)$column !== $constraint) {
+            $constraintCompatible = $constraint || ($checkUnsupported && (bool)$column);
+            if (($stored !== false) !== (bool)$column || (bool)$column !== $constraintCompatible) {
                 throw new RuntimeException('Unjournaled or incomplete VIN absence schema: '.json_encode([
                     'company_id'=>(int)$company['id'], 'journaled'=>$stored !== false, 'column_present'=>(bool)$column,
                     'constraint_reported'=>$constraintReported, 'constraint_defined'=>$constraintDefined,
+                    'server_version'=>$serverVersion, 'check_unsupported'=>$checkUnsupported,
                 ], JSON_THROW_ON_ERROR));
             }
             $hash = hash_init('sha256');
@@ -80,19 +93,21 @@ try {
                 $createTable = (string)$pdo->query('SHOW CREATE TABLE vehicle_units')->fetch(PDO::FETCH_NUM)[1];
                 $constraintDefined = preg_match('/CONSTRAINT\s+`?chk_vehicle_unit_vin_absent`?\s+CHECK\s*\(/i', $createTable) === 1;
                 $constraint = $constraintReported || $constraintDefined;
+                $constraintCompatible = $constraint || ($checkUnsupported && (bool)$column);
             }
             $query->execute([$name]);
             $actualChecksum = $query->fetchColumn();
-            if ($column && (!is_string($actualChecksum) || !hash_equals($checksum, $actualChecksum) || !$constraint
+            if ($column && (!is_string($actualChecksum) || !hash_equals($checksum, $actualChecksum) || !$constraintCompatible
                 || $column['DATA_TYPE'] !== 'tinyint' || $column['IS_NULLABLE'] !== 'NO' || (string)$column['COLUMN_DEFAULT'] !== '0')) {
                 throw new RuntimeException('VIN absence migration verification failed: '.json_encode([
                     'company_id'=>(int)$company['id'], 'checksum_match'=>is_string($actualChecksum) && hash_equals($checksum,$actualChecksum),
-                    'constraint'=>$constraint, 'column'=>$column,
+                    'constraint'=>$constraint, 'check_unsupported'=>$checkUnsupported, 'server_version'=>$serverVersion, 'column'=>$column,
                 ], JSON_THROW_ON_ERROR));
             }
             $results[] = ['company_id'=>(int)$company['id'], 'ready'=>(bool)$column,
                 'vehicle_count'=>$count, 'vin_sha256'=>$vinHash,
-                'marked_absent'=>$column ? (int)$pdo->query('SELECT COUNT(*) FROM vehicle_units WHERE vin_absent=1')->fetchColumn() : 0];
+                'marked_absent'=>$column ? (int)$pdo->query('SELECT COUNT(*) FROM vehicle_units WHERE vin_absent=1')->fetchColumn() : 0,
+                'check_enforced'=>$constraint, 'server_version'=>$serverVersion];
         } finally {
             $pdo->prepare('SELECT RELEASE_LOCK(?)')->execute([$lockName]);
         }
