@@ -68,11 +68,12 @@
     reportRows.forEach(row=>{row.hidden=!ids.has(row.dataset.reportTripId);if(!row.hidden)visible++;});
     reportDialog.querySelector('[data-closing-report-empty]').hidden=visible>0;
     reportDialog.querySelector('[data-closing-report-count]').textContent=`Рейсов: ${visible}`;
-    const download=reportDialog.querySelector('[data-closing-report-download]');
-    const url=new URL(download.href,location.href);
-    url.searchParams.set('ids',trips.filter(trip=>!trip.hidden).map(trip=>trip.dataset.tripId).join(','));
-    download.href=url.toString();
-    download.toggleAttribute('aria-disabled',visible===0);
+    reportDialog.querySelectorAll('[data-closing-report-download]').forEach(download=>{
+      const url=new URL(download.href,location.href);
+      url.searchParams.set('ids',trips.filter(trip=>!trip.hidden).map(trip=>trip.dataset.tripId).join(','));
+      download.href=url.toString();
+      download.setAttribute('aria-disabled',String(visible===0));
+    });
   }
   render();
   if(reportDialog){
@@ -84,9 +85,9 @@
     reportDialog.querySelectorAll('[data-closing-report-close]').forEach(button=>button.addEventListener('click',()=>reportDialog.close()));
     reportDialog.addEventListener('click',event=>{if(event.target===reportDialog)reportDialog.close();});
     reportDialog.addEventListener('close',()=>reportOpener?.focus());
-    reportDialog.querySelector('[data-closing-report-download]')?.addEventListener('click',event=>{
-      if(event.currentTarget.getAttribute('aria-disabled')==='true')event.preventDefault();
-    });
+    reportDialog.querySelectorAll('[data-closing-report-download]').forEach(download=>download.addEventListener('click',event=>{
+      if(download.getAttribute('aria-disabled')==='true')event.preventDefault();
+    }));
   }
   if((requestedTripId && trips.some(trip=>trip.dataset.tripId===requestedTripId)) || stage) saveState();
   if(stage){const url=new URL(location.href);url.searchParams.delete('stage');history.replaceState(history.state,'',url);}

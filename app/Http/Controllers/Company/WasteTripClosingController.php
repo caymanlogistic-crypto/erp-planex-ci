@@ -11,6 +11,7 @@ use App\Service\EmployeeMailProfileService;
 use App\Service\EntityResponsibilityService;
 use App\Service\FinanceInvoiceService;
 use App\Service\WasteTripClosingPackageStore;
+use App\Service\WasteTripClosingArchiveService;
 use App\Service\WasteTripClosingService;
 use App\Service\WasteTripClosingReportService;
 use App\Service\WasteTripClosingTransportService;
@@ -74,14 +75,7 @@ final class WasteTripClosingController
         try{
             [,$pdo]=$this->context();
             if(!WasteTripClosingService::ready($pdo))throw new DomainException('Раздел ожидает обновление схемы.');
-            $raw=(string)($_GET['ids']??'');
-            if($raw!==''&&!preg_match('/^[1-9][0-9]*(?:,[1-9][0-9]*)*$/D',$raw))throw new DomainException('Некорректный список рейсов.');
-            $ids=$raw===''?[]:array_values(array_unique(array_map('intval',explode(',',$raw))));
-            if(count($ids)>500)throw new DomainException('Слишком много рейсов в отчёте.');
-            $trips=WasteTripClosingService::trips($pdo);
-            $trips=array_values(array_filter($trips,static fn(array $trip):bool=>in_array((int)$trip['id'],$ids,true)));
-            $position=array_flip($ids);
-            usort($trips,static fn(array $left,array $right):int=>($position[(int)$left['id']]??PHP_INT_MAX)<=>($position[(int)$right['id']]??PHP_INT_MAX));
+            $trips=$this->selectedReportTrips($pdo);
             $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
             foreach($trips as &$trip)$trip['transport']=$transport[(int)$trip['id']]??null;
             unset($trip);
@@ -96,6 +90,46 @@ final class WasteTripClosingController
             http_response_code(400);header('Content-Type: text/plain; charset=UTF-8');
             echo $exception instanceof DomainException?$exception->getMessage():'Не удалось сформировать Excel.';
         }finally{if($path!==null)@unlink($path);}
+    }
+
+    public function archiveZip(): void
+    {
+        header('Cache-Control: no-store');
+        $path=null;
+        try {
+            [$company,$pdo]=$this->context();
+            if (!WasteTripClosingService::ready($pdo)) throw new DomainException('Раздел ожидает обновление схемы.');
+            $trips=$this->selectedReportTrips($pdo);
+            if ($trips===[]) throw new DomainException('Выберите рейсы для архива.');
+            $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
+            foreach ($trips as &$trip) $trip['transport']=$transport[(int)$trip['id']]??null;
+            unset($trip);
+            $path=WasteTripClosingArchiveService::create((int)$company['id'],$trips);
+            header('Content-Type: application/zip');
+            header('X-Content-Type-Options: nosniff');
+            header('Content-Disposition: attachment; filename*=UTF-8\'\''.rawurlencode('Рейсы_закрывающие_документы.zip'));
+            header('Content-Length: '.filesize($path));
+            readfile($path);
+        } catch (Throwable $exception) {
+            error_log('waste trip closing archive: '.$exception->getMessage());
+            http_response_code($exception instanceof DomainException?400:500);
+            header('Content-Type: text/plain; charset=UTF-8');
+            echo $exception instanceof DomainException?$exception->getMessage():'Не удалось сформировать архив.';
+        } finally { if ($path!==null) @unlink($path); }
+    }
+
+    /** @return list<array<string,mixed>> */
+    private function selectedReportTrips(PDO $pdo): array
+    {
+        $raw=(string)($_GET['ids']??'');
+        if ($raw!==''&&!preg_match('/^[1-9][0-9]*(?:,[1-9][0-9]*)*$/D',$raw)) throw new DomainException('Некорректный список рейсов.');
+        $ids=$raw===''?[]:array_values(array_unique(array_map('intval',explode(',',$raw))));
+        if (count($ids)>500) throw new DomainException('Слишком много рейсов в отчёте.');
+        $trips=WasteTripClosingService::trips($pdo);
+        $trips=array_values(array_filter($trips,static fn(array $trip):bool=>in_array((int)$trip['id'],$ids,true)));
+        $position=array_flip($ids);
+        usort($trips,static fn(array $left,array $right):int=>($position[(int)$left['id']]??PHP_INT_MAX)<=>($position[(int)$right['id']]??PHP_INT_MAX));
+        return $trips;
     }
 
     public function upload(string $tripId): void
