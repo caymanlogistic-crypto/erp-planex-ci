@@ -450,24 +450,20 @@ final class WasteTripClosingService
         if ($stmt->rowCount()!==1) throw new DomainException('Статус отправки изменился. Обновите страницу.');
     }
 
-    /** Only fully settled customer obligations with posted, allocated bank receipts qualify. */
+    /** Posted bank payments allocated to either side of a trip qualify, including partial payments. */
     public static function paidBankTransactions(PDO $pdo, int $tripId): array
     {
-        $stmt = $pdo->prepare("SELECT COUNT(*) AS obligations,SUM(o.amount) AS due,SUM(o.paid_amount) AS paid
-              FROM finance_obligations o WHERE o.source_parent_type='WASTE_TRIP' AND o.source_parent_id=?
-                AND o.party_role='customer' AND o.cancelled_at IS NULL AND o.status<>'cancelled'");
-        $stmt->execute([$tripId]);
-        $amounts = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
-        if ((int)($amounts['obligations']??0) === 0 || self::moneyCents((string)($amounts['due']??'0')) <= 0
-            || self::moneyCents((string)($amounts['paid']??'0')) < self::moneyCents((string)$amounts['due'])) return [];
         $payments = $pdo->prepare("SELECT DISTINCT bt.id,bt.operation_date,bt.document_number
               FROM finance_operation_allocations a
               JOIN finance_obligations o ON o.id=a.obligation_id
               JOIN finance_operations fo ON fo.id=a.operation_id AND fo.status='POSTED'
               JOIN bank_transactions bt ON bt.id=fo.bank_transaction_id
-             WHERE o.source_parent_type='WASTE_TRIP' AND o.source_parent_id=? AND o.party_role='customer'
+             WHERE o.source_parent_type='WASTE_TRIP' AND o.source_parent_id=?
+               AND o.party_role IN ('customer','carrier')
                AND o.cancelled_at IS NULL AND a.cancelled_at IS NULL AND a.amount>0
-               AND bt.credit_amount>0 AND COALESCE(bt.is_internal_transfer,0)=0
+               AND ((o.party_role='customer' AND bt.credit_amount>0)
+                 OR (o.party_role='carrier' AND bt.debit_amount>0))
+               AND COALESCE(bt.is_internal_transfer,0)=0
                AND NOT EXISTS (SELECT 1 FROM finance_employee_movements fem WHERE fem.bank_transaction_id=bt.id)
              ORDER BY bt.operation_date,bt.id");
         $payments->execute([$tripId]);

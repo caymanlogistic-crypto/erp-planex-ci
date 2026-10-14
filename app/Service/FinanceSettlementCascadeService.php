@@ -196,9 +196,7 @@ final class FinanceSettlementCascadeService
                 LinearTripServiceFinanceService::syncRoute($pdo, (int)$obligation['source_parent_id']);
             } elseif ($isWasteTrip) {
                 FinanceObligationService::syncWasteTrip($pdo, (int)$obligation['source_parent_id']);
-                if ((string)$obligation['source_type']==='WASTE_TRIP_CUSTOMER_PAYMENT') {
-                    WasteTripClosingService::syncFinance($pdo, (int)$obligation['source_parent_id']);
-                }
+                WasteTripClosingService::syncFinance($pdo, (int)$obligation['source_parent_id']);
             } elseif (($allocation['linear_route_id'] ?? null) !== null) {
                 foreach (self::getRoutePaymentsForRoute($pdo, (int)$allocation['linear_route_id']) as $payment) {
                     self::recalculateRoutePayment($pdo, (int)$payment['id'], $userId, $roleCode);

@@ -18,14 +18,14 @@ cleanCompanyPoolDatabase($pdo);
 try {
     $pdo->exec("CREATE TABLE waste_trips(id BIGINT UNSIGNED PRIMARY KEY,status VARCHAR(20),deleted_at DATETIME NULL) ENGINE=InnoDB;
         CREATE TABLE documents(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,entity_type VARCHAR(20),entity_id INT UNSIGNED,original_name VARCHAR(255),relative_path VARCHAR(1000),mime_type VARCHAR(100),file_size INT,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,deleted_at DATETIME NULL) ENGINE=InnoDB;
-        CREATE TABLE bank_transactions(id INT UNSIGNED PRIMARY KEY,operation_date DATE,document_number VARCHAR(100),credit_amount DECIMAL(12,2),is_internal_transfer TINYINT NOT NULL DEFAULT 0) ENGINE=InnoDB;
+        CREATE TABLE bank_transactions(id INT UNSIGNED PRIMARY KEY,operation_date DATE,document_number VARCHAR(100),debit_amount DECIMAL(12,2),credit_amount DECIMAL(12,2),is_internal_transfer TINYINT NOT NULL DEFAULT 0) ENGINE=InnoDB;
         CREATE TABLE finance_employee_movements(id INT UNSIGNED PRIMARY KEY AUTO_INCREMENT,bank_transaction_id INT UNSIGNED) ENGINE=InnoDB;
         CREATE TABLE finance_operations(id INT UNSIGNED PRIMARY KEY,bank_transaction_id INT UNSIGNED,status VARCHAR(20)) ENGINE=InnoDB;
         CREATE TABLE finance_obligations(id INT UNSIGNED PRIMARY KEY,source_parent_type VARCHAR(50),source_parent_id BIGINT UNSIGNED,party_role VARCHAR(20),amount DECIMAL(12,2),paid_amount DECIMAL(12,2),cancelled_at DATETIME NULL,status VARCHAR(30)) ENGINE=InnoDB;
         CREATE TABLE finance_operation_allocations(id INT UNSIGNED PRIMARY KEY,obligation_id INT UNSIGNED,operation_id INT UNSIGNED,amount DECIMAL(12,2),cancelled_at DATETIME NULL) ENGINE=InnoDB;
         CREATE TABLE finance_closing_document_links(id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,bank_transaction_id INT UNSIGNED,document_id INT UNSIGNED,requirement_code VARCHAR(32),is_edo TINYINT NOT NULL DEFAULT 0,UNIQUE KEY uq_payment_document_code(bank_transaction_id,document_id,requirement_code)) ENGINE=InnoDB;
         INSERT INTO waste_trips VALUES(1,'completed',NULL);
-        INSERT INTO bank_transactions VALUES(7,CURDATE(),'PAY-7',100.00,0),(8,CURDATE(),'PAY-8',100.00,0);
+        INSERT INTO bank_transactions VALUES(7,CURDATE(),'PAY-7',0,50.00,0),(8,CURDATE(),'PAY-8',100.00,0,0),(9,CURDATE(),'PAY-9',20.00,0,0);
         INSERT INTO finance_operations VALUES(11,7,'POSTED'),(12,8,'POSTED');
         INSERT INTO finance_obligations VALUES(21,'WASTE_TRIP',1,'customer',100.00,50.00,NULL,'partially_paid'),(22,'WASTE_TRIP',1,'carrier',100.00,100.00,NULL,'paid');
         INSERT INTO finance_operation_allocations VALUES(31,21,11,50.00,NULL),(32,22,12,100.00,NULL);");
@@ -40,18 +40,24 @@ try {
         $pdo->prepare('INSERT INTO waste_trip_closing_documents(waste_trip_id,document_id,slot_code,requirement_code) VALUES(1,?,?,?)')
             ->execute([(int)$pdo->lastInsertId(),$slot,$code]);
     }
+    $contractDocumentId=(int)$pdo->query("SELECT document_id FROM waste_trip_closing_documents WHERE slot_code='contract'")->fetchColumn();
+    $pdo->prepare("INSERT INTO finance_closing_document_links(bank_transaction_id,document_id,requirement_code) VALUES(7,?,'application')")
+        ->execute([$contractDocumentId]);
     Closing::syncFinance($pdo,1);
-    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links')->fetchColumn()===0,'partial customer payment must not transfer');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=7')->fetchColumn()===4,'partial customer receipt must show the trip documents');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=8')->fetchColumn()===4,'carrier payout must show the trip documents');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=9')->fetchColumn()===0,'unallocated household payment must stay untouched');
     $pdo->exec('UPDATE finance_obligations SET paid_amount=100.00,status=\'paid\' WHERE id=21');
     $pdo->exec('UPDATE finance_operation_allocations SET amount=100.00 WHERE id=31');
     Closing::syncFinance($pdo,1);Closing::syncFinance($pdo,1);
     $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=7')->fetchColumn()===4,'fully paid trip transfers each file exactly once');
-    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=8')->fetchColumn()===0,'carrier payout must be excluded');
-    $assert((int)$pdo->query('SELECT COUNT(*) FROM waste_trip_closing_finance_links')->fetchColumn()===4,'four provenance links');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=8')->fetchColumn()===4,'carrier payout remains linked exactly once');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM waste_trip_closing_finance_links')->fetchColumn()===7,'manually linked document is not duplicated or taken over by synchronization');
     $pdo->exec('UPDATE finance_obligations SET paid_amount=0,status=\'planned\' WHERE id=21');
     $pdo->exec('UPDATE finance_operation_allocations SET cancelled_at=NOW() WHERE id=31');
     Closing::syncFinance($pdo,1);
-    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links')->fetchColumn()===0,'cancelled allocation removes generated links');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=7')->fetchColumn()===1,'cancelled customer allocation preserves the existing manual link');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=8')->fetchColumn()===4,'carrier documents survive customer cancellation');
     echo "WASTE_TRIP_CLOSING_FINANCE=PASS\n";
 } finally {
     cleanCompanyPoolDatabase($pdo);
