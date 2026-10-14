@@ -22,6 +22,9 @@ try{
  for(const width of [1920,390]){
   const page=await browser.newPage({viewport:{width,height:900}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto('http://127.0.0.1:'+server.address().port);await page.locator('[data-gps-coverage]').first().getByText('25%').waitFor();
+  assert.deepEqual(await page.locator('.gps-status-tab').allTextContents(),['Все рейсы 2','В пути 1','Законченные 1']);
+  assert.equal(await page.locator('.gps-status-tab.is-active').count(),1);
+  assert.equal(await page.locator('.gps-status-tab').nth(1).getAttribute('href'),'/company/trips/gps-coverage?status=started');
   assert.equal(await page.locator('[data-gps-empty]').isVisible(),false,'false empty state visible');
   await page.locator('[data-gps-expand]').first().click();assert.equal(await page.locator('.gps-gap').count(),1);
   assert.equal(await page.locator('.gps-detail-row').first().isVisible(),true);

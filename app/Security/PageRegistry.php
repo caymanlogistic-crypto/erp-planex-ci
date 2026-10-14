@@ -54,7 +54,7 @@ final class PageRegistry
             self::definition('company.clients', 'Клиенты', 'Операции', '', 20, '/company/clients'),
             self::definition('company.trips.linear', 'Линейные', 'Операции', 'Рейсы', 30, '/company/trips/linear', badgeProvider: 'linear_trips_problem', badgeDisplay: 'self_parent'),
             self::definition('company.trips.waste', 'Отходы', 'Операции', 'Рейсы', 40, '/company/trips/departures', badgeProvider: 'departures_problem', badgeDisplay: 'self_parent'),
-            self::definition('company.trips.gps_coverage', 'Покрытие GPS', 'Операции', 'Рейсы', 41, '/company/trips/gps-coverage', grantable: false, ownerOnly: true),
+            self::definition('company.trips.gps_coverage', 'Покрытие GPS', 'Операции', 'Рейсы', 41, '/company/trips/gps-coverage'),
             self::definition('company.warehouses.stock', 'Заявки на складе', 'Операции', 'Склады', 41, '/company/warehouses/stock', badgeProvider: 'warehouse_stock_problem', badgeDisplay: 'self_parent'),
             self::definition('company.documents.request', 'Запросить документы', 'Операции', 'Рейсы', 41, '/company/documents/request'),
             self::definition('company.documents.collection', 'Регистрация времени загрузки', 'Операции', '', 42, '/company/logistics-assistant', badgeProvider: 'trip_completion_problem'),

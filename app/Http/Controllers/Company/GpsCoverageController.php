@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Security\AccessRuntime;
 use App\Service\GpsCoverageService;
 use App\Service\WasteTripLegacySourceService;
 use PDO;
@@ -20,14 +21,23 @@ final class GpsCoverageController
         return $pdo;
     }
 
+    private function managerIds(PDO $source): ?array
+    {
+        $access=AccessRuntime::current();
+        if ($access->isSystemOwner() || $access->isTechnicalSuperadmin()) return null;
+        return GpsCoverageService::managerIds($source,$this->db->connection(),(int)$access->companyId(),(int)$access->membershipId());
+    }
+
     public function index(): void
     {
         requireRole(['company_owner']);
         $pageTitle='Покрытие GPS'; $pageContext='Рейсы › Покрытие GPS';
         $pageStylesheets=['/assets/css/route-executor-review-workflow.css','/assets/css/route-executor-header.css','/assets/css/route-executor-list-v016.css','/assets/css/gps-coverage.css'];
         $pageScripts=['/assets/js/gps-coverage.js','/assets/js/gps-route-listbox.js'];
-        $data=['rows'=>[],'total'=>0,'page'=>1,'source_at'=>null];$error=null;
-        try{$data=GpsCoverageService::page($this->source(),max(1,(int)($_GET['page']??1)));}
+        $status=(string)($_GET['status']??'all');
+        if (!in_array($status,['all','started','completed'],true)) $status='all';
+        $data=['rows'=>[],'total'=>0,'totals'=>['all'=>0,'started'=>0,'completed'=>0],'status'=>$status,'page'=>1,'source_at'=>null];$error=null;
+        try{$source=$this->source();$data=GpsCoverageService::page($source,max(1,(int)($_GET['page']??1)),$status,$this->managerIds($source));}
         catch(Throwable $e){error_log('GPS coverage index: '.$e->getMessage());$error='Не удалось получить рейсы из базы Фрегат.';}
         ob_start();require base_path('app/View/pages/company_gps_coverage.php');$content=(string)ob_get_clean();
         $config=$this->config;$db=$this->db;require base_path('app/View/layouts/main.php');
@@ -39,9 +49,10 @@ final class GpsCoverageController
         header('Content-Type: application/json; charset=utf-8');
         header('Cache-Control: no-store, private');
         try {
-            $result=GpsCoverageService::flight($this->source(),(int)$id,(int)($_GET['minutes']??15));
+            $source=$this->source();
+            $result=GpsCoverageService::flight($source,(int)$id,(int)($_GET['minutes']??15),$this->managerIds($source));
             echo json_encode($result,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR);
-        } catch(\InvalidArgumentException $e){http_response_code(400);echo json_encode(['error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE);}
+        } catch(\InvalidArgumentException $e){http_response_code($e->getMessage()==='Рейс не найден.'?404:400);echo json_encode(['error'=>$e->getMessage()],JSON_UNESCAPED_UNICODE);}
         catch(Throwable $e){error_log('GPS coverage flight: '.$e->getMessage());http_response_code(503);echo json_encode(['error'=>'Данные GPS временно недоступны.'],JSON_UNESCAPED_UNICODE);}
     }
 }

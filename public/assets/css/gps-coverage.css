@@ -1,5 +1,10 @@
 /* Only GPS gap visualization has no counterpart in the approved ERP registry.
    Header, shell, toolbar, controls, table and mobile scroll use original ERP CSS. */
+.gps-status-tabs{box-sizing:border-box;display:flex;gap:2px;width:100%;height:37px;margin:0 0 6px;overflow-x:auto;overflow-y:hidden;scrollbar-width:thin}
+.gps-status-tab{box-sizing:border-box;position:relative;display:inline-flex;align-items:center;gap:8px;flex:none;height:37px;min-width:max-content;padding:0 12px 2px;border-bottom:2px solid transparent;color:#625c54;font:500 12px/16px 'IBM Plex Sans',sans-serif;text-decoration:none;white-space:nowrap}
+.gps-status-tab b{font:600 12px/16px 'IBM Plex Sans',sans-serif;color:inherit;font-variant-numeric:tabular-nums}
+.gps-status-tab:hover,.gps-status-tab.is-active{border-bottom-color:#7c4718;color:#7c4718;text-decoration:none}
+.gps-status-tab:focus-visible{outline:2px solid #9a5a22;outline-offset:-3px}
 .gps-progress{height:6px;margin-top:4px;background:var(--badge-danger-bg)}
 .gps-progress i{display:block;height:100%;background:var(--chart-3)}
 .gps-detail-row[hidden]{display:none!important}
