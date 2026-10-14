@@ -4,8 +4,10 @@ declare(strict_types=1);
 require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Support/company_database.php';
 require_once BASE_PATH.'/app/Service/WasteTripClosingService.php';
+require_once BASE_PATH.'/app/Service/WasteTripClosingFinanceBackfillService.php';
 
 use App\Service\WasteTripClosingService as Closing;
+use App\Service\WasteTripClosingFinanceBackfillService as Backfill;
 
 $database=(string)getenv('PLANEX_TEST_FIXED_DB');
 if ($database==='' || !in_array($database,explode(',',(string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')),true)) {
@@ -41,8 +43,35 @@ try {
             ->execute([(int)$pdo->lastInsertId(),$slot,$code]);
     }
     $contractDocumentId=(int)$pdo->query("SELECT document_id FROM waste_trip_closing_documents WHERE slot_code='contract'")->fetchColumn();
-    $pdo->prepare("INSERT INTO finance_closing_document_links(bank_transaction_id,document_id,requirement_code) VALUES(7,?,'application')")
+    $pdo->prepare("INSERT INTO finance_closing_document_links(bank_transaction_id,document_id,requirement_code) VALUES(7,?,'other')")
         ->execute([$contractDocumentId]);
+    $evidenceDir=sys_get_temp_dir().'/planex-backfill-test-'.bin2hex(random_bytes(8));
+    if (!mkdir($evidenceDir,0700)) throw new RuntimeException('Test evidence directory unavailable');
+    $manifest=$evidenceDir.'/test-run.json';
+    try {
+        $plan=Backfill::plan($pdo);
+        $assert(count($plan)===7,'historical preview excludes the existing manual link');
+        $result=Backfill::apply($pdo,$plan,1,str_repeat('a',40),$manifest);
+        $assert($result['inserted']===7 && is_file($manifest),'backfill inserts seven missing links and saves rollback manifest');
+        $assert(Backfill::plan($pdo)===[],'second preview finds no duplicate work');
+        $reapplyRejected=false;
+        try { Backfill::apply($pdo,$plan,1,str_repeat('a',40),$manifest); }
+        catch (RuntimeException $error) { $reapplyRejected=true; }
+        $assert($reapplyRejected,'same run cannot apply twice');
+        $pdo->exec('UPDATE finance_closing_document_links SET is_edo=1 WHERE id=(SELECT finance_link_id FROM waste_trip_closing_finance_links ORDER BY finance_link_id LIMIT 1)');
+        $rollbackRejected=false;
+        try { Backfill::rollback($pdo,1,$manifest); }
+        catch (RuntimeException $error) { $rollbackRejected=true; }
+        $assert($rollbackRejected,'rollback refuses a user-edited link');
+        $pdo->exec('UPDATE finance_closing_document_links SET is_edo=0 WHERE id=(SELECT finance_link_id FROM waste_trip_closing_finance_links ORDER BY finance_link_id LIMIT 1)');
+        $rollback=Backfill::rollback($pdo,1,$manifest);
+        $assert($rollback['removed']===7,'rollback removes precisely its seven links');
+        $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links')->fetchColumn()===1,'rollback preserves original manual link');
+        $assert(Backfill::rollback($pdo,1,$manifest)['already_absent']===7,'rollback can be retried');
+    } finally {
+        foreach ([$manifest,$manifest.'.rolled-back'] as $path) if (is_file($path)) unlink($path);
+        rmdir($evidenceDir);
+    }
     Closing::syncFinance($pdo,1);
     $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=7')->fetchColumn()===4,'partial customer receipt must show the trip documents');
     $assert((int)$pdo->query('SELECT COUNT(*) FROM finance_closing_document_links WHERE bank_transaction_id=8')->fetchColumn()===4,'carrier payout must show the trip documents');
