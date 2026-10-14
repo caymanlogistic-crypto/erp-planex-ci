@@ -97,6 +97,15 @@ $provider->snapshot = memberSnapshot(['company.documents.trip_closing'], ['compa
 $closingAccess = $resolver->resolve(new AccessRequestContext(4, 7));
 expect($closingAccess->canAccessPage('company.documents.trip_closing') && !$closingAccess->canAccessPage('company.documents.trip_closing_registry'), 'Explicit registry denial must override compatibility grant.');
 
+expect(in_array('company.trips.gps_coverage', $registry->grantablePageKeys(), true), 'GPS page must be configurable in roles.');
+$provider->snapshot = memberSnapshot(['company.trips.waste'], [], ['waste_trip'=>'own']);
+$gpsAccess = $resolver->resolve(new AccessRequestContext(4, 7));
+expect($gpsAccess->canAccessPage('company.trips.gps_coverage'), 'Waste trip manager must see GPS page.');
+$provider->snapshot = memberSnapshot(['company.trips.waste'], ['company.trips.gps_coverage'=>'deny'], ['waste_trip'=>'own']);
+expect(!$resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.trips.gps_coverage'), 'Explicit GPS denial must prevail.');
+$provider->snapshot = memberSnapshot(['company.trips.waste'], [], ['waste_trip'=>'none']);
+expect(!$resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.trips.gps_coverage'), 'Manager with no waste-trip scope must not see GPS page.');
+
 $provider->snapshot = memberSnapshot(
     ['company.clients', 'company.drivers'],
     ['company.clients' => 'deny', 'company.contractors' => 'allow'],

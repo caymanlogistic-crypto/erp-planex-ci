@@ -1,7 +1,7 @@
 (() => {
   const page=document.querySelector('[data-gps-page]');if(!page)return;
   const rows=[...page.querySelectorAll('[data-gps-row]')];
-  const status=page.querySelector('[data-gps-status]'),threshold=page.querySelector('[data-gps-threshold]'),search=page.querySelector('[data-gps-search]');
+  const threshold=page.querySelector('[data-gps-threshold]'),search=page.querySelector('[data-gps-search]');
   const cache=new Map();let generation=0;
   const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const duration=s=>{s=Math.max(0,Math.round(s||0));const d=Math.floor(s/86400),h=Math.floor(s%86400/3600),m=Math.floor(s%3600/60);return [d?d+' д':'',h?h+' ч':'',m?m+' мин':''].filter(Boolean).join(' ')||'<1 мин';};
@@ -29,8 +29,8 @@
     try{const response=await fetch(page.dataset.base+'/'+row.dataset.id+'/coverage?minutes='+threshold.value,{credentials:'same-origin',cache:'no-store'});if(!response.ok)throw Error('HTTP '+response.status);const data=await response.json();cache.set(key,data);if(run===generation)paint(row,data);}
     catch(e){if(run===generation)row.querySelector('[data-gps-coverage]').textContent='GPS временно недоступен';}
   }
-  async function refresh(){const run=++generation;const q=search.value.trim().toLocaleLowerCase('ru');let visible=0;for(const row of rows){const show=(status.value==='all'||row.dataset.status===status.value)&&(!q||row.dataset.search.includes(q));row.hidden=!show;document.getElementById('gps-detail-'+row.dataset.id).hidden=!show||document.getElementById('gps-detail-'+row.dataset.id).hidden;if(show)visible++;}page.querySelector('[data-visible]').textContent=visible;page.querySelector('[data-gps-empty]').hidden=visible>0;const selected=rows.filter(r=>!r.hidden);for(let i=0;i<selected.length;i+=2)await Promise.all(selected.slice(i,i+2).map(row=>load(row,run)));}
+  async function refresh(){const run=++generation;const q=search.value.trim().toLocaleLowerCase('ru');let visible=0;for(const row of rows){const show=!q||row.dataset.search.includes(q);row.hidden=!show;document.getElementById('gps-detail-'+row.dataset.id).hidden=!show||document.getElementById('gps-detail-'+row.dataset.id).hidden;if(show)visible++;}if(q)page.querySelector('[data-visible]').textContent=visible;else page.querySelector('[data-visible]').textContent=page.querySelector('[data-visible]').dataset.total;page.querySelector('[data-gps-empty]').hidden=visible>0;const selected=rows.filter(r=>!r.hidden);for(let i=0;i<selected.length;i+=2)await Promise.all(selected.slice(i,i+2).map(row=>load(row,run)));}
   rows.forEach(row=>row.querySelector('[data-gps-expand]').addEventListener('click',()=>{const detail=document.getElementById('gps-detail-'+row.dataset.id);const open=detail.hidden;page.querySelectorAll('.gps-detail-row').forEach(r=>r.hidden=true);page.querySelectorAll('[data-gps-expand]').forEach(b=>b.setAttribute('aria-expanded','false'));if(!open)return;detail.hidden=false;row.querySelector('[data-gps-expand]').setAttribute('aria-expanded','true');const data=cache.get(row.dataset.id+'|'+threshold.value);if(data)paintDetail(row,data);else detail.firstElementChild.textContent='Загрузка GPS…';}));
-  status.addEventListener('change',refresh);threshold.addEventListener('change',refresh);search.addEventListener('input',refresh);
+  threshold.addEventListener('change',refresh);search.addEventListener('input',refresh);
   refresh();
 })();

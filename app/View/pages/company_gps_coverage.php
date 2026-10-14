@@ -5,10 +5,14 @@
       <span class="page-summary">Рейсы Фрегата · действующие и завершённые · GPS-данные на <?= e($data['source_at'] ? (new DateTimeImmutable($data['source_at'],new DateTimeZone('UTC')))->setTimezone(new DateTimeZone('Europe/Moscow'))->format('d.m.Y H:i').' МСК' : '—') ?></span></span></div>
   </div>
   <?php if ($error): ?><div class="notice warn"><?= e($error) ?></div><?php else: ?>
+  <nav class="gps-status-tabs" aria-label="Статус рейса">
+    <?php foreach (['all'=>'Все рейсы','started'=>'В пути','completed'=>'Законченные'] as $tabStatus=>$tabLabel): ?>
+      <a href="<?= e(app_url('/company/trips/gps-coverage'.($tabStatus==='all'?'':'?status='.$tabStatus))) ?>" class="gps-status-tab<?= $data['status']===$tabStatus?' is-active':'' ?>" <?= $data['status']===$tabStatus?'aria-current="page"':'' ?>><?= e($tabLabel) ?> <b><?= (int)$data['totals'][$tabStatus] ?></b></a>
+    <?php endforeach; ?>
+  </nav>
   <div class="table-card table-card--standard route-executors-card gps-card">
-    <div class="table-toolbar"><div class="found-label">Найдено: <b data-visible><?= count($data['rows']) ?></b></div>
+    <div class="table-toolbar"><div class="found-label">Найдено: <b data-visible data-total="<?= (int)$data['total'] ?>"><?= (int)$data['total'] ?></b></div>
       <div class="toolbar-right">
-        <div class="toolbar-sort"><span class="toolbar-sort-label">Статус рейса:</span><select class="toolbar-select" aria-label="Статус рейса" data-erp-grid-sort data-gps-status><option value="all">Все статусы</option><option value="started">В пути</option><option value="completed">Завершённые</option></select></div>
         <div class="toolbar-sort"><span class="toolbar-sort-label">Порог GPS:</span><select class="toolbar-select" aria-label="Порог свежести GPS" data-erp-grid-sort data-gps-threshold><option value="5">Порог 5 мин</option><option value="15" selected>Порог 15 мин</option><option value="30">Порог 30 мин</option><option value="60">Порог 60 мин</option></select></div>
         <input type="search" class="toolbar-search" data-gps-search placeholder="Рейс, водитель, госномер" aria-label="Поиск по рейсу, водителю и госномеру" autocomplete="off">
       </div>
@@ -27,6 +31,6 @@
       </tbody></table></div>
       <div class="empty-state is-compact" data-gps-empty <?= $data['rows']?'hidden':'' ?>><p class="empty-title">Рейсы не найдены</p></div>
   </div>
-  <?php if($pages>1): ?><nav class="gps-pages" aria-label="Страницы рейсов"><?php if($data['page']>1): ?><a class="btn btn-ghost" href="<?= e(app_url('/company/trips/gps-coverage?page='.($data['page']-1))) ?>">← Назад</a><?php endif; ?><span>Страница <?= (int)$data['page'] ?> из <?= $pages ?></span><?php if($data['page']<$pages): ?><a class="btn btn-ghost" href="<?= e(app_url('/company/trips/gps-coverage?page='.($data['page']+1))) ?>">Далее →</a><?php endif; ?></nav><?php endif; ?>
+  <?php if($pages>1): $query='?'.($data['status']==='all'?'':'status='.$data['status'].'&').'page='; ?><nav class="gps-pages" aria-label="Страницы рейсов"><?php if($data['page']>1): ?><a class="btn btn-ghost" href="<?= e(app_url('/company/trips/gps-coverage'.$query.($data['page']-1))) ?>">← Назад</a><?php endif; ?><span>Страница <?= (int)$data['page'] ?> из <?= $pages ?></span><?php if($data['page']<$pages): ?><a class="btn btn-ghost" href="<?= e(app_url('/company/trips/gps-coverage'.$query.($data['page']+1))) ?>">Далее →</a><?php endif; ?></nav><?php endif; ?>
   <?php endif; ?>
 </div>

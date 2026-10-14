@@ -14,7 +14,7 @@ final class RouteExecutorReviewPackage
     {
         $controls=$snapshot['controls']??null;
         if (!is_array($controls) || count($controls)>350) throw new DomainException('Некорректные данные карточки.');
-        $values=[];$rows=[];
+        $values=[];$rows=[];$checked=[];
         $sections=['lab-contractor-form'=>'Подрядчик','lab-driver-form'=>'Водитель','lab-vehicle-form'=>'Транспорт'];
         foreach ($controls as $item) {
             if (!is_array($item)) throw new DomainException('Некорректные данные карточки.');
@@ -23,6 +23,10 @@ final class RouteExecutorReviewPackage
             $value=$item['value']??'';
             if (!is_string($value) || mb_strlen($value)>5000) throw new DomainException('Значение поля слишком длинное.');
             $values[$form][$name]=$value;
+            if ((string)($item['type']??'')==='checkbox') $checked[$form][$name]=!empty($item['checked']) && $value==='1';
+            if ($form==='lab-vehicle-form' && str_ends_with($name,'[vin_absent]') && !empty($checked[$form][$name])) {
+                $rows[]=['name'=>'Транспорт: VIN отсутствует','label'=>'VIN отсутствует','form'=>$form,'field'=>$name,'raw_value'=>'1','value'=>'Да'];
+            }
             if (trim($value)==='' || in_array((string)($item['type']??''),['checkbox','radio'],true)) continue;
             $label=(string)($item['label']??$name);
             if ($form==='lab-driver-form' && $name==='extra_phones[]') $label='Доп контакты';
@@ -62,9 +66,12 @@ final class RouteExecutorReviewPackage
         if (!$existingVehicle && !$unitRules) $vehicleReady=false;
         $requiredFiles=$existingDriver?[]:['lab-driver-form|predef_doc[passport][]','lab-driver-form|predef_doc[driver_license][]'];
         foreach ($existingVehicle ? [] : $unitRules as $role=>$unitRule) {
-            foreach (['brand','plate_number','vin'] as $field) {
+            foreach (['brand','plate_number'] as $field) {
                 $vehicleReady=$vehicleReady && $get('lab-vehicle-form',"units[$role][$field]")!=='';
             }
+            $vin=$get('lab-vehicle-form',"units[$role][vin]");
+            $vinAbsent=!empty($checked['lab-vehicle-form']["units[$role][vin_absent]"]);
+            $vehicleReady=$vehicleReady && (($vinAbsent && $vin==='') || (!$vinAbsent && preg_match('/^[A-HJ-NPR-Z0-9]{17}$/',strtoupper($vin))===1));
             if (!empty($unitRule['show_capacity'])) $vehicleReady=$vehicleReady && $get('lab-vehicle-form',"units[$role][capacity_tons]")!=='';
             if (!empty($unitRule['show_volume'])) $vehicleReady=$vehicleReady && $get('lab-vehicle-form',"units[$role][volume_m3]")!=='';
             $requiredFiles[]="lab-vehicle-form|predef_doc[$role][sts][]";
@@ -102,11 +109,16 @@ final class RouteExecutorReviewPackage
             'email'=>'Email водителя'] as $field=>$label) if ($get('lab-driver-form',$field)==='') $missing[]='Водитель: '.$label;
         if (!$existingVehicle && !$unitRules) $missing[]='Транспорт: тип комплекта ТС';
         foreach ($existingVehicle ? [] : $unitRules as $role=>$unitRule) {
-            $requiredUnitFields=['brand'=>'марка','plate_number'=>'госномер','vin'=>'VIN'];
+            $requiredUnitFields=['brand'=>'марка','plate_number'=>'госномер'];
             if (!empty($unitRule['show_capacity'])) $requiredUnitFields['capacity_tons']='грузоподъёмность';
             if (!empty($unitRule['show_volume'])) $requiredUnitFields['volume_m3']='объём';
             foreach ($requiredUnitFields as $field=>$label) if ($get('lab-vehicle-form',"units[$role][$field]")==='')
                 $missing[]='Транспорт '.($role==='primary'?'основной':'дополнительный').': '.$label;
+            $vin=$get('lab-vehicle-form',"units[$role][vin]");
+            $vinAbsent=!empty($checked['lab-vehicle-form']["units[$role][vin_absent]"]);
+            if ($vin==='' && !$vinAbsent) $missing[]='Транспорт '.($role==='primary'?'основной':'дополнительный').': VIN или отметка об отсутствии';
+            elseif ($vin!=='' && $vinAbsent) $missing[]='Транспорт '.($role==='primary'?'основной':'дополнительный').': очистите VIN при отметке об отсутствии';
+            elseif ($vin!=='' && preg_match('/^[A-HJ-NPR-Z0-9]{17}$/',strtoupper($vin))!==1) $missing[]='Транспорт '.($role==='primary'?'основной':'дополнительный').': неверный формат VIN';
         }
         foreach ($requiredFiles as $key) if (!isset($seen[$key])) {
             $label=match (true) {

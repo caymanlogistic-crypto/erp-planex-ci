@@ -87,6 +87,18 @@ final class EffectiveAccessResolver
             $scopes[$entityType] = $scope;
         }
 
+        // Managers who can work with waste trips can inspect GPS for their own
+        // trips. A dedicated GPS grant or explicit denial still takes precedence.
+        $gpsKey = 'company.trips.gps_coverage';
+        if (($pages['company.trips.waste'] ?? false)
+            && !in_array($gpsKey, $snapshot->rolePageKeys, true)
+            && ($snapshot->pageOverrides[$gpsKey] ?? 'inherit') === 'inherit') {
+            $pages[$gpsKey] = true;
+        }
+        if (($scopes['waste_trip'] ?? EffectiveAccess::SCOPE_NONE) === EffectiveAccess::SCOPE_NONE) {
+            $pages[$gpsKey] = false;
+        }
+
         return EffectiveAccess::member(
             $snapshot->membershipId,
             $snapshot->companyId,

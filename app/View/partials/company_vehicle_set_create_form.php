@@ -18,6 +18,7 @@ $unitDefaults = [
     'brand' => '',
     'model' => '',
     'vin' => '',
+    'vin_absent' => '',
     'capacity_tons' => '',
     'volume_m3' => '',
     'diagnostic_card_number' => '',
@@ -208,9 +209,9 @@ $vehicleSetFormClass = $vehicleSetFormClass ?? 'vehicle-set-form';
                             </div>
                         </div>
 
-                        <div class="field-row field-row-group">
+                        <div class="field-row field-row-group vin-absent-row">
                             <div class="field field-w-issued-by<?= $getUnitError($errors, $role, 'vin') !== '' ? ' is-error' : '' ?>">
-                                <label class="field-label">VIN код <span class="req" data-required-mark>*</span></label>
+                                <label class="field-label">VIN код <span class="req" data-required-mark<?= !empty($unitValues[$role]['vin_absent']) ? ' hidden' : '' ?>>*</span></label>
                                 <input
                                     type="text"
                                     name="units[<?= e($role) ?>][vin]"
@@ -219,6 +220,7 @@ $vehicleSetFormClass = $vehicleSetFormClass ?? 'vehicle-set-form';
                                     placeholder="<?= $role === 'secondary' ? 'WSM00000000000000' : 'X9F12345678901234' ?>"
                                     data-required-when-visible
                                 >
+                                <label class="vehicle-vin-absent contact-checkbox-item checkbox-item"><input type="checkbox" name="units[<?= e($role) ?>][vin_absent]" value="1" <?= !empty($unitValues[$role]['vin_absent']) ? 'checked' : '' ?>><span class="checkbox-mark" aria-hidden="true"></span><span class="contact-checkbox-label">VIN отсутствует</span></label>
                                 <div class="field-msg"><?= e($getUnitError($errors, $role, 'vin')) ?></div>
                             </div>
 
@@ -773,6 +775,11 @@ $vehicleSetFormClass = $vehicleSetFormClass ?? 'vehicle-set-form';
             return true;
         }
         if (name.indexOf('[vin]') !== -1) {
+            if (input.closest('.field')?.querySelector('[name$="[vin_absent]"]')?.checked) {
+                input.value = '';
+                clearFieldError(input);
+                return true;
+            }
             input.value = normalizeVinValue(input.value);
             if (input.value !== '' && !/^[A-HJ-NPR-Z0-9]{17}$/.test(input.value)) {
                 setFieldError(input, 'Формат VIN: 17 символов');
@@ -1214,6 +1221,19 @@ $vehicleSetFormClass = $vehicleSetFormClass ?? 'vehicle-set-form';
             input.value = normalizePlateValue(input.value);
             validatePlateField(input);
         });
+    });
+    form.querySelectorAll('input[name$="[vin_absent]"]').forEach(function (toggle) {
+        var vin = toggle.closest('.field').querySelector('input[name$="[vin]"]');
+        function syncVin() {
+            if (toggle.checked) vin.value = '';
+            vin.disabled = toggle.checked;
+            var required = vin.closest('.field').querySelector('[data-required-mark]');
+            if (required) required.hidden = toggle.checked;
+            clearFieldError(vin);
+            vin.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+        toggle.addEventListener('change', syncVin);
+        syncVin();
     });
     form.addEventListener('focusin', function (event) {
         if (event.target && event.target.classList.contains('js-erp-date-picker')) {
