@@ -33,6 +33,26 @@ try {
     check(str_contains(implode(' ',$names),'Рейс_№322_Москва _ Тверь_ID7/'),'trip folder is descriptive');
     check($zip->getFromName('Рейс_№322_Москва _ Тверь_ID7/Договор_scan.pdf')==='first','first document content');
     $zip->close();
+    $trip['documents'][]=['relative_path'=>'companies/25/documents/waste_trip/7/missing.pdf','original_name'=>'lost.pdf','slot_code'=>'invoice','requirement_code'=>'invoice'];
+    $partial=\App\Service\WasteTripClosingArchiveService::create(25,[$trip]);
+    $zip=new ZipArchive();check($zip->open($partial)===true,'partial archive opens');
+    check(str_contains((string)$zip->getFromName('Недоступные_файлы.txt'),'Рейс №322: lost.pdf'),'missing file is clearly listed');
+    check($zip->getFromName('Рейс_№322_Москва _ Тверь_ID7/Договор_scan.pdf')==='first','available document remains in partial archive');
+    $zip->close();@unlink($partial);
+    $many=[];
+    for($id=10;$id<110;$id++){
+        $directory=storage_path('companies/25/documents/waste_trip/'.$id);
+        mkdir($directory,0700,true);
+        file_put_contents($directory.'/act.pdf','act-'.$id);
+        $many[]=['id'=>$id,'business_id'=>$id+300,'comment'=>'Рейс '.$id,'status'=>'completed',
+            'documents'=>[['relative_path'=>'companies/25/documents/waste_trip/'.$id.'/act.pdf',
+                'original_name'=>'подписанный акт.pdf','slot_code'=>'act','requirement_code'=>'act']]];
+    }
+    $bulk=\App\Service\WasteTripClosingArchiveService::create(25,$many);
+    $zip=new ZipArchive();check($zip->open($bulk)===true,'100-trip archive opens');
+    check($zip->numFiles===201,'100 folders and 100 documents plus summary');
+    check($zip->getFromName('Рейс_№409_Рейс 109_ID109/Акт_подписанный акт.pdf')==='act-109','last trip is present');
+    $zip->close();@unlink($bulk);
     $trip['documents'][0]['relative_path']='companies/26/documents/waste_trip/7/first.pdf';
     try {\App\Service\WasteTripClosingArchiveService::create(25,[$trip]);throw new RuntimeException('cross-company path accepted');}
     catch (DomainException $expected) {}

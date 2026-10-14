@@ -114,7 +114,8 @@ final class WasteTripClosingController
             error_log('waste trip closing archive: '.$exception->getMessage());
             http_response_code($exception instanceof DomainException?400:500);
             header('Content-Type: text/plain; charset=UTF-8');
-            echo $exception instanceof DomainException?$exception->getMessage():'Не удалось сформировать архив.';
+            echo $exception instanceof DomainException || $exception instanceof \RuntimeException
+                ? $exception->getMessage() : 'Не удалось сформировать архив.';
         } finally { if ($path!==null) @unlink($path); }
     }
 

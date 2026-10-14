@@ -22,7 +22,7 @@ final class WasteTripClosingArchiveService
             $report=WasteTripClosingReportService::xlsx(WasteTripClosingReportService::rows($trips));
             if ($zip->open($path,ZipArchive::OVERWRITE)!==true) throw new RuntimeException('Не удалось открыть архив.');
             if (!$zip->addFile($report,'Сводный_отчёт.xlsx')) throw new RuntimeException('Не удалось добавить сводный отчёт.');
-            $used=[];
+            $used=[];$missing=[];
             foreach ($trips as $trip) {
                 $tripId=(int)$trip['id'];
                 $number=self::segment((string)($trip['business_id']??$tripId),'№'.$tripId);
@@ -35,8 +35,12 @@ final class WasteTripClosingArchiveService
                     if (!str_starts_with($relative,$prefix)) throw new DomainException('Документ находится вне рейса.');
                     $root=realpath(storage_path('companies/'.$companyId.'/documents/waste_trip/'.$tripId));
                     $source=realpath(storage_path($relative));
-                    if ($root===false || $source===false || !str_starts_with($source,$root.DIRECTORY_SEPARATOR) || !is_file($source)) {
-                        throw new DomainException('Файл документа рейса №'.$number.' недоступен.');
+                    if ($source!==false && ($root===false || !str_starts_with($source,$root.DIRECTORY_SEPARATOR))) {
+                        throw new DomainException('Документ находится вне рейса.');
+                    }
+                    if ($root===false || $source===false || !is_file($source) || !is_readable($source)) {
+                        $missing[]='Рейс №'.$number.': '.(string)($document['original_name']??'документ');
+                        continue;
                     }
                     $slot=(string)($document['slot_code']??'');
                     $type=match($slot) {
@@ -52,10 +56,16 @@ final class WasteTripClosingArchiveService
                     $stem=$folder.$type.'_'.$base;
                     $name=$stem.($extension!==''?'.'.$extension:'');
                     $suffix=2;
-                    while (isset($used[mb_strtolower($name,'UTF-8')])) $name=$stem.'_'.$suffix++.($extension!==''?'.'.$extension:'');
-                    $used[mb_strtolower($name,'UTF-8')]=true;
-                    if (!$zip->addFile($source,$name)) throw new RuntimeException('Не удалось добавить документ в архив.');
+                    while (isset($used[$name])) $name=$stem.'_'.$suffix++.($extension!==''?'.'.$extension:'');
+                    $used[$name]=true;
+                    if (!$zip->addFile($source,$name)) {
+                        $missing[]='Рейс №'.$number.': '.(string)($document['original_name']??'документ');
+                    }
                 }
+            }
+            if ($missing!==[] && !$zip->addFromString('Недоступные_файлы.txt',
+                "Эти документы есть в реестре, но их файлы не удалось включить в архив:\n".implode("\n",$missing)."\n")) {
+                throw new RuntimeException('Не удалось добавить список недоступных файлов.');
             }
             if (!$zip->close()) throw new RuntimeException('Не удалось завершить архив.');
             return $path;
@@ -72,6 +82,8 @@ final class WasteTripClosingArchiveService
     {
         $value=preg_replace('/[\\x00-\\x1f\\x7f\\/\\\\:*?"<>|]+/u','_',trim($value))??'';
         $value=trim(preg_replace('/\\s+/u',' ',$value)??''," ._-");
-        return mb_substr($value!==''?$value:$fallback,0,$limit,'UTF-8');
+        $value=$value!==''?$value:$fallback;
+        if (preg_match_all('/./us',$value,$characters)===false) return substr($value,0,$limit);
+        return implode('',array_slice($characters[0],0,$limit));
     }
 }
