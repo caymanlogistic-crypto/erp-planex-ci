@@ -13,24 +13,68 @@ final class GpsCoverageService
     private const MOSCOW = 'Europe/Moscow';
     private const UTC = 'UTC';
 
-    public static function page(PDO $pdo, int $page = 1): array
+    /** @param list<int>|null $managerIds Null is reserved for the company owner. */
+    public static function page(PDO $pdo, int $page = 1, string $status = 'all', ?array $managerIds = null): array
     {
+        if (!in_array($status, ['all', 'started', 'completed'], true)) throw new \InvalidArgumentException('Недопустимый статус рейса.');
         $page = max(1, $page);
-        $total = (int)$pdo->query("SELECT COUNT(*) FROM flights WHERE id >= 244 AND status IN ('started','completed')")->fetchColumn();
+        $managerIds = $managerIds === null ? null : array_values(array_unique(array_filter(array_map('intval', $managerIds), static fn(int $id): bool => $id > 0)));
+        $where = "f.id >= 244 AND f.status IN ('started','completed')";
+        $params = [];
+        if ($managerIds !== null) {
+            $where .= $managerIds === [] ? ' AND 1=0' : ' AND f.assigned_manager_id IN ('.implode(',', $managerIds).')';
+        }
+        $counts = $pdo->query("SELECT f.status,COUNT(*) AS amount FROM flights f WHERE $where GROUP BY f.status")->fetchAll(PDO::FETCH_KEY_PAIR);
+        $totals = ['all'=>0,'started'=>(int)($counts['started']??0),'completed'=>(int)($counts['completed']??0)];
+        $totals['all'] = $totals['started'] + $totals['completed'];
+        if ($status !== 'all') { $where .= ' AND f.status=:status'; $params['status'] = $status; }
+        $total = $totals[$status];
+        $page = min($page, max(1, (int)ceil($total/25)));
         $statement = $pdo->prepare("SELECT f.id,f.status,f.comment,f.actual_start_date,f.actual_end_date,d.full_name AS driver,d.vehicle_make_plate AS vehicle
             FROM flights f LEFT JOIN drivers d ON d.id=f.driver_id
-            WHERE f.id >= 244 AND f.status IN ('started','completed') ORDER BY f.id DESC LIMIT 25 OFFSET :offset");
+            WHERE $where ORDER BY f.id DESC LIMIT 25 OFFSET :offset");
+        foreach ($params as $key=>$value) $statement->bindValue(':'.$key, $value);
         $statement->bindValue(':offset', ($page - 1) * 25, PDO::PARAM_INT);
         $statement->execute();
-        return ['rows'=>$statement->fetchAll(PDO::FETCH_ASSOC), 'total'=>$total, 'page'=>$page,
+        return ['rows'=>$statement->fetchAll(PDO::FETCH_ASSOC), 'total'=>$total, 'totals'=>$totals, 'status'=>$status, 'page'=>$page,
             'source_at'=>$pdo->query('SELECT MAX(fetched_at) FROM tracker_log')->fetchColumn() ?: null];
     }
 
-    public static function flight(PDO $pdo, int $id, int $minutes = 15): array
+    /** Resolve legacy manager IDs only for a unique active company membership with matching surname and first name. */
+    public static function managerIds(PDO $source, PDO $central, int $companyId, int $membershipId): array
+    {
+        if ($companyId <= 0 || $membershipId <= 0) return [];
+        $members = $central->prepare("SELECT m.id AS membership_id,a.full_name FROM company_memberships m JOIN user_accounts a ON a.id=m.account_id JOIN company_roles r ON r.id=m.role_id AND r.company_id=m.company_id WHERE m.company_id=? AND m.status='active' AND a.status='active'");
+        $members->execute([$companyId]);
+        $memberships = $members->fetchAll(PDO::FETCH_ASSOC);
+        $member = null;
+        foreach ($memberships as $candidate) {
+            if ((int)$candidate['membership_id'] === $membershipId) { $member = $candidate; break; }
+        }
+        if ($member === null) return [];
+        $parts = preg_split('/\s+/u', trim((string)$member['full_name']), -1, PREG_SPLIT_NO_EMPTY);
+        $memberFirst = mb_strtolower(str_replace('ё','е', (string)($parts[1]??'')), 'UTF-8');
+        if ($memberFirst === '') return [];
+        $managers = $source->query("SELECT DISTINCT u.id,u.`Фамилия` AS surname,u.`Имя` AS first_name FROM flights f JOIN users u ON u.id=f.assigned_manager_id WHERE f.id>=244 AND f.status IN ('started','completed')")->fetchAll(PDO::FETCH_ASSOC);
+        $ids = [];
+        foreach ($managers as $manager) {
+            if (WasteTripLegacyMappingService::manager((string)$manager['surname'], (string)$manager['first_name'], $memberships) !== $membershipId) continue;
+            $first = mb_strtolower(str_replace('ё','е', trim((string)$manager['first_name'])), 'UTF-8');
+            if ($first === '' || $first !== $memberFirst) continue;
+            $ids[] = (int)$manager['id'];
+        }
+        return $ids;
+    }
+
+    /** @param list<int>|null $managerIds Null is reserved for the company owner. */
+    public static function flight(PDO $pdo, int $id, int $minutes = 15, ?array $managerIds = null): array
     {
         if ($id < 244 || !in_array($minutes, [5,15,30,60], true)) throw new \InvalidArgumentException('Недопустимые параметры рейса.');
+        $managerIds = $managerIds === null ? null : array_values(array_unique(array_filter(array_map('intval',$managerIds),static fn(int $id):bool=>$id>0)));
+        if ($managerIds !== null && $managerIds === []) throw new \InvalidArgumentException('Рейс не найден.');
+        $managerWhere = $managerIds === null ? '' : ' AND f.assigned_manager_id IN ('.implode(',', $managerIds).')';
         $stmt=$pdo->prepare("SELECT f.id,f.status,f.actual_start_date,f.actual_end_date,d.full_name AS driver,d.vehicle_make_plate AS vehicle
-            FROM flights f LEFT JOIN drivers d ON d.id=f.driver_id WHERE f.id=:id AND f.status IN ('started','completed') LIMIT 1");
+            FROM flights f LEFT JOIN drivers d ON d.id=f.driver_id WHERE f.id=:id AND f.status IN ('started','completed')$managerWhere LIMIT 1");
         $stmt->execute(['id'=>$id]);
         $flight=$stmt->fetch(PDO::FETCH_ASSOC);
         if (!$flight) throw new \InvalidArgumentException('Рейс не найден.');
