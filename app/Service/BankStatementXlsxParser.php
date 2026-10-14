@@ -641,18 +641,52 @@ final class BankStatementXlsxParser
                 $closingBalance = $calculatedClosing;
             }
 
-            $balanceDate = $periodTo ?? date('Y-m-d');
-            $balDedupeKey = ($accountNumber ?? '') . '|' . $balanceDate . '|FULL|' . ($openingBalance ?? 0) . '|' . $totalDebit . '|' . $totalCredit . '|' . $closingBalance;
-            $daily_balances[] = [
-                'account_number' => $accountNumber,
-                'statement_date' => $balanceDate,
-                'currency' => 'RUR',
-                'opening_balance' => $openingBalance,
-                'debit_turnover' => number_format($totalDebit, 2, '.', ''),
-                'credit_turnover' => number_format($totalCredit, 2, '.', ''),
-                'closing_balance' => number_format($closingBalance, 2, '.', ''),
-                'dedupe_hash' => hash('sha256', $balDedupeKey),
-            ];
+            // The header balances cover the whole file period. A multi-day XLSX
+            // must not store that period's turnover as the last day's turnover.
+            $firstDate = $periodFrom ?? ($transactions !== [] ? min(array_column($transactions, 'operation_date')) : null);
+            $lastDate = $periodTo ?? ($transactions !== [] ? max(array_column($transactions, 'operation_date')) : $firstDate);
+            if ($firstDate === null || $lastDate === null || $firstDate > $lastDate) {
+                throw new \RuntimeException('Cannot determine bank statement balance period.');
+            }
+            $start = new \DateTimeImmutable($firstDate);
+            $end = new \DateTimeImmutable($lastDate);
+            if ($start->diff($end)->days > 3660) {
+                throw new \RuntimeException('Bank statement balance period is too long.');
+            }
+            if ($openingBalance === null && $firstDate !== $lastDate) {
+                throw new \RuntimeException('Multi-day bank statement has no opening balance.');
+            }
+            $dailyTotals = [];
+            foreach ($transactions as $tx) {
+                $date = $tx['operation_date'];
+                if ($date < $firstDate || $date > $lastDate) {
+                    throw new \RuntimeException('Bank transaction date is outside the statement period.');
+                }
+                $dailyTotals[$date]['debit'] = ($dailyTotals[$date]['debit'] ?? 0) + (int)str_replace('.', '', $tx['debit_amount']);
+                $dailyTotals[$date]['credit'] = ($dailyTotals[$date]['credit'] ?? 0) + (int)str_replace('.', '', $tx['credit_amount']);
+            }
+            $runningCents = $openCents;
+            for ($day = $start; $day <= $end; $day = $day->modify('+1 day')) {
+                $balanceDate = $day->format('Y-m-d');
+                $dayDebitCents = $dailyTotals[$balanceDate]['debit'] ?? 0;
+                $dayCreditCents = $dailyTotals[$balanceDate]['credit'] ?? 0;
+                $dayOpening = $openingBalance === null ? null : $this->formatCents($runningCents);
+                $runningCents += $dayCreditCents - $dayDebitCents;
+                $dayDebit = $this->formatCents($dayDebitCents);
+                $dayCredit = $this->formatCents($dayCreditCents);
+                $dayClosing = $this->formatCents($runningCents);
+                $balDedupeKey = ($accountNumber ?? '') . '|' . $balanceDate . '|FULL|' . $dayOpening . '|' . $dayDebit . '|' . $dayCredit . '|' . $dayClosing;
+                $daily_balances[] = [
+                    'account_number' => $accountNumber,
+                    'statement_date' => $balanceDate,
+                    'currency' => 'RUR',
+                    'opening_balance' => $dayOpening,
+                    'debit_turnover' => $dayDebit,
+                    'credit_turnover' => $dayCredit,
+                    'closing_balance' => $dayClosing,
+                    'dedupe_hash' => hash('sha256', $balDedupeKey),
+                ];
+            }
         }
 
         return [
@@ -662,6 +696,11 @@ final class BankStatementXlsxParser
             'transactions' => $transactions,
             'daily_balances' => $daily_balances,
         ];
+    }
+
+    private function formatCents(int $cents): string
+    {
+        return ($cents < 0 ? '-' : '') . sprintf('%d.%02d', intdiv(abs($cents), 100), abs($cents) % 100);
     }
 
     private function parseVtbNumericStatement(array $cells, ?string $accountNumber, ?string $periodFrom, ?string $periodTo): ?array
