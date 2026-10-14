@@ -37,7 +37,7 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 429, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 430, f"company route inventory drift: {len(company_routes)}"
 for endpoint in ('/company/feo/requests/weights', '/company/feo/requests/weights/preview', '/company/feo/requests/weights/create', '/company/feo/requests/weights/{id}/json', '/company/feo/requests/weights/{id}/revert'):
     assert ('app/Http/Routes/company_feo_weights.php', endpoint) in company_routes
 assert ("app/Http/Routes/company_linear_trips.php", "/company/trips/gps-coverage") in company_routes
@@ -46,9 +46,10 @@ assert ("app/Http/Routes/company_document_generator.php", "/company/document-gen
 generator_routes = (ROOT / 'app/Http/Routes/company_document_generator.php').read_text(encoding='utf-8')
 assert "[$documentGeneratorController, 'downloadHistoryArchive'], $documentHistoryPage" in generator_routes
 closing_routes = (ROOT / 'app/Http/Routes/company_trip_closing.php').read_text(encoding='utf-8')
-assert closing_routes.count('$tripClosingPage);') == 10, 'Closing document endpoints must retain their page gate'
+assert closing_routes.count('$tripClosingPage);') == 11, 'Closing document endpoints must retain their page gate'
 assert closing_routes.count('$tripClosingRegistryPage);') == 10, 'Logistics registry endpoints must retain their dedicated page gate'
 assert "'/company/logistics/closing-documents'" in closing_routes
+assert ("app/Http/Routes/company_trip_closing.php", "/company/trips/closing-documents/archive.zip") in company_routes
 assert '/company/trips/closing-documents/{tripId}/payment-stage' not in closing_routes
 assert '/company/trips/closing-documents/{tripId}/invoices/link' in closing_routes
 assert "/company/trips/closing-documents/{tripId}/diagnostic-card',[$tripClosingController,'uploadDiagnosticCard'],$tripClosingPage" in closing_routes

@@ -65,6 +65,10 @@ $legacyHtml=(string)ob_get_clean();
 $assert(str_contains($legacyHtml,'Сбор закрывающих документов')
     && str_contains($legacyHtml,'data-closing-report-open')
     && str_contains($legacyHtml,'data-closing-report-dialog')
+    && str_contains($legacyHtml,'/company/trips/closing-documents/summary.xlsx')
+    && str_contains($legacyHtml,'/company/trips/closing-documents/archive.zip')
+    && str_contains($legacyHtml,'Скачать сводный отчёт')
+    && str_contains($legacyHtml,'Скачать архив с файлами')
     && str_contains($legacyHtml,'/assets/js/waste-trip-closing.js')
     && !str_contains($legacyHtml,'class="closing-grid lab-grid table-scroll"'),
     'original collection route must retain its accordion and popup report');

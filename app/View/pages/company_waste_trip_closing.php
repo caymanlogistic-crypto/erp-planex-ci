@@ -155,7 +155,7 @@ $progressColor=static function(int $percent):string {
       <?php endforeach;?>
     </tr><?php endforeach;?></tbody>
   </table></div><p class="closing-report-empty" data-closing-report-empty hidden>Рейсы по текущим фильтрам не найдены.</p></div>
-  <div class="closing-report-foot"><span data-closing-report-count></span><div><button type="button" class="btn btn-secondary" data-closing-report-close>Закрыть</button><a class="btn btn-primary" data-closing-report-download href="<?= e(app_url('/company/trips/closing-documents/summary.xlsx')) ?>">Скачать Excel</a></div></div>
+  <div class="closing-report-foot"><span data-closing-report-count></span><div><button type="button" class="btn btn-secondary" data-closing-report-close>Закрыть</button><a class="btn btn-secondary" data-closing-report-download href="<?= e(app_url('/company/trips/closing-documents/summary.xlsx')) ?>">Скачать сводный отчёт</a><a class="btn btn-primary" data-closing-report-download href="<?= e(app_url('/company/trips/closing-documents/archive.zip')) ?>">Скачать архив с файлами</a></div></div>
 </dialog>
 <?php endif;?>
 <?php if(\App\Service\WasteTripClosingService::REVIEW_EMAIL_ENABLED):?><dialog class="closing-review-dialog" data-review-dialog aria-labelledby="closing-review-title">
