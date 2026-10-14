@@ -73,9 +73,13 @@ try {
                 $constraint = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name='vehicle_units' AND constraint_name='chk_vehicle_unit_vin_absent' AND constraint_type='CHECK'")->fetchColumn() === 1;
             }
             $query->execute([$name]);
-            if ($column && (!hash_equals($checksum, (string)$query->fetchColumn()) || !$constraint
+            $actualChecksum = $query->fetchColumn();
+            if ($column && (!is_string($actualChecksum) || !hash_equals($checksum, $actualChecksum) || !$constraint
                 || $column['DATA_TYPE'] !== 'tinyint' || $column['IS_NULLABLE'] !== 'NO' || (string)$column['COLUMN_DEFAULT'] !== '0')) {
-                throw new RuntimeException('VIN absence migration verification failed');
+                throw new RuntimeException('VIN absence migration verification failed: '.json_encode([
+                    'company_id'=>(int)$company['id'], 'checksum_match'=>is_string($actualChecksum) && hash_equals($checksum,$actualChecksum),
+                    'constraint'=>$constraint, 'column'=>$column,
+                ], JSON_THROW_ON_ERROR));
             }
             $results[] = ['company_id'=>(int)$company['id'], 'ready'=>(bool)$column,
                 'vehicle_count'=>$count, 'vin_sha256'=>$vinHash,
