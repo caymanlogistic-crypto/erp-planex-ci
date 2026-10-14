@@ -76,8 +76,8 @@ trait DocumentGeneratorAccessTrait
                        ct.id contractor_id,ct.created_by_user_id contractor_created_by_user_id,ct.name contractor_name,ct.inn contractor_inn,ct.kpp contractor_kpp,ct.ogrn contractor_ogrn,ct.contractor_type,ct.legal_address contractor_legal_address,ct.physical_address contractor_physical_address,ct.bank_account contractor_bank_account,ct.bank_name contractor_bank_name,ct.bank_bik contractor_bank_bik,ct.bank_corr_account contractor_bank_corr_account,ct.director_full_name contractor_director_full_name,ct.director_position contractor_director_position,
                        dvb.created_by_user_id dvb_created_by_user_id,d.id driver_id,d.created_by_user_id driver_created_by_user_id,d.full_name driver_full_name,d.passport_number,d.passport_issued_by,d.passport_issue_date,d.license_number,d.license_issue_date,
                        vs.id vehicle_set_id,vs.created_by_user_id vehicle_set_created_by_user_id,vs.set_type vehicle_set_type,
-                       vu1.id primary_vehicle_unit_id,vu1.brand primary_brand,vu1.model primary_model,vu1.plate_number primary_plate,vu1.vin primary_vin,vu1.unit_type primary_unit_type,
-                       vu2.id secondary_vehicle_unit_id,vu2.brand secondary_brand,vu2.model secondary_model,vu2.plate_number secondary_plate,vu2.vin secondary_vin,vu2.unit_type secondary_unit_type
+                       vu1.id primary_vehicle_unit_id,vu1.brand primary_brand,vu1.model primary_model,vu1.plate_number primary_plate,vu1.vin primary_vin,vu1.vin_absent primary_vin_absent,vu1.unit_type primary_unit_type,
+                       vu2.id secondary_vehicle_unit_id,vu2.brand secondary_brand,vu2.model secondary_model,vu2.plate_number secondary_plate,vu2.vin secondary_vin,vu2.vin_absent secondary_vin_absent,vu2.unit_type secondary_unit_type
                 FROM crews c JOIN contractors ct ON ct.id=c.contractor_id JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id JOIN drivers d ON d.id=dvb.driver_id JOIN vehicle_sets vs ON vs.id=dvb.vehicle_set_id LEFT JOIN vehicle_units vu1 ON vu1.id=vs.primary_vehicle_unit_id LEFT JOIN vehicle_units vu2 ON vu2.id=vs.secondary_vehicle_unit_id";
     }
 
@@ -111,8 +111,9 @@ trait DocumentGeneratorAccessTrait
         $secondaryLabel=self::vehicleTypeLabel($secondaryType,true,true);
         $secondaryPlate=trim((string)($executor['secondary_plate'] ?? ''));
         $secondaryVin=trim((string)($executor['secondary_vin'] ?? ''));
+        $secondaryVinAbsent=(int)($executor['secondary_vin_absent'] ?? 0)===1;
         $secondaryDisplay=$secondaryId>0
-            ? "\u{00A0}" . $secondaryLabel . ': ' . $secondaryModel . ' гос. номер ' . $secondaryPlate . ' VIN ' . $secondaryVin
+            ? "\u{00A0}" . $secondaryLabel . ': ' . $secondaryModel . ' гос. номер ' . $secondaryPlate . ' VIN ' . ($secondaryVinAbsent ? 'отсутствует' : $secondaryVin)
             : '';
 
         $driverPassport=trim((string)($executor['passport_number'] ?? ''));
@@ -151,10 +152,10 @@ trait DocumentGeneratorAccessTrait
                 'id'=>(int)($executor['driver_id'] ?? 0),'full_name'=>(string)($executor['driver_full_name'] ?? ''),'passport_number'=>(string)($executor['passport_number'] ?? ''),'passport_issued_by'=>(string)($executor['passport_issued_by'] ?? ''),'passport_issue_date'=>(string)($executor['passport_issue_date'] ?? ''),'passport'=>$driverPassport,'license_number'=>(string)($executor['license_number'] ?? ''),'license_issue_date'=>(string)($executor['license_issue_date'] ?? ''),'license'=>$driverLicense,'signature_name'=>self::signatureName((string)($executor['driver_full_name'] ?? '')),
             ],
             'vehicle'=>[
-                'id'=>(int)($executor['primary_vehicle_unit_id'] ?? 0),'model'=>$primaryModel,'plate'=>(string)($executor['primary_plate'] ?? ''),'vin'=>(string)($executor['primary_vin'] ?? ''),'type'=>$primaryType,'label'=>$primaryLabel,
+                'id'=>(int)($executor['primary_vehicle_unit_id'] ?? 0),'model'=>$primaryModel,'plate'=>(string)($executor['primary_plate'] ?? ''),'vin'=>(string)($executor['primary_vin'] ?? ''),'vin_absent'=>(int)($executor['primary_vin_absent'] ?? 0)===1,'type'=>$primaryType,'label'=>$primaryLabel,
             ],
             'trailer'=>[
-                'id'=>$secondaryId,'model'=>$secondaryModel,'plate'=>$secondaryPlate,'vin'=>$secondaryVin,'type'=>$secondaryType,'label'=>$secondaryId>0?$secondaryLabel:'','display'=>$secondaryDisplay,
+                'id'=>$secondaryId,'model'=>$secondaryModel,'plate'=>$secondaryPlate,'vin'=>$secondaryVin,'vin_absent'=>$secondaryVinAbsent,'type'=>$secondaryType,'label'=>$secondaryId>0?$secondaryLabel:'','display'=>$secondaryDisplay,
             ],
             'vehicle_set'=>[
                 'id'=>(int)($executor['vehicle_set_id'] ?? 0),'type'=>(string)($executor['vehicle_set_type'] ?? ''),'has_secondary'=>$secondaryId>0,
