@@ -184,8 +184,10 @@
 
             <div class="field">
                 <label class="field-label">VIN</label>
-                <input type="text" name="vin" class="field-input"
+                <input type="text" name="vin" class="field-input" <?= !empty($old['vin_absent']) ? 'disabled' : '' ?>
                        value="<?= e($old['vin'] ?? '') ?>">
+                <label class="vehicle-vin-absent contact-checkbox-item checkbox-item"><input type="checkbox" name="vin_absent" value="1" <?= !empty($old['vin_absent']) ? 'checked' : '' ?> onchange="const vin=this.closest('.field').querySelector('[name=vin]');if(this.checked)vin.value='';vin.disabled=this.checked"><span class="checkbox-mark" aria-hidden="true"></span><span class="contact-checkbox-label">VIN отсутствует</span></label>
+                <?php if (!empty($errors['vin'])): ?><div class="field-msg"><?= e($errors['vin']) ?></div><?php endif; ?>
             </div>
 
             <div class="field">

@@ -62,6 +62,7 @@
       const role = panel.dataset.unitRole;
       const fields = ['brand', 'model', 'plate_number', 'vin', 'capacity_tons', 'volume_m3'];
       const visibleFieldsReady = fields.every(field => {
+        if (field === 'vin' && vehicle.elements.namedItem(`units[${role}][vin_absent]`)?.checked) return !named(vehicle, `units[${role}][vin]`);
         const element = vehicle.elements.namedItem(`units[${role}][${field}]`);
         return !!element?.closest('.is-hidden') || filled(element);
       });

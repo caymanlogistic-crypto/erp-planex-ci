@@ -25,6 +25,7 @@ $buildUnitLine = static function (array $unit) use ($na, $formatMeasure): string
     $brandModel = trim($brand . ' ' . $model);
     if ($brandModel !== '') $parts[] = $brandModel;
     if ($vin !== '') $parts[] = 'VIN ' . $vin;
+    elseif (!empty($unit['vin_absent'])) $parts[] = 'VIN отсутствует';
     $capacity = $formatMeasure($unit['capacity_tons'] ?? null);
     if ($capacity !== '') $parts[] = 'г/п ' . $capacity . ' т';
     $volume = $formatMeasure($unit['volume_m3'] ?? null);

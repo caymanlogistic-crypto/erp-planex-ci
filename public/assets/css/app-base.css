@@ -3222,6 +3222,27 @@ input:autofill,
   white-space: nowrap;
 }
 
+.vin-absent-row { align-items: flex-start; }
+.vehicle-vin-absent {
+    width: max-content;
+    max-width: 100%;
+    margin-top: 7px;
+    font-family: system-ui, "Segoe UI", sans-serif;
+}
+.vehicle-vin-absent .contact-checkbox-label {
+    font-family: system-ui, "Segoe UI", sans-serif;
+    font-weight: 400;
+}
+.vehicle-vin-absent input[type="checkbox"]:focus-visible + .checkbox-mark {
+    outline: 2px solid var(--accent, #7c4718);
+    outline-offset: 2px;
+}
+.vin-absent-row .field-w-issued-by > .field-msg { min-height: 0; }
+.vin-absent-row .field-w-issued-by .field-input:disabled {
+    color: var(--text-muted, #625d55);
+    background: var(--surface-muted, #f1eee9);
+}
+
 /* Кнопка удаления */
 .contractor-contact-remove {
   width: 24px;
