@@ -19,21 +19,27 @@ final class WasteTripClosingArchiveService
         $report=null;
         $zip=new ZipArchive();
         $opened=false;
+        $stage='report';
         try {
             $report=WasteTripClosingReportService::xlsx(WasteTripClosingReportService::rows($trips));
+            $stage='temporary_file';
             if (!@unlink($path)) throw new RuntimeException('Не удалось подготовить временный файл архива.');
+            $stage='open';
             $openResult=$zip->open($path,ZipArchive::CREATE | ZipArchive::OVERWRITE);
             if ($openResult!==true) throw new RuntimeException('Не удалось открыть архив ZIP (код '.$openResult.').');
             $opened=true;
+            $stage='summary';
             if (!$zip->addFile($report,'Сводный_отчёт.xlsx')) throw new RuntimeException('Не удалось добавить сводный отчёт.');
             $used=[];$missing=[];
             foreach ($trips as $trip) {
+                $stage='trip_folder';
                 $tripId=(int)$trip['id'];
                 $number=self::segment((string)($trip['business_id']??$tripId),'№'.$tripId);
                 $description=self::segment((string)($trip['comment']??''),'',60);
                 $folder='Рейс_№'.$number.($description!==''?'_'.$description:'').'_ID'.$tripId.'/';
                 if (!$zip->addEmptyDir(rtrim($folder,'/'))) throw new RuntimeException('Не удалось добавить папку рейса.');
                 foreach ($trip['documents']??[] as $document) {
+                    $stage='document';
                     $relative=(string)($document['relative_path']??'');
                     $prefix='companies/'.$companyId.'/documents/waste_trip/'.$tripId.'/';
                     if (!str_starts_with($relative,$prefix)) throw new DomainException('Документ находится вне рейса.');
@@ -67,10 +73,12 @@ final class WasteTripClosingArchiveService
                     }
                 }
             }
+            $stage='missing_files_list';
             if ($missing!==[] && !$zip->addFromString('Недоступные_файлы.txt',
                 "Эти документы есть в реестре, но их файлы не удалось включить в архив:\n".implode("\n",$missing)."\n")) {
                 throw new RuntimeException('Не удалось добавить список недоступных файлов.');
             }
+            $stage='close';
             if (!$zip->close()) throw new RuntimeException('Не удалось завершить архив.');
             $opened=false;
             return $path;
@@ -79,7 +87,8 @@ final class WasteTripClosingArchiveService
                 try { $zip->close(); } catch (\Throwable) {}
             }
             @unlink($path);
-            throw $error;
+            if ($error instanceof DomainException || $error instanceof RuntimeException) throw $error;
+            throw new RuntimeException('Ошибка сборки ZIP: '.$stage.' ('.get_class($error).').',0,$error);
         } finally {
             if ($report!==null) @unlink($report);
         }

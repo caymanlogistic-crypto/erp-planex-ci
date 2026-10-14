@@ -96,26 +96,31 @@ final class WasteTripClosingController
     {
         header('Cache-Control: no-store');
         $path=null;
+        $stage='context';
         try {
             [$company,$pdo]=$this->context();
+            $stage='selection';
             if (!WasteTripClosingService::ready($pdo)) throw new DomainException('Раздел ожидает обновление схемы.');
             $trips=$this->selectedReportTrips($pdo);
             if ($trips===[]) throw new DomainException('Выберите рейсы для архива.');
+            $stage='transport';
             $transport=WasteTripClosingTransportService::forTrips($pdo,array_map(static fn(array $trip):int=>(int)$trip['id'],$trips));
             foreach ($trips as &$trip) $trip['transport']=$transport[(int)$trip['id']]??null;
             unset($trip);
+            $stage='zip';
             $path=WasteTripClosingArchiveService::create((int)$company['id'],$trips);
+            $stage='response';
             header('Content-Type: application/zip');
             header('X-Content-Type-Options: nosniff');
             header('Content-Disposition: attachment; filename*=UTF-8\'\''.rawurlencode('Рейсы_закрывающие_документы.zip'));
             header('Content-Length: '.filesize($path));
             readfile($path);
         } catch (Throwable $exception) {
-            error_log('waste trip closing archive: '.$exception->getMessage());
+            error_log('waste trip closing archive ['.$stage.'] '.get_class($exception).': '.$exception->getMessage());
             http_response_code($exception instanceof DomainException?400:500);
             header('Content-Type: text/plain; charset=UTF-8');
             echo $exception instanceof DomainException || $exception instanceof \RuntimeException
-                ? $exception->getMessage() : 'Не удалось сформировать архив.';
+                ? $exception->getMessage() : 'Ошибка формирования архива: '.$stage.' ('.get_class($exception).').';
         } finally { if ($path!==null) @unlink($path); }
     }
 
