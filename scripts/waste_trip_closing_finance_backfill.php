@@ -23,6 +23,7 @@ try {
         }
     }
     $config = require $root.'/bootstrap/app.php';
+    require_once $root.'/app/Support/crypto_helper.php';
     require_once $root.'/app/Support/company_database.php';
     require_once $root.'/app/Service/WasteTripClosingService.php';
     require_once $root.'/app/Service/WasteTripClosingFinanceBackfillService.php';
