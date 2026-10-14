@@ -55,9 +55,15 @@ try {
             $stored = $query->fetchColumn();
             if ($stored !== false && !hash_equals((string)$stored, $checksum)) throw new RuntimeException('Migration journal checksum mismatch');
             $column = $pdo->query("SELECT DATA_TYPE,IS_NULLABLE,COLUMN_DEFAULT FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='vehicle_units' AND column_name='vin_absent'")->fetch(PDO::FETCH_ASSOC);
-            $constraint = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name='vehicle_units' AND constraint_name='chk_vehicle_unit_vin_absent' AND constraint_type='CHECK'")->fetchColumn() === 1;
+            $constraintReported = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name='vehicle_units' AND constraint_name='chk_vehicle_unit_vin_absent' AND constraint_type='CHECK'")->fetchColumn() === 1;
+            $createTable = (string)$pdo->query('SHOW CREATE TABLE vehicle_units')->fetch(PDO::FETCH_NUM)[1];
+            $constraintDefined = preg_match('/CONSTRAINT\s+`?chk_vehicle_unit_vin_absent`?\s+CHECK\s*\(/i', $createTable) === 1;
+            $constraint = $constraintReported || $constraintDefined;
             if (($stored !== false) !== (bool)$column || (bool)$column !== $constraint) {
-                throw new RuntimeException('Unjournaled or incomplete VIN absence schema');
+                throw new RuntimeException('Unjournaled or incomplete VIN absence schema: '.json_encode([
+                    'company_id'=>(int)$company['id'], 'journaled'=>$stored !== false, 'column_present'=>(bool)$column,
+                    'constraint_reported'=>$constraintReported, 'constraint_defined'=>$constraintDefined,
+                ], JSON_THROW_ON_ERROR));
             }
             $hash = hash_init('sha256');
             $count = 0;
@@ -70,7 +76,10 @@ try {
                 $pdo->exec($sql);
                 $pdo->prepare('INSERT INTO schema_migrations(migration,checksum) VALUES(?,?)')->execute([$name,$checksum]);
                 $column = $pdo->query("SELECT DATA_TYPE,IS_NULLABLE,COLUMN_DEFAULT FROM information_schema.columns WHERE table_schema=DATABASE() AND table_name='vehicle_units' AND column_name='vin_absent'")->fetch(PDO::FETCH_ASSOC);
-                $constraint = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name='vehicle_units' AND constraint_name='chk_vehicle_unit_vin_absent' AND constraint_type='CHECK'")->fetchColumn() === 1;
+                $constraintReported = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.table_constraints WHERE constraint_schema=DATABASE() AND table_name='vehicle_units' AND constraint_name='chk_vehicle_unit_vin_absent' AND constraint_type='CHECK'")->fetchColumn() === 1;
+                $createTable = (string)$pdo->query('SHOW CREATE TABLE vehicle_units')->fetch(PDO::FETCH_NUM)[1];
+                $constraintDefined = preg_match('/CONSTRAINT\s+`?chk_vehicle_unit_vin_absent`?\s+CHECK\s*\(/i', $createTable) === 1;
+                $constraint = $constraintReported || $constraintDefined;
             }
             $query->execute([$name]);
             $actualChecksum = $query->fetchColumn();
