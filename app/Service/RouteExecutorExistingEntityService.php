@@ -102,7 +102,7 @@ final class RouteExecutorExistingEntityService
                 $stmt->execute([$unitId]);
                 $unit = $stmt->fetch(PDO::FETCH_ASSOC);
                 if (!$unit) throw new DomainException('Транспортная единица недоступна.');
-                foreach (['unit_type','brand','model','plate_number','vin','vin_absent','diagnostic_card_number','diagnostic_card_date','capacity_tons','volume_m3'] as $field) {
+                foreach (['unit_type','brand','model','plate_number','vin','diagnostic_card_number','diagnostic_card_date','capacity_tons','volume_m3'] as $field) {
                     $value = (string)($unit[$field] ?? '');
                     $values["units[$role][$field]"] = $field === 'diagnostic_card_date' ? self::date($value) : $value;
                 }

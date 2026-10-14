@@ -2,7 +2,7 @@
 
 > GENERATED FILE. Do not edit manually. Physical source of truth: `database/migrations-local/*.sql` + `app/Service/LocalMigrationService.php`.
 
-**Schema fingerprint:** `c73e3eb2308edc5f23ba439abee99ca94354fe81167146e8895beaa361b4a44f`
+**Schema fingerprint:** `43126ce5ea815be277e650a400012d7fd4e4aae437682ed6723bd79dcfb12786`
 
 ## `crew_drivers`
 
@@ -216,7 +216,6 @@
 | `model` | `varchar(100)` | YES | NULL | — | — |
 | `vehicle_type` | `varchar(50)` | YES | NULL | — | — |
 | `vin` | `varchar(50)` | YES | NULL | — | — |
-| `vin_absent` | `tinyint(1)` | NO | `0` | — | — |
 | `sts_number` | `varchar(50)` | YES | NULL | — | — |
 | `pts_number` | `varchar(50)` | YES | NULL | — | — |
 | `capacity_tons` | `decimal(8,2)` | YES | NULL | — | — |

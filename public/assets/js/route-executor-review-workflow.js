@@ -154,10 +154,6 @@
       const title = panel.querySelector('[data-unit-title]')?.textContent?.trim() || 'ТС';
       for (const [name, label] of Object.entries(vehicleUnitFields)) {
         const element = vehicle.elements.namedItem(`units[${role}][${name}]`);
-        if (name === 'vin' && vehicle.elements.namedItem(`units[${role}][vin_absent]`)?.checked) {
-          if (filled(element)) fields.push(`${title}: очистите VIN при отметке об отсутствии`);
-          continue;
-        }
         if (!element?.closest('.is-hidden') && !filled(element)) fields.push(`${title}: ${label}`);
       }
       if (!hasFile(vehicle, `predef_doc[${role}][sts][]`)) files.push(`${title}: СТС`);
@@ -646,11 +642,11 @@
     const number = contract ? '' : partial ? '1/2' : draft.stage === 'partial' ? '2/2' : '1/1';
     const label = contract ? 'Данные для заключения договора' : partial ? 'Первичные данные' : 'Полный комплект';
     const fields = snapshot.controls.filter(item => (contract ? item.formId === 'lab-contractor-form' : item.formId !== 'lab-contractor-form')
-      && item.value?.trim() && (item.type !== 'checkbox' || (item.name.endsWith('[vin_absent]') && item.checked)) && item.type !== 'radio')
+      && item.value?.trim() && item.type !== 'checkbox' && item.type !== 'radio')
       .map(item => {
         const element = namedControl(item.formId, item.name, item.index);
         const section = { 'lab-contractor-form': 'Подрядчик', 'lab-driver-form': 'Водитель', 'lab-vehicle-form': 'Транспорт' }[item.formId];
-        const special = item.name.endsWith('[vin_absent]') ? 'VIN отсутствует' : item.name === 'full_name' ? 'ФИО' : item.name === 'snils' ? 'СНИЛС' : item.name === 'set_type' ? 'Тип комплекта'
+        const special = item.name === 'full_name' ? 'ФИО' : item.name === 'snils' ? 'СНИЛС' : item.name === 'set_type' ? 'Тип комплекта'
           : item.name === 'extra_phones[]' ? 'Доп контакты' : item.name === 'extra_phone_comments[]' ? 'Комментарий к доп контактам' : '';
         const contact = item.name.match(/^contacts\[\d+\]\[(contact_person|phone|email)\]$/)?.[1];
         const contactLabel = { contact_person: 'Контактное лицо', phone: 'Телефон контакта', email: 'Email контакта' }[contact];
@@ -658,7 +654,7 @@
         const visibleLabel = field?.querySelector('.field-label')?.textContent?.replace('*', '').trim();
         const fallback = item.name.replace(/\[|\]/g, ' ').replace(/_/g, ' ').trim();
         const name = `${section}: ${special || contactLabel || visibleLabel || element?.placeholder || fallback}`;
-        const value = item.name.endsWith('[vin_absent]') ? 'Да' : element?.tagName === 'SELECT' ? element.selectedOptions[0]?.textContent?.trim() || item.value : item.value.trim();
+        const value = element?.tagName === 'SELECT' ? element.selectedOptions[0]?.textContent?.trim() || item.value : item.value.trim();
         return { name, value };
       });
     const files = [...snapshot.files.filter(item => contract ? item.formId === 'lab-contractor-form' : item.formId !== 'lab-contractor-form')

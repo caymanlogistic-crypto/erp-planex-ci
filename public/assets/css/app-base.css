@@ -4828,5 +4828,3 @@ a.nav-sub-item:visited {
         border-top: 1px solid var(--line);
     }
 }
-.vehicle-vin-absent { display: inline-flex; align-items: center; gap: 6px; margin-top: 5px; font-size: 12px; line-height: 1.3; cursor: pointer; }
-.vehicle-vin-absent input { margin: 0; flex: none; }

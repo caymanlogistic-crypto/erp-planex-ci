@@ -35,7 +35,6 @@ try {
             'model' => trim((string) ($source['model'] ?? '')),
             'plate_number' => trim((string) ($source['plate_number'] ?? '')),
             'vin' => strtoupper(trim((string) ($source['vin'] ?? ''))),
-            'vin_absent' => (string) ($source['vin_absent'] ?? '') === '1' ? 1 : 0,
             'diagnostic_card_number' => trim((string) ($source['diagnostic_card_number'] ?? '')),
             'diagnostic_card_date' => trim((string) ($source['diagnostic_card_date'] ?? '')),
             'capacity_tons' => trim((string) ($source['capacity_tons'] ?? '')),
@@ -49,9 +48,6 @@ try {
         }
         if ($payload['vin'] !== '' && !preg_match('/^[A-HJ-NPR-Z0-9]{17}$/', $payload['vin'])) {
             $errors['units'][$role]['vin'] = 'Формат VIN: 17 символов';
-        }
-        if ($payload['vin_absent'] && $payload['vin'] !== '') {
-            $errors['units'][$role]['vin'] = 'При отметке об отсутствии VIN оставьте поле пустым';
         }
         if ($payload['diagnostic_card_date'] !== '' && !preg_match('/^\d{4}-\d{2}-\d{2}$/', $payload['diagnostic_card_date'])) {
             $errors['units'][$role]['diagnostic_card_date'] = 'Укажите корректную дату';
@@ -114,7 +110,7 @@ try {
         if (!in_array($status, ['active', 'inactive'], true)) $status = 'active';
         $comments = trim((string) ($_POST['comments'] ?? ''));
 
-        $updateUnit = $localPdo->prepare('UPDATE vehicle_units SET unit_type=:unit_type,brand=:brand,model=:model,plate_number=:plate_number,vin=:vin,vin_absent=:vin_absent,diagnostic_card_number=:diagnostic_card_number,diagnostic_card_date=:diagnostic_card_date,capacity_tons=:capacity_tons,volume_m3=:volume_m3,status=:status,updated_by_user_id=:uid,updated_by_role=:role WHERE id=:id');
+        $updateUnit = $localPdo->prepare('UPDATE vehicle_units SET unit_type=:unit_type,brand=:brand,model=:model,plate_number=:plate_number,vin=:vin,diagnostic_card_number=:diagnostic_card_number,diagnostic_card_date=:diagnostic_card_date,capacity_tons=:capacity_tons,volume_m3=:volume_m3,status=:status,updated_by_user_id=:uid,updated_by_role=:role WHERE id=:id');
         $insertUnit = null;
         foreach ($unitPayload as $role => $payload) {
             $roleRule = $rule['units'][$role] ?? [];
@@ -124,8 +120,7 @@ try {
                 ':brand' => $payload['brand'],
                 ':model' => $payload['model'],
                 ':plate_number' => $payload['plate_number'],
-                ':vin' => $payload['vin'] !== '' ? $payload['vin'] : null,
-                ':vin_absent' => $payload['vin_absent'],
+                ':vin' => $payload['vin'],
                 ':diagnostic_card_number' => $payload['diagnostic_card_number'] !== '' ? $payload['diagnostic_card_number'] : null,
                 ':diagnostic_card_date' => $payload['diagnostic_card_date'] !== '' ? $payload['diagnostic_card_date'] : null,
                 ':capacity_tons' => !empty($roleRule['show_capacity']) && $payload['capacity_tons'] !== '' ? (float) $payload['capacity_tons'] : null,
@@ -142,7 +137,7 @@ try {
                 throw new RuntimeException('Основная транспортная единица не найдена.');
             }
             if ($insertUnit === null) {
-                $insertUnit = $localPdo->prepare('INSERT INTO vehicle_units(plate_number,brand,model,unit_type,vin,vin_absent,capacity_tons,volume_m3,diagnostic_card_number,diagnostic_card_date,status,comments,created_by_user_id,created_by_membership_id,created_by_role) VALUES(:plate_number,:brand,:model,:unit_type,:vin,:vin_absent,:capacity_tons,:volume_m3,:diagnostic_card_number,:diagnostic_card_date,:status,NULL,:uid,:membership_id,:role)');
+                $insertUnit = $localPdo->prepare('INSERT INTO vehicle_units(plate_number,brand,model,unit_type,vin,capacity_tons,volume_m3,diagnostic_card_number,diagnostic_card_date,status,comments,created_by_user_id,created_by_membership_id,created_by_role) VALUES(:plate_number,:brand,:model,:unit_type,:vin,:capacity_tons,:volume_m3,:diagnostic_card_number,:diagnostic_card_date,:status,NULL,:uid,:membership_id,:role)');
             }
             $insertUnit->execute($unitParams + [':membership_id' => $newUnitCreatorMembershipId > 0 ? $newUnitCreatorMembershipId : null]);
             $unitId = (int) $localPdo->lastInsertId();

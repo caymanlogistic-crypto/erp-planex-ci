@@ -63,14 +63,6 @@ try {
 if (!$rejected) throw new RuntimeException('Final-send preflight accepted a missing driver phone.');
 $preflight['driver']['phone'] = '+7 900 000-00-00';
 RouteExecutorCombinedCreateService::create($pdo, $central, $config, 7, $preflight, [], 101, 'company_owner', null, false, true);
-$withoutVin=$payload('7701234567','А123ВС77');
-$withoutVin['vehicle']['units']['primary']['vin']='';
-$vinRejected=false;
-try { RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$withoutVin,[],101,'company_owner',null,false,true); }
-catch (RuntimeException $expected) { $vinRejected=str_contains($expected->getMessage(),'VIN'); }
-if (!$vinRejected) throw new RuntimeException('Final-send preflight accepted blank VIN without a declaration.');
-$withoutVin['vehicle']['units']['primary']['vin_absent']='1';
-RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$withoutVin,[],101,'company_owner',null,false,true);
 foreach (['contractors', 'drivers', 'vehicle_units', 'crews'] as $table) {
     if ((int) $pdo->query("SELECT COUNT(*) FROM `$table`")->fetchColumn() !== 0) throw new RuntimeException("Preflight wrote to $table.");
 }
@@ -175,13 +167,6 @@ foreach ([['lab-contractor-form|predef_doc[company_card][]','contractor.pdf'],
         'error'=>UPLOAD_ERR_OK,'size'=>filesize($storedSource)];
 }
 try {
-    $checkboxSnapshot=['controls'=>[$control('vehicle','units[primary][vin]',''),
-        ['formId'=>'lab-vehicle-form','name'=>'units[primary][vin_absent]','value'=>'1','type'=>'checkbox','checked'=>true]]];
-    [$checkboxPost]=RouteExecutorReviewMaterializationService::standardInput($checkboxSnapshot,[]);
-    if (($checkboxPost['vehicle']['units']['primary']['vin_absent']??null)!=='1') throw new RuntimeException('Checked VIN absence was lost while mapping the review snapshot.');
-    $checkboxSnapshot['controls'][1]['checked']=false;
-    [$uncheckedPost]=RouteExecutorReviewMaterializationService::standardInput($checkboxSnapshot,[]);
-    if (isset($uncheckedPost['vehicle']['units']['primary']['vin_absent'])) throw new RuntimeException('Unchecked VIN absence was submitted.');
     [$post,$files]=RouteExecutorReviewMaterializationService::standardInput($snapshot,$stored);
     if ($post['contractor']['contacts'][0]['email']!=='contact@example.test'
         || $post['vehicle']['units']['primary']['plate_number']!=='А125ВС77'
@@ -291,10 +276,4 @@ try {
     $snapshot['removed_documents']=[(int)$detail['files'][0]['id']];
     if ($library->documentsForSnapshot($snapshot,[])!==[]) throw new RuntimeException('Removed existing file remained in review package.');
 } finally { @unlink($existingPath); }
-$absentPost=$payload('7701234593','А703ВС77');
-$absentPost['vehicle']['units']['primary']['vin']='';
-$absentPost['vehicle']['units']['primary']['vin_absent']='1';
-$absentCrew=RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$absentPost,[],101,'company_owner');
-$absentRow=$pdo->query('SELECT v.vin,v.vin_absent FROM crews c JOIN vehicle_units v ON v.id=c.vehicle_id WHERE c.id='.(int)$absentCrew)->fetch(PDO::FETCH_ASSOC);
-if (!$absentRow || $absentRow['vin']!==null || (int)$absentRow['vin_absent']!==1) throw new RuntimeException('Confirmed absent VIN was not persisted as NULL with the separate flag.');
 echo "ROUTE_EXECUTOR_COMBINED_TRANSACTION=PASS\n";

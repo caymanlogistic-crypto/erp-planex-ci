@@ -73,20 +73,6 @@ try {
         'selected_entities'=>['contractor'=>11,'driver'=>12]],$couplingFiles,true);
     $assert($coupling['full'] && $coupling['missing']===[],
         'Coupling tractor does not require hidden capacity and volume; trailer values complete the package');
-    $withoutVin=array_values(array_filter($couplingControls,static fn(array $item):bool=>$item['name']!=='units[primary][vin]'));
-    $unconfirmed=RouteExecutorReviewPackage::inspect(['controls'=>$withoutVin,
-        'selected_entities'=>['contractor'=>11,'driver'=>12]],$couplingFiles,true);
-    $assert(!$unconfirmed['full'],'Empty VIN without an absence declaration must not complete a package');
-    $absence=$control('vehicle','units[primary][vin_absent]','1');
-    $absence['type']='checkbox';$absence['checked']=true;
-    $withoutVin[]=$absence;
-    $confirmed=RouteExecutorReviewPackage::inspect(['controls'=>$withoutVin,
-        'selected_entities'=>['contractor'=>11,'driver'=>12]],$couplingFiles,true);
-    $assert($confirmed['full'] && $confirmed['missing']===[],'Confirmed absent VIN completes the package');
-    $withoutVin[count($withoutVin)-1]['checked']=false;
-    $unchecked=RouteExecutorReviewPackage::inspect(['controls'=>$withoutVin,
-        'selected_entities'=>['contractor'=>11,'driver'=>12]],$couplingFiles,true);
-    $assert(!$unchecked['full'],'Unchecked absence box cannot bypass VIN');
     $roadTrainControls=$couplingControls;
     $roadTrainControls[0]['value']='road_train';
     $roadTrain=RouteExecutorReviewPackage::inspect(['controls'=>$roadTrainControls,
