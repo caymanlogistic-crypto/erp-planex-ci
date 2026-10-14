@@ -14,5 +14,8 @@ require BASE_PATH.'/app/Http/Routes/company_trip_closing.php';
 if (!class_exists(\App\Service\WasteTripClosingTransportService::class, false)) {
     throw new RuntimeException('Trip closing route must load its transport dependency before dispatch');
 }
+if (!class_exists(\App\Service\WasteTripClosingArchiveService::class, false)) {
+    throw new RuntimeException('Trip closing route must load its archive dependency before dispatch');
+}
 
 echo "WASTE_TRIP_CLOSING_ROUTE_DEPENDENCIES=PASS\n";
