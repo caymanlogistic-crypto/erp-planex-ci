@@ -39,6 +39,12 @@ try {
     check(str_contains((string)$zip->getFromName('Недоступные_файлы.txt'),'Рейс №322: lost.pdf'),'missing file is clearly listed');
     check($zip->getFromName('Рейс_№322_Москва _ Тверь_ID7/Договор_scan.pdf')==='first','available document remains in partial archive');
     $zip->close();@unlink($partial);
+    $emptyTrip=['id'=>8,'business_id'=>323,'comment'=>'Без документов','status'=>'completed','documents'=>[]];
+    $emptyArchive=\App\Service\WasteTripClosingArchiveService::create(25,[$emptyTrip]);
+    $zip=new ZipArchive();check($zip->open($emptyArchive)===true,'empty-document archive opens');
+    check($zip->locateName('Сводный_отчёт.xlsx')!==false,'empty-document archive contains summary');
+    check($zip->locateName('Рейс_№323_Без документов_ID8/')!==false,'empty-document archive contains trip folder');
+    $zip->close();@unlink($emptyArchive);
     $many=[];
     for($id=10;$id<110;$id++){
         $directory=storage_path('companies/25/documents/waste_trip/'.$id);
