@@ -18,9 +18,13 @@ final class WasteTripClosingArchiveService
         if ($path===false) throw new RuntimeException('Не удалось создать временный файл архива.');
         $report=null;
         $zip=new ZipArchive();
+        $opened=false;
         try {
             $report=WasteTripClosingReportService::xlsx(WasteTripClosingReportService::rows($trips));
-            if ($zip->open($path,ZipArchive::OVERWRITE)!==true) throw new RuntimeException('Не удалось открыть архив.');
+            if (!@unlink($path)) throw new RuntimeException('Не удалось подготовить временный файл архива.');
+            $openResult=$zip->open($path,ZipArchive::CREATE | ZipArchive::OVERWRITE);
+            if ($openResult!==true) throw new RuntimeException('Не удалось открыть архив ZIP (код '.$openResult.').');
+            $opened=true;
             if (!$zip->addFile($report,'Сводный_отчёт.xlsx')) throw new RuntimeException('Не удалось добавить сводный отчёт.');
             $used=[];$missing=[];
             foreach ($trips as $trip) {
@@ -68,9 +72,12 @@ final class WasteTripClosingArchiveService
                 throw new RuntimeException('Не удалось добавить список недоступных файлов.');
             }
             if (!$zip->close()) throw new RuntimeException('Не удалось завершить архив.');
+            $opened=false;
             return $path;
         } catch (\Throwable $error) {
-            $zip->close();
+            if ($opened) {
+                try { $zip->close(); } catch (\Throwable) {}
+            }
             @unlink($path);
             throw $error;
         } finally {
