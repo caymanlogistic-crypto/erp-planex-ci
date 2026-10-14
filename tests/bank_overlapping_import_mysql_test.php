@@ -14,6 +14,7 @@ namespace App\Service {
 namespace {
     require_once __DIR__ . '/../app/Service/FinanceBankReconciliationService.php';
     require_once __DIR__ . '/../app/Service/BankFinanceService.php';
+    require_once __DIR__ . '/../app/Service/BankStatementXlsxParser.php';
 
     $schema = getenv('PLANEX_TEST_DB_LEASE');
     if (!$schema || $schema !== getenv('PLANEX_TEST_FIXED_DB')) {
@@ -103,5 +104,26 @@ namespace {
     $deleted = \App\Service\BankFinanceService::deleteImport($pdo, $lateImportId);
     $expect($deleted['status'] === 'error', 'Cannot delete a linked import and leave a conflicting day');
     $expect((int)$pdo->query('SELECT COUNT(*) FROM bank_transactions')->fetchColumn() === 10, 'Unsafe deletion rolled back');
+
+    $parser = new \App\Service\BankStatementXlsxParser();
+    $parseSheet = new \ReflectionMethod($parser, 'parseFullStatement');
+    $multiDay = $parseSheet->invoke($parser, [
+        2 => ['A2' => $account],
+        3 => ['A3' => '13.10.2026 — 14.10.2026'],
+        4 => ['B4' => '832 804,03', 'D4' => '226 464,03'],
+        7 => ['A7' => 'Дата', 'B7' => 'Номер', 'C7' => 'Дебет', 'D7' => 'Кредит', 'E7' => 'Назначение',
+            'F7' => 'Вид операции', 'G7' => 'Контрагент', 'H7' => 'ИНН', 'I7' => 'БИК'],
+        8 => ['A8' => '13.10.2026', 'B8' => '13', 'C8' => '316 340,00'],
+        9 => ['A9' => '14.10.2026', 'B9' => '14a', 'C9' => '120 000,00'],
+        10 => ['A10' => '14.10.2026', 'B10' => '14b', 'C10' => '170 000,00'],
+    ], $account);
+    $r = \App\Service\BankFinanceService::importParsedData($pdo, $multiDay, 'manual', null, 'multi-day.xlsx', $hash('multi-day'));
+    $expect($r['transactions_imported'] === 3 && $r['balances_imported'] === 2, 'Multi-day import stores two daily balances');
+    $saved = $pdo->query("SELECT statement_date, opening_balance, debit_turnover, closing_balance FROM bank_daily_balances WHERE statement_date >= '2026-10-13' ORDER BY statement_date")->fetchAll();
+    $expect(count($saved) === 2 && $saved[0]['debit_turnover'] === '316340.00'
+        && $saved[1]['opening_balance'] === '516464.03' && $saved[1]['debit_turnover'] === '290000.00',
+        'Multi-day import keeps daily turnover and continuity');
+    $expect(count(\App\Service\FinanceBankReconciliationService::checkTransactionAggregates($pdo, 1)['mismatches']) === 0,
+        'Multi-day import passes independent aggregate reconciliation');
     echo "BANK_OVERLAPPING_IMPORT=PASS\n";
 }
