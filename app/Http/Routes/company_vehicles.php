@@ -237,8 +237,6 @@ $router->post('/company/vehicles/create', function () use ($config, $db) {
 
         $plateNumber = trim($_POST['plate_number'] ?? '');
         $unitType = trim($_POST['unit_type'] ?? '');
-        $vinAbsent = (string) ($_POST['vin_absent'] ?? '') === '1';
-        if ($vinAbsent && trim((string) ($_POST['vin'] ?? '')) !== '') $errors['vin'] = 'При отметке об отсутствии VIN оставьте поле пустым';
 
         if ($plateNumber === '') {
             $errors['plate_number'] = 'Обязательное поле';
@@ -275,9 +273,9 @@ $router->post('/company/vehicles/create', function () use ($config, $db) {
         $membershipId = \App\Service\RegulatedDataScopeService::assertCanCreate('vehicle_unit');
         $localPdo->beginTransaction();
         $insert = $localPdo->prepare(
-             'INSERT INTO vehicle_units (plate_number, brand, model, unit_type, vin, vin_absent,
+            'INSERT INTO vehicle_units (plate_number, brand, model, unit_type, vin,
              sts_number, pts_number, capacity_tons, volume_m3, status, comments, created_by_user_id, created_by_membership_id, created_by_role)
-              VALUES (:plate_number, :brand, :model, :unit_type, :vin, :vin_absent,
+             VALUES (:plate_number, :brand, :model, :unit_type, :vin,
              :sts_number, :pts_number, :capacity_tons, :volume_m3, :status, :comments, :created_by_user_id, :created_by_membership_id, :created_by_role)'
         );
         $insert->execute([
@@ -286,7 +284,6 @@ $router->post('/company/vehicles/create', function () use ($config, $db) {
             ':model'              => $model !== '' ? $model : null,
             ':unit_type'          => $unitType,
             ':vin'                => $vin !== '' ? $vin : null,
-            ':vin_absent'         => $vinAbsent ? 1 : 0,
             ':sts_number'         => $stsNumber !== '' ? $stsNumber : null,
             ':pts_number'         => $ptsNumber !== '' ? $ptsNumber : null,
             ':capacity_tons'      => $capacityTons !== '' ? $capacityTons : null,
@@ -681,8 +678,6 @@ $router->post('/company/vehicles/{id}/edit', function ($vehicleId) use ($config,
 
         $plateNumber = trim($_POST['plate_number'] ?? '');
         $unitType = trim($_POST['unit_type'] ?? '');
-        $vinAbsent = (string) ($_POST['vin_absent'] ?? '') === '1';
-        if ($vinAbsent && trim((string) ($_POST['vin'] ?? '')) !== '') $errors['vin'] = 'При отметке об отсутствии VIN оставьте поле пустым';
 
         if ($plateNumber === '') {
             $errors['plate_number'] = 'Обязательное поле';
@@ -719,7 +714,7 @@ $router->post('/company/vehicles/{id}/edit', function ($vehicleId) use ($config,
 
         $update = $localPdo->prepare(
             'UPDATE vehicle_units SET plate_number = :plate_number, brand = :brand, model = :model,
-              unit_type = :unit_type, vin = :vin, vin_absent = :vin_absent, sts_number = :sts_number,
+             unit_type = :unit_type, vin = :vin, sts_number = :sts_number,
              pts_number = :pts_number, capacity_tons = :capacity_tons, volume_m3 = :volume_m3,
              status = :status, comments = :comments
              WHERE id = :id'
@@ -730,7 +725,6 @@ $router->post('/company/vehicles/{id}/edit', function ($vehicleId) use ($config,
             ':model'         => $model !== '' ? $model : null,
             ':unit_type'     => $unitType,
             ':vin'           => $vin !== '' ? $vin : null,
-            ':vin_absent'    => $vinAbsent ? 1 : 0,
             ':sts_number'    => $stsNumber !== '' ? $stsNumber : null,
             ':pts_number'    => $ptsNumber !== '' ? $ptsNumber : null,
             ':capacity_tons' => $capacityTons !== '' ? $capacityTons : null,

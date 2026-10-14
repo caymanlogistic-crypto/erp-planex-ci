@@ -69,10 +69,7 @@ final class RouteExecutorCombinedCreateService
             $unit = (array) ($units[$unitRole] ?? []);
             if (trim((string) ($unit['plate_number'] ?? '')) === '') throw new RuntimeException('Укажите госномер транспортной единицы.');
             $vin = strtoupper(trim((string) ($unit['vin'] ?? '')));
-            $vinAbsent = (string) ($unit['vin_absent'] ?? '') === '1';
-            if ($vinAbsent && $vin !== '') throw new RuntimeException('При отметке «VIN отсутствует» оставьте поле VIN пустым.');
             if ($vin !== '' && !preg_match('/^[A-HJ-NPR-Z0-9]{17}$/', $vin)) throw new RuntimeException('Формат VIN: 17 символов.');
-            if ($validateOnly && !$vinAbsent && $vin === '') throw new RuntimeException('Укажите VIN или отметьте «VIN отсутствует».');
             $date = (string) ($unit['diagnostic_card_date'] ?? '');
             if ($date !== '') self::date($date);
             foreach (['capacity_tons', 'volume_m3'] as $measure) {
@@ -88,7 +85,7 @@ final class RouteExecutorCombinedCreateService
             'contractor_contacts' => 'SELECT 1 FROM contractor_contacts LIMIT 0',
             'drivers' => 'SELECT 1 FROM drivers LIMIT 0',
             'driver_phones' => 'SELECT 1 FROM driver_phones LIMIT 0',
-            'vehicle_units' => 'SELECT vin_absent FROM vehicle_units LIMIT 0',
+            'vehicle_units' => 'SELECT 1 FROM vehicle_units LIMIT 0',
             'vehicle_sets' => 'SELECT 1 FROM vehicle_sets LIMIT 0',
             'driver_vehicle_blocks' => 'SELECT 1 FROM driver_vehicle_blocks LIMIT 0',
             'crews' => 'SELECT 1 FROM crews LIMIT 0',
@@ -137,7 +134,7 @@ final class RouteExecutorCombinedCreateService
                 if (!empty($setRow['secondary_vehicle_unit_id'])) $unitIds['secondary'] = (int)$setRow['secondary_vehicle_unit_id'];
             } else {
             $membershipId = RegulatedDataScopeService::assertCanCreate('vehicle_unit');
-            $unitInsert = $pdo->prepare('INSERT INTO vehicle_units (plate_number,brand,model,unit_type,vin,vin_absent,capacity_tons,volume_m3,diagnostic_card_number,diagnostic_card_date,status,comments,created_by_user_id,created_by_role) VALUES (?,?,?,?,?,?,?,?,?,?,\'active\',NULL,?,?)');
+            $unitInsert = $pdo->prepare('INSERT INTO vehicle_units (plate_number,brand,model,unit_type,vin,capacity_tons,volume_m3,diagnostic_card_number,diagnostic_card_date,status,comments,created_by_user_id,created_by_role) VALUES (?,?,?,?,?,?,?,?,?,\'active\',NULL,?,?)');
             foreach ($rule['units'] as $unitRole => $unitRule) {
                 $unit = (array) $units[$unitRole];
                 $unitInsert->execute([
@@ -146,7 +143,6 @@ final class RouteExecutorCombinedCreateService
                     trim((string) ($unit['model'] ?? '')),
                     (string) $unitRule['unit_type'],
                     strtoupper(trim((string) ($unit['vin'] ?? ''))) ?: null,
-                    (string) ($unit['vin_absent'] ?? '') === '1' ? 1 : 0,
                     !empty($unitRule['show_capacity']) && ($unit['capacity_tons'] ?? '') !== '' ? (float) str_replace(',', '.', (string) $unit['capacity_tons']) : null,
                     !empty($unitRule['show_volume']) && ($unit['volume_m3'] ?? '') !== '' ? (float) str_replace(',', '.', (string) $unit['volume_m3']) : null,
                     trim((string) ($unit['diagnostic_card_number'] ?? '')) ?: null,

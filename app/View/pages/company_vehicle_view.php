@@ -119,7 +119,7 @@
             <h3 class="panel-head-title">Технические данные</h3>
             <dl class="kv">
                 <dt>VIN</dt>
-                <dd><?= !empty($vehicle['vin_absent']) ? 'Отсутствует' : '<code>' . (e($vehicle['vin'] ?? '') ?: '—') . '</code>' ?></dd>
+                <dd><code><?= e($vehicle['vin'] ?? '') ?: '—' ?></code></dd>
                 <dt>СТС</dt>
                 <dd><?= e($vehicle['sts_number'] ?? '') ?: '—' ?></dd>
                 <dt>Грузоподъёмность (т)</dt>
