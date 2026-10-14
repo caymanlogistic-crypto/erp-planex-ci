@@ -199,11 +199,11 @@ trait DocumentGeneratorDataTrait
             'vehicle.label'=>(string)($v['label'] ?? 'Транспортное средство'),
             'vehicle.model'=>(string)($v['model'] ?? ''),
             'vehicle.plate'=>(string)($v['plate'] ?? ''),
-            'vehicle.vin'=>(string)($v['vin'] ?? ''),
+            'vehicle.vin'=>!empty($v['vin_absent']) ? 'отсутствует' : (string)($v['vin'] ?? ''),
             'trailer.label'=>(string)($t['label'] ?? ''),
             'trailer.model'=>(string)($t['model'] ?? ''),
             'trailer.plate'=>(string)($t['plate'] ?? ''),
-            'trailer.vin'=>(string)($t['vin'] ?? ''),
+            'trailer.vin'=>!empty($t['vin_absent']) ? 'отсутствует' : (string)($t['vin'] ?? ''),
             'trailer.display'=>(string)($t['display'] ?? ''),
             'service.description'=>(string)($service['description'] ?? ''),
             'service.amount'=>self::formatMoneyAccounting($serviceAmountRaw),
@@ -246,7 +246,7 @@ trait DocumentGeneratorDataTrait
         }
 
         $vehicle=is_array($snapshot['vehicle'] ?? null)?$snapshot['vehicle']:[];
-        if (in_array('vehicle.vin',$placeholders,true) && trim((string)($vehicle['vin'] ?? ''))==='') {
+        if (in_array('vehicle.vin',$placeholders,true) && empty($vehicle['vin_absent']) && trim((string)($vehicle['vin'] ?? ''))==='') {
             $kind=self::vehicleTypeGenitive((string)($vehicle['type'] ?? ''),false);
             $errors[]='У ' . $kind . ' ' . self::vehicleIdentity($vehicle) . ' не заполнен VIN. Заполните его в карточке транспорта.';
         }
@@ -259,7 +259,7 @@ trait DocumentGeneratorDataTrait
         if ($trailerId>0 && $usesTrailer) {
             if (trim((string)($trailer['model'] ?? ''))==='') $errors[]='У второй транспортной единицы не заполнены марка/модель. Заполните карточку транспорта.';
             if (trim((string)($trailer['plate'] ?? ''))==='') $errors[]='У второй транспортной единицы не заполнен государственный номер. Заполните карточку транспорта.';
-            if (trim((string)($trailer['vin'] ?? ''))==='') {
+            if (empty($trailer['vin_absent']) && trim((string)($trailer['vin'] ?? ''))==='') {
                 $kind=self::vehicleTypeGenitive((string)($trailer['type'] ?? ''),true);
                 $errors[]='У ' . $kind . ' ' . self::vehicleIdentity($trailer) . ' не заполнен VIN. Заполните его в карточке транспорта.';
             }
