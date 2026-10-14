@@ -32,6 +32,16 @@
 .waste-general-disabled-notice { background:#e5e7eb; padding:10px 12px; border-radius:4px; }
 .waste-form-field .waste-cost-toggle { display:inline-flex; align-items:center; gap:8px; margin-top:4px; font-weight:400; cursor:pointer; }
 .waste-form-field .waste-cost-toggle input[type=checkbox] { appearance:auto; width:16px; height:16px; margin:0; flex:none; accent-color:var(--accent,#95500f); }
+.waste-executor-picker { position:relative; width:100%; min-width:0; }
+.waste-executor-picker .waste-executor-native { display:none; }
+.waste-executor-input { box-sizing:border-box; width:100%; height:34px; padding:6px 30px 6px 10px; border:1px solid var(--border,#d6d2c9); border-radius:3px; background:var(--surface,#fff); color:inherit; font:inherit; }
+.waste-executor-input:focus { outline:2px solid var(--accent,#95500f); outline-offset:1px; }
+.waste-executor-options { position:absolute; z-index:30; top:calc(100% + 3px); left:0; right:0; max-height:220px; overflow-y:auto; border:1px solid var(--border,#d6d2c9); border-radius:3px; background:var(--surface,#fff); box-shadow:0 6px 18px rgba(0,0,0,.15); }
+.waste-executor-options.is-above { top:auto; bottom:calc(100% + 3px); }
+.waste-executor-options[hidden] { display:none; }
+.waste-executor-option { display:block; width:100%; padding:8px 10px; border:0; background:transparent; color:inherit; font:inherit; text-align:left; white-space:normal; cursor:pointer; }
+.waste-executor-option:hover, .waste-executor-option.is-active { background:var(--surface-hover,#f4f0e9); }
+.waste-executor-empty { padding:8px 10px; color:var(--text-muted,#777); }
 .waste-no-markup-preview { background:#e5e7eb; padding:8px 10px; border-radius:4px; }
 
 /* Accepted departures design v022: scoped registry and modal presentation. */
