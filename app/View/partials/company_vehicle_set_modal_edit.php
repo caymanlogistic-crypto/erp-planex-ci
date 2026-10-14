@@ -8,6 +8,7 @@ $unitDefaults = [
     'brand' => '',
     'model' => '',
     'vin' => '',
+    'vin_absent' => 0,
     'capacity_tons' => '',
     'volume_m3' => '',
     'diagnostic_card_number' => '',
@@ -144,6 +145,7 @@ $badgeMeta = static function (array $doc): array {
                   <div class="field field-w-issued-by<?= !empty($errors['units'][$role]['vin']) ? ' is-error' : '' ?>">
                     <label class="field-label">VIN код</label>
                     <input type="text" name="units[<?= e($role) ?>][vin]" class="field-input" value="<?= e((string) ($unitValues[$role]['vin'] ?? '')) ?>">
+                    <label class="vehicle-vin-absent"><input type="checkbox" name="units[<?= e($role) ?>][vin_absent]" value="1" <?= !empty($unitValues[$role]['vin_absent']) ? 'checked' : '' ?>> VIN отсутствует</label>
                     <div class="field-msg"><?= e((string) ($errors['units'][$role]['vin'] ?? '')) ?></div>
                   </div>
 
@@ -410,6 +412,16 @@ $badgeMeta = static function (array $doc): array {
             if (input.value.trim() !== '') clearFieldError(input);
         });
     });
+    form.querySelectorAll('input[name$="[vin_absent]"]').forEach(function (toggle) {
+        var vin = toggle.closest('.field').querySelector('input[name$="[vin]"]');
+        function syncVin() {
+            if (toggle.checked) vin.value = '';
+            vin.readOnly = toggle.checked;
+            clearFieldError(vin);
+        }
+        toggle.addEventListener('change', syncVin);
+        syncVin();
+    });
 
     form.addEventListener('submit', function (event) {
         var valid = true;
@@ -424,6 +436,7 @@ $badgeMeta = static function (array $doc): array {
             var panel = form.querySelector('[data-vehicle-role-panel="' + role + '"]');
             if (!panel || panel.classList.contains('is-hidden')) return;
             panel.querySelectorAll('input[data-required-when-visible]').forEach(function (input) {
+                if (input.name.endsWith('[vin]') && panel.querySelector('input[name$="[vin_absent]"]')?.checked) return;
                 if (input.value.trim() === '') {
                     setFieldError(input, 'Обязательное поле');
                     valid = false;
