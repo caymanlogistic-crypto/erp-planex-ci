@@ -488,7 +488,10 @@ final class WasteTripClosingService
             $pdo->prepare('DELETE FROM waste_trip_closing_finance_links WHERE finance_link_id=?')->execute([(int)$row['finance_link_id']]);
             $pdo->prepare('DELETE FROM finance_closing_document_links WHERE id=?')->execute([(int)$row['finance_link_id']]);
         }
+        $existingPair=$pdo->prepare('SELECT 1 FROM finance_closing_document_links WHERE bank_transaction_id=? AND document_id=? LIMIT 1');
         foreach ($wanted as [$document,$bankId]) {
+            $existingPair->execute([$bankId,(int)$document['document_id']]);
+            if ($existingPair->fetchColumn()) continue;
             $insert=$pdo->prepare('INSERT IGNORE INTO finance_closing_document_links (bank_transaction_id,document_id,requirement_code,is_edo) VALUES (?,?,?,0)');
             $insert->execute([$bankId,(int)$document['document_id'],(string)$document['requirement_code']]);
             if ($insert->rowCount() > 0) $pdo->prepare('INSERT INTO waste_trip_closing_finance_links (finance_link_id,closing_document_id,bank_transaction_id) VALUES (?,?,?)')

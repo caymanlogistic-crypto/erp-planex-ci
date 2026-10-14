@@ -1,0 +1,149 @@
+name: Waste Trip Closing Finance Backfill Production
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact deployed canonical SHA
+        required: true
+        type: string
+      mode:
+        description: preview, apply, or rollback
+        required: true
+        type: choice
+        options: [preview, apply, rollback]
+      expected_digest:
+        description: Preview plan SHA256; required for apply
+        required: false
+        type: string
+      original_run_id:
+        description: Apply workflow run ID; required for rollback
+        required: false
+        type: string
+      confirm:
+        description: APPLY_WASTE_TRIP_CLOSING_BACKFILL or ROLLBACK_WASTE_TRIP_CLOSING_BACKFILL
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  backfill:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact canonical source, CI, and guarded inputs
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          MODE: ${{ inputs.mode }}
+          EXPECTED_DIGEST: ${{ inputs.expected_digest }}
+          ORIGINAL_RUN_ID: ${{ inputs.original_run_id }}
+          CONFIRM: ${{ inputs.confirm }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          php -l scripts/waste_trip_closing_finance_backfill.php
+          php -l app/Service/WasteTripClosingFinanceBackfillService.php
+          case "$MODE" in
+            preview) test -z "$CONFIRM" ;;
+            apply) [[ "$EXPECTED_DIGEST" =~ ^[0-9a-f]{64}$ ]] && test "$CONFIRM" = APPLY_WASTE_TRIP_CLOSING_BACKFILL ;;
+            rollback) [[ "$ORIGINAL_RUN_ID" =~ ^[1-9][0-9]{5,19}$ ]] && test "$CONFIRM" = ROLLBACK_WASTE_TRIP_CLOSING_BACKFILL ;;
+            *) exit 1 ;;
+          esac
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/waste-trip-closing-backfill-ci.json
+          SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
+          import json, os
+          rows = [r for r in json.load(open('/tmp/waste-trip-closing-backfill-ci.json')).get('workflow_runs', [])
+                  if r.get('head_sha') == os.environ['SOURCE_SHA'] and r.get('event') == 'push']
+          if not rows or max(rows, key=lambda r: r.get('run_number', 0)).get('conclusion') != 'success':
+              raise SystemExit('Exact canonical ERP PLANEX CI is not green')
+          print('WASTE_TRIP_CLOSING_BACKFILL_CI_PASS=YES')
+          PY
+
+      - name: Configure isolated SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/waste_trip_finance_backfill_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/waste_trip_finance_backfill_key" "$HOME/.ssh/known_hosts"
+
+      - name: Run guarded backfill and save evidence
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          MODE: ${{ inputs.mode }}
+          EXPECTED_DIGEST: ${{ inputs.expected_digest }}
+          ORIGINAL_RUN_ID: ${{ inputs.original_run_id }}
+          CONFIRM: ${{ inputs.confirm }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/waste_trip_finance_backfill_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
+          test "$("${remote[@]}" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
+          run_id="$GITHUB_RUN_ID"
+          if [ "$MODE" = rollback ]; then run_id="$ORIGINAL_RUN_ID"; fi
+          command="PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER' WASTE_TRIP_CLOSING_BACKFILL_MODE='$MODE' WASTE_TRIP_CLOSING_BACKFILL_RUN_ID='$run_id' WASTE_TRIP_CLOSING_BACKFILL_EXPECTED_DIGEST='$EXPECTED_DIGEST' WASTE_TRIP_CLOSING_BACKFILL_CONFIRM='$CONFIRM' /usr/bin/php8.5 '$LIVE_ROOT/scripts/waste_trip_closing_finance_backfill.php'"
+          "${remote[@]}" "$command" | tee result.txt
+          if [ "$MODE" = preview ]; then
+            grep -q '^WASTE_TRIP_CLOSING_BACKFILL_READ_ONLY_OK$' result.txt
+          else
+            grep -q "^WASTE_TRIP_CLOSING_BACKFILL_$(echo "$MODE" | tr '[:lower:]' '[:upper:]')_OK$" result.txt
+          fi
+          if [ "$MODE" = apply ]; then
+            "${remote[@]}" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER' /usr/bin/php8.5 '$LIVE_ROOT/scripts/waste_trip_closing_finance_backfill.php'" | tee after.txt
+            grep -q '^WASTE_TRIP_CLOSING_BACKFILL_READ_ONLY_OK$' after.txt
+            python3 - <<'PY'
+          import json
+          line = next(line for line in open('after.txt') if line.startswith('WASTE_TRIP_CLOSING_BACKFILL_SNAPSHOT='))
+          rows = json.loads(line.split('=', 1)[1])
+          if not rows or any(row['links_to_add'] != 0 for row in rows):
+              raise SystemExit('Backfill left missing links')
+          PY
+          fi
+          test "$("${remote[@]}" "cat '$DEPLOY_MARKER'")" = "$SOURCE_SHA"
+          echo "WASTE_TRIP_CLOSING_BACKFILL_PRODUCTION_PASS=YES mode=$MODE run_id=$run_id"
+
+      - name: Save audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: waste-trip-closing-finance-backfill-${{ github.run_id }}
+          path: |
+            result.txt
+            after.txt
+          if-no-files-found: ignore
+
+      - name: Remove isolated SSH key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/waste_trip_finance_backfill_key"
