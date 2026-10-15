@@ -28,13 +28,14 @@ trait DocumentGeneratorTripPackageTrait
 
     public static function listDocumentTrips(PDO $pdo, bool $includeFinance = false): array
     {
-        $trips = WasteTripService::fetchTrips($pdo, [], $includeFinance);
+        $trips = WasteTripService::fetchTrips($pdo, [], true);
         $out = [];
         foreach ($trips as $trip) {
             if ((string)($trip['status'] ?? '') === WasteTripService::STATUS_CANCELLED) continue;
             $trip['_document_ready'] = (int)($trip['route_executor_id'] ?? 0) > 0
                 && (int)($trip['request_count'] ?? 0) > 0;
             $trip['_document_period'] = self::tripPeriodLabel($trip);
+            $trip['_carrier_contract_defaults'] = self::suggestCarrierContractDefaults($trip);
             if ($includeFinance) {
                 $trip['_package_dates'] = self::suggestClientPackageDates($pdo, $trip);
             }
@@ -45,6 +46,21 @@ trait DocumentGeneratorTripPackageTrait
             $out[] = $trip;
         }
         return $out;
+    }
+
+    public static function suggestCarrierContractDefaults(array $trip): array
+    {
+        [$start] = self::tripDocumentDates($trip);
+        $useSale = (string)($trip['legal_entity_code'] ?? '') === 'mg_logistic'
+            || WasteTripService::hasNoMarkup($trip);
+        $payments = $useSale ? (array)($trip['customer_payments'] ?? []) : (array)($trip['carrier_payments'] ?? []);
+        $finish = $start === null ? '' : (new \DateTimeImmutable($start))->modify('+7 days')->format('Y-m-d');
+        return [
+            'contract_date' => $start ?? '',
+            'start_date' => $start ?? '',
+            'finish_date' => $finish,
+            'price' => self::sumPaymentRows($payments) ?? '',
+        ];
     }
 
     public static function listDocumentClients(PDO $pdo, int $userId, string $role): array

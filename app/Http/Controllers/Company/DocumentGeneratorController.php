@@ -328,7 +328,6 @@ final class DocumentGeneratorController
             }
             if ((int)$old['template_id'] <= 0 && $templates !== []) $old['template_id'] = (int)$templates[0]['id'];
             if ($_SERVER['REQUEST_METHOD'] === 'GET') {
-                if (trim((string)$old['contract_date']) === '') $old['contract_date'] = date('Y-m-d');
                 if (trim((string)$old['waybill_date']) === '') $old['waybill_date'] = date('Y-m-d');
                 if ($this->isClientPackageMode($old['generator_mode'])) {
                     foreach ($trips as $trip) {
@@ -340,7 +339,16 @@ final class DocumentGeneratorController
                         }
                         break;
                     }
+                } elseif ((int)$old['trip_id'] > 0) {
+                    foreach ($trips as $trip) {
+                        if ((int)$trip['id'] !== (int)$old['trip_id']) continue;
+                        foreach ((array)($trip['_carrier_contract_defaults'] ?? []) as $key => $value) {
+                            if (isset($old[$key]) && $old[$key] === '') $old[$key] = $value;
+                        }
+                        break;
+                    }
                 }
+                if (trim((string)$old['contract_date']) === '' && (int)$old['trip_id'] <= 0) $old['contract_date'] = date('Y-m-d');
             }
             if ($doPreview) {
                 if ($this->isClientPackageMode($old['generator_mode'])) {
