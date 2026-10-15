@@ -326,7 +326,16 @@ final class DocumentGeneratorController
                     ]);
                 }
             }
-            if ((int)$old['template_id'] <= 0 && $templates !== []) $old['template_id'] = (int)$templates[0]['id'];
+            if ((int)$old['template_id'] <= 0 && $templates !== []) {
+                $leaseTemplate = null;
+                foreach ($templates as $template) {
+                    if ((string)($template['document_type'] ?? '') === 'vehicle_lease_crew') {
+                        $leaseTemplate = $template;
+                        break;
+                    }
+                }
+                $old['template_id'] = (int)($leaseTemplate['id'] ?? $templates[0]['id']);
+            }
             if ($_SERVER['REQUEST_METHOD'] === 'GET') {
                 if (trim((string)$old['waybill_date']) === '') $old['waybill_date'] = date('Y-m-d');
                 if ($this->isClientPackageMode($old['generator_mode'])) {
