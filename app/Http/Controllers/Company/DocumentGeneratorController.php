@@ -299,7 +299,7 @@ final class DocumentGeneratorController
             $this->requireSchema($localPdo);
             DocumentGeneratorService::seedDefaultTemplates($localPdo, $companyId, 0, 'system');
             $allTemplates = DocumentGeneratorService::listTemplates($localPdo, true);
-            $templates = array_values(array_filter($allTemplates, static fn(array $row): bool => in_array((string)($row['document_type'] ?? ''), ['vehicle_lease_crew','waybill_driver_assignment'], true)));
+            $templates = array_values(array_filter($allTemplates, static fn(array $row): bool => in_array((string)($row['document_type'] ?? ''), ['vehicle_lease_crew','carrier_sublease_crew','waybill_driver_assignment'], true)));
             $canGenerateClientPackage = DocumentGeneratorService::canGenerateClientPackage($role);
             $trips = DocumentGeneratorService::listDocumentTrips($localPdo, $canGenerateClientPackage);
             if ($canGenerateClientPackage) $clients = DocumentGeneratorService::listDocumentClients($localPdo, $userId, $role);

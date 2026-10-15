@@ -166,7 +166,7 @@ trait DocumentGeneratorAccessTrait
                 'number'=>$documentType==='waybill_driver_assignment'
                     ? (string)($normalized['waybill_number'] ?? '')
                     : (in_array($documentType, ['client_sublease_crew','client_upd_contract'], true) ? (string)($normalized['contract_number'] ?? '') : ''),
-                'number_mode'=>$documentType==='vehicle_lease_crew'
+                'number_mode'=>in_array($documentType, ['vehicle_lease_crew','carrier_sublease_crew'], true)
                     ? 'trip_based'
                     : (in_array($documentType, ['client_sublease_crew','client_upd_contract'], true) ? 'trip_based' : 'manual'),
             ],

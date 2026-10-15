@@ -6,7 +6,7 @@ trait DocumentGeneratorDataTrait
 {
     private static function normalizeParameters(string $type, array $params): array
     {
-        if (in_array($type, ['vehicle_lease_crew','client_sublease_crew','client_upd_contract'], true)) {
+        if (in_array($type, ['vehicle_lease_crew','carrier_sublease_crew','client_sublease_crew','client_upd_contract'], true)) {
             $out = [
                 'contract_date'=>trim((string)($params['contract_date'] ?? '')),
                 'start_date'=>trim((string)($params['start_date'] ?? '')),
@@ -36,7 +36,7 @@ trait DocumentGeneratorDataTrait
             if (!preg_match('/^(\d{4})-(\d{2})-(\d{2})$/',$value,$m)) return false;
             return checkdate((int)$m[2],(int)$m[3],(int)$m[1]);
         };
-        if (in_array($type, ['vehicle_lease_crew','client_sublease_crew','client_upd_contract'], true)) {
+        if (in_array($type, ['vehicle_lease_crew','carrier_sublease_crew','client_sublease_crew','client_upd_contract'], true)) {
             foreach (['contract_date'=>'дату договора','start_date'=>'дату начала аренды','finish_date'=>'плановую дату завершения'] as $field=>$label) {
                 $value=trim((string)($params[$field] ?? ''));
                 if (!$validDate($value)) $errors[]='Укажите корректную ' . $label . '.';
