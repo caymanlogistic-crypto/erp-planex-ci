@@ -371,7 +371,16 @@ final class WarehouseStockService
                 if ($oldSource !== $erp[$flightId]['source'] || $oldDestination !== $erp[$flightId]['destination']) {
                     $messages[] = 'Склад рейса в ERP отличается от старой базы.';
                 }
-                $legacyRequests = self::requestIds((string)($flight[($flight['route_type'] ?? '') === 'mixed_to_utilizer' ? 'direct_zayavki_ids' : 'zayavki_ids'] ?? ''));
+                $legacyRequests = self::requestIds((string)($flight['zayavki_ids'] ?? ''));
+                if (isset($mixedWarehouseRequests[$flightId])) {
+                    $directRequests = self::requestIds((string)($flight['direct_zayavki_ids'] ?? ''));
+                    $erpRequestSet = array_fill_keys($erp[$flightId]['requests'], true);
+                    // Old ERP trips may contain the complete mixed trip; newer ones contain only its direct leg.
+                    if (count($erpRequestSet) === count($directRequests)
+                        && count(array_intersect($directRequests, $erp[$flightId]['requests'])) === count($directRequests)) {
+                        $legacyRequests = $directRequests;
+                    }
+                }
                 $onlyOld = array_diff(array_unique($legacyRequests), array_unique($erp[$flightId]['requests']));
                 $onlyErp = array_diff(array_unique($erp[$flightId]['requests']), array_unique($legacyRequests));
                 if ($onlyOld !== [] || $onlyErp !== []) {
@@ -426,8 +435,10 @@ final class WarehouseStockService
                 foreach (array_unique($directionRequests[$direction]) as $requestId) {
                     $expectedMass += $erp[$flightId]['request_masses_kg'][$requestId] ?? 0;
                 }
-                // ERP stores the direct leg of a mixed trip; it has no mass snapshot for the warehouse group.
-                if (!isset($mixedWarehouseRequests[$flightId]) && $flightMass > 0 && abs($flightMass - $expectedMass) > 1) {
+                // Compare mixed-trip mass only when ERP has snapshots for every warehouse request.
+                $hasWarehouseMassSnapshot = !isset($mixedWarehouseRequests[$flightId])
+                    || count(array_diff(array_keys($mixedWarehouseRequests[$flightId]), $erp[$flightId]['requests'])) === 0;
+                if ($hasWarehouseMassSnapshot && $flightMass > 0 && abs($flightMass - $expectedMass) > 1) {
                     $difference = $flightMass - $expectedMass;
                     $massMessage = 'Масса по рейсу: складской учёт '.$formatKg($flightMass).' кг, снимок рейса ERP '
                         .$formatKg($expectedMass).' кг. Разница '.($difference > 0 ? '+' : '−').$formatKg(abs($difference)).' кг.';

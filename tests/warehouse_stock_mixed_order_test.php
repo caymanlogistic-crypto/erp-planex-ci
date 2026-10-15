@@ -58,6 +58,15 @@ if ($issueGroup === null || $issueGroup['request_count'] !== 4 || $issueGroup['m
 if (isset($result['issues'][353])) {
     throw new RuntimeException('Складская группа смешанного рейса создаёт ложное расхождение.');
 }
+$erpFullTrip = $erp;
+foreach ($masses as $requestId => $mass) {
+    $erpFullTrip[] = ['business_id'=>353,'status'=>'completed','legacy_source_warehouse_id'=>1,
+        'zayavka_id'=>$requestId,'snapshot_mass_kg'=>(int)round((float)$mass * 1000)];
+}
+$fullTripResult = WarehouseStockService::build($warehouse, $movements, $flights, $erpFullTrip);
+if (isset($fullTripResult['issues'][353]) || $fullTripResult['current'][1] !== $result['current'][1]) {
+    throw new RuntimeException('Полный состав исторического смешанного рейса создаёт ложное расхождение.');
+}
 $withDirectStock = $movements;
 $withDirectStock[] = ['id'=>$id,'movement_type'=>'receipt','warehouse_id'=>1,'flight_id'=>200,
     'zayavka_id'=>312015,'mass_netto'=>'0.400','movement_date'=>'2026-10-01',
