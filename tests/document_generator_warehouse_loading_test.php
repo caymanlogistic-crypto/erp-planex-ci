@@ -58,4 +58,7 @@ $check($mixedRows[1]['document_loading_address'] === 'Москва, Складс
 $mixed353 = Loading::resolve($pdo, ['legacy_source_warehouse_id'=>1,'legacy_flight_id'=>353], ['312015','310867']);
 $check($mixed353['request_ids'] === ['310867','322245','321828','321391'], 'Mixed trip 353 warehouse request group');
 $check($mixed353['trip_request_ids'] === ['312015','310867','322245','321828','321391'], 'Mixed trip 353 complete contract request list');
+$stale351 = Loading::resolve($pdo, ['legacy_source_warehouse_id'=>1,'legacy_flight_id'=>351], ['312015','291382','310867','300001']);
+$check($stale351['trip_request_ids'] === ['291382','300001','300002'], 'Mixed contract uses current source composition');
+$check($stale351['ignored_request_ids'] === ['312015','310867'], 'Stale ERP requests are identified for warning');
 echo "DOCUMENT_GENERATOR_WAREHOUSE_LOADING=PASS\n";

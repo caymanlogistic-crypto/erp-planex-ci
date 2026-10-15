@@ -7,7 +7,7 @@ use RuntimeException;
 
 final class DocumentGeneratorWarehouseLoadingService
 {
-    /** @return array{address:string,request_ids:list<string>,trip_request_ids?:list<string>} */
+    /** @return array{address:string,request_ids:list<string>,trip_request_ids?:list<string>,ignored_request_ids?:list<string>} */
     public static function resolve(PDO $legacy, array $trip, array $requestIds): array
     {
         $warehouseId = (int)($trip['legacy_source_warehouse_id'] ?? 0);
@@ -29,13 +29,14 @@ final class DocumentGeneratorWarehouseLoadingService
         if ((string)$flight['route_type'] === 'mixed_to_utilizer') {
             $all = self::requestIds((string)$flight['zayavki_ids']);
             $direct = self::requestIds((string)$flight['direct_zayavki_ids']);
-            if ($all === [] || array_diff($direct, $all) !== [] || array_diff($requestIds, $all) !== []) {
-                throw new RuntimeException('Состав заявок смешанного рейса отличается от данных ERP.');
+            if ($all === [] || array_diff($direct, $all) !== []) {
+                throw new RuntimeException('Некорректный состав заявок смешанного рейса в старой базе.');
             }
+            $ignored = array_values(array_diff($requestIds, $all));
             $found = array_values(array_diff($all, $direct));
-            if ($found === []) return ['address'=>'', 'request_ids'=>[], 'trip_request_ids'=>$all];
+            if ($found === []) return ['address'=>'', 'request_ids'=>[], 'trip_request_ids'=>$all, 'ignored_request_ids'=>$ignored];
             $address = self::warehouseAddress($legacy, $warehouseId);
-            return ['address'=>$address, 'request_ids'=>$found, 'trip_request_ids'=>$all];
+            return ['address'=>$address, 'request_ids'=>$found, 'trip_request_ids'=>$all, 'ignored_request_ids'=>$ignored];
         }
         $found = [];
         foreach (array_chunk($requestIds, 300) as $chunk) {

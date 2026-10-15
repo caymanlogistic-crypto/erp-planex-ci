@@ -57,6 +57,11 @@ trait DocumentGeneratorWorkflowTrait
         }
         $warnings=[];
         if (trim((string)($googleContacts['warning'] ?? ''))!=='') $warnings[]=(string)$googleContacts['warning'];
+        $ignored = (array)($context['warehouse_loading']['ignored_request_ids'] ?? []);
+        if ($ignored !== []) {
+            $warnings[] = 'В ERP у рейса есть заявки, отсутствующие в текущем составе исходного рейса: '
+                .implode(', ', $ignored).'. В договор включён актуальный состав исходного рейса.';
+        }
 
         $placeholders = json_decode((string)($template['placeholders_json'] ?? '[]'), true);
         if (!is_array($placeholders)) $placeholders = [];
