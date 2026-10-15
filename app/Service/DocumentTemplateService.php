@@ -13,6 +13,7 @@ final class DocumentTemplateService
 
     private const DOCUMENT_TYPES = [
         'vehicle_lease_crew' => 'Договор-заявка аренды ТС с экипажем',
+        'carrier_sublease_crew' => 'Договор-заявка субаренды ТС с экипажем',
         'waybill_driver_assignment' => 'Приложение к путевому листу / задание водителю',
         'client_sublease_crew' => 'Договор субаренды транспортного средства с экипажем',
         'client_invoice' => 'Счёт клиенту',

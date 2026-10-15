@@ -75,7 +75,7 @@ trait DocumentGeneratorTripPackageTrait
 
         $context = ['trip'=>self::tripSnapshot($trip)];
         $template = self::getTemplateVersion($pdo, $templateId, null, true);
-        if ((string)($template['document_type'] ?? '') === 'vehicle_lease_crew'
+        if (in_array((string)($template['document_type'] ?? ''), ['vehicle_lease_crew','carrier_sublease_crew'], true)
             && (int)($trip['legacy_source_warehouse_id'] ?? 0) > 0) {
             try {
                 $legacy = WasteTripLegacySourceService::connectionFromEnvironment();

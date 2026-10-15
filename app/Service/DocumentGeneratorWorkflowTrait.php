@@ -70,7 +70,7 @@ trait DocumentGeneratorWorkflowTrait
             if (!is_string($key) || $key==='') continue;
             $snapshot[$key]=$value;
         }
-        if ((string)$template['document_type'] === 'vehicle_lease_crew') {
+        if (in_array((string)$template['document_type'], ['vehicle_lease_crew','carrier_sublease_crew'], true)) {
             $tripNumber = (int)($snapshot['trip']['business_id'] ?? 0);
             if ($tripNumber > 0) {
                 $number = 'П-'.$tripNumber;
@@ -90,12 +90,12 @@ trait DocumentGeneratorWorkflowTrait
         $values = self::buildFixedValues($snapshot);
         $errors = [];
         $contractExists = false;
-        if ((string)$template['document_type'] === 'vehicle_lease_crew') {
+        if (in_array((string)$template['document_type'], ['vehicle_lease_crew','carrier_sublease_crew'], true)) {
             if ((int)($snapshot['trip']['business_id'] ?? 0) <= 0) $errors[] = 'Не найден номер выбранного рейса для договора.';
             if (self::driverSurname((string)($snapshot['driver']['full_name'] ?? '')) === '') $errors[] = 'Не указана фамилия водителя для имени файла договора.';
             if (($snapshot['document']['number'] ?? '') !== '') {
-                $existing = $localPdo->prepare("SELECT 1 FROM generated_documents WHERE document_type='vehicle_lease_crew' AND document_number=? LIMIT 1");
-                $existing->execute([$snapshot['document']['number']]);
+                $existing = $localPdo->prepare('SELECT 1 FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1');
+                $existing->execute([(string)$template['document_type'], $snapshot['document']['number']]);
                 $contractExists = $existing->fetchColumn() !== false;
             }
         }
@@ -141,7 +141,7 @@ trait DocumentGeneratorWorkflowTrait
         $pdo->beginTransaction();
         try {
             $params = is_array($snapshot['parameters'] ?? null) ? $snapshot['parameters'] : [];
-            if ($type === 'vehicle_lease_crew') {
+            if (in_array($type, ['vehicle_lease_crew','carrier_sublease_crew'], true)) {
                 $tripNumber = (int)($snapshot['trip']['business_id'] ?? 0);
                 if ($tripNumber <= 0) throw new RuntimeException('Не найден номер выбранного рейса для договора.');
                 $number = 'П-'.$tripNumber;
@@ -149,8 +149,8 @@ trait DocumentGeneratorWorkflowTrait
                 $snapshot['document']['number_mode'] = 'trip_based';
                 $snapshot['parameters']['contract_number'] = $number;
                 $params = $snapshot['parameters'];
-                $existing = $pdo->prepare("SELECT * FROM generated_documents WHERE document_type='vehicle_lease_crew' AND document_number=? LIMIT 1 FOR UPDATE");
-                $existing->execute([$number]);
+                $existing = $pdo->prepare('SELECT * FROM generated_documents WHERE document_type=? AND document_number=? LIMIT 1 FOR UPDATE');
+                $existing->execute([$type, $number]);
                 $existingRow = $existing->fetch(PDO::FETCH_ASSOC) ?: null;
                 if ($existingRow !== null && !$overwriteExisting) {
                     throw new RuntimeException('Договор с номером '.$number.' уже сформирован. Подтвердите перезапись договора.');
@@ -176,13 +176,13 @@ trait DocumentGeneratorWorkflowTrait
                 $snapshot['document']['number'] = $number;
                 $snapshot['document']['number_mode'] = 'manual';
             }
-            $date = (string)($type==='vehicle_lease_crew' ? ($params['contract_date'] ?? '') : ($params['waybill_date'] ?? ''));
+            $date = (string)(in_array($type, ['vehicle_lease_crew','carrier_sublease_crew'], true) ? ($params['contract_date'] ?? '') : ($params['waybill_date'] ?? ''));
             $values = self::buildFixedValues($snapshot);
 
-            if ($type === 'vehicle_lease_crew') {
+            if (in_array($type, ['vehicle_lease_crew','carrier_sublease_crew'], true)) {
                 $surname = self::driverSurname((string)($snapshot['driver']['full_name'] ?? ''));
                 if ($surname === '') throw new RuntimeException('Не указана фамилия водителя для имени файла договора.');
-                $downloadName = DocumentService::safeDownloadName('Рейс '.$tripNumber.' '.$surname.'.docx');
+                $downloadName = DocumentService::safeDownloadName('Рейс '.$tripNumber.' '.$surname.($type === 'carrier_sublease_crew' ? ' Субаренда' : '').'.docx');
             } else {
                 $downloadName = DocumentService::safeDownloadName('Приложение-к-путевому-листу'.($number!==''?'_'.$number:'').'.docx');
             }

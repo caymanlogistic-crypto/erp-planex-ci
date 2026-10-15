@@ -40,6 +40,7 @@ trait DocumentGeneratorTemplateTrait
         try {
             $defaults = [
                 'vehicle_lease_crew' => ['Договор-заявка аренды ТС с экипажем', 'contract_vehicle_lease_crew_v3.docx'],
+                'carrier_sublease_crew' => ['Договор-заявка субаренды ТС с экипажем', 'contract_carrier_sublease_crew_v1.docx'],
                 'waybill_driver_assignment' => ['Приложение к путевому листу / задание водителю', 'waybill_driver_assignment_v1.docx'],
                 'client_sublease_crew' => ['Договор субаренды транспортного средства с экипажем', 'client_sublease_contract_v1.docx'],
                 'client_invoice' => ['Счёт клиенту', 'client_invoice_v1.docx'],
@@ -101,6 +102,7 @@ trait DocumentGeneratorTemplateTrait
             'contract_vehicle_lease_crew_v1.docx' => '0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc',
             'contract_vehicle_lease_crew_v2.docx' => '7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa',
             'contract_vehicle_lease_crew_v3.docx' => '87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',
+            'contract_carrier_sublease_crew_v1.docx' => '074d6a082e1a07b823bf156814842e3cb345f1724bca1656e13e8be0d053719e',
             'waybill_driver_assignment_v1.docx' => '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
             'client_sublease_contract_v1.docx' => '01ebdc8bb56beb11b20abc787bd6067c7ae3379274e1143cf3e4cf1258f7230c',
             'client_invoice_v1.docx' => '10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
