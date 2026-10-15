@@ -7,7 +7,7 @@ use RuntimeException;
 
 final class DocumentGeneratorWarehouseLoadingService
 {
-    /** @return array{address:string,request_ids:list<string>} */
+    /** @return array{address:string,request_ids:list<string>,trip_request_ids?:list<string>} */
     public static function resolve(PDO $legacy, array $trip, array $requestIds): array
     {
         $warehouseId = (int)($trip['legacy_source_warehouse_id'] ?? 0);
@@ -15,6 +15,28 @@ final class DocumentGeneratorWarehouseLoadingService
 
         $flightId = (int)($trip['legacy_flight_id'] ?? $trip['business_id'] ?? 0);
         if ($flightId <= 0) throw new RuntimeException('Не найден номер рейса для проверки складской погрузки.');
+        $flightQuery = $legacy->prepare('SELECT route_type,source_warehouse_id,zayavki_ids,direct_zayavki_ids FROM flights WHERE id=? LIMIT 1');
+        $flightQuery->execute([$flightId]);
+        $flight = $flightQuery->fetch(PDO::FETCH_ASSOC);
+        if (!$flight) throw new RuntimeException('Не найден рейс в старой базе для проверки складской погрузки.');
+        if ((int)$flight['source_warehouse_id'] !== $warehouseId) {
+            throw new RuntimeException('Склад-источник рейса отличается от склада в ERP.');
+        }
+        if ((string)($trip['legacy_route_type'] ?? '') === 'mixed_to_utilizer'
+            && (string)$flight['route_type'] !== 'mixed_to_utilizer') {
+            throw new RuntimeException('Тип смешанного рейса отличается от данных ERP.');
+        }
+        if ((string)$flight['route_type'] === 'mixed_to_utilizer') {
+            $all = self::requestIds((string)$flight['zayavki_ids']);
+            $direct = self::requestIds((string)$flight['direct_zayavki_ids']);
+            if ($all === [] || array_diff($direct, $all) !== [] || array_diff($requestIds, $all) !== []) {
+                throw new RuntimeException('Состав заявок смешанного рейса отличается от данных ERP.');
+            }
+            $found = array_values(array_diff($all, $direct));
+            if ($found === []) return ['address'=>'', 'request_ids'=>[], 'trip_request_ids'=>$all];
+            $address = self::warehouseAddress($legacy, $warehouseId);
+            return ['address'=>$address, 'request_ids'=>$found, 'trip_request_ids'=>$all];
+        }
         $found = [];
         foreach (array_chunk($requestIds, 300) as $chunk) {
             $marks = implode(',', array_fill(0, count($chunk), '?'));
@@ -34,6 +56,18 @@ final class DocumentGeneratorWarehouseLoadingService
         }
         if ($found === []) return ['address'=>'', 'request_ids'=>[]];
 
+        $address = self::warehouseAddress($legacy, $warehouseId);
+        return ['address'=>$address, 'request_ids'=>array_map('strval', array_keys($found))];
+    }
+
+    /** @return list<string> */
+    private static function requestIds(string $list): array
+    {
+        return array_values(array_unique(preg_split('/[\s,;]+/u', trim($list), -1, PREG_SPLIT_NO_EMPTY) ?: []));
+    }
+
+    private static function warehouseAddress(PDO $legacy, int $warehouseId): string
+    {
         $columns = $legacy->query('SHOW COLUMNS FROM warehouses')->fetchAll(PDO::FETCH_COLUMN);
         $addressColumn = null;
         foreach (['full_address', 'address', 'warehouse_address', 'adres', 'adres_sklada', 'location_address', 'physical_address', 'name'] as $candidate) {
@@ -44,7 +78,7 @@ final class DocumentGeneratorWarehouseLoadingService
         $warehouse->execute([$warehouseId]);
         $address = trim((string)$warehouse->fetchColumn());
         if ($address === '') throw new RuntimeException('Не заполнен адрес склада-источника выбранного рейса.');
-        return ['address'=>$address, 'request_ids'=>array_map('strval', array_keys($found))];
+        return $address;
     }
 
     public static function apply(array $rows, array $loading): array
