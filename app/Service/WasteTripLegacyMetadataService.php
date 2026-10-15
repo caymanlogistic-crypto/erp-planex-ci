@@ -58,7 +58,7 @@ final class WasteTripLegacyMetadataService
         return match ((string)($trip['legacy_route_type'] ?? '')) {
             'generator_to_warehouse' => "Выгрузка на склад:\n".$destination,
             'warehouse_to_warehouse' => "Загрузка со склада:\n".$source."\nВыгрузка на склад:\n".$destination,
-            'warehouse_to_utilizer' => "Загрузка со склада:\n".$source,
+            'warehouse_to_utilizer', 'mixed_to_utilizer' => "Загрузка со склада:\n".$source,
             default => ($trip['legacy_unload_type'] ?? null) === 'SKLAD' ? "Выгрузка на склад:\n".$destination : null,
         };
     }

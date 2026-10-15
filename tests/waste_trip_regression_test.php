@@ -112,6 +112,9 @@ $runAbove261=WasteTripLegacySyncService::syncAll($legacy,$pdo);$ok($runAbove261[
 $ok((string)$pdo->query('SELECT comment FROM waste_trips WHERE business_id=262')->fetchColumn()==='sync above 261','linked 262 did not sync');
 $autoMetadata=$pdo->query('SELECT * FROM waste_trips WHERE business_id=262')->fetch(PDO::FETCH_ASSOC);
 $ok($autoMetadata['legal_entity_code']==='mg_logistic'&&\App\Service\WasteTripLegacyMetadataService::warehouseLabel($autoMetadata)==="Загрузка со склада:\nСклад Север",'Automatic sync refreshes legal entity and warehouse');
+$mixedMetadata=$autoMetadata;
+$mixedMetadata['legacy_route_type']='mixed_to_utilizer';
+$ok(\App\Service\WasteTripLegacyMetadataService::warehouseLabel($mixedMetadata)==="Загрузка со склада:\nСклад Север",'Mixed route displays source warehouse');
 $registeredLink=(int)$pdo->query("SELECT id FROM waste_trip_requests WHERE waste_trip_id={$linked} AND removed_at IS NULL")->fetchColumn();
 $pdo->exec("CREATE TABLE waste_trip_registration_journal(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,waste_trip_request_id BIGINT UNSIGNED NOT NULL,CONSTRAINT fk_registration_journal_request FOREIGN KEY (waste_trip_request_id) REFERENCES waste_trip_requests(id) ON DELETE RESTRICT)");
 $pdo->prepare('INSERT INTO waste_trip_registration_journal(waste_trip_request_id) VALUES(?)')->execute([$registeredLink]);
