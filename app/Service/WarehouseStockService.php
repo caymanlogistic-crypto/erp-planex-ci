@@ -18,14 +18,14 @@ final class WarehouseStockService
     {
         $warehouses = $legacy->query('SELECT id,name FROM warehouses ORDER BY name,id')->fetchAll(PDO::FETCH_ASSOC);
         $movements = $legacy->query(
-            "SELECT id,movement_type,warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,status,comment
+            "SELECT id,movement_type,warehouse_id,flight_id,zayavka_id,mass_netto,movement_date,created_at,updated_at,status,comment
                FROM warehouse_movements
               WHERE status='active'
-              ORDER BY movement_date,id"
+              ORDER BY created_at,id"
         )->fetchAll(PDO::FETCH_ASSOC);
         $flights = $legacy->query(
             'SELECT f.id,f.comment,f.status,f.route_type,f.source_warehouse_id,f.destination_warehouse_id,
-                    f.actual_start_date,f.actual_end_date,f.zayavki_ids,d.full_name AS driver_name,d.vehicle_make_plate AS vehicle
+                    f.actual_start_date,f.actual_end_date,f.zayavki_ids,f.direct_zayavki_ids,d.full_name AS driver_name,d.vehicle_make_plate AS vehicle
                FROM flights f LEFT JOIN drivers d ON d.id=f.driver_id
               ORDER BY f.id'
         )->fetchAll(PDO::FETCH_ASSOC);
@@ -118,12 +118,41 @@ final class WarehouseStockService
         return $count.' '.$word;
     }
 
+    private static function requestIds(string $list): array
+    {
+        return array_values(array_unique(preg_split('/[\s,;]+/u', trim($list), -1, PREG_SPLIT_NO_EMPTY) ?: []));
+    }
+
+    private static function warehouseRequestIds(array $flight): array
+    {
+        $all = self::requestIds((string)($flight['zayavki_ids'] ?? ''));
+        if (($flight['route_type'] ?? '') !== 'mixed_to_utilizer') return $all;
+        return array_values(array_diff($all, self::requestIds((string)($flight['direct_zayavki_ids'] ?? ''))));
+    }
+
+    private static function movementOrderTime(array $row): string
+    {
+        // Reactivating a cancelled correction keeps its original created_at.
+        $updated = (string)($row['updated_at'] ?? '');
+        if (str_contains((string)($row['comment'] ?? ''), 'повторно проведено после отмены')
+            && $updated !== '' && !str_starts_with($updated, '0000-00-00')) return $updated;
+        $created = (string)($row['created_at'] ?? '');
+        return $created !== '' && !str_starts_with($created, '0000-00-00')
+            ? $created : (string)($row['movement_date'] ?? '');
+    }
+
     public static function build(array $warehouses, array $movements, array $flights, array $erpRows, array $exceptionRows = []): array
     {
         $names = [];
         foreach ($warehouses as $row) $names[(int)$row['id']] = (string)$row['name'];
         $flightMap = [];
         foreach ($flights as $row) $flightMap[(int)$row['id']] = $row;
+        $mixedWarehouseRequests = [];
+        foreach ($flightMap as $flightId => $flight) {
+            if (($flight['route_type'] ?? '') === 'mixed_to_utilizer') {
+                $mixedWarehouseRequests[$flightId] = array_fill_keys(self::warehouseRequestIds($flight), true);
+            }
+        }
         $erpFlights = [];
         foreach ($erpRows as $row) {
             $id = (int)$row['business_id'];
@@ -138,12 +167,13 @@ final class WarehouseStockService
                 $erpFlights[$id]['masses'][$requestId] = (int)round((float)($row['snapshot_mass_kg'] ?? 0));
             }
         }
-        $receiptDates = $recordedReceipts = [];
+        $receiptDates = $receiptOrderTimes = $recordedReceipts = [];
         foreach ($movements as $row) {
             if (($row['status'] ?? 'active') !== 'active' || !in_array((string)$row['movement_type'], ['receipt', 'transfer_in'], true)) continue;
             $flightId = (int)$row['flight_id'];
             $warehouseId = (int)$row['warehouse_id'];
             $receiptDates[$flightId][$warehouseId] = max($receiptDates[$flightId][$warehouseId] ?? '', (string)$row['movement_date']);
+            $receiptOrderTimes[$flightId][$warehouseId] = max($receiptOrderTimes[$flightId][$warehouseId] ?? '', self::movementOrderTime($row));
             $recordedReceipts[$flightId][$warehouseId][(string)$row['zayavka_id']] = true;
         }
         foreach ($erpFlights as $flightId => $erpFlight) {
@@ -161,6 +191,7 @@ final class WarehouseStockService
                     'flight_id'=>$flightId,'zayavka_id'=>$requestId,
                     'mass_netto'=>($erpFlight['masses'][$requestId] ?? 0) / 1000,
                     'movement_date'=>$receiptDates[$flightId][$warehouseId],
+                    'created_at'=>$receiptOrderTimes[$flightId][$warehouseId],
                     'status'=>'active','derived_receipt'=>true,
                 ];
             }
@@ -178,8 +209,10 @@ final class WarehouseStockService
             if (!in_array($status, ['started', 'in_progress', 'completed'], true)) continue;
             $warehouseId = (int)($flight['source_warehouse_id'] ?? 0) ?: (int)($erpFlight['source'] ?? 0);
             if ($warehouseId <= 0) continue;
-            $requestIds = array_keys($erpFlight['requests'] ?? []);
-            if ($requestIds === []) $requestIds = preg_split('/[\s,;]+/u', trim((string)($flight['zayavki_ids'] ?? '')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+            $requestIds = isset($mixedWarehouseRequests[$flightId])
+                ? array_keys($mixedWarehouseRequests[$flightId]) : array_keys($erpFlight['requests'] ?? []);
+            if ($requestIds === []) $requestIds = ($flight['route_type'] ?? '') === 'mixed_to_utilizer'
+                ? [] : self::requestIds((string)($flight['zayavki_ids'] ?? ''));
             $date = (string)($erpFlight['start_date'] ?? '') ?: (string)($flight['actual_start_date'] ?? '') ?: (string)($flight['actual_end_date'] ?? '') ?: date('Y-m-d H:i:s');
             foreach (array_unique($requestIds) as $requestId) {
                 if (isset($alreadyIssued[$flightId][$warehouseId][$requestId])) continue;
@@ -191,7 +224,7 @@ final class WarehouseStockService
             }
         }
         usort($movements, static fn(array $a, array $b): int =>
-            strcmp((string)$a['movement_date'], (string)$b['movement_date']) ?: ((int)$a['id'] <=> (int)$b['id']));
+            strcmp(self::movementOrderTime($a), self::movementOrderTime($b)) ?: ((int)$a['id'] <=> (int)$b['id']));
         $balances = $groups = $movementFlightIds = $journalFlightIds = $journalRequestIds = [];
         foreach ($movements as $row) {
             if (($row['status'] ?? 'active') !== 'active') continue;
@@ -208,7 +241,8 @@ final class WarehouseStockService
             if (!empty($row['derived']) && $before <= 0) continue;
             $weight = !empty($row['derived']) ? $before : (int)round((float)$row['mass_netto'] * 1000);
             if ($weight < 0) throw new RuntimeException('Отрицательная масса складского движения.');
-            $excluded = isset($erpFlights[$flightId]) && !isset($erpFlights[$flightId]['requests'][$requestId]);
+            $mixedWarehouseRequest = isset($mixedWarehouseRequests[$flightId][$requestId]);
+            $excluded = isset($erpFlights[$flightId]) && !isset($erpFlights[$flightId]['requests'][$requestId]) && !$mixedWarehouseRequest;
             $after = $excluded ? $before : $before + $sign * $weight;
             if (!$excluded) $balances[$warehouseId][$requestId] = $after;
             $direction = $sign > 0 ? 'in' : 'out';
@@ -266,9 +300,11 @@ final class WarehouseStockService
             $journalRequests = array_values(array_filter($group['requests'], static fn(array $request): bool => !$request['derived_receipt'] && !$request['derived_issue']));
             $group['journal_request_ids'] = array_values(array_unique(array_column($journalRequests, 'id')));
             $group['has_journal'] = $group['journal_request_ids'] !== [];
-            $tripRequestIds = isset($erpFlights[$group['flight_id']])
-                ? array_map('strval', array_keys($erpFlights[$group['flight_id']]['requests'] ?? []))
-                : null;
+            $tripRequestIds = isset($mixedWarehouseRequests[$group['flight_id']]) && $group['direction'] === 'out'
+                ? array_map('strval', array_keys($mixedWarehouseRequests[$group['flight_id']]))
+                : (isset($erpFlights[$group['flight_id']])
+                    ? array_map('strval', array_keys($erpFlights[$group['flight_id']]['requests'] ?? []))
+                    : null);
             $group['warehouse_only_request_ids'] = $tripRequestIds === null
                 ? [] : array_values(array_diff($group['request_ids'], $tripRequestIds));
             $group['trip_only_request_ids'] = $tripRequestIds === null
@@ -335,7 +371,7 @@ final class WarehouseStockService
                 if ($oldSource !== $erp[$flightId]['source'] || $oldDestination !== $erp[$flightId]['destination']) {
                     $messages[] = 'Склад рейса в ERP отличается от старой базы.';
                 }
-                $legacyRequests = preg_split('/[\s,;]+/u', trim((string)($flight['zayavki_ids'] ?? '')), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+                $legacyRequests = self::requestIds((string)($flight[($flight['route_type'] ?? '') === 'mixed_to_utilizer' ? 'direct_zayavki_ids' : 'zayavki_ids'] ?? ''));
                 $onlyOld = array_diff(array_unique($legacyRequests), array_unique($erp[$flightId]['requests']));
                 $onlyErp = array_diff(array_unique($erp[$flightId]['requests']), array_unique($legacyRequests));
                 if ($onlyOld !== [] || $onlyErp !== []) {
@@ -355,8 +391,10 @@ final class WarehouseStockService
                         }
                     }
                     if ($group['trip_only_request_ids'] !== []) {
-                        $recorded = count(array_intersect($group['journal_request_ids'], $erp[$flightId]['requests']));
-                        $total = count($erp[$flightId]['requests']);
+                        $expectedRequests = isset($mixedWarehouseRequests[$flightId]) && $group['direction'] === 'out'
+                            ? array_map('strval', array_keys($mixedWarehouseRequests[$flightId])) : $erp[$flightId]['requests'];
+                        $recorded = count(array_intersect($group['journal_request_ids'], $expectedRequests));
+                        $total = count($expectedRequests);
                         $missing = implode(', ', $group['trip_only_request_ids']);
                         $messages[] = $group['direction'] === 'out'
                             ? $where.': со склада списано '.$recorded.' из '.$total.' заявок рейса. Не списаны: '
@@ -388,7 +426,8 @@ final class WarehouseStockService
                 foreach (array_unique($directionRequests[$direction]) as $requestId) {
                     $expectedMass += $erp[$flightId]['request_masses_kg'][$requestId] ?? 0;
                 }
-                if ($flightMass > 0 && abs($flightMass - $expectedMass) > 1) {
+                // ERP stores the direct leg of a mixed trip; it has no mass snapshot for the warehouse group.
+                if (!isset($mixedWarehouseRequests[$flightId]) && $flightMass > 0 && abs($flightMass - $expectedMass) > 1) {
                     $difference = $flightMass - $expectedMass;
                     $massMessage = 'Масса по рейсу: складской учёт '.$formatKg($flightMass).' кг, снимок рейса ERP '
                         .$formatKg($expectedMass).' кг. Разница '.($difference > 0 ? '+' : '−').$formatKg(abs($difference)).' кг.';
