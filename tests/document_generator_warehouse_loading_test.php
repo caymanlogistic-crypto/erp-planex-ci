@@ -16,8 +16,12 @@ if ($schema === '' || !in_array($schema, explode(',', getenv('PLANEX_TEST_FIXED_
 }
 $pdo = new PDO("mysql:host=$host;port=$port;dbname=$schema;charset=utf8mb4", getenv('PLANEX_SCHEMA_DB_USER') ?: '', getenv('PLANEX_SCHEMA_DB_PASSWORD') ?: '', [PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION]);
 $pdo->exec('CREATE TABLE warehouses(id INT PRIMARY KEY,name VARCHAR(255) NOT NULL,full_address VARCHAR(255) NULL)');
+$pdo->exec('CREATE TABLE flights(id INT PRIMARY KEY,route_type VARCHAR(64),source_warehouse_id INT,zayavki_ids TEXT,direct_zayavki_ids TEXT)');
 $pdo->exec('CREATE TABLE warehouse_movements(id INT PRIMARY KEY,flight_id INT,warehouse_id INT,zayavka_id INT,movement_type VARCHAR(32),status VARCHAR(20),mass_netto DECIMAL(12,4))');
 $pdo->exec("INSERT INTO warehouses VALUES(1,'Склад Север','Москва, Складская, 1'),(2,'Склад Юг','Москва, Южная, 2')");
+$pdo->exec("INSERT INTO flights VALUES(77,'warehouse_to_utilizer',1,'300001,300002,300003,300004,300005,300006',NULL),
+    (351,'mixed_to_utilizer',1,'291382,300001,300002','291382'),
+    (353,'mixed_to_utilizer',1,'312015,310867,322245,321828,321391','312015')");
 $pdo->exec("INSERT INTO warehouse_movements VALUES
     (1,76,1,300001,'receipt','active',1),
     (2,77,1,300001,'issue','active',1),
@@ -29,7 +33,8 @@ $pdo->exec("INSERT INTO warehouse_movements VALUES
     (8,76,1,300005,'transfer_in','active',1),
     (9,77,1,300005,'transfer_out','active',1),
     (10,76,1,300006,'receipt','active',2),
-    (11,78,1,300006,'issue','active',1)");
+    (11,78,1,300006,'issue','active',1),
+    (12,351,1,291382,'receipt','active',1)");
 $loading = Loading::resolve($pdo, ['legacy_source_warehouse_id'=>1,'legacy_flight_id'=>77], ['300001','300002','300003','300004','300005','300006']);
 $check($loading['address'] === 'Москва, Складская, 1', 'Warehouse address');
 $check($loading['request_ids'] === ['300001','300002','300005','300006'], 'Current stock and withdrawals for this trip only');
@@ -41,4 +46,16 @@ $rows = Loading::apply([
 $check($rows[0]['document_loading_address'] === $loading['address'] && $rows[0]['contacts'] === '—', 'Warehouse row substitution');
 $check($rows[1]['document_loading_address'] === $loading['address'] && $rows[1]['contacts'] === '—', 'Stock before withdrawal');
 $check(!isset($rows[2]['document_loading_address']) && $rows[2]['contacts'] === 'Телефон 4', 'Request withdrawn by another trip unchanged');
+$mixed351 = Loading::resolve($pdo, ['legacy_source_warehouse_id'=>1,'legacy_flight_id'=>351], ['291382']);
+$check($mixed351['trip_request_ids'] === ['291382','300001','300002'], 'Mixed trip includes warehouse requests absent from ERP links');
+$check($mixed351['request_ids'] === ['300001','300002'], 'Mixed warehouse group excludes direct request even with warehouse stock');
+$mixedRows = Loading::apply([
+    ['zayavka_id'=>'291382','mno_adres_pogruzki'=>'Адрес ОО','contacts'=>'Контакт ОО'],
+    ['zayavka_id'=>'300001','mno_adres_pogruzki'=>'Адрес ОО 2','contacts'=>'Контакт ОО 2'],
+], $mixed351);
+$check(!isset($mixedRows[0]['document_loading_address']) && $mixedRows[0]['contacts'] === 'Контакт ОО', 'Direct request keeps original loading and contact');
+$check($mixedRows[1]['document_loading_address'] === 'Москва, Складская, 1' && $mixedRows[1]['contacts'] === '—', 'Mixed warehouse request uses warehouse loading');
+$mixed353 = Loading::resolve($pdo, ['legacy_source_warehouse_id'=>1,'legacy_flight_id'=>353], ['312015','310867']);
+$check($mixed353['request_ids'] === ['310867','322245','321828','321391'], 'Mixed trip 353 warehouse request group');
+$check($mixed353['trip_request_ids'] === ['312015','310867','322245','321828','321391'], 'Mixed trip 353 complete contract request list');
 echo "DOCUMENT_GENERATOR_WAREHOUSE_LOADING=PASS\n";

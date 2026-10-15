@@ -97,6 +97,7 @@ trait DocumentGeneratorTripPackageTrait
                 $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
                 if (!$legacy instanceof PDO) throw new RuntimeException('Старая база складов недоступна.');
                 $context['warehouse_loading'] = DocumentGeneratorWarehouseLoadingService::resolve($legacy, $trip, $requestIds);
+                $requestIds = $context['warehouse_loading']['trip_request_ids'] ?? $requestIds;
             } catch (\Throwable $e) {
                 return self::failed(['Не удалось проверить складскую погрузку: '.$e->getMessage()]);
             }
