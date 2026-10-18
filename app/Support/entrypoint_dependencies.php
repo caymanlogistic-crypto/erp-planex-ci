@@ -9,6 +9,7 @@ require_once base_path('app/Security/MembershipAccessSnapshot.php');
 require_once base_path('app/Security/EffectiveAccess.php');
 require_once base_path('app/Security/AccessRuntime.php');
 require_once base_path('app/Security/PageRegistry.php');
+require_once base_path('app/Security/RegistryUiStateScope.php');
 require_once base_path('app/Security/EffectiveAccessResolver.php');
 require_once base_path('app/Http/Router.php');
 require_once base_path('app/Service/AccessControlService.php');
