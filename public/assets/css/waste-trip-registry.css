@@ -1,5 +1,5 @@
 .waste-trip-filter { height:auto; min-height:var(--toolbar-h); }
-.waste-trip-filter .toolbar-right { display:flex; flex-wrap:wrap; gap:8px; padding:6px 0; }
+.waste-trip-filter .toolbar-right { display:flex; flex-wrap:wrap; gap:8px; }
 .waste-trip-filter .toolbar-search { max-width:100%; }
 .waste-table-scroll { overflow-x: auto; max-width: 100%; }
 .waste-registry { width: 100% !important; table-layout: auto; }
@@ -264,7 +264,7 @@
   }
 }
 @media (max-width: 1120px) {
-  .table-card[data-erp-grid] > .waste-trip-toolbar {
+  .table-card[data-erp-grid]:not(.registry-ui-card) > .waste-trip-toolbar {
     align-items: flex-start;
     flex-direction: column;
     gap: 4px;
