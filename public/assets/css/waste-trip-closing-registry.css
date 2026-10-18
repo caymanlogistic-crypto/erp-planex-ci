@@ -1,14 +1,11 @@
 /* Closing registry column geometry and document dialog.
    Header, tabs, toolbar and controls use the existing ERP stylesheets. */
-.closing-page .table-card[data-erp-grid]>.waste-trip-toolbar{top:-12px;z-index:20}
 @media(min-width:701px){.closing-page .table-card[data-erp-grid]>.waste-trip-toolbar .closing-toolbar-right{width:auto;flex:none;gap:8px;margin-left:auto}}
 .closing-page .lab-registry-card{display:block;overflow:visible}
 .closing-page .lab-registry-card>.closing-list{min-width:0;margin:0;padding:0;border:0;border-radius:0;box-shadow:none;overflow:visible}
 .lab-grid .lab-table tbody tr[hidden]{display:none!important}
 .lab-grid{width:100%;max-width:100%;overflow-x:auto;overscroll-behavior-inline:contain;background:var(--table-row)}
 .lab-grid .lab-table{min-width:1690px}
-.closing-page .lab-grid .lab-table thead{position:sticky;top:calc(var(--waste-toolbar-height,49px) - 12px);z-index:19}
-.closing-page .lab-registry-card .lab-table thead th{position:static;top:auto;z-index:auto}
 .lab-grid .lab-table td{height:44px}
 .lab-grid .lab-table tbody tr:focus-visible{outline:2px solid #9a5a22;outline-offset:-2px}
 .lab-grid .lab-table td:first-child{font-weight:700;font-variant-numeric:tabular-nums}
@@ -51,10 +48,8 @@
 .closing-page .lab-doc-dialog .closing-edit-fieldset{min-width:0}
 .closing-page .lab-doc-dialog .closing-doc-actions{min-width:0}
 .closing-page .lab-doc-dialog .closing-report-status{background:transparent}
-@media(min-width:1701px){.closing-page .lab-grid{overflow:visible}.closing-page .lab-grid .lab-table{min-width:0}}
-@media(max-width:1700px){.closing-page .lab-grid{max-height:calc(100dvh - 220px);overflow:auto}.closing-page .lab-grid .lab-table thead{top:0}}
+@media(min-width:1701px){.closing-page .lab-grid .lab-table{min-width:0}}
 @media(max-width:700px){
- .closing-page .lab-grid{max-height:calc(100dvh - 340px)}
  .lab-grid .lab-table :is(th,td):first-child{position:sticky;left:0;z-index:2}
  .closing-page .lab-registry-card .lab-table thead th:first-child{position:sticky;left:0;z-index:3}
  .lab-doc-dialog{width:calc(100vw - 12px);max-height:calc(100vh - 12px)}

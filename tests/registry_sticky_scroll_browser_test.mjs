@@ -25,7 +25,8 @@ try {
       const page = await browser.newPage({viewport:{width,height}});
       await page.setContent(html);
       await page.addStyleTag({content:sharedCss + '\n' + css(entry.stylesheet) + '\n' + css('registry-components.css')});
-      if (entry.name === 'departures') await page.waitForFunction(() => !!document.querySelector('.table-card[data-erp-grid]')?.style.getPropertyValue('--waste-toolbar-height'));
+      await page.addScriptTag({content:fs.readFileSync(path.join(root, 'public/assets/js/registry-components.js'), 'utf8')});
+      await page.waitForFunction(() => !!document.querySelector('.registry-ui-sticky-table')?.style.getPropertyValue('--registry-toolbar-height'));
       if (entry.name === 'finance') {
         await page.evaluate(() => {
           const body = document.querySelector('.rp-v010-table tbody');
@@ -58,6 +59,8 @@ try {
           toolbarBottom:rect(control).bottom,
           headerTop:rect(header).top,
           headerDisplay:getComputedStyle(header).display,
+          headerPosition:getComputedStyle(header).position,
+          headerClip:getComputedStyle(header).clip,
           pageHeadTop:rect(pageHead).top,
           footerTop:grid.querySelector('tfoot') ? rect(grid.querySelector('tfoot')).top : null,
           horizontalOverflow:document.documentElement.scrollWidth-innerWidth,
@@ -81,7 +84,7 @@ try {
       if (width >= entry.cardAt) {
         assert.ok(Math.abs(geometry.headerTop-geometry.toolbarBottom) < 2, `${entry.name} ${width}: header touches toolbar`);
       } else if (width < entry.cardAt) {
-        assert.ok(geometry.headerDisplay === 'none' || geometry.headerTop < 0, `${entry.name} ${width}: card view has no sticky header`);
+        assert.ok(geometry.headerDisplay === 'none' || geometry.headerPosition === 'absolute' && geometry.headerClip !== 'auto', `${entry.name} ${width}: card view hides column header`);
       }
       if (entry.name === 'finance') {
         assert.ok(geometry.footerTop > geometry.toolbarBottom, `${entry.name} ${width}: footer stays with table`);

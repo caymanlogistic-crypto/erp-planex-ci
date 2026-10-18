@@ -62,6 +62,9 @@ jobs:
         with:
           fetch-depth: 2
 
+      - name: Approved registry component contract
+        run: python3 tests/registry_component_contract_test.py
+
       - name: Detect changed scope
         id: changes
         shell: bash

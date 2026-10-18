@@ -288,29 +288,7 @@
 }
 
 
-/* Approved registry scroll pattern; the responsive card view keeps only the toolbar sticky. */
-.table-card[data-erp-grid]:has(> .waste-trip-toolbar) {overflow:visible}
-.table-card[data-erp-grid] > .waste-trip-toolbar {
-  position:sticky;
-  top:-12px;
-  z-index:20;
-  background:#f7f5f0;
-}
-@media(min-width:641px) {
-  .table-card[data-erp-grid] > .waste-table-scroll {overflow:visible}
-  .table-card[data-erp-grid] .waste-registry thead {
-    position:sticky;
-    top:calc(var(--waste-toolbar-height, 49px) - 12px);
-    z-index:19;
-    background:#e3ded5;
-  }
-  .table-card[data-erp-grid] .waste-registry thead th {top:auto}
-}
-
-.table-card[data-erp-grid] > .waste-trip-toolbar .found-label {font:500 12px/16px var(--font);color:#4c4840}
-.table-card[data-erp-grid] > .waste-trip-toolbar .found-label b {color:#2e2923}
 .table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-sort {display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
-.table-card[data-erp-grid] > .waste-trip-toolbar .toolbar-sort-label {font:500 12px/16px var(--font);color:#4c4840}
 .table-card[data-erp-grid] > .waste-trip-toolbar select[name="status"][hidden] {display:none}
 .waste-registry .registry-rate .waste-finance-reason,
 .waste-registry .registry-rate .registry-payment-line {display:block;text-align:left}

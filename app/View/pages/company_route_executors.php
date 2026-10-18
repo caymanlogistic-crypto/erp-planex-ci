@@ -45,13 +45,14 @@ $routeListVehicles = static function (array $row): void {
 
 <?php elseif ($company['status'] !== 'active'): ?>
 
-<div class="page-head route-executors-page-head registry-ui-head">
-    <div class="page-head-left">
-        <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
-        <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
-        <span class="page-summary">Исполнитель рейса: подрядчик + водитель + транспорт</span></span>
-    </div>
-</div>
+<?php
+$registryHeadTitle = 'Исполнители рейса';
+$registryHeadSummary = 'Исполнитель рейса: подрядчик + водитель + транспорт';
+$registryHeadIconHtml = $routeExecutorHeaderIcon;
+$registryHeadActionsHtml = '';
+$registryHeadExtraClass = 'route-executors-page-head';
+require base_path('app/View/partials/registry_ui_head.php');
+?>
 
 <div class="notice warn">
     Компания находится в статусе «<?= e($company['status']) ?>». Работа с исполнителями рейса недоступна.
@@ -59,13 +60,14 @@ $routeListVehicles = static function (array $row): void {
 
 <?php elseif (isset($dbError)): ?>
 
-<div class="page-head route-executors-page-head registry-ui-head">
-    <div class="page-head-left">
-        <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
-        <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
-        <span class="page-summary">Исполнитель рейса: подрядчик + водитель + транспорт</span></span>
-    </div>
-</div>
+<?php
+$registryHeadTitle = 'Исполнители рейса';
+$registryHeadSummary = 'Исполнитель рейса: подрядчик + водитель + транспорт';
+$registryHeadIconHtml = $routeExecutorHeaderIcon;
+$registryHeadActionsHtml = '';
+$registryHeadExtraClass = 'route-executors-page-head';
+require base_path('app/View/partials/registry_ui_head.php');
+?>
 
 <div class="notice warn">
     <?= e($dbError) ?>
@@ -74,18 +76,14 @@ $routeListVehicles = static function (array $row): void {
 <?php elseif (empty($executors) && empty($reviewCards)): ?>
 <?php $isLogist = ($_SESSION['role_code'] ?? '') === 'logist'; ?>
 
-<div class="page-head route-executors-page-head registry-ui-head">
-    <div class="page-head-left">
-        <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
-        <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
-        <span class="page-summary">Исполнитель рейса: подрядчик + водитель + транспорт</span></span>
-    </div>
-    <div class="page-head-actions">
-        <?= $routeExecutorDocumentButton ?>
-        <?= $routeExecutorExistingButton ?>
-        <?= $routeExecutorCreateButton ?>
-    </div>
-</div>
+<?php
+$registryHeadTitle = 'Исполнители рейса';
+$registryHeadSummary = 'Исполнитель рейса: подрядчик + водитель + транспорт';
+$registryHeadIconHtml = $routeExecutorHeaderIcon;
+$registryHeadActionsHtml = $routeExecutorDocumentButton . $routeExecutorExistingButton . $routeExecutorCreateButton;
+$registryHeadExtraClass = 'route-executors-page-head';
+require base_path('app/View/partials/registry_ui_head.php');
+?>
 
 <div class="panel">
     <?php if ($isLogist && !empty($hasGrantsButAllArchived)): ?>
@@ -109,18 +107,14 @@ $routeListVehicles = static function (array $row): void {
 
 <?php else: ?>
 
-<div class="page-head route-executors-page-head registry-ui-head">
-    <div class="page-head-left">
-        <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
-        <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
-        <span class="page-summary">Исполнитель рейса: подрядчик + водитель + транспорт</span></span>
-    </div>
-    <div class="page-head-actions">
-        <?= $routeExecutorDocumentButton ?>
-        <?= $routeExecutorExistingButton ?>
-        <?= $routeExecutorCreateButton ?>
-    </div>
-</div>
+<?php
+$registryHeadTitle = 'Исполнители рейса';
+$registryHeadSummary = 'Исполнитель рейса: подрядчик + водитель + транспорт';
+$registryHeadIconHtml = $routeExecutorHeaderIcon;
+$registryHeadActionsHtml = $routeExecutorDocumentButton . $routeExecutorExistingButton . $routeExecutorCreateButton;
+$registryHeadExtraClass = 'route-executors-page-head';
+require base_path('app/View/partials/registry_ui_head.php');
+?>
 
 <div class="table-card table-card--standard route-executors-card registry-ui-card registry-ui-sticky-table" data-erp-grid data-route-executors-grid>
     <div class="table-toolbar registry-ui-toolbar">

@@ -37,12 +37,27 @@
 .registry-ui-tabs button[data-status="completed"] {--registry-tab-color:#6c757d}
 .registry-ui-tabs + .registry-ui-card {margin-top:0}
 
-.registry-ui-card.table-card {min-width:0;border:1px solid #a8a196;overflow:visible}
+.registry-ui-card.table-card {min-width:0;border:1px solid #a8a196;background:#f5f3ee;overflow:visible}
 .registry-ui-sticky-table.table-card {grid-template-rows:none}
-.registry-ui-sticky-table > .table-scroll {overflow:visible}
+.registry-ui-sticky-table > :is(.table-scroll,.rp-v010-table-wrap) {overflow:visible}
 .registry-ui-sticky-table > .registry-ui-toolbar {position:sticky;top:-12px;z-index:20}
 .registry-ui-sticky-table .registry-ui-table thead {position:sticky;top:calc(var(--registry-toolbar-height, 49px) - 12px);z-index:19}
 .registry-ui-sticky-table .registry-ui-table thead th {position:static;top:auto;z-index:auto}
+.registry-ui-sticky-table .registry-ui-table thead {background:#e3ded5}
+.registry-ui-sticky-table .registry-ui-table--finance thead {background:#d0ccc4}
+@media(max-width:1050px){
+  .registry-ui-sticky-table--finance > .rp-v010-table-wrap {overflow:auto}
+  .registry-ui-sticky-table--finance .registry-ui-table thead {position:static}
+}
+@media(max-width:640px){
+  .registry-ui-sticky-table--trips > .waste-table-scroll {overflow:hidden}
+  .registry-ui-sticky-table--trips .registry-ui-table thead {position:absolute}
+}
+@media(max-width:1700px){
+  .registry-ui-sticky-table--wide-scroll > .table-scroll {max-height:calc(100dvh - 220px);overflow:auto}
+  .registry-ui-sticky-table--wide-scroll .registry-ui-table thead {top:0}
+}
+@media(max-width:700px){.registry-ui-sticky-table--wide-scroll > .table-scroll {max-height:calc(100dvh - 340px)}}
 .registry-ui-toolbar.table-toolbar {box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;min-width:0;min-height:49px;height:auto;padding:8px 12px;border:0;border-bottom:1px solid #d5cec3;background:#f7f5f0;box-shadow:none;font-family:var(--font)}
 .registry-ui-toolbar .found-label {flex:none;white-space:nowrap;color:#4c4840;font:500 12px/16px var(--font)}
 .registry-ui-toolbar .found-label::before {background:#7c4718}

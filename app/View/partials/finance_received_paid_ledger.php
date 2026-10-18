@@ -31,8 +31,14 @@ $dueHtml = static function (array $item): string {
 <link rel="stylesheet" href="<?= e(app_url('/assets/css/erp-ledger-table.css')) ?>?v=<?= filemtime(base_path('public/assets/css/erp-ledger-table.css')) ?>">
 <link rel="stylesheet" href="<?= e(app_url('/assets/css/registry-components.css')) ?>?v=<?= filemtime(base_path('public/assets/css/registry-components.css')) ?>">
 <div class="rp-lab-header-wrap rp-action-design rp-ledger-v015">
-    <div class="page-head registry-ui-head"><div class="page-head-left"><span class="rp-identity-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h14l-4 -4"/><path d="M17 14h-14l4 4"/></svg></span><span class="rp-head-text"><h1 class="page-title">Получено/оплачено</h1><span class="page-summary">Счета и фактические оплаты по рейсам ООО «Планэкс» со статусом «Груз сдан».</span></span></div>
-        <div class="page-head-actions"><button type="button" class="btn btn-primary" data-open-modal="invoice-create-modal"<?= $localPdo === null ? ' disabled' : '' ?>>Создать счёт</button></div></div>
+    <?php
+    $registryHeadTitle = 'Получено/оплачено';
+    $registryHeadSummary = 'Счета и фактические оплаты по рейсам ООО «Планэкс» со статусом «Груз сдан».';
+    $registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h14l-4 -4"/><path d="M17 14h-14l4 4"/></svg>';
+    $registryHeadActionsHtml = '<button type="button" class="btn btn-primary" data-open-modal="invoice-create-modal"' . ($localPdo === null ? ' disabled' : '') . '>Создать счёт</button>';
+    $registryHeadExtraClass = '';
+    require base_path('app/View/partials/registry_ui_head.php');
+    ?>
 </div>
     <?php if ($dbError !== null): ?><div class="notice warn"><?= e($dbError) ?></div><?php endif; ?>
     <?php if (!empty($_SESSION['invoice_success'])): ?><div class="notice success"><?= e((string)$_SESSION['invoice_success']) ?></div><?php unset($_SESSION['invoice_success']); endif; ?>
@@ -44,7 +50,7 @@ $dueHtml = static function (array $item): string {
         <button type="button" data-rp-filter="paid-unreceived" aria-pressed="false">Оплатили, не получили <b></b></button>
         <button type="button" data-rp-filter="received-unpaid" aria-pressed="false">Получили, не оплатили <b></b></button>
     </nav>
-<div class="table-card table-card--standard rp-standard-box rp-action-design rp-ledger-v010 rp-ledger-v015 registry-ui-card">
+<div class="table-card table-card--standard rp-standard-box rp-action-design rp-ledger-v010 rp-ledger-v015 registry-ui-card registry-ui-sticky-table registry-ui-sticky-table--finance">
     <div class="table-toolbar rp-v015-toolbar registry-ui-toolbar"><div class="found-label">Найдено: <b id="rp-count">0</b></div><div class="toolbar-right">
         <label class="rp-v014-hide-complete"><input type="checkbox" id="rp-hide-complete" checked><span>Скрыть завершённые</span></label>
         <label class="toolbar-sort"><span class="toolbar-sort-label">Сортировка по:</span><select class="field-select toolbar-select" id="rp-sort" aria-label="Сортировка по дате выгрузки или ID"><option value="date-new">Дата выгрузки</option><option value="id-new">ID</option></select></label>
