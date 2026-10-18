@@ -41,6 +41,7 @@ try {
       const first = table.tBodies[0].rows[0];
       const money = [9, 10, 11].map(index => first.cells[index].getBoundingClientRect().width);
       const filter = document.querySelector('[data-waste-filter]');
+      const toolbar = document.querySelector('.registry-ui-toolbar').getBoundingClientRect();
       const search = filter.querySelector('[name=q]').getBoundingClientRect();
       const sort = filter.querySelector('.lab-reference-select[data-name=sort] .lab-reference-trigger').getBoundingClientRect();
       const manager = filter.querySelector('.lab-reference-select[data-name=manager] .lab-reference-trigger').getBoundingClientRect();
@@ -52,6 +53,9 @@ try {
         managerBeforeSort: manager.top < sort.top || (Math.abs(manager.top - sort.top) < 1 && manager.left < sort.left),
         managerFits: manager.right <= document.documentElement.clientWidth + 1,
         searchFits: search.right <= document.querySelector('.registry-ui-toolbar').getBoundingClientRect().right - 8,
+        searchStartsInside: search.left >= toolbar.left + 8,
+        filterStartsBelowCount: filter.getBoundingClientRect().top >= document.querySelector('.found-label').getBoundingClientRect().bottom,
+        toolbarHeight: toolbar.height,
         searchWeight: getComputedStyle(filter.querySelector('[name=q]')).fontWeight,
         placeholder: getComputedStyle(filter.querySelector('[name=q]'), '::placeholder').color,
         headingBackground: getComputedStyle(table.querySelector('thead th')).backgroundColor,
@@ -67,6 +71,12 @@ try {
     assert.equal(metrics.managerBeforeSort, true, `${width}: manager filter precedes sort`);
     assert.equal(metrics.managerFits, true, `${width}: manager filter stays inside viewport ${JSON.stringify(metrics)}`);
     assert.equal(metrics.searchFits, true, `${width}: search stays inside toolbar ${JSON.stringify(metrics)}`);
+    if (width <= 640) {
+      assert.equal(metrics.searchStartsInside, true, `${width}: search starts inside toolbar ${JSON.stringify(metrics)}`);
+      assert.equal(metrics.filterStartsBelowCount, true, `${width}: filters follow count on a new row ${JSON.stringify(metrics)}`);
+    } else {
+      assert.ok(metrics.toolbarHeight <= 50, `${width}: shared toolbar stays 49px high ${JSON.stringify(metrics)}`);
+    }
     assert.equal(metrics.searchWeight, '400');
     assert.equal(metrics.placeholder, 'rgb(129, 123, 114)');
     assert.equal(metrics.headingBackground, 'rgb(227, 222, 213)');
