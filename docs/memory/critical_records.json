@@ -158,8 +158,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "7993c0b4968e84a171561c4f52dacb5ded28c97d",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/7993c0b4968e84a171561c4f52dacb5ded28c97d/tests/ui_standard_gallery_browser_test.mjs",
+      "verified_sha": "f501d050c7273df924ec5e308f73115caed3e50b",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/f501d050c7273df924ec5e308f73115caed3e50b/tests/ui_standard_gallery_browser_test.mjs",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
