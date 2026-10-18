@@ -28,9 +28,14 @@ $erp = [
     ['business_id'=>309,'legacy_source_warehouse_id'=>9,'status'=>'started','actual_start_date'=>'2026-09-29','zayavka_id'=>311706,'snapshot_mass_kg'=>2129],
 ];
 $data = WarehouseStockService::build($warehouses, $movements, $flights, $erp);
-if (isset($data['issues'][225]) || isset($data['issues'][290])) throw new RuntimeException('Исторический рейс или корректный приход попал в расхождения.');
-if ($data['issue_count'] !== 3 || !isset($data['issues'][226], $data['issues'][286], $data['issues'][309])) {
+if (isset($data['issues'][225])) throw new RuntimeException('Исторический рейс попал в расхождения.');
+if ($data['issue_count'] !== 4 || !isset($data['issues'][226], $data['issues'][286], $data['issues'][290], $data['issues'][309])) {
     throw new RuntimeException('Неверный состав расхождений после границы переноса.');
+}
+if (!str_contains(implode(' ', $data['issues'][290]['messages']), 'Повторное поступление заявки 311706')
+    || count(array_filter($data['groups'][9], static fn(array $group): bool => in_array($group['flight_id'], [286,290], true)
+        && in_array('311706', $group['duplicate_request_ids'] ?? [], true))) !== 2) {
+    throw new RuntimeException('Повторное поступление не выделено.');
 }
 $in = implode(' ', $data['issues'][286]['messages']);
 $out = implode(' ', $data['issues'][309]['messages']);
