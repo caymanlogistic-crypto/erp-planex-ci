@@ -29,14 +29,14 @@ $dueHtml = static function (array $item): string {
 };
 ?>
 <link rel="stylesheet" href="<?= e(app_url('/assets/css/erp-ledger-table.css')) ?>?v=<?= filemtime(base_path('public/assets/css/erp-ledger-table.css')) ?>">
+<link rel="stylesheet" href="<?= e(app_url('/assets/css/registry-components.css')) ?>?v=<?= filemtime(base_path('public/assets/css/registry-components.css')) ?>">
 <div class="rp-lab-header-wrap rp-action-design rp-ledger-v015">
-    <div class="page-head"><div class="page-head-left"><span class="rp-identity-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h14l-4 -4"/><path d="M17 14h-14l4 4"/></svg></span><span class="rp-head-text"><h1 class="page-title">Получено/оплачено</h1><span class="page-summary">Счета и фактические оплаты по рейсам ООО «Планэкс» со статусом «Груз сдан».</span></span></div>
+    <div class="page-head registry-ui-head"><div class="page-head-left"><span class="rp-identity-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h14l-4 -4"/><path d="M17 14h-14l4 4"/></svg></span><span class="rp-head-text"><h1 class="page-title">Получено/оплачено</h1><span class="page-summary">Счета и фактические оплаты по рейсам ООО «Планэкс» со статусом «Груз сдан».</span></span></div>
         <div class="page-head-actions"><button type="button" class="btn btn-primary" data-open-modal="invoice-create-modal"<?= $localPdo === null ? ' disabled' : '' ?>>Создать счёт</button></div></div>
 </div>
-<div class="table-card table-card--standard rp-standard-box rp-action-design rp-ledger-v010 rp-ledger-v015">
     <?php if ($dbError !== null): ?><div class="notice warn"><?= e($dbError) ?></div><?php endif; ?>
     <?php if (!empty($_SESSION['invoice_success'])): ?><div class="notice success"><?= e((string)$_SESSION['invoice_success']) ?></div><?php unset($_SESSION['invoice_success']); endif; ?>
-    <nav class="rp-v010-quick" id="rp-filters" aria-label="Отбор рейсов">
+    <nav class="rp-v010-quick registry-ui-tabs" id="rp-filters" aria-label="Отбор рейсов">
         <button type="button" data-rp-filter="all" aria-pressed="true">Все взаиморасчёты <b></b></button>
         <button type="button" data-rp-filter="unbilled" aria-pressed="false">Все к выставлению <b></b></button>
         <button type="button" data-rp-filter="client-due" aria-pressed="false">Срок поступления от заказчика наступил <b></b></button>
@@ -44,12 +44,13 @@ $dueHtml = static function (array $item): string {
         <button type="button" data-rp-filter="paid-unreceived" aria-pressed="false">Оплатили, не получили <b></b></button>
         <button type="button" data-rp-filter="received-unpaid" aria-pressed="false">Получили, не оплатили <b></b></button>
     </nav>
-    <div class="table-toolbar rp-v015-toolbar"><div class="found-label">Найдено: <b id="rp-count">0</b></div><div class="toolbar-right">
+<div class="table-card table-card--standard rp-standard-box rp-action-design rp-ledger-v010 rp-ledger-v015 registry-ui-card">
+    <div class="table-toolbar rp-v015-toolbar registry-ui-toolbar"><div class="found-label">Найдено: <b id="rp-count">0</b></div><div class="toolbar-right">
         <label class="rp-v014-hide-complete"><input type="checkbox" id="rp-hide-complete" checked><span>Скрыть завершённые</span></label>
         <label class="toolbar-sort"><span class="toolbar-sort-label">Сортировка по:</span><select class="field-select toolbar-select" id="rp-sort" aria-label="Сортировка по дате выгрузки или ID"><option value="date-new">Дата выгрузки</option><option value="id-new">ID</option></select></label>
-        <input class="field-input" id="rp-search" type="search" placeholder="Поиск" aria-label="Поиск по рейсам и счетам">
+        <input class="field-input registry-ui-search" id="rp-search" type="search" placeholder="Поиск" aria-label="Поиск по рейсам и счетам">
     </div></div>
-    <div class="rp-v010-table-wrap"><table class="table rp-v010-table erp-ledger-table" id="rp-ledger-table"><colgroup><?php foreach ([4,9,7,8,9,7,8,10,7,8,9,7,7] as $width): ?><col style="width:<?= $width ?>%"> <?php endforeach; ?></colgroup>
+    <div class="rp-v010-table-wrap"><table class="table rp-v010-table erp-ledger-table registry-ui-table registry-ui-table--finance" id="rp-ledger-table"><colgroup><?php foreach ([4,9,7,8,9,7,8,10,7,8,9,7,7] as $width): ?><col style="width:<?= $width ?>%"> <?php endforeach; ?></colgroup>
         <thead><tr class="rp-v012-wide-head"><th>ID</th><th>ОПИСАНИЕ РЕЙСА</th><th>СЧЕТ КЛИЕНТУ</th><th>СУММА СЧЕТА</th><th>ПОЛУЧИТЬ ДО</th><th>ПОЛУЧЕНО</th><th>К ПОЛУЧЕНИЮ</th><th>ПЕРЕВОЗЧИК</th><th>СЧЕТ ПОДРЯД.</th><th>СУММА СЧЕТА</th><th>ОПЛАТИТЬ ДО</th><th>ОПЛАЧЕНО</th><th>К ВЫПЛАТЕ</th></tr>
             <tr class="rp-v012-compact-head"><th>ID</th><th>ОПИСАНИЕ РЕЙСА / ПЕРЕВОЗЧИК</th><th>Счет</th><th>Сумма счета</th><th>Срок</th><th>Получено / оплачено</th><th>Остаток</th></tr></thead>
         <tbody id="rp-list">

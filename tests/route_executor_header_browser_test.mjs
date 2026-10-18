@@ -20,7 +20,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const [width, height] of [[768, 850], [1024, 768], [1280, 900], [1440, 900], [1920, 1080], [3840, 2160]]) {
+  for (const [width, height] of [[390, 844], [768, 850], [1024, 768], [1280, 900], [1440, 900], [1920, 1080], [3840, 2160]]) {
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     const header = page.locator('.route-executors-page-head');
@@ -63,7 +63,7 @@ try {
     assert.deepEqual(layout.iconSize, [30, 30], `${width}px icon size`);
     assert.equal(layout.iconColor, 'rgb(124, 71, 24)', `${width}px accent`);
     assert.equal(layout.gap, '10px', `${width}px text gap`);
-    assert.ok(layout.centerDelta < 1, `${width}px vertical alignment`);
+    assert.ok(layout.centerDelta < 1, `${width}px vertical alignment ${JSON.stringify(layout)}`);
     assert.equal(layout.headerHeight, layout.heightWithoutIcon, `${width}px header height`);
     assert.equal(layout.overlap, false, `${width}px overlap`);
     assert.equal(layout.pageOverflow, false, `${width}px page overflow`);

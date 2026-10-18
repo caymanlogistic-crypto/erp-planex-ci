@@ -10,6 +10,7 @@ const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/finance_received_paid_filter_render.php')],{encoding:'utf8'});
 const css=fs.readFileSync(path.join(root,'public/assets/css/finance-received-paid.css'),'utf8');
 const ledgerCss=fs.readFileSync(path.join(root,'public/assets/css/erp-ledger-table.css'),'utf8');
+const registryCss=fs.readFileSync(path.join(root,'public/assets/css/registry-components.css'),'utf8');
 const appCss=fs.readFileSync(path.join(root,'public/assets/css/app.css'),'utf8');
 const erpCss=fs.readFileSync(path.join(root,'public/assets/css/erp-ui.css'),'utf8');
 const fontCss=[[400,'Regular'],[500,'Medium'],[600,'SemiBold'],[700,'Bold']].map(([weight,name])=>`@font-face{font-family:"IBM Plex Sans";src:url(data:font/woff2;base64,${fs.readFileSync(path.join(root,`public/assets/fonts/IBMPlexSans-${name}.woff2`)).toString('base64')}) format("woff2");font-weight:${weight}}`).join('\n');
@@ -20,10 +21,16 @@ try{
  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
  page.on('pageerror',error=>errors.push(error.message));
  await page.setContent(html);
- await page.addStyleTag({content:appCss+'\n'+erpCss+'\n'+css+'\n'+ledgerCss+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
+ await page.addStyleTag({content:appCss+'\n'+erpCss+'\n'+css+'\n'+ledgerCss+'\n'+registryCss+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
  await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
  await page.addScriptTag({content:js});
  await page.addScriptTag({content:referenceSelectJs});
+ const sharedStyles=await page.evaluate(()=>{
+   const search=document.querySelector('#rp-search');
+   const heading=document.querySelector('#rp-ledger-table thead th');
+   return {searchWeight:getComputedStyle(search).fontWeight,placeholder:getComputedStyle(search,'::placeholder').color,headingBackground:getComputedStyle(heading).backgroundColor,headingImage:getComputedStyle(heading).backgroundImage};
+ });
+ assert.deepEqual(sharedStyles,{searchWeight:'400',placeholder:'rgb(129, 123, 114)',headingBackground:'rgb(208, 204, 196)',headingImage:'none'});
  const ids=()=>page.locator('#rp-list tr:visible').evaluateAll(items=>items.map(item=>item.dataset.id));
  assert.deepEqual(await ids(),['105','104','103','102']);
  assert.equal(await page.locator('#rp-count').innerText(),'4');
@@ -90,10 +97,10 @@ try{
      const frame=await page.locator('.rp-standard-box.rp-ledger-v015').evaluate(card=>{
        const toolbar=getComputedStyle(card.querySelector(':scope > .table-toolbar'));
        const table=getComputedStyle(card.querySelector(':scope > .rp-v010-table-wrap'));
-       const tabs=getComputedStyle(card.querySelector(':scope > .rp-v010-quick'));
-       return {top:toolbar.borderTopWidth,left:toolbar.borderLeftWidth,right:toolbar.borderRightWidth,tableLeft:table.borderLeftWidth,tableRight:table.borderRightWidth,bottom:table.borderBottomWidth,tabsTop:tabs.borderTopWidth,tabsLeft:tabs.borderLeftWidth,tabsRight:tabs.borderRightWidth};
+       const tabs=getComputedStyle(document.querySelector('#rp-filters'));
+       return {cardTop:getComputedStyle(card).borderTopWidth,cardLeft:getComputedStyle(card).borderLeftWidth,cardRight:getComputedStyle(card).borderRightWidth,cardBottom:getComputedStyle(card).borderBottomWidth,top:toolbar.borderTopWidth,left:toolbar.borderLeftWidth,right:toolbar.borderRightWidth,tableLeft:table.borderLeftWidth,tableRight:table.borderRightWidth,bottom:table.borderBottomWidth,tabsTop:tabs.borderTopWidth,tabsLeft:tabs.borderLeftWidth,tabsRight:tabs.borderRightWidth};
      });
-     assert.deepEqual(frame,{top:'1px',left:'1px',right:'1px',tableLeft:'1px',tableRight:'1px',bottom:'1px',tabsTop:'0px',tabsLeft:'0px',tabsRight:'0px'},'ledger working area has one continuous outer frame while tabs remain frameless');
+     assert.deepEqual(frame,{cardTop:'1px',cardLeft:'1px',cardRight:'1px',cardBottom:'1px',top:'0px',left:'0px',right:'0px',tableLeft:'0px',tableRight:'0px',bottom:'0px',tabsTop:'0px',tabsLeft:'0px',tabsRight:'0px'},'ledger working area has one continuous outer frame while tabs remain frameless');
      const fonts=await page.locator('#rp-ledger-table').evaluate(table=>({td:getComputedStyle(table.tBodies[0].rows[0].cells[0]).fontSize,th:getComputedStyle(table.tHead.rows[0].cells[0]).fontSize}));
      assert.deepEqual(fonts,{td:'12px',th:'10px'},'ERP table typography matches v015');
      const canonicalTripType=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>{
@@ -101,8 +108,8 @@ try{
        const header=getComputedStyle(document.querySelector('.rp-v012-wide-head th'));
        return {id:{family:id.fontFamily,size:id.fontSize,weight:id.fontWeight,line:id.lineHeight,color:id.color},description:{size:description.fontSize,weight:description.fontWeight,line:description.lineHeight},header:{size:header.fontSize,weight:header.fontWeight,line:header.lineHeight}};
      });
-     assert.equal(canonicalTripType.id.family.includes('IBM Plex Mono'),true,'trip ID uses canonical mono font');
-     assert.deepEqual({...canonicalTripType.id,family:'IBM Plex Mono'},{family:'IBM Plex Mono',size:'12px',weight:'700',line:'16.8px',color:'rgb(19, 18, 16)'},'trip ID is canonical black');
+     assert.equal(canonicalTripType.id.family.includes('IBM Plex Sans'),true,'trip ID uses the locally loaded canonical font');
+     assert.deepEqual({...canonicalTripType.id,family:'IBM Plex Sans'},{family:'IBM Plex Sans',size:'12px',weight:'700',line:'16.8px',color:'rgb(19, 18, 16)'},'trip ID is canonical black');
      assert.deepEqual(canonicalTripType.description,{size:'12px',weight:'400',line:'16.8px'},'trip description matches departures');
      assert.deepEqual(canonicalTripType.header,{size:'10px',weight:'700',line:'14px'},'table header matches departures');
      const tabFont=await tabs.first().evaluate(button=>({size:getComputedStyle(button).fontSize,line:getComputedStyle(button).lineHeight,countSize:getComputedStyle(button.querySelector('b')).fontSize}));
