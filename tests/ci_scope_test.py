@@ -110,8 +110,15 @@ for path in [
     "docs/ui/approved-components.json",
     ".agents/skills/planex-ui-standard/SKILL.md",
     "tools/ui_standard.py",
+    "tools/ui_style_guard.py",
+    "tools/ui_parity.mjs",
+    "app/View/components/other.php",
+    "app/View/layouts/company.php",
 ]:
     yes(path, "approved_ui")
+
+assert m.critical_path(["tools/ui_style_guard.py"])
+assert m.critical_path(["tools/ui_parity.mjs"])
 
 for path in [
     "tools/design_lab.py",

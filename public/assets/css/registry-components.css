@@ -37,8 +37,7 @@
 .registry-ui-tabs button[data-status="completed"] {--registry-tab-color:#6c757d}
 .registry-ui-tabs + .registry-ui-card {margin-top:0}
 
-.registry-ui-card.table-card {min-width:0;border:1px solid #a8a196;background:#f5f3ee;overflow:visible}
-.registry-ui-sticky-table.table-card {grid-template-rows:none}
+.registry-ui-card.table-card {min-width:0;grid-template-rows:none;border:1px solid #a8a196;background:#f5f3ee;overflow:visible}
 .registry-ui-sticky-table > :is(.table-scroll,.rp-v010-table-wrap) {overflow:visible}
 .registry-ui-sticky-table > .registry-ui-toolbar {position:sticky;top:-12px;z-index:20}
 .registry-ui-sticky-table .registry-ui-table thead {position:sticky;top:calc(var(--registry-toolbar-height, 49px) - 12px);z-index:19}

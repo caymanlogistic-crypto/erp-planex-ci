@@ -64,13 +64,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Approved registry component contract
         run: |
           python3 tests/registry_component_contract_test.py
           python3 tests/ui_standard_catalog_test.py
           python3 tools/ui_standard.py check
+          python3 tests/ui_style_guard_test.py
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            python3 tools/ui_style_guard.py --base "${{ github.event.pull_request.base.sha }}" --head HEAD
+          elif [ "${{ github.event_name }}" = "push" ]; then
+            python3 tools/ui_style_guard.py --base HEAD^ --head HEAD
+          fi
 
       - name: Detect changed scope
         id: changes
@@ -108,6 +114,7 @@ jobs:
             node "$test_file"
           done < <(python3 tools/ui_standard.py tests --all)
           node tests/ui_standard_gallery_browser_test.mjs
+          node tests/ui_standard_lab_browser_test.mjs
 
       - name: Changed PHP syntax
         if: steps.changes.outputs.php == 'true'

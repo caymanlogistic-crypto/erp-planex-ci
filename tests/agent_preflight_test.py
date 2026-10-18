@@ -65,6 +65,15 @@ assert "DYNAMIC_IDENTIFIER_SAFETY" in planned
 assert "ARCHITECTURE_GUARD" in planned
 assert "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in planned
 
+# Every UI publication route must execute the shared browser and source guard.
+assert "APPROVED_UI_CONTRACTS" in p.plan("FAST", ["public/assets/css/x.css"], p.ci.classify(["public/assets/css/x.css"]))
+assert "APPROVED_UI_CONTRACTS" in p.plan("STANDARD", ["app/View/pages/list.php"], p.ci.classify(["app/View/pages/list.php"]))
+for workflow in ["ci.yml", "erpv2_fast_release.yml"]:
+    workflow_source = (ROOT / ".github/workflows" / workflow).read_text(encoding="utf-8")
+    assert "tools/ui_style_guard.py --base" in workflow_source
+    assert "node tests/ui_standard_gallery_browser_test.mjs" in workflow_source
+    assert "node tests/ui_standard_lab_browser_test.mjs" in workflow_source
+
 # Tenant scope plans the real canonical integration contract.
 tenant_scopes = p.ci.classify(["database/migrations-local/100_x.sql"])
 tenant_plan = p.plan("CRITICAL", ["database/migrations-local/100_x.sql"], tenant_scopes)

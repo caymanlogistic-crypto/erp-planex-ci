@@ -17,7 +17,7 @@ import subprocess
 import sys
 import tempfile
 from typing import Iterator
-from urllib.parse import unquote, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 SCHEMA = "planex-design-lab/v1"
 ACCEPTANCE_SCHEMA = "planex-design-lab-acceptance/v1"
@@ -67,6 +67,12 @@ UI_QUALITY_CONTRACT = {
 }
 
 PRESETS = {
+    "ui-standard": {
+        "label": "Согласованный интерфейс ERP PLANEX",
+        "target_route": "/ui-standard",
+        "renderer": [sys.executable, "tools/ui_standard.py", "html"],
+        "source_paths": ["docs/ui/approved-components.json", "docs/ui/specimens", "public/assets/css/registry-components.css"],
+    },
     "trip-closing-documents": {
         "label": "Сбор закрывающих документов",
         "target_route": "/company/trips/closing-documents",
@@ -207,7 +213,7 @@ def read_json(path: Path) -> dict[str, object]:
 
 def git(worktree: Path, *args: str) -> str:
     process = subprocess.run(
-        ["git", *args], cwd=worktree, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        [os.environ.get("PLANEX_GIT", "git"), *args], cwd=worktree, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
     require(process.returncode == 0, "GIT_FAILED:" + (process.stderr.strip() or "unknown"))
     return process.stdout.strip()
@@ -254,6 +260,8 @@ def sanitize_snapshot(data: bytes) -> bytes:
 
 def render_preset(worktree: Path, preset: dict[str, object]) -> bytes:
     command = [str(part) for part in preset["renderer"]]
+    if command[0] == "php":
+        command[0] = os.environ.get("PLANEX_PHP", "php")
     process = subprocess.run(
         command,
         cwd=worktree,
@@ -300,6 +308,19 @@ def create_session(args: argparse.Namespace) -> None:
         atomic_write(temporary / "workspace" / "notes.md", b"# DESIGN LAB notes\n\n")
         atomic_write(temporary / "parity-checklist.md", PARITY_CHECKLIST.encode("utf-8"))
         atomic_write(temporary / "ui-quality-checklist.md", UI_QUALITY_CHECKLIST.encode("utf-8"))
+        # Freeze visual dependencies with the baseline. A later source edit must
+        # never silently change an already reviewed sandbox or checkpoint.
+        ui_assets = {}
+        asset_paths = list((worktree / "public/assets").rglob("*"))
+        asset_paths += [worktree / "docs/ui" / name for name in ("gallery.css", "preview.css", "gallery.js", "approved-components.json")]
+        for asset in sorted(asset_paths):
+            if not asset.is_file():
+                continue
+            require(not asset.is_symlink(), "UI_ASSET_SYMLINK_FORBIDDEN")
+            relative = asset.relative_to(worktree).as_posix()
+            content = asset.read_bytes()
+            atomic_write(temporary / "ui-assets" / relative, content)
+            ui_assets[relative] = sha256(content)
         write_json(
             temporary / "session.json",
             {
@@ -318,6 +339,7 @@ def create_session(args: argparse.Namespace) -> None:
                 "accepted_version": None,
                 "parity_contract": PARITY_CONTRACT,
                 "ui_quality_contract": UI_QUALITY_CONTRACT,
+                "ui_assets": ui_assets,
             },
         )
         root.parent.mkdir(parents=True, exist_ok=True)
@@ -370,6 +392,7 @@ def load_session(args: argparse.Namespace) -> tuple[Path, dict[str, object]]:
 
 
 def checkpoint(args: argparse.Namespace) -> None:
+    verify_session(args)
     root, manifest = load_session(args)
     with mutation_lock(root):
         versions = sorted(path.name for path in (root / "versions").iterdir() if path.is_dir() and VERSION.fullmatch(path.name))
@@ -398,6 +421,7 @@ def checkpoint(args: argparse.Namespace) -> None:
                 "task_id": manifest["task_id"],
                 "source_head": manifest["source_head"],
                 "baseline_sha256": manifest["baseline_sha256"],
+                "ui_assets": manifest.get("ui_assets", {}),
                 "note": args.note or "",
                 "created_at": utc_now(),
                 "files": hashes,
@@ -408,6 +432,7 @@ def checkpoint(args: argparse.Namespace) -> None:
 
 
 def accept(args: argparse.Namespace) -> None:
+    verify_session(args)
     root, manifest = load_session(args)
     require(VERSION.fullmatch(args.version) is not None, "INVALID_VERSION")
     version_root = root / "versions" / args.version
@@ -424,6 +449,7 @@ def accept(args: argparse.Namespace) -> None:
             "data_mode": manifest["data_mode"],
             "data_source": manifest["data_source"],
             "baseline_sha256": manifest["baseline_sha256"],
+            "ui_assets": manifest.get("ui_assets", {}),
             "files": checkpoint_data["files"],
             "owner_instruction": "ВНЕДРЯЙ",
         }
@@ -439,10 +465,17 @@ def verify_session(args: argparse.Namespace) -> None:
     root, manifest = load_session(args)
     baseline = (root / "baseline.html").read_bytes()
     require(sha256(baseline) == manifest.get("baseline_sha256"), "BASELINE_HASH_MISMATCH")
+    for name, expected in dict(manifest.get("ui_assets", {})).items():
+        frozen = (root / "ui-assets" / name).resolve()
+        require(frozen.is_relative_to((root / "ui-assets").resolve()) and frozen.is_file() and sha256(frozen.read_bytes()) == expected, "UI_ASSET_HASH_MISMATCH:" + name)
+        if getattr(args, "against_worktree", False):
+            current = Path(str(manifest["worktree"])) / name
+            require(current.is_file() and sha256(current.read_bytes()) == expected, "UI_STANDARD_SOURCE_DRIFT:" + name)
     for version_root in sorted((root / "versions").iterdir()):
         if not version_root.is_dir() or not VERSION.fullmatch(version_root.name):
             continue
         checkpoint_data = read_json(version_root / "checkpoint.json")
+        require(checkpoint_data.get("ui_assets", {}) == manifest.get("ui_assets", {}), "CHECKPOINT_UI_ASSETS_MISMATCH:" + version_root.name)
         for name, expected in dict(checkpoint_data.get("files", {})).items():
             path = version_root / name
             require(path.is_file() and sha256(path.read_bytes()) == expected, "VERSION_HASH_MISMATCH:" + version_root.name + ":" + name)
@@ -450,13 +483,17 @@ def verify_session(args: argparse.Namespace) -> None:
         acceptance = read_json(root / "acceptance.json")
         require(acceptance.get("schema") == ACCEPTANCE_SCHEMA, "ACCEPTANCE_SCHEMA_INVALID")
         require(acceptance.get("approved_version") == manifest.get("accepted_version"), "ACCEPTANCE_VERSION_MISMATCH")
+        require(acceptance.get("ui_assets", {}) == manifest.get("ui_assets", {}), "ACCEPTANCE_UI_ASSETS_MISMATCH")
+        accepted_checkpoint = read_json(root / "versions" / str(acceptance["approved_version"]) / "checkpoint.json")
+        require(acceptance.get("files") == accepted_checkpoint.get("files"), "ACCEPTANCE_FILES_MISMATCH")
     print("DESIGN_LAB_VERIFY=PASS")
 
 
-def inject_overrides(html: bytes) -> bytes:
+def inject_overrides(html: bytes, version: str = "") -> bytes:
     text = html.decode("utf-8")
-    head = '<meta name="robots" content="noindex,nofollow,noarchive"><link rel="stylesheet" href="/__design_lab__/overrides.css">'
-    script = '<script src="/__design_lab__/overrides.js" defer></script>'
+    suffix = "?version=" + version if version else ""
+    head = '<meta name="robots" content="noindex,nofollow,noarchive"><link rel="stylesheet" href="/__design_lab__/overrides.css' + suffix + '">'
+    script = '<script src="/__design_lab__/overrides.js' + suffix + '" defer></script>'
     text = text.replace("</head>", head + "</head>", 1)
     text = text.replace("</body>", script + "</body>", 1)
     return text.encode("utf-8")
@@ -495,18 +532,31 @@ class DesignLabHandler(BaseHTTPRequestHandler):
         if not self._host_allowed():
             self._send(421, b"Loopback Host header required.\n", "text/plain; charset=utf-8")
             return
-        path = unquote(urlsplit(self.path).path)
+        request_url = urlsplit(self.path)
+        path = unquote(request_url.path)
         root: Path = self.server.session_root  # type: ignore[attr-defined]
         worktree: Path = self.server.worktree  # type: ignore[attr-defined]
         manifest: dict[str, object] = self.server.manifest  # type: ignore[attr-defined]
+        version = parse_qs(request_url.query).get("version", [""])[0]
+        if version == "accepted":
+            # Read acceptance live so a running review server can display the
+            # newly accepted immutable version without a process restart.
+            acceptance_file = root / "acceptance.json"
+            version = str(read_json(acceptance_file).get("approved_version", "")) if acceptance_file.is_file() else "missing"
+        override_root = root / "workspace"
+        if version:
+            if VERSION.fullmatch(version) is None or not (root / "versions" / version / "checkpoint.json").is_file():
+                self._send(404, b"DESIGN_LAB_VERSION_NOT_FOUND\n", "text/plain; charset=utf-8")
+                return
+            override_root = root / "versions" / version
         if path in {"/", "/index.html", str(manifest["target_route"])}:
-            self._send(200, inject_overrides((root / "baseline.html").read_bytes()), "text/html; charset=utf-8")
+            self._send(200, inject_overrides((root / "baseline.html").read_bytes(), version), "text/html; charset=utf-8")
             return
         if path == "/__design_lab__/overrides.css":
-            self._send(200, (root / "workspace" / "overrides.css").read_bytes(), "text/css; charset=utf-8")
+            self._send(200, (override_root / "overrides.css").read_bytes(), "text/css; charset=utf-8")
             return
         if path == "/__design_lab__/overrides.js":
-            self._send(200, (root / "workspace" / "overrides.js").read_bytes(), "text/javascript; charset=utf-8")
+            self._send(200, (override_root / "overrides.js").read_bytes(), "text/javascript; charset=utf-8")
             return
         if path == "/__design_lab__/status.json":
             status = {
@@ -519,8 +569,16 @@ class DesignLabHandler(BaseHTTPRequestHandler):
             }
             self._send(200, json.dumps(status, ensure_ascii=False).encode("utf-8"), "application/json; charset=utf-8")
             return
+        if path.startswith("/__ui_standard__/") and path.rsplit("/", 1)[-1] in {"gallery.css", "preview.css", "gallery.js"}:
+            name = path.rsplit("/", 1)[-1]
+            asset = root / "ui-assets" / "docs/ui" / name
+            if not asset.is_file():
+                self._send(404, b"Not found.\n", "text/plain; charset=utf-8")
+                return
+            self._send(200, asset.read_bytes(), "text/javascript; charset=utf-8" if name.endswith(".js") else "text/css; charset=utf-8")
+            return
         if path.startswith("/assets/"):
-            public = (worktree / "public").resolve()
+            public = ((root / "ui-assets/public") if manifest.get("ui_assets") else (worktree / "public")).resolve()
             asset = (public / path.lstrip("/")).resolve()
             if not asset.is_relative_to(public) or not asset.is_file() or asset.is_symlink():
                 self._send(404, b"Not found.\n", "text/plain; charset=utf-8")
@@ -543,6 +601,7 @@ class DesignLabHandler(BaseHTTPRequestHandler):
 
 
 def serve(args: argparse.Namespace) -> None:
+    verify_session(args)
     root, manifest = load_session(args)
     worktree = Path(str(manifest["worktree"])).resolve()
     require(worktree.is_dir(), "SESSION_WORKTREE_MISSING")
@@ -590,6 +649,8 @@ def parser() -> argparse.ArgumentParser:
             command.add_argument("--screenshot")
         if name == "accept":
             command.add_argument("--version", required=True)
+        if name == "verify":
+            command.add_argument("--against-worktree", action="store_true", help="also reject visual dependency drift since sandbox creation")
         if name == "serve":
             command.add_argument("--host", default="127.0.0.1")
             command.add_argument("--port", type=int, default=0)

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 export async function assertRegistryVisualContract(page, label) {
+  await page.evaluate(() => document.fonts.ready);
   const metrics = await page.evaluate(() => {
     const card = document.querySelector('.registry-ui-card');
     const toolbar = card?.querySelector('.registry-ui-toolbar');
@@ -21,5 +22,23 @@ export async function assertRegistryVisualContract(page, label) {
   assert.ok(Math.abs(metrics.toolbar.bottom - metrics.table.top) <= 1, `gap or overlap between toolbar and table: ${context}`);
   assert.equal(metrics.toolbarMarginBottom, '0px', `toolbar external margin: ${context}`);
   assert.ok(metrics.toolbar.left >= metrics.card.left - 1 && metrics.toolbar.right <= metrics.card.right + 1, `toolbar outside card: ${context}`);
+  const appearance = await page.evaluate(() => {
+    const style = selector => {
+      const element = document.querySelector(selector);
+      if (!element) return null;
+      const css = getComputedStyle(element);
+      return Object.fromEntries(['fontSize','fontWeight','lineHeight','color','backgroundColor','borderTopColor','borderTopWidth','borderRadius','minHeight','paddingTop','paddingRight','height'].map(key => [key, css[key]]));
+    };
+    const fontLoaded = [400,700].every(weight => [...document.fonts].some(face => face.family.replace(/["']/g,'')==='IBM Plex Sans' && face.weight===String(weight) && face.status==='loaded'));
+    return {toolbar:style('.registry-ui-toolbar'),search:style('.registry-ui-search'),title:style('.registry-ui-head .page-title'),summary:style('.registry-ui-head .page-summary'),head:style('.registry-ui-head'),fontLoaded};
+  });
+  assert.equal(appearance.fontLoaded, true, `${label}: real approved font is loaded`);
+  assert.equal(appearance.toolbar.backgroundColor, 'rgb(247, 245, 240)', `${label}: toolbar background`);
+  assert.equal(appearance.toolbar.minHeight, '49px', `${label}: toolbar min height`);
+  assert.deepEqual([appearance.toolbar.paddingTop,appearance.toolbar.paddingRight], ['8px','12px'], `${label}: toolbar padding`);
+  assert.deepEqual([appearance.title?.fontSize,appearance.title?.fontWeight,appearance.title?.lineHeight,appearance.title?.color], ['19px','700','22px','rgb(19, 18, 16)'], `${label}: title typography`);
+  assert.deepEqual([appearance.summary?.fontSize,appearance.summary?.fontWeight,appearance.summary?.lineHeight], ['12px','500','15px'], `${label}: summary typography`);
+  assert.deepEqual([appearance.head?.borderTopColor,appearance.head?.borderTopWidth], ['rgb(168, 161, 150)','1px'], `${label}: header frame`);
+  assert.deepEqual([appearance.search?.height,appearance.search?.fontSize,appearance.search?.fontWeight,appearance.search?.borderRadius,appearance.search?.backgroundColor], ['32px','12px','400','2px','rgb(255, 253, 249)'], `${label}: search appearance`);
   return metrics;
 }

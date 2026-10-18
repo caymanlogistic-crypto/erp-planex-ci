@@ -17,7 +17,9 @@ execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/waste_trip
   cwd: root,
   env: { ...process.env, WASTE_REGISTRY_RENDER_OUTPUT: rendered },
 });
-const html = fs.readFileSync(rendered, 'utf8');
+// The PHP render contract returns a view fragment. Load the same font/token base
+// as the real layout so browser checks cannot silently exercise browser defaults.
+const html = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/erp-ui.css"></head><body>' + fs.readFileSync(rendered, 'utf8') + '</body></html>';
 const server = http.createServer((req, res) => {
   if (req.url === '/' || req.url?.startsWith('/?')) {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
