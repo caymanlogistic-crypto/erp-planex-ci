@@ -25,6 +25,20 @@ export async function assertRegistryDataCoverage(page,label){
   assert.deepEqual(uncovered,[],`${label}: untyped visible table data; use an approved typography role (a color-only class is insufficient)`);
 }
 
+export async function assertRegistryColumnGeometry(page,label){
+  const columns=await page.evaluate(()=>[...document.querySelectorAll('.registry-ui-data')].flatMap(table=>{
+    if(table.classList.contains('registry-ui-data--cards'))return [];
+    const idWidth=parseFloat(getComputedStyle(table).getPropertyValue('--registry-id-width'))||64;
+    return [...table.querySelectorAll('tbody .registry-ui-id,tbody .registry-ui-trip')].flatMap(element=>{
+      const cell=element.closest('td'),rect=cell?.getBoundingClientRect();
+      if(!rect?.width||!rect.height)return [];
+      const role=element.classList.contains('registry-ui-id')?'id':'trip';
+      return [{role,width:rect.width,expected:role==='id'?idWidth:240}];
+    });
+  }));
+  for(const column of columns)assert.ok(Math.abs(column.width-column.expected)<0.1,`${label}: canonical ${column.role} column width ${column.width} != ${column.expected}`);
+}
+
 // Required coverage is evaluated against actual visible data, never class-name
 // strings in a PHP source. Test fixtures must expose every applicable role.
 export async function assertRegistryDataRoles(page, requiredRoles, label) {
@@ -78,6 +92,7 @@ export async function assertRegistryDataContract(page, pageId) {
   assert.ok(Array.isArray(definition.data_roles)&&definition.data_roles.length,`${pageId}: explicit data_roles required`);
   await assertRegistryDataRoles(page,definition.data_roles,pageId);
   await assertRegistryDataCoverage(page,pageId);
+  await assertRegistryColumnGeometry(page,pageId);
 }
 
 export async function assertRegistryVisualContract(page, label) {
