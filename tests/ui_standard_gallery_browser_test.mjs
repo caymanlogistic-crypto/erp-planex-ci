@@ -157,6 +157,7 @@ try{
   const copy=original.cloneNode(true);copy.dataset.galleryView='scroll';copy.dataset.registryStateScope='scroll-fixture';copy.querySelector('[data-registry-field=query]').value='';
   const main=document.createElement('main');main.className='content';main.style.cssText='height:320px;width:850px;overflow:auto;padding:12px;position:relative';
   original.after(main);main.append(copy);
+  copy.querySelector('.registry-ui-toolbar').style.minHeight='80px';copy.querySelector('.registry-ui-card').style.removeProperty('--registry-toolbar-height');
   const tbody=copy.querySelector('tbody'),rows=[...tbody.querySelectorAll('[data-gallery-row]')];
   rows.forEach(row=>{row.hidden=false;});copy.querySelector('[data-gallery-empty]').hidden=true;
   for(let i=0;i<12;i++)rows.forEach(row=>tbody.append(row.cloneNode(true)));
@@ -166,9 +167,10 @@ try{
  const scroll=await clean.locator('[data-gallery-view=scroll]').evaluate(view=>{
   const main=view.parentElement,wrap=view.querySelector('.table-scroll'),toolbar=view.querySelector('.registry-ui-toolbar'),table=view.querySelector('table');
   wrap.scrollLeft=150;
-  return {main:main.scrollTop,inner:wrap.scrollHeight-wrap.clientHeight,y:table.tHead.getBoundingClientRect().top-toolbar.getBoundingClientRect().bottom,x:table.tHead.rows[0].cells[0].getBoundingClientRect().left-table.tBodies[0].rows[0].cells[0].getBoundingClientRect().left};
+  return {main:main.scrollTop,inner:wrap.scrollHeight-wrap.clientHeight,measured:parseFloat(getComputedStyle(view.querySelector('.registry-ui-card')).getPropertyValue('--registry-toolbar-height')),height:toolbar.getBoundingClientRect().height,y:table.tHead.getBoundingClientRect().top-toolbar.getBoundingClientRect().bottom,x:table.tHead.rows[0].cells[0].getBoundingClientRect().left-table.tBodies[0].rows[0].cells[0].getBoundingClientRect().left};
  });
  assert.equal(scroll.main,300);assert.equal(scroll.inner,0);assert.ok(Math.abs(scroll.y)<1);assert.ok(Math.abs(scroll.x)<1);
+ assert.equal(scroll.measured,scroll.height,'dynamically mounted registry measures its own responsive toolbar');
  await clean.locator('[data-gallery-view=scroll]').evaluate(view=>view.querySelectorAll('tbody tr').forEach(row=>row.hidden=true));
  await page.waitForTimeout(100);
  assert.equal(await clean.locator('[data-gallery-view=scroll]').evaluate(view=>view.parentElement.scrollHeight-view.parentElement.clientHeight),0,'empty state has no ghost header range');

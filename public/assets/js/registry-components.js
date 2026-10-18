@@ -96,6 +96,7 @@
       let frame=0,shift=0;
       const update=()=>{
         frame=0;
+        if(toolbar)card.style.setProperty('--registry-toolbar-height',`${toolbar.getBoundingClientRect().height}px`);
         const rect=table.getBoundingClientRect(),headRect=head.getBoundingClientRect();
         const visible=headRect.width>2&&headRect.height>2&&getComputedStyle(head).display!=='none';
         const wide=wrap.scrollWidth>wrap.clientWidth+1;
