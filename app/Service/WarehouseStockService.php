@@ -226,6 +226,7 @@ final class WarehouseStockService
         usort($movements, static fn(array $a, array $b): int =>
             strcmp(self::movementOrderTime($a), self::movementOrderTime($b)) ?: ((int)$a['id'] <=> (int)$b['id']));
         $balances = $groups = $movementFlightIds = $journalFlightIds = $journalRequestIds = [];
+        $openReceiptFlights = $duplicateReceipts = [];
         foreach ($movements as $row) {
             if (($row['status'] ?? 'active') !== 'active') continue;
             $type = (string)$row['movement_type'];
@@ -245,6 +246,16 @@ final class WarehouseStockService
             $excluded = isset($erpFlights[$flightId]) && !isset($erpFlights[$flightId]['requests'][$requestId]) && !$mixedWarehouseRequest;
             $after = $excluded ? $before : $before + $sign * $weight;
             if (!$excluded) $balances[$warehouseId][$requestId] = $after;
+            if (!$excluded && $sign > 0) {
+                $firstFlightId = $openReceiptFlights[$warehouseId][$requestId] ?? null;
+                if ($before > 0 && $firstFlightId !== null && $firstFlightId !== $flightId) {
+                    $duplicateReceipts[$warehouseId][$requestId]['first'] = $firstFlightId;
+                    $duplicateReceipts[$warehouseId][$requestId]['repeats'][$flightId] = true;
+                }
+                $openReceiptFlights[$warehouseId][$requestId] ??= $flightId;
+            } elseif (!$excluded && $sign < 0 && $after <= 0) {
+                unset($openReceiptFlights[$warehouseId][$requestId]);
+            }
             $direction = $sign > 0 ? 'in' : 'out';
             $key = $warehouseId.':'.$flightId.':'.$direction;
             if (!isset($groups[$key])) {
@@ -316,6 +327,15 @@ final class WarehouseStockService
             $group['added_request_ids'] = array_values(array_intersect($group['trip_only_request_ids'], $derivedRequestIds));
             $group['unmoved_request_ids'] = array_values(array_diff($group['trip_only_request_ids'], $group['added_request_ids']));
             $group['display_request_ids'] = array_values(array_unique(array_merge($group['request_ids'], $group['trip_only_request_ids'])));
+            $group['duplicate_request_ids'] = [];
+            if ($group['direction'] === 'in') {
+                foreach ($group['active_request_ids'] as $requestId) {
+                    $duplicate = $duplicateReceipts[$group['warehouse_id']][$requestId] ?? null;
+                    if ($duplicate !== null && ($group['flight_id'] === $duplicate['first'] || isset($duplicate['repeats'][$group['flight_id']]))) {
+                        $group['duplicate_request_ids'][] = $requestId;
+                    }
+                }
+            }
         }
         unset($group);
         $byWarehouse = [];
@@ -493,6 +513,27 @@ final class WarehouseStockService
                 'has_movements'=>false, 'movement_label'=>'Нет в журнале',
             ];
         }
+        foreach ($duplicateReceipts as $warehouseId => $requests) {
+            foreach ($requests as $requestId => $duplicate) {
+                foreach (array_keys($duplicate['repeats']) as $flightId) {
+                    $message = 'Повторное поступление заявки '.$requestId.'. Ранее она уже поступила в рейсе #'
+                        .$duplicate['first'].'; повторно проведена в рейсе #'.$flightId
+                        .'. Проверьте оба рейса и остаток заявки.';
+                    if (!isset($issues[$flightId])) {
+                        $issues[$flightId] = [
+                            'flight_id'=>$flightId,
+                            'name'=>trim((string)($flightMap[$flightId]['comment'] ?? '')) ?: trim((string)($erp[$flightId]['name'] ?? '')),
+                            'warehouse_id'=>$warehouseId,
+                            'messages'=>[], 'has_movements'=>true,
+                            'movement_label'=>'Складской журнал: 2 поступления одной заявки',
+                            'reconcile_targets'=>[],
+                        ];
+                    }
+                    $issues[$flightId]['messages'][] = $message;
+                    $issues[$flightId]['duplicate'] = true;
+                }
+            }
+        }
         krsort($issues, SORT_NUMERIC);
         $allIssues = $issues;
         foreach ($exceptionRows as &$exception) {
@@ -524,6 +565,7 @@ final class WarehouseStockService
         ];
         usort($correctionFlights, static fn(array $a, array $b): int => $b['id'] <=> $a['id']);
         return ['warehouses'=>$names,'groups'=>$byWarehouse,'current'=>$current,'issues'=>$issues,'all_issues'=>$allIssues,
+            'duplicate_receipts'=>$duplicateReceipts,
             'exceptions'=>$exceptionRows,'issue_count'=>count($issues),'correction_flights'=>$correctionFlights];
     }
 }
