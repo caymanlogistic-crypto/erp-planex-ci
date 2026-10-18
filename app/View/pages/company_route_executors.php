@@ -45,11 +45,11 @@ $routeListVehicles = static function (array $row): void {
 
 <?php elseif ($company['status'] !== 'active'): ?>
 
-<div class="page-head route-executors-page-head">
+<div class="page-head route-executors-page-head registry-ui-head">
     <div class="page-head-left">
-        <?= $routeExecutorHeaderIcon ?>
-        <h1 class="page-title">Исполнители рейса</h1>
-        <div class="page-summary"><span>Исполнитель рейса: подрядчик + водитель + транспорт</span></div>
+        <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
+        <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
+        <span class="page-summary">Исполнитель рейса: подрядчик + водитель + транспорт</span></span>
     </div>
 </div>
 
@@ -59,11 +59,11 @@ $routeListVehicles = static function (array $row): void {
 
 <?php elseif (isset($dbError)): ?>
 
-<div class="page-head route-executors-page-head">
+<div class="page-head route-executors-page-head registry-ui-head">
     <div class="page-head-left">
-        <?= $routeExecutorHeaderIcon ?>
-        <h1 class="page-title">Исполнители рейса</h1>
-        <div class="page-summary"><span>Исполнитель рейса: подрядчик + водитель + транспорт</span></div>
+        <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
+        <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
+        <span class="page-summary">Исполнитель рейса: подрядчик + водитель + транспорт</span></span>
     </div>
 </div>
 
@@ -74,11 +74,11 @@ $routeListVehicles = static function (array $row): void {
 <?php elseif (empty($executors) && empty($reviewCards)): ?>
 <?php $isLogist = ($_SESSION['role_code'] ?? '') === 'logist'; ?>
 
-<div class="page-head route-executors-page-head">
+<div class="page-head route-executors-page-head registry-ui-head">
     <div class="page-head-left">
-        <?= $routeExecutorHeaderIcon ?>
-        <h1 class="page-title">Исполнители рейса</h1>
-        <div class="page-summary"><span>Исполнитель рейса: подрядчик + водитель + транспорт</span></div>
+        <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
+        <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
+        <span class="page-summary">Исполнитель рейса: подрядчик + водитель + транспорт</span></span>
     </div>
     <div class="page-head-actions">
         <?= $routeExecutorDocumentButton ?>
@@ -109,7 +109,7 @@ $routeListVehicles = static function (array $row): void {
 
 <?php else: ?>
 
-<div class="page-head route-executors-page-head">
+<div class="page-head route-executors-page-head registry-ui-head">
     <div class="page-head-left">
         <span class="rp-identity-icon"><?= $routeExecutorHeaderIcon ?></span>
         <span class="rp-head-text"><h1 class="page-title">Исполнители рейса</h1>
@@ -122,22 +122,22 @@ $routeListVehicles = static function (array $row): void {
     </div>
 </div>
 
-<div class="table-card table-card--standard route-executors-card" data-erp-grid data-route-executors-grid>
-    <div class="table-toolbar">
+<div class="table-card table-card--standard route-executors-card registry-ui-card" data-erp-grid data-route-executors-grid>
+    <div class="table-toolbar registry-ui-toolbar">
         <div class="found-label">Найдено: <b><?= count($executors) + count($reviewCards) ?></b></div>
         <div class="toolbar-right">
             <div class="toolbar-sort">
                 <span class="toolbar-sort-label">Сортировка по:</span>
-                <select class="toolbar-select" data-erp-grid-sort>
+                <select class="toolbar-select" data-erp-grid-sort data-table-reference-select="route">
                     <option value="date" selected>По дате добавления</option>
                     <option value="alpha">По алфавиту</option>
                 </select>
             </div>
-            <input type="search" class="toolbar-search" name="route_executor_search" placeholder="Поиск по таблице" aria-label="Поиск исполнителя рейса" autocomplete="off">
+            <input type="search" class="toolbar-search registry-ui-search" name="route_executor_search" placeholder="Поиск по таблице" aria-label="Поиск исполнителя рейса" autocomplete="off">
         </div>
     </div>
     <div class="table-scroll">
-        <table class="table">
+        <table class="table registry-ui-table">
             <colgroup><col style="width:26%"><col style="width:23%"><col style="width:22%"><col style="width:13%"><col style="width:16%"></colgroup>
             <thead>
                 <tr>

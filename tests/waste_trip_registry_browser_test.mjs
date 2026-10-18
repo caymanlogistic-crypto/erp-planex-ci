@@ -51,6 +51,11 @@ try {
         searchRightOfSort: search.left >= sort.left,
         managerBeforeSort: manager.top < sort.top || (Math.abs(manager.top - sort.top) < 1 && manager.left < sort.left),
         managerFits: manager.right <= document.documentElement.clientWidth + 1,
+        searchFits: search.right <= document.querySelector('.registry-ui-toolbar').getBoundingClientRect().right - 8,
+        searchWeight: getComputedStyle(filter.querySelector('[name=q]')).fontWeight,
+        placeholder: getComputedStyle(filter.querySelector('[name=q]'), '::placeholder').color,
+        headingBackground: getComputedStyle(table.querySelector('thead th')).backgroundColor,
+        headingImage: getComputedStyle(table.querySelector('thead th')).backgroundImage,
         statusIndex: first.cells[2].classList.contains('waste-status'),
         rowCount: table.tBodies[0].rows.length,
       };
@@ -61,6 +66,11 @@ try {
     assert.equal(metrics.searchRightOfSort, true, `${width}: search follows sort`);
     assert.equal(metrics.managerBeforeSort, true, `${width}: manager filter precedes sort`);
     assert.equal(metrics.managerFits, true, `${width}: manager filter stays inside viewport ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.searchFits, true, `${width}: search stays inside toolbar ${JSON.stringify(metrics)}`);
+    assert.equal(metrics.searchWeight, '400');
+    assert.equal(metrics.placeholder, 'rgb(129, 123, 114)');
+    assert.equal(metrics.headingBackground, 'rgb(227, 222, 213)');
+    assert.equal(metrics.headingImage, 'none');
     if (width === 390 && process.env.PLANEX_VISUAL_EVIDENCE_DIR) {
       fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR, 'departures-interactive-390.png') });

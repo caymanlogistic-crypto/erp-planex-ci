@@ -134,6 +134,10 @@ Technical integration actor identity is not the current standard request gate.
 - Production migration, reconciliation, seed, backfill, destructive SQL and business-data writes require separate task-specific OWNER authorization.
 - Docs/governance/control-plane-only changes do not require an application deploy.
 
+## Единственный источник стилей реестров
+
+Для новых и изменяемых табличных реестров обязательны `docs/ui/REGISTRY_CANON.md` и подключаемый `public/assets/css/registry-components.css`. Общие роли Page Header, вкладок, панели, поиска, выбора, кнопок шапки и базовой таблицы оформляются только через классы `registry-ui-*` этого файла. Нельзя копировать их CSS или JS в CSS страницы, inline `<style>` и новый локальный компонент. Файл страницы содержит лишь колонки, предметные статусы и уникальные действия. Для выпадающего списка использовать `public/assets/js/table-reference-select.js`; локальные копии поведения запрещены. Если общего варианта не хватает, сначала расширить общий компонент с явным opt-in и проверить уже подключённые страницы. Исключение требует отдельного решения OWNER и записи в каноне.
+
 ## Definition of done
 
 `CODE PASS + CI PASS + MEMORY PASS`.

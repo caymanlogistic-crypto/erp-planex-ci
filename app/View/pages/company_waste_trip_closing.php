@@ -23,7 +23,7 @@ $progressColor=static function(int $percent):string {
 <?php if(!empty($_SESSION['invoice_success'])):?><div class="notice success" role="status"><?= e((string)$_SESSION['invoice_success']) ?></div><?php unset($_SESSION['invoice_success']);endif;?>
 <?php if(in_array($success,['Документ добавлен.','Документ убран из комплекта.','Диагностическая карта добавлена.'],true)):?><span data-closing-action-result="success" hidden></span><?php elseif($success):?><div class="notice success" role="status"><?= e((string)$success) ?></div><?php endif;?>
 <?php if($flashError||$error):?><div class="notice warn" role="alert"><?= e((string)($flashError?:$error)) ?></div><?php endif;?>
-<div class="closing-page" data-closing-state-key="<?= e($viewStateKey??'') ?>">
+<div class="closing-page closing-page--legacy" data-closing-state-key="<?= e($viewStateKey??'') ?>">
   <div class="page-head"><div class="page-head-left"><h1 class="page-title">Сбор закрывающих документов</h1><div class="page-summary">Документы по завершённым рейсам.</div></div><?php if($schemaReady):?><div class="page-head-actions"><button type="button" class="btn btn-primary" data-closing-report-open>Сводный отчёт</button></div><?php endif;?></div>
   <?php if(!$schemaReady):?><div class="notice warn">Раздел ожидает обновление схемы данных.</div><?php else:?>
   <div class="closing-registry-tabs"><div class="closing-filters" role="group" aria-label="Фильтр по состоянию">

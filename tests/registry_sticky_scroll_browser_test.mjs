@@ -24,7 +24,7 @@ try {
     for (const [width, height] of [[1920,600],[1280,600],[1100,600],[1051,600],[1035,600],[1034,600],[1033,600],[1032,600],[1024,600],[900,600],[701,600],[700,600],[641,600],[390,600],[320,600]]) {
       const page = await browser.newPage({viewport:{width,height}});
       await page.setContent(html);
-      await page.addStyleTag({content:sharedCss + '\n' + css(entry.stylesheet)});
+      await page.addStyleTag({content:sharedCss + '\n' + css(entry.stylesheet) + '\n' + css('registry-components.css')});
       if (entry.name === 'departures') await page.waitForFunction(() => !!document.querySelector('.table-card[data-erp-grid]')?.style.getPropertyValue('--waste-toolbar-height'));
       if (entry.name === 'finance') {
         await page.evaluate(() => {

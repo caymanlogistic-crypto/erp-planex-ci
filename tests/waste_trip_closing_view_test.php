@@ -84,7 +84,7 @@ $assert(\App\Service\WasteTripClosingService::customerSettlementDisplay(['custom
 $assert(\App\Service\WasteTripClosingService::customerSettlementDisplay(['customer_rate'=>null,'customer_paid_amount'=>'0.00'])===['status'=>'unknown','text'=>'Сумма рейса не указана'],'missing customer amount must not invent a debt');
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
 $assert(str_contains($html,'class="closing-grid lab-grid table-scroll"')&&str_contains($html,'data-closing-doc-dialog')&&str_contains($html,'data-closing-report-download'),'registry must show the report table with document popup and Excel download');
-$assert(str_contains($html,'class="closing-table lab-table table erp-ledger-table"')&&str_contains($html,'/assets/css/erp-ledger-table.css'),'registry must use the shared received/paid table style');
+$assert(str_contains($html,'class="closing-table lab-table table erp-ledger-table registry-ui-table"')&&str_contains($html,'/assets/css/registry-components.css'),'registry must use the shared registry component style');
 $assert(substr_count($html,'data-report-trip-id=')===2,'registry must include both accessible trips');
 $assert(str_contains($sheet,'Рейс №')&&str_contains($sheet,'Название рейса')&&str_contains($sheet,'Вывоз отходов с площадки А')&&str_contains($sheet,'ПЛАНЭКС')&&str_contains($sheet,'МГ Логистика')&&str_contains($sheet,'autoFilter ref="A1:P3"'),'Excel report must contain trip title, both executors and filter');
 $assert(str_contains($sheet,'<t xml:space="preserve">Раздел</t>')&&str_contains($sheet,'<t xml:space="preserve">Оплаченные полные комплекты</t>'),'Excel must include the automatically assigned section');

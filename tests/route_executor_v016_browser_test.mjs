@@ -29,7 +29,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const [width, height] of [[768, 850], [1024, 768], [1280, 900], [1440, 900], [1920, 1080], [2560, 1440], [3840, 2160]]) {
+  for (const [width, height] of [[390, 844], [768, 850], [1024, 768], [1280, 900], [1440, 900], [1920, 1080], [2560, 1440], [3840, 2160]]) {
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
@@ -38,6 +38,7 @@ try {
     await page.addScriptTag({ url: '/assets/js/app.js' });
     await page.addScriptTag({ url: '/assets/js/route-executor-review-workflow.js' });
     await page.addScriptTag({ url: '/assets/js/route-executor-list-v016.js' });
+    await page.addScriptTag({ url: '/assets/js/table-reference-select.js' });
 
     const metrics = await page.evaluate(() => {
       const header = document.querySelector('.route-executors-page-head');
@@ -54,15 +55,23 @@ try {
         headingBottom: getComputedStyle(heading).borderBottomWidth,
         brandTransform: getComputedStyle(vehicle).textTransform,
         searchIcon: getComputedStyle(search).backgroundImage.includes('svg'),
+        searchWeight: getComputedStyle(search).fontWeight,
+        placeholder: getComputedStyle(search, '::placeholder').color,
+        headingBackground: getComputedStyle(heading).backgroundColor,
+        headingImage: getComputedStyle(heading).backgroundImage,
         overflow: document.documentElement.scrollWidth > innerWidth + 1,
       };
     });
-    assert.equal(metrics.gap, 8, `${width}px header-to-table gap`);
+    assert.equal(metrics.gap, 12, `${width}px header-to-table gap`);
     assert.deepEqual(metrics.toolbarPadding, ['12px', '12px']);
     assert.equal(metrics.headingTop, '0px');
     assert.equal(metrics.headingBottom, '1px');
     assert.equal(metrics.brandTransform, 'uppercase');
     assert.equal(metrics.searchIcon, true);
+    assert.equal(metrics.searchWeight, '400');
+    assert.equal(metrics.placeholder, 'rgb(129, 123, 114)');
+    assert.equal(metrics.headingBackground, 'rgb(227, 222, 213)');
+    assert.equal(metrics.headingImage, 'none');
     assert.equal(metrics.overflow, false, `${width}px document overflow`);
     const vehicleInput = page.locator('input[name^="units["][name$="[brand]"]').first();
     if (await vehicleInput.count()) {
@@ -71,12 +80,12 @@ try {
       assert.equal(await vehicleInput.evaluate(element => getComputedStyle(element).textTransform), 'uppercase');
     }
 
-    const sort = page.locator('.route-sort-trigger');
+    const sort = page.locator('.route-executors-card .lab-reference-trigger');
     await sort.click();
-    const list = page.locator('.route-sort-list');
+    const list = page.locator('.route-executors-card .lab-reference-list');
     assert.equal(await list.isVisible(), true);
     assert.equal(await list.evaluate(element => getComputedStyle(element).padding), '0px');
-    assert.equal(await list.locator('.route-sort-option').first().evaluate(element => getComputedStyle(element).borderLeftWidth), '0px');
+    assert.equal(await list.locator('.lab-reference-option').first().evaluate(element => getComputedStyle(element).borderLeftWidth), '0px');
     if (process.env.PLANEX_VISUAL_EVIDENCE_DIR && [1920, 3840].includes(width)) {
       fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR, `route-executor-v016-sort-${width}.png`), fullPage: false });

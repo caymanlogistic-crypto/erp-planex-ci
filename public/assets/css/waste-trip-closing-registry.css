@@ -1,13 +1,5 @@
 /* Closing registry column geometry and document dialog.
    Header, tabs, toolbar and controls use the existing ERP stylesheets. */
-.closing-page .page-head{margin-bottom:0}
-.closing-page .page-head-left{display:flex;align-items:center;gap:10px}
-.closing-page .page-head-left::before{display:none}
-.closing-page .page-head-left>.rp-identity-icon{flex:none;width:30px;height:30px;color:#7c4718}
-.closing-page .page-head-left>.rp-identity-icon svg{width:30px;height:30px}
-.closing-page .page-head-left>.rp-head-text{display:flex;flex-direction:column;min-width:0}
-.closing-page .page-head-left>.rp-head-text>.page-title{margin:0}
-.closing-page .page-head-left>.rp-head-text>.page-summary{margin-top:4px}
 .closing-page .table-card[data-erp-grid]>.waste-trip-toolbar{top:-12px;z-index:20}
 @media(min-width:701px){.closing-page .table-card[data-erp-grid]>.waste-trip-toolbar .closing-toolbar-right{width:auto;flex:none;gap:8px;margin-left:auto}}
 .closing-page .lab-registry-card{display:block;overflow:visible}
@@ -99,11 +91,6 @@
   height: 48px;
   line-height: 16.8px;
 }
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] td.registry-id {
-  font: 700 12px/16.8px "IBM Plex Mono", "Cascadia Code", Consolas, monospace;
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] td.waste-description,
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] td.registry-executor {
   white-space: normal;
@@ -127,7 +114,6 @@
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .registry-executor-secondary {
   display: block;
   margin-top: 2px;
-  color: #817d75;
   font-size: 11px;
   font-weight: 400;
   line-height: 15.4px;
@@ -181,28 +167,6 @@
   .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .registry-executor-secondary {
     display: none;
   }
-}
-.closing-page .closing-sort-field > .toolbar-select { height: 32px; }
-.closing-page .closing-registry-card .closing-search .toolbar-search {
-  box-sizing: border-box;
-  width: 100%;
-  height: 32px;
-  min-height: 32px;
-  padding: 0 9px 0 31px;
-  border: 1px solid #c8c0b5;
-  border-radius: 2px;
-  background: #fffdf9 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath stroke='none' d='M0 0h24v24H0z' fill='none'/%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0'/%3E%3Cpath d='M21 21l-6 -6'/%3E%3C/svg%3E") 9px center / 15px 15px no-repeat;
-  color: #2e2923;
-  font: 500 12px/1.4 "IBM Plex Sans", "Segoe UI", Arial, sans-serif;
-}
-.closing-page .closing-registry-card .closing-search .toolbar-search::placeholder {
-  color: #777168;
-}
-.closing-page .closing-registry-card .closing-search .toolbar-search:focus {
-  border-color: #7c4718;
-  background-color: #fffdf9;
-  box-shadow: 0 0 0 2px rgba(124, 71, 24, .1);
-  outline: none;
 }
 @media (max-width: 700px) {
   .closing-page .closing-registry-card .closing-extra-filters .closing-filter-field:last-child {

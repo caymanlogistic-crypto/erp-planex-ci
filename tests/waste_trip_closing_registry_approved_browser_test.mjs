@@ -27,6 +27,12 @@ try{
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.addInitScript(()=>localStorage.setItem('fixture:closing-registry',JSON.stringify({filter:'paid_complete',sort:'unloading'})));
   await page.goto(`http://127.0.0.1:${server.address().port}/company/logistics/closing-documents`);
+  const sharedStyles=await page.evaluate(()=>{
+    const search=document.querySelector('.closing-registry-card .registry-ui-search');
+    const heading=document.querySelector('.closing-registry-card thead th');
+    return {searchWeight:getComputedStyle(search).fontWeight,placeholder:getComputedStyle(search,'::placeholder').color,headingBackground:getComputedStyle(heading).backgroundColor,headingImage:getComputedStyle(heading).backgroundImage};
+  });
+  assert.deepEqual(sharedStyles,{searchWeight:'400',placeholder:'rgb(129, 123, 114)',headingBackground:'rgb(227, 222, 213)',headingImage:'none'});
   const table=page.locator('.closing-page .lab-table');
   assert.equal(await table.locator('thead th').count(),14);
   assert.deepEqual(await table.locator('thead th').allInnerTexts().then(values=>values.slice(0,4)),['ID','ОПИСАНИЕ РЕЙСА','ДАТА ВЫГРУЗКИ','ПОДРЯД. / ВОД.']);
