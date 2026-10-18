@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import json
 import re
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "docs/ui/approved-components.json"
+GALLERY = ROOT / "docs/ui/approved-components.html"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$")
 
 
@@ -26,16 +28,16 @@ def load() -> dict:
 
 def validate(data: dict) -> list[str]:
     errors: list[str] = []
-    if data.get("schema_version") != 1:
-        errors.append("schema_version must be 1")
+    if data.get("schema_version") != 2:
+        errors.append("schema_version must be 2")
     families: dict[str, dict] = {}
     for family in data.get("families", []):
         name = family.get("id", "")
         if not ID.fullmatch(name) or name in families:
             errors.append(f"invalid or duplicate family: {name}")
         families[name] = family
-        if not family.get("approval") or not family.get("reference_route", "").startswith("/erpv2/"):
-            errors.append(f"{name}: approval and ERP reference route required")
+        if not family.get("approval") or not family.get("description") or not family.get("reference_route", "").startswith("/erpv2/"):
+            errors.append(f"{name}: approval, description and ERP reference route required")
         for value in [family.get("canon", ""), family.get("styles", ""), *family.get("behavior", [])]:
             try:
                 safe_file(value)
@@ -63,6 +65,16 @@ def validate(data: dict) -> list[str]:
                         safe_file(item["markup"])
                     except ValueError as exc:
                         errors.append(f"components/{name}: {exc}")
+                if not item.get("description"):
+                    errors.append(f"components/{name}: gallery description required")
+                try:
+                    specimen = safe_file(item.get("specimen", ""))
+                    if specimen.suffix != ".html" or not specimen.relative_to(ROOT).as_posix().startswith("docs/ui/specimens/"):
+                        errors.append(f"components/{name}: specimen must be in docs/ui/specimens")
+                    elif selector.split()[-1].lstrip(".") not in specimen.read_text(encoding="utf-8") and not (name == "registry.select" and "data-table-reference-select" in specimen.read_text(encoding="utf-8")):
+                        errors.append(f"components/{name}: specimen lacks shared selector")
+                except ValueError as exc:
+                    errors.append(f"components/{name}/specimen: {exc}")
             else:
                 if not item.get("route", "").startswith("/erpv2/"):
                     errors.append(f"pages/{name}: ERP route required")
@@ -90,10 +102,34 @@ def validate(data: dict) -> list[str]:
     return errors
 
 
+def render_gallery(data: dict) -> str:
+    """Build an offline HTML gallery from catalog metadata and real shared CSS."""
+    sections: list[str] = []
+    navigation: list[str] = []
+    for family in data["families"]:
+        family_id = family["id"]
+        navigation.append(f'<a href="#{html.escape(family_id, quote=True)}">{html.escape(family["description"])}</a>')
+        parts = [f'<section class="gallery-family" id="{html.escape(family_id, quote=True)}"><h2>{html.escape(family["description"])}</h2><p>Канон: <a href="{html.escape(Path(family["canon"]).name, quote=True)}">{html.escape(family["canon"])}</a>. Общие стили: <a href="../../{html.escape(family["styles"], quote=True)}">{html.escape(family["styles"])}</a>.</p>']
+        for component in (x for x in data["components"] if x["family"] == family_id):
+            specimen = safe_file(component["specimen"]).read_text(encoding="utf-8").strip()
+            parts.append(f'<article class="gallery-item" id="{html.escape(component["id"], quote=True)}"><div class="gallery-copy"><h3>{html.escape(component["role"])}</h3><p>{html.escape(component["description"])}</p><p class="gallery-meta">{html.escape(component["id"])} · {html.escape(component["selector"])} · {html.escape(component["approval"])}</p></div><div class="gallery-preview">{specimen}</div></article>')
+        parts.append('</section>')
+        sections.append('\n'.join(parts))
+    page_links = ''.join(f'<li><a href="https://plan-ex.ru{html.escape(page["route"], quote=True)}">{html.escape(page["route"])}</a></li>' for page in data["pages"])
+    css_links = '\n'.join(f'<link rel="stylesheet" href="../../{html.escape(path, quote=True)}">' for path in ["public/assets/css/erp-ui.css", *(x["styles"] for x in data["families"])])
+    js_links = '\n'.join(f'<script src="../../{html.escape(path, quote=True)}"></script>' for path in dict.fromkeys(path for family in data["families"] for path in family["behavior"]))
+    return ('<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>ERP PLANEX — согласованные компоненты</title>\n'
+            + css_links + '\n<link rel="stylesheet" href="gallery.css">\n</head>\n<body>\n<main class="gallery-shell">\n<header class="gallery-intro"><h1>Согласованные компоненты ERP PLANEX</h1><p>Живые образцы используют общие CSS и JS из приложения. Описания и список образцов формируются из <a href="approved-components.json">каталога</a>; точные значения хранятся в каноне и общем CSS.</p><nav>'
+            + ' '.join(navigation) + '</nav></header>\n' + '\n'.join(sections)
+            + '<section class="gallery-family"><h2>Страницы с подключённым стандартом</h2><ul>' + page_links + '</ul></section>\n</main>\n'
+            + js_links + '\n</body>\n</html>\n')
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check", help="validate catalog and page coverage")
+    sub.add_parser("render", help="regenerate the approved HTML gallery")
     sub.add_parser("list", help="list approved families, components and pages")
     tests = sub.add_parser("tests", help="print registered browser tests, one path per line")
     test_selection = tests.add_mutually_exclusive_group(required=True)
@@ -116,11 +152,16 @@ def main() -> int:
         errors = validate(data)
         if errors:
             raise ValueError("\n".join(errors))
+        if args.command == "check" and (not GALLERY.is_file() or GALLERY.read_text(encoding="utf-8") != render_gallery(data)):
+            raise ValueError("HTML gallery is missing or stale; run: python tools/ui_standard.py render")
         if args.command == "register":
             CATALOG.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
             print(f"UI_STANDARD_REGISTERED={args.kind}:{entry['id']}")
         elif args.command == "check":
             print("UI_STANDARD_CATALOG=PASS")
+        elif args.command == "render":
+            GALLERY.write_text(render_gallery(data), encoding="utf-8")
+            print(f"UI_STANDARD_GALLERY={GALLERY.relative_to(ROOT).as_posix()}")
         elif args.command == "list":
             for kind in ("families", "components", "pages"):
                 print(f"{kind}: " + ", ".join(item["id"] for item in data[kind]))

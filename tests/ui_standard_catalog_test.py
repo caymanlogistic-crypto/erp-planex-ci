@@ -13,6 +13,7 @@ import ui_standard
 
 catalog = ui_standard.load()
 assert ui_standard.validate(catalog) == []
+assert ui_standard.GALLERY.read_text(encoding="utf-8") == ui_standard.render_gallery(catalog)
 
 unapproved = copy.deepcopy(catalog)
 unapproved["components"].append({
@@ -41,6 +42,10 @@ non_visual = copy.deepcopy(catalog)
 non_visual["pages"][0]["browser_test"] = "tests/registry_sticky_scroll_browser_test.mjs"
 assert any("shared registry visual contract" in error for error in ui_standard.validate(non_visual))
 
+without_specimen = copy.deepcopy(catalog)
+without_specimen["components"][0].pop("specimen")
+assert any("specimen" in error for error in ui_standard.validate(without_specimen))
+
 with tempfile.TemporaryDirectory(prefix="planex-ui-catalog-") as temp:
     root = Path(temp)
     catalog_path = root / "catalog.json"
@@ -52,6 +57,8 @@ with tempfile.TemporaryDirectory(prefix="planex-ui-catalog-") as temp:
         "role": "Test fixture",
         "selector": ".registry-ui-card",
         "approval": "OWNER test fixture",
+        "description": "Test fixture for gallery registration.",
+        "specimen": "docs/ui/specimens/registry.card.html",
     }), encoding="utf-8")
     original_catalog, original_argv = ui_standard.CATALOG, sys.argv
     try:
