@@ -102,27 +102,38 @@ def validate(data: dict) -> list[str]:
     return errors
 
 
-def render_gallery(data: dict) -> str:
-    """Build an offline HTML gallery from catalog metadata and real shared CSS."""
+def render_gallery(data: dict, *, hosted: bool = False) -> str:
+    """Isolate each live specimen so gallery CSS cannot restyle approved controls."""
+    asset_prefix = "/assets/" if hosted else "../../public/assets/"
+    gallery_prefix = "/__ui_standard__/" if hosted else ""
+    css_paths = ["public/assets/css/erp-ui.css", *(x["styles"] for x in data["families"])]
+    css_links = '\n'.join(f'<link rel="stylesheet" href="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}">' for path in css_paths)
+    js_links = '\n'.join(f'<script src="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}"></script>' for path in dict.fromkeys(path for family in data["families"] for path in family["behavior"]))
+    def preview(identifier: str, title: str, specimen: str) -> str:
+        document = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
+                    + css_links + f'<link rel="stylesheet" href="{gallery_prefix}preview.css"></head><body><main data-specimen-root>'
+                    + specimen + '</main>' + js_links + f'<script src="{gallery_prefix}gallery.js"></script></body></html>')
+        fixed = ' data-fixed-preview="true"' if identifier == 'registry.sticky' else ''
+        return f'<iframe class="gallery-preview" data-preview="{html.escape(identifier, quote=True)}"{fixed} title="{html.escape(title, quote=True)}" srcdoc="{html.escape(document, quote=True)}"></iframe>'
     sections: list[str] = []
-    navigation: list[str] = []
+    navigation: list[str] = ['<a href="#complete-example">Цельный пример</a>']
     for family in data["families"]:
         family_id = family["id"]
         navigation.append(f'<a href="#{html.escape(family_id, quote=True)}">{html.escape(family["description"])}</a>')
-        parts = [f'<section class="gallery-family" id="{html.escape(family_id, quote=True)}"><h2>{html.escape(family["description"])}</h2><p>Канон: <a href="{html.escape(Path(family["canon"]).name, quote=True)}">{html.escape(family["canon"])}</a>. Общие стили: <a href="../../{html.escape(family["styles"], quote=True)}">{html.escape(family["styles"])}</a>.</p>']
+        parts = [f'<section class="gallery-family" id="{html.escape(family_id, quote=True)}"><h2>{html.escape(family["description"])}</h2><p>Каждый образец использует общие стили приложения. Наведите указатель, нажмите на контрол или перейдите к нему клавишей Tab.</p>']
         for component in (x for x in data["components"] if x["family"] == family_id):
             specimen = safe_file(component["specimen"]).read_text(encoding="utf-8").strip()
-            parts.append(f'<article class="gallery-item" id="{html.escape(component["id"], quote=True)}"><div class="gallery-copy"><h3>{html.escape(component["role"])}</h3><p>{html.escape(component["description"])}</p><p class="gallery-meta">{html.escape(component["id"])} · {html.escape(component["selector"])} · {html.escape(component["approval"])}</p></div><div class="gallery-preview">{specimen}</div></article>')
+            parts.append(f'<article class="gallery-item" id="{html.escape(component["id"], quote=True)}"><div class="gallery-copy"><h3>{html.escape(component["role"])}</h3><p>{html.escape(component["description"])}</p><p class="gallery-meta">{html.escape(component["id"])} · {html.escape(component["approval"])}</p></div>{preview(component["id"], component["role"], specimen)}</article>')
         parts.append('</section>')
         sections.append('\n'.join(parts))
     page_links = ''.join(f'<li><a href="https://plan-ex.ru{html.escape(page["route"], quote=True)}">{html.escape(page["route"])}</a></li>' for page in data["pages"])
-    css_links = '\n'.join(f'<link rel="stylesheet" href="../../{html.escape(path, quote=True)}">' for path in ["public/assets/css/erp-ui.css", *(x["styles"] for x in data["families"])])
-    js_links = '\n'.join(f'<script src="../../{html.escape(path, quote=True)}"></script>' for path in dict.fromkeys(path for family in data["families"] for path in family["behavior"]))
+    complete = safe_file("docs/ui/specimens/registry.example.html").read_text(encoding="utf-8")
     return ('<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>ERP PLANEX — согласованные компоненты</title>\n'
-            + css_links + '\n<link rel="stylesheet" href="gallery.css">\n</head>\n<body>\n<main class="gallery-shell">\n<header class="gallery-intro"><h1>Согласованные компоненты ERP PLANEX</h1><p>Живые образцы используют общие CSS и JS из приложения. Описания и список образцов формируются из <a href="approved-components.json">каталога</a>; точные значения хранятся в каноне и общем CSS.</p><nav>'
-            + ' '.join(navigation) + '</nav></header>\n' + '\n'.join(sections)
+            + f'<link rel="stylesheet" href="{asset_prefix}css/erp-ui.css">\n<link rel="stylesheet" href="{gallery_prefix}gallery.css">\n</head>\n<body>\n<main class="gallery-shell">\n<header class="gallery-intro"><p class="gallery-kicker">ERP PLANEX · утверждённый стандарт</p><h1>Как должен выглядеть интерфейс</h1><p>Сначала — цельный пример реестра. Ниже — согласованные элементы и их интерактивные состояния. Образцы, песочница и приложение используют одни файлы компонентов.</p><p>Данные вымышленные. Новые варианты становятся стандартом после отдельного согласования.</p><nav>'
+            + ' '.join(navigation) + '</nav></header>\n<section class="gallery-family" id="complete-example"><h2>Цельный пример реестра</h2><p>Шапка, действия, вкладки, фильтры, поиск и таблица в одной композиции. Фильтры в этом образце демонстрируют внешний вид.</p>'
+            + preview("registry.example", "Цельный пример реестра", complete) + '</section>\n' + '\n'.join(sections)
             + '<section class="gallery-family"><h2>Страницы с подключённым стандартом</h2><ul>' + page_links + '</ul></section>\n</main>\n'
-            + js_links + '\n</body>\n</html>\n')
+            + f'<script src="{gallery_prefix}gallery.js"></script>\n</body>\n</html>\n')
 
 
 def main() -> int:
@@ -130,6 +141,7 @@ def main() -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("check", help="validate catalog and page coverage")
     sub.add_parser("render", help="regenerate the approved HTML gallery")
+    sub.add_parser("html", help="render the same gallery for the localhost Design Lab")
     sub.add_parser("list", help="list approved families, components and pages")
     tests = sub.add_parser("tests", help="print registered browser tests, one path per line")
     test_selection = tests.add_mutually_exclusive_group(required=True)
@@ -160,8 +172,10 @@ def main() -> int:
         elif args.command == "check":
             print("UI_STANDARD_CATALOG=PASS")
         elif args.command == "render":
-            GALLERY.write_text(render_gallery(data), encoding="utf-8")
+            GALLERY.write_text(render_gallery(data), encoding="utf-8", newline="\n")
             print(f"UI_STANDARD_GALLERY={GALLERY.relative_to(ROOT).as_posix()}")
+        elif args.command == "html":
+            sys.stdout.buffer.write(render_gallery(data, hosted=True).encode("utf-8"))
         elif args.command == "list":
             for kind in ("families", "components", "pages"):
                 print(f"{kind}: " + ", ".join(item["id"] for item in data[kind]))

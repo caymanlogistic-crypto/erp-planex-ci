@@ -5,6 +5,8 @@ description: "Use for PLANEX requests containing РЕЖИМ РАЗРАБОТКА
 
 # PLANEX Design Lab
 
+OWNER 2026-10-18: gallery, sandbox and implementation must reuse the same approved UI components. New sessions freeze visual assets and SHA-256 with checkpoints/acceptance; use `verify --against-worktree` to detect source drift. An accepted version is available read-only at the session URL with `?version=accepted`, even while workspace overrides change. Before implementation acceptance, run `node tools/ui_parity.mjs --reference-url <localhost sandbox> --candidate-url <localhost ERP> --output <task evidence>` on identical synthetic fixtures and exercise page-specific states. The tool compares the frozen accepted version. New component appearance belongs in the shared component after explicit OWNER approval, never in parallel page styles. For approved examples, create a task-owned `ui-standard` preset using the pinned Python `tools/design_lab.py create` command, then use the normal `Start-DesignLab.ps1` wrapper.
+
 1. Read `docs/DESIGN_LAB.md` and `references/workflow.md`. Read `references/data-safety.md` when a real-shaped snapshot or data source is requested.
 2. Create or resume the task-owned session with `local/New-DesignLab.ps1`; default to `synthetic` data. Start it with `local/Start-DesignLab.ps1` and open the returned localhost URL.
 3. Before any design correction, verify the initial copy against the current ERP page using `parity-checklist.md`. It must match 1:1 visually and in available user behavior. Synthetic values may differ, but data shape and UI-relevant states must match. Only production writes, production DB/API/network access, and external navigation may differ; simulate their visible result locally when needed.

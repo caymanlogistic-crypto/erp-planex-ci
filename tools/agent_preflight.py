@@ -115,11 +115,12 @@ def diff_meta(base,head):
     return rows,lines
 
 def plan(cls,paths,scopes):
-    if cls=="FAST": return ["FAST_SCOPE_POLICY","CHANGED_PHP_SYNTAX","CHANGED_JS_SYNTAX","CHEAP_UI_CONTRACTS"]
+    if cls=="FAST": return ["FAST_SCOPE_POLICY","CHANGED_PHP_SYNTAX","CHANGED_JS_SYNTAX","CHEAP_UI_CONTRACTS","APPROVED_UI_CONTRACTS"]
     out=[]
     mapping=[("php","CHANGED_PHP_SYNTAX"),("js","CHANGED_JS_SYNTAX"),("python","CHANGED_PYTHON_SYNTAX"),("finance","FINANCE_REGRESSIONS"),("linear","LINEAR_REGRESSION"),("ui_lab","UI_LAB_CONTRACT"),("migrations","MIGRATION_INTEGRITY"),("migration_normalization","MIGRATION_NORMALIZATION"),("tenant_schema",TENANT)]
     for scope,check in mapping:
         if scopes[scope]: out.append(check)
+    if scopes["approved_ui"]: out.append("APPROVED_UI_CONTRACTS")
     out += ["DYNAMIC_IDENTIFIER_SAFETY","ARCHITECTURE_GUARD"]
     if scopes["tenant_schema"] or any(re.search(r"(?:/Feo(?:Transfer|Request|Location|LegacyImport|Import|Xlsx)|/YandexGeocoding|/feo_(?:transfers|legacy|import|xlsx)|/company_feo_(?:transfers|requests)|/feo-transfers|/MaxEventCatalog)", p) for p in paths):
         out.append("FEO_TRANSFER_REGRESSIONS")
@@ -222,8 +223,19 @@ def registry_checks(results):
     for p in ["docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json","tools/active_registry_coverage_check.py","tests/active_registry_coverage_checker_test.py"]: need(p)
     cmdcheck(results,"ACTIVE_REGISTRY_CONTRACTS",[PYTHON,"tests/active_registry_coverage_checker_test.py"])
     cmdcheck(results,"ACTIVE_REGISTRY_CONTRACTS",[PYTHON,"tools/active_registry_coverage_check.py","docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json"])
-def execute_local_required(cls,head,paths,scopes,rows,lines,required):
+def approved_ui_checks(base,head,results):
+    exe("node")
+    for test in ["tests/registry_component_contract_test.py", "tests/ui_standard_catalog_test.py", "tests/ui_style_guard_test.py"]:
+        need(test); cmdcheck(results,"APPROVED_UI_CONTRACTS",[PYTHON,test])
+    cmdcheck(results,"APPROVED_UI_CONTRACTS",[PYTHON,"tools/ui_standard.py","check"])
+    cmdcheck(results,"APPROVED_UI_CONTRACTS",[PYTHON,"tools/ui_style_guard.py","--base",base,"--head",head])
+    catalog=json.loads((ROOT/"docs/ui/approved-components.json").read_text(encoding="utf-8"))
+    for test in dict.fromkeys([p["browser_test"] for p in catalog["pages"]]+["tests/ui_standard_gallery_browser_test.mjs","tests/ui_standard_lab_browser_test.mjs"]):
+        need(test); cmdcheck(results,"APPROVED_UI_CONTRACTS",["node",test])
+
+def execute_local_required(cls,head,paths,scopes,rows,lines,required,base):
     results={}; want=set(required)
+    if "APPROVED_UI_CONTRACTS" in want: approved_ui_checks(base,head,results)
     if cls=="FAST":
         exe("php"); fast_policy(rows,lines,results)
         if "CHANGED_PHP_SYNTAX" in want: lint(paths,".php",lambda p:["php","-l",p],"CHANGED_PHP_SYNTAX",results)
@@ -276,7 +288,7 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required):
     if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",[PYTHON,"tools/dynamic_table_safety_audit.py"])
     if "ARCHITECTURE_GUARD" in want: need("tools/architecture_guard.php"); cmdcheck(results,"ARCHITECTURE_GUARD",["php","tools/architecture_guard.php"])
     if "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in want:
-        tests=["tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/design_lab_contract_test.py","tests/local_publish_test.py","tests/runner_helpers_contract_test.py"]
+        tests=["tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/agent_deploy_policy_contract_test.py","tests/design_lab_contract_test.py","tests/local_publish_test.py","tests/runner_helpers_contract_test.py"]
         if any(p.startswith("tools/sentinelx/") or p=="tests/sentinelx_hardening_test.py" for p in paths): tests.append("tests/sentinelx_hardening_test.py")
         for t in tests: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",[PYTHON,t])
         for t in ["tests/agent_deploy_request_contract_test.php","tests/agent_db_migration_request_contract_test.php"]: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",["php",t])
@@ -303,7 +315,7 @@ def main():
             print("CHECKS_EXECUTED=[]")
             print("LOCAL_PREFLIGHT_REMOTE_GATES_FORBIDDEN")
             return 2
-        results=execute_local_required(resolved,x.head,paths,scopes,rows,lines,local); ordered=[{"check":n,"result":results[n]} for n in local]; print("LOCAL_REQUIRED_RESULTS="+jsonish(ordered)); print("CHECKS_EXECUTED="+jsonish(local))
+        results=execute_local_required(resolved,x.head,paths,scopes,rows,lines,local,x.base); ordered=[{"check":n,"result":results[n]} for n in local]; print("LOCAL_REQUIRED_RESULTS="+jsonish(ordered)); print("CHECKS_EXECUTED="+jsonish(local))
         if any(value != "PASS" for value in results.values()): print("LOCAL_PREFLIGHT_FAIL"); return 1
         print("LOCAL_PREFLIGHT_PASS"); return 0
     except PreflightEnvironmentError as e: print(f"PREFLIGHT_ENV_REASON={e}\nLOCAL_PREFLIGHT_ENV_ERROR"); return 2
