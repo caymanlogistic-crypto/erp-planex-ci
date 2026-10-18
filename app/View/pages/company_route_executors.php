@@ -122,7 +122,7 @@ $routeListVehicles = static function (array $row): void {
     </div>
 </div>
 
-<div class="table-card table-card--standard route-executors-card registry-ui-card" data-erp-grid data-route-executors-grid>
+<div class="table-card table-card--standard route-executors-card registry-ui-card registry-ui-sticky-table" data-erp-grid data-route-executors-grid>
     <div class="table-toolbar registry-ui-toolbar">
         <div class="found-label">Найдено: <b><?= count($executors) + count($reviewCards) ?></b></div>
         <div class="toolbar-right">

@@ -58,20 +58,3 @@ input[name^="units["][name$="[model]"] {
 .content--wide-workspace:has(.route-executors-card) .workspace-shell-1690 {
   padding-bottom: 8px;
 }
-.route-executors-card.table-card--standard {
-  grid-template-rows: 36px auto;
-  overflow: visible;
-}
-.route-executors-card > .table-scroll {
-  overflow: visible;
-}
-.route-executors-card > .table-toolbar {
-  position: sticky;
-  top: -12px;
-  z-index: 20;
-}
-.route-executors-card .table thead th {
-  position: sticky;
-  top: 24px;
-  z-index: 19;
-}

@@ -23,6 +23,27 @@ try {
   for (const [width, height] of [[390, 844], [768, 850], [1024, 768], [1280, 900], [1440, 900], [1920, 1080], [3840, 2160]]) {
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 1 });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await page.addScriptTag({ path: path.join(root, 'public/assets/js/registry-components.js') });
+    const tableGeometry = await page.evaluate(() => {
+      const card = document.querySelector('.registry-ui-sticky-table');
+      const toolbar = card.querySelector('.registry-ui-toolbar');
+      const thead = card.querySelector('thead');
+      const body = card.querySelector('tbody');
+      const row = body.firstElementChild;
+      while (body.children.length < 30) body.append(row.cloneNode(true));
+      const scroller = document.querySelector('main.test-workspace');
+      scroller.style.height = '600px';
+      scroller.style.overflowY = 'auto';
+      const before = thead.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom;
+      scroller.scrollTop = 300;
+      const after = thead.getBoundingClientRect().top - toolbar.getBoundingClientRect().bottom;
+      return { before, after, scrollY: scroller.scrollTop, toolbarHeight: toolbar.getBoundingClientRect().height, measuredHeight: card.style.getPropertyValue('--registry-toolbar-height') };
+    });
+    assert.ok(tableGeometry.scrollY > 100, `${width}px fixture scrolls before sticky check`);
+    assert.ok(Math.abs(tableGeometry.before) < 1, `${width}px table header touches toolbar at top: ${JSON.stringify(tableGeometry)}`);
+    assert.ok(Math.abs(tableGeometry.after) < 1, `${width}px sticky table header touches toolbar: ${JSON.stringify(tableGeometry)}`);
+    assert.equal(tableGeometry.measuredHeight, `${tableGeometry.toolbarHeight}px`, `${width}px toolbar height is measured`);
+    await page.evaluate(() => { const scroller = document.querySelector('main.test-workspace'); scroller.scrollTop = 0; scroller.style.height = ''; scroller.style.overflowY = ''; });
     const header = page.locator('.route-executors-page-head');
     const icon = header.locator('svg.page-head-tabler-icon');
     const secondary = header.locator('.page-head-actions .btn-ghost');
