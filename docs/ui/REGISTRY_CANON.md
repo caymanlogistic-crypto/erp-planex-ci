@@ -10,6 +10,8 @@
 
 Четыре подключённых экрана: `/company/route-executors`, `/company/trips/departures`, `/company/finance/received-paid`, `/company/logistics/closing-documents`. Их модульные CSS не служат источником общих токенов. Legacy `.table`, `.page-head`, `.btn` и `:root` не менять ради отдельного реестра.
 
+Для реестра с закреплёнными панелью и заголовками колонок используется opt-in `registry-ui-sticky-table`: сетка и sticky-отступы определены в `registry-components.css`, фактическую высоту панели измеряет `registry-components.js`. Фиксированные значения высоты панели и `top` для заголовков в CSS отдельной страницы запрещены: на узком экране панель может переноситься на несколько строк.
+
 ## 2. Общая геометрия и Page Header
 
 | Параметр | Канон |
