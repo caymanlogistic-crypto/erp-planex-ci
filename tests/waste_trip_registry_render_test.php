@@ -39,7 +39,7 @@ $render=static function(bool $finance) use($legacy): string {
 };
 $html=$render(true);
 $dom=new DOMDocument();@$dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);$xp=new DOMXPath($dom);
-$assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th')->length===13,'Thirteen registry columns');
+$assert($xp->query('//table[contains(@class,"registry-ui-table--trips")]/thead/tr/th')->length===13,'Thirteen registry columns');
 $sort=$xp->query('//select[@name="sort"]')->item(0);
 $assert($sort!==null && $sort->getAttribute('aria-label')==='Сортировка рейсов','Registry sort control');
 $assert($xp->query('//span[contains(@class,"toolbar-sort-label")]')->length===0,'No visible sort caption in waste registry');
@@ -47,10 +47,10 @@ $assert($xp->query('//select[@name="manager"]/option')->length===3,'Manager filt
 $assert($xp->query('//select[@name="sort"]/option[@value="status" and @selected]')->length===1,'Status sort is selected by default');
 $assert($xp->query('//select[@name="sort"]/option[@value="status"]')->length===1 && $xp->query('//select[@name="sort"]/option[@value="manager"]')->length===1,'Status and manager sort choices');
 $assert($xp->query('//tr[@data-waste-view="1"]/td')->length===13,'Thirteen data columns');
-$assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th[3]')->item(0)->textContent==='СТАТУС','Status follows description');
-$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[4]')->item(0)->textContent)==='Выгрузка:Склад Север' && $xp->query('//tr[@data-waste-view="1"]/td[4]/br')->length===1,'Warehouse destination has short caption and name on separate lines');
-$assert(trim($xp->query('//tr[@data-waste-view="2"]/td[4]')->item(0)->textContent)==='Загрузка:Склад СеверВыгрузка:Склад Юг' && $xp->query('//tr[@data-waste-view="2"]/td[4]/br')->length===3,'Warehouse route shows both roles and names on separate lines');
-$assert($xp->query('//tr[@data-waste-view="2"]/td[2]/span[contains(@class,"is-mg-logistic")]')->length===1,'MG company is second line');
+$assert($xp->query('//table[contains(@class,"registry-ui-table--trips")]/thead/tr/th[3]')->item(0)->textContent==='СТАТУС','Status follows description');
+$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[4]')->item(0)->textContent)==='Выгрузка:Склад Север' && $xp->query('//tr[@data-waste-view="1"]/td[4]//br')->length===1,'Warehouse destination has short caption and name on separate lines');
+$assert(trim($xp->query('//tr[@data-waste-view="2"]/td[4]')->item(0)->textContent)==='Загрузка:Склад СеверВыгрузка:Склад Юг' && $xp->query('//tr[@data-waste-view="2"]/td[4]//br')->length===3,'Warehouse route shows both roles and names on separate lines');
+$assert($xp->query('//tr[@data-waste-view="2"]/td[2]//span[contains(@class,"is-mg-logistic")]')->length===1,'MG company is second line');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[10]')->item(0)->textContent,'При выгрузке не оплачивается')&&$xp->query('//tr[@data-waste-view="1"]/td[10][contains(@class,"waste-general-disabled")]')->length===1,'Warehouse general payment explanation');
 $assert(str_contains($xp->query('//tr[@data-waste-view="2"]/td[10]')->item(0)->textContent,'При выгрузке не оплачивается'),'Warehouse-to-warehouse general payment explanation');
 $assert(str_contains($xp->query('//tr[@data-waste-view="2"]/td[12]')->item(0)->textContent,'Для МГ Логистик не заполняется')&&$xp->query('//tr[@data-waste-view="2"]/td[12][contains(@class,"waste-cost-disabled")]')->length===1,'MG cost explanation');

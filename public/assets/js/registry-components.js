@@ -81,7 +81,11 @@
       if(tabs.length)(tabs.find(tab=>tab.dataset.registryTab===value.tab)||tabs.find(tab=>tab.dataset.registryTab===defaults.tab))?.click();
     };
     let saved=null;try{if(key)saved=JSON.parse(localStorage.getItem(key)||'null');}catch{/* Ignore malformed/unavailable storage. */}
-    apply(saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:defaults);
+    // Server-filtered registries may be opened with an explicit filtered URL.
+    // Keep that URL's rendered controls on the first visit; later visits restore
+    // the same account/role/company-scoped state as client-filtered registries.
+    const initial=root.hasAttribute('data-registry-server-filter')?read():defaults;
+    apply(saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:initial);
     fields.forEach(field=>['input','change'].forEach(type=>field.addEventListener(type,()=>queueMicrotask(sync))));
     tabs.forEach(tab=>tab.addEventListener('click',()=>queueMicrotask(sync)));
     reset.addEventListener('click',()=>{apply(defaults);sync();});

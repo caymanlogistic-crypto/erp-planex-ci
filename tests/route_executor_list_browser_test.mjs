@@ -46,11 +46,11 @@ try {
         reviewBackground: getComputedStyle(review).backgroundColor };
     });
     assert.equal(styles.overflow, false, `${width}px page overflow`);
-    assert.deepEqual([styles.brand, styles.plate, styles.metric], ['500', '600', '700']);
+    assert.deepEqual([styles.brand, styles.plate, styles.metric], ['500', '500', '500']);
     assert.equal(styles.metricColor, 'rgb(19, 18, 16)');
     assert.equal(styles.statusBackground, 'rgba(0, 0, 0, 0)');
     assert.equal(styles.statusBorder, '0px');
-    assert.equal(styles.reviewBackground, 'rgb(255, 241, 189)');
+    assert.equal(styles.reviewBackground, 'rgb(253, 240, 213)');
     if (process.env.PLANEX_VISUAL_EVIDENCE_DIR) {
       fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR, `route-executors-${width}.png`), fullPage: true });

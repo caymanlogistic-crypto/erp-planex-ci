@@ -80,9 +80,6 @@
 #waste-trip-view-modal select[name="status"][data-waste-status="completed"] { color:#6c757d; }
 .waste-registry .waste-legal-entity.is-mg-logistic,
 .waste-registry .waste-legal-entity.is-planex {
-  color:#817d75;
-  font-size:11px;
-  font-weight:400;
   margin-top:2px;
 }
 .waste-registry .registry-id { font-weight:700; }

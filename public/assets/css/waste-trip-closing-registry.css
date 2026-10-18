@@ -98,20 +98,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16.8px;
-}
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] .registry-executor-line {
-  font-weight: 500;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .waste-legal-entity,
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .registry-executor-secondary {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 15.4px;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] :is(th, td):nth-child(11) {
   text-align: left;
@@ -135,14 +126,9 @@
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .lab-section-paid {
   display: block;
-  color: #17603a;
-  font-weight: 700;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .lab-section-detail {
   display: block;
-  color: #817d75;
-  font-size: 11px;
-  line-height: 15.4px;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(n+5):nth-child(-n+9).is-missing {
   font-size: 12px;

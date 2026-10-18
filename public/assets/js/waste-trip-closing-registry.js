@@ -18,17 +18,11 @@
   let savedState=null;
   try { if(stateKey) savedState=JSON.parse(localStorage.getItem(stateKey)||'null'); } catch (_) {}
   let filter='all';
-  let firstRender=true;
-  if(savedState && typeof savedState==='object') {
-    if(typeof savedState.search==='string') search.value=savedState.search.slice(0,1000);
-    if(['all','incomplete','ready','paid_incomplete','paid_complete'].includes(savedState.filter)) filter=savedState.filter;
-    if(savedState.filter==='open') filter='incomplete';
-    if(entity && [...entity.options].some(option=>option.value===savedState.entity)) entity.value=savedState.entity;
-    if(sort && ['id','unloading'].includes(savedState.sort)) sort.value=savedState.sort;
-    if(manager && [...manager.options].some(option=>option.value===savedState.manager)) manager.value=savedState.manager;
-  }
   const stage=new URLSearchParams(location.search).get('stage');
   if(['all','incomplete','ready','paid_incomplete','paid_complete'].includes(stage)) filter=stage;
+  if(stage && filters.some(button=>button.dataset.closingFilter===stage)) {
+    page.addEventListener('registry:state',()=>filters.find(button=>button.dataset.closingFilter===stage)?.click(),{once:true});
+  }
   if(!filters.some(button=>button.dataset.closingFilter===filter)) filter='all';
   filters.forEach(button=>{const active=button.dataset.closingFilter===filter;button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));});
   const tabs=page.querySelector('.closing-registry-tabs');
@@ -41,7 +35,7 @@
   }
   function saveState() {
     if(!stateKey) return;
-    try { localStorage.setItem(stateKey,JSON.stringify({search:search.value,filter,entity:entity?.value||'all',sort:sort?.value||'unloading',manager:manager?.value||'',openTripId:trips.find(trip=>trip.open)?.dataset.tripId||null})); } catch (_) {}
+    try { localStorage.setItem(stateKey,JSON.stringify({openTripId:trips.find(trip=>trip.open)?.dataset.tripId||null})); } catch (_) {}
   }
   function sortReportRows(){
     const body=reportGrid?.querySelector('tbody');
@@ -75,13 +69,6 @@
       trip.hidden=!(matchesSearch&&matches&&matchesEntity&&matchesManager);
       if (!trip.hidden) visible++;
     }
-    if(firstRender&&filter!=='all'&&tabCounts.all>0&&tabCounts[filter]===0&&!query){
-      filter='all';
-      filters.forEach(button=>{const active=button.dataset.closingFilter==='all';button.classList.toggle('is-active',active);button.setAttribute('aria-pressed',String(active));});
-      for(const trip of trips)trip.hidden=!(trip.dataset.search.includes(query)&&(!entity||entity.value==='all'||trip.dataset.entity===entity.value)&&(!manager||!manager.value||trip.dataset.managerId===manager.value));
-      visible=tabCounts.all;
-    }
-    firstRender=false;
     filters.forEach(button=>{const badge=button.querySelector('[data-closing-filter-count]');if(badge)badge.textContent=String(tabCounts[button.dataset.closingFilter]??0);});
     count.textContent=String(visible);
     if(listLabel) listLabel.textContent=filter==='all'?'РЕЙСЫ В РАБОТЕ И ЗАВЕРШЁННЫЕ':filters.find(button=>button.dataset.closingFilter===filter)?.textContent.trim().toLocaleUpperCase('ru');
