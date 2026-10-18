@@ -47,13 +47,13 @@ without_specimen["components"][0].pop("specimen")
 assert any("specimen" in error for error in ui_standard.validate(without_specimen))
 
 new_legacy = copy.deepcopy(catalog)
-new_legacy['pages'].append({**new_legacy['pages'][0], 'id':'new-table'})
+new_legacy['pages'].append({**new_legacy['pages'][0], 'id':'new-table', 'adaptation_status':'legacy_shared_shell_pending_20261018'})
 assert any('legacy exception is closed' in error for error in ui_standard.validate(new_legacy))
 
 false_current = copy.deepcopy(catalog)
 false_current['pages'][0]['adaptation_status']='current_20261018'
+false_current['pages'][0]['view']='app/View/partials/registry_ui_head.php'
 assert any('current canon requires registry-ui-data' in error for error in ui_standard.validate(false_current))
-assert any('data_roles must cover' in error for error in ui_standard.validate(false_current))
 false_current['pages'][0]['data_roles']=[]
 assert any('data_roles must cover' in error for error in ui_standard.validate(false_current))
 false_current['pages'][0]['data_roles']=['primary']

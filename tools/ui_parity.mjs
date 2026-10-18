@@ -14,6 +14,9 @@ for (const name of ['--reference-url','--candidate-url']) {
   if (url.protocol !== 'http:' || !['127.0.0.1','localhost','[::1]'].includes(url.hostname)) throw new Error('UI parity accepts localhost HTTP URLs only');
 }
 const output = path.resolve(args['--output']);
+const financeSearchNormalization=args['--reference-normalization']==='legacy-finance-search-500';
+if(args['--reference-normalization']&&!financeSearchNormalization)throw new Error('Unknown reference normalization');
+if(financeSearchNormalization&&!new URL(args['--reference-url']).pathname.endsWith('/company/finance/received-paid'))throw new Error('Finance search normalization is restricted to the finance registry');
 mkdirSync(output,{recursive:true});
 const resultFile=path.join(output,'result.json');
 writeFileSync(resultFile,JSON.stringify({result:'RUNNING'}));
@@ -35,9 +38,15 @@ try {
     const referenceResponse = await reference.goto(args['--reference-url']);
     const candidateResponse = await candidate.goto(args['--candidate-url']);
     if(!referenceResponse?.ok()||!candidateResponse?.ok())throw new Error('Accepted sandbox and implementation must both return HTTP success');
+    // This changes only the in-memory comparison copy. The frozen checkpoint
+    // remains untouched; raw parity still reports the historical 400/500 delta.
+    if(financeSearchNormalization)await reference.addStyleTag({content:'.rp-ledger-v015 .registry-ui-toolbar input.registry-ui-search,.rp-ledger-v015 .registry-ui-toolbar input.registry-ui-search::placeholder{font-weight:500!important}'});
     await assertAppearanceParity(reference,candidate,`${width}px normal`);
     for (const selector of ['.registry-ui-search','.registry-ui-head .btn-primary','.registry-ui-head .btn-secondary,.registry-ui-head .btn-ghost','.registry-ui-toolbar .lab-reference-trigger','.registry-ui-checkbox input']) {
       if (await reference.locator(selector).count() && await reference.locator(selector).first().isVisible()) {
+        if (!await candidate.locator(selector).count()) throw new Error(`${width}px ${selector}: candidate control missing`);
+        if (await reference.locator(selector).first().isEnabled() !== await candidate.locator(selector).first().isEnabled()) throw new Error(`${width}px ${selector}: enabled state differs`);
+        if (!await reference.locator(selector).first().isEnabled()) continue;
         for (const state of ['hover','focus']) {
           await reference.locator(selector).first()[state]();
           await candidate.locator(selector).first()[state]();
@@ -49,8 +58,8 @@ try {
     await candidate.screenshot({path:path.join(output,`candidate-${width}.png`),fullPage:true});
     await context.close();
   }
-  writeFileSync(resultFile,JSON.stringify({result:'PASS',reference:args['--reference-url'],candidate:args['--candidate-url'],widths:[390,1280,1920,3840]},null,2));
-  console.log('UI_PARITY=PASS');
+  writeFileSync(resultFile,JSON.stringify({result:financeSearchNormalization?'PASS_WITH_KNOWN_LEGACY_DELTA':'PASS',knownLegacyDelta:financeSearchNormalization?'finance search font weight 400 in frozen reference versus approved shared 500':undefined,reference:args['--reference-url'],candidate:args['--candidate-url'],widths:[390,1280,1920,3840]},null,2));
+  console.log(financeSearchNormalization?'UI_PARITY=PASS_WITH_KNOWN_LEGACY_DELTA':'UI_PARITY=PASS');
 } catch(error){
   writeFileSync(resultFile,JSON.stringify({result:'FAIL',error:error.message,reference:args['--reference-url'],candidate:args['--candidate-url']},null,2));
   throw error;

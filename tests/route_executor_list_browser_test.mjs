@@ -5,12 +5,16 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { assertRegistryVisualContract } from './helpers/registry_visual_contract.mjs';
+import { assertRegistryVisualContract, assertRegistryDataContract } from './helpers/registry_visual_contract.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const html = execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/fixtures/route_executor_list_render.php')], { encoding: 'utf8' });
+const finalEditHtml = execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/fixtures/route_executor_list_render.php'),'final-edit'], { encoding: 'utf8' });
+for (const rendered of [html,finalEditHtml]) {
+  assert.doesNotMatch(rendered,/Менеджер сохранил|Исправление после отправки/,'removed stage wording must not leak into text, title, or aria-label');
+}
 const server = http.createServer((request, response) => {
   if (request.url === '/') { response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html); return; }
   const file = path.resolve(root, 'public', '.' + request.url.split('?')[0]);
@@ -20,10 +24,15 @@ const server = http.createServer((request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const width of [1440, 1920]) {
+  for (const width of [390, 1440, 1920]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await assertRegistryVisualContract(page, `route-executors ${width}px`);
+    await assertRegistryDataContract(page, 'route-executors');
+    if (width === 390) {
+      assert.equal(await page.locator('[data-route-executors-grid] table').evaluate(table => getComputedStyle(table).display), 'table', 'approved mobile mode stays a wide table');
+      assert.ok(await page.locator('[data-route-executors-grid] .table-scroll').evaluate(scroll => scroll.scrollWidth > scroll.clientWidth), 'mobile table has internal X scroll');
+    }
     assert.deepEqual(await page.locator('[data-route-executors-grid] thead th').allTextContents(), ['Подрядчик', 'Водитель', 'Комплект ТС', 'Логист', 'Статус']);
     assert.equal(await page.locator('[data-route-executors-grid] tbody tr').count(), 3);
     assert.equal(await page.locator('[data-route-executors-grid] .route-review-row').count(), 2);
@@ -46,11 +55,11 @@ try {
         reviewBackground: getComputedStyle(review).backgroundColor };
     });
     assert.equal(styles.overflow, false, `${width}px page overflow`);
-    assert.deepEqual([styles.brand, styles.plate, styles.metric], ['500', '600', '700']);
+    assert.deepEqual([styles.brand, styles.plate, styles.metric], ['500', '500', '500']);
     assert.equal(styles.metricColor, 'rgb(19, 18, 16)');
     assert.equal(styles.statusBackground, 'rgba(0, 0, 0, 0)');
     assert.equal(styles.statusBorder, '0px');
-    assert.equal(styles.reviewBackground, 'rgb(255, 241, 189)');
+    assert.equal(styles.reviewBackground, 'rgb(253, 240, 213)');
     if (process.env.PLANEX_VISUAL_EVIDENCE_DIR) {
       fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR, `route-executors-${width}.png`), fullPage: true });

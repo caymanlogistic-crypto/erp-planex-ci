@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 $root=dirname(__DIR__);
+spl_autoload_register(static function(string $class) use($root): void { if(str_starts_with($class,'App\\')){ $file=$root.'/app/'.str_replace('\\','/',substr($class,4)).'.php'; if(is_file($file))require_once $file; } });
 require_once $root.'/app/Service/WasteTripService.php';
 require_once $root.'/app/Service/LinearRouteService.php';
 require_once $root.'/app/Service/DateCalculationService.php';
@@ -39,7 +40,7 @@ $render=static function(bool $finance) use($legacy): string {
 };
 $html=$render(true);
 $dom=new DOMDocument();@$dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);$xp=new DOMXPath($dom);
-$assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th')->length===13,'Thirteen registry columns');
+$assert($xp->query('//table[contains(@class,"registry-ui-table--trips")]/thead/tr/th')->length===13,'Thirteen registry columns');
 $sort=$xp->query('//select[@name="sort"]')->item(0);
 $assert($sort!==null && $sort->getAttribute('aria-label')==='Сортировка рейсов','Registry sort control');
 $assert($xp->query('//span[contains(@class,"toolbar-sort-label")]')->length===0,'No visible sort caption in waste registry');
@@ -47,10 +48,10 @@ $assert($xp->query('//select[@name="manager"]/option')->length===3,'Manager filt
 $assert($xp->query('//select[@name="sort"]/option[@value="status" and @selected]')->length===1,'Status sort is selected by default');
 $assert($xp->query('//select[@name="sort"]/option[@value="status"]')->length===1 && $xp->query('//select[@name="sort"]/option[@value="manager"]')->length===1,'Status and manager sort choices');
 $assert($xp->query('//tr[@data-waste-view="1"]/td')->length===13,'Thirteen data columns');
-$assert($xp->query('//table[contains(@class,"waste-registry")]/thead/tr/th[3]')->item(0)->textContent==='СТАТУС','Status follows description');
-$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[4]')->item(0)->textContent)==='Выгрузка:Склад Север' && $xp->query('//tr[@data-waste-view="1"]/td[4]/br')->length===1,'Warehouse destination has short caption and name on separate lines');
-$assert(trim($xp->query('//tr[@data-waste-view="2"]/td[4]')->item(0)->textContent)==='Загрузка:Склад СеверВыгрузка:Склад Юг' && $xp->query('//tr[@data-waste-view="2"]/td[4]/br')->length===3,'Warehouse route shows both roles and names on separate lines');
-$assert($xp->query('//tr[@data-waste-view="2"]/td[2]/span[contains(@class,"is-mg-logistic")]')->length===1,'MG company is second line');
+$assert($xp->query('//table[contains(@class,"registry-ui-table--trips")]/thead/tr/th[3]')->item(0)->textContent==='СТАТУС','Status follows description');
+$assert(trim($xp->query('//tr[@data-waste-view="1"]/td[4]')->item(0)->textContent)==='Выгрузка:Склад Север' && $xp->query('//tr[@data-waste-view="1"]/td[4]//br')->length===1,'Warehouse destination has short caption and name on separate lines');
+$assert(trim($xp->query('//tr[@data-waste-view="2"]/td[4]')->item(0)->textContent)==='Загрузка:Склад СеверВыгрузка:Склад Юг' && $xp->query('//tr[@data-waste-view="2"]/td[4]//br')->length===3,'Warehouse route shows both roles and names on separate lines');
+$assert($xp->query('//tr[@data-waste-view="2"]/td[2]//span[contains(@class,"is-mg-logistic")]')->length===1,'MG company is second line');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[10]')->item(0)->textContent,'При выгрузке не оплачивается')&&$xp->query('//tr[@data-waste-view="1"]/td[10][contains(@class,"waste-general-disabled")]')->length===1,'Warehouse general payment explanation');
 $assert(str_contains($xp->query('//tr[@data-waste-view="2"]/td[10]')->item(0)->textContent,'При выгрузке не оплачивается'),'Warehouse-to-warehouse general payment explanation');
 $assert(str_contains($xp->query('//tr[@data-waste-view="2"]/td[12]')->item(0)->textContent,'Для МГ Логистик не заполняется')&&$xp->query('//tr[@data-waste-view="2"]/td[12][contains(@class,"waste-cost-disabled")]')->length===1,'MG cost explanation');
@@ -62,6 +63,8 @@ $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[11]')->item(0)->t
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[12]')->item(0)->textContent,'120 ₽'),'Manual cost column');
 $assert($xp->query('//td[contains(@class,"waste-executor-unmatched")]')->length===0,'Missing executor has no warning highlight');
 $assert(trim($xp->query('//tr[@data-waste-view="2"]/td[7]')->item(0)->textContent)==='—','Missing executor is shown as a dash');
+$driverNode=$xp->query('//tr[@data-waste-view="3"]/td[7]//span[contains(@class,"registry-executor-secondary")]')->item(0);
+$assert($driverNode!==null && $driverNode->textContent==='Иванов Иван Петрович' && $driverNode->getAttribute('title')==='Иванов Иван Петрович','Approved registry shows and exposes the full driver name');
 $assert($xp->query('//select[@name="company"]/option')->length===3,'Company filter offers all, MG and Planex');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[8]')->item(0)->textContent,'22'),'Request count');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[9]')->item(0)->textContent,'1 500'),'Total mass rounded to kilograms');

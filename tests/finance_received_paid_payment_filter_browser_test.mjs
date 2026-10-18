@@ -4,7 +4,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {assertRegistryVisualContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -16,6 +16,7 @@ const appCss=fs.readFileSync(path.join(root,'public/assets/css/app.css'),'utf8')
 const erpCss=fs.readFileSync(path.join(root,'public/assets/css/erp-ui.css'),'utf8');
 const fontCss=[[400,'Regular'],[500,'Medium'],[600,'SemiBold'],[700,'Bold']].map(([weight,name])=>`@font-face{font-family:"IBM Plex Sans";src:url(data:font/woff2;base64,${fs.readFileSync(path.join(root,`public/assets/fonts/IBMPlexSans-${name}.woff2`)).toString('base64')}) format("woff2");font-weight:${weight}}`).join('\n');
 const js=fs.readFileSync(path.join(root,'public/assets/js/finance-received-paid.js'),'utf8');
+const registryJs=fs.readFileSync(path.join(root,'public/assets/js/registry-components.js'),'utf8');
 const referenceSelectJs=fs.readFileSync(path.join(root,'public/assets/js/table-reference-select.js'),'utf8');
 const browser=await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_EXECUTABLE?{executablePath:process.env.PLANEX_BROWSER_EXECUTABLE}:{})});
 try{
@@ -26,7 +27,10 @@ try{
  await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
  await page.addScriptTag({content:js});
  await page.addScriptTag({content:referenceSelectJs});
+ await page.addScriptTag({content:registryJs});
+ await page.locator('[data-registry-id="finance-received-paid"][data-registry-ready="true"]').waitFor();
  await assertRegistryVisualContract(page, 'finance-received-paid 1280px');
+ await assertRegistryDataContract(page, 'finance-received-paid');
  const sharedStyles=await page.evaluate(()=>{
    const search=document.querySelector('#rp-search');
    const heading=document.querySelector('#rp-ledger-table thead th');
@@ -86,14 +90,18 @@ try{
    if(width===390) assert.equal(await page.locator('.rp-v015-toolbar .lab-reference-trigger').evaluate(control=>control.getBoundingClientRect().right<=control.closest('.rp-v015-toolbar').getBoundingClientRect().right-8),true,'mobile sort control stays inside the toolbar');
    assert.deepEqual(await page.locator('.rp-standard-box .lab-reference-trigger, .rp-standard-box #rp-search').evaluateAll(items=>items.map(el=>getComputedStyle(el).borderRadius)),['2px','2px'],`accepted control radius at ${width}`);
    assert.equal(await page.locator('.rp-v010-table-wrap').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,`ledger wrapper has no horizontal scroll at ${width}`);
+   if(width>=1920){
+     const fixedColumns=await page.locator('#rp-ledger-table tbody tr:visible').first().evaluate(row=>[row.cells[0].getBoundingClientRect().width,row.cells[1].getBoundingClientRect().width]);
+     assert.ok(Math.abs(fixedColumns[0]-64)<=1&&Math.abs(fixedColumns[1]-240)<=1,`${width}: canonical 64px ID and 240px trip widths, got ${fixedColumns}`);
+   }
    if(width===390){
-     const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[4,5,6,7,10,11,12,13].map(index=>Math.round(row.cells[index-1].querySelector('span')?.getBoundingClientRect().left||0)));
+     const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[4,5,6,7,10,11,12,13].map(index=>Math.round(row.cells[index-1].querySelector('.registry-ui-value')?.getBoundingClientRect().left||0)));
      assert.equal(new Set(columns).size,1,'mobile values share one aligned column');
    }
    if(width===1280){
      const geometry=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>({rowBottom:row.getBoundingClientRect().bottom,docsBottom:row.querySelector('.rp-v010-doc-list').getBoundingClientRect().bottom}));
      assert.equal(geometry.docsBottom<=geometry.rowBottom+1,true,'two invoices stay inside the compact trip row');
-     assert.equal(await page.locator('#rp-ledger-table tfoot tr').evaluate(row=>Math.round(row.getBoundingClientRect().height))<=34,true,'compact totals stay one line');
+     assert.equal(await page.locator('#rp-ledger-table tfoot tr').evaluate(row=>{const height=Math.round(row.getBoundingClientRect().height);return height>=40&&height<=90;}),true,'compact totals keep label above amount');
    }
    if(width===1920){
      const frame=await page.locator('.rp-standard-box.rp-ledger-v015').evaluate(card=>{
@@ -112,7 +120,7 @@ try{
      });
      assert.equal(canonicalTripType.id.family.includes('IBM Plex Sans'),true,'trip ID uses the locally loaded canonical font');
      assert.deepEqual({...canonicalTripType.id,family:'IBM Plex Sans'},{family:'IBM Plex Sans',size:'12px',weight:'700',line:'16.8px',color:'rgb(19, 18, 16)'},'trip ID is canonical black');
-     assert.deepEqual(canonicalTripType.description,{size:'12px',weight:'400',line:'16.8px'},'trip description matches departures');
+     assert.deepEqual(canonicalTripType.description,{size:'12px',weight:'500',line:'16.8px'},'trip description matches departures');
      assert.deepEqual(canonicalTripType.header,{size:'10px',weight:'700',line:'14px'},'table header matches departures');
      const tabFont=await tabs.first().evaluate(button=>({size:getComputedStyle(button).fontSize,line:getComputedStyle(button).lineHeight,countSize:getComputedStyle(button.querySelector('b')).fontSize}));
      assert.deepEqual(tabFont,{size:'12px',line:'16px',countSize:'12px'},'finance tabs use the approved status-tab typography');

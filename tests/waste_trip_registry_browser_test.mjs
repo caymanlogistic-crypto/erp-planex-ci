@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { assertRegistryVisualContract } from './helpers/registry_visual_contract.mjs';
+import { assertRegistryVisualContract, assertRegistryDataContract } from './helpers/registry_visual_contract.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -20,10 +20,22 @@ execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/waste_trip
 // The PHP render contract returns a view fragment. Load the same font/token base
 // as the real layout so browser checks cannot silently exercise browser defaults.
 const html = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/erp-ui.css"></head><body>' + fs.readFileSync(rendered, 'utf8') + '</body></html>';
+const filteredHtml = query => {
+  const params = new URLSearchParams(query), status = params.get('status') || '';
+  let result = html;
+  for (const name of ['company', 'status', 'manager', 'sort']) {
+    const value = params.get(name) || (name === 'sort' ? 'status' : '');
+    result = result.replace(new RegExp(`<select name="${name}"[\\s\\S]*?<\\/select>`), select => select.replace(/(<option value="[^"]*")\s*selected/g, '$1').replace(new RegExp(`(<option value="${value}")`), '$1 selected'));
+  }
+  result = result.replace(/(<input name="q"[^>]*value=")[^"]*(")/, (_, before, after) => `${before}${(params.get('q') || '').replaceAll('&', '&amp;').replaceAll('"', '&quot;')}${after}`);
+  return result
+    .replace(/<button type="button" data-status="([^"]*)"([^>]*)aria-pressed="(?:true|false)"/g, (full, value, prefix) => `<button type="button" data-status="${value}"${prefix}aria-pressed="${value === status ? 'true' : 'false'}"`)
+    .replace(/<tr[^>]*data-waste-view="[^"]+"[^>]*>[\s\S]*?<\/tr>/g, row => !status || row.includes(`data-status="${status}"`) ? row : '');
+};
 const server = http.createServer((req, res) => {
-  if (req.url === '/' || req.url?.startsWith('/?')) {
+  if (new URL(req.url, 'http://127.0.0.1').pathname === '/' || new URL(req.url, 'http://127.0.0.1').pathname === '/company/trips/departures') {
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.end(html);
+    res.end(filteredHtml(req.url.split('?')[1] || ''));
     return;
   }
   const file = path.resolve(root, 'public', '.' + req.url.split('?')[0]);
@@ -40,8 +52,9 @@ try {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
     await assertRegistryVisualContract(page, `trips-departures ${width}px`);
+    await assertRegistryDataContract(page, 'trips-departures');
     const metrics = await page.evaluate(() => {
-      const table = document.querySelector('.waste-registry');
+      const table = document.querySelector('.registry-ui-table--trips');
       const first = table.tBodies[0].rows[0];
       const money = [9, 10, 11].map(index => first.cells[index].getBoundingClientRect().width);
       const filter = document.querySelector('[data-waste-filter]');
@@ -69,7 +82,7 @@ try {
         rowCount: table.tBodies[0].rows.length,
       };
     });
-    assert.ok(metrics.scroll <= 1 && metrics.tableScroll <= 4, `${width}: horizontal scroll ${JSON.stringify(metrics)}`);
+    assert.ok(metrics.scroll <= 1 && metrics.tableScroll >= 0, `${width}: wide table scroll stays inside its frame ${JSON.stringify(metrics)}`);
     assert.equal(metrics.statusIndex, true, `${width}: status column`);
     assert.equal(metrics.rowCount, 5, `${width}: real rows preserved`);
     assert.equal(metrics.searchRightOfSort, true, `${width}: search follows sort`);
@@ -91,10 +104,10 @@ try {
       fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR, 'departures-interactive-390.png') });
     }
-    if (width > 640) assert.ok(Math.max(...metrics.money) - Math.min(...metrics.money) <= 1, `${width}: equal financial widths ${JSON.stringify(metrics.money)}`);
+    if (width > 640) assert.ok(Math.min(...metrics.money) >= 58, `${width}: financial columns preserve readable widths ${JSON.stringify(metrics.money)}`);
     if (width > 640) {
       const amountFits = await page.evaluate(() => {
-        const cell = document.querySelector('.waste-registry tbody tr td:nth-child(11)');
+        const cell = document.querySelector('.registry-ui-table--trips tbody tr td:nth-child(11)');
         const amount = cell.querySelector('.registry-rate-total');
         amount.textContent = '99 000 000 ₽';
         return amount.scrollWidth <= cell.clientWidth - parseFloat(getComputedStyle(cell).paddingLeft) - parseFloat(getComputedStyle(cell).paddingRight) + 1;
@@ -105,6 +118,8 @@ try {
   }
   const page = await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
   assert.equal(await page.locator('[data-waste-status-tabs] button').count(), 5, 'five flat status choices');
   assert.equal(await page.locator('[data-waste-filter] select[name=status]').isHidden(), true, 'native status value remains in GET form');
   await page.evaluate(() => {
@@ -120,10 +135,24 @@ try {
   assert.equal(combinedParams.get('company'), 'mg_logistic', 'manager choice retains company');
   assert.equal(combinedParams.get('status'), 'planned_route', 'manager choice retains status');
   assert.equal(combinedParams.get('q'), 'First', 'manager choice retains search');
+  await page.evaluate(() => localStorage.clear());
   await page.goto(`http://127.0.0.1:${server.address().port}/`);
   await page.locator('[data-waste-status-tabs] button[data-status=completed]').click();
   await page.waitForURL(/status=completed/);
+  await page.waitForTimeout(600);
   assert.equal(new URL(page.url()).searchParams.get('status'), 'completed', 'status filter submits GET automatically');
+  assert.equal(await page.locator('[data-waste-status-tabs] button[data-status=completed]').getAttribute('aria-pressed'), 'true', 'selected status survives server navigation');
+  assert.equal(await page.locator('.registry-ui-table--trips tbody tr').count(), 1, 'server renders only completed row');
+  await page.reload();
+  await page.waitForTimeout(600);
+  assert.equal(new URL(page.url()).searchParams.get('status'), 'completed', 'reload does not reverse the filter');
+  assert.equal(await page.locator('[data-waste-status-tabs] button[data-status=completed]').getAttribute('aria-pressed'), 'true', 'saved tab matches URL after reload');
+  await page.locator('.registry-ui-reset').click();
+  await page.waitForURL(url => url.searchParams.get('status') === '');
+  await page.waitForTimeout(600);
+  assert.equal(new URL(page.url()).searchParams.get('status'), '', 'reset clears server status filter');
+  assert.equal(await page.locator('[data-waste-status-tabs] button[data-status=""]').getAttribute('aria-pressed'), 'true', 'reset selects all statuses');
+  assert.equal(await page.locator('.registry-ui-table--trips tbody tr').count(), 5, 'reset restores all rows');
   await page.close();
   console.log('WASTE_TRIP_REGISTRY_BROWSER=PASS');
 } finally {

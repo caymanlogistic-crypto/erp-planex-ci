@@ -5,7 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {assertRegistryVisualContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
 
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.PLANEX_PLAYWRIGHT_MODULE || 'playwright');
@@ -28,6 +28,11 @@ try {
     const page = await browser.newPage({viewport:{width,height:900}});
     await page.goto(`http://127.0.0.1:${server.address().port}/company/logistics/closing-documents`);
     await assertRegistryVisualContract(page, `logistics-closing-documents ${width}px`);
+    await assertRegistryDataContract(page, 'logistics-closing-documents');
+    const cardStates = await page.locator('.registry-ui-table--documents tbody tr').evaluateAll(rows => [1,2,3,4].map(id => [...rows.find(row => row.dataset.reportTripId===String(id)).cells[9].querySelectorAll('.registry-ui-status')].map(item => { const style=getComputedStyle(item); return {text:item.textContent.trim(),type:item.classList.contains('registry-ui-error')?'error':'success',font:[style.fontSize,style.fontWeight,style.lineHeight,style.color]}; })));
+    assert.deepEqual(cardStates.map(items => items.map(item => item.type)), [['error'],['success'],['success','error'],['success','success']], `${width}: single and multi diagnostic states use raw semantics`);
+    for (const items of cardStates) for (const item of items) assert.deepEqual(item.font, ['12px','500','16.8px',item.type==='error'?'rgb(135, 40, 34)':'rgb(31, 107, 67)'], `${width}: diagnostic typography and semantic color`);
+    assert.equal(cardStates[0][0].text, 'НЕТ', `${width}: missing single diagnostic card stays red`);
     const metrics = await page.evaluate(() => {
       const q = selector => document.querySelector(selector);
       const box = element => element.getBoundingClientRect();

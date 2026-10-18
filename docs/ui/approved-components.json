@@ -207,7 +207,8 @@
       "browser_test": "tests/route_executor_list_browser_test.mjs",
       "sticky": true,
       "reference_select": true,
-      "adaptation_status": "legacy_shared_shell_pending_20261018"
+      "data_roles": ["primary", "name", "secondary", "status"],
+      "adaptation_status": "current_20261018"
     },
     {
       "id": "trips-departures",
@@ -217,7 +218,8 @@
       "browser_test": "tests/waste_trip_registry_browser_test.mjs",
       "sticky": true,
       "reference_select": true,
-      "adaptation_status": "legacy_shared_shell_pending_20261018"
+      "data_roles": ["primary", "name", "secondary", "money", "id", "trip", "missing", "status"],
+      "adaptation_status": "current_20261018"
     },
     {
       "id": "finance-received-paid",
@@ -228,7 +230,8 @@
       "browser_test": "tests/finance_received_paid_payment_filter_browser_test.mjs",
       "sticky": true,
       "reference_select": true,
-      "adaptation_status": "legacy_shared_shell_pending_20261018"
+      "data_roles": ["primary", "name", "secondary", "money", "id", "trip", "missing", "due", "total"],
+      "adaptation_status": "current_20261018"
     },
     {
       "id": "logistics-closing-documents",
@@ -238,7 +241,8 @@
       "browser_test": "tests/registry_closing_responsive_browser_test.mjs",
       "sticky": true,
       "reference_select": true,
-      "adaptation_status": "legacy_shared_shell_pending_20261018"
+      "data_roles": ["primary", "name", "secondary", "id", "trip", "missing", "status"],
+      "adaptation_status": "current_20261018"
     }
   ],
   "decisions": "docs/ui/decisions-20261018.json"

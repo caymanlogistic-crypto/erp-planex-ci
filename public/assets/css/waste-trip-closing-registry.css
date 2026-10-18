@@ -10,10 +10,7 @@
 .lab-grid .lab-table tbody tr:focus-visible{outline:2px solid #9a5a22;outline-offset:-2px}
 .lab-grid .lab-table td:first-child{font-weight:700;font-variant-numeric:tabular-nums}
 .lab-grid .lab-table th:nth-child(12),.lab-grid .lab-table td:nth-child(12){text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
-.lab-grid .lab-table td.closing-report-status.is-present,.lab-grid .lab-table .closing-report-unit.is-present{color:#17643b;font-weight:600}
-.lab-grid .lab-table td.closing-report-status.is-missing,.lab-grid .lab-table .closing-report-unit.is-missing{color:#a0322d;font-weight:600}
-.lab-grid .lab-table td.closing-report-status.is-partial{color:#835a08;font-weight:600}
-.lab-grid .lab-table .closing-report-unit{display:block;line-height:1.3;white-space:normal;overflow-wrap:anywhere}
+.lab-grid .lab-table .closing-report-unit{display:block;white-space:normal;overflow-wrap:anywhere}
 .lab-grid .lab-table :is(th,td):nth-child(1){width:3%}
 .lab-grid .lab-table :is(th,td):nth-child(2){width:10%}
 .lab-grid .lab-table :is(th,td):nth-child(3){width:8%}
@@ -98,20 +95,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 16.8px;
-}
-.closing-page .lab-grid .lab-table[data-reference-columns="departures"] .registry-executor-line {
-  font-weight: 500;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .waste-legal-entity,
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .registry-executor-secondary {
   display: block;
   margin-top: 2px;
-  font-size: 11px;
-  font-weight: 400;
-  line-height: 15.4px;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] :is(th, td):nth-child(11) {
   text-align: left;
@@ -135,14 +123,9 @@
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .lab-section-paid {
   display: block;
-  color: #17603a;
-  font-weight: 700;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .lab-section-detail {
   display: block;
-  color: #817d75;
-  font-size: 11px;
-  line-height: 15.4px;
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(n+5):nth-child(-n+9).is-missing {
   font-size: 12px;
@@ -157,11 +140,6 @@
 }
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(10).closing-report-status.is-missing {
   font-weight: 700;
-}
-@media (min-width: 641px) and (max-width: 1400px) {
-  .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .registry-executor-secondary {
-    display: none;
-  }
 }
 @media (max-width: 700px) {
   .closing-page .closing-registry-card .closing-extra-filters .closing-filter-field:last-child {

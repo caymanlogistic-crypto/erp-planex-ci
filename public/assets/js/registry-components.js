@@ -68,6 +68,8 @@
       root.dispatchEvent(new CustomEvent('registry:state',{detail:value}));
     };
     const apply=value=>{
+      const serverFiltered=root.hasAttribute('data-registry-server-filter');
+      if(serverFiltered)root.dataset.registryHydrating='true';
       for(const field of fields){
         const name=field.dataset.registryField;
         let next=Object.hasOwn(value,name)?value[name]:defaults[name];
@@ -79,9 +81,14 @@
         field.dispatchEvent(new Event(field.matches('[type="search"],[type="text"]')?'input':'change',{bubbles:true}));
       }
       if(tabs.length)(tabs.find(tab=>tab.dataset.registryTab===value.tab)||tabs.find(tab=>tab.dataset.registryTab===defaults.tab))?.click();
+      if(serverFiltered){delete root.dataset.registryHydrating;root.dispatchEvent(new Event('registry:hydrated'));}
     };
     let saved=null;try{if(key)saved=JSON.parse(localStorage.getItem(key)||'null');}catch{/* Ignore malformed/unavailable storage. */}
-    apply(saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:defaults);
+    // Server-filtered registries may be opened with an explicit filtered URL.
+    // Keep that URL's rendered controls on the first visit; later visits restore
+    // the same account/role/company-scoped state as client-filtered registries.
+    const initial=root.hasAttribute('data-registry-server-filter')?read():defaults;
+    apply(saved&&typeof saved==='object'&&!Array.isArray(saved)?saved:initial);
     fields.forEach(field=>['input','change'].forEach(type=>field.addEventListener(type,()=>queueMicrotask(sync))));
     tabs.forEach(tab=>tab.addEventListener('click',()=>queueMicrotask(sync)));
     reset.addEventListener('click',()=>{apply(defaults);sync();});

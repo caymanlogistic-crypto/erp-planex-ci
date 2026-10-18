@@ -18,9 +18,10 @@ function csrfField(): string { return '<input type="hidden" name="csrf_token" va
 function e(mixed $value): string { return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 
 $_SESSION = ['role_code'=>'company_owner', 'company_id'=>0, 'user_id'=>1, 'user_name'=>'Иван Петров'];
-\App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::systemOwner(
-    1, 0, array_column(\App\Security\PageRegistry::companyPages(), 'key')
-));
+$managerView=($argv[1]??'')==='manager';
+\App\Security\AccessRuntime::setCurrent($managerView
+    ? \App\Security\EffectiveAccess::member(2,0,['company.trips.waste'=>true],['waste_trip'=>'own'])
+    : \App\Security\EffectiveAccess::systemOwner(1,0,array_column(\App\Security\PageRegistry::companyPages(), 'key')));
 $company = ['name'=>'ООО «ПЛАНЭКС»'];
 $config = ['app'=>['app_name'=>'ERP PLANEX']];
 $db = new stdClass();
@@ -60,20 +61,28 @@ for ($index = 0; $index < 35; $index++) {
         'id' => $index + 1,
         'business_id' => $businessId,
         'status' => in_array($index, [10, 11], true) ? 'in_progress' : 'completed',
-        'actual_end_date' => in_array($index, [10, 11], true) ? null : '2026-10-'.str_pad((string)(6 - ($index % 6)), 2, '0', STR_PAD_LEFT),
+        'actual_end_date' => in_array($index, [10, 11], true) ? null : ($index >= 30 ? '2026-09-25' : '2026-10-'.str_pad((string)(6 - ($index % 6)), 2, '0', STR_PAD_LEFT)),
         'carrier_name' => $carriers[$index % count($carriers)],
         'manager_name' => $managers[$index % count($managers)],
         'legal_entity_code' => $index % 7 === 5 ? 'mg_logistic' : 'planex',
         'recipient_email' => $index % 7 === 5 ? 'documents@example.test' : 'office@example.test',
         'documents' => $documents,
+        'transport' => ['units' => match ($index) {
+            0 => [['label'=>'Тягач','brand'=>'КамАЗ','plate'=>'А111АА','has_card'=>false]],
+            1 => [['label'=>'Тягач','brand'=>'КамАЗ','plate'=>'В222ВВ','has_card'=>true]],
+            2 => [['label'=>'Тягач','brand'=>'КамАЗ','plate'=>'С333СС','has_card'=>true],['label'=>'Полуприцеп','brand'=>'Тонар','plate'=>'Е444ЕЕ','has_card'=>false]],
+            3 => [['label'=>'Тягач','brand'=>'КамАЗ','plate'=>'К555КК','has_card'=>true],['label'=>'Полуприцеп','brand'=>'Тонар','plate'=>'М666ММ','has_card'=>true]],
+            default => [],
+        }],
         'paid_bank_transactions' => [],
         'review_state' => 'new',
         'review_version' => 1,
     ];
 }
 $reportRows = \App\Service\WasteTripClosingReportService::rows($trips, '2026-10-13');
+$completionQuarters=['2026-Q4'=>[4,'26'],'2026-Q3'=>[3,'26']];
 $responsibleUsers = [];
-$canFilterManagers = true;
+$canFilterManagers = !$managerView;
 $canCreateInvoice = false;
 $viewStateKey = 'fixture:closing-registry';
 

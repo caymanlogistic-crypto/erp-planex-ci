@@ -152,16 +152,12 @@
 .rp-ledger-v015 .rp-v015-driver{margin-top:2px;color:var(--text-faint,#756e65);font-size:11px}
 .rp-ledger-v015 .rp-v010-doc-list{list-style:none;margin:0;padding:0}
 .rp-ledger-v015 .rp-v010-doc-list li+li{margin-top:5px}
-.rp-ledger-v015 .rp-v013-doc-number{display:block;font-weight:700;overflow-wrap:anywhere}
-.rp-ledger-v015 .rp-v012-doc-date{display:block;margin-top:2px;color:var(--text-faint,#756e65);font-size:10px;overflow-wrap:anywhere}
+.rp-ledger-v015 .rp-v013-doc-number{display:block;overflow-wrap:anywhere}
+.rp-ledger-v015 .rp-v012-doc-date{display:block;margin-top:2px;overflow-wrap:anywhere}
 .rp-ledger-v015 .rp-v010-money{text-align:right;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
 .rp-ledger-v015 .rp-v010-date strong,.rp-ledger-v015 .rp-v010-date small{display:block}
 .rp-ledger-v015 .rp-v010-date strong{font-variant-numeric:tabular-nums}
-.rp-ledger-v015 .rp-v010-date small{margin-top:2px;font-size:10px}
-.rp-ledger-v015 .rp-v010-date.is-overdue{color:#a84032}
-.rp-ledger-v015 .rp-v010-date.is-today{color:#8b5b1f}
-.rp-ledger-v015 .rp-v010-date.is-closed{color:#277453}
-.rp-ledger-v015 .rp-v010-missing{color:#817c74}
+.rp-ledger-v015 .rp-v010-date small{margin-top:2px}
 .rp-ledger-v015 .rp-v010-table tfoot td{height:32px;min-height:32px;padding:5px 6px;background:#eeeae3;font-size:11px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;overflow:visible}
 .rp-ledger-v015 .rp-v010-table tfoot td:first-child{white-space:nowrap}
 .rp-ledger-v015 .rp-v010-empty{padding:28px 12px;text-align:center;color:#746f66}
@@ -335,7 +331,7 @@
 
 /* Registry identity: ID and trip description occupy distinct cells, as in departures. */
 .rp-ledger-v015 .rp-v010-table .rp-v010-id strong {color:inherit;font-weight:inherit}
-.rp-ledger-v015 .rp-v010-table .rp-v010-trip span {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:400;line-height:16.8px}
+.rp-ledger-v015 .rp-v010-table .rp-v010-trip span {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(min-width:1600px) {
   .rp-ledger-v015 .rp-v010-table th:nth-child(9) {white-space:nowrap;padding-inline:4px}
 }
