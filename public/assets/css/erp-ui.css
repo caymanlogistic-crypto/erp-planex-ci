@@ -98,9 +98,11 @@ svg { display: block; }
   --accent-bg:    #e8dbc8;
 
   /* Semantic */
-  --success:        #1f6b43; --success-bg:     #ddeee5; --success-border: #7eb89b; --success-field:  #f3faf6; --success-text:   #1a5c39;
-  --warning:        #7a5210; --warning-bg:     #fdf0d5; --warning-border: #c9a450; --warning-field:  #fffcf2; --warning-text:   #6b470e;
-  --danger:         #992e26; --danger-bg:      #fcecea; --danger-border:  #ca8880; --danger-field:   #fff7f6; --danger-text:    #872822;
+  /* OWNER 18.10.2026: shared semantic palette, including legacy consumers. */
+  --success:        #1f6b43; --success-bg:     #dff3e5; --success-border: #7eb89b; --success-field:  #f3faf6; --success-text:   #1f6b43;
+  --warning:        #7a5210; --warning-bg:     #fdf0d5; --warning-border: #c9a450; --warning-field:  #fffcf2; --warning-text:   #131210;
+  --danger:         #872822; --danger-bg:      #ffe5df; --danger-border:  #ca8880; --danger-field:   #fff7f6; --danger-text:    #872822;
+  --success-hover-bg:#cdebd7; --warning-hover-bg:#fff1bd; --danger-hover-bg:#ffd6cc;
   --neutral:        #625d57; --neutral-bg:     #e3e0da;
 
   /* Alert accent — sourced from chart series palette (palette-card-technical), not semantic tokens */

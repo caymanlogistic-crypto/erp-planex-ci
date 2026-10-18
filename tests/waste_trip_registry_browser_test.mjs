@@ -83,7 +83,7 @@ try {
     } else {
       assert.ok(metrics.toolbarHeight <= 50, `${width}: shared toolbar stays 49px high ${JSON.stringify(metrics)}`);
     }
-    assert.equal(metrics.searchWeight, '400');
+    assert.equal(metrics.searchWeight, '500');
     assert.equal(metrics.placeholder, 'rgb(129, 123, 114)');
     assert.equal(metrics.headingBackground, 'rgb(227, 222, 213)');
     assert.equal(metrics.headingImage, 'none');

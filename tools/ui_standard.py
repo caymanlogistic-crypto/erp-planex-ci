@@ -13,6 +13,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CATALOG = ROOT / "docs/ui/approved-components.json"
 GALLERY = ROOT / "docs/ui/approved-components.html"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$")
+LEGACY_PAGES = frozenset({'route-executors','trips-departures','finance-received-paid','logistics-closing-documents'})
 
 
 def safe_file(value: str) -> Path:
@@ -30,6 +31,12 @@ def validate(data: dict) -> list[str]:
     errors: list[str] = []
     if data.get("schema_version") != 2:
         errors.append("schema_version must be 2")
+    try:
+        decisions=json.loads(safe_file(data.get('decisions','')).read_text(encoding='utf-8'))
+        if decisions.get('schema')!='planex-approved-ui-decisions/v1' or not decisions.get('references'):
+            errors.append('recorded OWNER decisions and immutable reference versions required')
+    except (ValueError, OSError) as exc:
+        errors.append(f'decisions: {exc}')
     families: dict[str, dict] = {}
     for family in data.get("families", []):
         name = family.get("id", "")
@@ -76,6 +83,9 @@ def validate(data: dict) -> list[str]:
                 except ValueError as exc:
                     errors.append(f"components/{name}/specimen: {exc}")
             else:
+                status=item.get('adaptation_status')
+                if status!='current_20261018' and not (name in LEGACY_PAGES and status=='legacy_shared_shell_pending_20261018'):
+                    errors.append(f'pages/{name}: new pages must adopt current_20261018; legacy exception is closed')
                 if not item.get("route", "").startswith("/erpv2/"):
                     errors.append(f"pages/{name}: ERP route required")
                 if item.get("family") == "registry" and (type(item.get("sticky")) is not bool or type(item.get("reference_select")) is not bool):
@@ -95,6 +105,10 @@ def validate(data: dict) -> list[str]:
                     source = safe_file(item["view"]).read_text(encoding="utf-8")
                     if "registry-ui-card" not in source:
                         errors.append(f"pages/{name}: view lacks registry-ui-card")
+                    if status=='current_20261018':
+                        for role in ('registry-ui-data','data-registry-id','data-registry-state-scope','data-registry-field','data-registry-default','registry-ui-reset','registry-ui-search-group'):
+                            if role not in source:
+                                errors.append(f'pages/{name}: current canon requires {role}')
     registered = {item.get("view") for item in data.get("pages", [])}
     for view in (ROOT / "app/View").rglob("*.php"):
         if "registry-ui-card" in view.read_text(encoding="utf-8") and view.relative_to(ROOT).as_posix() not in registered:
@@ -103,37 +117,25 @@ def validate(data: dict) -> list[str]:
 
 
 def render_gallery(data: dict, *, hosted: bool = False) -> str:
-    """Isolate each live specimen so gallery CSS cannot restyle approved controls."""
+    """One complete live composition; the role index never repeats controls."""
     asset_prefix = "/assets/" if hosted else "../../public/assets/"
     gallery_prefix = "/__ui_standard__/" if hosted else ""
-    css_paths = ["public/assets/css/erp-ui.css", *(x["styles"] for x in data["families"])]
-    css_links = '\n'.join(f'<link rel="stylesheet" href="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}">' for path in css_paths)
-    js_links = '\n'.join(f'<script src="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}"></script>' for path in dict.fromkeys(path for family in data["families"] for path in family["behavior"]))
-    def preview(identifier: str, title: str, specimen: str) -> str:
-        document = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'
-                    + css_links + f'<link rel="stylesheet" href="{gallery_prefix}preview.css"></head><body><main data-specimen-root>'
-                    + specimen + '</main>' + js_links + f'<script src="{gallery_prefix}gallery.js"></script></body></html>')
-        fixed = ' data-fixed-preview="true"' if identifier == 'registry.sticky' else ''
-        return f'<iframe class="gallery-preview" data-preview="{html.escape(identifier, quote=True)}"{fixed} title="{html.escape(title, quote=True)}" srcdoc="{html.escape(document, quote=True)}"></iframe>'
-    sections: list[str] = []
-    navigation: list[str] = ['<a href="#complete-example">Цельный пример</a>']
-    for family in data["families"]:
-        family_id = family["id"]
-        navigation.append(f'<a href="#{html.escape(family_id, quote=True)}">{html.escape(family["description"])}</a>')
-        parts = [f'<section class="gallery-family" id="{html.escape(family_id, quote=True)}"><h2>{html.escape(family["description"])}</h2><p>Каждый образец использует общие стили приложения. Наведите указатель, нажмите на контрол или перейдите к нему клавишей Tab.</p>']
-        for component in (x for x in data["components"] if x["family"] == family_id):
-            specimen = safe_file(component["specimen"]).read_text(encoding="utf-8").strip()
-            parts.append(f'<article class="gallery-item" id="{html.escape(component["id"], quote=True)}"><div class="gallery-copy"><h3>{html.escape(component["role"])}</h3><p>{html.escape(component["description"])}</p><p class="gallery-meta">{html.escape(component["id"])} · {html.escape(component["approval"])}</p></div>{preview(component["id"], component["role"], specimen)}</article>')
-        parts.append('</section>')
-        sections.append('\n'.join(parts))
-    page_links = ''.join(f'<li><a href="https://plan-ex.ru{html.escape(page["route"], quote=True)}">{html.escape(page["route"])}</a></li>' for page in data["pages"])
-    complete = safe_file("docs/ui/specimens/registry.example.html").read_text(encoding="utf-8")
-    return ('<!doctype html>\n<html lang="ru">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>ERP PLANEX — согласованные компоненты</title>\n'
-            + f'<link rel="stylesheet" href="{asset_prefix}css/erp-ui.css">\n<link rel="stylesheet" href="{gallery_prefix}gallery.css">\n</head>\n<body>\n<main class="gallery-shell">\n<header class="gallery-intro"><p class="gallery-kicker">ERP PLANEX · утверждённый стандарт</p><h1>Как должен выглядеть интерфейс</h1><p>Сначала — цельный пример реестра. Ниже — согласованные элементы и их интерактивные состояния. Образцы, песочница и приложение используют одни файлы компонентов.</p><p>Данные вымышленные. Новые варианты становятся стандартом после отдельного согласования.</p><nav>'
-            + ' '.join(navigation) + '</nav></header>\n<section class="gallery-family" id="complete-example"><h2>Цельный пример реестра</h2><p>Шапка, действия, вкладки, фильтры, поиск и таблица в одной композиции. Фильтры в этом образце демонстрируют внешний вид.</p>'
-            + preview("registry.example", "Цельный пример реестра", complete) + '</section>\n' + '\n'.join(sections)
-            + '<section class="gallery-family"><h2>Страницы с подключённым стандартом</h2><ul>' + page_links + '</ul></section>\n</main>\n'
-            + f'<script src="{gallery_prefix}gallery.js"></script>\n</body>\n</html>\n')
+    css_paths = ["public/assets/css/erp-ui.css", "public/assets/css/route-executor-review-workflow.css", "public/assets/css/route-executor-list-v016.css", *(x["styles"] for x in data["families"])]
+    css_links = ''.join(f'<link rel="stylesheet" href="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}">' for path in css_paths)
+    js_links = ''.join(f'<script src="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}"></script>' for path in dict.fromkeys(path for family in data["families"] for path in family["behavior"]))
+    js_links += f'<script src="{asset_prefix}js/route-executor-list-v016.js"></script>'
+    specimen = safe_file("docs/ui/specimens/registry.composition.html").read_text(encoding="utf-8")
+    document = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+css_links+f'<link rel="stylesheet" href="{gallery_prefix}preview.css"></head><body><main data-specimen-root>'+specimen+'</main>'+js_links+f'<script src="{gallery_prefix}gallery.js"></script></body></html>')
+    roles = ''.join(f'<li><strong>{html.escape(item["role"])}</strong> — {html.escape(item["description"])} <code>{html.escape(item["id"])}</code></li>' for item in data['components'])
+    return ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PLANEX — согласованный канон</title>'
+            +f'<link rel="stylesheet" href="{asset_prefix}css/erp-ui.css"><link rel="stylesheet" href="{gallery_prefix}gallery.css"></head><body><main class="gallery-shell">'
+            +'<header class="gallery-intro"><p class="gallery-kicker">PLANEX · решения OWNER 18.10.2026</p><h1>Согласованный вид реестров</h1><p>Одна цельная композиция за раз. Поиск, списки, наведение и «Сбросить» работают на вымышленных данных. Это образцы общих ролей; состав и расчёты реальных страниц сохраняются при адаптации.</p>'
+            +'<nav aria-label="Примеры реестров">'+''.join(f'<button type="button" data-gallery-scene="{key}" aria-pressed="{str(key=="executors").lower()}">{label}</button>' for key,label in [('executors','Исполнители'),('finance','Получено/оплачено'),('trips','Выезды'),('documents','Закрывающие документы')])+'</nav></header>'
+            +f'<iframe class="gallery-preview" data-preview="registry.composition" title="Цельный пример согласованного реестра" srcdoc="{html.escape(document,quote=True)}"></iframe>'
+            +'<details class="gallery-family"><summary>Что здесь утверждено — роли и правила для агента</summary><ul>'+roles+'</ul><p>Используйте общий CSS/JS и docs/ui/REGISTRY_CANON.md. Новые визуальные решения: предложение → песочница → решение OWNER → общий компонент → тест → каталог и витрина.</p></details>'
+            +'<section class="gallery-family"><h2>Границы согласования</h2><p>Утверждены роли и состояния четырёх реестров. Формы, подтверждение удаления, загрузки файлов и ожидание серверных операций требуют отдельных примеров. Компания/квартал руководителя: запрос записан, конкретный вариант ещё ожидает визуального подтверждения.</p><p>Подключённая страница не обязательно уже перенесена на все поправки от 18.10.2026: агент обязан проверить статус адаптации и сравнить результат с принятой песочницей. Витрина не утверждает сама себя.</p></section></main>'
+            +f'<script src="{gallery_prefix}gallery.js"></script></body></html>\n')
+
 
 
 def main() -> int:

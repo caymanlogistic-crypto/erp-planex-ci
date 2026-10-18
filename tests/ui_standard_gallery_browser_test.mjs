@@ -4,77 +4,176 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath,pathToFileURL} from 'node:url';
 import {assertRegistryVisualContract} from './helpers/registry_visual_contract.mjs';
-
-const require = createRequire(import.meta.url);
-const {chromium} = require('playwright');
-const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
-const gallery = pathToFileURL(path.join(root,'docs/ui/approved-components.html')).href;
-const catalog = JSON.parse(fs.readFileSync(path.join(root,'docs/ui/approved-components.json'),'utf8'));
-const browser = await chromium.launch({headless:true});
-try {
-  for (const width of [390,1280,1920,3840]) {
-    const page = await browser.newPage({viewport:{width,height:1080},deviceScaleFactor:1});
-    await page.goto(gallery);
-    const preview = id => page.frameLocator(`iframe[data-preview="${id}"]`);
-    await preview('registry.example').locator('.registry-ui-search').waitFor();
-    if(process.env.PLANEX_VISUAL_EVIDENCE_DIR){fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,`gallery-initial-${width}.png`)});}
-    assert.equal(await page.locator('.gallery-item').count(),catalog.components.length);
-    assert.equal(await page.locator('iframe[data-preview]').count(),catalog.components.length+1);
-    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth<=innerWidth+1),true,`${width}px gallery overflow`);
-    for (const frame of page.frames().filter(frame => frame.parentFrame())) {
-      await frame.evaluate(() => document.fonts.ready);
-      const overflow=await frame.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,nodes:[...document.querySelectorAll('*')].filter(element=>element.getBoundingClientRect().right>innerWidth+1).map(element=>[element.tagName,element.className,element.getBoundingClientRect().right]).slice(0,8)}));
-      assert.equal(overflow.scroll<=overflow.width+1,true,`${width}px specimen overflow ${await (await frame.frameElement()).getAttribute('data-preview')}: ${JSON.stringify(overflow)}`);
-    }
-    const complete = page.frames().find(frame => frame.parentFrame() && frame.locator);
-    await assertRegistryVisualContract(complete,`gallery complete example ${width}px`);
-    const search = preview('registry.search').locator('.registry-ui-search');
-    await search.focus();
-    assert.deepEqual(await search.evaluate(element => {
-      const style=getComputedStyle(element);
-      return [style.borderColor,style.boxShadow,style.height];
-    }),['rgb(124, 71, 24)','rgba(124, 71, 24, 0.1) 0px 0px 0px 2px','32px']);
-    const native = preview('registry.toolbar').locator('.toolbar-select');
-    await native.hover();
-    const nativeHover = await native.evaluate(element => [getComputedStyle(element).backgroundColor,getComputedStyle(element).borderColor]);
-    assert.deepEqual(nativeHover,['rgb(234, 227, 216)','rgb(201, 189, 174)']);
-    const select = preview('registry.select'), trigger = select.locator('.lab-reference-trigger');
-    await trigger.hover();
-    assert.deepEqual(await trigger.evaluate(element => [getComputedStyle(element).backgroundColor,getComputedStyle(element).borderColor]),nativeHover);
-    await trigger.click();
-    const list = select.locator('.lab-reference-list');
-    assert.equal(await list.isVisible(),true);
-    await page.waitForFunction(() => {
-      const frame=document.querySelector('iframe[data-preview="registry.select"]');
-      const list=frame.contentDocument.querySelector('.lab-reference-list');
-      return frame.clientHeight >= list.getBoundingClientRect().bottom;
-    });
-    assert.equal(await list.evaluate(element => getComputedStyle(element).backgroundColor),'rgb(255, 255, 255)');
-    await page.mouse.move(1,1);
-    const selected=select.locator('[aria-selected="true"]');
-    assert.equal(await selected.evaluate(element => getComputedStyle(element).backgroundColor),'rgb(242, 232, 220)');
-    await selected.hover();
-    assert.equal(await selected.evaluate(element => getComputedStyle(element).backgroundColor),'rgb(233, 217, 199)');
-    await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
-    assert.equal(await select.locator('select').inputValue(),'name');
-    const single = preview('registry.checkbox').locator('.rp-v014-hide-complete');
-    const grouped = preview('registry.checkbox-group').locator('.registry-ui-checkboxes:not(.registry-ui-checkboxes--trip-status) .registry-ui-checkbox').first();
-    const labelStyle = element => {const s=getComputedStyle(element),input=getComputedStyle(element.querySelector('input'));return [s.minHeight,s.gap,s.font,s.color,input.width,input.height,input.accentColor]};
-    assert.deepEqual(await grouped.evaluate(labelStyle),await single.evaluate(labelStyle));
-    const checkbox = preview('registry.checkbox-group').locator('.registry-ui-checkboxes:not(.registry-ui-checkboxes--trip-status) input').nth(1);
-    await checkbox.focus();await page.keyboard.press('Space');assert.equal(await checkbox.isChecked(),true);
-    assert.deepEqual(await preview('registry.checkbox-group').locator('.registry-ui-checkboxes--trip-status input').evaluateAll(items=>items.map(element=>getComputedStyle(element).accentColor)),['rgb(156, 39, 176)','rgb(23, 162, 184)','rgb(40, 167, 69)','rgb(108, 117, 125)']);
-    // Host-page CSS is deliberately hostile: isolated component styles must survive.
-    const before=await search.evaluate(element=>getComputedStyle(element).height);
-    await page.addStyleTag({content:'.registry-ui-search{height:77px!important;font:30px Arial!important}'});
-    assert.equal(await search.evaluate(element=>getComputedStyle(element).height),before);
-    if(process.env.PLANEX_VISUAL_EVIDENCE_DIR){
-      fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR,{recursive:true});
-      await page.evaluate(()=>window.scrollTo(0,0));
-      await page.screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,`gallery-${width}.png`)});
-      await page.locator('#complete-example').screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,`gallery-example-${width}.png`)});
-    }
-    await page.close();
+const require=createRequire(import.meta.url),{chromium}=require('playwright');
+const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const url=pathToFileURL(path.join(root,'docs/ui/approved-components.html')).href;
+const browser=await chromium.launch({headless:true});
+const evidence=process.env.PLANEX_VISUAL_EVIDENCE_DIR;
+try{
+ for(const width of [390,1280,1920,3840]){
+  const page=await browser.newPage({viewport:{width,height:1080},deviceScaleFactor:1});
+  const errors=[];page.on('pageerror',error=>errors.push(error.message));
+  await page.goto(url);
+  const frame=page.frameLocator('iframe[data-preview="registry.composition"]');
+  const view=key=>frame.locator(`[data-gallery-view="${key}"]`);
+  await view('executors').locator('[data-registry-field=query]').waitFor();
+  await page.waitForFunction(()=>document.querySelector('iframe').contentDocument.querySelector('[data-registry-ready="true"]'));
+  assert.equal(await page.locator('iframe[data-preview]').count(),1,'one whole composition, no repeated specimens');
+  const actual=page.frames().find(item=>item.parentFrame());
+  const settle=()=>actual.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>{
+    document.getAnimations().filter(animation=>animation.constructor.name==='CSSTransition').forEach(animation=>animation.finish());resolve();
+  }))));
+  await assertRegistryVisualContract(actual,`gallery ${width}`);
+  assert.deepEqual(await actual.evaluate(()=>{
+    const css=getComputedStyle(document.documentElement);return ['--danger','--danger-bg','--warning-bg','--warning-text','--success','--success-bg'].map(key=>css.getPropertyValue(key).trim());
+  }),['#872822','#ffe5df','#fdf0d5','#131210','#1f6b43','#dff3e5'],'system tokens match the approved palette');
+  for(const key of ['executors','finance','trips','documents']){
+   await page.locator(`[data-gallery-scene=${key}]`).click();
+   const scene=view(key);await scene.waitFor({state:'visible'});
+   await actual.evaluate(()=>document.fonts.ready);
+   assert.equal(await frame.locator('[data-gallery-view]:visible').count(),1);
+   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`host ${width}`);
+   assert.equal(await actual.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`composition ${key} ${width}`);
+   const metrics=await scene.locator('.table-scroll').evaluate(element=>({range:element.scrollHeight-element.clientHeight}));
+   assert.equal(metrics.range,0,`no inner vertical scroll ${key} ${width}`);
+   if(width>=1920&&key!=='executors')assert.equal(await scene.locator('tbody .registry-ui-id').first().evaluate(element=>element.getBoundingClientRect().width),64,'same ID width');
+   if(key==='finance'&&width===1280){
+    assert.equal(await scene.locator('.registry-ui-compact-head').isVisible(),true,'accepted finance two-band mode');
+   }
+   if(key==='finance'&&width>=1920){
+    assert.equal(await scene.locator('.registry-ui-wide-head').isVisible(),true,'wide viewport must expose all 13 headers');
+    assert.equal(await scene.locator('.registry-ui-compact-head').isVisible(),false,'bounded workspace must not shrink the preview viewport');
+   }
+   if(width===390){
+    assert.equal(await scene.locator('.registry-ui-data--cards').count(),['finance','trips'].includes(key)?1:0,'only approved card variants');
+   }
+   const search=scene.locator('[data-registry-field=query]'),reset=scene.locator('.registry-ui-reset');
+   assert.equal(await reset.isVisible(),false);
+   await search.fill('zzzz-no-match');await reset.waitFor({state:'visible'});
+   assert.equal(await scene.locator('[data-gallery-count]').innerText(),'0');
+   assert.equal(await scene.locator('[data-gallery-empty]').isVisible(),true);
+   assert.equal(await search.evaluate(element=>getComputedStyle(element).backgroundImage.includes('svg')),true,'focus preserves search icon');
+   await reset.click();await reset.waitFor({state:'hidden'});
+   assert.equal(await search.inputValue(),'');
+   assert.equal(await scene.locator('[data-gallery-empty]').isVisible(),false);
+   if(evidence){fs.mkdirSync(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,`canon-${key}-${width}.png`),fullPage:true});}
   }
-  console.log('UI_STANDARD_GALLERY_BROWSER=PASS');
+  await page.locator('[data-gallery-scene=finance]').click();
+  const finance=view('finance');
+  const styles=await finance.evaluate(element=>{
+   const css=selector=>{const s=getComputedStyle(element.querySelector(selector));return [s.fontSize,s.fontWeight,s.lineHeight,s.color]};
+   return {primary:css('.registry-ui-due--today .registry-ui-primary'),secondary:css('.registry-ui-secondary'),name:css('.registry-ui-name'),money:css('.registry-ui-money'),today:css('.registry-ui-due--today .registry-ui-secondary'),complete:css('.registry-ui-due--complete .registry-ui-primary'),id:css('tbody .registry-ui-id')};
+  });
+  assert.deepEqual(styles.primary.slice(0,3),['12px','500','16.8px']);
+  assert.deepEqual(styles.secondary,['11px','500','15.4px','rgb(120, 114, 106)']);
+  assert.deepEqual(styles.name.slice(0,3),['12px','600','16.8px']);
+  assert.deepEqual(styles.money.slice(0,3),['12px','600','16.8px']);
+  assert.equal(styles.today[3],'rgb(19, 18, 16)');assert.equal(styles.complete[3],'rgb(31, 107, 67)');
+  assert.deepEqual(styles.id.slice(0,3),['12px','700','16.8px']);
+  assert.deepEqual(await finance.locator('[data-gallery-row]').evaluateAll(rows=>rows.map(row=>row.children.length)),[13,13,13,13,13]);
+  assert.equal(await finance.locator('[data-gallery-total]').count(),6);
+  assert.deepEqual(await finance.locator('[data-gallery-total]').first().evaluate(element=>{const s=getComputedStyle(element);return [s.fontSize,s.fontWeight,s.lineHeight]}),['11px','700','15.4px']);
+  const last=finance.locator('[data-registry-trip]').last();
+  assert.equal(await last.evaluate(element=>[...new Intl.Segmenter('ru',{granularity:'grapheme'}).segment(element.textContent)].length),31);
+  assert.equal((await last.getAttribute('title')).endsWith('сборный рейс'),true);
+  await finance.locator('[data-registry-field=query]').fill('сборный');
+  assert.equal(await finance.locator('[data-gallery-count]').innerText(),'1','search includes truncated tail');
+  assert.equal((await finance.locator('[data-gallery-total="3"]').innerText()).replace(/\s/g,''),'146494,50₽','filtered totals');
+  await finance.locator('.registry-ui-reset').click();
+  const check=finance.locator('[type=checkbox]');await check.focus();await page.keyboard.press('Space');
+  assert.equal(await check.isChecked(),true);await finance.locator('.registry-ui-reset').waitFor({state:'visible'});
+  await finance.locator('.registry-ui-reset').click();assert.equal(await check.isChecked(),false);
+  await page.locator('[data-gallery-scene=executors]').click();
+  const executor=view('executors'),trigger=executor.locator('.lab-reference-trigger');
+  await trigger.click();const selected=executor.locator('[aria-selected=true]');
+  await page.mouse.move(0,0);
+  assert.equal(await selected.evaluate(element=>getComputedStyle(element).backgroundColor),'rgb(242, 232, 220)');
+  await selected.hover();assert.equal(await selected.evaluate(element=>getComputedStyle(element).backgroundColor),'rgb(233, 217, 199)');
+  await page.keyboard.press('ArrowDown');await page.keyboard.press('Enter');
+  await executor.locator('.registry-ui-reset').waitFor({state:'visible'});
+  await executor.locator('.registry-ui-reset').click();
+  await executor.getByRole('button',{name:'Действия с карточкой'}).click();
+  const remove=frame.getByRole('menuitem',{name:'Удалить карточку'});
+  assert.equal(await remove.isVisible(),true);
+  assert.equal(await remove.evaluate(element=>getComputedStyle(element).color),'rgb(135, 40, 34)');
+  await page.keyboard.press('Escape');assert.equal(await remove.isVisible(),false);
+  for(const [cls,normal,hover] of [['registry-ui-warning','rgb(253, 240, 213)','rgb(255, 241, 189)'],['registry-ui-soft-error','rgb(255, 229, 223)','rgb(255, 214, 204)'],['registry-ui-soft-success','rgb(223, 243, 229)','rgb(205, 235, 215)']]){
+   const row=executor.locator('tr.'+cls),cell=row.locator('td').first();
+   await page.mouse.move(0,0);await trigger.focus();await settle();
+   assert.equal(await cell.evaluate(element=>getComputedStyle(element).backgroundColor),normal);
+   await cell.hover();await settle();assert.equal(await cell.evaluate(element=>getComputedStyle(element).backgroundColor),hover);
+  }
+  // Host decorations cannot restyle the component document.
+  await page.addStyleTag({content:'.registry-ui-search{height:77px!important;font:30px Arial!important}'});
+  assert.equal(await executor.locator('.registry-ui-search').evaluate(element=>getComputedStyle(element).height),'32px');
+  assert.deepEqual(errors,[]);
+  await page.close();
+ }
+ // Persistence, rejected stale options, isolation, storage failure and long IDs.
+ const page=await browser.newPage({viewport:{width:1280,height:900}});await page.goto(url);
+ const frame=page.frames().find(item=>item.parentFrame());
+ await frame.waitForSelector('[data-registry-ready=true]');
+ await frame.locator('[data-gallery-view=executors] [data-registry-field=query]').fill('Магистраль');
+ await frame.locator('[data-gallery-view=executors] .registry-ui-reset').waitFor({state:'visible'});
+ await page.reload();
+ const restored=page.frames().find(item=>item.parentFrame());await restored.waitForSelector('[data-registry-ready=true]');
+ assert.equal(await restored.locator('[data-gallery-view=executors] [data-registry-field=query]').inputValue(),'Магистраль');
+ await restored.evaluate(()=>{
+  const key=Object.keys(localStorage).find(key=>key.includes('gallery-executors'));
+  localStorage.setItem(key,JSON.stringify({query:'',sort:'removed-option',hideComplete:'bad',tab:'removed-tab'}));
+ });
+ await page.reload();const clean=page.frames().find(item=>item.parentFrame());await clean.waitForSelector('[data-registry-ready=true]');
+ assert.equal(await clean.locator('[data-gallery-view=executors] select').inputValue(),'date');
+ await clean.locator('[data-gallery-view=executors] [data-registry-field=query]').fill('private-owner-selection');
+ await clean.locator('[data-gallery-view=executors] .registry-ui-reset').waitFor({state:'visible'});
+ await clean.evaluate(()=>{
+  const original=document.querySelector('[data-gallery-view=executors]');
+  const copy=original.cloneNode(true);copy.dataset.registryStateScope='other-account:logist:other-company:v1';copy.dataset.galleryView='isolation';
+  copy.querySelector('[data-registry-field=query]').value='';document.querySelector('[data-specimen-root]').append(copy);window.PlanexRegistry.mount(copy);
+ });
+ assert.equal(await clean.locator('[data-gallery-view=isolation] [data-registry-field=query]').inputValue(),'');
+ await clean.evaluate(()=>{
+  const copy=document.querySelector('[data-gallery-view=executors]').cloneNode(true);copy.dataset.registryStateScope='broken-json';copy.dataset.galleryView='broken';
+  localStorage.setItem(`planex:registry:v1:${location.pathname}:${copy.dataset.registryId}:broken-json`,'{');document.querySelector('[data-specimen-root]').append(copy);window.PlanexRegistry.mount(copy);
+ });
+ assert.equal(await clean.locator('[data-gallery-view=broken] [data-registry-field=query]').inputValue(),'','corrupt saved JSON returns to the page defaults');
+ await clean.evaluate(()=>{
+  const root=document.querySelector('[data-gallery-view=finance]');root.querySelector('tbody .registry-ui-id').textContent='#12345678901234567890';window.PlanexRegistry.textRoles(root);
+ });
+ await page.waitForTimeout(100);
+ assert.ok(await clean.locator('[data-gallery-view=finance] .registry-ui-data').evaluate(element=>parseFloat(element.style.getPropertyValue('--registry-id-width')))>64);
+ await clean.evaluate(()=>{
+  Storage.prototype.setItem=()=>{throw new Error('blocked')};Storage.prototype.getItem=()=>{throw new Error('blocked')};
+  const copy=document.querySelector('[data-gallery-view=executors]').cloneNode(true);copy.dataset.galleryView='blocked';document.querySelector('[data-specimen-root]').append(copy);window.PlanexRegistry.mount(copy);
+ });
+ await clean.locator('[data-gallery-view=blocked] [data-registry-field=query]').fill('test');
+ await clean.locator('[data-gallery-view=blocked] .registry-ui-reset').waitFor({state:'visible'});
+ await clean.locator('[data-gallery-view=blocked] .registry-ui-reset').click();
+ assert.equal(await clean.locator('[data-gallery-view=blocked] [data-registry-field=query]').inputValue(),'');
+ // Exercise the real shared sticky logic with one bounded vertical owner and a
+ // wide table. The fixture geometry is test-only; application CSS stays shared.
+ await clean.evaluate(()=>{
+  const original=document.querySelector('[data-gallery-view=executors]');
+  const copy=original.cloneNode(true);copy.dataset.galleryView='scroll';copy.dataset.registryStateScope='scroll-fixture';copy.querySelector('[data-registry-field=query]').value='';
+  const main=document.createElement('main');main.className='content';main.style.cssText='height:320px;width:850px;overflow:auto;padding:12px;position:relative';
+  original.after(main);main.append(copy);
+  copy.querySelector('.registry-ui-toolbar').style.minHeight='80px';copy.querySelector('.registry-ui-card').style.removeProperty('--registry-toolbar-height');
+  const tbody=copy.querySelector('tbody'),rows=[...tbody.querySelectorAll('[data-gallery-row]')];
+  rows.forEach(row=>{row.hidden=false;});copy.querySelector('[data-gallery-empty]').hidden=true;
+  for(let i=0;i<12;i++)rows.forEach(row=>tbody.append(row.cloneNode(true)));
+  window.PlanexRegistry.mount(copy);main.scrollTop=300;
+ });
+ await page.waitForTimeout(100);
+ const scroll=await clean.locator('[data-gallery-view=scroll]').evaluate(view=>{
+  const main=view.parentElement,wrap=view.querySelector('.table-scroll'),toolbar=view.querySelector('.registry-ui-toolbar'),table=view.querySelector('table');
+  wrap.scrollLeft=150;
+  return {main:main.scrollTop,inner:wrap.scrollHeight-wrap.clientHeight,measured:parseFloat(getComputedStyle(view.querySelector('.registry-ui-card')).getPropertyValue('--registry-toolbar-height')),height:toolbar.getBoundingClientRect().height,y:table.tHead.getBoundingClientRect().top-toolbar.getBoundingClientRect().bottom,x:table.tHead.rows[0].cells[0].getBoundingClientRect().left-table.tBodies[0].rows[0].cells[0].getBoundingClientRect().left};
+ });
+ assert.equal(scroll.main,300);assert.equal(scroll.inner,0);assert.ok(Math.abs(scroll.y)<1);assert.ok(Math.abs(scroll.x)<1);
+ assert.equal(scroll.measured,scroll.height,'dynamically mounted registry measures its own responsive toolbar');
+ await clean.locator('[data-gallery-view=scroll]').evaluate(view=>view.querySelectorAll('tbody tr').forEach(row=>row.hidden=true));
+ await page.waitForTimeout(100);
+ assert.equal(await clean.locator('[data-gallery-view=scroll]').evaluate(view=>view.parentElement.scrollHeight-view.parentElement.clientHeight),0,'empty state has no ghost header range');
+ await page.close();
+ console.log('UI_STANDARD_GALLERY_BROWSER=PASS');
 }finally{await browser.close()}

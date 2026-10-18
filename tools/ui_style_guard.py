@@ -18,6 +18,9 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 CATALOG = "docs/ui/approved-components.json"
 STYLE_OWNERS = frozenset({"public/assets/css/erp-ui.css", "public/assets/css/registry-components.css"})
+# The existing shared behavior owns only measured sticky/column geometry. This
+# does not exempt a page script, inline CSS or a newly registered family.
+RUNTIME_OWNER = "public/assets/js/registry-components.js"
 # These describe data geometry, not the appearance of a reusable control.
 GEOMETRY = frozenset("width min-width max-width table-layout grid-template-columns grid-column grid-column-start grid-column-end flex-basis text-align vertical-align white-space overflow overflow-x overflow-y text-overflow word-break overflow-wrap order display visibility cursor pointer-events".split())
 SHARED = re.compile(r"\.(?:registry-ui-[\w-]+|page-head(?:-[\w-]+)?|page-title|page-summary|table-toolbar|toolbar-(?:right|select)|found-label|lab-reference-[\w-]+|btn(?:-[\w-]+)?|field-(?:input|select|label|textarea)|modal-(?:head|body|foot))\b")
@@ -139,6 +142,8 @@ def violations(path: str, before: str, after: str, owners: set[str]) -> list[str
         return []
     errors = []
     for (context, selector, prop, value), count in (inventory(path, after) - inventory(path, before)).items():
+        if path == RUNTIME_OWNER and prop == "style-mutation" and re.match(r"\.style\.(?:setProperty\(['\"]--registry-(?:toolbar-height|id-width)['\"]|transform\s*=)", value):
+            continue
         # Column geometry is allowed; shared controls and all inline/runtime styling
         # must use their owner, including custom properties and !important overrides.
         if prop in GEOMETRY and selector not in {"inline style", "runtime style"} and not SHARED.search(selector + context):
@@ -179,6 +184,9 @@ def check(base: str, head: str | None = None, root: Path = ROOT) -> list[str]:
     for page in base_data["pages"]:
         if read(head, page["view"]) and page["view"] not in registered:
             errors.append(f"{page['view']}: removing an existing page from the approved catalog is forbidden")
+        current = next((item for item in data['pages'] if item['view']==page['view']),None)
+        if current and page.get('adaptation_status')=='current_20261018' and current.get('adaptation_status')!='current_20261018':
+            errors.append(f"{page['view']}: downgrading an adapted page to legacy is forbidden")
     return errors
 
 
