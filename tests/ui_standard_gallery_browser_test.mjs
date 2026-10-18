@@ -21,12 +21,20 @@ try {
       const toolbar = document.querySelector('[id="registry.toolbar"] .registry-ui-toolbar');
       const thead = document.querySelector('[id="registry.finance-table"] thead th');
       const select = document.querySelector('[id="registry.select"] .lab-reference-select');
+      const checkboxes = document.querySelector('[id="registry.checkbox-group"]');
+      const accent = selector => getComputedStyle(checkboxes.querySelector(selector)).accentColor;
       return {
         headHeight: Math.round(head.getBoundingClientRect().height),
         toolbarMinHeight: getComputedStyle(toolbar).minHeight,
         financeHead: getComputedStyle(thead).backgroundColor,
         selectReady: !!select && select.classList.contains('is-ready'),
         pageOverflow: document.documentElement.scrollWidth > innerWidth + 1,
+        pageCanScroll: document.documentElement.scrollHeight > innerHeight && getComputedStyle(document.body).overflowY !== 'hidden',
+        standardAccent: accent('.registry-ui-checkboxes:not(.registry-ui-checkboxes--trip-status) input:checked'),
+        plannedAccent: accent('[data-status="planned_route"] input'),
+        formedAccent: accent('[data-status="executor_assigned"] input'),
+        progressAccent: accent('[data-status="in_progress"] input'),
+        completedAccent: accent('[data-status="completed"] input'),
       };
     });
     assert.equal(state.headHeight >= 58, true, `${width}px head height`);
@@ -34,6 +42,18 @@ try {
     assert.equal(state.financeHead, 'rgb(208, 204, 196)');
     assert.equal(state.selectReady, true);
     assert.equal(state.pageOverflow, false, `${width}px horizontal overflow`);
+    assert.equal(state.pageCanScroll, true, `${width}px vertical scrolling`);
+    assert.equal(state.standardAccent, 'rgb(124, 71, 24)');
+    assert.equal(state.plannedAccent, 'rgb(156, 39, 176)');
+    assert.equal(state.formedAccent, 'rgb(23, 162, 184)');
+    assert.equal(state.progressAccent, 'rgb(40, 167, 69)');
+    assert.equal(state.completedAccent, 'rgb(108, 117, 125)');
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    assert.equal(await page.evaluate(() => window.scrollY > 0), true, `${width}px scroll reaches lower content`);
+    const ordinary = page.locator('[id="registry.checkbox-group"] .registry-ui-checkboxes:not(.registry-ui-checkboxes--trip-status) input').nth(1);
+    await ordinary.focus();
+    await page.keyboard.press('Space');
+    assert.equal(await ordinary.isChecked(), true);
     await page.locator('[id="registry.select"] .lab-reference-trigger').click();
     assert.equal(await page.locator('[id="registry.select"] .lab-reference-list').isVisible(), true);
     await page.keyboard.press('ArrowDown');
