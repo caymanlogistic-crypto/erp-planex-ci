@@ -170,14 +170,15 @@
 .registry-ui-data.registry-ui-table--documents col:nth-child(12) {width:100px}
 .registry-ui-data.registry-ui-table--documents col:nth-child(13) {width:165px}
 .registry-ui-data.registry-ui-table--documents col:nth-child(14) {width:170px}
-.registry-ui-data.registry-ui-table--finance col:nth-child(3),.registry-ui-data.registry-ui-table--finance col:nth-child(9) {width:90px}
-.registry-ui-data.registry-ui-table--finance col:nth-child(5),.registry-ui-data.registry-ui-table--finance col:nth-child(11) {width:132px}
-.registry-ui-data.registry-ui-table--finance col:nth-child(4),.registry-ui-data.registry-ui-table--finance col:nth-child(6),.registry-ui-data.registry-ui-table--finance col:nth-child(7),.registry-ui-data.registry-ui-table--finance col:nth-child(10),.registry-ui-data.registry-ui-table--finance col:nth-child(12),.registry-ui-data.registry-ui-table--finance col:nth-child(13) {width:105px}
 .registry-ui-data .registry-ui-secondary {max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.registry-ui-data .registry-ui-money .registry-rate-total {font:inherit;color:inherit}
+.registry-ui-data tfoot td :is(strong,b) {font-weight:700}
+.registry-ui-data .registry-ui-status.registry-ui-error {color:#872822}
+.registry-ui-data .registry-ui-status.registry-ui-success {color:#1f6b43}
 .registry-ui-data .registry-ui-reason {font:500 11px/15.4px var(--font);color:#675f55;white-space:normal;overflow-wrap:normal}
 .registry-ui-data .registry-ui-due .registry-ui-secondary {overflow:visible;white-space:normal}
 .registry-ui-data tbody tr.registry-ui-warning .registry-ui-secondary {color:#131210}
-.registry-ui-data .route-status {font:500 12px/16.8px var(--font)}
+.registry-ui-data .route-status {font:500 12px/16.8px var(--font);color:#131210}
 .registry-ui-data .route-status--danger,.registry-ui-data .route-status--danger::before {color:#872822}
 .registry-ui-data .route-status--danger::before {background:#872822}
 .registry-ui-data .route-status--active {color:#1f6b43}

@@ -29,8 +29,8 @@ $routeListVehicles = static function (array $row): void {
         echo '<span class="route-vehicle-line">';
         if ($brand!=='') echo '<span class="route-vehicle-brand registry-ui-primary">'.e($brand).'</span>';
         if ($plate!=='') echo '<span class="route-vehicle-plate registry-ui-primary">'.e(\App\Service\RouteExecutorListPresentation::plate($plate,$role==='secondary')).'</span>';
-        if ($capacity!=='') echo '<span class="route-vehicle-metric registry-ui-secondary"><span class="route-vehicle-dot">·</span> '.e($capacity).' т</span>';
-        if ($volume!=='') echo '<span class="route-vehicle-metric registry-ui-secondary"><span class="route-vehicle-dot">·</span> '.e($volume).' м³</span>';
+        if ($capacity!=='') echo '<span class="route-vehicle-metric registry-ui-secondary">· '.e($capacity).' т</span>';
+        if ($volume!=='') echo '<span class="route-vehicle-metric registry-ui-secondary">· '.e($volume).' м³</span>';
         echo '</span>';
     }
     if (!$shown) echo '—';
@@ -131,7 +131,7 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
         </div>
     </div>
     <div class="table-scroll">
-        <table class="table registry-ui-table registry-ui-data registry-ui-table--executors" data-registry-cards-at="640">
+        <table class="table registry-ui-table registry-ui-data registry-ui-table--executors">
             <colgroup><col style="width:26%"><col style="width:23%"><col style="width:22%"><col style="width:13%"><col style="width:16%"></colgroup>
             <thead>
                 <tr>
@@ -150,7 +150,7 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
                     <td class="route-person-cell" data-label="Водитель"><div class="registry-ui-value"><strong class="registry-ui-name"><?= e($card['driver_name'] ?: '—') ?></strong><?php $routeListContact($card['driver_phone']??'', $card['driver_email']??''); ?></div></td>
                     <td class="route-vehicle-cell" data-label="Комплект ТС"><div class="registry-ui-value"><?php $routeListVehicles($card); ?></div></td>
                     <td data-label="Логист"><div class="registry-ui-value"><?= e($responsibleLogistNames[(int)($card['responsible_membership_id']??0)]??'—') ?></div></td>
-                    <td data-label="Статус"><div class="registry-ui-value route-review-actions"><span class="route-status registry-ui-status route-status--<?= $reviewStatusClass ?>" title="<?= e($reviewLabel) ?>"><?= e($reviewStatusText) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="route-review-delete row-actions-btn" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Действия с карточкой" aria-haspopup="menu" aria-expanded="false">⋯</button></div></td>
+                    <td data-label="Статус"><div class="registry-ui-value route-review-actions"><span class="route-status registry-ui-status route-status--<?= $reviewStatusClass ?><?= $reviewStatusClass==='active'?' registry-ui-success':($reviewStatusClass==='danger'?' registry-ui-error':'') ?>" title="<?= e($reviewLabel) ?>"><?= e($reviewStatusText) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="route-review-delete row-actions-btn" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Действия с карточкой" aria-haspopup="menu" aria-expanded="false">⋯</button></div></td>
                 </tr>
                 <?php endforeach; ?>
                 <?php foreach ($executors as $e): ?>
@@ -159,7 +159,7 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
                     <td class="route-person-cell" data-label="Водитель"><div class="registry-ui-value"><strong class="registry-ui-name"><?= e($e['driver_name'] ?? '—') ?></strong><?php $routeListContact($e['driver_phone']??'', $e['driver_email']??''); ?></div></td>
                     <td class="route-vehicle-cell" data-label="Комплект ТС"><div class="registry-ui-value"><?php $routeListVehicles($e); ?></div></td>
                     <td data-label="Логист"><div class="registry-ui-value"><?= e($e['responsible_name'] ?? '—') ?></div></td>
-                    <td data-label="Статус"><div class="registry-ui-value"><span class="route-status registry-ui-status route-status--<?= $e['crew_status'] === 'active' ? 'active' : 'neutral' ?>">
+                    <td data-label="Статус"><div class="registry-ui-value"><span class="route-status registry-ui-status route-status--<?= $e['crew_status'] === 'active' ? 'active registry-ui-success' : 'neutral' ?>">
                             <?= $e['crew_status'] === 'active' ? 'Активен' : 'Неактивен' ?>
                         </span></div>
                     </td>

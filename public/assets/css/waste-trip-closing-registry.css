@@ -10,10 +10,7 @@
 .lab-grid .lab-table tbody tr:focus-visible{outline:2px solid #9a5a22;outline-offset:-2px}
 .lab-grid .lab-table td:first-child{font-weight:700;font-variant-numeric:tabular-nums}
 .lab-grid .lab-table th:nth-child(12),.lab-grid .lab-table td:nth-child(12){text-align:right;font-variant-numeric:tabular-nums;font-weight:600}
-.lab-grid .lab-table td.closing-report-status.is-present,.lab-grid .lab-table .closing-report-unit.is-present{color:#17643b;font-weight:600}
-.lab-grid .lab-table td.closing-report-status.is-missing,.lab-grid .lab-table .closing-report-unit.is-missing{color:#a0322d;font-weight:600}
-.lab-grid .lab-table td.closing-report-status.is-partial{color:#835a08;font-weight:600}
-.lab-grid .lab-table .closing-report-unit{display:block;line-height:1.3;white-space:normal;overflow-wrap:anywhere}
+.lab-grid .lab-table .closing-report-unit{display:block;white-space:normal;overflow-wrap:anywhere}
 .lab-grid .lab-table :is(th,td):nth-child(1){width:3%}
 .lab-grid .lab-table :is(th,td):nth-child(2){width:10%}
 .lab-grid .lab-table :is(th,td):nth-child(3){width:8%}

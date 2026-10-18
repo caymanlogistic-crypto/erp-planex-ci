@@ -4,7 +4,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {assertRegistryVisualContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -30,6 +30,7 @@ try{
  await page.addScriptTag({content:registryJs});
  await page.locator('[data-registry-id="finance-received-paid"][data-registry-ready="true"]').waitFor();
  await assertRegistryVisualContract(page, 'finance-received-paid 1280px');
+ await assertRegistryDataContract(page, 'finance-received-paid');
  const sharedStyles=await page.evaluate(()=>{
    const search=document.querySelector('#rp-search');
    const heading=document.querySelector('#rp-ledger-table thead th');
@@ -89,6 +90,10 @@ try{
    if(width===390) assert.equal(await page.locator('.rp-v015-toolbar .lab-reference-trigger').evaluate(control=>control.getBoundingClientRect().right<=control.closest('.rp-v015-toolbar').getBoundingClientRect().right-8),true,'mobile sort control stays inside the toolbar');
    assert.deepEqual(await page.locator('.rp-standard-box .lab-reference-trigger, .rp-standard-box #rp-search').evaluateAll(items=>items.map(el=>getComputedStyle(el).borderRadius)),['2px','2px'],`accepted control radius at ${width}`);
    assert.equal(await page.locator('.rp-v010-table-wrap').evaluate(el=>el.scrollWidth<=el.clientWidth+1),true,`ledger wrapper has no horizontal scroll at ${width}`);
+   if(width>=1920){
+     const fixedColumns=await page.locator('#rp-ledger-table tbody tr:visible').first().evaluate(row=>[row.cells[0].getBoundingClientRect().width,row.cells[1].getBoundingClientRect().width]);
+     assert.ok(Math.abs(fixedColumns[0]-64)<=1&&Math.abs(fixedColumns[1]-240)<=1,`${width}: canonical 64px ID and 240px trip widths, got ${fixedColumns}`);
+   }
    if(width===390){
      const columns=await page.locator('#rp-list tr[data-id="102"]').evaluate(row=>[4,5,6,7,10,11,12,13].map(index=>Math.round(row.cells[index-1].querySelector('.registry-ui-value')?.getBoundingClientRect().left||0)));
      assert.equal(new Set(columns).size,1,'mobile values share one aligned column');
@@ -115,7 +120,7 @@ try{
      });
      assert.equal(canonicalTripType.id.family.includes('IBM Plex Sans'),true,'trip ID uses the locally loaded canonical font');
      assert.deepEqual({...canonicalTripType.id,family:'IBM Plex Sans'},{family:'IBM Plex Sans',size:'12px',weight:'700',line:'16.8px',color:'rgb(19, 18, 16)'},'trip ID is canonical black');
-     assert.deepEqual(canonicalTripType.description,{size:'12px',weight:'400',line:'16.8px'},'trip description matches departures');
+     assert.deepEqual(canonicalTripType.description,{size:'12px',weight:'500',line:'16.8px'},'trip description matches departures');
      assert.deepEqual(canonicalTripType.header,{size:'10px',weight:'700',line:'14px'},'table header matches departures');
      const tabFont=await tabs.first().evaluate(button=>({size:getComputedStyle(button).fontSize,line:getComputedStyle(button).lineHeight,countSize:getComputedStyle(button.querySelector('b')).fontSize}));
      assert.deepEqual(tabFont,{size:'12px',line:'16px',countSize:'12px'},'finance tabs use the approved status-tab typography');

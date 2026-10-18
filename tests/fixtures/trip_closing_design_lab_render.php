@@ -66,6 +66,13 @@ for ($index = 0; $index < 35; $index++) {
         'legal_entity_code' => $index % 7 === 5 ? 'mg_logistic' : 'planex',
         'recipient_email' => $index % 7 === 5 ? 'documents@example.test' : 'office@example.test',
         'documents' => $documents,
+        'transport' => ['units' => match ($index) {
+            0 => [['label'=>'Тягач','brand'=>'КамАЗ','plate'=>'А111АА','has_card'=>false]],
+            1 => [['label'=>'Тягач','brand'=>'КамАЗ','plate'=>'В222ВВ','has_card'=>true]],
+            2 => [['label'=>'Тягач','brand'=>'КамАЗ','plate'=>'С333СС','has_card'=>true],['label'=>'Полуприцеп','brand'=>'Тонар','plate'=>'Е444ЕЕ','has_card'=>false]],
+            3 => [['label'=>'Тягач','brand'=>'КамАЗ','plate'=>'К555КК','has_card'=>true],['label'=>'Полуприцеп','brand'=>'Тонар','plate'=>'М666ММ','has_card'=>true]],
+            default => [],
+        }],
         'paid_bank_transactions' => [],
         'review_state' => 'new',
         'review_version' => 1,

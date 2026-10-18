@@ -1,6 +1,7 @@
 <?php
 declare(strict_types=1);
 $root=dirname(__DIR__);
+spl_autoload_register(static function(string $class) use($root): void { if(str_starts_with($class,'App\\')){ $file=$root.'/app/'.str_replace('\\','/',substr($class,4)).'.php'; if(is_file($file))require_once $file; } });
 require_once $root.'/app/Service/WasteTripService.php';
 require_once $root.'/app/Service/LinearRouteService.php';
 require_once $root.'/app/Service/DateCalculationService.php';
@@ -62,6 +63,8 @@ $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[11]')->item(0)->t
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[12]')->item(0)->textContent,'120 ₽'),'Manual cost column');
 $assert($xp->query('//td[contains(@class,"waste-executor-unmatched")]')->length===0,'Missing executor has no warning highlight');
 $assert(trim($xp->query('//tr[@data-waste-view="2"]/td[7]')->item(0)->textContent)==='—','Missing executor is shown as a dash');
+$driverNode=$xp->query('//tr[@data-waste-view="3"]/td[7]//span[contains(@class,"registry-executor-secondary")]')->item(0);
+$assert($driverNode!==null && $driverNode->textContent==='Иванов Иван Петрович' && $driverNode->getAttribute('title')==='Иванов Иван Петрович','Approved registry shows and exposes the full driver name');
 $assert($xp->query('//select[@name="company"]/option')->length===3,'Company filter offers all, MG and Planex');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[8]')->item(0)->textContent,'22'),'Request count');
 $assert(str_contains($xp->query('//tr[@data-waste-view="1"]/td[9]')->item(0)->textContent,'1 500'),'Total mass rounded to kilograms');

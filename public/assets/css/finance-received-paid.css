@@ -331,7 +331,7 @@
 
 /* Registry identity: ID and trip description occupy distinct cells, as in departures. */
 .rp-ledger-v015 .rp-v010-table .rp-v010-id strong {color:inherit;font-weight:inherit}
-.rp-ledger-v015 .rp-v010-table .rp-v010-trip span {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;font-weight:400;line-height:16.8px}
+.rp-ledger-v015 .rp-v010-table .rp-v010-trip span {display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 @media(min-width:1600px) {
   .rp-ledger-v015 .rp-v010-table th:nth-child(9) {white-space:nowrap;padding-inline:4px}
 }
