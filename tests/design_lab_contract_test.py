@@ -97,6 +97,32 @@ with tempfile.TemporaryDirectory(prefix="planex-design-lab-contract-") as tempor
     assert acceptance["approved_version"] == "v001"
     assert acceptance["owner_instruction"] == "ВНЕДРЯЙ"
 
+    # Recover existing explicit approval without touching another task's session.
+    # The selected immutable files/assets remain identical, not re-rendered from
+    # current source or replaced by its later mutable workspace.
+    saved_manifest=(session/'session.json').read_bytes()
+    saved_acceptance=(session/'acceptance.json').read_bytes()
+    (session/'acceptance.json').unlink()
+    pending_manifest=json.loads(saved_manifest)
+    pending_manifest['accepted_version']=None
+    (session/'session.json').write_text(json.dumps(pending_manifest),encoding='utf-8')
+    original_manifest=(session/'session.json').read_bytes()
+    css.write_text('/* later unapproved experiment */',encoding='utf-8')
+    imported_common=('--task-id','owned-reference','--local-root',str(local_root))
+    run('import-reference',*imported_common,'--source-task-id',task_id,'--worktree',str(ROOT),'--version','v001','--owner-instruction','OWNER: implement agreed pages','--decision-source','OWNER message 2026-10-19','--exclude-role','new forms')
+    imported_session=local_root/'design-lab/owned-reference'
+    imported_acceptance=json.loads((imported_session/'acceptance.json').read_text(encoding='utf-8'))
+    assert imported_acceptance['reference_origin']['source_task_id']==task_id
+    assert imported_acceptance['reference_origin']['excluded_roles']==['new forms']
+    assert (imported_session/'workspace/overrides.css').read_bytes()==(session/'versions/v001/overrides.css').read_bytes()
+    assert (session/'session.json').read_bytes()==original_manifest
+    assert not (session/'acceptance.json').exists()
+    run('verify',*imported_common)
+    assert 'SESSION_ALREADY_EXISTS' in run('import-reference',*imported_common,'--source-task-id',task_id,'--worktree',str(ROOT),'--version','v001','--owner-instruction','x','--decision-source','x',ok=False).stderr
+    (session/'session.json').write_bytes(saved_manifest)
+    (session/'acceptance.json').write_bytes(saved_acceptance)
+    css.write_bytes((session/'versions/v001/overrides.css').read_bytes())
+
     ready = local_root / "ready.json"
     server = subprocess.Popen(
         [

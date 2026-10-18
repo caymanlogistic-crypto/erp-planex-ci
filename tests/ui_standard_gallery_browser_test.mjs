@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {assertRegistryVisualContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataRoles} from './helpers/registry_visual_contract.mjs';
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const url=pathToFileURL(path.join(root,'docs/ui/approved-components.html')).href;
@@ -31,6 +31,7 @@ try{
    await page.locator(`[data-gallery-scene=${key}]`).click();
    const scene=view(key);await scene.waitFor({state:'visible'});
    await actual.evaluate(()=>document.fonts.ready);
+   await assertRegistryDataRoles(actual,[],`all approved data roles ${key} ${width}`);
    assert.equal(await frame.locator('[data-gallery-view]:visible').count(),1);
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`host ${width}`);
    assert.equal(await actual.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true,`composition ${key} ${width}`);
@@ -175,5 +176,22 @@ try{
  await page.waitForTimeout(100);
  assert.equal(await clean.locator('[data-gallery-view=scroll]').evaluate(view=>view.parentElement.scrollHeight-view.parentElement.clientHeight),0,'empty state has no ghost header range');
  await page.close();
+ // Reproduce the independent audit: loaded font files do not prove the actual
+ // glyph family, and missing semantic markers must never pass by vacuity.
+ const audit=await browser.newPage({viewport:{width:1920,height:1080}});
+ await audit.goto(url);
+ await audit.locator('[data-gallery-scene=finance]').click();
+ const auditFrame=audit.frames().find(frame=>frame.parentFrame());
+ await auditFrame.locator('[data-gallery-view=finance] .registry-ui-search').waitFor();
+ await assertRegistryDataRoles(auditFrame,['primary','name','secondary'],'audit baseline');
+ const hostile=await auditFrame.addStyleTag({content:'.registry-ui-data .registry-ui-name,.registry-ui-data .registry-ui-secondary{font-family:Arial!important}.registry-ui-data .registry-ui-primary{font-size:25px!important;color:blue!important}'});
+ await assert.rejects(()=>assertRegistryVisualContract(auditFrame,'audit actual font drift'),/actual font family|typography\/color/);
+ await hostile.evaluate(element=>element.remove());
+ const fallback=await auditFrame.addStyleTag({content:'.registry-ui-data .registry-ui-name{font-family:Arial,"IBM Plex Sans"!important}'});
+ await assert.rejects(()=>assertRegistryDataRoles(auditFrame,['name'],'audit fallback family'),/actual font family/);
+ await fallback.evaluate(element=>element.remove());
+ await auditFrame.locator('[data-gallery-view=finance] .registry-ui-name').evaluateAll(elements=>elements.forEach(element=>element.classList.remove('registry-ui-name')));
+ await assert.rejects(()=>assertRegistryDataRoles(auditFrame,['name'],'audit missing coverage'),/no visible coverage/);
+ await audit.close();
  console.log('UI_STANDARD_GALLERY_BROWSER=PASS');
 }finally{await browser.close()}

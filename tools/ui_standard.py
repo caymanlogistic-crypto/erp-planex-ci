@@ -14,6 +14,13 @@ CATALOG = ROOT / "docs/ui/approved-components.json"
 GALLERY = ROOT / "docs/ui/approved-components.html"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$")
 LEGACY_PAGES = frozenset({'route-executors','trips-departures','finance-received-paid','logistics-closing-documents'})
+DATA_ROLES = frozenset({'primary','name','secondary','money','id','trip','missing','due','status','total','reason'})
+PAGE_DATA_ROLES = {
+    'route-executors': {'primary','name','secondary','status'},
+    'trips-departures': {'primary','name','secondary','money','id','trip','missing','status'},
+    'finance-received-paid': {'primary','name','secondary','money','id','trip','missing','due','total'},
+    'logistics-closing-documents': {'primary','name','secondary','id','trip','missing','status'},
+}
 
 
 def safe_file(value: str) -> Path:
@@ -86,6 +93,11 @@ def validate(data: dict) -> list[str]:
                 status=item.get('adaptation_status')
                 if status!='current_20261018' and not (name in LEGACY_PAGES and status=='legacy_shared_shell_pending_20261018'):
                     errors.append(f'pages/{name}: new pages must adopt current_20261018; legacy exception is closed')
+                if status=='current_20261018':
+                    roles=item.get('data_roles')
+                    minimum=PAGE_DATA_ROLES.get(name, {'primary'})
+                    if not isinstance(roles,list) or not roles or any(not isinstance(role,str) or role not in DATA_ROLES for role in roles) or len(set(roles))!=len(roles) or not minimum.issubset(roles):
+                        errors.append(f'pages/{name}: data_roles must cover applicable canonical roles, including {sorted(minimum)}')
                 if not item.get("route", "").startswith("/erpv2/"):
                     errors.append(f"pages/{name}: ERP route required")
                 if item.get("family") == "registry" and (type(item.get("sticky")) is not bool or type(item.get("reference_select")) is not bool):
@@ -101,6 +113,8 @@ def validate(data: dict) -> list[str]:
                     test_source = safe_file(item["browser_test"]).read_text(encoding="utf-8")
                     if "assertRegistryVisualContract" not in test_source:
                         errors.append(f"pages/{name}: browser test must invoke shared registry visual contract")
+                    if status=='current_20261018' and ('assertRegistryDataContract' not in test_source or name not in test_source):
+                        errors.append(f'pages/{name}: current browser test must invoke assertRegistryDataContract with catalog page id')
                 if item.get("view") and (ROOT / item["view"]).is_file():
                     source = safe_file(item["view"]).read_text(encoding="utf-8")
                     if "registry-ui-card" not in source:

@@ -4,6 +4,12 @@
   "scope": "Approved registry presentation; mechanism implementation requested separately by OWNER",
   "request": "Завершай механизм, думай может мы что-то забыли ещё согласовать?",
   "implementation_scope": "Reusable canon infrastructure, gallery, agent workflow and enforcement. Four-page runtime migration is tracked separately; no authorization inferred for unsupervised new visual decisions.",
+  "rollout_authorization": {
+    "date": "2026-10-19",
+    "source": "OWNER in designer coordination chat, after explicit scope confirmation",
+    "instruction": "Да, всё правильно. Запускай ТЕСТ и независимого аудитора, доведи все 4 страницы в продакшене до согласованного канона, исправь пробелы в документации. Компьютер выключи только после полной проверки результата.",
+    "scope": "Implement the four referenced approved versions through normal LOCAL checks, PR/CI, release and production verification; recover missing acceptance in owned reference copies with source hashes and decision provenance. Pending new visual roles remain unapproved. No production DB/business-data writes authorized."
+  },
   "references": {
     "executors": "ui-four-pages-row-batch-20261018:v006",
     "finance": "ui-four-pages-finance-20261018:v007",

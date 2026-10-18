@@ -20,6 +20,9 @@ bad = [
     ("app/View/pages/example.php", '<style>.page-head{height:72px}</style>'),
     ("app/View/pages/example.php", '<input class="renamed" style="border:2px solid red">'),
     ("public/assets/js/example.js", "control.style.backgroundColor = '#fff';"),
+    ("public/assets/js/example.js", "control['style'].color = 'red';"),
+    ("public/assets/js/example.js", "control['style']['setProperty']('color','red');"),
+    ("app/View/pages/example.php", '<input style=color:red>'),
     ("public/assets/js/example.js", "control.style.setProperty('--control-height', '40px');"),
     ("public/assets/js/example.js", "control.setAttribute('style', 'color:red');"),
     ("public/assets/js/example.js", "sheet.insertRule('.alias{color:red}');"),
@@ -27,6 +30,10 @@ bad = [
     ("public/assets/js/example.mjs", "Object.assign(control.style, {background:'red'});"),
     ("public/assets/css/page.css", '@import "parallel.css";'),
     ("public/assets/css/page.css", '@layer reused; .copy{color:red}'),
+    ("public/assets/css/page.css", '.copy-search{width:999px;text-align:right;display:none}'),
+    ("public/assets/css/page.css", '.copy-search{width:999px}'),
+    ("public/assets/css/page.css", 'td.business-column input{width:999px}'),
+    ("public/assets/css/page.css", 'td.business-column{display:none;pointer-events:none}'),
 ]
 for path, source in bad:
     assert violations(path, "", source, owners), (path, source)
@@ -35,7 +42,7 @@ assert not violations("public/assets/css/page.css", old, "/* format */ .old{colo
 assert not violations("public/assets/css/page.css", old, ".old{color:red}", owners)
 assert violations("public/assets/css/page.css", old, old + old, owners)
 assert violations("public/assets/css/page.css", old, old.replace(".old", ".copy"), owners)
-assert not violations("public/assets/css/page.css", "", ".business-column{width:20%;text-align:right}", owners)
+assert not violations("public/assets/css/page.css", "", "col.business-column{width:20%} .business-table td:nth-child(3){text-align:right}", owners)
 assert not violations("public/assets/css/registry-components.css", "", old, owners)
 assert not violations('public/assets/js/registry-components.js','','head.style.transform = value;',owners)
 assert not violations('public/assets/js/registry-components.js','',"table.style.setProperty('--registry-id-width', value);",owners)
