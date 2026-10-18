@@ -6,6 +6,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { assertRegistryVisualContract } from './helpers/registry_visual_contract.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -36,6 +37,7 @@ try {
   for (const width of [1920, 1280, 390, 360]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await assertRegistryVisualContract(page, `trips-departures ${width}px`);
     const metrics = await page.evaluate(() => {
       const table = document.querySelector('.waste-registry');
       const first = table.tBodies[0].rows[0];

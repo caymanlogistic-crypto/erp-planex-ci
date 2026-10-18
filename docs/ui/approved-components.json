@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "families": [
+    {
+      "id": "registry",
+      "description": "Табличный реестр ERP PLANEX",
+      "approval": "OWNER 2026-10-12",
+      "canon": "docs/ui/REGISTRY_CANON.md",
+      "reference_route": "/erpv2/company/route-executors",
+      "styles": "public/assets/css/registry-components.css",
+      "behavior": [
+        "public/assets/js/registry-components.js",
+        "public/assets/js/table-reference-select.js"
+      ]
+    }
+  ],
+  "components": [
+    {"id": "registry.page-head", "family": "registry", "role": "Шапка страницы", "selector": ".registry-ui-head", "markup": "app/View/partials/registry_ui_head.php", "approval": "OWNER 2026-10-12"},
+    {"id": "registry.tabs", "family": "registry", "role": "Вкладки статусов", "selector": ".registry-ui-tabs", "approval": "OWNER 2026-10-12"},
+    {"id": "registry.card", "family": "registry", "role": "Рамка рабочего блока", "selector": ".registry-ui-card", "approval": "OWNER 2026-10-12"},
+    {"id": "registry.toolbar", "family": "registry", "role": "Панель Найдено и фильтров", "selector": ".registry-ui-toolbar", "approval": "OWNER 2026-10-12"},
+    {"id": "registry.search", "family": "registry", "role": "Поиск", "selector": ".registry-ui-search", "approval": "OWNER 2026-10-12"},
+    {"id": "registry.table", "family": "registry", "role": "Таблица и заголовки", "selector": ".registry-ui-table", "approval": "OWNER 2026-10-12"},
+    {"id": "registry.sticky", "family": "registry", "role": "Закрепление панели и заголовков", "selector": ".registry-ui-sticky-table", "approval": "OWNER 2026-10-12"},
+    {"id": "registry.select", "family": "registry", "role": "Выбор значения", "selector": ".registry-ui-toolbar .lab-reference-select", "approval": "OWNER 2026-10-12"}
+  ],
+  "pages": [
+    {"id": "route-executors", "family": "registry", "route": "/erpv2/company/route-executors", "view": "app/View/pages/company_route_executors.php", "asset_owner": "app/Http/Controllers/Company/RouteExecutorActions/index.php", "browser_test": "tests/route_executor_list_browser_test.mjs", "sticky": true, "reference_select": true},
+    {"id": "trips-departures", "family": "registry", "route": "/erpv2/company/trips/departures", "view": "app/View/pages/company_waste_trips.php", "browser_test": "tests/waste_trip_registry_browser_test.mjs", "sticky": true, "reference_select": true},
+    {"id": "finance-received-paid", "family": "registry", "route": "/erpv2/company/finance/received-paid", "view": "app/View/partials/finance_received_paid_ledger.php", "asset_owner": "app/View/pages/company_finance_received_paid.php", "browser_test": "tests/finance_received_paid_payment_filter_browser_test.mjs", "sticky": true, "reference_select": true},
+    {"id": "logistics-closing-documents", "family": "registry", "route": "/erpv2/company/logistics/closing-documents", "view": "app/View/pages/company_waste_trip_closing_registry.php", "browser_test": "tests/registry_closing_responsive_browser_test.mjs", "sticky": true, "reference_select": true}
+  ]
+}
