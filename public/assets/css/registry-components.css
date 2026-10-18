@@ -93,9 +93,11 @@
 .registry-ui-toolbar .lab-reference-option[aria-selected="true"] {background:#f2e8dc;color:#2e2923;font-weight:500}
 .registry-ui-toolbar .lab-reference-option[aria-selected="true"]:hover {background:#e9d9c7}
 .registry-ui-toolbar .registry-ui-search {box-sizing:border-box;width:230px;height:32px;min-height:32px;flex:0 0 230px;padding:0 9px 0 31px;border:1px solid #c8c0b5;border-radius:2px;background:#fffdf9 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M21 21l-6 -6'/%3E%3C/svg%3E") 9px center/15px 15px no-repeat;color:#2e2923;font:500 12px/16px var(--font)}
-.registry-ui-toolbar .registry-ui-search::placeholder {color:#817b72;opacity:1}
-.registry-ui-toolbar .registry-ui-search:focus {outline:none;border-color:#7c4718;box-shadow:0 0 0 2px rgba(124,71,24,.1)}
-.registry-ui-card .registry-ui-table thead th {height:30px;background:#e3ded5;color:#2a2620;font:700 10px/14px var(--font);text-transform:uppercase}
+.registry-ui-toolbar .registry-ui-search::placeholder {color:#817b72;opacity:1;font-weight:500}
+.registry-ui-toolbar .closing-search .registry-ui-search::placeholder {font-weight:500}
+.registry-ui-toolbar .registry-ui-search:focus {outline:none;border-color:#7c4718;box-shadow:0 0 0 2px rgba(124,71,24,.1);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M21 21l-6 -6'/%3E%3C/svg%3E");background-position:9px center;background-size:15px 15px;background-repeat:no-repeat}
+.registry-ui-card .registry-ui-table thead th {height:30px;padding:0 10px;border-top:0;border-left:0;background:#e3ded5;color:#2a2620;font:700 10px/14px var(--font);text-transform:uppercase}
+.registry-ui-card .registry-ui-table tbody td {padding-left:10px;padding-right:10px;border-top:0;border-left:0}
 .registry-ui-card .registry-ui-table--finance thead th {background:#d0ccc4;color:#34322f}
 .registry-ui-table .registry-id,.registry-ui-table .col-mono,.registry-ui-table .rp-v010-id {color:#131210;font-family:var(--font);font-size:12px;font-weight:700;line-height:16.8px;font-variant-numeric:tabular-nums}
 .registry-ui-table .registry-executor-secondary,.registry-ui-table .waste-legal-entity {color:#78726a}
@@ -152,6 +154,17 @@
 .registry-ui-data tfoot td.registry-ui-money {font:700 11px/15.4px var(--font)}
 .registry-ui-data--wide {min-width:1660px}
 .registry-ui-data.registry-ui-table--executors {min-width:1000px}
+.registry-ui-card .registry-ui-table--documents tbody td.registry-ui-id {font-variant-numeric:normal}
+.registry-ui-card .registry-ui-table--documents :is(th,td):nth-child(12) {text-align:left;font-variant-numeric:normal}
+.registry-ui-table--executors tbody td {font-variant-numeric:tabular-nums}
+.registry-ui-table--executors tbody :is(.registry-ui-name,.registry-ui-secondary,.registry-ui-primary,.registry-ui-status) {font-variant-numeric:tabular-nums}
+.registry-ui-table--executors tbody tr.registry-ui-warning .route-vehicle-dot {color:#131210}
+.registry-ui-table--executors .route-vehicle-metric {color:#131210}
+.registry-ui-table--executors tbody tr.registry-ui-warning .route-review-delete {color:#131210}
+.registry-ui-table--executors tbody tr:is(.registry-ui-soft-error,.registry-ui-soft-success) :is(.registry-ui-secondary,.route-vehicle-dot,.route-review-delete) {color:#131210}
+.registry-ui-table--executors tbody tr.registry-ui-soft-success .route-review-materialize {color:#131210}
+.registry-ui-table--executors .route-review-actions > .route-status[data-full-mail-label] {min-width:0;max-width:calc(100% - 30px);white-space:normal}
+.registry-ui-card .registry-ui-table--executors tbody td.route-vehicle-cell {padding-inline:5px}
 .registry-ui-data.registry-ui-table--trips col:nth-child(3) {width:136px}
 .registry-ui-data.registry-ui-table--trips col:nth-child(4) {width:110px}
 .registry-ui-data.registry-ui-table--trips col:nth-child(5) {width:120px}
@@ -179,6 +192,7 @@
 .registry-ui-data .registry-ui-due .registry-ui-secondary {overflow:visible;white-space:normal}
 .registry-ui-data tbody tr.registry-ui-warning .registry-ui-secondary {color:#131210}
 .registry-ui-data .route-status {font:500 12px/16.8px var(--font);color:#131210}
+.registry-ui-data .route-status--neutral {color:#4c4840}
 .registry-ui-data .route-status--danger,.registry-ui-data .route-status--danger::before {color:#872822}
 .registry-ui-data .route-status--danger::before {background:#872822}
 .registry-ui-data .route-status--active {color:#1f6b43}
@@ -232,3 +246,129 @@
  .registry-ui-data.registry-ui-table--finance tfoot td:first-child,.registry-ui-data.registry-ui-table--finance tfoot td[data-gallery-total],.registry-ui-data.registry-ui-table--finance tfoot td[data-registry-total] {display:block;min-width:0;width:auto;height:auto}
  .registry-ui-data.registry-ui-table--finance tfoot td[data-label]::before {content:attr(data-label);display:block;font:500 11px/15.4px var(--font);color:#78726a}
 }
+
+/* Approved four-registry reference: finance-received-paid.css */
+@media(min-width:1051px) and (max-width:1599px) {
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data .rp-v012-compact-head th {border-right-color:rgba(168,161,150,.15);padding:6px 7px;white-space:normal}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tbody td {display:flex;align-items:center;padding:6px 7px}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tbody td:nth-child(8) {display:block}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tbody td:nth-child(8) .rp-v010-mobile-group {font:500 12px/15px var(--font-base);color:#131210;font-variant-numeric:tabular-nums}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tbody td:nth-child(n+8) {border-top:1px solid rgba(190,184,174,.42)}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tfoot td[data-total] {min-height:44px;height:auto}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tfoot td {border-top:0;border-left:0;border-right-color:rgba(168,161,150,.15)}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tfoot td:is(:first-child,[data-total]) {display:flex}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tfoot td[data-total] {padding:4px 6px;gap:2px;flex-direction:column;align-items:flex-end;justify-content:center}
+}
+@media(min-width:1800px) {
+  .rp-ledger-v015 .rp-v010-table {table-layout:fixed}
+  .rp-ledger-v015 .rp-v010-table col {width:auto!important}
+  .rp-ledger-v015 .rp-v010-table col:first-child {width:64px!important}
+  .rp-ledger-v015 .rp-v010-table col:nth-child(2) {width:240px!important}
+  .rp-ledger-v015 .rp-v010-table col:nth-child(3),
+  .rp-ledger-v015 .rp-v010-table col:nth-child(9) {width:90px!important}
+  .rp-ledger-v015 .rp-v010-table col:nth-child(5),
+  .rp-ledger-v015 .rp-v010-table col:nth-child(11) {width:132px!important}
+  .rp-ledger-v015 .rp-v010-table col:nth-child(4),
+  .rp-ledger-v015 .rp-v010-table col:nth-child(6),
+  .rp-ledger-v015 .rp-v010-table col:nth-child(7),
+  .rp-ledger-v015 .rp-v010-table col:nth-child(10),
+  .rp-ledger-v015 .rp-v010-table col:nth-child(12),
+  .rp-ledger-v015 .rp-v010-table col:nth-child(13) {width:105px!important}
+}
+
+/* Semantic value wrappers preserve the accepted finance card grid. */
+.rp-ledger-v015 .rp-v010-table tbody td > .registry-ui-value {display:contents}
+.rp-ledger-v015 .registry-ui-toolbar .rp-v014-hide-complete {margin-right:16px}
+.rp-ledger-v015 .rp-v010-table tbody td {line-height:15px}
+.rp-ledger-v015 .rp-v010-table tbody td:is(.rp-v010-id,.rp-v010-money) {line-height:16.8px}
+.rp-ledger-v015 .rp-v010-table tbody td.rp-v010-money {font-weight:600;text-align:right}
+.rp-ledger-v015 .rp-v010-table .rp-v010-date strong {font-variant-numeric:normal}
+.rp-ledger-v015 .rp-v010-table .rp-v010-date.is-today small.registry-ui-secondary {color:#131210}
+.rp-ledger-v015 .rp-v010-table .rp-v010-date.is-overdue small.registry-ui-secondary {color:#872822}
+.rp-ledger-v015 .rp-v010-table .rp-v010-date.is-closed small.registry-ui-secondary {color:#1f6b43}
+.rp-ledger-v015 .rp-v010-table tbody td:has(.registry-ui-reason) {justify-content:flex-start;text-align:left}
+.rp-ledger-v015 .rp-v010-table tfoot td[data-total] {justify-content:normal;text-align:right}
+.rp-ledger-v015 .rp-v010-table tfoot td[data-total] strong {font-variant-numeric:tabular-nums;text-align:right!important}
+.rp-ledger-v015 .rp-v010-table.registry-ui-data tfoot td {border-top:0;border-left:0;border-right-color:rgba(168,161,150,.15)}
+@media(min-width:1600px) {
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data tbody td {padding:6px 7px;border-bottom-color:rgba(190,184,174,.42);border-right-color:rgba(168,161,150,.15)}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data thead th {padding:6px 7px;border-right-color:rgba(168,161,150,.15)}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-data thead .rp-v012-wide-head th:is(:nth-child(8),:nth-child(9)) {padding-inline:4px}
+  .rp-ledger-v015 .rp-v010-table .rp-v010-mobile-group {display:none!important}
+}
+@media(max-width:1050px) {
+  .rp-ledger-v015 .rp-v010-table tbody td.rp-v010-money:has(.rp-v010-missing) {text-align:left}
+  .rp-ledger-v015 .rp-v010-table .rp-v010-mobile-group {line-height:13.75px;font-variant-numeric:tabular-nums}
+}
+@media(max-width:1050px) {
+  .rp-ledger-v015 .rp-v010-table.registry-ui-table tbody td {padding-inline:0;align-items:normal}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-table tbody td:not(.rp-v010-id):not(.rp-v010-money)::before {line-height:12.5px}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-table tbody td.rp-v010-money::before {line-height:16.8px}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-table tbody td:first-child::before {line-height:16.8px}
+  .rp-ledger-v015 .rp-v010-table.registry-ui-table tbody td:has(.registry-ui-reason)::before {line-height:16.8px}
+  .rp-ledger-v015 .rp-v010-table .rp-v015-carrier-name,
+  .rp-ledger-v015 .rp-v010-table .rp-v015-driver {white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
+
+
+/* Approved four-registry reference: waste-trip-registry.css */
+
+/* Accepted thirteen-field mobile card: expose the five detail rows. */
+.waste-registry.registry-ui-table--trips .waste-finance-reason.registry-ui-reason {color:#78726a}
+.waste-registry.registry-ui-table--trips .registry-ui-planned-date {font:500 12px/16.8px var(--font-base);color:#78726a;font-variant-numeric:tabular-nums}
+.waste-registry.registry-ui-table--trips .registry-date-value.registry-ui-primary {font-variant-numeric:tabular-nums}
+@media(min-width:641px) {
+  .waste-registry.registry-ui-table--trips {table-layout:fixed!important;width:max(100%,1660px)!important;min-width:1660px!important}
+  .waste-registry.registry-ui-table--trips :is(th,td) {display:table-cell!important;width:auto!important;min-width:0!important;padding:6px 8px!important}
+  .waste-registry.registry-ui-table--trips thead th {border-right-color:rgba(160,152,140,.28);vertical-align:top}
+  .waste-registry.registry-ui-table--trips tbody td {border-right-color:rgba(216,212,204,.35);border-bottom-color:rgba(220,216,208,.7);vertical-align:top}
+  .waste-registry.registry-ui-table--trips tbody td.waste-status {vertical-align:middle}
+  .waste-registry.registry-ui-table--trips .waste-mobile-label.registry-ui-secondary {display:none!important}
+  .waste-registry.registry-ui-table--trips .registry-executor-secondary {display:block!important}
+  .waste-registry.registry-ui-table--trips .registry-date-value {white-space:normal;overflow-wrap:normal}
+}
+@media(max-width:640px) {
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row {grid-template-columns:64px minmax(0,1fr) minmax(0,1fr)}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:first-child {width:64px!important}
+  .waste-registry.registry-ui-table--trips .waste-description-text {max-width:240px}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:is(:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7),:nth-child(13)) {
+    display:grid;grid-column:1/-1;grid-template-columns:103px minmax(0,1fr);gap:0 8px;text-align:left;white-space:normal!important
+  }
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:nth-child(4) {grid-row:7}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:nth-child(5) {grid-row:8}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:nth-child(6) {grid-row:9}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:nth-child(7) {grid-row:10}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:nth-child(13) {grid-row:11}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:is(:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7),:nth-child(13))::before {content:attr(data-label);grid-column:1;grid-row:1/4;font:500 11px/15.4px var(--font-base);color:#78726a}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:is(:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7),:nth-child(13)) > .registry-ui-value {display:contents}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:is(:nth-child(4),:nth-child(5),:nth-child(6),:nth-child(7),:nth-child(13)) .registry-ui-value > * {grid-column:2}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row .registry-executor-secondary {display:block}
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:is(:nth-child(8),:nth-child(9),:nth-child(10),:nth-child(11),:nth-child(12)) > .registry-ui-value {display:contents}
+  .waste-registry.registry-ui-table--trips .waste-mobile-label.registry-ui-secondary {display:inline;font:500 12px/16.8px var(--font-base);color:#4c4840}
+  .waste-registry.registry-ui-table--trips tbody td:nth-child(n+10):nth-child(-n+12) .waste-mobile-label {font-variant-numeric:tabular-nums}
+  .waste-registry.registry-ui-table--trips .registry-executor-line.registry-ui-missing {display:block}
+  /* The accepted missing-contractor row occupies one full card grid track. */
+  .waste-registry.registry-ui-table--trips tbody tr.waste-row td:nth-child(7):has(.registry-ui-missing) {min-height:41.34375px}
+  .waste-registry.registry-ui-table--trips .waste-finance-reason.registry-ui-reason {color:#78726a}
+  .waste-registry.registry-ui-table--trips .registry-ui-planned-date {font:500 12px/16.8px var(--font-base);color:#78726a;font-variant-numeric:tabular-nums}
+  .waste-registry.registry-ui-table--trips .registry-date-value.registry-ui-primary {font-variant-numeric:tabular-nums}
+}
+
+
+/* Approved four-registry reference: waste-trip-closing-registry.css */
+
+/* Approved fourteen-column registry keeps fixed identity widths and lets the
+   contractor column absorb the remaining desktop space. */
+.closing-page .lab-grid .lab-table.registry-ui-table--documents[data-reference-columns="departures"] {width:max(100%,1660px);min-width:1660px;table-layout:fixed}
+.closing-page .lab-grid .lab-table.registry-ui-table--documents thead th {border-right-color:rgba(168,161,150,.15)}
+.closing-page .lab-grid .lab-table.registry-ui-table--documents tbody td {border-right-color:rgba(168,161,150,.15);border-bottom-color:rgba(190,184,174,.42)}
+.registry-ui-table--documents col:nth-child(1){width:64px}
+.registry-ui-table--documents col:nth-child(2){width:240px}
+.registry-ui-table--documents col:nth-child(3){width:108px}
+.registry-ui-table--documents col:nth-child(n+5):nth-child(-n+8){width:58px}
+.registry-ui-table--documents col:nth-child(9){width:70px}
+.registry-ui-table--documents col:nth-child(10){width:145px}
+.registry-ui-table--documents col:nth-child(11){width:160px}
+.registry-ui-table--documents col:nth-child(12){width:100px}
+.registry-ui-table--documents col:nth-child(13){width:165px}
+.registry-ui-table--documents col:nth-child(14){width:170px}

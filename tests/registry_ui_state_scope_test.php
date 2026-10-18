@@ -21,4 +21,12 @@ $check($base !== RegistryUiStateScope::fingerprint(7, $scopeChanged), 'changed d
 $check($base !== RegistryUiStateScope::fingerprint(8, $one), 'changed account must change state key');
 $check($base !== RegistryUiStateScope::fingerprint(7, EffectiveAccess::member(12, 4, ['company.trips.waste' => true], ['waste_trip' => 'own'])), 'changed membership must change state key');
 $check($base !== RegistryUiStateScope::fingerprint(7, EffectiveAccess::member(11, 5, ['company.trips.waste' => true], ['waste_trip' => 'own'])), 'changed company must change state key');
+$check($base === RegistryUiStateScope::fingerprint(7, $one, 99, 888), 'member state must ignore extraneous technical context');
+$technical = EffectiveAccess::technicalSuperadmin(array_column(\App\Security\PageRegistry::companyPages(), 'key'));
+$technicalBase = RegistryUiStateScope::fingerprint(0, $technical, 91, 4);
+$check($technicalBase !== '', 'resolved technical context must persist');
+$check($technicalBase !== RegistryUiStateScope::fingerprint(0, $technical, 91, 5), 'technical company switch must change state key');
+$check($technicalBase !== RegistryUiStateScope::fingerprint(0, $technical, 92, 4), 'technical actor switch must change state key');
+$check(RegistryUiStateScope::fingerprint(0, $technical, 0, 4) === '', 'unresolved technical user must disable persistence');
+$check(RegistryUiStateScope::fingerprint(0, $technical, 91, 0) === '', 'unresolved technical company must disable persistence');
 echo "REGISTRY_UI_STATE_SCOPE=PASS\n";

@@ -4,6 +4,7 @@
   const trips=[...page.querySelectorAll('[data-closing-trip]')];
   const search=page.querySelector('[data-closing-search]');
   const entity=page.querySelector('[data-closing-entity]');
+  const quarter=page.querySelector('[data-closing-quarter]');
   const manager=page.querySelector('[data-closing-manager]');
   const sort=page.querySelector('[data-closing-sort]');
   const filters=[...page.querySelectorAll('[data-closing-filter]')];
@@ -62,11 +63,15 @@
     for (const trip of trips) {
       const state=trip.dataset.state;
       const matchesEntity=!entity||entity.value==='all'||trip.dataset.entity===entity.value;
+      const actualEnd=trip.dataset.actualEnd||'';
+      const actualQuarter=/^(\d{4})-(0[1-9]|1[0-2])-\d{2}$/.test(actualEnd)
+        ?`${actualEnd.slice(0,4)}-Q${Math.ceil(Number(actualEnd.slice(5,7))/3)}`:'';
+      const matchesQuarter=!quarter||!quarter.value||actualQuarter===quarter.value;
       const matchesManager=!manager||!manager.value||trip.dataset.managerId===manager.value;
       const matchesSearch=requestedIds&&!idSearch?false:idSearch?idSearch.has(trip.dataset.businessId):trip.dataset.search.includes(query);
-      if(matchesEntity&&matchesManager&&matchesSearch){tabCounts.all++;if(Object.hasOwn(tabCounts,state))tabCounts[state]++;}
+      if(matchesEntity&&matchesQuarter&&matchesManager&&matchesSearch){tabCounts.all++;if(Object.hasOwn(tabCounts,state))tabCounts[state]++;}
       const matches=filter==='all'||state===filter;
-      trip.hidden=!(matchesSearch&&matches&&matchesEntity&&matchesManager);
+      trip.hidden=!(matchesSearch&&matches&&matchesEntity&&matchesQuarter&&matchesManager);
       if (!trip.hidden) visible++;
     }
     filters.forEach(button=>{const badge=button.querySelector('[data-closing-filter-count]');if(badge)badge.textContent=String(tabCounts[button.dataset.closingFilter]??0);});
@@ -123,6 +128,7 @@
   if(stage){const url=new URL(location.href);url.searchParams.delete('stage');history.replaceState(history.state,'',url);}
   search.addEventListener('input',()=>{render();saveState();});
   entity?.addEventListener('change',()=>{render();saveState();});
+  quarter?.addEventListener('change',()=>{render();saveState();});
   sort?.addEventListener('change',()=>{sortReportRows();updateReport();saveState();});
   manager?.addEventListener('change',()=>{render();saveState();});
   filters.forEach(button=>button.addEventListener('click',()=>{

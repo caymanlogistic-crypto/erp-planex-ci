@@ -11,6 +11,10 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const html = execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/fixtures/route_executor_list_render.php')], { encoding: 'utf8' });
+const finalEditHtml = execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/fixtures/route_executor_list_render.php'),'final-edit'], { encoding: 'utf8' });
+for (const rendered of [html,finalEditHtml]) {
+  assert.doesNotMatch(rendered,/Менеджер сохранил|Исправление после отправки/,'removed stage wording must not leak into text, title, or aria-label');
+}
 const server = http.createServer((request, response) => {
   if (request.url === '/') { response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html); return; }
   const file = path.resolve(root, 'public', '.' + request.url.split('?')[0]);

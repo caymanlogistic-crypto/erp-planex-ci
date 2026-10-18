@@ -10,6 +10,7 @@ const require=createRequire(import.meta.url);
 const {chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const html=execFileSync(process.env.PLANEX_PHP,[path.join(root,'tests/fixtures/trip_closing_design_lab_render.php')],{encoding:'utf8'});
+const managerHtml=execFileSync(process.env.PLANEX_PHP,[path.join(root,'tests/fixtures/trip_closing_design_lab_render.php'),'manager'],{encoding:'utf8'});
 const server=http.createServer((request,response)=>{
   if(request.url.startsWith('/assets/')){
     const file=path.join(root,'public',request.url.split('?')[0]);
@@ -18,7 +19,7 @@ const server=http.createServer((request,response)=>{
     return;
   }
   response.setHeader('Content-Type','text/html; charset=utf-8');
-  response.end(html);
+  response.end(request.url.includes('role=manager')?managerHtml:html);
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
@@ -42,7 +43,23 @@ try{
   assert.equal(await page.locator('[data-closing-filter="all"]').getAttribute('aria-pressed'),'true');
   assert.equal(await page.locator('[data-closing-count]').textContent(),'35');
   assert.equal(await page.locator('[data-closing-list-label]').textContent(),'РЕЙСЫ В РАБОТЕ И ЗАВЕРШЁННЫЕ');
-  assert.equal(await page.locator('[data-closing-entity]').count(),0);
+  assert.equal(await page.locator('[data-closing-entity]').count(),1);
+  assert.equal(await page.locator('[data-closing-quarter]').count(),1);
+  assert.deepEqual(await page.locator('[data-closing-quarter] option').evaluateAll(options=>options.map(option=>option.value)),['','2026-Q4','2026-Q3']);
+  await page.locator('.canon-leader-company .lab-reference-trigger').click();
+  await page.locator('.canon-leader-company [role="option"][data-value="mg_logistic"]').click();
+  await page.locator('.canon-leader-quarter .lab-reference-trigger').click();
+  await page.locator('.canon-leader-quarter [role="option"][data-value="2026-Q3"]').click();
+  assert.equal(await page.locator('[data-closing-count]').textContent(),'1');
+  assert.equal(await table.locator('tbody tr:not([hidden])').count(),1);
+  await page.reload();
+  assert.equal(await page.locator('[data-closing-entity]').inputValue(),'mg_logistic');
+  assert.equal(await page.locator('[data-closing-quarter]').inputValue(),'2026-Q3');
+  assert.equal(await page.locator('[data-closing-count]').textContent(),'1');
+  await page.locator('.registry-ui-reset').click();
+  assert.equal(await page.locator('[data-closing-entity]').inputValue(),'all');
+  assert.equal(await page.locator('[data-closing-quarter]').inputValue(),'');
+  assert.equal(await page.locator('[data-closing-count]').textContent(),'35');
   assert.equal(await page.locator('[data-closing-sort]').inputValue(),'unloading');
   assert.deepEqual(await table.locator('tbody tr').evaluateAll(rows=>rows.slice(0,2).map(row=>[row.cells[0].textContent,row.cells[2].textContent])),[['#312','—'],['#311','—']]);
   assert.notEqual(await page.locator('.closing-sort-field .lab-reference-trigger').evaluate(el=>getComputedStyle(el).backgroundImage),'none');
@@ -57,6 +74,10 @@ try{
   assert.equal(await dialog.locator('.closing-tn-details,.closing-finance-handoff').count(),0);
   await page.setViewportSize({width:390,height:844});
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth),390);
+  const managerPage=await browser.newPage();
+  await managerPage.goto(`http://127.0.0.1:${server.address().port}/company/logistics/closing-documents?role=manager`);
+  assert.equal(await managerPage.locator('[data-closing-entity],[data-closing-quarter]').count(),0);
+  await managerPage.close();
   assert.deepEqual(errors,[]);
   console.log('waste_trip_closing_registry_approved_browser: PASS');
 }finally{

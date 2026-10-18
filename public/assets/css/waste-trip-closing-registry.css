@@ -141,11 +141,6 @@
 .closing-page .lab-grid .lab-table[data-reference-columns="departures"] tbody td:nth-child(10).closing-report-status.is-missing {
   font-weight: 700;
 }
-@media (min-width: 641px) and (max-width: 1400px) {
-  .closing-page .lab-grid .lab-table[data-reference-columns="departures"] .registry-executor-secondary {
-    display: none;
-  }
-}
 @media (max-width: 700px) {
   .closing-page .closing-registry-card .closing-extra-filters .closing-filter-field:last-child {
     grid-column: 1 / -1;

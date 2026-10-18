@@ -5,8 +5,11 @@ namespace App\Security;
 /** Stable key for browser-only registry filters; never grants access. */
 final class RegistryUiStateScope
 {
-    public static function fingerprint(int $accountId, EffectiveAccess $access): string
+    public static function fingerprint(int $accountId, EffectiveAccess $access, int $technicalUserId = 0, int $selectedCompanyId = 0): string
     {
+        // Technical users have no company membership in EffectiveAccess. An
+        // unresolved identity or selected company must never share saved state.
+        if ($access->isTechnicalSuperadmin() && ($technicalUserId <= 0 || $selectedCompanyId <= 0)) return '';
         $keys = array_column(PageRegistry::companyPages(), 'key');
         sort($keys, SORT_STRING);
         $permissions = [];
@@ -24,6 +27,8 @@ final class RegistryUiStateScope
             'active' => $access->isActive(),
             'system_owner' => $access->isSystemOwner(),
             'technical_superadmin' => $access->isTechnicalSuperadmin(),
+            'technical_user' => $access->isTechnicalSuperadmin() ? $technicalUserId : null,
+            'technical_selected_company' => $access->isTechnicalSuperadmin() ? $selectedCompanyId : null,
             'role' => $access->compatibilityRoleCode(),
             'permissions' => $permissions,
             'data_scopes' => $scopes,

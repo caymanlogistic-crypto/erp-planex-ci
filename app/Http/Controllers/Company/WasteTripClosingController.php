@@ -28,13 +28,14 @@ final class WasteTripClosingController
     {
         header('Cache-Control: no-store');
         $registryView=current_app_path()==='/company/logistics/closing-documents';
-        $trips=[];$reportRows=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$canFilterManagers=false;$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
+        $trips=[];$reportRows=[];$error=null;$schemaReady=false;$canCreateInvoice=false;$canFilterManagers=false;$canFilterLeader=false;$completionQuarters=[];$contractors=[];$clients=[];$responsibleUsers=[];$viewStateKey='';
         $success=$_SESSION['waste_trip_closing_success']??null;
         $flashError=$_SESSION['waste_trip_closing_error']??null;
         unset($_SESSION['waste_trip_closing_success'],$_SESSION['waste_trip_closing_error']);
         try {
             [$company, $pdo,,,$accountId]=$this->context();
             $viewStateKey='planex:trip-closing:v1:'.(int)$company['id'].':'.$accountId;
+            $canFilterLeader=AccessRuntime::current()->isSystemOwner();
             $canFilterManagers=AccessRuntime::current()->isActive()
                 ? AccessControlService::effectiveDataScope('waste_trip')==='all'
                 : in_array((string)($_SESSION['role_code']??''),['superadmin','company_owner','senior_logist'],true);
@@ -48,6 +49,15 @@ final class WasteTripClosingController
                 foreach ($trips as &$trip) $trip['transport']=$transport[(int)$trip['id']]??null;
                 unset($trip);
                 $reportRows=WasteTripClosingReportService::rows($trips);
+                if ($canFilterLeader) {
+                    foreach ($reportRows as $row) {
+                        $date=(string)($row['unloading_date']??'');
+                        if (!preg_match('/^(\d{4})-(0[1-9]|1[0-2])-\d{2}$/D',$date,$parts)) continue;
+                        $quarter=(int)ceil((int)$parts[2]/3);
+                        $completionQuarters[$parts[1].'-Q'.$quarter]=[$quarter,substr($parts[1],-2)];
+                    }
+                    krsort($completionQuarters,SORT_STRING);
+                }
             }
             $canCreateInvoice=AccessControlService::canAccessPage('company.finance.invoices');
             if ($canCreateInvoice) {

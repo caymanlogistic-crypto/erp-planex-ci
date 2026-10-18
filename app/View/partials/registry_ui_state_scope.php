@@ -3,4 +3,6 @@
 $registryUiStateScope = \App\Security\RegistryUiStateScope::fingerprint(
     (int) ($_SESSION['account_id'] ?? 0),
     \App\Security\AccessRuntime::current(),
+    (int) ($_SESSION['user_id'] ?? 0),
+    (int) ($_SESSION['company_id'] ?? 0),
 );
