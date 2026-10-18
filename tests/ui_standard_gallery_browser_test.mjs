@@ -48,14 +48,61 @@ try {
     assert.equal(state.formedAccent, 'rgb(23, 162, 184)');
     assert.equal(state.progressAccent, 'rgb(40, 167, 69)');
     assert.equal(state.completedAccent, 'rgb(108, 117, 125)');
+    const sameCheckboxStyle = await page.evaluate(() => {
+      const single = document.querySelector('[id="registry.checkbox"] .rp-v014-hide-complete');
+      const grouped = document.querySelector('[id="registry.checkbox-group"] .registry-ui-checkbox');
+      const labelStyle = element => {
+        const style = getComputedStyle(element);
+        return [style.minHeight, style.gap, style.color, style.font, style.backgroundColor, style.borderWidth];
+      };
+      const inputStyle = element => {
+        const style = getComputedStyle(element.querySelector('input'));
+        return [style.width, style.height, style.accentColor, style.margin];
+      };
+      return { singleLabel: labelStyle(single), groupedLabel: labelStyle(grouped), singleInput: inputStyle(single), groupedInput: inputStyle(grouped) };
+    });
+    assert.deepEqual(sameCheckboxStyle.groupedLabel, sameCheckboxStyle.singleLabel, `${width}px checkbox label parity`);
+    assert.deepEqual(sameCheckboxStyle.groupedInput, sameCheckboxStyle.singleInput, `${width}px checkbox input parity`);
+    const search = page.locator('[id="registry.search"] .registry-ui-search');
+    await search.focus();
+    const focusedSearch = await search.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { border: style.borderColor, shadow: style.boxShadow, outline: style.outlineStyle };
+    });
+    assert.equal(focusedSearch.border, 'rgb(124, 71, 24)', `${width}px focused search border`);
+    assert.equal(focusedSearch.shadow, 'rgba(124, 71, 24, 0.1) 0px 0px 0px 2px', `${width}px focused search ring`);
+    assert.equal(focusedSearch.outline, 'none', `${width}px focused search outline`);
+    const nativeSelect = page.locator('[id="registry.toolbar"] .toolbar-select');
+    await nativeSelect.hover();
+    const nativeHover = await nativeSelect.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, border: style.borderColor };
+    });
+    assert.deepEqual(nativeHover, { background: 'rgb(234, 227, 216)', border: 'rgb(201, 189, 174)' }, `${width}px native select hover`);
+    const referenceTrigger = page.locator('[id="registry.select"] .lab-reference-trigger');
+    await referenceTrigger.hover();
+    const referenceHover = await referenceTrigger.evaluate(element => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, border: style.borderColor };
+    });
+    assert.deepEqual(referenceHover, nativeHover, `${width}px select variant hover parity`);
     await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
     assert.equal(await page.evaluate(() => window.scrollY > 0), true, `${width}px scroll reaches lower content`);
     const ordinary = page.locator('[id="registry.checkbox-group"] .registry-ui-checkboxes:not(.registry-ui-checkboxes--trip-status) input').nth(1);
     await ordinary.focus();
     await page.keyboard.press('Space');
     assert.equal(await ordinary.isChecked(), true);
-    await page.locator('[id="registry.select"] .lab-reference-trigger').click();
+    await referenceTrigger.click();
     assert.equal(await page.locator('[id="registry.select"] .lab-reference-list').isVisible(), true);
+    const openList = await page.locator('[id="registry.select"] .lab-reference-list').evaluate(element => {
+      const style = getComputedStyle(element);
+      return { background: style.backgroundColor, border: style.borderColor };
+    });
+    assert.deepEqual(openList, { background: 'rgb(255, 255, 255)', border: 'rgb(200, 191, 178)' }, `${width}px open select list`);
+    const selectedOption = page.locator('[id="registry.select"] .lab-reference-option[aria-selected="true"]');
+    assert.equal(await selectedOption.evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(242, 232, 220)', `${width}px selected option`);
+    await selectedOption.hover();
+    assert.equal(await selectedOption.evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(233, 217, 199)', `${width}px selected option hover`);
     await page.keyboard.press('ArrowDown');
     await page.keyboard.press('Enter');
     assert.equal(await page.locator('[id="registry.select"] select').inputValue(), 'name');
