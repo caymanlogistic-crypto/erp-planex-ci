@@ -8,12 +8,18 @@ body{overflow-x:hidden;overflow-y:auto;background:var(--app-bg)}
 .gallery-intro p,.gallery-family>p,.gallery-copy p{margin:0 0 10px;line-height:1.5;color:var(--text-muted);max-width:100ch}
 .gallery-intro nav{display:flex;flex-wrap:wrap;gap:8px 20px;margin-top:16px}
 .gallery-intro a,.gallery-family a{color:var(--accent)}
+.gallery-intro button{min-height:32px;padding:4px 10px;border:1px solid var(--line);background:transparent;color:var(--text-main);font:500 12px/16px var(--font);cursor:pointer}
+.gallery-intro button[aria-pressed="true"]{background:var(--surface-strong);border-bottom:2px solid var(--accent);font-weight:600}
+.gallery-intro button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.gallery-family{margin-top:16px}
+.gallery-family summary{cursor:pointer;font-weight:600}
+.gallery-family code{overflow-wrap:anywhere}
 .gallery-family h2{font-size:19px;margin:0 0 10px}
 .gallery-item{border-top:1px solid var(--line-hair);padding:20px 0 8px}
 .gallery-copy{margin-bottom:12px}
 .gallery-copy h3{font-size:15px;margin:0 0 6px}
 .gallery-copy .gallery-meta{font-size:11px;overflow-wrap:anywhere;color:var(--text-faint)}
-.gallery-preview{display:block;width:100%;height:180px;min-width:0;border:0;background:transparent}
+.gallery-preview{display:block;position:relative;left:50%;transform:translateX(-50%);width:100vw;height:180px;min-width:0;border:0;background:transparent}
 .gallery-preview[data-fixed-preview]{height:500px}
 .gallery-family ul{margin:8px 0 0;padding-left:20px;line-height:1.8}
 @media(max-width:800px){.gallery-shell{padding:10px}.gallery-intro,.gallery-family{padding:12px}.gallery-intro h1{font-size:21px}}

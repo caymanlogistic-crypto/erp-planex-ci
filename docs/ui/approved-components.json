@@ -15,23 +15,231 @@
     }
   ],
   "components": [
-    {"id": "registry.page-head", "family": "registry", "role": "Шапка страницы", "selector": ".registry-ui-head", "markup": "app/View/partials/registry_ui_head.php", "approval": "OWNER 2026-10-12", "description": "Отдельная шапка с иконкой, заголовком, пояснением и действиями справа. Новая страница использует общий PHP partial.", "specimen": "docs/ui/specimens/registry.page-head.html"},
-    {"id": "registry.tabs", "family": "registry", "role": "Вкладки статусов", "selector": ".registry-ui-tabs", "approval": "OWNER 2026-10-12", "description": "Плоские вкладки со счётчиками и линией активного статуса; на узком экране прокручиваются внутри своей строки.", "specimen": "docs/ui/specimens/registry.tabs.html"},
-    {"id": "registry.card", "family": "registry", "role": "Рамка рабочего блока", "selector": ".registry-ui-card", "approval": "OWNER 2026-10-12", "description": "Единая непрерывная рамка вокруг панели и таблицы. Шапка страницы находится отдельно.", "specimen": "docs/ui/specimens/registry.card.html"},
-    {"id": "registry.toolbar", "family": "registry", "role": "Панель Найдено и фильтров", "selector": ".registry-ui-toolbar", "approval": "OWNER 2026-10-12", "description": "Панель внутри рамки: счётчик слева, доступные фильтры и поиск справа. Высота растёт вместе с содержимым.", "specimen": "docs/ui/specimens/registry.toolbar.html"},
-    {"id": "registry.search", "family": "registry", "role": "Поиск", "selector": ".registry-ui-search", "approval": "OWNER 2026-10-12", "description": "Нажмите на поле: при фокусе рамка становится коричневой #7C4718 с мягким кольцом того же цвета. Геометрия не меняется; фильтрация принадлежит логике страницы.", "specimen": "docs/ui/specimens/registry.search.html"},
-    {"id": "registry.table", "family": "registry", "role": "Таблица и заголовки", "selector": ".registry-ui-table", "approval": "OWNER 2026-10-12", "description": "Таблица с утверждёнными типографикой, фоном строк и заголовком. Колонки и предметные данные задаёт страница.", "specimen": "docs/ui/specimens/registry.table.html"},
-    {"id": "registry.sticky", "family": "registry", "role": "Закрепление панели и заголовков", "selector": ".registry-ui-sticky-table", "approval": "OWNER 2026-10-12", "description": "Opt-in для закрепления панели и заголовков. Общий JS измеряет реальную высоту панели.", "specimen": "docs/ui/specimens/registry.sticky.html"},
-    {"id": "registry.select", "family": "registry", "role": "Выбор значения", "selector": ".registry-ui-toolbar .lab-reference-select", "approval": "OWNER 2026-10-12", "description": "Серо-бежевый закрытый select #F0EDE7; при наведении #EAE3D8. Нажмите для просмотра белого списка, бежевого выбранного пункта и управления клавиатурой. Native select остаётся доступной основой.", "specimen": "docs/ui/specimens/registry.select.html"},
-    {"id": "registry.actions", "family": "registry", "role": "Кнопки шапки", "selector": ".registry-ui-head .page-head-actions .btn", "approval": "OWNER 2026-10-12", "description": "Вторичные действия идут перед одним главным. Общий компонент задаёт размер, цвет, hover и focus.", "specimen": "docs/ui/specimens/registry.actions.html"},
-    {"id": "registry.checkbox", "family": "registry", "role": "Флажок панели", "selector": ".registry-ui-toolbar .rp-v014-hide-complete", "approval": "OWNER 2026-10-12", "description": "Флажок с текстом без отдельной плашки, с сохранённой семантикой native input.", "specimen": "docs/ui/specimens/registry.checkbox.html"},
-    {"id": "registry.finance-table", "family": "registry", "role": "Финансовая таблица", "selector": ".registry-ui-table--finance", "approval": "OWNER 2026-10-12", "description": "Утверждённый вариант таблицы для широкой финансовой записи. Состав колонок и итоги задаёт страница.", "specimen": "docs/ui/specimens/registry.finance-table.html"},
-    {"id": "registry.checkbox-group", "family": "registry", "role": "Блок флажков", "selector": ".registry-ui-checkboxes", "approval": "OWNER 2026-10-18", "description": "Группа и одиночный флажок панели используют одно правило размеров, текста и фокуса; обычный акцент коричневый. Только блок статусов рейсов с явным вариантом registry-ui-checkboxes--trip-status использует смысловые цвета. Native input сохраняет клавиатуру и доступное имя.", "specimen": "docs/ui/specimens/registry.checkbox-group.html"}
+    {
+      "id": "registry.page-head",
+      "family": "registry",
+      "role": "Шапка страницы",
+      "selector": ".registry-ui-head",
+      "markup": "app/View/partials/registry_ui_head.php",
+      "approval": "OWNER 2026-10-12",
+      "description": "Отдельная шапка с иконкой, заголовком, пояснением и действиями справа. Новая страница использует общий PHP partial.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.tabs",
+      "family": "registry",
+      "role": "Вкладки статусов",
+      "selector": ".registry-ui-tabs",
+      "approval": "OWNER 2026-10-12",
+      "description": "Плоские вкладки со счётчиками и линией активного статуса; на узком экране прокручиваются внутри своей строки.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.card",
+      "family": "registry",
+      "role": "Рамка рабочего блока",
+      "selector": ".registry-ui-card",
+      "approval": "OWNER 2026-10-12",
+      "description": "Единая непрерывная рамка вокруг панели и таблицы. Шапка страницы находится отдельно.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.toolbar",
+      "family": "registry",
+      "role": "Панель Найдено и фильтров",
+      "selector": ".registry-ui-toolbar",
+      "approval": "OWNER 2026-10-12",
+      "description": "Панель внутри рамки: счётчик слева, доступные фильтры и поиск справа. Высота растёт вместе с содержимым.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.search",
+      "family": "registry",
+      "role": "Поиск",
+      "selector": ".registry-ui-search",
+      "approval": "OWNER 2026-10-18",
+      "description": "IBM Plex Sans 12/500/16; отступ слева 31 px, постоянная иконка при focus. После поиска появляется Сбросить при изменении состояния.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.table",
+      "family": "registry",
+      "role": "Таблица и заголовки",
+      "selector": ".registry-ui-table",
+      "approval": "OWNER 2026-10-12",
+      "description": "Таблица с утверждёнными типографикой, фоном строк и заголовком. Колонки и предметные данные задаёт страница.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.sticky",
+      "family": "registry",
+      "role": "Закрепление панели и заголовков",
+      "selector": ".registry-ui-sticky-table",
+      "approval": "OWNER 2026-10-12",
+      "description": "Opt-in для закрепления панели и заголовков. Общий JS измеряет реальную высоту панели.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.select",
+      "family": "registry",
+      "role": "Выбор значения",
+      "selector": ".registry-ui-toolbar .lab-reference-select",
+      "approval": "OWNER 2026-10-12",
+      "description": "Серо-бежевый закрытый select #F0EDE7; при наведении #EAE3D8. Нажмите для просмотра белого списка, бежевого выбранного пункта и управления клавиатурой. Native select остаётся доступной основой.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.actions",
+      "family": "registry",
+      "role": "Кнопки шапки",
+      "selector": ".registry-ui-head .page-head-actions .btn",
+      "approval": "OWNER 2026-10-12",
+      "description": "Вторичные действия идут перед одним главным. Общий компонент задаёт размер, цвет, hover и focus.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.checkbox",
+      "family": "registry",
+      "role": "Флажок панели",
+      "selector": ".registry-ui-toolbar .rp-v014-hide-complete",
+      "approval": "OWNER 2026-10-12",
+      "description": "Флажок с текстом без отдельной плашки, с сохранённой семантикой native input.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.finance-table",
+      "family": "registry",
+      "role": "Финансовая таблица",
+      "selector": ".registry-ui-table--finance",
+      "approval": "OWNER 2026-10-12",
+      "description": "Утверждённый вариант таблицы для широкой финансовой записи. Состав колонок и итоги задаёт страница.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.checkbox-group",
+      "family": "registry",
+      "role": "Блок флажков",
+      "selector": ".registry-ui-checkboxes",
+      "approval": "OWNER 2026-10-18",
+      "description": "Группа и одиночный флажок панели используют одно правило размеров, текста и фокуса; обычный акцент коричневый. Только блок статусов рейсов с явным вариантом registry-ui-checkboxes--trip-status использует смысловые цвета. Native input сохраняет клавиатуру и доступное имя.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.data",
+      "family": "registry",
+      "role": "Типографика данных",
+      "selector": ".registry-ui-data",
+      "approval": "OWNER 2026-10-18",
+      "description": "Основной 12/500/16.8; имена и суммы 12/600; дополнительный 11/500/15.4. IBM Plex Sans.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.id",
+      "family": "registry",
+      "role": "ID любой сущности",
+      "selector": ".registry-ui-id",
+      "approval": "OWNER 2026-10-18",
+      "description": "Общая колонка 64 px для #0000; настоящий ID не сокращается и не дополняется нулями.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.trip",
+      "family": "registry",
+      "role": "Описание рейса",
+      "selector": ".registry-ui-trip",
+      "approval": "OWNER 2026-10-18",
+      "description": "Колонка 240 px, 30 графем и …; полное значение доступно для чтения и поиска.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.secondary",
+      "family": "registry",
+      "role": "Дополнительные данные",
+      "selector": ".registry-ui-secondary",
+      "approval": "OWNER 2026-10-18",
+      "description": "Дата счёта, водитель под перевозчиком, пояснения, контакты: 11/500/15.4.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.palette",
+      "family": "registry",
+      "role": "Смысловые цвета",
+      "selector": ".registry-ui-warning",
+      "approval": "OWNER 2026-10-18",
+      "description": "Согласованные жёлтый/чёрный, красный, мягкие красный и зелёный; hover без изменения геометрии.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.status",
+      "family": "registry",
+      "role": "Предметные статусы",
+      "selector": ".registry-ui-status",
+      "approval": "OWNER 2026-10-18",
+      "description": "Выезды: фиолетовый, бирюзовый, зелёный, серый. Документы: Есть/НЕТ, несколько ТС, оплата и комплектность.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.state",
+      "family": "registry",
+      "role": "Фильтры, память и сброс",
+      "selector": ".registry-ui-reset",
+      "approval": "OWNER 2026-10-18",
+      "description": "Один Сбросить после поиска при любом отклонении от начальных значений. Состояние отдельно по странице, пользователю, роли и компании.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.scroll",
+      "family": "registry",
+      "role": "Прокрутка таблицы",
+      "selector": ".registry-ui-scroll",
+      "approval": "OWNER 2026-10-18",
+      "description": "Один вертикальный владелец, панель и заголовки закреплены вместе, горизонтальная прокрутка широкого содержимого.",
+      "specimen": "docs/ui/specimens/registry.composition.html"
+    }
   ],
   "pages": [
-    {"id": "route-executors", "family": "registry", "route": "/erpv2/company/route-executors", "view": "app/View/pages/company_route_executors.php", "asset_owner": "app/Http/Controllers/Company/RouteExecutorActions/index.php", "browser_test": "tests/route_executor_list_browser_test.mjs", "sticky": true, "reference_select": true},
-    {"id": "trips-departures", "family": "registry", "route": "/erpv2/company/trips/departures", "view": "app/View/pages/company_waste_trips.php", "browser_test": "tests/waste_trip_registry_browser_test.mjs", "sticky": true, "reference_select": true},
-    {"id": "finance-received-paid", "family": "registry", "route": "/erpv2/company/finance/received-paid", "view": "app/View/partials/finance_received_paid_ledger.php", "asset_owner": "app/View/pages/company_finance_received_paid.php", "browser_test": "tests/finance_received_paid_payment_filter_browser_test.mjs", "sticky": true, "reference_select": true},
-    {"id": "logistics-closing-documents", "family": "registry", "route": "/erpv2/company/logistics/closing-documents", "view": "app/View/pages/company_waste_trip_closing_registry.php", "browser_test": "tests/registry_closing_responsive_browser_test.mjs", "sticky": true, "reference_select": true}
-  ]
+    {
+      "id": "route-executors",
+      "family": "registry",
+      "route": "/erpv2/company/route-executors",
+      "view": "app/View/pages/company_route_executors.php",
+      "asset_owner": "app/Http/Controllers/Company/RouteExecutorActions/index.php",
+      "browser_test": "tests/route_executor_list_browser_test.mjs",
+      "sticky": true,
+      "reference_select": true,
+      "adaptation_status": "legacy_shared_shell_pending_20261018"
+    },
+    {
+      "id": "trips-departures",
+      "family": "registry",
+      "route": "/erpv2/company/trips/departures",
+      "view": "app/View/pages/company_waste_trips.php",
+      "browser_test": "tests/waste_trip_registry_browser_test.mjs",
+      "sticky": true,
+      "reference_select": true,
+      "adaptation_status": "legacy_shared_shell_pending_20261018"
+    },
+    {
+      "id": "finance-received-paid",
+      "family": "registry",
+      "route": "/erpv2/company/finance/received-paid",
+      "view": "app/View/partials/finance_received_paid_ledger.php",
+      "asset_owner": "app/View/pages/company_finance_received_paid.php",
+      "browser_test": "tests/finance_received_paid_payment_filter_browser_test.mjs",
+      "sticky": true,
+      "reference_select": true,
+      "adaptation_status": "legacy_shared_shell_pending_20261018"
+    },
+    {
+      "id": "logistics-closing-documents",
+      "family": "registry",
+      "route": "/erpv2/company/logistics/closing-documents",
+      "view": "app/View/pages/company_waste_trip_closing_registry.php",
+      "browser_test": "tests/registry_closing_responsive_browser_test.mjs",
+      "sticky": true,
+      "reference_select": true,
+      "adaptation_status": "legacy_shared_shell_pending_20261018"
+    }
+  ],
+  "decisions": "docs/ui/decisions-20261018.json"
 }

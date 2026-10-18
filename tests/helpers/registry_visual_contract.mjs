@@ -1,7 +1,10 @@
 import assert from 'node:assert/strict';
 
 export async function assertRegistryVisualContract(page, label) {
-  await page.evaluate(() => document.fonts.ready);
+  await page.evaluate(async () => {
+    await Promise.allSettled([400,500,600,700].map(weight=>document.fonts.load(`${weight} 12px "IBM Plex Sans"`)));
+    await document.fonts.ready;
+  });
   const metrics = await page.evaluate(() => {
     const card = document.querySelector('.registry-ui-card');
     const toolbar = card?.querySelector('.registry-ui-toolbar');
@@ -29,7 +32,7 @@ export async function assertRegistryVisualContract(page, label) {
       const css = getComputedStyle(element);
       return Object.fromEntries(['fontSize','fontWeight','lineHeight','color','backgroundColor','borderTopColor','borderTopWidth','borderRadius','minHeight','paddingTop','paddingRight','height'].map(key => [key, css[key]]));
     };
-    const fontLoaded = [400,700].every(weight => [...document.fonts].some(face => face.family.replace(/["']/g,'')==='IBM Plex Sans' && face.weight===String(weight) && face.status==='loaded'));
+    const fontLoaded = [400,500,600,700].every(weight => [...document.fonts].some(face => face.family.replace(/["']/g,'')==='IBM Plex Sans' && face.weight===String(weight) && face.status==='loaded'));
     return {toolbar:style('.registry-ui-toolbar'),search:style('.registry-ui-search'),title:style('.registry-ui-head .page-title'),summary:style('.registry-ui-head .page-summary'),head:style('.registry-ui-head'),fontLoaded};
   });
   assert.equal(appearance.fontLoaded, true, `${label}: real approved font is loaded`);
@@ -39,6 +42,14 @@ export async function assertRegistryVisualContract(page, label) {
   assert.deepEqual([appearance.title?.fontSize,appearance.title?.fontWeight,appearance.title?.lineHeight,appearance.title?.color], ['19px','700','22px','rgb(19, 18, 16)'], `${label}: title typography`);
   assert.deepEqual([appearance.summary?.fontSize,appearance.summary?.fontWeight,appearance.summary?.lineHeight], ['12px','500','15px'], `${label}: summary typography`);
   assert.deepEqual([appearance.head?.borderTopColor,appearance.head?.borderTopWidth], ['rgb(168, 161, 150)','1px'], `${label}: header frame`);
-  assert.deepEqual([appearance.search?.height,appearance.search?.fontSize,appearance.search?.fontWeight,appearance.search?.borderRadius,appearance.search?.backgroundColor], ['32px','12px','400','2px','rgb(255, 253, 249)'], `${label}: search appearance`);
+  assert.deepEqual([appearance.search?.height,appearance.search?.fontSize,appearance.search?.fontWeight,appearance.search?.borderRadius,appearance.search?.backgroundColor], ['32px','12px','500','2px','rgb(255, 253, 249)'], `${label}: search appearance`);
+  const dataRoles = await page.evaluate(() => [...document.querySelectorAll('.registry-ui-data .registry-ui-name,.registry-ui-data .registry-ui-secondary,.registry-ui-data tbody .registry-ui-money,.registry-ui-data tbody .registry-ui-id')].map(element=>{
+    const css=getComputedStyle(element);
+    return {role:element.classList.contains('registry-ui-id')?'id':element.classList.contains('registry-ui-money')?'money':element.classList.contains('registry-ui-name')?'name':'secondary',size:css.fontSize,weight:css.fontWeight,line:css.lineHeight};
+  }));
+  for(const actual of dataRoles){
+    const expected={id:['12px','700','16.8px'],money:['12px','600','16.8px'],name:['12px','600','16.8px'],secondary:['11px','500','15.4px']}[actual.role];
+    assert.deepEqual([actual.size,actual.weight,actual.line],expected,`${label}: canonical ${actual.role}`);
+  }
   return metrics;
 }

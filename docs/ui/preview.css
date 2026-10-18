@@ -1,3 +1,4 @@
 /* Preview viewport and canvas only. Never target a component descendant here. */
 html,body{height:auto;min-height:0;margin:0;overflow:visible;background:transparent}
 [data-specimen-root]{box-sizing:border-box;width:100%;max-width:1690px;margin:0 auto;padding:4px 4px 20px}
+[data-gallery-view][hidden]{display:none!important}

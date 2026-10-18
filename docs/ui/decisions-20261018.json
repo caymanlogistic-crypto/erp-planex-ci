@@ -1,0 +1,264 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "date": "2026-10-18",
+  "scope": "Approved registry presentation; mechanism implementation requested separately by OWNER",
+  "request": "Завершай механизм, думай может мы что-то забыли ещё согласовать?",
+  "implementation_scope": "Reusable canon infrastructure, gallery, agent workflow and enforcement. Four-page runtime migration is tracked separately; no authorization inferred for unsupervised new visual decisions.",
+  "references": {
+    "executors": "ui-four-pages-row-batch-20261018:v006",
+    "finance": "ui-four-pages-finance-20261018:v007",
+    "departures": "ui-four-pages-panel-trips-20261018:v006",
+    "documents": "ui-four-pages-closing-20261018:v004"
+  },
+  "typography": {
+    "ordinary_data": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "#131210"
+    },
+    "trip_description": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "#131210",
+      "alignment": "left",
+      "overflow": "…; full title, accessible value and full-text search preserved",
+      "column_width_px": 240,
+      "max_graphemes": 30
+    },
+    "primary_person_or_party_name": {
+      "size_px": 12,
+      "weight": 600,
+      "line_height_px": 16.8,
+      "color": "#131210",
+      "alignment": "left"
+    },
+    "driver_under_carrier": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "#78726A",
+      "alignment": "left",
+      "overflow": "single line ellipsis; preserve full title/accessible value"
+    },
+    "invoice_number": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "#131210",
+      "alignment": "left"
+    },
+    "invoice_issue_date": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "#78726A",
+      "placement": "separate line below invoice number"
+    },
+    "money": {
+      "size_px": 12,
+      "weight": 600,
+      "line_height_px": 16.8,
+      "color": "#131210",
+      "alignment": "right",
+      "numerals": "tabular-nums",
+      "overflow": "never ellipsis or clip significant digits or currency"
+    },
+    "ordinary_date": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "#131210"
+    },
+    "overdue_date": {
+      "size_px": 12,
+      "weight": 700,
+      "line_height_px": 16.8,
+      "color": "#872822"
+    },
+    "due_explanation": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "#78726A",
+      "placement": "separate line, aligned to its date"
+    },
+    "overdue_explanation": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "#872822"
+    },
+    "today_date": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "#131210",
+      "background": "none",
+      "additional_padding_px": 0
+    },
+    "today_explanation": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "#131210",
+      "background": "none"
+    },
+    "completed_due_date": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "#1F6B43"
+    },
+    "completed_due_explanation": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "#1F6B43"
+    },
+    "missing_value_dash": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "#817D75",
+      "alignment": "inherit data role: right for money, left for text"
+    },
+    "text_instead_of_money": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "#675F55",
+      "alignment": "left",
+      "background": "none"
+    },
+    "total": {
+      "size_px": 11,
+      "weight": 700,
+      "line_height_px": 15.4,
+      "color": "#131210",
+      "alignment": "amounts right, total label left",
+      "numerals": "tabular-nums"
+    },
+    "compact_total_label": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "placement": "above amount in compact mode"
+    },
+    "column_header": {
+      "size_px": 10,
+      "weight": 700,
+      "line_height_px": 14,
+      "color": "#2A2620",
+      "finance_color": "#34322F",
+      "case": "uppercase",
+      "height_px": 30
+    },
+    "contact_phone_or_email": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "#78726A",
+      "approval": "OWNER accepted paired executors v004 and finance v005; unified secondary role supersedes earlier 11/400 exception"
+    },
+    "trip_id": {
+      "size_px": 12,
+      "weight": 700,
+      "line_height_px": 16.8,
+      "color": "#131210",
+      "numerals": "tabular-nums",
+      "placement": "own column, separate from description",
+      "column_width_px": 64
+    },
+    "vehicle_metric": {
+      "size_px": 11,
+      "weight": 500,
+      "line_height_px": 15.4,
+      "color": "inherit semantic row color"
+    },
+    "vehicle_brand_or_plate": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "inherit semantic row color"
+    },
+    "executor_status": {
+      "size_px": 12,
+      "weight": 500,
+      "line_height_px": 16.8,
+      "color": "inherit approved semantic status color"
+    }
+  },
+  "palette": {
+    "warning_attention": {
+      "background": "#FDF0D5",
+      "hover_background": "#FFF1BD",
+      "ordinary_text": "#131210",
+      "scope": "system-wide warning and attention styling",
+      "owner_instruction": "Принимаем для всей системы желтый цвет предупреждения внимания. На желтом пишем черным."
+    },
+    "error_text": {
+      "color": "#872822",
+      "example": "Ошибка отправки",
+      "scope": "system-wide error text",
+      "exception_to_black_on_warning": true,
+      "owner_instruction": "Ошибка отправки сейчас написаны правильным красным, фиксируем для всей системы."
+    },
+    "soft_error": {
+      "background": "#FFE5DF",
+      "hover_background": "#FFD6CC",
+      "text": "#872822"
+    },
+    "soft_success": {
+      "background": "#DFF3E5",
+      "hover_background": "#CDEBD7",
+      "ordinary_text": "#131210"
+    },
+    "success_status": {
+      "text_and_marker": "#1F6B43"
+    },
+    "delete_colors": {
+      "text_and_icon": "#872822",
+      "background": "#FFE5DF",
+      "hover_background": "#FFD6CC"
+    }
+  },
+  "scroll": {
+    "vertical": "One vertical scroll in the main workspace; table wrappers have no independent vertical range or height cap",
+    "header": "Keep the reference registry header region: its existing toolbar and column headings stay together while page heading, tabs, rows and totals scroll",
+    "horizontal": "Wide tables may scroll horizontally without acquiring an independent vertical scroll",
+    "alignment": "Actual header widths and horizontal positions match body cells; no independently sized parallel header",
+    "cards": "Do not pin an invisible table header in mobile card layouts",
+    "boundaries": "Header stays within its table; empty filters and resize do not leave a ghost header",
+    "implementation": "One shared registry implementation; prohibit page-local max-height/overflow hacks"
+  },
+  "state": {
+    "dirty": "Show exactly one reset button if any filter, status tab, checkbox or sorting differs from the page initial profile, or the query is nonempty",
+    "placement": "Immediately after search in the same visual group; both remain usable on mobile",
+    "default": "Hide reset in the initial state",
+    "reset": "Clear search and restore all initial filter, tab, checkbox and sorting values; save the reset state and hide the button",
+    "persistence": "Restore filters, query, tab, checkbox and sorting on reopening the page",
+    "scope_isolation": "Keep independent state for each page and permitted role; in ERP also key by account and company",
+    "permissions": "Never restore or apply controls unavailable to the current role; ignore invalid saved options",
+    "quarter_default_reconciliation": "All companies and all quarters are first-visit/reset defaults. The latest persistence instruction supersedes the earlier instruction to clear those choices on every load.",
+    "implementation": "Use one shared registry-state component, not page-specific reset/persistence alternatives"
+  },
+  "statuses": {
+    "status": "owner_approved",
+    "instruction": "Статусы Выездов и документов — оставляем как есть.",
+    "departures": {
+      "planned_route": "#9C27B0",
+      "executor_assigned": "#17A2B8",
+      "in_progress": "#1F6B43",
+      "completed": "#6C757D"
+    },
+    "documents": "Есть/НЕТ, карты нескольких ТС без жёлтой подложки, оплата, полный/неполный комплект"
+  },
+  "pending": [
+    "Leader company/quarter final visual prototype",
+    "Forms and destructive confirmation",
+    "Uploads/file removal, server errors and waiting",
+    "Universal action menu typography/layout"
+  ]
+}

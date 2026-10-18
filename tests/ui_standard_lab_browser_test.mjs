@@ -53,8 +53,8 @@ try{
     const galleryPage=await context.newPage(),offline=await context.newPage();
     await galleryPage.goto(`${gallery.url}/ui-standard`);
     await offline.goto(pathToFileURL(path.join(root,'docs/ui/approved-components.html')).href);
-    await galleryPage.frameLocator('iframe[data-preview="registry.example"]').locator('.registry-ui-search').waitFor();
-    await offline.frameLocator('iframe[data-preview="registry.example"]').locator('.registry-ui-search').waitFor();
+    await galleryPage.frameLocator('iframe[data-preview="registry.composition"]').locator('[data-gallery-view=executors] .registry-ui-search').waitFor();
+    await offline.frameLocator('iframe[data-preview="registry.composition"]').locator('[data-gallery-view=executors] .registry-ui-search').waitFor();
     const frame=page=>page.frames().find(item=>item.parentFrame());
     await assertAppearanceParity(frame(galleryPage),frame(offline),`${width}px gallery and sandbox`);
     const reference=await context.newPage(),actual=await context.newPage();

@@ -33,7 +33,7 @@
 .registry-ui-tabs button:focus-visible {outline:2px solid #7c4718;outline-offset:-3px}
 .registry-ui-tabs button[data-status="planned_route"] {--registry-tab-color:#9c27b0}
 .registry-ui-tabs button[data-status="executor_assigned"] {--registry-tab-color:#17a2b8}
-.registry-ui-tabs button[data-status="in_progress"] {--registry-tab-color:#28a745}
+.registry-ui-tabs button[data-status="in_progress"] {--registry-tab-color:#1f6b43}
 .registry-ui-tabs button[data-status="completed"] {--registry-tab-color:#6c757d}
 .registry-ui-tabs + .registry-ui-card {margin-top:0}
 
@@ -72,7 +72,7 @@
 .registry-ui-checkbox:has(input:disabled){opacity:.6;cursor:not-allowed}
 .registry-ui-checkboxes--trip-status .registry-ui-checkbox[data-status=planned_route]{--registry-checkbox-accent:#9c27b0}
 .registry-ui-checkboxes--trip-status .registry-ui-checkbox[data-status=executor_assigned]{--registry-checkbox-accent:#17a2b8}
-.registry-ui-checkboxes--trip-status .registry-ui-checkbox[data-status=in_progress]{--registry-checkbox-accent:#28a745}
+.registry-ui-checkboxes--trip-status .registry-ui-checkbox[data-status=in_progress]{--registry-checkbox-accent:#1f6b43}
 .registry-ui-checkboxes--trip-status .registry-ui-checkbox[data-status=completed]{--registry-checkbox-accent:#6c757d}
 .registry-ui-toolbar .toolbar-select,.registry-ui-toolbar .lab-reference-trigger {box-sizing:border-box;height:32px;min-height:32px;border:1px solid #d7d1c7;border-radius:2px;background-color:#f0ede7;color:#4d4942;font:500 12px/16px var(--font)}
 .registry-ui-toolbar .lab-reference-trigger:hover,.registry-ui-toolbar .toolbar-select:hover {background-color:#eae3d8;border-color:#c9bdae}
@@ -92,14 +92,14 @@
 .registry-ui-toolbar .lab-reference-option:hover,.registry-ui-toolbar .lab-reference-option.is-active:not([aria-selected="true"]) {background:#f2f2f0}
 .registry-ui-toolbar .lab-reference-option[aria-selected="true"] {background:#f2e8dc;color:#2e2923;font-weight:500}
 .registry-ui-toolbar .lab-reference-option[aria-selected="true"]:hover {background:#e9d9c7}
-.registry-ui-toolbar .registry-ui-search {box-sizing:border-box;width:230px;height:32px;min-height:32px;flex:0 0 230px;padding:0 9px 0 31px;border:1px solid #c8c0b5;border-radius:2px;background:#fffdf9 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M21 21l-6 -6'/%3E%3C/svg%3E") 9px center/15px 15px no-repeat;color:#2e2923;font:400 12px/16px var(--font)}
+.registry-ui-toolbar .registry-ui-search {box-sizing:border-box;width:230px;height:32px;min-height:32px;flex:0 0 230px;padding:0 9px 0 31px;border:1px solid #c8c0b5;border-radius:2px;background:#fffdf9 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M21 21l-6 -6'/%3E%3C/svg%3E") 9px center/15px 15px no-repeat;color:#2e2923;font:500 12px/16px var(--font)}
 .registry-ui-toolbar .registry-ui-search::placeholder {color:#817b72;opacity:1}
 .registry-ui-toolbar .registry-ui-search:focus {outline:none;border-color:#7c4718;box-shadow:0 0 0 2px rgba(124,71,24,.1)}
 .registry-ui-card .registry-ui-table thead th {height:30px;background:#e3ded5;color:#2a2620;font:700 10px/14px var(--font);text-transform:uppercase}
 .registry-ui-card .registry-ui-table--finance thead th {background:#d0ccc4;color:#34322f}
 .registry-ui-table .registry-id,.registry-ui-table .col-mono,.registry-ui-table .rp-v010-id {color:#131210;font-family:var(--font);font-size:12px;font-weight:700;line-height:16.8px;font-variant-numeric:tabular-nums}
 .registry-ui-table .registry-executor-secondary,.registry-ui-table .waste-legal-entity {color:#78726a}
-.registry-ui-toolbar #rp-search {width:230px;min-width:0;height:32px;min-height:32px;padding:0 9px 0 31px;background-color:#fffdf9;color:#2e2923;font:400 12px/16px var(--font)}
+.registry-ui-toolbar #rp-search {width:230px;min-width:0;height:32px;min-height:32px;padding:0 9px 0 31px;background-color:#fffdf9;color:#2e2923;font:500 12px/16px var(--font)}
 .registry-ui-toolbar #rp-search::placeholder {color:#817b72;opacity:1}
 @media(max-width:1100px){.registry-ui-head.page-head {height:auto;min-height:58px;flex-wrap:wrap}.registry-ui-head .page-head-left {flex:1 1 350px}}
 @media(max-width:700px){
@@ -114,4 +114,120 @@
   .registry-ui-toolbar .waste-trip-filter--integrated {flex:1 1 100%;width:100%;max-width:100%;min-width:0}
   .registry-ui-toolbar .waste-trip-filter--integrated .toolbar-right {display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);width:100%;max-width:100%}
   .registry-ui-toolbar .waste-trip-filter--integrated .registry-ui-search {grid-column:1/-1}
+}
+
+/* OWNER 18.10.2026. Data roles are opt-in: migrate legacy markup deliberately. */
+.registry-ui-data {--registry-id-width:64px;box-sizing:border-box;width:100%;min-width:900px;border-collapse:collapse;table-layout:fixed;font:500 12px/16.8px var(--font);color:#131210}
+.registry-ui-data :is(th,td) {box-sizing:border-box;padding:8px;border:1px solid #e3ded5;text-align:left;vertical-align:middle}
+.registry-ui-data .registry-ui-value {min-width:0;max-width:100%}
+.registry-ui-data tbody td {background:#fafaf6;font:500 12px/16.8px var(--font);color:#131210}
+.registry-ui-data tbody tr:is(:hover,:focus-within) > td {background:#ece9e2}
+.registry-ui-data :is(col,th,td).registry-ui-id {width:var(--registry-id-width);min-width:var(--registry-id-width);white-space:nowrap;color:#131210;font:700 12px/16.8px var(--font);font-variant-numeric:tabular-nums;overflow:visible}
+.registry-ui-data :is(col,th,td).registry-ui-trip-cell {width:240px;min-width:240px}
+.registry-ui-data .registry-ui-trip {display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 12px/16.8px var(--font);color:#131210}
+.registry-ui-data .registry-ui-primary {font:500 12px/16.8px var(--font);color:#131210}
+.registry-ui-data .registry-ui-name {display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 12px/16.8px var(--font);color:#131210}
+.registry-ui-data .registry-ui-secondary {display:block;font:500 11px/15.4px var(--font);color:#78726a}
+.registry-ui-data .registry-ui-money {text-align:right;white-space:nowrap;font:600 12px/16.8px var(--font);color:#131210;font-variant-numeric:tabular-nums}
+.registry-ui-data .registry-ui-missing {font:500 12px/16.8px var(--font);color:#817d75}
+.registry-ui-data .registry-ui-due {font:500 12px/16.8px var(--font);color:#131210}
+.registry-ui-data .registry-ui-due--today,.registry-ui-data .registry-ui-due--today .registry-ui-secondary {color:#131210;background:transparent}
+.registry-ui-data .registry-ui-due--overdue,.registry-ui-data .registry-ui-due--overdue .registry-ui-secondary {color:#872822}
+.registry-ui-data .registry-ui-due--overdue > .registry-ui-primary {font-weight:700;color:inherit}
+.registry-ui-data .registry-ui-due--complete,.registry-ui-data .registry-ui-due--complete :is(.registry-ui-primary,.registry-ui-secondary) {color:#1f6b43}
+.registry-ui-data .registry-ui-error {color:#872822}
+.registry-ui-data .registry-ui-success {color:#1f6b43}
+.registry-ui-data .registry-ui-status {font:500 12px/16.8px var(--font)}
+.registry-ui-data .registry-ui-status[data-status="planned_route"] {color:#9c27b0}
+.registry-ui-data .registry-ui-status[data-status="executor_assigned"] {color:#17a2b8}
+.registry-ui-data .registry-ui-status[data-status="in_progress"] {color:#1f6b43}
+.registry-ui-data .registry-ui-status[data-status="completed"] {color:#6c757d}
+.registry-ui-data tbody :is(tr.registry-ui-warning > td,td.registry-ui-warning) {background:#fdf0d5;color:#131210}
+.registry-ui-data tbody tr:is(:hover,:focus-within).registry-ui-warning > td,.registry-ui-data tbody tr:is(:hover,:focus-within) > td.registry-ui-warning {background:#fff1bd}
+.registry-ui-data tbody :is(tr.registry-ui-soft-error > td,td.registry-ui-soft-error) {background:#ffe5df}
+.registry-ui-data tbody tr:is(:hover,:focus-within).registry-ui-soft-error > td,.registry-ui-data tbody tr:is(:hover,:focus-within) > td.registry-ui-soft-error {background:#ffd6cc}
+.registry-ui-data tbody :is(tr.registry-ui-soft-success > td,td.registry-ui-soft-success) {background:#dff3e5;color:#131210}
+.registry-ui-data tbody tr:is(:hover,:focus-within).registry-ui-soft-success > td,.registry-ui-data tbody tr:is(:hover,:focus-within) > td.registry-ui-soft-success {background:#cdebd7}
+.registry-ui-data tfoot td {background:#eeeae3;font:700 11px/15.4px var(--font);color:#131210;font-variant-numeric:tabular-nums}
+.registry-ui-data tfoot td.registry-ui-money {font:700 11px/15.4px var(--font)}
+.registry-ui-data--wide {min-width:1660px}
+.registry-ui-data.registry-ui-table--executors {min-width:1000px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(3) {width:136px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(4) {width:110px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(5) {width:120px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(6) {width:130px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(8) {width:60px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(9) {width:75px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(10) {width:120px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(11) {width:110px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(12) {width:130px}
+.registry-ui-data.registry-ui-table--trips col:nth-child(13) {width:160px}
+.registry-ui-data.registry-ui-table--documents col:nth-child(3) {width:108px}
+.registry-ui-data.registry-ui-table--documents col:nth-child(n+5):nth-child(-n+8) {width:58px}
+.registry-ui-data.registry-ui-table--documents col:nth-child(9) {width:70px}
+.registry-ui-data.registry-ui-table--documents col:nth-child(10) {width:145px}
+.registry-ui-data.registry-ui-table--documents col:nth-child(11) {width:160px}
+.registry-ui-data.registry-ui-table--documents col:nth-child(12) {width:100px}
+.registry-ui-data.registry-ui-table--documents col:nth-child(13) {width:165px}
+.registry-ui-data.registry-ui-table--documents col:nth-child(14) {width:170px}
+.registry-ui-data.registry-ui-table--finance col:nth-child(3),.registry-ui-data.registry-ui-table--finance col:nth-child(9) {width:90px}
+.registry-ui-data.registry-ui-table--finance col:nth-child(5),.registry-ui-data.registry-ui-table--finance col:nth-child(11) {width:132px}
+.registry-ui-data.registry-ui-table--finance col:nth-child(4),.registry-ui-data.registry-ui-table--finance col:nth-child(6),.registry-ui-data.registry-ui-table--finance col:nth-child(7),.registry-ui-data.registry-ui-table--finance col:nth-child(10),.registry-ui-data.registry-ui-table--finance col:nth-child(12),.registry-ui-data.registry-ui-table--finance col:nth-child(13) {width:105px}
+.registry-ui-data .registry-ui-secondary {max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.registry-ui-data .registry-ui-reason {font:500 11px/15.4px var(--font);color:#675f55;white-space:normal;overflow-wrap:normal}
+.registry-ui-data .registry-ui-due .registry-ui-secondary {overflow:visible;white-space:normal}
+.registry-ui-data tbody tr.registry-ui-warning .registry-ui-secondary {color:#131210}
+.registry-ui-data .route-status {font:500 12px/16.8px var(--font)}
+.registry-ui-data .route-status--danger,.registry-ui-data .route-status--danger::before {color:#872822}
+.registry-ui-data .route-status--danger::before {background:#872822}
+.registry-ui-data .route-status--active {color:#1f6b43}
+.registry-ui-data .route-status--active::before {background:#1f6b43}
+.route-review-action-menu .registry-ui-delete {color:#872822;background:#ffe5df}
+.route-review-action-menu .registry-ui-delete:is(:hover,:focus-visible) {background:#ffd6cc;color:#872822}
+.route-review-action-menu .registry-ui-delete:focus-visible {outline:2px solid #9a5a22!important;outline-offset:-2px!important}
+.route-review-action-menu:has(.registry-ui-delete) {box-shadow:none}
+.route-review-action-menu .registry-ui-delete {min-height:28px}
+.registry-ui-delete {color:#872822;background:#ffe5df}
+.registry-ui-delete:is(:hover,:focus-visible) {background:#ffd6cc}
+.registry-ui-toolbar .registry-ui-search-group {display:flex;align-items:center;gap:8px;min-width:0;max-width:100%}
+.registry-ui-toolbar .registry-ui-reset {flex:none;min-height:32px;height:32px;margin:0;padding:0 8px;border:0;border-radius:2px;background:transparent;color:#4c4840;font:500 12px/16px var(--font);white-space:nowrap;cursor:pointer}
+.registry-ui-toolbar .registry-ui-reset:hover {background:#ece9e2}
+.registry-ui-toolbar .registry-ui-reset:focus-visible {outline:2px solid #9a5a22;outline-offset:2px}
+.registry-ui-reset[hidden],.registry-ui-data tr[hidden] {display:none!important}
+/* One vertical owner. The X wrapper has its full content height, never a Y cap. */
+.registry-ui-scroll > :is(.table-scroll,.rp-v010-table-wrap) {height:auto!important;max-height:none!important;min-height:0;overflow:visible!important}
+.registry-ui-scroll > [data-registry-scroll-x="true"] {overflow-x:auto!important;overflow-y:auto!important}
+.registry-ui-scroll .registry-ui-scroll-native {position:sticky!important;top:calc(var(--registry-toolbar-height,49px) - 12px)!important;z-index:19}
+.registry-ui-scroll .registry-ui-scroll-translated {position:relative!important;top:0!important;z-index:19;will-change:transform}
+@media(max-width:700px){
+ .registry-ui-toolbar .registry-ui-search-group {width:100%;grid-column:1/-1}
+ .registry-ui-toolbar .registry-ui-search-group .registry-ui-search {flex:1 1 0;min-width:0;width:0}
+}
+.registry-ui-data--cards {display:block;min-width:0;table-layout:auto}
+.registry-ui-data--cards :is(colgroup,thead) {display:none}
+.registry-ui-data--cards tbody {display:block}
+.registry-ui-data--cards tbody tr {display:block;border-bottom:1px solid #a8a196}
+.registry-ui-data--cards tbody td {display:grid;grid-template-columns:105px minmax(0,1fr);align-items:baseline;gap:8px;width:100%;height:auto;min-height:0;border:0;padding:6px 8px;white-space:normal;overflow-wrap:anywhere}
+.registry-ui-data--cards tbody td::before {content:attr(data-label);font:500 11px/15.4px var(--font);color:#78726a;text-align:left}
+.registry-ui-data--cards tbody td.registry-ui-trip-cell {width:100%;min-width:0}
+.registry-ui-data--cards .registry-ui-trip {max-width:min(100%,240px)}
+.registry-ui-data--cards tbody td.registry-ui-id {width:100%;min-width:0}
+.registry-ui-data--cards :is(.registry-ui-name,.registry-ui-secondary) {overflow:visible;white-space:normal}
+.registry-ui-data .registry-ui-compact-head {display:none}
+.registry-ui-data--cards tfoot,.registry-ui-data--cards tfoot tr {display:block}
+.registry-ui-data--cards tfoot td {display:none}
+.registry-ui-data--cards tfoot td[data-gallery-total],.registry-ui-data--cards tfoot td[data-registry-total] {display:flex;justify-content:space-between;gap:8px;width:100%;height:auto}
+.registry-ui-data--cards tfoot td[data-label]::before {content:attr(data-label);font:500 11px/15.4px var(--font);color:#78726a}
+@media(min-width:1051px) and (max-width:1799px){
+ .registry-ui-data.registry-ui-table--finance {min-width:0}
+ .registry-ui-data.registry-ui-table--finance colgroup,.registry-ui-data.registry-ui-table--finance .registry-ui-wide-head {display:none}
+ .registry-ui-data.registry-ui-table--finance :is(thead,tbody,tfoot) {display:block}
+ .registry-ui-data.registry-ui-table--finance .registry-ui-compact-head,.registry-ui-data.registry-ui-table--finance tbody tr {display:grid;grid-template-columns:var(--registry-id-width) 240px minmax(0,14fr) minmax(0,14fr) minmax(0,18fr) minmax(0,14fr) minmax(0,17fr)}
+ .registry-ui-data.registry-ui-table--finance tbody td {height:auto;min-height:42px;min-width:0;width:auto;display:block;align-content:center;border:0}
+ .registry-ui-data.registry-ui-table--finance tbody td:nth-child(8) {grid-column:1/3}
+ .registry-ui-data.registry-ui-table--finance tbody td:nth-child(n+8) {border-top:1px solid #e3ded5}
+ .registry-ui-data.registry-ui-table--finance tfoot tr {display:grid;grid-template-columns:9% 11% 16% 17% 13% 16% 18%}
+ .registry-ui-data.registry-ui-table--finance tfoot td {display:none}
+ .registry-ui-data.registry-ui-table--finance tfoot td:first-child,.registry-ui-data.registry-ui-table--finance tfoot td[data-gallery-total],.registry-ui-data.registry-ui-table--finance tfoot td[data-registry-total] {display:block;min-width:0;width:auto;height:auto}
+ .registry-ui-data.registry-ui-table--finance tfoot td[data-label]::before {content:attr(data-label);display:block;font:500 11px/15.4px var(--font);color:#78726a}
 }

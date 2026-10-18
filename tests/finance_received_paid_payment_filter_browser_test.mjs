@@ -32,7 +32,7 @@ try{
    const heading=document.querySelector('#rp-ledger-table thead th');
    return {searchWeight:getComputedStyle(search).fontWeight,placeholder:getComputedStyle(search,'::placeholder').color,headingBackground:getComputedStyle(heading).backgroundColor,headingImage:getComputedStyle(heading).backgroundImage};
  });
- assert.deepEqual(sharedStyles,{searchWeight:'400',placeholder:'rgb(129, 123, 114)',headingBackground:'rgb(208, 204, 196)',headingImage:'none'});
+ assert.deepEqual(sharedStyles,{searchWeight:'500',placeholder:'rgb(129, 123, 114)',headingBackground:'rgb(208, 204, 196)',headingImage:'none'});
  const ids=()=>page.locator('#rp-list tr:visible').evaluateAll(items=>items.map(item=>item.dataset.id));
  assert.deepEqual(await ids(),['105','104','103','102']);
  assert.equal(await page.locator('#rp-count').innerText(),'4');

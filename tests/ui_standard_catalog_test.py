@@ -46,6 +46,14 @@ without_specimen = copy.deepcopy(catalog)
 without_specimen["components"][0].pop("specimen")
 assert any("specimen" in error for error in ui_standard.validate(without_specimen))
 
+new_legacy = copy.deepcopy(catalog)
+new_legacy['pages'].append({**new_legacy['pages'][0], 'id':'new-table'})
+assert any('legacy exception is closed' in error for error in ui_standard.validate(new_legacy))
+
+false_current = copy.deepcopy(catalog)
+false_current['pages'][0]['adaptation_status']='current_20261018'
+assert any('current canon requires registry-ui-data' in error for error in ui_standard.validate(false_current))
+
 with tempfile.TemporaryDirectory(prefix="planex-ui-catalog-") as temp:
     root = Path(temp)
     catalog_path = root / "catalog.json"
@@ -58,7 +66,7 @@ with tempfile.TemporaryDirectory(prefix="planex-ui-catalog-") as temp:
         "selector": ".registry-ui-card",
         "approval": "OWNER test fixture",
         "description": "Test fixture for gallery registration.",
-        "specimen": "docs/ui/specimens/registry.card.html",
+        "specimen": "docs/ui/specimens/registry.composition.html",
     }), encoding="utf-8")
     original_catalog, original_argv = ui_standard.CATALOG, sys.argv
     try:
