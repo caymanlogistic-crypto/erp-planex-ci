@@ -230,6 +230,12 @@
       "hover_background": "#FFD6CC"
     }
   },
+  "responsive": {
+    "executors": "Wide table at all widths including 390px; horizontal table scroll, no cards",
+    "documents": "Wide table at all widths including 390px; horizontal table scroll, no cards",
+    "departures": "Cards at viewport <=640px, table above 640px",
+    "finance": "Cards <=1050px; two-band logical rows 1051-1799px; 13-column wide table >=1800px. Use viewport breakpoint, not bounded workspace width."
+  },
   "scroll": {
     "vertical": "One vertical scroll in the main workspace; table wrappers have no independent vertical range or height cap",
     "header": "Keep the reference registry header region: its existing toolbar and column headings stay together while page heading, tabs, rows and totals scroll",
