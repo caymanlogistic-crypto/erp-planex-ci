@@ -89,6 +89,9 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
+      - name: Approved registry component contract
+        run: python3 tests/registry_component_contract_test.py
+
       - name: Changed PHP syntax only
         shell: bash
         run: |

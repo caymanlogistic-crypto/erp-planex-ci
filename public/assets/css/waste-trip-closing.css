@@ -121,8 +121,8 @@
 .closing-registry-tabs .closing-filter.is-active{border-bottom-color:#7c4718;color:#7c4718;font-weight:600}
 .closing-registry-tabs .closing-filter::after{content:"";position:absolute;inset:2px;border:2px solid #9a5a22;opacity:0;pointer-events:none}
 .closing-registry-tabs .closing-filter:focus-visible::after{opacity:1}
-.closing-registry-card{box-sizing:border-box;width:100%;border:1px solid #a8a196;background:#fafaf6}
-.closing-page .closing-registry-card .closing-toolbar{box-sizing:border-box;position:sticky;top:38px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:8px 16px;min-height:49px;height:auto;margin:0;padding:8px 12px;border:0;border-bottom:1px solid #d5cec3;background:#f7f5f0;box-shadow:none}
+.closing-registry-card:not(.registry-ui-card){box-sizing:border-box;width:100%;border:1px solid #a8a196;background:#fafaf6}
+.closing-page .closing-registry-card:not(.registry-ui-card) .closing-toolbar{box-sizing:border-box;position:sticky;top:38px;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:8px 16px;min-height:49px;height:auto;margin:0;padding:8px 12px;border:0;border-bottom:1px solid #d5cec3;background:#f7f5f0;box-shadow:none}
 .closing-page .closing-registry-card .closing-toolbar-right{display:flex;align-items:center;justify-content:flex-end;gap:16px;flex:none;min-width:0;margin-left:auto}
 .closing-found{display:inline-flex;align-items:center;gap:5px;flex:none;color:#4c4840;font:500 12px/16px 'IBM Plex Sans',sans-serif;white-space:nowrap}
 .closing-found::before{content:"";width:5px;height:5px;margin-right:2px;background:#7c4718}

@@ -29,7 +29,16 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
 <link rel="stylesheet" href="<?=app_url('/assets/css/'.$stylesheet.'.css')?>?v=<?=filemtime(base_path('public/assets/css/'.$stylesheet.'.css'))?>">
 <?php endforeach; ?>
 <link rel="stylesheet" href="<?=app_url('/assets/css/registry-components.css')?>?v=<?=filemtime(base_path('public/assets/css/registry-components.css'))?>">
-<div class="page-head waste-trips-page-head registry-ui-head"><div class="page-head-left"><span class="rp-identity-icon"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-truck-delivery page-head-tabler-icon" aria-hidden="true" focusable="false"><path d="M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M5 17h-2v-4m-1 -8h11v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5"/><path d="M3 9l4 0"/></svg></span><span class="rp-head-text"><h1 class="page-title">Перевозка отходов</h1><span class="page-summary">ERP-рейсы и рейсы, перенесённые из старой БД.</span></span></div><div class="page-head-actions"><?php if($isFinanceRealm):?><form method="post" action="<?=app_url('/company/trips/departures/synchronize')?>"><?=csrfField()?><button type="submit" class="btn btn-secondary">Синхронизация рейсов со старой БД</button></form><?php endif;?><button type="button" class="btn btn-primary" onclick="openModal('waste-trip-create-modal')">Создать рейс</button></div></div>
+<?php
+$registryHeadTitle = 'Перевозка отходов';
+$registryHeadSummary = 'ERP-рейсы и рейсы, перенесённые из старой БД.';
+$registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-truck-delivery page-head-tabler-icon" aria-hidden="true" focusable="false"><path d="M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M5 17h-2v-4m-1 -8h11v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5"/><path d="M3 9l4 0"/></svg>';
+ob_start();
+?><?php if($isFinanceRealm):?><form method="post" action="<?=app_url('/company/trips/departures/synchronize')?>"><?=csrfField()?><button type="submit" class="btn btn-secondary">Синхронизация рейсов со старой БД</button></form><?php endif;?><button type="button" class="btn btn-primary" onclick="openModal('waste-trip-create-modal')">Создать рейс</button><?php
+$registryHeadActionsHtml = (string) ob_get_clean();
+$registryHeadExtraClass = 'waste-trips-page-head';
+require base_path('app/View/partials/registry_ui_head.php');
+?>
 <?php if(($tripParity??null)!==null && empty($tripParity['available'])):?>
 <div class="notice warn" data-waste-trip-parity-warning><b>Контрольная сверка рейсов со старой базой недоступна.</b> <?=e((string)($tripParity['message']??''))?></div>
 <?php elseif(!empty($tripParity['mismatch'])):?>
@@ -47,7 +56,7 @@ $planLabel=static function(array $t)use($fmtDate):string{if(!empty($t['planned_s
 <?php endforeach;?>
 </nav>
 <?php if($formSuccess):?><div class="notice success"><?=e($formSuccess)?></div><?php endif;?><?php if($formError):?><div class="notice warn"><?=e($formError)?></div><?php endif;?>
-<div class="table-card table-card--standard registry-ui-card" data-erp-grid><div class="table-toolbar waste-trip-toolbar registry-ui-toolbar"><div class="found-label">Найдено: <b><?=count($trips)?></b></div>
+<div class="table-card table-card--standard registry-ui-card registry-ui-sticky-table registry-ui-sticky-table--trips" data-erp-grid><div class="table-toolbar waste-trip-toolbar registry-ui-toolbar"><div class="found-label">Найдено: <b><?=count($trips)?></b></div>
 <form method="get" action="<?=app_url('/company/trips/departures')?>" class="waste-trip-filter waste-trip-filter--integrated" data-waste-filter><div class="toolbar-right">
 <select name="company" class="toolbar-select" aria-label="Компания рейса"><option value="">Все компании</option><option value="mg_logistic" <?=$selectedCompany==='mg_logistic'?'selected':''?>>МГ ЛОГИСТИК</option><option value="planex" <?=$selectedCompany==='planex'?'selected':''?>>ПЛАНЭКС</option></select>
 <select name="status" hidden aria-label="Статус рейса"><option value="">Все статусы</option><?php foreach(WasteTripService::STATUS_OPTIONS as $v=>$label):?><option value="<?=e($v)?>" <?=$selectedStatus===$v?'selected':''?>><?=e($label)?></option><?php endforeach;?></select>
@@ -136,11 +145,11 @@ paintStatusSelects(document);
 document.addEventListener('change',function(event){if(event.target.matches('select[name="status"]'))event.target.dataset.wasteStatus=event.target.value;});
 var wasteFilter=document.querySelector('[data-waste-filter]');if(wasteFilter){var search=wasteFilter.querySelector('[name="q"]'),timer;wasteFilter.querySelectorAll('select').forEach(function(select){select.addEventListener('change',function(){wasteFilter.requestSubmit();});});if(search){search.addEventListener('input',function(){clearTimeout(timer);timer=setTimeout(function(){wasteFilter.requestSubmit();},400);});search.addEventListener('keydown',function(event){if(event.key==='Enter'){clearTimeout(timer);}});}}
 var statusNav=document.querySelector('[data-waste-status-tabs]');if(statusNav&&wasteFilter){var statusSelect=wasteFilter.querySelector('select[name="status"]'),statusButtons=[...statusNav.querySelectorAll('button[data-status]')];statusButtons.forEach(function(button){button.addEventListener('click',function(){if(statusSelect.value===button.dataset.status)return;statusSelect.value=button.dataset.status;statusSelect.dispatchEvent(new Event('change',{bubbles:true}));});});statusNav.addEventListener('keydown',function(event){var index=statusButtons.indexOf(document.activeElement),next=event.key==='ArrowRight'?index+1:event.key==='ArrowLeft'?index-1:event.key==='Home'?0:event.key==='End'?statusButtons.length-1:-1;if(index<0||next<0)return;event.preventDefault();statusButtons[(next+statusButtons.length)%statusButtons.length].focus();});requestAnimationFrame(function(){var active=statusNav.querySelector('[aria-pressed="true"]');if(!active)return;var strip=statusNav.getBoundingClientRect(),tab=active.getBoundingClientRect();if(tab.left<strip.left)statusNav.scrollLeft+=tab.left-strip.left;if(tab.right>strip.right)statusNav.scrollLeft+=tab.right-strip.right;});}
-var registryToolbar=document.querySelector('.table-card[data-erp-grid] > .waste-trip-toolbar');if(registryToolbar&&window.ResizeObserver){var syncToolbarHeight=function(){registryToolbar.parentElement.style.setProperty('--waste-toolbar-height',registryToolbar.getBoundingClientRect().height+'px');};new ResizeObserver(syncToolbarHeight).observe(registryToolbar);syncToolbarHeight();}
 document.addEventListener('DOMContentLoaded',function(){document.querySelectorAll('[data-linear-trip-form]').forEach(wireForm);});
 <?php if($showCreateModal):?>openModal('waste-trip-create-modal');<?php endif;?>
 <?php if($openTripId>0):?>loadModal('view',<?=$openTripId?>);<?php endif;?>
 <?php if($openEditId>0):?>loadModal('edit',<?=$openEditId?>);<?php endif;?>
 })();</script>
 <script src="<?=app_url('/assets/js/table-reference-select.js')?>?v=<?=filemtime(base_path('public/assets/js/table-reference-select.js'))?>" defer></script>
+<script src="<?=app_url('/assets/js/registry-components.js')?>?v=<?=filemtime(base_path('public/assets/js/registry-components.js'))?>" defer></script>
 <?php endif;?>
