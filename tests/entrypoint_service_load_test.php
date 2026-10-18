@@ -17,6 +17,22 @@ if (PHP_SAPI !== 'cli') {
     exit;
 }
 
+if (($argv[1] ?? '') === '--registry-scope-subprocess') {
+    require __DIR__ . '/../bootstrap/app.php';
+    require BASE_PATH . '/app/Support/entrypoint_dependencies.php';
+    \App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::systemOwner(
+        11, 4, array_column(\App\Security\PageRegistry::companyPages(), 'key')
+    ));
+    $_SESSION = ['account_id' => 7, 'user_id' => 11, 'company_id' => 4];
+    require BASE_PATH . '/app/View/partials/registry_ui_state_scope.php';
+    if (!isset($registryUiStateScope) || !preg_match('/^[0-9a-f]{64}$/', $registryUiStateScope)) {
+        echo "REGISTRY_SCOPE_ENTRYPOINT_FAILED\n";
+        exit(1);
+    }
+    echo "REGISTRY_SCOPE_ENTRYPOINT_PASS\n";
+    exit(0);
+}
+
 // ---------------------------------------------------------------------------
 // Subprocess mode: load CS-01 classes and prove class_exists().
 // ---------------------------------------------------------------------------
@@ -121,6 +137,14 @@ foreach ($foundational as $f) {
     }
 }
 check('all 5 web-consumer foundational services required by entrypoint', $missingRequires === []);
+check(
+    'registry state scope is loaded before production views without an autoloader',
+    in_array('app/Security/RegistryUiStateScope.php', $requires, true)
+        && positionIn($requires, 'app/Security/EffectiveAccess.php')
+            < positionIn($requires, 'app/Security/RegistryUiStateScope.php')
+        && positionIn($requires, 'app/Security/PageRegistry.php')
+            < positionIn($requires, 'app/Security/RegistryUiStateScope.php')
+);
 
 // 5. Dependency order: foundational must appear before every direct consumer.
 $consumers = [
@@ -191,6 +215,13 @@ check('subprocess class_exists for all 6 CS-01 classes', $subOk);
 if (!$subOk) {
     echo "  subprocess output: " . trim(implode("\n", $out)) . "\n";
 }
+
+$scopeCmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__FILE__) . ' --registry-scope-subprocess';
+$scopeOut = [];
+$scopeCode = 0;
+exec($scopeCmd . ' 2>&1', $scopeOut, $scopeCode);
+check('registry scope partial works with production entrypoint and no autoloader', $scopeCode === 0 && in_array('REGISTRY_SCOPE_ENTRYPOINT_PASS', $scopeOut, true));
+if ($scopeCode !== 0) echo "  scope subprocess output: " . trim(implode("\n", $scopeOut)) . "\n";
 
 // 7. No persistent artifacts created by this test.
 $artifacts = glob(sys_get_temp_dir() . '/cs01_*');
