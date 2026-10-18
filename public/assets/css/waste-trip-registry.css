@@ -1,3 +1,4 @@
+@import url("./erp-registry-header-actions.css");
 .waste-trip-filter { height:auto; min-height:var(--toolbar-h); }
 .waste-trip-filter .toolbar-right { display:flex; flex-wrap:wrap; gap:8px; padding:6px 0; }
 .waste-trip-filter .toolbar-search { max-width:100%; }
