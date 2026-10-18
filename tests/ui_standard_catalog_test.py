@@ -54,6 +54,11 @@ false_current = copy.deepcopy(catalog)
 false_current['pages'][0]['adaptation_status']='current_20261018'
 false_current['pages'][0]['view']='app/View/partials/registry_ui_head.php'
 assert any('current canon requires registry-ui-data' in error for error in ui_standard.validate(false_current))
+assert any('data_roles must cover' in error for error in ui_standard.validate(false_current))
+false_current['pages'][0]['data_roles']=[]
+assert any('data_roles must cover' in error for error in ui_standard.validate(false_current))
+false_current['pages'][0]['data_roles']=['primary']
+assert any('data_roles must cover' in error for error in ui_standard.validate(false_current))
 
 with tempfile.TemporaryDirectory(prefix="planex-ui-catalog-") as temp:
     root = Path(temp)

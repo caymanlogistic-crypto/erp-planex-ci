@@ -22,7 +22,14 @@ STYLE_OWNERS = frozenset({"public/assets/css/erp-ui.css", "public/assets/css/reg
 # does not exempt a page script, inline CSS or a newly registered family.
 RUNTIME_OWNER = "public/assets/js/registry-components.js"
 # These describe data geometry, not the appearance of a reusable control.
-GEOMETRY = frozenset("width min-width max-width table-layout grid-template-columns grid-column grid-column-start grid-column-end flex-basis text-align vertical-align white-space overflow overflow-x overflow-y text-overflow word-break overflow-wrap order display visibility cursor pointer-events".split())
+GEOMETRY = frozenset("width min-width max-width text-align vertical-align white-space overflow text-overflow word-break overflow-wrap".split())
+# Only explicit terminal table cells/columns may own business geometry. A bare
+# renamed class is not proof that it belongs to a column (it may be a control).
+COLUMN_TARGET = re.compile(r"(?:^|[ >+~])(?:col|th|td)(?=[.#[:]|$)(?:[.#][\w-]+|\[[^\]{}]+\]|:nth-(?:child|of-type)\([^()]+\))*$")
+
+
+def business_geometry(selector: str, prop: str) -> bool:
+    return prop in GEOMETRY and bool(COLUMN_TARGET.search(selector))
 SHARED = re.compile(r"\.(?:registry-ui-[\w-]+|page-head(?:-[\w-]+)?|page-title|page-summary|table-toolbar|toolbar-(?:right|select)|found-label|lab-reference-[\w-]+|btn(?:-[\w-]+)?|field-(?:input|select|label|textarea)|modal-(?:head|body|foot))\b")
 SOURCE = re.compile(r"^(?:public/assets/.*\.(?:css|js|mjs)|app/(?:View|Http/Controllers)/.*\.php)$")
 
@@ -125,11 +132,12 @@ def inventory(path: str, source: str) -> Counter:
     result = Counter()
     for block in re.findall(r"<style\b[^>]*>(.*?)</style\s*>", source, re.I | re.S):
         result.update(css_inventory(block))
-    for attr in re.finditer(r"\bstyle\s*=\s*([\"'])(.*?)\1", source, re.I | re.S):
-        for prop, value in declarations(attr[2]):
+    for attr in re.finditer(r"\bstyle\s*=\s*(?:([\"'])(.*?)\1|([^\s>]+))", source, re.I | re.S):
+        for prop, value in declarations(attr[2] if attr[1] else attr[3]):
             result[("", "inline style", prop, value)] += 1
     # Also reject CSS injection and style mutations under different class names.
     js = re.sub(r"/\*.*?\*/|^[ \t]*//[^\n]*", "", source, flags=re.S | re.M)
+    js = re.sub(r"\[\s*(['\"])([A-Za-z_$][\w$]*)\1\s*\]", lambda match: '.'+match[2], js)
     pattern = r"(?:\.style\s*(?:\.[\w]+|\[[^\]]+\])?\s*(?:=|\+=)|\.style\.(?:setProperty|removeProperty)\s*\(|Object\.assign\s*\([^,;]*\.style\s*,|\.(?:setAttribute|setAttributeNS)\s*\(\s*['\"]style['\"]|\.(?:insertRule|addRule|replaceSync)\s*\(|createElement\s*\(\s*['\"]style['\"]|adoptedStyleSheets\s*=)"
     for mutation in re.finditer(pattern, js):
         statement = normalize(js[mutation.start():].split(";", 1)[0].split("\n", 1)[0])
@@ -146,7 +154,7 @@ def violations(path: str, before: str, after: str, owners: set[str]) -> list[str
             continue
         # Column geometry is allowed; shared controls and all inline/runtime styling
         # must use their owner, including custom properties and !important overrides.
-        if prop in GEOMETRY and selector not in {"inline style", "runtime style"} and not SHARED.search(selector + context):
+        if business_geometry(selector, prop) and not SHARED.search(selector + context):
             continue
         errors.append(f"{path}: {context}{selector} {{ {prop}: {value} }} — use the approved shared component ({count} new)")
     return errors
