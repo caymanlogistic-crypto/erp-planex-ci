@@ -101,7 +101,7 @@
   .registry-ui-head .page-head-left {flex-basis:100%}
   .registry-ui-head .page-head-actions {width:100%;min-width:0;margin-left:0;flex-wrap:wrap;justify-content:flex-start}
   .registry-ui-head .page-head-actions .btn {max-width:100%;height:auto;white-space:normal;text-align:center}
-  .registry-ui-toolbar.table-toolbar {align-items:stretch;flex-direction:column;max-width:100%}
+  .registry-ui-toolbar.table-toolbar {align-items:stretch;flex-direction:column;flex-wrap:nowrap;max-width:100%}
   .registry-ui-toolbar .toolbar-right {width:100%;max-width:100%;min-width:0;margin-left:0;flex-wrap:wrap}
   .registry-ui-toolbar .registry-ui-search {width:100%;min-width:0;flex:1 1 100%}
   .registry-ui-toolbar :is(form,label,.toolbar-sort,.lab-reference-select) {max-width:100%;min-width:0}
