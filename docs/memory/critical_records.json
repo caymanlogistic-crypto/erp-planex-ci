@@ -158,8 +158,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "d433d667d66ae297e68efe9230b2d524500e46b6",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d433d667d66ae297e68efe9230b2d524500e46b6/tests/ui_standard_gallery_browser_test.mjs",
+      "verified_sha": "4f37041e8bb357a7a9340d4d4c980f7fc39f96de",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/4f37041e8bb357a7a9340d4d4c980f7fc39f96de/tests/ui_style_guard_test.py",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -178,7 +178,18 @@
         "tools/runner/**",
         "tests/runner_helpers_contract_test.py",
         "tests/local_preflight_evidence_test.py",
-        "docs/LOCAL_PREFLIGHT_PUBLISHING.md"
+        "docs/LOCAL_PREFLIGHT_PUBLISHING.md",
+        ".agents/skills/planex-ui-standard/**",
+        "tools/ui_standard.py",
+        "tools/ui_style_guard.py",
+        "tools/ui_parity.mjs",
+        "tests/ui_style_guard_test.py",
+        "tests/ui_standard_catalog_test.py",
+        "tests/ui_standard_gallery_browser_test.mjs",
+        "tests/ui_standard_lab_browser_test.mjs",
+        "tests/helpers/ui_appearance.mjs",
+        "tests/helpers/registry_visual_contract.mjs",
+        "tests/registry_component_contract_test.py"
       ],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
