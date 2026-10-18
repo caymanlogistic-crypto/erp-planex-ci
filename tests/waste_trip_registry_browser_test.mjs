@@ -56,6 +56,7 @@ try {
         searchStartsInside: search.left >= toolbar.left + 8,
         filterStartsBelowCount: filter.getBoundingClientRect().top >= document.querySelector('.found-label').getBoundingClientRect().bottom,
         toolbarHeight: toolbar.height,
+        toolbarWrap: getComputedStyle(document.querySelector('.registry-ui-toolbar')).flexWrap,
         searchWeight: getComputedStyle(filter.querySelector('[name=q]')).fontWeight,
         placeholder: getComputedStyle(filter.querySelector('[name=q]'), '::placeholder').color,
         headingBackground: getComputedStyle(table.querySelector('thead th')).backgroundColor,
@@ -72,6 +73,7 @@ try {
     assert.equal(metrics.managerFits, true, `${width}: manager filter stays inside viewport ${JSON.stringify(metrics)}`);
     assert.equal(metrics.searchFits, true, `${width}: search stays inside toolbar ${JSON.stringify(metrics)}`);
     if (width <= 640) {
+      assert.equal(metrics.toolbarWrap, 'nowrap', `${width}: shared mobile toolbar stays in one column`);
       assert.equal(metrics.searchStartsInside, true, `${width}: search starts inside toolbar ${JSON.stringify(metrics)}`);
       assert.equal(metrics.filterStartsBelowCount, true, `${width}: filters follow count on a new row ${JSON.stringify(metrics)}`);
     } else {
