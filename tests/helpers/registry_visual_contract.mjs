@@ -5,6 +5,26 @@ const catalog=JSON.parse(readFileSync(new URL('../../docs/ui/approved-components
 const roleSelectors={primary:'.registry-ui-primary',name:'.registry-ui-name',secondary:'.registry-ui-secondary',money:'tbody .registry-ui-money',id:'tbody .registry-ui-id',trip:'.registry-ui-trip',missing:'.registry-ui-missing',due:'.registry-ui-due',status:'.registry-ui-status',total:'tfoot td',reason:'.registry-ui-reason'};
 const firstFamily=value=>value.split(',')[0].trim().replace(/^["']|["']$/g,'');
 
+export async function assertRegistryDataCoverage(page,label){
+  const typed=Object.values(roleSelectors).map(selector=>selector.split(' ').at(-1)).filter(selector=>selector!=='td').join(',');
+  const uncovered=await page.evaluate(typed=>{
+    const result=[];
+    for(const body of document.querySelectorAll('.registry-ui-data tbody')){
+      const walker=document.createTreeWalker(body,NodeFilter.SHOW_TEXT);
+      for(let node=walker.nextNode();node;node=walker.nextNode()){
+        if(!node.textContent.trim())continue;
+        const element=node.parentElement,range=document.createRange();range.selectNodeContents(node);
+        if(!range.getBoundingClientRect().width||!range.getBoundingClientRect().height||getComputedStyle(element).visibility==='hidden')continue;
+        // Actions retain their independently approved component contract.
+        if(element.closest('button,input,select,textarea,[role=button],[role=menu],.btn,.lab-reference-list,.lab-reference-trigger'))continue;
+        if(!element.closest(typed))result.push(node.textContent.trim().slice(0,100));
+      }
+    }
+    return result;
+  },typed);
+  assert.deepEqual(uncovered,[],`${label}: untyped visible table data; use an approved typography role (a color-only class is insufficient)`);
+}
+
 // Required coverage is evaluated against actual visible data, never class-name
 // strings in a PHP source. Test fixtures must expose every applicable role.
 export async function assertRegistryDataRoles(page, requiredRoles, label) {
@@ -53,6 +73,7 @@ export async function assertRegistryDataContract(page, pageId) {
   assert.equal(definition?.adaptation_status,'current_20261018',`${pageId}: data contract requires current registered page`);
   assert.ok(Array.isArray(definition.data_roles)&&definition.data_roles.length,`${pageId}: explicit data_roles required`);
   await assertRegistryDataRoles(page,definition.data_roles,pageId);
+  await assertRegistryDataCoverage(page,pageId);
 }
 
 export async function assertRegistryVisualContract(page, label) {

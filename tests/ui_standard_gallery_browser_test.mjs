@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath,pathToFileURL} from 'node:url';
-import {assertRegistryVisualContract,assertRegistryDataRoles} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataRoles,assertRegistryDataCoverage} from './helpers/registry_visual_contract.mjs';
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const url=pathToFileURL(path.join(root,'docs/ui/approved-components.html')).href;
@@ -190,6 +190,13 @@ try{
  const fallback=await auditFrame.addStyleTag({content:'.registry-ui-data .registry-ui-name{font-family:Arial,"IBM Plex Sans"!important}'});
  await assert.rejects(()=>assertRegistryDataRoles(auditFrame,['name'],'audit fallback family'),/actual font family/);
  await fallback.evaluate(element=>element.remove());
+ // A typed status elsewhere must not hide an untyped, incorrectly inherited
+ // document state. Color-only spans cannot establish typography coverage.
+ await auditFrame.locator('[data-gallery-view=finance] tbody tr').first().locator('td').first().evaluate(element=>{
+  const value=document.createElement('span');value.className='registry-ui-error';value.textContent='НЕТ';element.append(value);
+  element.classList.remove('registry-ui-id');
+ });
+ await assert.rejects(()=>assertRegistryDataCoverage(auditFrame,'audit color-only data'),/untyped visible table data/);
  await auditFrame.locator('[data-gallery-view=finance] .registry-ui-name').evaluateAll(elements=>elements.forEach(element=>element.classList.remove('registry-ui-name')));
  await assert.rejects(()=>assertRegistryDataRoles(auditFrame,['name'],'audit missing coverage'),/no visible coverage/);
  await audit.close();
