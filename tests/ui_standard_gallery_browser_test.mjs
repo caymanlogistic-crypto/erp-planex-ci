@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -7,13 +8,14 @@ const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const gallery = pathToFileURL(path.join(root, 'docs/ui/approved-components.html')).href;
+const expectedComponents = JSON.parse(fs.readFileSync(path.join(root, 'docs/ui/approved-components.json'), 'utf8')).components.length;
 const browser = await chromium.launch({ headless: true });
 try {
   for (const width of [390, 1280, 1920]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(gallery);
     await page.locator('.gallery-item').first().waitFor();
-    assert.equal(await page.locator('.gallery-item').count(), 11);
+    assert.equal(await page.locator('.gallery-item').count(), expectedComponents);
     const state = await page.evaluate(() => {
       const head = document.querySelector('[id="registry.page-head"] .registry-ui-head');
       const toolbar = document.querySelector('[id="registry.toolbar"] .registry-ui-toolbar');
