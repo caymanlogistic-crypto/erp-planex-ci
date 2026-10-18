@@ -4,6 +4,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
+import {assertRegistryVisualContract} from './helpers/registry_visual_contract.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -25,6 +26,7 @@ try{
  await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
  await page.addScriptTag({content:js});
  await page.addScriptTag({content:referenceSelectJs});
+ await assertRegistryVisualContract(page, 'finance-received-paid 1280px');
  const sharedStyles=await page.evaluate(()=>{
    const search=document.querySelector('#rp-search');
    const heading=document.querySelector('#rp-ledger-table thead th');

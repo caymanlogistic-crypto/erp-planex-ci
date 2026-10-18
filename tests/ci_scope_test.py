@@ -98,10 +98,20 @@ expected = {
     "migration_normalization",
     "tenant_schema",
     "ui_lab",
+    "approved_ui",
     "memory",
     "control_plane",
 }
 assert set(m.SCOPE_PATTERNS) == expected
+
+for path in [
+    "public/assets/css/registry-components.css",
+    "app/View/pages/company_waste_trips.php",
+    "docs/ui/approved-components.json",
+    ".agents/skills/planex-ui-standard/SKILL.md",
+    "tools/ui_standard.py",
+]:
+    yes(path, "approved_ui")
 
 for path in [
     "tools/design_lab.py",

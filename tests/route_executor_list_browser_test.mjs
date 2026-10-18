@@ -5,6 +5,7 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { assertRegistryVisualContract } from './helpers/registry_visual_contract.mjs';
 
 const require = createRequire(import.meta.url);
 const { chromium } = require('playwright');
@@ -22,6 +23,7 @@ try {
   for (const width of [1440, 1920]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await assertRegistryVisualContract(page, `route-executors ${width}px`);
     assert.deepEqual(await page.locator('[data-route-executors-grid] thead th').allTextContents(), ['Подрядчик', 'Водитель', 'Комплект ТС', 'Логист', 'Статус']);
     assert.equal(await page.locator('[data-route-executors-grid] tbody tr').count(), 3);
     assert.equal(await page.locator('[data-route-executors-grid] .route-review-row').count(), 2);

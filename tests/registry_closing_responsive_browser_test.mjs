@@ -5,6 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
+import {assertRegistryVisualContract} from './helpers/registry_visual_contract.mjs';
 
 const require = createRequire(import.meta.url);
 const {chromium} = require(process.env.PLANEX_PLAYWRIGHT_MODULE || 'playwright');
@@ -26,6 +27,7 @@ try {
   for (const width of [390, 1280, 1920]) {
     const page = await browser.newPage({viewport:{width,height:900}});
     await page.goto(`http://127.0.0.1:${server.address().port}/company/logistics/closing-documents`);
+    await assertRegistryVisualContract(page, `logistics-closing-documents ${width}px`);
     const metrics = await page.evaluate(() => {
       const q = selector => document.querySelector(selector);
       const box = element => element.getBoundingClientRect();

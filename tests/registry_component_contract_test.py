@@ -2,6 +2,10 @@
 
 from pathlib import Path
 import re
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools"))
+from ui_standard import load, validate
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -11,27 +15,27 @@ def read(path: str) -> str:
 
 
 errors: list[str] = []
-pages = {
-    "app/View/pages/company_route_executors.php": "app/Http/Controllers/Company/RouteExecutorActions/index.php",
-    "app/View/pages/company_waste_trips.php": None,
-    "app/View/pages/company_waste_trip_closing_registry.php": None,
-    "app/View/partials/finance_received_paid_ledger.php": "app/View/pages/company_finance_received_paid.php",
-}
-required_roles = ("registry-ui-card", "registry-ui-toolbar", "registry-ui-search", "registry-ui-table", "registry-ui-sticky-table")
+catalog = load()
+errors.extend(validate(catalog))
+pages = {item["view"]: item for item in catalog["pages"] if item["family"] == "registry"}
+required_roles = ("registry-ui-card", "registry-ui-toolbar", "registry-ui-search", "registry-ui-table")
 
-for path, script_owner in pages.items():
+for path, page in pages.items():
     source = read(path)
     for role in required_roles:
         if role not in source:
             errors.append(f"{path}: missing {role}")
     if "registry_ui_head.php" not in source or "registryHeadTitle" not in source:
         errors.append(f"{path}: render the approved registry_ui_head.php partial")
+    if page["sticky"] and "registry-ui-sticky-table" not in source:
+        errors.append(f"{path}: missing registry-ui-sticky-table")
+    script_owner = page.get("asset_owner") or path
     if "registry-components.css" not in source and "registry-components.css" not in read(script_owner or ""):
         errors.append(f"{path}: missing registry-components.css")
     js_source = read(script_owner or path)
-    if "registry-components.js" not in js_source:
+    if page["sticky"] and "registry-components.js" not in js_source:
         errors.append(f"{path}: missing shared toolbar measurement JS")
-    if "table-reference-select.js" not in js_source:
+    if page["reference_select"] and "table-reference-select.js" not in js_source:
         errors.append(f"{path}: missing shared native-backed select JS")
 
 for path in (ROOT / "app/View").rglob("*.php"):
