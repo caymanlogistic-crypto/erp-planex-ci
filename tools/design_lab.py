@@ -461,6 +461,53 @@ def accept(args: argparse.Namespace) -> None:
     print("DESIGN_LAB_ACCEPTANCE=" + str(root / "acceptance.json"))
 
 
+def import_reference(args: argparse.Namespace) -> None:
+    """Recover an already OWNER-approved checkpoint into an owned reference.
+
+    This records existing authority; it does not approve a design by itself.
+    Never mutate the source session, its acceptance or its running process.
+    """
+    worktree = resolve_worktree(args.worktree)
+    local_root = resolve_local_root(args.local_root, worktree)
+    destination = session_root(local_root, args.task_id)
+    require(not destination.exists(), "SESSION_ALREADY_EXISTS")
+    source_args = argparse.Namespace(task_id=args.source_task_id, local_root=str(local_root))
+    verify_session(source_args)
+    source, original = load_session(source_args)
+    require(VERSION.fullmatch(args.version) is not None, "INVALID_VERSION")
+    version_root = source / "versions" / args.version
+    require(version_root.is_dir(), "VERSION_NOT_FOUND")
+    require(bool(original.get("ui_assets")), "FROZEN_ASSETS_REQUIRED")
+    require(args.owner_instruction.strip() and args.decision_source.strip(), "OWNER_DECISION_REQUIRED")
+    # A copied symlink/junction could escape the trusted immutable source.
+    require(not any(path.is_symlink() or (hasattr(path, 'is_junction') and path.is_junction()) for path in source.rglob('*')), "REFERENCE_LINK_FORBIDDEN")
+    temporary = destination.with_name(destination.name + '.importing-' + str(os.getpid()))
+    require(not temporary.exists(), "SESSION_TEMP_EXISTS")
+    try:
+        temporary.mkdir(parents=True)
+        for name in ('baseline.html','parity-checklist.md','ui-quality-checklist.md'):
+            shutil.copyfile(source / name, temporary / name)
+        shutil.copytree(source / 'ui-assets', temporary / 'ui-assets')
+        shutil.copytree(version_root, temporary / 'versions' / args.version)
+        (temporary / 'workspace').mkdir()
+        for name in ('overrides.css','overrides.js','notes.md'):
+            shutil.copyfile(version_root / name, temporary / 'workspace' / name)
+        provenance = {'source_task_id':args.source_task_id,'version':args.version,'source_manifest_sha256':sha256((source/'session.json').read_bytes()),'source_checkpoint_sha256':sha256((version_root/'checkpoint.json').read_bytes()),'owner_instruction':args.owner_instruction,'decision_source':args.decision_source,'excluded_roles':args.exclude_role,'imported_at':utc_now()}
+        manifest = {**original,'task_id':args.task_id,'worktree':str(worktree),'accepted_version':None,'reference_origin':provenance}
+        write_json(temporary / 'session.json', manifest)
+        write_json(temporary / 'reference-origin.json', provenance)
+        os.replace(temporary, destination)
+    finally:
+        if temporary.exists():
+            shutil.rmtree(temporary)
+    accept(argparse.Namespace(task_id=args.task_id,local_root=str(local_root),version=args.version))
+    acceptance=read_json(destination/'acceptance.json')
+    acceptance['owner_instruction']=args.owner_instruction
+    acceptance['reference_origin']=provenance
+    write_json(destination/'acceptance.json',acceptance)
+    print('DESIGN_LAB_IMPORTED_REFERENCE=' + str(destination))
+
+
 def verify_session(args: argparse.Namespace) -> None:
     root, manifest = load_session(args)
     baseline = (root / "baseline.html").read_bytes()
@@ -640,6 +687,11 @@ def parser() -> argparse.ArgumentParser:
     create.add_argument("--snapshot")
     create.add_argument("--resume", action="store_true")
     create.set_defaults(handler=create_session)
+    imported = commands.add_parser('import-reference')
+    for flag in ('task-id','source-task-id','local-root','worktree','version','owner-instruction','decision-source'):
+        imported.add_argument('--'+flag, required=True)
+    imported.add_argument('--exclude-role', action='append', default=[])
+    imported.set_defaults(handler=import_reference)
     for name, handler in [("checkpoint", checkpoint), ("accept", accept), ("verify", verify_session), ("status", status), ("serve", serve)]:
         command = commands.add_parser(name)
         command.add_argument("--task-id", required=True)
