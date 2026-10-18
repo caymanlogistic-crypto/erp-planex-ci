@@ -58,7 +58,7 @@
   .registry-ui-sticky-table--wide-scroll .registry-ui-table thead {top:0}
 }
 @media(max-width:700px){.registry-ui-sticky-table--wide-scroll > .table-scroll {max-height:calc(100dvh - 340px)}}
-.registry-ui-toolbar.table-toolbar {box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;min-width:0;min-height:49px;height:auto;padding:8px 12px;border:0;border-bottom:1px solid #d5cec3;background:#f7f5f0;box-shadow:none;font-family:var(--font)}
+.registry-ui-toolbar.table-toolbar {box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;min-width:0;min-height:49px;height:auto;margin:0;padding:8px 12px;border:0;border-bottom:1px solid #d5cec3;background:#f7f5f0;box-shadow:none;font-family:var(--font)}
 .registry-ui-toolbar .found-label {flex:none;white-space:nowrap;color:#4c4840;font:500 12px/16px var(--font)}
 .registry-ui-toolbar .found-label::before {background:#7c4718}
 .registry-ui-toolbar .found-label :is(b,[data-closing-count]) {color:#2e2923;font-weight:600}
