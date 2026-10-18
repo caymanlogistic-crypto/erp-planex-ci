@@ -288,7 +288,7 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required,base):
     if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",[PYTHON,"tools/dynamic_table_safety_audit.py"])
     if "ARCHITECTURE_GUARD" in want: need("tools/architecture_guard.php"); cmdcheck(results,"ARCHITECTURE_GUARD",["php","tools/architecture_guard.php"])
     if "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in want:
-        tests=["tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/design_lab_contract_test.py","tests/local_publish_test.py","tests/runner_helpers_contract_test.py"]
+        tests=["tests/ci_scope_test.py","tests/agent_preflight_test.py","tests/agent_deploy_policy_contract_test.py","tests/design_lab_contract_test.py","tests/local_publish_test.py","tests/runner_helpers_contract_test.py"]
         if any(p.startswith("tools/sentinelx/") or p=="tests/sentinelx_hardening_test.py" for p in paths): tests.append("tests/sentinelx_hardening_test.py")
         for t in tests: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",[PYTHON,t])
         for t in ["tests/agent_deploy_request_contract_test.php","tests/agent_db_migration_request_contract_test.php"]: need(t); cmdcheck(results,"CONTROL_PLANE_PREFLIGHT_CONTRACTS",["php",t])

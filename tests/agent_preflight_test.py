@@ -64,6 +64,7 @@ planned = p.plan("CRITICAL", ["tools/agent_preflight.py"], scopes)
 assert "DYNAMIC_IDENTIFIER_SAFETY" in planned
 assert "ARCHITECTURE_GUARD" in planned
 assert "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in planned
+assert '"tests/agent_deploy_policy_contract_test.py"' in (ROOT / "tools/agent_preflight.py").read_text(encoding="utf-8")
 
 # Every UI publication route must execute the shared browser and source guard.
 assert "APPROVED_UI_CONTRACTS" in p.plan("FAST", ["public/assets/css/x.css"], p.ci.classify(["public/assets/css/x.css"]))
