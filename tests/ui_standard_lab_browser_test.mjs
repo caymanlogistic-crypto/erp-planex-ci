@@ -61,6 +61,17 @@ try{
     await reference.goto(`${lab.url}/company/trips/departures`);
     await actual.goto(`http://127.0.0.1:${candidate.address().port}/company/trips/departures`);
     await assertAppearanceParity(reference,actual,`${width}px sandbox and application fixture`);
+    // A migration may add semantic markers/value wrappers without changing a
+    // single visible pixel. The immutable reference must not need DOM edits.
+    await actual.locator('.waste-description-text').first().evaluate(element=>{
+      element.classList.add('registry-ui-trip');
+      const value=document.createElement('span');value.textContent=element.textContent;
+      element.textContent='';element.append(value);
+    });
+    await assertAppearanceParity(reference,actual,`${width}px semantic marker and value wrapper migration`);
+    await actual.locator('.waste-description-text > span').first().evaluate(element=>{element.style.fontWeight='700';});
+    await assert.rejects(()=>assertAppearanceParity(reference,actual,`${width}px child typography drift`),/sandbox and implementation differ/);
+    await actual.locator('.waste-description-text > span').first().evaluate(element=>element.style.removeProperty('font-weight'));
     for(const state of ['hover','focus']){
       await reference.locator('.registry-ui-search')[state]();await actual.locator('.registry-ui-search')[state]();
       await assertAppearanceParity(reference,actual,`${width}px ${state}`);
