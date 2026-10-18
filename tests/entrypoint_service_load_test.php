@@ -121,6 +121,14 @@ foreach ($foundational as $f) {
     }
 }
 check('all 5 web-consumer foundational services required by entrypoint', $missingRequires === []);
+check(
+    'registry state scope is loaded before production views without an autoloader',
+    in_array('app/Security/RegistryUiStateScope.php', $requires, true)
+        && positionIn($requires, 'app/Security/EffectiveAccess.php')
+            < positionIn($requires, 'app/Security/RegistryUiStateScope.php')
+        && positionIn($requires, 'app/Security/PageRegistry.php')
+            < positionIn($requires, 'app/Security/RegistryUiStateScope.php')
+);
 
 // 5. Dependency order: foundational must appear before every direct consumer.
 $consumers = [
