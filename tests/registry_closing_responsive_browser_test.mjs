@@ -36,6 +36,7 @@ try {
         headLeft:box(head).left, cardLeft:box(card).left, headRight:box(head).right, cardRight:box(card).right,
         cardBackground:getComputedStyle(card).backgroundColor,
         toolbarHeight:box(toolbar).height,
+        toolbarTableGap:box(grid).top-box(toolbar).bottom,
         measured:parseFloat(card.style.getPropertyValue('--registry-toolbar-height')),
         columnBackground:getComputedStyle(column).backgroundColor,
         columnFontSize:getComputedStyle(column).fontSize,
@@ -49,6 +50,7 @@ try {
     assert.ok(Math.abs(metrics.headLeft-metrics.cardLeft) <= 1 && Math.abs(metrics.headRight-metrics.cardRight) <= 1, `${width}: header and card align`);
     assert.equal(metrics.cardBackground, 'rgb(245, 243, 238)', `${width}: shared card surface`);
     assert.ok(metrics.toolbarHeight >= 49 && Math.abs(metrics.toolbarHeight-metrics.measured) < 1, `${width}: measured shared toolbar`);
+    assert.ok(Math.abs(metrics.toolbarTableGap) <= 1, `${width}: toolbar meets table header without a gap ${JSON.stringify(metrics)}`);
     assert.deepEqual([metrics.columnBackground,metrics.columnFontSize,metrics.columnWeight], ['rgb(227, 222, 213)','10px','700'], `${width}: approved column header`);
     assert.equal(metrics.searchHeight, 32, `${width}: approved search height`);
     assert.equal(metrics.gridOverflow, width <= 1700 ? 'auto' : 'visible', `${width}: approved wide table scroll variant`);
