@@ -192,10 +192,3 @@ select:not([multiple]) {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
-
-/* FEO map placement: table cells own the visible row background, so the
-   exclusion state must paint the cells rather than only the <tr>. */
-.feo-placement-table tbody tr[data-placement-block-type="exclusion"] > td,
-.feo-placement-table tbody tr[data-placement-block-type="exclusion"]:hover > td {
-    background: var(--danger-bg) !important;
-}

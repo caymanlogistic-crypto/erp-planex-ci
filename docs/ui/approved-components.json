@@ -389,6 +389,32 @@
       },
       "view": "app/View/pages/company_vehicle_sets.php",
       "family": "registry"
+    },
+    {
+      "id": "feo-map-placement",
+      "adaptation_status": "current_20261018",
+      "route": "/erpv2/company/feo/requests/map-placement",
+      "data_roles": [
+        "primary",
+        "name",
+        "id",
+        "status"
+      ],
+      "view": "app/View/pages/company_feo_map_placement.php",
+      "header_icon": {
+        "variant": "outline",
+        "source": "app/View/components/tabler/outline/map-pin.svg",
+        "version": "3.48.0",
+        "name": "map-pin",
+        "role": "registry.page-head",
+        "pack": "@tabler/icons"
+      },
+      "reference_select": false,
+      "sticky": true,
+      "asset_owner": "app/Http/Controllers/Company/FeoPlacementController.php",
+      "browser_test": "tests/feo_map_placement_canon_browser_test.mjs",
+      "family": "registry",
+      "runtime_browser_test": "tests/feo_map_placement_runtime_browser_test.mjs"
     }
   ],
   "decisions": "docs/ui/decisions-20261018.json"

@@ -59,6 +59,7 @@
 @media(max-width:700px){.registry-ui-sticky-table--wide-scroll > .table-scroll {max-height:calc(100dvh - 340px)}}
 .registry-ui-toolbar.table-toolbar {box-sizing:border-box;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px 16px;min-width:0;min-height:49px;height:auto;margin:0;padding:8px 12px;border:0;border-bottom:1px solid #d5cec3;background:#f7f5f0;box-shadow:none;font-family:var(--font)}
 .registry-ui-toolbar .found-label {flex:none;white-space:nowrap;color:#4c4840;font:500 12px/16px var(--font)}
+.registry-ui-toolbar .registry-ui-toolbar-summary {display:flex;align-items:center;flex-wrap:wrap;flex:1 1 auto;gap:0 5px;min-width:0;white-space:normal}
 .registry-ui-toolbar .found-label::before {background:#7c4718}
 .registry-ui-toolbar .found-label :is(b,[data-closing-count]) {color:#2e2923;font-weight:600}
 .registry-ui-toolbar .toolbar-right {display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;margin-left:auto}
@@ -93,6 +94,7 @@
 .registry-ui-toolbar .lab-reference-option[aria-selected="true"] {background:#f2e8dc;color:#2e2923;font-weight:500}
 .registry-ui-toolbar .lab-reference-option[aria-selected="true"]:hover {background:#e9d9c7}
 .registry-ui-toolbar .registry-ui-search {box-sizing:border-box;width:230px;height:32px;min-height:32px;flex:0 0 230px;padding:0 9px 0 31px;border:1px solid #c8c0b5;border-radius:2px;background:#fffdf9 url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M21 21l-6 -6'/%3E%3C/svg%3E") 9px center/15px 15px no-repeat;color:#2e2923;font:500 12px/16px var(--font)}
+.registry-ui-toolbar textarea.registry-ui-search {resize:none;overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding-top:7px;padding-bottom:7px}
 .registry-ui-toolbar .registry-ui-search::placeholder {color:#817b72;opacity:1;font-weight:500}
 .registry-ui-toolbar .closing-search .registry-ui-search::placeholder {font-weight:500}
 .registry-ui-toolbar .registry-ui-search:focus {outline:none;border-color:#7c4718;box-shadow:0 0 0 2px rgba(124,71,24,.1);background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='%237e776d' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 10a7 7 0 1 0 14 0a7 7 0 1 0 -14 0M21 21l-6 -6'/%3E%3C/svg%3E");background-position:9px center;background-size:15px 15px;background-repeat:no-repeat}
@@ -122,6 +124,7 @@
 .registry-ui-data {--registry-id-width:64px;box-sizing:border-box;width:100%;min-width:900px;border-collapse:collapse;table-layout:fixed;font:500 12px/16.8px var(--font);color:#131210}
 /* Ordinary registries must win over the legacy .table-card .table auto layout. */
 .registry-ui-card .registry-ui-data:where(:not(.registry-ui-table--finance,.registry-ui-data--cards,.registry-ui-table--trips)) {table-layout:fixed;min-width:900px}
+.registry-ui-card .registry-ui-table--placement {min-width:1200px}
 .registry-ui-data :is(th,td) {box-sizing:border-box;padding:8px;border:1px solid #e3ded5;text-align:left;vertical-align:middle}
 .registry-ui-data .registry-ui-value {min-width:0;max-width:100%}
 .registry-ui-data tbody td {background:#fafaf6;font:500 12px/16.8px var(--font);color:#131210}
