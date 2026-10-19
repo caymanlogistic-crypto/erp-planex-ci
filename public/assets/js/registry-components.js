@@ -95,7 +95,8 @@
     sync();
   }
   function scroll(root) {
-    root.querySelectorAll('.registry-ui-scroll').forEach(card=>{
+    const cards=[...(root.matches('.registry-ui-scroll')?[root]:[]),...root.querySelectorAll('.registry-ui-scroll')];
+    cards.forEach(card=>{
       const wrap=card.querySelector(':scope > .table-scroll,:scope > .rp-v010-table-wrap');
       const table=wrap?.querySelector('table'),head=table?.tHead,toolbar=card.querySelector('.registry-ui-toolbar');
       if(!head)return;

@@ -846,7 +846,7 @@ window.getErpBasePath = function () {
         var sortSelect = card.querySelector('select[data-erp-grid-sort]');
         var sortMode = sortSelect ? sortSelect.value : 'date';
         var stateKey = null;
-        if (window.location.pathname === '/company/drivers') {
+        if (window.location.pathname === '/company/drivers' && !card.hasAttribute('data-registry-id')) {
             stateKey = DRIVER_GRID_STATE_KEY;
         } else if (window.location.pathname === '/company/vehicle-sets') {
             stateKey = VEHICLE_SET_GRID_STATE_KEY;
@@ -959,7 +959,7 @@ window.getErpBasePath = function () {
             var visible = 0;
 
             rows.forEach(function (tr) {
-                var text = tr.textContent.toLowerCase();
+                var text = (tr.getAttribute('data-registry-search') || tr.textContent).toLowerCase();
                 if (query === '' || text.indexOf(query) !== -1) {
                     tr.classList.remove('is-hidden');
                     visible++;
@@ -1457,7 +1457,7 @@ document.addEventListener('click', function (e) {
         nameSelector: '.driver-view-name',
         editFormSelector: '#driver-edit-form',
         gridSelector: '.table-card[data-erp-grid]',
-        gridStateKey: 'companyDriversGridState',
+        gridStateKey: null, // The authorized registry scope owns persisted filters.
         viewBtnSelectors: {
             edit:   '[data-driver-edit-btn]',
             close:  '[data-driver-view-cancel]',
@@ -1500,6 +1500,13 @@ document.addEventListener('click', function (e) {
 
     var driverTable = document.querySelector('.table-card[data-erp-grid] tbody');
     if (driverTable) {
+        driverTable.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' || event.target.closest('a, button, input, select, textarea, label')) return;
+            var row = event.target.closest('tr[data-driver-id]');
+            if (!row) return;
+            event.preventDefault();
+            driverCtrl.loadView(row.getAttribute('data-driver-id'));
+        });
         driverTable.addEventListener('dblclick', function (e) {
             if (e.target.closest('a, button, input, select, textarea, label')) return;
             var row = e.target.closest('tr');

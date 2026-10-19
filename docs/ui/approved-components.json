@@ -243,6 +243,24 @@
       "reference_select": true,
       "data_roles": ["primary", "name", "secondary", "id", "trip", "missing", "status"],
       "adaptation_status": "current_20261018"
+    },
+    {
+      "id": "drivers",
+      "family": "registry",
+      "route": "/erpv2/company/drivers",
+      "view": "app/View/pages/company_drivers.php",
+      "asset_owner": "app/Http/Controllers/Company/DriverActions/index.php",
+      "browser_test": "tests/drivers_registry_browser_test.mjs",
+      "sticky": true,
+      "reference_select": true,
+      "data_roles": [
+        "primary",
+        "name",
+        "secondary",
+        "id",
+        "missing"
+      ],
+      "adaptation_status": "current_20261018"
     }
   ],
   "decisions": "docs/ui/decisions-20261018.json"

@@ -1,0 +1,7 @@
+/* Business column geometry; shared appearance belongs to registry-components.css. */
+.drivers-table col:nth-child(2) {width:18%}
+.drivers-table col:nth-child(3) {width:14%}
+.drivers-table col:nth-child(4) {width:15%}
+.drivers-table col:nth-child(6) {width:14%}
+.drivers-table col:nth-child(7) {width:12%}
+.drivers-table col:nth-child(8) {width:64px}

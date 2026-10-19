@@ -2,6 +2,10 @@
 /** @var DriverService $service */
 requireRole(['company_owner', 'senior_logist', 'logist']);
 $pageTitle = 'Водители';
+$pageStylesheets[] = '/assets/css/registry-components.css';
+$pageStylesheets[] = '/assets/css/drivers-registry.css';
+$pageScripts[] = '/assets/js/table-reference-select.js';
+$pageScripts[] = '/assets/js/registry-components.js';
 $pageContext = 'Водители › Компания';
 $companyId = $service->getCompanyId();
 if ($companyId <= 0) { $company=null; $drivers=[]; $dbError=null; ob_start(); require base_path('app/View/pages/company_drivers.php'); $content=ob_get_clean(); require base_path('app/View/layouts/main.php'); return; }

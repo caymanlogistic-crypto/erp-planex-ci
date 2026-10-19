@@ -1,0 +1,24 @@
+<?php
+declare(strict_types=1);
+require dirname(__DIR__).'/bootstrap/app.php';
+require BASE_PATH.'/app/Support/entrypoint_dependencies.php';
+$schema=getenv('PLANEX_TEST_FIXED_DB')?:'';
+if($schema===''||!in_array($schema,explode(',',getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')?:''),true))throw new RuntimeException('Disposable DB wrapper required');
+$config['database']=['host'=>getenv('PLANEX_SCHEMA_DB_HOST'),'port'=>getenv('PLANEX_SCHEMA_DB_PORT'),'database'=>$schema,'username'=>getenv('PLANEX_SCHEMA_DB_USER'),'password'=>getenv('PLANEX_SCHEMA_DB_PASSWORD'),'charset'=>'utf8mb4'];
+$db=new \App\Core\Database($config['database']);$pdo=$db->connection();
+$pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
+$stmt=$pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)');$stmt->execute(['ООО Synthetic','active',$schema]);
+$pdo->exec('CREATE TABLE drivers(id INT PRIMARY KEY,full_name VARCHAR(255),phone VARCHAR(50),email VARCHAR(255),passport_number VARCHAR(50),passport_issued_by VARCHAR(255),passport_issue_date DATE,license_number VARCHAR(50),license_issue_date DATE,snils VARCHAR(50),created_by_user_id INT,deleted_at DATETIME,created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)');
+$pdo->exec("INSERT INTO drivers(id,full_name,phone,email) VALUES(41,'Иванов Иван Иванович','+7 900 111-22-33','driver@example.test')");
+$pdo->exec('CREATE TABLE driver_phones(driver_id INT,phone VARCHAR(50),is_main INT)');
+$pdo->exec('CREATE TABLE documents(id INT PRIMARY KEY,entity_type VARCHAR(30),entity_id INT,deleted_at DATETIME,created_by_user_id INT)');
+$pdo->exec('CREATE TABLE document_types(id INT PRIMARY KEY,name VARCHAR(255),code VARCHAR(30),entity_type VARCHAR(30),sort_order INT)');
+$_SESSION=['user_id'=>11,'account_id'=>3,'company_id'=>7,'role_code'=>'company_owner'];
+$_SERVER['REQUEST_URI']='/company/drivers';$_SERVER['SCRIPT_NAME']='/index.php';
+\App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::systemOwner(11,7,array_column(\App\Security\PageRegistry::companyPages(),'key')));
+$service=new \App\Service\DriverService($config,$db);
+ob_start();require BASE_PATH.'/app/Http/Controllers/Company/DriverActions/index.php';$html=(string)ob_get_clean();
+foreach(['registry-ui-head','data-registry-id="drivers"','data-driver-id="41"','Иванов Иван Иванович','/assets/css/registry-components.css','/assets/js/registry-components.js']as$needle)if(!str_contains($html,$needle))throw new RuntimeException('Missing full protected page role: '.$needle);
+if(str_contains($html,'Не удалось подключиться')||str_contains($html,'Fatal error'))throw new RuntimeException('Protected render failed');
+if((int)$pdo->query('SELECT COUNT(*) FROM drivers')->fetchColumn()!==1)throw new RuntimeException('Render changed driver data');
+echo "DRIVERS_REGISTRY_RUNTIME_MYSQL=PASS real bootstrap/controller/service/layout protected data unchanged\n";
