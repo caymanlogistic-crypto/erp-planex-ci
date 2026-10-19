@@ -62,8 +62,9 @@ try{
   await page.locator('.registry-ui-reset').click();assert.equal(await page.locator('select[data-erp-grid-sort]').inputValue(),'date');assert.equal(await page.locator('tbody tr').first().getAttribute('data-driver-id'),'74');
   await page.getByRole('button',{name:'Добавить нового водителя',exact:true}).first().click();assert.ok(await page.locator('#driver-create-modal').isVisible(),'create modal remains functional');
   await page.locator('#driver-create-modal .modal-close').click();
-  let modalRequested=false;await page.route('**/company/drivers/74/modal-view',route=>{modalRequested=true;return route.fulfill({status:200,contentType:'text/html',body:'<div class="modal-body"><div class="driver-view-name">Яковлев Сергей Александрович</div><button data-driver-edit-btn>Редактировать</button><button data-driver-delete-btn>Удалить</button></div>'});});
-  await page.locator('tr[data-driver-id="74"]').dblclick();assert.equal(modalRequested,true,'existing double click modal endpoint');assert.ok(await page.locator('#driver-view-modal').isVisible());
+  await page.route('**/company/drivers/74/modal-view',route=>route.fulfill({status:200,contentType:'text/html',body:'<div class="modal-body"><div class="driver-view-name">Яковлев Сергей Александрович</div><button data-driver-edit-btn>Редактировать</button><button data-driver-delete-btn>Удалить</button></div>'}));
+  const modalRequested=page.waitForRequest('**/company/drivers/74/modal-view');
+  await page.locator('tr[data-driver-id="74"]').dblclick();await modalRequested;await page.locator('#driver-view-modal [data-driver-edit-btn]').waitFor();assert.ok(await page.locator('#driver-view-modal').isVisible());
   await page.route('**/company/drivers/74/modal-edit',route=>route.fulfill({status:200,contentType:'text/html',body:'<div class="modal-body"><form id="driver-edit-form"><input name="full_name" value="Яковлев Сергей Александрович"><button data-driver-cancel-edit-btn type="button">Отмена</button></form></div>'}));
   await page.locator('[data-driver-edit-btn]').click();await page.locator('#driver-edit-form').waitFor();
   await page.locator('[data-driver-cancel-edit-btn]').click();await page.locator('[data-driver-delete-btn]').waitFor();

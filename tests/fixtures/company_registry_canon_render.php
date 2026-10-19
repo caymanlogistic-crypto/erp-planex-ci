@@ -7,8 +7,11 @@ $state = $argv[2] ?? 'populated';
 $role = $argv[3] ?? 'company_owner';
 $_SERVER['REQUEST_URI'] = '/company/' . $kind;
 $_SERVER['SCRIPT_NAME'] = '/index.php';
-$_SESSION = ['role_code' => $role, 'company_id' => 7, 'user_id' => 11, 'account_id' => 3, 'user_name' => 'Анна Петрова'];
-\App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::systemOwner(11, 7, array_column(\App\Security\PageRegistry::companyPages(), 'key')));
+$_SESSION = ['role_code' => $role, 'company_id' => 7, 'user_id' => 11, 'account_id' => 3, 'user_name' => 'Тестовый пользователь'];
+$_SESSION['membership_id'] = $role === 'company_owner' ? 11 : 12;
+\App\Security\AccessRuntime::setCurrent($role === 'company_owner'
+    ? \App\Security\EffectiveAccess::systemOwner(11, 7, array_column(\App\Security\PageRegistry::companyPages(), 'key'))
+    : \App\Security\EffectiveAccess::member(12, 7, ['company.contractors'=>true,'company.vehicle_sets'=>true], ['contractor'=>'own','vehicle_unit'=>'own'], 'logist'));
 $company = ['name' => 'ООО «ПЛАНЭКС»', 'status' => $state === 'inactive' ? 'blocked' : 'active'];
 $db = new class([]) extends \App\Core\Database { public function connection(): PDO { throw new RuntimeException('Fixture has no database'); } };
 $pageTitle = $kind === 'contractors' ? 'Перевозчики' : 'Транспорт';

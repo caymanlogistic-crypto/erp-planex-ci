@@ -158,8 +158,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "fc27236e73478ca751310137f34ba850ef8f9b0b",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/fc27236e73478ca751310137f34ba850ef8f9b0b/tests/ui_standard_lab_browser_test.mjs",
+      "verified_sha": "f411ea1ef094357805c30a9f35aad0552615f259",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/f411ea1ef094357805c30a9f35aad0552615f259/tools/registry_runtime_gate.mjs",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -190,7 +190,14 @@
         "tests/helpers/ui_appearance.mjs",
         "tests/helpers/registry_visual_contract.mjs",
         "tests/registry_component_contract_test.py",
-        "tests/agent_deploy_policy_contract_test.py"
+        "tests/agent_deploy_policy_contract_test.py",
+        "tools/ci_registry_runtime.sh",
+        "tools/registry_runtime_gate.mjs",
+        "tests/registry_runtime_gate_test.mjs",
+        "tests/helpers/registry_behavior_contract.mjs",
+        "tests/company_registry_runtime_browser_test.mjs",
+        "tests/fixtures/company_registry_runtime.php",
+        "tests/fixtures/company_registry_expectations.mjs"
       ],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
