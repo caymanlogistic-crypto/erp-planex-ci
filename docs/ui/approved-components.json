@@ -207,8 +207,21 @@
       "browser_test": "tests/route_executor_list_browser_test.mjs",
       "sticky": true,
       "reference_select": true,
-      "data_roles": ["primary", "name", "secondary", "status"],
-      "adaptation_status": "current_20261018"
+      "data_roles": [
+        "primary",
+        "name",
+        "secondary",
+        "status"
+      ],
+      "adaptation_status": "current_20261018",
+      "header_icon": {
+        "role": "registry.page-head",
+        "pack": "@tabler/icons",
+        "version": "3.48.0",
+        "variant": "outline",
+        "name": "users-group",
+        "source": "app/View/components/tabler/outline/users-group.svg"
+      }
     },
     {
       "id": "trips-departures",
@@ -218,8 +231,25 @@
       "browser_test": "tests/waste_trip_registry_browser_test.mjs",
       "sticky": true,
       "reference_select": true,
-      "data_roles": ["primary", "name", "secondary", "money", "id", "trip", "missing", "status"],
-      "adaptation_status": "current_20261018"
+      "data_roles": [
+        "primary",
+        "name",
+        "secondary",
+        "money",
+        "id",
+        "trip",
+        "missing",
+        "status"
+      ],
+      "adaptation_status": "current_20261018",
+      "header_icon": {
+        "role": "registry.page-head",
+        "pack": "@tabler/icons",
+        "version": "3.48.0",
+        "variant": "outline",
+        "name": "truck-delivery",
+        "source": "app/View/components/tabler/outline/truck-delivery.svg"
+      }
     },
     {
       "id": "finance-received-paid",
@@ -230,8 +260,26 @@
       "browser_test": "tests/finance_received_paid_payment_filter_browser_test.mjs",
       "sticky": true,
       "reference_select": true,
-      "data_roles": ["primary", "name", "secondary", "money", "id", "trip", "missing", "due", "total"],
-      "adaptation_status": "current_20261018"
+      "data_roles": [
+        "primary",
+        "name",
+        "secondary",
+        "money",
+        "id",
+        "trip",
+        "missing",
+        "due",
+        "total"
+      ],
+      "adaptation_status": "current_20261018",
+      "header_icon": {
+        "role": "registry.page-head",
+        "pack": "@tabler/icons",
+        "version": "3.48.0",
+        "variant": "outline",
+        "name": "arrows-exchange",
+        "source": "app/View/components/tabler/outline/arrows-exchange.svg"
+      }
     },
     {
       "id": "logistics-closing-documents",
@@ -241,8 +289,24 @@
       "browser_test": "tests/registry_closing_responsive_browser_test.mjs",
       "sticky": true,
       "reference_select": true,
-      "data_roles": ["primary", "name", "secondary", "id", "trip", "missing", "status"],
-      "adaptation_status": "current_20261018"
+      "data_roles": [
+        "primary",
+        "name",
+        "secondary",
+        "id",
+        "trip",
+        "missing",
+        "status"
+      ],
+      "adaptation_status": "current_20261018",
+      "header_icon": {
+        "role": "registry.page-head",
+        "pack": "@tabler/icons",
+        "version": "3.48.0",
+        "variant": "outline",
+        "name": "file-text",
+        "source": "app/View/components/tabler/outline/file-text.svg"
+      }
     },
     {
       "id": "drivers",
@@ -260,7 +324,15 @@
         "id",
         "missing"
       ],
-      "adaptation_status": "current_20261018"
+      "adaptation_status": "current_20261018",
+      "header_icon": {
+        "role": "registry.page-head",
+        "pack": "@tabler/icons",
+        "version": "3.48.0",
+        "variant": "outline",
+        "name": "user",
+        "source": "app/View/components/tabler/outline/user.svg"
+      }
     },
     {
       "id": "contractors",
@@ -279,7 +351,14 @@
       "browser_test": "tests/company_registry_canon_browser_test.mjs",
       "runtime_browser_test": "tests/company_registry_runtime_browser_test.mjs",
       "route": "/erpv2/company/contractors",
-      "header_icon": {"role":"registry.page-head","pack":"@tabler/icons","version":"3.48.0","variant":"outline","name":"truck-delivery","source":"app/View/components/tabler/outline/truck-delivery.svg"},
+      "header_icon": {
+        "role": "registry.page-head",
+        "pack": "@tabler/icons",
+        "version": "3.48.0",
+        "variant": "outline",
+        "name": "truck-delivery",
+        "source": "app/View/components/tabler/outline/truck-delivery.svg"
+      },
       "view": "app/View/pages/company_contractors.php",
       "family": "registry"
     },
@@ -300,7 +379,14 @@
       "browser_test": "tests/company_registry_canon_browser_test.mjs",
       "runtime_browser_test": "tests/company_registry_runtime_browser_test.mjs",
       "route": "/erpv2/company/vehicle-sets",
-      "header_icon": {"role":"registry.page-head","pack":"@tabler/icons","version":"3.48.0","variant":"outline","name":"truck","source":"app/View/components/tabler/outline/truck.svg"},
+      "header_icon": {
+        "role": "registry.page-head",
+        "pack": "@tabler/icons",
+        "version": "3.48.0",
+        "variant": "outline",
+        "name": "truck",
+        "source": "app/View/components/tabler/outline/truck.svg"
+      },
       "view": "app/View/pages/company_vehicle_sets.php",
       "family": "registry"
     }

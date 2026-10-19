@@ -1,4 +1,6 @@
 <?php
+require_once base_path('app/View/components/registry_tabler_icons.php');
+
 $invoiceList = static function (array $invoices) use ($date): string {
     if (!$invoices) return '<span class="rp-v010-missing registry-ui-missing">—</span>';
     $html = '<ul class="rp-v010-doc-list">';
@@ -36,7 +38,7 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
     <?php
     $registryHeadTitle = 'Получено/оплачено';
     $registryHeadSummary = 'Счета и фактические оплаты по рейсам ООО «Планэкс» со статусом «Груз сдан».';
-    $registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 10h14l-4 -4"/><path d="M17 14h-14l4 4"/></svg>';
+    $registryHeadIconHtml = registry_tabler_header_icon('arrows-exchange');
     $registryHeadActionsHtml = '<button type="button" class="btn btn-primary" data-open-modal="invoice-create-modal"' . ($localPdo === null ? ' disabled' : '') . '>Создать счёт</button>';
     $registryHeadExtraClass = '';
     require base_path('app/View/partials/registry_ui_head.php');

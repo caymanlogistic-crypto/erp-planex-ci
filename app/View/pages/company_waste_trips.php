@@ -1,4 +1,6 @@
 <?php
+require_once base_path('app/View/components/registry_tabler_icons.php');
+
 require_once base_path('app/Service/WasteTripRegistryPresenter.php');
 use App\Service\WasteTripCustomerPaymentService;
 use App\Service\WasteTripService;
@@ -33,7 +35,7 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
 <?php
 $registryHeadTitle = 'Перевозка отходов';
 $registryHeadSummary = 'ERP-рейсы и рейсы, перенесённые из старой БД.';
-$registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="icon icon-tabler icons-tabler-outline icon-tabler-truck-delivery page-head-tabler-icon" aria-hidden="true" focusable="false"><path d="M5 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M15 17a2 2 0 1 0 4 0a2 2 0 1 0 -4 0"/><path d="M5 17h-2v-4m-1 -8h11v12m-4 0h6m4 0h2v-6h-8m0 -5h5l3 5"/><path d="M3 9l4 0"/></svg>';
+$registryHeadIconHtml = registry_tabler_header_icon('truck-delivery');
 ob_start();
 ?><?php if($isFinanceRealm):?><form method="post" action="<?=app_url('/company/trips/departures/synchronize')?>"><?=csrfField()?><button type="submit" class="btn btn-secondary">Синхронизация рейсов со старой БД</button></form><?php endif;?><button type="button" class="btn btn-primary" onclick="openModal('waste-trip-create-modal')">Создать рейс</button><?php
 $registryHeadActionsHtml = (string) ob_get_clean();

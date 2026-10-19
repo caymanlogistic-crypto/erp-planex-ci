@@ -23,7 +23,7 @@ export async function assertRegistryTablerIcon(page,pageId){
  assert.ok(manifest.icons[icon.name],`${pageId}: official outline name`);
  const sourceBytes=readFileSync(path.join(root,icon.source));
  assert.equal(sha256(sourceBytes),manifest.icons[icon.name],`${pageId}: exact official package source bytes`);
- const actual=await page.locator('.registry-ui-head .rp-identity-icon svg').evaluate((svg,{source,name})=>{
+ const actual=await page.locator('.registry-ui-head:visible .rp-identity-icon svg').evaluate((svg,{source,name})=>{
   const original=new DOMParser().parseFromString(source,'image/svg+xml').documentElement;
   const signature=node=>({tag:node.localName,attributes:[...node.attributes].filter(attr=>!['class','aria-hidden','focusable'].includes(attr.name)).map(attr=>[attr.name,attr.value]).sort((a,b)=>a[0].localeCompare(b[0])),children:[...node.children].map(signature)});
   const rect=svg.getBoundingClientRect(),style=getComputedStyle(svg);

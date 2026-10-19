@@ -3,16 +3,16 @@ declare(strict_types=1);
 
 /**
  * Named Tabler Icons outline assets for registry page headers.
- * Source: @tabler/icons 3.48.0, icons/outline/{truck-delivery,truck}.svg
+ * Source: @tabler/icons 3.48.0, icons/outline/<name>.svg
  * https://github.com/tabler/tabler-icons/tree/v3.48.0/icons/outline
  * MIT notice: app/View/components/tabler/LICENSE.txt
- * Page roles: contractors => truck-delivery; vehicle-sets => truck.
+ * Page roles and named assets: docs/ui/approved-components.json header_icon.
  * Geometry stays byte-for-byte in the vendored SVG; only root presentation
  * attributes are augmented to use the approved shared header CSS.
  */
 function registry_tabler_header_icon(string $name): string
 {
-    $allowed = ['truck-delivery' => true, 'truck' => true];
+    $allowed = ['users-group' => true, 'truck-delivery' => true, 'arrows-exchange' => true, 'file-text' => true, 'user' => true, 'truck' => true];
     if (!isset($allowed[$name])) {
         throw new InvalidArgumentException('Unknown registry Tabler icon');
     }

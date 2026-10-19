@@ -16,7 +16,7 @@ for (const rendered of [html,finalEditHtml]) {
   assert.doesNotMatch(rendered,/Менеджер сохранил|Исправление после отправки/,'removed stage wording must not leak into text, title, or aria-label');
 }
 const server = http.createServer((request, response) => {
-  if (request.url === '/') { response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html); return; }
+  if (request.url === '/company/route-executors') { response.setHeader('Content-Type', 'text/html; charset=utf-8'); response.end(html); return; }
   const file = path.resolve(root, 'public', '.' + request.url.split('?')[0]);
   if (!file.startsWith(path.join(root, 'public') + path.sep) || !fs.existsSync(file)) { response.statusCode = 404; response.end(); return; }
   response.setHeader('Content-Type', 'text/css; charset=utf-8'); response.end(fs.readFileSync(file));
@@ -24,9 +24,9 @@ const server = http.createServer((request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const width of [390, 1440, 1920]) {
+  for (const width of [390, 1280, 1920, 3840]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
-    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/company/route-executors`);
     await assertRegistryVisualContract(page, `route-executors ${width}px`);
     await assertRegistryDataContract(page, 'route-executors');
     if (width === 390) {
