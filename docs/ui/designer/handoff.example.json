@@ -1,0 +1,20 @@
+{
+  "schema": "planex-designer-handoff/v1",
+  "task_id": "REPLACE_WITH_OWN_TASK_ID",
+  "thread_id": "REPLACE_WITH_OWN_CHAT_ID",
+  "topic": "REPLACE_WITH_SPECIFIC_TOPIC",
+  "status": "awaiting_owner",
+  "updated_at": "REPLACE_WITH_ISO_DATETIME",
+  "worktree": "REPLACE_WITH_OWN_ABSOLUTE_WORKTREE",
+  "start_head": "REPLACE_WITH_CAPTURED_START_HEAD",
+  "scope": {"pages": [], "roles": [], "states": [], "widths": [], "excluded": []},
+  "session": null,
+  "journal": "REPLACE_WITH_ABSOLUTE_NOTES_PATH",
+  "latest_shown": {"session_task_id": null, "version": null, "checkpoint_path": null, "checkpoint_sha256": null, "screenshots": []},
+  "decisions": [{"id": "REPLACE_WITH_DECISION_ID", "status": "proposed", "scope": [], "session_task_id": null, "version": null, "owner_source": null, "owner_quote": null, "excluded": [], "supersedes": null}],
+  "implementation": {"authorization_source": null, "status": "not_authorized", "pr": null, "candidate_sha": null, "merged_sha": null, "runtime_sha": null, "evidence": []},
+  "independent_acceptance": {"status": "not_checked", "reviewer": null, "checked_sha": null, "coverage": [], "limitations": [], "evidence": []},
+  "open_questions": [],
+  "next_action": "REPLACE_WITH_ONE_CONCRETE_NEXT_STEP",
+  "handover": {"status": "not_transferred", "source": null}
+}

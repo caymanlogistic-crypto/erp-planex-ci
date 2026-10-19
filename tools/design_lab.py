@@ -396,7 +396,9 @@ def checkpoint(args: argparse.Namespace) -> None:
     root, manifest = load_session(args)
     with mutation_lock(root):
         versions = sorted(path.name for path in (root / "versions").iterdir() if path.is_dir() and VERSION.fullmatch(path.name))
-        version = f"v{len(versions) + 1:03d}"
+        next_number = max((int(name[1:]) for name in versions), default=0) + 1
+        require(next_number <= 999, "VERSION_LIMIT_REACHED")
+        version = f"v{next_number:03d}"
         destination = root / "versions" / version
         destination.mkdir()
         hashes: dict[str, str] = {}
@@ -461,12 +463,8 @@ def accept(args: argparse.Namespace) -> None:
     print("DESIGN_LAB_ACCEPTANCE=" + str(root / "acceptance.json"))
 
 
-def import_reference(args: argparse.Namespace) -> None:
-    """Recover an already OWNER-approved checkpoint into an owned reference.
-
-    This records existing authority; it does not approve a design by itself.
-    Never mutate the source session, its acceptance or its running process.
-    """
+def copy_checkpoint(args: argparse.Namespace, *, preview: bool) -> tuple[Path, dict[str, object]]:
+    """Copy a verified immutable checkpoint; authority is handled by the caller."""
     worktree = resolve_worktree(args.worktree)
     local_root = resolve_local_root(args.local_root, worktree)
     destination = session_root(local_root, args.task_id)
@@ -478,7 +476,8 @@ def import_reference(args: argparse.Namespace) -> None:
     version_root = source / "versions" / args.version
     require(version_root.is_dir(), "VERSION_NOT_FOUND")
     require(bool(original.get("ui_assets")), "FROZEN_ASSETS_REQUIRED")
-    require(args.owner_instruction.strip() and args.decision_source.strip(), "OWNER_DECISION_REQUIRED")
+    if not preview:
+        require(args.owner_instruction.strip() and args.decision_source.strip(), "OWNER_DECISION_REQUIRED")
     # A copied symlink/junction could escape the trusted immutable source.
     require(not any(path.is_symlink() or (hasattr(path, 'is_junction') and path.is_junction()) for path in source.rglob('*')), "REFERENCE_LINK_FORBIDDEN")
     temporary = destination.with_name(destination.name + '.importing-' + str(os.getpid()))
@@ -492,14 +491,31 @@ def import_reference(args: argparse.Namespace) -> None:
         (temporary / 'workspace').mkdir()
         for name in ('overrides.css','overrides.js','notes.md'):
             shutil.copyfile(version_root / name, temporary / 'workspace' / name)
-        provenance = {'source_task_id':args.source_task_id,'version':args.version,'source_manifest_sha256':sha256((source/'session.json').read_bytes()),'source_checkpoint_sha256':sha256((version_root/'checkpoint.json').read_bytes()),'owner_instruction':args.owner_instruction,'decision_source':args.decision_source,'excluded_roles':args.exclude_role,'imported_at':utc_now()}
+        provenance = {'source_task_id':args.source_task_id,'version':args.version,'source_manifest_sha256':sha256((source/'session.json').read_bytes()),'source_checkpoint_sha256':sha256((version_root/'checkpoint.json').read_bytes()),'mode':'preview_only' if preview else 'approved_reference','imported_at':utc_now()}
+        if not preview:
+            provenance.update(owner_instruction=args.owner_instruction, decision_source=args.decision_source, excluded_roles=args.exclude_role)
         manifest = {**original,'task_id':args.task_id,'worktree':str(worktree),'accepted_version':None,'reference_origin':provenance}
+        manifest.pop('accepted_at', None)
         write_json(temporary / 'session.json', manifest)
         write_json(temporary / 'reference-origin.json', provenance)
         os.replace(temporary, destination)
     finally:
         if temporary.exists():
             shutil.rmtree(temporary)
+    return destination, provenance
+
+
+def fork_preview(args: argparse.Namespace) -> None:
+    """Continue discussion in an owned copy without creating release authority."""
+    destination, _ = copy_checkpoint(args, preview=True)
+    verify_session(argparse.Namespace(task_id=args.task_id, local_root=args.local_root))
+    print('DESIGN_LAB_PREVIEW_ONLY=' + str(destination))
+
+
+def import_reference(args: argparse.Namespace) -> None:
+    """Recover existing OWNER-approved implementation authority, not a proposal."""
+    destination, provenance = copy_checkpoint(args, preview=False)
+    local_root = Path(args.local_root).resolve()
     accept(argparse.Namespace(task_id=args.task_id,local_root=str(local_root),version=args.version))
     acceptance=read_json(destination/'acceptance.json')
     acceptance['owner_instruction']=args.owner_instruction
@@ -692,6 +708,10 @@ def parser() -> argparse.ArgumentParser:
         imported.add_argument('--'+flag, required=True)
     imported.add_argument('--exclude-role', action='append', default=[])
     imported.set_defaults(handler=import_reference)
+    preview = commands.add_parser('fork-preview')
+    for flag in ('task-id','source-task-id','local-root','worktree','version'):
+        preview.add_argument('--'+flag, required=True)
+    preview.set_defaults(handler=fork_preview)
     for name, handler in [("checkpoint", checkpoint), ("accept", accept), ("verify", verify_session), ("status", status), ("serve", serve)]:
         command = commands.add_parser(name)
         command.add_argument("--task-id", required=True)
