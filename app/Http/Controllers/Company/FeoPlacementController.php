@@ -26,6 +26,8 @@ final class FeoPlacementController
 
     public function index(): void
     {
+        $pageStylesheets[] = '/assets/css/registry-components.css';
+        $pageScripts[] = '/assets/js/registry-components.js';
         $pageTitle = 'Размещение на карте';
         $pageContext = 'Заявки ФЭО › Размещение на карте';
         $company = null;

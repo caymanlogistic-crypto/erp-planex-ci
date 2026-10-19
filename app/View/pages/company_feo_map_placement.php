@@ -8,19 +8,23 @@ $fmtMass = static function ($value): string {
     $number = (float)$value;
     return number_format($number, abs($number - round($number)) < 0.0005 ? 0 : 3, ',', ' ');
 };
+require_once base_path('app/View/components/registry_tabler_icons.php');
+$registryHeadTitle = 'Размещение на карте';
+$registryHeadSummary = 'Рабочий состав заявок ФЭО, переданных в размещение. Состав рассчитывается из применяемых добавляющих и исключающих блоков.';
+$registryHeadIconHtml = registry_tabler_header_icon('map-pin');
+$registryHeadActionsHtml = empty($dbError)
+    ? '<button type="button" class="btn btn-primary" data-placement-open-create>Создать блок</button>'
+    : '';
 ?>
 <style>
-.feo-placement-head{margin-bottom:10px}
-.feo-placement-table-card{display:block;min-width:0;border:0!important;box-shadow:none!important;background:transparent!important}
-.feo-placement-table-card .table-scroll{overflow-x:hidden}
-.feo-placement-toolbar{min-height:42px;height:auto;padding:6px 8px;gap:8px;flex-wrap:wrap}
-.feo-placement-toolbar-summary{display:flex;align-items:center;gap:5px;flex-wrap:wrap}
-.feo-placement-toolbar-summary .sep{color:var(--text-muted);font-weight:400}
-.feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0}
-.feo-placement-hide-disabled{display:flex;align-items:center;gap:6px;min-height:30px;white-space:nowrap;font-size:11px;color:var(--text);cursor:pointer}
-.feo-placement-hide-disabled input[type="checkbox"]{width:15px;height:15px;margin:0;accent-color:var(--accent)}
 .feo-placement-table-card:has([data-placement-hide-disabled]:checked) .feo-placement-table tbody tr[data-placement-block-status="disabled"]{display:none}
-.feo-placement-toolbar .feo-placement-block-search-input{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden;line-height:calc(var(--toolbar-h) - 2px);padding:0 9px}
+col.feo-placement-col-type{width:110px}
+col.feo-placement-col-count{width:80px}
+col.feo-placement-col-mass{width:110px}
+col.feo-placement-col-source{width:250px}
+col.feo-placement-col-date{width:140px}
+col.feo-placement-col-author{width:100px}
+col.feo-placement-col-status{width:105px}
 .feo-placement-block-search-results{padding:8px 0 0;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-placement-block-search-results.is-hidden{display:none}
 .feo-placement-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px;padding:0 8px}
@@ -30,14 +34,10 @@ $fmtMass = static function ($value): string {
 .feo-placement-search-col--block{width:auto;white-space:normal;overflow-wrap:anywhere;word-break:normal}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]{cursor:pointer}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]:hover{background:var(--accent-bg)}
-.feo-placement-table-card .feo-placement-table{width:100%;table-layout:auto;min-width:0!important}
 .feo-placement-table th,.feo-placement-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.feo-placement-table .feo-placement-name-cell,.feo-placement-table td:nth-child(6){max-width:0;white-space:normal;overflow-wrap:anywhere;word-break:normal;text-overflow:clip}
+.feo-placement-table .feo-placement-name-cell,.feo-placement-table td:nth-child(6){white-space:normal;overflow-wrap:anywhere;word-break:normal;text-overflow:clip}
 .feo-placement-source-cell{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-overflow:clip!important}
 .feo-placement-table tbody tr[data-placement-block-id]{cursor:pointer}
-.feo-placement-table tbody tr[data-placement-block-id]:hover{background:var(--accent-bg)}
-.feo-placement-table tbody tr[data-placement-block-type="exclusion"]{background:var(--danger-bg)}
-.feo-placement-table tbody tr[data-placement-block-type="exclusion"]:hover,.feo-placement-table tbody tr[data-placement-block-type="exclusion"]:hover>td{background:var(--badge-danger-bg,var(--danger-field))!important}
 .feo-placement-status{font-weight:700}
 .feo-placement-status--applied{color:var(--success,#2f7d32)}
 .feo-placement-status--disabled{color:var(--danger,#b42318)}
@@ -92,8 +92,6 @@ $fmtMass = static function ($value): string {
 @media(max-width:900px){
   .feo-placement-form-grid{grid-template-columns:1fr}
   .feo-placement-wide{grid-column:auto}
-  .feo-placement-toolbar-actions{width:100%}
-  .feo-placement-toolbar .feo-placement-block-search-input{width:100%;min-width:0;max-width:100%}
   .feo-placement-detail-meta{grid-template-columns:1fr}
   .feo-placement-parity-grid{grid-template-columns:1fr}
   .feo-placement-parity-card{border-right:0;border-bottom:1px solid var(--line-soft)}
@@ -107,13 +105,7 @@ $fmtMass = static function ($value): string {
 <?php if (!empty($errorFlash)): ?><div class="notice warn"><?= e((string)$errorFlash) ?></div><?php endif; ?>
 <?php if (!empty($dbError)): ?><div class="notice warn"><?= e((string)$dbError) ?></div><?php endif; ?>
 
-<div class="page-head feo-placement-head">
-  <div class="page-head-left">
-    <h1 class="page-title">Размещение на карте</h1>
-    <div class="page-summary"><span>Рабочий состав заявок ФЭО, переданных в размещение. Состав рассчитывается из применяемых добавляющих и исключающих блоков.</span></div>
-  </div>
-  <?php if (empty($dbError)): ?><div class="page-head-actions"><button type="button" class="btn btn-primary" data-placement-open-create>Создать блок</button></div><?php endif; ?>
-</div>
+<?php require base_path('app/View/partials/registry_ui_head.php'); ?>
 
 <?php if (empty($dbError)): ?>
 <?php if (empty($consistency['is_consistent'])): ?>
@@ -142,25 +134,27 @@ $fmtMass = static function ($value): string {
 </div>
 <?php endif; ?>
 
-<div class="table-card table-card--standard feo-placement-table-card">
-  <div class="table-toolbar feo-placement-toolbar">
-    <div class="found-label feo-placement-toolbar-summary">
+<?php require base_path('app/View/partials/registry_ui_state_scope.php'); ?>
+<div class="table-card table-card--standard registry-ui-card registry-ui-sticky-table registry-ui-sticky-table--wide-scroll registry-ui-scroll feo-placement-table-card" data-registry-id="feo-map-placement" data-registry-state-scope="<?= e($registryUiStateScope) ?>">
+  <div class="table-toolbar registry-ui-toolbar">
+    <div class="found-label registry-ui-toolbar-summary">
       <span>Блоки размещения: <b><?= count($blocks) ?></b></span>
-      <span class="sep">·</span>
+      <span>·</span>
       <span>Актуальный состав: <b><?= (int)($current['request_count'] ?? 0) ?></b> заявок</span>
-      <span class="sep">·</span>
+      <span>·</span>
       <span>Масса: <b><?= e($fmtMass($current['total_mass_kg'] ?? 0)) ?> кг</b></span>
     </div>
-    <div class="toolbar-right feo-placement-toolbar-actions">
-      <label class="feo-placement-hide-disabled"><input type="checkbox" data-placement-hide-disabled checked> Не показывать отключённые</label>
-      <textarea rows="1" class="toolbar-search feo-placement-block-search-input" data-placement-block-search placeholder="Найти заявку в блоках" autocomplete="off"></textarea>
+    <div class="toolbar-right">
+      <div class="registry-ui-checkboxes"><label class="registry-ui-checkbox"><input type="checkbox" data-placement-hide-disabled data-registry-field="hide-disabled" data-registry-default="true" checked> Не показывать отключённые</label></div>
       <button type="button" class="btn btn-secondary btn--toolbar" data-placement-open-current>Актуальные заявки</button>
+      <div class="registry-ui-search-group"><textarea rows="1" class="toolbar-search registry-ui-search" data-placement-block-search data-registry-field="query" data-registry-default="" placeholder="Найти заявку в блоках" aria-label="Поиск заявки в блоках" autocomplete="off"></textarea><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div>
     </div>
   </div>
   <div class="feo-placement-block-search-results is-hidden" data-placement-block-search-results></div>
   <div class="table-scroll">
-    <table class="table feo-placement-table">
-      <thead><tr><th style="width:1%">ID</th><th>Название</th><th style="width:9%">Тип</th><th style="width:1%">Заявок</th><th style="width:1%">Масса, кг</th><th style="width:24%">Источник</th><th style="width:1%">Дата</th><th style="width:1%">Ответств.</th><th style="width:1%">Статус</th></tr></thead>
+    <table class="table registry-ui-table registry-ui-data registry-ui-table--placement feo-placement-table">
+      <colgroup><col class="registry-ui-id"><col><col class="feo-placement-col-type"><col class="feo-placement-col-count"><col class="feo-placement-col-mass"><col class="feo-placement-col-source"><col class="feo-placement-col-date"><col class="feo-placement-col-author"><col class="feo-placement-col-status"></colgroup>
+      <thead><tr><th class="registry-ui-id">ID</th><th>Название</th><th>Тип</th><th>Заявок</th><th>Масса, кг</th><th>Источник</th><th>Дата</th><th>Ответств.</th><th>Статус</th></tr></thead>
       <tbody>
       <?php foreach ($blocks as $block): ?>
         <?php
@@ -175,18 +169,18 @@ $fmtMass = static function ($value): string {
           if ($sourceText === '') $sourceText = $sourceType === 'manual' ? '—' : strtoupper($sourceType);
         ?>
         <tr data-placement-block-id="<?= (int)$block['id'] ?>" data-placement-block-status="<?= $statusApplied ? 'applied' : 'disabled' ?>" data-placement-block-type="<?= e((string)($block['block_type'] ?? '')) ?>">
-          <td>#<?= (int)$block['id'] ?></td>
-          <td class="feo-placement-name-cell"><?= e((string)($block['name'] ?: '—')) ?></td>
-          <td><?= ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение' ?></td>
-          <td><?= (int)($block['request_count'] ?? 0) ?></td>
-          <td><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></td>
-          <td<?= $sourceType === 'manual' ? ' class="feo-placement-source-cell"' : '' ?> title="<?= e($sourceText) ?>"><?= e($sourceText) ?></td>
-          <td><?= e($fmtDateTime($block['created_at'] ?? null)) ?></td>
-          <td title="<?= e((string)($block['created_by_login'] ?? '')) ?>"><?= e((string)($block['created_by_display_name'] ?? '—')) ?></td>
-          <td><span class="feo-placement-status <?= $statusApplied ? 'feo-placement-status--applied' : 'feo-placement-status--disabled' ?>"><?= $statusApplied ? 'Применяется' : 'Отключён' ?></span></td>
+          <td class="registry-ui-id">#<?= (int)$block['id'] ?></td>
+          <td class="feo-placement-name-cell"><span class="registry-ui-name" title="<?= e((string)($block['name'] ?: '—')) ?>"><?= e((string)($block['name'] ?: '—')) ?></span></td>
+          <td><span class="registry-ui-primary"><?= ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение' ?></span></td>
+          <td><span class="registry-ui-primary"><?= (int)($block['request_count'] ?? 0) ?></span></td>
+          <td><span class="registry-ui-primary"><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></span></td>
+          <td class="feo-placement-source-cell" title="<?= e($sourceText) ?>"><span class="registry-ui-primary"><?= e($sourceText) ?></span></td>
+          <td><span class="registry-ui-primary"><?= e($fmtDateTime($block['created_at'] ?? null)) ?></span></td>
+          <td title="<?= e((string)($block['created_by_login'] ?? '')) ?>"><span class="registry-ui-primary"><?= e((string)($block['created_by_display_name'] ?? '—')) ?></span></td>
+          <td><span class="registry-ui-status <?= $statusApplied ? 'registry-ui-success' : 'registry-ui-error' ?>"><?= $statusApplied ? 'Применяется' : 'Отключён' ?></span></td>
         </tr>
       <?php endforeach; ?>
-      <?php if (!$blocks): ?><tr><td colspan="9" class="text-muted">Блоки ещё не созданы.</td></tr><?php endif; ?>
+      <?php if (!$blocks): ?><tr><td colspan="9"><span class="registry-ui-missing">Блоки ещё не созданы.</span></td></tr><?php endif; ?>
       </tbody>
     </table>
   </div>

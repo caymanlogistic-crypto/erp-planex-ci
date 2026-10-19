@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 export async function assertRegistryRows(page, {rowSelector, rows, forbidden = []}, label) {
   const normalize = value => value.replace(/\s+/g, ' ').trim();
   const actual = await page.locator(rowSelector).evaluateAll(items => items.map(row => ({
-    id: row.dataset.contractorId || row.dataset.vehicleSetId || row.dataset.driverId,
+    id: row.dataset.contractorId || row.dataset.vehicleSetId || row.dataset.driverId || row.dataset.placementBlockId,
     cells: [...row.cells].map(cell => {
       const fields=[...cell.querySelectorAll(':scope > span')];
       return (fields.length?fields:[cell]).map(field=>field.textContent.replace(/\s+/g,' ').trim());
@@ -21,10 +21,12 @@ export async function assertRegistryRows(page, {rowSelector, rows, forbidden = [
   for (const value of forbidden) assert.ok(!html.includes(value), `${label}: forbidden value leaked into HTML/index: ${value}`);
 }
 
-export async function assertRegistrySearch(page, {rowSelector, probes}, label) {
+export async function assertRegistrySearch(page, {rowSelector, probes, resolveActual}, label) {
   for (const {query, ids} of probes) {
     await page.locator('.registry-ui-search').fill(query);
-    const actual = await page.locator(rowSelector + ':not(.is-hidden)').evaluateAll(items => items.map(row => row.dataset.contractorId || row.dataset.vehicleSetId || row.dataset.driverId).sort());
+    const actual = resolveActual
+      ? await resolveActual(page, query)
+      : await page.locator(rowSelector + ':not(.is-hidden)').evaluateAll(items => items.map(row => row.dataset.contractorId || row.dataset.vehicleSetId || row.dataset.driverId).sort());
     assert.deepEqual(actual, ids.map(String).sort(), `${label}: actual filtered IDs for ${query}`);
   }
   await page.locator('.registry-ui-search').fill('');
@@ -34,7 +36,7 @@ export async function assertRegistrySearch(page, {rowSelector, probes}, label) {
 export async function assertRegistryScroll(page, label) {
   const measure = () => page.evaluate(() => {
     const main = document.querySelector('main.content'), card = document.querySelector('.registry-ui-card');
-    const toolbar = card.querySelector('.registry-ui-toolbar'), table = card.querySelector('table'), head = table.tHead;
+    const toolbar = card.querySelector('.registry-ui-toolbar'), table = card.querySelector(':scope > .table-scroll table'), head = table.tHead;
     const box = element => element.getBoundingClientRect();
     // Sidebar navigation has its own unrelated scroll area; inspect the content chain.
     const yOwners = [document.documentElement,document.body,main,...main.querySelectorAll('*')].filter(element => ['auto','scroll'].includes(getComputedStyle(element).overflowY) && element.scrollHeight > element.clientHeight + 1);
@@ -53,7 +55,7 @@ export async function assertRegistryScroll(page, label) {
     assert.ok(result.y > 0, `${label}: main scroll moved`);
     assert.deepEqual(result.owners, ['main'], `${label}: one vertical scroll owner`);
     assert.ok(Math.abs(result.toolbarTop-result.mainTop)<2, `${label}: sticky toolbar`);
-    if(!result.cards)assert.ok(Math.abs(result.headTop-result.toolbarBottom)<2, `${label}: sticky column header`);
+    if(!result.cards)assert.ok(Math.abs(result.headTop-result.toolbarBottom)<2, `${label}: sticky column header ${JSON.stringify(result)}`);
     assert.ok(result.pageX<=1, `${label}: no document horizontal overflow`);
   }
   await page.locator('.table-scroll').evaluate(element=>{element.scrollLeft=element.scrollWidth-element.clientWidth});
