@@ -114,9 +114,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          while IFS= read -r test_file; do
-            node "$test_file"
-          done < <(python3 tools/ui_standard.py tests --all)
           node tests/ui_standard_gallery_browser_test.mjs
           node tests/ui_standard_lab_browser_test.mjs
           node tests/registry_visual_gate_test.mjs

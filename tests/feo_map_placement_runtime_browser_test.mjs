@@ -5,6 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
+import {assertRegistryAsyncSearchContract} from './helpers/registry_async_search_contract.mjs';
 import {assertRegistryRows} from './helpers/registry_behavior_contract.mjs';
 import {assertRegistryTableState} from './helpers/registry_visual_contract.mjs';
 
@@ -36,8 +37,8 @@ try{
   await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
   const origin=`http://127.0.0.1:${server.address().port}`;
   browser=await chromium.launch({headless:true});
-  for(actor of ['owner','member']){
-    const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
+  for(actor of ['owner','member'])for(const width of [390,1280,1920,3840]){
+    const page=await browser.newPage({viewport:{width,height:900}}),errors=[];
     page.on('pageerror',error=>errors.push(error.message));
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
     await page.goto(origin+'/company/feo/requests/map-placement');
@@ -61,10 +62,23 @@ try{
     assert.equal(await page.locator('[data-placement-search-block-id="74"]').count(),1,'real endpoint returns saved block');
     await page.locator('.registry-ui-reset').click();
     assert.equal(await search.inputValue(),'','real reset clears query');
+    const payload=(id,name)=>({success:true,results:[{zayavka_id:id,exists_in_feo:true,blocks:[{id:74,name,block_type:'addition',created_at:'2026-10-17 10:45:00'}]}],duplicates:[]});
+    await assertRegistryAsyncSearchContract(page,{
+      runtime:true,pageId:'feo-map-placement',endpoint:'**/search-blocks?*',searchSelector:'[data-placement-block-search]',resetSelector:'.registry-ui-reset',resultsSelector:'[data-placement-block-search-results]',
+      firstQuery:'309552',nextQuery:'302545',firstResponse:payload('309552','Контроль старого ответа'),nextResponse:payload('302545','Площадка Сосновый Бор'),firstText:'Контроль старого ответа',nextText:'Площадка Сосновый Бор',
+    });
     await page.getByRole('button',{name:'Создать блок'}).click();
     assert.ok(await page.locator('#feo-placement-create-modal form[action$="/map-placement/analyze"]').isVisible(),'real create form remains available');
     await page.keyboard.press('Escape');
     assert.deepEqual(errors,[],actor+' real runtime has no page errors');
+    await page.close();
+  }
+  actor='page-error';
+  for(const width of [390,1280,1920,3840]){
+    const page=await browser.newPage({viewport:{width,height:900}});
+    await page.goto(origin+'/company/feo/requests/map-placement');
+    await page.getByText('Компания не найдена.',{exact:false}).waitFor();
+    await assertRegistryTableState(page,'feo-map-placement','page-error',{runtime:true});
     await page.close();
   }
   assert.notEqual(cache.get('owner:scope'),cache.get('member:scope'),'state scope separates identities');

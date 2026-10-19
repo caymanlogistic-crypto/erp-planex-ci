@@ -134,3 +134,12 @@ with tempfile.TemporaryDirectory(prefix="planex-ui-catalog-") as temp:
         ui_standard.CATALOG, sys.argv = original_catalog, original_argv
 
 print("UI_STANDARD_CATALOG_TEST=PASS")
+
+# Required source routing and missing catalog contracts cannot silently bypass LOCAL/CI.
+import copy
+sys.path.insert(0,str(ui_standard.ROOT/'tools'))
+import ci_scope
+assert ci_scope.classify(['app/Service/FeoPlacementService.php'])['approved_ui']
+missing_contract=copy.deepcopy(catalog)
+next(page for page in missing_contract['pages'] if page['id']=='feo-map-placement')['required_contracts']=[]
+assert any('required FEO PHP contract missing' in error for error in ui_standard.validate(missing_contract))

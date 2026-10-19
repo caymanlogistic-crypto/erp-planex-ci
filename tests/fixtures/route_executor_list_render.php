@@ -1,7 +1,8 @@
 <?php
 declare(strict_types=1);
 
-require dirname(__DIR__, 2).'/bootstrap/app.php';
+$config=require dirname(__DIR__, 2).'/bootstrap/app.php';
+require BASE_PATH.'/app/Support/entrypoint_dependencies.php';
 spl_autoload_register(static function(string $class): void { if(str_starts_with($class,'App\\')){ $file=BASE_PATH.'/app/'.str_replace('\\','/',substr($class,4)).'.php'; if(is_file($file))require_once $file; } });
 require_once BASE_PATH.'/app/Support/core_runtime.php';
 require_once BASE_PATH.'/app/Service/RouteExecutorListPresentation.php';
@@ -21,8 +22,13 @@ if (($argv[1]??'')==='final-edit') {
     $reviewCards[0]['stage']='final_edit';
 }
 $executors=[['crew_id'=>9,'crew_status'=>'active','contractor_name'=>'ООО Действующий','contractor_phone'=>'+7 900 000-00-04','contractor_email'=>'active@example.test','driver_name'=>'Иванов Иван','driver_phone'=>'+7 900 000-00-05','driver_email'=>'ivanov@example.test','primary_brand'=>'КАМАЗ','primary_plate'=>'А123АА77','primary_capacity'=>'20','primary_volume'=>'86','secondary_brand'=>'ТОНАР','secondary_plate'=>'А1213334','secondary_capacity'=>'24','secondary_volume'=>'92','responsible_name'=>'Карина Гладких']];
-?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<link rel="stylesheet" href="/assets/css/erp-ui.css"><link rel="stylesheet" href="/assets/css/app-base.css"><link rel="stylesheet" href="/assets/css/route-executor-review-workflow.css"><link rel="stylesheet" href="/assets/css/route-executor-list-v016.css"><link rel="stylesheet" href="/assets/css/registry-components.css">
-<style>html,body{margin:0}.test-workspace{box-sizing:border-box;width:calc(100% - 220px);margin-left:220px;padding:12px 16px;min-width:0}.modal-overlay{display:none!important}</style></head><body><main class="test-workspace">
-<?php require BASE_PATH.'/app/View/pages/company_route_executors.php'; ?>
-</main></body></html>
+$_SERVER['REQUEST_URI']='/company/route-executors';
+$_SERVER['SCRIPT_NAME']='/index.php';
+$_SESSION=['company_id'=>1,'role_code'=>'company_owner','account_id'=>3,'user_id'=>11,'membership_id'=>11];
+\App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::systemOwner(11,1,array_column(\App\Security\PageRegistry::companyPages(),'key')));
+$db=new class([]) extends \App\Core\Database { public function connection(): PDO { throw new RuntimeException('Synthetic visual fixture has no database'); } };
+$pageTitle='Исполнители рейса';$pageContext='Исполнители рейса › Компания';
+$pageStylesheets=['/assets/css/route-executor-review-workflow.css','/assets/css/route-executor-list-v016.css','/assets/css/registry-components.css'];
+$pageScripts=['/assets/js/table-reference-select.js','/assets/js/registry-components.js'];
+ob_start();require BASE_PATH.'/app/View/pages/company_route_executors.php';$content=(string)ob_get_clean();
+require BASE_PATH.'/app/View/layouts/main.php';

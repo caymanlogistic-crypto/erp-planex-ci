@@ -41,8 +41,8 @@ try {
  await new Promise((resolve,reject)=>{server.once('error',reject);server.listen(0,'127.0.0.1',resolve)});
  const origin=`http://127.0.0.1:${server.address().port}`;
  browser=await chromium.launch({headless:true});
- for(actor of ['owner','member']) for(const kind of ['contractors','vehicle-sets']){
-  const page=await browser.newPage({viewport:{width:1280,height:900}});
+ for(actor of ['owner','member']) for(const kind of ['contractors','vehicle-sets'])for(const width of [390,1280,1920,3840]){
+  const page=await browser.newPage({viewport:{width,height:900}});
   page.on('pageerror',error=>errors.push(error.message));
   await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
   await page.goto(origin+'/company/'+kind);await page.waitForSelector('[data-registry-ready="true"]');

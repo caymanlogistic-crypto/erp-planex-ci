@@ -4,6 +4,8 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
+import {verifyMatrix,verifyAsyncMatrix} from './registry_matrix.mjs';
+
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 
 export function verifyVisualCoverage(stdout,expected){
@@ -12,20 +14,26 @@ export function verifyVisualCoverage(stdout,expected){
 }
 
 export function verifySurfaceCoverage(stdout,pages){
- const actual=new Set([...stdout.matchAll(/^REGISTRY_SURFACE_STATE=([a-z][a-z0-9.-]*:[a-z][a-z0-9-]*)\r?$/gm)].map(match=>match[1]));
- const expected=pages.flatMap(page=>page.table_states.map(state=>`${page.id}:${state.id}`));
- assert.deepEqual([...actual].sort(),expected.sort(),'every declared registry table surface/state must execute against the visible DOM');
+ verifyMatrix(stdout,pages,'REGISTRY_SURFACE_STATE');
 }
 
 export function verifyAsyncCoverage(stdout,pages){
- const actual=new Set([...stdout.matchAll(/^REGISTRY_ASYNC_SEARCH=([a-z][a-z0-9.-]*)\r?$/gm)].map(match=>match[1]));
- const expected=pages.filter(page=>page.async_search?.applicable).map(page=>page.id);
- assert.deepEqual([...actual].sort(),expected.sort(),'every applicable async search must execute the shared delayed-response contract');
+ verifyAsyncMatrix(stdout,pages);
+}
+
+export function runRequiredContracts(pages,{directory=root,php=process.env.PLANEX_PHP||'php'}={}) {
+ const contracts=pages.flatMap(page=>page.required_contracts||[]);
+ assert.ok(Array.isArray(contracts),'required contracts inventory');
+ for(const test of new Set(contracts)){
+  assert.match(test,/^tests\/[a-zA-Z0-9_/-]+_test\.php$/,'safe required PHP contract');
+  process.stdout.write(execFileSync(php,[path.join(directory,test)],{cwd:directory,env:process.env,encoding:'utf8'}));
+ }
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){
  const catalog=JSON.parse(readFileSync(path.join(root,'docs/ui/approved-components.json'),'utf8'));
  const tests=new Map();
+ runRequiredContracts(catalog.pages);
  const pages=catalog.pages.filter(page=>page.family==='registry');
  for(const page of pages){
   assert.match(page.browser_test,/^tests\/[a-zA-Z0-9_/-]+\.mjs$/,'safe visual test path');

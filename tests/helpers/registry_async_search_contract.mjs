@@ -6,9 +6,10 @@ const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms));
 // The delayed responses are held by the browser's request router. The page
 // still executes its production search code and renders the resulting DOM.
 export async function assertRegistryAsyncSearchContract(page,{
-  pageId,endpoint,searchSelector,resetSelector,resultsSelector,firstQuery,nextQuery,
+  runtime=false,pageId,endpoint,searchSelector,resetSelector,resultsSelector,firstQuery,nextQuery,
   firstResponse,nextResponse,firstText,nextText,
 }) {
+  const check=state=>assertRegistryTableState(page,pageId,state,{runtime});
   const held=[];
   await page.route(endpoint,route=>{
     held.push({route,query:new URL(route.request().url()).searchParams.get('request_ids')});
@@ -43,11 +44,11 @@ export async function assertRegistryAsyncSearchContract(page,{
 
   await search.fill(firstQuery);
   const first=await take(firstQuery);
-  await assertRegistryTableState(page,pageId,'search-pending');
+  await check('search-pending');
   await reset.click();
   await pause(350); // Let any queued empty-query branch run before the late reply.
   await empty('reset while GET pending');
-  await assertRegistryTableState(page,pageId,'reset');
+  await check('reset');
   await release(first,firstResponse);
   await pause(100);
   await empty('late success after reset');
@@ -69,7 +70,7 @@ export async function assertRegistryAsyncSearchContract(page,{
   const current=await take(nextQuery);
   await release(current,nextResponse);
   await results.getByText(nextText,{exact:true}).waitFor();
-  await assertRegistryTableState(page,pageId,'search-results');
+  await check('search-results');
   assert.equal(await results.getByText(firstText,{exact:true}).count(),0,'new query owns result surface');
   assert.equal((await stored())?.query,nextQuery,'new query is persisted');
 
@@ -77,19 +78,19 @@ export async function assertRegistryAsyncSearchContract(page,{
   const emptyResponse=await take(firstQuery);
   await release(emptyResponse,{success:true,results:[],duplicates:[]});
   await results.getByText('Найдено по 0 заявкам.',{exact:false}).waitFor();
-  await assertRegistryTableState(page,pageId,'search-empty');
+  await check('search-empty');
 
   await search.fill(nextQuery);
   const errorResponse=await take(nextQuery);
   await release(errorResponse,{success:false,message:'Контрольная ошибка поиска'},500);
   await results.getByText('Контрольная ошибка поиска',{exact:false}).waitFor();
-  await assertRegistryTableState(page,pageId,'search-error');
+  await check('search-error');
 
   await search.fill('');await pause(350);await empty('manual clear');
-  await assertRegistryTableState(page,pageId,'reset');
+  await check('reset');
   await page.reload();await page.waitForSelector('[data-registry-ready="true"]');
   await empty('reload after clear');
-  await assertRegistryTableState(page,pageId,'reload');
+  await check('reload');
   await page.unroute(endpoint);
-  console.log(`REGISTRY_ASYNC_SEARCH=${pageId}`);
+  console.log(`${runtime?'REGISTRY_RUNTIME_ASYNC_SEARCH':'REGISTRY_ASYNC_SEARCH'}=${pageId}:${page.viewportSize().width}`);
 }

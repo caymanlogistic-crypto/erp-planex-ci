@@ -51,15 +51,15 @@ if ($command === 'fingerprint') {
 if ($command !== 'render') throw new RuntimeException('Unknown fixture command');
 $uri=$argv[2] ?? '';$actor=$argv[3] ?? 'owner';
 if (!in_array($uri,['/company/feo/requests/map-placement','/company/feo/requests/map-placement/search-blocks','/company/feo/requests/map-placement/current','/company/feo/requests/map-placement/blocks/74/json'],true)
-    || !in_array($actor,['owner','member','denied'],true)) throw new RuntimeException('Only bounded placement GET routes permitted');
+    || !in_array($actor,['owner','member','denied','page-error'],true)) throw new RuntimeException('Only bounded placement GET routes permitted');
 $_SERVER['REQUEST_URI']=$uri;
 $_SERVER['HTTP_X_REQUESTED_WITH']='XMLHttpRequest';
 if (str_ends_with($uri,'/search-blocks')) $_GET=['request_ids'=>(string)($argv[4] ?? '302545')];
-$_SESSION=['user_id'=>$actor==='owner'?1:2,'account_id'=>$actor==='owner'?101:102,'membership_id'=>$actor==='owner'?11:12,'company_id'=>7,'role_code'=>$actor==='owner'?'company_owner':'logist','full_name'=>'Тестовый пользователь','auth_type'=>'company_user'];
+$_SESSION=['user_id'=>$actor==='owner'?1:2,'account_id'=>$actor==='owner'?101:102,'membership_id'=>$actor==='owner'?11:12,'company_id'=>$actor==='page-error'?999:7,'role_code'=>$actor==='owner'?'company_owner':'logist','full_name'=>'Тестовый пользователь','auth_type'=>'company_user'];
 $registry=new App\Security\PageRegistry();
 $access=$actor==='owner'
     ? App\Security\EffectiveAccess::systemOwner(11,7,$registry->pageKeys())
-    : App\Security\EffectiveAccess::member(12,7,$actor==='member'?['company.feo.map_placement'=>true]:[],[],'logist');
+    : App\Security\EffectiveAccess::member(12,7,in_array($actor,['member','page-error'],true)?['company.feo.map_placement'=>true]:[],[],'logist');
 App\Security\AccessRuntime::setCurrent($access);
 $router=new App\Http\Router($registry);
 require BASE_PATH . '/app/Http/Routes/company_feo_requests.php';

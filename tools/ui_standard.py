@@ -149,6 +149,20 @@ def validate(data: dict) -> list[str]:
                             errors.append(f'pages/{name}/async_search: {exc}')
                     elif not str(async_search.get('reason','')).strip():
                         errors.append(f'pages/{name}: non-applicable async_search needs a reason')
+                sources=item.get('contract_sources',[])
+                if not isinstance(sources,list) or any(not isinstance(source,str) or not re.fullmatch(r'(?:app|tests)/[a-zA-Z0-9_/*.-]+',source) or '..' in source or not list(ROOT.glob(source)) for source in sources):
+                    errors.append(f'pages/{name}: contract_sources must match existing bounded app/tests paths')
+                required_contracts=item.get('required_contracts',[])
+                if name=='feo-map-placement' and 'tests/feo_placement_contract_test.php' not in required_contracts:
+                    errors.append(f'pages/{name}: required FEO PHP contract missing')
+                if not isinstance(required_contracts,list):
+                    errors.append(f'pages/{name}: required_contracts must be a list')
+                else:
+                    for contract in required_contracts:
+                        try:
+                            if not re.fullmatch(r'tests/[a-zA-Z0-9_/-]+_test\.php',contract): raise ValueError('required PHP contract path')
+                            safe_file(contract)
+                        except (ValueError,TypeError) as exc: errors.append(f'pages/{name}/required_contracts: {exc}')
                 if not item.get("route", "").startswith("/erpv2/"):
                     errors.append(f"pages/{name}: ERP route required")
                 if item.get("family") == "registry" and (type(item.get("sticky")) is not bool or type(item.get("reference_select")) is not bool):

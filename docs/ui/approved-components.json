@@ -612,7 +612,16 @@
           "reset",
           "reload"
         ]
-      }
+      },
+      "required_contracts": [
+        "tests/feo_placement_contract_test.php"
+      ],
+      "contract_sources": [
+        "app/Service/FeoPlacement*.php",
+        "app/Http/Routes/company_feo_requests.php",
+        "tests/feo_placement*.php",
+        "tests/fixtures/feo_map_placement*.php"
+      ]
     }
   ],
   "decisions": "docs/ui/decisions-20261018.json"

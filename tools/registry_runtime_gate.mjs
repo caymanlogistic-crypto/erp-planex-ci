@@ -4,6 +4,8 @@ import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import path from 'node:path';
 
+import {verifyMatrix,verifyAsyncMatrix} from './registry_matrix.mjs';
+
 export function verifyRuntimeCoverage(stdout,expected) {
   const actual=[...stdout.matchAll(/^REGISTRY_RUNTIME_PAGE=([a-z][a-z0-9.-]*)\r?$/gm)].map(match=>match[1]);
   assert.equal(new Set(actual).size,actual.length,'duplicate runtime page coverage');
@@ -11,9 +13,8 @@ export function verifyRuntimeCoverage(stdout,expected) {
 }
 
 export function verifyRuntimeSurfaceCoverage(stdout,pages) {
-  const actual=new Set([...stdout.matchAll(/^REGISTRY_RUNTIME_SURFACE=([a-z][a-z0-9.-]*:[a-z][a-z0-9-]*)\r?$/gm)].map(match=>match[1]));
-  const expected=pages.flatMap(page=>[`${page.id}:initial`,...(page.async_search?.applicable?[`${page.id}:search-results`]:[])]);
-  assert.deepEqual([...actual].sort(),expected.sort(),'runtime browser must discover main and applicable dynamic business tables');
+  verifyMatrix(stdout,pages,'REGISTRY_RUNTIME_SURFACE');
+  verifyAsyncMatrix(stdout,pages,'REGISTRY_RUNTIME_ASYNC_SEARCH');
 }
 
 if(process.argv[1]&&path.resolve(process.argv[1])===fileURLToPath(import.meta.url)){

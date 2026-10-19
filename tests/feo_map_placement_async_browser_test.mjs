@@ -26,7 +26,8 @@ const server=http.createServer((req,res)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
 try{
-  const page=await browser.newPage({viewport:{width:1280,height:900}});
+  for(const width of [390,1280,1920,3840]){
+  const page=await browser.newPage({viewport:{width,height:900}});
   await page.goto(`http://127.0.0.1:${server.address().port}/erpv2/company/feo/requests/map-placement`);
   await page.waitForSelector('[data-registry-ready="true"]');
   const firstResponse={success:true,results:[
@@ -39,5 +40,6 @@ try{
     firstQuery:'309552, 319172',nextQuery:'302545',firstResponse,nextResponse,firstText:'Вологодская область догруз',nextText:'Площадка Сосновый Бор',
   });
   await page.close();
+  }
   console.log('FEO_MAP_PLACEMENT_ASYNC_BROWSER=PASS late success/error reset, query change, clear, reload');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}

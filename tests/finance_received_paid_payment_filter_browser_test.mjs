@@ -4,7 +4,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
-import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataContract,assertRegistryDataCoverage} from './helpers/registry_visual_contract.mjs';
 import {assertRegistryTablerIcon} from './helpers/registry_tabler_icon_contract.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
@@ -35,6 +35,23 @@ try{
  for(const width of [390,1280,1920,3840]){
   await page.setViewportSize({width,height:900});
   await assertRegistryTablerIcon(page,'finance-received-paid');
+  await assertRegistryDataContract(page,'finance-received-paid');
+  if(width===390){
+    await page.locator('.rp-v010-mobile-group:visible').filter({hasText:'Клиент'}).first().evaluate(element=>element.dataset.captionProbe='true');
+    const caption=page.locator('[data-caption-probe=true]');
+    const original=await caption.innerHTML();
+    await caption.evaluate(element=>element.textContent='Непроверенные бизнес-данные');
+    await assert.rejects(assertRegistryDataCoverage(page,'finance-caption-negative'),/untyped visible table data/);
+    await caption.evaluate(element=>element.innerHTML='<span>Вложенные бизнес-данные</span>');
+    await assert.rejects(assertRegistryDataCoverage(page,'finance-caption-nested-negative'),/untyped visible table data/);
+    await caption.evaluate((element,html)=>element.innerHTML=html,original);
+    await caption.evaluate(element=>element.style.fontSize='20px');
+    await assert.rejects(assertRegistryDataCoverage(page,'finance-caption-font-negative'),/finance caption typography/);
+    await caption.evaluate(element=>element.style.removeProperty('font-size'));
+    await assertRegistryDataCoverage(page,'finance-caption-restored');
+    console.log('REGISTRY_CAPTION_NEGATIVE=unknown,nested,wrong-font');
+  }
+
  }
  await page.setViewportSize({width:1280,height:900});
  await assertRegistryVisualContract(page,'finance-received-paid 1280px');

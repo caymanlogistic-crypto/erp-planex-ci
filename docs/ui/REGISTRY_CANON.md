@@ -131,8 +131,9 @@ Hover select: фон `#EAE3D8`, рамка `#C9BDAE`; pressed: `#E4D8CA`, рам
 | Контекст и selector | Типографика | Источник |
 | --- | --- | --- |
 | Выезды, `.registry-ui-planned-date` | 12/500/16.8, `#78726A` | `ui-four-pages-panel-trips-20261018:v006` |
-| Финансовая мобильная группировка, `.rp-v010-mobile-group.registry-ui-secondary` | 12/500/15, `#131210` | `ui-four-pages-finance-20261018:v007` |
-| Выезды ≤640px, `.waste-mobile-label.registry-ui-secondary` | 12/500/16.8, `#4C4840`; в денежной ячейке вес 600 | `ui-four-pages-panel-trips-20261018:v006` |
+| Финансовая компактная группировка 1051–1799px, `.rp-v010-mobile-group.registry-ui-secondary` | 12/500/15, `#131210` | `ui-four-pages-finance-20261018:v007` |
+| Финансовые фиксированные подписи ≤1050px, `.rp-v010-mobile-group` с точным текстом `Клиент` / `Подрядчик` | 11/500/13.75, `#60584F`; без вложенных бизнес-значений | `ui-four-pages-finance-20261018:v007`; immutable overrides.css SHA-256 `3fc79bc04222973efeac6e92c34200b06a4d91bf623ce68ccce9a11810d1f12a` |
+| Выезды ≤640px, `.waste-mobile-label.registry-ui-secondary` | 12/500/16.8, `#4C4840`, включая фиксированные подписи в денежных ячейках; сами суммы сохраняют вес 600 | `ui-four-pages-panel-trips-20261018:v006` |
 | Выезды, `.waste-finance-reason.registry-ui-reason` | 11/500/15.4, `#78726A` | `ui-four-pages-panel-trips-20261018:v006` |
 | Исполнители, `.route-status--neutral` | 12/500/16.8, `#4C4840` | `ui-four-pages-row-batch-20261018:v006` |
 | Исполнители, `.registry-ui-secondary` в `.registry-ui-soft-error`, `.registry-ui-soft-success` и `.route-vehicle-metric` | 11/500/15.4, `#131210` | `ui-four-pages-row-batch-20261018:v006` |

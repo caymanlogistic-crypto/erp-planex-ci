@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deterministic changed-path classifier shared by local preflight and GitHub CI."""
 from __future__ import annotations
-import argparse, json, re, subprocess, sys
+import argparse, fnmatch, json, re, subprocess, sys
 from pathlib import Path
 
 SCOPE_PATTERNS = {
@@ -15,9 +15,9 @@ SCOPE_PATTERNS = {
     "migration_normalization": r"^(database/migrations-local/(057_create_crew_drivers|058_create_linear_route_points)\.sql|scripts/p40_reconcile_migration_names\.php)$",
     "tenant_schema": r"^(database/migrations-local/|app/Service/LocalMigrationService\.php$|app/Support/company_database\.php$|app/Http/Controllers/Superadmin/CompanyActions/create_submit\.php$|tools/database/|tests/tenant_schema_provisioning_contract_test\.php$|docs/database/|\.github/workflows/ci\.yml$)",
     "ui_lab": r"^(app/Http/Controllers/Superadmin/UiPatternLabController\.php$|app/Http/Routes/superadmin\.php$|app/View/pages/ui_pattern_lab\.php$|app/View/components/(button|input|page_header|status_badge|table)\.php$|public/assets/css/(ui-pattern-lab|erp-ui|app|app-base|workspace-benchmark)\.css$|tests/ui_pattern_lab_contract_test\.php$|\.github/ui-pattern-lab/ui_pattern_lab_visual\.js$)",
-    "approved_ui": r"^(app/(View|Http/Controllers)/.*\.php$|public/assets/(css/.*\.css$|js/.*\.(?:js|mjs)$)|docs/ui/.*|\.agents/skills/planex-ui-standard/|tools/(?:ui_standard|ui_style_guard|design_lab)\.py$|tools/(?:(?:ui_parity|registry_runtime_gate|registry_visual_gate)\.mjs|ci_registry_runtime\.sh)$|tests/(fixtures/(?:company_registry_|drivers_registry_).*|.*_browser_test\.mjs$|registry_.*|ui_style_guard_test\.py$|helpers/(?:registry_.*|ui_appearance).*))",
+    "approved_ui": r"^(app/(View|Http/Controllers)/.*\.php$|public/assets/(css/.*\.css$|js/.*\.(?:js|mjs)$)|docs/ui/.*|\.agents/skills/planex-ui-standard/|tools/(?:ui_standard|ui_style_guard|design_lab)\.py$|tools/(?:(?:ui_parity|registry_runtime_gate|registry_visual_gate|registry_matrix)\.mjs|ci_registry_runtime\.sh)$|tests/(fixtures/(?:company_registry_|drivers_registry_).*|.*_browser_test\.mjs$|registry_.*|ui_style_guard_test\.py$|helpers/(?:registry_.*|ui_appearance).*))",
     "memory": r"^(docs/memory/|tools/(memory_integrity_check|active_registry_coverage_check)\.py$|tests/(memory_integrity_checker|active_registry_coverage_checker)_test\.py$)",
-    "control_plane": r"^(\.github/(?:workflows/|p07/)|\.agents/skills/(?:planex-design-lab|planex-ui-standard)/|AGENTS\.md$|docs/(?:DESIGN_LAB|GITHUB_CONTROL_PLANE|LOCAL_PREFLIGHT_PUBLISHING)\.md$|\.github/pull_request_template\.md$|tools/(?:runner/|sentinelx/|(?:agent_preflight|ci_scope|design_lab|local_publish|ui_style_guard|ui_standard)\.py$|(?:(?:ui_parity|registry_runtime_gate|registry_visual_gate)\.mjs|ci_registry_runtime\.sh)$)|tests/(?:(?:design_lab_contract|agent_deploy_policy_contract|runner_helpers_contract|sentinelx_hardening|local_publish|ui_style_guard)_test\.py$|(?:agent_preflight|ci_scope)_test\.py$))",
+    "control_plane": r"^(\.github/(?:workflows/|p07/)|\.agents/skills/(?:planex-design-lab|planex-ui-standard)/|AGENTS\.md$|docs/(?:DESIGN_LAB|GITHUB_CONTROL_PLANE|LOCAL_PREFLIGHT_PUBLISHING)\.md$|\.github/pull_request_template\.md$|tools/(?:runner/|sentinelx/|(?:agent_preflight|ci_scope|design_lab|local_publish|ui_style_guard|ui_standard)\.py$|(?:(?:ui_parity|registry_runtime_gate|registry_visual_gate|registry_matrix)\.mjs|ci_registry_runtime\.sh)$)|tests/(?:(?:design_lab_contract|agent_deploy_policy_contract|runner_helpers_contract|sentinelx_hardening|local_publish|ui_style_guard)_test\.py$|(?:agent_preflight|ci_scope)_test\.py$))",
 }
 CRITICAL_PATH_SCOPES = ("finance", "security", "migrations", "tenant_schema", "memory", "control_plane")
 KNOWN_CRITICAL_PATHS = (
@@ -57,6 +57,10 @@ def classify(paths: list[str], full_scan: bool=False) -> dict[str,bool]:
         for key, pat in SCOPE_PATTERNS.items():
             rx = re.compile(pat)
             out[key] = any(rx.search(p) for p in paths)
+    # The catalog owns additional source -> required contracts routing in both CI and LOCAL.
+    catalog=json.loads((Path(__file__).resolve().parents[1]/'docs/ui/approved-components.json').read_text(encoding='utf-8'))
+    sources=[source for page in catalog['pages'] for source in [page.get('view'),page.get('asset_owner'),page.get('browser_test'),page.get('runtime_browser_test'),*page.get('required_contracts',[]),*page.get('contract_sources',[])] if source]
+    out['approved_ui'] = out['approved_ui'] or any(fnmatch.fnmatchcase(path,source) for path in paths for source in sources)
     return out
 
 def critical_path(paths: list[str]) -> bool:
