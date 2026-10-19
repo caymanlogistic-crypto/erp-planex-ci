@@ -3663,26 +3663,6 @@ a.nav-sub-item:visited {
   white-space: nowrap;
 }
 
-/* Compact ✓/× document indicators */
-.company-vehicle-sets-table .table-check {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 16px;
-  font-weight: 700;
-  font-size: 13px;
-  line-height: 1;
-}
-
-.company-vehicle-sets-table .table-check--yes {
-  color: var(--success);
-}
-
-.company-vehicle-sets-table .table-check--no {
-  color: var(--danger);
-}
-
 /* ============================================================
    DRIVER CREATE MODAL — wider than standard .modal-lg (820px)
    ============================================================ */

@@ -848,7 +848,7 @@ window.getErpBasePath = function () {
         var stateKey = null;
         if (window.location.pathname === '/company/drivers' && !card.hasAttribute('data-registry-id')) {
             stateKey = DRIVER_GRID_STATE_KEY;
-        } else if (window.location.pathname === '/company/vehicle-sets') {
+        } else if (window.location.pathname === '/company/vehicle-sets' && !card.hasAttribute('data-registry-id')) {
             stateKey = VEHICLE_SET_GRID_STATE_KEY;
         }
 
@@ -1354,7 +1354,7 @@ document.addEventListener('click', function (e) {
         nameSelector: '.driver-view-name',
         editFormSelector: '#contractor-edit-form',
         gridSelector: '.table-card[data-erp-grid]',
-        gridStateKey: 'companyContractorsGridState',
+        gridStateKey: null, // The authorized registry scope owns persisted filters.
         viewBtnSelectors: {
             edit: '[data-contractor-edit-btn]',
             close: '[data-contractor-view-close-btn]',
@@ -1441,6 +1441,11 @@ document.addEventListener('click', function (e) {
             var row = event.target.closest('tr[data-contractor-id]');
             if (!row) return;
             var id = row.getAttribute('data-contractor-id');
+            if (id) contractorCtrl.loadView(id);
+        });
+        contractorTable.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter' || event.target.tagName !== 'TR') return;
+            var id = event.target.getAttribute('data-contractor-id');
             if (id) contractorCtrl.loadView(id);
         });
     }
@@ -1676,7 +1681,7 @@ document.addEventListener('click', function (e) {
         nameSelector: '.driver-view-name',
         editFormSelector: '#vehicle-set-edit-form',
         gridSelector: '.table-card[data-vehicle-sets-grid]',
-        gridStateKey: 'companyVehicleSetsGridState',
+        gridStateKey: null, // The authorized registry scope owns persisted filters.
         viewBtnSelectors: {
             edit:   '[data-vehicle-set-edit-btn]',
             close:  '[data-vehicle-set-close-btn]',
@@ -1741,6 +1746,11 @@ document.addEventListener('click', function (e) {
                 var row = event.target.closest('tr[data-vehicle-set-id]');
                 if (!row) return;
                 var id = row.getAttribute('data-vehicle-set-id');
+                if (id) vehicleSetCtrl.loadView(id);
+            });
+            tableBody.addEventListener('keydown', function (event) {
+                if (event.key !== 'Enter' || event.target.tagName !== 'TR') return;
+                var id = event.target.getAttribute('data-vehicle-set-id');
                 if (id) vehicleSetCtrl.loadView(id);
             });
         }

@@ -1,0 +1,7 @@
+/* Only business column geometry; appearance is owned by registry-components.css. */
+.company-vehicle-sets-table col.col-type {width:110px}
+.company-vehicle-sets-table col.col-main-unit,
+.company-vehicle-sets-table col.col-secondary-unit {width:378px}
+.company-vehicle-sets-table col.col-volume,
+.company-vehicle-sets-table col.col-capacity {width:85px}
+.company-vehicle-sets-table col.col-check {width:70px}

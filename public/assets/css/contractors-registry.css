@@ -1,0 +1,3 @@
+/* Only business column geometry; appearance is owned by registry-components.css. */
+.contractors-table col:nth-child(2) {width:36%}
+.contractors-table col:nth-child(3) {width:30%}

@@ -1,5 +1,11 @@
 <?php
 require_once base_path('app/View/components/view_formatters.php');
+$registryHeadTitle = 'Список транспорта';
+$registryHeadSummary = 'Тягачи и полуприцепы · Транспортные средства перевозчиков';
+$registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17h18l-2-7H5l-2 7Z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M4 10V7h9v3"/></svg>';
+$vehicleRegistryAvailable = $company !== null && ($company['status'] ?? '') === 'active' && !isset($dbError);
+$registryHeadActionsHtml = $vehicleRegistryAvailable ? '<button type="button" class="btn btn-primary" onclick="openModal(\'vehicle-set-create-modal\')">Добавить новый транспорт</button>' : '';
+require base_path('app/View/partials/registry_ui_head.php');
 ?>
 <?php if ($company === null): ?>
 
@@ -9,41 +15,17 @@ require_once base_path('app/View/components/view_formatters.php');
 
 <?php elseif (($company['status'] ?? '') !== 'active'): ?>
 
-<div class="page-head">
-    <div class="page-head-left">
-        <h1 class="page-title">Список транспорта</h1>
-        <div class="page-summary"><span>Тягачи и полуприцепы · Транспортные средства перевозчиков</span></div>
-    </div>
-</div>
-
 <div class="notice warn">
     Компания находится в статусе «<?= e($company['status']) ?>». Работа с транспортом недоступна.
 </div>
 
 <?php elseif (isset($dbError)): ?>
 
-<div class="page-head">
-    <div class="page-head-left">
-        <h1 class="page-title">Список транспорта</h1>
-        <div class="page-summary"><span>Тягачи и полуприцепы · Транспортные средства перевозчиков</span></div>
-    </div>
-</div>
-
 <div class="notice warn">
     <?= e($dbError) ?>
 </div>
 
 <?php elseif (empty($vehicleSets)): ?>
-
-<div class="page-head">
-    <div class="page-head-left">
-        <h1 class="page-title">Список транспорта</h1>
-        <div class="page-summary"><span>Тягачи и полуприцепы · Транспортные средства перевозчиков</span></div>
-    </div>
-    <div class="page-head-actions">
-        <button type="button" class="btn btn-primary" onclick="openModal('vehicle-set-create-modal')">Добавить новый транспорт</button>
-    </div>
-</div>
 
 <div class="panel">
     <div class="panel-body">
@@ -63,35 +45,26 @@ function vehicle_table_num($value): string {
 }
 ?>
 
-<div class="page-head">
-    <div class="page-head-left">
-        <h1 class="page-title">Список транспорта</h1>
-        <div class="page-summary"><span>Тягачи и полуприцепы · Транспортные средства перевозчиков</span></div>
-    </div>
-    <div class="page-head-actions">
-        <button type="button" class="btn btn-primary" onclick="openModal('vehicle-set-create-modal')">Добавить новый транспорт</button>
-    </div>
-</div>
-
-<div class="table-card table-card--standard" data-erp-grid data-vehicle-sets-grid>
-    <div class="table-toolbar">
-        <div class="found-label">Найдено: <b><?= count($vehicleSets) ?></b> транспорта</div>
+<?php require base_path('app/View/partials/registry_ui_state_scope.php'); ?>
+<div class="table-card table-card--standard registry-ui-card registry-ui-sticky-table registry-ui-scroll" data-erp-grid data-vehicle-sets-grid data-registry-id="vehicle-sets" data-registry-state-scope="<?= e($registryUiStateScope) ?>">
+    <div class="table-toolbar registry-ui-toolbar">
+        <div class="found-label">Найдено: <b><?= count($vehicleSets) ?></b></div>
         <div class="toolbar-right">
             <div class="toolbar-sort">
-                <span class="toolbar-sort-label">Сортировка по:</span>
-                <select class="toolbar-select" data-erp-grid-sort>
+                <select class="toolbar-select" data-erp-grid-sort data-table-reference-select="vehicle-sets" data-registry-field="sort" data-registry-default="date" aria-label="Сортировка транспорта">
                     <option value="date" selected>По дате добавления</option>
                     <option value="alpha">По алфавиту</option>
                 </select>
             </div>
-            <input type="text" class="toolbar-search" placeholder="Поиск по таблице">
+            <div class="registry-ui-search-group"><input type="search" class="toolbar-search registry-ui-search" placeholder="Поиск по таблице" aria-label="Поиск транспорта" autocomplete="off" data-registry-field="query" data-registry-default=""><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div>
         </div>
     </div>
     <div class="table-scroll">
-        <table class="table company-vehicle-sets-table">
+        <table class="table company-vehicle-sets-table registry-ui-table registry-ui-data registry-ui-data--wide">
+            <colgroup><col class="registry-ui-id"><col class="col-type"><col class="col-main-unit"><col class="col-volume"><col class="col-capacity"><col class="col-check"><col class="col-check"><col class="col-check"><col class="col-secondary-unit"><col class="col-volume"><col class="col-capacity"><col class="col-check"><col class="col-check"><col class="col-check"></colgroup>
             <thead>
                 <tr>
-                    <th class="col-id">ID</th>
+                    <th class="registry-ui-id">ID</th>
                     <th class="col-type">ТИП</th>
                     <th class="col-main-unit">ОСНОВНОЕ ТС</th>
                     <th class="col-volume">ОБЪЕМ (м3.)</th>
@@ -111,6 +84,9 @@ function vehicle_table_num($value): string {
                 <?php foreach ($vehicleSets as $vs):
                     $setLabel = ui_set_type($vs['set_type'] ?? null);
                     $hasSecondary = !empty($vs['secondary_vehicle_unit_id']);
+                    $secondaryLabel = '—';
+                    $secVolume = '—';
+                    $secCapacity = '—';
                     // Основное ТС
                     $primaryParts = [];
                     if (!empty($vs['primary_brand'])) $primaryParts[] = trim($vs['primary_brand']);
@@ -137,72 +113,70 @@ function vehicle_table_num($value): string {
                         $hasDkSec = !empty($vs['has_diagnostic_card_doc_sec']);
                         $hasPhotoSec = !empty($vs['has_photo_sec']);
                     endif;
+                    $fullSearch = implode(' ', [(string)$vs['id'], $setLabel, $primaryLabel, $secondaryLabel, $volume, $capacity, $secVolume, $secCapacity]);
                 ?>
-                <tr data-vehicle-set-id="<?= (int)$vs['id'] ?>" data-erp-sort-date="<?= (int)$vs['id'] ?>">
-                    <td class="col-id"><?= (int)$vs['id'] ?></td>
-                    <td class="col-type"><?= e($setLabel !== '' ? $setLabel : '—') ?></td>
-                    <td class="col-main-unit"><?= e($primaryLabel) ?></td>
-                    <td class="col-volume"><?= e($volume) ?></td>
-                    <td class="col-capacity"><?= e($capacity) ?></td>
+                <tr data-vehicle-set-id="<?= (int)$vs['id'] ?>" data-erp-sort-date="<?= (int)$vs['id'] ?>" data-registry-search="<?= e($fullSearch) ?>" tabindex="0" aria-label="Транспорт <?= (int)$vs['id'] ?>. Enter или двойное нажатие открывает карточку">
+                    <td class="registry-ui-id"><?= (int)$vs['id'] ?></td>
+                    <td class="col-type"><span class="<?= $setLabel !== '' ? 'registry-ui-primary' : 'registry-ui-missing' ?>"><?= e($setLabel !== '' ? $setLabel : '—') ?></span></td>
+                    <td class="col-main-unit"><span class="cell-main <?= $primaryLabel !== '—' ? 'registry-ui-name' : 'registry-ui-missing' ?>" title="<?= e($primaryLabel) ?>"><?= e($primaryLabel) ?></span></td>
+                    <td class="col-volume"><span class="<?= $volume !== '—' ? 'registry-ui-secondary' : 'registry-ui-missing' ?>"><?= e($volume) ?></span></td>
+                    <td class="col-capacity"><span class="<?= $capacity !== '—' ? 'registry-ui-secondary' : 'registry-ui-missing' ?>"><?= e($capacity) ?></span></td>
                     <td class="col-check">
                         <?php if ($hasSts): ?>
-                        <span class="table-check table-check--yes" title="СТС загружен">✓</span>
+                        <span class="table-check table-check--yes registry-ui-status registry-ui-success" title="СТС загружен">Есть</span>
                         <?php else: ?>
-                        <span class="table-check table-check--no" title="СТС не загружен">×</span>
+                        <span class="table-check table-check--no registry-ui-status registry-ui-error" title="СТС не загружен">НЕТ</span>
                         <?php endif; ?>
                     </td>
                     <td class="col-check">
                         <?php if ($hasDk): ?>
-                        <span class="table-check table-check--yes" title="Диагностическая карта">✓</span>
+                        <span class="table-check table-check--yes registry-ui-status registry-ui-success" title="Диагностическая карта">Есть</span>
                         <?php else: ?>
-                        <span class="table-check table-check--no" title="Диагностическая карта не загружена">×</span>
+                        <span class="table-check table-check--no registry-ui-status registry-ui-error" title="Диагностическая карта не загружена">НЕТ</span>
                         <?php endif; ?>
                     </td>
                     <td class="col-check">
                         <?php if ($hasPhoto): ?>
-                        <span class="table-check table-check--yes" title="Фото загружено">✓</span>
+                        <span class="table-check table-check--yes registry-ui-status registry-ui-success" title="Фото загружено">Есть</span>
                         <?php else: ?>
-                        <span class="table-check table-check--no" title="Фото не загружено">×</span>
+                        <span class="table-check table-check--no registry-ui-status registry-ui-error" title="Фото не загружено">НЕТ</span>
                         <?php endif; ?>
                     </td>
                     <!-- Дополнительное ТС -->
-                    <td class="col-secondary-unit"><?= $hasSecondary ? e($secondaryLabel) : '—' ?></td>
-                    <td class="col-volume"><?= $hasSecondary ? e($secVolume) : '—' ?></td>
-                    <td class="col-capacity"><?= $hasSecondary ? e($secCapacity) : '—' ?></td>
+                    <td class="col-secondary-unit"><span class="<?= $hasSecondary && $secondaryLabel !== '—' ? 'registry-ui-name' : 'registry-ui-missing' ?>" title="<?= $hasSecondary ? e($secondaryLabel) : '' ?>"><?= $hasSecondary ? e($secondaryLabel) : '—' ?></span></td>
+                    <td class="col-volume"><span class="<?= $hasSecondary && $secVolume !== '—' ? 'registry-ui-secondary' : 'registry-ui-missing' ?>"><?= $hasSecondary ? e($secVolume) : '—' ?></span></td>
+                    <td class="col-capacity"><span class="<?= $hasSecondary && $secCapacity !== '—' ? 'registry-ui-secondary' : 'registry-ui-missing' ?>"><?= $hasSecondary ? e($secCapacity) : '—' ?></span></td>
                     <td class="col-check">
                         <?php if (!$hasSecondary): ?>
-                        —
+                        <span class="registry-ui-missing">—</span>
                         <?php elseif ($hasStsSec): ?>
-                        <span class="table-check table-check--yes" title="СТС загружен">✓</span>
+                        <span class="table-check table-check--yes registry-ui-status registry-ui-success" title="СТС загружен">Есть</span>
                         <?php else: ?>
-                        <span class="table-check table-check--no" title="СТС не загружен">×</span>
+                        <span class="table-check table-check--no registry-ui-status registry-ui-error" title="СТС не загружен">НЕТ</span>
                         <?php endif; ?>
                     </td>
                     <td class="col-check">
                         <?php if (!$hasSecondary): ?>
-                        —
+                        <span class="registry-ui-missing">—</span>
                         <?php elseif ($hasDkSec): ?>
-                        <span class="table-check table-check--yes" title="Диагностическая карта">✓</span>
+                        <span class="table-check table-check--yes registry-ui-status registry-ui-success" title="Диагностическая карта">Есть</span>
                         <?php else: ?>
-                        <span class="table-check table-check--no" title="Диагностическая карта не загружена">×</span>
+                        <span class="table-check table-check--no registry-ui-status registry-ui-error" title="Диагностическая карта не загружена">НЕТ</span>
                         <?php endif; ?>
                     </td>
                     <td class="col-check">
                         <?php if (!$hasSecondary): ?>
-                        —
+                        <span class="registry-ui-missing">—</span>
                         <?php elseif ($hasPhotoSec): ?>
-                        <span class="table-check table-check--yes" title="Фото загружено">✓</span>
+                        <span class="table-check table-check--yes registry-ui-status registry-ui-success" title="Фото загружено">Есть</span>
                         <?php else: ?>
-                        <span class="table-check table-check--no" title="Фото не загружено">×</span>
+                        <span class="table-check table-check--no registry-ui-status registry-ui-error" title="Фото не загружено">НЕТ</span>
                         <?php endif; ?>
                     </td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
-    </div>
-    <div class="table-footer">
-        <span class="footer-label">Показано <b class="footer-range">1–<?= count($vehicleSets) ?></b> из <b class="footer-total"><?= count($vehicleSets) ?></b></span>
     </div>
 </div>
 

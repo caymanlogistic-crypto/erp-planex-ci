@@ -261,6 +261,44 @@
         "missing"
       ],
       "adaptation_status": "current_20261018"
+    },
+    {
+      "id": "contractors",
+      "adaptation_status": "current_20261018",
+      "reference_select": true,
+      "data_roles": [
+        "primary",
+        "name",
+        "secondary",
+        "id",
+        "missing",
+        "status"
+      ],
+      "sticky": true,
+      "asset_owner": "app/Http/Controllers/Company/ContractorActions/index.php",
+      "browser_test": "tests/company_registry_canon_browser_test.mjs",
+      "route": "/erpv2/company/contractors",
+      "view": "app/View/pages/company_contractors.php",
+      "family": "registry"
+    },
+    {
+      "id": "vehicle-sets",
+      "adaptation_status": "current_20261018",
+      "reference_select": true,
+      "data_roles": [
+        "primary",
+        "name",
+        "secondary",
+        "id",
+        "missing",
+        "status"
+      ],
+      "sticky": true,
+      "asset_owner": "app/Http/Controllers/Company/VehicleSetActions/index.php",
+      "browser_test": "tests/company_registry_canon_browser_test.mjs",
+      "route": "/erpv2/company/vehicle-sets",
+      "view": "app/View/pages/company_vehicle_sets.php",
+      "family": "registry"
     }
   ],
   "decisions": "docs/ui/decisions-20261018.json"

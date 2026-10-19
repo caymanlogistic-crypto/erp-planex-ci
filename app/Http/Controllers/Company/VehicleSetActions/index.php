@@ -1,6 +1,10 @@
 <?php
 /** @var VehicleSetService $service */
 $pageTitle='Транспорт';$pageContext='Транспорт › Компания';
+$pageStylesheets[]='/assets/css/registry-components.css';
+$pageStylesheets[]='/assets/css/vehicle-sets-registry.css';
+$pageScripts[]='/assets/js/table-reference-select.js';
+$pageScripts[]='/assets/js/registry-components.js';
 $companyId=$service->getCompanyId();
 if($companyId<=0){$company=null;$vehicleSets=[];$dbError=null;ob_start();require base_path('app/View/pages/company_vehicle_sets.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}
 try{$company=$service->loadCompany($companyId);if(!$company){$company=null;$vehicleSets=[];$dbError=null;ob_start();require base_path('app/View/pages/company_vehicle_sets.php');$content=ob_get_clean();require base_path('app/View/layouts/main.php');return;}

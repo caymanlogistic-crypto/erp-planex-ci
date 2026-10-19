@@ -1,153 +1,79 @@
+<?php
+require_once base_path('app/View/components/view_formatters.php');
+$registryHeadTitle = 'Список перевозчиков';
+$registryHeadSummary = 'Компании-перевозчики и ИП · Управление договорами и документами';
+$registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17h18l-2-7H5l-2 7Z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M7 10V6h10v4"/></svg>';
+$contractorRegistryAvailable = $company !== null && ($company['status'] ?? '') === 'active' && !isset($dbError);
+$registryHeadActionsHtml = $contractorRegistryAvailable
+    ? '<a href="' . e(app_url('/company/contractors/create-full')) . '" class="btn btn-secondary">Создать перевозчика + Водителя + Транспорт</a><button type="button" class="btn btn-primary" onclick="openModal(\'le-contractor-modal\')">Создать перевозчика</button>'
+    : '';
+require base_path('app/View/partials/registry_ui_head.php');
+?>
 <?php if ($company === null): ?>
-
-<div class="notice warn">
-    Компания не найдена. Укажите корректный company_id.
-</div>
-
+<div class="notice warn">Компания не найдена. Укажите корректный company_id.</div>
 <?php elseif ($company['status'] !== 'active'): ?>
-
-<div class="page-head">
-    <div class="page-head-left">
-        <h1 class="page-title">Список перевозчиков</h1>
-        <div class="page-summary"><span>Компании-перевозчики и ИП · Управление договорами и документами</span></div>
-    </div>
-</div>
-
-<div class="notice warn">
-    Компания находится в статусе «<?= e($company['status']) ?>». Создание перевозчиков недоступно.
-</div>
-
+<div class="notice warn">Компания находится в статусе «<?= e($company['status']) ?>». Создание перевозчиков недоступно.</div>
 <?php elseif (isset($dbError)): ?>
-
-<div class="page-head">
-    <div class="page-head-left">
-        <h1 class="page-title">Список перевозчиков</h1>
-        <div class="page-summary"><span>Компании-перевозчики и ИП · Управление договорами и документами</span></div>
-    </div>
-</div>
-
-<div class="notice warn">
-    <?= e($dbError) ?>
-</div>
-
+<div class="notice warn"><?= e($dbError) ?></div>
 <?php elseif (empty($contractors)): ?>
-<?php $isLogist = ($_SESSION['role_code'] ?? '') === 'logist'; ?>
-
-<div class="page-head">
-    <div class="page-head-left">
-        <h1 class="page-title">Список перевозчиков</h1>
-        <div class="page-summary"><span>Компании-перевозчики и ИП · Управление договорами и документами</span></div>
-    </div>
-    <div class="page-head-actions">
-        <button type="button" class="btn btn-primary" onclick="openModal('le-contractor-modal')">Создать перевозчика</button>
-    </div>
-</div>
-
-<div class="panel">
-    <div class="panel-body">
-        <div class="empty-state">
-            <p class="empty-title">Нет доступных перевозчиков</p>
-            <p class="empty-desc">У вас пока нет созданных перевозчиков, либо руководитель ещё не выдал вам доступ к существующим.</p>
-        </div>
-    </div>
-</div>
-
+<div class="panel"><div class="panel-body"><div class="empty-state">
+    <p class="empty-title">Нет доступных перевозчиков</p>
+    <p class="empty-desc">У вас пока нет созданных перевозчиков, либо руководитель ещё не выдал вам доступ к существующим.</p>
+</div></div></div>
 <?php else: ?>
-<?php $isLogist = ($_SESSION['role_code'] ?? '') === 'logist'; ?>
-
-<div class="page-head">
-    <div class="page-head-left">
-        <h1 class="page-title">Список перевозчиков</h1>
-        <div class="page-summary"><span>Компании-перевозчики и ИП · Управление договорами и документами</span></div>
-    </div>
-    <div class="page-head-actions">
-        <button type="button" class="btn btn-primary" onclick="openModal('le-contractor-modal')">Создать перевозчика</button>
-        <a href="<?= app_url('/company/contractors/create-full') ?>" class="btn btn-primary">Создать перевозчика + Водителя + Транспорт</a>
-    </div>
-</div>
-
-<div class="table-card table-card--standard" data-erp-grid>
-    <div class="table-toolbar">
-        <div class="found-label">Найдено: <b><?= count($contractors) ?></b> перевозчиков</div>
+<?php require base_path('app/View/partials/registry_ui_state_scope.php'); ?>
+<div class="table-card table-card--standard registry-ui-card registry-ui-sticky-table registry-ui-scroll" data-erp-grid data-registry-id="contractors" data-registry-state-scope="<?= e($registryUiStateScope) ?>">
+    <div class="table-toolbar registry-ui-toolbar">
+        <div class="found-label">Найдено: <b><?= count($contractors) ?></b></div>
         <div class="toolbar-right">
-            <div class="toolbar-sort">
-                <span class="toolbar-sort-label">Сортировка по:</span>
-                <select class="toolbar-select" data-erp-grid-sort>
-                    <option value="date" selected>По дате добавления</option>
-                    <option value="alpha">По алфавиту</option>
-                </select>
-            </div>
-            <input type="text" class="toolbar-search" placeholder="Поиск по таблице">
+            <div class="toolbar-sort"><select class="toolbar-select" data-erp-grid-sort data-table-reference-select="contractors" data-registry-field="sort" data-registry-default="date" aria-label="Сортировка перевозчиков">
+                <option value="date" selected>По дате добавления</option><option value="alpha">По алфавиту</option>
+            </select></div>
+            <div class="registry-ui-search-group"><input type="search" class="toolbar-search registry-ui-search" placeholder="Поиск по таблице" aria-label="Поиск перевозчика" autocomplete="off" data-registry-field="query" data-registry-default=""><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div>
         </div>
     </div>
     <div class="table-scroll">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th>Перевозчик</th>
-                    <th>Контакт</th>
-                    <?php if (($_SESSION['role_code'] ?? '') === 'company_owner'): ?>
-                    <th>Создал</th>
-                    <?php endif; ?>
-                    <th>Статус</th>
-                </tr>
-            </thead>
+        <table class="table contractors-table registry-ui-table registry-ui-data">
+            <colgroup><col class="registry-ui-id"><col><col><?php if (($_SESSION['role_code'] ?? '') === 'company_owner'): ?><col><?php endif; ?><col></colgroup>
+            <thead><tr><th class="registry-ui-id">ID</th><th>Перевозчик</th><th>Контакт</th><?php if (($_SESSION['role_code'] ?? '') === 'company_owner'): ?><th>Создал</th><?php endif; ?><th>Статус</th></tr></thead>
             <tbody>
                 <?php foreach ($contractors as $c): ?>
-                <tr data-erp-sort-date="<?= $c['id'] ?>" data-contractor-id="<?= $c['id'] ?>">
-                    <td class="cell-double">
-                        <span class="cell-main"><?= e($c['name']) ?></span>
-                        <span class="cell-sub">ИНН <?= e($c['inn']) ?> · <?= !empty($c['contractor_type']) ? e(ui_contractor_type($c['contractor_type'])) : '—' ?></span>
-                    </td>
-                    <td class="cell-double">
-                        <span class="cell-main"><?= e($c['primary_contact_person'] ?? '') ?: '—' ?></span>
-                        <span class="cell-sub"><?= e($c['primary_contact_phone'] ?? '') ?: e($c['doc_email'] ?? '') ?: 'Контакт не указан' ?></span>
-                    </td>
-                    <?php if (($_SESSION['role_code'] ?? '') === 'company_owner'): ?>
-                    <td class="col-muted"><?= e(ui_actor($c['created_by_role'] ?? null, $c['created_by_user_id'] ?? null, $c['created_by_name'] ?? null)) ?></td>
-                    <?php endif; ?>
-                    <td>
-                        <span class="badge<?= $c['status'] === 'active' ? ' badge-ok' : '' ?>">
-                            <span class="dot"></span>
-                            <?= $c['status'] === 'active' ? 'Активен' : 'Неактивен' ?>
-                        </span>
-                    </td>
+                <?php
+                    $contactName = (string)($c['primary_contact_person'] ?? '');
+                    $contactDetail = (string)(($c['primary_contact_phone'] ?? '') ?: ($c['doc_email'] ?? ''));
+                    $creator = ui_actor($c['created_by_role'] ?? null, $c['created_by_user_id'] ?? null, $c['created_by_name'] ?? null);
+                    $fullSearch = implode(' ', [(string)$c['id'], $c['name'] ?? '', $c['inn'] ?? '', $c['contractor_type'] ?? '', $contactName, $contactDetail, (($_SESSION['role_code'] ?? '') === 'company_owner' ? $creator : ''), $c['status'] ?? '']);
+                ?>
+                <tr data-erp-sort-date="<?= (int)$c['id'] ?>" data-contractor-id="<?= (int)$c['id'] ?>" data-registry-search="<?= e($fullSearch) ?>" tabindex="0" aria-label="<?= e($c['name']) ?>. Enter или двойное нажатие открывает карточку">
+                    <td class="registry-ui-id"><?= (int)$c['id'] ?></td>
+                    <td><span class="cell-main registry-ui-name" title="<?= e($c['name']) ?>"><?= e($c['name']) ?></span><span class="cell-sub registry-ui-secondary">ИНН <?= e($c['inn']) ?> · <?= !empty($c['contractor_type']) ? e(ui_contractor_type($c['contractor_type'])) : '—' ?></span></td>
+                    <td><span class="cell-main <?= $contactName !== '' ? 'registry-ui-primary' : 'registry-ui-missing' ?>"><?= e($contactName ?: '—') ?></span><span class="cell-sub registry-ui-secondary"><?= e($contactDetail ?: 'Контакт не указан') ?></span></td>
+                    <?php if (($_SESSION['role_code'] ?? '') === 'company_owner'): ?><td><span class="registry-ui-secondary"><?= e($creator) ?></span></td><?php endif; ?>
+                    <td><span class="registry-ui-status" data-status="<?= e($c['status']) ?>"><?= $c['status'] === 'active' ? 'Активен' : 'Неактивен' ?></span></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>
         </table>
     </div>
-    <div class="table-footer">
-        <span class="footer-label">Показано <b class="footer-range">1–<?= count($contractors) ?></b> из <b class="footer-total"><?= count($contractors) ?></b></span>
-    </div>
 </div>
-
 <?php endif; ?>
 
+<?php if ($contractorRegistryAvailable): ?>
 <div class="modal-overlay driver-view-overlay" id="le-contractor-modal" data-close-on-overlay="0" data-close-on-escape="0">
   <div class="modal modal-lg driver-view-modal-inner">
     <div class="modal-head">
       <span class="modal-title">Создать перевозчика</span>
       <button type="button" class="modal-close" onclick="closeModal('le-contractor-modal')">&times;</button>
     </div>
-    <div class="modal-body" id="le-contractor-modal-body">
-      <div class="driver-modal-loading">Загрузка...</div>
-    </div>
+    <div class="modal-body" id="le-contractor-modal-body"><div class="driver-modal-loading">Загрузка...</div></div>
   </div>
 </div>
 <script>
 (function initContractorLegalEntityModal() {
     window.ERP_BASE_PATH = '<?= app_base_path() ?>';
     var config = { modalId: 'le-contractor-modal', formAction: '<?= app_url('/company/contractors/create') ?>', typeField: 'contractor_type' };
-    if (window.LegalEntityModal && typeof window.LegalEntityModal.init === 'function') {
-        window.LegalEntityModal.init(config);
-        return;
-    }
-
-    window.addEventListener('load', function () {
-        if (window.LegalEntityModal && typeof window.LegalEntityModal.init === 'function') {
-            window.LegalEntityModal.init(config);
-        }
-    }, { once: true });
+    if (window.LegalEntityModal && typeof window.LegalEntityModal.init === 'function') { window.LegalEntityModal.init(config); return; }
+    window.addEventListener('load', function () { if (window.LegalEntityModal && typeof window.LegalEntityModal.init === 'function') window.LegalEntityModal.init(config); }, { once: true });
 })();
 </script>
+<?php endif; ?>
