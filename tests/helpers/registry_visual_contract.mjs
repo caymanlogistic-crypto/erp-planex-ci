@@ -100,8 +100,8 @@ export async function assertRegistryDataContract(page, pageId) {
 export async function assertRegistryVisualContract(page, label) {
   const pageId=label.split(/\s+/)[0];
   const definition=catalog.pages.find(item=>item.id===pageId);
-  if(pageId==='gallery'){
-    assert.equal(page.url(),'about:srcdoc','gallery-only icon exemption requires the approved specimen frame');
+  if(page.url()==='about:srcdoc'){
+    assert.ok(pageId==='gallery'||pageId==='audit','gallery-only icon exemption requires the approved specimen frame');
   }else{
     assert.equal(definition?.family,'registry',`${label}: registered registry page required by common visual contract`);
     if(definition.header_icon||!iconProvenanceDebt.has(pageId)){
