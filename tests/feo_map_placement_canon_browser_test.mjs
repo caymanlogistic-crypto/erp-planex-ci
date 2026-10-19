@@ -83,6 +83,15 @@ try{
     await page.getByText('Найдено по 2 заявкам.',{exact:false}).waitFor();
     await assertRegistryDataContract(page,'feo-map-placement',{state:'search-results'});
     const searchTable=page.locator('[data-placement-block-search-results] .feo-placement-search-table');
+    if(width===390){
+      const body=searchTable.locator('tbody'),saved=await body.innerHTML();
+      await body.evaluate(element=>element.replaceChildren());
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-results'),/block-search-results: expected populated business rows/,'main rows cannot cover an empty secondary result fixture');
+      await body.evaluate((element,html)=>element.innerHTML=html,saved);
+      await assertRegistryTableState(page,'feo-map-placement','search-results');
+      console.log('REGISTRY_SURFACE_NEGATIVE=feo-map-placement:missing-secondary-data');
+    }
+
     assert.ok(await searchTable.isVisible(),'second business table is visible after search');
     const searchGeometry=await searchTable.evaluate(table=>({idWidth:table.tBodies[0].rows[0].cells[0].getBoundingClientRect().width,
       idRole:table.tBodies[0].rows[0].cells[0].classList.contains('registry-ui-id'),
@@ -149,7 +158,7 @@ try{
     assert.equal(await page.locator('.registry-ui-head').count(),1,`${state}: canonical header`);
     assert.equal(await page.locator('.feo-placement-table tbody tr[data-placement-block-id]').count(),0,`${state}: no phantom data`);
     assert.equal(await page.locator('.registry-ui-card').count(),state==='empty'?1:0,`${state}: correct card state`);
-    await assertRegistryTableState(page,'feo-map-placement',state==='error'?'page-error':'initial');
+    await assertRegistryTableState(page,'feo-map-placement',state==='error'?'page-error':'initial',state==='empty'?{fixture:'empty'}:{});
     await page.close();
   }
   if(evidence)writeFileSync(path.join(evidence,'measurements.json'),JSON.stringify(measurements,null,2));

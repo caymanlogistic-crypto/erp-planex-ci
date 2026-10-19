@@ -8,11 +8,13 @@ const firstFamily=value=>value.split(',')[0].trim().replace(/^["']|["']$/g,'');
 
 // Discover business tables from the registered card, before looking for any
 // approved class. An unmarked JS-created table must be visible to this gate.
-export async function assertRegistryTableState(page,pageId,state='initial',{runtime=false}={}) {
+export async function assertRegistryTableState(page,pageId,state='initial',{runtime=false,fixture=null}={}) {
   const definition=catalog.pages.find(item=>item.id===pageId);
   assert.ok(definition?.table_surfaces?.length,`${pageId}: explicit business-table inventory required`);
   const declared=definition.table_states?.find(item=>item.id===state);
   assert.ok(declared,`${pageId}: undeclared table state ${state}`);
+  assert.ok(fixture===null||(fixture==='empty'&&declared.empty_fixture===true),`${pageId}/${state}: undeclared empty fixture`);
+  assert.deepEqual(Object.keys(declared.data||{}).sort(),[...declared.visible].sort(),`${pageId}/${state}: per-surface data expectations required`);
   const observed=await page.evaluate(surfaces=>{
     const visible=element=>{
       const rect=element.getBoundingClientRect(),css=getComputedStyle(element);
@@ -21,9 +23,10 @@ export async function assertRegistryTableState(page,pageId,state='initial',{runt
     const tables=[...document.querySelectorAll('.registry-ui-card table')].filter(visible);
     return tables.map(table=>{
       const owners=surfaces.filter(surface=>table.matches(surface.selector)).map(surface=>surface.id);
+      const surface=surfaces.find(surface=>table.matches(surface.selector));
       const header=table.tHead?.rows[0]?.cells[0];
       return {owners,classes:table.className,headerBackground:header?getComputedStyle(header).backgroundColor:null,
-        rows:[...table.tBodies].flatMap(body=>[...body.rows]).filter(visible).length,
+        rows:[...table.querySelectorAll(surface?.row_selector||':not(*)')].filter(row=>visible(row)&&row.textContent.trim()).length,
         selector:table.outerHTML.slice(0,180)};
     });
   },definition.table_surfaces);
@@ -35,12 +38,17 @@ export async function assertRegistryTableState(page,pageId,state='initial',{runt
     assert.equal(table.headerBackground,approvedHeader,`${pageId}/${state}: visible business table header differs from approved canon`);
   }
   assert.deepEqual(observed.map(table=>table.owners[0]).sort(),[...declared.visible].sort(),`${pageId}/${state}: declared business-table surfaces differ from actual visible DOM`);
+  for(const table of observed){
+    const expected=fixture==='empty'?'empty':declared.data[table.owners[0]];
+    assert.ok(['populated','empty'].includes(expected),`${pageId}/${state}: explicit data expectation required`);
+    assert.ok(expected==='populated'?table.rows>0:table.rows===0,`${pageId}/${state}/${table.owners[0]}: expected ${expected} business rows, observed ${table.rows}`);
+  }
   await assertRegistryDataRoles(page,[],`${pageId}/${state}`);
   await assertRegistryDataCoverage(page,`${pageId}/${state}`);
   await assertRegistryColumnGeometry(page,`${pageId}/${state}`);
   await assertRegistryContainment(page,`${pageId}/${state}`);
   const width=page.viewportSize().width;
-  console.log(`${runtime?'REGISTRY_RUNTIME_SURFACE':'REGISTRY_SURFACE_STATE'}=${pageId}:${state}:${width}`);
+  console.log(`${fixture==='empty'?'REGISTRY_EMPTY_FIXTURE_SURFACE':runtime?'REGISTRY_RUNTIME_SURFACE':'REGISTRY_SURFACE_STATE'}=${pageId}:${state}:${width}`);
   return observed;
 }
 

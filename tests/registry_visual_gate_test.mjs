@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdtempSync,mkdirSync,writeFileSync,rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
-import {verifyVisualCoverage,verifySurfaceCoverage,verifyAsyncCoverage,runRequiredContracts} from '../tools/registry_visual_gate.mjs';
+import {verifyVisualCoverage,verifySurfaceCoverage,verifyAsyncCoverage,runRequiredContracts,verifyEmptyFixtureCoverage} from '../tools/registry_visual_gate.mjs';
 
 const output='REGISTRY_VISUAL_PAGE=contractors\nREGISTRY_VISUAL_PAGE=vehicle-sets\n';
 verifyVisualCoverage(output,['contractors','vehicle-sets']);
@@ -33,3 +33,10 @@ try{
  writeFileSync(path.join(directory,'tests/probe_test.php'),'<?php echo "REQUIRED_PHP_EXECUTED=PASS\\n";');
  runRequiredContracts(required,{directory});
 }finally{rmSync(directory,{recursive:true,force:true});}
+
+const emptyPages=[{id:'fixture-page',table_states:[{id:'initial',empty_fixture:true}]}];
+const emptyOutput=widths.map(width=>`REGISTRY_EMPTY_FIXTURE_SURFACE=fixture-page:initial:${width}\n`).join('');
+verifyEmptyFixtureCoverage(emptyOutput,emptyPages);
+assert.throws(()=>verifyEmptyFixtureCoverage('',emptyPages),/every declared registry/);
+assert.throws(()=>verifyEmptyFixtureCoverage(emptyOutput.replace('REGISTRY_EMPTY_FIXTURE_SURFACE=fixture-page:initial:390\n',''),emptyPages),/every declared registry/);
+assert.throws(()=>verifySurfaceCoverage(emptyOutput,emptyPages),/every declared registry/,'supplementary empty fixture cannot certify populated initial');

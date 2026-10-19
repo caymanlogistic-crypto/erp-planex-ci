@@ -15,6 +15,12 @@ export function verifyVisualCoverage(stdout,expected){
 
 export function verifySurfaceCoverage(stdout,pages){
  verifyMatrix(stdout,pages,'REGISTRY_SURFACE_STATE');
+ verifyEmptyFixtureCoverage(stdout,pages);
+}
+
+export function verifyEmptyFixtureCoverage(stdout,pages){
+ const variants=pages.flatMap(page=>page.table_states.filter(state=>state.empty_fixture).map(state=>({id:page.id,table_states:[state]})));
+ verifyMatrix(stdout,variants,'REGISTRY_EMPTY_FIXTURE_SURFACE');
 }
 
 export function verifyAsyncCoverage(stdout,pages){

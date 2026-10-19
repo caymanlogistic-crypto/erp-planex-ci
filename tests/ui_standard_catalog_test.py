@@ -143,3 +143,12 @@ assert ci_scope.classify(['app/Service/FeoPlacementService.php'])['approved_ui']
 missing_contract=copy.deepcopy(catalog)
 next(page for page in missing_contract['pages'] if page['id']=='feo-map-placement')['required_contracts']=[]
 assert any('required FEO PHP contract missing' in error for error in ui_standard.validate(missing_contract))
+
+missing_data=copy.deepcopy(catalog)
+next(page for page in missing_data['pages'] if page['id']=='feo-map-placement')['table_states'][0].pop('data')
+assert any('per-surface data expectations required' in error for error in ui_standard.validate(missing_data))
+
+empty_only=copy.deepcopy(catalog)
+for state in next(page for page in empty_only['pages'] if page['id']=='feo-map-placement')['table_states']:
+    if 'block-search-results' in state['data']:state['data']['block-search-results']='empty'
+assert any('populated fixture coverage' in error for error in ui_standard.validate(empty_only))
