@@ -121,8 +121,8 @@ with tempfile.TemporaryDirectory(prefix="planex-design-lab-contract-") as tempor
     assert 'SESSION_ALREADY_EXISTS' in run('import-reference',*imported_common,'--source-task-id',task_id,'--worktree',str(ROOT),'--version','v001','--owner-instruction','x','--decision-source','x',ok=False).stderr
     # A new designer can continue a shown checkpoint without implementation
     # authorization. Copy the immutable version, never later workspace edits.
-    def preview(destination_id: str, version: str = 'v001', ok: bool = True):
-        return run('fork-preview', '--task-id', destination_id, '--source-task-id', task_id,
+    def preview(destination_id: str, version: str = 'v001', ok: bool = True, source_task_id: str = task_id):
+        return run('fork-preview', '--task-id', destination_id, '--source-task-id', source_task_id,
                    '--local-root', str(local_root), '--worktree', str(ROOT), '--version', version, ok=ok)
 
     source_before = {p.relative_to(session).as_posix(): design_lab.sha256(p.read_bytes())
@@ -146,6 +146,18 @@ with tempfile.TemporaryDirectory(prefix="planex-design-lab-contract-") as tempor
     assert not (local_root/'design-lab/missing-checkpoint').exists()
     assert 'INVALID_TASK_ID' in preview('../escape', ok=False).stderr
     assert not (local_root/'escape').exists()
+    # Historical designer handoffs usually resume a later version (v005, v017),
+    # not v001. The next number must follow that version, never count directories.
+    for number in range(2, 6):
+        result = run('checkpoint', '--task-id', 'discussion-copy', '--local-root', str(local_root))
+        assert f'DESIGN_LAB_CHECKPOINT=v{number:03d}' in result.stdout
+    later_checkpoint = (discussion/'versions/v005/checkpoint.json').read_bytes()
+    preview('late-discussion-copy', 'v005', source_task_id='discussion-copy')
+    late_common = ('--task-id', 'late-discussion-copy', '--local-root', str(local_root))
+    assert 'DESIGN_LAB_CHECKPOINT=v006' in run('checkpoint', *late_common).stdout
+    assert 'DESIGN_LAB_CHECKPOINT=v007' in run('checkpoint', *late_common).stdout
+    assert (discussion/'versions/v005/checkpoint.json').read_bytes() == later_checkpoint
+    assert not (local_root/'design-lab/late-discussion-copy/acceptance.json').exists()
     frozen = next(p for p in (session/'ui-assets').rglob('*') if p.is_file())
     frozen_original = frozen.read_bytes()
     try:

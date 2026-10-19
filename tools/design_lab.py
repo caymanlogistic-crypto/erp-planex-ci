@@ -396,7 +396,9 @@ def checkpoint(args: argparse.Namespace) -> None:
     root, manifest = load_session(args)
     with mutation_lock(root):
         versions = sorted(path.name for path in (root / "versions").iterdir() if path.is_dir() and VERSION.fullmatch(path.name))
-        version = f"v{len(versions) + 1:03d}"
+        next_number = max((int(name[1:]) for name in versions), default=0) + 1
+        require(next_number <= 999, "VERSION_LIMIT_REACHED")
+        version = f"v{next_number:03d}"
         destination = root / "versions" / version
         destination.mkdir()
         hashes: dict[str, str] = {}
