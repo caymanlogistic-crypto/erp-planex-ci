@@ -516,7 +516,7 @@ function renderBlockSearch(data){
     }
   });
   const duplicateNote=Array.isArray(data.duplicates)&&data.duplicates.length?` Повторы во вводе удалены: ${esc(data.duplicates.join(', '))}.`:'';
-  blockSearchResults.innerHTML=`<div class="feo-placement-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной клик по строке откроет блок.</div><div class="table-scroll" role="region" aria-label="Результаты поиска по блокам"><table class="table registry-ui-table registry-ui-data feo-placement-search-table"><colgroup><col class="registry-ui-id"><col class="feo-placement-search-col--date"><col><col class="feo-placement-search-col--type"></colgroup><thead><tr><th class="registry-ui-id" scope="col" aria-label="Заявка">ID</th><th>ДАТА ОПЕРАЦИИ</th><th>БЛОК</th><th>ТИП</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  blockSearchResults.innerHTML=`<div class="feo-placement-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной клик по строке откроет блок.</div><div class="table-scroll registry-ui-nested-table-scroll" role="region" aria-label="Результаты поиска по блокам"><table class="table registry-ui-table registry-ui-data feo-placement-search-table"><colgroup><col class="registry-ui-id"><col class="feo-placement-search-col--date"><col><col class="feo-placement-search-col--type"></colgroup><thead><tr><th class="registry-ui-id" scope="col" aria-label="Заявка">ID</th><th>ДАТА ОПЕРАЦИИ</th><th>БЛОК</th><th>ТИП</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
   blockSearchResults.classList.remove('is-hidden');
   qa('[data-placement-search-block-id]',blockSearchResults).forEach(row=>row.addEventListener('dblclick',()=>openBlock(row.dataset.placementSearchBlockId)));
 }

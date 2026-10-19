@@ -216,6 +216,8 @@
 .registry-ui-reset[hidden],.registry-ui-data tr[hidden] {display:none!important}
 /* One vertical owner. The X wrapper has its full content height, never a Y cap. */
 .registry-ui-scroll > :is(.table-scroll,.rp-v010-table-wrap) {height:auto!important;max-height:none!important;min-height:0;overflow:visible!important}
+.registry-ui-card .registry-ui-table-surface {min-width:0;max-width:100%}
+.registry-ui-card .registry-ui-nested-table-scroll {min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden}
 .registry-ui-scroll > [data-registry-scroll-x="true"] {overflow-x:auto!important;overflow-y:auto!important}
 .registry-ui-scroll .registry-ui-scroll-native {position:sticky!important;top:calc(var(--registry-toolbar-height,49px) - 12px)!important;z-index:19}
 .registry-ui-scroll .registry-ui-scroll-translated {position:relative!important;top:0!important;z-index:19;will-change:transform}

@@ -148,7 +148,7 @@ col.feo-placement-col-status{width:105px}
       <div class="registry-ui-search-group"><textarea rows="1" class="toolbar-search registry-ui-search" data-placement-block-search data-registry-field="query" data-registry-default="" placeholder="Найти заявку в блоках" aria-label="Поиск заявки в блоках" autocomplete="off"></textarea><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div>
     </div>
   </div>
-  <div class="feo-placement-block-search-results is-hidden" data-placement-block-search-results></div>
+  <div class="feo-placement-block-search-results registry-ui-table-surface is-hidden" data-placement-block-search-results></div>
   <div class="table-scroll">
     <table class="table registry-ui-table registry-ui-data registry-ui-table--placement feo-placement-table">
       <colgroup><col class="registry-ui-id"><col><col class="feo-placement-col-type"><col class="feo-placement-col-count"><col class="feo-placement-col-mass"><col class="feo-placement-col-source"><col class="feo-placement-col-date"><col class="feo-placement-col-author"><col class="feo-placement-col-status"></colgroup>

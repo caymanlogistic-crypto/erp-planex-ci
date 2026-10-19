@@ -77,6 +77,12 @@ try{
       primaryRole:!!table.tBodies[0].rows[0].querySelector('.registry-ui-primary')}));
     assert.ok(Math.abs(searchGeometry.idWidth-64)<0.25,`search table ID column follows 64px canon: ${searchGeometry.idWidth}`);
     assert.ok(searchGeometry.idRole&&searchGeometry.nameRole&&searchGeometry.primaryRole,'search result cells carry approved data roles');
+    const searchOverflow=await page.evaluate(()=>{
+      const main=document.querySelector('main.content'),wrap=document.querySelector('[data-placement-block-search-results] .table-scroll');
+      return {page:document.documentElement.scrollWidth-document.documentElement.clientWidth,main:main.scrollWidth-main.clientWidth,internal:wrap.scrollWidth-wrap.clientWidth};
+    });
+    assert.ok(searchOverflow.page<=1&&searchOverflow.main<=1,`${width}: search table cannot create outer horizontal scroll ${JSON.stringify(searchOverflow)}`);
+    if(width===390)assert.ok(searchOverflow.internal>0,'mobile search table keeps its own horizontal scroll');
     if(evidence)await page.screenshot({path:path.join(evidence,`placement-${width}-search-results.png`)});
     if(width===1280){
       await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-error'),/declared business-table surfaces/,'wrong state cannot certify a visible secondary table');
