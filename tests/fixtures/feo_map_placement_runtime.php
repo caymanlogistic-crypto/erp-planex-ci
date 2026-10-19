@@ -16,9 +16,18 @@ $pdo = $db->connection();
 $command = $argv[1] ?? '';
 
 if ($command === 'seed') {
-    if ($pdo->query('SHOW TABLES')->fetchColumn() !== false) throw new RuntimeException('Fresh disposable schema required');
-    $pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
-    $pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)')->execute(['ООО «ПЛАНЭКС»','active',$schema]);
+    // The registry runtime gate executes multiple page fixtures in one wrapper-owned
+    // disposable schema, and may invoke this page twice. Preserve earlier fixtures.
+    if ($pdo->query("SHOW TABLES LIKE 'feo_placement_blocks'")->fetchColumn() !== false) {
+        $ids=$pdo->query('SELECT id FROM feo_placement_blocks ORDER BY id')->fetchAll(PDO::FETCH_COLUMN);
+        if ($ids !== [74,75] && $ids !== ['74','75']) throw new RuntimeException('Unexpected placement fixture state');
+        echo 'SEEDED';exit;
+    }
+    if ($pdo->query("SHOW TABLES LIKE 'companies'")->fetchColumn() === false) {
+        $pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
+        $pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)')->execute(['ООО «ПЛАНЭКС»','active',$schema]);
+    } elseif ((int)$pdo->query('SELECT COUNT(*) FROM companies WHERE id=7')->fetchColumn() !== 1) throw new RuntimeException('Expected disposable company fixture');
+    if ($pdo->query("SHOW TABLES LIKE 'feo_requests'")->fetchColumn() !== false) throw new RuntimeException('Unexpected FEO fixture state');
     $pdo->exec('CREATE TABLE user_accounts(id BIGINT UNSIGNED PRIMARY KEY,full_name VARCHAR(255),login VARCHAR(100))');
     $pdo->exec("INSERT INTO user_accounts VALUES(101,'Петрова Анна Сергеевна','owner')");
     $pdo->exec('CREATE TABLE feo_requests(zayavka_id VARCHAR(64) PRIMARY KEY,mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
