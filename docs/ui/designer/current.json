@@ -1,0 +1,23 @@
+{
+  "schema": "planex-designer-index/v1",
+  "role": "docs/ui/PROJECT_DESIGNER.md",
+  "baseline_handoff": "docs/ui/designer/continuation-20261019.md",
+  "scope": "Navigation for the permanent designer. Exact values and page adaptation status remain in their owning canon/catalog; this file grants no approval or release authorization.",
+  "sources": {
+    "catalog": "docs/ui/approved-components.json",
+    "gallery": "docs/ui/approved-components.html",
+    "registry_canon": "docs/ui/REGISTRY_CANON.md",
+    "registry_decisions": "docs/ui/decisions-20261018.json",
+    "icon_provenance": "docs/ui/REGISTRY_ICON_PROVENANCE.md",
+    "sandbox": "docs/DESIGN_LAB.md",
+    "implementation": "docs/ui/REGISTRY_WORKFLOW.md",
+    "notion_entry": "https://www.notion.so/3eda64edce3281789c27e9f31dfe5c66"
+  },
+  "local_continuations": "C:/plan-ex/ERP-PLANEX/local/evidence/*/designer-handoff.json",
+  "focus": null,
+  "backlog": [
+    {"id": "forms-and-dialogs", "status": "not_approved", "topic": "Формы, подтверждение удаления, загрузка и удаление файлов; показать цельный сценарий с состояниями", "authority": "docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"},
+    {"id": "action-menus", "status": "partially_approved", "topic": "Общее устройство и типографика меню действий. Согласованные цвета не утверждают всё меню", "authority": "docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"},
+    {"id": "feedback-states", "status": "not_approved", "topic": "Общее отображение ожидания, серверных ошибок и восстановления; сохранить утверждённую семантику цветов", "authority": "docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"}
+  ]
+}

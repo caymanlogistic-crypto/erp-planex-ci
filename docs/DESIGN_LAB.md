@@ -10,6 +10,18 @@ DESIGN LAB ускоряет последовательные правки вне
 
 При переносе выбранного checkpoint сравнить принятый localhost sandbox и локальную ERP на одинаковых synthetic fixtures: `node tools/ui_parity.mjs --reference-url <sandbox> --candidate-url <local ERP> --output <task evidence>`. Проверяются размеры и appearance общих ролей на 390/1280/1920/3840 px, normal/hover/focus; сохраняются снимки и JSON. Предметные формы, ошибки, статусы и действия дополнительно проверяются в browser-сценариях. Локальная параллельная стилизация не допускается: accepted-изменение переносится в общий компонент.
 
+### Продолжение обсуждения в новом чате без разрешения внедрения
+
+`fork-preview` копирует выбранный immutable checkpoint, его notes и frozen assets в новую собственную session. Исходная session остаётся неизменной. Команда **не создаёт acceptance**, сбрасывает accepted_version и не переносит разрешение на выпуск, даже если оно было в исходной session. Сохранённое решение OWNER об оформлении подтверждается отдельно по журналу/сообщению.
+
+```powershell
+. C:\plan-ex\ERP-PLANEX\local\Enter-Dev.ps1 -Worktree <own-worktree>
+& $env:PLANEX_PYTHON tools/design_lab.py fork-preview --task-id <own-task-id> --source-task-id <source-task-id> --local-root C:\plan-ex\ERP-PLANEX\local --worktree <own-worktree> --version <vNNN>
+& C:\plan-ex\ERP-PLANEX\local\Start-DesignLab.ps1 -TaskId <own-task-id>
+```
+
+Это продолжение старой frozen версии, а не доказательство её соответствия сегодняшнему ERP. Перед новой правкой проверить baseline и source drift; сохранить старую принятую версию, обнаруженные отличия согласовать адресно. Для переноса уже данного явного поручения внедрить использовать следующий `import-reference`, а не создавать новое согласование.
+
 ### Восстановление уже данного решения в собственную reference-сессию
 
 Если OWNER уже согласовал immutable версию и прямо разрешил внедрение, но историческая session не содержит `acceptance.json`, не менять чужую session и не просить повторного согласования тех же значений. Использовать проверенный импорт:
