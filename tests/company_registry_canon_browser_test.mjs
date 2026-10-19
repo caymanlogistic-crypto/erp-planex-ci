@@ -91,7 +91,7 @@ try{
    assert.equal(await page.locator('tbody tr').first().getAttribute('data-erp-sort-date'),'74');
    const create=kind==='contractors'?'Создать перевозчика':'Добавить новый транспорт',modal=kind==='contractors'?'#le-contractor-modal':'#vehicle-set-create-modal';
    await page.getByRole('button',{name:create,exact:true}).first().click();assert.ok(await page.locator(modal).isVisible(),'create action preserved');
-   await page.locator(modal+' .modal-close').click();
+   await page.locator(modal+' .modal-close').first().click();
    const endpoint=kind==='contractors'?'contractors':'vehicle-sets';
    await page.route(`**/company/${endpoint}/74/modal-view`,route=>route.fulfill({status:200,contentType:'text/html',body:'<div class="modal-body"><div class="driver-view-name">Карточка</div></div>'}));
    const requested=page.waitForRequest(`**/company/${endpoint}/74/modal-view`);
