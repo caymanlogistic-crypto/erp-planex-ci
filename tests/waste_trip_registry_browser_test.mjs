@@ -48,9 +48,9 @@ const server = http.createServer((req, res) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({ headless: true, ...(process.env.PLANEX_CHROMIUM_PATH ? { executablePath: process.env.PLANEX_CHROMIUM_PATH } : {}) });
 try {
-  for (const width of [1920, 1280, 390, 360]) {
+  for (const width of [1920, 1280, 390, 360, 3840]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
-    await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    await page.goto(`http://127.0.0.1:${server.address().port}/company/trips/departures`);
     await assertRegistryVisualContract(page, `trips-departures ${width}px`);
     await assertRegistryDataContract(page, 'trips-departures');
     const metrics = await page.evaluate(() => {

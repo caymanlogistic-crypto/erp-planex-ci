@@ -1,8 +1,10 @@
 <?php
+require_once base_path('app/View/components/registry_tabler_icons.php');
+
 require_once base_path('app/View/components/view_formatters.php');
 $registryHeadTitle = 'Список водителей';
 $registryHeadSummary = 'Реестр водителей транспортных средств · Управление доступами и документами';
-$registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="3"/><path d="M6 21v-2a6 6 0 0 1 12 0v2"/></svg>';
+$registryHeadIconHtml = registry_tabler_header_icon('user');
 $driverRegistryAvailable = $company !== null && ($company['status'] ?? '') === 'active' && !isset($dbError);
 $registryHeadActionsHtml = $driverRegistryAvailable ? '<button type="button" class="btn btn-primary" onclick="openModal(\'driver-create-modal\')">Добавить нового водителя</button>' : '';
 require base_path('app/View/partials/registry_ui_head.php');

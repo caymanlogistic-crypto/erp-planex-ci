@@ -1,4 +1,6 @@
 <?php
+require_once base_path('app/View/components/registry_tabler_icons.php');
+
 /** @var list<array<string,mixed>> $trips */
 $canCreateInvoice=$canCreateInvoice??false;
 $contractors=$contractors??[];
@@ -33,7 +35,7 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
   <?php
   $registryHeadTitle = 'Закрывающие документы';
   $registryHeadSummary = 'Рейсы и документы';
-  $registryHeadIconHtml = '<svg class="page-head-tabler-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 3h10l4 4v14H5zM15 3v4h4M8 12h8M8 16h8"/></svg>';
+  $registryHeadIconHtml = registry_tabler_header_icon('file-text');
   $registryHeadActionsHtml = $schemaReady ? '<a class="btn btn-primary" data-closing-report-download href="' . e(app_url('/company/logistics/closing-documents/summary.xlsx')) . '">Скачать Excel</a>' : '';
   $registryHeadExtraClass = 'waste-trips-page-head';
   require base_path('app/View/partials/registry_ui_head.php');

@@ -30,6 +30,14 @@ try{
   for(const key of ['executors','finance','trips','documents']){
    await page.locator(`[data-gallery-scene=${key}]`).click();
    const scene=view(key);await scene.waitFor({state:'visible'});
+   await assertRegistryVisualContract(actual,`gallery ${key} ${width}`);
+   if(width===1280){
+    const shape=scene.locator('.rp-identity-icon svg path').last(),original=await shape.getAttribute('d');
+    try{
+     await shape.evaluate(node=>node.setAttribute('d','M1 1L23 23'));
+     await assert.rejects(()=>assertRegistryVisualContract(actual,`gallery forged ${key}`),/exact named Tabler outline geometry/);
+    }finally{await shape.evaluate((node,d)=>node.setAttribute('d',d),original);}
+   }
    await actual.evaluate(()=>document.fonts.ready);
    await assertRegistryDataRoles(actual,[],`all approved data roles ${key} ${width}`);
    await assertRegistryColumnGeometry(actual,`approved column geometry ${key} ${width}`);

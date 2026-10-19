@@ -5,6 +5,7 @@ import {createRequire} from 'node:module';
 import {execFileSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryTablerIcon} from './helpers/registry_tabler_icon_contract.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -22,14 +23,21 @@ const browser=await chromium.launch({headless:true,...(process.env.PLANEX_BROWSE
 try{
  const page=await browser.newPage({viewport:{width:1280,height:900}}),errors=[];
  page.on('pageerror',error=>errors.push(error.message));
- await page.setContent(html);
- await page.addStyleTag({content:appCss+'\n'+erpCss+'\n'+css+'\n'+ledgerCss+'\n'+registryCss+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
+ await page.route('**/assets/**',route=>{const file=path.join(root,'public',new URL(route.request().url()).pathname.replace(/^\/erpv2/,'') );return route.fulfill({contentType:file.endsWith('.css')?'text/css':'font/woff2',body:fs.readFileSync(file)})});
+ await page.route('http://127.0.0.1/company/finance/received-paid',route=>route.fulfill({contentType:'text/html',body:html.replace(/<link\b[^>]*>/g,'').replace(/<script\b[^>]*src=[^>]*>[\s\S]*?<\/script>/g,'')}));
+ await page.goto('http://127.0.0.1/company/finance/received-paid');
+ await page.addStyleTag({content:appCss.replace(/@import[^;]+;/g,'')+'\n'+erpCss+'\n'+css+'\n'+ledgerCss+'\n'+registryCss+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
  await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
  await page.addScriptTag({content:js});
  await page.addScriptTag({content:referenceSelectJs});
  await page.addScriptTag({content:registryJs});
  await page.locator('[data-registry-id="finance-received-paid"][data-registry-ready="true"]').waitFor();
- await assertRegistryVisualContract(page, 'finance-received-paid 1280px');
+ for(const width of [390,1280,1920,3840]){
+  await page.setViewportSize({width,height:900});
+  await assertRegistryTablerIcon(page,'finance-received-paid');
+ }
+ await page.setViewportSize({width:1280,height:900});
+ await assertRegistryVisualContract(page,'finance-received-paid 1280px');
  await assertRegistryDataContract(page, 'finance-received-paid');
  const sharedStyles=await page.evaluate(()=>{
    const search=document.querySelector('#rp-search');

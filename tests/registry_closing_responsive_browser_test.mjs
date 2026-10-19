@@ -24,7 +24,7 @@ const server = http.createServer((request,response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({headless:true});
 try {
-  for (const width of [390, 1280, 1920]) {
+  for (const width of [390, 1280, 1920, 3840]) {
     const page = await browser.newPage({viewport:{width,height:900}});
     await page.goto(`http://127.0.0.1:${server.address().port}/company/logistics/closing-documents`);
     await assertRegistryVisualContract(page, `logistics-closing-documents ${width}px`);

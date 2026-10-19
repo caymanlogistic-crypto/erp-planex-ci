@@ -15,10 +15,11 @@ catalog = ui_standard.load()
 assert ui_standard.validate(catalog) == []
 assert ui_standard.GALLERY.read_text(encoding="utf-8") == ui_standard.render_gallery(catalog)
 
-for page_id in ['contractors','vehicle-sets']:
+for page_id in [p['id'] for p in catalog['pages'] if p['family']=='registry']:
     missing_runtime=copy.deepcopy(catalog)
-    next(page for page in missing_runtime['pages'] if page['id']==page_id).pop('runtime_browser_test')
-    assert any(f'pages/{page_id}/runtime_browser_test' in error for error in ui_standard.validate(missing_runtime))
+    next(page for page in missing_runtime['pages'] if page['id']==page_id).pop('runtime_browser_test',None)
+    if page_id not in ui_standard.RUNTIME_FIXTURE_DEBT:
+        assert any(f'pages/{page_id}/runtime_browser_test' in error for error in ui_standard.validate(missing_runtime))
 
     missing_icon=copy.deepcopy(catalog)
     next(page for page in missing_icon['pages'] if page['id']==page_id).pop('header_icon')
@@ -44,13 +45,6 @@ assert any('pages/new-registry/runtime_browser_test' in error for error in ui_st
 assert any('pages/new-registry/header_icon' in error for error in ui_standard.validate(new_registry))
 entry['header_icon']=copy.deepcopy(next(page for page in catalog['pages'] if page['id']=='contractors')['header_icon'])
 assert not any('pages/new-registry/header_icon' in error for error in ui_standard.validate(new_registry))
-
-old_debt=ui_standard.ICON_PROVENANCE_DEBT['drivers']
-try:
-    ui_standard.ICON_PROVENANCE_DEBT['drivers']=(old_debt[0],old_debt[1],'0'*64)
-    assert any('pages/drivers/header_icon' in error for error in ui_standard.validate(catalog))
-finally:
-    ui_standard.ICON_PROVENANCE_DEBT['drivers']=old_debt
 
 unapproved = copy.deepcopy(catalog)
 unapproved["components"].append({
