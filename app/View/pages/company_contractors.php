@@ -42,14 +42,19 @@ require base_path('app/View/partials/registry_ui_head.php');
                     $contactName = (string)($c['primary_contact_person'] ?? '');
                     $contactDetail = (string)(($c['primary_contact_phone'] ?? '') ?: ($c['doc_email'] ?? ''));
                     $creator = ui_actor($c['created_by_role'] ?? null, $c['created_by_user_id'] ?? null, $c['created_by_name'] ?? null);
-                    $fullSearch = implode(' ', [(string)$c['id'], $c['name'] ?? '', $c['inn'] ?? '', $c['contractor_type'] ?? '', $contactName, $contactDetail, (($_SESSION['role_code'] ?? '') === 'company_owner' ? $creator : ''), $c['status'] ?? '']);
+                    $contractorTypeLabel = !empty($c['contractor_type']) ? ui_contractor_type($c['contractor_type']) : '—';
+                    $statusLabel = $c['status'] === 'active' ? 'Активен' : 'Неактивен';
+                    $fullSearch = implode(' ', [(string)$c['id'], $c['name'] ?? '', 'ИНН ' . ($c['inn'] ?? '') . ' · ' . $contractorTypeLabel,
+                        $contactName ?: '—', $contactDetail ?: 'Контакт не указан',
+                        (($_SESSION['role_code'] ?? '') === 'company_owner' ? $creator : ''), $statusLabel,
+                        $c['contractor_type'] ?? '', $c['status'] ?? '']);
                 ?>
                 <tr data-erp-sort-date="<?= (int)$c['id'] ?>" data-contractor-id="<?= (int)$c['id'] ?>" data-registry-search="<?= e($fullSearch) ?>" tabindex="0" aria-label="<?= e($c['name']) ?>. Enter или двойное нажатие открывает карточку">
                     <td class="registry-ui-id"><?= (int)$c['id'] ?></td>
-                    <td><span class="cell-main registry-ui-name" title="<?= e($c['name']) ?>"><?= e($c['name']) ?></span><span class="cell-sub registry-ui-secondary">ИНН <?= e($c['inn']) ?> · <?= !empty($c['contractor_type']) ? e(ui_contractor_type($c['contractor_type'])) : '—' ?></span></td>
+                    <td><span class="cell-main registry-ui-name" title="<?= e($c['name']) ?>"><?= e($c['name']) ?></span><span class="cell-sub registry-ui-secondary">ИНН <?= e($c['inn']) ?> · <?= e($contractorTypeLabel) ?></span></td>
                     <td><span class="cell-main <?= $contactName !== '' ? 'registry-ui-primary' : 'registry-ui-missing' ?>"><?= e($contactName ?: '—') ?></span><span class="cell-sub registry-ui-secondary"><?= e($contactDetail ?: 'Контакт не указан') ?></span></td>
                     <?php if (($_SESSION['role_code'] ?? '') === 'company_owner'): ?><td><span class="registry-ui-secondary"><?= e($creator) ?></span></td><?php endif; ?>
-                    <td><span class="registry-ui-status" data-status="<?= e($c['status']) ?>"><?= $c['status'] === 'active' ? 'Активен' : 'Неактивен' ?></span></td>
+                    <td><span class="registry-ui-status" data-status="<?= e($c['status']) ?>"><?= e($statusLabel) ?></span></td>
                 </tr>
                 <?php endforeach; ?>
             </tbody>

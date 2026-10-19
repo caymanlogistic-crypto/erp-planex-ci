@@ -72,10 +72,77 @@ try{
    await page.close();
   }
  }
+ // Search must return the actual rows whose authorized rendered cells contain the query.
+ // The explicit index may add complete values behind ellipsis, but cannot replace localized UI text.
+ for(const [kind,queries] of [
+  ['contractors',['Активен','Неактивен','Юридическое лицо','ИП','Физическое лицо','Восточный маршрут']],
+  ['vehicle-sets',['Есть','НЕТ','КамАЗ 5490 А123АА77','Тонар 9888 В456ВВ77']],
+ ]){
+  const page=await browser.newPage();
+  await page.goto(`http://127.0.0.1:${server.address().port}/company/${kind}`);
+  await page.waitForSelector('[data-registry-ready="true"]');
+  const rows=page.locator('.registry-ui-card tbody tr');
+  const baseline=await rows.evaluateAll((items,kind)=>items.map(tr=>({id:tr.getAttribute(kind==='contractors'?'data-contractor-id':'data-vehicle-set-id'),text:tr.textContent})),kind);
+  for(const query of queries){
+   const expected=baseline.filter(row=>row.text.toLocaleLowerCase('ru').includes(query.toLocaleLowerCase('ru'))).map(row=>row.id).sort();
+   assert.ok(expected.length>0,`${kind}: fixture has visible ${query}`);
+   await page.locator('.registry-ui-search').fill(query);
+   const actual=await page.locator('.registry-ui-card tbody tr:not(.is-hidden)').evaluateAll((items,kind)=>items.map(tr=>tr.getAttribute(kind==='contractors'?'data-contractor-id':'data-vehicle-set-id')).sort(),kind);
+   assert.deepEqual(actual,expected,`${kind}: search returns rendered rows for ${query}`);
+  }
+  const coverage=await page.evaluate(()=>{
+   const grid=document.querySelector('.registry-ui-card');
+   const input=grid.querySelector('.registry-ui-search');
+   const rows=[...grid.querySelectorAll('tbody tr')];
+   const probes=new Map(),failures=[];
+   rows.forEach(row=>{
+    const id=row.getAttribute('data-contractor-id')||row.getAttribute('data-vehicle-set-id');
+    const cells=[...row.querySelectorAll('td')];
+    for(const cell of cells){
+     const leaves=cell.querySelectorAll('span').length?[...cell.querySelectorAll('span')]:[cell];
+     for(const leaf of leaves){
+      for(const value of [leaf.textContent.trim(),leaf.classList.contains('registry-ui-name')?leaf.getAttribute('title'):null].filter(Boolean)){
+       if(!probes.has(value))probes.set(value,new Set());
+       probes.get(value).add(id);
+      }
+     }
+    }
+    const docCells=[...row.querySelectorAll('td.col-check')];
+    if(docCells.length){
+     const index=(row.getAttribute('data-registry-search')||'').split(/\s+/);
+     for(const state of ['Есть','НЕТ']){
+      const rendered=docCells.filter(cell=>cell.textContent.trim()===state).length;
+      const indexed=index.filter(token=>token===state).length;
+      if(rendered!==indexed)failures.push(`${id}: ${state} in ${rendered} document cells but ${indexed} index tokens`);
+     }
+    }
+   });
+   for(const [value,ids] of probes){
+    input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));
+    for(const row of rows){
+     const id=row.getAttribute('data-contractor-id')||row.getAttribute('data-vehicle-set-id');
+     if(ids.has(id)&&row.classList.contains('is-hidden'))failures.push(`${id}: visible value ${value} not searchable`);
+    }
+   }
+   return {probes:probes.size,failures};
+  });
+  assert.ok(coverage.probes>10,`${kind}: varied visible-value probes`);
+  assert.deepEqual(coverage.failures,[],`${kind}: every visible value and all six document states searchable`);
+  if(kind==='vehicle-sets'){
+   assert.equal((await page.content()).includes('СКРЫТАЯ-МАРКА-ЕДИНИЦЫ'),false,'inaccessible secondary unit absent from HTML');
+   await page.locator('.registry-ui-search').fill('СКРЫТАЯ-МАРКА-ЕДИНИЦЫ');
+   assert.equal(await page.locator('.registry-ui-card tbody tr:not(.is-hidden)').count(),0,'inaccessible secondary unit absent from search');
+  }
+  await page.locator('.registry-ui-search').fill('нет такого значения 918273');
+  assert.equal(await page.locator('.registry-ui-card tbody tr:not(.is-hidden)').count(),0,`${kind}: no-result rows`);
+  await page.close();
+ }
  const page=await browser.newPage();
  await page.goto(`http://127.0.0.1:${server.address().port}/company/contractors?state=logist`);
  assert.equal(await page.locator('thead th').count(),4,'creator column stays owner-only');
  assert.equal((await page.locator('.registry-ui-card tbody tr').first().getAttribute('data-registry-search')).includes('Анна Петрова'),false,'creator does not leak into role-limited search index');
+ await page.locator('.registry-ui-search').fill('Анна Петрова');
+ assert.equal(await page.locator('.registry-ui-card tbody tr:not(.is-hidden)').count(),0,'creator is not searchable for logist');
  await page.close();
  const blockedStorage=await browser.newPage();
  await blockedStorage.addInitScript(()=>{Storage.prototype.getItem=()=>{throw new Error('storage unavailable')};Storage.prototype.setItem=()=>{throw new Error('storage unavailable')};});

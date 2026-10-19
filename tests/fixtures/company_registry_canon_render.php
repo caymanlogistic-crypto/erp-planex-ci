@@ -21,7 +21,7 @@ $names = ['ООО «Восточный маршрут»', 'ИП Крылов', '
 for ($i = 0; $i < 35; $i++) {
     $contractors[] = [
         'id' => 40 + $i, 'name' => $names[$i % 3], 'inn' => '7701234567',
-        'contractor_type' => 'llc', 'primary_contact_person' => $i === 1 ? '' : 'Мария Волкова',
+        'contractor_type' => ['legal_entity', 'individual_entrepreneur', 'individual'][$i % 3], 'primary_contact_person' => $i === 1 ? '' : 'Мария Волкова',
         'primary_contact_phone' => $i === 1 ? '' : '+7 900 123-45-67',
         'doc_email' => 'contact@example.test', 'created_by_role' => 'company_owner',
         'created_by_user_id' => 11, 'created_by_name' => 'Анна Петрова',
@@ -31,11 +31,11 @@ for ($i = 0; $i < 35; $i++) {
         'id' => 40 + $i, 'set_type' => $i % 2 ? 'single' : 'coupling',
         'primary_brand' => 'КамАЗ', 'primary_model' => '5490', 'primary_plate' => 'А123АА77',
         'primary_volume_m3' => $i === 1 ? null : '88.5', 'primary_capacity_tons' => '20.0',
-        'has_sts' => $i % 2, 'has_diagnostic_card_doc' => $i % 2, 'has_photo' => $i % 2,
+        'has_sts' => $i % 2, 'has_diagnostic_card_doc' => ($i + 1) % 2, 'has_photo' => $i % 2,
         'secondary_vehicle_unit_id' => $i % 2 ? null : 200 + $i,
-        'secondary_brand' => 'Тонар', 'secondary_model' => '9888', 'secondary_plate' => 'В456ВВ77',
+        'secondary_brand' => $i === 1 ? 'СКРЫТАЯ-МАРКА-ЕДИНИЦЫ' : 'Тонар', 'secondary_model' => '9888', 'secondary_plate' => 'В456ВВ77',
         'secondary_volume_m3' => '90.0', 'secondary_capacity_tons' => '25.0',
-        'has_sts_sec' => $i % 2, 'has_diagnostic_card_doc_sec' => $i % 2, 'has_photo_sec' => $i % 2,
+        'has_sts_sec' => ($i + 1) % 2, 'has_diagnostic_card_doc_sec' => $i % 2, 'has_photo_sec' => ($i + 1) % 2,
     ];
 }
 if ($state === 'empty') { $contractors = []; $vehicleSets = []; }
