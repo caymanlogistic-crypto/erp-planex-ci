@@ -97,6 +97,9 @@ jobs:
           python3 tests/ui_style_guard_test.py
           python3 tools/ui_style_guard.py --base "${{ steps.scope.outputs.base_sha }}" --head "${{ steps.scope.outputs.head_sha }}"
 
+      - name: Production bootstrap before approved UI browser QA
+        run: php tests/entrypoint_service_load_test.php
+
       - name: Setup Node for approved UI browser QA
         uses: actions/setup-node@v4
         with:

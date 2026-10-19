@@ -224,7 +224,12 @@ def registry_checks(results):
     cmdcheck(results,"ACTIVE_REGISTRY_CONTRACTS",[PYTHON,"tests/active_registry_coverage_checker_test.py"])
     cmdcheck(results,"ACTIVE_REGISTRY_CONTRACTS",[PYTHON,"tools/active_registry_coverage_check.py","docs/memory/active_registry_inventory.json","docs/memory/machine_ownership.json"])
 def approved_ui_checks(base,head,results):
-    exe("node")
+    exe("php"); exe("node")
+    # Fixtures can autoload classes missing from the real production manifest.
+    # Reject startup failures before spending time on visual browser matrices.
+    need("tests/entrypoint_service_load_test.php")
+    cmdcheck(results,"APPROVED_UI_CONTRACTS",["php","tests/entrypoint_service_load_test.php"])
+    if results["APPROVED_UI_CONTRACTS"] == "FAIL": return
     for test in ["tests/registry_component_contract_test.py", "tests/ui_standard_catalog_test.py", "tests/ui_style_guard_test.py"]:
         need(test); cmdcheck(results,"APPROVED_UI_CONTRACTS",[PYTHON,test])
     cmdcheck(results,"APPROVED_UI_CONTRACTS",[PYTHON,"tools/ui_standard.py","check"])

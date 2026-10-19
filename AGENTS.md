@@ -66,6 +66,14 @@ Development loop:
 - Batch related corrections in the same worktree and commit chain.
 - Label an intentionally failing red-phase test as TDD evidence. Environment/setup failures are blockers, not product-test failures.
 
+### Ready batch and bounded review — OWNER 2026-10-19
+
+- Before UI adaptation, follow the readiness/review phases in `docs/ui/REGISTRY_WORKFLOW.md`. Freeze the approved scope, responsive profiles and known reference deltas before mass migration. A gap in the checker is a preparation defect; do not keep changing the contract underneath the implementer.
+- Verify the real production bootstrap before detailed appearance work whenever runtime classes/partials change. Fixture autoload and asset/login smoke do not prove page viability.
+- With multiple agents, keep one prioritized review list and one status matrix. Send critical startup/access/data failures immediately; batch other findings at the end of a review pass. Reuse exact-SHA evidence instead of asking each agent to rerun the same check.
+- Complete all known code, tests, generated artifacts and repository-memory/documentation edits before the final publisher. Do not start a full gate while planning to change its candidate. Batch closing documentation corrections into one PR when safe; runtime recovery takes priority.
+- During corrections use the smallest affected check. A diagnostic UI parity result is not release evidence; the complete matrix and applicable exact-candidate gates remain mandatory. End the task after agreed scope, production verification when required, and MEMORY pass; put optional further improvements in a separate task.
+
 ### Windows local toolchain
 
 - Run `local\Test-LocalReadiness.ps1` once when a task starts or resumes. Reuse the result until the worktree or machine toolchain changes.

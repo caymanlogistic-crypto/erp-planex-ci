@@ -3,12 +3,19 @@
 import {createRequire} from 'node:module';
 import {mkdirSync,writeFileSync} from 'node:fs';
 import path from 'node:path';
-import {assertAppearanceParity} from '../tests/helpers/ui_appearance.mjs';
+import {collectAppearanceDifferences} from '../tests/helpers/ui_appearance.mjs';
 
 const require = createRequire(import.meta.url);
 const {chromium} = require('playwright');
-const args = Object.fromEntries(process.argv.slice(2).reduce((pairs,value,index,all) => index%2 ? pairs : [...pairs,[value,all[index+1]]],[]));
+const argv=process.argv.slice(2), allowed=new Set(['--reference-url','--candidate-url','--output','--reference-normalization','--widths','--states']);
+if(argv.length%2||argv.some((value,index)=>index%2===0&&!allowed.has(value)))throw new Error('Expected known --option value pairs');
+const args = Object.fromEntries(argv.reduce((pairs,value,index,all) => index%2 ? pairs : [...pairs,[value,all[index+1]]],[]));
 for (const name of ['--reference-url','--candidate-url','--output']) if (!args[name]) throw new Error(`Required: ${name}`);
+const fullWidths=[390,1280,1920,3840], fullStates=['normal','hover','focus'];
+const widths=[...new Set((args['--widths']||fullWidths.join(',')).split(',').map(Number))];
+const states=[...new Set((args['--states']||fullStates.join(',')).split(','))];
+if(widths.some(width=>!fullWidths.includes(width))||states.some(state=>!fullStates.includes(state))||!states.includes('normal'))throw new Error('Use approved widths and normal[,hover,focus] states');
+const diagnostic=widths.length!==fullWidths.length||states.length!==fullStates.length;
 for (const name of ['--reference-url','--candidate-url']) {
   const url = new URL(args[name]);
   if (url.protocol !== 'http:' || !['127.0.0.1','localhost','[::1]'].includes(url.hostname)) throw new Error('UI parity accepts localhost HTTP URLs only');
@@ -19,16 +26,22 @@ if(args['--reference-normalization']&&!financeSearchNormalization)throw new Erro
 if(financeSearchNormalization&&!new URL(args['--reference-url']).pathname.endsWith('/company/finance/received-paid'))throw new Error('Finance search normalization is restricted to the finance registry');
 mkdirSync(output,{recursive:true});
 const resultFile=path.join(output,'result.json');
-writeFileSync(resultFile,JSON.stringify({result:'RUNNING'}));
+const startedAt=new Date().toISOString(), checks=[];
+const metadata={reference:args['--reference-url'],candidate:args['--candidate-url'],widths,states,diagnostic,startedAt};
+const save=(result,extra={})=>writeFileSync(resultFile,JSON.stringify({...metadata,result,completedAt:result==='RUNNING'?undefined:new Date().toISOString(),checks,differenceCount:checks.reduce((sum,check)=>sum+check.differenceCount,0),...extra},null,2));
+save('RUNNING');
 // Publication evidence must compare the frozen accepted version, not mutable
 // workspace overrides. The Design Lab refuses this URL until OWNER acceptance.
 const referenceUrl = new URL(args['--reference-url']);
 referenceUrl.searchParams.set('version','accepted');
 args['--reference-url'] = referenceUrl.href;
-const browser = await chromium.launch({headless:true});
+metadata.reference=referenceUrl.href;
+let browser;
 try {
-  for (const width of [390,1280,1920,3840]) {
+  browser=await chromium.launch({headless:true});
+  for (const width of widths) {
     const context = await browser.newContext({viewport:{width,height:1080},locale:'ru-RU',timezoneId:'Europe/Moscow',deviceScaleFactor:1});
+    try {
     // Never allow external traffic or application writes during visual acceptance.
     await context.route('**/*', route => {
       const url = new URL(route.request().url());
@@ -41,26 +54,30 @@ try {
     // This changes only the in-memory comparison copy. The frozen checkpoint
     // remains untouched; raw parity still reports the historical 400/500 delta.
     if(financeSearchNormalization)await reference.addStyleTag({content:'.rp-ledger-v015 .registry-ui-toolbar input.registry-ui-search,.rp-ledger-v015 .registry-ui-toolbar input.registry-ui-search::placeholder{font-weight:500!important}'});
-    await assertAppearanceParity(reference,candidate,`${width}px normal`);
+    const check=async state=>checks.push({width,state,...await collectAppearanceDifferences(reference,candidate,`${width}px ${state}`)});
+    await check('normal');
     for (const selector of ['.registry-ui-search','.registry-ui-head .btn-primary','.registry-ui-head .btn-secondary,.registry-ui-head .btn-ghost','.registry-ui-toolbar .lab-reference-trigger','.registry-ui-checkbox input']) {
       if (await reference.locator(selector).count() && await reference.locator(selector).first().isVisible()) {
-        if (!await candidate.locator(selector).count()) throw new Error(`${width}px ${selector}: candidate control missing`);
-        if (await reference.locator(selector).first().isEnabled() !== await candidate.locator(selector).first().isEnabled()) throw new Error(`${width}px ${selector}: enabled state differs`);
-        if (!await reference.locator(selector).first().isEnabled()) continue;
-        for (const state of ['hover','focus']) {
+        // The normal snapshot already records missing, hidden and disabled
+        // controls. Avoid a locator timeout while still reporting other states.
+        if (!await candidate.locator(selector).count()||!await candidate.locator(selector).first().isVisible()||!await reference.locator(selector).first().isEnabled()||!await candidate.locator(selector).first().isEnabled()) continue;
+        for (const state of states.filter(state=>state!=='normal')) {
           await reference.locator(selector).first()[state]();
           await candidate.locator(selector).first()[state]();
-          await assertAppearanceParity(reference,candidate,`${width}px ${selector} ${state}`);
+          await check(`${selector} ${state}`);
         }
       }
     }
     await reference.screenshot({path:path.join(output,`reference-${width}.png`),fullPage:true});
     await candidate.screenshot({path:path.join(output,`candidate-${width}.png`),fullPage:true});
-    await context.close();
+    } finally {await context.close();}
   }
-  writeFileSync(resultFile,JSON.stringify({result:financeSearchNormalization?'PASS_WITH_KNOWN_LEGACY_DELTA':'PASS',knownLegacyDelta:financeSearchNormalization?'finance search font weight 400 in frozen reference versus approved shared 500':undefined,reference:args['--reference-url'],candidate:args['--candidate-url'],widths:[390,1280,1920,3840]},null,2));
-  console.log(financeSearchNormalization?'UI_PARITY=PASS_WITH_KNOWN_LEGACY_DELTA':'UI_PARITY=PASS');
+  const differenceCount=checks.reduce((sum,check)=>sum+check.differenceCount,0);
+  const result=differenceCount?'FAIL':diagnostic?'PASS_DIAGNOSTIC':financeSearchNormalization?'PASS_WITH_KNOWN_LEGACY_DELTA':'PASS';
+  save(result,{knownLegacyDelta:financeSearchNormalization?'finance search font weight 400 in frozen reference versus approved shared 500':undefined});
+  console.log(`UI_PARITY=${result} differences=${differenceCount} report=${resultFile}`);
+  if(differenceCount)process.exitCode=1;
 } catch(error){
-  writeFileSync(resultFile,JSON.stringify({result:'FAIL',error:error.message,reference:args['--reference-url'],candidate:args['--candidate-url']},null,2));
+  save('FAIL',{error:error.message});
   throw error;
-} finally {await browser.close();}
+} finally {await browser?.close();}
