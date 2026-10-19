@@ -74,6 +74,7 @@ for workflow in ["ci.yml", "erpv2_fast_release.yml"]:
     assert "tools/ui_style_guard.py --base" in workflow_source
     assert "node tests/ui_standard_gallery_browser_test.mjs" in workflow_source
     assert "node tests/ui_standard_lab_browser_test.mjs" in workflow_source
+    assert 'run: bash tools/ci_registry_runtime.sh' in workflow_source
     assert workflow_source.index("run: php tests/entrypoint_service_load_test.php") < workflow_source.index("- name: Setup Node for approved UI browser QA")
 
 # Real execution ordering: a failed production startup gate prevents the costly
@@ -89,6 +90,20 @@ try:
     assert startup_result == {"APPROVED_UI_CONTRACTS": "FAIL"}
 finally:
     p.run, p.exe = original_run, original_exe
+
+# The same registered full runtime gate must be mandatory locally, not CI-only.
+try:
+    commands=[]
+    p.exe=lambda name: None
+    p.run=lambda command,env=None:(commands.append(command) or 0)
+    result={};p.approved_ui_checks('base','head',result)
+    assert ['node','tools/registry_runtime_gate.mjs'] in commands
+    assert result['APPROVED_UI_CONTRACTS']=='PASS'
+    p.run=lambda command,env=None: 1 if command==['node','tools/registry_runtime_gate.mjs'] else 0
+    result={};p.approved_ui_checks('base','head',result)
+    assert result['APPROVED_UI_CONTRACTS']=='FAIL'
+finally:
+    p.run,p.exe=original_run,original_exe
 
 # Tenant scope plans the real canonical integration contract.
 tenant_scopes = p.ci.classify(["database/migrations-local/100_x.sql"])

@@ -235,6 +235,10 @@ def approved_ui_checks(base,head,results):
     cmdcheck(results,"APPROVED_UI_CONTRACTS",[PYTHON,"tools/ui_standard.py","check"])
     cmdcheck(results,"APPROVED_UI_CONTRACTS",[PYTHON,"tools/ui_style_guard.py","--base",base,"--head",head])
     catalog=json.loads((ROOT/"docs/ui/approved-components.json").read_text(encoding="utf-8"))
+    # Run actual routes/controllers/services/layout + bounded role/GET interactions.
+    # The trusted LOCAL preflight wrapper supplies a fresh restricted disposable DB.
+    for test in ('tests/registry_runtime_gate_test.mjs','tools/registry_runtime_gate.mjs'):
+        need(test); cmdcheck(results,'APPROVED_UI_CONTRACTS',['node',test])
     for test in dict.fromkeys([p["browser_test"] for p in catalog["pages"]]+["tests/ui_standard_gallery_browser_test.mjs","tests/ui_standard_lab_browser_test.mjs"]):
         need(test); cmdcheck(results,"APPROVED_UI_CONTRACTS",["node",test])
 

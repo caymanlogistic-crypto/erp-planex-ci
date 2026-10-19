@@ -120,6 +120,10 @@ jobs:
           node tests/ui_standard_gallery_browser_test.mjs
           node tests/ui_standard_lab_browser_test.mjs
 
+      - name: Registered registry runtime and own-scope browser QA
+        if: steps.changes.outputs.approved_ui == 'true'
+        run: bash tools/ci_registry_runtime.sh
+
       - name: Changed PHP syntax
         if: steps.changes.outputs.php == 'true'
         shell: bash

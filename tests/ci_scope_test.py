@@ -112,6 +112,10 @@ for path in [
     "tools/ui_standard.py",
     "tools/ui_style_guard.py",
     "tools/ui_parity.mjs",
+    "tools/ci_registry_runtime.sh",
+    "tests/helpers/registry_behavior_contract.mjs",
+    "tests/fixtures/company_registry_runtime.php",
+    "tests/fixtures/company_registry_expectations.mjs",
     "app/View/components/other.php",
     "app/View/layouts/company.php",
 ]:
@@ -119,6 +123,7 @@ for path in [
 
 assert m.critical_path(["tools/ui_style_guard.py"])
 assert m.critical_path(["tools/ui_parity.mjs"])
+assert m.critical_path(["tools/ci_registry_runtime.sh"])
 
 for path in [
     "tools/design_lab.py",

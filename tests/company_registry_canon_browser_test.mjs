@@ -6,6 +6,8 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryRows,assertRegistrySearch,assertRegistryScroll} from './helpers/registry_behavior_contract.mjs';
+import {companyRegistryExpectations} from './fixtures/company_registry_expectations.mjs';
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const render=(kind,state='populated',role='company_owner')=>execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/company_registry_canon_render.php'),kind,state,role],{encoding:'utf8'});
@@ -28,6 +30,31 @@ try{
    await page.waitForSelector('[data-registry-ready="true"]');
    await assertRegistryVisualContract(page,`${kind} ${width}`);
    await assertRegistryDataContract(page,kind);
+   await assertRegistryRows(page,companyRegistryExpectations(kind),kind);
+   if(kind==='contractors'&&width===1280){
+    // Prove the gate rejects omissions, broken filtering and lost stickiness.
+    const contact=page.locator('[data-contractor-id="74"] td').nth(2),saved=await contact.innerHTML();
+    await contact.evaluate(element=>element.replaceChildren());
+    await assert.rejects(assertRegistryRows(page,companyRegistryExpectations(kind),'negative missing contact'),/missing or changed field/);
+    await contact.evaluate((element,html)=>{element.innerHTML=html},saved);
+    await page.evaluate(()=>{window.blockSearch=event=>event.stopImmediatePropagation();document.addEventListener('input',window.blockSearch,true)});
+    await assert.rejects(assertRegistrySearch(page,{...companyRegistryExpectations(kind),probes:[{query:'Неактивен',ids:[41]}]},'negative search'),/actual filtered IDs/);
+    await page.evaluate(()=>{document.removeEventListener('input',window.blockSearch,true)});
+    await page.locator('.registry-ui-search').fill('');
+    await page.locator('.registry-ui-toolbar').evaluate(element=>element.style.setProperty('position','static','important'));
+    await assert.rejects(assertRegistryScroll(page,'negative sticky'),/sticky toolbar/);
+    await page.locator('.registry-ui-toolbar').evaluate(element=>element.style.removeProperty('position'));
+    await page.locator('main.content').evaluate(element=>{element.scrollTop=0});
+    console.log('REGISTRY_BEHAVIOR_NEGATIVE=PASS missing-field,wrong-filter,lost-sticky rejected');
+   }
+   if(kind==='vehicle-sets'&&width===1280){
+    const capacity=page.locator('[data-vehicle-set-id="74"] td.col-capacity span').first();
+    await capacity.evaluate(element=>{element.textContent='120'});
+    await assert.rejects(assertRegistryRows(page,companyRegistryExpectations(kind),'negative numeric corruption'),/missing or changed field/);
+    await capacity.evaluate(element=>{element.textContent='20'});
+    console.log('REGISTRY_NUMERIC_NEGATIVE=PASS 20-to-120 rejected');
+   }
+   await assertRegistryScroll(page,`${kind} ${width}`);
    const geometry=await page.evaluate(()=>{
     const box=selector=>document.querySelector(selector).getBoundingClientRect().toJSON();
     return {width:innerWidth,head:box('.registry-ui-head'),card:box('.registry-ui-card'),table:box('.registry-ui-table'),xScroll:document.querySelector('.table-scroll').scrollWidth-document.querySelector('.table-scroll').clientWidth};
@@ -57,10 +84,11 @@ try{
    await page.getByRole('button',{name:create,exact:true}).first().click();assert.ok(await page.locator(modal).isVisible(),'create action preserved');
    await page.locator(modal+' .modal-close').click();
    const endpoint=kind==='contractors'?'contractors':'vehicle-sets';
-   let requested=false;
-   await page.route(`**/company/${endpoint}/74/modal-view`,route=>{requested=true;return route.fulfill({status:200,contentType:'text/html',body:'<div class="modal-body"><div class="driver-view-name">Карточка</div></div>'});});
+   await page.route(`**/company/${endpoint}/74/modal-view`,route=>route.fulfill({status:200,contentType:'text/html',body:'<div class="modal-body"><div class="driver-view-name">Карточка</div></div>'}));
+   const requested=page.waitForRequest(`**/company/${endpoint}/74/modal-view`);
    await page.locator(`.registry-ui-card tbody tr[data-${kind==='contractors'?'contractor':'vehicle-set'}-id="74"]`).first().dblclick();
-   assert.ok(requested,'view endpoint preserved');
+   await requested;
+   await page.getByText('Карточка',{exact:true}).waitFor();
    assert.deepEqual(errors,[],`no runtime errors ${kind} ${width}`);
    measurements.push({kind,...geometry});await page.close();
   }
@@ -81,6 +109,8 @@ try{
   const page=await browser.newPage();
   await page.goto(`http://127.0.0.1:${server.address().port}/company/${kind}`);
   await page.waitForSelector('[data-registry-ready="true"]');
+  await assertRegistryRows(page,companyRegistryExpectations(kind),kind);
+  await assertRegistrySearch(page,companyRegistryExpectations(kind),kind);
   const rows=page.locator('.registry-ui-card tbody tr');
   const baseline=await rows.evaluateAll((items,kind)=>items.map(tr=>({id:tr.getAttribute(kind==='contractors'?'data-contractor-id':'data-vehicle-set-id'),text:tr.textContent})),kind);
   for(const query of queries){

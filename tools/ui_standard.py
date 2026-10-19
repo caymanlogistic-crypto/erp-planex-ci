@@ -14,6 +14,9 @@ CATALOG = ROOT / "docs/ui/approved-components.json"
 GALLERY = ROOT / "docs/ui/approved-components.html"
 ID = re.compile(r"^[a-z][a-z0-9]*(?:[.-][a-z0-9]+)*$")
 LEGACY_PAGES = frozenset({'route-executors','trips-departures','finance-received-paid','logistics-closing-documents'})
+# Existing pages retain their historical fixtures until a scoped runtime migration.
+# This closed list cannot grandfather a newly registered registry.
+RUNTIME_FIXTURE_DEBT = LEGACY_PAGES | {'drivers'}
 DATA_ROLES = frozenset({'primary','name','secondary','money','id','trip','missing','due','status','total','reason'})
 PAGE_DATA_ROLES = {
     'route-executors': {'primary','name','secondary','status'},
@@ -115,6 +118,17 @@ def validate(data: dict) -> list[str]:
                         errors.append(f"pages/{name}: browser test must invoke shared registry visual contract")
                     if status=='current_20261018' and ('assertRegistryDataContract' not in test_source or name not in test_source):
                         errors.append(f'pages/{name}: current browser test must invoke assertRegistryDataContract with catalog page id')
+                    if name not in RUNTIME_FIXTURE_DEBT:
+                        for helper in ('assertRegistryRows','assertRegistrySearch','assertRegistryScroll'):
+                            if helper not in test_source:
+                                errors.append(f'pages/{name}: browser test must invoke {helper} against independent fixture expectations')
+                if item.get('family') == 'registry' and name not in RUNTIME_FIXTURE_DEBT:
+                    try:
+                        runtime=safe_file(item.get('runtime_browser_test',''))
+                        if runtime.suffix != '.mjs':
+                            raise ValueError('runtime browser test must be .mjs')
+                    except ValueError as exc:
+                        errors.append(f'pages/{name}/runtime_browser_test: {exc}')
                 if item.get("view") and (ROOT / item["view"]).is_file():
                     source = safe_file(item["view"]).read_text(encoding="utf-8")
                     if "registry-ui-card" not in source:
@@ -163,6 +177,7 @@ def main() -> int:
     test_selection = tests.add_mutually_exclusive_group(required=True)
     test_selection.add_argument("--family")
     test_selection.add_argument("--all", action="store_true")
+    tests.add_argument('--runtime', action='store_true', help='only registered disposable-DB runtime browser tests')
     show = sub.add_parser("show", help="show one approved family, component or page")
     show.add_argument("id")
     register = sub.add_parser("register", help="register an approved family/component or adapted page")
@@ -198,7 +213,8 @@ def main() -> int:
         elif args.command == "tests":
             if not args.all and args.family not in {item["id"] for item in data["families"]}:
                 raise ValueError(f"unknown family: {args.family}")
-            for path in dict.fromkeys(item["browser_test"] for item in data["pages"] if args.all or item["family"] == args.family):
+            field='runtime_browser_test' if args.runtime else 'browser_test'
+            for path in dict.fromkeys(item[field] for item in data["pages"] if (args.all or item["family"] == args.family) and item.get(field)):
                 print(path)
         else:
             item = next((item for kind in ("families", "components", "pages") for item in data[kind] if item["id"] == args.id), None)

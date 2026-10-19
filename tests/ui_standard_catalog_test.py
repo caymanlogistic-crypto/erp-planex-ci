@@ -15,6 +15,17 @@ catalog = ui_standard.load()
 assert ui_standard.validate(catalog) == []
 assert ui_standard.GALLERY.read_text(encoding="utf-8") == ui_standard.render_gallery(catalog)
 
+for page_id in ['contractors','vehicle-sets']:
+    missing_runtime=copy.deepcopy(catalog)
+    next(page for page in missing_runtime['pages'] if page['id']==page_id).pop('runtime_browser_test')
+    assert any(f'pages/{page_id}/runtime_browser_test' in error for error in ui_standard.validate(missing_runtime))
+
+new_registry=copy.deepcopy(catalog)
+entry=copy.deepcopy(next(page for page in catalog['pages'] if page['id']=='contractors'))
+entry['id']='new-registry';entry.pop('runtime_browser_test')
+new_registry['pages'].append(entry)
+assert any('pages/new-registry/runtime_browser_test' in error for error in ui_standard.validate(new_registry))
+
 unapproved = copy.deepcopy(catalog)
 unapproved["components"].append({
     "id": "registry.unapproved",
