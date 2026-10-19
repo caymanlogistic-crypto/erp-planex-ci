@@ -221,6 +221,24 @@
         "variant": "outline",
         "name": "users-group",
         "source": "app/View/components/tabler/outline/users-group.svg"
+      },
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ]
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search is local or completes a navigation; no delayed same-page result surface."
       }
     },
     {
@@ -249,6 +267,24 @@
         "variant": "outline",
         "name": "truck-delivery",
         "source": "app/View/components/tabler/outline/truck-delivery.svg"
+      },
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ]
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search is local or completes a navigation; no delayed same-page result surface."
       }
     },
     {
@@ -279,6 +315,24 @@
         "variant": "outline",
         "name": "arrows-exchange",
         "source": "app/View/components/tabler/outline/arrows-exchange.svg"
+      },
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ]
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search is local or completes a navigation; no delayed same-page result surface."
       }
     },
     {
@@ -306,6 +360,24 @@
         "variant": "outline",
         "name": "file-text",
         "source": "app/View/components/tabler/outline/file-text.svg"
+      },
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ]
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search is local or completes a navigation; no delayed same-page result surface."
       }
     },
     {
@@ -332,6 +404,24 @@
         "variant": "outline",
         "name": "user",
         "source": "app/View/components/tabler/outline/user.svg"
+      },
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ]
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search is local or completes a navigation; no delayed same-page result surface."
       }
     },
     {
@@ -360,7 +450,25 @@
         "source": "app/View/components/tabler/outline/truck-delivery.svg"
       },
       "view": "app/View/pages/company_contractors.php",
-      "family": "registry"
+      "family": "registry",
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ]
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search is local or completes a navigation; no delayed same-page result surface."
+      }
     },
     {
       "id": "vehicle-sets",
@@ -388,7 +496,25 @@
         "source": "app/View/components/tabler/outline/truck.svg"
       },
       "view": "app/View/pages/company_vehicle_sets.php",
-      "family": "registry"
+      "family": "registry",
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ]
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search is local or completes a navigation; no delayed same-page result surface."
+      }
     },
     {
       "id": "feo-map-placement",
@@ -414,7 +540,79 @@
       "asset_owner": "app/Http/Controllers/Company/FeoPlacementController.php",
       "browser_test": "tests/feo_map_placement_canon_browser_test.mjs",
       "family": "registry",
-      "runtime_browser_test": "tests/feo_map_placement_runtime_browser_test.mjs"
+      "runtime_browser_test": "tests/feo_map_placement_runtime_browser_test.mjs",
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+        },
+        {
+          "id": "block-search-results",
+          "selector": ".registry-ui-card [data-placement-block-search-results] .table-scroll > table"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ]
+        },
+        {
+          "id": "search-pending",
+          "visible": [
+            "main"
+          ]
+        },
+        {
+          "id": "search-results",
+          "visible": [
+            "main",
+            "block-search-results"
+          ]
+        },
+        {
+          "id": "search-empty",
+          "visible": [
+            "main",
+            "block-search-results"
+          ]
+        },
+        {
+          "id": "search-error",
+          "visible": [
+            "main"
+          ]
+        },
+        {
+          "id": "reset",
+          "visible": [
+            "main"
+          ]
+        },
+        {
+          "id": "reload",
+          "visible": [
+            "main"
+          ]
+        },
+        {
+          "id": "page-error",
+          "visible": []
+        }
+      ],
+      "async_search": {
+        "applicable": true,
+        "browser_test": "tests/feo_map_placement_async_browser_test.mjs",
+        "required_states": [
+          "search-pending",
+          "search-results",
+          "search-empty",
+          "search-error",
+          "reset",
+          "reload"
+        ]
+      }
     }
   ],
   "decisions": "docs/ui/decisions-20261018.json"

@@ -1,9 +1,13 @@
 import assert from 'node:assert/strict';
-import {verifyRuntimeCoverage} from '../tools/registry_runtime_gate.mjs';
+import {verifyRuntimeCoverage,verifyRuntimeSurfaceCoverage} from '../tools/registry_runtime_gate.mjs';
 const output='REGISTRY_RUNTIME_PAGE=contractors\nREGISTRY_RUNTIME_PAGE=vehicle-sets\n';
 verifyRuntimeCoverage(output,['contractors','vehicle-sets']);
 assert.throws(()=>verifyRuntimeCoverage(output,['contractors','vehicle-sets','copied-page-without-scenario']),/executed runtime scenarios/);
 assert.throws(()=>verifyRuntimeCoverage('', ['contractors']),/executed runtime scenarios/);
 assert.throws(()=>verifyRuntimeCoverage(output+'REGISTRY_RUNTIME_PAGE=contractors\n',['contractors','vehicle-sets']),/duplicate/);
 assert.throws(()=>verifyRuntimeCoverage(output,['contractors']),/executed runtime scenarios/);
-console.log('REGISTRY_RUNTIME_GATE_TEST=PASS positive and missing/extra/duplicate page coverage rejected');
+const pages=[{id:'contractors',async_search:{applicable:false}},{id:'feo-map-placement',async_search:{applicable:true}}];
+const surfaces='REGISTRY_RUNTIME_SURFACE=contractors:initial\nREGISTRY_RUNTIME_SURFACE=feo-map-placement:initial\nREGISTRY_RUNTIME_SURFACE=feo-map-placement:search-results\n';
+verifyRuntimeSurfaceCoverage(surfaces,pages);
+assert.throws(()=>verifyRuntimeSurfaceCoverage(surfaces.replace('REGISTRY_RUNTIME_SURFACE=feo-map-placement:search-results\n',''),pages),/runtime browser must discover/);
+console.log('REGISTRY_RUNTIME_GATE_TEST=PASS page and dynamic surface coverage positive/negative');

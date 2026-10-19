@@ -120,6 +120,35 @@ def validate(data: dict) -> list[str]:
                     minimum=PAGE_DATA_ROLES.get(name, {'primary'})
                     if not isinstance(roles,list) or not roles or any(not isinstance(role,str) or role not in DATA_ROLES for role in roles) or len(set(roles))!=len(roles) or not minimum.issubset(roles):
                         errors.append(f'pages/{name}: data_roles must cover applicable canonical roles, including {sorted(minimum)}')
+                    surfaces=item.get('table_surfaces')
+                    states=item.get('table_states')
+                    if not isinstance(surfaces,list) or not surfaces or any(not isinstance(surface,dict) or not ID.fullmatch(str(surface.get('id',''))) or not str(surface.get('selector','')).startswith('.registry-ui-card ') or not str(surface.get('selector','')).endswith('table') for surface in surfaces):
+                        errors.append(f'pages/{name}: explicit scoped table_surfaces inventory required')
+                        surface_ids=set()
+                    else:
+                        surface_ids={surface['id'] for surface in surfaces}
+                        if len(surface_ids)!=len(surfaces): errors.append(f'pages/{name}: duplicate table_surfaces')
+                    if not isinstance(states,list) or not states or any(not isinstance(state,dict) or not ID.fullmatch(str(state.get('id',''))) or not isinstance(state.get('visible'),list) or any(surface not in surface_ids for surface in state['visible']) or len(set(state['visible']))!=len(state['visible']) for state in states):
+                        errors.append(f'pages/{name}: table_states must cover declared surface IDs')
+                    elif states[0].get('id')!='initial' or 'main' not in states[0]['visible'] or len({state['id'] for state in states})!=len(states):
+                        errors.append(f'pages/{name}: initial and unique table_states required')
+                    async_search=item.get('async_search')
+                    if not isinstance(async_search,dict) or type(async_search.get('applicable')) is not bool:
+                        errors.append(f'pages/{name}: explicit async_search applicability required')
+                    elif async_search['applicable']:
+                        required=async_search.get('required_states')
+                        mandatory={'search-pending','search-results','search-empty','search-error','reset','reload'}
+                        declared={entry['id'] for entry in states or [] if isinstance(entry,dict) and 'id' in entry}
+                        if not isinstance(required,list) or not mandatory.issubset(required) or any(state not in declared for state in required):
+                            errors.append(f'pages/{name}: async_search required_states must be declared table_states')
+                        try:
+                            async_test=safe_file(async_search.get('browser_test',''))
+                            if async_test.suffix!='.mjs' or 'assertRegistryAsyncSearchContract' not in async_test.read_text(encoding='utf-8'):
+                                raise ValueError('shared async search browser contract required')
+                        except ValueError as exc:
+                            errors.append(f'pages/{name}/async_search: {exc}')
+                    elif not str(async_search.get('reason','')).strip():
+                        errors.append(f'pages/{name}: non-applicable async_search needs a reason')
                 if not item.get("route", "").startswith("/erpv2/"):
                     errors.append(f"pages/{name}: ERP route required")
                 if item.get("family") == "registry" and (type(item.get("sticky")) is not bool or type(item.get("reference_select")) is not bool):

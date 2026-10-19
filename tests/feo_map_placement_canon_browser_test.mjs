@@ -5,7 +5,7 @@ import http from 'node:http';
 import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
-import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
+import {assertRegistryVisualContract,assertRegistryDataContract,assertRegistryTableState} from './helpers/registry_visual_contract.mjs';
 import {assertRegistryRows,assertRegistrySearch,assertRegistryScroll} from './helpers/registry_behavior_contract.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
@@ -68,6 +68,27 @@ try{
     const search=page.locator('[data-placement-block-search]');
     await search.fill('302545\n285664');
     await page.getByText('Найдено по 2 заявкам.',{exact:false}).waitFor();
+    await assertRegistryDataContract(page,'feo-map-placement',{state:'search-results'});
+    const searchTable=page.locator('[data-placement-block-search-results] .feo-placement-search-table');
+    assert.ok(await searchTable.isVisible(),'second business table is visible after search');
+    const searchGeometry=await searchTable.evaluate(table=>({idWidth:table.tBodies[0].rows[0].cells[0].getBoundingClientRect().width,
+      idRole:table.tBodies[0].rows[0].cells[0].classList.contains('registry-ui-id'),
+      nameRole:!!table.tBodies[0].rows[0].querySelector('.registry-ui-name'),
+      primaryRole:!!table.tBodies[0].rows[0].querySelector('.registry-ui-primary')}));
+    assert.ok(Math.abs(searchGeometry.idWidth-64)<0.25,`search table ID column follows 64px canon: ${searchGeometry.idWidth}`);
+    assert.ok(searchGeometry.idRole&&searchGeometry.nameRole&&searchGeometry.primaryRole,'search result cells carry approved data roles');
+    if(evidence)await page.screenshot({path:path.join(evidence,`placement-${width}-search-results.png`)});
+    if(width===1280){
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-error'),/declared business-table surfaces/,'wrong state cannot certify a visible secondary table');
+      await page.locator('[data-placement-block-search-results]').evaluate(element=>element.insertAdjacentHTML('beforeend','<table data-unmapped-probe><thead><tr><th>ЗАЯВКА</th></tr></thead><tbody><tr><td>309552</td></tr></tbody></table>'));
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-results'),/missing or ambiguously mapped/,'unregistered JS-created table is discovered');
+      await page.locator('[data-unmapped-probe]').evaluate(element=>element.remove());
+      await searchTable.evaluate(table=>table.classList.remove('registry-ui-data'));
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-results'),/lacks data role/,'registered table cannot lose approved role');
+      await searchTable.evaluate(table=>table.classList.add('registry-ui-data'));
+      await assertRegistryTableState(page,'feo-map-placement','search-results');
+      console.log('REGISTRY_SURFACE_NEGATIVE=feo-map-placement:unmapped,missing-role,wrong-state');
+    }
     assert.equal(await search.inputValue(),'302545, 285664','multiline IDs normalize without loss');
     assert.equal(await page.locator('[data-placement-search-block-id="74"]').count(),1,'block search links to original block');
     if(width===1280){
@@ -80,6 +101,7 @@ try{
     await page.locator('.registry-ui-reset').click();
     assert.equal(await search.inputValue(),'','reset clears search');
     await page.locator('[data-placement-block-search-results]').waitFor({state:'hidden'});
+    await assertRegistryTableState(page,'feo-map-placement','reset');
     if(width===1280){
       await assertRegistrySearch(page,{rowSelector:'.feo-placement-table tbody tr[data-placement-block-id]',probes:[{query:'302545',ids:[74]}],resolveActual:async target=>{
         await target.getByText('Найдено по 1 заявкам.',{exact:false}).waitFor();
@@ -105,6 +127,7 @@ try{
     assert.equal(await page.locator('.registry-ui-head').count(),1,`${state}: canonical header`);
     assert.equal(await page.locator('.feo-placement-table tbody tr[data-placement-block-id]').count(),0,`${state}: no phantom data`);
     assert.equal(await page.locator('.registry-ui-card').count(),state==='empty'?1:0,`${state}: correct card state`);
+    await assertRegistryTableState(page,'feo-map-placement',state==='error'?'page-error':'initial');
     await page.close();
   }
   if(evidence)writeFileSync(path.join(evidence,'measurements.json'),JSON.stringify(measurements,null,2));
