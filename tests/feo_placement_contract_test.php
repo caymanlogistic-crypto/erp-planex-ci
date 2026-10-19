@@ -142,16 +142,18 @@ $ok(
 );
 $ok(
     'request id is rendered in every history row',
-    str_contains($js, '<td class="feo-placement-search-col--request"><b>${esc(item.zayavka_id)}</b></td>')
+    substr_count($js, '<td class="registry-ui-id">${esc(item.zayavka_id)}</td>') === 2
     && !str_contains($js, 'index===0?')
 );
 $ok(
-    'search results use exactly the four requested columns with block taking remaining width',
-    str_contains($js, '>ЗАЯВКА</th><th class="feo-placement-search-col--date">ДАТА ОПЕРАЦИИ</th><th class="feo-placement-search-col--block">БЛОК</th><th class="feo-placement-search-col--type">ТИП</th>')
+    'search results use four canonical columns with block taking remaining width',
+    str_contains($js, '<table class="table registry-ui-table registry-ui-data feo-placement-search-table">')
+    && str_contains($js, '<colgroup><col class="registry-ui-id"><col class="feo-placement-search-col--date"><col><col class="feo-placement-search-col--type"></colgroup>')
+    && str_contains($js, 'aria-label="Заявка">ID</th><th>ДАТА ОПЕРАЦИИ</th><th>БЛОК</th><th>ТИП</th>')
     && !str_contains($js, '>Статус блока</th>')
     && !str_contains($js, '>Актуальный состав</th>')
-    && str_contains($view, '.feo-placement-search-col--request,.feo-placement-search-col--date,.feo-placement-search-col--type{width:1%;white-space:nowrap}')
-    && str_contains($view, '.feo-placement-search-col--block{width:auto;white-space:normal;overflow-wrap:anywhere;word-break:normal}')
+    && str_contains($view, '.feo-placement-search-table col.feo-placement-search-col--date{width:160px}')
+    && str_contains($view, '.feo-placement-search-table col.feo-placement-search-col--type{width:112px}')
 );
 $ok('search result table has no side or bottom padding', str_contains($view, '.feo-placement-block-search-results{padding:8px 0 0;'));
 $registryCss = $read($root . '/public/assets/css/registry-components.css');
