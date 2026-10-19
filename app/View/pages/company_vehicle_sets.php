@@ -113,7 +113,12 @@ function vehicle_table_num($value): string {
                         $hasDkSec = !empty($vs['has_diagnostic_card_doc_sec']);
                         $hasPhotoSec = !empty($vs['has_photo_sec']);
                     endif;
-                    $fullSearch = implode(' ', [(string)$vs['id'], $setLabel, $primaryLabel, $secondaryLabel, $volume, $capacity, $secVolume, $secCapacity]);
+                    $primaryDocumentLabels = [$hasSts ? 'Есть' : 'НЕТ', $hasDk ? 'Есть' : 'НЕТ', $hasPhoto ? 'Есть' : 'НЕТ'];
+                    $secondaryDocumentLabels = $hasSecondary
+                        ? [$hasStsSec ? 'Есть' : 'НЕТ', $hasDkSec ? 'Есть' : 'НЕТ', $hasPhotoSec ? 'Есть' : 'НЕТ']
+                        : ['—', '—', '—'];
+                    $fullSearch = implode(' ', array_merge([(string)$vs['id'], $setLabel ?: '—', $primaryLabel, $volume, $capacity],
+                        $primaryDocumentLabels, [$secondaryLabel, $secVolume, $secCapacity], $secondaryDocumentLabels));
                 ?>
                 <tr data-vehicle-set-id="<?= (int)$vs['id'] ?>" data-erp-sort-date="<?= (int)$vs['id'] ?>" data-registry-search="<?= e($fullSearch) ?>" tabindex="0" aria-label="Транспорт <?= (int)$vs['id'] ?>. Enter или двойное нажатие открывает карточку">
                     <td class="registry-ui-id"><?= (int)$vs['id'] ?></td>
