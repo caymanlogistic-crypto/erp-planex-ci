@@ -93,6 +93,10 @@ jobs:
           echo 'Changed files:'
           cat /tmp/changed_files
 
+      - name: Production bootstrap before approved UI browser QA
+        if: steps.changes.outputs.approved_ui == 'true'
+        run: php tests/entrypoint_service_load_test.php
+
       - name: Setup Node for approved UI browser QA
         if: steps.changes.outputs.approved_ui == 'true'
         uses: actions/setup-node@v4
@@ -173,7 +177,9 @@ jobs:
           php tests/roles_access_legacy_session_upgrade_test.php
           php tests/roles_access_session_recovery_contract_test.php
           php tests/roles_access_131_production_migration_contract_test.php
-          php tests/entrypoint_service_load_test.php
+          if [ "${{ steps.changes.outputs.approved_ui }}" != "true" ]; then
+            php tests/entrypoint_service_load_test.php
+          fi
           php tests/roles_access_core_test.php
           php tests/roles_access_identity_membership_contract_test.php
           php tests/roles_access_assignment_endpoint_test.php

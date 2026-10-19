@@ -74,6 +74,21 @@ for workflow in ["ci.yml", "erpv2_fast_release.yml"]:
     assert "tools/ui_style_guard.py --base" in workflow_source
     assert "node tests/ui_standard_gallery_browser_test.mjs" in workflow_source
     assert "node tests/ui_standard_lab_browser_test.mjs" in workflow_source
+    assert workflow_source.index("run: php tests/entrypoint_service_load_test.php") < workflow_source.index("- name: Setup Node for approved UI browser QA")
+
+# Real execution ordering: a failed production startup gate prevents the costly
+# visual matrix, and remains a failed required UI group. No real DB is needed.
+original_run, original_exe = p.run, p.exe
+try:
+    commands = []
+    p.exe = lambda name: None
+    p.run = lambda command, env=None: (commands.append(command) or 1)
+    startup_result = {}
+    p.approved_ui_checks("base", "head", startup_result)
+    assert commands == [["php", "tests/entrypoint_service_load_test.php"]]
+    assert startup_result == {"APPROVED_UI_CONTRACTS": "FAIL"}
+finally:
+    p.run, p.exe = original_run, original_exe
 
 # Tenant scope plans the real canonical integration contract.
 tenant_scopes = p.ci.classify(["database/migrations-local/100_x.sql"])

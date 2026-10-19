@@ -48,6 +48,8 @@ The publisher does not create an application deploy and never authorizes product
 
 Do not run this command after every correction. During development use only focused syntax, contract, DB or browser checks that cover the current diff. Publish once when the correction batch is ready.
 
+Before the final publisher, finish every known code, test, generated-gallery and repository-memory/documentation change. Do not deliberately start a full preflight while planning another candidate edit. Collect review findings into one prioritized batch; send startup/access/data failures immediately. For UI transfers follow the preparation and stop criteria in `docs/ui/REGISTRY_WORKFLOW.md`: real production bootstrap precedes browser matrices, focused parity is diagnostic only, and final full coverage remains required. Batch closing documentation fixes into one PR when safe. Notion still updates after merge; do not manufacture repeated pushes merely to synchronize its final merge SHA into repository metadata.
+
 Use `local\Invoke-LocalTests.ps1`; `-Static` avoids allocating a disposable schema only for tests proven not to touch MySQL. Playwright tests use `local\Invoke-LocalBrowserTest.ps1`, which pins Node, `NODE_PATH`, `PLAYWRIGHT_BROWSERS_PATH` and verifies the Chromium executable before running the test. Do not install dependencies ad hoc inside a task worktree.
 
 The local environment exposes exact executables through `PLANEX_PHP`, `PLANEX_PYTHON`, `PLANEX_NODE`, `PLANEX_GIT`, `PLANEX_GZIP`, `PLANEX_TAR` and `PLANEX_MYSQL`. Nested Python subprocesses must use `PLANEX_PYTHON`/`sys.executable`, not a guessed `python3` command.

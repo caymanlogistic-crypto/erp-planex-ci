@@ -59,31 +59,55 @@ export async function appearance(page) {
   }, roles);
 }
 
-export async function assertAppearanceParity(reference, candidate, label) {
-  const expected = await appearance(reference);
+// Collect independent differences instead of making the agent restart the whole
+// browser matrix after every mismatched property. The count is never capped;
+// only stored examples are bounded so a broken layout cannot flood the report.
+export function compareAppearanceSnapshots(expected, actual, label, limit = 200) {
+  assert.ok(Number.isInteger(limit) && limit > 0, 'difference limit must be a positive integer');
   assert.ok(expected.some(role => role.elements.length), `${label}: no approved UI roles found`);
-  const actual=await appearance(candidate);
+  const differences=[], groups=new Map();
+  let differenceCount=0;
+  const compare=(value, approved, selector, index, property, context)=>{
+    if(value===approved)return;
+    differenceCount++;
+    const groupKey=JSON.stringify([selector,property]);
+    if(!groups.has(groupKey))groups.set(groupKey,{selector,property,count:0,example:{index,expected:approved??null,actual:value??null}});
+    groups.get(groupKey).count++;
+    if(differences.length<limit)differences.push({selector,index,property,expected:approved??null,actual:value??null,message:`${context} ${property}`});
+  };
   for(let r=0;r<expected.length;r++){
-    const context=`${label}: sandbox and implementation differ: ${expected[r].selector}`;
+    const role=expected[r], found=actual.find(item=>item.selector===role.selector);
+    const context=`${label}: sandbox and implementation differ: ${role.selector}`;
     // Semantic markers are not visible requirements. Missing/added marker
     // aliases are covered by mandatory geometry and rendered-text probes.
-    if(markers.has(expected[r].selector)&&(!expected[r].elements.length||!actual[r].elements.length))continue;
-    assert.equal(actual[r].elements.length,expected[r].elements.length,`${context} count`);
-    for(let i=0;i<expected[r].elements.length;i++){
-      const a=actual[r].elements[i],e=expected[r].elements[i];
-      assert.equal(a.visible,e.visible,`${context}[${i}] visible`);
-      if(e.visible&&a.visible)for(const key of ['x','y','width','height'])assert.equal(a[key],e[key],`${context}[${i}]${e.styles.text?` ${JSON.stringify(e.styles.text)}`:''} ${key}`);
+    if(markers.has(role.selector)&&(!role.elements.length||!found?.elements.length))continue;
+    compare(found?.elements.length??0,role.elements.length,role.selector,null,'count',context);
+    for(let i=0;i<Math.min(role.elements.length,found?.elements.length??0);i++){
+      const a=found.elements[i],e=role.elements[i];
+      const itemContext=`${context}[${i}]${e.styles.text?` ${JSON.stringify(e.styles.text)}`:''}`;
+      compare(a.visible,e.visible,role.selector,i,'visible',itemContext);
+      if(e.visible&&a.visible)for(const key of ['x','y','width','height'])compare(a[key],e[key],role.selector,i,key,itemContext);
       // Hidden controls have no painted appearance; their semantics remain covered
       // by the page's browser contract and become comparable when shown.
       if(e.visible&&a.visible)for(const key of Object.keys(e.styles)){
         // The table container paints no glyphs. Its inherited font/color can
         // differ after an opt-in migration; rendered child text is compared below.
-        if((['.registry-ui-table','.registry-ui-table--finance'].includes(expected[r].selector)||expected[r].selector==='.registry-ui-table :is(thead th,tbody td,tfoot td)')&&['fontFamily','fontSize','fontWeight','lineHeight','color'].includes(key))continue;
+        if((['.registry-ui-table','.registry-ui-table--finance'].includes(role.selector)||role.selector==='.registry-ui-table :is(thead th,tbody td,tfoot td)')&&['fontFamily','fontSize','fontWeight','lineHeight','color'].includes(key))continue;
         const border=key.match(/^border(Top|Bottom|Left|Right)Color$/);
         if(border&&e.styles[`border${border[1]}Width`]==='0px'&&a.styles[`border${border[1]}Width`]==='0px')continue;
         if(key==='outlineColor'&&['none','hidden'].includes(e.styles.outlineStyle)&&['none','hidden'].includes(a.styles.outlineStyle))continue;
-        assert.equal(a.styles[key],e.styles[key],`${context}[${i}]${e.styles.text?` ${JSON.stringify(e.styles.text)}`:''}${e.styles.placeholder?` ${JSON.stringify(e.styles.placeholder)}`:''}${e.styles.content?` ${e.styles.side} ${JSON.stringify(e.styles.content)}`:''} ${key}`);
+        compare(a.styles[key],e.styles[key],role.selector,i,key,`${itemContext}${e.styles.placeholder?` ${JSON.stringify(e.styles.placeholder)}`:''}${e.styles.content?` ${e.styles.side} ${JSON.stringify(e.styles.content)}`:''}`);
       }
     }
   }
+  return {differenceCount,differences,summary:[...groups.values()],truncated:differenceCount>differences.length};
+}
+
+export async function collectAppearanceDifferences(reference, candidate, label) {
+  return compareAppearanceSnapshots(await appearance(reference),await appearance(candidate),label);
+}
+
+export async function assertAppearanceParity(reference, candidate, label) {
+  const result=await collectAppearanceDifferences(reference,candidate,label);
+  assert.equal(result.differenceCount,0,result.differences[0]?.message);
 }
