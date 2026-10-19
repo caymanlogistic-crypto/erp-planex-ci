@@ -1,8 +1,9 @@
 <?php
 require_once base_path('app/View/components/view_formatters.php');
+require_once base_path('app/View/components/registry_tabler_icons.php');
 $registryHeadTitle = 'Список перевозчиков';
 $registryHeadSummary = 'Компании-перевозчики и ИП · Управление договорами и документами';
-$registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17h18l-2-7H5l-2 7Z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M7 10V6h10v4"/></svg>';
+$registryHeadIconHtml = registry_tabler_header_icon('truck-delivery');
 $contractorRegistryAvailable = $company !== null && ($company['status'] ?? '') === 'active' && !isset($dbError);
 $registryHeadActionsHtml = $contractorRegistryAvailable
     ? '<a href="' . e(app_url('/company/contractors/create-full')) . '" class="btn btn-secondary">Создать перевозчика + Водителя + Транспорт</a><button type="button" class="btn btn-primary" onclick="openModal(\'le-contractor-modal\')">Создать перевозчика</button>'

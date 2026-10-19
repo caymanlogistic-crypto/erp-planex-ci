@@ -1,8 +1,9 @@
 <?php
 require_once base_path('app/View/components/view_formatters.php');
+require_once base_path('app/View/components/registry_tabler_icons.php');
 $registryHeadTitle = 'Список транспорта';
 $registryHeadSummary = 'Тягачи и полуприцепы · Транспортные средства перевозчиков';
-$registryHeadIconHtml = '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 17h18l-2-7H5l-2 7Z"/><circle cx="7" cy="17" r="2"/><circle cx="17" cy="17" r="2"/><path d="M4 10V7h9v3"/></svg>';
+$registryHeadIconHtml = registry_tabler_header_icon('truck');
 $vehicleRegistryAvailable = $company !== null && ($company['status'] ?? '') === 'active' && !isset($dbError);
 $registryHeadActionsHtml = $vehicleRegistryAvailable ? '<button type="button" class="btn btn-primary" onclick="openModal(\'vehicle-set-create-modal\')">Добавить новый транспорт</button>' : '';
 require base_path('app/View/partials/registry_ui_head.php');

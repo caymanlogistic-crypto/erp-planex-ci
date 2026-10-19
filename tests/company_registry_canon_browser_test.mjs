@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {assertRegistryVisualContract,assertRegistryDataContract} from './helpers/registry_visual_contract.mjs';
 import {assertRegistryRows,assertRegistrySearch,assertRegistryScroll} from './helpers/registry_behavior_contract.mjs';
 import {companyRegistryExpectations} from './fixtures/company_registry_expectations.mjs';
+import {assertRegistryTablerIcon} from './helpers/registry_tabler_icon_contract.mjs';
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const render=(kind,state='populated',role='company_owner')=>execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/company_registry_canon_render.php'),kind,state,role],{encoding:'utf8'});
@@ -29,6 +30,14 @@ try{
    await page.goto(`http://127.0.0.1:${server.address().port}/company/${kind}`);
    await page.waitForSelector('[data-registry-ready="true"]');
    await assertRegistryVisualContract(page,`${kind} ${width}`);
+   await assertRegistryTablerIcon(page,kind);
+   if(width===1280){
+    const shape=page.locator('.registry-ui-head .rp-identity-icon svg path').last();
+    const original=await shape.getAttribute('d');
+    await shape.evaluate(node=>node.setAttribute('d','M1 1l9 9'));
+    await assert.rejects(assertRegistryTablerIcon(page,kind),/exact named Tabler outline geometry/,`${kind}: arbitrary path under Tabler class rejected`);
+    await shape.evaluate((node,d)=>node.setAttribute('d',d),original);
+   }
    await assertRegistryDataContract(page,kind);
    await assertRegistryRows(page,companyRegistryExpectations(kind),kind);
    if(kind==='contractors'&&width===1280){
@@ -82,7 +91,7 @@ try{
    assert.equal(await page.locator('tbody tr').first().getAttribute('data-erp-sort-date'),'74');
    const create=kind==='contractors'?'Создать перевозчика':'Добавить новый транспорт',modal=kind==='contractors'?'#le-contractor-modal':'#vehicle-set-create-modal';
    await page.getByRole('button',{name:create,exact:true}).first().click();assert.ok(await page.locator(modal).isVisible(),'create action preserved');
-   await page.locator(modal+' .modal-close').click();
+   await page.locator(modal+' .modal-close').first().click();
    const endpoint=kind==='contractors'?'contractors':'vehicle-sets';
    await page.route(`**/company/${endpoint}/74/modal-view`,route=>route.fulfill({status:200,contentType:'text/html',body:'<div class="modal-body"><div class="driver-view-name">Карточка</div></div>'}));
    const requested=page.waitForRequest(`**/company/${endpoint}/74/modal-view`);

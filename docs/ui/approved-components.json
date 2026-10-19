@@ -279,6 +279,7 @@
       "browser_test": "tests/company_registry_canon_browser_test.mjs",
       "runtime_browser_test": "tests/company_registry_runtime_browser_test.mjs",
       "route": "/erpv2/company/contractors",
+      "header_icon": "@tabler/icons@3.48.0:outline/truck-delivery",
       "view": "app/View/pages/company_contractors.php",
       "family": "registry"
     },
@@ -299,6 +300,7 @@
       "browser_test": "tests/company_registry_canon_browser_test.mjs",
       "runtime_browser_test": "tests/company_registry_runtime_browser_test.mjs",
       "route": "/erpv2/company/vehicle-sets",
+      "header_icon": "@tabler/icons@3.48.0:outline/truck",
       "view": "app/View/pages/company_vehicle_sets.php",
       "family": "registry"
     }
