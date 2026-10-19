@@ -6,6 +6,39 @@ const catalog=JSON.parse(readFileSync(new URL('../../docs/ui/approved-components
 const roleSelectors={primary:'.registry-ui-primary',name:'.registry-ui-name',secondary:'.registry-ui-secondary',plannedDate:'.registry-ui-planned-date',money:'tbody .registry-ui-money',id:'tbody .registry-ui-id',trip:'.registry-ui-trip',missing:'.registry-ui-missing',due:'.registry-ui-due',status:'.registry-ui-status',total:'tfoot td',reason:'.registry-ui-reason'};
 const firstFamily=value=>value.split(',')[0].trim().replace(/^["']|["']$/g,'');
 
+// Discover business tables from the registered card, before looking for any
+// approved class. An unmarked JS-created table must be visible to this gate.
+export async function assertRegistryTableState(page,pageId,state='initial',{runtime=false}={}) {
+  const definition=catalog.pages.find(item=>item.id===pageId);
+  assert.ok(definition?.table_surfaces?.length,`${pageId}: explicit business-table inventory required`);
+  const declared=definition.table_states?.find(item=>item.id===state);
+  assert.ok(declared,`${pageId}: undeclared table state ${state}`);
+  const observed=await page.evaluate(surfaces=>{
+    const visible=element=>{
+      const rect=element.getBoundingClientRect(),css=getComputedStyle(element);
+      return rect.width>0&&rect.height>0&&css.visibility!=='hidden'&&css.display!=='none';
+    };
+    const tables=[...document.querySelectorAll('.registry-ui-card table')].filter(visible);
+    return tables.map(table=>{
+      const owners=surfaces.filter(surface=>table.matches(surface.selector)).map(surface=>surface.id);
+      const header=table.tHead?.rows[0]?.cells[0];
+      return {owners,classes:table.className,headerBackground:header?getComputedStyle(header).backgroundColor:null,
+        rows:[...table.tBodies].flatMap(body=>[...body.rows]).filter(visible).length,
+        selector:table.outerHTML.slice(0,180)};
+    });
+  },definition.table_surfaces);
+  for(const table of observed){
+    assert.equal(table.owners.length,1,`${pageId}/${state}: visible business table missing or ambiguously mapped in inventory: ${table.selector}`);
+    assert.match(table.classes,/\bregistry-ui-table\b/,`${pageId}/${state}: visible business table lacks shared table role`);
+    assert.match(table.classes,/\bregistry-ui-data\b/,`${pageId}/${state}: visible business table lacks data role`);
+    const approvedHeader=table.classes.includes('registry-ui-table--finance')?'rgb(208, 204, 196)':'rgb(227, 222, 213)';
+    assert.equal(table.headerBackground,approvedHeader,`${pageId}/${state}: visible business table header differs from approved canon`);
+  }
+  assert.deepEqual(observed.map(table=>table.owners[0]).sort(),[...declared.visible].sort(),`${pageId}/${state}: declared business-table surfaces differ from actual visible DOM`);
+  console.log(`${runtime?'REGISTRY_RUNTIME_SURFACE':'REGISTRY_SURFACE_STATE'}=${pageId}:${state}`);
+  return observed;
+}
+
 export async function assertRegistryDataCoverage(page,label){
   const typed=Object.values(roleSelectors).map(selector=>selector.split(' ').at(-1)).filter(selector=>selector!=='td').join(',');
   const uncovered=await page.evaluate(typed=>{
@@ -87,10 +120,11 @@ export async function assertRegistryDataRoles(page, requiredRoles, label) {
   }
 }
 
-export async function assertRegistryDataContract(page, pageId) {
+export async function assertRegistryDataContract(page, pageId, {state='initial'}={}) {
   const definition=catalog.pages.find(item=>item.id===pageId);
   assert.equal(definition?.adaptation_status,'current_20261018',`${pageId}: data contract requires current registered page`);
   assert.ok(Array.isArray(definition.data_roles)&&definition.data_roles.length,`${pageId}: explicit data_roles required`);
+  await assertRegistryTableState(page,pageId,state);
   await assertRegistryDataRoles(page,definition.data_roles,pageId);
   await assertRegistryDataCoverage(page,pageId);
   await assertRegistryColumnGeometry(page,pageId);

@@ -6,6 +6,7 @@ import path from 'node:path';
 import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {assertRegistryRows} from './helpers/registry_behavior_contract.mjs';
+import {assertRegistryTableState} from './helpers/registry_visual_contract.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -41,6 +42,7 @@ try{
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
     await page.goto(origin+'/company/feo/requests/map-placement');
     await page.waitForSelector('[data-registry-ready="true"]');
+    await assertRegistryTableState(page,'feo-map-placement','initial',{runtime:true});
     const html=await page.content();
     for(const asset of ['registry-components.css','registry-components.js','feo-map-placement.js'])assert.ok(html.includes('/assets/'+(asset.endsWith('.css')?'css/':'js/')+asset),`real controller composes ${asset}`);
     await assertRegistryRows(page,{rowSelector:'.feo-placement-table tbody tr[data-placement-block-id]',rows:[
@@ -54,6 +56,7 @@ try{
     const search=page.locator('[data-placement-block-search]');
     await search.fill('302545\n281861');
     await page.getByText('Найдено по 2 заявкам.',{exact:false}).waitFor();
+    await assertRegistryTableState(page,'feo-map-placement','search-results',{runtime:true});
     assert.equal(await search.inputValue(),'302545, 281861','real search parser preserves two pasted IDs');
     assert.equal(await page.locator('[data-placement-search-block-id="74"]').count(),1,'real endpoint returns saved block');
     await page.locator('.registry-ui-reset').click();

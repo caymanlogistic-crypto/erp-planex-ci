@@ -486,7 +486,7 @@ q('[data-placement-open-current]')?.addEventListener('click',async()=>{
 
 const blockSearchInput=q('[data-placement-block-search]');
 const blockSearchResults=q('[data-placement-block-search-results]');
-let blockSearch={timer:0,generation:0,controller:null};
+let blockSearch={timer:0,generation:0,controller:null,query:null};
 
 function clearBlockSearch(){
   if(blockSearchResults){
@@ -508,25 +508,25 @@ function renderBlockSearch(data){
     const blocks=Array.isArray(item.blocks)?item.blocks:[];
     if(blocks.length){
       blocks.forEach(block=>{
-        rows.push(`<tr data-placement-search-block-id="${block.id}"><td class="feo-placement-search-col--request"><b>${esc(item.zayavka_id)}</b></td><td class="feo-placement-search-col--date">${esc(formatBlockOperationDate(block.created_at))}</td><td class="feo-placement-search-col--block">#${block.id}${block.name?' · '+esc(block.name):''}</td><td class="feo-placement-search-col--type">${block.block_type==='addition'?'Добавление':'Исключение'}</td></tr>`);
+        rows.push(`<tr data-placement-search-block-id="${block.id}"><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-primary">${esc(formatBlockOperationDate(block.created_at))}</span></td><td><span class="registry-ui-primary">#${esc(block.id)}</span>${block.name?`<span class="registry-ui-name" title="${esc(block.name)}">${esc(block.name)}</span>`:''}</td><td><span class="registry-ui-primary">${block.block_type==='addition'?'Добавление':'Исключение'}</span></td></tr>`);
       });
     }else{
       const blockText=item.exists_in_feo?'Не входит ни в один блок':'Нет в реестре ФЭО · не входит ни в один блок';
-      rows.push(`<tr><td class="feo-placement-search-col--request"><b>${esc(item.zayavka_id)}</b></td><td class="feo-placement-search-col--date">—</td><td class="feo-placement-search-col--block">${blockText}</td><td class="feo-placement-search-col--type">—</td></tr>`);
+      rows.push(`<tr><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-missing">—</span></td><td><span class="registry-ui-missing">${esc(blockText)}</span></td><td><span class="registry-ui-missing">—</span></td></tr>`);
     }
   });
   const duplicateNote=Array.isArray(data.duplicates)&&data.duplicates.length?` Повторы во вводе удалены: ${esc(data.duplicates.join(', '))}.`:'';
-  blockSearchResults.innerHTML=`<div class="feo-placement-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной клик по строке откроет блок.</div><table class="table feo-placement-search-table"><thead><tr><th class="feo-placement-search-col--request">ЗАЯВКА</th><th class="feo-placement-search-col--date">ДАТА ОПЕРАЦИИ</th><th class="feo-placement-search-col--block">БЛОК</th><th class="feo-placement-search-col--type">ТИП</th></tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  blockSearchResults.innerHTML=`<div class="feo-placement-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной клик по строке откроет блок.</div><div class="table-scroll" role="region" aria-label="Результаты поиска по блокам"><table class="table registry-ui-table registry-ui-data feo-placement-search-table"><colgroup><col class="registry-ui-id"><col class="feo-placement-search-col--date"><col><col class="feo-placement-search-col--type"></colgroup><thead><tr><th class="registry-ui-id" scope="col" aria-label="Заявка">ID</th><th>ДАТА ОПЕРАЦИИ</th><th>БЛОК</th><th>ТИП</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
   blockSearchResults.classList.remove('is-hidden');
   qa('[data-placement-search-block-id]',blockSearchResults).forEach(row=>row.addEventListener('dblclick',()=>openBlock(row.dataset.placementSearchBlockId)));
 }
-async function runBlockSearch(){
+async function runBlockSearch(generation){
   if(!blockSearchInput)return;
+  if(generation!==blockSearch.generation)return;
   const raw=blockSearchInput.value;
   if(!raw.trim()){clearBlockSearch();return;}
   const ids=extractClientRequestIds(raw);
   if(!ids.length){
-    if(blockSearch.controller)blockSearch.controller.abort();
     if(blockSearchResults){
       blockSearchResults.classList.remove('is-hidden');
       blockSearchResults.innerHTML='';
@@ -539,11 +539,12 @@ async function runBlockSearch(){
   }
   const normalized=ids.join(', ');
   blockSearchInput.value=normalized;
-  const generation=++blockSearch.generation;
-  if(blockSearch.controller)blockSearch.controller.abort();
-  blockSearch.controller=new AbortController();
+  blockSearch.query=normalized;
+  blockSearchInput.dispatchEvent(new Event('input',{bubbles:true}));
+  const controller=new AbortController();
+  blockSearch.controller=controller;
   try{
-    const data=await json(base+'/search-blocks?'+new URLSearchParams({request_ids:normalized}).toString(),{signal:blockSearch.controller.signal});
+    const data=await json(base+'/search-blocks?'+new URLSearchParams({request_ids:normalized}).toString(),{signal:controller.signal});
     if(generation!==blockSearch.generation)return;
     renderBlockSearch(data);
   }catch(e){
@@ -556,11 +557,21 @@ async function runBlockSearch(){
       renderMessage(notice,e.message);
       blockSearchResults.appendChild(notice);
     }
+  }finally{
+    if(blockSearch.controller===controller)blockSearch.controller=null;
   }
 }
 function scheduleBlockSearch(immediate=false){
+  const query=blockSearchInput?.value||'';
+  if(!immediate&&query===blockSearch.query)return;
+  blockSearch.query=query;
   clearTimeout(blockSearch.timer);
-  blockSearch.timer=window.setTimeout(runBlockSearch,immediate?0:280);
+  const generation=++blockSearch.generation;
+  if(blockSearch.controller)blockSearch.controller.abort();
+  blockSearch.controller=null;
+  clearBlockSearch();
+  if(!query.trim())return;
+  blockSearch.timer=window.setTimeout(()=>runBlockSearch(generation),immediate?0:280);
 }
 blockSearchInput?.addEventListener('input',()=>scheduleBlockSearch());
 blockSearchInput?.addEventListener('change',()=>scheduleBlockSearch());
@@ -571,6 +582,7 @@ blockSearchInput?.addEventListener('paste',ev=>{
     ev.preventDefault();
     blockSearchInput.value=ids.join(', ');
     scheduleBlockSearch(true);
+    blockSearchInput.dispatchEvent(new Event('input',{bubbles:true}));
   }
 });
 blockSearchInput?.addEventListener('keydown',ev=>{

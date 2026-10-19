@@ -28,12 +28,10 @@ col.feo-placement-col-status{width:105px}
 .feo-placement-block-search-results{padding:8px 0 0;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-placement-block-search-results.is-hidden{display:none}
 .feo-placement-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px;padding:0 8px}
-.feo-placement-search-table{width:100%;table-layout:auto;min-width:0!important;margin:0}
-.feo-placement-search-table th,.feo-placement-search-table td{vertical-align:middle}
-.feo-placement-search-col--request,.feo-placement-search-col--date,.feo-placement-search-col--type{width:1%;white-space:nowrap}
-.feo-placement-search-col--block{width:auto;white-space:normal;overflow-wrap:anywhere;word-break:normal}
+.feo-placement-search-table{margin:0}
+.feo-placement-search-table col.feo-placement-search-col--date{width:160px}
+.feo-placement-search-table col.feo-placement-search-col--type{width:112px}
 .feo-placement-search-table tbody tr[data-placement-search-block-id]{cursor:pointer}
-.feo-placement-search-table tbody tr[data-placement-search-block-id]:hover{background:var(--accent-bg)}
 .feo-placement-table th,.feo-placement-table td{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .feo-placement-table .feo-placement-name-cell,.feo-placement-table td:nth-child(6){white-space:normal;overflow-wrap:anywhere;word-break:normal;text-overflow:clip}
 .feo-placement-source-cell{white-space:normal!important;overflow-wrap:anywhere;word-break:normal;text-overflow:clip!important}

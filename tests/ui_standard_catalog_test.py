@@ -37,6 +37,26 @@ for page_id in [p['id'] for p in catalog['pages'] if p['family']=='registry']:
     next(page for page in wrong_source['pages'] if page['id']==page_id)['header_icon']['source']='app/View/components/tabler/outline/fake.svg'
     assert any(f'pages/{page_id}/header_icon' in error for error in ui_standard.validate(wrong_source))
 
+    missing_inventory=copy.deepcopy(catalog)
+    next(page for page in missing_inventory['pages'] if page['id']==page_id).pop('table_surfaces')
+    assert any(f'pages/{page_id}: explicit scoped table_surfaces' in error for error in ui_standard.validate(missing_inventory))
+
+    missing_state=copy.deepcopy(catalog)
+    next(page for page in missing_state['pages'] if page['id']==page_id).pop('table_states')
+    assert any(f'pages/{page_id}: table_states' in error for error in ui_standard.validate(missing_state))
+
+    missing_async_decision=copy.deepcopy(catalog)
+    next(page for page in missing_async_decision['pages'] if page['id']==page_id).pop('async_search')
+    assert any(f'pages/{page_id}: explicit async_search' in error for error in ui_standard.validate(missing_async_decision))
+
+missing_async_execution=copy.deepcopy(catalog)
+next(page for page in missing_async_execution['pages'] if page['id']=='feo-map-placement')['async_search']['browser_test']='tests/registry_visual_gate_test.mjs'
+assert any('pages/feo-map-placement/async_search' in error for error in ui_standard.validate(missing_async_execution))
+
+missing_dynamic_state=copy.deepcopy(catalog)
+next(page for page in missing_dynamic_state['pages'] if page['id']=='feo-map-placement')['table_states']=[{'id':'initial','visible':['main']}]
+assert any('pages/feo-map-placement: async_search required_states' in error for error in ui_standard.validate(missing_dynamic_state))
+
 new_registry=copy.deepcopy(catalog)
 entry=copy.deepcopy(next(page for page in catalog['pages'] if page['id']=='contractors'))
 entry['id']='new-registry';entry.pop('runtime_browser_test');entry.pop('header_icon')
