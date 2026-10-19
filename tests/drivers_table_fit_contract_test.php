@@ -1,27 +1,12 @@
 <?php
-
 declare(strict_types=1);
-
-$root = dirname(__DIR__);
-$view = @file_get_contents($root . '/app/View/pages/company_drivers.php');
-if (!is_string($view)) {
-    fwrite(STDERR, "FAIL: cannot read company_drivers.php\n");
-    exit(1);
-}
-
-$must = static function (bool $ok, string $message): void {
-    if (!$ok) {
-        fwrite(STDERR, "FAIL: {$message}\n");
-        exit(1);
-    }
-};
-
-$must(str_contains($view, 'table-card table-card--standard drivers-table-card'), 'drivers table must use scoped fit-to-card class');
-$must(str_contains($view, 'class="table drivers-table"'), 'drivers table must use scoped fixed-layout class');
-$must(str_contains($view, '.drivers-table-card > .table-scroll') && str_contains($view, 'overflow-x: hidden;'), 'drivers table horizontal scrolling must stay disabled');
-$must(str_contains($view, '.drivers-table-card .drivers-table') && str_contains($view, 'table-layout: fixed;'), 'drivers table must stay constrained to card width');
-$must(substr_count($view, '.drivers-table-card .drivers-table th:nth-child(') === 8, 'drivers table must keep explicit widths for all eight columns');
-$must(str_contains($view, 'driver_table_limit_text($fullPassport, 55)'), 'passport preview must stay compact');
-$must(str_contains($view, 'title="\' . e($fullPassport) . \'"'), 'full passport text must remain available in the title tooltip');
-
+$root=dirname(__DIR__);$view=file_get_contents($root.'/app/View/pages/company_drivers.php');
+$must=static function(bool $ok,string $message):void{if(!$ok){fwrite(STDERR,"FAIL: $message\n");exit(1);}};
+$must(!str_contains($view,'<style>'),'no local presentation copy');
+$must(str_contains($view,'registry_ui_head.php')&&str_contains($view,'registry_ui_state_scope.php'),'shared header and authorized scope');
+$must(str_contains($view,'registry-ui-data')&&str_contains($view,'registry-ui-scroll'),'shared responsive table');
+$must(substr_count($view,'<th>')===8,'all eight business columns');
+$must(str_contains($view,'data-registry-search="<?= e($fullSearch) ?>"'),'full raw values remain searchable');
+$must(str_contains($view,'data-driver-id=')&&str_contains($view,"'/company/drivers/modal-create'"),'existing modal targets preserved');
+$must(!str_contains($view,'Сортировка по:')&&!str_contains($view,'table-footer'),'no redundant label/footer');
 echo "DRIVERS_TABLE_FIT_CONTRACT=PASS\n";
