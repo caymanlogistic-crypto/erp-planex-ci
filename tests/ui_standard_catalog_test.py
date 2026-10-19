@@ -20,11 +20,37 @@ for page_id in ['contractors','vehicle-sets']:
     next(page for page in missing_runtime['pages'] if page['id']==page_id).pop('runtime_browser_test')
     assert any(f'pages/{page_id}/runtime_browser_test' in error for error in ui_standard.validate(missing_runtime))
 
+    missing_icon=copy.deepcopy(catalog)
+    next(page for page in missing_icon['pages'] if page['id']==page_id).pop('header_icon')
+    assert any(f'pages/{page_id}/header_icon' in error for error in ui_standard.validate(missing_icon))
+
+    wrong_pack=copy.deepcopy(catalog)
+    next(page for page in wrong_pack['pages'] if page['id']==page_id)['header_icon']='invented-pack:hand-drawn'
+    assert any(f'pages/{page_id}/header_icon' in error for error in ui_standard.validate(wrong_pack))
+
+    wrong_name=copy.deepcopy(catalog)
+    next(page for page in wrong_name['pages'] if page['id']==page_id)['header_icon']['name']='hand-drawn'
+    assert any(f'pages/{page_id}/header_icon' in error for error in ui_standard.validate(wrong_name))
+
+    wrong_source=copy.deepcopy(catalog)
+    next(page for page in wrong_source['pages'] if page['id']==page_id)['header_icon']['source']='app/View/components/tabler/outline/fake.svg'
+    assert any(f'pages/{page_id}/header_icon' in error for error in ui_standard.validate(wrong_source))
+
 new_registry=copy.deepcopy(catalog)
 entry=copy.deepcopy(next(page for page in catalog['pages'] if page['id']=='contractors'))
-entry['id']='new-registry';entry.pop('runtime_browser_test')
+entry['id']='new-registry';entry.pop('runtime_browser_test');entry.pop('header_icon')
 new_registry['pages'].append(entry)
 assert any('pages/new-registry/runtime_browser_test' in error for error in ui_standard.validate(new_registry))
+assert any('pages/new-registry/header_icon' in error for error in ui_standard.validate(new_registry))
+entry['header_icon']=copy.deepcopy(next(page for page in catalog['pages'] if page['id']=='contractors')['header_icon'])
+assert not any('pages/new-registry/header_icon' in error for error in ui_standard.validate(new_registry))
+
+old_debt=ui_standard.ICON_PROVENANCE_DEBT['drivers']
+try:
+    ui_standard.ICON_PROVENANCE_DEBT['drivers']=(old_debt[0],old_debt[1],'0'*64)
+    assert any('pages/drivers/header_icon' in error for error in ui_standard.validate(catalog))
+finally:
+    ui_standard.ICON_PROVENANCE_DEBT['drivers']=old_debt
 
 unapproved = copy.deepcopy(catalog)
 unapproved["components"].append({

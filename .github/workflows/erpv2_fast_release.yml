@@ -116,6 +116,8 @@ jobs:
           done < <(python3 tools/ui_standard.py tests --all)
           node tests/ui_standard_gallery_browser_test.mjs
           node tests/ui_standard_lab_browser_test.mjs
+          node tests/registry_visual_gate_test.mjs
+          node tools/registry_visual_gate.mjs
 
       - name: Registered registry runtime and own-scope browser QA
         run: bash tools/ci_registry_runtime.sh
