@@ -2,6 +2,10 @@
 /** @var ContractorService $service */
 requireRole(['company_owner', 'senior_logist', 'logist']);
 $pageTitle = 'Перевозчики';
+$pageStylesheets[] = '/assets/css/registry-components.css';
+$pageStylesheets[] = '/assets/css/contractors-registry.css';
+$pageScripts[] = '/assets/js/table-reference-select.js';
+$pageScripts[] = '/assets/js/registry-components.js';
 $pageContext = 'Перевозчики › Компания';
 
 $companyId = $service->getCompanyId();
