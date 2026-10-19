@@ -35,16 +35,8 @@ $ok(
     preg_match('/<textarea\b[^>]*\brows="1"[^>]*\bdata-placement-block-search\b[^>]*><\/textarea>/i', $view) === 1
     && preg_match('/<input\b[^>]*\bdata-placement-block-search\b[^>]*>/i', $view) === 0
 );
-$ok(
-    'map-placement search desktop width overrides generic 200px toolbar search and is tripled',
-    str_contains($view, '.feo-placement-toolbar-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;max-width:100%;min-width:0}')
-    && str_contains($view, '.feo-placement-toolbar .feo-placement-block-search-input{width:600px;min-width:320px;max-width:100%;resize:none;overflow:hidden;line-height:calc(var(--toolbar-h) - 2px);padding:0 9px}')
-);
-$ok(
-    'map-placement search remains responsive without page overflow',
-    str_contains($view, '.feo-placement-toolbar-actions{width:100%}')
-    && str_contains($view, '.feo-placement-toolbar .feo-placement-block-search-input{width:100%;min-width:0;max-width:100%}')
-);
+$ok('map-placement search uses the approved search role while retaining multiline input', str_contains($view, 'class="toolbar-search registry-ui-search"') && str_contains($view, 'data-placement-block-search'));
+$ok('map-placement search remains responsive with shared toolbar rules', str_contains($view, 'registry-ui-toolbar') && str_contains($view, 'registry-ui-search-group'));
 $ok(
     'map-placement page owns the placement script instead of loading it globally',
     $scriptPos !== false
@@ -162,7 +154,8 @@ $ok(
     && str_contains($view, '.feo-placement-search-col--block{width:auto;white-space:normal;overflow-wrap:anywhere;word-break:normal}')
 );
 $ok('search result table has no side or bottom padding', str_contains($view, '.feo-placement-block-search-results{padding:8px 0 0;'));
-$ok('search textarea content is vertically centered', str_contains($view, 'line-height:calc(var(--toolbar-h) - 2px);padding:0 9px'));
+$registryCss = $read($root . '/public/assets/css/registry-components.css');
+$ok('search textarea content is vertically centered by shared source', str_contains($registryCss, 'textarea.registry-ui-search {resize:none;overflow-x:auto;overflow-y:hidden;white-space:nowrap;padding-top:7px;padding-bottom:7px}'));
 $ok(
     'search explicitly shows missing registry and no-block states',
     str_contains($js, 'Нет в реестре ФЭО')

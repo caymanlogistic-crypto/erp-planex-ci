@@ -221,12 +221,12 @@ foreach ([
     'Пересчитать состав', 'Актуальные заявки', 'Найти заявку в блоках',
     'data-placement-block-search', 'data-placement-live-validation',
 ] as $needle) $ok('view contains ' . $needle, str_contains($view, $needle));
-$ok('placement table card outer border is removed', str_contains($view, '.feo-placement-table-card{display:block;min-width:0;border:0!important;box-shadow:none!important;background:transparent!important}'));
-$ok('applied and disabled statuses use system green/red variables', str_contains($view, 'feo-placement-status--applied{color:var(--success') && str_contains($view, 'feo-placement-status--disabled{color:var(--danger'));
-$ok('KPI boxes are removed and summary moved into toolbar', !str_contains($view, 'feo-placement-kpi') && !str_contains($view, 'feo-placement-summary') && str_contains($view, 'feo-placement-toolbar-summary') && str_contains($view, 'Масса: <b>'));
+$ok('placement table uses the approved bordered registry card', str_contains($view, 'registry-ui-card registry-ui-sticky-table registry-ui-sticky-table--wide-scroll') && !str_contains($view, 'border:0!important'));
+$ok('applied and disabled statuses use approved semantic roles', str_contains($view, "'registry-ui-success' : 'registry-ui-error'"));
+$ok('KPI boxes are removed and summary remains in toolbar', !str_contains($view, 'feo-placement-kpi') && !str_contains($view, 'feo-placement-summary') && str_contains($view, 'registry-ui-toolbar') && str_contains($view, 'Масса: <b>'));
 $ok('source column shows filename or manual request list', str_contains($view, "\$block['request_ids_text']") && str_contains($view, "\$block['source_filename']") && str_contains($view, 'title="<?= e($sourceText) ?>"'));
 $ok('block detail modal has no outer body padding or horizontal overflow', str_contains($view, '.feo-placement-detail-modal-body{padding:0!important;overflow:hidden!important}') && str_contains($view, 'overflow-y:auto;overflow-x:hidden'));
-$ok('page placement table suppresses horizontal scrolling', str_contains($view, '.feo-placement-table-card .table-scroll{overflow-x:hidden}') && str_contains($view, 'min-width:0!important'));
+$ok('page placement table scrolls internally on narrow screens', str_contains($view, 'registry-ui-sticky-table--wide-scroll') && !str_contains($view, '.feo-placement-table-card .table-scroll{overflow-x:hidden}'));
 $ok('repeat warning has structured rows', str_contains($view, '.feo-placement-repeat-item{display:grid') && str_contains($view, '.feo-placement-repeat-blocks{display:grid'));
 
 $js = $read($root . '/public/assets/js/feo-map-placement.js');

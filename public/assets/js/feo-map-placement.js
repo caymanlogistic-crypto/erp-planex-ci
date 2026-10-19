@@ -563,6 +563,7 @@ function scheduleBlockSearch(immediate=false){
   blockSearch.timer=window.setTimeout(runBlockSearch,immediate?0:280);
 }
 blockSearchInput?.addEventListener('input',()=>scheduleBlockSearch());
+blockSearchInput?.addEventListener('change',()=>scheduleBlockSearch());
 blockSearchInput?.addEventListener('paste',ev=>{
   const pasted=ev.clipboardData?.getData('text/plain')||'';
   const ids=extractClientRequestIds(pasted);
