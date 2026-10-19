@@ -241,6 +241,8 @@ def approved_ui_checks(base,head,results):
         need(test); cmdcheck(results,'APPROVED_UI_CONTRACTS',['node',test])
     for test in dict.fromkeys([p["browser_test"] for p in catalog["pages"]]+["tests/ui_standard_gallery_browser_test.mjs","tests/ui_standard_lab_browser_test.mjs"]):
         need(test); cmdcheck(results,"APPROVED_UI_CONTRACTS",["node",test])
+    for test in ('tests/registry_visual_gate_test.mjs','tools/registry_visual_gate.mjs'):
+        need(test); cmdcheck(results,'APPROVED_UI_CONTRACTS',['node',test])
 
 def execute_local_required(cls,head,paths,scopes,rows,lines,required,base):
     results={}; want=set(required)

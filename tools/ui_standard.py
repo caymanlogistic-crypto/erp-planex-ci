@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import html
 import json
 import re
@@ -17,6 +18,17 @@ LEGACY_PAGES = frozenset({'route-executors','trips-departures','finance-received
 # Existing pages retain their historical fixtures until a scoped runtime migration.
 # This closed list cannot grandfather a newly registered registry.
 RUNTIME_FIXTURE_DEBT = LEGACY_PAGES | {'drivers'}
+# These five historical headers have not had their SVG provenance verified.
+# Their exact view bytes are frozen; editing a view closes its exemption.
+ICON_PROVENANCE_DEBT = {
+    'route-executors': ('/erpv2/company/route-executors', 'app/View/pages/company_route_executors.php', '4f8207e13c8b9711ff129f15ec9c423c2a439650da03896cd9acb38853c5c91e'),
+    'trips-departures': ('/erpv2/company/trips/departures', 'app/View/pages/company_waste_trips.php', 'b0bd8d7086c189d4bfd5802cf96f710ae927f37be56ad4fe91955d12e80d6e47'),
+    'finance-received-paid': ('/erpv2/company/finance/received-paid', 'app/View/partials/finance_received_paid_ledger.php', 'b7be3c91bdba29b2de49b4460eb027373b46e6fd514129b29eb4a1ac63f605f5'),
+    'logistics-closing-documents': ('/erpv2/company/logistics/closing-documents', 'app/View/pages/company_waste_trip_closing_registry.php', '7035daf30759135e9846cd4fcb01a7f51ff568f24ec6781791240e2a5e9bdf9f'),
+    'drivers': ('/erpv2/company/drivers', 'app/View/pages/company_drivers.php', '35fe36c36c2d4589eb1b8ab9625e08ee82520f5b34431f916ad75c5424e93def'),
+}
+TABLER_MANIFEST = 'docs/ui/tabler-outline-3.48.0.json'
+TABLER_MANIFEST_SHA256 = 'effa1ed6d92b1d4fddec70099375fb0105fcd2e9741860b10c26315594e2a079'
 DATA_ROLES = frozenset({'primary','name','secondary','money','id','trip','missing','due','status','total','reason'})
 PAGE_DATA_ROLES = {
     'route-executors': {'primary','name','secondary','status'},
@@ -37,8 +49,23 @@ def load() -> dict:
     return json.loads(CATALOG.read_text(encoding="utf-8"))
 
 
+def official_tabler_icons() -> dict[str, str]:
+    source = safe_file(TABLER_MANIFEST).read_bytes()
+    if hashlib.sha256(source).hexdigest() != TABLER_MANIFEST_SHA256:
+        raise ValueError('official Tabler icon manifest changed')
+    manifest = json.loads(source)
+    if (manifest.get('package'), manifest.get('version'), manifest.get('variant')) != ('@tabler/icons', '3.48.0', 'outline'):
+        raise ValueError('official Tabler icon manifest metadata changed')
+    return manifest['icons']
+
+
 def validate(data: dict) -> list[str]:
     errors: list[str] = []
+    try:
+        icon_hashes = official_tabler_icons()
+    except (ValueError, OSError, KeyError, json.JSONDecodeError) as exc:
+        errors.append(f'official Tabler icon manifest: {exc}')
+        icon_hashes = {}
     if data.get("schema_version") != 2:
         errors.append("schema_version must be 2")
     try:
@@ -105,6 +132,31 @@ def validate(data: dict) -> list[str]:
                     errors.append(f"pages/{name}: ERP route required")
                 if item.get("family") == "registry" and (type(item.get("sticky")) is not bool or type(item.get("reference_select")) is not bool):
                     errors.append(f"pages/{name}: sticky and reference_select must be explicit booleans")
+                if item.get('family') == 'registry':
+                    icon = item.get('header_icon')
+                    debt = ICON_PROVENANCE_DEBT.get(name)
+                    if icon is None and debt:
+                        route, view, digest = debt
+                        if item.get('route') != route or item.get('view') != view or not (ROOT / view).is_file() or hashlib.sha256(safe_file(view).read_bytes()).hexdigest() != digest:
+                            errors.append(f'pages/{name}/header_icon: historical icon debt is frozen; changed registry view requires official provenance')
+                    elif not isinstance(icon, dict):
+                        errors.append(f'pages/{name}/header_icon: named official Tabler outline metadata required')
+                    else:
+                        expected = {'role': 'registry.page-head', 'pack': '@tabler/icons', 'version': '3.48.0', 'variant': 'outline'}
+                        if any(icon.get(key) != value for key, value in expected.items()):
+                            errors.append(f'pages/{name}/header_icon: approved role and @tabler/icons 3.48.0 outline required')
+                        icon_name = icon.get('name')
+                        icon_source = icon.get('source')
+                        if not isinstance(icon_name, str) or icon_name not in icon_hashes:
+                            errors.append(f'pages/{name}/header_icon: unknown official outline name')
+                        if icon_source != f'app/View/components/tabler/outline/{icon_name}.svg':
+                            errors.append(f'pages/{name}/header_icon: shared source must match named icon')
+                        else:
+                            try:
+                                if hashlib.sha256(safe_file(icon_source).read_bytes()).hexdigest() != icon_hashes.get(icon_name):
+                                    errors.append(f'pages/{name}/header_icon: source differs from official package bytes')
+                            except (ValueError, OSError) as exc:
+                                errors.append(f'pages/{name}/header_icon: {exc}')
                 for field in ("view", "browser_test", "asset_owner"):
                     if field == "asset_owner" and not item.get(field):
                         continue

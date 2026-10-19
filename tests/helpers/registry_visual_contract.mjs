@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
+import {assertRegistryTablerIcon} from './registry_tabler_icon_contract.mjs';
 
 const catalog=JSON.parse(readFileSync(new URL('../../docs/ui/approved-components.json',import.meta.url),'utf8'));
+const iconProvenanceDebt=new Set(['route-executors','trips-departures','finance-received-paid','logistics-closing-documents','drivers']);
 const roleSelectors={primary:'.registry-ui-primary',name:'.registry-ui-name',secondary:'.registry-ui-secondary',plannedDate:'.registry-ui-planned-date',money:'tbody .registry-ui-money',id:'tbody .registry-ui-id',trip:'.registry-ui-trip',missing:'.registry-ui-missing',due:'.registry-ui-due',status:'.registry-ui-status',total:'tfoot td',reason:'.registry-ui-reason'};
 const firstFamily=value=>value.split(',')[0].trim().replace(/^["']|["']$/g,'');
 
@@ -96,6 +98,18 @@ export async function assertRegistryDataContract(page, pageId) {
 }
 
 export async function assertRegistryVisualContract(page, label) {
+  const pageId=label.split(/\s+/)[0];
+  const definition=catalog.pages.find(item=>item.id===pageId);
+  if(pageId==='gallery'){
+    assert.equal(page.url(),'about:srcdoc','gallery-only icon exemption requires the approved specimen frame');
+  }else{
+    assert.equal(definition?.family,'registry',`${label}: registered registry page required by common visual contract`);
+    if(definition.header_icon||!iconProvenanceDebt.has(pageId)){
+      const actualPath=new URL(page.url()).pathname;
+      assert.ok([definition.route,definition.route.replace(/^\/erpv2/,'')].includes(actualPath),`${label}: browser route must match registered page before icon acceptance`);
+      await assertRegistryTablerIcon(page,pageId);
+    }
+  }
   await page.evaluate(async () => {
     await Promise.allSettled([400,500,600,700].map(weight=>document.fonts.load(`${weight} 12px "IBM Plex Sans"`)));
     await document.fonts.ready;
@@ -140,5 +154,6 @@ export async function assertRegistryVisualContract(page, label) {
   assert.deepEqual([appearance.head?.borderTopColor,appearance.head?.borderTopWidth], ['rgb(168, 161, 150)','1px'], `${label}: header frame`);
   assert.deepEqual([appearance.search?.height,appearance.search?.fontSize,appearance.search?.fontWeight,appearance.search?.borderRadius,appearance.search?.backgroundColor], ['32px','12px','500','2px','rgb(255, 253, 249)'], `${label}: search appearance`);
   await assertRegistryDataRoles(page,[],label);
+  if(definition&&(definition.header_icon||!iconProvenanceDebt.has(pageId)))console.log(`REGISTRY_VISUAL_PAGE=${pageId}`);
   return metrics;
 }
