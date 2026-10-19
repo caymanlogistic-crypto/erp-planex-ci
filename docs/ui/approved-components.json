@@ -225,7 +225,8 @@
       "table_surfaces": [
         {
           "id": "main",
-          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         }
       ],
       "table_states": [
@@ -233,7 +234,10 @@
           "id": "initial",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         }
       ],
       "async_search": {
@@ -271,7 +275,8 @@
       "table_surfaces": [
         {
           "id": "main",
-          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         }
       ],
       "table_states": [
@@ -279,7 +284,10 @@
           "id": "initial",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         }
       ],
       "async_search": {
@@ -319,7 +327,8 @@
       "table_surfaces": [
         {
           "id": "main",
-          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         }
       ],
       "table_states": [
@@ -327,7 +336,10 @@
           "id": "initial",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         }
       ],
       "async_search": {
@@ -364,7 +376,8 @@
       "table_surfaces": [
         {
           "id": "main",
-          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         }
       ],
       "table_states": [
@@ -372,7 +385,10 @@
           "id": "initial",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         }
       ],
       "async_search": {
@@ -408,7 +424,8 @@
       "table_surfaces": [
         {
           "id": "main",
-          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         }
       ],
       "table_states": [
@@ -416,7 +433,10 @@
           "id": "initial",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         }
       ],
       "async_search": {
@@ -454,7 +474,8 @@
       "table_surfaces": [
         {
           "id": "main",
-          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         }
       ],
       "table_states": [
@@ -462,7 +483,10 @@
           "id": "initial",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         }
       ],
       "async_search": {
@@ -500,7 +524,8 @@
       "table_surfaces": [
         {
           "id": "main",
-          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         }
       ],
       "table_states": [
@@ -508,7 +533,10 @@
           "id": "initial",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         }
       ],
       "async_search": {
@@ -544,11 +572,13 @@
       "table_surfaces": [
         {
           "id": "main",
-          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table"
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         },
         {
           "id": "block-search-results",
-          "selector": ".registry-ui-card [data-placement-block-search-results] .table-scroll > table"
+          "selector": ".registry-ui-card [data-placement-block-search-results] .table-scroll > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
         }
       ],
       "table_states": [
@@ -556,49 +586,74 @@
           "id": "initial",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          },
+          "empty_fixture": true
         },
         {
           "id": "search-pending",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         },
         {
           "id": "search-results",
           "visible": [
             "main",
             "block-search-results"
-          ]
+          ],
+          "data": {
+            "main": "populated",
+            "block-search-results": "populated"
+          }
         },
         {
           "id": "search-empty",
           "visible": [
             "main",
             "block-search-results"
-          ]
+          ],
+          "data": {
+            "main": "populated",
+            "block-search-results": "empty"
+          }
         },
         {
           "id": "search-error",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         },
         {
           "id": "reset",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         },
         {
           "id": "reload",
           "visible": [
             "main"
-          ]
+          ],
+          "data": {
+            "main": "populated"
+          }
         },
         {
           "id": "page-error",
-          "visible": []
+          "visible": [],
+          "data": {}
         }
       ],
       "async_search": {
@@ -612,7 +667,16 @@
           "reset",
           "reload"
         ]
-      }
+      },
+      "required_contracts": [
+        "tests/feo_placement_contract_test.php"
+      ],
+      "contract_sources": [
+        "app/Service/FeoPlacement*.php",
+        "app/Http/Routes/company_feo_requests.php",
+        "tests/feo_placement*.php",
+        "tests/fixtures/feo_map_placement*.php"
+      ]
     }
   ],
   "decisions": "docs/ui/decisions-20261018.json"

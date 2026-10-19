@@ -122,7 +122,7 @@ def validate(data: dict) -> list[str]:
                         errors.append(f'pages/{name}: data_roles must cover applicable canonical roles, including {sorted(minimum)}')
                     surfaces=item.get('table_surfaces')
                     states=item.get('table_states')
-                    if not isinstance(surfaces,list) or not surfaces or any(not isinstance(surface,dict) or not ID.fullmatch(str(surface.get('id',''))) or not str(surface.get('selector','')).startswith('.registry-ui-card ') or not str(surface.get('selector','')).endswith('table') for surface in surfaces):
+                    if not isinstance(surfaces,list) or not surfaces or any(not isinstance(surface,dict) or not ID.fullmatch(str(surface.get('id',''))) or not str(surface.get('selector','')).startswith('.registry-ui-card ') or not str(surface.get('selector','')).endswith('table') or not isinstance(surface.get('row_selector'),str) or not surface['row_selector'].startswith('tbody > tr') for surface in surfaces):
                         errors.append(f'pages/{name}: explicit scoped table_surfaces inventory required')
                         surface_ids=set()
                     else:
@@ -132,6 +132,16 @@ def validate(data: dict) -> list[str]:
                         errors.append(f'pages/{name}: table_states must cover declared surface IDs')
                     elif states[0].get('id')!='initial' or 'main' not in states[0]['visible'] or len({state['id'] for state in states})!=len(states):
                         errors.append(f'pages/{name}: initial and unique table_states required')
+                    for state in states or []:
+                        if not isinstance(state,dict) or not isinstance(state.get('visible'),list): continue
+                        expectations=state.get('data')
+                        if not isinstance(expectations,dict) or set(expectations)!=set(state['visible']) or any(value not in ('populated','empty') for value in expectations.values()):
+                            errors.append(f'pages/{name}/{state.get("id")}: explicit per-surface data expectations required')
+                        if 'empty_fixture' in state and (state.get('id')!='initial' or state['empty_fixture'] is not True):
+                            errors.append(f'pages/{name}: supplementary empty fixture requires initial and explicit true')
+                    populated={surface for state in states or [] if isinstance(state,dict) and isinstance(state.get('data'),dict) for surface,expectation in state['data'].items() if expectation=='populated'}
+                    if populated!=surface_ids or (states and isinstance(states[0],dict) and states[0].get('data',{}).get('main')!='populated'):
+                        errors.append(f'pages/{name}: initial main and every inventoried surface require populated fixture coverage')
                     async_search=item.get('async_search')
                     if not isinstance(async_search,dict) or type(async_search.get('applicable')) is not bool:
                         errors.append(f'pages/{name}: explicit async_search applicability required')
@@ -149,6 +159,20 @@ def validate(data: dict) -> list[str]:
                             errors.append(f'pages/{name}/async_search: {exc}')
                     elif not str(async_search.get('reason','')).strip():
                         errors.append(f'pages/{name}: non-applicable async_search needs a reason')
+                sources=item.get('contract_sources',[])
+                if not isinstance(sources,list) or any(not isinstance(source,str) or not re.fullmatch(r'(?:app|tests)/[a-zA-Z0-9_/*.-]+',source) or '..' in source or not list(ROOT.glob(source)) for source in sources):
+                    errors.append(f'pages/{name}: contract_sources must match existing bounded app/tests paths')
+                required_contracts=item.get('required_contracts',[])
+                if name=='feo-map-placement' and 'tests/feo_placement_contract_test.php' not in required_contracts:
+                    errors.append(f'pages/{name}: required FEO PHP contract missing')
+                if not isinstance(required_contracts,list):
+                    errors.append(f'pages/{name}: required_contracts must be a list')
+                else:
+                    for contract in required_contracts:
+                        try:
+                            if not re.fullmatch(r'tests/[a-zA-Z0-9_/-]+_test\.php',contract): raise ValueError('required PHP contract path')
+                            safe_file(contract)
+                        except (ValueError,TypeError) as exc: errors.append(f'pages/{name}/required_contracts: {exc}')
                 if not item.get("route", "").startswith("/erpv2/"):
                     errors.append(f"pages/{name}: ERP route required")
                 if item.get("family") == "registry" and (type(item.get("sticky")) is not bool or type(item.get("reference_select")) is not bool):

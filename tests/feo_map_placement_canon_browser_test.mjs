@@ -39,6 +39,19 @@ try{
     await page.waitForSelector('[data-registry-ready="true"]');
     await assertRegistryVisualContract(page,`feo-map-placement ${width}`);
     await assertRegistryDataContract(page,'feo-map-placement');
+    if(width===390){
+      await page.locator('main.content').evaluate(element=>element.style.minWidth='900px');
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','initial'),/outer horizontal overflow/,'mobile outer overflow must be RED');
+      await page.locator('main.content').evaluate(element=>element.style.removeProperty('min-width'));
+      await assertRegistryTableState(page,'feo-map-placement','initial');
+      const wrap=page.locator('.registry-ui-card > .table-scroll');
+      await wrap.evaluate(element=>element.style.setProperty('overflow-x','hidden','important'));
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','initial'),/must actually scroll inside/,'clipped wide table must be RED');
+      await wrap.evaluate(element=>element.style.removeProperty('overflow-x'));
+      await assertRegistryTableState(page,'feo-map-placement','initial');
+      console.log('REGISTRY_SURFACE_NEGATIVE=feo-map-placement:mobile-outer-overflow,missing-inner-scroll');
+    }
+
     if(evidence){mkdirSync(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,`placement-${width}-initial.png`)});}
     const geometry=await page.evaluate(()=>{
       const rect=selector=>document.querySelector(selector).getBoundingClientRect().toJSON();
@@ -70,6 +83,15 @@ try{
     await page.getByText('Найдено по 2 заявкам.',{exact:false}).waitFor();
     await assertRegistryDataContract(page,'feo-map-placement',{state:'search-results'});
     const searchTable=page.locator('[data-placement-block-search-results] .feo-placement-search-table');
+    if(width===390){
+      const body=searchTable.locator('tbody'),saved=await body.innerHTML();
+      await body.evaluate(element=>element.replaceChildren());
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-results'),/block-search-results: expected populated business rows/,'main rows cannot cover an empty secondary result fixture');
+      await body.evaluate((element,html)=>element.innerHTML=html,saved);
+      await assertRegistryTableState(page,'feo-map-placement','search-results');
+      console.log('REGISTRY_SURFACE_NEGATIVE=feo-map-placement:missing-secondary-data');
+    }
+
     assert.ok(await searchTable.isVisible(),'second business table is visible after search');
     const searchGeometry=await searchTable.evaluate(table=>({idWidth:table.tBodies[0].rows[0].cells[0].getBoundingClientRect().width,
       idRole:table.tBodies[0].rows[0].cells[0].classList.contains('registry-ui-id'),
@@ -85,6 +107,9 @@ try{
     if(width===390)assert.ok(searchOverflow.internal>0,'mobile search table keeps its own horizontal scroll');
     if(evidence)await page.screenshot({path:path.join(evidence,`placement-${width}-search-results.png`)});
     if(width===1280){
+      const secondaryHtml=await searchTable.evaluate(table=>{const html=table.outerHTML;table.remove();return html;});
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-results'),/declared business-table surfaces/,'missing secondary surface must be RED');
+      await page.locator('[data-placement-block-search-results] .table-scroll').evaluate((wrap,html)=>wrap.insertAdjacentHTML('beforeend',html),secondaryHtml);
       await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-error'),/declared business-table surfaces/,'wrong state cannot certify a visible secondary table');
       await page.locator('[data-placement-block-search-results]').evaluate(element=>element.insertAdjacentHTML('beforeend','<table data-unmapped-probe><thead><tr><th>ЗАЯВКА</th></tr></thead><tbody><tr><td>309552</td></tr></tbody></table>'));
       await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-results'),/missing or ambiguously mapped/,'unregistered JS-created table is discovered');
@@ -128,12 +153,12 @@ try{
     assert.deepEqual(errors,[],`no browser errors at ${width}`);
     measurements.push(geometry);await page.close();
   }
-  for(const state of ['empty','error']){
-    const page=await browser.newPage();await page.goto(`http://127.0.0.1:${server.address().port}/erpv2/company/feo/requests/map-placement?state=${state}`);
+  for(const state of ['empty','error'])for(const width of [390,1280,1920,3840]){
+    const page=await browser.newPage({viewport:{width,height:900}});await page.goto(`http://127.0.0.1:${server.address().port}/erpv2/company/feo/requests/map-placement?state=${state}`);
     assert.equal(await page.locator('.registry-ui-head').count(),1,`${state}: canonical header`);
     assert.equal(await page.locator('.feo-placement-table tbody tr[data-placement-block-id]').count(),0,`${state}: no phantom data`);
     assert.equal(await page.locator('.registry-ui-card').count(),state==='empty'?1:0,`${state}: correct card state`);
-    await assertRegistryTableState(page,'feo-map-placement',state==='error'?'page-error':'initial');
+    await assertRegistryTableState(page,'feo-map-placement',state==='error'?'page-error':'initial',state==='empty'?{fixture:'empty'}:{});
     await page.close();
   }
   if(evidence)writeFileSync(path.join(evidence,'measurements.json'),JSON.stringify(measurements,null,2));

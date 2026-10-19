@@ -8,11 +8,13 @@ const firstFamily=value=>value.split(',')[0].trim().replace(/^["']|["']$/g,'');
 
 // Discover business tables from the registered card, before looking for any
 // approved class. An unmarked JS-created table must be visible to this gate.
-export async function assertRegistryTableState(page,pageId,state='initial',{runtime=false}={}) {
+export async function assertRegistryTableState(page,pageId,state='initial',{runtime=false,fixture=null}={}) {
   const definition=catalog.pages.find(item=>item.id===pageId);
   assert.ok(definition?.table_surfaces?.length,`${pageId}: explicit business-table inventory required`);
   const declared=definition.table_states?.find(item=>item.id===state);
   assert.ok(declared,`${pageId}: undeclared table state ${state}`);
+  assert.ok(fixture===null||(fixture==='empty'&&declared.empty_fixture===true),`${pageId}/${state}: undeclared empty fixture`);
+  assert.deepEqual(Object.keys(declared.data||{}).sort(),[...declared.visible].sort(),`${pageId}/${state}: per-surface data expectations required`);
   const observed=await page.evaluate(surfaces=>{
     const visible=element=>{
       const rect=element.getBoundingClientRect(),css=getComputedStyle(element);
@@ -21,9 +23,10 @@ export async function assertRegistryTableState(page,pageId,state='initial',{runt
     const tables=[...document.querySelectorAll('.registry-ui-card table')].filter(visible);
     return tables.map(table=>{
       const owners=surfaces.filter(surface=>table.matches(surface.selector)).map(surface=>surface.id);
+      const surface=surfaces.find(surface=>table.matches(surface.selector));
       const header=table.tHead?.rows[0]?.cells[0];
       return {owners,classes:table.className,headerBackground:header?getComputedStyle(header).backgroundColor:null,
-        rows:[...table.tBodies].flatMap(body=>[...body.rows]).filter(visible).length,
+        rows:[...table.querySelectorAll(surface?.row_selector||':not(*)')].filter(row=>visible(row)&&row.textContent.trim()).length,
         selector:table.outerHTML.slice(0,180)};
     });
   },definition.table_surfaces);
@@ -35,8 +38,42 @@ export async function assertRegistryTableState(page,pageId,state='initial',{runt
     assert.equal(table.headerBackground,approvedHeader,`${pageId}/${state}: visible business table header differs from approved canon`);
   }
   assert.deepEqual(observed.map(table=>table.owners[0]).sort(),[...declared.visible].sort(),`${pageId}/${state}: declared business-table surfaces differ from actual visible DOM`);
-  console.log(`${runtime?'REGISTRY_RUNTIME_SURFACE':'REGISTRY_SURFACE_STATE'}=${pageId}:${state}`);
+  for(const table of observed){
+    const expected=fixture==='empty'?'empty':declared.data[table.owners[0]];
+    assert.ok(['populated','empty'].includes(expected),`${pageId}/${state}: explicit data expectation required`);
+    assert.ok(expected==='populated'?table.rows>0:table.rows===0,`${pageId}/${state}/${table.owners[0]}: expected ${expected} business rows, observed ${table.rows}`);
+  }
+  await assertRegistryDataRoles(page,[],`${pageId}/${state}`);
+  await assertRegistryDataCoverage(page,`${pageId}/${state}`);
+  await assertRegistryColumnGeometry(page,`${pageId}/${state}`);
+  await assertRegistryContainment(page,`${pageId}/${state}`);
+  const width=page.viewportSize().width;
+  console.log(`${fixture==='empty'?'REGISTRY_EMPTY_FIXTURE_SURFACE':runtime?'REGISTRY_RUNTIME_SURFACE':'REGISTRY_SURFACE_STATE'}=${pageId}:${state}:${width}`);
   return observed;
+}
+
+// Probe the actual scroll owner after every state, including JS secondary tables.
+export async function assertRegistryContainment(page,label) {
+ const result=await page.evaluate(()=>{
+  const main=document.querySelector('main.content')||document.querySelector('main'),doc=document.documentElement;
+  const visible=el=>{const r=el.getBoundingClientRect();return r.width>0&&r.height>0&&getComputedStyle(el).visibility!=='hidden'};
+  const tables=[...document.querySelectorAll('.registry-ui-card table')].filter(visible).map(table=>{
+   let owner=table.parentElement;
+   while(owner&&owner!==main&&!['auto','scroll'].includes(getComputedStyle(owner).overflowX))owner=owner.parentElement;
+   const wide=table.getBoundingClientRect().width>(main?.clientWidth||doc.clientWidth)+1;
+   let moved=0;
+   if(owner&&owner!==main){const before=owner.scrollLeft;owner.scrollLeft=owner.scrollWidth-owner.clientWidth;moved=owner.scrollLeft;owner.scrollLeft=before;}
+   const r=owner?.getBoundingClientRect();
+   return {wide,inner:!!owner&&owner!==main,moved,left:r?.left,right:r?.right};
+  });
+  return {document:doc.scrollWidth-doc.clientWidth,main:main?main.scrollWidth-main.clientWidth:null,viewport:doc.clientWidth,mainLeft:main?.getBoundingClientRect().left,mainRight:main?.getBoundingClientRect().right,tables};
+ });
+ assert.ok(result.main!==null,`${label}: real main layout required`);
+ assert.ok(result.document<=1&&result.main<=1&&result.mainLeft>=-1&&result.mainRight<=result.viewport+1,`${label}: outer horizontal overflow ${JSON.stringify(result)}`);
+ for(const table of result.tables)if(table.wide){
+  assert.ok(table.inner&&table.moved>0,`${label}: wide table must actually scroll inside its own owner ${JSON.stringify(table)}`);
+  assert.ok(table.left>=-1&&table.right<=result.viewport+1,`${label}: inner scroll owner outside document`);
+ }
 }
 
 export async function assertRegistryDataCoverage(page,label){
@@ -51,6 +88,15 @@ export async function assertRegistryDataCoverage(page,label){
         if(!range.getBoundingClientRect().width||!range.getBoundingClientRect().height||getComputedStyle(element).visibility==='hidden')continue;
         // Actions retain their independently approved component contract.
         if(element.closest('button,input,select,textarea,[role=button],[role=menu],.btn,.lab-reference-list,.lab-reference-trigger'))continue;
+        // These two fixed finance captions are UI labels in accepted v007,
+        // not arbitrary data-role exemptions. Nested/business text still fails.
+        const caption=element.matches('.rp-ledger-v015 .rp-v010-table .rp-v010-mobile-group')&&element.childElementCount===0&&['Клиент','Подрядчик'].includes(element.textContent.trim());
+        if(caption){
+          const css=getComputedStyle(element),mobile=innerWidth<=1050;
+          const expected=mobile?['11px','500','13.75px','rgb(96, 88, 79)']:['12px','500','15px','rgb(19, 18, 16)'];
+          if(!css.fontFamily.includes('IBM Plex Sans')||JSON.stringify([css.fontSize,css.fontWeight,css.lineHeight,css.color])!==JSON.stringify(expected))result.push('finance caption typography: '+element.textContent.trim());
+          continue;
+        }
         if(!element.closest(typed))result.push(node.textContent.trim().slice(0,100));
       }
     }
@@ -61,7 +107,7 @@ export async function assertRegistryDataCoverage(page,label){
 
 export async function assertRegistryColumnGeometry(page,label){
   const columns=await page.evaluate(()=>[...document.querySelectorAll('.registry-ui-data')].flatMap(table=>{
-    if(table.classList.contains('registry-ui-data--cards')||getComputedStyle(table.tBodies[0]?.rows[0]).display==='grid')return [];
+    if(!table.tBodies[0]?.rows[0]||table.classList.contains('registry-ui-data--cards')||getComputedStyle(table.tBodies[0].rows[0]).display==='grid')return [];
     const idWidth=parseFloat(getComputedStyle(table).getPropertyValue('--registry-id-width'))||64;
     return [...table.querySelectorAll('tbody .registry-ui-id,tbody .registry-ui-trip')].flatMap(element=>{
       const cell=element.closest('td'),rect=cell?.getBoundingClientRect();
@@ -79,7 +125,7 @@ export async function assertRegistryDataRoles(page, requiredRoles, label) {
   const actual=await page.evaluate(selectors=>{
     const visible=element=>{const rect=element.getBoundingClientRect(),css=getComputedStyle(element);return !!(rect.width&&rect.height)&&css.visibility!=='hidden'};
     const read=element=>{const css=getComputedStyle(element);return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','color'].map(key=>[key,css[key]]))};
-    const probe=element=>({style:read(element),sample:element.textContent.trim().slice(0,60),due:element.closest('.registry-ui-due')?.className||'',status:element.closest('.registry-ui-status')?.dataset.status||'',statusClass:element.closest('.registry-ui-status')?.className||'',semantic:element.closest('.registry-ui-error,.registry-ui-success')?.className||'',warning:!!element.closest('tr.registry-ui-warning'),rowTone:element.closest('tr')?.className||'',vehicleMetric:!!element.closest('.route-vehicle-metric'),financeGroup:!!element.closest('.rp-v010-mobile-group'),departuresReason:!!element.closest('.waste-finance-reason'),departuresMobileLabel:!!element.closest('.waste-mobile-label'),moneyCell:!!element.closest('td.registry-ui-money')});
+    const probe=element=>({style:read(element),sample:element.textContent.trim().slice(0,60),due:element.closest('.registry-ui-due')?.className||'',status:element.closest('.registry-ui-status')?.dataset.status||'',statusClass:element.closest('.registry-ui-status')?.className||'',semantic:element.closest('.registry-ui-error,.registry-ui-success')?.className||'',warning:!!element.closest('tr.registry-ui-warning'),rowTone:element.closest('tr')?.className||'',vehicleMetric:!!element.closest('.route-vehicle-metric'),financeGroup:element.matches('.rp-ledger-v015 .rp-v010-table .rp-v010-mobile-group')&&element.childElementCount===0&&['Клиент','Подрядчик'].includes(element.textContent.trim()),departuresReason:!!element.closest('.waste-finance-reason'),departuresMobileLabel:!!element.closest('.waste-mobile-label'),moneyCell:!!element.closest('td.registry-ui-money')});
     const typed=Object.values(selectors).filter(selector=>!selector.includes(' ')).join(',');
     return Object.fromEntries(Object.entries(selectors).map(([role,selector])=>[role,[...document.querySelectorAll('.registry-ui-data '+selector)].filter(visible).map(element=>{
       const texts=[],walker=document.createTreeWalker(element,NodeFilter.SHOW_TEXT);
@@ -106,8 +152,12 @@ export async function assertRegistryDataRoles(page, requiredRoles, label) {
     if(['due','secondary'].includes(role)&&item.due.includes('registry-ui-due--overdue'))expected[3]='#872822';
     if(['primary','secondary','due'].includes(role)&&item.due.includes('registry-ui-due--complete'))expected[3]='#1f6b43';
     if(role==='secondary'&&(item.warning||item.rowTone.includes('registry-ui-soft-')||item.vehicleMetric||item.due.includes('registry-ui-due--today')))expected[3]='#131210';
-    if(role==='secondary'&&item.financeGroup){expected[0]='12px';expected[2]='15px';expected[3]='#131210'}
-    if(role==='secondary'&&item.departuresMobileLabel){expected[0]='12px';expected[1]=item.moneyCell?'600':'500';expected[2]='16.8px';expected[3]='#4c4840'}
+    if(role==='secondary'&&item.financeGroup){
+      // Accepted reference has distinct mobile group labels and compact inline values.
+      if(page.viewportSize().width<=1050){expected[0]='11px';expected[2]='13.75px';expected[3]='#60584f'}
+      else {expected[0]='12px';expected[2]='15px';expected[3]='#131210'}
+    }
+    if(role==='secondary'&&item.departuresMobileLabel){expected[0]='12px';expected[1]='500';expected[2]='16.8px';expected[3]='#4c4840'}
     if(role==='reason'&&item.departuresReason)expected[3]='#78726a';
     if(role==='status')expected[3]=({planned_route:'#9c27b0',executor_assigned:'#17a2b8',in_progress:'#1f6b43',completed:'#6c757d'})[item.status]||expected[3];
     if(role==='status'&&item.statusClass.includes('route-status--neutral'))expected[3]='#4c4840';
@@ -126,8 +176,6 @@ export async function assertRegistryDataContract(page, pageId, {state='initial'}
   assert.ok(Array.isArray(definition.data_roles)&&definition.data_roles.length,`${pageId}: explicit data_roles required`);
   await assertRegistryTableState(page,pageId,state);
   await assertRegistryDataRoles(page,definition.data_roles,pageId);
-  await assertRegistryDataCoverage(page,pageId);
-  await assertRegistryColumnGeometry(page,pageId);
 }
 
 export async function assertRegistryVisualContract(page, label) {

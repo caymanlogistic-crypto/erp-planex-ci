@@ -158,8 +158,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ded09bb5243915cee484b98220e1e27cbfb30bae",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ded09bb5243915cee484b98220e1e27cbfb30bae/tools/registry_visual_gate.mjs",
+      "verified_sha": "fa2cb422a1896c5d8bdbf47d44dbddf247e4977d",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/fa2cb422a1896c5d8bdbf47d44dbddf247e4977d/tools/registry_visual_gate.mjs",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -204,7 +204,9 @@
         "tests/helpers/registry_behavior_contract.mjs",
         "tests/company_registry_runtime_browser_test.mjs",
         "tests/fixtures/company_registry_runtime.php",
-        "tests/fixtures/company_registry_expectations.mjs"
+        "tests/fixtures/company_registry_expectations.mjs",
+        "tools/registry_matrix.mjs",
+        "tests/fixtures/registry_layout_render.php"
       ],
       "navigation": "active",
       "machine_ownership_id": "control.ci"

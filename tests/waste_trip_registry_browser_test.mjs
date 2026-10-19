@@ -17,9 +17,8 @@ execFileSync(process.env.PLANEX_PHP || 'php', [path.join(root, 'tests/waste_trip
   cwd: root,
   env: { ...process.env, WASTE_REGISTRY_RENDER_OUTPUT: rendered },
 });
-// The PHP render contract returns a view fragment. Load the same font/token base
-// as the real layout so browser checks cannot silently exercise browser defaults.
-const html = '<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/erp-ui.css"></head><body>' + fs.readFileSync(rendered, 'utf8') + '</body></html>';
+// The render contract remains a view fixture; use the actual shell for containment.
+const html=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/registry_layout_render.php')],{input:fs.readFileSync(rendered,'utf8'),encoding:'utf8'});
 const filteredHtml = query => {
   const params = new URLSearchParams(query), status = params.get('status') || '';
   let result = html;
@@ -51,6 +50,7 @@ try {
   for (const width of [1920, 1280, 390, 360, 3840]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/company/trips/departures`);
+    await page.waitForSelector('[data-registry-ready="true"]');
     await assertRegistryVisualContract(page, `trips-departures ${width}px`);
     await assertRegistryDataContract(page, 'trips-departures');
     const metrics = await page.evaluate(() => {
