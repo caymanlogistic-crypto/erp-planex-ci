@@ -20,7 +20,7 @@ $pdo->exec((string)file_get_contents(BASE_PATH.'/database/migrations-local/025_a
 $pdo->exec('DELETE FROM document_types');
 $pdo->exec('ALTER TABLE document_types ADD deleted_at DATETIME NULL');
 $pdo->exec("CREATE TABLE drivers(id INT PRIMARY KEY,full_name VARCHAR(100),phone VARCHAR(30),status VARCHAR(20),deleted_at DATETIME NULL,created_at DATETIME DEFAULT CURRENT_TIMESTAMP,updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,created_by_user_id INT)");
-$pdo->exec("INSERT INTO drivers(id,full_name,phone,status,created_by_user_id) VALUES(1,'Тестов Тест Тестович','+79000000000','active',77),(2,'Другой Тест Тестович','+79000000001','active',88)");
+$pdo->exec("INSERT INTO drivers(id,full_name,phone,status,created_by_user_id) VALUES(1,'Тестов Тест Исправленный','+79000000000','active',77),(2,'Другой Тест Тестович','+79000000001','active',88)");
 $pdo->exec('CREATE TABLE route_executor_review_cards(card_id CHAR(36) PRIMARY KEY,snapshot_json LONGTEXT,files_json LONGTEXT,deleted_at DATETIME NULL)');
 $pdo->exec('CREATE TABLE entity_assignments(id INT PRIMARY KEY,entity_type VARCHAR(30),entity_id INT,membership_id INT)');
 $pdo->exec("INSERT INTO entity_assignments VALUES(1,'driver',1,77)");
@@ -57,14 +57,19 @@ for ($i=0;$i<35;$i++) {
     $name='Паспорт утраченная страница '.$i.'.pdf';$bytes='%PDF-1.4 retained synthetic page '.$i;
     $relative='companies/25/route-executor-review/'.$card.'/page-'.$i.'.pdf';$put($relative,$bytes);
     $retained[]=['id'=>str_pad((string)$i,32,'0'),'formId'=>'lab-driver-form','name'=>'predef_doc[passport][]','index'=>0,'original_name'=>$name,'mime'=>'application/pdf','size'=>strlen($bytes),'path'=>$relative];
-    $restores[]=['entity_type'=>'driver','entity_id'=>1,'document_type'=>'Паспорт','document_type_id'=>5,'original_name'=>$name,'mime'=>'application/pdf','size'=>strlen($bytes),'sha256'=>hash('sha256',$bytes),'source_kind'=>'review','source_card_id'=>$card,'source_position'=>$i,'source_path'=>$relative,'reference_document_id'=>1,'reference_sha256'=>hash_file('sha256',$root.'/companies/25/documents/existing-1.pdf')];
+    $restores[]=['entity_type'=>'driver','entity_id'=>1,'document_type'=>'Паспорт','document_type_id'=>5,'original_name'=>$name,'mime'=>'application/pdf','size'=>strlen($bytes),'sha256'=>hash('sha256',$bytes),'source_kind'=>'review','source_card_id'=>$card,'source_position'=>$i,'source_path'=>$relative,'source_identity'=>'Тестов Тест Тестович','reference_document_id'=>1,'reference_sha256'=>hash_file('sha256',$root.'/companies/25/documents/existing-1.pdf')];
 }
 $png=base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2beioAAAAASUVORK5CYII=',true);
 for ($i=0;$i<2;$i++) {
     $bytes=$png.'owner-'.$i;
     $restores[]=['entity_type'=>'driver','entity_id'=>1,'document_type'=>'Паспорт','document_type_id'=>5,'original_name'=>'Предоставленная владельцем страница '.$i.'.png','mime'=>'image/png','size'=>strlen($bytes),'sha256'=>hash('sha256',$bytes),'source_kind'=>'owner','source_card_id'=>null,'source_position'=>null,'source_path'=>null,'inline_base64'=>base64_encode($bytes),'reference_document_id'=>1,'reference_sha256'=>hash_file('sha256',$root.'/companies/25/documents/existing-1.pdf')];
 }
-$snapshot=['controls'=>[['formId'=>'lab-driver-form','name'=>'full_name','value'=>'Тестов Тест Тестович']]];
+$snapshot=['controls'=>[
+    ['formId'=>'lab-driver-form','name'=>'full_name','value'=>'Ранее введённое значение'],
+    ['formId'=>'lab-contractor-form','name'=>'full_name','value'=>'Другая форма не определяет водителя'],
+    ['formId'=>'lab-driver-form','name'=>'full_name','value'=>'Тестов Тест Тестович'],
+    ['formId'=>'lab-driver-form','name'=>'full_name','value'=>'Неотмеченный контроль не заменяет значение','type'=>'checkbox','checked'=>false],
+]];
 $pdo->prepare('INSERT INTO route_executor_review_cards VALUES(?,?,?,NOW())')->execute([$card,json_encode($snapshot,JSON_UNESCAPED_UNICODE),json_encode($retained,JSON_UNESCAPED_UNICODE)]);
 $typeMappings=[];foreach ($codes as $i=>$code) $typeMappings[]=['id'=>$i+1,'old_name'=>$code,'canonical_id'=>$i+5,'new_name'=>App\Service\TripDocumentPackage::LABELS[$code],'code'=>$code,'entity_type'=>$code==='company_card'?'contractor':'driver'];
 $entity=$pdo->query('SELECT full_name,status,deleted_at,created_at,updated_at,created_by_user_id FROM drivers WHERE id=1')->fetch(PDO::FETCH_ASSOC);
@@ -82,7 +87,22 @@ try {
     $before=$state();$checked=$recovery->check($payload);
     $assert($checked['pending_restores']===37 && $checked['pending_labels']===74 && $checked['pending_types']===0 && $checked['type_mappings']===4,'Exact approved recovery plan must be returned without writes');
     $assert(count($checked['before_image']['documents'])===402 && count($checked['before_image']['document_types'])===33 && isset($checked['before_image']['documents'][0]['comments']),'Receipt must retain full before images beyond projections');
+    $assert($checked['before_image']['entities']['driver:1']['full_name']==='Тестов Тест Исправленный' && $checked['before_image']['source_files'][0]['source_identity']==='Тестов Тест Тестович','Receipt must bind corrected current target and exact historical source separately');
     $assert($before===$state(),'Check must not change data, ACL, old files or sources');
+    $identityMutations=[
+        [static function(array &$p):void {$p['restores'][0]['source_identity']='Тестов Тест Исправленный';},'SOURCE_IDENTITY_MISMATCH'],
+        [static function(array &$p):void {$p['restores'][0]['source_identity']='ТЕСТОВ ТЕСТ ТЕСТОВИЧ';},'SOURCE_IDENTITY_MISMATCH'],
+        [static function(array &$p):void {unset($p['restores'][0]['source_identity']);},'REVIEW_SOURCE_IDENTITY_INVALID'],
+        [static function(array &$p):void {$p['restores'][0]['source_identity']='';},'REVIEW_SOURCE_IDENTITY_INVALID'],
+        [static function(array &$p):void {$p['restores'][0]['source_identity']=str_repeat('я',256);},'REVIEW_SOURCE_IDENTITY_INVALID'],
+        [static function(array &$p):void {$p['restores'][35]['source_identity']=null;},'OWNER_SOURCE_INVALID'],
+    ];
+    foreach ($identityMutations as [$mutate,$expectedCode]) {
+        $invalid=$payload;$mutate($invalid);$rejected=false;
+        try { $recovery->check($invalid); }
+        catch (RuntimeException $error) { $rejected=true;$assert($error->getMessage()===$expectedCode,'Historical identity proof must fail at its own guard before writes'); }
+        $assert($rejected && $before===$state(),'Invalid or missing historical source identity must not write files, entity data or ACL');
+    }
     $mutations=[
         static function(array &$p):void {$p['restores'][0]['sha256']=str_repeat('0',64);},
         static function(array &$p):void {$p['restores'][0]['entity_id']=2;},

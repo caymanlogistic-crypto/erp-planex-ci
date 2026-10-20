@@ -141,8 +141,17 @@ final class RegistryDocumentInventoryReadOnly
                         }
                         $snapshot=$row['snapshot_json'];
                         if (!array_is_list($row['files_json'])) throw new RuntimeException('FILE_JSON_SHAPE');
-                        $controls=array_values(array_filter((array)($snapshot['controls']??[]), static fn($c)=>is_array($c)
-                            && preg_match('/^(predef_doc_type|custom_doc_type|custom_doc_type_new)(\[|$)/',(string)($c['name']??''))));
+                        $controls=array_values(array_filter((array)($snapshot['controls']??[]), static function($c): bool {
+                            if (!is_array($c)) return false;
+                            $name=(string)($c['name']??'');
+                            if (preg_match('/^(predef_doc_type|custom_doc_type|custom_doc_type_new)(\[|$)/',$name)) return true;
+                            return match((string)($c['formId']??'')) {
+                                'lab-contractor-form'=>$name==='name',
+                                'lab-driver-form'=>$name==='full_name',
+                                'lab-vehicle-form'=>in_array($name,['units[primary][plate_number]','units[secondary][plate_number]'],true),
+                                default=>false,
+                            };
+                        }));
                         $row['snapshot_json']=['selected_entities'=>$snapshot['selected_entities']??[],
                             'removed_documents'=>$snapshot['removed_documents']??[],'controls'=>$controls];
                         foreach ($row['files_json'] as &$file) {

@@ -5,7 +5,7 @@ import argparse, fnmatch, json, re, subprocess, sys
 from pathlib import Path
 
 SCOPE_PATTERNS = {
-    "document_attachments": r"^(app/Service/RouteExecutor[^/]*\.php$|public/assets/js/route-executor-review-workflow\.js$|scripts/registry_document_attachment_recovery\.php$|tests/document_attachment|tests/route_executor_combined_mysql_test\.php$|tools/document_attachment[^/]*\.(?:py|mjs)$|\.github/workflows/document_attachment)",
+    "document_attachments": r"^(app/Service/RouteExecutor[^/]*\.php$|public/assets/js/route-executor-review-workflow\.js$|scripts/registry_document_(?:attachment_recovery|inventory_readonly_probe)\.php$|tests/document_(?:attachment|inventory)|tests/route_executor_combined_mysql_test\.php$|tools/document_attachment[^/]*\.(?:py|mjs)$|\.github/workflows/(?:document_attachment|document_inventory|registry_document_inventory))",
     "php": r"\.php$",
     "js": r"\.(js|mjs)$",
     "python": r"^tools/.*\.py$",

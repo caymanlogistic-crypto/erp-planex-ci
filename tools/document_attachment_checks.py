@@ -11,6 +11,7 @@ PHP_TESTS=(
     'tests/document_attachment_materialization_test.php',
     'tests/route_executor_combined_mysql_test.php',
     'tests/document_attachment_recovery_mysql_test.php',
+    'tests/document_inventory_readonly_mysql_test.php',
 )
 BROWSER_TEST='tests/document_attachment_pipeline_browser_test.mjs'
 
@@ -26,6 +27,7 @@ def main():
         if not (ROOT/path).is_file(): raise RuntimeError('Required attachment test missing: '+path)
         subprocess.run([node if path.endswith('.mjs') else php,path],cwd=ROOT,env=env,check=True)
     subprocess.run([sys.executable,'tests/document_attachment_control_plane_test.py'],cwd=ROOT,env=env,check=True)
+    subprocess.run([sys.executable,'tests/document_inventory_control_plane_test.py'],cwd=ROOT,env=env,check=True)
     print('DOCUMENT_ATTACHMENT_REQUIRED_CHECKS_PASS')
     return 0
 
