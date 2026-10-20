@@ -148,8 +148,8 @@ $ok(
 $ok(
     'search results use four canonical columns with block taking remaining width',
     str_contains($js, '<table class="table registry-ui-table registry-ui-data feo-placement-search-table">')
-    && str_contains($js, '<colgroup><col class="registry-ui-id"><col class="feo-placement-search-col--date"><col><col class="feo-placement-search-col--type"></colgroup>')
-    && str_contains($js, 'aria-label="Заявка">ID</th><th>ДАТА ОПЕРАЦИИ</th><th>БЛОК</th><th>ТИП</th>')
+    && str_contains($js, '<colgroup><col class="registry-ui-id"><col class="feo-placement-search-col--type"><col class="feo-placement-search-col--date"><col></colgroup>')
+    && str_contains($js, 'aria-label="Заявка">ID</th><th>ТИП</th><th>ДАТА ОПЕРАЦИИ</th><th>БЛОК</th>')
     && !str_contains($js, '>Статус блока</th>')
     && !str_contains($js, '>Актуальный состав</th>')
     && str_contains($view, '.feo-placement-search-table col.feo-placement-search-col--date{width:160px}')

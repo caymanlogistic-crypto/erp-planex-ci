@@ -354,6 +354,9 @@ q('[data-placement-confirm-submit]')?.addEventListener('click',async()=>{
 });
 
 qa('[data-placement-block-id]').forEach(row=>row.addEventListener('dblclick',()=>openBlock(row.dataset.placementBlockId)));
+qa('.feo-placement-table .registry-ui-open-detail').forEach(name=>name.addEventListener('keydown',event=>{
+  if(event.key==='Enter'||event.key===' '){event.preventDefault();openBlock(name.closest('[data-placement-block-id]').dataset.placementBlockId);}
+}));
 
 async function openBlock(id){
   const body=q('[data-placement-detail-body]');
@@ -508,17 +511,22 @@ function renderBlockSearch(data){
     const blocks=Array.isArray(item.blocks)?item.blocks:[];
     if(blocks.length){
       blocks.forEach(block=>{
-        rows.push(`<tr class="registry-ui-warning" data-placement-search-block-id="${block.id}"><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-primary">${esc(formatBlockOperationDate(block.created_at))}</span></td><td><span class="registry-ui-inline-identity"><span class="registry-ui-primary">#${esc(block.id)}&nbsp;</span>${block.name?`<span class="registry-ui-name" title="${esc(block.name)}">${esc(block.name)}</span>`:''}</span></td><td><span class="registry-ui-primary">${block.block_type==='addition'?'Добавление':'Исключение'}</span></td></tr>`);
+        rows.push(`<tr class="registry-ui-warning" data-placement-search-block-id="${block.id}"><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-primary registry-ui-operation--${block.block_type==='addition'?'addition':'exclusion'}">${block.block_type==='addition'?'Добавление':'Исключение'}</span></td><td><span class="registry-ui-primary">${esc(formatBlockOperationDate(block.created_at))}</span></td><td><span class="registry-ui-inline-identity registry-ui-open-detail" role="button" tabindex="0" aria-label="Заявка ${esc(item.zayavka_id)}, блок #${esc(block.id)} ${esc(block.name||'')}. Открыть карточку."><span class="registry-ui-primary">#${esc(block.id)}&nbsp;</span>${block.name?`<span class="registry-ui-name" title="${esc(block.name)}">${esc(block.name)}</span>`:''}</span></td></tr>`);
       });
     }else{
       const blockText=item.exists_in_feo?'Не входит ни в один блок':'Нет в реестре ФЭО · не входит ни в один блок';
-      rows.push(`<tr class="registry-ui-warning"><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-missing">—</span></td><td><span class="registry-ui-missing">${esc(blockText)}</span></td><td><span class="registry-ui-missing">—</span></td></tr>`);
+      rows.push(`<tr class="registry-ui-warning"><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-missing">—</span></td><td><span class="registry-ui-missing">—</span></td><td><span class="registry-ui-missing">${esc(blockText)}</span></td></tr>`);
     }
   });
   const duplicateNote=Array.isArray(data.duplicates)&&data.duplicates.length?` Повторы во вводе удалены: ${esc(data.duplicates.join(', '))}.`:'';
-  blockSearchResults.innerHTML=`<div class="feo-placement-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной клик по строке откроет блок.</div><div class="table-scroll registry-ui-nested-table-scroll" role="region" aria-label="Результаты поиска по блокам"><table class="table registry-ui-table registry-ui-data feo-placement-search-table"><colgroup><col class="registry-ui-id"><col class="feo-placement-search-col--date"><col><col class="feo-placement-search-col--type"></colgroup><thead><tr><th class="registry-ui-id" scope="col" aria-label="Заявка">ID</th><th>ДАТА ОПЕРАЦИИ</th><th>БЛОК</th><th>ТИП</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
+  blockSearchResults.innerHTML=`<div class="feo-placement-search-summary registry-ui-search-summary">Найдено по ${results.length} заявкам.${duplicateNote} Двойной клик по строке откроет блок.</div><div class="table-scroll registry-ui-nested-table-scroll" role="region" aria-label="Результаты поиска по блокам"><table class="table registry-ui-table registry-ui-data feo-placement-search-table"><colgroup><col class="registry-ui-id"><col class="feo-placement-search-col--type"><col class="feo-placement-search-col--date"><col></colgroup><thead><tr><th class="registry-ui-id" scope="col" aria-label="Заявка">ID</th><th>ТИП</th><th>ДАТА ОПЕРАЦИИ</th><th>БЛОК</th></tr></thead><tbody>${rows.join('')}</tbody></table></div>`;
   blockSearchResults.classList.remove('is-hidden');
-  qa('[data-placement-search-block-id]',blockSearchResults).forEach(row=>row.addEventListener('dblclick',()=>openBlock(row.dataset.placementSearchBlockId)));
+  qa('[data-placement-search-block-id]',blockSearchResults).forEach(row=>{
+    row.addEventListener('dblclick',()=>openBlock(row.dataset.placementSearchBlockId));
+    row.querySelector('.registry-ui-open-detail')?.addEventListener('keydown',event=>{
+      if(event.key==='Enter'||event.key===' '){event.preventDefault();openBlock(row.dataset.placementSearchBlockId);}
+    });
+  });
 }
 async function runBlockSearch(generation){
   if(!blockSearchInput)return;

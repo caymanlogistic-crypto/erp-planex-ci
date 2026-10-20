@@ -125,6 +125,14 @@
 /* Ordinary registries must win over the legacy .table-card .table auto layout. */
 .registry-ui-card .registry-ui-data:where(:not(.registry-ui-table--finance,.registry-ui-data--cards,.registry-ui-table--trips)) {table-layout:fixed;min-width:900px}
 .registry-ui-card .registry-ui-table--placement {min-width:1200px}
+.registry-ui-card .registry-ui-table--placement.registry-ui-table--placement-blocks {min-width:1550px;max-width:1900px}
+.registry-ui-data tbody tr.registry-ui-muted > td {background:#f0ede7}
+.registry-ui-data tbody tr.registry-ui-muted:is(:hover,:focus-within) > td {background:#ece9e2}
+.registry-ui-data .registry-ui-primary.registry-ui-operation--addition {color:#1f6b43;font-weight:700}
+.registry-ui-data .registry-ui-primary.registry-ui-operation--exclusion {color:#872822;font-weight:700}
+.registry-ui-data .registry-ui-source-id {display:inline-block;white-space:nowrap}
+.registry-ui-data .registry-ui-open-detail:focus-visible {outline:2px solid #9a5a22;outline-offset:2px}
+.registry-ui-search-summary {font:500 12px/16px var(--font);color:#4c4840}
 .registry-ui-data :is(th,td) {box-sizing:border-box;padding:8px;border:1px solid #e3ded5;text-align:left;vertical-align:middle}
 .registry-ui-data .registry-ui-value {min-width:0;max-width:100%}
 .registry-ui-data tbody td {background:#fafaf6;font:500 12px/16.8px var(--font);color:#131210}

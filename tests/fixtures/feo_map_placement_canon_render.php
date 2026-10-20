@@ -28,10 +28,13 @@ $blocks = [
     ['id' => 76, 'name' => 'Резервный перечень', 'block_type' => 'addition', 'request_count' => 1, 'total_mass_kg' => 620, 'source_type' => 'manual', 'request_ids_text' => '281861', 'created_at' => '2026-10-18 13:05:00', 'created_by_login' => 'logist', 'created_by_display_name' => 'Иван К.', 'status' => 'disabled'],
 ];
 $locations = ['Северная промзона', 'Улица Лесная', 'Площадка Заречная', 'Квартал Восточный', 'Проезд Строителей', 'Складской тупик', 'Посёлок Озёрный', 'Проспект Мира'];
+$longName = 'Северная промзона — дополнительный блок размещения с длинным названием для проверки полного текста';
+$manyIds = implode(', ', array_map(static fn(int $n): string => (string)(310000 + $n), range(1, 50)));
+$longFile = '1 - 28.06 - финал по заявкам Мурманск Карелия Архангельск МГ Логистик корректировка 3 (1).xlsx';
 for ($i = 0; $i < 67; $i++) {
-    $blocks[] = ['id' => 77 + $i, 'name' => $locations[$i % count($locations)] . ' · ' . ['утренний вывоз', 'обновление адреса', 'возврат в резерв'][$i % 3],
+    $blocks[] = ['id' => 77 + $i, 'name' => $i === 0 ? $longName : $locations[$i % count($locations)] . ' · ' . ['утренний вывоз', 'обновление адреса', 'возврат в резерв'][$i % 3],
         'block_type' => $i % 5 === 0 ? 'exclusion' : 'addition', 'request_count' => 1 + $i % 3, 'total_mass_kg' => 320 + 14.5 * $i,
-        'source_type' => 'manual', 'request_ids_text' => (string)(330001 + $i), 'created_at' => '2026-10-16 11:30:00',
+        'source_type' => $i === 1 ? 'xlsx' : 'manual', 'source_filename' => $i === 1 ? $longFile : null, 'request_ids_text' => $i === 0 ? $manyIds : (string)(330001 + $i), 'created_at' => '2026-10-16 11:30:00',
         'created_by_login' => 'logist', 'created_by_display_name' => 'Иван К.', 'status' => $i % 7 === 0 ? 'disabled' : 'applied'];
 }
 if ($state === 'empty') $blocks = [];

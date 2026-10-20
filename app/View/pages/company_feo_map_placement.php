@@ -18,16 +18,16 @@ $registryHeadActionsHtml = empty($dbError)
 ?>
 <style>
 .feo-placement-table-card:has([data-placement-hide-disabled]:checked) .feo-placement-table tbody tr[data-placement-block-status="disabled"]{display:none}
-col.feo-placement-col-type{width:110px}
-col.feo-placement-col-count{width:80px}
+col.feo-placement-col-name{width:400px}
+col.feo-placement-col-type{width:120px}
+col.feo-placement-col-count{width:84px}
 col.feo-placement-col-mass{width:110px}
-col.feo-placement-col-source{width:250px}
-col.feo-placement-col-date{width:140px}
-col.feo-placement-col-author{width:100px}
-col.feo-placement-col-status{width:105px}
+col.feo-placement-col-source{width:calc(100% - 1058px)}
+col.feo-placement-col-date{width:150px}
+col.feo-placement-col-author{width:130px}
 .feo-placement-block-search-results{padding:8px 0 0;border-top:1px solid var(--line-soft);background:var(--surface-form)}
 .feo-placement-block-search-results.is-hidden{display:none}
-.feo-placement-search-summary{font-size:11px;color:var(--text-muted);margin-bottom:6px;padding:0 8px}
+.feo-placement-search-summary{margin-bottom:6px;padding:0 8px}
 .feo-placement-search-table{margin:0}
 .feo-placement-search-table col.feo-placement-search-col--date{width:160px}
 .feo-placement-search-table col.feo-placement-search-col--type{width:112px}
@@ -150,9 +150,9 @@ col.feo-placement-col-status{width:105px}
   </div>
   <div class="feo-placement-block-search-results registry-ui-table-surface is-hidden" data-placement-block-search-results></div>
   <div class="table-scroll">
-    <table class="table registry-ui-table registry-ui-data registry-ui-table--placement feo-placement-table">
-      <colgroup><col class="registry-ui-id"><col><col class="feo-placement-col-type"><col class="feo-placement-col-count"><col class="feo-placement-col-mass"><col class="feo-placement-col-source"><col class="feo-placement-col-date"><col class="feo-placement-col-author"><col class="feo-placement-col-status"></colgroup>
-      <thead><tr><th class="registry-ui-id">ID</th><th>Название</th><th>Тип</th><th>Заявок</th><th>Масса, кг</th><th>Источник</th><th>Дата</th><th>Ответств.</th><th>Статус</th></tr></thead>
+    <table class="table registry-ui-table registry-ui-data registry-ui-table--placement registry-ui-table--placement-blocks feo-placement-table">
+      <colgroup><col class="registry-ui-id"><col class="feo-placement-col-name"><col class="feo-placement-col-type"><col class="feo-placement-col-count"><col class="feo-placement-col-mass"><col class="feo-placement-col-source"><col class="feo-placement-col-date"><col class="feo-placement-col-author"></colgroup>
+      <thead><tr><th class="registry-ui-id">ID</th><th>Название</th><th>Тип</th><th>Заявок</th><th>Масса, кг</th><th>Источник</th><th>Дата</th><th>Ответств.</th></tr></thead>
       <tbody>
       <?php foreach ($blocks as $block): ?>
         <?php
@@ -165,20 +165,25 @@ col.feo-placement-col-status{width:105px}
               $sourceText = preg_replace('/\s*,\s*/u', ', ', $sourceText) ?? $sourceText;
           }
           if ($sourceText === '') $sourceText = $sourceType === 'manual' ? '—' : strtoupper($sourceType);
+          $fullName = (string)($block['name'] ?: '—');
+          $displayName = mb_strlen($fullName, 'UTF-8') > 50
+              ? rtrim(mb_substr($fullName, 0, 49, 'UTF-8')) . '…'
+              : $fullName;
+          $sourceIds = preg_match('/^[0-9]{6}(?:, [0-9]{6})*$/D', $sourceText)
+              ? explode(', ', $sourceText) : [];
         ?>
-        <tr data-placement-block-id="<?= (int)$block['id'] ?>" data-placement-block-status="<?= $statusApplied ? 'applied' : 'disabled' ?>" data-placement-block-type="<?= e((string)($block['block_type'] ?? '')) ?>">
+        <tr class="<?= $statusApplied ? '' : 'registry-ui-muted' ?>" data-placement-block-id="<?= (int)$block['id'] ?>" data-placement-block-status="<?= $statusApplied ? 'applied' : 'disabled' ?>" data-placement-block-type="<?= e((string)($block['block_type'] ?? '')) ?>">
           <td class="registry-ui-id">#<?= (int)$block['id'] ?></td>
-          <td class="feo-placement-name-cell"><span class="registry-ui-name" title="<?= e((string)($block['name'] ?: '—')) ?>"><?= e((string)($block['name'] ?: '—')) ?></span></td>
-          <td><span class="registry-ui-primary"><?= ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение' ?></span></td>
+          <td class="feo-placement-name-cell"><span class="registry-ui-name registry-ui-open-detail" data-registry-full-text="<?= e($fullName) ?>" title="<?= e($fullName) ?>" role="button" tabindex="0" aria-label="Блок #<?= (int)$block['id'] ?>: <?= e($fullName) ?>. Открыть карточку."><?= e($displayName) ?></span></td>
+          <td><span class="registry-ui-primary registry-ui-operation--<?= ($block['block_type'] ?? '') === 'addition' ? 'addition' : 'exclusion' ?>"><?= ($block['block_type'] ?? '') === 'addition' ? 'Добавление' : 'Исключение' ?></span></td>
           <td><span class="registry-ui-primary"><?= (int)($block['request_count'] ?? 0) ?></span></td>
           <td><span class="registry-ui-primary"><?= e($fmtMass($block['total_mass_kg'] ?? 0)) ?></span></td>
-          <td class="feo-placement-source-cell" title="<?= e($sourceText) ?>"><span class="registry-ui-primary"><?= e($sourceText) ?></span></td>
+          <td class="feo-placement-source-cell" title="<?= e($sourceText) ?>"><span class="registry-ui-primary"><?php if ($sourceIds): ?><?php foreach ($sourceIds as $i => $sourceId): ?><span class="registry-ui-source-id"><?= e($sourceId) ?><?= $i < count($sourceIds)-1 ? ',' : '' ?></span><?= $i < count($sourceIds)-1 ? ' ' : '' ?><?php endforeach; ?><?php else: ?><?= e($sourceText) ?><?php endif; ?></span></td>
           <td><span class="registry-ui-primary"><?= e($fmtDateTime($block['created_at'] ?? null)) ?></span></td>
           <td title="<?= e((string)($block['created_by_login'] ?? '')) ?>"><span class="registry-ui-primary"><?= e((string)($block['created_by_display_name'] ?? '—')) ?></span></td>
-          <td><span class="registry-ui-status <?= $statusApplied ? 'registry-ui-success' : 'registry-ui-error' ?>"><?= $statusApplied ? 'Применяется' : 'Отключён' ?></span></td>
         </tr>
       <?php endforeach; ?>
-      <?php if (!$blocks): ?><tr><td colspan="9"><span class="registry-ui-missing">Блоки ещё не созданы.</span></td></tr><?php endif; ?>
+      <?php if (!$blocks): ?><tr><td colspan="8"><span class="registry-ui-missing">Блоки ещё не созданы.</span></td></tr><?php endif; ?>
       </tbody>
     </table>
   </div>
