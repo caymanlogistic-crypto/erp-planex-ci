@@ -73,7 +73,7 @@ $snapshot=['controls'=>[
 $pdo->prepare('INSERT INTO route_executor_review_cards VALUES(?,?,?,NOW())')->execute([$card,json_encode($snapshot,JSON_UNESCAPED_UNICODE),json_encode($retained,JSON_UNESCAPED_UNICODE)]);
 $typeMappings=[];foreach ($codes as $i=>$code) $typeMappings[]=['id'=>$i+1,'old_name'=>$code,'canonical_id'=>$i+5,'new_name'=>App\Service\TripDocumentPackage::LABELS[$code],'code'=>$code,'entity_type'=>$code==='company_card'?'contractor':'driver'];
 $entity=$pdo->query('SELECT full_name,status,deleted_at,created_at,updated_at,created_by_user_id FROM drivers WHERE id=1')->fetch(PDO::FETCH_ASSOC);
-$payload=['task_id'=>'document-attachments-restore-20261020','company_id'=>25,'authorization'=>'RESTORE_37_RU_DOCUMENTS_20261020','expected_file_count'=>37,'expected_label_count'=>74,'documents_before'=>$selectProjection('documents',$docProjection," WHERE entity_type IN ('contractor','driver','vehicle_unit')"),'types_before'=>$selectProjection('document_types',$typeProjection),'entities_before'=>[['entity_type'=>'driver','id'=>1,'values'=>$entity]],'label_updates'=>$labelUpdates,'type_mappings'=>$typeMappings,'restores'=>$restores];
+$payload=['task_id'=>'document-attachments-restore-20261020','company_id'=>25,'authorization'=>'RESTORE_37_RU_DOCUMENTS_20261020','expected_file_count'=>37,'expected_label_count'=>74,'expected_baseline_document_count'=>402,'documents_before'=>$selectProjection('documents',$docProjection," WHERE entity_type IN ('contractor','driver','vehicle_unit')"),'types_before'=>$selectProjection('document_types',$typeProjection),'entities_before'=>[['entity_type'=>'driver','id'=>1,'values'=>$entity]],'label_updates'=>$labelUpdates,'type_mappings'=>$typeMappings,'restores'=>$restores];
 $allFiles=static function()use($root):array {
     $out=[];$iterator=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS));
     foreach ($iterator as $file) if ($file->isFile()) $out[substr(str_replace('\\','/',$file->getPathname()),strlen(str_replace('\\','/',$root))+1)]=hash_file('sha256',$file->getPathname());ksort($out);return $out;
@@ -84,9 +84,35 @@ $state=static function()use($pdo,$allFiles):array {
 $reject=static function(callable $action,string $message)use($assert):void { try { $action(); } catch (RuntimeException $expected) { return; }throw new RuntimeException($message); };
 $recovery=new RegistryDocumentAttachmentRecovery($pdo,$root);
 try {
-    $before=$state();$checked=$recovery->check($payload);
+    // Legitimate uploads arrive after the original finite recovery plan was built.
+    // They must become protected before images, never an ignored drift exception.
+    for ($id=404;$id<=412;$id++) {
+        $relative='companies/25/documents/fresh-upload-'.$id.'.pdf';$bytes='%PDF-1.4 new unrelated active upload '.$id;$put($relative,$bytes);
+        $insertDocument->execute([$id,'driver',2,'Паспорт',5,'новая загрузка '.$id.'.pdf','fresh-upload-'.$id.'.pdf',$relative,'application/pdf',strlen($bytes)]);
+    }
+    $before=$state();$staleRejected=false;
+    try { $recovery->check($payload); }
+    catch (RuntimeException $error) { $staleRejected=true;$assert($error->getMessage()==='UNEXPECTED_DOCUMENT_DRIFT','Old 402-row plan must detect all nine later uploads as unexpected drift'); }
+    $assert($staleRejected && $before===$state(),'Old baseline must fail without touching legitimate new uploads');
+    $payload['documents_before']=$selectProjection('documents',$docProjection," WHERE entity_type IN ('contractor','driver','vehicle_unit')");
+    $payload['expected_baseline_document_count']=411;
+    $baselineMutations=[
+        [static function(array &$p):void {unset($p['expected_baseline_document_count']);},'BASELINE_DOCUMENT_COUNT_INVALID'],
+        [static function(array &$p):void {$p['expected_baseline_document_count']=410;},'PAYLOAD_ARRAY_COUNT_INVALID'],
+        [static function(array &$p):void {$p['expected_baseline_document_count']=401;},'BASELINE_DOCUMENT_COUNT_INVALID'],
+        [static function(array &$p):void {$p['expected_baseline_document_count']=5001;},'BASELINE_DOCUMENT_COUNT_INVALID'],
+        [static function(array &$p):void {$p['expected_baseline_document_count']=411.0;},'BASELINE_DOCUMENT_COUNT_INVALID'],
+        [static function(array &$p):void {$p['expected_baseline_document_count']='411';},'BASELINE_DOCUMENT_COUNT_INVALID'],
+    ];
+    foreach ($baselineMutations as [$mutate,$expectedCode]) {
+        $invalid=$payload;$mutate($invalid);$rejected=false;
+        try { $recovery->check($invalid); }
+        catch (RuntimeException $error) { $rejected=true;$assert($error->getMessage()===$expectedCode,'Baseline declaration must fail at its own count/type/range guard'); }
+        $assert($rejected && $before===$state(),'Invalid baseline declaration must fail before any file, document or ACL write');
+    }
+    $checked=$recovery->check($payload);
     $assert($checked['pending_restores']===37 && $checked['pending_labels']===74 && $checked['pending_types']===0 && $checked['type_mappings']===4,'Exact approved recovery plan must be returned without writes');
-    $assert(count($checked['before_image']['documents'])===402 && count($checked['before_image']['document_types'])===33 && isset($checked['before_image']['documents'][0]['comments']),'Receipt must retain full before images beyond projections');
+    $assert(count($checked['before_image']['documents'])===411 && count($checked['before_image']['document_types'])===33 && isset($checked['before_image']['documents'][0]['comments']),'Receipt must protect all 411 old and newly uploaded documents with full before images');
     $assert($checked['before_image']['entities']['driver:1']['full_name']==='Тестов Тест Исправленный' && $checked['before_image']['source_files'][0]['source_identity']==='Тестов Тест Тестович','Receipt must bind corrected current target and exact historical source separately');
     $assert($before===$state(),'Check must not change data, ACL, old files or sources');
     $identityMutations=[
@@ -131,7 +157,7 @@ try {
     $assert($applied['restored']===37 && $applied['labels_updated']===74 && $applied['types_updated']===0 && $applied['type_mappings']===4,'Exact 37 file and 74 label/FK recovery must succeed without catalog mutation');
     $assert($applied['before_image']===$checked['before_image'],'Successful apply receipt must retain the actual pre-write before image');
     $assert(count($applied['restore_documents'])===37 && array_column($applied['restore_documents'],'position')===range(0,36),'Receipt must expose all restored document IDs in payload order for independent GET verification');
-    $after=$state();$assert(count($after['documents'])===440,'37 new rows must be added beside 402 baseline and one unrelated row');
+    $after=$state();$assert(count($after['documents'])===449,'37 recovery rows must be added beside the 411 protected baseline and one unrelated category row');
     foreach ($before['documents'] as $row) {
         $current=$pdo->query('SELECT * FROM documents WHERE id='.(int)$row['id'])->fetch(PDO::FETCH_ASSOC);
         if ((int)$row['id']<=74) { $row['document_type']=App\Service\TripDocumentPackage::LABELS[$codes[((int)$row['id']-1)%4]];$row['document_type_id']=(int)$row['document_type_id']+4; }
@@ -139,7 +165,7 @@ try {
     }
     foreach ($before['files'] as $path=>$sha) $assert(($after['files'][$path]??null)===$sha,'An existing or retained source file changed');
     foreach (['document_types','drivers','route_executor_review_cards','entity_assignments','business_data'] as $table) $assert($before[$table]===$after[$table],'Catalog, entity, ACL, card or business data changed');
-    $new=$pdo->query('SELECT * FROM documents WHERE id>403 ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+    $new=$pdo->query('SELECT * FROM documents WHERE id>412 ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
     foreach ($new as $i=>$document) {
         $expected=$restores[$i];$assert($document['original_name']===$expected['original_name'] && $document['document_type']===$expected['document_type'] && (int)$document['document_type_id']===5,'New rows must preserve names and canonical type IDs');
         $assert((int)$document['created_by_user_id']===0 && $document['created_by_role']==='system' && (int)$document['uploaded_by_user_id']===0 && $document['uploaded_by_role']==='system','Recovery must never impersonate the old uploader');
@@ -149,14 +175,14 @@ try {
     $assert($repeat['restored']===0 && $repeat['labels_updated']===0 && $repeat['types_updated']===0 && $repeat['deduplicated']===37 && $after===$state(),'Repeated apply must be a complete no-op using the original check receipt');
     $assert($recovery->check($payload)['check_digest']===$checked['check_digest'],'Receipt must remain stable after exactly approved changes');
     // Simulate lost COMMIT acknowledgement with genuinely new rows/files, then retry.
-    foreach ($new as $document) unlink($root.'/'.$document['relative_path']);$pdo->exec('DELETE FROM documents WHERE id>403');
+    foreach ($new as $document) unlink($root.'/'.$document['relative_path']);$pdo->exec('DELETE FROM documents WHERE id>412');
     foreach ($labelUpdates as $change) $pdo->prepare('UPDATE documents SET document_type=?,document_type_id=?,updated_at=updated_at WHERE id=?')->execute([$change['old_type'],$change['document_type_id'],$change['id']]);
     $unknown=new RegistryDocumentAttachmentRecovery($pdo,$root,['commit'=>static function(PDO $database):bool {$database->commit();throw new RuntimeException('LOST_COMMIT_ACK');}]);
     $reject(fn()=>$unknown->apply($payload,$checked['check_digest']),'Lost commit acknowledgement must be surfaced');
-    $assert((int)$pdo->query('SELECT COUNT(*) FROM documents WHERE id>403')->fetchColumn()===37,'Committed rows survived an unknown acknowledgement');
-    foreach ($pdo->query('SELECT relative_path FROM documents WHERE id>403')->fetchAll(PDO::FETCH_COLUMN) as $path) $assert(is_file($root.'/'.$path),'Unknown commit outcome deleted a committed file');
+    $assert((int)$pdo->query('SELECT COUNT(*) FROM documents WHERE id>412')->fetchColumn()===37,'Committed rows survived an unknown acknowledgement');
+    foreach ($pdo->query('SELECT relative_path FROM documents WHERE id>412')->fetchAll(PDO::FETCH_COLUMN) as $path) $assert(is_file($root.'/'.$path),'Unknown commit outcome deleted a committed file');
     $assert($recovery->apply($payload,$checked['check_digest'])['restored']===0,'Retry after unknown commit must discover committed content without duplicates');
-    echo "DOCUMENT_ATTACHMENT_RECOVERY_MYSQL=PASS restored=37 labels=74 type_mappings=4 catalog_unchanged=PASS repeat=0 rollback=PASS unknown_commit=PASS\n";
+    echo "DOCUMENT_ATTACHMENT_RECOVERY_MYSQL=PASS baseline=411 stale_402=REJECTED restored=37 labels=74 type_mappings=4 catalog_unchanged=PASS repeat=0 rollback=PASS unknown_commit=PASS\n";
 } finally {
     if ($pdo->inTransaction()) $pdo->rollBack();
     $resolved=realpath($root);$temporary=realpath(sys_get_temp_dir());
