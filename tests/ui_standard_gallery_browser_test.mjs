@@ -30,7 +30,9 @@ try{
   for(const key of ['executors','finance','trips','documents']){
    await page.locator(`[data-gallery-scene=${key}]`).click();
    const scene=view(key);await scene.waitFor({state:'visible'});
-   await assertRegistryVisualContract(actual,`gallery ${key} ${width}`);
+   const measured=await assertRegistryVisualContract(actual,`gallery ${key} ${width}`);
+   const visibleWidth=await scene.locator('.registry-ui-card').evaluate(el=>el.getBoundingClientRect().width);
+   assert.ok(visibleWidth>0&&Math.abs(measured.card.width-visibleWidth)<1,'contract measures this visible scene, not the hidden first registry');
    if(width===1280){
     const shape=scene.locator('.rp-identity-icon svg path').last(),original=await shape.getAttribute('d');
     try{

@@ -206,9 +206,13 @@ export async function assertRegistryVisualContract(page, label) {
   await page.evaluate(async () => {
     await Promise.allSettled([400,500,600,700].map(weight=>document.fonts.load(`${weight} 12px "IBM Plex Sans"`)));
     await document.fonts.ready;
+    // Scene visibility dispatches resize; allow the actual shared scroll owner
+    // to measure the newly visible table before reading its geometry.
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
   });
   const metrics = await page.evaluate(() => {
-    const card = document.querySelector('.registry-ui-card');
+    const scope=document.querySelector('[data-gallery-view]:not([hidden])')||document;
+    const card = scope.querySelector('.registry-ui-card');
     const toolbar = card?.querySelector('.registry-ui-toolbar');
     const table = card?.querySelector('.registry-ui-table');
     const box = element => element?.getBoundingClientRect();
@@ -223,13 +227,15 @@ export async function assertRegistryVisualContract(page, label) {
   });
   const context = `${label}: ${JSON.stringify(metrics)}`;
   assert.ok(metrics.card && metrics.toolbar && metrics.table, `missing shared registry structure: ${context}`);
+  assert.ok(metrics.card.width>0&&metrics.toolbar.width>0&&metrics.table.width>0,`shared registry geometry must be visible: ${context}`);
   assert.ok(metrics.pageOverflow <= 1, `page horizontal overflow: ${context}`);
   assert.ok(Math.abs(metrics.toolbar.bottom - metrics.table.top) <= 1, `gap or overlap between toolbar and table: ${context}`);
   assert.equal(metrics.toolbarMarginBottom, '0px', `toolbar external margin: ${context}`);
   assert.ok(metrics.toolbar.left >= metrics.card.left - 1 && metrics.toolbar.right <= metrics.card.right + 1, `toolbar outside card: ${context}`);
   const appearance = await page.evaluate(() => {
+    const scope=document.querySelector('[data-gallery-view]:not([hidden])')||document;
     const style = selector => {
-      const element = document.querySelector(selector);
+      const element = scope.querySelector(selector);
       if (!element) return null;
       const css = getComputedStyle(element);
       return Object.fromEntries(['fontFamily','fontSize','fontWeight','lineHeight','color','backgroundColor','borderTopColor','borderTopWidth','borderRadius','minHeight','paddingTop','paddingRight','height'].map(key => [key, css[key]]));
