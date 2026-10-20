@@ -121,6 +121,19 @@ try {
       });
       assert.equal(amountFits, true, `${width}: 99 million rubles fits financial column`);
     }
+    assert.ok(await page.locator('script[src*="/assets/js/app.js"]').count(),`${width}: actual generic grid script loaded`);
+    const visibleIds=()=>page.locator('.registry-ui-table--trips tbody tr').evaluateAll(rows=>rows.filter(row=>row.getClientRects().length&&getComputedStyle(row).display!=='none').map(row=>Number(row.dataset.wasteView)).sort((a,b)=>a-b));
+    for(const query of ['Сидоров Владимир Петрович','Владимир С.']){
+      await page.locator('[data-waste-filter] [name=q]').fill(query);
+      await page.waitForURL(url=>url.searchParams.get('q')===query);
+      assert.deepEqual(await visibleIds(),[1,2,3,4],`${width}: real generic grid retains known full/short manager rows for ${query}`);
+      await page.reload();
+      assert.deepEqual(await visibleIds(),[1,2,3,4],`${width}: full/short search visible IDs survive reload`);
+      assert.deepEqual(await page.locator('td.waste-manager .registry-ui-primary').allTextContents(),['Владимир С.','Владимир С.','Владимир С.','Владимир С.','Карина Г.'],`${width}: search never expands visible manager labels`);
+      await page.locator('.registry-ui-reset').click();
+      await page.waitForURL(url=>url.searchParams.get('q')==='');
+      assert.deepEqual(await visibleIds(),[1,2,3,4,5],`${width}: reset restores all actual visible IDs`);
+    }
     await page.close();
   }
   const page = await browser.newPage();
