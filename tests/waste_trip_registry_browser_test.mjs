@@ -51,6 +51,11 @@ try {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/company/trips/departures`);
     await page.waitForSelector('[data-registry-ready="true"]');
+    assert.deepEqual(await page.locator('select[name=manager] option').evaluateAll(options=>options.map(option=>[option.value,option.textContent])), [['','Все менеджеры'],['1','Владимир С.'],['2','Карина Г.']], `${width}: manager labels and original IDs/order`);
+    const managerTrigger=page.locator('.lab-reference-select[data-name=manager] .lab-reference-trigger');
+    await managerTrigger.click();
+    assert.deepEqual(await page.locator('.lab-reference-select[data-name=manager] [role=option]').allTextContents(), ['Все менеджеры','Владимир С.','Карина Г.'], `${width}: visible option labels`);
+    await page.keyboard.press('Escape');
     await assertRegistryVisualContract(page, `trips-departures ${width}px`);
     await assertRegistryDataContract(page, 'trips-departures');
     const metrics = await page.evaluate(() => {
@@ -131,6 +136,7 @@ try {
   await page.locator('.lab-reference-select[data-name=manager] .lab-reference-trigger').click();
   await page.locator('.lab-reference-select[data-name=manager] .lab-reference-option[data-value="1"]').click();
   await page.waitForURL(/manager=1/);
+  assert.equal(await page.locator('.lab-reference-select[data-name=manager] .lab-reference-trigger').textContent(),'Владимир С.','selected visible label follows manager value');
   const combinedParams = new URL(page.url()).searchParams;
   assert.equal(combinedParams.get('company'), 'mg_logistic', 'manager choice retains company');
   assert.equal(combinedParams.get('status'), 'planned_route', 'manager choice retains status');

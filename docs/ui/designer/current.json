@@ -8,6 +8,7 @@
     "gallery": "docs/ui/approved-components.html",
     "registry_canon": "docs/ui/REGISTRY_CANON.md",
     "registry_decisions": "docs/ui/decisions-20261018.json",
+    "manager_display_decision": "docs/ui/decisions-20261020-manager-display.json",
     "icon_provenance": "docs/ui/REGISTRY_ICON_PROVENANCE.md",
     "sandbox": "docs/DESIGN_LAB.md",
     "implementation": "docs/ui/REGISTRY_WORKFLOW.md",

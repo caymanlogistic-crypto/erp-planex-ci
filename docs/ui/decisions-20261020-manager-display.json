@@ -1,0 +1,50 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "manager-display-given-name-surname-initial-20261020",
+  "date": "2026-10-20",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "chat": "Current OWNER coordination chat; exact thread ID unavailable",
+    "thread_id": null,
+    "quotes": [
+      "ФИО менеджера пишется в формате Карина Г. тоесть Имя и перва буква фамилии.",
+      "в фильтрах поменял всех страниц которые мы согласовали кроме https://plan-ex.ru/erpv2/company/feo/requests/map-placement, над ней сейчас другой агент работает"
+    ]
+  },
+  "global_rule": "Manager display = given name + space + first surname letter + dot; example Гладких Карина Артуровна → Карина Г.",
+  "implementation_authorized": true,
+  "implementation_scope": "Labels of existing manager filter options and their selected trigger on registered agreed pages. Do not add absent manager filters.",
+  "changed_routes": ["/erpv2/company/trips/departures", "/erpv2/company/logistics/closing-documents"],
+  "inventoried_routes_without_manager_filter": [
+    "/erpv2/company/route-executors",
+    "/erpv2/company/finance/received-paid",
+    "/erpv2/company/drivers",
+    "/erpv2/company/contractors",
+    "/erpv2/company/vehicle-sets"
+  ],
+  "excluded_route": "/erpv2/company/feo/requests/map-placement",
+  "excluded_reason": "Explicit OWNER instruction: another agent owns this page. No direct edits or indirect shared formatter change.",
+  "sources": {
+    "departures": "WasteTripService::fetchRegistryManagers: users.id/full_name, DISTINCT and ORDER BY full_name,id unchanged",
+    "closing": "EntityResponsibilityService::eligibleRecipients: company_memberships.id + user_accounts.full_name/login, eligibility and ORDER BY unchanged",
+    "name_order": "Existing WasteTripRegistryPresenter::manager contract: Фамилия Имя [Отчество]. Neither source exposes separate name fields; do not infer alternate order.",
+    "formatter": "Reuse unchanged WasteTripRegistryPresenter::manager only at the two filter render sites"
+  },
+  "fallback": {
+    "single_token": "Preserve the token, including GTP-Бухгалтерия",
+    "missing_closing_name": "Preserve existing login fallback",
+    "missing_departures_name": "—",
+    "unproven_order": "Do not guess token order; confirm the owning source contract before future migration"
+  },
+  "preserved": ["option IDs/value/order", "filter/reset/persistence", "roles/access", "full names/domain data", "driver and counterparty formats"],
+  "verification": {
+    "static_and_real_bootstrap": ["tests/waste_trip_registry_render_test.php", "tests/manager_filter_runtime_mysql_test.php"],
+    "browser": ["tests/waste_trip_registry_browser_test.mjs", "tests/registry_closing_responsive_browser_test.mjs", "tests/waste_trip_closing_registry_approved_browser_test.mjs"],
+    "widths": [390, 1280, 1920, 3840],
+    "release_status": "Implementation candidate; exact SHA/release and independent acceptance live in task evidence"
+  },
+  "task_id": "manager-filter-display-canon-20261020",
+  "journal": "local/evidence/manager-filter-display-canon-20261020/designer-notes.md",
+  "supersedes": null
+}

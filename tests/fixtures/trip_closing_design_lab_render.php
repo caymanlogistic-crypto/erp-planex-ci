@@ -64,6 +64,7 @@ for ($index = 0; $index < 35; $index++) {
         'actual_end_date' => in_array($index, [10, 11], true) ? null : ($index >= 30 ? '2026-09-25' : '2026-10-'.str_pad((string)(6 - ($index % 6)), 2, '0', STR_PAD_LEFT)),
         'carrier_name' => $carriers[$index % count($carriers)],
         'manager_name' => $managers[$index % count($managers)],
+        'manager_membership_id' => 71 + $index % count($managers),
         'legal_entity_code' => $index % 7 === 5 ? 'mg_logistic' : 'planex',
         'recipient_email' => $index % 7 === 5 ? 'documents@example.test' : 'office@example.test',
         'documents' => $documents,
@@ -81,7 +82,12 @@ for ($index = 0; $index < 35; $index++) {
 }
 $reportRows = \App\Service\WasteTripClosingReportService::rows($trips, '2026-10-13');
 $completionQuarters=['2026-Q4'=>[4,'26'],'2026-Q3'=>[3,'26']];
-$responsibleUsers = [];
+$responsibleUsers = [
+    ['membership_id'=>71,'full_name'=>$managers[0],'login'=>'anna'],
+    ['membership_id'=>72,'full_name'=>$managers[1],'login'=>'maxim'],
+    ['membership_id'=>73,'full_name'=>$managers[2],'login'=>'maria'],
+    ['membership_id'=>74,'full_name'=>'','login'=>'idle.manager'],
+];
 $canFilterManagers = !$managerView;
 $canCreateInvoice = false;
 $viewStateKey = 'fixture:closing-registry';
