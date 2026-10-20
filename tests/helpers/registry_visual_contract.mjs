@@ -26,6 +26,10 @@ export async function assertRegistryTableState(page,pageId,state='initial',{runt
       const surface=surfaces.find(surface=>table.matches(surface.selector));
       const header=table.tHead?.rows[0]?.cells[0];
       return {owners,classes:table.className,headerBackground:header?getComputedStyle(header).backgroundColor:null,
+        nestedHeader:table.closest('.registry-ui-nested-table-scroll')&&table.tHead?{
+          position:getComputedStyle(table.tHead).position,
+          offset:table.tHead.getBoundingClientRect().top-table.getBoundingClientRect().top,
+        }:null,
         rows:[...table.querySelectorAll(surface?.row_selector||':not(*)')].filter(row=>visible(row)&&row.textContent.trim()).length,
         selector:table.outerHTML.slice(0,180)};
     });
@@ -36,6 +40,10 @@ export async function assertRegistryTableState(page,pageId,state='initial',{runt
     assert.match(table.classes,/\bregistry-ui-data\b/,`${pageId}/${state}: visible business table lacks data role`);
     const approvedHeader=table.classes.includes('registry-ui-table--finance')?'rgb(208, 204, 196)':'rgb(227, 222, 213)';
     assert.equal(table.headerBackground,approvedHeader,`${pageId}/${state}: visible business table header differs from approved canon`);
+    if(table.nestedHeader){
+      assert.equal(table.nestedHeader.position,'static',`${pageId}/${state}: nested table header must not inherit main sticky offset`);
+      assert.ok(Math.abs(table.nestedHeader.offset)<=1,`${pageId}/${state}: nested table header must align with its table start`);
+    }
   }
   assert.deepEqual(observed.map(table=>table.owners[0]).sort(),[...declared.visible].sort(),`${pageId}/${state}: declared business-table surfaces differ from actual visible DOM`);
   for(const table of observed){

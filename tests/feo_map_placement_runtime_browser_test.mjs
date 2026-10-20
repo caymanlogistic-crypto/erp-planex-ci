@@ -8,6 +8,7 @@ import {fileURLToPath} from 'node:url';
 import {assertRegistryAsyncSearchContract} from './helpers/registry_async_search_contract.mjs';
 import {assertRegistryRows} from './helpers/registry_behavior_contract.mjs';
 import {assertRegistryTableState} from './helpers/registry_visual_contract.mjs';
+import {assertPlacementSearchPresentation} from './helpers/feo_placement_search_presentation.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -58,6 +59,7 @@ try{
     await search.fill('302545\n281861');
     await page.getByText('Найдено по 2 заявкам.',{exact:false}).waitFor();
     await assertRegistryTableState(page,'feo-map-placement','search-results',{runtime:true});
+    await assertPlacementSearchPresentation(page);
     assert.equal(await search.inputValue(),'302545, 281861','real search parser preserves two pasted IDs');
     assert.equal(await page.locator('[data-placement-search-block-id="74"]').count(),1,'real endpoint returns saved block');
     await page.locator('.registry-ui-reset').click();

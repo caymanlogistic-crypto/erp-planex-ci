@@ -134,6 +134,9 @@
 .registry-ui-data .registry-ui-trip {display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:500 12px/16.8px var(--font);color:#131210}
 .registry-ui-data .registry-ui-primary {font:500 12px/16.8px var(--font);color:#131210}
 .registry-ui-data .registry-ui-name {display:block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:600 12px/16.8px var(--font);color:#131210}
+.registry-ui-data .registry-ui-inline-identity {display:flex;align-items:baseline;min-width:0}
+.registry-ui-data .registry-ui-inline-identity > .registry-ui-primary {flex:none}
+.registry-ui-data .registry-ui-inline-identity > .registry-ui-name {min-width:0}
 .registry-ui-data .registry-ui-secondary {display:block;font:500 11px/15.4px var(--font);color:#78726a}
 .registry-ui-data .registry-ui-money {text-align:right;white-space:nowrap;font:600 12px/16.8px var(--font);color:#131210;font-variant-numeric:tabular-nums}
 .registry-ui-data .registry-ui-missing {font:500 12px/16.8px var(--font);color:#817d75}
@@ -218,6 +221,7 @@
 .registry-ui-scroll > :is(.table-scroll,.rp-v010-table-wrap) {height:auto!important;max-height:none!important;min-height:0;overflow:visible!important}
 .registry-ui-card .registry-ui-table-surface {min-width:0;max-width:100%}
 .registry-ui-card .registry-ui-nested-table-scroll {min-width:0;max-width:100%;overflow-x:auto;overflow-y:hidden}
+.registry-ui-nested-table-scroll .registry-ui-table > thead {position:static;top:auto;z-index:auto}
 .registry-ui-scroll > [data-registry-scroll-x="true"] {overflow-x:auto!important;overflow-y:auto!important}
 .registry-ui-scroll .registry-ui-scroll-native {position:sticky!important;top:calc(var(--registry-toolbar-height,49px) - 12px)!important;z-index:19}
 .registry-ui-scroll .registry-ui-scroll-translated {position:relative!important;top:0!important;z-index:19;will-change:transform}

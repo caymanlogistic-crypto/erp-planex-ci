@@ -508,11 +508,11 @@ function renderBlockSearch(data){
     const blocks=Array.isArray(item.blocks)?item.blocks:[];
     if(blocks.length){
       blocks.forEach(block=>{
-        rows.push(`<tr data-placement-search-block-id="${block.id}"><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-primary">${esc(formatBlockOperationDate(block.created_at))}</span></td><td><span class="registry-ui-primary">#${esc(block.id)}</span>${block.name?`<span class="registry-ui-name" title="${esc(block.name)}">${esc(block.name)}</span>`:''}</td><td><span class="registry-ui-primary">${block.block_type==='addition'?'Добавление':'Исключение'}</span></td></tr>`);
+        rows.push(`<tr class="registry-ui-warning" data-placement-search-block-id="${block.id}"><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-primary">${esc(formatBlockOperationDate(block.created_at))}</span></td><td><span class="registry-ui-inline-identity"><span class="registry-ui-primary">#${esc(block.id)}&nbsp;</span>${block.name?`<span class="registry-ui-name" title="${esc(block.name)}">${esc(block.name)}</span>`:''}</span></td><td><span class="registry-ui-primary">${block.block_type==='addition'?'Добавление':'Исключение'}</span></td></tr>`);
       });
     }else{
       const blockText=item.exists_in_feo?'Не входит ни в один блок':'Нет в реестре ФЭО · не входит ни в один блок';
-      rows.push(`<tr><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-missing">—</span></td><td><span class="registry-ui-missing">${esc(blockText)}</span></td><td><span class="registry-ui-missing">—</span></td></tr>`);
+      rows.push(`<tr class="registry-ui-warning"><td class="registry-ui-id">${esc(item.zayavka_id)}</td><td><span class="registry-ui-missing">—</span></td><td><span class="registry-ui-missing">${esc(blockText)}</span></td><td><span class="registry-ui-missing">—</span></td></tr>`);
     }
   });
   const duplicateNote=Array.isArray(data.duplicates)&&data.duplicates.length?` Повторы во вводе удалены: ${esc(data.duplicates.join(', '))}.`:'';

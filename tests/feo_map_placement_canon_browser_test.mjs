@@ -7,6 +7,7 @@ import {createRequire} from 'node:module';
 import {fileURLToPath} from 'node:url';
 import {assertRegistryVisualContract,assertRegistryDataContract,assertRegistryTableState} from './helpers/registry_visual_contract.mjs';
 import {assertRegistryRows,assertRegistrySearch,assertRegistryScroll} from './helpers/registry_behavior_contract.mjs';
+import {assertPlacementSearchPresentation} from './helpers/feo_placement_search_presentation.mjs';
 
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
@@ -23,7 +24,7 @@ const server=http.createServer((req,res)=>{
   if(url.pathname.endsWith('/search-blocks')){
     const ids=(url.searchParams.get('request_ids')||'').split(/,\s*/).filter(Boolean);
     res.setHeader('Content-Type','application/json');
-    res.end(JSON.stringify({success:true,results:ids.map(id=>({zayavka_id:id,exists_in_feo:true,blocks:id==='302545'?[{id:74,name:'Площадка Сосновый Бор',block_type:'addition',created_at:'2026-10-17 10:45:00'}]:[]})),duplicates:[]}));return;
+    res.end(JSON.stringify({success:true,results:ids.map(id=>({zayavka_id:id,exists_in_feo:true,blocks:id==='302545'?[{id:74,name:'Площадка Сосновый Бор',block_type:'addition',created_at:'2026-10-17 10:45:00'}]:id==='285664'?[{id:75,name:'Корректировка по улице Заводской',block_type:'exclusion',created_at:'2026-10-18 09:20:00'}]:[]})),duplicates:[]}));return;
   }
   res.setHeader('Content-Type','text/html; charset=utf-8');res.end(pages[url.searchParams.get('state')||'populated']);
 });
@@ -79,10 +80,31 @@ try{
     await page.locator('#feo-placement-create-modal [data-close-modal]').first().click();
     assert.ok(!(await page.locator('#feo-placement-create-modal').getAttribute('class')).includes('is-open'),'existing close action dismisses create form');
     const search=page.locator('[data-placement-block-search]');
-    await search.fill('302545\n285664');
-    await page.getByText('Найдено по 2 заявкам.',{exact:false}).waitFor();
+    await search.fill('302545\n285664\n281861');
+    await page.getByText('Найдено по 3 заявкам.',{exact:false}).waitFor();
     await assertRegistryDataContract(page,'feo-map-placement',{state:'search-results'});
     const searchTable=page.locator('[data-placement-block-search-results] .feo-placement-search-table');
+    await assertPlacementSearchPresentation(page);
+    if(width===1280){
+      const head=searchTable.locator('thead');
+      await head.evaluate(el=>el.style.position='sticky');
+      await assert.rejects(assertRegistryTableState(page,'feo-map-placement','search-results'),/must not inherit main sticky offset/,'sticky secondary header is RED');
+      await head.evaluate(el=>el.style.removeProperty('position'));
+      const identity=searchTable.locator('.registry-ui-inline-identity').first();
+      await identity.evaluate(el=>el.style.display='block');
+      await assert.rejects(assertPlacementSearchPresentation(page),/one line/,'stacked block ID and name is RED');
+      await identity.evaluate(el=>el.style.removeProperty('display'));
+      const warning=searchTable.locator('tbody tr').first();
+      await warning.evaluate(el=>el.classList.remove('registry-ui-warning'));
+      await assert.rejects(assertPlacementSearchPresentation(page),/yellow attention role/,'missing yellow row is RED');
+      await warning.evaluate(el=>el.classList.add('registry-ui-warning'));
+      await assertPlacementSearchPresentation(page);
+      console.log('FEO_SEARCH_PRESENTATION_CANARIES=PASS sticky-header,stacked-identity,missing-yellow');
+    }
+    const oldScroll=await page.locator('main.content').evaluate(el=>{const old=el.scrollTop;el.scrollTop+=120;return old;});
+    await assertRegistryTableState(page,'feo-map-placement','search-results');
+    await assertPlacementSearchPresentation(page);
+    await page.locator('main.content').evaluate((el,value)=>el.scrollTop=value,oldScroll);
     if(width===390){
       const body=searchTable.locator('tbody'),saved=await body.innerHTML();
       await body.evaluate(element=>element.replaceChildren());
@@ -120,7 +142,7 @@ try{
       await assertRegistryTableState(page,'feo-map-placement','search-results');
       console.log('REGISTRY_SURFACE_NEGATIVE=feo-map-placement:unmapped,missing-role,wrong-state');
     }
-    assert.equal(await search.inputValue(),'302545, 285664','multiline IDs normalize without loss');
+    assert.equal(await search.inputValue(),'302545, 285664, 281861','multiline IDs normalize without loss');
     assert.equal(await page.locator('[data-placement-search-block-id="74"]').count(),1,'block search links to original block');
     if(width===1280){
       await assertRegistryRows(page,{rowSelector:'.feo-placement-table tbody tr[data-placement-block-id="74"],.feo-placement-table tbody tr[data-placement-block-id="75"],.feo-placement-table tbody tr[data-placement-block-id="76"]',rows:[

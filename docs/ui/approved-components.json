@@ -195,6 +195,15 @@
       "approval": "OWNER 2026-10-18",
       "description": "Один вертикальный владелец, панель и заголовки закреплены вместе, горизонтальная прокрутка широкого содержимого.",
       "specimen": "docs/ui/specimens/registry.composition.html"
+    },
+    {
+      "id": "registry.inline-identity",
+      "family": "registry",
+      "role": "ID и название в одной строке",
+      "selector": ".registry-ui-inline-identity",
+      "approval": "OWNER2026-10-20: secondary FEO search ID and name in one line; docs/ui/decisions-20261020-feo-search.json",
+      "description": "Одна строка из неизменного ID и названия с существующими primary/name ролями; длинное имя сокращается с полным title. Во вторичном поиске ФЭО все строки используют общий жёлтый warning, заголовок не наследует sticky основной таблицы.",
+      "specimen": "docs/ui/specimens/registry.inline-identity.html"
     }
   ],
   "pages": [
