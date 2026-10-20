@@ -1,0 +1,26 @@
+{
+  "schema": "planex-ui-owner-decision/v1",
+  "id": "feo-search-secondary-table-20261020",
+  "date": "2026-10-20",
+  "scope": [
+    "/erpv2/company/feo/requests/map-placement",
+    "secondary search results only"
+  ],
+  "owner_source": "Current OWNER conversation; attachment codex-clipboard-63d2b146-b97c-4055-9b6d-4d5639e2d0f5.png and subsequent answer",
+  "owner_quote": [
+    "У вторичной таблицы сьехала шапка",
+    "id блока и название в одну строку",
+    "Все строки вторичной таблицы"
+  ],
+  "decisions": {
+    "header": "normal table flow; no inherited primary sticky offset",
+    "identity": "block ID and name share one line, existing primary/name typography retained",
+    "rows": "reuse approved registry-ui-warning for every secondary row"
+  },
+  "excluded": [
+    "search generation/reset semantics",
+    "data access and writes",
+    "main table colors",
+    "modals"
+  ]
+}
