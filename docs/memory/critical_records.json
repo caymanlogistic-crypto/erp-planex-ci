@@ -158,8 +158,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "c1fae53157f6711396041fab39d199d34cf048f8",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/c1fae53157f6711396041fab39d199d34cf048f8/docs/DOCUMENT_ATTACHMENT_PRESERVATION.md",
+      "verified_sha": "2e1371a9820c3ff84ebc3fdfa27a26af53ff6e3d",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2e1371a9820c3ff84ebc3fdfa27a26af53ff6e3d/.github/workflows/document_attachment_recovery_production.yml",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
