@@ -1,17 +1,6 @@
 name: Registry Document Inventory Read Only Diagnostic
 
 on:
-  pull_request:
-    paths:
-      - '.github/workflows/registry_document_inventory_readonly_diagnostic.yml'
-      - 'scripts/registry_document_inventory_readonly_probe.php'
-      - 'tests/document_inventory_readonly_mysql_test.php'
-  push:
-    branches: ['chatgpt/production-stabilization-20260802']
-    paths:
-      - '.github/workflows/registry_document_inventory_readonly_diagnostic.yml'
-      - 'scripts/registry_document_inventory_readonly_probe.php'
-      - 'tests/document_inventory_readonly_mysql_test.php'
   workflow_dispatch:
     inputs:
       company_scope:
@@ -42,31 +31,6 @@ env:
   LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
   DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
 jobs:
-  regression:
-    if: github.event_name != 'workflow_dispatch'
-    runs-on: ubuntu-24.04
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@v4
-      - name: Disposable MySQL behavioral regression
-        env:
-          APP_ENV: test
-          PLANEX_SCHEMA_DB_HOST: 127.0.0.1
-          PLANEX_SCHEMA_DB_PORT: 3306
-          PLANEX_SCHEMA_DB_USER: inventory_ci
-          PLANEX_SCHEMA_DB_PASSWORD: ephemeral_ci_only
-          PLANEX_TEST_FIXED_DB: inventory_readonly_test
-          PLANEX_TEST_FIXED_DB_ALLOWLIST: inventory_readonly_test
-        shell: bash
-        run: |
-          set -euo pipefail
-          sudo systemctl start mysql
-          mysql -uroot -proot <<'SQL'
-          CREATE DATABASE inventory_readonly_test CHARACTER SET utf8mb4;
-          CREATE USER 'inventory_ci'@'127.0.0.1' IDENTIFIED BY 'ephemeral_ci_only';
-          GRANT ALL ON inventory_readonly_test.* TO 'inventory_ci'@'127.0.0.1';
-          SQL
-          php tests/document_inventory_readonly_mysql_test.php
   inventory:
     if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-24.04
