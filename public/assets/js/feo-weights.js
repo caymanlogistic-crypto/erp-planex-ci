@@ -69,7 +69,7 @@
     find('[data-confirm-revert]').onclick = event => action(event.currentTarget, async () => { const result = await request(`/${id}/revert`, new FormData()); completed(result, 'возвращён'); }, message => { const box = find('[data-revert-error]'); box.textContent = message; box.hidden = false; });
     detailDialog.showModal();
   }));
-  find('[data-history-search]')?.addEventListener('input', event => { const query = event.target.value.trim().toLocaleLowerCase('ru'); root.querySelectorAll('[data-batch-row]').forEach(row => { row.hidden = !row.textContent.toLocaleLowerCase('ru').includes(query); }); });
+  find('[data-history-search]')?.addEventListener('input', event => { const query = event.target.value.trim().toLocaleLowerCase('ru'); root.querySelectorAll('[data-batch-row]').forEach(row => { const full=row.querySelector('[data-registry-full-text]')?.dataset.registryFullText||''; row.hidden = !(row.textContent+' '+full).toLocaleLowerCase('ru').includes(query); }); });
   const saved = sessionStorage.getItem('feo-weight-result');
   if (saved) { sessionStorage.removeItem('feo-weight-result'); try { const result = JSON.parse(saved); pageMessage(result.message, result.warning); } catch {} }
 })();

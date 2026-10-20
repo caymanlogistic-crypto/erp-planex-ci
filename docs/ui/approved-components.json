@@ -694,6 +694,115 @@
         "tests/feo_placement*.php",
         "tests/fixtures/feo_map_placement*.php"
       ]
+    },
+    {
+      "id": "feo-transfers",
+      "family": "registry",
+      "adaptation_status": "current_20261018",
+      "route": "/erpv2/company/feo/requests/transfers",
+      "view": "app/View/pages/company_feo_transfers.php",
+      "header_icon": {
+        "variant": "outline",
+        "source": "app/View/components/tabler/outline/truck-delivery.svg",
+        "version": "3.48.0",
+        "name": "truck-delivery",
+        "role": "registry.page-head",
+        "pack": "@tabler/icons"
+      },
+      "reference_select": false,
+      "sticky": true,
+      "asset_owner": "app/Http/Controllers/Company/FeoTransferController.php",
+      "browser_test": "tests/feo_history_canon_browser_test.mjs",
+      "runtime_browser_test": "tests/feo_history_runtime_browser_test.mjs",
+      "data_roles": [
+        "primary",
+        "name",
+        "secondary",
+        "id",
+        "status"
+      ],
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ],
+          "data": {
+            "main": "populated"
+          },
+          "empty_fixture": true
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search filters already loaded history rows locally."
+      },
+      "contract_sources": [
+        "app/View/pages/company_feo_transfers.php",
+        "tests/fixtures/feo_history_canon_render.php"
+      ],
+      "required_contracts": []
+    },
+    {
+      "id": "feo-weights",
+      "family": "registry",
+      "adaptation_status": "current_20261018",
+      "route": "/erpv2/company/feo/requests/weights",
+      "view": "app/View/pages/company_feo_weight_batches.php",
+      "header_icon": {
+        "variant": "outline",
+        "source": "app/View/components/tabler/outline/arrows-exchange.svg",
+        "version": "3.48.0",
+        "name": "arrows-exchange",
+        "role": "registry.page-head",
+        "pack": "@tabler/icons"
+      },
+      "reference_select": false,
+      "sticky": true,
+      "asset_owner": "app/Http/Controllers/Company/FeoWeightBatchController.php",
+      "browser_test": "tests/feo_history_canon_browser_test.mjs",
+      "runtime_browser_test": "tests/feo_history_runtime_browser_test.mjs",
+      "data_roles": [
+        "primary",
+        "name",
+        "id",
+        "status"
+      ],
+      "table_surfaces": [
+        {
+          "id": "main",
+          "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+          "row_selector": "tbody > tr:not(:has(td[colspan]))"
+        }
+      ],
+      "table_states": [
+        {
+          "id": "initial",
+          "visible": [
+            "main"
+          ],
+          "data": {
+            "main": "populated"
+          },
+          "empty_fixture": true
+        }
+      ],
+      "async_search": {
+        "applicable": false,
+        "reason": "Search filters already loaded history rows locally."
+      },
+      "contract_sources": [
+        "app/View/pages/company_feo_weight_batches.php",
+        "tests/fixtures/feo_history_canon_render.php"
+      ],
+      "required_contracts": []
     }
   ],
   "decisions": "docs/ui/decisions-20261018.json"
