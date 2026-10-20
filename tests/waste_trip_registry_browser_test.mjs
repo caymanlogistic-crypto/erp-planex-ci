@@ -58,6 +58,8 @@ try {
     await page.keyboard.press('Escape');
     await assertRegistryVisualContract(page, `trips-departures ${width}px`);
     await assertRegistryDataContract(page, 'trips-departures');
+    assert.deepEqual(await page.locator('td.waste-manager .registry-ui-primary').allTextContents(),['Владимир С.','Владимир С.','Владимир С.','Владимир С.','Карина Г.'],`${width}: manager cells and idempotence`);
+    assert.equal(await page.locator('td.waste-manager').first().getAttribute('title'),'Сидоров Владимир Петрович',`${width}: full manager tooltip preserved`);
     const metrics = await page.evaluate(() => {
       const table = document.querySelector('.registry-ui-table--trips');
       const first = table.tBodies[0].rows[0];

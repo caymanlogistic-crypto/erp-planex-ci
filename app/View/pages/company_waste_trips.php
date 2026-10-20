@@ -1,5 +1,6 @@
 <?php
 require_once base_path('app/View/components/registry_tabler_icons.php');
+require_once base_path('app/Service/RegistryManagerPresentation.php');
 
 require_once base_path('app/Service/WasteTripRegistryPresenter.php');
 use App\Service\WasteTripCustomerPaymentService;
@@ -108,7 +109,7 @@ require base_path('app/View/partials/registry_ui_head.php');
         <?php else:?><span class="registry-empty registry-ui-missing">—</span><?php endif;?>
         <?php if($isFinanceRealm && $sideIndex===1 && WasteTripService::hasPreservedSettlements($trip)):?><span class="registry-payment-line registry-ui-secondary" title="<?=e(WasteTripService::PRESERVED_SETTLEMENTS_NOTICE)?>">Расчёты по прежним условиям</span><?php endif;?>
     </div></td><?php endforeach;?>
-    <td class="waste-manager" data-label="Менеджер" title="<?=e((string)($trip['responsible_name']??''))?>"><div class="registry-ui-value"><span class="registry-ui-primary"><?=e((string)($trip['responsible_name']??''))?></span></div></td>
+    <td class="waste-manager" data-label="Менеджер" title="<?=e((string)($trip['responsible_name']??''))?>"><div class="registry-ui-value"><span class="registry-ui-primary" aria-label="<?=e((string)($trip['responsible_name']??''))?>"><?=e(\App\Service\RegistryManagerPresentation::name((string)($trip['responsible_name']??'')))?></span></div></td>
 </tr>
 <?php endforeach;?></tbody></table></div><?php endif;?></div></section>
 <div class="modal-overlay" id="waste-trip-create-modal" data-close-on-overlay="0"><div class="modal modal-lg"><div class="modal-head"><span class="modal-title">Создать рейс перевозки отходов</span><button type="button" class="modal-close" onclick="closeModal('waste-trip-create-modal')">&times;</button></div><form method="post" action="<?=app_url('/company/trips/departures/create')?>" data-linear-trip-form><div class="modal-body waste-modal-scroll"><div class="waste-form-grid">

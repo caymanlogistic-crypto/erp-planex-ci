@@ -1,6 +1,7 @@
 <?php
 require_once base_path('app/View/components/registry_tabler_icons.php');
 require_once base_path('app/Service/WasteTripRegistryPresenter.php');
+require_once base_path('app/Service/RegistryManagerPresentation.php');
 
 /** @var list<array<string,mixed>> $trips */
 $canCreateInvoice=$canCreateInvoice??false;
@@ -63,7 +64,7 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
       <?php foreach(['tn','contract','invoice','act','waybill'] as $key):$present=$row[$key]==='Есть';?><td class="closing-report-status is-<?= $present?'present':'missing' ?>"><div class="registry-ui-value"><span class="registry-ui-status registry-ui-<?= $present?'success':'error' ?>"><?= $present?'Есть':'НЕТ' ?></span></div></td><?php endforeach;?>
       <?php if(count($row['diagnostic_card_details'])>1):?><td class="closing-report-status is-<?= e((string)$row['diagnostic_card_state']) ?>"><div class="registry-ui-value"><?php foreach(explode("\n",$display[10]) as $index=>$unitLabel):$unit=$row['diagnostic_card_details'][$index];?><span class="closing-report-unit registry-ui-status registry-ui-<?= $unit['status']==='Есть'?'success':'error' ?>" title="<?= e($unit['label'].': '.$unit['status']) ?>"><?= e($unitLabel) ?></span><?php endforeach;?></div></td><?php else:$cardPresent=$row['diagnostic_card_state']==='present';?><td class="closing-report-status is-<?= e((string)$row['diagnostic_card_state']) ?>"><div class="registry-ui-value"><span class="registry-ui-status registry-ui-<?= $cardPresent?'success':'error' ?>"><?= $cardPresent?e($display[10]):'НЕТ' ?></span></div></td><?php endif;?>
       <td class="closing-report-status is-<?= $sectionState==='incomplete'?'missing':($sectionState==='ready'?'partial':'present') ?><?= $sectionState==='ready'?' registry-ui-warning':'' ?>" title="<?= e((string)$row['payment_status']) ?>"><div class="registry-ui-value"><span class="registry-ui-status <?= $sectionState==='incomplete'?'registry-ui-error':($sectionState==='ready'?'':'registry-ui-success') ?>"><?= e($display[11]) ?></span></div></td>
-      <td><div class="registry-ui-value"><span class="<?= $display[12]==='—'?'registry-ui-missing':'registry-ui-primary' ?>"><?= e($display[12]) ?></span></div></td><td title="<?= e((string)$row['manager']) ?>"><div class="registry-ui-value"><span class="registry-ui-primary"><?= e((string)$row['manager']) ?></span></div></td>
+      <td><div class="registry-ui-value"><span class="<?= $display[12]==='—'?'registry-ui-missing':'registry-ui-primary' ?>"><?= e($display[12]) ?></span></div></td><td title="<?= e((string)$row['manager']) ?>"><div class="registry-ui-value"><span class="registry-ui-primary" aria-label="<?= e((string)$row['manager']) ?>"><?= e(\App\Service\RegistryManagerPresentation::name((string)$row['manager'])) ?></span></div></td>
       <td title="<?= e((string)$row['section']) ?>"><div class="registry-ui-value"><?php if(str_starts_with($sectionState,'paid_')):?><span class="lab-section-paid registry-ui-status registry-ui-success">Оплачено</span><span class="lab-section-detail registry-ui-secondary"><?= $sectionState==='paid_complete'?'Полный комплект':'Неполный комплект' ?></span><?php else:?><span class="registry-ui-primary"><?= e($display[14]) ?></span><?php endif;?></div></td>
     </tr><?php endforeach;?></tbody>
   </table><p class="closing-empty" data-closing-empty<?= $reportRows?' hidden':'' ?>>Рейсы по запросу не найдены.</p></div>
@@ -101,7 +102,7 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
         $invoiceStatus=$hasCarrierPayment?($carrierDebt?'Оплачен частично':'Оплачен'):match($invoiceSummary['status']){'paid'=>'Оплачен','waiting'=>'Ожидает оплаты',default=>'Не введён'};
         $invoiceDetail=$hasCarrierPayment&&($trip['carrier_paid_date']??null)?'Оплата: '.date('d.m.Y',strtotime((string)$trip['carrier_paid_date'])):(string)$invoiceSummary['detail'];
         $invoiceDisplayStatus=$hasCarrierPayment?'paid':(string)$invoiceSummary['status'];
-        $search=mb_strtolower($trip['business_id'].' '.$trip['carrier_name'].' '.$trip['manager_name'].' '.$executorLabel((string)$trip['legal_entity_code']),'UTF-8');
+        $search=mb_strtolower($trip['business_id'].' '.$trip['carrier_name'].' '.$trip['manager_name'].' '.\App\Service\RegistryManagerPresentation::name((string)$trip['manager_name']).' '.$executorLabel((string)$trip['legal_entity_code']),'UTF-8');
     ?>
     <details class="closing-trip" name="closing-trip" data-closing-trip data-trip-id="<?= (int)$trip['id'] ?>" data-business-id="<?= e((string)$trip['business_id']) ?>" data-state="<?= e($section) ?>" data-entity="<?= e((string)$trip['legal_entity_code']) ?>" data-actual-end="<?= e((string)($trip['actual_end_date']??'')) ?>" data-manager-id="<?= (int)($trip['manager_membership_id']??0) ?>" data-search="<?= e($search) ?>"<?= (int)$trip['id']===$selectedTrip?' open':'' ?>>
       <summary class="closing-trip-summary"><span class="closing-chevron" aria-hidden="true"></span>
