@@ -14,7 +14,7 @@ final class CargoBalanceStatisticsService
         return (int)$tables->fetchColumn() === 6;
     }
 
-    /** @return array{daily:list<array<string,int|string>>,today:string,history_note:string} */
+    /** @return array{daily:list<array<string,int|string>>,today:string,history_note:string,forecast:array{formed_trip_count:int,projected_new:int}} */
     public static function dashboard(PDO $pdo): array
     {
         $blocks = $pdo->query("SELECT b.id,b.block_type,DATE(b.created_at) day,br.zayavka_id
@@ -28,6 +28,12 @@ final class CargoBalanceStatisticsService
             WHERE wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed')
               AND wt.actual_start_date IS NOT NULL
             GROUP BY fr.zayavka_id")->fetchAll(PDO::FETCH_ASSOC);
+        $formedTripCount = (int)$pdo->query("SELECT COUNT(*) FROM waste_trips WHERE status='assigned' AND deleted_at IS NULL")->fetchColumn();
+        $formedRequests = $pdo->query("SELECT DISTINCT fr.zayavka_id
+            FROM waste_trips wt
+            JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.removed_at IS NULL
+            JOIN feo_requests fr ON fr.id=wtr.feo_request_id
+            WHERE wt.status='assigned' AND wt.deleted_at IS NULL")->fetchAll(PDO::FETCH_COLUMN);
         $today = (new DateTimeImmutable('today'))->format('Y-m-d');
         $events = [];
         foreach ($blocks as $block) {
@@ -70,9 +76,14 @@ final class CargoBalanceStatisticsService
         // The current placement table is authoritative when a past block was disabled.
         $current = (int)$pdo->query('SELECT COUNT(*) FROM feo_placement_current')->fetchColumn();
         if ($daily !== []) $daily[count($daily)-1]['assigned'] = $current;
+        $projectedNew = 0;
+        foreach ($formedRequests as $id) {
+            if (!isset($started[(string)$id])) $projectedNew++;
+        }
         return [
             'daily'=>$daily,
             'today'=>$today,
+            'forecast'=>['formed_trip_count'=>$formedTripCount,'projected_new'=>$projectedNew],
             'history_note'=>'Прошлые остатки восстановлены по блокам, применяемым сейчас; изменения отключённых блоков могут отсутствовать.',
         ];
     }
