@@ -185,10 +185,10 @@ final class RegistryDocumentAttachmentRecovery
                 self::need(is_array($source) && (string)$source['path']===$restore['source_path'] && (string)$source['original_name']===$restore['original_name'] && (int)$source['size']===(int)$restore['size'] && (string)$source['mime']===$restore['mime'],'REVIEW_SOURCE_METADATA_MISMATCH');
                 $prefix='companies/25/route-executor-review/'.$cardId.'/';
                 self::need(str_starts_with($restore['source_path'],$prefix),'REVIEW_SOURCE_PATH_INVALID');
-                $this->sourceIdentity($restore,$source,$card,$entities[$key],(string)$type['code']);
+                $this->sourceIdentity($restore,$source,$card,(string)$type['code']);
                 $fingerprint=$this->fingerprint($restore['source_path'],true);
                 self::need($fingerprint['sha256']===$restore['sha256'] && $fingerprint['size']===(int)$restore['size'] && $fingerprint['mime']===$restore['mime'],'REVIEW_SOURCE_CONTENT_MISMATCH');
-                $restore['_absolute_source']=$this->existingPath($restore['source_path']);$sources[$position]=$fingerprint;
+                $restore['_absolute_source']=$this->existingPath($restore['source_path']);$sources[$position]=$fingerprint+['source_identity'=>$restore['source_identity']];
             } else {
                 $bytes=base64_decode($restore['inline_base64'],true);
                 self::need(is_string($bytes) && str_starts_with($bytes,"\x89PNG\r\n\x1a\n") && strlen($bytes)===(int)$restore['size'] && hash('sha256',$bytes)===$restore['sha256'] && (new finfo(FILEINFO_MIME_TYPE))->buffer($bytes)==='image/png','OWNER_SOURCE_CONTENT_MISMATCH');
@@ -208,7 +208,7 @@ final class RegistryDocumentAttachmentRecovery
             if ($found) $matches[$found[0]]=$position;else $pending[]=$restore;
         }
         foreach ($actualDocs as $id=>$doc) self::need(isset($beforeDocs[$id]) || isset($matches[$id]),'UNEXPECTED_DOCUMENT_DRIFT');
-        $beforeImage=['documents'=>array_values(array_intersect_key($actualDocs,$beforeDocs)),'document_types'=>$types,'entities'=>$entityRows,'review_cards'=>$reviewRows];
+        $beforeImage=['documents'=>array_values(array_intersect_key($actualDocs,$beforeDocs)),'document_types'=>$types,'entities'=>$entityRows,'review_cards'=>$reviewRows,'source_files'=>$sources];
         $canonical=['payload_digest'=>$digest,'documents'=>$canonicalDocs,'document_types'=>$canonicalTypes,'entities'=>$entityRows,'old_files'=>$filesBefore,'source_files'=>$sources,'review_cards'=>$reviewRows];
         $restoreDocuments=[];
         foreach ($matches as $id=>$position) {
@@ -240,35 +240,43 @@ final class RegistryDocumentAttachmentRecovery
         }
         $kinds=['review'=>0,'owner'=>0];
         foreach ($payload['restores'] as $restore) {
-            self::keys($restore,['entity_type','entity_id','document_type','document_type_id','original_name','mime','size','sha256','source_kind','source_card_id','source_position','source_path','inline_base64','reference_document_id','reference_sha256']);
+            self::keys($restore,['entity_type','entity_id','document_type','document_type_id','original_name','mime','size','sha256','source_kind','source_card_id','source_position','source_path','source_identity','inline_base64','reference_document_id','reference_sha256']);
             self::need(isset(self::TABLES[$restore['entity_type']??'']) && (int)($restore['entity_id']??0)>0 && (int)($restore['document_type_id']??0)>0 && (int)($restore['reference_document_id']??0)>0 && isset($restore['document_type']),'RESTORE_TARGET_INVALID');
             foreach (['sha256','reference_sha256'] as $field) self::need(is_string($restore[$field]??null) && (bool)preg_match('/^[a-f0-9]{64}$/D',$restore[$field]),'CONTENT_HASH_INVALID');
             $name=$restore['original_name']??'';
             self::need(is_string($name) && $name!=='' && strlen($name)<=500 && !preg_match('~[\\\\/\x00-\x1f]~',$name) && in_array(strtolower(pathinfo($name,PATHINFO_EXTENSION)),['pdf','jpg','jpeg','png','webp','doc','docx','rtf','odt','xls','xlsx','csv','ods','gif','bmp','tif','tiff','heic','heif','txt'],true),'ORIGINAL_NAME_INVALID');
             self::need(is_int($restore['size']??null) && $restore['size']>0 && $restore['size']<=20*1024*1024 && is_string($restore['mime']??null),'RESTORE_SIZE_MIME_INVALID');
             $kind=$restore['source_kind']??'';self::need(isset($kinds[$kind]),'SOURCE_KIND_INVALID');$kinds[$kind]++;
-            if ($kind==='review') self::need(is_string($restore['source_card_id']??null) && (bool)preg_match('/^[a-f0-9-]{36}$/D',$restore['source_card_id']) && is_int($restore['source_position']??null) && $restore['source_position']>=0 && is_string($restore['source_path']??null) && !isset($restore['inline_base64']),'REVIEW_SOURCE_INVALID');
-            else self::need(($restore['source_card_id']??null)===null && ($restore['source_position']??null)===null && ($restore['source_path']??null)===null && is_string($restore['inline_base64']??null) && $restore['mime']==='image/png','OWNER_SOURCE_INVALID');
+            if ($kind==='review') {
+                self::need(is_string($restore['source_card_id']??null) && (bool)preg_match('/^[a-f0-9-]{36}$/D',$restore['source_card_id']) && is_int($restore['source_position']??null) && $restore['source_position']>=0 && is_string($restore['source_path']??null) && !isset($restore['inline_base64']),'REVIEW_SOURCE_INVALID');
+                self::need(is_string($restore['source_identity']??null) && trim($restore['source_identity'])!=='' && mb_strlen($restore['source_identity'])<=255,'REVIEW_SOURCE_IDENTITY_INVALID');
+            } else self::need(($restore['source_card_id']??null)===null && ($restore['source_position']??null)===null && ($restore['source_path']??null)===null && !array_key_exists('source_identity',$restore) && is_string($restore['inline_base64']??null) && $restore['mime']==='image/png','OWNER_SOURCE_INVALID');
         }
         self::need($kinds['review']===$this->counts['review'] && $kinds['owner']===$this->counts['owner'],'SOURCE_COUNTS_INVALID');
     }
 
-    private function sourceIdentity(array $restore,array $file,array $card,array $entity,string $code): void
+    private function sourceIdentity(array $restore,array $file,array $card,string $code): void
     {
         $form=$restore['entity_type']==='vehicle_unit'?'vehicle':($restore['entity_type']==='driver'?'driver':'contractor');
         self::need(($file['formId']??'')==='lab-'.$form.'-form','SOURCE_FORM_MISMATCH');
         $field=(string)($file['name']??'');
         if ($form==='vehicle') {
             self::need((bool)preg_match('/^predef_doc\[(primary|secondary)\]\[([a-z_]+)\](?:\[\])?$/D',$field,$m) && $m[2]===$code,'SOURCE_DOCUMENT_TYPE_MISMATCH');
-            $identityField='units['.$m[1].'][plate_number]';$targetIdentity=(string)$entity['plate_number'];
+            $identityField='units['.$m[1].'][plate_number]';
         } else {
             self::need($field==='predef_doc['.$code.'][]' || $field==='predef_doc['.$code.']','SOURCE_DOCUMENT_TYPE_MISMATCH');
-            $identityField=$form==='driver'?'full_name':'name';$targetIdentity=(string)$entity[$identityField];
+            $identityField=$form==='driver'?'full_name':'name';
         }
-        $snapshot=json_decode((string)$card['snapshot_json'],true,512,JSON_THROW_ON_ERROR);$identities=[];
-        foreach ($snapshot['controls']??[] as $control) if (($control['formId']??'')==='lab-'.$form.'-form' && ($control['name']??'')===$identityField) $identities[]=(string)($control['value']??'');
-        $normalize=static fn(string $value):string=>mb_strtolower((string)preg_replace('/\s+/u','',trim($value)));
-        self::need(count($identities)===1 && $normalize($identities[0])===$normalize($targetIdentity),'SOURCE_TARGET_IDENTITY_MISMATCH');
+        $snapshot=json_decode((string)$card['snapshot_json'],true,512,JSON_THROW_ON_ERROR);$identity=null;
+        // Preserve the materializer's effective scalar value: last applicable
+        // assignment in this form wins. Historical spelling remains exact;
+        // current target identity is independently bound by entities_before.
+        foreach ($snapshot['controls']??[] as $control) {
+            if (!is_array($control) || ($control['formId']??'')!=='lab-'.$form.'-form' || ($control['name']??'')!==$identityField) continue;
+            if (in_array((string)($control['type']??''),['checkbox','radio'],true) && empty($control['checked'])) continue;
+            $identity=(string)($control['value']??'');
+        }
+        self::need($identity!==null && $identity===$restore['source_identity'],'SOURCE_IDENTITY_MISMATCH');
     }
 
     private function assertOwnDocument(array $document,array $restore,string $marker,string $taskId): void

@@ -7,6 +7,8 @@ if (getenv('APP_ENV')!=='test' || !in_array($db,explode(',',(string)getenv('PLAN
     throw new RuntimeException('Unique disposable test schema required');
 $pdo=new PDO(sprintf('mysql:host=%s;port=%d;dbname=%s;charset=utf8mb4',getenv('PLANEX_SCHEMA_DB_HOST'),getenv('PLANEX_SCHEMA_DB_PORT'),$db),
     getenv('PLANEX_SCHEMA_DB_USER'),getenv('PLANEX_SCHEMA_DB_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
+require_once dirname(__DIR__).'/app/Support/company_database.php';
+cleanCompanyPoolDatabase($pdo);
 $assert=static function(bool $ok,string $name): void { if (!$ok) throw new RuntimeException($name); echo "PASS $name\n"; };
 $root=sys_get_temp_dir().DIRECTORY_SEPARATOR.'planex-document-inventory-'.bin2hex(random_bytes(8));
 mkdir($root); $card='00000000-0000-0000-0000-000000000001';
@@ -24,6 +26,13 @@ try {
         'original_name'=>$file,'path'=>"companies/7/route-executor-review/$card/$file",'mime'=>'image/jpeg','size'=>filesize($dir.'/'.$file)];
     $snapshot=['selected_entities'=>['driver'=>66],'controls'=>[
         ['formId'=>'lab-driver-form','name'=>'passport_number','value'=>'PRIVATE-MUST-NOT-EXPORT'],
+        ['formId'=>'unrelated-form','name'=>'full_name','value'=>'PRIVATE-MUST-NOT-EXPORT'],
+        ['formId'=>'lab-driver-form','name'=>'name','value'=>'PRIVATE-MUST-NOT-EXPORT'],
+        ['formId'=>'lab-driver-form','name'=>'full_name','value'=>'Историческая опечатка'],
+        ['formId'=>'lab-driver-form','name'=>'full_name','value'=>'Последнее историческое имя'],
+        ['formId'=>'lab-contractor-form','name'=>'name','value'=>'Исторический исполнитель'],
+        ['formId'=>'lab-vehicle-form','name'=>'units[primary][plate_number]','value'=>'А001АА'],
+        ['formId'=>'lab-vehicle-form','name'=>'units[secondary][plate_number]','value'=>'В002ВВ'],
         ['formId'=>'lab-driver-form','name'=>'predef_doc_type[passport]','value'=>'Паспорт']], 'removed_documents'=>[42]];
     $q=$pdo->prepare('INSERT INTO route_executor_review_cards(card_id,snapshot_json,files_json,deleted_at) VALUES(?,?,?,?)');
     $q->execute([$card,json_encode($snapshot),json_encode($files),'2026-10-19 13:49:08']);
@@ -44,6 +53,12 @@ try {
     $cards=array_values(array_filter($lines,fn($l)=>($l['table']??'')==='route_executor_review_cards' && $l['kind']==='row'));
     $assert($cards[0]['row']['deleted_at']!==null && count($cards[0]['row']['files_json'])===2,'deleted card and both source occurrences retained');
     $assert(!str_contains(json_encode($lines),'PRIVATE-MUST-NOT-EXPORT'),'sensitive unrelated fields omitted');
+    $identityControls=$cards[0]['row']['snapshot_json']['controls'];
+    $assert(count($identityControls)===6 && array_column(array_slice($identityControls,0,5),'value')===
+        ['Историческая опечатка','Последнее историческое имя','Исторический исполнитель','А001АА','В002ВВ'],
+        'only form-scoped identity controls retained in source order');
+    $assert($cards[0]['row']['snapshot_json_sha256']===hash('sha256',json_encode($snapshot)),
+        'raw source fingerprint independent of privacy projection');
     $assert($cards[0]['row']['files_json'][0]['inspection']['sha256']===hash('sha256','first file'),'actual source bytes hashed');
     $assert($manifest['table_counts']['documents']['exported']===3,'all document categories counted including soft-delete');
     $assert($manifest['inspections']['missing']===2,'missing destination bytes detected');
