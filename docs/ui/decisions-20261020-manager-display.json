@@ -15,6 +15,7 @@
   "global_rule": "Manager display = given name + space + first surname letter + dot; example Гладких Карина Артуровна → Карина Г.",
   "implementation_authorized": true,
   "implementation_scope": "Labels of existing manager filter options and their selected trigger on registered agreed pages. Do not add absent manager filters.",
+  "phase_history": "Filters-only phase implemented in PR 431. This remains historical scope; subsequent OWNER instruction extends manager/logist table cells via decisions-20261020-manager-tables.json.",
   "changed_routes": ["/erpv2/company/trips/departures", "/erpv2/company/logistics/closing-documents"],
   "inventoried_routes_without_manager_filter": [
     "/erpv2/company/route-executors",

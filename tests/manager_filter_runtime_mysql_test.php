@@ -79,6 +79,52 @@ try {
     $check(!str_contains($closing,'><Анна> К.</option>'),'Labels escape HTML');
     $check($before===$pdo->query('SELECT id,full_name FROM users ORDER BY id')->fetchAll(PDO::FETCH_ASSOC),'Rendering never rewrites full names');
     $check(str_contains($departures,'/assets/js/table-reference-select.js')&&str_contains($closing,'/assets/js/table-reference-select.js'),'Actual layout includes enhanced select');
+    $assertCell=static function(string $html,string $query,string $expected): void {
+        $dom=new DOMDocument();@$dom->loadHTML('<?xml encoding="utf-8" ?>'.$html);$xp=new DOMXPath($dom);
+        if($xp->query($query)->item(0)?->textContent!==$expected)throw new RuntimeException('Manager cell label regression');
+    };
+    $assertCell($departures,'//tr[@data-waste-view="1"]/td[@data-label="Менеджер"]//span','Карина Г.');
+    $assertCell($closing,'//tr[@data-report-trip-id="1"]/td[13]//span','Карина Г.');
+    require_once BASE_PATH.'/app/Service/RouteExecutorListPresentation.php';
+    $localPdo=$pdo;$responsibleLogists=[];$responsibleLogistNames=[71=>$responsibleUsers[array_search(71,array_column($responsibleUsers,'membership_id'),true)]['full_name']];
+    $reviewCards=[['card_id'=>'runtime-review','stage'=>'new','updated_at'=>'2026-10-20','contractor_name'=>'Тестовый перевозчик','driver_name'=>'Иванов Иван Петрович','responsible_membership_id'=>71]];
+    $executors=[['crew_id'=>9,'crew_status'=>'active','contractor_name'=>'Тестовый перевозчик','driver_name'=>'Иванов Иван Петрович','responsible_name'=>'Гладких Карина Артуровна']];
+    ob_start();require BASE_PATH.'/app/View/pages/company_route_executors.php';$content=(string)ob_get_clean();
+    ob_start();require BASE_PATH.'/app/View/layouts/main.php';$executorsHtml=(string)ob_get_clean();
+    $assertCell($executorsHtml,'//tr[@data-route-review-card-id="runtime-review"]/td[@data-label="Логист"]//span[@class="registry-ui-primary"]','Карина Г.');
+    $assertCell($executorsHtml,'//tr[@data-route-executor-id="9"]/td[@data-label="Логист"]//span[@class="registry-ui-primary"]','Карина Г.');
+    foreach([
+        [$departures,'//tr[@data-waste-view="1"]/td[@data-label="Менеджер"]//span'],
+        [$closing,'//tr[@data-report-trip-id="1"]/td[13]//span'],
+        [$executorsHtml,'//tr[@data-route-executor-id="9"]/td[@data-label="Логист"]//span[@class="registry-ui-primary"]'],
+        [$executorsHtml,'//tr[@data-route-review-card-id="runtime-review"]/td[@data-label="Логист"]//span[@class="registry-ui-primary"]'],
+    ] as [$html,$query]){
+        $regression=str_replace('>Карина Г.</span>','>Гладких Карина Артуровна</span>',$html);
+        $rejected=false;try{$assertCell($regression,$query,'Карина Г.');}catch(RuntimeException){$rejected=true;}
+        $check($rejected,'Old full-name cell rejected for each rendered table surface');
+    }
+    foreach(['Карина Г.'=>'Карина Г.',"\tЁлкина\u{00A0}Анна  Игоревна "=>'Анна Ё.','Салтыкова-Щедрина Анна-Мария'=>'Анна-Мария С.','GTP-Бухгалтерия'=>'GTP-Бухгалтерия',''=>'—'] as $raw=>$expected)$check(\App\Service\RegistryManagerPresentation::name($raw)===$expected,'Cell helper source cases');
+    $pdo->exec("INSERT INTO users(id,membership_id,full_name,login,password_hash,role_code,status) VALUES
+        (12,75,'  Ёлкина    Анна Игоревна  ','anna','hash','logist','active'),
+        (13,76,'Карина Г.','short','hash','logist','active');
+        INSERT INTO waste_trips(id,business_id,client_id,responsible_user_id,destination_type,legal_entity_code,status,created_by_membership_id,comment) VALUES
+        (3,503,1,12,'warehouse','planex','planned_route',72,'Whitespace case'),
+        (4,504,1,13,'warehouse','mg_logistic','planned_route',72,'Already-short case');");
+    $ids=static fn(array $filters):array=>array_map('intval',array_column(WasteTripService::fetchTrips($pdo,$filters),'id'));
+    foreach(['Гладких Карина Артуровна','Карина Г.'] as $query){
+        $check($ids(['q'=>$query,'manager'=>10,'company'=>'planex','status'=>'completed'])===[1],'Full and short query returns exact scoped IDs');
+        $check($ids(['q'=>$query,'manager'=>11])===[],'Search cannot bypass selected manager');
+        $check($ids(['q'=>$query,'manager'=>10,'company'=>'mg_logistic'])===[],'Search cannot bypass company');
+        $check($ids(['q'=>$query,'status'=>'in_progress'])===[],'Search cannot bypass status');
+    }
+    foreach(['Ёлкина    Анна Игоревна','Анна Ё.'] as $query)$check($ids(['q'=>$query])===[3],'Whitespace normalization matches visible short label');
+    $check($ids(['q'=>'Карина Г.'])===[4,1],'Already-short source and full source have same visible label');
+    $check($ids(['q'=>'GTP-Бухгалтерия'])===[2],'Single-token query preserved');
+    AccessRuntime::setCurrent(EffectiveAccess::member(71,1,['company.trips.waste'=>true],['waste_trip'=>'own']));
+    $check($ids(['q'=>'Карина Г.'])===[1],'Short-name OR cannot expose another membership trip');
+    $check($ids(['q'=>'Анна Ё.'])===[],'Short-name OR respects own scope');
+    AccessRuntime::setCurrent(EffectiveAccess::member(71,1,['company.trips.waste'=>true],['waste_trip'=>'none']));
+    $check($ids(['q'=>'Карина Г.'])===[],'Short-name OR respects denied data scope');
     echo "MANAGER_FILTER_RUNTIME_MYSQL=PASS\n";
 } finally {
     AccessRuntime::clear();

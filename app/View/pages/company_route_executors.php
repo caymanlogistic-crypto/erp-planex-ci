@@ -1,5 +1,6 @@
 <?php
 require_once base_path('app/View/components/registry_tabler_icons.php');
+require_once base_path('app/Service/RegistryManagerPresentation.php');
 
 $routeExecutorCreateButton = '<button type="button" class="btn btn-primary" data-route-executor-create-btn>Создать исполнителя рейса</button>';
 $routeExecutorExistingButton = '<button type="button" class="btn btn-ghost" data-route-executor-existing-create>Выбрать из имеющихся</button>';
@@ -140,7 +141,8 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
                     <td class="route-person-cell" data-label="Подрядчик"><div class="registry-ui-value"><strong class="registry-ui-name"><?= e($card['contractor_name'] ?: 'Без подрядчика') ?></strong><?php $routeListContact($card['contractor_phone']??'', $card['contractor_email']??''); ?></div></td>
                     <td class="route-person-cell" data-label="Водитель"><div class="registry-ui-value"><strong class="registry-ui-name"><?= e($card['driver_name'] ?: '—') ?></strong><?php $routeListContact($card['driver_phone']??'', $card['driver_email']??''); ?></div></td>
                     <td class="route-vehicle-cell" data-label="Комплект ТС"><div class="registry-ui-value"><?php $routeListVehicles($card); ?></div></td>
-                    <td data-label="Логист"><div class="registry-ui-value"><span class="registry-ui-primary"><?= e($responsibleLogistNames[(int)($card['responsible_membership_id']??0)]??'—') ?></span></div></td>
+                    <?php $managerName=(string)($responsibleLogistNames[(int)($card['responsible_membership_id']??0)]??'—'); ?>
+                    <td data-label="Логист" title="<?= e($managerName) ?>"><div class="registry-ui-value"><span class="registry-ui-primary" aria-label="<?= e($managerName) ?>"><?= e(\App\Service\RegistryManagerPresentation::name($managerName)) ?></span><span hidden aria-hidden="true"> <?= e($managerName) ?></span></div></td>
                     <td data-label="Статус"><div class="registry-ui-value route-review-actions"><span class="route-status registry-ui-status route-status--<?= $reviewStatusClass ?><?= $reviewStatusClass==='active'?' registry-ui-success':($reviewStatusClass==='danger'?' registry-ui-error':'') ?>" title="<?= e($reviewStatusText) ?>"<?= $reviewStage==='partial'?' data-full-mail-label':'' ?>><?= e($reviewStatusText) ?></span><?php if ($reviewFinal): ?><button type="button" class="btn btn-ghost route-review-materialize" data-route-review-materialize="<?= e($card['card_id']) ?>">Внести в справочники</button><?php endif; ?><button type="button" class="route-review-delete row-actions-btn" data-route-review-delete="<?= e($card['card_id']) ?>" aria-label="Действия с карточкой" aria-haspopup="menu" aria-expanded="false">⋯</button></div></td>
                 </tr>
                 <?php endforeach; ?>
@@ -149,7 +151,8 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
                     <td class="route-person-cell" data-label="Подрядчик"><div class="registry-ui-value"><strong class="registry-ui-name"><?= e($e['contractor_name'] ?? '—') ?></strong><?php $routeListContact($e['contractor_phone']??'', $e['contractor_email']??''); ?></div></td>
                     <td class="route-person-cell" data-label="Водитель"><div class="registry-ui-value"><strong class="registry-ui-name"><?= e($e['driver_name'] ?? '—') ?></strong><?php $routeListContact($e['driver_phone']??'', $e['driver_email']??''); ?></div></td>
                     <td class="route-vehicle-cell" data-label="Комплект ТС"><div class="registry-ui-value"><?php $routeListVehicles($e); ?></div></td>
-                    <td data-label="Логист"><div class="registry-ui-value"><span class="registry-ui-primary"><?= e($e['responsible_name'] ?? '—') ?></span></div></td>
+                    <?php $managerName=(string)($e['responsible_name']??'—'); ?>
+                    <td data-label="Логист" title="<?= e($managerName) ?>"><div class="registry-ui-value"><span class="registry-ui-primary" aria-label="<?= e($managerName) ?>"><?= e(\App\Service\RegistryManagerPresentation::name($managerName)) ?></span><span hidden aria-hidden="true"> <?= e($managerName) ?></span></div></td>
                     <td data-label="Статус"><div class="registry-ui-value"><span class="route-status registry-ui-status route-status--<?= $e['crew_status'] === 'active' ? 'active registry-ui-success' : 'neutral' ?>">
                             <?= $e['crew_status'] === 'active' ? 'Активен' : 'Неактивен' ?>
                         </span></div>

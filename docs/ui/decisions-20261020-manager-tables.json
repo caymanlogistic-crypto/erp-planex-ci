@@ -1,0 +1,30 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "manager-table-given-name-surname-initial-20261020",
+  "date": "2026-10-20",
+  "status": "OWNER_APPROVED",
+  "source": {"actor": "OWNER", "chat": "Current OWNER coordination chat; exact thread ID unavailable", "thread_id": null, "quote": "и в самиз таблицах писать в том же формате"},
+  "extends": "manager-display-given-name-surname-initial-20261020",
+  "history": "Previous PR 431 correctly implemented its filters-only scope. This subsequent instruction adds table cells; no retroactive claim that the first phase migrated tables.",
+  "rule": "Manager/responsible logist cells display given name + space + first surname letter + dot, e.g. Гладких Карина Артуровна → Карина Г.",
+  "implementation_authorized": true,
+  "changed_routes": ["/erpv2/company/route-executors", "/erpv2/company/trips/departures", "/erpv2/company/logistics/closing-documents"],
+  "surfaces": ["route-executors review card Логист cell", "route-executors existing executor Логист cell", "departures Менеджер cell", "closing registry Менеджер cell"],
+  "inventoried_without_manager_cells": ["/erpv2/company/finance/received-paid", "/erpv2/company/drivers", "/erpv2/company/contractors", "/erpv2/company/vehicle-sets"],
+  "generic_creator_excluded": "contractors Создал is generic authorship, not manager/current responsibility",
+  "excluded_route": "/erpv2/company/feo/requests/map-placement",
+  "excluded_reason": "OWNER explicitly left this page to another agent; no change to its files, contracts or shared formatter behavior",
+  "sources": {
+    "route-executors": "EntityResponsibilityService::eligibleRecipients full_name by membership ID, existing rows fall back to users.full_name creator projection",
+    "departures": "users.full_name as responsible_name",
+    "closing": "raw report row.manager and trip.manager_name; source/dialog values preserved",
+    "name_order": "Established Фамилия Имя [Отчество] contract, not guessed from word suffixes; structured parts absent in these projections",
+    "formatter": "New scoped view helper calls unchanged WasteTripRegistryPresenter::manager and preserves already-canonical Имя Ф.; FEO does not consume it"
+  },
+  "fallback": {"already_short": "Preserve Имя Ф.", "single_token": "Preserve token including GTP-Бухгалтерия", "missing": "—", "whitespace": "Normalize Unicode whitespace for visible label only"},
+  "preserved": ["raw full names/domain storage", "full tooltip/accessible name", "full and short search", "row IDs", "roles and data scopes", "company/status/manager predicates", "sorting/filter/reset/persistence", "driver/counterparty/creator formats", "existing filter labels from PR 431"],
+  "search_scope": "Only presentation lookup: add short label to route/closing search text and to departures existing parenthesized SQL search OR. Access and other predicates remain separate AND terms. Document package caller passes empty filters and never enters new search clause; no FEO caller.",
+  "verification": {"real_bootstrap_mysql": "tests/manager_filter_runtime_mysql_test.php", "browser": ["tests/route_executor_list_browser_test.mjs", "tests/waste_trip_registry_browser_test.mjs", "tests/registry_closing_responsive_browser_test.mjs"], "widths": [390,1280,1920,3840], "status": "SELF_CHECK evidence and exact candidate/release state in task handoff; independent acceptance not inferred"},
+  "task_id": "manager-table-display-canon-20261020",
+  "journal": "local/evidence/manager-table-display-canon-20261020/designer-notes.md"
+}
