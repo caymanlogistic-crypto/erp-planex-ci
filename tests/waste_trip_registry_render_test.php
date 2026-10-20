@@ -20,6 +20,10 @@ $assert(!Registry::executorUnmatched($legacy),'Absent source executor is not an 
 $assert(!Registry::executorUnmatched($legacy+['legacy_sync_error'=>'Утилизатор не определён однозначно по заявкам ФЭО.']),'Unrelated warning is not an executor mismatch');
 $assert(Registry::executorUnmatched($legacy+['legacy_sync_error'=>'Исполнитель не найден по фамилии и госномеру.']),'Known unmatched source executor');
 $assert(Registry::manager('Сидоров Владимир Петрович')==='Владимир С.','Manager name order');
+foreach(['Гладких Карина Артуровна'=>'Карина Г.','Гладких Карина'=>'Карина Г.',"\tЁлкина\u{00A0}Анна  Игоревна "=>'Анна Ё.','Салтыкова-Щедрина Анна-Мария'=>'Анна-Мария С.','Карина'=>'Карина',''=>'—'] as $full=>$expected) {
+    $assert(Registry::manager($full)===$expected,'Manager label respects surname-first source and missing parts: '.$full);
+}
+$assert(Registry::manager('Гладких Карина Артуровна')!=='Гладких К.','Must not reverse surname and given name');
 $assert(Registry::drivers('Иванов Иван Петрович / Петров Петр')==='Иванов И. П. / Петров П.','Driver initials');
 $assert(Registry::profitability([['amount'=>'100.00']],[['amount'=>'120.00']])==='-20,0 %','Negative profitability');
 $assert(Registry::profitability([['amount'=>'0.00']],[['amount'=>'0.00']])===null,'Zero sale cannot divide');
@@ -30,7 +34,7 @@ $assert(count(Trips::STATUS_OPTIONS)===4 && Trips::displayStatus('searching_exec
 $assert(Trips::generalCustomerDoesNotPay(['destination_type'=>'warehouse']),'ERP warehouse destination blocks general customer cost');
 $assert(Trips::generalCustomerDoesNotPay(['legacy_unload_type'=>'SKLAD']),'Legacy warehouse unloading blocks general customer cost');
 $assert(!Trips::generalCustomerDoesNotPay(['destination_type'=>'utilizer','legacy_route_type'=>'warehouse_to_utilizer']),'Loading from warehouse still allows general customer cost');
-$render=static function(bool $finance) use($legacy): string {
+$render=static function(bool $finance, int $selectedManager=0) use($legacy): string {
     $company=['status'=>'active'];$dbError=null;$formSuccess=null;$formError=null;$old=[];$clients=[];$responsibleUsers=[];$routeExecutors=[];$utilizers=[];$isFinanceRealm=$finance;
     $registryManagers=[['id'=>1,'full_name'=>'Сидоров Владимир Петрович'],['id'=>2,'full_name'=>'Гладких Карина Артуровна']];
     $base=$legacy+['id'=>1,'business_id'=>250,'comment'=>str_repeat('Длинное описание <script> ',20),'status'=>'searching_executor','actual_start_date'=>null,'planned_start_date'=>'2026-01-02','actual_end_date'=>null,'planned_finish_date'=>null,'responsible_name'=>'Сидоров Владимир Петрович','request_count'=>22,'snapshot_total_mass_kg'=>1500.25,'general_payments'=>[['amount'=>'200.00','condition_type'=>'after_end','days_count'=>3,'days_kind'=>'calendar']],'customer_payments'=>[['amount'=>'100.00','condition_type'=>'on_loading']],'carrier_payments'=>[['amount'=>'120.00','condition_type'=>'']]];
@@ -45,6 +49,11 @@ $sort=$xp->query('//select[@name="sort"]')->item(0);
 $assert($sort!==null && $sort->getAttribute('aria-label')==='Сортировка рейсов','Registry sort control');
 $assert($xp->query('//span[contains(@class,"toolbar-sort-label")]')->length===0,'No visible sort caption in waste registry');
 $assert($xp->query('//select[@name="manager"]/option')->length===3,'Manager filter offers all and available managers');
+$managerOptions=[];foreach($xp->query('//select[@name="manager"]/option') as $option)$managerOptions[]=[$option->getAttribute('value'),$option->textContent];
+$assert($managerOptions===[['','Все менеджеры'],['1','Владимир С.'],['2','Карина Г.']],'Short labels keep original option IDs and order');
+$selectedDom=new DOMDocument();@$selectedDom->loadHTML('<?xml encoding="utf-8" ?>'.$render(true,2));$selectedXp=new DOMXPath($selectedDom);
+$assert($selectedXp->query('//select[@name="manager"]/option[@selected and @value="2"]')->item(0)?->textContent==='Карина Г.','Selected GET manager keeps its identity with short label');
+$assert($xp->query('//tr[@data-waste-view="1"]/td[contains(@class,"waste-manager")]')->item(0)?->getAttribute('title')==='Сидоров Владимир Петрович','Filter formatting preserves full domain name');
 $assert($xp->query('//select[@name="sort"]/option[@value="status" and @selected]')->length===1,'Status sort is selected by default');
 $assert($xp->query('//select[@name="sort"]/option[@value="status"]')->length===1 && $xp->query('//select[@name="sort"]/option[@value="manager"]')->length===1,'Status and manager sort choices');
 $assert($xp->query('//tr[@data-waste-view="1"]/td')->length===13,'Thirteen data columns');
