@@ -7,6 +7,7 @@ import sys
 
 ROOT=Path(__file__).resolve().parents[1]
 PHP_TESTS=(
+    'tests/document_attachment_io_guard_test.php',
     'tests/document_attachment_materialization_test.php',
     'tests/route_executor_combined_mysql_test.php',
     'tests/document_attachment_recovery_mysql_test.php',
