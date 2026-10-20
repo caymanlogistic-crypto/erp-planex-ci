@@ -3,6 +3,7 @@
 namespace App\Service;
 
 require_once __DIR__ . '/RouteExecutorExistingEntityService.php';
+require_once __DIR__ . '/TripDocumentPackage.php';
 
 use App\Core\Database;
 use PDO;
@@ -268,7 +269,7 @@ final class RouteExecutorCombinedCreateService
                 }
                 $code = (string) ($path[0] ?? '');
                 if ($category === 'predefined') {
-                    $name = (string) ($post['predef_doc_type'][$code] ?? $code);
+                    $name = (string) (TripDocumentPackage::LABELS[$code] ?? $post['predef_doc_type'][$code] ?? $code);
                     if ($entityType === 'vehicle_unit') {
                         foreach (vehicleSetPredefinedDocumentSections()[$unitRole] ?? [] as $meta) if (($meta['doc_code'] ?? '') === $code) $name = (string) $meta['name'];
                     }

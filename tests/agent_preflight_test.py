@@ -274,3 +274,9 @@ assert "tests/feo_placement_legacy_sync_mysql_test.php" in p.FEO_TRANSFER_TESTS
 assert "tests/feo_placement_legacy_sync_xa_mysql_test.php" in p.FEO_TRANSFER_TESTS
 assert "tests/feo_xlsx_parser_format_test.php" in p.FEO_TRANSFER_TESTS
 print("agent_preflight_test: PASS")
+
+# Attachment retention is required even for a small eligible JS correction.
+attachment_path="public/assets/js/route-executor-review-workflow.js"
+attachment_scopes=p.ci.classify([attachment_path])
+for cls in ("FAST","STANDARD","CRITICAL"):
+    assert "DOCUMENT_ATTACHMENT_REGRESSIONS" in p.plan(cls,[attachment_path],attachment_scopes)

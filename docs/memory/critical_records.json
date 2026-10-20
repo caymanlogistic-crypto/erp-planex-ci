@@ -212,7 +212,14 @@
         "tests/document_inventory_readonly_mysql_test.php",
         "docs/DOCUMENT_RECOVERY_DIAGNOSTIC.md",
         ".github/workflows/document_inventory_readonly_regression.yml",
-        "tests/document_inventory_control_plane_test.py"
+        "tests/document_inventory_control_plane_test.py",
+        ".github/workflows/document_attachment_recovery_production.yml",
+        ".github/workflows/document_attachment_regression.yml",
+        "scripts/registry_document_attachment_recovery.php",
+        "tools/document_attachment_checks.py",
+        "tools/document_attachment_production_verify.mjs",
+        "tests/document_attachment*",
+        "docs/DOCUMENT_ATTACHMENT_PRESERVATION.md"
       ],
       "navigation": "active",
       "machine_ownership_id": "control.ci"

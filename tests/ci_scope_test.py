@@ -88,6 +88,7 @@ for path in [
 
 # Exact preserved legacy classifier families + additive security/memory/control_plane.
 expected = {
+    "document_attachments",
     "php",
     "js",
     "python",

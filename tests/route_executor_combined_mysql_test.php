@@ -170,6 +170,9 @@ file_put_contents($storedSource,'%PDF-1.4 review document');
 $stored=[];
 foreach ([['lab-contractor-form|predef_doc[company_card][]','contractor.pdf'],
     ['lab-driver-form|predef_doc[passport][]','passport.pdf'],
+    ['lab-driver-form|predef_doc[passport][]','passport-second.pdf'],
+    ['lab-driver-form|predef_doc[driver_license][]','license.pdf'],
+    ['lab-driver-form|predef_doc[snils][]','snils.pdf'],
     ['lab-vehicle-form|predef_doc[primary][sts][]','sts.pdf']] as [$key,$name]) {
     $stored[]=['key'=>$key,'index'=>0,'name'=>$name,'mime'=>'application/pdf','tmp_name'=>$storedSource,
         'error'=>UPLOAD_ERR_OK,'size'=>filesize($storedSource)];
@@ -188,9 +191,11 @@ try {
         || $files['vehicle_predef_doc']['name']['primary']['sts'][0]!=='sts.pdf') throw new RuntimeException('Review snapshot was not mapped to standard input.');
     $movedCrewId=RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$post,$files,101,'company_owner',null,true);
     if ($movedCrewId<=$newCrewId) throw new RuntimeException('Review crew was not created.');
-    $docs=$pdo->query("SELECT d.entity_type,d.relative_path FROM documents d WHERE d.original_name IN ('contractor.pdf','passport.pdf','sts.pdf') ORDER BY d.entity_type")->fetchAll(PDO::FETCH_ASSOC);
-    if (count($docs)!==3 || array_column($docs,'entity_type')!==['contractor','driver','vehicle_unit']) throw new RuntimeException('Review files did not enter all standard document directories.');
+    $docs=$pdo->query("SELECT d.entity_type,d.relative_path,d.original_name,d.document_type,t.name type_name FROM documents d JOIN document_types t ON t.id=d.document_type_id WHERE d.original_name IN ('contractor.pdf','passport.pdf','passport-second.pdf','license.pdf','snils.pdf','sts.pdf') ORDER BY d.id")->fetchAll(PDO::FETCH_ASSOC);
+    $expectedTypes=['contractor.pdf'=>'Карточка предприятия','passport.pdf'=>'Паспорт','passport-second.pdf'=>'Паспорт','license.pdf'=>'Водительское удостоверение','snils.pdf'=>'СНИЛС','sts.pdf'=>'СТС'];
+    if (count($docs)!==6) throw new RuntimeException('Review lost a file from a repeated historical control index.');
     foreach ($docs as $doc) {
+        if ($doc['document_type']!==$expectedTypes[$doc['original_name']] || $doc['type_name']!==$expectedTypes[$doc['original_name']]) throw new RuntimeException('Canonical Russian document label was not persisted without a hidden browser label.');
         $file=storage_path($doc['relative_path']);
         if (!is_file($file) || file_get_contents($file)!=='%PDF-1.4 review document') throw new RuntimeException('Stored review document was not copied into the standard location.');
         @unlink($file);
@@ -290,6 +295,22 @@ try {
     if (count($linked)!==1 || file_get_contents($linked[0]['tmp_name'])!=='%PDF-1.4 existing card') throw new RuntimeException('Existing file was not linked to review package.');
     $snapshot['removed_documents']=[(int)$detail['files'][0]['id']];
     if ($library->documentsForSnapshot($snapshot,[])!==[]) throw new RuntimeException('Removed existing file remained in review package.');
+    $originalContractor=$pdo->query('SELECT * FROM contractors WHERE id='.$reuseContractorId)->fetch(PDO::FETCH_ASSOC);
+    $originalDocument=$pdo->query('SELECT * FROM documents WHERE id='.(int)$detail['files'][0]['id'])->fetch(PDO::FETCH_ASSOC);
+    $unchanged=$payload('7701234594','А704ВС77');
+    $unchanged['existing']=['contractor'=>$reuseContractorId];
+    $unchanged['contractor']['name']='Не заменять существующую карточку';
+    RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$unchanged,[],101,'company_owner',null,true);
+    if ($pdo->query('SELECT * FROM contractors WHERE id='.$reuseContractorId)->fetch(PDO::FETCH_ASSOC)!==$originalContractor
+        || $pdo->query('SELECT * FROM documents WHERE id='.(int)$detail['files'][0]['id'])->fetch(PDO::FETCH_ASSOC)!==$originalDocument
+        || file_get_contents($existingPath)!=='%PDF-1.4 existing card') throw new RuntimeException('Reusing an entity changed its data or unrelated existing documents.');
+    $countBeforeDenied=(int)$pdo->query('SELECT COUNT(*) FROM crews')->fetchColumn();
+    AccessRuntime::setCurrent(EffectiveAccess::member(12,7,['company.route_executors'=>true],['contractor'=>'none','driver'=>'all','vehicle_unit'=>'all']));
+    try {
+        try { RouteExecutorCombinedCreateService::create($pdo,$central,$config,7,$unchanged,[],102,'custom_role',null,true); throw new RuntimeException('Document materialization bypassed access to an existing entity.'); }
+        catch (DomainException $expected) {}
+    } finally { AccessRuntime::setCurrent(EffectiveAccess::systemOwner(11,7,['company.route_executors'])); }
+    if ((int)$pdo->query('SELECT COUNT(*) FROM crews')->fetchColumn()!==$countBeforeDenied) throw new RuntimeException('Denied document materialization wrote partial data.');
 } finally { @unlink($existingPath); }
 $absentPost=$payload('7701234593','А703ВС77');
 $absentPost['vehicle']['units']['primary']['vin']='';
