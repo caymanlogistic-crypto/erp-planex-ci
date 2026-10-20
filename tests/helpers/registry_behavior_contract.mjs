@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 export async function assertRegistryRows(page, {rowSelector, rows, forbidden = []}, label) {
   const normalize = value => value.replace(/\s+/g, ' ').trim();
   const actual = await page.locator(rowSelector).evaluateAll(items => items.map(row => ({
-    id: row.dataset.contractorId || row.dataset.vehicleSetId || row.dataset.driverId || row.dataset.placementBlockId,
+    id: row.dataset.contractorId || row.dataset.vehicleSetId || row.dataset.driverId || row.dataset.placementBlockId || row.dataset.registryRowId,
     cells: [...row.cells].map(cell => {
       const fields=[...cell.querySelectorAll(':scope > span')];
       return (fields.length?fields:[cell]).map(field=>field.textContent.replace(/\s+/g,' ').trim());
@@ -58,9 +58,9 @@ export async function assertRegistryScroll(page, label) {
     if(!result.cards)assert.ok(Math.abs(result.headTop-result.toolbarBottom)<2, `${label}: sticky column header ${JSON.stringify(result)}`);
     assert.ok(result.pageX<=1, `${label}: no document horizontal overflow`);
   }
-  await page.locator('.table-scroll').evaluate(element=>{element.scrollLeft=element.scrollWidth-element.clientWidth});
+  await page.locator('.registry-ui-card > .table-scroll').evaluate(element=>{element.scrollLeft=element.scrollWidth-element.clientWidth});
   const shifted=await measure();
   if(!shifted.cards)shifted.headCells.forEach((left,index)=>assert.ok(Math.abs(left-shifted.rowCells[index])<2, `${label}: header/body X alignment column ${index}`));
-  await page.locator('.table-scroll').evaluate(element=>{element.scrollLeft=0});
+  await page.locator('.registry-ui-card > .table-scroll').evaluate(element=>{element.scrollLeft=0});
   await page.locator('main.content').evaluate(element=>{element.scrollTop=0});
 }

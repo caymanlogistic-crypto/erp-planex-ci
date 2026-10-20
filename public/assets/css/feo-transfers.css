@@ -25,12 +25,20 @@
 .transfer-quality{font-size:11px;color:var(--warning);margin-top:4px}.transfer-quality.is-exact{color:var(--success)}
 .transfer-preview{border-top:1px solid var(--line-soft);padding-top:12px}.transfer-preview>h3{font-size:13px;margin-bottom:8px}.transfer-preview .table-scroll{max-height:300px;overflow:auto}.transfer-preview td{white-space:normal;min-width:140px;overflow-wrap:anywhere}.transfer-preview>p{margin:8px 0}
 .transfer-empty{text-align:center;padding:32px 16px;color:var(--text-muted)}.transfer-empty b{color:var(--text-main);font-size:13px}.transfer-empty p{white-space:normal;margin:8px 0}
-.transfer-history td{vertical-align:top}.transfer-history .transfer-location{white-space:normal;min-width:210px;max-width:390px;overflow-wrap:anywhere}.transfer-history .muted{font-size:11px;margin-top:4px}.transfer-history .inline-actions{flex-wrap:wrap;gap:6px}
+.feo-history-table col.feo-history-col-name{width:300px}
+.feo-history-table col.feo-history-col-destination{width:calc(100% - 1029px)}
+.feo-history-table col.feo-history-col-count{width:80px}
+.feo-history-table col.feo-history-col-date{width:150px}
+.feo-history-table col.feo-history-col-author{width:140px}
+.feo-history-table col.feo-history-col-status{width:105px}
+.feo-history-table col.feo-history-col-actions{width:190px}
+.feo-history-table--weights col.feo-history-col-name{width:calc(100% - 729px)}
+.feo-history-table--weights col.feo-history-col-actions{width:190px}
 .transfer-settings{margin-top:12px;padding-top:12px;border-top:1px solid var(--line-soft)}.transfer-settings summary{cursor:pointer;font-size:12px}
 .transfer-pagination{display:flex;gap:8px;padding:10px}.transfer-detail-body .table-scroll{max-height:50vh;overflow:auto}.transfer-detail-body td{white-space:normal;overflow-wrap:anywhere;min-width:120px}.transfer-detail-meta{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}.transfer-detail-meta p{margin:0}.transfer-detail-meta b{display:block}
 .transfer-confirm-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:16px}
 .feo-transfers>[data-page-message]:not([hidden]){margin-bottom:8px}
-@media(max-width:700px){.transfer-form-grid,.transfer-coordinates,.transfer-detail-meta{grid-template-columns:1fr}.transfer-wide{grid-column:auto}.transfer-address-search{flex-direction:column;align-items:stretch}.transfer-dialog{width:calc(100vw - 16px)}.transfer-history{min-width:850px}.transfer-form-body{padding:12px}.transfer-radio-row{gap:12px}}
+@media(max-width:700px){.transfer-form-grid,.transfer-coordinates,.transfer-detail-meta{grid-template-columns:1fr}.transfer-wide{grid-column:auto}.transfer-address-search{flex-direction:column;align-items:stretch}.transfer-dialog{width:calc(100vw - 16px)}.transfer-form-body{padding:12px}.transfer-radio-row{gap:12px}}
 
 /* Six product quality categories, using existing muted ERP palette tokens. */
 .transfer-quality-result{display:flex;align-items:baseline;flex-wrap:wrap;gap:6px 10px;font-size:12px;line-height:1.5;color:var(--text-muted)}
