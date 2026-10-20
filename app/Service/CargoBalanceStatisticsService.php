@@ -6,6 +6,8 @@ namespace App\Service;
 use DateTimeImmutable;
 use PDO;
 
+require_once __DIR__.'/WasteTripService.php';
+
 final class CargoBalanceStatisticsService
 {
     public static function schemaReady(PDO $pdo): bool
@@ -28,12 +30,16 @@ final class CargoBalanceStatisticsService
             WHERE wt.deleted_at IS NULL AND wt.status IN ('in_progress','completed')
               AND wt.actual_start_date IS NOT NULL
             GROUP BY fr.zayavka_id")->fetchAll(PDO::FETCH_ASSOC);
-        $formedTripCount = (int)$pdo->query("SELECT COUNT(*) FROM waste_trips WHERE status='assigned' AND deleted_at IS NULL")->fetchColumn();
-        $formedRequests = $pdo->query("SELECT DISTINCT fr.zayavka_id
+        $formedTrips = $pdo->prepare('SELECT COUNT(*) FROM waste_trips WHERE status=? AND deleted_at IS NULL');
+        $formedTrips->execute([WasteTripService::STATUS_ASSIGNED]);
+        $formedTripCount = (int)$formedTrips->fetchColumn();
+        $formedRequestQuery = $pdo->prepare("SELECT DISTINCT fr.zayavka_id
             FROM waste_trips wt
             JOIN waste_trip_requests wtr ON wtr.waste_trip_id=wt.id AND wtr.removed_at IS NULL
             JOIN feo_requests fr ON fr.id=wtr.feo_request_id
-            WHERE wt.status='assigned' AND wt.deleted_at IS NULL")->fetchAll(PDO::FETCH_COLUMN);
+            WHERE wt.status=? AND wt.deleted_at IS NULL");
+        $formedRequestQuery->execute([WasteTripService::STATUS_ASSIGNED]);
+        $formedRequests = $formedRequestQuery->fetchAll(PDO::FETCH_COLUMN);
         $today = (new DateTimeImmutable('today'))->format('Y-m-d');
         $events = [];
         foreach ($blocks as $block) {
