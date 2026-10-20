@@ -8,6 +8,7 @@ use Throwable;
 
 require_once __DIR__.'/WasteTripStartStatisticsService.php';
 require_once __DIR__.'/WasteTripLegacyMetadataService.php';
+require_once __DIR__.'/RegistryManagerPresentation.php';
 
 final class WasteTripService
 {
@@ -438,7 +439,20 @@ final class WasteTripService
 
     public static function fetchTrips(PDO $pdo,array $filters=[],bool $includeFinance=false): array
     {
-        $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');$where=[$access['sql'],'wt.deleted_at IS NULL'];$params=$access['params'];$status=trim((string)($filters['status']??''));if($status!==''&&isset(self::STATUS_LABELS[$status])){if(in_array($status,[self::STATUS_PLANNED,self::STATUS_SEARCHING],true)){$where[]="wt.status IN ('planned_route','searching_executor')";}else{$where[]='wt.status=?';$params[]=$status;}}$company=(string)($filters['company']??'');if(in_array($company,['mg_logistic','planex'],true)){$where[]='wt.legal_entity_code=?';$params[]=$company;}$q=trim((string)($filters['q']??''));if($q!==''){$term='%'.$q.'%';$where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR wt.comment LIKE ? OR c.name LIKE ? OR u.full_name LIKE ? OR ct.name LIKE ? OR EXISTS (SELECT 1 FROM waste_trip_requests sqr JOIN feo_requests sqf ON sqf.id=sqr.feo_request_id WHERE sqr.waste_trip_id=wt.id AND sqr.removed_at IS NULL AND sqf.zayavka_id LIKE ?) OR wt.status LIKE ?)';for($i=0;$i<7;$i++)$params[]=$term;}
+        $access=RegulatedDataScopeService::condition('waste_trip','wt.id','wt.created_by_membership_id');$where=[$access['sql'],'wt.deleted_at IS NULL'];$params=$access['params'];$status=trim((string)($filters['status']??''));if($status!==''&&isset(self::STATUS_LABELS[$status])){if(in_array($status,[self::STATUS_PLANNED,self::STATUS_SEARCHING],true)){$where[]="wt.status IN ('planned_route','searching_executor')";}else{$where[]='wt.status=?';$params[]=$status;}}$company=(string)($filters['company']??'');if(in_array($company,['mg_logistic','planex'],true)){$where[]='wt.legal_entity_code=?';$params[]=$company;}
+        $q=trim((string)($filters['q']??''));
+        if($q!==''){
+            // Match visible labels through the same PHP formatter; no newer SQL
+            // functions or assumptions about DB Unicode/whitespace semantics.
+            $managerIds=[];
+            foreach(self::fetchRegistryManagers($pdo) as $option){
+                if(mb_stripos(RegistryManagerPresentation::name((string)$option['full_name']),$q,0,'UTF-8')!==false)$managerIds[]=(int)$option['id'];
+            }
+            $managerMatch=$managerIds===[]?'1=0':'wt.responsible_user_id IN ('.implode(',',$managerIds).')';
+            $term='%'.$q.'%';
+            $where[]='(CAST(wt.business_id AS CHAR) LIKE ? OR wt.comment LIKE ? OR c.name LIKE ? OR u.full_name LIKE ? OR '.$managerMatch.' OR ct.name LIKE ? OR EXISTS (SELECT 1 FROM waste_trip_requests sqr JOIN feo_requests sqf ON sqf.id=sqr.feo_request_id WHERE sqr.waste_trip_id=wt.id AND sqr.removed_at IS NULL AND sqf.zayavka_id LIKE ?) OR wt.status LIKE ?)';
+            for($i=0;$i<7;$i++)$params[]=$term;
+        }
         $manager=(int)($filters['manager']??0);
         if($manager>0){$where[]='wt.responsible_user_id=?';$params[]=$manager;}
         $statusOrder="CASE wt.status WHEN 'planned_route' THEN 0 WHEN 'searching_executor' THEN 0 WHEN 'executor_assigned' THEN 1 WHEN 'in_progress' THEN 2 WHEN 'completed' THEN 3 WHEN 'cancelled' THEN 4 ELSE 5 END";

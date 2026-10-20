@@ -37,6 +37,15 @@ try {
     assert.deepEqual(await page.locator('[data-route-executors-grid] thead th').allTextContents(), ['Подрядчик', 'Водитель', 'Комплект ТС', 'Логист', 'Статус']);
     assert.equal(await page.locator('[data-route-executors-grid] tbody tr').count(), 3);
     assert.equal(await page.locator('[data-route-executors-grid] .route-review-row').count(), 2);
+    assert.deepEqual(await page.locator('td[data-label="Логист"] .registry-ui-primary').allTextContents(),['Карина Г.','Владимир С.','GTP-Бухгалтерия'],`${width}: responsible names, already-short and single-token labels`);
+    assert.equal(await page.locator('td[data-label="Логист"]').first().getAttribute('title'),'Гладких Карина Артуровна',`${width}: raw full name remains in tooltip`);
+    const visibleIds=()=>page.locator('[data-route-executors-grid] tbody tr:not(.is-hidden)').evaluateAll(rows=>rows.map(row=>row.dataset.routeReviewCardId||row.dataset.routeExecutorId).sort());
+    for(const [query,ids] of [['Гладких Карина Артуровна',['synthetic-draft']],['Карина Г.',['synthetic-draft']],['Владимир С.',['synthetic-mail']],['несуществующий менеджер',[]]]){
+      await page.locator('.registry-ui-search').fill(query);
+      assert.deepEqual(await visibleIds(),ids,`${width}: actual search IDs for ${query}`);
+    }
+    await page.locator('.registry-ui-reset').click();
+    assert.deepEqual(await visibleIds(),['9','synthetic-draft','synthetic-mail'],`${width}: reset restores original rows`);
     assert.equal(await page.locator('[data-route-executors-grid] .route-vehicle-line').first().textContent(), 'SHACMANА 101 ВС 16· 20 т· 86 м³');
     assert.equal(await page.locator('[data-route-executors-grid] .route-vehicle-line').nth(1).textContent(), 'ТОНАРА1213 33· 24 т· 92 м³');
     assert.equal(await page.locator('[data-route-executors-grid] .route-review-delete').first().textContent(), '⋯');
