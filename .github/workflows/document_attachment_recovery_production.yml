@@ -1,0 +1,166 @@
+name: Authorized Document Attachment Recovery
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: check first; apply only the OWNER-authorized finite plan
+        type: choice
+        options: [check, apply, verify]
+        required: true
+      expected_live_sha:
+        description: Exact deployed runtime SHA
+        required: true
+      transport_tag:
+        description: Private draft release containing encrypted recovery.cms.enc
+        required: true
+      ciphertext_sha256:
+        description: Exact encrypted transport SHA256
+        required: true
+      payload_sha256:
+        description: Exact authorized plaintext plan SHA256
+        required: true
+      check_digest:
+        description: Prior successful check receipt digest (apply only)
+        default: ''
+      recipient_certificate_base64:
+        description: Public report recipient certificate; never a private key
+        required: true
+      recipient_certificate_sha256:
+        description: SHA256 of decoded report certificate
+        required: true
+
+permissions:
+  contents: read
+concurrency:
+  group: document-attachment-recovery-production
+  cancel-in-progress: false
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+jobs:
+  recovery:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify canonical and encrypted finite plan
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TRANSPORT_TAG: ${{ inputs.transport_tag }}
+          CIPHER_SHA: ${{ inputs.ciphertext_sha256 }}
+          PAYLOAD_SHA: ${{ inputs.payload_sha256 }}
+          RECIPIENT_B64: ${{ inputs.recipient_certificate_base64 }}
+          RECIPIENT_SHA: ${{ inputs.recipient_certificate_sha256 }}
+          PLANEX_RECOVERY_TRANSPORT_KEY: ${{ secrets.DOC_RECOVERY_20261020_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git ls-remote origin "refs/heads/$CANONICAL_BRANCH" | awk '{print $1}')" = "$GITHUB_SHA"
+          [[ "$TRANSPORT_TAG" =~ ^private-document-recovery-20261020-[a-f0-9]{8}$ ]]
+          for digest in "$CIPHER_SHA" "$PAYLOAD_SHA" "$RECIPIENT_SHA"; do [[ "$digest" =~ ^[a-f0-9]{64}$ ]]; done
+          test "${#PLANEX_RECOVERY_TRANSPORT_KEY}" -eq 64
+          test "${#RECIPIENT_B64}" -lt 12000
+          gh release view "$TRANSPORT_TAG" --json isDraft --jq '.isDraft' | grep -qx true
+          gh release download "$TRANSPORT_TAG" --pattern recovery.cms.enc --dir "$RUNNER_TEMP"
+          test "$(sha256sum "$RUNNER_TEMP/recovery.cms.enc" | awk '{print $1}')" = "$CIPHER_SHA"
+          openssl enc -d -aes-256-cbc -pbkdf2 -iter 200000 -in "$RUNNER_TEMP/recovery.cms.enc" -out "$RUNNER_TEMP/recovery.json" -pass env:PLANEX_RECOVERY_TRANSPORT_KEY
+          test "$(sha256sum "$RUNNER_TEMP/recovery.json" | awk '{print $1}')" = "$PAYLOAD_SHA"
+          test "$(stat -c%s "$RUNNER_TEMP/recovery.json")" -lt 16777216
+          printf '%s' "$RECIPIENT_B64" | base64 --decode > "$RUNNER_TEMP/recovery-recipient.pem"
+          test "$(sha256sum "$RUNNER_TEMP/recovery-recipient.pem" | awk '{print $1}')" = "$RECIPIENT_SHA"
+          openssl x509 -in "$RUNNER_TEMP/recovery-recipient.pem" -noout -checkend 0
+      - name: Configure pinned production transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/attachment_recovery_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/attachment_recovery_key" "$HOME/.ssh/known_hosts"
+      - name: Verify deployed code and execute authorized mode
+        env:
+          MODE: ${{ inputs.mode }}
+          EXPECTED_LIVE: ${{ inputs.expected_live_sha }}
+          CHECK_DIGEST: ${{ inputs.check_digest }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          [[ "$MODE" = check || "$MODE" = apply || "$MODE" = verify ]]
+          [[ "$EXPECTED_LIVE" =~ ^[a-f0-9]{40}$ ]]
+          if [ "$MODE" = apply ]; then [[ "$CHECK_DIGEST" =~ ^[a-f0-9]{64}$ ]]; else test -z "$CHECK_DIGEST"; fi
+          if [ "$MODE" = verify ]; then MODE=check; fi
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/attachment_recovery_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 "$SSH_USER@$SSH_HOST")
+          test "$("${SSH[@]}" "cat '$DEPLOY_MARKER'")" = "$EXPECTED_LIVE"
+          git merge-base --is-ancestor "$EXPECTED_LIVE" HEAD
+          for path in scripts/registry_document_attachment_recovery.php scripts/registry_document_inventory_readonly_probe.php app/Service/RouteExecutorReviewMaterializationService.php app/Service/RouteExecutorCombinedCreateService.php public/assets/js/route-executor-review-workflow.js; do
+            expected="$(git show "$EXPECTED_LIVE:$path" | sha256sum | awk '{print $1}')"
+            test "$("${SSH[@]}" "sha256sum '$LIVE_ROOT/$path'" | awk '{print $1}')" = "$expected"
+          done
+          cat "$RUNNER_TEMP/recovery.json" | "${SSH[@]}" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_ATTACHMENT_RECOVERY_MODE='$MODE' PLANEX_ATTACHMENT_RECOVERY_CHECK_DIGEST='$CHECK_DIGEST' /usr/bin/php8.5 '$LIVE_ROOT/scripts/registry_document_attachment_recovery.php'" \
+            > "$RUNNER_TEMP/recovery-receipt.json" 2> "$RUNNER_TEMP/recovery.private.stderr"
+          echo 'AUTHORIZED_ATTACHMENT_RECOVERY_TRANSPORT_PASS'
+      - uses: actions/setup-node@v4
+        if: inputs.mode == 'verify'
+        with:
+          node-version: '22'
+      - name: Install independent production browser
+        if: inputs.mode == 'verify'
+        run: |
+          npm install --prefix /tmp/attachment-production-browser playwright@1.58.2
+          /tmp/attachment-production-browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Independent login and document GET verification
+        if: inputs.mode == 'verify'
+        env:
+          PLANEX_ATTACHMENT_REVIEW_CREDENTIAL: ${{ secrets.DOC_RECOVERY_20261020_REVIEW_CREDENTIAL }}
+          PLANEX_ATTACHMENT_VERIFY_DIR: ${{ runner.temp }}
+          NODE_PATH: /tmp/attachment-production-browser/node_modules
+        run: node tools/document_attachment_production_verify.mjs
+      - name: Encrypt receipt and independent browser evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f "$RUNNER_TEMP/recovery-receipt.json" ] && [ -f "$RUNNER_TEMP/recovery-recipient.pem" ]; then
+            openssl cms -encrypt -binary -aes256 -in "$RUNNER_TEMP/recovery-receipt.json" -outform DER -recip "$RUNNER_TEMP/recovery-recipient.pem" -out recovery-report.cms
+          fi
+          if [ -d "$RUNNER_TEMP/browser-evidence" ] && [ -f "$RUNNER_TEMP/recovery-recipient.pem" ]; then
+            tar -C "$RUNNER_TEMP" -czf - browser-evidence | openssl cms -encrypt -binary -aes256 -outform DER -recip "$RUNNER_TEMP/recovery-recipient.pem" -out independent-browser.cms
+          fi
+      - name: Encrypt private transport errors
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$RUNNER_TEMP/recovery.private.stderr" ] && [ -f "$RUNNER_TEMP/recovery-recipient.pem" ]; then
+            openssl cms -encrypt -binary -aes256 -in "$RUNNER_TEMP/recovery.private.stderr" -outform DER -recip "$RUNNER_TEMP/recovery-recipient.pem" -out recovery-errors.cms
+          fi
+      - name: Preserve encrypted receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: attachment-recovery-encrypted-${{ github.run_id }}
+          path: |
+            recovery-report.cms
+            recovery-errors.cms
+            independent-browser.cms
+          if-no-files-found: error
+          retention-days: 7
+      - name: Cleanup ephemeral transport
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/attachment_recovery_key" "$RUNNER_TEMP/recovery.json" "$RUNNER_TEMP/recovery.cms.enc" "$RUNNER_TEMP/recovery-recipient.pem" "$RUNNER_TEMP/recovery.private.stderr" "$RUNNER_TEMP/recovery-receipt.json" recovery-report.cms recovery-errors.cms independent-browser.cms
+          if [ -d "$RUNNER_TEMP/browser-evidence" ]; then find "$RUNNER_TEMP/browser-evidence" -type f -delete; rmdir "$RUNNER_TEMP/browser-evidence"; fi

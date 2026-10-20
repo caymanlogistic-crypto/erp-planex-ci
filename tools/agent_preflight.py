@@ -115,12 +115,14 @@ def diff_meta(base,head):
     return rows,lines
 
 def plan(cls,paths,scopes):
-    if cls=="FAST": return ["FAST_SCOPE_POLICY","CHANGED_PHP_SYNTAX","CHANGED_JS_SYNTAX","CHEAP_UI_CONTRACTS","APPROVED_UI_CONTRACTS"]
+    if cls=="FAST":
+        return ["FAST_SCOPE_POLICY","CHANGED_PHP_SYNTAX","CHANGED_JS_SYNTAX","CHEAP_UI_CONTRACTS","APPROVED_UI_CONTRACTS"] + (["DOCUMENT_ATTACHMENT_REGRESSIONS"] if scopes["document_attachments"] else [])
     out=[]
     mapping=[("php","CHANGED_PHP_SYNTAX"),("js","CHANGED_JS_SYNTAX"),("python","CHANGED_PYTHON_SYNTAX"),("finance","FINANCE_REGRESSIONS"),("linear","LINEAR_REGRESSION"),("ui_lab","UI_LAB_CONTRACT"),("migrations","MIGRATION_INTEGRITY"),("migration_normalization","MIGRATION_NORMALIZATION"),("tenant_schema",TENANT)]
     for scope,check in mapping:
         if scopes[scope]: out.append(check)
     if scopes["approved_ui"]: out.append("APPROVED_UI_CONTRACTS")
+    if scopes["document_attachments"]: out.append("DOCUMENT_ATTACHMENT_REGRESSIONS")
     out += ["DYNAMIC_IDENTIFIER_SAFETY","ARCHITECTURE_GUARD"]
     if scopes["tenant_schema"] or any(re.search(r"(?:/Feo(?:Transfer|Request|Location|LegacyImport|Import|Xlsx)|/YandexGeocoding|/feo_(?:transfers|legacy|import|xlsx)|/company_feo_(?:transfers|requests)|/feo-transfers|/MaxEventCatalog)", p) for p in paths):
         out.append("FEO_TRANSFER_REGRESSIONS")
@@ -296,6 +298,9 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required,base):
         env=os.environ.copy();env["APP_ENV"]="test"
         for t in ["tests/document_mail_transport_test.php","tests/trip_document_collection_mysql_test.php","tests/trip_document_140_production_migration_contract_test.php","tests/trip_document_140_migration_mysql_test.php"]:
             need(t);cmdcheck(results,"TRIP_DOCUMENT_REGRESSIONS",["php",t],env)
+    if "DOCUMENT_ATTACHMENT_REGRESSIONS" in want:
+        need("tools/document_attachment_checks.py")
+        cmdcheck(results,"DOCUMENT_ATTACHMENT_REGRESSIONS",[PYTHON,"tools/document_attachment_checks.py"])
     if "DYNAMIC_IDENTIFIER_SAFETY" in want: need("tools/dynamic_table_safety_audit.py"); cmdcheck(results,"DYNAMIC_IDENTIFIER_SAFETY",[PYTHON,"tools/dynamic_table_safety_audit.py"])
     if "ARCHITECTURE_GUARD" in want: need("tools/architecture_guard.php"); cmdcheck(results,"ARCHITECTURE_GUARD",["php","tools/architecture_guard.php"])
     if "CONTROL_PLANE_PREFLIGHT_CONTRACTS" in want:

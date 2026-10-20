@@ -8,6 +8,7 @@ const { chromium } = require('playwright');
 const root = resolve(import.meta.dirname, '..');
 const script = readFileSync(resolve(root, 'public/assets/js/route-executor-review-workflow.js'), 'utf8');
 const css = readFileSync(resolve(root, 'public/assets/css/route-executor-review-workflow.css'), 'utf8');
+const registryCss = readFileSync(resolve(root, 'public/assets/css/registry-components.css'), 'utf8');
 const browser = await chromium.launch({ headless: true });
 try {
   const context = await browser.newContext({ viewport: { width: 1366, height: 800 } });
@@ -47,12 +48,12 @@ try {
         : action === 'contract' ? { ok: true, contract_status: 'accepted' }
           : action ? { ok: true } : { ok: true, stage: currentStage, mail_status: 'accepted', max_status: 'sent' } });
     }
-    const row = currentCardId ? `<tr class="route-review-row${currentStage === 'final' ? ' route-review-row-final' : ''}" data-route-review-card-id="${currentCardId}" ${currentStage === 'final' ? '' : 'data-erp-pin="1"'} tabindex="0"><td>ИП Тестовый</td><td><button data-route-review-delete="${currentCardId}">Удалить</button></td></tr>` : '';
-    return route.fulfill({ status: 200, contentType: 'text/html', body: `<!doctype html><html><body><div class="route-executors-card" data-route-executors-grid><table class="table"><tbody>${row}</tbody></table></div></body></html>` });
+    const row = currentCardId ? `<tr class="route-review-row${currentStage === 'final' ? ' route-review-row-final registry-ui-soft-success' : ' registry-ui-warning'}" data-route-review-card-id="${currentCardId}" ${currentStage === 'final' ? '' : 'data-erp-pin="1"'} tabindex="0"><td>ИП Тестовый</td><td><button data-route-review-delete="${currentCardId}">Удалить</button></td></tr>` : '';
+    return route.fulfill({ status: 200, contentType: 'text/html', body: `<!doctype html><html><body><div class="route-executors-card" data-route-executors-grid><table class="table registry-ui-data"><tbody>${row}</tbody></table></div></body></html>` });
   });
   await page.goto('http://127.0.0.1:59999/');
-  await page.setContent(`<meta name="csrf-token" content="test-csrf-token"><style>${css}</style>
-    <button data-source-create-open>Открыть</button><div class="route-executors-card" data-route-executors-grid><table class="table"><tbody></tbody></table></div>
+  await page.setContent(`<meta name="csrf-token" content="test-csrf-token"><style>${css}</style><style>${registryCss}</style>
+    <button data-source-create-open>Открыть</button><div class="route-executors-card" data-route-executors-grid><table class="table registry-ui-data"><tbody></tbody></table></div>
     <div id="route-executor-create-modal" class="is-open" data-workflow-scope="7-11">
       <div id="route-executor-create-modal-inner">
         <div class="modal-head"><span class="modal-title">Создать исполнителя рейса</span>
@@ -104,7 +105,8 @@ try {
   assert.equal(await modal.evaluate(node => node.classList.contains('is-open')), false, 'Save closes the main popup');
   assert.equal(sends.filter(item => /name="action"\r?\n\r?\ncontract/.test(item.body)).length, 0, 'Save never sends contract mail');
   assert.equal(await page.locator('[data-route-review-card-id]').count(), 1, 'Shared yellow row appears after saving');
-  assert.equal(await page.locator('[data-route-review-card-id] td').first().evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(255, 241, 189)');
+  await page.mouse.move(1300, 750);
+  assert.equal(await page.locator('[data-route-review-card-id] td').first().evaluate(node => getComputedStyle(node).backgroundColor), 'rgb(253, 240, 213)');
   await page.evaluate(() => window.openModal('route-executor-create-modal'));
   assert.equal(await modal.locator('[data-lab-send]').isVisible(), false, 'No send without logist and trip');
   await modal.locator('#route-executor-responsible-logist').selectOption('12');

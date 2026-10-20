@@ -1,0 +1,48 @@
+name: Document Attachment Preservation Regression
+
+on:
+  pull_request:
+    paths: ['app/Service/RouteExecutor*', 'public/assets/js/route-executor-review-workflow.js', 'scripts/registry_document_attachment_recovery.php', 'tests/document_attachment*', 'tests/route_executor_combined_mysql_test.php', 'tools/document_attachment*', '.github/workflows/document_attachment*']
+  push:
+    branches: ['chatgpt/production-stabilization-20260802']
+    paths: ['app/Service/RouteExecutor*', 'public/assets/js/route-executor-review-workflow.js', 'scripts/registry_document_attachment_recovery.php', 'tests/document_attachment*', 'tests/route_executor_combined_mysql_test.php', 'tools/document_attachment*', '.github/workflows/document_attachment*']
+permissions:
+  contents: read
+jobs:
+  attachment-preservation:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      APP_ENV: test
+      PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+      PLANEX_SCHEMA_DB_PORT: '3306'
+      PLANEX_SCHEMA_DB_USER: attachment_ci
+      PLANEX_SCHEMA_DB_PASSWORD: ephemeral_ci_only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          extensions: pdo_mysql, mbstring, openssl
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Provision isolated regression dependencies
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          test_db="planex_t_$(openssl rand -hex 12)"
+          mysql -uroot -proot <<SQL
+          CREATE DATABASE $test_db CHARACTER SET utf8mb4;
+          CREATE USER 'attachment_ci'@'127.0.0.1' IDENTIFIED BY 'ephemeral_ci_only';
+          GRANT ALL ON $test_db.* TO 'attachment_ci'@'127.0.0.1';
+          SQL
+          echo "PLANEX_TEST_FIXED_DB=$test_db" >> "$GITHUB_ENV"
+          echo "PLANEX_TEST_FIXED_DB_ALLOWLIST=$test_db" >> "$GITHUB_ENV"
+          npm install --prefix /tmp/attachment-test playwright@1.58.2
+          /tmp/attachment-test/node_modules/.bin/playwright install --with-deps chromium
+          echo "PLANEX_PHP=$(command -v php)" >> "$GITHUB_ENV"
+          echo "PLANEX_NODE=$(command -v node)" >> "$GITHUB_ENV"
+          echo 'NODE_PATH=/tmp/attachment-test/node_modules' >> "$GITHUB_ENV"
+      - name: Required PHP and real browser-to-materialization checks
+        run: python3 tools/document_attachment_checks.py

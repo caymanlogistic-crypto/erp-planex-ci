@@ -91,8 +91,31 @@ final class RouteExecutorReviewMaterializationService
             if ($group===null || !preg_match('/^(predef_doc|custom_doc_file)((?:\[[a-zA-Z0-9_-]*\]){1,3})$/D',$field,$match)) throw new DomainException('Некорректный документ карточки.');
             preg_match_all('/\[([^\]]*)\]/',$match[2],$parts);
             $path=$parts[1];
-            if (end($path)==='') $path[count($path)-1]=(string)($stored['index']??0);
             $bucket=$group.'_'.$match[1];
+            // An implicit custom [] identifies the label row, whose empty upload
+            // controls still count. Preserve sparse row positions instead of compacting.
+            $implicitCustomRow=$match[1]==='custom_doc_file' && end($path)==='' &&
+                (count($path)===1 || ($group==='vehicle' && count($path)===2 && in_array($path[0],['primary','secondary'],true)));
+            if ($implicitCustomRow) $path[count($path)-1]=(string)($stored['index']??0);
+            // Stored index identifies the browser control, not a member of its FileList.
+            // Historical cards therefore legitimately contain repeated indices. Rebuild
+            // file-list [] in source order, keeping custom row/label indices intact.
+            $leaf=array_pop($path);
+            $names=&$files[$bucket]['name'];
+            foreach ($path as $segment) {
+                if ($segment==='' || (isset($names[$segment]) && !is_array($names[$segment]))) throw new DomainException('Некорректный документ карточки.');
+                $names=&$names[$segment];
+            }
+            if ($names!==null && !is_array($names)) throw new DomainException('Некорректный документ карточки.');
+            if ($leaf==='') {
+                $names??=[];
+                $names[]=null;
+                $leaf=array_key_last($names);
+            } elseif (array_key_exists($leaf,$names??[])) {
+                throw new DomainException('Повторяется одиночное поле документа карточки.');
+            }
+            $path[]=$leaf;
+            unset($names);
             foreach (['name'=>(string)$stored['name'],'type'=>(string)($stored['mime']??'application/octet-stream'),
                 'tmp_name'=>(string)$stored['tmp_name'],'error'=>(int)$stored['error'],'size'=>(int)$stored['size']] as $attribute=>$value) {
                 $target=&$files[$bucket][$attribute];

@@ -446,11 +446,17 @@
       element.dispatchEvent(new Event('input', { bubbles: true }));
       element.dispatchEvent(new Event('change', { bubbles: true }));
     }
+    const restoredFiles = new Map();
     for (const item of snapshot.files) {
       const element = namedControl(item.formId, item.name, item.index);
       if (!element || element.type !== 'file') continue;
-      const transfer = new DataTransfer();
+      // Server cards store one entry per upload; several entries can belong to
+      // the same multiple control. Restore its complete FileList in one pass.
+      const transfer = restoredFiles.get(element) || new DataTransfer();
       item.selected.forEach(file => transfer.items.add(file));
+      restoredFiles.set(element, transfer);
+    }
+    for (const [element, transfer] of restoredFiles) {
       element.files = transfer.files;
       element.dispatchEvent(new Event('change', { bubbles: true }));
     }
