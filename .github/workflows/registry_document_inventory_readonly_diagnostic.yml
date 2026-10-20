@@ -1,0 +1,146 @@
+name: Registry Document Inventory Read Only Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - '.github/workflows/registry_document_inventory_readonly_diagnostic.yml'
+      - 'scripts/registry_document_inventory_readonly_probe.php'
+      - 'tests/document_inventory_readonly_mysql_test.php'
+  push:
+    branches: ['chatgpt/production-stabilization-20260802']
+    paths:
+      - '.github/workflows/registry_document_inventory_readonly_diagnostic.yml'
+      - 'scripts/registry_document_inventory_readonly_probe.php'
+      - 'tests/document_inventory_readonly_mysql_test.php'
+  workflow_dispatch:
+    inputs:
+      company_scope:
+        description: 'discover or explicit comma-separated central company IDs'
+        required: true
+        type: string
+      expected_live_sha:
+        description: Exact previously verified deployed SHA
+        required: true
+        type: string
+      recipient_certificate_base64:
+        description: Public recipient X509 certificate only (never private key)
+        required: true
+        type: string
+      recipient_certificate_sha256:
+        description: SHA256 of decoded public certificate PEM
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: registry-document-inventory-readonly
+  cancel-in-progress: false
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+jobs:
+  regression:
+    if: github.event_name != 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Disposable MySQL behavioral regression
+        env:
+          APP_ENV: test
+          PLANEX_SCHEMA_DB_HOST: 127.0.0.1
+          PLANEX_SCHEMA_DB_PORT: 3306
+          PLANEX_SCHEMA_DB_USER: inventory_ci
+          PLANEX_SCHEMA_DB_PASSWORD: ephemeral_ci_only
+          PLANEX_TEST_FIXED_DB: inventory_readonly_test
+          PLANEX_TEST_FIXED_DB_ALLOWLIST: inventory_readonly_test
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo systemctl start mysql
+          mysql -uroot -proot <<'SQL'
+          CREATE DATABASE inventory_readonly_test CHARACTER SET utf8mb4;
+          CREATE USER 'inventory_ci'@'127.0.0.1' IDENTIFIED BY 'ephemeral_ci_only';
+          GRANT ALL ON inventory_readonly_test.* TO 'inventory_ci'@'127.0.0.1';
+          SQL
+          php tests/document_inventory_readonly_mysql_test.php
+  inventory:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Verify canonical and recipient
+        env:
+          SOURCE_SHA: ${{ github.sha }}
+          SCOPE: ${{ inputs.company_scope }}
+          EXPECTED_LIVE: ${{ inputs.expected_live_sha }}
+          RECIPIENT_B64: ${{ inputs.recipient_certificate_base64 }}
+          RECIPIENT_SHA: ${{ inputs.recipient_certificate_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin "refs/heads/$CANONICAL_BRANCH" | awk '{print $1}')" = "$SOURCE_SHA"
+          [[ "$SCOPE" = discover || "$SCOPE" =~ ^[1-9][0-9]{0,9}(,[1-9][0-9]{0,9}){0,19}$ ]]
+          [[ "$EXPECTED_LIVE" =~ ^[a-f0-9]{40}$ ]]
+          [[ "$RECIPIENT_SHA" =~ ^[a-f0-9]{64}$ ]]
+          test "${#RECIPIENT_B64}" -lt 12000
+          printf '%s' "$RECIPIENT_B64" | base64 --decode > "$RUNNER_TEMP/inventory-recipient.pem"
+          test "$(sha256sum "$RUNNER_TEMP/inventory-recipient.pem" | awk '{print $1}')" = "$RECIPIENT_SHA"
+          openssl x509 -in "$RUNNER_TEMP/inventory-recipient.pem" -noout -checkend 0
+          php -l scripts/registry_document_inventory_readonly_probe.php
+      - name: Configure pinned SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/document_inventory_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/document_inventory_key" "$HOME/.ssh/known_hosts"
+      - name: Stream SELECT and file hashes into encrypted artifact
+        env:
+          SCOPE: ${{ inputs.company_scope }}
+          EXPECTED_LIVE: ${{ inputs.expected_live_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/document_inventory_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 "$SSH_USER@$SSH_HOST")
+          deployed="$("${SSH[@]}" "cat '$DEPLOY_MARKER'")"
+          test "$deployed" = "$EXPECTED_LIVE"
+          git merge-base --is-ancestor "$deployed" HEAD
+          for path in app/Service/RouteExecutorReviewMaterializationService.php app/Service/RouteExecutorReviewCardService.php app/Service/RouteExecutorCombinedCreateService.php; do
+            expected="$(git show "$deployed:$path" | sha256sum | awk '{print $1}')"
+            actual="$("${SSH[@]}" "sha256sum '$LIVE_ROOT/$path'" | awk '{print $1}')"
+            test "$actual" = "$expected"
+          done
+          probe_hash="$(sha256sum scripts/registry_document_inventory_readonly_probe.php | awk '{print $1}')"
+          cat scripts/registry_document_inventory_readonly_probe.php | "${SSH[@]}" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_INVENTORY_SCOPE='$SCOPE' PLANEX_AUDIT_RUN='$GITHUB_RUN_ID' PLANEX_PROBE_HASH='$probe_hash' PLANEX_LIVE_SHA='$deployed' /usr/bin/php8.5" \
+            | openssl cms -encrypt -binary -aes256 -outform DER -recip "$RUNNER_TEMP/inventory-recipient.pem" -out inventory.cms
+          echo 'DOCUMENT_INVENTORY_ENCRYPTED_TRANSPORT_PASS'
+      - name: Upload encrypted metadata only
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: document-inventory-encrypted-${{ github.run_id }}
+          path: inventory.cms
+          if-no-files-found: error
+          retention-days: 1
+      - name: Cleanup task transport
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/document_inventory_key" "$RUNNER_TEMP/inventory-recipient.pem" inventory.cms
