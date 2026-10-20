@@ -2,10 +2,10 @@ name: Document Attachment Preservation Regression
 
 on:
   pull_request:
-    paths: ['app/Service/RouteExecutor*', 'public/assets/js/route-executor-review-workflow.js', 'scripts/registry_document_attachment_recovery.php', 'tests/document_attachment*', 'tests/route_executor_combined_mysql_test.php', 'tools/document_attachment*', '.github/workflows/document_attachment*']
+    paths: ['app/Service/RouteExecutor*', 'public/assets/js/route-executor-review-workflow.js', 'scripts/registry_document_attachment_recovery.php', 'scripts/registry_document_inventory_readonly_probe.php', 'tests/document_inventory*', '.github/workflows/document_inventory*', '.github/workflows/registry_document_inventory*', 'tests/document_attachment*', 'tests/route_executor_combined_mysql_test.php', 'tools/document_attachment*', '.github/workflows/document_attachment*']
   push:
     branches: ['chatgpt/production-stabilization-20260802']
-    paths: ['app/Service/RouteExecutor*', 'public/assets/js/route-executor-review-workflow.js', 'scripts/registry_document_attachment_recovery.php', 'tests/document_attachment*', 'tests/route_executor_combined_mysql_test.php', 'tools/document_attachment*', '.github/workflows/document_attachment*']
+    paths: ['app/Service/RouteExecutor*', 'public/assets/js/route-executor-review-workflow.js', 'scripts/registry_document_attachment_recovery.php', 'scripts/registry_document_inventory_readonly_probe.php', 'tests/document_inventory*', '.github/workflows/document_inventory*', '.github/workflows/registry_document_inventory*', 'tests/document_attachment*', 'tests/route_executor_combined_mysql_test.php', 'tools/document_attachment*', '.github/workflows/document_attachment*']
 permissions:
   contents: read
 jobs:

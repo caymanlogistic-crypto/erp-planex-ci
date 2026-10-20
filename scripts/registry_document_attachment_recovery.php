@@ -221,10 +221,13 @@ final class RegistryDocumentAttachmentRecovery
 
     private function validatePayload(array $payload): void
     {
-        self::keys($payload,['task_id','company_id','authorization','expected_file_count','expected_label_count','documents_before','types_before','entities_before','label_updates','type_mappings','restores']);
+        self::keys($payload,['task_id','company_id','authorization','expected_file_count','expected_label_count','expected_baseline_document_count','documents_before','types_before','entities_before','label_updates','type_mappings','restores']);
         self::need((bool)preg_match('/^[a-z0-9][a-z0-9-]{4,100}$/D',(string)($payload['task_id']??'')) && ($payload['company_id']??null)===25 && ($payload['authorization']??'')===self::AUTHORIZATION,'RECOVERY_AUTHORIZATION_INVALID');
         self::need(($payload['expected_file_count']??null)===$this->counts['files'] && ($payload['expected_label_count']??null)===$this->counts['labels'],'RECOVERY_COUNTS_INVALID');
-        foreach (['documents_before'=>'documents','types_before'=>'catalog','label_updates'=>'labels','type_mappings'=>'types','restores'=>'files'] as $name=>$count) self::need(is_array($payload[$name]??null) && array_is_list($payload[$name]) && count($payload[$name])===$this->counts[$count],'PAYLOAD_ARRAY_COUNT_INVALID');
+        $baselineCount=$payload['expected_baseline_document_count']??null;
+        self::need(is_int($baselineCount) && $baselineCount>=$this->counts['documents'] && $baselineCount<=5000,'BASELINE_DOCUMENT_COUNT_INVALID');
+        self::need(is_array($payload['documents_before']??null) && array_is_list($payload['documents_before']) && count($payload['documents_before'])===$baselineCount,'PAYLOAD_ARRAY_COUNT_INVALID');
+        foreach (['types_before'=>'catalog','label_updates'=>'labels','type_mappings'=>'types','restores'=>'files'] as $name=>$count) self::need(is_array($payload[$name]??null) && array_is_list($payload[$name]) && count($payload[$name])===$this->counts[$count],'PAYLOAD_ARRAY_COUNT_INVALID');
         foreach ($payload['documents_before'] as $row) {
             self::keys($row,self::DOCUMENT_KEYS);self::need(isset($row['id'],$row['entity_type'],$row['entity_id'],$row['relative_path']) && array_key_exists('document_type_id',$row) && array_key_exists('document_type',$row),'DOCUMENT_PROJECTION_INCOMPLETE');
         }
