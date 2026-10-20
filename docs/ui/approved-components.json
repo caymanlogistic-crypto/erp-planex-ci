@@ -711,7 +711,7 @@
       },
       "reference_select": false,
       "sticky": true,
-      "asset_owner": "app/Http/Controllers/Company/FeoTransferController.php",
+      "asset_owner": "app/View/pages/company_feo_transfers.php",
       "browser_test": "tests/feo_history_canon_browser_test.mjs",
       "runtime_browser_test": "tests/feo_history_runtime_browser_test.mjs",
       "data_roles": [
@@ -766,7 +766,7 @@
       },
       "reference_select": false,
       "sticky": true,
-      "asset_owner": "app/Http/Controllers/Company/FeoWeightBatchController.php",
+      "asset_owner": "app/View/pages/company_feo_weight_batches.php",
       "browser_test": "tests/feo_history_canon_browser_test.mjs",
       "runtime_browser_test": "tests/feo_history_runtime_browser_test.mjs",
       "data_roles": [
