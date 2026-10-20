@@ -5,6 +5,7 @@ require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Service/CargoBalanceStatisticsService.php';
 
 use App\Service\CargoBalanceStatisticsService;
+use App\Service\WasteTripService;
 
 $database = (string)getenv('PLANEX_TEST_FIXED_DB');
 $allowed = explode(',', (string)getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST'));
@@ -34,10 +35,13 @@ INSERT INTO feo_requests VALUES (1,'A'),(2,'B'),(3,'C'),(4,'D');");
 $trips = $pdo->prepare('INSERT INTO waste_trips VALUES (?,?,?,?)');
 foreach ([[1,'in_progress',$yesterday,null],[2,'completed',$today,null],[3,'completed',$today,null],
           [4,'cancelled',$today,null],[5,'searching_executor',null,null],[6,'in_progress',$today,$today.' 12:00:00'],
-          [7,'assigned',null,null],[8,'assigned',null,null],[9,'assigned',null,$today.' 12:00:00']] as $row) {
+          [7,WasteTripService::STATUS_ASSIGNED,null,null],
+          [8,WasteTripService::STATUS_ASSIGNED,null,null],
+          [9,WasteTripService::STATUS_ASSIGNED,null,$today.' 12:00:00'],
+          [10,'assigned',null,null]] as $row) {
     $trips->execute($row);
 }
-$pdo->exec("INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id) VALUES (1,1,1),(2,2,2),(3,3,1),(4,4,3),(5,5,4),(6,6,4),(7,7,1),(8,7,4),(9,8,4),(10,9,3)");
+$pdo->exec("INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id) VALUES (1,1,1),(2,2,2),(3,3,1),(4,4,3),(5,5,4),(6,6,4),(7,7,1),(8,7,4),(9,8,4),(10,9,3),(11,10,4)");
 $pdo->exec("UPDATE waste_trip_requests SET removed_at=NOW() WHERE id=9");
 if (!CargoBalanceStatisticsService::schemaReady($pdo)) throw new RuntimeException('Schema check failed');
 $dashboard = CargoBalanceStatisticsService::dashboard($pdo);
