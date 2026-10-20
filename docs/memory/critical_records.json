@@ -158,8 +158,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "fa2cb422a1896c5d8bdbf47d44dbddf247e4977d",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/fa2cb422a1896c5d8bdbf47d44dbddf247e4977d/tools/registry_visual_gate.mjs",
+      "verified_sha": "8d5fb5334fdf8a8b2c1b8a37d83c2e12313cfdf2",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/8d5fb5334fdf8a8b2c1b8a37d83c2e12313cfdf2/scripts/registry_document_inventory_readonly_probe.php",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -206,7 +206,11 @@
         "tests/fixtures/company_registry_runtime.php",
         "tests/fixtures/company_registry_expectations.mjs",
         "tools/registry_matrix.mjs",
-        "tests/fixtures/registry_layout_render.php"
+        "tests/fixtures/registry_layout_render.php",
+        ".github/workflows/registry_document_inventory_readonly_diagnostic.yml",
+        "scripts/registry_document_inventory_readonly_probe.php",
+        "tests/document_inventory_readonly_mysql_test.php",
+        "docs/DOCUMENT_RECOVERY_DIAGNOSTIC.md"
       ],
       "navigation": "active",
       "machine_ownership_id": "control.ci"
