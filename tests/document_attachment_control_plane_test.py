@@ -16,6 +16,8 @@ automatic=(ROOT/'.github/workflows/document_attachment_regression.yml').read_tex
 assert '\n  workflow_dispatch:' in production
 assert not any('\n  '+x+':' in production for x in ('push','pull_request','schedule','workflow_run'))
 assert 'DOC_RECOVERY_20261020_KEY' in production
+assert '    permissions:\n      contents: write' in production
+assert 'test "$(git ls-remote origin' in production
 assert 'openssl cms -encrypt -binary -aes256' in production
 assert 'sha256sum "$RUNNER_TEMP/recovery.json"' in production
 assert 'PLANEX_ATTACHMENT_RECOVERY_CHECK_DIGEST' in production
