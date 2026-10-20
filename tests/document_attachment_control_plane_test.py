@@ -21,6 +21,10 @@ assert 'test "$(git ls-remote origin' in production
 assert 'openssl cms -encrypt -binary -aes256' in production
 assert 'sha256sum "$RUNNER_TEMP/recovery.json"' in production
 assert 'PLANEX_ATTACHMENT_RECOVERY_CHECK_DIGEST' in production
+assert 'remote_tool="/tmp/planex-attachment-recovery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"' in production
+assert "'$remote_tool/registry_document_attachment_recovery.php'" in production
+assert "'$LIVE_ROOT/scripts/registry_document_attachment_recovery.php'" not in production
+assert "'$REMOTE_RECOVERY_ROOT/source_sha'" in production
 assert 'ERPV2_SSH_' not in automatic and 'public_html/erpv2' not in automatic
 assert 'python3 tools/document_attachment_checks.py' in automatic
 preflight=(ROOT/'tools/agent_preflight.py').read_text()

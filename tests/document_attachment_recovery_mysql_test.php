@@ -7,6 +7,8 @@ require_once BASE_PATH.'/app/Service/TripDocumentPackage.php';
 define('PLANEX_ATTACHMENT_RECOVERY_LIBRARY',true);
 require_once BASE_PATH.'/scripts/registry_document_attachment_recovery.php';
 
+RegistryDocumentAttachmentRecovery::installIoGuard();
+try {
 $schema=(string)getenv('PLANEX_TEST_FIXED_DB');
 if (getenv('APP_ENV')!=='test' || !preg_match('/^planex_t_[a-f0-9]{24}$/D',$schema) || getenv('PLANEX_TEST_FIXED_DB_ALLOWLIST')!==$schema) throw new RuntimeException('Unique disposable test schema required');
 $pdo=new PDO('mysql:host='.getenv('PLANEX_SCHEMA_DB_HOST').';port='.getenv('PLANEX_SCHEMA_DB_PORT').';dbname='.$schema.';charset=utf8mb4',getenv('PLANEX_SCHEMA_DB_USER'),getenv('PLANEX_SCHEMA_DB_PASSWORD'),[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);
@@ -142,3 +144,4 @@ try {
     $iterator=new RecursiveIteratorIterator(new RecursiveDirectoryIterator($root,FilesystemIterator::SKIP_DOTS),RecursiveIteratorIterator::CHILD_FIRST);
     foreach ($iterator as $file) { if ($file->isDir() && !$file->isLink()) rmdir($file->getPathname());else unlink($file->getPathname()); }rmdir($root);
 }
+} finally { restore_error_handler(); }

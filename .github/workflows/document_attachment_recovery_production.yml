@@ -109,12 +109,23 @@ jobs:
           SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/attachment_recovery_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 -o ServerAliveInterval=30 "$SSH_USER@$SSH_HOST")
           test "$("${SSH[@]}" "cat '$DEPLOY_MARKER'")" = "$EXPECTED_LIVE"
           git merge-base --is-ancestor "$EXPECTED_LIVE" HEAD
-          for path in scripts/registry_document_attachment_recovery.php scripts/registry_document_inventory_readonly_probe.php app/Service/RouteExecutorReviewMaterializationService.php app/Service/RouteExecutorCombinedCreateService.php public/assets/js/route-executor-review-workflow.js; do
+          for path in app/Service/RouteExecutorReviewMaterializationService.php app/Service/RouteExecutorCombinedCreateService.php public/assets/js/route-executor-review-workflow.js; do
             expected="$(git show "$EXPECTED_LIVE:$path" | sha256sum | awk '{print $1}')"
             test "$("${SSH[@]}" "sha256sum '$LIVE_ROOT/$path'" | awk '{print $1}')" = "$expected"
           done
+          # A canonical administration tool is staged separately from application runtime.
+          # Never hot-patch deployed code or copy a private payload onto the server.
+          remote_tool="/tmp/planex-attachment-recovery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "REMOTE_RECOVERY_ROOT=$remote_tool" >> "$GITHUB_ENV"
+          "${SSH[@]}" "mkdir -m 700 '$remote_tool' && printf '%s' '$GITHUB_SHA' > '$remote_tool/source_sha'"
+          scp -P "$SSH_PORT" -i "$HOME/.ssh/attachment_recovery_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            scripts/registry_document_attachment_recovery.php scripts/registry_document_inventory_readonly_probe.php "$SSH_USER@$SSH_HOST:$remote_tool/"
+          for name in registry_document_attachment_recovery.php registry_document_inventory_readonly_probe.php; do
+            expected="$(sha256sum "scripts/$name" | awk '{print $1}')"
+            test "$("${SSH[@]}" "sha256sum '$remote_tool/$name'" | awk '{print $1}')" = "$expected"
+          done
           cat "$RUNNER_TEMP/recovery.json" | "${SSH[@]}" \
-            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_ATTACHMENT_RECOVERY_MODE='$MODE' PLANEX_ATTACHMENT_RECOVERY_CHECK_DIGEST='$CHECK_DIGEST' /usr/bin/php8.5 '$LIVE_ROOT/scripts/registry_document_attachment_recovery.php'" \
+            "PLANEX_ROOT='$LIVE_ROOT' PLANEX_ATTACHMENT_RECOVERY_MODE='$MODE' PLANEX_ATTACHMENT_RECOVERY_CHECK_DIGEST='$CHECK_DIGEST' /usr/bin/php8.5 '$remote_tool/registry_document_attachment_recovery.php'" \
             > "$RUNNER_TEMP/recovery-receipt.json" 2> "$RUNNER_TEMP/recovery.private.stderr"
           echo 'AUTHORIZED_ATTACHMENT_RECOVERY_TRANSPORT_PASS'
       - uses: actions/setup-node@v4
@@ -164,7 +175,17 @@ jobs:
           retention-days: 7
       - name: Cleanup ephemeral transport
         if: always()
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
         shell: bash
         run: |
+          set -euo pipefail
+          if [ -n "${REMOTE_RECOVERY_ROOT:-}" ] && [ -f "$HOME/.ssh/attachment_recovery_key" ]; then
+            [[ "$REMOTE_RECOVERY_ROOT" = "/tmp/planex-attachment-recovery-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" ]]
+            ssh -p "$SSH_PORT" -i "$HOME/.ssh/attachment_recovery_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes -o ConnectTimeout=20 "$SSH_USER@$SSH_HOST" \
+              "if test -d '$REMOTE_RECOVERY_ROOT'; then test ! -L '$REMOTE_RECOVERY_ROOT' && test \"\$(cat '$REMOTE_RECOVERY_ROOT/source_sha')\" = '$GITHUB_SHA' && rm -f '$REMOTE_RECOVERY_ROOT/registry_document_attachment_recovery.php' '$REMOTE_RECOVERY_ROOT/registry_document_inventory_readonly_probe.php' '$REMOTE_RECOVERY_ROOT/source_sha' && rmdir '$REMOTE_RECOVERY_ROOT'; fi"
+          fi
           rm -f "$HOME/.ssh/attachment_recovery_key" "$RUNNER_TEMP/recovery.json" "$RUNNER_TEMP/recovery.cms.enc" "$RUNNER_TEMP/recovery-recipient.pem" "$RUNNER_TEMP/recovery.private.stderr" "$RUNNER_TEMP/recovery-receipt.json" recovery-report.cms recovery-errors.cms independent-browser.cms
           if [ -d "$RUNNER_TEMP/browser-evidence" ]; then find "$RUNNER_TEMP/browser-evidence" -type f -delete; rmdir "$RUNNER_TEMP/browser-evidence"; fi

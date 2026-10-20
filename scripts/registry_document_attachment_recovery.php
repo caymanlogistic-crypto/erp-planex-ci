@@ -26,6 +26,17 @@ final class RegistryDocumentAttachmentRecovery
 
     public static function payloadDigest(array $payload): string { return hash('sha256',self::json(self::canonical($payload))); }
 
+    /** Install the same sanitized I/O policy in CLI and isolated tests. */
+    public static function installIoGuard(): void
+    {
+        set_error_handler(static function(int $severity): bool {
+            // Inspector probes intentionally suppress transient /proc/self/fd stat
+            // failures. Respect that mask while sanitizing reportable I/O errors.
+            if (!(error_reporting() & $severity)) return false;
+            throw new RuntimeException('RECOVERY_IO_ERROR');
+        });
+    }
+
     public function check(array $payload): array
     {
         self::need(!$this->pdo->inTransaction(),'TRANSACTION_ALREADY_OPEN');
@@ -334,7 +345,7 @@ final class RegistryDocumentAttachmentRecovery
 
 if (!defined('PLANEX_ATTACHMENT_RECOVERY_LIBRARY')) {
     ini_set('display_errors','0');
-    set_error_handler(static function():never { throw new RuntimeException('RECOVERY_IO_ERROR'); });
+    RegistryDocumentAttachmentRecovery::installIoGuard();
     try {
         if (PHP_SAPI!=='cli') throw new RuntimeException('CLI_REQUIRED');
         $root=rtrim((string)getenv('PLANEX_ROOT'),'/');
