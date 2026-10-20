@@ -6,6 +6,7 @@
   "source": {"actor": "OWNER", "chat": "Current OWNER coordination chat; exact thread ID unavailable", "thread_id": null, "quote": "и в самиз таблицах писать в том же формате"},
   "extends": "manager-display-given-name-surname-initial-20261020",
   "history": "Previous PR 431 correctly implemented its filters-only scope. This subsequent instruction adds table cells; no retroactive claim that the first phase migrated tables.",
+  "correction_history": "Independent production acceptance of PR 433 / d210780659facfd7bcee89d36cf5786aafe6d70e rejected full-name search on departures and closing: generic app.js additionally hid server/domain matches. Correction preserves raw manager text in all three table textContent indexes and checks actual CSS-visible IDs through reload/reset. Original release evidence remains historical, not accepted production PASS.",
   "rule": "Manager/responsible logist cells display given name + space + first surname letter + dot, e.g. Гладких Карина Артуровна → Карина Г.",
   "implementation_authorized": true,
   "changed_routes": ["/erpv2/company/route-executors", "/erpv2/company/trips/departures", "/erpv2/company/logistics/closing-documents"],

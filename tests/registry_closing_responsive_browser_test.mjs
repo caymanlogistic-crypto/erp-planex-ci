@@ -37,7 +37,7 @@ try {
     await managerSelect.locator('[role=option][data-value="72"]').click();
     assert.equal(await manager.inputValue(),'72',`${width}: original membership selected`);
     assert.equal(await managerSelect.locator('.lab-reference-trigger').textContent(),'Максим О.',`${width}: selected manager label`);
-    const visibleIds=()=>page.locator('.registry-ui-table--documents tbody tr:not([hidden])').evaluateAll(rows=>rows.map(row=>Number(row.dataset.reportTripId)).sort((a,b)=>a-b));
+    const visibleIds=()=>page.locator('.registry-ui-table--documents tbody tr').evaluateAll(rows=>rows.filter(row=>row.getClientRects().length&&getComputedStyle(row).display!=='none').map(row=>Number(row.dataset.reportTripId)).sort((a,b)=>a-b));
     const expectedIds=Array.from({length:35},(_,index)=>index+1).filter(id=>(id-1)%3===1);
     assert.deepEqual(await visibleIds(),expectedIds,`${width}: label change preserves actual manager row filtering`);
     await page.reload();
@@ -51,8 +51,13 @@ try {
     for(const [query,ids] of [['Орлов Максим Ильич',expectedIds],['Максим О.',expectedIds],['несуществующий менеджер',[]]]){
       await page.locator('.registry-ui-search').fill(query);
       assert.deepEqual(await visibleIds(),ids,`${width}: actual full/visible-short search IDs for ${query}`);
+      if(ids.length){
+        await page.reload();
+        assert.deepEqual(await visibleIds(),ids,`${width}: actual manager search IDs survive reload`);
+      }
     }
     await page.locator('.registry-ui-reset').click();
+    assert.equal((await visibleIds()).length,35,`${width}: reset restores all actual visible manager rows after search`);
     const cardStates = await page.locator('.registry-ui-table--documents tbody tr').evaluateAll(rows => [1,2,3,4].map(id => [...rows.find(row => row.dataset.reportTripId===String(id)).cells[9].querySelectorAll('.registry-ui-status')].map(item => { const style=getComputedStyle(item); return {text:item.textContent.trim(),type:item.classList.contains('registry-ui-error')?'error':'success',font:[style.fontSize,style.fontWeight,style.lineHeight,style.color]}; })));
     assert.deepEqual(cardStates.map(items => items.map(item => item.type)), [['error'],['success'],['success','error'],['success','success']], `${width}: single and multi diagnostic states use raw semantics`);
     for (const items of cardStates) for (const item of items) assert.deepEqual(item.font, ['12px','500','16.8px',item.type==='error'?'rgb(135, 40, 34)':'rgb(31, 107, 67)'], `${width}: diagnostic typography and semantic color`);
