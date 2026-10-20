@@ -33,15 +33,21 @@ INSERT INTO feo_placement_current VALUES ('A'),('B'),('D');
 INSERT INTO feo_requests VALUES (1,'A'),(2,'B'),(3,'C'),(4,'D');");
 $trips = $pdo->prepare('INSERT INTO waste_trips VALUES (?,?,?,?)');
 foreach ([[1,'in_progress',$yesterday,null],[2,'completed',$today,null],[3,'completed',$today,null],
-          [4,'cancelled',$today,null],[5,'searching_executor',null,null],[6,'in_progress',$today,$today.' 12:00:00']] as $row) {
+          [4,'cancelled',$today,null],[5,'searching_executor',null,null],[6,'in_progress',$today,$today.' 12:00:00'],
+          [7,'assigned',null,null],[8,'assigned',null,null],[9,'assigned',null,$today.' 12:00:00']] as $row) {
     $trips->execute($row);
 }
-$pdo->exec("INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id) VALUES (1,1,1),(2,2,2),(3,3,1),(4,4,3),(5,5,4),(6,6,4)");
+$pdo->exec("INSERT INTO waste_trip_requests(id,waste_trip_id,feo_request_id) VALUES (1,1,1),(2,2,2),(3,3,1),(4,4,3),(5,5,4),(6,6,4),(7,7,1),(8,7,4),(9,8,4),(10,9,3)");
+$pdo->exec("UPDATE waste_trip_requests SET removed_at=NOW() WHERE id=9");
 if (!CargoBalanceStatisticsService::schemaReady($pdo)) throw new RuntimeException('Schema check failed');
-$daily = CargoBalanceStatisticsService::dashboard($pdo)['daily'];
+$dashboard = CargoBalanceStatisticsService::dashboard($pdo);
+$daily = $dashboard['daily'];
 $last = end($daily);
 if ($last['assigned'] !== 3 || $last['started'] !== 2 || $last['received'] !== 1
     || $last['withdrawn'] !== 1 || $last['started_new'] !== 1 || $last['assigned']-$last['started'] !== 1) {
     throw new RuntimeException('Cargo balance movement or distinct work count incorrect: '.json_encode($last));
+}
+if ($dashboard['forecast'] !== ['formed_trip_count'=>2,'projected_new'=>1]) {
+    throw new RuntimeException('Formed trip forecast must exclude deleted trips, removed links, and requests already started: '.json_encode($dashboard['forecast']));
 }
 echo "CARGO_BALANCE_STATISTICS_MYSQL=PASS\n";
