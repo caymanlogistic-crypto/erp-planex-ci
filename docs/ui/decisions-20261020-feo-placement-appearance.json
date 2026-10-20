@@ -1,0 +1,35 @@
+{
+  "schema": "planex-ui-owner-decision/v1",
+  "id": "feo-placement-appearance-20261020",
+  "date": "2026-10-20",
+  "scope": [
+    "/erpv2/company/feo/requests/map-placement",
+    "main placement blocks table",
+    "secondary block search results"
+  ],
+  "owner_source": "Current OWNER conversation; consecutive Design Lab corrections and explicit instruction to publish the selected update",
+  "owner_quote": [
+    "Пусть агент выкладывает обновление"
+  ],
+  "reference": {
+    "task_id": "feo-map-appearance-lab-20261020",
+    "checkpoint": "v006",
+    "checkpoint_sha256": "6a2aad306e3a829abf4bce7a593c87a3b49c24c330b24c83cd93e03c167dbc09",
+    "acceptance": "C:/plan-ex/ERP-PLANEX/local/design-lab/feo-map-appearance-lab-20261020/acceptance.json"
+  },
+  "decisions": {
+    "main_columns": "ID, Название, Тип, Заявок, Масса, кг, Источник, Дата, Ответств.; visible status column removed",
+    "main_widths_px": {"id": 64, "name": 400, "type": 120, "request_count": 84, "mass": 110, "source": "remaining, minimum 492", "date": 150, "responsible": 130, "table_min": 1550, "table_max": 1900},
+    "disabled_row": "neutral #F0EDE7; hover/focus #ECE9E2, using approved palette values",
+    "name": "at most 50 Unicode code points including ellipsis; full value in title, accessible name and detail",
+    "operation": "Добавление #1F6B43 700; Исключение #872822 700 in both tables",
+    "source": "complete ordered six-digit IDs naturally wrap only between IDs; filenames remain complete and wrap",
+    "secondary": "ID, Тип, Дата операции, Блок; existing yellow rows, inline ID and name, static header offset 0",
+    "search_summary": "IBM Plex Sans 12/500/16 #4C4840, matching the approved registry toolbar summary"
+  },
+  "excluded": [
+    "business calculations, access rules and persistence",
+    "form or modal redesign",
+    "production database, schema or business-data writes"
+  ]
+}

@@ -40,6 +40,20 @@ try{
     await page.waitForSelector('[data-registry-ready="true"]');
     await assertRegistryVisualContract(page,`feo-map-placement ${width}`);
     await assertRegistryDataContract(page,'feo-map-placement');
+    const accepted=await page.locator('.feo-placement-table').evaluate(table=>{
+      const name=table.querySelector('[data-placement-block-id="77"] .registry-ui-name');
+      const source=table.querySelector('[data-placement-block-id="77"] .feo-placement-source-cell');
+      const file=table.querySelector('[data-placement-block-id="78"] .feo-placement-source-cell');
+      const ids=[...source.querySelectorAll('.registry-ui-source-id')];
+      const operation=table.querySelector('[data-placement-block-id="75"] .registry-ui-operation--exclusion');
+      const style=getComputedStyle(operation);
+      return {headings:[...table.tHead.rows[0].cells].map(cell=>cell.textContent.trim()),columns:[...table.querySelectorAll('col')].map(col=>Math.round(col.getBoundingClientRect().width)),name:name.textContent,fullName:name.title,accessible:name.getAttribute('aria-label'),source:source.querySelector('.registry-ui-primary').textContent,tokens:ids.length,idOverflow:source.scrollWidth-source.clientWidth,file:file.textContent.trim(),fileOverflow:file.scrollWidth-file.clientWidth,typeColor:style.color,typeWeight:style.fontWeight};
+    });
+    assert.deepEqual(accepted.headings,['ID','Название','Тип','Заявок','Масса, кг','Источник','Дата','Ответств.']);
+    assert.deepEqual(accepted.columns.slice(0,5),[64,400,120,84,110]);assert.deepEqual(accepted.columns.slice(6),[150,130]);assert(accepted.columns[5]>=492);
+    assert(accepted.name.length<=50&&accepted.name.endsWith('…')&&accepted.fullName.length>50&&accepted.accessible.includes(accepted.fullName));
+    assert.equal(accepted.tokens,50);assert.equal(accepted.source.split(', ').length,50);assert(accepted.idOverflow<=1);assert(accepted.file.endsWith('.xlsx')&&accepted.file.length>90&&accepted.fileOverflow<=1);
+    assert.equal(accepted.typeColor,'rgb(135, 40, 34)');assert.equal(accepted.typeWeight,'700');
     if(width===390){
       await page.locator('main.content').evaluate(element=>element.style.minWidth='900px');
       await assert.rejects(assertRegistryTableState(page,'feo-map-placement','initial'),/outer horizontal overflow/,'mobile outer overflow must be RED');
@@ -71,6 +85,7 @@ try{
     assert.equal(await page.locator('.feo-placement-table tbody tr[data-placement-block-id]:visible').count(),59,'disabled blocks initially hidden');
     await page.locator('[data-placement-hide-disabled]').uncheck();
     assert.equal(await page.locator('.feo-placement-table tbody tr[data-placement-block-id]:visible').count(),70,'checkbox exposes disabled blocks');
+    assert.equal(await page.locator('.feo-placement-table tbody tr[data-placement-block-id="76"] td').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(240, 237, 231)','disabled row uses accepted neutral tone');
     await page.locator('.registry-ui-reset').click();
     assert.equal(await page.locator('[data-placement-hide-disabled]').isChecked(),true,'reset restores checkbox default');
     await page.getByRole('button',{name:'Создать блок'}).click();
@@ -82,8 +97,11 @@ try{
     const search=page.locator('[data-placement-block-search]');
     await search.fill('302545\n285664\n281861');
     await page.getByText('Найдено по 3 заявкам.',{exact:false}).waitFor();
+    const summary=await page.locator('.feo-placement-search-summary').evaluate(el=>{const c=getComputedStyle(el);return [c.fontFamily,c.fontSize,c.fontWeight,c.lineHeight,c.color]});
+    assert.deepEqual(summary,['"IBM Plex Sans", "Segoe UI", Arial, sans-serif','12px','500','16px','rgb(76, 72, 64)']);
     await assertRegistryDataContract(page,'feo-map-placement',{state:'search-results'});
     const searchTable=page.locator('[data-placement-block-search-results] .feo-placement-search-table');
+    assert.deepEqual(await searchTable.locator('thead th').allTextContents(),['ID','ТИП','ДАТА ОПЕРАЦИИ','БЛОК']);
     await assertPlacementSearchPresentation(page);
     if(width===1280){
       const head=searchTable.locator('thead');
@@ -146,9 +164,9 @@ try{
     assert.equal(await page.locator('[data-placement-search-block-id="74"]').count(),1,'block search links to original block');
     if(width===1280){
       await assertRegistryRows(page,{rowSelector:'.feo-placement-table tbody tr[data-placement-block-id="74"],.feo-placement-table tbody tr[data-placement-block-id="75"],.feo-placement-table tbody tr[data-placement-block-id="76"]',rows:[
-        {id:74,cells:[['#74'],['Площадка Сосновый Бор — южный сектор'],['Добавление'],['2'],['1 230,500'],['302545, 285664'],['17.10.2026 10:45'],['Анна П.'],['Применяется']]},
-        {id:75,cells:[['#75'],['Корректировка по улице Заводской'],['Исключение'],['1'],['380'],['исключение-заводская.xlsx'],['18.10.2026 09:20'],['Анна П.'],['Применяется']]},
-        {id:76,cells:[['#76'],['Резервный перечень'],['Добавление'],['1'],['620'],['281861'],['18.10.2026 13:05'],['Иван К.'],['Отключён']]},
+        {id:74,cells:[['#74'],['Площадка Сосновый Бор — южный сектор'],['Добавление'],['2'],['1 230,500'],['302545, 285664'],['17.10.2026 10:45'],['Анна П.']]},
+        {id:75,cells:[['#75'],['Корректировка по улице Заводской'],['Исключение'],['1'],['380'],['исключение-заводская.xlsx'],['18.10.2026 09:20'],['Анна П.']]},
+        {id:76,cells:[['#76'],['Резервный перечень'],['Добавление'],['1'],['620'],['281861'],['18.10.2026 13:05'],['Иван К.']]},
       ]},'placement independent domain fixture');
     }
     await page.locator('.registry-ui-reset').click();

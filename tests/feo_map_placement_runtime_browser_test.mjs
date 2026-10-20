@@ -48,8 +48,8 @@ try{
     const html=await page.content();
     for(const asset of ['registry-components.css','registry-components.js','feo-map-placement.js'])assert.ok(html.includes('/assets/'+(asset.endsWith('.css')?'css/':'js/')+asset),`real controller composes ${asset}`);
     await assertRegistryRows(page,{rowSelector:'.feo-placement-table tbody tr[data-placement-block-id]',rows:[
-      {id:75,cells:[['#75'],['Резервный список'],['Добавление'],['1'],['380'],['281861'],['18.10.2026 09:20'],['Анна П.'],['Отключён']]},
-      {id:74,cells:[['#74'],['Площадка Сосновый Бор'],['Добавление'],['2'],['1 850,500'],['302545, 285664'],['17.10.2026 10:45'],['Анна П.'],['Применяется']]},
+      {id:75,cells:[['#75'],['Резервный список'],['Добавление'],['1'],['380'],['281861'],['18.10.2026 09:20'],['Анна П.']]},
+      {id:74,cells:[['#74'],['Площадка Сосновый Бор'],['Добавление'],['2'],['1 850,500'],['302545, 285664'],['17.10.2026 10:45'],['Анна П.']]},
     ]},actor+' actual route data');
     const scope=await page.locator('.registry-ui-card').getAttribute('data-registry-state-scope');
     assert.ok(scope,'server-supplied state scope');cache.set(actor+':scope',scope);

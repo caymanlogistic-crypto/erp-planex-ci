@@ -216,13 +216,13 @@ $ok('placement route becomes active in injected submenu', str_contains($nav, '/c
 
 $view = $read($root . '/app/View/pages/company_feo_map_placement.php');
 foreach ([
-    'Актуальный состав:', 'Создать блок', 'Добавление', 'Исключение', 'Применяется', 'Отключён',
+    'Актуальный состав:', 'Создать блок', 'Добавление', 'Исключение',
     'Ручной ввод', 'XLS / XLSX', 'только первый столбец', 'feo-placement-confirm-modal',
     'Пересчитать состав', 'Актуальные заявки', 'Найти заявку в блоках',
     'data-placement-block-search', 'data-placement-live-validation',
 ] as $needle) $ok('view contains ' . $needle, str_contains($view, $needle));
 $ok('placement table uses the approved bordered registry card', str_contains($view, 'registry-ui-card registry-ui-sticky-table registry-ui-sticky-table--wide-scroll') && !str_contains($view, 'border:0!important'));
-$ok('applied and disabled statuses use approved semantic roles', str_contains($view, "'registry-ui-success' : 'registry-ui-error'"));
+$ok('status remains in row state while the visible status column is removed', str_contains($view, 'data-placement-block-status=') && !str_contains($view, '<th>Статус</th>') && str_contains($view, "'registry-ui-muted'"));
 $ok('KPI boxes are removed and summary remains in toolbar', !str_contains($view, 'feo-placement-kpi') && !str_contains($view, 'feo-placement-summary') && str_contains($view, 'registry-ui-toolbar') && str_contains($view, 'Масса: <b>'));
 $ok('source column shows filename or manual request list', str_contains($view, "\$block['request_ids_text']") && str_contains($view, "\$block['source_filename']") && str_contains($view, 'title="<?= e($sourceText) ?>"'));
 $ok('block detail modal has no outer body padding or horizontal overflow', str_contains($view, '.feo-placement-detail-modal-body{padding:0!important;overflow:hidden!important}') && str_contains($view, 'overflow-y:auto;overflow-x:hidden'));
@@ -270,7 +270,7 @@ $ok('block search result opens block detail without redundant status column', !s
 $ok('delete action is a system danger button for both applied and disabled blocks', str_contains($js, "html+=`<button type=\"button\" class=\"btn btn-danger\" data-placement-delete>Удалить</button>`") && str_contains($js, "if(b.status==='applied')html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Отключить блок</button>`") && str_contains($js, "else html+=`<button type=\"button\" class=\"btn btn-primary\" data-placement-toggle>Включить блок</button>`"));
 $ok('delete confirmation uses a password field and explains irreversible replay impact', str_contains($js, 'data-placement-delete-password') && str_contains($js, 'type="password"') && str_contains($js, 'Блок будет удалён без возможности восстановления.') && str_contains($js, 'Изменение актуального состава:') && str_contains($js, "fd.append('delete_password'") && !str_contains($js, '7550055'));
 $ok('block table has no actions column', !str_contains($view, '<th>Действия</th>'));
-$ok('block table renders responsible immediately after date and before status', preg_match('/<th\\b[^>]*>Дата<\/th>\\s*<th\\b[^>]*>Ответств\\.<\/th>\\s*<th\\b[^>]*>Статус<\/th>/u', $view) === 1 && str_contains($view, "\$block['created_by_display_name']") && str_contains($view, 'colspan="9"'));
+$ok('block table renders responsible immediately after date in eight-column grid', preg_match('/<th\\b[^>]*>Дата<\/th>\\s*<th\\b[^>]*>Ответств\\.<\/th>/u', $view) === 1 && str_contains($view, "\$block['created_by_display_name']") && str_contains($view, 'colspan="8"'));
 $ok('file upload hint states single-sheet and first-column requirements without header coupling', str_contains($view, 'В файле должен быть ровно один лист.') && str_contains($view, 'Названия колонок не проверяются.'));
 
 $manifest = json_decode($read($root . '/.github/agent_db_migration_request.json'), true);

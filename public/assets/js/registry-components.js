@@ -14,7 +14,7 @@
   if(window.PlanexRegistry)return;
   const mounted = new WeakSet();
   function textRoles(root) {
-    root.querySelectorAll('.registry-ui-name,.registry-ui-secondary').forEach(element=>{element.title=element.textContent;});
+    root.querySelectorAll('.registry-ui-name,.registry-ui-secondary').forEach(element=>{element.title=element.dataset.registryFullText??element.textContent;});
     root.querySelectorAll('[data-registry-cards-at]').forEach(table=>{
       const width=Number(table.dataset.registryCardsAt);
       if(![640,1050].includes(width))return;

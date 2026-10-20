@@ -197,12 +197,21 @@
       "specimen": "docs/ui/specimens/registry.composition.html"
     },
     {
+      "id": "registry.placement-blocks",
+      "family": "registry",
+      "role": "Блоки размещения ФЭО",
+      "selector": ".registry-ui-table--placement-blocks",
+      "approval": "OWNER 2026-10-20; feo-map-appearance-lab-20261020:v006; docs/ui/decisions-20261020-feo-placement-appearance.json",
+      "description": "Opt-in таблица с нейтральной отключённой строкой, цветом и весом операции, естественным переносом цельных ID источника и согласованной сводкой вторичного поиска. Предметные ширины колонок задаёт FEO view.",
+      "specimen": "docs/ui/specimens/registry.placement-blocks.html"
+    },
+    {
       "id": "registry.inline-identity",
       "family": "registry",
       "role": "ID и название в одной строке",
       "selector": ".registry-ui-inline-identity",
       "approval": "OWNER2026-10-20: secondary FEO search ID and name in one line; docs/ui/decisions-20261020-feo-search.json",
-      "description": "Одна строка из неизменного ID и названия с существующими primary/name ролями; длинное имя сокращается с полным title. Во вторичном поиске ФЭО все строки используют общий жёлтый warning, заголовок не наследует sticky основной таблицы.",
+      "description": "Одна строка из неизменного ID и названия с существующими primary/name ролями; длинное имя сокращается с полным title. Во вторичном поиске ФЭО тип стоит второй колонкой, все строки используют общий жёлтый warning, заголовок не наследует sticky основной таблицы.",
       "specimen": "docs/ui/specimens/registry.inline-identity.html"
     }
   ],
@@ -560,8 +569,7 @@
       "data_roles": [
         "primary",
         "name",
-        "id",
-        "status"
+        "id"
       ],
       "view": "app/View/pages/company_feo_map_placement.php",
       "header_icon": {
