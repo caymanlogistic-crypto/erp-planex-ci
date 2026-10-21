@@ -245,8 +245,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ba151676ef77e8e269a401d70cc5b085fe2fa09c",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ba151676ef77e8e269a401d70cc5b085fe2fa09c/tests/feo_legacy_transfer_mirror_mysql_test.php",
+      "verified_sha": "41b17577e10adf23bd8661fae147fe02b067ee3d",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/41b17577e10adf23bd8661fae147fe02b067ee3d/tests/feo_transfers_access_mysql_test.php",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",
