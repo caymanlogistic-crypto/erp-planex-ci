@@ -70,6 +70,65 @@ final class FeoLegacyImportSync
         }
     }
 
+    /** Return the exact legacy values so a later operation can reverse only this weight change. */
+    public function writeWeight(string $id, array $weights): array
+    {
+        $this->assertReady();
+        $fields = ['mass_netto', 'mass_brutto'];
+        if (!$this->weightFieldsOnly($weights)) throw new RuntimeException('Для изменения веса нужны только нетто и брутто.');
+        $current = $this->find($id);
+        if ($current === null) throw new RuntimeException('Заявка №'.$id.' не найдена в старой базе. Изменение веса отменено.');
+        $before = ['mass_netto'=>$current['mass_netto'], 'mass_brutto'=>$current['mass_brutto']];
+        $values = [];
+        foreach ($fields as $field) $values[$field] = $this->compatibleValue($field, $weights[$field], $id);
+        $this->update($id, $values);
+        $saved = $this->find($id);
+        $after = $saved === null ? [] : ['mass_netto'=>$saved['mass_netto'], 'mass_brutto'=>$saved['mass_brutto']];
+        foreach ($fields as $field) {
+            if (!array_key_exists($field, $after) || !$this->sameValue($after[$field], $values[$field])) {
+                throw new RuntimeException('Не удалось точно сохранить вес заявки №'.$id.' в старой базе.');
+            }
+        }
+        return ['version'=>1, 'database'=>$this->database, 'zayavka_id'=>$id, 'before'=>$before, 'after'=>$after];
+    }
+
+    /** Refuse a late edit, then restore exactly the two weights captured before writeWeight. */
+    public function revertWeight(string $id, array $snapshot): array
+    {
+        $this->assertReady();
+        $fields = ['mass_netto', 'mass_brutto'];
+        if (($snapshot['version'] ?? null) !== 1 || ($snapshot['database'] ?? null) !== $this->database
+            || ($snapshot['zayavka_id'] ?? null) !== $id || !is_array($snapshot['before'] ?? null)
+            || !is_array($snapshot['after'] ?? null) || !$this->weightFieldsOnly($snapshot['before'])
+            || !$this->weightFieldsOnly($snapshot['after'])) {
+            throw new RuntimeException('Снимок веса старой заявки не соответствует операции.');
+        }
+        $current = $this->find($id);
+        if ($current === null) throw new RuntimeException('Заявка №'.$id.' не найдена в старой базе. Возврат веса отменён.');
+        foreach ($fields as $field) {
+            if (!$this->sameValue($current[$field] ?? null, $snapshot['after'][$field])) {
+                throw new RuntimeException('Вес заявки №'.$id.' в старой базе изменён после записи. Возврат отменён.');
+            }
+        }
+        $restore = ['mass_netto'=>$snapshot['before']['mass_netto'], 'mass_brutto'=>$snapshot['before']['mass_brutto']];
+        $this->update($id, $restore);
+        $saved = $this->find($id);
+        foreach ($fields as $field) {
+            if (!$this->sameValue($saved[$field] ?? null, $snapshot['before'][$field])) {
+                throw new RuntimeException('Не удалось точно вернуть вес заявки №'.$id.' в старой базе.');
+            }
+        }
+        return ['version'=>1, 'database'=>$this->database, 'zayavka_id'=>$id,
+            'before'=>$snapshot['after'], 'after'=>$snapshot['before']];
+    }
+
+    private function weightFieldsOnly(array $weights): bool
+    {
+        if (count($weights) !== 2 || !array_key_exists('mass_netto',$weights) || !array_key_exists('mass_brutto',$weights)) return false;
+        foreach ($weights as $value) if ($value !== null && !is_string($value) && !is_int($value) && !is_float($value)) return false;
+        return true;
+    }
+
     public function validate(): void
     {
         if (!$this->pdo->inTransaction()) throw new RuntimeException('Синхронизация ФЭО требует общей транзакции.');

@@ -55,6 +55,24 @@ final class FeoImportTransaction
 
     public function sync(): ?FeoLegacyImportSync { return $this->sync; }
 
+    /** Caller holds the FEO database lock; the callback writes tenant and legacy rows in one XA decision. */
+    public static function runWithLegacy(PDO $tenant, callable $action): mixed
+    {
+        self::recoverPending($tenant);
+        $transaction = self::begin($tenant);
+        try {
+            $sync = $transaction->sync();
+            if ($sync === null) throw new RuntimeException('Подключение к старой базе ФЭО не настроено.');
+            $sync->validate();
+            $result = $action($sync);
+            $transaction->commit();
+            return $result;
+        } catch (\Throwable $e) {
+            $transaction->rollback();
+            throw $e;
+        }
+    }
+
     public static function pending(PDO $tenant): bool
     {
         $root=rtrim((string)env('FEO_LEGACY_SYNC_JOURNAL_DIR', dirname(BASE_PATH, 2).'/feo-import-sync'), '/');

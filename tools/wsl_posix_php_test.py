@@ -20,6 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 TESTS = {
     "tests/feo_legacy_xa_mysql_test.php",
+    "tests/feo_legacy_weight_bridge_xa_mysql_test.php",
     "tests/feo_placement_legacy_sync_xa_mysql_test.php",
 }
 
