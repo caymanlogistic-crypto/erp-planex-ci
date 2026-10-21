@@ -15,7 +15,7 @@ if ($command==='seed') {
   $pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)')->execute(['ООО «ПЛАНЭКС»','active',$schema]);
  }
  if ($pdo->query("SHOW TABLES LIKE 'feo_requests'")->fetchColumn()===false) $pdo->exec('CREATE TABLE feo_requests(zayavka_id VARCHAR(64) PRIMARY KEY,mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
- foreach (['139_create_feo_transfers.sql','160_create_feo_weight_batches.sql'] as $file) {
+ foreach (['139_create_feo_transfers.sql','160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql'] as $file) {
   $migration=(string)file_get_contents(BASE_PATH.'/database/migrations-local/'.$file);
   foreach (array_filter(array_map('trim',preg_split('/;\s*(?:\R|$)/',$migration)?:[])) as $statement) $pdo->exec($statement);
  }

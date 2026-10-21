@@ -10,7 +10,7 @@ ob_start();
 require __DIR__.'/roles_access_session_auth_mysql_test.php';
 try {
     foreach (['FeoXlsxParser','FeoRequestService','FeoPlacementAuthorService','MaxEventCatalog','MaxEventNotificationService'] as $class) require_once BASE_PATH.'/app/Service/'.$class.'.php';
-    foreach (['122_create_feo_requests.sql','139_create_feo_transfers.sql','160_create_feo_weight_batches.sql'] as $file) $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-local/'.$file));
+    foreach (['122_create_feo_requests.sql','139_create_feo_transfers.sql','160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql'] as $file) $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-local/'.$file));
     $pdo->exec("INSERT INTO feo_requests(zayavka_id,mno_adres_pogruzki,mno_sh,mno_d) VALUES('100001','Исходный адрес','37','55'),('100002','Новый адрес','38','56')");
     $config=['database'=>['host'=>$host,'port'=>(string)$port,'database'=>$dbName,'username'=>$user,'password'=>$password]];
     $db=new App\Core\Database($config['database']);

@@ -1,0 +1,158 @@
+name: FEO Weight Legacy Snapshot 162 Production Migration
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: Exact merged canonical SHA containing FEO weight migration 162 tooling
+        required: true
+        type: string
+      confirm_migration:
+        description: Type APPLY_FEO_WEIGHT_LEGACY_162
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+  statuses: read
+
+concurrency:
+  group: erpv2-controlled-deploy
+  cancel-in-progress: false
+
+env:
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+
+jobs:
+  migrate:
+    if: ${{ inputs.confirm_migration == 'APPLY_FEO_WEIGHT_LEGACY_162' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.source_sha }}
+          fetch-depth: 0
+
+      - name: Verify exact canonical source and CI
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$SOURCE_SHA"
+          php -l scripts/feo_weight_legacy_snapshot_migration_162.php
+          test -s database/migrations-local/162_feo_weight_legacy_snapshot.sql
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$SOURCE_SHA&event=push&per_page=20" > /tmp/feo-weight-legacy-162-ci.json
+          SOURCE_SHA="$SOURCE_SHA" python3 - <<'PY'
+          import json, os
+          rows = [r for r in json.load(open('/tmp/feo-weight-legacy-162-ci.json')).get('workflow_runs', [])
+                  if r.get('head_sha') == os.environ['SOURCE_SHA'] and r.get('event') == 'push']
+          if not rows or max(rows, key=lambda r: r.get('run_number', 0)).get('conclusion') != 'success':
+              raise SystemExit('Exact canonical ERP PLANEX CI is not green')
+          print('FEO_WEIGHT_LEGACY_162_CI_PASS=YES')
+          PY
+
+      - name: Configure isolated SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/feo_weight_legacy_162_key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/feo_weight_legacy_162_key" "$HOME/.ssh/known_hosts"
+
+      - name: Verify deployed ancestor and upload migration tooling
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          API_URL: ${{ github.api_url }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          SSH=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_weight_legacy_162_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          SCP=(scp -P "$SSH_PORT" -i "$HOME/.ssh/feo_weight_legacy_162_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes)
+          DEPLOYED="$("${SSH[@]}" "$SSH_USER@$SSH_HOST" "cat '$DEPLOY_MARKER'")"
+          [[ "$DEPLOYED" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$DEPLOYED" "$SOURCE_SHA"
+          curl -fsS -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            "$API_URL/repos/$REPOSITORY/commits/$DEPLOYED/status" > /tmp/feo-weight-legacy-162-deployed-status.json
+          python3 - <<'PY'
+          import json
+          rows=[row for row in json.load(open('/tmp/feo-weight-legacy-162-deployed-status.json')).get('statuses',[]) if row.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success': raise SystemExit('Deployed ancestor lacks successful deploy status')
+          PY
+          printf 'DEPLOYED_BEFORE=%s\n' "$DEPLOYED" >> "$GITHUB_ENV"
+          "${SCP[@]}" scripts/feo_weight_legacy_snapshot_migration_162.php "$SSH_USER@$SSH_HOST:/tmp/feo_weight_legacy_162_${GITHUB_RUN_ID}.php"
+          "${SCP[@]}" database/migrations-local/162_feo_weight_legacy_snapshot.sql "$SSH_USER@$SSH_HOST:/tmp/feo_weight_legacy_162_${GITHUB_RUN_ID}.sql"
+
+      - name: Inspect, apply, and verify tenant migration 162
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tenant_hash="$(sha256sum database/migrations-local/162_feo_weight_legacy_snapshot.sql | awk '{print $1}')"
+          remote=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/feo_weight_legacy_162_key" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
+          base="PLANEX_ROOT='$LIVE_ROOT' PLANEX_SOURCE_SHA='$SOURCE_SHA' PLANEX_DEPLOYED_BEFORE='$DEPLOYED_BEFORE' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER' PLANEX_TENANT_SHA256='$tenant_hash' PLANEX_TENANT_MIGRATION_PATH='/tmp/feo_weight_legacy_162_${GITHUB_RUN_ID}.sql'"
+          script="/tmp/feo_weight_legacy_162_${GITHUB_RUN_ID}.php"
+          "${remote[@]}" "$base /usr/bin/php8.5 '$script'" | tee before.txt
+          grep -q '^FEO_WEIGHT_LEGACY_162_READ_ONLY_OK$' before.txt
+          "${remote[@]}" "$base FEO_WEIGHT_LEGACY_162_MODE=apply FEO_WEIGHT_LEGACY_162_CONFIRM=APPLY_FEO_WEIGHT_LEGACY_162 /usr/bin/php8.5 '$script'" | tee apply.txt
+          grep -q '^FEO_WEIGHT_LEGACY_162_APPLY_OK$' apply.txt
+          "${remote[@]}" "$base /usr/bin/php8.5 '$script'" | tee after.txt
+          grep -q '^FEO_WEIGHT_LEGACY_162_READ_ONLY_OK$' after.txt
+          test "$("${remote[@]}" "cat '$DEPLOY_MARKER'")" = "$DEPLOYED_BEFORE"
+          python3 - <<'PY'
+          import json,re
+          def rows(path):
+              match=re.search(r'^FEO_WEIGHT_LEGACY_162_SNAPSHOT=(.+)$',open(path).read(),re.M)
+              if not match: raise SystemExit(f'{path}: snapshot missing')
+              return {row['company_id']:row for row in json.loads(match.group(1))}
+          before,after=rows('before.txt'),rows('after.txt')
+          if not before or set(before)!=set(after): raise SystemExit('Tenant set changed')
+          for company_id,row in after.items():
+              if not row['ready']: raise SystemExit(f'{company_id}: migration not ready')
+              for key in ('items','items_sha256','requests','legacy_snapshot_nonnull'):
+                  if row[key]!=before[company_id][key]: raise SystemExit(f'{company_id}: {key} changed')
+              if before[company_id]['ready'] and row['checksum'] != before[company_id]['checksum']:
+                  raise SystemExit(f'{company_id}: migration checksum changed')
+          print('FEO_WEIGHT_LEGACY_162_BUSINESS_DATA_UNCHANGED=YES')
+          PY
+          echo 'FEO_WEIGHT_LEGACY_162_PRODUCTION_PASS=YES'
+
+      - name: Save migration evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: feo-weight-legacy-162-${{ github.run_id }}
+          path: |
+            before.txt
+            apply.txt
+            after.txt
+          if-no-files-found: ignore
+
+      - name: Remove temporary SSH material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/feo_weight_legacy_162_key"
