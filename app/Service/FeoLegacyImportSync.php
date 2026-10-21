@@ -47,6 +47,29 @@ final class FeoLegacyImportSync
 
     public function database(): string { return $this->database; }
 
+    /** Mirror only the three location fields; never overwrite unrelated legacy edits. */
+    public function mirrorLocation(string $id, array $before, array $after): void
+    {
+        $this->assertReady();
+        $fields = FeoLocationOverrideService::FIELDS;
+        $current = $this->find($id);
+        if ($current === null) throw new RuntimeException('Заявка №'.$id.' не найдена в старой базе. Перемещение отменено.');
+        foreach ($fields as $field) {
+            if (!array_key_exists($field, $before) || !array_key_exists($field, $after)
+                || !$this->sameValue($current[$field] ?? null, $before[$field])) {
+                throw new RuntimeException('Место заявки №'.$id.' в старой базе отличается от ERP. Перемещение отменено.');
+            }
+        }
+        $values = array_intersect_key($after, array_flip($fields));
+        $this->update($id, $values);
+        $saved = $this->find($id);
+        foreach ($fields as $field) {
+            if (!$this->sameValue($saved[$field] ?? null, $after[$field])) {
+                throw new RuntimeException('Не удалось точно сохранить место заявки №'.$id.' в старой базе. Перемещение отменено.');
+            }
+        }
+    }
+
     public function validate(): void
     {
         if (!$this->pdo->inTransaction()) throw new RuntimeException('Синхронизация ФЭО требует общей транзакции.');

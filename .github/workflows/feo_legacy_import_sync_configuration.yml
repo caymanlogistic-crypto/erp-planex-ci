@@ -34,6 +34,16 @@ on:
         required: true
         type: string
         default: spugovxsim_frega
+      transfer_mirror:
+        description: Enable atomic mirroring for future FEO transfer blocks only
+        required: true
+        type: choice
+        options: ['no', 'yes']
+        default: 'no'
+      confirm_transfer_mirror:
+        description: Type ENABLE_FEO_TRANSFER_MIRROR when transfer_mirror is yes
+        required: false
+        type: string
 permissions:
   contents: read
   actions: read
@@ -111,18 +121,22 @@ jobs:
           LEGACY_DATABASE: ${{ inputs.legacy_database }}
           CONNECTION_MODE: ${{ inputs.connection_mode }}
           LEGACY_CONNECTION: ${{ secrets.FEO_LEGACY_SYNC_CONNECTION }}
+          TRANSFER_MIRROR: ${{ inputs.transfer_mirror }}
+          TRANSFER_CONFIRM: ${{ inputs.confirm_transfer_mirror }}
         run: |
           set -euo pipefail
           [[ "$MODE" = check || "$MODE" = activate ]]
           [[ "$COMPANY_ID" =~ ^[0-9]+$ ]]
           [[ "$LEGACY_DATABASE" =~ ^[A-Za-z0-9_]{1,64}$ ]]
           [[ "$CONNECTION_MODE" = shared || "$CONNECTION_MODE" = separate ]]
+          [[ "$TRANSFER_MIRROR" = no || "$TRANSFER_MIRROR" = yes ]]
+          if [ "$TRANSFER_MIRROR" = yes ]; then test "$TRANSFER_CONFIRM" = ENABLE_FEO_TRANSFER_MIRROR; fi
           if [ "$CONNECTION_MODE" = separate ]; then test -n "$LEGACY_CONNECTION"; fi
           if [ "$MODE" = activate ]; then test "$COMPANY_ID" -gt 0; fi
           remote="/tmp/feo_import_sync_configuration_${GITHUB_RUN_ID}.php"
           scp -P "$PORT" -i "$HOME/.ssh/feo_import_sync_configuration" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes scripts/feo_legacy_sync_configure.php "$USER@$HOST:$remote"
           printf '%s' "$LEGACY_CONNECTION" | ssh -p "$PORT" -i "$HOME/.ssh/feo_import_sync_configuration" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$USER@$HOST" \
-            "PLANEX_ROOT='$LIVE_ROOT' FEO_SYNC_CONFIRM=CONFIGURE_FEO_IMPORT_SYNC FEO_SYNC_CONFIGURE_MODE='$MODE' FEO_SYNC_COMPANY_ID='$COMPANY_ID' FEO_SYNC_LEGACY_DATABASE='$LEGACY_DATABASE' FEO_SYNC_CONNECTION_MODE='$CONNECTION_MODE' /usr/bin/php8.5 '$remote'" | tee feo_import_sync_configuration.txt
+            "PLANEX_ROOT='$LIVE_ROOT' FEO_SYNC_CONFIRM=CONFIGURE_FEO_IMPORT_SYNC FEO_SYNC_CONFIGURE_MODE='$MODE' FEO_SYNC_COMPANY_ID='$COMPANY_ID' FEO_SYNC_LEGACY_DATABASE='$LEGACY_DATABASE' FEO_SYNC_CONNECTION_MODE='$CONNECTION_MODE' FEO_SYNC_TRANSFER_MIRROR='$([ "$TRANSFER_MIRROR" = yes ] && echo 1 || echo 0)' FEO_SYNC_TRANSFER_CONFIRM='$TRANSFER_CONFIRM' /usr/bin/php8.5 '$remote'" | tee feo_import_sync_configuration.txt
           if [ "$COMPANY_ID" -gt 0 ]; then grep -q '^FEO_IMPORT_SYNC_CONFIGURATION_PASS$' feo_import_sync_configuration.txt; fi
           test "$(curl -fsSL -o /dev/null -w '%{http_code}' --max-time 30 https://plan-ex.ru/erpv2/login)" = 200
       - name: Upload redacted activation evidence
