@@ -280,7 +280,7 @@ def execute_local_required(cls,head,paths,scopes,rows,lines,required,base):
             if check == "DOCUMENT_GENERATOR_REGRESSIONS": env["PLANEX_DOCGEN_REQUIRE_RUNTIME"]="1"
             for t in tests:
                 need(t)
-                if os.name == "nt" and t in {"tests/feo_legacy_xa_mysql_test.php", "tests/feo_placement_legacy_sync_xa_mysql_test.php"}:
+                if os.name == "nt" and t in POSIX_XA_TESTS:
                     need("tools/wsl_posix_php_test.py")
                     cmdcheck(results,check,[PYTHON,"tools/wsl_posix_php_test.py",t],env)
                 else:
