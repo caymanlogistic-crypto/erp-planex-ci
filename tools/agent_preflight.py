@@ -32,6 +32,7 @@ FEO_TRANSFER_TESTS=["tests/"+name+".php" for name in (
     "feo_legacy_import_sync_mysql_test", "feo_legacy_xa_mysql_test", "feo_legacy_weight_bridge_xa_mysql_test", "feo_legacy_sync_configuration_test", "feo_placement_legacy_sync_mysql_test", "feo_placement_legacy_sync_xa_mysql_test", "feo_xlsx_parser_format_test", "feo_import_modal_regression_test", "feo_requests_contract_test",
     "feo_transfers_contract_test", "feo_transfers_mysql_test", "feo_legacy_transfer_mirror_mysql_test", "feo_transfers_access_mysql_test",
     "feo_transfers_139_production_migration_contract_test", "feo_transfers_139_migration_mysql_test",
+    "feo_weight_batches_mysql_test", "feo_weight_legacy_162_production_migration_contract_test",
     "feo_transfers_activation_contract_test", "feo_transfers_activation_mysql_test",
     "feo_share_statistics_contract_test", "feo_share_statistics_mysql_test",
     "cargo_balance_statistics_contract_test", "cargo_balance_statistics_mysql_test",

@@ -28,7 +28,7 @@ final class FeoWeightBatchController
         $batches = []; $dbError = null;
         try {
             [, $pdo] = $this->context();
-            if (!$this->service->ready($pdo)) throw new RuntimeException('Инструмент ожидает обновления базы компании (160).');
+            if (!$this->service->ready($pdo)) throw new RuntimeException('Инструмент ожидает обновления базы компании (162).');
             $batches = $this->service->batches($pdo, $page);
         } catch (\Throwable $e) { $dbError = $e->getMessage(); }
         $config = $this->config; $db = $this->db;
@@ -95,7 +95,8 @@ final class FeoWeightBatchController
             $query = $pdo->prepare('SELECT * FROM feo_weight_batches WHERE id=?'); $query->execute([$batchId]);
             $batch = $query->fetch(PDO::FETCH_ASSOC);
             if (!$batch) throw new RuntimeException('Блок не найден.');
-            return ['batch'=>$batch, 'items'=>$this->service->items($pdo, $batchId)];
+            $items = array_map(static function (array $item): array { unset($item['legacy_snapshot_json']); return $item; }, $this->service->items($pdo, $batchId));
+            return ['batch'=>$batch, 'items'=>$items];
         });
     }
 

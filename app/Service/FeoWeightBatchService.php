@@ -5,11 +5,15 @@ namespace App\Service;
 use PDO;
 use RuntimeException;
 
+require_once __DIR__ . '/FeoImportTransaction.php';
+
 final class FeoWeightBatchService
 {
     public function ready(PDO $pdo): bool
     {
-        return (int)$pdo->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('feo_requests','feo_weight_batches','feo_weight_items')")->fetchColumn() === 3;
+        if ((int)$pdo->query("SELECT COUNT(*) FROM information_schema.TABLES WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME IN ('feo_requests','feo_weight_batches','feo_weight_items')")->fetchColumn() !== 3) return false;
+        $column = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='feo_weight_items' AND COLUMN_NAME='legacy_snapshot_json'");
+        return (int)$column->fetchColumn() === 1;
     }
 
     public static function parseIds(string $raw): array
@@ -30,7 +34,7 @@ final class FeoWeightBatchService
 
     public function preview(PDO $pdo, array $ids, bool $lock = false): array
     {
-        if (!$this->ready($pdo)) throw new RuntimeException('Изменение веса ожидает обновления базы компании (160).');
+        if (!$this->ready($pdo)) throw new RuntimeException('Изменение веса ожидает обновления базы компании (162).');
         $ids = self::parseIds(implode("\n", $ids))['ids'];
         $marks = implode(',', array_fill(0, count($ids), '?'));
         $query = $pdo->prepare("SELECT id,zayavka_id,mass_netto,mass_brutto FROM feo_requests WHERE zayavka_id IN ($marks) ORDER BY zayavka_id" . ($lock ? ' FOR UPDATE' : ''));
@@ -48,7 +52,7 @@ final class FeoWeightBatchService
         $name = trim($name); $comment = trim($comment);
         if (mb_strlen($name) > 180 || mb_strlen($comment) > 2000) throw new RuntimeException('Сократите название или комментарий блока.');
         if ((int)($actor['created_by_user_id'] ?? 0) <= 0) throw new RuntimeException('Не удалось определить автора изменения.');
-        return $this->transaction($pdo, function () use ($pdo, $preview, $targets, $actor, $operationKey, $name, $comment, $event): array {
+        return $this->transaction($pdo, function (?FeoLegacyImportSync $legacy) use ($pdo, $preview, $targets, $actor, $operationKey, $name, $comment, $event): array {
             $query = $pdo->prepare('SELECT id FROM feo_weight_batches WHERE operation_key=?');
             $query->execute([$operationKey]);
             if ($id = $query->fetchColumn()) return ['batch_id'=>(int)$id, 'already_applied'=>true];
@@ -68,12 +72,13 @@ final class FeoWeightBatchService
             $query = $pdo->prepare('INSERT INTO feo_weight_batches(name,comment,request_count,operation_key,created_by_user_id,created_by_name) VALUES(?,?,?,?,?,?)');
             $query->execute([$name ?: 'Изменение веса заявок', $comment, count($changes), $operationKey, $actor['created_by_user_id'], $actor['created_by_display_name']]);
             $batchId = (int)$pdo->lastInsertId();
-            $insert = $pdo->prepare('INSERT INTO feo_weight_items(batch_id,zayavka_id,request_row_id,before_netto,before_brutto,after_netto,after_brutto) VALUES(?,?,?,?,?,?,?)');
+            $insert = $pdo->prepare('INSERT INTO feo_weight_items(batch_id,zayavka_id,request_row_id,before_netto,before_brutto,after_netto,after_brutto,legacy_snapshot_json) VALUES(?,?,?,?,?,?,?,?)');
             $update = $pdo->prepare('UPDATE feo_requests SET mass_netto=?,mass_brutto=?,current_import_id=NULL WHERE id=?');
             $eventChanges = [];
             foreach ($changes as $change) {
                 $row = $change['row'];
-                $insert->execute([$batchId, $row['zayavka_id'], $row['id'], $row['mass_netto'], $row['mass_brutto'], $change['netto'], $change['brutto']]);
+                $snapshot = $legacy?->writeWeight((string)$row['zayavka_id'], ['mass_netto'=>$change['netto'], 'mass_brutto'=>$change['brutto']]);
+                $insert->execute([$batchId, $row['zayavka_id'], $row['id'], $row['mass_netto'], $row['mass_brutto'], $change['netto'], $change['brutto'], $snapshot === null ? null : json_encode($snapshot, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR)]);
                 $update->execute([$change['netto'], $change['brutto'], $row['id']]);
                 $notification = FeoWeightChangeNotificationService::change($row, ['zayavka_id'=>$row['zayavka_id'], 'mass_netto'=>$change['netto'], 'mass_brutto'=>$change['brutto']]);
                 if ($notification) $eventChanges[] = $notification;
@@ -85,13 +90,15 @@ final class FeoWeightBatchService
 
     public function revert(PDO $pdo, int $batchId, array $actor, ?callable $event = null): array
     {
-        return $this->transaction($pdo, function () use ($pdo, $batchId, $actor, $event): array {
+        return $this->transaction($pdo, function (?FeoLegacyImportSync $legacy) use ($pdo, $batchId, $actor, $event): array {
             $query = $pdo->prepare('SELECT * FROM feo_weight_batches WHERE id=? FOR UPDATE');
             $query->execute([$batchId]);
             $batch = $query->fetch(PDO::FETCH_ASSOC);
             if (!$batch) throw new RuntimeException('Блок не найден.');
             if ($batch['status'] === 'reverted') return ['batch_id'=>$batchId, 'already_reverted'=>true];
             $items = $this->items($pdo, $batchId);
+            $synced = array_filter($items, static fn(array $item): bool => $item['legacy_snapshot_json'] !== null);
+            if ($synced !== [] && count($synced) !== count($items)) throw new RuntimeException('История синхронизации блока неполна. Возврат остановлен.');
             $find = $pdo->prepare('SELECT id,zayavka_id,mass_netto,mass_brutto FROM feo_requests WHERE zayavka_id=? FOR UPDATE');
             $update = $pdo->prepare('UPDATE feo_requests SET mass_netto=?,mass_brutto=?,current_import_id=NULL WHERE id=?');
             $eventChanges = [];
@@ -100,6 +107,10 @@ final class FeoWeightBatchService
                 $current = $find->fetch(PDO::FETCH_ASSOC);
                 if (!$current || (int)$current['id'] !== (int)$item['request_row_id'] || !$this->same($current['mass_netto'], $item['after_netto']) || !$this->same($current['mass_brutto'], $item['after_brutto'])) {
                     throw new RuntimeException('Вес заявки №'.$item['zayavka_id'].' изменён после блока. Возврат всего блока остановлен.');
+                }
+                if ($item['legacy_snapshot_json'] !== null) {
+                    if ($legacy === null) throw new RuntimeException('Для возврата блока требуется подключение к старой базе ФЭО.');
+                    $legacy->revertWeight((string)$item['zayavka_id'], json_decode((string)$item['legacy_snapshot_json'], true, 32, JSON_THROW_ON_ERROR));
                 }
                 $update->execute([$item['before_netto'], $item['before_brutto'], $current['id']]);
                 $notification = FeoWeightChangeNotificationService::change($current, ['zayavka_id'=>$item['zayavka_id'], 'mass_netto'=>$item['before_netto'], 'mass_brutto'=>$item['before_brutto']]);
@@ -120,7 +131,7 @@ final class FeoWeightBatchService
 
     public function items(PDO $pdo, int $batchId): array
     {
-        $query = $pdo->prepare('SELECT zayavka_id,request_row_id,before_netto,before_brutto,after_netto,after_brutto FROM feo_weight_items WHERE batch_id=? ORDER BY zayavka_id');
+        $query = $pdo->prepare('SELECT zayavka_id,request_row_id,before_netto,before_brutto,after_netto,after_brutto,legacy_snapshot_json FROM feo_weight_items WHERE batch_id=? ORDER BY zayavka_id');
         $query->execute([$batchId]);
         return $query->fetchAll(PDO::FETCH_ASSOC);
     }
@@ -141,8 +152,15 @@ final class FeoWeightBatchService
         $lock = 'planex_feo_'.substr(hash('sha256', (string)$pdo->query('SELECT DATABASE()')->fetchColumn()), 0, 24);
         $query = $pdo->prepare('SELECT GET_LOCK(?,10)'); $query->execute([$lock]);
         if ((int)$query->fetchColumn() !== 1) throw new RuntimeException('Заявки сейчас изменяются. Повторите позже.');
-        try { $pdo->beginTransaction(); $result = $action(); $pdo->commit(); return $result; }
-        catch (\Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
+        try {
+            $syncTenant = trim((string)env('FEO_LEGACY_SYNC_TENANT_DATABASE', ''));
+            if ($syncTenant !== '' && $syncTenant === (string)$pdo->query('SELECT DATABASE()')->fetchColumn()) {
+                return FeoImportTransaction::runWithLegacy($pdo, $action);
+            }
+            $pdo->beginTransaction();
+            try { $result = $action(null); $pdo->commit(); return $result; }
+            catch (\Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
+        }
         finally { $query = $pdo->prepare('SELECT RELEASE_LOCK(?)'); $query->execute([$lock]); }
     }
 }

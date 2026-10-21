@@ -5,8 +5,12 @@ require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Support/company_database.php';
 require_once BASE_PATH.'/app/Service/FeoXlsxParser.php';
 require_once BASE_PATH.'/app/Service/FeoImportTransaction.php';
+require_once BASE_PATH.'/app/Service/FeoTransferService.php';
+require_once BASE_PATH.'/app/Service/FeoWeightChangeNotificationService.php';
+require_once BASE_PATH.'/app/Service/FeoWeightBatchService.php';
 
 use App\Service\FeoImportTransaction;
+use App\Service\FeoWeightBatchService;
 
 if (PHP_OS_FAMILY === 'Windows' || getenv('APP_ENV') !== 'test') throw new RuntimeException('Isolated POSIX test required.');
 $db=(string)getenv('PLANEX_TEST_FIXED_DB');
@@ -102,6 +106,28 @@ try {
     $check($weight($pdo,'feo_requests','100002')['mass_netto']==='5.5555','Tenant confirmation recovered');
     $check($weight($pdo,'feo','100002')===['mass_netto'=>'5.555','mass_brutto'=>'6.66'],'Legacy confirmation retained');
     $check((glob($journal.'/*.json')?:[])===[],'Resolved decision removed');
+    foreach (['160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql'] as $file) {
+        $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-local/'.$file));
+    }
+    $service=new FeoWeightBatchService();
+    $actor=['created_by_user_id'=>11,'created_by_display_name'=>'Менеджер'];
+    $preview=$service->preview($pdo,['100002']);
+    $batch=$service->create($pdo,$preview,['100002'=>['netto_kg'=>'7000','brutto_kg'=>'8000']],$actor,hash('sha256','xa-weight-batch'),'Тест XA','');
+    $item=$service->items($pdo,$batch['batch_id'])[0];
+    $legacySnapshot=json_decode((string)$item['legacy_snapshot_json'],true,32,JSON_THROW_ON_ERROR);
+    $check($weight($pdo,'feo_requests','100002')===['mass_netto'=>'7.0000','mass_brutto'=>'8.0000'],'Batch changed tenant through XA');
+    $check($weight($pdo,'feo','100002')===['mass_netto'=>'7.000','mass_brutto'=>'8.00'],'Batch changed legacy through XA');
+    $check($legacySnapshot['before']===['mass_netto'=>'5.555','mass_brutto'=>'6.66'],'Batch persisted exact legacy snapshot');
+    $service->revert($pdo,$batch['batch_id'],$actor);
+    $check($weight($pdo,'feo_requests','100002')===['mass_netto'=>'5.5555','mass_brutto'=>'6.6666'],'Batch restored tenant through XA');
+    $check($weight($pdo,'feo','100002')===['mass_netto'=>'5.555','mass_brutto'=>'6.66'],'Batch restored legacy through XA');
+    $pdo->exec("INSERT INTO feo_requests(zayavka_id,mass_netto,mass_brutto) VALUES ('100003',1.0000,1.0000)");
+    $preview=$service->preview($pdo,['100003']);
+    try {
+        $service->create($pdo,$preview,['100003'=>['netto_kg'=>'2000','brutto_kg'=>'2000']],$actor,hash('sha256','missing-legacy'),'','');
+        throw new LogicException('Expected missing legacy request');
+    } catch (RuntimeException $e) { $check(str_contains($e->getMessage(),'не найдена'),'Missing legacy request rejected by batch'); }
+    $check($weight($pdo,'feo_requests','100003')===['mass_netto'=>'1.0000','mass_brutto'=>'1.0000'],'Missing legacy request leaves tenant unchanged');
     echo "FEO_LEGACY_WEIGHT_BRIDGE_XA=PASS\n";
 } finally {
     foreach ($previous as $key=>$value) putenv($value===false?$key:$key.'='.$value);
