@@ -160,8 +160,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "30e26a0298d84aa842fadab079087b7ca0419c59",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/30e26a0298d84aa842fadab079087b7ca0419c59/tests/feo_history_canon_browser_test.mjs",
+      "verified_sha": "ba151676ef77e8e269a401d70cc5b085fe2fa09c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ba151676ef77e8e269a401d70cc5b085fe2fa09c/tests/feo_legacy_transfer_mirror_mysql_test.php",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
@@ -245,8 +245,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "30e26a0298d84aa842fadab079087b7ca0419c59",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/30e26a0298d84aa842fadab079087b7ca0419c59/tests/feo_history_runtime_browser_test.mjs",
+      "verified_sha": "ba151676ef77e8e269a401d70cc5b085fe2fa09c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ba151676ef77e8e269a401d70cc5b085fe2fa09c/tests/feo_legacy_transfer_mirror_mysql_test.php",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",
@@ -289,8 +289,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "5448a479c83d173e7d9fd1b69d9584c249aeda8d",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/5448a479c83d173e7d9fd1b69d9584c249aeda8d/tests/feo_legacy_import_sync_mysql_test.php",
+      "verified_sha": "ba151676ef77e8e269a401d70cc5b085fe2fa09c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ba151676ef77e8e269a401d70cc5b085fe2fa09c/tests/feo_legacy_transfer_mirror_mysql_test.php",
       "owning_paths": [
         "app/Service/FeoRequestService.php",
         "app/Service/FeoRequestInteractionService.php",
