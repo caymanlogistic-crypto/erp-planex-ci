@@ -24,6 +24,19 @@ function feoLegacySyncEnvironment(string $original, string $tenant, string $lega
     return $result;
 }
 
+/** Enable only future transfer writes; preserve all other settings and reject duplicate flags. */
+function feoTransferSyncEnvironment(string $original): string
+{
+    preg_match_all('/^[ \t]*FEO_LEGACY_TRANSFER_SYNC_ENABLED[ \t]*=([^\r\n]*)/m',$original,$matches,PREG_OFFSET_CAPTURE);
+    if (count($matches[0])>1) throw new RuntimeException('Duplicate FEO transfer sync flag');
+    if ($matches[0]===[]) return $original.(str_ends_with($original,"\n")?'':"\n")."FEO_LEGACY_TRANSFER_SYNC_ENABLED=1\n";
+    $value=trim(trim($matches[1][0][0]),"\"'");
+    if (!in_array($value,['0','1'],true)) throw new RuntimeException('Invalid FEO transfer sync flag');
+    if ($value==='1') return $original;
+    $offset=$matches[0][0][1];
+    return substr_replace($original,'FEO_LEGACY_TRANSFER_SYNC_ENABLED=1',$offset,strlen($matches[0][0][0]));
+}
+
 /** Shared by the CLI entry point and its encrypted-company-credential regression. */
 function feoLegacySyncLoadDependencies(string $root): void
 {
@@ -40,6 +53,8 @@ if (realpath((string)($_SERVER['SCRIPT_FILENAME'] ?? '')) !== __FILE__) return;
 if (PHP_SAPI !== 'cli') throw new RuntimeException('CLI only');
 $mode = (string)getenv('FEO_SYNC_CONFIGURE_MODE');
 if (!in_array($mode, ['check','activate'], true) || getenv('FEO_SYNC_CONFIRM') !== 'CONFIGURE_FEO_IMPORT_SYNC') throw new RuntimeException('Explicit scoped configuration required');
+$enableTransfer=(string)getenv('FEO_SYNC_TRANSFER_MIRROR')==='1';
+if ($enableTransfer && getenv('FEO_SYNC_TRANSFER_CONFIRM')!=='ENABLE_FEO_TRANSFER_MIRROR') throw new RuntimeException('Explicit transfer mirror activation required');
 $root = rtrim((string)getenv('PLANEX_ROOT'), '/');
 if (!is_file($root . '/bootstrap/app.php') || !is_file($root . '/.env') || is_link($root . '/.env')) throw new RuntimeException('Invalid application root');
 $config = require $root . '/bootstrap/app.php';
@@ -61,10 +76,17 @@ if ($tenant !== $company['db_identifier']) throw new RuntimeException('Tenant id
 $legacy = trim((string)getenv('FEO_SYNC_LEGACY_DATABASE'));
 $environment = file_get_contents($root . '/.env');
 if ($environment === false) throw new RuntimeException('Cannot read application environment');
+if ($enableTransfer) {
+    foreach (['FEO_LEGACY_SYNC_TENANT_DATABASE'=>$tenant,'FEO_LEGACY_SYNC_DATABASE'=>$legacy] as $key=>$expected) {
+        preg_match_all('/^[ \t]*'.preg_quote($key,'/').'[ \t]*=([^\r\n]*)/m',$environment,$found);
+        if (count($found[1])!==1 || trim(trim($found[1][0]),"\"'")!==$expected) throw new RuntimeException('Transfer mirror requires the existing exact tenant and legacy binding');
+    }
+}
 $connectionMode=(string)(getenv('FEO_SYNC_CONNECTION_MODE') ?: 'shared');
 if (!in_array($connectionMode,['shared','separate'],true)) throw new RuntimeException('Invalid connection mode');
 $connection='';
 if ($connectionMode==='separate') {
+    if ($enableTransfer && !str_contains($environment,'FEO_LEGACY_SYNC_CONNECTION_B64=')) throw new RuntimeException('Transfer mirror requires existing protected legacy connection');
     // The GitHub secret arrives only via SSH stdin, never a shell argument or uploaded public file.
     $raw=stream_get_contents(STDIN,65537);
     if ($raw===false || strlen($raw)>65536) throw new RuntimeException('Protected connection missing or too large');
@@ -75,6 +97,7 @@ if ($connectionMode==='separate') {
     $_ENV['FEO_LEGACY_SYNC_CONNECTION_B64']=$connection; $_SERVER['FEO_LEGACY_SYNC_CONNECTION_B64']=$connection; putenv('FEO_LEGACY_SYNC_CONNECTION_B64='.$connection);
 }
 $updated = feoLegacySyncEnvironment($environment, $tenant, $legacy, $connection);
+if ($enableTransfer) $updated=feoTransferSyncEnvironment($updated);
 foreach (['FEO_LEGACY_SYNC_TENANT_DATABASE'=>$tenant,'FEO_LEGACY_SYNC_DATABASE'=>$legacy] as $key=>$value) { $_ENV[$key]=$value; $_SERVER[$key]=$value; putenv($key.'='.$value); }
 $transaction=null;
 try {
@@ -105,6 +128,11 @@ try {
             if ($written !== strlen($updated) || !rename($temporary,$root.'/.env')) throw new RuntimeException('Cannot install environment candidate');
         } finally { if ($temporary && is_file($temporary)) unlink($temporary); flock($handle,LOCK_UN); fclose($handle); }
     }
-    echo json_encode(['mode'=>$mode,'connection_mode'=>$connectionMode,'company_id'=>$companyId,'tenant_database'=>$tenant,'legacy_database'=>$legacy,'ready'=>true,'business_data_unchanged'=>true,'schema_unchanged'=>true],JSON_THROW_ON_ERROR) . "\n";
+    $pendingTransfers=$enableTransfer ? (int)$pdo->query("SELECT COUNT(*) FROM feo_transfer_outbox WHERE status='awaiting_connector'")->fetchColumn() : null;
+    $effectiveEnvironment=$mode==='activate'?$updated:$environment;
+    $transferEnabled=preg_match('/^[ \t]*FEO_LEGACY_TRANSFER_SYNC_ENABLED[ \t]*=1[ \t]*$/m',$effectiveEnvironment)===1;
+    echo json_encode(['mode'=>$mode,'connection_mode'=>$connectionMode,'company_id'=>$companyId,'tenant_database'=>$tenant,'legacy_database'=>$legacy,
+        'transfer_mirror_requested'=>$enableTransfer,'transfer_mirror_enabled'=>$transferEnabled,
+        'historical_transfers_not_replayed'=>$pendingTransfers,'ready'=>true,'business_data_unchanged'=>true,'schema_unchanged'=>true],JSON_THROW_ON_ERROR) . "\n";
     echo "FEO_IMPORT_SYNC_CONFIGURATION_PASS\n";
 } catch (Throwable $e) { ($transaction??null)?->rollback(); throw $e; }

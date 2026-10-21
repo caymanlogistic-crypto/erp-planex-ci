@@ -260,6 +260,7 @@ jobs:
           php tests/feo_import_modal_regression_test.php
           php tests/feo_requests_contract_test.php
           php tests/feo_transfers_mysql_test.php
+          php tests/feo_legacy_transfer_mirror_mysql_test.php
           php tests/feo_transfers_access_mysql_test.php
           php tests/feo_transfers_139_production_migration_contract_test.php
           php tests/feo_weights_160_production_migration_contract_test.php

@@ -78,7 +78,7 @@
   });
   function completed(result, verb) {
     const warning = result.notification === 'failed' || result.notification === 'sending';
-    sessionStorage.setItem('feo-transfer-result',JSON.stringify({message:`Блок #${result.batch_id} ${verb}.${warning ? ' Уведомление MAX не отправлено или результат неизвестен; проверьте журнал событий.' : result.notification === 'disabled' ? ' Уведомление MAX отключено в настройках события.' : result.notification === 'sent' ? ' Уведомление MAX отправлено.' : ''}`,warning}));
+    sessionStorage.setItem('feo-transfer-result',JSON.stringify({message:`Блок #${result.batch_id} ${verb}.${result.legacy_synced ? ' Старая база обновлена.' : ''}${warning ? ' Уведомление MAX не отправлено или результат неизвестен; проверьте журнал событий.' : result.notification === 'disabled' ? ' Уведомление MAX отключено в настройках события.' : result.notification === 'sent' ? ' Уведомление MAX отправлено.' : ''}`,warning}));
     location.reload();
   }
   find('[data-commit]').addEventListener('click',e => action(e.currentTarget,async () => {

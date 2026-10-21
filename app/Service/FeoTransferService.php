@@ -2,6 +2,9 @@
 
 namespace App\Service;
 
+require_once __DIR__.'/FeoLocationOverrideService.php';
+require_once __DIR__.'/FeoImportTransaction.php';
+
 use PDO;
 use RuntimeException;
 
@@ -68,9 +71,9 @@ final class FeoTransferService
         if (!preg_match('/^[a-f0-9]{64}$/D',$operationKey)) throw new RuntimeException('Некорректный ключ операции.');
         $name=trim($name); $comment=trim($comment);
         if (mb_strlen($name)>180 || mb_strlen($comment)>2000) throw new RuntimeException('Сократите название или комментарий блока.');
-        return $this->transaction($pdo, function () use ($pdo,$preview,$actor,$operationKey,$name,$comment,$event): array {
+        return $this->transaction($pdo, function (?FeoLegacyImportSync $mirror) use ($pdo,$preview,$actor,$operationKey,$name,$comment,$event): array {
             $q=$pdo->prepare('SELECT id FROM feo_transfer_batches WHERE operation_key=?'); $q->execute([$operationKey]);
-            if ($id=$q->fetchColumn()) return ['batch_id'=>(int)$id,'already_applied'=>true];
+            if ($id=$q->fetchColumn()) return ['batch_id'=>(int)$id,'already_applied'=>true,'legacy_synced'=>$this->wasMirrored($pdo,(int)$id,'transfer')];
             $fresh=$this->preview($pdo,array_column($preview['rows'],'zayavka_id'),$preview['mode'],(string)($preview['source_request_id']??''),$preview['destination'],true);
             if (!hash_equals($preview['state_hash'],$fresh['state_hash'])) throw new RuntimeException('Адреса или история заявок изменились после проверки. Проверьте блок заново.');
             if ((int)($actor['created_by_user_id']??0)<=0) throw new RuntimeException('Не удалось определить автора перемещения.');
@@ -84,12 +87,13 @@ final class FeoTransferService
             foreach ($fresh['rows'] as $row) {
                 $before=$this->location($row);
                 $insert->execute([$batchId,$row['zayavka_id'],$row['id'],$this->json($before),$this->json($after),$row['previous_batch_id']]);
+                $mirror?->mirrorLocation((string)$row['zayavka_id'],$before,$after);
                 $this->writeLocation($pdo,(int)$row['id'],$after);
                 $override->execute([$row['zayavka_id'],$batchId]);
                 $payload[]=['request_number'=>(string)$row['zayavka_id'],'before'=>$before,'after'=>$after];
             }
-            $this->enqueueLegacy($pdo,$batchId,'transfer',$payload);
-            $result=['batch_id'=>$batchId,'count'=>$fresh['count'],'destination'=>$fresh['destination']];
+            $this->enqueueLegacy($pdo,$batchId,'transfer',$payload,$mirror!==null);
+            $result=['batch_id'=>$batchId,'count'=>$fresh['count'],'destination'=>$fresh['destination'],'legacy_synced'=>$mirror!==null];
             if ($event) $event($result+['items'=>$payload]);
             return $result;
         });
@@ -97,17 +101,18 @@ final class FeoTransferService
 
     public function revert(PDO $pdo, int $batchId, array $actor, ?callable $event = null): array
     {
-        return $this->transaction($pdo,function () use ($pdo,$batchId,$actor,$event): array {
+        return $this->transaction($pdo,function (?FeoLegacyImportSync $mirror) use ($pdo,$batchId,$actor,$event): array {
             $q=$pdo->prepare('SELECT * FROM feo_transfer_batches WHERE id=? FOR UPDATE'); $q->execute([$batchId]);
             $batch=$q->fetch(PDO::FETCH_ASSOC);
             if (!$batch) throw new RuntimeException('Блок не найден.');
-            if ($batch['status']==='reverted') return ['batch_id'=>$batchId,'already_reverted'=>true];
+            if ($batch['status']==='reverted') return ['batch_id'=>$batchId,'already_reverted'=>true,'legacy_synced'=>$this->wasMirrored($pdo,$batchId,'revert')];
             $items=$this->items($pdo,$batchId);
             $payload=[];
             foreach ($items as $item) {
                 $q=$pdo->prepare('SELECT r.id,r.mno_adres_pogruzki,r.mno_sh,r.mno_d,o.batch_id FROM feo_requests r LEFT JOIN feo_location_overrides o ON o.zayavka_id=r.zayavka_id WHERE r.zayavka_id=? FOR UPDATE');
                 $q->execute([$item['zayavka_id']]); $current=$q->fetch(PDO::FETCH_ASSOC);
                 if (!$current || (int)$current['id']!==(int)$item['request_row_id'] || (int)$current['batch_id']!==$batchId || $this->location($current)!==$item['after']) throw new RuntimeException('Заявка №'.$item['zayavka_id'].' удалена или перемещена позже. Возврат всего блока остановлен. Сначала верните более поздний блок.');
+                $mirror?->mirrorLocation((string)$item['zayavka_id'],$item['after'],$item['before']);
                 $this->writeLocation($pdo,(int)$current['id'],$item['before']);
                 if ($item['previous_batch_id']!==null) {
                     $q=$pdo->prepare('UPDATE feo_location_overrides SET batch_id=? WHERE zayavka_id=?'); $q->execute([$item['previous_batch_id'],$item['zayavka_id']]);
@@ -118,8 +123,8 @@ final class FeoTransferService
             }
             $q=$pdo->prepare("UPDATE feo_transfer_batches SET status='reverted',reverted_by_user_id=?,reverted_by_name=?,reverted_at=NOW() WHERE id=?");
             $q->execute([$actor['created_by_user_id'],$actor['created_by_display_name'],$batchId]);
-            $this->enqueueLegacy($pdo,$batchId,'revert',$payload);
-            $result=['batch_id'=>$batchId,'count'=>count($items),'name'=>$batch['name'],'destination'=>json_decode($batch['destination_json'],true)];
+            $this->enqueueLegacy($pdo,$batchId,'revert',$payload,$mirror!==null);
+            $result=['batch_id'=>$batchId,'count'=>count($items),'name'=>$batch['name'],'destination'=>json_decode($batch['destination_json'],true),'legacy_synced'=>$mirror!==null];
             if ($event) $event($result+['items'=>$payload]);
             return $result;
         });
@@ -143,8 +148,31 @@ final class FeoTransferService
         $lock='planex_feo_'.substr(hash('sha256',(string)$pdo->query('SELECT DATABASE()')->fetchColumn()),0,24);
         $q=$pdo->prepare('SELECT GET_LOCK(?,10)'); $q->execute([$lock]);
         if ((int)$q->fetchColumn()!==1) throw new RuntimeException('Заявки сейчас изменяются. Повторите позже.');
-        try { $pdo->beginTransaction(); $result=$action(); $pdo->commit(); return $result; }
-        catch (\Throwable $e) { if ($pdo->inTransaction()) $pdo->rollBack(); throw $e; }
+        $transaction=null;
+        try {
+            FeoImportTransaction::recoverPending($pdo);
+            $target=(string)env('FEO_LEGACY_SYNC_TENANT_DATABASE','');
+            $enabled=(string)env('FEO_LEGACY_TRANSFER_SYNC_ENABLED','0')==='1';
+            if ($enabled && $target==='') throw new RuntimeException('Зеркало перемещений ФЭО включено без привязки компании к старой базе.');
+            $mirrorRequired=$enabled && (string)$pdo->query('SELECT DATABASE()')->fetchColumn()===$target;
+            if ($mirrorRequired) {
+                $transaction=FeoImportTransaction::begin($pdo);
+                $mirror=$transaction->sync();
+                if ($mirror===null) throw new RuntimeException('Подключение зеркала перемещений к старой базе не настроено.');
+                $mirror->validate();
+            } else {
+                $pdo->beginTransaction();
+                $mirror=null;
+            }
+            $result=$action($mirror);
+            if ($transaction!==null) $transaction->commit(); else $pdo->commit();
+            return $result;
+        }
+        catch (\Throwable $e) {
+            if ($transaction!==null) $transaction->rollback();
+            elseif ($pdo->inTransaction()) $pdo->rollBack();
+            throw $e;
+        }
         finally { $q=$pdo->prepare('SELECT RELEASE_LOCK(?)'); $q->execute([$lock]); }
     }
 
@@ -165,10 +193,16 @@ final class FeoTransferService
         $q=$pdo->prepare('UPDATE feo_requests SET mno_adres_pogruzki=?,mno_sh=?,mno_d=? WHERE id=?');
         $q->execute([$location['mno_adres_pogruzki'],$location['mno_sh'],$location['mno_d'],$rowId]);
     }
-    private function enqueueLegacy(PDO $pdo, int $batchId, string $operation, array $items): void
+    private function enqueueLegacy(PDO $pdo, int $batchId, string $operation, array $items, bool $mirrored): void
     {
-        $q=$pdo->prepare('INSERT INTO feo_transfer_outbox(batch_id,operation,payload_json) VALUES(?,?,?)');
-        $q->execute([$batchId,$operation,$this->json(['version'=>1,'batch_id'=>$batchId,'operation'=>$operation,'coordinate_storage'=>['mno_sh'=>'longitude','mno_d'=>'latitude'],'items'=>$items])]);
+        $q=$pdo->prepare('INSERT INTO feo_transfer_outbox(batch_id,operation,payload_json,status,sent_at) VALUES(?,?,?,?,?)');
+        $q->execute([$batchId,$operation,$this->json(['version'=>1,'batch_id'=>$batchId,'operation'=>$operation,'coordinate_storage'=>['mno_sh'=>'longitude','mno_d'=>'latitude'],'items'=>$items]),$mirrored?'mirrored':'awaiting_connector',$mirrored?date('Y-m-d H:i:s'):null]);
+    }
+    private function wasMirrored(PDO $pdo, int $batchId, string $operation): bool
+    {
+        $q=$pdo->prepare('SELECT status FROM feo_transfer_outbox WHERE batch_id=? AND operation=?');
+        $q->execute([$batchId,$operation]);
+        return $q->fetchColumn()==='mirrored';
     }
     private function json(array $value): string { return json_encode($value,JSON_UNESCAPED_UNICODE|JSON_UNESCAPED_SLASHES|JSON_THROW_ON_ERROR); }
 }
