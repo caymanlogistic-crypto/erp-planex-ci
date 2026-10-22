@@ -14,7 +14,6 @@ use App\Service\WasteTripGeneralPaymentService;
 use App\Service\WasteTripCarrierPaymentService;
 use App\Service\WasteTripService;
 use App\Service\WasteTripParityService;
-use App\Service\GpsCoverageService;
 use App\Service\UserSyncService;
 use PDO;
 use RuntimeException;
@@ -34,8 +33,6 @@ final class WasteTripController
         $pageTitle='Перевозка отходов'; $pageContext='Рейсы › Перевозка отходов'; $dbError=$context['error'];
         $trips=$clients=$routeExecutors=$responsibleUsers=$utilizers=$registryManagers=[];
         $tripStatusCounts=[];
-        $trackerLastPoints=[];
-        $trackerNow=new \DateTimeImmutable('now', new \DateTimeZone('UTC'));
         $tripParity=null;
         $syncResult=$_SESSION['waste_trip_sync_result']??null; unset($_SESSION['waste_trip_sync_result']);
         $formError=$_SESSION['waste_trip_error']??null; $formSuccess=$_SESSION['waste_trip_success']??null; $old=$_SESSION['waste_trip_old']??[];
@@ -50,15 +47,6 @@ final class WasteTripController
                 $filters=['status'=>$_GET['status']??'','company'=>$_GET['company']??'','manager'=>$selectedManager,'q'=>$_GET['q']??'','sort'=>$_GET['sort']??'status'];
                 $trips=WasteTripService::fetchTrips($localPdo,$filters,$isFinanceRealm);
                 $trips=array_values(array_filter($trips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));
-                if (array_filter($trips, static fn(array $trip):bool=>($trip['status']??'')==='in_progress')) {
-                    try {
-                        $source=WasteTripLegacySourceService::connectionFromEnvironment();
-                        if ($source instanceof PDO) {
-                            $source->exec("SET time_zone = '+00:00'");
-                            $trackerLastPoints=GpsCoverageService::lastPointsForTrips($source,$trips,$trackerNow);
-                        }
-                    } catch (Throwable $e) { error_log('waste trip tracker read failed: '.$e->getMessage()); }
-                }
                 $statusFilterActive=trim((string)($_GET['status']??''))!=='';
                 $statusTrips=$statusFilterActive ? WasteTripService::fetchTrips($localPdo,array_replace($filters,['status'=>'']),false) : $trips;
                 if($statusFilterActive)$statusTrips=array_values(array_filter($statusTrips,static fn(array $trip):bool=>WasteTripService::canAccessTrip($localPdo,$trip,$sessionUser)));

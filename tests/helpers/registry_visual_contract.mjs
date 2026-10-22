@@ -115,7 +115,7 @@ export async function assertRegistryDataCoverage(page,label){
 
 export async function assertRegistryColumnGeometry(page,label){
   const columns=await page.evaluate(()=>[...document.querySelectorAll('.registry-ui-data')].flatMap(table=>{
-    if(!table.tBodies[0]?.rows[0]||table.classList.contains('registry-ui-data--cards')||table.closest('[data-registry-id="trips-departures"]')||getComputedStyle(table.tBodies[0].rows[0]).display==='grid')return [];
+    if(!table.tBodies[0]?.rows[0]||table.classList.contains('registry-ui-data--cards')||getComputedStyle(table.tBodies[0].rows[0]).display==='grid')return [];
     const idWidth=parseFloat(getComputedStyle(table).getPropertyValue('--registry-id-width'))||64;
     return [...table.querySelectorAll('tbody .registry-ui-id,tbody .registry-ui-trip')].flatMap(element=>{
       const cell=element.closest('td'),rect=cell?.getBoundingClientRect();

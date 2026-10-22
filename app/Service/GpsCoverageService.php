@@ -13,59 +13,6 @@ final class GpsCoverageService
     private const MOSCOW = 'Europe/Moscow';
     private const UTC = 'UTC';
 
-    /**
-     * Last valid GPS point for already authorized, visible ERP trips.
-     * @param list<array<string,mixed>> $trips
-     * @return array<int,string> UTC timestamp keyed by ERP trip ID
-     */
-    public static function lastPointsForTrips(PDO $pdo, array $trips, ?DateTimeImmutable $now = null): array
-    {
-        $now ??= new DateTimeImmutable('now', new DateTimeZone(self::UTC));
-        $now = $now->setTimezone(new DateTimeZone(self::UTC));
-        $oldest = $now->sub(new DateInterval('P90D'));
-        $latest = $now->add(new DateInterval('PT5M'))->format('Y-m-d H:i:s');
-        $query = $pdo->prepare('SELECT uniqueid,name,MAX(lastupdate) AS last_point FROM tracker_log FORCE INDEX (idx_fetched_at)
-            WHERE fetched_at BETWEEN :from AND :to AND name LIKE :surname
-              AND lat IS NOT NULL AND lon IS NOT NULL AND lastupdate IS NOT NULL
-              AND lastupdate BETWEEN :from_point AND :latest
-              AND lastupdate <= DATE_ADD(fetched_at, INTERVAL 5 MINUTE)
-            GROUP BY uniqueid,name');
-        $points = [];
-        $cache = [];
-        foreach ($trips as $trip) {
-            if (($trip['status'] ?? '') !== 'in_progress') continue;
-            $id = (int)($trip['id'] ?? 0);
-            $driver = trim((string)($trip['executor_driver_names'] ?? ''));
-            $vehicle = trim((string)($trip['executor_vehicle_label'] ?? ''));
-            if ($id <= 0 || $driver === '' || str_contains($driver, '/') || str_contains($vehicle, ' + ')) continue;
-            $surname = self::surname($driver);
-            $plate = self::plate($vehicle);
-            if ($surname === '' || $plate === '') continue;
-            $start = (string)($trip['actual_start_date'] ?? '');
-            $from = self::dateValid($start)
-                ? (new DateTimeImmutable($start.' 00:00:00', new DateTimeZone(self::MOSCOW)))->setTimezone(new DateTimeZone(self::UTC))
-                : $oldest;
-            if ($from < $oldest) $from = $oldest;
-            if ($from > $now) continue;
-            $key = $surname.'|'.$plate.'|'.$from->format('Y-m-d H:i:s');
-            if (!array_key_exists($key, $cache)) {
-                $query->execute(['from'=>$from->format('Y-m-d H:i:s'), 'to'=>$latest,
-                    'surname'=>'%'.$surname.'%', 'from_point'=>$from->format('Y-m-d H:i:s'), 'latest'=>$latest]);
-                $devices = [];
-                foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $row) {
-                    if (self::trackerKey((string)$row['name']) !== $surname.'|'.$plate) continue;
-                    $device = trim((string)$row['uniqueid']);
-                    if ($device === '') continue;
-                    $point = (string)$row['last_point'];
-                    if (!isset($devices[$device]) || $point > $devices[$device]) $devices[$device] = $point;
-                }
-                $cache[$key] = count($devices) === 1 ? reset($devices) : null;
-            }
-            if ($cache[$key] !== null) $points[$id] = $cache[$key];
-        }
-        return $points;
-    }
-
     /** @param list<int>|null $managerIds Null is reserved for the company owner. */
     public static function page(PDO $pdo, int $page = 1, string $status = 'all', ?array $managerIds = null): array
     {
