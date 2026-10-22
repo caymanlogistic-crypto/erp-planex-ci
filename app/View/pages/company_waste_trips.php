@@ -3,9 +3,11 @@ require_once base_path('app/View/components/registry_tabler_icons.php');
 require_once base_path('app/Service/RegistryManagerPresentation.php');
 
 require_once base_path('app/Service/WasteTripRegistryPresenter.php');
+require_once base_path('app/Service/WasteTripTrackerPresentation.php');
 use App\Service\WasteTripCustomerPaymentService;
 use App\Service\WasteTripService;
 use App\Service\WasteTripRegistryPresenter as Registry;
+use App\Service\WasteTripTrackerPresentation;
 $showCreateModal=(($_GET['show_create']??'')==='1')||!empty($old);
 $openTripId=max(0,(int)($_GET['open_trip']??0));
 $openEditId=max(0,(int)($_GET['open_edit']??0));
@@ -68,7 +70,7 @@ require base_path('app/View/partials/registry_ui_head.php');
 <label class="toolbar-sort"><select name="sort" class="toolbar-select" aria-label="Сортировка рейсов" data-registry-field="sort" data-registry-default="status"><option value="id" <?=$selectedSort==='id'?'selected':''?>>По ID (сначала новые)</option><option value="status" <?=$selectedSort==='status'?'selected':''?>>По статусу</option><option value="manager" <?=$selectedSort==='manager'?'selected':''?>>По менеджеру и статусу</option></select></label>
 <div class="registry-ui-search-group"><input name="q" class="toolbar-search registry-ui-search" value="<?=e($searchQuery)?>" aria-label="Поиск рейсов" placeholder="Поиск по рейсам" autocomplete="off" data-registry-field="query" data-registry-default=""><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div></div></form></div>
 <?php if($trips===[]):?><div class="panel"><div class="panel-body"><div class="empty-state"><p class="empty-title">Рейсов не найдено.</p></div></div></div><?php else:?>
-<div class="table-scroll waste-table-scroll"><table class="table waste-registry registry-ui-table registry-ui-data registry-ui-data--wide registry-ui-table--trips"><colgroup><col class="registry-ui-id"><col class="registry-ui-trip-cell"><?php for($column=2;$column<13;$column++):?><col><?php endfor;?></colgroup><thead><tr><th class="registry-ui-id">ID</th><th class="registry-ui-trip-cell">ОПИСАНИЕ РЕЙСА</th><th>СТАТУС</th><th>СКЛАД</th><th>НАЧАЛО РЕЙСА</th><th>ОКОНЧАНИЕ РЕЙСА</th><th>ПОДРЯД. / ВОД.</th><th>ЗАЯВКИ</th><th>ВЕС, КГ</th><th>ГЕН. ЗАКАЗЧИК</th><th>ПРОДАЖА</th><th>СЕБЕС, РУБ</th><th>МЕНЕДЖЕР</th></tr></thead><tbody>
+<div class="table-scroll waste-table-scroll"><table class="table waste-registry registry-ui-table registry-ui-data registry-ui-data--wide registry-ui-table--trips"><colgroup><col class="registry-ui-id"><col class="registry-ui-trip-cell"><col class="waste-tracker-col"><?php for($column=2;$column<13;$column++):?><col><?php endfor;?></colgroup><thead><tr><th class="registry-ui-id">ID</th><th class="registry-ui-trip-cell">ОПИСАНИЕ РЕЙСА</th><th>ТРЕКЕР</th><th>СТАТУС</th><th>СКЛАД</th><th>НАЧАЛО РЕЙСА</th><th>ОКОНЧАНИЕ РЕЙСА</th><th>ПОДРЯД. / ВОД.</th><th>ЗАЯВКИ</th><th>ВЕС, КГ</th><th>ГЕН. ЗАКАЗЧИК</th><th>ПРОДАЖА</th><th>СЕБЕС, РУБ</th><th>МЕНЕДЖЕР</th></tr></thead><tbody>
 <?php foreach($trips as $trip):
     $plan=$planLabel($trip);
     $startPlanned=empty($trip['actual_start_date']) && $plan!=='—';
@@ -80,10 +82,14 @@ require base_path('app/View/partials/registry_ui_head.php');
     $customerPayments=$isFinanceRealm?(array)($trip['customer_payments']??[]):[];
     $carrierPayments=$isFinanceRealm?(array)($trip['carrier_payments']??[]):[];
     $generalPayments=$isFinanceRealm?(array)($trip['general_payments']??[]):[];
+    $tracker=($trip['status']??'')==='in_progress'
+        ? WasteTripTrackerPresentation::fromUtc($trackerLastPoints[(int)$trip['id']]??null,$trackerNow??new \DateTimeImmutable('now',new \DateTimeZone('UTC')))
+        : null;
 ?>
 <tr class="waste-row" data-waste-view="<?=(int)$trip['id']?>" tabindex="0">
     <td class="col-mono registry-id registry-ui-id" data-label="ID"><div class="registry-ui-value">#<?=(int)$trip['business_id']?></div></td>
     <td class="waste-description registry-ui-trip-cell" data-label="Описание рейса"><div class="registry-ui-value"><span class="waste-description-text registry-ui-trip" data-registry-trip><?=e(trim((string)($trip['comment']??''))?:'—')?></span><?php if($companyName=\App\Service\WasteTripLegacyMetadataService::companyName($trip['legal_entity_code']??null)):?><span class="waste-legal-entity registry-ui-secondary <?=($trip['legal_entity_code']==='mg_logistic'?'is-mg-logistic':'is-planex')?>"><?=e($companyName)?></span><?php endif;?></div></td>
+    <td class="waste-tracker" data-label="Трекер"><div class="registry-ui-value"><span class="<?=$tracker?'registry-ui-primary'.($tracker['late']?' registry-ui-tracker-late':''):'registry-ui-missing'?>" <?=$tracker?'title="'.e($tracker['title']).'" aria-label="'.e('Последняя связь с трекером '.$tracker['text'].' назад').'"':''?>><?=e($tracker['text']??'—')?></span></div></td>
     <td class="waste-status <?=e(WasteTripService::statusCellClass((string)$trip['status']))?>" data-label="Статус"><div class="registry-ui-value"><span class="registry-ui-status" data-status="<?=e(WasteTripService::displayStatus((string)$trip['status']))?>"><?=e(WasteTripService::statusLabel((string)$trip['status']))?></span></div></td>
     <td class="waste-warehouse" data-label="Склад"><div class="registry-ui-value"><span class="<?=trim((string)\App\Service\WasteTripLegacyMetadataService::warehouseLabel($trip))===''?'registry-ui-missing':'registry-ui-primary'?>"><?php require base_path('app/View/partials/company_waste_trip_warehouse_display.php'); ?></span></div></td>
     <td class="registry-date <?=$startPlanned?'registry-date-planned':''?>" data-label="Начало рейса"><div class="registry-ui-value"><span class="registry-date-value <?= $startLabel==='—'?'registry-ui-missing':($startPlanned?'registry-ui-planned-date':'registry-ui-primary') ?>"><?=e($startLabel)?></span><?php if($startPlanned):?><span class="registry-date-note registry-ui-secondary">(плановая)</span><?php endif;?></div></td>

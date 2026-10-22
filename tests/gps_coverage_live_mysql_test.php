@@ -58,4 +58,14 @@ $next=GpsCoverageService::flight($pdo,244,15);
 if($next['covered_seconds']!==1500||$next['pct']<1.7||$next['pct']>1.8)throw new RuntimeException('Live GPS mutation did not change coverage '.json_encode($next));
 $ongoing=GpsCoverageService::flight($pdo,245,15);
 if(!in_array($ongoing['assessment'],['long_interval','calculated'],true))throw new RuntimeException('Ongoing flight was not assessed');
+$visibleTrips=[['id'=>1,'status'=>'in_progress','executor_driver_names'=>'Иванов Иван','executor_vehicle_label'=>'КАМАЗ А123ВС77','actual_start_date'=>'2026-09-01'],
+    ['id'=>2,'status'=>'completed','executor_driver_names'=>'Иванов Иван','executor_vehicle_label'=>'КАМАЗ А123ВС77','actual_start_date'=>'2026-09-01'],
+    ['id'=>3,'status'=>'in_progress','executor_driver_names'=>'Иванов Иван / Петров Пётр','executor_vehicle_label'=>'КАМАЗ А123ВС77','actual_start_date'=>'2026-09-01']];
+$clock=new DateTimeImmutable('2026-09-02 23:00:00',new DateTimeZone('UTC'));
+$last=GpsCoverageService::lastPointsForTrips($pdo,$visibleTrips,$clock);
+if($last!==[1=>'2026-09-01 00:00:00'])throw new RuntimeException('Visible started tracker point mismatch '.json_encode($last));
+$pdo->exec("INSERT INTO tracker_log(uniqueid,name,lastupdate,lat,lon,fetched_at) VALUES('device-1','А123ВС77 (ИВАНОВ)','2026-09-02 22:59:00',NULL,37.1,'2026-09-02 23:00:00')");
+if(GpsCoverageService::lastPointsForTrips($pdo,$visibleTrips,$clock)!==$last)throw new RuntimeException('Invalid coordinate became a tracker contact');
+$pdo->exec("INSERT INTO tracker_log(uniqueid,name,lastupdate,lat,lon,fetched_at) VALUES('device-2','А123ВС77 (ИВАНОВ)','2026-09-02 22:58:00',55.1,37.1,'2026-09-02 23:00:00')");
+if(GpsCoverageService::lastPointsForTrips($pdo,$visibleTrips,$clock)!==[])throw new RuntimeException('Ambiguous tracker devices must fail closed');
 echo "GPS_LIVE_MYSQL_PASS\n";
