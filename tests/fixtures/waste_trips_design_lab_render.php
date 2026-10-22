@@ -24,7 +24,7 @@ $_SESSION = ['role_code'=>'company_owner', 'company_id'=>0, 'user_id'=>1, 'user_
     0,
     array_column(\App\Security\PageRegistry::companyPages(), 'key')
 ));
-$_GET = [];
+$_GET = $_GET ?? [];
 $company = ['name'=>'ООО «ПЛАНЭКС»'];
 $config = ['app'=>['app_name'=>'ERP PLANEX']];
 $db = new stdClass();
@@ -89,6 +89,7 @@ for ($i = 0; $i < 38; $i++) {
         'actual_start_date'=>in_array($status,['completed','in_progress'],true)?'2026-09-24':null,
         'actual_end_date'=>$status==='completed'?'2026-09-25':null,
         'source_system'=>$i < 3?'legacy_sync':'erpv2','legacy_flight_id'=>$i < 3?301-$i:null,
+        'legal_entity_code'=>'planex',
         'legacy_last_checked_at'=>'2026-09-27 09:00:00','legacy_last_success_at'=>'2026-09-27 09:00:00',
         'route_executor_id'=>$hasExecutor?1:null,'lock_version'=>1,
         'client_id'=>1,'client_name'=>'ООО «Вектор»','responsible_membership_id'=>$i%4===0?2:1,
@@ -108,9 +109,35 @@ for ($i = 0; $i < 38; $i++) {
     ];
 }
 
+$tripStatusCounts = [''=>count($trips)];
+foreach ($trips as $trip) {
+    $status = (string)$trip['status'];
+    $tripStatusCounts[$status] = ($tripStatusCounts[$status] ?? 0) + 1;
+}
+$trackerNow = new DateTimeImmutable('now', new DateTimeZone('UTC'));
+$trackerLastPoints = [];
+$trackerAges = [2, 13 * 60 + 2, 12 * 24 * 60 + 13 * 60 + 2];
+$trackerIndex = 0;
+foreach ($trips as $trip) {
+    if ($trip['status'] !== 'in_progress') continue;
+    $trackerLastPoints[(int)$trip['id']] = gmdate('Y-m-d H:i:s', $trackerNow->getTimestamp() - $trackerAges[$trackerIndex++ % count($trackerAges)] * 60);
+}
+$statusOrder = ['planned_route'=>0,'executor_assigned'=>1,'in_progress'=>2,'completed'=>3];
+usort($trips, static fn(array $a,array $b):int => ($statusOrder[$a['status']]??4)<=>($statusOrder[$b['status']]??4));
+if (isset($_GET['status']) && $_GET['status'] !== '') {
+    $trips = array_values(array_filter($trips, static fn(array $trip): bool => $trip['status'] === $_GET['status']));
+}
+
 ob_start();
 require $root.'/app/View/pages/company_waste_trips.php';
 $content = (string)ob_get_clean();
+// The accepted sandbox varies the display badge synthetically without changing
+// the finance domain state of those sample rows.
+$content = preg_replace_callback('/<tr class="waste-row" data-waste-view="(\d+)"[^>]*>.*?<\/tr>/s',
+    static function (array $match): string {
+        if (((int)$match[1] - 1) % 4 !== 1) return $match[0];
+        return str_replace('is-planex">ООО «Планэкс»', 'is-mg-logistic">ООО «МГ Логистик»', $match[0]);
+    }, $content);
 foreach ($trips as $trip) {
     $tripId = (int)$trip['id'];
     ob_start();

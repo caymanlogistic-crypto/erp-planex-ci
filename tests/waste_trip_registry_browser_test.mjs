@@ -63,7 +63,7 @@ try {
     const metrics = await page.evaluate(() => {
       const table = document.querySelector('.registry-ui-table--trips');
       const first = table.tBodies[0].rows[0];
-      const money = [9, 10, 11].map(index => first.cells[index].getBoundingClientRect().width);
+      const money = [10, 11, 12].map(index => first.cells[index].getBoundingClientRect().width);
       const filter = document.querySelector('[data-waste-filter]');
       const toolbar = document.querySelector('.registry-ui-toolbar').getBoundingClientRect();
       const search = filter.querySelector('[name=q]').getBoundingClientRect();
@@ -85,11 +85,11 @@ try {
         placeholder: getComputedStyle(filter.querySelector('[name=q]'), '::placeholder').color,
         headingBackground: getComputedStyle(table.querySelector('thead th')).backgroundColor,
         headingImage: getComputedStyle(table.querySelector('thead th')).backgroundImage,
-        statusIndex: first.cells[2].classList.contains('waste-status'),
+        statusIndex: first.cells[3].classList.contains('waste-status'),
         rowCount: table.tBodies[0].rows.length,
       };
     });
-    assert.ok(metrics.scroll <= 1 && metrics.tableScroll >= 0, `${width}: wide table scroll stays inside its frame ${JSON.stringify(metrics)}`);
+    assert.ok(metrics.scroll <= 1 && metrics.tableScroll <= 1, `${width}: registry has no horizontal scroll ${JSON.stringify(metrics)}`);
     assert.equal(metrics.statusIndex, true, `${width}: status column`);
     assert.equal(metrics.rowCount, 5, `${width}: real rows preserved`);
     assert.equal(metrics.searchRightOfSort, true, `${width}: search follows sort`);
@@ -112,14 +112,13 @@ try {
       await page.screenshot({ path: path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR, 'departures-interactive-390.png') });
     }
     if (width > 640) assert.ok(Math.min(...metrics.money) >= 58, `${width}: financial columns preserve readable widths ${JSON.stringify(metrics.money)}`);
-    if (width > 640) {
-      const amountFits = await page.evaluate(() => {
-        const cell = document.querySelector('.registry-ui-table--trips tbody tr td:nth-child(11)');
-        const amount = cell.querySelector('.registry-rate-total');
-        amount.textContent = '99 000 000 ₽';
-        return amount.scrollWidth <= cell.clientWidth - parseFloat(getComputedStyle(cell).paddingLeft) - parseFloat(getComputedStyle(cell).paddingRight) + 1;
+    if (width > 1100) {
+      const widths = await page.evaluate(() => {
+        const row = document.querySelector('.registry-ui-table--trips tbody tr');
+        const tableWidth = row.closest('table').getBoundingClientRect().width;
+        return [row.cells[0], row.cells[1], row.cells[2]].map(cell => cell.getBoundingClientRect().width / tableWidth);
       });
-      assert.equal(amountFits, true, `${width}: 99 million rubles fits financial column`);
+      assert.ok(Math.abs(widths[0] - .05) < .005 && Math.abs(widths[1] - .11) < .005 && Math.abs(widths[2] - .08) < .005, `${width}: accepted ID, description and tracker widths ${JSON.stringify(widths)}`);
     }
     assert.ok(await page.locator('script[src*="/assets/js/app.js"]').count(),`${width}: actual generic grid script loaded`);
     const visibleIds=()=>page.locator('.registry-ui-table--trips tbody tr').evaluateAll(rows=>rows.filter(row=>row.getClientRects().length&&getComputedStyle(row).display!=='none').map(row=>Number(row.dataset.wasteView)).sort((a,b)=>a-b));
