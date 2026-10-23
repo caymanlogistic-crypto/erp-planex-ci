@@ -2,10 +2,13 @@
 declare(strict_types=1);
 
 require_once dirname(__DIR__).'/bootstrap/app.php';
+require_once BASE_PATH.'/app/Support/entrypoint_dependencies.php';
 require_once BASE_PATH.'/app/Service/WasteTripClosingService.php';
 require_once BASE_PATH.'/app/Service/WasteTripClosingReportService.php';
 require_once BASE_PATH.'/app/Service/FinanceInvoiceService.php';
 require_once BASE_PATH.'/app/Support/http_runtime.php';
+
+\App\Security\AccessRuntime::setCurrent(\App\Security\EffectiveAccess::member(71, 1, ['company.trips.waste'=>true], ['waste_trip'=>'own']));
 
 $trip=static function(int $id,array $documents):array {
     return [
@@ -45,6 +48,7 @@ $canCreateInvoice=true;
 $contractors=[['id'=>42,'name'=>'Перевозчик','inn'=>'1234567890']];
 $clients=[];
 $responsibleUsers=[['membership_id'=>71,'full_name'=>'Менеджер','login'=>'manager'],['membership_id'=>72,'full_name'=>'Без рейсов','login'=>'idle']];
+$canFilterLeader=false;
 $viewStateKey='planex:trip-closing:v1:1:42';
 $reportRows=\App\Service\WasteTripClosingReportService::rows($trips,'2026-10-12');
 $xlsx=\App\Service\WasteTripClosingReportService::xlsx($reportRows);
@@ -84,7 +88,7 @@ $assert(\App\Service\WasteTripClosingService::customerSettlementDisplay(['custom
 $assert(\App\Service\WasteTripClosingService::customerSettlementDisplay(['customer_rate'=>null,'customer_paid_amount'=>'0.00'])===['status'=>'unknown','text'=>'Сумма рейса не указана'],'missing customer amount must not invent a debt');
 $assert(str_contains($html,'data-closing-state-key="planex:trip-closing:v1:1:42"'),'saved view settings must use the current account scope');
 $assert(str_contains($html,'class="closing-grid lab-grid table-scroll"')&&str_contains($html,'data-closing-doc-dialog')&&str_contains($html,'data-closing-report-download'),'registry must show the report table with document popup and Excel download');
-$assert(str_contains($html,'class="closing-table lab-table table erp-ledger-table registry-ui-table"')&&str_contains($html,'/assets/css/registry-components.css'),'registry must use the shared registry component style');
+$assert(str_contains($html,'class="closing-table lab-table table erp-ledger-table registry-ui-table registry-ui-data ')&&str_contains($html,'/assets/css/registry-components.css'),'registry must use the shared registry component style');
 $assert(substr_count($html,'data-report-trip-id=')===2,'registry must include both accessible trips');
 $assert(str_contains($sheet,'Рейс №')&&str_contains($sheet,'Название рейса')&&str_contains($sheet,'Вывоз отходов с площадки А')&&str_contains($sheet,'ПЛАНЭКС')&&str_contains($sheet,'МГ Логистика')&&str_contains($sheet,'autoFilter ref="A1:P3"'),'Excel report must contain trip title, both executors and filter');
 $assert(str_contains($sheet,'<t xml:space="preserve">Раздел</t>')&&str_contains($sheet,'<t xml:space="preserve">Оплаченные полные комплекты</t>'),'Excel must include the automatically assigned section');
@@ -109,7 +113,7 @@ $orderedRow=$reportRows[0];
 $orderedRow['tn']='Есть';$orderedRow['contract']='Есть';$orderedRow['invoice']='Нет';$orderedRow['act']='Есть';$orderedRow['waybill']='Нет';
 $assert(array_slice(\App\Service\WasteTripClosingReportService::registryValues($orderedRow),5,5)===['Есть','Есть','НЕТ','Есть','НЕТ'],
     'registry document values must match their reordered headers');
-$assert(str_contains($html,'<th scope="col">ОПИСАНИЕ РЕЙСА</th><th scope="col">ДАТА ВЫГРУЗКИ</th>')&&str_contains($html,'class="registry-unloading-date">30.09.2026')&&str_contains($html,'Вывоз отходов с площадки А')&&!str_contains($html,'Направление</th>'),'registry must display the trip title followed by unloading date');
+$assert(str_contains($html,'<th scope="col">ОПИСАНИЕ РЕЙСА</th><th scope="col">ДАТА ВЫГРУЗКИ</th>')&&str_contains($html,'class="registry-unloading-date" data-label="Дата выгрузки"')&&str_contains($html,'30.09.2026')&&str_contains($html,'Вывоз отходов с площадки А')&&!str_contains($html,'Направление</th>'),'registry must display the trip title followed by unloading date');
 $assert(str_contains($html,'<th scope="col">СТАТУС</th><th scope="col">ДАТА ОПЛ.</th>')&&!str_contains($html,'Оплачено, документы не все'),'registry must have separate payment status and date columns without removed flag');
 $assert(str_contains($html,'closing-report-status is-present')&&str_contains($html,'closing-report-status is-missing'),'registry must color available and missing documents');
 $assert(str_contains($styles,'FFE0F3E7')&&str_contains($styles,'FFFCE5E3')&&str_contains($styles,'FFFFF0C2')&&str_contains($sheet,'r="E2" s="2"')&&str_contains($sheet,'r="E3" s="1"'),'Excel must color document statuses');
@@ -154,7 +158,7 @@ $assert(preg_match('/data-closing-filter-count="all">2<\/b>/',$html)===1
 $assert(!str_contains($html,'payment-stage')&&!str_contains($html,'Вернуть на доработку')&&!str_contains($html,'data-closing-filter="payment"'),'manual payment stage must be absent');
 $assert(str_contains($html,'data-state="incomplete"')&&str_contains($html,'data-state="paid_complete"'),'trip sections must follow documents, TN and posted carrier payment');
 $assert(str_contains($html,'<option value="71">Менеджер</option>'),'manager must be selectable by membership ID');
-$assert(str_contains($html,'<option value="72">Без рейсов</option>'),'active user without trips must remain selectable');
+$assert(str_contains($html,'<option value="72">рейсов Б.</option>'),'active user without trips must remain selectable under the approved short manager label');
 $assert(str_contains($html,'data-manager-id="71"'),'trip must expose its responsible membership ID');
 $assert(str_contains($html,'data-business-id="1"'),'trip must expose its exact business number for list search');
 $assert(str_contains($html,'<b>Нет документов:</b> Подписанный договор / заявка, Счёт, АКТ/УПД, Путевой лист')&&str_contains($html,'Диагностическая карта: Транспортная единица А111АА (необязательно)'),'missing required documents and optional card must be separate');
