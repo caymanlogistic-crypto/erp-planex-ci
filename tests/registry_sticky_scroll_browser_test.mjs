@@ -40,7 +40,7 @@ try {
         fs.mkdirSync(evidenceDir, {recursive:true});
         await page.screenshot({path:path.join(evidenceDir, `${entry.name}-top-${width}.png`)});
       }
-      const geometry = await page.evaluate(({toolbar, table}) => {
+      const geometry = await page.evaluate(async ({toolbar, table}) => {
         const main = document.querySelector('main.content');
         const control = document.querySelector(toolbar);
         const grid = document.querySelector(table);
@@ -48,6 +48,8 @@ try {
         const pageHead = document.querySelector('.page-head');
         const before = {toolbar:control.getBoundingClientRect().top, header:header.getBoundingClientRect().top};
         main.scrollTop = 500;
+        await new Promise(requestAnimationFrame);
+        await new Promise(requestAnimationFrame);
         const rect = element => element.getBoundingClientRect();
         const result = {
           max:main.scrollHeight-main.clientHeight,
