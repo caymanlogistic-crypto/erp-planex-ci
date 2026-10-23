@@ -257,6 +257,7 @@
 @media(max-width:700px){
  .registry-ui-toolbar .registry-ui-search-group {width:100%;grid-column:1/-1}
  .registry-ui-toolbar .registry-ui-search-group .registry-ui-search {flex:1 1 0;min-width:0;width:0}
+ .registry-ui-toolbar.table-toolbar > .toolbar-right:has(> .registry-ui-reset + .registry-ui-search-group:last-child) > .registry-ui-reset[hidden] {display:inline-flex!important;visibility:hidden;pointer-events:none}
 }
 .registry-ui-data--cards {display:block;min-width:0;table-layout:auto}
 .registry-ui-data--cards :is(colgroup,thead) {display:none}
