@@ -113,13 +113,14 @@ require base_path('app/View/partials/registry_ui_state_scope.php');
     <div class="table-toolbar registry-ui-toolbar">
         <div class="found-label">Найдено: <b><?= count($executors) + count($reviewCards) ?></b></div>
         <div class="toolbar-right">
+            <button type="button" class="registry-ui-reset" hidden>Сбросить фильтр</button>
             <div class="toolbar-sort">
                 <select class="toolbar-select" data-erp-grid-sort data-table-reference-select="route" data-registry-field="sort" data-registry-default="date" aria-label="Сортировка исполнителей рейса">
                     <option value="date" selected>По дате добавления</option>
                     <option value="alpha">По алфавиту</option>
                 </select>
             </div>
-            <div class="registry-ui-search-group"><input type="search" class="toolbar-search registry-ui-search" name="route_executor_search" placeholder="Поиск по таблице" aria-label="Поиск исполнителя рейса" autocomplete="off" data-registry-field="query" data-registry-default=""><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div>
+            <div class="registry-ui-search-group"><input type="search" class="toolbar-search registry-ui-search" name="route_executor_search" placeholder="Поиск по таблице" aria-label="Поиск исполнителя рейса" autocomplete="off" data-registry-field="query" data-registry-default=""></div>
         </div>
     </div>
     <div class="table-scroll">

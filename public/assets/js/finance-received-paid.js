@@ -6,7 +6,7 @@
   const filters = document.getElementById('rp-filters');
   const search = document.getElementById('rp-search');
   const sort = document.getElementById('rp-sort');
-  const hideComplete = document.getElementById('rp-hide-complete');
+  const showComplete = document.getElementById('rp-hide-complete');
   const money = cents => new Intl.NumberFormat('ru-RU', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 }).format(cents / 100) + ' ₽';
   const amount = (row, key) => row.dataset[key] === '' ? null : Number(row.dataset[key]);
   let selected = 'all';
@@ -34,7 +34,7 @@
   };
   function render() {
     const query = search.value.trim().toLocaleLowerCase('ru');
-    const eligible = rows.filter(row => (!hideComplete.checked || row.dataset.complete !== '1') && (!query || row.dataset.search.includes(query)));
+    const eligible = rows.filter(row => (showComplete.checked || row.dataset.complete !== '1') && (!query || row.dataset.search.includes(query)));
     for (const button of buttons) {
       const filter = button.dataset.rpFilter;
       button.querySelector('b').textContent = String(eligible.filter(row => matches(row, filter)).length);
@@ -65,7 +65,7 @@
     revealSelected();
   });
   window.addEventListener('resize', revealSelected);
-  hideComplete.addEventListener('change', render);
+  showComplete.addEventListener('change', render);
   sort.addEventListener('change', render);
   search.addEventListener('input', render);
   const details = document.getElementById('rp-detail-modal');

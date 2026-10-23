@@ -24,12 +24,24 @@ const server = http.createServer((request, response) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({ headless: true });
 try {
-  for (const width of [390, 1280, 1920, 3840]) {
+  for (const width of [390, 700, 701, 900, 1099, 1100, 1280, 1920, 3840]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/company/route-executors`);
     await page.waitForSelector('[data-registry-ready="true"]');
     await assertRegistryVisualContract(page, `route-executors ${width}px`);
     await assertRegistryDataContract(page, 'route-executors');
+    const toolbar = page.locator('[data-route-executors-grid] .registry-ui-toolbar');
+    const reset = toolbar.locator('.toolbar-right > .registry-ui-reset');
+    const sort = toolbar.locator('.toolbar-sort');
+    const search = toolbar.locator('.registry-ui-search');
+    assert.equal(await reset.textContent(), 'Сбросить фильтр', `${width}: approved reset label`);
+    assert.equal(await page.getByRole('button', { name: 'Сбросить фильтр' }).count(), 0, `${width}: hidden reset is absent from accessibility tree`);
+    assert.equal(await reset.evaluate(button => { button.focus(); return document.activeElement === button; }), false, `${width}: hidden reset cannot receive focus`);
+    const positions = async () => {
+      const [sortBox, searchBox, toolbarBox] = await Promise.all([sort.boundingBox(), search.boundingBox(), toolbar.boundingBox()]);
+      return {sortX: sortBox.x, sortY: sortBox.y, searchX: searchBox.x, searchY: searchBox.y, toolbarHeight: toolbarBox.height};
+    };
+    const beforeReset = await positions();
     if (width === 390) {
       assert.equal(await page.locator('[data-route-executors-grid] table').evaluate(table => getComputedStyle(table).display), 'table', 'approved mobile mode stays a wide table');
       assert.ok(await page.locator('[data-route-executors-grid] .table-scroll').evaluate(scroll => scroll.scrollWidth > scroll.clientWidth), 'mobile table has internal X scroll');
@@ -44,8 +56,13 @@ try {
       await page.locator('.registry-ui-search').fill(query);
       assert.deepEqual(await visibleIds(),ids,`${width}: actual search IDs for ${query}`);
     }
-    await page.locator('.registry-ui-reset').click();
+    assert.equal(await page.getByRole('button', { name: 'Сбросить фильтр' }).count(), 1, `${width}: visible reset is accessible`);
+    assert.deepEqual(await positions(), beforeReset, `${width}: reset does not move sort, search or toolbar`);
+    await reset.focus();
+    assert.equal(await reset.evaluate(button => document.activeElement === button), true, `${width}: visible reset receives focus`);
+    await reset.press('Enter');
     assert.deepEqual(await visibleIds(),['9','synthetic-draft','synthetic-mail'],`${width}: reset restores original rows`);
+    assert.equal(await page.getByRole('button', { name: 'Сбросить фильтр' }).count(), 0, `${width}: reset returns to hidden state`);
     assert.equal(await page.locator('[data-route-executors-grid] .route-vehicle-line').first().textContent(), 'SHACMANА 101 ВС 16· 20 т· 86 м³');
     assert.equal(await page.locator('[data-route-executors-grid] .route-vehicle-line').nth(1).textContent(), 'ТОНАРА1213 33· 24 т· 92 м³');
     assert.equal(await page.locator('[data-route-executors-grid] .route-review-delete').first().textContent(), '⋯');

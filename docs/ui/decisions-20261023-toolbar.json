@@ -1,0 +1,57 @@
+{
+  "schema": "planex-ui-owner-decision/v1",
+  "id": "OWNER-2026-10-23-REGISTRY-TOOLBAR-LAYOUT",
+  "date": "2026-10-23",
+  "scope": [
+    "/erpv2/company/route-executors",
+    "/erpv2/company/trips/departures",
+    "/erpv2/company/finance/received-paid",
+    "/erpv2/company/logistics/closing-documents",
+    "/erpv2/company/drivers",
+    "/erpv2/company/contractors",
+    "/erpv2/company/vehicle-sets",
+    "/erpv2/company/feo/requests/map-placement",
+    "/erpv2/company/feo/requests/transfers",
+    "/erpv2/company/feo/requests/weights"
+  ],
+  "owner_source": "Current OWNER conversation; acceptance of Design Lab v019 and subsequent explicit instruction to adapt and publish every agreed page",
+  "owner_quote": [
+    "Текущее размещение чекбокса и кнопки сбросить считаем каноническим только кнопку пусть будет сбросить фильтр",
+    "Длелай на каждую страницу субагента которые аккуратно приведет к новому канону и сразу загрузит."
+  ],
+  "reference": {
+    "task_id": "feo-transfers-canon-gap-20261022",
+    "checkpoint": "v019",
+    "checkpoint_sha256": "D9171187187F134E16B4AFD33103A923F6A40CEA3ABA1B88688824E998F159AD",
+    "review_url": "http://127.0.0.1:56832/company/feo/requests/transfers?review=1&version=v019"
+  },
+  "decisions": {
+    "left_group": "Existing registry-ui-checkboxes: Найдено: N, then existing filter-sep only if the page has a checkbox, then the page's native checkbox and clickable label. The divider is 1×18 px #DEDAD0 with 20 px visual gap on each side; divider and checkbox stay paired when a long summary wraps.",
+    "right_group": "One existing registry-ui-reset is first in toolbar-right, before page filters/select/sort; search remains last at the right. Exact button text: Сбросить фильтр. No similar page-local visual class or duplicate reset handler.",
+    "geometry": "At a fixed viewport, showing or hiding reset preserves X/Y of select and search and toolbar height. If space is insufficient, the whole right group has a stable second row in both states. Verify 390, 900, 1280, 1920 and 3840 CSS px and neighboring wrap widths.",
+    "hidden": "Hidden reset is absent from keyboard Tab order and accessibility tree. Above 1099 px the ordinary v019 group removes it from layout. Shared CSS reserves an invisible visibility:hidden slot for dense departures and closing filters, for direct right groups at 701–1099 px, and for search-only right groups at 700 px and below; these structural responsive exceptions preserve control geometry.",
+    "reset": "Visible on any deviation from each page's initial filter/tab/checkbox/sort/search profile; restores that exact profile, clears search, persists the result by the established state scope and becomes hidden. Existing business behavior is retained.",
+    "checkbox_pages": {
+      "/erpv2/company/finance/received-paid": "Показать завершённые: unchecked by default; checked includes fully completed settlements; reset returns unchecked. Persist under showComplete, never invert legacy hideComplete state.",
+      "/erpv2/company/feo/requests/map-placement": "Не показывать отключённые: checked by default; continue hiding disabled blocks.",
+      "/erpv2/company/feo/requests/transfers": "Показать возвращённые: unchecked by default; returned blocks appear only when checked. Reset also restores Нетто and empty search."
+    },
+    "other_pages": "The seven other registered pages do not acquire a new checkbox or divider.",
+    "visual_source": "Reuse registry-components.css, registry-ui-* and existing filter-sep; reset height 32 px and existing IBM Plex Sans 12/500/16, brown checkbox 16×16, approved focus/hover states. The map placement toolbar's existing btn--toolbar aligns to the same 32 px control row."
+  },
+  "amendments": [
+    {
+      "id": "OWNER-2026-10-23-FINANCE-SHOW-COMPLETED",
+      "date": "2026-10-23",
+      "source": "Subsequent explicit OWNER instruction in the same conversation",
+      "supersedes": "Only the original finance checkbox label, checked default and storage semantics in OWNER-2026-10-23-REGISTRY-TOOLBAR-LAYOUT",
+      "previous": "Скрыть завершённые, checked by default",
+      "effective": "Показать завершённые, unchecked by default; checked shows completed rows; reset restores unchecked; showComplete is a new storage key"
+    }
+  ],
+  "excluded": [
+    "new visual controls, palette or page-local duplicate styles",
+    "changes to each page's access rules, data, filter meaning or starting profile, except the explicit finance checkbox amendment above",
+    "production database, schema or business-data writes"
+  ]
+}

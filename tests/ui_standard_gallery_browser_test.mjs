@@ -10,7 +10,7 @@ const url=pathToFileURL(path.join(root,'docs/ui/approved-components.html')).href
 const browser=await chromium.launch({headless:true});
 const evidence=process.env.PLANEX_VISUAL_EVIDENCE_DIR;
 try{
- for(const width of [390,1280,1920,3840]){
+ for(const width of [390,900,1280,1920,3840]){
   const page=await browser.newPage({viewport:{width,height:1080},deviceScaleFactor:1});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(url);
@@ -61,7 +61,17 @@ try{
    }
    const search=scene.locator('[data-registry-field=query]'),reset=scene.locator('.registry-ui-reset');
    assert.equal(await reset.isVisible(),false);
+   assert.equal(await reset.textContent(),'Сбросить фильтр');
+   assert.equal(await scene.locator('.registry-ui-toolbar .toolbar-right > .registry-ui-reset').count(),1,'reset is first in the shared right group');
+   const layout=()=>scene.locator('.registry-ui-toolbar').evaluate(toolbar=>({
+    height:toolbar.getBoundingClientRect().height,
+    controls:[...toolbar.querySelectorAll('.lab-reference-trigger,.registry-ui-search')].map(node=>{
+     const box=node.getBoundingClientRect();return [box.x,box.y];
+    })
+   }));
+   const hiddenLayout=await layout();
    await search.fill('zzzz-no-match');await reset.waitFor({state:'visible'});
+   assert.deepEqual(await layout(),hiddenLayout,`gallery ${key} ${width}: revealing reset does not move filters/search or toolbar height`);
    assert.equal(await scene.locator('[data-gallery-count]').innerText(),'0');
    assert.equal(await scene.locator('[data-gallery-empty]').isVisible(),true);
    assert.equal(await search.evaluate(element=>getComputedStyle(element).backgroundImage.includes('svg')),true,'focus preserves search icon');
@@ -89,10 +99,14 @@ try{
   assert.equal(await last.evaluate(element=>[...new Intl.Segmenter('ru',{granularity:'grapheme'}).segment(element.textContent)].length),31);
   assert.equal((await last.getAttribute('title')).endsWith('сборный рейс'),true);
   await finance.locator('[data-registry-field=query]').fill('сборный');
+  const check=finance.locator('[type=checkbox]');
+  assert.equal(await check.isChecked(),false,'finance show-completed checkbox defaults to unchecked');
+  assert.equal(await finance.locator('[data-gallery-count]').innerText(),'0','completed row stays hidden under the default profile');
+  await check.check();
   assert.equal(await finance.locator('[data-gallery-count]').innerText(),'1','search includes truncated tail');
   assert.equal((await finance.locator('[data-gallery-total="3"]').innerText()).replace(/\s/g,''),'146494,50₽','filtered totals');
   await finance.locator('.registry-ui-reset').click();
-  const check=finance.locator('[type=checkbox]');await check.focus();await page.keyboard.press('Space');
+  assert.equal(await check.isChecked(),false);await check.focus();await page.keyboard.press('Space');
   assert.equal(await check.isChecked(),true);await finance.locator('.registry-ui-reset').waitFor({state:'visible'});
   await finance.locator('.registry-ui-reset').click();assert.equal(await check.isChecked(),false);
   await page.locator('[data-gallery-scene=executors]').click();
@@ -132,7 +146,7 @@ try{
  assert.equal(await restored.locator('[data-gallery-view=executors] [data-registry-field=query]').inputValue(),'Магистраль');
  await restored.evaluate(()=>{
   const key=Object.keys(localStorage).find(key=>key.includes('gallery-executors'));
-  localStorage.setItem(key,JSON.stringify({query:'',sort:'removed-option',hideComplete:'bad',tab:'removed-tab'}));
+  localStorage.setItem(key,JSON.stringify({query:'',sort:'removed-option',showComplete:'bad',tab:'removed-tab'}));
  });
  await page.reload();const clean=page.frames().find(item=>item.parentFrame());await clean.waitForSelector('[data-registry-ready=true]');
  assert.equal(await clean.locator('[data-gallery-view=executors] select').inputValue(),'date');

@@ -12,7 +12,7 @@ declare(strict_types=1);
  */
 function registry_tabler_header_icon(string $name): string
 {
-    $allowed = ['users-group' => true, 'truck-delivery' => true, 'arrows-exchange' => true, 'file-text' => true, 'user' => true, 'truck' => true, 'map-pin' => true];
+    $allowed = ['users-group' => true, 'truck-delivery' => true, 'arrow-right-square' => true, 'arrows-exchange' => true, 'file-text' => true, 'user' => true, 'truck' => true, 'map-pin' => true];
     if (!isset($allowed[$name])) {
         throw new InvalidArgumentException('Unknown registry Tabler icon');
     }

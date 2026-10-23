@@ -8,7 +8,7 @@ require_once base_path('app/View/components/registry_tabler_icons.php');
 <link rel="stylesheet" href="<?= app_url('/assets/css/feo-transfers.css') ?>?v=<?= filemtime(__DIR__.'/../../../public/assets/css/feo-transfers.css') ?>">
 <div class="feo-transfers" data-feo-transfers data-base="<?= e($transferBase) ?>" data-geo-base="<?= e($geoBase) ?>">
   <?php if (!$coordinatesOnly): ?>
-    <?php $registryHeadTitle=$pageTitle; $registryHeadSummary='Перемещайте заявки блоками. Исходные адреса и координаты сохраняются в истории.'; $registryHeadIconHtml=registry_tabler_header_icon('truck-delivery'); $registryHeadActionsHtml=$dbError?'':'<button class="btn btn-primary" type="button" data-open-transfer>Создать блок</button>'; require base_path('app/View/partials/registry_ui_head.php'); ?>
+    <?php $registryHeadTitle=$pageTitle; $registryHeadSummary='Перемещайте заявки блоками. Исходные адреса и координаты сохраняются в истории.'; $registryHeadIconHtml=registry_tabler_header_icon('arrow-right-square'); $registryHeadActionsHtml=$dbError?'':'<button class="btn btn-primary" type="button" data-open-transfer>Создать блок</button>'; require base_path('app/View/partials/registry_ui_head.php'); ?>
   <?php else: ?>
     <div class="page-head"><div class="page-head-left"><h1 class="page-title"><?= e($pageTitle) ?></h1><div class="page-summary">Найдите адрес и узнайте, насколько точно определены координаты.</div></div></div>
   <?php endif; ?>
@@ -19,22 +19,28 @@ require_once base_path('app/View/components/registry_tabler_icons.php');
   <?php if (!$coordinatesOnly): ?>
   <?php if (class_exists(\App\Security\RegistryUiStateScope::class)): require base_path('app/View/partials/registry_ui_state_scope.php'); else: $registryUiStateScope=''; endif; ?>
   <div class="table-card table-card--standard registry-ui-card registry-ui-sticky-table registry-ui-sticky-table--wide-scroll registry-ui-scroll" data-registry-id="feo-transfers" data-registry-state-scope="<?= e($registryUiStateScope) ?>">
-    <div class="table-toolbar registry-ui-toolbar"><div class="found-label registry-ui-toolbar-summary">Блоки перемещения: <b><?= count($batches) ?></b> <span>· страница <?= (int)$page ?></span></div><div class="toolbar-right"><div class="registry-ui-search-group"><input class="toolbar-search registry-ui-search" type="search" data-history-search data-registry-field="query" data-registry-default="" placeholder="Поиск на странице" aria-label="Поиск блоков"><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div></div></div>
+    <div class="table-toolbar registry-ui-toolbar">
+      <div class="registry-ui-checkboxes"><div class="found-label">Найдено: <b data-history-count>0</b></div><span class="filter-sep" aria-hidden="true"></span><div class="registry-ui-checkboxes"><label class="registry-ui-checkbox"><input type="checkbox" data-show-returned data-registry-field="show-returned" data-registry-default="false"> Показать возвращённые</label></div></div>
+      <div class="toolbar-right"><button type="button" class="registry-ui-reset" hidden>Сбросить фильтр</button><select class="toolbar-select" data-weight-mode data-registry-field="weight" data-registry-default="net" data-table-reference-select="feo-transfers" aria-label="Вид веса"><option value="net">Нетто</option><option value="gross">Брутто</option></select><div class="registry-ui-search-group"><input class="toolbar-search registry-ui-search" type="search" data-history-search data-registry-field="query" data-registry-default="" placeholder="Поиск на странице" aria-label="Поиск блоков"></div></div>
+    </div>
     <div class="table-scroll"><table class="table registry-ui-table registry-ui-data registry-ui-table--placement registry-ui-table--placement-blocks transfer-history feo-history-table feo-history-table--transfers">
-      <colgroup><col class="registry-ui-id"><col class="feo-history-col-name"><col class="feo-history-col-destination"><col class="feo-history-col-count"><col class="feo-history-col-date"><col class="feo-history-col-author"><col class="feo-history-col-status"><col class="feo-history-col-actions"></colgroup>
-      <thead><tr><th class="registry-ui-id">ID</th><th>Название</th><th>Место назначения</th><th>Заявок</th><th>Дата</th><th>Ответств.</th><th>Состояние</th><th>Действия</th></tr></thead>
+      <colgroup><col><col><col><col><col><col><col></colgroup>
+      <thead><tr><th>ID</th><th>Заявки которые перемещаются</th><th>Заявок</th><th>Общий вес</th><th>Место назначения</th><th>Дата</th><th>Ответственный</th></tr></thead>
       <tbody>
-      <?php if (!$batches): ?><tr><td colspan="8"><div class="transfer-empty"><b class="registry-ui-name">Перемещений пока нет</b><p class="registry-ui-secondary">Создайте блок, добавьте номера заявок и выберите новое место погрузки.</p><button class="btn btn-primary" type="button" data-open-transfer>Создать первый блок</button></div></td></tr><?php endif; ?>
-      <?php foreach ($batches as $batch): $destination=json_decode($batch['destination_json'],true); ?>
-        <tr data-batch-row data-registry-row-id="<?= (int)$batch['id'] ?>" class="<?= $batch['status']==='applied'?'':'registry-ui-muted' ?>"><td class="registry-ui-id">#<?= (int)$batch['id'] ?></td><td><span class="registry-ui-name" title="<?= e($batch['name']) ?>" data-registry-full-text="<?= e($batch['name']) ?>"><?= e(mb_strlen((string)$batch['name'],'UTF-8')>50 ? rtrim(mb_substr((string)$batch['name'],0,49,'UTF-8')).'…' : $batch['name']) ?></span></td>
-          <td class="transfer-location"><span class="registry-ui-primary" title="<?= e($destination['address']??'') ?>"><?= e($destination['address']??'') ?></span><span class="registry-ui-secondary"><?= e($destination['quality']??'Точность не подтверждена') ?></span></td>
-          <td><span class="registry-ui-primary"><?= (int)$batch['request_count'] ?></span></td><td><span class="registry-ui-primary"><?= e($fmtHistoryDate($batch['created_at'])) ?></span></td><td><span class="registry-ui-primary"><?= e($batch['created_by_name']) ?></span></td>
-          <td><span class="registry-ui-status <?= $batch['status']==='applied'?'registry-ui-success':'' ?>"><?= $batch['status']==='applied'?'Применён':'Возвращён' ?></span></td>
-          <td><div class="inline-actions"><button class="btn btn-secondary btn-sm" type="button" data-detail="<?= (int)$batch['id'] ?>">Подробнее</button><?php if ($batch['status']==='applied'): ?><button class="btn btn-secondary btn-sm" type="button" data-revert="<?= (int)$batch['id'] ?>">Вернуть блок</button><?php endif; ?></div></td></tr>
+      <?php if (!$batches): ?><tr><td colspan="7"><div class="transfer-empty"><b class="registry-ui-name">Перемещений пока нет</b><p class="registry-ui-secondary">Создайте блок, добавьте номера заявок и выберите новое место погрузки.</p><button class="btn btn-primary" type="button" data-open-transfer>Создать первый блок</button></div></td></tr><?php endif; ?>
+      <?php foreach ($batches as $batch): $destination=json_decode($batch['destination_json'],true); $summary=$batchIndexItems[(int)$batch['id']]??['ids'=>[],'net_kg'=>null,'gross_kg'=>null]; $requestIds=implode(', ',$summary['ids']); $sourceId=($batch['mode']??'')==='request'?(string)($batch['source_request_id']??''):''; ?>
+        <tr data-batch-row data-registry-row-id="<?= (int)$batch['id'] ?>" data-batch-status="<?= e($batch['status']) ?>" data-registry-search="<?= e($batch['name'].' '.$requestIds.' '.($destination['address']??'').' '.($destination['quality']??'').' '.$batch['created_by_name']) ?>" class="<?= $batch['status']==='applied'?'':'registry-ui-muted' ?>">
+          <td class="registry-ui-id registry-ui-open-detail" role="button" tabindex="0" data-detail="<?= (int)$batch['id'] ?>" aria-label="Открыть историю <?= $batch['status']==='applied'?'блока':'возвращённого блока' ?> #<?= (int)$batch['id'] ?>">#<?= (int)$batch['id'] ?></td>
+          <td><span class="registry-ui-primary" data-registry-full-text="<?= e($requestIds) ?>" title="<?= e($requestIds) ?>"><?= e($requestIds) ?></span></td>
+          <td><span class="registry-ui-primary"><?= (int)$batch['request_count'] ?></span></td>
+          <td><span class="registry-ui-primary" data-total-weight data-net-kg="<?= e($summary['net_kg']===null?'':(string)$summary['net_kg']) ?>" data-gross-kg="<?= e($summary['gross_kg']===null?'':(string)$summary['gross_kg']) ?>"></span></td>
+          <td class="transfer-location"><?php if ($sourceId!==''): ?><div class="registry-ui-primary"><strong>По адресу заявки <?= e($sourceId) ?></strong></div><?php endif; ?><div class="registry-ui-primary" title="<?= e($destination['address']??'') ?>"><?= e($destination['address']??'') ?></div></td>
+          <td><span class="registry-ui-primary"><?= e($fmtHistoryDate($batch['created_at'])) ?></span></td><td><span class="registry-ui-primary"><?= e($batch['created_by_name']) ?></span></td>
+        </tr>
       <?php endforeach; ?>
       </tbody>
     </table></div>
-    <div class="transfer-pagination"><?php if ($page>1): ?><a class="btn btn-secondary btn-sm" href="<?= e($transferBase.'?page='.($page-1)) ?>">← Новее</a><?php endif; ?><?php if (count($batches)===50): ?><a class="btn btn-secondary btn-sm" href="<?= e($transferBase.'?page='.($page+1)) ?>">Ранее →</a><?php endif; ?></div>
+    <?php if ($page>1 || count($batches)===50): ?><div class="transfer-pagination"><?php if ($page>1): ?><a class="btn btn-secondary btn-sm" href="<?= e($transferBase.'?page='.($page-1)) ?>">← Новее</a><?php endif; ?><?php if (count($batches)===50): ?><a class="btn btn-secondary btn-sm" href="<?= e($transferBase.'?page='.($page+1)) ?>">Ранее →</a><?php endif; ?></div><?php endif; ?>
   </div>
   <dialog class="modal modal-lg transfer-dialog" data-create-dialog aria-labelledby="transfer-create-title">
     <div class="modal-head"><span class="modal-title" id="transfer-create-title">Новый блок перемещения</span><button type="button" class="modal-close" data-close-dialog aria-label="Закрыть">&times;</button></div>
@@ -65,4 +71,5 @@ require_once base_path('app/View/components/registry_tabler_icons.php');
   <?php endif; ?>
 </div>
 <script src="<?= app_url('/assets/js/registry-components.js') ?>?v=<?= filemtime(base_path('public/assets/js/registry-components.js')) ?>" defer></script>
+<script src="<?= app_url('/assets/js/table-reference-select.js') ?>?v=<?= filemtime(base_path('public/assets/js/table-reference-select.js')) ?>" defer></script>
 <script src="<?= app_url('/assets/js/feo-transfers.js') ?>?v=<?= filemtime(__DIR__.'/../../../public/assets/js/feo-transfers.js') ?>" defer></script>

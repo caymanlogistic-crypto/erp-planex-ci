@@ -8,10 +8,10 @@
         const value=key=>view.querySelector(`[data-registry-field="${key}"]`)?.value;
         const query=(value('query')||'').toLocaleLowerCase('ru');
         const attention=view.querySelector('[data-registry-tab="attention"]')?.getAttribute('aria-pressed')==='true'||value('status')==='attention';
-        const hide=view.querySelector('[data-registry-field="hideComplete"]')?.checked;
+        const showComplete=view.querySelector('[data-registry-field="showComplete"]');
         rows.forEach(row=>{
           const full=[...row.querySelectorAll('[data-registry-full-text]')].map(item=>item.dataset.registryFullText).join(' ');
-          row.hidden=!(row.textContent+' '+full).toLocaleLowerCase('ru').includes(query)||(attention&&row.dataset.attention!=='true')||(hide&&row.dataset.complete==='true');
+          row.hidden=!(row.textContent+' '+full).toLocaleLowerCase('ru').includes(query)||(attention&&row.dataset.attention!=='true')||(showComplete&&!showComplete.checked&&row.dataset.complete==='true');
         });
         const count=rows.filter(row=>!row.hidden).length;
         view.querySelector('[data-gallery-count]').textContent=String(count);

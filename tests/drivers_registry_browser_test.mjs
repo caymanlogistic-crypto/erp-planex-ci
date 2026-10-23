@@ -18,6 +18,37 @@ const browser=await chromium.launch({headless:true});
 const output=process.env.PLANEX_VISUAL_EVIDENCE_DIR;
 const measurements=[];
 try{
+ for(const width of [390,700,701,900,1099,1100,1280,1920,3840]){
+  const page=await browser.newPage({viewport:{width,height:900}});
+  await page.goto(`http://127.0.0.1:${server.address().port}/company/drivers`);
+  await page.waitForSelector('[data-registry-ready="true"]');
+  const reset=page.locator('.registry-ui-reset');
+  assert.equal(await page.locator('.toolbar-right > :first-child').getAttribute('class'),'registry-ui-reset','reset precedes sort and search');
+  assert.equal(await reset.textContent(),'Сбросить фильтр');
+  assert.equal(await reset.isHidden(),true);
+  assert.equal(await page.getByRole('button',{name:'Сбросить фильтр'}).count(),0,'hidden reset absent from accessibility tree');
+  assert.equal(await reset.evaluate(el=>{el.focus();return document.activeElement===el}),false,'hidden reset cannot receive focus');
+  const geometry=()=>page.evaluate(()=>{
+   const rect=selector=>{const {x,y,width,height,right,bottom}=document.querySelector(selector).getBoundingClientRect();return {x,y,width,height,right,bottom};};
+   return {toolbar:rect('.registry-ui-toolbar'),sort:rect('.lab-reference-trigger'),search:rect('.registry-ui-search'),reset:rect('.registry-ui-reset'),right:rect('.toolbar-right'),card:rect('.registry-ui-card'),documentOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};
+  });
+  const before=await geometry();
+  await page.locator('.registry-ui-search').fill('несуществующий водитель');
+  assert.equal(await page.getByRole('button',{name:'Сбросить фильтр'}).count(),1,'visible reset exposed to accessibility tree');
+  const after=await geometry();
+  for(const control of ['sort','search'])for(const coordinate of ['x','y'])
+   assert.ok(Math.abs(before[control][coordinate]-after[control][coordinate])<1,`${control} ${coordinate} stable at ${width}: ${before[control][coordinate]} -> ${after[control][coordinate]}`);
+  assert.ok(Math.abs(before.toolbar.height-after.toolbar.height)<1,`toolbar height stable at ${width}`);
+  assert.ok(after.documentOverflow<=1,`no document horizontal overflow at ${width}`);
+  for(const [left,right] of [[after.reset,after.sort],[after.reset,after.search],[after.sort,after.search]])
+   assert.ok(Math.min(left.right,right.right)-Math.max(left.x,right.x)<=1||Math.min(left.bottom,right.bottom)-Math.max(left.y,right.y)<=1,`toolbar controls do not overlap at ${width}`);
+  await reset.focus();
+  assert.notEqual(await reset.evaluate(el=>getComputedStyle(el).outlineStyle),'none',`reset focus visible at ${width}`);
+  await page.keyboard.press('Enter');
+  assert.equal(await page.locator('.registry-ui-search').inputValue(),'');
+  assert.equal(await reset.isHidden(),true);
+  await page.close();
+ }
  for(const width of [390,1280,1920,3840]){
   const page=await browser.newPage({viewport:{width,height:900}});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));

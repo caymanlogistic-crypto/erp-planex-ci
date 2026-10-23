@@ -51,13 +51,14 @@ function vehicle_table_num($value): string {
     <div class="table-toolbar registry-ui-toolbar">
         <div class="found-label">Найдено: <b><?= count($vehicleSets) ?></b></div>
         <div class="toolbar-right">
+            <button type="button" class="registry-ui-reset" hidden>Сбросить фильтр</button>
             <div class="toolbar-sort">
                 <select class="toolbar-select" data-erp-grid-sort data-table-reference-select="vehicle-sets" data-registry-field="sort" data-registry-default="date" aria-label="Сортировка транспорта">
                     <option value="date" selected>По дате добавления</option>
                     <option value="alpha">По алфавиту</option>
                 </select>
             </div>
-            <div class="registry-ui-search-group"><input type="search" class="toolbar-search registry-ui-search" placeholder="Поиск по таблице" aria-label="Поиск транспорта" autocomplete="off" data-registry-field="query" data-registry-default=""><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div>
+            <div class="registry-ui-search-group"><input type="search" class="toolbar-search registry-ui-search" placeholder="Поиск по таблице" aria-label="Поиск транспорта" autocomplete="off" data-registry-field="query" data-registry-default=""></div>
         </div>
     </div>
     <div class="table-scroll">

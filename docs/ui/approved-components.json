@@ -49,7 +49,7 @@
       "role": "Панель Найдено и фильтров",
       "selector": ".registry-ui-toolbar",
       "approval": "OWNER 2026-10-12",
-      "description": "Панель внутри рамки: счётчик слева, доступные фильтры и поиск справа. Высота растёт вместе с содержимым.",
+      "description": "Панель внутри рамки: слева счётчик и при наличии флажок через штатный разделитель, справа сначала «Сбросить фильтр», затем фильтры, поиск последним. Высота растёт вместе с содержимым; появление сброса не сдвигает контролы.",
       "specimen": "docs/ui/specimens/registry.composition.html"
     },
     {
@@ -58,7 +58,7 @@
       "role": "Поиск",
       "selector": ".registry-ui-search",
       "approval": "OWNER 2026-10-18",
-      "description": "IBM Plex Sans 12/500/16; отступ слева 31 px, постоянная иконка при focus. После поиска появляется Сбросить при изменении состояния.",
+      "description": "IBM Plex Sans 12/500/16; отступ слева 31 px, постоянная иконка при focus. Поиск последний справа; «Сбросить фильтр» расположен перед фильтрами и появляется при изменении состояния.",
       "specimen": "docs/ui/specimens/registry.composition.html"
     },
     {
@@ -103,7 +103,7 @@
       "role": "Флажок панели",
       "selector": ".registry-ui-toolbar .rp-v014-hide-complete",
       "approval": "OWNER 2026-10-12",
-      "description": "Флажок с текстом без отдельной плашки, с сохранённой семантикой native input.",
+      "description": "Флажок с текстом без отдельной плашки и с native input. Если он предусмотрен страницей, расположен слева после счётчика и разделителя .filter-sep; без флажка разделителя нет.",
       "specimen": "docs/ui/specimens/registry.composition.html"
     },
     {
@@ -184,7 +184,7 @@
       "role": "Фильтры, память и сброс",
       "selector": ".registry-ui-reset",
       "approval": "OWNER 2026-10-18",
-      "description": "Один Сбросить после поиска при любом отклонении от начальных значений. Состояние отдельно по странице, пользователю, роли и компании.",
+      "description": "Одна кнопка «Сбросить фильтр» первой в правой группе при любом отклонении от начальных значений. Состояние отдельно по странице, пользователю, роли и компании; select и поиск не сдвигаются при появлении кнопки.",
       "specimen": "docs/ui/specimens/registry.composition.html"
     },
     {
@@ -703,23 +703,20 @@
       "view": "app/View/pages/company_feo_transfers.php",
       "header_icon": {
         "variant": "outline",
-        "source": "app/View/components/tabler/outline/truck-delivery.svg",
+        "source": "app/View/components/tabler/outline/arrow-right-square.svg",
         "version": "3.48.0",
-        "name": "truck-delivery",
+        "name": "arrow-right-square",
         "role": "registry.page-head",
         "pack": "@tabler/icons"
       },
-      "reference_select": false,
+      "reference_select": true,
       "sticky": true,
       "asset_owner": "app/View/pages/company_feo_transfers.php",
       "browser_test": "tests/feo_history_canon_browser_test.mjs",
       "runtime_browser_test": "tests/feo_history_runtime_browser_test.mjs",
       "data_roles": [
         "primary",
-        "name",
-        "secondary",
-        "id",
-        "status"
+        "id"
       ],
       "table_surfaces": [
         {

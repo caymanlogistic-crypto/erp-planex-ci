@@ -24,13 +24,16 @@ final class FeoTransferController
     {
         $pageTitle=$coordinatesOnly?'Определение координат':'Перемещение заявок';
         $pageContext='Заявки ФЭО › '.$pageTitle;
-        $batches=[]; $dbError=null; $keyConfigured=false;
+        $batches=[]; $batchIndexItems=[]; $dbError=null; $keyConfigured=false;
         $page=max(1,min(100000,(int)($_GET['page']??1)));
         $isOwner=AccessRuntime::current()->isSystemOwner();
         try {
             [$company,$pdo]=$this->context();
             if (!$this->service->ready($pdo)) throw new RuntimeException('Модуль ожидает обновления базы компании (139).');
-            if (!$coordinatesOnly) $batches=$this->service->batches($pdo,$page);
+            if (!$coordinatesOnly) {
+                $batches=$this->service->batches($pdo,$page);
+                $batchIndexItems=$this->service->batchIndexItems($pdo,$batches);
+            }
             $keyConfigured=$this->apiKey($pdo)!=='';
         } catch (\Throwable $e) { $dbError=$e->getMessage(); }
         $config=$this->config; $db=$this->db;

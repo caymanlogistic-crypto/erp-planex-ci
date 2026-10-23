@@ -32,6 +32,61 @@ await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
 const evidence=process.env.PLANEX_VISUAL_EVIDENCE_DIR;
 const measurements=[];
+const toolbarGeometry=page=>page.evaluate(()=>{
+  const rect=selector=>{
+    const {x,y,width,height}=document.querySelector(selector).getBoundingClientRect();
+    return {x,y,width,height};
+  };
+  const toolbar=document.querySelector('.registry-ui-toolbar');
+  const summary=document.querySelector('.registry-ui-toolbar-summary');
+  const sep=document.querySelector('.registry-ui-toolbar .filter-sep');
+  return {
+    toolbar:rect('.registry-ui-toolbar'),summary:rect('.registry-ui-toolbar-summary'),
+    sep:rect('.registry-ui-toolbar .filter-sep'),checkbox:rect('.registry-ui-toolbar .registry-ui-checkbox'),
+    action:rect('[data-placement-open-current]'),search:rect('[data-placement-block-search]'),
+    sepColor:getComputedStyle(sep).backgroundColor,summaryOverflow:summary.scrollWidth-summary.clientWidth,
+    pageOverflow:document.documentElement.scrollWidth-document.documentElement.clientWidth,
+    toolbarOverflow:toolbar.scrollWidth-toolbar.clientWidth,
+  };
+});
+const assertToolbarLayout=async(page,width)=>{
+  const reset=page.getByRole('button',{name:'Сбросить фильтр'});
+  assert.equal(await reset.count(),0,`${width}: hidden reset absent from accessibility tree`);
+  assert.equal(await page.locator('.toolbar-right > .registry-ui-reset').count(),1,`${width}: reset is first in right group`);
+  assert.equal(await page.locator('.toolbar-right').evaluate(el=>el.firstElementChild.classList.contains('registry-ui-reset')),true);
+  assert.equal(await page.locator('.registry-ui-checkboxes > .registry-ui-checkboxes .filter-sep + .registry-ui-checkbox').count(),1,`${width}: divider and checkbox stay paired`);
+  assert.equal(await page.locator('[data-placement-hide-disabled]').isChecked(),true,`${width}: existing checkbox default`);
+  await page.locator('[data-placement-hide-disabled]').focus();
+  await page.keyboard.press('Tab');
+  assert.equal(await page.locator('[data-placement-open-current]').evaluate(el=>el===document.activeElement),true,`${width}: hidden reset omitted from Tab order`);
+  const before=await toolbarGeometry(page);
+  assert.equal(before.sep.width,1,`${width}: canonical divider width`);
+  assert.equal(before.sep.height,18,`${width}: canonical divider height`);
+  assert.equal(before.sepColor,'rgb(222, 218, 208)',`${width}: canonical divider tone`);
+  assert.ok(Math.abs(before.sep.y+before.sep.height/2-before.checkbox.y-before.checkbox.height/2)<=1,`${width}: divider remains with checkbox`);
+  assert.ok(Math.abs(before.checkbox.x-before.sep.x-before.sep.width-20)<=1,`${width}: canonical divider gap`);
+  assert.ok(before.summaryOverflow<=1&&before.pageOverflow<=1&&before.toolbarOverflow<=1,`${width}: summary and toolbar do not clip or overflow`);
+  await page.locator('[data-placement-hide-disabled]').uncheck();
+  assert.equal(await reset.count(),1,`${width}: changed checkbox reveals reset`);
+  const after=await toolbarGeometry(page);
+  for(const key of ['action','search'])for(const axis of ['x','y'])
+    assert.ok(Math.abs(after[key][axis]-before[key][axis])<=1,`${width}: ${key} ${axis} stable when reset appears (${before[key][axis]} → ${after[key][axis]})`);
+  assert.ok(Math.abs(after.toolbar.height-before.toolbar.height)<=1,`${width}: toolbar height stable when reset appears`);
+  await page.locator('[data-placement-hide-disabled]').focus();
+  await page.keyboard.press('Tab');
+  assert.equal(await reset.evaluate(el=>el===document.activeElement),true,`${width}: visible reset follows checkbox in Tab order`);
+  await reset.click();
+  assert.equal(await page.locator('[data-placement-hide-disabled]').isChecked(),true,`${width}: reset restores existing checkbox default`);
+  assert.equal(await reset.count(),0,`${width}: reset hidden again after restore`);
+  if(width===900){
+    await page.locator('[data-placement-hide-disabled]').uncheck();
+    await page.reload();
+    await page.waitForSelector('[data-registry-ready="true"]');
+    assert.equal(await page.locator('[data-placement-hide-disabled]').isChecked(),false,'changed checkbox persists after reload');
+    await page.getByRole('button',{name:'Сбросить фильтр'}).click();
+    assert.equal(await page.locator('[data-placement-hide-disabled]').isChecked(),true,'reset clears persisted checkbox change');
+  }
+};
 try{
   for(const width of [390,1280,1920,3840]){
     const page=await browser.newPage({viewport:{width,height:900}}),errors=[];
@@ -80,6 +135,7 @@ try{
     assert.deepEqual(await page.locator('.feo-placement-table thead th').evaluateAll(items=>items.filter(el=>el.scrollWidth>el.clientWidth+1).map(el=>el.textContent.trim())),[],'every column heading remains readable');
     if(width===390)assert.ok(geometry.internalScroll>0,'wide table scrolls within card');
     if(width===3840)assert.ok(geometry.card.width<3000,'workspace remains bounded');
+    await assertToolbarLayout(page,width);
     const rows=page.locator('.feo-placement-table tbody tr[data-placement-block-id]');
     assert.equal(await rows.count(),70,'all blocks preserved');
     assert.equal(await page.locator('.feo-placement-table tbody tr[data-placement-block-id]:visible').count(),59,'disabled blocks initially hidden');
@@ -193,6 +249,13 @@ try{
     assert.deepEqual(errors,[],`no browser errors at ${width}`);
     measurements.push(geometry);await page.close();
   }
+  for(const width of [700,701,900,1099,1100]){
+    const page=await browser.newPage({viewport:{width,height:900}});
+    await page.goto(`http://127.0.0.1:${server.address().port}/erpv2/company/feo/requests/map-placement`);
+    await page.waitForSelector('[data-registry-ready="true"]');
+    await assertToolbarLayout(page,width);
+    await page.close();
+  }
   for(const state of ['empty','error'])for(const width of [390,1280,1920,3840]){
     const page=await browser.newPage({viewport:{width,height:900}});await page.goto(`http://127.0.0.1:${server.address().port}/erpv2/company/feo/requests/map-placement?state=${state}`);
     assert.equal(await page.locator('.registry-ui-head').count(),1,`${state}: canonical header`);
@@ -202,5 +265,5 @@ try{
     await page.close();
   }
   if(evidence)writeFileSync(path.join(evidence,'measurements.json'),JSON.stringify(measurements,null,2));
-  console.log('FEO_MAP_PLACEMENT_CANON_BROWSER=PASS widths=390,1280,1920,3840 states=normal,hover,focus,empty,error');
+  console.log('FEO_MAP_PLACEMENT_CANON_BROWSER=PASS widths=390,700,701,900,1099,1100,1280,1920,3840 states=normal,hover,focus,empty,error');
 }finally{await browser.close();await new Promise(resolve=>server.close(resolve));}
