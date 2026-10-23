@@ -32,13 +32,23 @@
     "hidden": "Hidden reset is absent from keyboard Tab order and accessibility tree. The ordinary v019 group removes it from layout; dense departures and closing filters may reserve an invisible slot using shared CSS visibility:hidden to preserve control geometry.",
     "reset": "Visible on any deviation from each page's initial filter/tab/checkbox/sort/search profile; restores that exact profile, clears search, persists the result by the established state scope and becomes hidden. Existing business behavior is retained.",
     "checkbox_pages": {
-      "/erpv2/company/finance/received-paid": "Скрыть завершённые: checked by default; continue hiding fully completed settlements.",
+      "/erpv2/company/finance/received-paid": "Показать завершённые: unchecked by default; checked includes fully completed settlements; reset returns unchecked. Persist under showComplete, never invert legacy hideComplete state.",
       "/erpv2/company/feo/requests/map-placement": "Не показывать отключённые: checked by default; continue hiding disabled blocks.",
       "/erpv2/company/feo/requests/transfers": "Показать возвращённые: unchecked by default; returned blocks appear only when checked. Reset also restores Нетто and empty search."
     },
     "other_pages": "The seven other registered pages do not acquire a new checkbox or divider.",
     "visual_source": "Reuse registry-components.css, registry-ui-* and existing filter-sep; reset height 32 px and existing IBM Plex Sans 12/500/16, brown checkbox 16×16, approved focus/hover states. The map placement toolbar's existing btn--toolbar aligns to the same 32 px control row."
   },
+  "amendments": [
+    {
+      "id": "OWNER-2026-10-23-FINANCE-SHOW-COMPLETED",
+      "date": "2026-10-23",
+      "source": "Subsequent explicit OWNER instruction in the same conversation",
+      "supersedes": "Only the original finance checkbox label, checked default and storage semantics in OWNER-2026-10-23-REGISTRY-TOOLBAR-LAYOUT",
+      "previous": "Скрыть завершённые, checked by default",
+      "effective": "Показать завершённые, unchecked by default; checked shows completed rows; reset restores unchecked; showComplete is a new storage key"
+    }
+  ],
   "excluded": [
     "new visual controls, palette or page-local duplicate styles",
     "changes to each page's access rules, data, filter meaning or starting profile",

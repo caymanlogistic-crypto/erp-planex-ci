@@ -100,15 +100,15 @@ try{
   assert.equal((await last.getAttribute('title')).endsWith('сборный рейс'),true);
   await finance.locator('[data-registry-field=query]').fill('сборный');
   const check=finance.locator('[type=checkbox]');
-  assert.equal(await check.isChecked(),true,'finance checkbox defaults to hiding completed rows');
+  assert.equal(await check.isChecked(),false,'finance show-completed checkbox defaults to unchecked');
   assert.equal(await finance.locator('[data-gallery-count]').innerText(),'0','completed row stays hidden under the default profile');
-  await check.uncheck();
+  await check.check();
   assert.equal(await finance.locator('[data-gallery-count]').innerText(),'1','search includes truncated tail');
   assert.equal((await finance.locator('[data-gallery-total="3"]').innerText()).replace(/\s/g,''),'146494,50₽','filtered totals');
   await finance.locator('.registry-ui-reset').click();
-  assert.equal(await check.isChecked(),true);await check.focus();await page.keyboard.press('Space');
-  assert.equal(await check.isChecked(),false);await finance.locator('.registry-ui-reset').waitFor({state:'visible'});
-  await finance.locator('.registry-ui-reset').click();assert.equal(await check.isChecked(),true);
+  assert.equal(await check.isChecked(),false);await check.focus();await page.keyboard.press('Space');
+  assert.equal(await check.isChecked(),true);await finance.locator('.registry-ui-reset').waitFor({state:'visible'});
+  await finance.locator('.registry-ui-reset').click();assert.equal(await check.isChecked(),false);
   await page.locator('[data-gallery-scene=executors]').click();
   const executor=view('executors'),trigger=executor.locator('.lab-reference-trigger');
   await trigger.click();const selected=executor.locator('[aria-selected=true]');
@@ -146,7 +146,7 @@ try{
  assert.equal(await restored.locator('[data-gallery-view=executors] [data-registry-field=query]').inputValue(),'Магистраль');
  await restored.evaluate(()=>{
   const key=Object.keys(localStorage).find(key=>key.includes('gallery-executors'));
-  localStorage.setItem(key,JSON.stringify({query:'',sort:'removed-option',hideComplete:'bad',tab:'removed-tab'}));
+  localStorage.setItem(key,JSON.stringify({query:'',sort:'removed-option',showComplete:'bad',tab:'removed-tab'}));
  });
  await page.reload();const clean=page.frames().find(item=>item.parentFrame());await clean.waitForSelector('[data-registry-ready=true]');
  assert.equal(await clean.locator('[data-gallery-view=executors] select').inputValue(),'date');
