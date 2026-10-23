@@ -51,6 +51,8 @@ require base_path('app/View/partials/registry_ui_head.php');
     <span>Старая БД: <?=(int)$tripParity['legacy_count']?>; связанные рейсы ERP: <?=(int)$tripParity['erp_linked_count']?>; самостоятельные рейсы ERP: <?=(int)$tripParity['erp_independent_count']?> (в сверку не входят).</span>
     <?php if($tripParity['missing_ids']!==[]):?><div>Нет в реестре ERP: #<?=e(implode(', #',$tripParity['missing_ids']))?></div><?php endif;?>
     <?php if($tripParity['extra_ids']!==[]):?><div>Нет в старой БД: #<?=e(implode(', #',$tripParity['extra_ids']))?></div><?php endif;?>
+    <?php if($tripParity['status_mismatch_ids']!==[]):?><div>Не совпадает статус: #<?=e(implode(', #',$tripParity['status_mismatch_ids']))?></div><?php endif;?>
+    <?php if($tripParity['sync_error_ids']!==[]):?><div>Ошибка синхронизации (подробности в карточке рейса): #<?=e(implode(', #',$tripParity['sync_error_ids']))?></div><?php endif;?>
 </div>
 <?php endif;?>
 <?php if(!empty($syncResult)):?><div class="notice">Синхронизация: создано <?= (int)$syncResult['created']?>, обновлено <?= (int)$syncResult['updated']?>, удалено <?= (int)$syncResult['deleted']?>, ошибок <?= (int)$syncResult['failed']?>.</div><?php foreach(array_merge($syncResult['warnings'],$syncResult['errors']) as $message):?><div class="notice warn"><?=e($message)?></div><?php endforeach;endif;?>
