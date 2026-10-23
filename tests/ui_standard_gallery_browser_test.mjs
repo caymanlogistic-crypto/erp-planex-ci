@@ -10,7 +10,7 @@ const url=pathToFileURL(path.join(root,'docs/ui/approved-components.html')).href
 const browser=await chromium.launch({headless:true});
 const evidence=process.env.PLANEX_VISUAL_EVIDENCE_DIR;
 try{
- for(const width of [390,1280,1920,3840]){
+ for(const width of [390,900,1280,1920,3840]){
   const page=await browser.newPage({viewport:{width,height:1080},deviceScaleFactor:1});
   const errors=[];page.on('pageerror',error=>errors.push(error.message));
   await page.goto(url);
@@ -61,7 +61,17 @@ try{
    }
    const search=scene.locator('[data-registry-field=query]'),reset=scene.locator('.registry-ui-reset');
    assert.equal(await reset.isVisible(),false);
+   assert.equal(await reset.innerText(),'Сбросить фильтр');
+   assert.equal(await scene.locator('.registry-ui-toolbar .toolbar-right > .registry-ui-reset').count(),1,'reset is first in the shared right group');
+   const layout=()=>scene.locator('.registry-ui-toolbar').evaluate(toolbar=>({
+    height:toolbar.getBoundingClientRect().height,
+    controls:[...toolbar.querySelectorAll('.lab-reference-trigger,.registry-ui-search')].map(node=>{
+     const box=node.getBoundingClientRect();return [box.x,box.y];
+    })
+   }));
+   const hiddenLayout=await layout();
    await search.fill('zzzz-no-match');await reset.waitFor({state:'visible'});
+   assert.deepEqual(await layout(),hiddenLayout,`gallery ${key} ${width}: revealing reset does not move filters/search or toolbar height`);
    assert.equal(await scene.locator('[data-gallery-count]').innerText(),'0');
    assert.equal(await scene.locator('[data-gallery-empty]').isVisible(),true);
    assert.equal(await search.evaluate(element=>getComputedStyle(element).backgroundImage.includes('svg')),true,'focus preserves search icon');
