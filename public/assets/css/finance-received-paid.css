@@ -170,7 +170,6 @@
 #rp-detail-modal .rp-v011-detail-due{display:flex;justify-content:space-between;gap:12px;padding:9px 11px;border-bottom:1px solid var(--line-soft)}
 #rp-detail-modal .rp-details-meta{display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:36px;padding:8px 11px;background:#fffdf9;border-bottom:1px solid var(--line-soft);color:#625c53;font-size:11px}
 #rp-detail-modal .rp-details-meta span:last-child{text-align:right}
-@media(max-width:1199px){.rp-ledger-v015 .rp-v015-toolbar{flex-wrap:wrap}}
 @media(min-width:1051px) and (max-width:1599px){
  .rp-ledger-v015 .rp-v010-table colgroup,.rp-ledger-v015 .rp-v012-wide-head{display:none}
  .rp-ledger-v015 .rp-v010-table thead,.rp-ledger-v015 .rp-v010-table tbody,.rp-ledger-v015 .rp-v010-table tfoot{display:block}
@@ -227,8 +226,7 @@
  .rp-ledger-v015 .rp-v010-table tfoot td[data-total="paid"]:before{content:'Оплачено'}
  .rp-ledger-v015 .rp-v010-table tfoot td[data-total="carrier-balance"]:before{content:'К выплате'}
 }
-@media(max-width:950px){.rp-ledger-v015 .toolbar-right{display:grid;grid-template-columns:max-content minmax(171px,1fr);width:100%}.rp-ledger-v015 #rp-search{grid-column:1/-1;width:100%}}
-@media(max-width:600px){.rp-ledger-v015 .toolbar-right{grid-template-columns:minmax(0,1fr)}.rp-ledger-v015 #rp-search{grid-column:auto}.rp-ledger-v015 .rp-v010-table tbody tr,.rp-ledger-v015 .rp-v010-table tfoot tr{grid-template-columns:1fr}.rp-ledger-v015 .rp-v010-table tbody td:first-child,.rp-ledger-v015 .rp-v010-table tbody td:nth-child(2),.rp-ledger-v015 .rp-v010-table tbody td:nth-child(7){grid-column:1}}
+@media(max-width:600px){.rp-ledger-v015 .rp-v010-table tbody tr,.rp-ledger-v015 .rp-v010-table tfoot tr{grid-template-columns:1fr}.rp-ledger-v015 .rp-v010-table tbody td:first-child,.rp-ledger-v015 .rp-v010-table tbody td:nth-child(2),.rp-ledger-v015 .rp-v010-table tbody td:nth-child(7){grid-column:1}}
 @media(max-width:600px){.rp-ledger-v015>.page-head{flex-wrap:wrap;align-items:flex-start}.rp-ledger-v015 .page-head-actions{margin-left:40px}}
 @media(max-width:550px){
   .rp-compact-table{font-size:10px}.rp-compact-table thead th{font-size:8px}

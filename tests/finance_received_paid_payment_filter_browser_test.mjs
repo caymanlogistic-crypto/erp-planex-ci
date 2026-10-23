@@ -32,6 +32,44 @@ try{
  await page.addScriptTag({content:referenceSelectJs});
  await page.addScriptTag({content:registryJs});
  await page.locator('[data-registry-id="finance-received-paid"][data-registry-ready="true"]').waitFor();
+ const toolbar=page.locator('.rp-v015-toolbar');
+ const reset=toolbar.locator('.registry-ui-reset');
+ assert.equal(await toolbar.locator(':scope > .registry-ui-checkboxes > .found-label + .filter-sep + label:has(#rp-hide-complete)').count(),1,'count, divider and original checkbox share the left group');
+ assert.equal(await toolbar.locator(':scope > .toolbar-right > .registry-ui-reset:first-child').count(),1,'reset precedes the finance sort and search');
+ assert.equal(await toolbar.locator(':scope > .toolbar-right > .registry-ui-search-group:last-child #rp-search').count(),1,'search remains the last control');
+ assert.equal(await reset.innerText(),'Сбросить фильтр');
+ for(const width of [390,900,1280,1920,3840]){
+   await page.setViewportSize({width,height:900});
+   const geometry=()=>toolbar.evaluate(element=>{
+     const box=selector=>{const rect=(selector==='self'?element:element.querySelector(selector)).getBoundingClientRect();return {x:Math.round(rect.x),y:Math.round(rect.y),width:Math.round(rect.width),height:Math.round(rect.height)};};
+     return {toolbar:box('self'),sort:box('.lab-reference-trigger'),search:box('#rp-search'),count:box('.found-label'),divider:box('.filter-sep'),check:box('#rp-hide-complete'),overflow:document.documentElement.scrollWidth>innerWidth+1};
+   });
+   assert.equal(await reset.isHidden(),true,`${width}: default reset hidden`);
+   assert.equal(await page.locator('#rp-hide-complete').isChecked(),true,`${width}: existing checked default retained`);
+   const before=await geometry();
+   const dividerStyle=await toolbar.locator('.filter-sep').evaluate(element=>({width:getComputedStyle(element).width,height:getComputedStyle(element).height,color:getComputedStyle(element).backgroundColor}));
+   assert.deepEqual(dividerStyle,{width:'1px',height:'18px',color:'rgb(222, 218, 208)'},`${width}: existing divider matches canon`);
+   assert.equal(before.divider.x-before.count.x-before.count.width>=18,true,`${width}: divider separated from count`);
+   assert.equal(before.check.x-before.divider.x-before.divider.width>=18,true,`${width}: checkbox separated from divider`);
+   if(process.env.PLANEX_VISUAL_EVIDENCE_DIR){
+     fs.mkdirSync(process.env.PLANEX_VISUAL_EVIDENCE_DIR,{recursive:true});
+     await toolbar.screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,`received-paid-toolbar-${width}-reset-hidden.png`)});
+   }
+   await page.locator('#rp-search').fill('103');
+   assert.equal(await reset.isVisible(),true,`${width}: dirty search reveals reset`);
+   const after=await geometry();
+   assert.deepEqual(after.sort,before.sort,`${width}: revealing reset keeps select coordinates`);
+   assert.deepEqual(after.search,before.search,`${width}: revealing reset keeps search coordinates`);
+   assert.equal(after.toolbar.height,before.toolbar.height,`${width}: revealing reset keeps toolbar height`);
+   assert.equal(after.overflow,false,`${width}: no document overflow`);
+   if(process.env.PLANEX_VISUAL_EVIDENCE_DIR) await toolbar.screenshot({path:path.join(process.env.PLANEX_VISUAL_EVIDENCE_DIR,`received-paid-toolbar-${width}-reset-visible.png`)});
+   await reset.click();
+   assert.equal(await reset.isHidden(),true,`${width}: reset hides after use`);
+   assert.equal(await page.locator('#rp-search').inputValue(),'');
+   assert.equal(await page.locator('#rp-hide-complete').isChecked(),true);
+   assert.equal(await page.locator('#rp-sort').inputValue(),'date-new');
+   assert.equal(await toolbar.locator('.found-label b').innerText(),'4');
+ }
  for(const width of [390,1280,1920,3840]){
   await page.setViewportSize({width,height:900});
   await assertRegistryTablerIcon(page,'finance-received-paid');
