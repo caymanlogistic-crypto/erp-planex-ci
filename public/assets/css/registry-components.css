@@ -114,6 +114,8 @@
 /* The legacy 1024px shell floor clips approved registries at intermediate widths. */
 @media(min-width:701px) and (max-width:1023px){
   .app:has(.registry-ui-card),.app-shell:has(.registry-ui-card){min-width:0}
+  .registry-ui-toolbar .toolbar-right:has(> .btn--toolbar){flex-wrap:wrap}
+  .registry-ui-toolbar .toolbar-right:has(> .btn--toolbar) > .registry-ui-reset[hidden]{display:inline-flex!important;visibility:hidden;pointer-events:none}
 }
 @media(max-width:700px){
   .registry-ui-head.page-head {align-items:flex-start;row-gap:12px}
