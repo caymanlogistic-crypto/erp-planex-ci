@@ -25,16 +25,22 @@ try{
  page.on('pageerror',error=>errors.push(error.message));
  await page.route('**/assets/**',route=>{const file=path.join(root,'public',new URL(route.request().url()).pathname.replace(/^\/erpv2/,'') );return route.fulfill({contentType:file.endsWith('.css')?'text/css':'font/woff2',body:fs.readFileSync(file)})});
  await page.route('http://127.0.0.1/company/finance/received-paid',route=>route.fulfill({contentType:'text/html',body:html.replace(/<link\b[^>]*>/g,'').replace(/<script\b[^>]*src=[^>]*>[\s\S]*?<\/script>/g,'')}));
+ const mountFixture=async()=>{
+   await page.addStyleTag({content:appCss.replace(/@import[^;]+;/g,'')+'\n'+erpCss+'\n'+css+'\n'+ledgerCss+'\n'+registryCss+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
+   await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
+   await page.addScriptTag({content:js});
+   await page.addScriptTag({content:referenceSelectJs});
+   await page.addScriptTag({content:registryJs});
+   await page.locator('[data-registry-id="finance-received-paid"][data-registry-ready="true"]').waitFor();
+ };
  await page.goto('http://127.0.0.1/company/finance/received-paid');
- await page.addStyleTag({content:appCss.replace(/@import[^;]+;/g,'')+'\n'+erpCss+'\n'+css+'\n'+ledgerCss+'\n'+registryCss+'\n'+fontCss+'\nbody{margin:0;overflow:auto}.modal-overlay{display:none}.modal-overlay.is-open{display:flex}'});
- await page.evaluate(()=>{window.openModal=id=>document.getElementById(id).classList.add('is-open');window.closeModal=id=>document.getElementById(id).classList.remove('is-open');});
- await page.addScriptTag({content:js});
- await page.addScriptTag({content:referenceSelectJs});
- await page.addScriptTag({content:registryJs});
- await page.locator('[data-registry-id="finance-received-paid"][data-registry-ready="true"]').waitFor();
+ await mountFixture();
  const toolbar=page.locator('.rp-v015-toolbar');
  const reset=toolbar.locator('.registry-ui-reset');
  assert.equal(await toolbar.locator(':scope > .registry-ui-checkboxes > .found-label + .filter-sep + label:has(#rp-hide-complete)').count(),1,'count, divider and original checkbox share the left group');
+ assert.equal(await toolbar.locator('label:has(#rp-hide-complete)').innerText(),'Показать завершённые');
+ assert.equal(await page.locator('#rp-hide-complete').getAttribute('data-registry-field'),'showComplete','new state field isolates old persisted hideComplete values');
+ assert.equal(await page.locator('#rp-hide-complete').getAttribute('data-registry-default'),'false');
  assert.equal(await toolbar.locator(':scope > .toolbar-right > .registry-ui-reset:first-child').count(),1,'reset precedes the finance sort and search');
  assert.equal(await toolbar.locator(':scope > .toolbar-right > .registry-ui-search-group:last-child #rp-search').count(),1,'search remains the last control');
  assert.equal(await reset.innerText(),'Сбросить фильтр');
@@ -45,7 +51,7 @@ try{
      return {toolbar:box('self'),sort:box('.lab-reference-trigger'),search:box('#rp-search'),count:box('.found-label'),divider:box('.filter-sep'),check:box('#rp-hide-complete'),overflow:document.documentElement.scrollWidth>innerWidth+1};
    });
    assert.equal(await reset.isHidden(),true,`${width}: default reset hidden`);
-   assert.equal(await page.locator('#rp-hide-complete').isChecked(),true,`${width}: existing checked default retained`);
+   assert.equal(await page.locator('#rp-hide-complete').isChecked(),false,`${width}: completed trips hidden by default`);
    const before=await geometry();
    const dividerStyle=await toolbar.locator('.filter-sep').evaluate(element=>({width:getComputedStyle(element).width,height:getComputedStyle(element).height,color:getComputedStyle(element).backgroundColor}));
    assert.deepEqual(dividerStyle,{width:'1px',height:'18px',color:'rgb(222, 218, 208)'},`${width}: existing divider matches canon`);
@@ -66,10 +72,30 @@ try{
    await reset.click();
    assert.equal(await reset.isHidden(),true,`${width}: reset hides after use`);
    assert.equal(await page.locator('#rp-search').inputValue(),'');
-   assert.equal(await page.locator('#rp-hide-complete').isChecked(),true);
+   assert.equal(await page.locator('#rp-hide-complete').isChecked(),false);
    assert.equal(await page.locator('#rp-sort').inputValue(),'date-new');
    assert.equal(await toolbar.locator('.found-label b').innerText(),'4');
+   if(width===390){
+     assert.equal(await page.locator('#rp-ledger-table').evaluate(table=>table.classList.contains('registry-ui-data--cards')),true,'mobile finance cards remain active');
+     await page.locator('#rp-hide-complete').check();
+     assert.equal(await page.locator('#rp-list tr[data-id="101"]').isVisible(),true,'completed mobile card is revealed');
+     await reset.click();
+     assert.equal(await page.locator('#rp-list tr[data-id="101"]').isVisible(),false,'reset hides completed mobile card');
+   }
  }
+ await page.setViewportSize({width:1280,height:900});
+ await page.locator('#rp-hide-complete').focus();
+ await page.keyboard.press('Space');
+ assert.equal(await page.locator('#rp-hide-complete').isChecked(),true,'Space includes completed settlements');
+ assert.equal(await reset.isVisible(),true,'checkbox change reveals shared reset');
+ assert.deepEqual(await page.locator('#rp-list tr:visible').evaluateAll(rows=>rows.map(row=>row.dataset.id)),['105','104','103','102','101']);
+ assert.equal(await page.locator('#rp-count').innerText(),'5');
+ assert.equal(await page.locator('[data-total="customer-invoices"]').innerText(),'200 ₽','completed row contributes to invoice total');
+ assert.equal(await page.locator('[data-total="received"]').innerText(),'240 ₽','completed row contributes to received total');
+ await reset.click();
+ assert.equal(await page.locator('#rp-hide-complete').isChecked(),false,'reset restores unchecked profile');
+ assert.equal(await page.locator('#rp-count').innerText(),'4');
+ assert.equal(await page.locator('[data-total="customer-invoices"]').innerText(),'100 ₽','reset excludes completed totals again');
  for(const width of [390,1280,1920,3840]){
   await page.setViewportSize({width,height:900});
   await assertRegistryTablerIcon(page,'finance-received-paid');
@@ -115,7 +141,7 @@ try{
  await page.locator('#rp-search').fill('101');
  assert.deepEqual(await ids(),[],'search composes with completion toggle');
  assert.equal(await page.locator('[data-total="customer-invoices"]').innerText(),'—','empty invoice total is unknown');
- await page.locator('#rp-hide-complete').uncheck();
+ await page.locator('#rp-hide-complete').check();
  assert.deepEqual(await ids(),['101']);
  assert.equal(await page.locator('[data-total="customer-invoices"]').innerText(),'100 ₽');
  await page.locator('#rp-search').clear();
@@ -136,7 +162,7 @@ try{
  assert.equal(await page.evaluate(()=>window.__invoiceUrl),'/erpv2/company/finance/invoices/1/modal-view','invoice uses the ERP base path');
  await page.evaluate(()=>window.closeModal('invoice-view-modal'));
  assert.equal(await page.locator('#rp-list tr[data-id="101"]').evaluate(row=>document.activeElement===row),true,'focus returns to row');
- await page.locator('#rp-hide-complete').check();
+ await page.locator('#rp-hide-complete').uncheck();
  await page.locator('.rp-standard-box .lab-reference-trigger').click();
  await page.locator('.rp-standard-box [role=option][data-value="date-new"]').click();
  assert.equal(await page.locator('#rp-sort').inputValue(),'date-new','visible listbox keeps the native sort value');
@@ -217,6 +243,27 @@ try{
  await page.keyboard.press('Space');
  assert.equal(await lastTab.getAttribute('aria-pressed'),'false','keyboard activation toggles the preset');
  assert.equal(await lastTab.evaluate(button=>document.activeElement===button),true,'keyboard focus remains on the tab');
+ const storageKey=await page.locator('[data-registry-id="finance-received-paid"]').evaluate(root=>`planex:registry:v1:${location.pathname}:${root.dataset.registryId}:${root.dataset.registryStateScope}`);
+ await page.evaluate(key=>localStorage.setItem(key,JSON.stringify({hideComplete:true,query:'101',sort:'id-new',tab:'all'})),storageKey);
+ await page.reload();
+ await mountFixture();
+ assert.equal(await page.locator('#rp-hide-complete').isChecked(),false,'old hideComplete state cannot enable new showComplete flag');
+ assert.deepEqual(await page.locator('#rp-list tr:visible').evaluateAll(rows=>rows.map(row=>row.dataset.id)),[],'old state search remains, but completed row stays excluded');
+ assert.equal(await page.locator('#rp-sort').inputValue(),'id-new','unchanged persisted sort remains compatible');
+ const migrated=await page.evaluate(key=>JSON.parse(localStorage.getItem(key)),storageKey);
+ assert.equal(migrated.showComplete,false,'new state field is persisted with unchecked default');
+ assert.equal(Object.hasOwn(migrated,'hideComplete'),false,'old inverse field is discarded');
+ await page.locator('#rp-hide-complete').check();
+ assert.deepEqual(await page.locator('#rp-list tr:visible').evaluateAll(rows=>rows.map(row=>row.dataset.id)),['101'],'checked includes completed result after old-state migration');
+ await page.reload();
+ await mountFixture();
+ assert.equal(await page.locator('#rp-hide-complete').isChecked(),true,'showComplete persists across reload');
+ assert.deepEqual(await page.locator('#rp-list tr:visible').evaluateAll(rows=>rows.map(row=>row.dataset.id)),['101']);
+ await page.locator('.registry-ui-reset').click();
+ assert.equal(await page.locator('#rp-hide-complete').isChecked(),false);
+ assert.equal(await page.locator('#rp-search').inputValue(),'');
+ assert.equal(await page.locator('#rp-sort').inputValue(),'date-new');
+ assert.equal(await page.locator('#rp-count').innerText(),'4');
  assert.deepEqual(errors,[]);
  console.log('FINANCE_RECEIVED_PAID_PAYMENT_FILTER_BROWSER_OK');
 }finally{await browser.close();}

@@ -33,7 +33,7 @@ try {
           const originals = [...body.children];
           while (body.children.length < 20) for (const row of originals) body.append(row.cloneNode(true));
           document.querySelector('#rp-count').textContent = String(body.children.length);
-          document.querySelector('#rp-hide-complete').checked = false;
+          document.querySelector('#rp-hide-complete').checked = true;
         });
       }
       if (evidenceDir && [1920,390].includes(width)) {
