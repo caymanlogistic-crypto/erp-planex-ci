@@ -14,7 +14,14 @@ if ($command==='seed') {
   $pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
   $pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)')->execute(['ООО «ПЛАНЭКС»','active',$schema]);
  }
- if ($pdo->query("SHOW TABLES LIKE 'feo_requests'")->fetchColumn()===false) $pdo->exec('CREATE TABLE feo_requests(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,zayavka_id VARCHAR(64) UNIQUE,mass_netto DECIMAL(18,6) NULL,mass_brutto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+ if ($pdo->query("SHOW TABLES LIKE 'feo_requests'")->fetchColumn()===false) {
+  $pdo->exec('CREATE TABLE feo_requests(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,zayavka_id VARCHAR(64) UNIQUE,mass_netto DECIMAL(18,6) NULL,mass_brutto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+ } else {
+  // The map-placement runtime fixture creates a smaller table in this disposable schema.
+  $columns=$pdo->query('SHOW COLUMNS FROM feo_requests')->fetchAll(PDO::FETCH_COLUMN);
+  if (!in_array('id',$columns,true)) $pdo->exec('ALTER TABLE feo_requests ADD COLUMN id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE FIRST');
+  if (!in_array('mass_brutto',$columns,true)) $pdo->exec('ALTER TABLE feo_requests ADD COLUMN mass_brutto DECIMAL(18,6) NULL AFTER mass_netto');
+ }
  foreach (['139_create_feo_transfers.sql','160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql'] as $file) {
   $migration=(string)file_get_contents(BASE_PATH.'/database/migrations-local/'.$file);
   foreach (array_filter(array_map('trim',preg_split('/;\s*(?:\R|$)/',$migration)?:[])) as $statement) $pdo->exec($statement);
