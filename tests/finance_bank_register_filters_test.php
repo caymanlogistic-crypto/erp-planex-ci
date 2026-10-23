@@ -84,6 +84,8 @@ assertTrue(R::fetchBankRegister($pdo,['classification_status'=>'UNALLOCATED'])['
 assertTrue(R::fetchBankRegister($pdo,['search'=>'Спугов'])['total']===0,'unmark removes employee search attribution');
 
 $wrapper = file_get_contents(__DIR__ . '/../app/Http/Controllers/Company/BankFinanceActions/indexAutoFilters.php');
+$register = file_get_contents(__DIR__ . '/../app/Service/FinanceMatchingRuleRegisterTrait.php');
+assertTrue(str_contains($register, 'unallocatedClientReceiptIds') && str_contains($register, "\$tx['classification_status']='UNALLOCATED'"), 'unsettled client receipts override generic classification for red display');
 assertTrue(str_contains($wrapper, "'classification_status'"), 'status auto-filter hook');
 assertTrue(str_contains($wrapper, "'[name=\"q\"]'"), 'search auto-filter hook');
 assertTrue(str_contains($wrapper, 'setTimeout(submitNow,350)'), 'search debounce');

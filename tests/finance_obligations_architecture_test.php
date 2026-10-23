@@ -22,9 +22,9 @@ guard(str_contains($service, 'ProductionCalendarService::addWorkingDays'), 'work
 guard(!str_contains($service, 'DateCalculationService::addWorkingDays'), 'no weekday-only fallback for obligations');
 guard(str_contains($service, 'linearSourceKey'), 'durable route source identity exists');
 guard(str_contains($service, 'replaceInvoiceLinks'), 'invoice N:M obligation allocation exists');
-guard(str_contains($service, 'autoAllocateIncomingCustomerReceipts'), 'incoming customer auto-allocation exists');
-guard(str_contains($service, 'count($numberMatches) === 1'), 'invoice-number auto-match is uniqueness guarded');
-guard(str_contains($service, 'count($exact) === 1'), 'amount auto-match is uniqueness guarded');
+guard(str_contains($service, 'autoAllocateIncomingCustomerReceipts'), 'legacy entry point remains inert');
+guard(!str_contains($service, 'count($numberMatches) === 1'), 'customer receipts are not auto-matched by invoice number');
+guard(!str_contains($service, 'count($exact) === 1'), 'customer receipts are not auto-matched by exact amount');
 guard(str_contains($invoiceForm, 'obligation_id[]') && str_contains($invoiceForm, 'obligation_amount[]'), 'invoice form supports multiple obligations');
 guard(str_contains($invoiceForm, 'syncInvoiceAmount') && str_contains($invoiceForm, 'data-auto-amount') === false, 'invoice total is synchronized from selected obligations in JS');
 guard(str_contains($invoiceForm, 'width:16px;height:16px;min-width:16px;min-height:16px'), 'obligation checkbox has compact explicit dimensions');
@@ -34,7 +34,7 @@ guard(!str_contains($invoicePage, "querySelectorAll('[data-invoice-id]')"), 'inv
 guard(str_contains($invoicePage, "id <= 0) return"), 'invoice double-click ignores invalid invoice identifiers');
 guard(str_contains($invoiceCreate, '$obligationTotalCents') && str_contains($invoiceCreate, '$centsToMoney($obligationTotalCents)'), 'create action derives invoice amount from selected obligations');
 guard(str_contains($invoiceEdit, '$obligationTotalCents') && str_contains($invoiceEdit, '$centsToMoney($obligationTotalCents)'), 'edit action derives invoice amount from selected obligations');
-guard(str_contains($bankImport, 'autoAllocateIncomingCustomerReceipts'), 'bank import invokes obligation auto-allocation');
+guard(!str_contains($bankImport, 'autoAllocateIncomingCustomerReceipts'), 'bank import leaves customer receipts for manual settlement');
 guard(str_contains($tripController, 'syncFinanceObligations'), 'trip reads synchronize due/status');
 guard(str_contains($routes, '/company/finance/receivables') && str_contains($routes, '/company/finance/invoices/obligations'), 'receivables and obligation endpoints routed');
 echo "FINANCE_OBLIGATIONS_ARCHITECTURE_OK\n";

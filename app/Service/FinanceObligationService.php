@@ -598,81 +598,10 @@ final class FinanceObligationService
 
     public static function autoAllocateIncomingCustomerReceipts(PDO $pdo, array $user): array
     {
-        if (!self::schemaReady($pdo)) {
-            return ['operations' => 0, 'allocations' => 0, 'amount' => '0.00'];
-        }
-        self::syncAllOperationalObligations($pdo);
-
-        $ops = $pdo->query(
-            "SELECT fo.*,
-                    (fo.amount-COALESCE((SELECT SUM(a.amount) FROM finance_operation_allocations a WHERE a.operation_id=fo.id AND a.cancelled_at IS NULL),0)) AS remaining_amount
-               FROM finance_operations fo
-              WHERE fo.status='POSTED' AND fo.operation_type='INCOME'
-                AND fo.counterparty_inn IS NOT NULL AND TRIM(fo.counterparty_inn)<>''
-              ORDER BY fo.operation_date,fo.id"
-        )->fetchAll(PDO::FETCH_ASSOC);
-
-        $matchedOps = 0;
-        $allocationCount = 0;
-        $total = '0.00';
-        foreach ($ops as $op) {
-            $opRemaining = self::money((string)$op['remaining_amount']);
-            if (self::compareMoney($opRemaining, '0.00') <= 0) {
-                continue;
-            }
-            $candidateStmt = $pdo->prepare(
-                "SELECT DISTINCT i.*,
-                        (i.amount-COALESCE((SELECT SUM(a.amount) FROM finance_operation_allocations a WHERE a.invoice_id=i.id AND a.cancelled_at IS NULL),0)) AS remaining_amount
-                   FROM finance_invoices i
-                   JOIN finance_invoice_links l ON l.invoice_id=i.id AND l.obligation_id IS NOT NULL
-                   JOIN finance_obligations o ON o.id=l.obligation_id
-                  WHERE i.direction='OUTGOING' AND i.status NOT IN ('cancelled','paid')
-                    AND i.counterparty_inn=? AND o.direction='RECEIVABLE' AND o.cancelled_at IS NULL
-                  ORDER BY i.invoice_date,i.id"
-            );
-            $candidateStmt->execute([(string)$op['counterparty_inn']]);
-            $candidates = array_values(array_filter(
-                $candidateStmt->fetchAll(PDO::FETCH_ASSOC),
-                static fn(array $i): bool => (float)$i['remaining_amount'] > 0
-            ));
-            if ($candidates === []) {
-                continue;
-            }
-
-            $purpose = mb_strtolower((string)($op['purpose'] ?? ''), 'UTF-8');
-            $numberMatches = [];
-            foreach ($candidates as $candidate) {
-                $number = trim((string)($candidate['number'] ?? ''));
-                if (mb_strlen($number, 'UTF-8') >= 3 && mb_stripos($purpose, mb_strtolower($number, 'UTF-8'), 0, 'UTF-8') !== false) {
-                    $numberMatches[] = $candidate;
-                }
-            }
-
-            $target = null;
-            if (count($numberMatches) === 1 && self::compareMoney($opRemaining, (string)$numberMatches[0]['remaining_amount']) <= 0) {
-                $target = $numberMatches[0];
-            } else {
-                $exact = array_values(array_filter(
-                    $candidates,
-                    static fn(array $i): bool => self::compareMoney((string)$i['remaining_amount'], $opRemaining) === 0
-                ));
-                if (count($exact) === 1) {
-                    $target = $exact[0];
-                }
-            }
-            if ($target === null) {
-                continue;
-            }
-
-            $created = self::allocateOperationToInvoiceObligations($pdo, (int)$op['id'], (int)$target['id'], $opRemaining, $user);
-            if ($created > 0) {
-                $matchedOps++;
-                $allocationCount += $created;
-                $total = self::addMoney($total, $opRemaining);
-            }
-        }
-        self::syncAllOperationalObligations($pdo);
-        return ['operations' => $matchedOps, 'allocations' => $allocationCount, 'amount' => $total];
+        // Customer receipts require an explicit invoice choice. Keep the legacy
+        // entry point inert so older callers cannot silently settle by number
+        // or by a coincidentally equal amount.
+        return ['operations' => 0, 'allocations' => 0, 'amount' => '0.00'];
     }
 
     public static function receivablesReport(PDO $pdo): array
@@ -875,56 +804,6 @@ final class FinanceObligationService
               WHERE id=? AND deleted_at IS NULL"
         );
         $stmt->execute([$paid, $routeStatus, $forecast, $due, $routeStatus, $paymentId]);
-    }
-
-    private static function allocateOperationToInvoiceObligations(PDO $pdo, int $operationId, int $invoiceId, string $amount, array $user): int
-    {
-        $linksStmt = $pdo->prepare(
-            "SELECT l.*,o.source_id,o.source_parent_id,o.source_parent_type,o.source_type,o.due_date,
-                    COALESCE((SELECT SUM(a.amount) FROM finance_operation_allocations a WHERE a.invoice_id=l.invoice_id AND a.obligation_id=l.obligation_id AND a.cancelled_at IS NULL),0) AS allocated_amount
-               FROM finance_invoice_links l
-               JOIN finance_obligations o ON o.id=l.obligation_id
-              WHERE l.invoice_id=? AND o.cancelled_at IS NULL
-              ORDER BY CASE WHEN o.due_date IS NULL THEN 1 ELSE 0 END,o.due_date,l.id"
-        );
-        $linksStmt->execute([$invoiceId]);
-        $links = $linksStmt->fetchAll(PDO::FETCH_ASSOC);
-        $capacity = '0.00';
-        foreach ($links as $link) {
-            $capacity = self::addMoney($capacity, self::subMoney((string)$link['amount'], (string)$link['allocated_amount']));
-        }
-        if (self::compareMoney($capacity, $amount) < 0) return 0;
-
-        $remaining = $amount;
-        $ids = [];
-        $insert = $pdo->prepare(
-            "INSERT INTO finance_operation_allocations
-                (operation_id,invoice_id,obligation_id,linear_route_id,linear_route_payment_id,amount,allocation_date,method,comment,created_by_user_id,created_by_role)
-             VALUES (?,?,?,?,?,?,CURDATE(),'auto_exact',?,?,?)"
-        );
-        foreach ($links as $link) {
-            if (self::compareMoney($remaining, '0.00') <= 0) break;
-            $free = self::subMoney((string)$link['amount'], (string)$link['allocated_amount']);
-            if (self::compareMoney($free, '0.00') <= 0) continue;
-            $part = self::compareMoney($free, $remaining) <= 0 ? $free : $remaining;
-            $insert->execute([
-                $operationId, $invoiceId, (int)$link['obligation_id'],
-                (string)$link['source_parent_type'] === 'LINEAR_ROUTE' ? (int)$link['source_parent_id'] : null,
-                (string)$link['source_type'] === 'LINEAR_ROUTE_PAYMENT' ? (int)$link['source_id'] : null,
-                $part,
-                'Автоматическое разнесение поступления клиента по счёту и платёжному обязательству.',
-                (int)($user['user_id'] ?? 0) ?: null,
-                (string)($user['role_code'] ?? '') ?: 'company_owner',
-            ]);
-            $ids[] = (int)$pdo->lastInsertId();
-            $remaining = self::subMoney($remaining, $part);
-        }
-        if (self::compareMoney($remaining, '0.00') !== 0) {
-            foreach ($ids as $id) $pdo->prepare('DELETE FROM finance_operation_allocations WHERE id=?')->execute([$id]);
-            return 0;
-        }
-        foreach ($ids as $id) FinanceSettlementCascadeService::cascadeAfterAllocationCreate($pdo, $id);
-        return count($ids);
     }
 
     private static function backfillLegacyReferences(PDO $pdo): void

@@ -9,12 +9,14 @@ trait FinanceMatchingRuleRegisterTrait{
   $all=[];$page=1;$chunk=500;
   do{$batch=BankFinanceService::getTransactions($pdo,null,$page,$chunk,$dateFrom,$dateTo);$all=array_merge($all,$batch['data']);$page++;}while(count($all)<(int)$batch['total']);
   $settlementStatuses=class_exists(FinanceSettlementStateService::class)?FinanceSettlementStateService::effectiveBankStatuses($pdo):[];
+  $pendingClientReceipts=class_exists(FinanceSettlementStateService::class)?FinanceSettlementStateService::unallocatedClientReceiptIds($pdo,$settlementStatuses):[];
   $employeeAttributions=FinanceEmployeeCompanyFundedExpenseService::bankAttributions($pdo);
   $cfu=[];foreach(self::fetchCashFlowCenters($pdo,false) as $x)$cfu[(int)$x['id']]=$x['name'];$dds=[];foreach(FinanceDdsCategoryService::fetchCategories($pdo) as $x)$dds[(int)$x['id']]=$x;
   $status=strtoupper(trim((string)($f['classification_status']??'')));$q=self::lower(trim((string)($f['search']??'')));$rows=[];
   foreach($all as $tx){
    $txId=(int)($tx['id']??0);
    if(isset($settlementStatuses[$txId]))$tx['classification_status']=$settlementStatuses[$txId];
+   if(isset($pendingClientReceipts[$txId]))$tx['classification_status']='UNALLOCATED';
    $attribution=$employeeAttributions[$txId]??null;
    if($attribution!==null){$tx['company_funded_attribution']=$attribution;$tx['classification_status']='MANUAL';}
    if($status!==''&&strtoupper((string)($tx['classification_status']??'UNALLOCATED'))!==$status)continue;
