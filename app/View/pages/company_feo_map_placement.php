@@ -135,17 +135,23 @@ col.feo-placement-col-author{width:130px}
 <?php require base_path('app/View/partials/registry_ui_state_scope.php'); ?>
 <div class="table-card table-card--standard registry-ui-card registry-ui-sticky-table registry-ui-sticky-table--wide-scroll registry-ui-scroll feo-placement-table-card" data-registry-id="feo-map-placement" data-registry-state-scope="<?= e($registryUiStateScope) ?>">
   <div class="table-toolbar registry-ui-toolbar">
-    <div class="found-label registry-ui-toolbar-summary">
-      <span>Блоки размещения: <b><?= count($blocks) ?></b></span>
-      <span>·</span>
-      <span>Актуальный состав: <b><?= (int)($current['request_count'] ?? 0) ?></b> заявок</span>
-      <span>·</span>
-      <span>Масса: <b><?= e($fmtMass($current['total_mass_kg'] ?? 0)) ?> кг</b></span>
+    <div class="registry-ui-checkboxes">
+      <div class="found-label registry-ui-toolbar-summary">
+        <span>Блоки размещения: <b><?= count($blocks) ?></b></span>
+        <span>·</span>
+        <span>Актуальный состав: <b><?= (int)($current['request_count'] ?? 0) ?></b> заявок</span>
+        <span>·</span>
+        <span>Масса: <b><?= e($fmtMass($current['total_mass_kg'] ?? 0)) ?> кг</b></span>
+      </div>
+      <div class="registry-ui-checkboxes">
+        <span class="filter-sep" aria-hidden="true"></span>
+        <label class="registry-ui-checkbox"><input type="checkbox" data-placement-hide-disabled data-registry-field="hide-disabled" data-registry-default="true" checked> Не показывать отключённые</label>
+      </div>
     </div>
     <div class="toolbar-right">
-      <div class="registry-ui-checkboxes"><label class="registry-ui-checkbox"><input type="checkbox" data-placement-hide-disabled data-registry-field="hide-disabled" data-registry-default="true" checked> Не показывать отключённые</label></div>
+      <button type="button" class="registry-ui-reset" hidden>Сбросить фильтр</button>
       <button type="button" class="btn btn-secondary btn--toolbar" data-placement-open-current>Актуальные заявки</button>
-      <div class="registry-ui-search-group"><textarea rows="1" class="toolbar-search registry-ui-search" data-placement-block-search data-registry-field="query" data-registry-default="" placeholder="Найти заявку в блоках" aria-label="Поиск заявки в блоках" autocomplete="off"></textarea><button type="button" class="registry-ui-reset" hidden>Сбросить</button></div>
+      <div class="registry-ui-search-group"><textarea rows="1" class="toolbar-search registry-ui-search" data-placement-block-search data-registry-field="query" data-registry-default="" placeholder="Найти заявку в блоках" aria-label="Поиск заявки в блоках" autocomplete="off"></textarea></div>
     </div>
   </div>
   <div class="feo-placement-block-search-results registry-ui-table-surface is-hidden" data-placement-block-search-results></div>
