@@ -67,10 +67,38 @@ try {
     assert.equal(shell.appMinWidth, width < 1024 ? '0px' : '1024px', `${width}: shell floor only removed below 1024px`);
     await page.close();
   }
-  for (const width of [1920, 1280, 390, 360, 3840]) {
+  for (const width of [1920, 1280, 1100, 1099, 390, 360, 3840, 900]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/company/trips/departures`);
     await page.waitForSelector('[data-registry-ready="true"]');
+    const reset=page.locator('[data-waste-filter] .registry-ui-reset');
+    assert.equal(await reset.textContent(),'Сбросить фильтр',`${width}: approved reset label`);
+    assert.equal(await reset.evaluate(button=>button===button.parentElement.firstElementChild),true,`${width}: reset precedes filters`);
+    assert.equal(await reset.isVisible(),false,`${width}: inactive reset is hidden`);
+    assert.equal(await reset.evaluate(button=>{button.focus();return document.activeElement===button}),false,`${width}: hidden reset stays outside keyboard focus`);
+    const toolbarGeometry=()=>page.evaluate(()=>{
+      const form=document.querySelector('[data-waste-filter]');
+      const selectors=['.lab-reference-select[data-name="company"] .lab-reference-trigger','.lab-reference-select[data-name="manager"] .lab-reference-trigger','.lab-reference-select[data-name="sort"] .lab-reference-trigger','[name="q"]'];
+      const position=element=>{const rect=element.getBoundingClientRect();return [rect.x,rect.y,rect.width,rect.height]};
+      return {controls:selectors.map(selector=>position(form.querySelector(selector))),toolbar:position(document.querySelector('.registry-ui-toolbar')),overflow:document.documentElement.scrollWidth-document.documentElement.clientWidth};
+    });
+    const beforeReset=await toolbarGeometry();
+    await page.locator('[data-waste-filter] [name="q"]').evaluate(input=>{input.value='контроль';input.dispatchEvent(new Event('input',{bubbles:true}));});
+    await page.waitForFunction(()=>!document.querySelector('[data-waste-filter] .registry-ui-reset').hidden);
+    const afterReset=await toolbarGeometry();
+    assert.deepEqual(afterReset.controls,beforeReset.controls,`${width}: visible reset does not move or resize filters/search`);
+    assert.deepEqual(afterReset.toolbar,beforeReset.toolbar,`${width}: visible reset does not resize toolbar`);
+    assert.ok(afterReset.overflow<=1,`${width}: no document overflow after reset appears`);
+    const resetAppearance=await reset.evaluate(button=>{button.focus();const css=getComputedStyle(button);return {focused:document.activeElement===button,height:button.getBoundingClientRect().height,font:css.fontFamily,size:css.fontSize,weight:css.fontWeight,color:css.color,outline:css.outlineWidth};});
+    assert.equal(resetAppearance.focused,true,`${width}: visible reset accepts keyboard focus`);
+    assert.equal(resetAppearance.height,32,`${width}: shared reset height`);
+    assert.equal(resetAppearance.size,'12px',`${width}: shared reset text size`);
+    assert.equal(resetAppearance.weight,'500',`${width}: shared reset font weight`);
+    assert.equal(resetAppearance.color,'rgb(76, 72, 64)',`${width}: shared reset text color`);
+    assert.equal(resetAppearance.outline,'2px',`${width}: shared reset focus ring`);
+    await page.locator('[data-waste-filter] [name="q"]').evaluate(input=>{input.value='';input.dispatchEvent(new Event('input',{bubbles:true}));});
+    await page.waitForFunction(()=>document.querySelector('[data-waste-filter] .registry-ui-reset').hidden);
+    assert.equal(await reset.isVisible(),false,`${width}: reset hides again after filter clears`);
     assert.deepEqual(await page.locator('select[name=manager] option').evaluateAll(options=>options.map(option=>[option.value,option.textContent])), [['','Все менеджеры'],['1','Владимир С.'],['2','Карина Г.']], `${width}: manager labels and original IDs/order`);
     const managerTrigger=page.locator('.lab-reference-select[data-name=manager] .lab-reference-trigger');
     await managerTrigger.click();
@@ -93,7 +121,7 @@ try {
         scroll: document.documentElement.scrollWidth - document.documentElement.clientWidth,
         tableScroll: document.querySelector('.waste-table-scroll').scrollWidth - document.querySelector('.waste-table-scroll').clientWidth,
         money,
-        searchRightOfSort: search.left >= sort.left,
+        searchAfterSort: search.top > sort.top || (Math.abs(search.top - sort.top) < 1 && search.left >= sort.left),
         managerBeforeSort: manager.top < sort.top || (Math.abs(manager.top - sort.top) < 1 && manager.left < sort.left),
         managerFits: manager.right <= document.documentElement.clientWidth + 1,
         searchFits: search.right <= document.querySelector('.registry-ui-toolbar').getBoundingClientRect().right - 8,
@@ -112,7 +140,7 @@ try {
     assert.ok(metrics.scroll <= 1 && metrics.tableScroll >= 0, `${width}: wide table scroll stays inside its frame ${JSON.stringify(metrics)}`);
     assert.equal(metrics.statusIndex, true, `${width}: status column`);
     assert.equal(metrics.rowCount, 5, `${width}: real rows preserved`);
-    assert.equal(metrics.searchRightOfSort, true, `${width}: search follows sort`);
+    assert.equal(metrics.searchAfterSort, true, `${width}: search follows sort`);
     assert.equal(metrics.managerBeforeSort, true, `${width}: manager filter precedes sort`);
     assert.equal(metrics.managerFits, true, `${width}: manager filter stays inside viewport ${JSON.stringify(metrics)}`);
     assert.equal(metrics.searchFits, true, `${width}: search stays inside toolbar ${JSON.stringify(metrics)}`);
@@ -120,7 +148,7 @@ try {
       assert.equal(metrics.toolbarWrap, 'nowrap', `${width}: shared mobile toolbar stays in one column`);
       assert.equal(metrics.searchStartsInside, true, `${width}: search starts inside toolbar ${JSON.stringify(metrics)}`);
       assert.equal(metrics.filterStartsBelowCount, true, `${width}: filters follow count on a new row ${JSON.stringify(metrics)}`);
-    } else {
+    } else if(width>=1280) {
       assert.ok(metrics.toolbarHeight <= 50, `${width}: shared toolbar stays 49px high ${JSON.stringify(metrics)}`);
     }
     assert.equal(metrics.searchWeight, '500');
