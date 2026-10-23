@@ -63,6 +63,7 @@
 .registry-ui-toolbar .found-label::before {background:#7c4718}
 .registry-ui-toolbar .found-label :is(b,[data-closing-count]) {color:#2e2923;font-weight:600}
 .registry-ui-toolbar .toolbar-right {display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;margin-left:auto}
+.registry-ui-toolbar .btn--toolbar {height:32px;min-height:32px}
 .registry-ui-toolbar form {margin:0}
 .registry-ui-toolbar .toolbar-sort-label {color:#4c4840;font:500 12px/16px var(--font)}
 .registry-ui-checkboxes{display:flex;align-items:center;flex-wrap:wrap;gap:8px 18px;min-width:0;font-family:var(--font)}
@@ -102,7 +103,7 @@
 .registry-ui-card .registry-ui-table tbody td {padding-left:10px;padding-right:10px;border-top:0;border-left:0}
 .registry-ui-card .registry-ui-table--finance thead th {background:#d0ccc4;color:#34322f}
 .feo-transfers > .registry-ui-head.page-head {margin-bottom:12px}
-.feo-transfers .registry-ui-card .registry-ui-table--placement.registry-ui-table--placement-blocks.transfer-history {table-layout:fixed;min-width:1160px;max-width:none;width:100%}
+.registry-ui-card .registry-ui-table--placement.registry-ui-table--placement-blocks.transfer-history {table-layout:fixed;min-width:1160px;max-width:none;width:100%}
 .registry-ui-table .registry-id,.registry-ui-table .col-mono,.registry-ui-table .rp-v010-id {color:#131210;font-family:var(--font);font-size:12px;font-weight:700;line-height:16.8px;font-variant-numeric:tabular-nums}
 .registry-ui-table .registry-executor-secondary,.registry-ui-table .waste-legal-entity {color:#78726a}
 .registry-ui-toolbar #rp-search {width:230px;min-width:0;height:32px;min-height:32px;padding:0 9px 0 31px;background-color:#fffdf9;color:#2e2923;font:500 12px/16px var(--font)}
