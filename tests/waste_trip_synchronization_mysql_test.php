@@ -395,6 +395,11 @@ try {
     $pdo->exec("DELETE FROM fixture_flights WHERE id=500; INSERT INTO fixture_flights(id,zayavki_ids,status,assigned_manager_id,unload_type) VALUES(226,'700001','completed',3,'SKLAD')");
     check(\App\Service\WasteTripParityService::state($pdo,$legacy)['mismatch']===false,'Equal linked ID sets do not warn even with independent ERP trips');
     check(\App\Service\WasteTripParityService::attentionCount($pdo,$legacy)===0,'Menu badge is hidden when linked ID sets match');
+    $pdo->exec("UPDATE waste_trips SET status='in_progress',legacy_sync_error='Legacy факт содержит начало позже окончания.' WHERE business_id=226");
+    $parity=\App\Service\WasteTripParityService::state($pdo,$legacy);
+    check($parity['mismatch']===true&&$parity['status_mismatch_ids']===[226]&&$parity['sync_error_ids']===[226],'Status drift and failed sync are visible even when ID sets match');
+    check(\App\Service\WasteTripParityService::attentionCount($pdo,$legacy)===1,'One failed trip contributes one menu warning');
+    $pdo->exec("UPDATE waste_trips SET status='completed',legacy_sync_error=NULL WHERE business_id=226");
     $otherVersion=(int)Trips::fetchTrip($pdo,$other)['lock_version'];
     reject(static fn()=>Trips::delete($pdo,$other,$otherVersion+1,$actor),'Stale delete must fail');
     reject(static fn()=>Trips::delete($pdo,$other,$otherVersion,['user_id'=>1,'role_code'=>'logist']),'Only owner can delete');
