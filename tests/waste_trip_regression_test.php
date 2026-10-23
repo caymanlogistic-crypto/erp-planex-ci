@@ -33,6 +33,7 @@ $fail=static function(string$m):never{fwrite(STDERR,"FAIL: {$m}\n");exit(1);};
 $ok=static function(bool$v,string$m)use($fail):void{if(!$v)$fail($m);};
 
 $bad=false;try{WasteTripLegacySourceService::authoritativeState(['id'=>250,'zayavki_ids'=>'10,10','status'=>'started']);}catch(RuntimeException){$bad=true;}$ok($bad,'duplicate source request must fail');
+$badDate=false;try{WasteTripLegacySourceService::authoritativeState(['id'=>355,'zayavki_ids'=>'1004','status'=>'completed','actual_start_date'=>'2026-10-22','actual_end_date'=>'2023-10-23']);}catch(RuntimeException $error){$badDate=$error->getMessage()==='Legacy факт содержит начало позже окончания.';}$ok($badDate,'trip 355 inverted source dates must still block sync');
 $partial=WasteTripLegacySourceService::authoritativeState(['id'=>250,'zayavki_ids'=>'10','status'=>'started','planned_start_date_from'=>'2026-09-01']);$ok($partial['planned_start_mode']==='range'&&$partial['planned_start_date_to']===null,'partial source range must synchronize');
 $ok(WasteTripService::ERP_BUSINESS_ID_START===400,'ERP range start must be 400');
 $ok(WasteTripService::LEGACY_RANGE_WARNING_THRESHOLD===390,'legacy warning threshold must be 390');
@@ -159,6 +160,14 @@ $independentComment=(string)$pdo->query('SELECT comment FROM waste_trips WHERE b
 foreach([300,389,390,404]as$legacyOnlyId)$ok((int)$pdo->query('SELECT COUNT(*) FROM waste_trips WHERE business_id='.$legacyOnlyId)->fetchColumn()===0,'sync must not auto-materialize legacy '.$legacyOnlyId);
 
 $dbName=(string)$pdo->query('SELECT DATABASE()')->fetchColumn();$lockName='erp_waste_trip_legacy_sync_'.substr(hash('sha256',$dbName),0,24);$pdo2=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);$ls=$pdo2->prepare('SELECT GET_LOCK(?,0)');$ls->execute([$lockName]);$overlap=WasteTripLegacySyncService::syncAll($legacy,$pdo);$ok($overlap['skipped_overlap']===true,'overlapping sync not rejected');$ok($overlap['warning']===WasteTripService::LEGACY_RANGE_WARNING,'warning must remain non-blocking during overlap');$rel=$pdo2->prepare('SELECT RELEASE_LOCK(?)');$rel->execute([$lockName]);
+
+$legacy->exec("INSERT INTO flights(id,zayavki_ids,comment,planned_start_date,planned_start_date_from,planned_start_date_to,actual_start_date,actual_end_date) VALUES(263,'1004','second legacy leg',NULL,NULL,NULL,NULL,NULL)");
+$second=WasteTripLegacySyncService::materialize($legacy,$pdo,263,['client_id'=>1,'responsible_user_id'=>1,'destination_type'=>'utilizer','utilizer_id'=>1,'status'=>'searching_executor'],$userCtx);
+$ok($second===263,'second linked legacy trip may carry an already linked request');
+$secondState=WasteTripLegacySourceService::authoritativeState(['id'=>263,'zayavki_ids'=>'1004','status'=>'completed','comment'=>'second leg delivered']);
+$secondId=(int)$pdo->query('SELECT id FROM waste_trips WHERE business_id=263')->fetchColumn();
+WasteTripService::syncLegacyOwnedState($pdo,$secondId,$secondState);
+$ok((string)$pdo->query("SELECT status FROM waste_trips WHERE id={$secondId}")->fetchColumn()==='completed','background sync must accept linked-to-linked request overlap');
 
 echo "WASTE_TRIP_MYSQL=PASS\n";
 }finally{if($fixedMode){$cleanup=new PDO("mysql:host={$host};port={$port};dbname={$db};charset=utf8mb4",$user,$pass,[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_EMULATE_PREPARES=>false]);cleanCompanyPoolDatabase($cleanup);}else{$admin->exec("DROP DATABASE IF EXISTS `{$db}`;DROP DATABASE IF EXISTS `{$legacyDb}`");}}

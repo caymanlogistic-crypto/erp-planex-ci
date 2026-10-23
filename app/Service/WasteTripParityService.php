@@ -5,20 +5,23 @@ namespace App\Service;
 use PDO;
 use Throwable;
 
+require_once __DIR__.'/WasteTripActionConflictService.php';
+
 final class WasteTripParityService
 {
-    public static function attentionCount(PDO $tenant, ?PDO $legacyPdo = null): int
+    public static function attentionCount(PDO $tenant, ?PDO $legacyPdo = null, ?array $stock = null): int
     {
-        $state = self::state($tenant, $legacyPdo);
+        $state = self::state($tenant, $legacyPdo, $stock);
         if (empty($state['available'])) return 1;
 
-        return count(array_unique(array_merge(
+        $count = count(array_unique(array_merge(
             $state['missing_ids'], $state['extra_ids'],
-            $state['status_mismatch_ids'], $state['sync_error_ids']
+            $state['status_mismatch_ids'], $state['sync_error_ids'], $state['action_issue_ids']
         )));
+        return empty($state['action_available']) ? max(1, $count) : $count;
     }
 
-    public static function state(PDO $tenant, ?PDO $legacyPdo = null): array
+    public static function state(PDO $tenant, ?PDO $legacyPdo = null, ?array $stock = null): array
     {
         try {
             $legacy = $legacyPdo ?? WasteTripLegacySourceService::connectionFromEnvironment();
@@ -48,6 +51,18 @@ final class WasteTripParityService
             sort($extra, SORT_NUMERIC);
             sort($statusMismatchIds, SORT_NUMERIC);
             sort($syncErrorIds, SORT_NUMERIC);
+            $actionAvailable = true;
+            try {
+                $actionIssues = array_intersect_key(
+                    WasteTripActionConflictService::load($legacy, $tenant, $stock),
+                    array_fill_keys($linkedIds, true)
+                );
+            } catch (Throwable $error) {
+                error_log('waste trip action check failed: '.$error->getMessage());
+                $actionIssues = [];
+                $actionAvailable = false;
+            }
+            $actionIssueIds = array_keys($actionIssues);
             return [
                 'available'=>true,
                 'legacy_count'=>count($sourceIds),
@@ -57,7 +72,10 @@ final class WasteTripParityService
                 'extra_ids'=>$extra,
                 'status_mismatch_ids'=>$statusMismatchIds,
                 'sync_error_ids'=>$syncErrorIds,
-                'mismatch'=>count($sourceIds)!==count($linkedIds) || $missing!==[] || $extra!==[] || $statusMismatchIds!==[] || $syncErrorIds!==[],
+                'action_issue_ids'=>$actionIssueIds,
+                'action_issues'=>$actionIssues,
+                'action_available'=>$actionAvailable,
+                'mismatch'=>count($sourceIds)!==count($linkedIds) || $missing!==[] || $extra!==[] || $statusMismatchIds!==[] || $syncErrorIds!==[] || $actionIssueIds!==[],
             ];
         } catch (Throwable $error) {
             error_log('waste trip parity failed: '.$error->getMessage());
