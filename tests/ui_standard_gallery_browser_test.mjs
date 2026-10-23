@@ -61,7 +61,7 @@ try{
    }
    const search=scene.locator('[data-registry-field=query]'),reset=scene.locator('.registry-ui-reset');
    assert.equal(await reset.isVisible(),false);
-   assert.equal(await reset.innerText(),'Сбросить фильтр');
+   assert.equal(await reset.textContent(),'Сбросить фильтр');
    assert.equal(await scene.locator('.registry-ui-toolbar .toolbar-right > .registry-ui-reset').count(),1,'reset is first in the shared right group');
    const layout=()=>scene.locator('.registry-ui-toolbar').evaluate(toolbar=>({
     height:toolbar.getBoundingClientRect().height,
