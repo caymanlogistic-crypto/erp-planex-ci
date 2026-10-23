@@ -47,6 +47,26 @@ const server = http.createServer((req, res) => {
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({ headless: true, ...(process.env.PLANEX_CHROMIUM_PATH ? { executablePath: process.env.PLANEX_CHROMIUM_PATH } : {}) });
 try {
+  for (const width of [701, 900, 1023, 1024]) {
+    const page = await browser.newPage({ viewport: { width, height: 900 } });
+    await page.goto(`http://127.0.0.1:${server.address().port}/company/trips/departures`);
+    const shell = await page.evaluate(() => {
+      const app = document.querySelector('.app');
+      const main = document.querySelector('main.content');
+      const search = document.querySelector('.registry-ui-toolbar .registry-ui-search');
+      return {
+        appRight: app.getBoundingClientRect().right,
+        mainRight: main.getBoundingClientRect().right,
+        searchRight: search.getBoundingClientRect().right,
+        appMinWidth: getComputedStyle(app).minWidth,
+      };
+    });
+    assert.ok(shell.appRight <= width + 1, `${width}: registry shell fits viewport ${JSON.stringify(shell)}`);
+    assert.ok(shell.mainRight <= width + 1, `${width}: registry content fits viewport ${JSON.stringify(shell)}`);
+    assert.ok(shell.searchRight <= width + 1, `${width}: search remains visible ${JSON.stringify(shell)}`);
+    assert.equal(shell.appMinWidth, width < 1024 ? '0px' : '1024px', `${width}: shell floor only removed below 1024px`);
+    await page.close();
+  }
   for (const width of [1920, 1280, 390, 360, 3840]) {
     const page = await browser.newPage({ viewport: { width, height: 900 } });
     await page.goto(`http://127.0.0.1:${server.address().port}/company/trips/departures`);
