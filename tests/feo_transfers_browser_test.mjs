@@ -32,6 +32,7 @@ try {
     if(url.endsWith('/geocode')) result={success:true,geo_token:'fixture-geo',result:destination};
     else if(url.endsWith('/preview')) {previewCalls++; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination,rows:[{zayavka_id:'100001',mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
     else if(url.endsWith('/create')) {createCalls++; result={success:true,batch_id:19,notification:'failed'};}
+    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:[]};
     else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего блока остановлен.'};
     else result={success:true};
     await route.fulfill({status:result.success?200:422,contentType:'application/json',body:JSON.stringify(result)});
@@ -73,7 +74,9 @@ try {
   await page.locator('[data-commit]').click(); await page.locator('[data-page-message]').waitFor({state:'visible'});
   assert.match(await page.locator('[data-page-message]').innerText(),/сохранён.*MAX не отправлено/);
   assert.equal(createCalls,1,'One commit call');
-  await page.locator('[data-revert]').click(); await page.locator('[data-confirm-revert]').click();
+  await page.locator('[data-batch-row] [data-detail]').click();
+  await page.locator('[data-detail-dialog] [data-revert]').click();
+  await page.locator('[data-confirm-revert]').click();
   await page.locator('[data-revert-error]').waitFor({state:'visible'});
   assert.match(await page.locator('[data-revert-error]').innerText(),/Возврат всего блока остановлен/);
   await page.goto(url+'/coordinates'); await page.locator('[name=address]').fill('Москва');

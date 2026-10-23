@@ -51,3 +51,16 @@
 .transfer-quality-badge.quality-street{background:var(--badge-danger-bg);border-color:var(--badge-danger-edge);color:var(--badge-danger-edge)}
 .transfer-quality-badge.quality-other{background:var(--badge-danger-edge);border-color:var(--badge-danger-edge);color:var(--inverse)}
 .transfer-quality-badge.quality-unknown{background:var(--badge-archived-bg);border-color:var(--badge-archived-edge);color:var(--badge-archived-edge)}
+
+/* Subject-specific geometry of the approved transfer history table. */
+.feo-transfers .transfer-history col:nth-child(1){width:64px}
+.feo-transfers .transfer-history col:nth-child(2){width:auto}
+.feo-transfers .transfer-history col:nth-child(3){width:78px}
+.feo-transfers .transfer-history col:nth-child(4){width:126px}
+.feo-transfers .transfer-history col:nth-child(5){width:320px}
+.feo-transfers .transfer-history col:nth-child(6){width:152px}
+.feo-transfers .transfer-history col:nth-child(7){width:138px}
+.feo-transfers .transfer-history td{vertical-align:top}
+.feo-transfers .transfer-history td:nth-child(2){white-space:normal}
+.feo-transfers .transfer-history td:nth-child(n+3){white-space:nowrap}
+.feo-transfers .transfer-history td:nth-child(5){white-space:normal}

@@ -47,6 +47,9 @@ try {
     $a=$s->create($pdo,$p,$actor,hash('sha256','a'),'Пакет А','Причина');
     $again=$s->create($pdo,$p,$actor,hash('sha256','a'),'Пакет А','Причина');
     $ok($again['batch_id']===$a['batch_id'] && $again['already_applied'],'Idempotent network retry');
+    $index=$s->batchIndexItems($pdo,$s->batches($pdo,1));
+    $ok($index[$a['batch_id']]['ids']===['100001','100002'],'History index has every persisted request ID');
+    $ok($index[$a['batch_id']]['net_kg']===69120.0 && $index[$a['batch_id']]['gross_kg']===null,'History mass uses current tonnes converted to kilograms and exposes missing gross');
     $rows=$pdo->query('SELECT * FROM feo_requests ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
     $ok($rows[0]['mno_sh']==='38.2' && $rows[0]['mno_d']==='56.2','Preserve inverted client coordinate fields');
     foreach ($rows as $i=>$row) foreach ($row as $field=>$value) if (!in_array($field,['mno_adres_pogruzki','mno_sh','mno_d','updated_at'],true)) $ok($value===$original[$i][$field],'Unrelated field changed: '.$field);
@@ -59,6 +62,7 @@ try {
     $import=$requestService->applyImport($pdo,[$importRow],'after-transfer.xlsx',hash('sha256','import'),['user_id'=>11,'role_code'=>'account']);
     $row=$pdo->query("SELECT * FROM feo_requests WHERE zayavka_id='100001'")->fetch(PDO::FETCH_ASSOC);
     $ok($row['mno_adres_pogruzki']==='Адрес назначения' && (float)$row['mass_netto']===42.0,'Import preserves moved location and updates other fields');
+    $ok($s->batchIndexItems($pdo,$s->batches($pdo,1))[$a['batch_id']]['net_kg']===98780.0,'History reflects current weight without rewriting transfer history');
     $requestService->rollbackLatest($pdo,$import['import_id'],['user_id'=>11]);
     $ok($pdo->query("SELECT mno_adres_pogruzki FROM feo_requests WHERE zayavka_id='100001'")->fetchColumn()==='Адрес назначения','Import rollback preserves override');
     $requestService->restoreRolledBackImport($pdo,$import['import_id'],['user_id'=>11]);

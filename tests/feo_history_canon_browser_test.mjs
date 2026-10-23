@@ -11,7 +11,7 @@ import {assertRegistryRows,assertRegistrySearch,assertRegistryScroll} from './he
 const require=createRequire(import.meta.url),{chromium}=require(process.env.PLANEX_PLAYWRIGHT_MODULE||'playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
 const fixture=(kind,state)=>execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/feo_history_canon_render.php'),kind,state],{encoding:'utf8',maxBuffer:8*1024*1024});
-const pages=Object.fromEntries(['transfers','weights'].map(kind=>[kind,Object.fromEntries(['populated','empty'].map(state=>[state,fixture(kind,state)]))]));
+const pages=Object.fromEntries(['transfers','weights'].map(kind=>[kind,Object.fromEntries(['populated','empty','scroll'].map(state=>[state,fixture(kind,state)]))]));
 const server=http.createServer((req,res)=>{
  const url=new URL(req.url,'http://localhost');
  if(url.pathname.startsWith('/assets/')){
@@ -20,7 +20,8 @@ const server=http.createServer((req,res)=>{
    res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.woff2')?'font/woff2':'text/javascript');res.end(readFileSync(file));return;
  }
  const kind=url.pathname.endsWith('/weights')?'weights':'transfers';
- res.setHeader('Content-Type','text/html; charset=utf-8');res.end(pages[kind][url.searchParams.get('state')==='empty'?'empty':'populated']);
+ const state=url.searchParams.get('state');
+ res.setHeader('Content-Type','text/html; charset=utf-8');res.end(pages[kind][state==='empty'||state==='scroll'?state:'populated']);
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
@@ -33,20 +34,42 @@ try{
    await page.goto(base);await page.waitForSelector('[data-registry-ready="true"]');
    await assertRegistryVisualContract(page,`${id} ${width}`);
    await assertRegistryDataContract(page,id);
-   await assertRegistryScroll(page,`${id} ${width}`);
-   await assertRegistrySearch(page,{rowSelector:'[data-batch-row]',probes:[{query:'#18',ids:['18']},{query:'#17',ids:['17']}],resolveActual:async p=>p.locator('[data-batch-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId).sort())},id);
-   await page.locator('[data-history-search]').fill('#18');
-   const row=page.locator('[data-batch-row]:visible');
-   assert.equal(await row.count(),1);
-   assert.equal(await row.getAttribute('data-registry-row-id'),'18');
-   await assertRegistryRows(page,{rowSelector:'[data-batch-row]:visible',rows:[{id:18,cells:kind==='transfers'
-     ? [['#18'],['Перемещение на склад'],['Москва, улица Примерная, дом 12, корпус 1','Только улица, дом не определён'],['12'],['18.10.2026 15:30'],['Владимир С.'],['Применён'],['ПодробнееВернуть блок']]
-     : [['#18'],['Перемещение на склад'],['12'],['18.10.2026 15:30'],['Владимир С.'],['Применён'],['ПодробнееВернуть блок']]}]},id);
-   await page.locator('[data-history-search]').fill('обрезку');
-   assert.equal(await page.locator('[data-batch-row]:visible').count(),1,'search uses full title behind 50-character preview');
-   assert.equal(await page.locator('[data-batch-row]:visible').getAttribute('data-registry-row-id'),'100');
-   await page.locator('.registry-ui-reset').click();
-   assert.equal(await page.locator('[data-batch-row]:visible').count(),72,'reset restores history');
+   if(kind==='transfers'){
+     const scroll=await browser.newPage({viewport:{width,height:900}});
+     await scroll.goto(base+'?state=scroll');await scroll.waitForSelector('[data-registry-ready="true"]');
+     await assertRegistryScroll(scroll,`${id} ${width}`);await scroll.close();
+   }else await assertRegistryScroll(page,`${id} ${width}`);
+   if(kind==='transfers'){
+     assert.equal(await page.locator('[data-batch-row]:visible').count(),4,'returned transfers hidden by default');
+     assert.equal(await page.locator('[data-history-count]').innerText(),'4');
+     assert.equal(await page.locator('[data-show-returned]').isChecked(),false);
+     assert.equal(await page.locator('.registry-ui-reset').innerText(),'Сбросить фильтр');
+     const row=page.locator('[data-registry-row-id="118"]');
+     assert.match(await row.locator('td').nth(1).innerText(),/^320648,/);
+     assert.equal(await row.locator('td').nth(2).innerText(),'12');
+     assert.equal(await row.locator('[data-total-weight]').innerText(),'6 737 кг');
+     assert.match(await row.locator('td').nth(4).innerText(),/^По адресу заявки 329001\nРоссия,/);
+     await page.locator('.registry-ui-toolbar .lab-reference-trigger').click();
+     await page.getByRole('option',{name:'Брутто'}).click();
+     assert.equal(await row.locator('[data-total-weight]').innerText(),'7 015 кг');
+     await page.locator('[data-show-returned]').check();
+     assert.equal(await page.locator('[data-batch-row]:visible').count(),6);
+     await assertRegistrySearch(page,{rowSelector:'[data-batch-row]',probes:[{query:'317812',ids:['116']},{query:'Таёжная',ids:['118']}],resolveActual:async p=>p.locator('[data-batch-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId).sort())},id);
+     await page.locator('.registry-ui-reset').click();
+     assert.equal(await page.locator('[data-batch-row]:visible').count(),4,'reset restores default filter');
+     assert.equal(await page.locator('[data-history-count]').innerText(),'4');
+     assert.equal(await page.locator('[data-weight-mode]').inputValue(),'net');
+   }else{
+     await assertRegistrySearch(page,{rowSelector:'[data-batch-row]',probes:[{query:'#18',ids:['18']},{query:'#17',ids:['17']}],resolveActual:async p=>p.locator('[data-batch-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId).sort())},id);
+     await page.locator('[data-history-search]').fill('#18');
+     const row=page.locator('[data-batch-row]:visible');
+     assert.equal(await row.count(),1);
+     await assertRegistryRows(page,{rowSelector:'[data-batch-row]:visible',rows:[{id:18,cells:[['#18'],['Перемещение на склад'],['12'],['18.10.2026 15:30'],['Владимир С.'],['Применён'],['ПодробнееВернуть блок']]}]},id);
+     await page.locator('[data-history-search]').fill('обрезку');
+     assert.equal(await page.locator('[data-batch-row]:visible').count(),1,'search uses full title behind 50-character preview');
+     await page.locator('.registry-ui-reset').click();
+     assert.equal(await page.locator('[data-batch-row]:visible').count(),72,'reset restores history');
+   }
    assert.deepEqual(errors,[],`${id} page errors`);
    await page.close();
   }

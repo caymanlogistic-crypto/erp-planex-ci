@@ -14,18 +14,27 @@ if ($command==='seed') {
   $pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
   $pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)')->execute(['ООО «ПЛАНЭКС»','active',$schema]);
  }
- if ($pdo->query("SHOW TABLES LIKE 'feo_requests'")->fetchColumn()===false) $pdo->exec('CREATE TABLE feo_requests(zayavka_id VARCHAR(64) PRIMARY KEY,mass_netto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
+ if ($pdo->query("SHOW TABLES LIKE 'feo_requests'")->fetchColumn()===false) $pdo->exec('CREATE TABLE feo_requests(id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,zayavka_id VARCHAR(64) UNIQUE,mass_netto DECIMAL(18,6) NULL,mass_brutto DECIMAL(18,6) NULL) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci');
  foreach (['139_create_feo_transfers.sql','160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql'] as $file) {
   $migration=(string)file_get_contents(BASE_PATH.'/database/migrations-local/'.$file);
   foreach (array_filter(array_map('trim',preg_split('/;\s*(?:\R|$)/',$migration)?:[])) as $statement) $pdo->exec($statement);
  }
  $transfer=$pdo->prepare('INSERT IGNORE INTO feo_transfer_batches(id,name,mode,destination_json,request_count,status,operation_key,created_by_user_id,created_by_name,created_at) VALUES(18,?,?,?,?,?,?,?,?,?)');
  $transfer->execute(['Перемещение на склад','address',json_encode(['address'=>'Москва, улица Примерная, 12','quality'=>'Точный адрес'],JSON_UNESCAPED_UNICODE),12,'applied',str_repeat('a',64),101,'Владимир С.','2026-10-18 15:30:00']);
+ $request=$pdo->prepare('INSERT IGNORE INTO feo_requests(zayavka_id,mass_netto,mass_brutto) VALUES(?,?,?)');
+ $item=$pdo->prepare('INSERT IGNORE INTO feo_transfer_items(batch_id,zayavka_id,request_row_id,before_json,after_json) VALUES(?,?,?,?,?)');
+ for($i=1;$i<=12;$i++){
+  $number=(string)(100000+$i);$request->execute([$number,'1.2500','1.5000']);
+  $requestId=(int)$pdo->query("SELECT id FROM feo_requests WHERE zayavka_id='".$number."'")->fetchColumn();
+  $before=json_encode(['mno_adres_pogruzki'=>'Старый адрес','mno_d'=>'55','mno_sh'=>'37'],JSON_UNESCAPED_UNICODE);
+  $after=json_encode(['mno_adres_pogruzki'=>'Москва, улица Примерная, 12','mno_d'=>'56','mno_sh'=>'38'],JSON_UNESCAPED_UNICODE);
+  $item->execute([18,$number,$requestId,$before,$after]);
+ }
  $pdo->exec("INSERT IGNORE INTO feo_weight_batches(id,name,request_count,operation_key,status,created_by_user_id,created_by_name,created_at) VALUES(18,'Проверка веса',12,'".str_repeat('b',64)."','applied',101,'Владимир С.','2026-10-18 15:30:00')");
  echo 'SEEDED';exit;
 }
 if ($command==='fingerprint') {
- $data=[];foreach (['feo_transfer_batches','feo_weight_batches'] as $table) $data[$table]=$pdo->query('SELECT * FROM '.$table.' ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
+ $data=[];foreach (['feo_transfer_batches','feo_transfer_items','feo_requests','feo_weight_batches'] as $table) $data[$table]=$pdo->query('SELECT * FROM '.$table.' ORDER BY '.($table==='feo_transfer_items'?'batch_id,zayavka_id':'id'))->fetchAll(PDO::FETCH_ASSOC);
  echo hash('sha256',json_encode($data,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));exit;
 }
 if ($command!=='render') throw new RuntimeException('Unknown fixture command');

@@ -136,6 +136,36 @@ final class FeoTransferService
         return $pdo->query("SELECT * FROM feo_transfer_batches ORDER BY id DESC LIMIT 50 OFFSET $offset")->fetchAll(PDO::FETCH_ASSOC);
     }
 
+    /** Complete request IDs and current weights for the visible history page. */
+    public function batchIndexItems(PDO $pdo, array $batches): array
+    {
+        if (!$batches) return [];
+        $ids=array_map(static fn(array $batch): int => (int)$batch['id'], $batches);
+        $marks=implode(',',array_fill(0,count($ids),'?'));
+        $q=$pdo->prepare("SELECT i.batch_id,i.zayavka_id,r.mass_netto,r.mass_brutto
+            FROM feo_transfer_items i
+            LEFT JOIN feo_requests r ON r.id=i.request_row_id AND r.zayavka_id=i.zayavka_id
+            WHERE i.batch_id IN ($marks) ORDER BY i.batch_id DESC,i.zayavka_id");
+        $q->execute($ids);
+        $result=[];
+        foreach ($ids as $id) $result[$id]=['ids'=>[],'net_kg'=>0.0,'gross_kg'=>0.0,'net_complete'=>true,'gross_complete'=>true];
+        foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $item) {
+            $id=(int)$item['batch_id'];
+            $result[$id]['ids'][]=(string)$item['zayavka_id'];
+            foreach (['net'=>'mass_netto','gross'=>'mass_brutto'] as $kind=>$field) {
+                if ($item[$field]===null) $result[$id][$kind.'_complete']=false;
+                else $result[$id][$kind.'_kg']+=(float)$item[$field]*1000;
+            }
+        }
+        foreach ($result as &$summary) {
+            if (!$summary['ids']) $summary['net_complete']=$summary['gross_complete']=false;
+            foreach (['net','gross'] as $kind) $summary[$kind.'_kg']=$summary[$kind.'_complete']?round($summary[$kind.'_kg'],1):null;
+            unset($summary['net_complete'],$summary['gross_complete']);
+        }
+        unset($summary);
+        return $result;
+    }
+
     public function items(PDO $pdo, int $batchId): array
     {
         $q=$pdo->prepare('SELECT * FROM feo_transfer_items WHERE batch_id=? ORDER BY zayavka_id'); $q->execute([$batchId]);
