@@ -60,23 +60,12 @@
             $fileStore->remove($fileHash);
             $newFile = false;
         }
-        $auto = ['operations'=>0,'allocations'=>0,'amount'=>'0.00'];
-        if (($result['status'] ?? '') !== 'error') {
-            try {
-                \App\Service\FinanceObligationService::syncAllOperationalObligations($localPdo);
-                $auto = \App\Service\FinanceObligationService::autoAllocateIncomingCustomerReceipts($localPdo, $_SESSION['user'] ?? []);
-            } catch (\Throwable $autoError) {
-                $_SESSION['flash_info'] = 'Выписка загружена. Автоматическое разнесение требует проверки: ' . $autoError->getMessage();
-            }
-        }
-
         if ($result['status'] === 'skipped') {
             $_SESSION['flash_info'] = 'Этот файл уже был импортирован ранее. Исходный XLSX сохранён для скачивания.';
         } elseif ($result['status'] === 'error') {
             $_SESSION['flash_error'] = $result['message'];
         } else {
-            $suffix = (int)$auto['operations'] > 0 ? ' Автоматически разнесено поступлений: ' . (int)$auto['operations'] . '.' : '';
-            $_SESSION['flash_success'] = $result['message'] . $suffix;
+            $_SESSION['flash_success'] = $result['message'];
         }
         redirect_to('/company/finance/bank-accounts');
     } catch (\Exception $e) {

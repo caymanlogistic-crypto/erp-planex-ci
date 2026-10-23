@@ -104,8 +104,8 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "703abda0774dfdb5bd7fe295dd2702fd89cd4450",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/703abda0774dfdb5bd7fe295dd2702fd89cd4450/tests/finance_bank_register_filters_test.php",
+      "verified_sha": "ddc76021879eea564542ac532c6da5279414c6ba",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ddc76021879eea564542ac532c6da5279414c6ba/tests/finance_bank_register_filters_test.php",
       "owning_paths": [
         "app/Service/FinanceMatchingRule*.php",
         "app/Http/Controllers/Company/BankFinanceActions/**",

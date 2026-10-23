@@ -27,6 +27,40 @@ final class FinanceSettlementStateService
     }
 
     /**
+     * A client receipt is pending until its whole amount is linked to invoices.
+     * Cash-flow categorization alone must not clear the bank register warning.
+     *
+     * @param array<int,string> $fullySettledStatuses
+     * @return array<int,true>
+     */
+    public static function unallocatedClientReceiptIds(PDO $pdo, array $fullySettledStatuses): array
+    {
+        try {
+            $stmt = $pdo->query(
+                "SELECT DISTINCT fo.bank_transaction_id
+                   FROM finance_operations fo
+                   JOIN bank_transactions bt ON bt.id=fo.bank_transaction_id
+                  WHERE fo.status='POSTED' AND fo.operation_type='INCOME'
+                    AND (fo.counterparty_entity_type='client'
+                         OR EXISTS (
+                             SELECT 1 FROM clients c
+                              WHERE c.inn=COALESCE(NULLIF(TRIM(fo.counterparty_inn),''),TRIM(bt.counterparty_inn))
+                         ))"
+            );
+            $pending = [];
+            foreach ($stmt->fetchAll(PDO::FETCH_COLUMN) as $id) {
+                $id = (int)$id;
+                if ($id > 0 && !isset($fullySettledStatuses[$id])) {
+                    $pending[$id] = true;
+                }
+            }
+            return $pending;
+        } catch (Throwable) {
+            return [];
+        }
+    }
+
+    /**
      * Persists the settlement state after automatic/manual invoice allocation and repairs
      * previously created allocations whose bank/invoice status was left stale.
      */

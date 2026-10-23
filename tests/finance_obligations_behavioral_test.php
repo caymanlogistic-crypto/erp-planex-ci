@@ -13,6 +13,7 @@ require_once __DIR__.'/../app/Service/LinearTripServiceFinanceService.php';
 require_once __DIR__.'/../app/Service/FinanceObligationService.php';
 
 use App\Service\FinanceObligationService;
+use App\Service\FinanceSettlementCascadeService;
 
 function ok(bool $v,string $m):void{if(!$v)throw new RuntimeException('FAIL: '.$m);}
 $pdo=new PDO('mysql:host='.(getenv('PLANEX_SCHEMA_DB_HOST')?:'127.0.0.1').';port='.(getenv('PLANEX_SCHEMA_DB_PORT')?:'3306').';dbname='.(getenv('PLANEX_TEST_FIXED_DB')?:'erp_obligations_test').';charset=utf8mb4',getenv('PLANEX_SCHEMA_DB_USER')?:'root',getenv('PLANEX_SCHEMA_DB_PASSWORD')?:'root',[PDO::ATTR_ERRMODE=>PDO::ERRMODE_EXCEPTION,PDO::ATTR_DEFAULT_FETCH_MODE=>PDO::FETCH_ASSOC]);
@@ -49,7 +50,15 @@ $pdo->exec("INSERT INTO finance_invoices(direction,number,invoice_date,counterpa
 FinanceObligationService::replaceInvoiceLinks($pdo,1,[['obligation_id'=>(int)$obs[0]['id'],'amount'=>'600.00'],['obligation_id'=>(int)$obs[1]['id'],'amount'=>'400.00']],['user_id'=>1,'role_code'=>'company_owner']);
 ok((int)$pdo->query('SELECT COUNT(*) FROM finance_invoice_links WHERE invoice_id=1')->fetchColumn()===2,'one invoice links two obligations');
 $pdo->exec("INSERT INTO finance_operations(operation_date,operation_type,counterparty_inn,purpose,amount,status) VALUES('2026-11-06','INCOME','7701000001','Оплата по счету INV-26-001',1000,'POSTED')");
-$a=FinanceObligationService::autoAllocateIncomingCustomerReceipts($pdo,['user_id'=>1,'role_code'=>'company_owner']);ok($a['operations']===1,'incoming client receipt auto matched');ok((int)$pdo->query('SELECT COUNT(*) FROM finance_operation_allocations')->fetchColumn()===2,'bank receipt split over two obligations');ok((string)$pdo->query('SELECT paid_amount FROM finance_invoices WHERE id=1')->fetchColumn()==='1000.00','invoice fully paid');
+$a=FinanceObligationService::autoAllocateIncomingCustomerReceipts($pdo,['user_id'=>1,'role_code'=>'company_owner']);
+ok($a['operations']===0&&(int)$pdo->query('SELECT COUNT(*) FROM finance_operation_allocations')->fetchColumn()===0,'incoming receipt stays unallocated even with matching invoice number and amount');
+$insertManual=$pdo->prepare("INSERT INTO finance_operation_allocations(operation_id,invoice_id,obligation_id,amount,allocation_date,method,created_by_role) VALUES(1,1,?,?,'2026-11-06','manual','company_owner')");
+foreach ([['id'=>(int)$obs[0]['id'],'amount'=>'600.00'],['id'=>(int)$obs[1]['id'],'amount'=>'400.00']] as $part) {
+    $insertManual->execute([$part['id'],$part['amount']]);
+    FinanceSettlementCascadeService::cascadeAfterAllocationCreate($pdo,(int)$pdo->lastInsertId());
+}
+ok((int)$pdo->query('SELECT COUNT(*) FROM finance_operation_allocations')->fetchColumn()===2,'manual receipt split over two obligations');
+ok((string)$pdo->query('SELECT paid_amount FROM finance_invoices WHERE id=1')->fetchColumn()==='1000.00','invoice fully paid after manual allocation');
 FinanceObligationService::syncAllLinearRoutes($pdo);ok((string)$pdo->query('SELECT SUM(paid_amount) FROM finance_obligations')->fetchColumn()==='1000.00','obligations fully settled');
 
 $pdo->exec("UPDATE linear_route_payments SET deleted_at=NOW() WHERE linear_route_id=10");

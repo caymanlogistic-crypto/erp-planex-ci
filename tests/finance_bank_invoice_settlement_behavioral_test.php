@@ -58,12 +58,15 @@ $clientTx=(int)$pdo->query("SELECT id FROM bank_transactions WHERE document_numb
 $carrierTx=(int)$pdo->query("SELECT id FROM bank_transactions WHERE document_number='PAY-2'")->fetchColumn();
 $pdo->exec("INSERT INTO finance_operations(operation_date,operation_type,counterparty_inn,purpose,amount,status,source,bank_transaction_id) VALUES('2026-12-03','INCOME','7701000001','Оплата без номера счета',300,'POSTED','BANK_STATEMENT',{$clientTx}),('2026-12-04','EXPENSE','7702000002','Оплата перевозки',250,'POSTED','BANK_STATEMENT',{$carrierTx})");
 
+ok(isset(FinanceSettlementStateService::unallocatedClientReceiptIds($pdo, [])[$clientTx]),'unallocated client receipt is marked for red register row');
+
 $ctx=FinanceBankInvoiceSettlementService::fetchContext($pdo,$clientTx);
 ok($ctx!==null,'known incoming client opens settlement context');
 ok($ctx['counterparty']['type']==='client','incoming context resolves client');
 ok(count($ctx['invoices'])===1&&(int)$ctx['invoices'][0]['id']===$clientInvoice,'client sees only compatible invoice');
 $r=FinanceBankInvoiceSettlementService::manualAllocate($pdo,$clientTx,[['invoice_id'=>$clientInvoice,'amount'=>'125.00']],['user_id'=>7,'role_code'=>'company_owner']);
 ok($r['allocated_amount']==='125.00'&&$r['remaining_amount']==='175.00','partial manual allocation preserved bank remainder');
+ok(isset(FinanceSettlementStateService::unallocatedClientReceiptIds($pdo, [])[$clientTx]),'partially allocated client receipt stays red');
 ok((string)$pdo->query("SELECT paid_amount FROM finance_invoices WHERE id={$clientInvoice}")->fetchColumn()==='125.00','partial allocation updates invoice');
 FinanceObligationService::syncLinearRoute($pdo,20);
 ok((string)$pdo->query("SELECT paid_amount FROM finance_obligations WHERE id={$clientOb}")->fetchColumn()==='125.00','partial allocation updates obligation');
@@ -75,6 +78,7 @@ ok((string)$pdo->query("SELECT status FROM finance_obligations WHERE id={$client
 
 $effective=FinanceSettlementStateService::effectiveBankStatuses($pdo);
 ok(($effective[$clientTx]??null)==='MANUAL','fully manually allocated bank payment has effective manual status');
+ok(!isset(FinanceSettlementStateService::unallocatedClientReceiptIds($pdo, $effective)[$clientTx]),'fully allocated client receipt leaves red register rows');
 $sync=FinanceSettlementStateService::syncPersistedStatuses($pdo);
 ok($sync['transactions']>=1,'settlement sync finds completed invoice payments');
 ok((string)$pdo->query("SELECT classification_status FROM bank_transactions WHERE id={$clientTx}")->fetchColumn()==='MANUAL','manual invoice settlement persists bank status');

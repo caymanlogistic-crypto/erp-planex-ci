@@ -11,7 +11,8 @@ mustContain('app/Support/entrypoint_dependencies.php','FinanceBankInvoiceSettlem
 mustContain('app/Http/Routes/company_bank_finance.php','/bank-transactions/{id}/settlement','settlement routes');
 mustContain('app/Http/Controllers/Company/BankFinanceController.php','settlementForm','settlement form controller action');
 mustContain('app/Http/Controllers/Company/BankFinanceController.php','settlementSubmit','settlement submit controller action');
-mustContain('app/Http/Controllers/Company/BankFinanceActions/applyRules.php','autoAllocateIncomingCustomerReceipts','apply rules also settles unambiguous client receipts');
+$applyRules=file_get_contents(__DIR__.'/../app/Http/Controllers/Company/BankFinanceActions/applyRules.php');
+if($applyRules===false||str_contains($applyRules,'autoAllocateIncomingCustomerReceipts'))throw new RuntimeException('FAIL: apply rules must leave client receipts for manual settlement');
 mustContain('app/Http/Controllers/Company/BankFinanceActions/applyRules.php','FinanceCarrierBankAutoSettlementService.php','carrier bank auto-settlement service is loaded');
 mustContain('app/Http/Controllers/Company/BankFinanceActions/applyRules.php','autoAllocateOutgoingCarrierPayments','apply rules also settles unambiguous carrier payments');
 mustContain('app/Http/Controllers/Company/BankFinanceActions/indexAutoFilters.php','bank-invoice-settlement-modal','dedicated settlement modal');
