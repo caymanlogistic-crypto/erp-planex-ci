@@ -63,6 +63,10 @@
 .registry-ui-toolbar .found-label::before {background:#7c4718}
 .registry-ui-toolbar .found-label :is(b,[data-closing-count]) {color:#2e2923;font-weight:600}
 .registry-ui-toolbar .toolbar-right {display:flex;align-items:center;justify-content:flex-end;gap:8px;min-width:0;margin-left:auto}
+/* Closing filters share the same wrapping row as reset and search at every shell width. */
+.closing-page .registry-ui-card[data-erp-grid] > .registry-ui-toolbar .closing-toolbar-right {flex:0 1 auto;flex-wrap:wrap;max-width:100%;gap:8px}
+.closing-page .registry-ui-card[data-erp-grid] > .registry-ui-toolbar .closing-extra-filters {display:contents}
+@media(min-width:701px) and (max-width:1500px){.closing-page .registry-ui-card[data-erp-grid] > .registry-ui-toolbar .closing-toolbar-right {flex-basis:100%;width:100%}}
 .registry-ui-toolbar .btn--toolbar {height:32px;min-height:32px}
 .registry-ui-toolbar form {margin:0}
 .registry-ui-toolbar .toolbar-sort-label {color:#4c4840;font:500 12px/16px var(--font)}
