@@ -8,6 +8,8 @@
     "gallery": "docs/ui/approved-components.html",
     "registry_canon": "docs/ui/REGISTRY_CANON.md",
     "registry_decisions": "docs/ui/decisions-20261018.json",
+    "registry_toolbar_decision": "docs/ui/decisions-20261023-toolbar.json",
+    "feo_transfers_table_decision": "docs/ui/decisions-20261023-feo-transfers-table.json",
     "manager_display_decision": "docs/ui/decisions-20261020-manager-display.json",
     "manager_table_extension": "docs/ui/decisions-20261020-manager-tables.json",
     "icon_provenance": "docs/ui/REGISTRY_ICON_PROVENANCE.md",
