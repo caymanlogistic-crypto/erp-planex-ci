@@ -101,9 +101,9 @@
       "id": "registry.checkbox",
       "family": "registry",
       "role": "Флажок панели",
-      "selector": ".registry-ui-toolbar .rp-v014-hide-complete",
-      "approval": "OWNER 2026-10-12",
-      "description": "Флажок с текстом без отдельной плашки и с native input. Если он предусмотрен страницей, расположен слева после счётчика и разделителя .filter-sep; без флажка разделителя нет.",
+      "selector": ".registry-ui-checkbox",
+      "approval": "OWNER 2026-10-12; toolbar placement OWNER 2026-10-23",
+      "description": "Существующий общий класс для одиночного native checkbox с кликабельной подписью, без отдельной плашки. Если флажок предусмотрен страницей, он расположен слева после счётчика и существующего .filter-sep; без флажка разделителя нет. Исторический .rp-v014-hide-complete не использовать как образец новой страницы.",
       "specimen": "docs/ui/specimens/registry.composition.html"
     },
     {

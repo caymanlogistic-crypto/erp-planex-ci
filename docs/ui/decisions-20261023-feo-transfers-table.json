@@ -1,0 +1,29 @@
+{
+  "schema": "planex-ui-owner-decision/v1",
+  "id": "OWNER-2026-10-23-FEO-TRANSFERS-TABLE",
+  "date": "2026-10-23",
+  "scope": ["/erpv2/company/feo/requests/transfers"],
+  "owner_source": "OWNER instructions in the transfers design conversation, 22–23.10.2026",
+  "reference": {
+    "task_id": "feo-transfers-canon-gap-20261022",
+    "checkpoint": "v019",
+    "checkpoint_sha256": "D9171187187F134E16B4AFD33103A923F6A40CEA3ABA1B88688824E998F159AD"
+  },
+  "decisions": {
+    "columns": ["ID", "Заявки которые перемещаются", "Заявок", "Общий вес", "Место назначения", "Дата", "Ответственный"],
+    "request_ids": "Show every request number, with natural wrapping and row height; no line clamp or ellipsis. The displayed number count equals the adjacent count.",
+    "address_variants": {
+      "compact": "One line with ellipsis and full address in title; use only where the page contract selects it.",
+      "full": "Entire address with natural wrapping and row height; selected for this transfers table."
+    },
+    "destination_from_request": "Separate first line По адресу заявки N in standard IBM Plex Sans 12/700/16.8, then the full address in registry-ui-primary 12/500/16.8. Direct address has no request line.",
+    "history": "Clicking ID or double-clicking a row opens the existing block history.",
+    "returned": "Hidden by default; Показать возвращённые reveals rows using existing registry-ui-muted.",
+    "header_icon": "Exact Tabler outline arrow-right-square through the shared renderer."
+  },
+  "excluded": ["New shared visual treatment of forms, popups or action menus", "Page-local copies of shared component styles", "Production database, schema or business-data writes"],
+  "implementation": {
+    "pull_request": "https://github.com/caymanlogistic-crypto/erp-planex-ci/pull/446",
+    "merged_sha": "31bd1287aee1055f7a70574c67b77c58a251ad68"
+  }
+}
