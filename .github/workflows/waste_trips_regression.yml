@@ -79,6 +79,7 @@ jobs:
             app/Http/Controllers/Company/WasteTripController.php \
             app/Http/Routes/company_linear_trips.php \
             app/Service/WasteTripService.php \
+            app/Service/WasteTripActionConflictService.php \
             app/Service/WasteTripCustomerPaymentService.php \
             app/Service/WasteTripCarrierPaymentService.php \
             app/Service/WasteTripIncidentService.php \
@@ -93,7 +94,7 @@ jobs:
             app/View/partials/company_waste_trip_customer_payments.php \
             app/View/partials/company_waste_trip_carrier_payments.php \
             scripts/waste_trip_sync.php scripts/waste_trips_apply_130.php scripts/waste_trips_verify_130.php scripts/waste_trips_apply_134.php scripts/waste_trips_verify_134.php scripts/waste_trips_apply_135.php scripts/waste_trips_verify_135.php scripts/waste_trip_244_readonly_probe.php scripts/waste_trip_legacy_readonly_probe.php \
-            tests/waste_trip_incident_service_test.php tests/waste_trip_customer_payment_regression_test.php tests/waste_trip_carrier_finance_regression_test.php tests/waste_trip_legacy_readonly_probe_contract_test.php tests/waste_trip_regression_test.php tests/waste_trip_manager_membership_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_runtime_diagnostic_contract_test.php tests/waste_trip_244_readonly_probe_contract_test.php tests/waste_trips_128_production_migration_contract_test.php tests/waste_trips_130_production_migration_contract_test.php tests/waste_trips_134_production_migration_contract_test.php tests/waste_trips_135_production_migration_contract_test.php
+            tests/waste_trip_incident_service_test.php tests/waste_trip_action_conflict_test.php tests/waste_trip_customer_payment_regression_test.php tests/waste_trip_carrier_finance_regression_test.php tests/waste_trip_legacy_readonly_probe_contract_test.php tests/waste_trip_regression_test.php tests/waste_trip_manager_membership_regression_test.php tests/waste_trip_legacy_linked_contract_test.php tests/waste_trip_owner_layout_contract_test.php tests/waste_trip_scheduler_contract_test.php tests/waste_trips_runtime_diagnostic_contract_test.php tests/waste_trip_244_readonly_probe_contract_test.php tests/waste_trips_128_production_migration_contract_test.php tests/waste_trips_130_production_migration_contract_test.php tests/waste_trips_134_production_migration_contract_test.php tests/waste_trips_135_production_migration_contract_test.php
           do php -l "$f"; done
       - name: Static target contracts
         shell: bash
@@ -101,6 +102,8 @@ jobs:
           set -euo pipefail
           php tests/waste_trip_incident_service_test.php | tee /tmp/incident.out
           grep -Fqx 'WASTE_TRIP_INCIDENT_SERVICE=PASS' /tmp/incident.out
+          php tests/waste_trip_action_conflict_test.php | tee /tmp/action-conflict.out
+          grep -Fqx 'WASTE_TRIP_ACTION_CONFLICT=PASS' /tmp/action-conflict.out
           php tests/waste_trip_legacy_readonly_probe_contract_test.php | tee /tmp/legacy-probe.out
           grep -Fqx 'WASTE_TRIP_LEGACY_READ_ONLY_PROBE_CONTRACT=PASS' /tmp/legacy-probe.out
           php tests/waste_trip_legacy_linked_contract_test.php | tee /tmp/legacy.out

@@ -14,6 +14,7 @@ use App\Service\WasteTripGeneralPaymentService;
 use App\Service\WasteTripCarrierPaymentService;
 use App\Service\WasteTripService;
 use App\Service\WasteTripParityService;
+use App\Service\WasteTripActionConflictService;
 use App\Service\UserSyncService;
 use PDO;
 use RuntimeException;
@@ -114,6 +115,14 @@ final class WasteTripController
         requireRole(['company_owner','senior_logist','logist']); $context=$this->tenantContext(false); $pdo=$this->requireTenantPdo($context); $this->assertSchemaReady($pdo);
         $isFinanceRealm=(string)($context['sessionUser']['role_code']??'')==='company_owner';$trip=WasteTripService::fetchTrip($pdo,(int)$id,$isFinanceRealm); if ($trip===null){http_response_code(404);echo '<div class="notice warn">Рейс не найден.</div>';return;}
         if(!WasteTripService::canAccessTrip($pdo,$trip,$context['sessionUser'])){http_response_code(403);echo '<div class="notice warn">У вас нет доступа к этому рейсу.</div>';return;}
+        $tripActionIssues=[];$tripActionCheckError=false;
+        if(WasteTripService::isSynchronizableLegacyTrip($trip)){
+            try {
+                $legacy=WasteTripLegacySourceService::connectionFromEnvironment();
+                if($legacy instanceof PDO)$tripActionIssues=WasteTripActionConflictService::load($legacy,$pdo)[(int)$trip['business_id']]??[];
+                else $tripActionCheckError=true;
+            } catch(Throwable $error) { error_log('waste trip action check failed: '.$error->getMessage()); $tripActionCheckError=true; }
+        }
         header('Content-Type: text/html; charset=utf-8'); require base_path('app/View/partials/company_waste_trip_modal_view.php');
     }
 

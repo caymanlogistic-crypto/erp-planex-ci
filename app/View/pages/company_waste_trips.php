@@ -53,7 +53,11 @@ require base_path('app/View/partials/registry_ui_head.php');
     <?php if($tripParity['extra_ids']!==[]):?><div>Нет в старой БД: #<?=e(implode(', #',$tripParity['extra_ids']))?></div><?php endif;?>
     <?php if($tripParity['status_mismatch_ids']!==[]):?><div>Не совпадает статус: #<?=e(implode(', #',$tripParity['status_mismatch_ids']))?></div><?php endif;?>
     <?php if($tripParity['sync_error_ids']!==[]):?><div>Ошибка синхронизации (подробности в карточке рейса): #<?=e(implode(', #',$tripParity['sync_error_ids']))?></div><?php endif;?>
+    <?php if(($tripParity['action_issue_ids']??[])!==[]):?><div>Возможный повторный забор, сдача или складское расхождение (подробности в карточке рейса): #<?=e(implode(', #',$tripParity['action_issue_ids']))?></div><?php endif;?>
 </div>
+<?php endif;?>
+<?php if(!empty($tripParity['available']) && empty($tripParity['action_available'])):?>
+<div class="notice warn">Проверка повторного забора и сдачи временно недоступна: не удалось прочитать данные рейсов или складского учёта.</div>
 <?php endif;?>
 <?php if(!empty($syncResult)):?><div class="notice">Синхронизация: создано <?= (int)$syncResult['created']?>, обновлено <?= (int)$syncResult['updated']?>, удалено <?= (int)$syncResult['deleted']?>, ошибок <?= (int)$syncResult['failed']?>.</div><?php foreach(array_merge($syncResult['warnings'],$syncResult['errors']) as $message):?><div class="notice warn"><?=e($message)?></div><?php endforeach;endif;?>
 <section data-registry-id="trips-departures" data-registry-state-scope="<?= e($registryUiStateScope) ?>" data-registry-default-tab="all" data-registry-server-filter><nav class="lab-status-tabs registry-ui-tabs" aria-label="Фильтр по статусу рейса" data-waste-status-tabs>

@@ -110,26 +110,28 @@ final class NavigationCounterService
             $counters['linear_trips_problem'] = 0;
         }
 
-        try {
-            if (!class_exists(WasteTripLegacySourceService::class)) require_once __DIR__.'/WasteTripLegacySourceService.php';
-            if (!class_exists(WasteTripService::class)) require_once __DIR__.'/WasteTripService.php';
-            if (!class_exists(WasteTripParityService::class)) require_once __DIR__.'/WasteTripParityService.php';
-            $counters['departures_problem'] = WasteTripParityService::attentionCount($tenant);
-        } catch (Throwable $error) {
-            error_log('waste trip navigation count failed: '.$error->getMessage());
-            $counters['departures_problem'] = 1;
-        }
-
+        $legacy = null;
+        $warehouseStock = null;
         try {
             if (!class_exists(WasteTripLegacySourceService::class)) require_once __DIR__.'/WasteTripLegacySourceService.php';
             if (!class_exists(WarehouseStockService::class)) require_once __DIR__.'/WarehouseStockService.php';
             $legacy = WasteTripLegacySourceService::connectionFromEnvironment();
-            $counters['warehouse_stock_problem'] = $legacy instanceof PDO
-                ? WarehouseStockService::load($legacy, $tenant)['issue_count']
-                : 1;
+            if ($legacy instanceof PDO) {
+                $warehouseStock = WarehouseStockService::load($legacy, $tenant);
+                $counters['warehouse_stock_problem'] = $warehouseStock['issue_count'];
+            } else $counters['warehouse_stock_problem'] = 1;
         } catch (Throwable $error) {
             error_log('warehouse stock navigation count failed: '.$error->getMessage());
             $counters['warehouse_stock_problem'] = 1;
+        }
+
+        try {
+            if (!class_exists(WasteTripService::class)) require_once __DIR__.'/WasteTripService.php';
+            if (!class_exists(WasteTripParityService::class)) require_once __DIR__.'/WasteTripParityService.php';
+            $counters['departures_problem'] = WasteTripParityService::attentionCount($tenant, $legacy, $warehouseStock);
+        } catch (Throwable $error) {
+            error_log('waste trip navigation count failed: '.$error->getMessage());
+            $counters['departures_problem'] = 1;
         }
 
         try {
