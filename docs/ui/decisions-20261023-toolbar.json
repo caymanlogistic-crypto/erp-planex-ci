@@ -51,7 +51,7 @@
   ],
   "excluded": [
     "new visual controls, palette or page-local duplicate styles",
-    "changes to each page's access rules, data, filter meaning or starting profile",
+    "changes to each page's access rules, data, filter meaning or starting profile, except the explicit finance checkbox amendment above",
     "production database, schema or business-data writes"
   ]
 }
