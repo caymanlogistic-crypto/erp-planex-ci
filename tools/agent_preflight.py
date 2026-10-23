@@ -38,7 +38,7 @@ FEO_TRANSFER_TESTS=["tests/"+name+".php" for name in (
     "cargo_balance_statistics_contract_test", "cargo_balance_statistics_mysql_test",
 )]
 WASTE_TESTS=["tests/"+name+".php" for name in (
-    "waste_trip_incident_service_test", "waste_trip_legacy_readonly_probe_contract_test",
+    "waste_trip_incident_service_test", "waste_trip_action_conflict_test", "waste_trip_legacy_readonly_probe_contract_test",
     "waste_trip_legacy_linked_contract_test", "waste_trip_owner_layout_contract_test",
     "waste_trip_scheduler_contract_test", "waste_trips_runtime_diagnostic_contract_test",
     "waste_trip_244_readonly_probe_contract_test", "waste_trips_130_production_migration_contract_test",
