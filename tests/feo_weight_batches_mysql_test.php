@@ -36,6 +36,8 @@ try {
     putenv('FEO_LEGACY_SYNC_DATABASE='.$schema);
     putenv('FEO_LEGACY_SYNC_CONNECTION_B64');
     $actor = ['created_by_user_id'=>11, 'created_by_display_name'=>'Менеджер'];
+    $parsedIds = FeoWeightBatchService::parseIds('100001, 100002, 100001, 100001');
+    $ok($parsedIds['ids'] === ['100001','100002'] && $parsedIds['duplicates'] === 2, 'Duplicate summary counts removed occurrences');
     $ok(FeoWeightBatchService::tonnesFromKg('1 250,1') === '1.2501', 'Kilograms convert to decimal tonnes');
     $reject(fn()=>FeoWeightBatchService::tonnesFromKg('-10'), 'Negative mass rejected');
     $reject(fn()=>FeoWeightBatchService::tonnesFromKg('1.25'), 'Excess precision rejected');
@@ -74,6 +76,30 @@ try {
     $ok($rows[0]['mass_netto'] === '1.2500' && $rows[0]['mass_brutto'] === '1.6000' && $rows[1]['mass_brutto'] === '2.3000', 'Original net and gross restored');
     $ok($pdo->query("SELECT mass_brutto FROM feo WHERE zayavka_id='100001'")->fetchColumn() === '1.50', 'Original legacy gross restored');
     $ok(!empty($service->revert($pdo, $batchId, $actor)['already_reverted']), 'Revert retry is idempotent');
+    // The compact editor must preserve the service's distinction between empty, zero and 0.1 kg.
+    putenv('FEO_LEGACY_SYNC_TENANT_DATABASE=');
+    putenv('FEO_LEGACY_SYNC_DATABASE=');
+    $pdo->exec("INSERT INTO feo_requests(zayavka_id,mass_netto,mass_brutto) VALUES('100003',NULL,NULL),('100004',0,0),('100005',0.0001,0.0002)");
+    $edgePreview = $service->preview($pdo, ['100003', '100004', '100005']);
+    $ok(FeoWeightBatchService::tonnesFromKg('') === null && FeoWeightBatchService::tonnesFromKg('0') === '0.0000' && FeoWeightBatchService::tonnesFromKg('0,1') === '0.0001', 'Blank, zero and tenths convert distinctly');
+    $sameTargets = [
+        '100003'=>['netto_kg'=>'', 'brutto_kg'=>''],
+        '100004'=>['netto_kg'=>'0', 'brutto_kg'=>'0'],
+        '100005'=>['netto_kg'=>'0,1', 'brutto_kg'=>'0,2'],
+    ];
+    $reject(fn()=>$service->create($pdo, $edgePreview, $sameTargets, $actor, hash('sha256','edge-no-change'), '', ''), 'No-change values reject block across NULL, zero and tenths');
+    $ok((int)$pdo->query('SELECT COUNT(*) FROM feo_weight_batches')->fetchColumn() === 1, 'No-change attempt creates no second block');
+    $edgeTargets = [
+        '100003'=>['netto_kg'=>'0', 'brutto_kg'=>'0,1'],
+        '100004'=>['netto_kg'=>'', 'brutto_kg'=>''],
+        '100005'=>['netto_kg'=>'0,2', 'brutto_kg'=>'0,3'],
+    ];
+    $edgeResult = $service->create($pdo, $edgePreview, $edgeTargets, $actor, hash('sha256','edge-apply'), '', '');
+    $ok($edgeResult['count'] === 3, 'Blank, zero and tenths are actual changes');
+    $ok($pdo->query('SELECT name FROM feo_weight_batches WHERE id='.(int)$edgeResult['batch_id'])->fetchColumn() === 'Изменение веса заявок', 'Compact form uses existing default block name');
+    $edgeRows = $pdo->query("SELECT zayavka_id,mass_netto,mass_brutto FROM feo_requests WHERE zayavka_id IN ('100003','100004','100005') ORDER BY zayavka_id")->fetchAll(PDO::FETCH_ASSOC);
+    $ok($edgeRows[0]['mass_netto'] === '0.0000' && $edgeRows[0]['mass_brutto'] === '0.0001' && $edgeRows[1]['mass_netto'] === null && $edgeRows[1]['mass_brutto'] === null && $edgeRows[2]['mass_netto'] === '0.0002' && $edgeRows[2]['mass_brutto'] === '0.0003', 'Distinct edge values persisted exactly');
+    $ok($service->revert($pdo, $edgeResult['batch_id'], $actor)['count'] === 3, 'Edge-value block reverts');
     echo "FEO_WEIGHT_BATCHES_MYSQL_PASS checks=$count\n";
 } finally {
     foreach ($legacySettings as $key=>$value) putenv($value===false?$key:$key.'='.$value);

@@ -1,0 +1,33 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "feo-weight-popups-20261024",
+  "date": "2026-10-24",
+  "status": "OWNER_DELEGATED_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "instruction": "Создать блок изменения веса по аналогии с принятым переносом, самостоятельно продумать сценарий и опубликовать после независимой проверки координатора.",
+    "checkpoint": "weights-block-design-20261024:v003",
+    "independent_gate": "ROOT PASS for empty, filled, 72 ID, NULL/0, missing ID, confirmation, cancel/reopen, responsive and canonical classes; publication explicitly commanded after transfer PR #452 merge."
+  },
+  "scope": ["/erpv2/company/feo/requests/weights — create, editor, read-only detail and final revert confirmation"],
+  "inherits": ["docs/ui/decisions-20261024-popup-shell.json", "docs/ui/decisions-20261024-feo-transfer-popups.json: shared popup roles only"],
+  "shared_style_owner": "public/assets/css/registry-components.css",
+  "shared_roles": [".registry-ui-modal", ".registry-ui-modal-form", ".registry-ui-modal-grid", ".registry-ui-modal-text", ".registry-ui-modal-summary", ".registry-ui-modal-preview", ".registry-ui-modal-confirm", ".registry-ui-modal-secondary", ".registry-ui-compact-table-scroll", ".registry-ui-compact-table", ".registry-ui-entity-id"],
+  "approved": {
+    "shell": "The exact shared modal shell: IBM Plex Sans title 19/700/22, #131210, cross right; #F0EDE6 header/footer; 48px footer, #DEDAD0 divider; #FEFDF8 body with 12/16px padding and 8px grid. Existing shared backdrop. No local popup skin.",
+    "create": "No editable block name or comment. Requests textarea 96px, vertically resizable, six-digit ID placeholder. Paste extracts first Excel/markdown column and normalizes visible IDs to comma-separated text. Current weights load automatically after 250ms, with stale response discard. Footer has Отменить and one primary Сохранить изменения веса; save disabled without current preview token.",
+    "editor": "Plain summary Заявок: N. and optional Повторов объединено: D. Shared 1px bordered compact table, max-height 300px internal scroll: Заявка / Нетто было / Нетто станет, кг / Брутто было / Брутто станет, кг. Current values come from feo_requests, converted tonnes to kg. Numeric input allows nonnegative kilograms with 0.1 precision; blank means NULL/delete, while 0 remains a real weight. Only changed requests are stored in a block.",
+    "validation": "Unknown six-digit IDs are listed under Requests in system dark red #872822 with role=alert. Invalid kilograms and unchanged-weight error appear under the editor table, using the same shared field-error role. No separate Проверить or Загрузить button. Server preview and create keep stale-state checks.",
+    "detail": "Title Изменение веса №ID. Plain read-only text lists every request number in shared 12/700 tabular-numeric role, followed by Заявок: N. and the same bordered table with before/after net and gross. NULL is a neutral dash, zero is 0 кг. No block/author/comment/return metadata strip. Footer has Отменить and Отменить изменение веса for an applied block; returned block has only Отменить.",
+    "confirmation": "Same shell and title. Plain text lists all IDs and says they return to previous net and gross; second line explains that a later weight change stops the entire return and history remains. Footer has Отменить and shared red .btn-danger Отменить изменение веса. Cancel/reopen restores ordinary primary action. Server failure appears below the text, dark red with role=alert.",
+    "responsive": "The five-column table scrolls only inside its bordered region at narrow widths. Dialog/document have no accidental horizontal overflow; all footer actions remain reachable."
+  },
+  "business_contract": "Existing FeoWeightBatchService retains independent nullable net/gross, 0 versus NULL, atomic create/revert, stale current-value checks, legacy sync and MAX notification. The new view does not change the seven-column main registry table or its data/filters.",
+  "implementation": {
+    "view": "app/View/pages/company_feo_weight_batches.php",
+    "behavior": "public/assets/js/feo-weights.js",
+    "service": "app/Service/FeoWeightBatchService.php",
+    "style": "public/assets/css/registry-components.css; shared rules inherited from merged transfer PR #452, no weight-specific copies"
+  },
+  "excluded": ["Changing the main seven-column weight history registry", "Production database/schema or business-data migration", "Approving new palette colors or one-page lookalike classes"]
+}
