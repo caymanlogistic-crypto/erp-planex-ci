@@ -2,7 +2,8 @@
   "schema": "planex-approved-ui-decisions/v1",
   "id": "row-fill-semantic-badges-20261024",
   "date": "2026-10-24",
-  "status": "OWNER_APPROVED",
+  "status": "SUPERSEDED",
+  "superseded_by": "docs/ui/decisions-20261024-row-badges-static.json",
   "source": {
     "actor": "OWNER",
     "chat": "Current badge-design conversation; exact thread ID unavailable",
