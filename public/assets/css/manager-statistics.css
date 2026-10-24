@@ -159,9 +159,6 @@
   height: 28px;
   padding: 0;
 }
-.manager-stats__chart-controls .manager-stats__warehouse-field .manager-stats__segments {
-  width: 100%;
-}
 .manager-stats__chart-controls .manager-stats__segments a {
   flex: none;
   height: auto;
@@ -169,10 +166,6 @@
   border-right: 1px solid var(--line-hair);
   font-size: 9.5px;
   font-weight: 700;
-}
-.manager-stats__chart-controls .manager-stats__warehouse-field .manager-stats__segments a {
-  flex: 1;
-  justify-content: center;
 }
 .manager-stats__chart-controls .manager-stats__segments a:last-child {
   border-right: 0;
@@ -326,9 +319,6 @@
     align-items: stretch;
     flex-direction: column;
     gap: 8px;
-  }
-  .manager-stats__chart-controls .manager-stats__warehouse-field {
-    width: max-content;
   }
   .manager-stats__chart-controls .manager-stats__segments {
     width: max-content;
