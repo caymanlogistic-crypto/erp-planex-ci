@@ -242,14 +242,16 @@
     let destination = null;
     try { destination = JSON.parse(batch.destination_json); } catch {}
     const requests = result.items.map(item => String(item.zayavka_id));
-    let html = `<div class="registry-ui-modal-grid"><div class="field"><span class="field-label">Заявки</span><p class="registry-ui-modal-text">${idsHtml(requests)}</p></div>`;
-    if (batch.mode === 'request' || batch.mode === 'address') html += `<div class="field"><span class="field-label">Куда переместить</span><p class="registry-ui-modal-text">${batch.mode === 'request' ? 'К другой заявке' : 'По адресу'}</p></div>`;
-    if (batch.mode === 'request' && batch.source_request_id) html += `<div class="field"><span class="field-label">Номер заявки с нужным адресом</span><p class="registry-ui-modal-text">${idsHtml([batch.source_request_id])}</p></div>`;
+    let summary = `<div class="field"><span class="field-label">Заявки</span><p class="registry-ui-modal-text">${idsHtml(requests)}</p></div>`;
+    if (batch.mode === 'request' || batch.mode === 'address') summary += `<div class="field"><span class="field-label">Куда переместить</span><p class="registry-ui-modal-text">${batch.mode === 'request' ? 'К другой заявке' : 'По адресу'}</p></div>`;
+    let destinationHtml = '';
+    if (batch.mode === 'request' && batch.source_request_id) destinationHtml += `<div class="field"><span class="field-label">Номер заявки с нужным адресом</span><p class="registry-ui-modal-text">${idsHtml([batch.source_request_id])}</p></div>`;
     if (batch.mode === 'address' && destination?.address) {
-      html += `<div class="field"><span class="field-label">Адрес места погрузки</span><p class="registry-ui-modal-text">${escape(destination.query || destination.address)}</p></div>`;
-      html += `<div class="registry-ui-modal-geo"><div class="field"><span class="field-label">Найденный адрес</span><p class="registry-ui-modal-text">${escape(destination.address)}</p></div><p class="registry-ui-modal-text">Широта ${escape(destination.latitude)} · Долгота ${escape(destination.longitude)}</p>${destination.precision ? qualityHtml(destination) : ''}</div>`;
+      summary += `<div class="field"><span class="field-label">Адрес места погрузки</span><p class="registry-ui-modal-text">${escape(destination.query || destination.address)}</p></div>`;
+      destinationHtml += `<div class="registry-ui-modal-geo"><div class="field"><span class="field-label">Найденный адрес</span><p class="registry-ui-modal-text">${escape(destination.address)}</p></div><p class="registry-ui-modal-text">Широта ${escape(destination.latitude)} · Долгота ${escape(destination.longitude)}</p>${destination.precision ? qualityHtml(destination) : ''}</div>`;
     }
-    html += `<section class="registry-ui-modal-preview"><div class="registry-ui-modal-summary">Заявок: ${result.items.length}.</div><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Вес нетто</th><th>Было</th><th>Стало</th></tr></thead><tbody>${result.items.map(item => rowHtml(item)).join('')}</tbody></table></div></section></div>`;
+    let html = `<div class="registry-ui-modal-grid${destinationHtml ? ' registry-ui-modal-grid--reading' : ''}"><div class="registry-ui-modal-grid">${summary}</div>${destinationHtml ? `<div class="registry-ui-modal-grid">${destinationHtml}</div>` : ''}`;
+    html += `<section class="registry-ui-modal-preview"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Вес нетто</th><th>Было</th><th>Стало</th></tr></thead><tbody>${result.items.map(item => rowHtml(item)).join('')}</tbody></table></div></section></div>`;
     return {html,requests};
   };
   async function openDetail(id) {
@@ -258,15 +260,19 @@
       const result = await request(`${base}/${id}/json`);
       const view = historyContent(result);
       detailId = Number(id); detailIds = view.requests;
-      detailTitle.textContent = `Перенос заявок №${id}`;
+      detailTitle.textContent = `Перенос заявок #${id}`;
       detailBody.innerHTML = view.html;
       detailRevert.hidden = result.batch.status !== 'applied';
       confirmRevert.hidden = true;
+      detailDialog.classList.remove('registry-ui-modal--confirmation');
+      detailDialog.classList.add('registry-ui-modal--reading');
       detailDialog.showModal();
     } catch(e) { pageMessage(e.message,true); }
   }
   detailRevert.addEventListener('click',() => {
     detailBody.innerHTML = `<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">На прежние адреса и координаты вернутся заявки: ${idsHtml(detailIds)}.</p><p class="registry-ui-modal-text">Если какая-либо заявка перемещена более поздним блоком, отмена переноса остановится. История сохранится.</p><div class="field-msg is-error" data-revert-error role="alert" hidden></div></div>`;
+    detailDialog.classList.remove('registry-ui-modal--reading');
+    detailDialog.classList.add('registry-ui-modal--confirmation');
     detailRevert.hidden = true; confirmRevert.hidden = false;
   });
   confirmRevert.addEventListener('click',async () => {

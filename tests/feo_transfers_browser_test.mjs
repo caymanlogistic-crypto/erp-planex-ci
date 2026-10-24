@@ -26,13 +26,19 @@ try {
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   let createCalls=0,previewCalls=0;
   const destination={address:'Новый адрес <img src=x onerror=alert(1)>',latitude:'55.456',longitude:'37.123',quality:'Только улица, дом не определён',precision:'street'};
+  const addressDestination={query:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',address:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',latitude:'66.071007',longitude:'76.560232',precision:'exact',quality:'Найден запрошенный дом, включая указанный корпус или строение.'};
+  const detailFixture=[{zayavka_id:'100001',net_kg:1250,before:{mno_adres_pogruzki:'Короткий адрес',mno_d:'55',mno_sh:'37'},after:{mno_adres_pogruzki:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',mno_d:'56',mno_sh:'38'}},{zayavka_id:'100002',net_kg:0,before:{mno_adres_pogruzki:'Россия, Ханты-Мансийский автономный округ, Сургут, Промышленная улица, 4',mno_d:'61',mno_sh:'73'},after:{mno_adres_pogruzki:'Короткий итоговый адрес',mno_d:'62',mno_sh:'74'}}];
+  let shownDetailItems=detailFixture;
+  let shownDetailMode='request';
+  let shownTargetId='100003';
+  let shownAddressDestination=addressDestination;
   await page.route('**/company/feo/**',async route => {
     const url=route.request().url();
     let result;
     if(url.endsWith('/geocode')) result={success:true,geo_token:'fixture-geo',result:destination};
     else if(url.endsWith('/preview')) {previewCalls++; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination,rows:[{zayavka_id:'100001',net_kg:1250,mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',net_kg:null,mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
     else if(url.endsWith('/create')) {createCalls++; result={success:true,batch_id:19,notification:'failed'};}
-    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',mode:'request',source_request_id:'100003',destination_json:JSON.stringify(destination),created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:[{zayavka_id:'100001',net_kg:1250,before:{mno_adres_pogruzki:'Короткий адрес',mno_d:'55',mno_sh:'37'},after:{mno_adres_pogruzki:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',mno_d:'56',mno_sh:'38'}},{zayavka_id:'100002',net_kg:0,before:{mno_adres_pogruzki:'Россия, Ханты-Мансийский автономный округ, Сургут, Промышленная улица, 4',mno_d:'61',mno_sh:'73'},after:{mno_adres_pogruzki:'Короткий итоговый адрес',mno_d:'62',mno_sh:'74'}}]};
+    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',mode:shownDetailMode,source_request_id:shownDetailMode==='request'?shownTargetId:null,destination_json:JSON.stringify(shownDetailMode==='address'?shownAddressDestination:destination),created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:shownDetailItems};
     else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего блока остановлен.'};
     else result={success:true};
     await route.fulfill({status:result.success?200:422,contentType:'application/json',body:JSON.stringify(result)});
@@ -84,7 +90,9 @@ try {
   assert.equal(createCalls,1,'One commit call');
   await page.locator('[data-batch-row] [data-detail]').click();
   await page.locator('[data-detail-dialog]').waitFor({state:'visible'});
+  assert.match(await page.locator('[data-detail-dialog] .modal-title').innerText(),/^Перенос заявок #\d+$/);
   assert.equal(await page.locator('[data-detail-dialog] .transfer-detail-meta').count(),0);
+  assert.equal(await page.locator('[data-detail-dialog] .registry-ui-modal-summary').count(),0,'Read-only history omits request count');
   assert.match(await page.locator('[data-detail-dialog] [data-detail-body]').innerText(),/Вес нетто/i);
   assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').first().evaluate(e=>getComputedStyle(e).fontWeight),'700');
   assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').count(),3,'Request and destination IDs use the shared bold role');
@@ -105,9 +113,104 @@ try {
   }
   await page.locator('[data-detail-dialog] [data-revert]').click();
   assert.match(await page.locator('[data-detail-body]').innerText(),/На прежние адреса и координаты вернутся заявки: 100001/);
+  assert.equal(await page.locator('[data-confirm-revert]').innerText(),'Выполнить возврат');
   await page.locator('[data-confirm-revert]').click();
   await page.locator('[data-revert-error]').waitFor({state:'visible'});
   assert.match(await page.locator('[data-revert-error]').innerText(),/Возврат всего блока остановлен/);
+  await page.locator('[data-detail-dialog] .modal-close').click();
+  shownDetailItems=detailFixture.slice(0,1);
+  for (const [mode,target,address] of [['request',null,addressDestination],['legacy',null,addressDestination],['address',null,{query:'Адрес без результата',address:''}]]) {
+    shownDetailMode=mode; shownTargetId=target; shownAddressDestination=address;
+    await page.setViewportSize({width:1280,height:900});
+    await page.goto(url);
+    await page.locator('[data-batch-row] [data-detail]').click();
+    assert.equal(await page.locator('[data-detail-dialog] .registry-ui-modal-grid--reading').count(),0,`Missing ${mode} destination does not create empty right group`);
+    assert.equal(await page.locator('[data-detail-dialog] .modal-body>.registry-ui-modal-grid').evaluate(e=>e.children.length),2,`Only summary and full-width table remain for ${mode}`);
+    assert.equal(await page.locator('[data-detail-dialog] tbody tr').count(),1);
+    await page.locator('[data-detail-dialog] .modal-close').click();
+  }
+  shownTargetId='100003';
+  shownAddressDestination=addressDestination;
+  for (const mode of ['request','address']) {
+  shownDetailMode=mode;
+  for (const [variant,items] of [
+    ['one',detailFixture.slice(0,1)],
+    ['many',Array.from({length:24},(_,index)=>({
+      ...detailFixture[index%detailFixture.length],zayavka_id:String(310500+index),
+      before:{...detailFixture[index%detailFixture.length].before,mno_adres_pogruzki:`Россия, Ханты-Мансийский автономный округ, Сургут, Промышленная улица, корпус ${index+1}, строение 4, производственный участок`}
+    }))]
+  ]) {
+    shownDetailItems=items;
+    for (const width of [390,1280,1920]) {
+      await page.setViewportSize({width,height:900});
+      await page.goto(url);
+      await page.locator('[data-batch-row] [data-detail]').click();
+      const detail=page.locator('[data-detail-dialog]');
+      await detail.waitFor({state:'visible'});
+      const compactTableMetrics=await detail.evaluate(e=>{
+        const th=e.querySelector('thead th'),td=e.querySelector('tbody td:nth-child(4)'),scroll=e.querySelector('.registry-ui-compact-table-scroll'),body=e.querySelector('.modal-body'),foot=e.querySelector('.modal-foot');
+        const props=node=>{const s=getComputedStyle(node);return {paddingTop:s.paddingTop,paddingBottom:s.paddingBottom,paddingLeft:s.paddingLeft,lineHeight:s.lineHeight,height:s.height,boxSizing:s.boxSizing}};
+        const groups=[...scroll.parentElement.parentElement.children].filter(node=>node!==scroll.parentElement);
+        return {th:props(th),td:props(td),body:props(body),tableTopGap:scroll.getBoundingClientRect().top-Math.max(...groups.map(node=>node.getBoundingClientRect().bottom)),tableBottomGap:foot.getBoundingClientRect().top-scroll.getBoundingClientRect().bottom};
+      });
+      for (const cell of [compactTableMetrics.th,compactTableMetrics.td]) {
+        assert.equal(cell.paddingTop,'8px',`Compact table top padding ${mode} ${variant} ${width}`);
+        assert.equal(cell.paddingBottom,'8px',`Compact table bottom padding ${mode} ${variant} ${width}`);
+        assert.equal(cell.paddingLeft,'10px',`Compact table side padding ${mode} ${variant} ${width}`);
+        assert.equal(cell.boxSizing,'border-box',`Compact table cell sizing ${mode} ${variant} ${width}`);
+      }
+      assert.ok(Math.abs(compactTableMetrics.tableTopGap-8)<=1,`Compact table top gap ${mode} ${variant} ${width}`);
+      assert.ok(Math.abs(compactTableMetrics.tableBottomGap-12)<=1,`Compact table footer gap ${mode} ${variant} ${width}`);
+      assert.match(await detail.locator('.modal-title').innerText(),/^Перенос заявок #\d+$/,`History title ${mode} ${variant} ${width}`);
+      const historyWidth=await detail.evaluate(e=>Math.round(e.getBoundingClientRect().width));
+      assert.ok(width===390?historyWidth>=350&&historyWidth<=374:historyWidth===900,`History width ${variant} ${width}: ${historyWidth}`);
+      assert.equal(await detail.evaluate(e=>e.scrollWidth>e.clientWidth),false,`History dialog overflow ${variant} ${width}`);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`History page overflow ${variant} ${width}`);
+      const layout=await detail.locator('.registry-ui-modal-grid--reading').evaluate(e=>{
+        const left=e.children[0].getBoundingClientRect(),right=e.children[1].getBoundingClientRect(),table=e.children[2].getBoundingClientRect();
+        return {left:{x:left.x,y:left.y,bottom:left.bottom},right:{x:right.x,y:right.y,bottom:right.bottom},tableY:table.y};
+      });
+      if(width===390) assert.ok(Math.abs(layout.left.x-layout.right.x)<=1&&layout.right.y>=layout.left.bottom,`Mobile reading order ${mode} ${variant}`);
+      else assert.ok(layout.right.x>layout.left.x&&Math.abs(layout.right.y-layout.left.y)<=1,`Desktop two groups ${mode} ${variant} ${width}`);
+      assert.ok(layout.tableY>=Math.max(layout.left.bottom,layout.right.bottom),`Table follows both groups ${mode} ${variant} ${width}`);
+      assert.equal(await detail.locator('tbody tr').count(),items.length,`History rows ${variant} ${width}`);
+      assert.equal(await detail.locator('.registry-ui-modal-summary').count(),0,`History omits count ${mode} ${variant} ${width}`);
+      if(width===390) assert.equal(await detail.locator('.registry-ui-compact-table-scroll').evaluate(e=>e.scrollWidth>e.clientWidth),true,`History table scrolls horizontally ${mode} ${variant}`);
+      if (mode==='address') {
+        assert.equal(await detail.locator('.registry-ui-modal-geo .registry-ui-modal-text').first().innerText(),addressDestination.address,`Full found address ${variant} ${width}`);
+        assert.match(await detail.locator('.registry-ui-modal-geo').innerText(),/Широта 66\.071007 · Долгота 76\.560232/,`Coordinates ${variant} ${width}`);
+        assert.equal(await detail.locator('.registry-ui-modal-geo .badge').innerText(),'Точное',`Precision badge ${variant} ${width}`);
+      } else {
+        assert.match(await detail.locator('[data-detail-body]').innerText(),/Номер заявки с нужным адресом\s+100003/,`Target request ${variant} ${width}`);
+      }
+      if (variant==='many') assert.equal(await detail.locator('.registry-ui-compact-table-scroll').evaluate(e=>e.scrollHeight>e.clientHeight),true,`History table scroll ${width}`);
+      if(screenshotDir) await detail.screenshot({path:path.join(screenshotDir,`transfer-history-${mode}-${variant}-${width}.png`)});
+      await detail.locator('[data-revert]').click();
+      assert.match(await detail.locator('.modal-title').innerText(),/^Перенос заявок #\d+$/,`Confirmation title ${mode} ${variant} ${width}`);
+      assert.equal(await detail.locator('[data-confirm-revert]').innerText(),'Выполнить возврат');
+      const confirmationWidth=await detail.evaluate(e=>Math.round(e.getBoundingClientRect().width));
+      assert.ok(width===390?confirmationWidth>=350&&confirmationWidth<=374:confirmationWidth===640,`Confirmation width ${variant} ${width}: ${confirmationWidth}`);
+      assert.equal(await detail.evaluate(e=>e.scrollWidth>e.clientWidth),false,`Confirmation dialog overflow ${variant} ${width}`);
+      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,`Confirmation page overflow ${variant} ${width}`);
+      assert.equal(await detail.locator('.registry-ui-entity-id').count(),items.length,`Confirmation lists every request ${variant} ${width}`);
+      if(screenshotDir) await detail.screenshot({path:path.join(screenshotDir,`transfer-confirmation-${mode}-${variant}-${width}.png`)});
+      await detail.locator('.modal-close').click();
+    }
+  }
+  }
+  shownDetailItems=Array.from({length:1000},(_,index)=>({...detailFixture[0],zayavka_id:String(310500+index)}));
+  await page.setViewportSize({width:390,height:900});
+  await page.goto(url);
+  await page.locator('[data-batch-row] [data-detail]').click();
+  await page.locator('[data-detail-dialog] [data-revert]').click();
+  assert.equal(await page.locator('[data-detail-dialog] .modal-body').evaluate(e=>e.scrollHeight>e.clientHeight),true,'Long confirmation scrolls inside modal body');
+  assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').count(),1000,'Long confirmation preserves every ID');
+  assert.equal(await page.locator('[data-detail-dialog] .modal-foot [data-confirm-revert]').isVisible(),true,'Long confirmation keeps final action visible');
+  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Long confirmation has no page overflow');
+  if(screenshotDir) await page.locator('[data-detail-dialog]').screenshot({path:path.join(screenshotDir,'transfer-confirmation-1000-390.png')});
+  await page.locator('[data-detail-dialog] .modal-close').click();
+  shownDetailItems=detailFixture;
+  shownDetailMode='request';
   await page.goto(url+'/coordinates'); await page.locator('[name=address]').fill('Москва');
   await page.locator('[data-geocode]').click(); await page.locator('[data-geo-result]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-geo-lon]').innerText(),'37.123');
