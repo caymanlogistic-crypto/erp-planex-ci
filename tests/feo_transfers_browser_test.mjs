@@ -30,9 +30,9 @@ try {
     const url=route.request().url();
     let result;
     if(url.endsWith('/geocode')) result={success:true,geo_token:'fixture-geo',result:destination};
-    else if(url.endsWith('/preview')) {previewCalls++; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination,rows:[{zayavka_id:'100001',mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
+    else if(url.endsWith('/preview')) {previewCalls++; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination,rows:[{zayavka_id:'100001',net_kg:1250,mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',net_kg:null,mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
     else if(url.endsWith('/create')) {createCalls++; result={success:true,batch_id:19,notification:'failed'};}
-    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:[]};
+    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',mode:'request',source_request_id:'100003',destination_json:JSON.stringify(destination),created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:[{zayavka_id:'100001',net_kg:1250,before:{mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},after:{mno_adres_pogruzki:'Итоговый адрес',mno_d:'56',mno_sh:'38'}}]};
     else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего блока остановлен.'};
     else result={success:true};
     await route.fulfill({status:result.success?200:422,contentType:'application/json',body:JSON.stringify(result)});
@@ -46,16 +46,22 @@ try {
     await page.locator('[data-open-transfer]').first().click();
     assert.equal(await page.getByText('Вставьте один номер или список из столбца Excel. До 1000 заявок; повторы будут объединены.',{exact:true}).count(),0);
     assert.equal(await page.getByText('Заявка назначения останется без изменений.',{exact:true}).count(),0);
-    assert.equal(await page.getByText('Заявка с нужным адресом',{exact:true}).count(),1);
-    assert.equal(await page.locator('[data-create-dialog] .modal-foot [data-close-dialog]').innerText(),'Отмена');
-    assert.equal(await page.locator('[data-create-dialog] .modal-foot [data-preview]').innerText(),'Проверить');
-    const modalGeometry=await page.locator('[data-create-dialog]').evaluate(e=>({radius:parseFloat(getComputedStyle(e).borderRadius),title:parseFloat(getComputedStyle(e.querySelector('.modal-title')).fontSize)}));
-    assert.ok(modalGeometry.radius<=2 && modalGeometry.title<=14,'System modal geometry '+width);
+    assert.equal(await page.getByText('Номер заявки с нужным адресом',{exact:true}).count(),1);
+    assert.equal(await page.locator('[data-create-dialog] .modal-foot [data-close-dialog]').innerText(),'Отменить');
+    assert.equal(await page.locator('[data-create-dialog] .modal-foot [data-commit]').innerText(),'Создать блок и переместить заявки');
+    const modalGeometry=await page.locator('[data-create-dialog]').evaluate(e=>({radius:parseFloat(getComputedStyle(e).borderRadius),title:parseFloat(getComputedStyle(e.querySelector('.modal-title')).fontSize),titleWeight:getComputedStyle(e.querySelector('.modal-title')).fontWeight,body:getComputedStyle(e.querySelector('.modal-body')).backgroundColor,foot:getComputedStyle(e.querySelector('.modal-foot')).backgroundColor}));
+    assert.ok(modalGeometry.radius<=2 && modalGeometry.title===19 && modalGeometry.titleWeight==='700','Approved modal geometry '+width);
+    assert.equal(modalGeometry.body,'rgb(254, 253, 248)');
+    assert.equal(modalGeometry.foot,'rgb(240, 237, 230)');
     if(screenshotDir) await page.screenshot({path:path.join(screenshotDir,`transfer-form-${width}.png`),fullPage:true});
     await page.locator('[name=request_ids]').fill('100001\n100002');
     await page.locator('[name=source_request_id]').fill('100003');
-    await page.locator('[data-preview]').click(); await page.locator('[data-preview-result]').waitFor({state:'visible'});
-    assert.match(await page.locator('[data-preview-summary]').innerText(),/Только улица/);
+    await page.locator('[data-preview-result]').waitFor({state:'visible'});
+    assert.match(await page.locator('[data-preview-summary]').innerText(),/Заявок: 2/);
+    assert.deepEqual((await page.locator('[data-preview-result] thead th').allInnerTexts()).map(x=>x.toLocaleLowerCase('ru')),['заявка','вес нетто','было','станет']);
+    assert.match(await page.locator('[data-preview-rows] tr').first().innerText(),/1\s*250 кг/);
+    assert.match(await page.locator('[data-preview-rows] tr').last().innerText(),/—/);
+    assert.equal(await page.locator('[data-preview-result] .registry-ui-compact-table-scroll').evaluate(e=>getComputedStyle(e).borderTopColor),'rgb(168, 161, 150)');
     assert.equal(await page.locator('[data-preview-rows] img').count(),0,'Destination HTML injection');
     assert.equal(await page.locator('[data-create-dialog]').evaluate(e=>e.scrollWidth>e.clientWidth),false,'Dialog overflow '+width);
     if(screenshotDir) await page.screenshot({path:path.join(screenshotDir,`transfer-${width}.png`),fullPage:true});
@@ -65,17 +71,24 @@ try {
   }
   await page.goto(url); await page.locator('[data-open-transfer]').first().click();
   await page.locator('[name=request_ids]').fill('100001\n100002');
-  await page.locator('[name=mode][value=address]').check();
+  await page.locator('[name=mode][value=address]').locator('..').click();
   await page.locator('[name=address]').fill('Москва, улица Примерная');
   await page.locator('[data-geocode]').click(); await page.locator('[data-geo-result]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-geo-lat]').innerText(),'55.456');
-  await page.locator('[data-preview]').click(); await page.locator('[data-preview-result]').waitFor({state:'visible'});
+  await page.locator('[data-preview-result]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-commit]').isEnabled(),true,'Imprecise coordinate warning does not block');
-  await page.locator('[data-commit]').click(); await page.locator('[data-page-message]').waitFor({state:'visible'});
+  await page.locator('[data-commit]').click();
+  await page.waitForFunction(()=>document.querySelector('[data-page-message]')?.textContent.includes('сохранён'));
   assert.match(await page.locator('[data-page-message]').innerText(),/сохранён.*MAX не отправлено/);
   assert.equal(createCalls,1,'One commit call');
   await page.locator('[data-batch-row] [data-detail]').click();
+  await page.locator('[data-detail-dialog]').waitFor({state:'visible'});
+  assert.equal(await page.locator('[data-detail-dialog] .transfer-detail-meta').count(),0);
+  assert.match(await page.locator('[data-detail-dialog] [data-detail-body]').innerText(),/Вес нетто/i);
+  assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').first().evaluate(e=>getComputedStyle(e).fontWeight),'700');
+  assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').count(),2,'Request and destination IDs use the shared bold role');
   await page.locator('[data-detail-dialog] [data-revert]').click();
+  assert.match(await page.locator('[data-detail-body]').innerText(),/На прежние адреса и координаты вернутся заявки: 100001/);
   await page.locator('[data-confirm-revert]').click();
   await page.locator('[data-revert-error]').waitFor({state:'visible'});
   assert.match(await page.locator('[data-revert-error]').innerText(),/Возврат всего блока остановлен/);
@@ -116,7 +129,7 @@ try {
     await page.setViewportSize({width:390,height:900});
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'Quality row overflow '+precision);
   }
-  assert.equal(qualityColors.size,6,'Distinct muted system colors for six categories');
+  assert.equal(qualityColors.size,6,'Standalone coordinate finder retains its six existing precision colors');
   for (const route of ['/', '/coordinates']) {
     await page.goto(url+route);
     assert.equal(await page.locator('[data-geo-settings], [name=api_key]').count(),0,'No settings on FEO page');

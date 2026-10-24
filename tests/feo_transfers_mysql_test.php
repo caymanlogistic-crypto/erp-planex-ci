@@ -33,6 +33,14 @@ try {
     $reject(fn()=>$s->preview($pdo,$ids,'request','999999'),'Missing destination rejects');
     $reject(fn()=>$s->preview($pdo,$ids,'request','100001'),'Destination in sources rejects');
     $p=$s->preview($pdo,$ids,'request','100003');
+    $ok($p['rows'][0]['net_kg']===12340.0 && $p['rows'][1]['net_kg']===56780.0,'Preview exposes each current net weight in kilograms');
+    $pdo->exec("UPDATE feo_requests SET mass_netto=NULL WHERE zayavka_id='100001'");
+    $pdo->exec("UPDATE feo_requests SET mass_netto=0 WHERE zayavka_id='100002'");
+    $weightsChanged=$s->preview($pdo,$ids,'request','100003');
+    $ok($weightsChanged['rows'][0]['net_kg']===null && $weightsChanged['rows'][1]['net_kg']===0.0,'Missing net weight and known zero remain distinct');
+    $ok($weightsChanged['state_hash']===$p['state_hash'],'Weight edits do not change address stale guard');
+    $pdo->exec("UPDATE feo_requests SET mass_netto=12.34 WHERE zayavka_id='100001'");
+    $pdo->exec("UPDATE feo_requests SET mass_netto=56.78 WHERE zayavka_id='100002'");
     $pdo->exec("UPDATE feo_requests SET mno_sh='38.3' WHERE zayavka_id='100003'");
     $reject(fn()=>$s->create($pdo,$p,$actor,hash('sha256','stale'),'Тест',''),'Preview destination drift rejects');
     $ok((int)$pdo->query('SELECT COUNT(*) FROM feo_transfer_batches')->fetchColumn()===0,'No partial batch');
@@ -48,6 +56,8 @@ try {
     $again=$s->create($pdo,$p,$actor,hash('sha256','a'),'Пакет А','Причина');
     $ok($again['batch_id']===$a['batch_id'] && $again['already_applied'],'Idempotent network retry');
     $index=$s->batchIndexItems($pdo,$s->batches($pdo,1));
+    $itemWeights=$s->items($pdo,$a['batch_id']);
+    $ok($itemWeights[0]['net_kg']===12340.0 && $itemWeights[1]['net_kg']===56780.0,'History exposes each current net weight, not a share of block total');
     $ok($index[$a['batch_id']]['ids']===['100001','100002'],'History index has every persisted request ID');
     $ok($index[$a['batch_id']]['net_kg']===69120.0 && $index[$a['batch_id']]['gross_kg']===null,'History mass uses current tonnes converted to kilograms and exposes missing gross');
     $rows=$pdo->query('SELECT * FROM feo_requests ORDER BY id')->fetchAll(PDO::FETCH_ASSOC);
@@ -63,6 +73,7 @@ try {
     $row=$pdo->query("SELECT * FROM feo_requests WHERE zayavka_id='100001'")->fetch(PDO::FETCH_ASSOC);
     $ok($row['mno_adres_pogruzki']==='Адрес назначения' && (float)$row['mass_netto']===42.0,'Import preserves moved location and updates other fields');
     $ok($s->batchIndexItems($pdo,$s->batches($pdo,1))[$a['batch_id']]['net_kg']===98780.0,'History reflects current weight without rewriting transfer history');
+    $ok($s->items($pdo,$a['batch_id'])[0]['net_kg']===42000.0,'History detail reflects current request weight after import');
     $requestService->rollbackLatest($pdo,$import['import_id'],['user_id'=>11]);
     $ok($pdo->query("SELECT mno_adres_pogruzki FROM feo_requests WHERE zayavka_id='100001'")->fetchColumn()==='Адрес назначения','Import rollback preserves override');
     $requestService->restoreRolledBackImport($pdo,$import['import_id'],['user_id'=>11]);

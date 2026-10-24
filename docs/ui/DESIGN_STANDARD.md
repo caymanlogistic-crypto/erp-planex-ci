@@ -28,7 +28,7 @@
 
 Для новых и редактируемых реестров действующий источник — `docs/ui/REGISTRY_CANON.md` вместе с актуальным `09 — UI SYSTEM` в Notion и последним явным решением OWNER. `FINAL3.html` — исторический исходный образец; его устаревшие размеры и стили не перекрывают принятые позднее правила. Реальный canonical код проверяется как свидетельство реализации, но случайное расхождение кода с утверждённым правилом не превращается в новый стандарт.
 
-Для универсальной оболочки попапа отдельно принято решение OWNER 24.10.2026: заголовок IBM Plex Sans 19/700/22, tracking −0.035em, `#131210`, крестик справа; футер 48 px минимум с фоном `#F0EDE6` и верхней линией `#DEDAD0`. Полный scope, исключения и статус ещё не выполненного общего CSS — [`decisions-20261024-popup-shell.json`](decisions-20261024-popup-shell.json). Существующий `.modal-title` 14 px — расхождение реализации, не новый канон.
+Для универсальной opt-in оболочки попапа принято решение OWNER 24.10.2026: заголовок IBM Plex Sans 19/700/22, tracking −0.035em, `#131210`, крестик справа; футер 48 px минимум с фоном `#F0EDE6` и верхней линией `#DEDAD0`. Её общая реализация — `.registry-ui-modal` в `registry-components.css`; вне opt-in старый `.modal-title` 14 px остаётся отдельной старой ролью. Полный scope — [`decisions-20261024-popup-shell.json`](decisions-20261024-popup-shell.json). Состав и точные роли согласованных попапов перемещения, включая создание, историю и подтверждение, описаны в [`decisions-20261024-feo-transfer-popups.json`](decisions-20261024-feo-transfer-popups.json) и [REGISTRY_CANON.md](REGISTRY_CANON.md#попапы-перемещения-заявок--owner-24102026).
 
 ## Какие файлы использовать
 
@@ -55,7 +55,7 @@
 | Алерты | `.form-alert` + `.alert-error/warning/success/info`, `.alert-mark`, `.alert-body` |
 | Действия в строке | `.row-actions`, `.row-btn`, `.btn-row-neutral` |
 | Пустые состояния | `.empty-state`, `.empty-icon`, `.empty-title`, `.empty-desc`, `.empty-code` |
-| Модальные окна | `.modal-overlay`, `.modal`, `.modal-sm/md/lg`, `.modal-head`, `.modal-body`, `.modal-foot`, `.modal-icon` |
+| Модальные окна | `.modal-overlay`, `.modal`, `.modal-sm/md/lg`, `.modal-head`, `.modal-body`, `.modal-foot`, `.modal-icon`; утверждённая компактная opt-in оболочка `.registry-ui-modal` с `.registry-ui-modal-grid`, `.registry-ui-modal-text`, `.registry-ui-modal-summary`, `.registry-ui-compact-table` |
 | Toast-уведомления | `.toast-stack`, `.toast`, `.is-success/warning/danger/info` |
 | Вспомогательные | `.tabs-page`/`.tabs-insp`, `.skeleton`, `.stepper`, `.ctx-menu`, `.tooltip-wrap` |
 

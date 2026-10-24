@@ -21,13 +21,13 @@
     "footer": "Min-height 48px; background #F0EDE6, same as the shown header; top divider #DEDAD0; horizontal padding 16px. Existing-object deletion occupies a separate calm left area only when real deletion exists. Cancel and one main action form the right group; buttons may wrap on narrow widths without reducing the font. A red danger button is reserved for a separate destructive confirmation."
   },
   "implementation_status": {
-    "shared_erp_implementation": "PENDING; current generic .modal-title still differs and must not be cited as the approved implementation",
-    "whole_popup": "NOT_APPROVED"
+    "shared_erp_implementation": "Implemented as opt-in .registry-ui-modal in public/assets/css/registry-components.css; generic .modal-title outside the opt-in retains its previous behavior.",
+    "whole_popup": "FEO transfers create/history/confirmation approved by OWNER in decisions-20261024-feo-transfer-popups.json; other popup bodies remain separately scoped."
   },
-  "implementation_authorized": false,
+  "implementation_authorized": true,
   "excluded": [
-    "Popup body layout, field arrangement, geocoding result and quality levels other than separately approved low/very-low red",
-    "Automatic approval of forms, action menus, deletion confirmation or file flows",
-    "ERP runtime changes without a separately accepted implementation checkpoint"
+    "Popup bodies outside the FEO transfers checkpoint",
+    "Automatic approval of other forms, action menus, deletion confirmation or file flows",
+    "ERP runtime changes outside the separately accepted FEO transfers checkpoint"
   ]
 }
