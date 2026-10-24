@@ -12,7 +12,10 @@ function expectTransfer(bool $v,string $m): void { if (!$v) throw new RuntimeExc
 function rejectTransfer(callable $fn): void { $caught=false; try{$fn();}catch(RuntimeException){$caught=true;} expectTransfer($caught,'Expected rejection'); }
 $parsed=FeoTransferService::parseIds("123456\n123457,123456;123458");
 expectTransfer($parsed['ids']===['123456','123457','123458'] && $parsed['duplicates']===1,'Strict number parser');
-rejectTransfer(fn()=>FeoTransferService::parseIds('123456 nonsense 999999'));
+expectTransfer(FeoTransferService::parseIds('123456 nonsense 999999')['ids']===['123456','999999'],'Free text yields independent six-digit IDs');
+expectTransfer(FeoTransferService::parseIds("123456\t987654\n| 234567 | 345678 |")['ids']===['123456','234567'],'Tab and markdown paste use the first column');
+expectTransfer(FeoTransferService::parseIds('123456, 123456, 123456')['duplicates']===2,'Repeated IDs counted individually');
+rejectTransfer(fn()=>FeoTransferService::parseIds('1234567'));
 rejectTransfer(fn()=>FeoTransferService::parseIds(''));
 $response=static function(string $precision,string $position='37.123 55.456'): string { return json_encode(['response'=>['GeoObjectCollection'=>['featureMember'=>[['GeoObject'=>['Point'=>['pos'=>$position],'metaDataProperty'=>['GeocoderMetaData'=>['text'=>'Найденный адрес','precision'=>$precision,'kind'=>'house']]]]]]]]); };
 foreach (['exact','number','near','range','street','other','unknown'] as $precision) {

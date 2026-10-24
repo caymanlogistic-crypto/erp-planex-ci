@@ -534,3 +534,50 @@
 .registry-ui-table--documents col:nth-child(12){width:100px}
 .registry-ui-table--documents col:nth-child(13){width:165px}
 .registry-ui-table--documents col:nth-child(14){width:170px}
+/* OWNER-approved compact registry popup roles (transfer checkpoint v010). */
+.registry-ui-modal:not([open]),.registry-ui-modal [hidden]{display:none!important}
+.registry-ui-modal{box-sizing:border-box;width:min(1230px,calc(100vw - 32px));padding:0;transform:none;overflow:hidden}
+.registry-ui-modal::backdrop{background:rgba(10,9,8,.58)}
+.registry-ui-modal-form{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;margin:0}
+.registry-ui-modal-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:start}
+.registry-ui-modal-grid>.field,.registry-ui-modal-grid>fieldset,.registry-ui-modal-grid>[data-address-destination]{margin:0;min-width:0}
+.registry-ui-modal-grid fieldset{border:0;padding:0;min-width:0}
+.registry-ui-modal-address-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.registry-ui-modal-address-row .field-input{flex:1;min-width:0}
+.registry-ui-modal-quality{display:flex;align-items:center;flex-wrap:wrap;gap:6px 8px}
+.registry-ui-modal-quality .registry-ui-modal-help{min-width:0;flex:1 1 200px}
+.registry-ui-modal .modal-head{min-height:48px;background:#f0ede6}
+.registry-ui-modal .modal-title{font-family:var(--font);font-size:19px;font-weight:700;line-height:22px;letter-spacing:-.035em;color:#131210}
+.registry-ui-modal .modal-body{padding:12px 16px;background:#fefdf8}
+.registry-ui-modal .modal-foot{min-height:48px;padding:7px 16px;background:#f0ede6;border-top:1px solid #dedad0}
+.registry-ui-modal .modal-foot-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
+.registry-ui-modal .field-label{display:block;margin-bottom:3px}
+.registry-ui-modal .field-input{min-height:32px}
+.registry-ui-modal textarea.registry-ui-request-ids{height:96px;min-height:96px;max-height:none;resize:vertical}
+.registry-ui-modal .radio-item input[type=radio]{width:15px;height:15px;min-height:0;padding:0;margin:0;border:0}
+.registry-ui-modal .radio-item input[type=radio]:focus-visible+.radio-mark{outline:2px solid #9a5a22;outline-offset:2px}
+.registry-ui-modal .registry-ui-modal-text{display:block;margin:0;white-space:normal;overflow-wrap:anywhere;font:500 12px/16.8px var(--font);color:#131210}
+.registry-ui-modal .registry-ui-modal-help{font:500 11px/15.4px var(--font);color:#4c4840}
+.registry-ui-modal .registry-ui-modal-summary{display:block;margin:0 0 8px;font:600 12px/16.8px var(--font);color:#131210}
+.registry-ui-modal .registry-ui-entity-id{font:700 12px/16.8px var(--font);font-variant-numeric:tabular-nums;color:#131210}
+.registry-ui-modal .field-msg.is-error:not([hidden]){display:block;margin-top:3px;color:#872822}
+.registry-ui-modal .badge:is(.badge-ok,.badge-warning,.badge-danger){height:20px;min-height:20px;padding:0 8px;border:1px solid #131210;border-radius:2px;color:#131210;font:500 11px/20px var(--font);box-shadow:none;transition:none}
+.registry-ui-modal .badge.badge-ok{background:#cdebd7}
+.registry-ui-modal .badge.badge-warning{background:#fff1bd}
+.registry-ui-modal .badge.badge-danger{background:#ffd6cc}
+.registry-ui-modal .badge:is(.badge-ok,.badge-warning,.badge-danger):hover{border-color:#131210;color:#131210}
+.registry-ui-modal-geo{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:0;border:0}
+.registry-ui-modal-geo .field{margin:0}
+.registry-ui-modal-preview{min-width:0;margin-top:0;padding-top:0;border-top:0}
+.registry-ui-modal .registry-ui-compact-table-scroll{max-height:300px;overflow:auto;border:1px solid #a8a196}
+.registry-ui-modal .registry-ui-compact-table{width:100%;min-width:0;table-layout:fixed}
+.registry-ui-modal .registry-ui-compact-table th:first-child{width:92px}
+.registry-ui-modal .registry-ui-compact-table th:nth-child(2){width:105px}
+.registry-ui-modal .registry-ui-compact-table :is(th,td){white-space:normal;overflow-wrap:anywhere}
+.registry-ui-modal .registry-ui-compact-table td:nth-child(2){white-space:nowrap;overflow-wrap:normal}
+.registry-ui-modal .registry-ui-compact-table .registry-id{font:700 12px/16.8px var(--font);font-variant-numeric:tabular-nums;color:#131210}
+.registry-ui-modal .registry-ui-compact-table .registry-ui-missing{color:#817d75}
+.registry-ui-modal-secondary{display:block;max-width:100%;white-space:normal;overflow-wrap:anywhere;font:500 11px/15.4px var(--font);color:#675f55}
+.registry-ui-modal-confirm{display:grid;gap:8px}
+.registry-ui-modal-confirm .registry-ui-modal-text{margin:0}
+@media(max-width:700px){.registry-ui-modal{width:calc(100vw - 16px)}.registry-ui-modal-address-row{flex-direction:column;align-items:stretch}.registry-ui-modal-address-row .btn{width:100%}.registry-ui-modal .registry-ui-compact-table{min-width:630px}}

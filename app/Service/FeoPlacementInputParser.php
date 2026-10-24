@@ -92,7 +92,7 @@ final class FeoPlacementInputParser
             $ids[] = $id;
             if (count($ids) > self::MAX_IDS) throw new \RuntimeException('За одну операцию можно обработать не более 20 000 заявок.');
         }
-        return ['ids' => $ids, 'duplicates' => array_map('strval', array_keys($duplicates))];
+        return ['ids' => $ids, 'duplicates' => array_map('strval', array_keys($duplicates)), 'duplicate_count' => count($matches) - count($ids)];
     }
 
     private function readXlsxFirstColumn(string $path): array

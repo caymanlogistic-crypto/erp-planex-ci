@@ -4,6 +4,7 @@ namespace App\Service;
 
 require_once __DIR__.'/FeoLocationOverrideService.php';
 require_once __DIR__.'/FeoImportTransaction.php';
+require_once __DIR__.'/FeoPlacementInputParser.php';
 
 use PDO;
 use RuntimeException;
@@ -18,13 +19,10 @@ final class FeoTransferService
     public static function parseIds(string $raw): array
     {
         if (strlen($raw) > 100000) throw new RuntimeException('Слишком большой список заявок.');
-        $tokens = preg_split('/[\s,;]+/u', trim($raw), -1, PREG_SPLIT_NO_EMPTY) ?: [];
-        if (!$tokens) throw new RuntimeException('Введите номера заявок.');
-        foreach ($tokens as $id) if (!preg_match('/^[0-9]{1,64}$/D', $id)) throw new RuntimeException('Вставьте только номера заявок, разделённые пробелом, запятой или новой строкой. Некорректное значение: ' . mb_substr($id,0,70));
-        $ids = array_values(array_unique($tokens));
+        $parsed=(new FeoPlacementInputParser())->parseManual($raw);
+        $ids=$parsed['ids'];
         if (count($ids) > 1000) throw new RuntimeException('В одном блоке допускается до 1000 заявок.');
-        sort($ids, SORT_STRING);
-        return ['ids'=>$ids,'duplicates'=>count($tokens)-count($ids)];
+        return ['ids'=>$ids,'duplicates'=>$parsed['duplicate_count']];
     }
 
     public function preview(PDO $pdo, array $ids, string $mode, string $sourceId, ?array $geocoded = null, bool $lock = false): array
@@ -32,16 +30,21 @@ final class FeoTransferService
         if (!$this->ready($pdo)) throw new RuntimeException('Перемещение заявок ожидает обновления базы компании (139).');
         $ids = self::parseIds(implode("\n", $ids))['ids'];
         if (!in_array($mode,['request','address'],true)) throw new RuntimeException('Выберите способ перемещения.');
+        if ($mode==='request' && !preg_match('/^\d{6}$/D',$sourceId)) throw new RuntimeException('Введите шестизначный номер заявки с нужным адресом.');
         if ($mode === 'request' && in_array($sourceId,$ids,true)) throw new RuntimeException('Заявка с нужным адресом не должна входить в блок перемещения.');
         $lookupIds = $mode === 'request' ? array_values(array_unique([...$ids,$sourceId])) : $ids;
         sort($lookupIds,SORT_STRING);
         $marks = implode(',',array_fill(0,count($lookupIds),'?'));
-        $q = $pdo->prepare("SELECT id,zayavka_id,mno_adres_pogruzki,mno_sh,mno_d FROM feo_requests WHERE zayavka_id IN ($marks) ORDER BY zayavka_id" . ($lock ? ' FOR UPDATE' : ''));
+        $q = $pdo->prepare("SELECT id,zayavka_id,mass_netto,mno_adres_pogruzki,mno_sh,mno_d FROM feo_requests WHERE zayavka_id IN ($marks) ORDER BY zayavka_id" . ($lock ? ' FOR UPDATE' : ''));
         $q->execute($lookupIds);
         $found = [];
         foreach ($q->fetchAll(PDO::FETCH_ASSOC) as $row) $found[(string)$row['zayavka_id']] = $row;
         $missing = array_values(array_diff($lookupIds,array_keys($found)));
-        if ($missing) throw new RuntimeException('Заявки не найдены: ' . implode(', ',array_slice($missing,0,30)) . '. Блок не сохранён.');
+        if ($missing) {
+            $missingRequests=array_values(array_intersect($ids,$missing));
+            if ($missingRequests) throw new RuntimeException('Заявки не найдены в системе: '.implode(', ',$missingRequests).'.');
+            throw new RuntimeException('Заявка не найдена в системе: '.$sourceId.'.');
+        }
         $overrideQuery = $pdo->prepare("SELECT zayavka_id,batch_id FROM feo_location_overrides WHERE zayavka_id IN ($marks)" . ($lock ? ' FOR UPDATE' : ''));
         $overrideQuery->execute($lookupIds);
         $overrides = $overrideQuery->fetchAll(PDO::FETCH_KEY_PAIR);
@@ -61,9 +64,15 @@ final class FeoTransferService
         }
         $this->validateDestination($destination);
         $rows=[];
-        foreach ($ids as $id) $rows[]=$found[$id]+['previous_batch_id'=>isset($overrides[$id])?(int)$overrides[$id]:null];
+        foreach ($ids as $id) $rows[]=$found[$id]+['net_kg'=>$found[$id]['mass_netto']===null?null:round((float)$found[$id]['mass_netto']*1000,1),'previous_batch_id'=>isset($overrides[$id])?(int)$overrides[$id]:null];
+        // Current weight is display data. A weight edit after preview must not alter the existing
+        // address/coordinate stale guard or block an otherwise valid transfer.
+        $stateRows=array_map(static function(array $row): array {
+            unset($row['mass_netto'],$row['net_kg']);
+            return $row;
+        },$rows);
         return ['rows'=>$rows,'count'=>count($rows),'destination'=>$destination,'mode'=>$mode,'source_request_id'=>$mode==='request'?$sourceId:null,
-            'state_hash'=>hash('sha256',$this->json([$rows,$destination]))];
+            'state_hash'=>hash('sha256',$this->json([$stateRows,$destination]))];
     }
 
     public function create(PDO $pdo, array $preview, array $actor, string $operationKey, string $name, string $comment, ?callable $event = null): array
@@ -168,8 +177,8 @@ final class FeoTransferService
 
     public function items(PDO $pdo, int $batchId): array
     {
-        $q=$pdo->prepare('SELECT * FROM feo_transfer_items WHERE batch_id=? ORDER BY zayavka_id'); $q->execute([$batchId]);
-        return array_map(static function(array $row): array { $row['before']=json_decode($row['before_json'],true,16,JSON_THROW_ON_ERROR); $row['after']=json_decode($row['after_json'],true,16,JSON_THROW_ON_ERROR); unset($row['before_json'],$row['after_json']); return $row; },$q->fetchAll(PDO::FETCH_ASSOC));
+        $q=$pdo->prepare('SELECT i.*,r.mass_netto FROM feo_transfer_items i LEFT JOIN feo_requests r ON r.id=i.request_row_id AND r.zayavka_id=i.zayavka_id WHERE i.batch_id=? ORDER BY i.zayavka_id'); $q->execute([$batchId]);
+        return array_map(static function(array $row): array { $row['before']=json_decode($row['before_json'],true,16,JSON_THROW_ON_ERROR); $row['after']=json_decode($row['after_json'],true,16,JSON_THROW_ON_ERROR); $row['net_kg']=$row['mass_netto']===null?null:round((float)$row['mass_netto']*1000,1); unset($row['before_json'],$row['after_json'],$row['mass_netto']); return $row; },$q->fetchAll(PDO::FETCH_ASSOC));
     }
 
     private function transaction(PDO $pdo, callable $action): array
