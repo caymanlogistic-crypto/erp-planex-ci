@@ -728,6 +728,7 @@
       "adaptation_status": "current_20261018",
       "route": "/erpv2/company/feo/requests/transfers",
       "view": "app/View/pages/company_feo_transfers.php",
+      "popup_decision": "docs/ui/decisions-20261024-feo-transfer-popups.json",
       "header_icon": {
         "variant": "outline",
         "source": "app/View/components/tabler/outline/arrow-right-square.svg",
@@ -780,6 +781,10 @@
       "adaptation_status": "current_20261018",
       "route": "/erpv2/company/feo/requests/weights",
       "view": "app/View/pages/company_feo_weight_batches.php",
+      "popup_decision": "docs/ui/decisions-20261024-feo-weight-popups.json",
+      "popup_style_owner": "public/assets/css/registry-components.css",
+      "popup_browser_test": "tests/feo_weights_browser_test.mjs",
+      "popup_service_test": "tests/feo_weight_batches_mysql_test.php",
       "header_icon": {
         "variant": "outline",
         "source": "app/View/components/tabler/outline/arrows-exchange.svg",

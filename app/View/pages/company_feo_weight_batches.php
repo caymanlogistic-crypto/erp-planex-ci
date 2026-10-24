@@ -2,7 +2,6 @@
 <?php $fmtHistoryDate = static function ($value): string { $time = strtotime((string)$value); return $time === false ? (string)$value : date('d.m.Y H:i', $time); }; require_once base_path('app/View/components/registry_tabler_icons.php'); ?>
 <link rel="stylesheet" href="<?= app_url('/assets/css/registry-components.css') ?>?v=<?= filemtime(base_path('public/assets/css/registry-components.css')) ?>">
 <link rel="stylesheet" href="<?= app_url('/assets/css/feo-transfers.css') ?>?v=<?= filemtime(__DIR__.'/../../../public/assets/css/feo-transfers.css') ?>">
-<link rel="stylesheet" href="<?= app_url('/assets/css/feo-weights.css') ?>?v=<?= filemtime(__DIR__.'/../../../public/assets/css/feo-weights.css') ?>">
 <div class="feo-transfers feo-weights" data-feo-weights data-base="<?= e($weightBase) ?>">
   <?php $registryHeadTitle='Изменение веса заявок'; $registryHeadSummary='Задайте новый вес нетто и брутто для каждой заявки. Изменения сохраняются одним блоком с историей и возможностью возврата.'; $registryHeadIconHtml=registry_tabler_header_icon('arrows-exchange'); $registryHeadActionsHtml=$dbError?'':'<button class="btn btn-primary" type="button" data-open-weight>Создать блок</button>'; require base_path('app/View/partials/registry_ui_head.php'); ?>
   <div class="form-alert" data-page-message role="status" hidden></div>
@@ -16,24 +15,22 @@
     </tbody></table></div>
     <div class="transfer-pagination"><?php if ($page>1): ?><a class="btn btn-secondary btn-sm" href="<?= e($weightBase.'?page='.($page-1)) ?>">← Новее</a><?php endif; ?><?php if (count($batches)===50): ?><a class="btn btn-secondary btn-sm" href="<?= e($weightBase.'?page='.($page+1)) ?>">Ранее →</a><?php endif; ?></div>
   </div>
-  <dialog class="modal modal-lg transfer-dialog weight-dialog" data-create-dialog aria-labelledby="weight-create-title">
+  <dialog class="modal modal-lg registry-ui-modal" data-create-dialog aria-labelledby="weight-create-title">
     <div class="modal-head"><span class="modal-title" id="weight-create-title">Новый блок изменения веса</span><button type="button" class="modal-close" data-close-dialog aria-label="Закрыть">&times;</button></div>
-    <form data-weight-form>
+    <form class="registry-ui-modal-form" data-weight-form>
       <?= csrfField() ?>
-      <div class="modal-body weight-form-body">
-        <div class="field"><label class="field-label" for="weight-name">Название, необязательно</label><input class="field-input" id="weight-name" name="name" maxlength="180"></div>
-        <div class="field"><label class="field-label" for="weight-ids">Заявки</label><textarea class="field-input" id="weight-ids" name="request_ids" rows="4" required placeholder="Номера заявок через пробел, запятую или новую строку"></textarea></div>
-        <button class="btn btn-secondary" type="submit" data-load>Загрузить текущий вес</button>
-        <section data-edit-section hidden aria-live="polite"><div class="form-alert alert-warning" data-edit-summary></div><p class="muted">Вес указывается в килограммах с точностью до 0,1 кг. Пустое поле удаляет значение веса. Изменённые строки сохраняются в одном блоке.</p>
-          <div class="table-scroll"><table class="table weight-edit-table"><thead><tr><th>Заявка</th><th>Нетто сейчас, кг</th><th>Нетто новое, кг</th><th>Брутто сейчас, кг</th><th>Брутто новое, кг</th></tr></thead><tbody data-edit-rows></tbody></table></div>
-          <div class="field"><label class="field-label" for="weight-comment">Комментарий, необязательно</label><input class="field-input" id="weight-comment" name="comment" maxlength="2000"></div>
-          <div class="form-alert alert-warning" data-form-error role="alert" hidden></div>
-          <div class="weight-save-actions"><button class="btn btn-primary" type="button" data-commit>Проверить и сохранить блок</button></div>
+      <div class="modal-body"><div class="registry-ui-modal-grid">
+        <div class="field"><label class="field-label" for="weight-ids">Заявки</label><textarea class="field-input registry-ui-request-ids" id="weight-ids" name="request_ids" rows="4" required placeholder="Вставьте шестизначные номера заявок"></textarea><div class="field-msg is-error" data-ids-error role="alert" hidden></div></div>
+        <section class="registry-ui-modal-preview" data-edit-section hidden aria-live="polite">
+          <div class="registry-ui-modal-summary" data-edit-summary></div>
+          <div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Нетто было</th><th>Нетто станет, кг</th><th>Брутто было</th><th>Брутто станет, кг</th></tr></thead><tbody data-edit-rows></tbody></table></div>
+          <div class="field-msg is-error" data-table-error role="alert" hidden></div>
+          <p class="registry-ui-modal-secondary">Вес в килограммах с точностью до 0,1. Пустое поле удаляет значение.</p>
         </section>
-      </div><div class="modal-foot"><button class="btn btn-ghost" type="button" data-close-dialog>Закрыть</button></div>
+      </div></div><div class="modal-foot"><div class="modal-foot-actions"><button class="btn btn-ghost" type="button" data-close-dialog>Отменить</button><button class="btn btn-primary" type="button" data-commit disabled>Сохранить изменения веса</button></div></div>
     </form>
   </dialog>
-  <dialog class="modal modal-lg transfer-dialog weight-dialog" data-detail-dialog aria-labelledby="weight-detail-title"><div class="modal-head"><span class="modal-title" id="weight-detail-title">История блока</span><button class="modal-close" type="button" data-close-dialog aria-label="Закрыть">&times;</button></div><div data-detail-body class="modal-body transfer-detail-body"></div></dialog>
+  <dialog class="modal modal-lg registry-ui-modal" data-detail-dialog aria-labelledby="weight-detail-title"><div class="modal-head"><span class="modal-title" id="weight-detail-title">Изменение веса</span><button class="modal-close" type="button" data-close-dialog aria-label="Закрыть">&times;</button></div><div data-detail-body class="modal-body registry-ui-modal-grid"></div><div class="modal-foot"><div class="modal-foot-actions"><button class="btn btn-ghost" type="button" data-close-dialog>Отменить</button><button class="btn btn-primary" type="button" data-detail-revert hidden>Отменить изменение веса</button><button class="btn btn-danger" type="button" data-confirm-revert hidden>Отменить изменение веса</button></div></div></dialog>
   <?php endif; ?>
 </div>
 <script src="<?= app_url('/assets/js/registry-components.js') ?>?v=<?= filemtime(base_path('public/assets/js/registry-components.js')) ?>" defer></script>
