@@ -15,11 +15,15 @@ const emptyHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'test
 const weightHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/manager_statistics_render.php')],{
   encoding:'utf8',env:{...process.env,PLANEX_MANAGER_STATISTICS_METRIC:'weight'},
 });
+const warehouseHtml=execFileSync(process.env.PLANEX_PHP||'php',[path.join(root,'tests/fixtures/manager_statistics_render.php')],{
+  encoding:'utf8',env:{...process.env,PLANEX_MANAGER_STATISTICS_WAREHOUSE:'1'},
+});
 const server=http.createServer((req,res)=>{
   const pathname=req.url.split('?')[0];
   if(pathname==='/'||pathname==='/company/statistics/managers'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(html);}
   if(pathname==='/empty'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(emptyHtml);}
   if(pathname==='/weight'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(weightHtml);}
+  if(pathname==='/warehouse'){res.setHeader('Content-Type','text/html; charset=utf-8');return res.end(warehouseHtml);}
   const file=path.resolve(root,'public','.'+pathname);
   if(!file.startsWith(path.join(root,'public')+path.sep)||!fs.existsSync(file)){res.statusCode=404;return res.end();}
   res.setHeader('Content-Type',file.endsWith('.css')?'text/css':file.endsWith('.js')?'text/javascript':'application/octet-stream');res.end(fs.readFileSync(file));
@@ -46,8 +50,12 @@ try{
   assert.equal(await page.getByText('Свой период',{exact:true}).count(),0,'custom period mode is removed');
   assert.equal(await page.getByRole('link',{name:'Открыть реестр рейсов'}).count(),0,'registry transition is removed');
   assert.equal(await page.getByRole('link',{name:'Открыть →'}).count(),0,'trip transitions are removed');
-  assert.deepEqual(await page.locator('.manager-stats__segments a').allTextContents(),['Недели','Месяцы','Год'],'only three instant modes');
-  const modeFit=await page.locator('.manager-stats__segments').evaluate(element=>{
+  assert.deepEqual(await page.locator('.manager-stats__chart-controls > *').evaluateAll(elements=>elements.map(element=>element.getAttribute('aria-label')||element.querySelector('.manager-stats__field-label')?.textContent.trim())),['Загрузки со склада','Режим отчёта','Показатель графиков'],'controls keep approved order');
+  const warehouseSwitch=page.getByRole('navigation',{name:'Загрузки со склада'});
+  assert.deepEqual(await warehouseSwitch.locator('a').allTextContents(),['Да','Нет'],'warehouse selector has approved labels');
+  assert.equal(await warehouseSwitch.locator('a.is-active').innerText(),'Нет','warehouse loads are excluded by default');
+  assert.deepEqual(await page.getByRole('navigation',{name:'Режим отчёта'}).locator('a').allTextContents(),['Недели','Месяцы','Год'],'only three instant modes');
+  const modeFit=await page.getByRole('navigation',{name:'Режим отчёта'}).evaluate(element=>{
     const segment=element.getBoundingClientRect(),last=element.lastElementChild.getBoundingClientRect();
     return segment.right-last.right;
   });
@@ -121,6 +129,10 @@ try{
   if(evidence){fs.mkdirSync(path.dirname(evidence),{recursive:true});await page.screenshot({path:evidence,fullPage:true});}
   await page.getByRole('link',{name:'Месяцы'}).click();
   assert.match(page.url(),/\?mode=month&metric=trips$/,'mode click navigates immediately without confirmation');
+  await page.goto('http://127.0.0.1:'+server.address().port+'/warehouse',{waitUntil:'networkidle'});
+  assert.equal(await page.getByRole('navigation',{name:'Загрузки со склада'}).locator('a.is-active').innerText(),'Да','warehouse fixture selects Yes');
+  assert.match(await page.getByRole('link',{name:'Месяцы'}).getAttribute('href'),/warehouse=1$/,'report mode preserves warehouse selection');
+  assert.match(await page.getByRole('navigation',{name:'Показатель графиков'}).getByRole('link',{name:'Вес'}).getAttribute('href'),/warehouse=1$/,'metric preserves warehouse selection');
   await page.goto('http://127.0.0.1:'+server.address().port+'/weight',{waitUntil:'networkidle'});
   assert.equal(await page.locator('.manager-stats__period-table').innerText(),periodTable,'chart metric does not change the all-metric period table');
   assert.equal(await page.locator('.manager-stats__metric-tabs a.is-active').innerText(),'Вес','weight fixture selects the graph metric');

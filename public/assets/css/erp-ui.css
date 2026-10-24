@@ -1848,3 +1848,15 @@ td.is-dash {
   .cargo-report__forecast-line { animation: none; clip-path: none; }
   .cargo-report__node.is-forecast { animation: none; opacity: 1; }
 }
+
+/* Equal-width variant for the approved report selector. */
+.manager-stats__chart-controls .manager-stats__field--mode.erp-segmented-field--compact {
+  width: max-content;
+}
+.manager-stats__chart-controls .manager-stats__segments.erp-segments--equal {
+  width: 100%;
+}
+.manager-stats__chart-controls .manager-stats__segments.erp-segments--equal a {
+  flex: 1;
+  justify-content: center;
+}
