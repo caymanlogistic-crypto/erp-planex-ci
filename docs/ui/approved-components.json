@@ -84,8 +84,8 @@
       "family": "registry",
       "role": "Выбор значения",
       "selector": ".registry-ui-toolbar .lab-reference-select",
-      "approval": "OWNER 2026-10-12",
-      "description": "Серо-бежевый закрытый select #F0EDE7; при наведении #EAE3D8. Нажмите для просмотра белого списка, бежевого выбранного пункта и управления клавиатурой. Native select остаётся доступной основой.",
+      "approval": "OWNER 2026-10-12; colors OWNER 2026-10-24, decisions-20261024-select-colors.json",
+      "description": "Светлый закрытый select #FFFDF9 с рамкой #C8C0B5 и текстом #2E2923 в тон поиску; hover и pressed #F9F7F2 с рамкой #A8A196. Белый список сохраняет геометрию; выбранный пункт #F0EDE7, при наведении #EAE3D8. Управление клавиатурой и native select сохранены.",
       "specimen": "docs/ui/specimens/registry.composition.html"
     },
     {

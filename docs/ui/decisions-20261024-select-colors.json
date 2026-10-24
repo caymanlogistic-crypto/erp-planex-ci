@@ -1,0 +1,37 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "registry-select-neutral-colors-20261024",
+  "date": "2026-10-24",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "chat": "Current select-design conversation; exact thread ID unavailable",
+    "thread_id": null,
+    "quote": "СОгласованно вноси в канон.",
+    "context": "OWNER approved the assistant's recommendation of variant A in its entirety: a light closed select matching search and a soft neutral selected option."
+  },
+  "reference": {
+    "task_id": "ui-select-color-options-20261024",
+    "checkpoint": "v012",
+    "checkpoint_sha256": "1DB822AE6CF9FEA8D91242F5629655E8E284A00E5F64A73316F5C403E80C80EA",
+    "selected_variant": "A / field / мягкий нейтральный",
+    "accepted_copy": "ui-select-canon-ref-20261024"
+  },
+  "scope": [
+    "Shared registry toolbar native .toolbar-select and enhanced .lab-reference-trigger",
+    "Shared .lab-reference-option[aria-selected=true]"
+  ],
+  "approved": {
+    "closed": {"background": "#FFFDF9", "border": "#C8C0B5", "text": "#2E2923"},
+    "hover_and_pressed": {"background": "#F9F7F2", "border": "#A8A196"},
+    "selected_option": {"background": "#F0EDE7", "text": "#2E2923"},
+    "selected_option_hover": {"background": "#EAE3D8", "text": "#2E2923"},
+    "unchanged": "IBM Plex Sans 12/500/16, control height 32px, list geometry and non-selected option colors, arrow, visible focus, native backing and keyboard behavior"
+  },
+  "supersedes": "Only the former closed/hover/pressed select and selected-option colors in docs/ui/REGISTRY_CANON.md; no other control role or page-specific business state",
+  "excluded": [
+    "Comparison variants B and C",
+    "Page-local lookalike classes or colors",
+    "Changes to filters, search, keyboard behavior, dimensions or business data"
+  ]
+}
