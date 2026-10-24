@@ -68,6 +68,11 @@ try {
     await page.locator('[data-detail-body] .registry-ui-compact-table').waitFor();
     assert.equal(await page.locator('[data-detail-body] img').count(),0,'Detail escapes server data');
     assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table').count(),1,'Shared detail table');
+    const weightTablePadding=await page.locator('[data-detail-body] .registry-ui-compact-table').evaluate(e=>[e.querySelector('th'),e.querySelector('td')].map(cell=>{
+      const style=getComputedStyle(cell);
+      return [style.paddingTop,style.paddingBottom,style.paddingLeft,style.boxSizing];
+    }));
+    assert.deepEqual(weightTablePadding,[['8px','8px','10px','border-box'],['8px','8px','10px','border-box']],`Shared compact table padding ${width}`);
     assert.match(await page.locator('[data-detail-body]').innerText(),/Заявок: 2/);
     await page.locator('[data-detail-revert]').click();
     assert.equal(await page.locator('[data-confirm-revert]').isVisible(),true,'Separate final confirmation');

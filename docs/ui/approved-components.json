@@ -224,12 +224,39 @@
       "specimen": "docs/ui/specimens/registry.transfer-popup.html"
     },
     {
+      "id": "registry.modal-reading",
+      "family": "registry",
+      "role": "Компактная ширина текстовой истории",
+      "selector": ".registry-ui-modal--reading",
+      "approval": "OWNER 2026-10-24: reduce empty space in transfer history; docs/ui/decisions-20261024-feo-transfer-popups.json",
+      "description": "Общий opt-in вариант оболочки для подробного просмотра: максимум 900 px. Двухгрупповая desktop-сетка и одноколоночная mobile-сетка используют общую роль registry-ui-modal-grid--reading; таблица занимает всю ширину, полный текст сохраняется.",
+      "specimen": "docs/ui/specimens/registry.transfer-popup.html"
+    },
+    {
+      "id": "registry.modal-confirmation",
+      "family": "registry",
+      "role": "Компактная ширина окончательного подтверждения",
+      "selector": ".registry-ui-modal--confirmation",
+      "approval": "OWNER 2026-10-24: reduce empty space in transfer confirmation; docs/ui/decisions-20261024-feo-transfer-popups.json",
+      "description": "Общий opt-in вариант оболочки для короткого подтверждения: максимум 640 px. При длинном списке номеров тело прокручивается по высоте; состав и цвет кнопок задаёт утверждённый предметный сценарий.",
+      "specimen": "docs/ui/specimens/registry.transfer-confirmation.html"
+    },
+    {
+      "id": "registry.modal-reading-grid",
+      "family": "registry",
+      "role": "Две группы данных в истории переноса",
+      "selector": ".registry-ui-modal-grid--reading",
+      "approval": "OWNER 2026-10-24: redistribute empty space in transfer history; docs/ui/decisions-20261024-feo-transfer-popups.json",
+      "description": "На desktop предметные сведения сгруппированы слева и справа, а таблица занимает всю ширину; до 700 px группы идут одной колонкой. Внутренние значения используют существующие field-label и registry-ui-modal-text/geo/quality роли.",
+      "specimen": "docs/ui/specimens/registry.transfer-popup.html"
+    },
+    {
       "id": "registry.compact-table",
       "family": "registry",
       "role": "Таблица внутри попапа",
       "selector": ".registry-ui-compact-table",
       "approval": "OWNER 2026-10-24; docs/ui/decisions-20261024-feo-transfer-popups.json",
-      "description": "Таблица с системной внешней обводкой, заголовком и внутренней прокруткой до 300 px. Ячейки каждой строки начинаются на одном верхнем уровне. Предметные колонки определяет попап: при предпросмотре переноса Заявка, Вес нетто, Было, Станет; в истории выполненного переноса Заявка, Вес нетто, Было, Стало.",
+      "description": "Таблица с системной внешней обводкой, заголовком и внутренней прокруткой до 300 px. Заголовки и ячейки: 8 px сверху/снизу и 10 px сбоку, высота по содержимому; перед таблицей 8 px, до футера 12 px. Ячейки каждой строки начинаются на одном верхнем уровне. Предметные колонки определяет попап: при предпросмотре переноса Заявка, Вес нетто, Было, Станет; в истории выполненного переноса Заявка, Вес нетто, Было, Стало.",
       "specimen": "docs/ui/specimens/registry.transfer-popup.html"
     },
     {
