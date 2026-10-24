@@ -15,6 +15,7 @@ $_SESSION = [
 
 $fixtureMetric = getenv('PLANEX_MANAGER_STATISTICS_METRIC') ?: 'trips';
 $_GET = ['mode'=>'week','metric'=>$fixtureMetric];
+if (getenv('PLANEX_MANAGER_STATISTICS_WAREHOUSE') === '1') $_GET['warehouse'] = '1';
 $company = ['name'=>'ООО «ПЛАНЭКС»'];
 $dbError = null;
 $eligibleManagers = [
@@ -26,6 +27,7 @@ $eligibleManagers = [
 $filters = [
     'mode'=>'week','metric'=>$fixtureMetric,'group'=>'week','from'=>'2026-08-03','to'=>'2026-09-23',
     'previous_from'=>'2026-06-08','previous_to'=>'2026-07-29','manager_ids'=>[],'compare'=>false,'duration_days'=>52,
+    'include_warehouse_loads'=>isset($_GET['warehouse']),
 ];
 $trend=[];$previousTrend=[];
 foreach ([0,0,0,0,3,4,9,5] as $index=>$value) {

@@ -61,18 +61,23 @@ try {
         (3,103,'Вера Тихая','vera','hash','logist','active'),
         (4,104,'Старший Логист','senior','hash','senior_logist','active');
         INSERT INTO clients(id,name,inn,status) VALUES(1,'Тестовый клиент','7700000000','active');
-        INSERT INTO feo_requests(id,zayavka_id,mass_netto) VALUES(1,'STAT-1',1.5),(2,'STAT-2',2.5),(3,'STAT-3',3.0),(4,'STAT-4',4.0);
-        INSERT INTO waste_trips(id,business_id,client_id,responsible_user_id,destination_type,status,actual_start_date,created_by_membership_id) VALUES
-        (1,501,1,1,'warehouse','completed','2026-09-02',101),
-        (2,502,1,1,'warehouse','in_progress','2026-09-08',101),
-        (3,503,1,2,'warehouse','cancelled','2026-09-15',102),
-        (4,504,1,2,'warehouse','searching_executor',NULL,102),
-        (5,505,1,4,'warehouse','completed','2026-09-16',104);
+        INSERT INTO feo_requests(id,zayavka_id,mass_netto) VALUES(1,'STAT-1',1.5),(2,'STAT-2',2.5),(3,'STAT-3',3.0),(4,'STAT-4',4.0),(5,'STAT-5',2.0),(6,'STAT-6',3.0),(7,'STAT-7',1.0),(8,'STAT-8',4.0);
+        INSERT INTO waste_trips(id,business_id,client_id,responsible_user_id,destination_type,status,actual_start_date,created_by_membership_id,legacy_route_type,legacy_source_warehouse_id) VALUES
+        (1,501,1,1,'warehouse','completed','2026-09-02',101,'generator_to_warehouse',NULL),
+        (2,502,1,1,'warehouse','in_progress','2026-09-08',101,NULL,NULL),
+        (3,503,1,2,'warehouse','cancelled','2026-09-15',102,NULL,NULL),
+        (4,504,1,2,'warehouse','searching_executor',NULL,102,NULL,NULL),
+        (5,505,1,4,'warehouse','completed','2026-09-16',104,NULL,NULL),
+        (6,506,1,1,'utilizer','completed','2026-09-17',101,'warehouse_to_utilizer',11),
+        (7,507,1,1,'warehouse','completed','2026-09-18',101,'warehouse_to_warehouse',11),
+        (8,508,1,2,'utilizer','completed','2026-09-19',102,'mixed_to_utilizer',11),
+        (9,509,1,2,'utilizer','completed','2026-09-20',102,NULL,11);
         INSERT INTO waste_trip_requests(waste_trip_id,feo_request_id,snapshot_mass_kg,position_no) VALUES
-        (1,1,1500,1),(1,2,2500,2),(2,3,3000,1),(3,2,2500,1),(5,4,4000,1);");
+        (1,1,1500,1),(1,2,2500,2),(2,3,3000,1),(3,2,2500,1),(5,4,4000,1),
+        (6,5,2000,1),(7,6,3000,1),(8,7,1000,1),(9,8,4000,1);");
 
-    foreach ([1,2,3,4,5] as $tripId) Statistics::synchronizeTrip($pdo, $tripId);
-    check((int)$pdo->query('SELECT COUNT(*) FROM waste_trip_start_statistics')->fetchColumn()===4, 'only started trips captured');
+    foreach ([1,2,3,4,5,6,7,8,9] as $tripId) Statistics::synchronizeTrip($pdo, $tripId);
+    check((int)$pdo->query('SELECT COUNT(*) FROM waste_trip_start_statistics')->fetchColumn()===8, 'only started trips captured');
 
     $pdo->exec("UPDATE waste_trips SET responsible_user_id=2 WHERE id=1; DELETE FROM waste_trip_requests WHERE waste_trip_id=1 AND feo_request_id=2");
     Statistics::synchronizeTrip($pdo, 1);
@@ -96,6 +101,17 @@ try {
     check(is_array($zero)&&$zero['trips']===0, 'zero-result employee visible');
     check(count($dashboard['trend'])===8 && count($dashboard['details'])===3, 'eight-week trend and drill-down');
     check(count($dashboard['period_rows'])===8 && count($dashboard['manager_trends'])===3, 'eight exact periods and per-logist dynamics');
+    check($filters['include_warehouse_loads']===false, 'warehouse loading default is No');
+
+    $withWarehouse=Statistics::normalizeFilters(['mode'=>'week','metric'=>'trips','warehouse'=>'1'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
+    $all=Statistics::dashboard($pdo,$withWarehouse,[
+        ['membership_id'=>101,'full_name'=>'Анна Новая'],
+        ['membership_id'=>102,'full_name'=>'Борис Серов'],
+        ['membership_id'=>103,'full_name'=>'Вера Тихая'],
+    ]);
+    check($all['totals']['trips']===7 && $all['totals']['requests']===7 && (float)$all['totals']['weight']===17000.0, 'Yes includes known warehouse loading routes and source warehouse');
+    check(count($all['details'])===7 && count($dashboard['details'])===3, 'details use the same warehouse selection');
+    check(array_sum(array_column($all['trend'],'trips'))===7 && array_sum(array_column($dashboard['trend'],'trips'))===3, 'chart and periods use the same warehouse selection');
 
     $filtered=$filters;$filtered['manager_ids']=[102];
     $one=Statistics::dashboard($pdo,$filtered,[

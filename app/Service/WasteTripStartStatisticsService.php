@@ -144,6 +144,7 @@ final class WasteTripStartStatisticsService
         return [
             'mode'=>$mode,
             'metric'=>$metric,
+            'include_warehouse_loads'=>(string)($query['warehouse'] ?? '') === '1',
             'group'=>$group,
             'from'=>$from->format('Y-m-d'),
             'to'=>$to->format('Y-m-d'),
@@ -173,8 +174,9 @@ final class WasteTripStartStatisticsService
             $eligibleManagers
         )));
         $requestedIds = array_values(array_map('intval', $filters['manager_ids'] ?? []));
-        $current = self::aggregate($pdo, (string)$filters['from'], (string)$filters['to'], $requestedIds, $allowedIds);
-        $previous = self::aggregate($pdo, (string)$filters['previous_from'], (string)$filters['previous_to'], $requestedIds, $allowedIds);
+        $includeWarehouseLoads = !empty($filters['include_warehouse_loads']);
+        $current = self::aggregate($pdo, (string)$filters['from'], (string)$filters['to'], $requestedIds, $allowedIds, $includeWarehouseLoads);
+        $previous = self::aggregate($pdo, (string)$filters['previous_from'], (string)$filters['previous_to'], $requestedIds, $allowedIds, $includeWarehouseLoads);
         $selectedManagers = array_fill_keys($requestedIds, true);
         $visibleManagers = $selectedManagers === [] ? $eligibleManagers : array_values(array_filter(
             $eligibleManagers,
@@ -203,9 +205,9 @@ final class WasteTripStartStatisticsService
     }
 
     /** @return array{totals:array<string,int|float>,managers:list<array<string,mixed>>,daily:list<array<string,mixed>>,daily_managers:list<array<string,mixed>>} */
-    private static function aggregate(PDO $pdo, string $from, string $to, array $managerIds, array $allowedIds): array
+    private static function aggregate(PDO $pdo, string $from, string $to, array $managerIds, array $allowedIds, bool $includeWarehouseLoads): array
     {
-        [$where, $params] = self::where($from, $to, $managerIds, $allowedIds);
+        [$where, $params] = self::where($from, $to, $managerIds, $allowedIds, $includeWarehouseLoads);
         $base = " FROM waste_trip_start_statistics s JOIN waste_trips wt ON wt.id=s.waste_trip_id WHERE ".implode(' AND ', $where);
 
         $totalStmt = $pdo->prepare(
@@ -252,9 +254,13 @@ final class WasteTripStartStatisticsService
     }
 
     /** @return array{0:list<string>,1:list<int|string>} */
-    private static function where(string $from, string $to, array $managerIds, array $allowedIds): array
+    private static function where(string $from, string $to, array $managerIds, array $allowedIds, bool $includeWarehouseLoads): array
     {
         $where = ['wt.deleted_at IS NULL', 's.actual_start_date BETWEEN ? AND ?'];
+        if (!$includeWarehouseLoads) {
+            $where[] = "COALESCE(wt.legacy_route_type,'') NOT IN ('warehouse_to_warehouse','warehouse_to_utilizer','mixed_to_utilizer')";
+            $where[] = 'wt.legacy_source_warehouse_id IS NULL';
+        }
         $params = [$from, $to];
         if ($allowedIds === []) {
             $where[] = '1=0';
@@ -404,7 +410,7 @@ final class WasteTripStartStatisticsService
 
     private static function details(PDO $pdo, array $filters, array $allowedIds): array
     {
-        [$where,$params] = self::where((string)$filters['from'], (string)$filters['to'], $filters['manager_ids'], $allowedIds);
+        [$where,$params] = self::where((string)$filters['from'], (string)$filters['to'], $filters['manager_ids'], $allowedIds, !empty($filters['include_warehouse_loads']));
         $stmt = $pdo->prepare(
             "SELECT wt.id,wt.business_id,wt.status,s.actual_start_date,s.responsible_name_snapshot,
                     s.responsible_membership_id,s.request_count,s.total_mass_kg
