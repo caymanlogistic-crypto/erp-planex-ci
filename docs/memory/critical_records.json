@@ -160,9 +160,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "25344f5b4c46d535891d96bebfa95a847b06190f",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/25344f5b4c46d535891d96bebfa95a847b06190f/tests/ui_standard_gallery_browser_test.mjs",
-      "verification_note": "2026-10-24: approved select colors added to existing gallery browser assertions. Gallery test PASS on 390/900/1280/1920/3840 for normal, hover, pressed, keyboard focus and selected-option states; registry_visual_gate PASS across all 10 catalog pages. Control-plane tools and workflows unchanged; prior 2026-10-24 checks for other owning paths remain valid.",
+      "verified_sha": "b8bd73798279f30daf96959fd417d5d6e4d51203",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/b8bd73798279f30daf96959fd417d5d6e4d51203/docs/ui/designer/current.json",
+      "verification_note": "2026-10-24: weight-popup decision link and approved scope added to designer navigation after shared transfer popup canon merge; no control-plane tooling or workflows changed. Local ui_standard_catalog_test, registry_component_contract_test, memory_integrity_checker_test, ui_standard_gallery_browser_test and registry browser matrices PASS. Seven-column weight registry computed styles match baseline at 1366/390 px; weight popup browser and isolated MySQL service tests PASS. Earlier 2026-10-24 verification of other owning paths remains valid.",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
