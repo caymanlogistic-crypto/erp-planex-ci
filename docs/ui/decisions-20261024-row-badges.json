@@ -1,0 +1,46 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "row-fill-semantic-badges-20261024",
+  "date": "2026-10-24",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "chat": "Current badge-design conversation; exact thread ID unavailable",
+    "thread_id": null,
+    "quote": "Давай согласовывваем черную обводку и черный текст, прописывай в каноне"
+  },
+  "scope": ["Shared ERP PLANEX .badge-warning, .badge-danger and .badge-ok semantic badge appearances"],
+  "reference": {
+    "task_id": "ui-standard-row-badges-20261024",
+    "checkpoint": "v012",
+    "checkpoint_sha256": "0A0164131732BE576DA5D52AF6BEA1B224DF3404AF8EFF005749B163103B4483",
+    "review_url": "http://127.0.0.1:52766/ui-standard?version=v012",
+    "normal_column": 2,
+    "hover_column": 4
+  },
+  "approved": {
+    "geometry": "Existing shared .badge geometry: IBM Plex Sans 11px; 20px height; 8px horizontal padding; solid 1px border on every side; 2px radius.",
+    "normal": {
+      "warning": {"background": "#FDF0D5", "text": "#6B4F0F", "border": "#6B4F0F", "font_weight": 600},
+      "danger": {"background": "#FFE5DF", "text": "#7A3326", "border": "#7A3326", "font_weight": 600},
+      "ok": {"background": "#DFF3E5", "text": "#1E5247", "border": "#1E5247", "font_weight": 600}
+    },
+    "hover": {
+      "warning": {"background": "#FFF1BD", "text": "#131210", "border": "#131210", "font_weight": 500},
+      "danger": {"background": "#FFD6CC", "text": "#131210", "border": "#131210", "font_weight": 500},
+      "ok": {"background": "#CDEBD7", "text": "#131210", "border": "#131210", "font_weight": 500}
+    }
+  },
+  "implementation_status": {
+    "shared_erp_implementation": "PENDING; public/assets/css/erp-ui.css still contains the preceding shared badge colors and no new hover variant",
+    "living_atlas": "Design Lab ui-standard-badge-canon-20261024:v009 shows the approved appearance; ERP CSS remains pending. Original v008 and v012 checkpoints are immutable."
+  },
+  "implementation_authorized": false,
+  "excluded": [
+    "Fifth-column 3px left accent",
+    "Black text and border in normal state",
+    "Neutral, archived, doc-status and other badge roles",
+    "Page-local lookalike classes or colors",
+    "ERP runtime changes without a separately accepted implementation checkpoint"
+  ]
+}
