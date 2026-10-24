@@ -17,7 +17,7 @@
     "footer_checkpoint": "v022"
   },
   "approved": {
-    "title": "IBM Plex Sans 19px / 700 / 22px, letter-spacing -0.035em, color #131210, matching the registry Page Header title. The close control remains at the right corner of the header.",
+    "title": "IBM Plex Sans 19px / 700 / 22px, letter-spacing -0.035em, color #131210, matching the registry Page Header title. The close control remains at the right corner of the header. The transfer popup preserves its previously approved backdrop rgba(10,9,8,.58) via the shared opt-in modal class.",
     "footer": "Min-height 48px; background #F0EDE6, same as the shown header; top divider #DEDAD0; horizontal padding 16px. Existing-object deletion occupies a separate calm left area only when real deletion exists. Cancel and one main action form the right group; buttons may wrap on narrow widths without reducing the font. A red danger button is reserved for a separate destructive confirmation."
   },
   "implementation_status": {

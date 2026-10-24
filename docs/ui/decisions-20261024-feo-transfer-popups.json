@@ -26,7 +26,7 @@
     ".registry-ui-entity-id"
   ],
   "approved": {
-    "shell": "Shared popup title IBM Plex Sans 19/700/22, tracking -0.035em, #131210; cross at right. Header and footer #F0EDE6. Footer min 48px, top border #DEDAD0, horizontal padding 16px. Body #FEFDF8 with 12px vertical and 16px horizontal padding.",
+    "shell": "Shared popup title IBM Plex Sans 19/700/22, tracking -0.035em, #131210; cross at right. Existing modal backdrop rgba(10,9,8,.58). Header and footer #F0EDE6. Footer min 48px, top border #DEDAD0, horizontal padding 16px. Body #FEFDF8 with 12px vertical and 16px horizontal padding.",
     "form": "Single column, 8px gaps. Requests textarea 96px and vertically resizable, other fields 32px. Existing system radio controls. Order: Requests, destination mode, relevant destination field. No name or comment. Default mode Other request; address mode retains Address and Determine coordinates.",
     "input": "Textarea placeholder: Вставьте шестизначные номера заявок. Paste extracts independent six-digit IDs, first tab/markdown column, preserving order and repeated matches, then displays comma-separated values. Ordinary typing is unchanged.",
     "validation": "Automatic preview after 250ms with stale-response discard. Missing six-digit request IDs: Заявки не найдены в системе: ID, ID. below Requests; missing target: Заявка не найдена в системе: ID. below target; both use shared field error 11/600 #872822 role=alert. Empty/invalid target: Введите шестизначный номер заявки с нужным адресом. No manual Проверить button. Create action is disabled until current preview token exists.",

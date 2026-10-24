@@ -49,10 +49,11 @@ try {
     assert.equal(await page.getByText('Номер заявки с нужным адресом',{exact:true}).count(),1);
     assert.equal(await page.locator('[data-create-dialog] .modal-foot [data-close-dialog]').innerText(),'Отменить');
     assert.equal(await page.locator('[data-create-dialog] .modal-foot [data-commit]').innerText(),'Создать блок и переместить заявки');
-    const modalGeometry=await page.locator('[data-create-dialog]').evaluate(e=>({radius:parseFloat(getComputedStyle(e).borderRadius),title:parseFloat(getComputedStyle(e.querySelector('.modal-title')).fontSize),titleWeight:getComputedStyle(e.querySelector('.modal-title')).fontWeight,body:getComputedStyle(e.querySelector('.modal-body')).backgroundColor,foot:getComputedStyle(e.querySelector('.modal-foot')).backgroundColor}));
+    const modalGeometry=await page.locator('[data-create-dialog]').evaluate(e=>({radius:parseFloat(getComputedStyle(e).borderRadius),title:parseFloat(getComputedStyle(e.querySelector('.modal-title')).fontSize),titleWeight:getComputedStyle(e.querySelector('.modal-title')).fontWeight,body:getComputedStyle(e.querySelector('.modal-body')).backgroundColor,foot:getComputedStyle(e.querySelector('.modal-foot')).backgroundColor,backdrop:getComputedStyle(e,'::backdrop').backgroundColor}));
     assert.ok(modalGeometry.radius<=2 && modalGeometry.title===19 && modalGeometry.titleWeight==='700','Approved modal geometry '+width);
     assert.equal(modalGeometry.body,'rgb(254, 253, 248)');
     assert.equal(modalGeometry.foot,'rgb(240, 237, 230)');
+    assert.equal(modalGeometry.backdrop,'rgba(10, 9, 8, 0.58)');
     if(screenshotDir) await page.screenshot({path:path.join(screenshotDir,`transfer-form-${width}.png`),fullPage:true});
     await page.locator('[name=request_ids]').fill('100001\n100002');
     await page.locator('[name=source_request_id]').fill('100003');
