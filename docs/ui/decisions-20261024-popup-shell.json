@@ -1,0 +1,33 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "popup-shell-title-footer-20261024",
+  "date": "2026-10-24",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "chat": "Current popup design conversation; exact thread ID unavailable",
+    "thread_id": null,
+    "quote": "СОгласовываем размер шрийта , крестик в углу хедера"
+  },
+  "scope": ["ERP PLANEX popup shell; first reviewed on /erpv2/company/feo/requests/transfers"],
+  "acceptance": "OWNER explicitly accepted title and cross, then footer; on 2026-10-24 reconfirmed that the sandbox title decision is canon.",
+  "reference": {
+    "task_id": "feo-transfer-popup-shell-lab-20261024",
+    "title_checkpoint": "v021",
+    "footer_checkpoint": "v022"
+  },
+  "approved": {
+    "title": "IBM Plex Sans 19px / 700 / 22px, letter-spacing -0.035em, color #131210, matching the registry Page Header title. The close control remains at the right corner of the header.",
+    "footer": "Min-height 48px; background #F0EDE6, same as the shown header; top divider #DEDAD0; horizontal padding 16px. Existing-object deletion occupies a separate calm left area only when real deletion exists. Cancel and one main action form the right group; buttons may wrap on narrow widths without reducing the font. A red danger button is reserved for a separate destructive confirmation."
+  },
+  "implementation_status": {
+    "shared_erp_implementation": "PENDING; current generic .modal-title still differs and must not be cited as the approved implementation",
+    "whole_popup": "NOT_APPROVED"
+  },
+  "implementation_authorized": false,
+  "excluded": [
+    "Popup body layout, field arrangement, geocoding result and quality levels other than separately approved low/very-low red",
+    "Automatic approval of forms, action menus, deletion confirmation or file flows",
+    "ERP runtime changes without a separately accepted implementation checkpoint"
+  ]
+}

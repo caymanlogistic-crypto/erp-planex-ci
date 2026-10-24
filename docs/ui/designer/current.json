@@ -10,6 +10,7 @@
     "registry_decisions": "docs/ui/decisions-20261018.json",
     "registry_toolbar_decision": "docs/ui/decisions-20261023-toolbar.json",
     "feo_transfers_table_decision": "docs/ui/decisions-20261023-feo-transfers-table.json",
+    "popup_shell_decision": "docs/ui/decisions-20261024-popup-shell.json",
     "manager_display_decision": "docs/ui/decisions-20261020-manager-display.json",
     "manager_table_extension": "docs/ui/decisions-20261020-manager-tables.json",
     "icon_provenance": "docs/ui/REGISTRY_ICON_PROVENANCE.md",
@@ -20,7 +21,7 @@
   "local_continuations": "C:/plan-ex/ERP-PLANEX/local/evidence/*/designer-handoff.json",
   "focus": null,
   "backlog": [
-    {"id": "forms-and-dialogs", "status": "not_approved", "topic": "Формы, подтверждение удаления, загрузка и удаление файлов; показать цельный сценарий с состояниями", "authority": "docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"},
+    {"id": "forms-and-dialogs", "status": "partially_approved", "topic": "Заголовок и футер оболочки попапа согласованы; формы, подтверждение удаления, загрузка и удаление файлов требуют цельного сценария с состояниями", "authority": "docs/ui/decisions-20261024-popup-shell.json; docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"},
     {"id": "action-menus", "status": "partially_approved", "topic": "Общее устройство и типографика меню действий. Согласованные цвета не утверждают всё меню", "authority": "docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"},
     {"id": "feedback-states", "status": "not_approved", "topic": "Общее отображение ожидания, серверных ошибок и восстановления; сохранить утверждённую семантику цветов", "authority": "docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"}
   ]
