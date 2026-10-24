@@ -1,0 +1,43 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "static-black-semantic-badges-20261024",
+  "date": "2026-10-24",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "chat": "Current badge-design conversation; exact thread ID unavailable",
+    "thread_id": null,
+    "quote": "Системные бейджи должны быть стационарными, они не должны меняться при наведении; оставляем как финальную чёрный контур и текст, только проследи, чтобы шрифт был системным"
+  },
+  "scope": ["Shared ERP PLANEX .badge-warning, .badge-danger and .badge-ok only"],
+  "supersedes": "docs/ui/decisions-20261024-row-badges.json: different normal/hover colors and weights",
+  "reference": {
+    "task_id": "ui-standard-row-badges-20261024",
+    "checkpoint": "v012",
+    "checkpoint_sha256": "0A0164131732BE576DA5D52AF6BEA1B224DF3404AF8EFF005749B163103B4483",
+    "selected_column": 4,
+    "adaptation": "Use its black-text-and-border appearance as one static state; do not carry over the comparison's hover transition"
+  },
+  "approved": {
+    "font": "var(--font): IBM Plex Sans with existing system fallbacks; 11px, weight 500, line-height 1; no local font family or font-face",
+    "geometry": "Existing shared .badge: 20px height, 8px horizontal padding, solid 1px border on all sides, 2px radius",
+    "static": {
+      "warning": {"background": "#FFF1BD", "text": "#131210", "border": "#131210"},
+      "danger": {"background": "#FFD6CC", "text": "#131210", "border": "#131210"},
+      "ok": {"background": "#CDEBD7", "text": "#131210", "border": "#131210"}
+    },
+    "hover": "Exactly the same background, text, border, font weight and geometry as static; no visual hover response"
+  },
+  "implementation_status": {
+    "shared_erp_implementation": "PENDING; the current shared CSS predates this decision",
+    "living_atlas": "Design Lab ui-standard-badge-static-20261024:v010 shows the approved static appearance; original v009 remains immutable"
+  },
+  "implementation_authorized": false,
+  "excluded": [
+    "Any hover-driven appearance change for these three badges",
+    "Fifth-column 3px left accent",
+    "Neutral, archived, doc-status and other badge roles",
+    "Page-local lookalike classes, colors or fonts",
+    "ERP runtime changes without a separately accepted implementation checkpoint"
+  ]
+}
