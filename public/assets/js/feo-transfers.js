@@ -249,7 +249,7 @@
       html += `<div class="field"><span class="field-label">Адрес места погрузки</span><p class="registry-ui-modal-text">${escape(destination.query || destination.address)}</p></div>`;
       html += `<div class="registry-ui-modal-geo"><div class="field"><span class="field-label">Найденный адрес</span><p class="registry-ui-modal-text">${escape(destination.address)}</p></div><p class="registry-ui-modal-text">Широта ${escape(destination.latitude)} · Долгота ${escape(destination.longitude)}</p>${destination.precision ? qualityHtml(destination) : ''}</div>`;
     }
-    html += `<section class="registry-ui-modal-preview"><div class="registry-ui-modal-summary">Заявок: ${result.items.length}.</div><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Вес нетто</th><th>Было</th><th>Станет</th></tr></thead><tbody>${result.items.map(item => rowHtml(item)).join('')}</tbody></table></div></section></div>`;
+    html += `<section class="registry-ui-modal-preview"><div class="registry-ui-modal-summary">Заявок: ${result.items.length}.</div><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Вес нетто</th><th>Было</th><th>Стало</th></tr></thead><tbody>${result.items.map(item => rowHtml(item)).join('')}</tbody></table></div></section></div>`;
     return {html,requests};
   };
   async function openDetail(id) {

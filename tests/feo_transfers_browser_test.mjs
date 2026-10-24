@@ -32,7 +32,7 @@ try {
     if(url.endsWith('/geocode')) result={success:true,geo_token:'fixture-geo',result:destination};
     else if(url.endsWith('/preview')) {previewCalls++; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination,rows:[{zayavka_id:'100001',net_kg:1250,mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',net_kg:null,mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
     else if(url.endsWith('/create')) {createCalls++; result={success:true,batch_id:19,notification:'failed'};}
-    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',mode:'request',source_request_id:'100003',destination_json:JSON.stringify(destination),created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:[{zayavka_id:'100001',net_kg:1250,before:{mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},after:{mno_adres_pogruzki:'Итоговый адрес',mno_d:'56',mno_sh:'38'}}]};
+    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',mode:'request',source_request_id:'100003',destination_json:JSON.stringify(destination),created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:[{zayavka_id:'100001',net_kg:1250,before:{mno_adres_pogruzki:'Короткий адрес',mno_d:'55',mno_sh:'37'},after:{mno_adres_pogruzki:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',mno_d:'56',mno_sh:'38'}},{zayavka_id:'100002',net_kg:0,before:{mno_adres_pogruzki:'Россия, Ханты-Мансийский автономный округ, Сургут, Промышленная улица, 4',mno_d:'61',mno_sh:'73'},after:{mno_adres_pogruzki:'Короткий итоговый адрес',mno_d:'62',mno_sh:'74'}}]};
     else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего блока остановлен.'};
     else result={success:true};
     await route.fulfill({status:result.success?200:422,contentType:'application/json',body:JSON.stringify(result)});
@@ -59,7 +59,7 @@ try {
     await page.locator('[name=source_request_id]').fill('100003');
     await page.locator('[data-preview-result]').waitFor({state:'visible'});
     assert.match(await page.locator('[data-preview-summary]').innerText(),/Заявок: 2/);
-    assert.deepEqual((await page.locator('[data-preview-result] thead th').allInnerTexts()).map(x=>x.toLocaleLowerCase('ru')),['заявка','вес нетто','было','станет']);
+    assert.deepEqual((await page.locator('[data-preview-result] thead th').allInnerTexts()).map(x=>x.toLocaleLowerCase('ru')),['заявка','вес нетто','было','станет'],'Future create preview uses «Станет»');
     assert.match(await page.locator('[data-preview-rows] tr').first().innerText(),/1\s*250 кг/);
     assert.match(await page.locator('[data-preview-rows] tr').last().innerText(),/—/);
     assert.equal(await page.locator('[data-preview-result] .registry-ui-compact-table-scroll').evaluate(e=>getComputedStyle(e).borderTopColor),'rgb(168, 161, 150)');
@@ -87,7 +87,22 @@ try {
   assert.equal(await page.locator('[data-detail-dialog] .transfer-detail-meta').count(),0);
   assert.match(await page.locator('[data-detail-dialog] [data-detail-body]').innerText(),/Вес нетто/i);
   assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').first().evaluate(e=>getComputedStyle(e).fontWeight),'700');
-  assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').count(),2,'Request and destination IDs use the shared bold role');
+  assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').count(),3,'Request and destination IDs use the shared bold role');
+  assert.deepEqual((await page.locator('[data-detail-dialog] thead th').allInnerTexts()).map(x=>x.toLocaleLowerCase('ru')),['заявка','вес нетто','было','стало'],'Completed transfer history uses «Стало»');
+  for (const width of [1366,390]) {
+    await page.setViewportSize({width,height:900});
+    const rows=await page.locator('[data-detail-dialog] tbody tr').evaluateAll(elements=>elements.map(row=>[...row.cells].map(cell=>{
+      const range=document.createRange();range.selectNodeContents(cell.firstChild);
+      return {top:range.getBoundingClientRect().top,alignment:getComputedStyle(cell).verticalAlign};
+    })));
+    assert.equal(rows.length,2,'History includes varied address lengths');
+    for (const cells of rows) {
+      assert.ok(cells.every(cell=>cell.alignment==='top'),'Compact table aligns each cell to top '+width);
+      assert.ok(Math.max(...cells.map(cell=>cell.top))-Math.min(...cells.map(cell=>cell.top))<=1,'ID, weight and addresses share one top line '+width);
+    }
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'No document overflow in history '+width);
+    if(screenshotDir) await page.locator('[data-detail-dialog]').screenshot({path:path.join(screenshotDir,`transfer-history-${width}.png`)});
+  }
   await page.locator('[data-detail-dialog] [data-revert]').click();
   assert.match(await page.locator('[data-detail-body]').innerText(),/На прежние адреса и координаты вернутся заявки: 100001/);
   await page.locator('[data-confirm-revert]').click();
