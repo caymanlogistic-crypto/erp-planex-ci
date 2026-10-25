@@ -68,17 +68,12 @@ $periodLabel = date('d.m.Y',strtotime((string)$filters['from'])).' — '.date('d
 $tableMeasures = ['trips'=>'Рейсы','requests'=>'Заявки','weight'=>'Вес, т'];
 $managerTotals = [];
 foreach ($statistics['managers'] as $row) $managerTotals[(int)$row['membership_id']] = $row;
-$kpis = [
+$kpis = $personalMode ? [] : [
     ['label'=>'Рейсы поставлены на погрузку','value'=>$fmtInt($statistics['totals']['trips']),'current'=>(float)$statistics['totals']['trips'],'previous'=>(float)$statistics['previous_totals']['trips'],'class'=>'is-copper','note'=>'Факт начала вывоза'],
     ['label'=>'Заявки в рейсах','value'=>$fmtInt($statistics['totals']['requests']),'current'=>(float)$statistics['totals']['requests'],'previous'=>(float)$statistics['previous_totals']['requests'],'class'=>'is-steel','note'=>'Состав рейса на момент старта'],
     ['label'=>'Вес заявок','value'=>$fmtWeight($statistics['totals']['weight']),'current'=>(float)$statistics['totals']['weight'],'previous'=>(float)$statistics['previous_totals']['weight'],'class'=>'is-patina','note'=>'Вес по зафиксированному составу'],
     ['label'=>'Логисты с результатом','value'=>$fmtInt($statistics['totals']['active_managers']),'current'=>(float)$statistics['totals']['active_managers'],'previous'=>(float)$statistics['previous_totals']['active_managers'],'class'=>'is-asphalt','note'=>'Только активная роль «Логист»'],
 ];
-if ($personalMode) {
-    $myTrips = (int)($statistics['managers'][0]['trips'] ?? 0);
-    $kpis[3] = ['label'=>'Мои рейсы','value'=>$fmtInt($myTrips),'current'=>(float)$myTrips,
-        'previous'=>0.0,'class'=>'is-asphalt','note'=>'С 38-й недели'];
-}
 ?>
 <div class="manager-stats" data-manager-statistics>
     <div class="page-head manager-stats__head">
@@ -91,9 +86,9 @@ if ($personalMode) {
     <?php if ($dbError !== null): ?>
         <div class="notice warn"><?= e($dbError) ?></div>
     <?php else: ?>
-        <div class="manager-stats__kpis">
+        <?php if (!$personalMode): ?><div class="manager-stats__kpis">
             <?php foreach($kpis as$kpi):?><article class="manager-stats__kpi <?=$kpi['class']?>"><div class="manager-stats__kpi-label"><?=e($kpi['label'])?></div><div class="manager-stats__kpi-row"><strong><?=e($kpi['value'])?></strong></div><div class="manager-stats__kpi-note"><?=e($kpi['note'])?></div></article><?php endforeach;?>
-        </div>
+        </div><?php endif; ?>
 
         <div class="manager-stats__charts">
             <section class="manager-stats__card manager-stats__trend">
