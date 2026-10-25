@@ -36,6 +36,12 @@ $ok(array_column($registry->grantableTree()['Операции']['Статист�
 foreach ($statisticsKeys as $key) {
     $ok(in_array($key, $grantableKeys, true), $key . ' must remain grantable');
 }
+$personalPage = $registry->page('company.statistics.work');
+$ok(($personalPage['path'] ?? '') === '/company/statistics/work'
+    && ($personalPage['label'] ?? '') === 'Статистика работы'
+    && ($personalPage['section'] ?? '') === 'Логисты'
+    && in_array('company.statistics.work', $grantableKeys, true),
+    'personal statistics must be a grantable page in the logist menu');
 
 $js = (string)file_get_contents($root . '/public/assets/js/roles-access.js');
 $layout = (string)file_get_contents($root . '/app/View/layouts/main.php');

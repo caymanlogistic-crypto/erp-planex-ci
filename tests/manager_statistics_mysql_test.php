@@ -15,7 +15,7 @@ use App\Service\LocalMigrationService;
 use App\Service\WasteTripStartStatisticsService as Statistics;
 
 $root = dirname(__DIR__);
-require $root.'/bootstrap/app.php';
+$appConfig=require $root.'/bootstrap/app.php';
 require_once $root.'/app/Support/company_database.php';
 spl_autoload_register(static function(string $class) use ($root): void {
     if (str_starts_with($class, 'App\\')) {
@@ -113,6 +113,36 @@ try {
     check(count($all['details'])===7 && count($dashboard['details'])===3, 'details use the same warehouse selection');
     check(array_sum(array_column($all['trend'],'trips'))===7 && array_sum(array_column($dashboard['trend'],'trips'))===3, 'chart and periods use the same warehouse selection');
 
+    $personalFilters=Statistics::normalizePersonalFilters(
+        ['mode'=>'week','manager_ids'=>[101],'from'=>'2020-01-01'],
+        new \DateTimeImmutable('2026-10-25',new \DateTimeZone('Europe/Moscow'))
+    );
+    check($personalFilters['from']==='2026-09-14' && $personalFilters['to']==='2026-10-25'
+        && $personalFilters['manager_ids']===[] && !$personalFilters['include_warehouse_loads'],
+        'personal window starts at week 38; query cannot select another logist');
+    $personalEligible=[
+        ['membership_id'=>101,'full_name'=>'Анна Новая'],
+        ['membership_id'=>102,'full_name'=>'Борис Серов'],
+        ['membership_id'=>103,'full_name'=>'Вера Тихая'],
+    ];
+    $personal=Statistics::personalDashboard($pdo,$personalFilters,$personalEligible,102);
+    check($personal['totals']['trips']===1 && $personal['managers'][0]['trips']===1,
+        'company and signed-in logist totals use the same warehouse filter');
+    check(count($personal['trend'])===6 && count($personal['manager_trends'])===1,
+        'personal report shows weeks 38 through 43 and exactly one line');
+    check($personal['manager_trends'][0]['membership_id']===102
+        && $personal['manager_trends'][0]['name']==='Мои показатели',
+        'only server-selected logist identity reaches the chart');
+    check($personal['details']===[]
+        && array_keys($personal['period_rows'][0]['manager_values'])===[102]
+        && array_column($personal['managers'],'membership_id')===[102],
+        'other logist names and rows are absent from the personal report payload');
+    $personalFilters['include_warehouse_loads']=true;
+    $personalWithWarehouse=Statistics::personalDashboard($pdo,$personalFilters,$personalEligible,102);
+    check($personalWithWarehouse['totals']['trips']===5
+        && $personalWithWarehouse['managers'][0]['trips']===3,
+        'warehouse Yes changes company and own aggregates independently');
+
     $filtered=$filters;$filtered['manager_ids']=[102];
     $one=Statistics::dashboard($pdo,$filtered,[
         ['membership_id'=>101,'full_name'=>'Анна Новая'],
@@ -136,6 +166,52 @@ try {
     check($month['from']==='2026-06-01'&&$month['to']==='2026-09-23'&&$month['group']==='month'&&$month['previous_from']==='2026-02-01'&&$month['previous_to']==='2026-05-23','current and three previous months');
     $removed=Statistics::normalizeFilters(['mode'=>'custom','from'=>'2020-01-01','to'=>'2030-01-01','manager_ids'=>[102],'compare'=>'1'],new \DateTimeImmutable('2026-09-23',new \DateTimeZone('Europe/Moscow')));
     check($removed['mode']==='week'&&$removed['from']==='2026-08-03'&&$removed['manager_ids']===[]&&$removed['compare']===false,'removed settings cannot change the fixed report');
+
+    // Full route/controller/view/layout startup on the same disposable tenant.
+    $pdo->exec("CREATE TEMPORARY TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255));");
+    $companyRow=$pdo->prepare("INSERT INTO companies VALUES(25,'ООО Тест','active',?)");
+    $companyRow->execute([$database]);
+    $pdo->exec('UPDATE company_memberships SET role_id=1 WHERE id=102');
+    require_once $root.'/app/Support/http_runtime.php';
+    $appConfig['database']=['host'=>$host,'port'=>$port,'database'=>$database,'username'=>$user,'password'=>$pass,'charset'=>'utf8mb4'];
+    $centralDb=new class($appConfig['database'],$pdo) extends \App\Core\Database {
+        public function __construct(array $config,private \PDO $fixturePdo) { parent::__construct($config); }
+        public function connection(): \PDO { return $this->fixturePdo; }
+    };
+    $_SERVER['REQUEST_METHOD']='GET';
+    $_SERVER['REQUEST_URI']='/company/statistics/work';
+    $_SERVER['SCRIPT_NAME']='/index.php';
+    $_SESSION=['company_id'=>25,'user_id'=>1,'membership_id'=>101,'role_code'=>'logist',
+        'full_name'=>'Анна Новая','auth_type'=>'company_user'];
+    $_GET=['mode'=>'week','metric'=>'trips','warehouse'=>'1','manager_ids'=>[102]];
+    $registry=new \App\Security\PageRegistry();
+    $access=\App\Security\EffectiveAccess::member(101,25,['company.statistics.work'=>true],[],'logist');
+    \App\Security\AccessRuntime::setCurrent($access);
+    $router=new \App\Http\Router($registry);
+    $config=$appConfig;
+    $db=$centralDb;
+    require $root.'/app/Http/Routes/company_statistics.php';
+    $gate=new \ReflectionProperty($router,'effectiveAccess');
+    $gate->setValue($router,$access);
+    ob_start();
+    $router->dispatch('GET','/company/statistics/work');
+    $html=(string)ob_get_clean();
+    check(http_response_code()!==403 && str_contains($html,'Статистика работы')
+        && str_contains($html,'Нед. 38 · 14.09')
+        && str_contains($html,'Мои показатели')
+        && str_contains($html,'Компания')
+        && str_contains($html,'class="nav-label">Статистика работы</span>'),
+        'real route/controller/service/view/layout renders personal report from week 38');
+    check(!str_contains($html,'Борис Серов') && !str_contains($html,'Вера Тихая'),
+        'real personal HTML never exposes another logist name');
+    $gate->setValue($router,\App\Security\EffectiveAccess::member(101,25,[],[],'logist'));
+    http_response_code(200);
+    ob_start();
+    $router->dispatch('GET','/company/statistics/work');
+    $denied=(string)ob_get_clean();
+    check(http_response_code()===403 && !str_contains($denied,'Статистика работы'),
+        'real route denies access without the dedicated page grant');
+    \App\Security\AccessRuntime::clear();
     echo "MANAGER_STATISTICS_MYSQL=PASS\n";
 } finally {
     if($fixed!=='')cleanCompanyPoolDatabase($pdo);else $admin->exec("DROP DATABASE `$database`");

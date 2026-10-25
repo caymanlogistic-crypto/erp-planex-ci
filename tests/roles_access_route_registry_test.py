@@ -37,7 +37,7 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 430, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 431, f"company route inventory drift: {len(company_routes)}"
 for endpoint in ('/company/feo/requests/weights', '/company/feo/requests/weights/preview', '/company/feo/requests/weights/create', '/company/feo/requests/weights/{id}/json', '/company/feo/requests/weights/{id}/revert'):
     assert ('app/Http/Routes/company_feo_weights.php', endpoint) in company_routes
 assert ("app/Http/Routes/company_linear_trips.php", "/company/trips/gps-coverage") in company_routes
@@ -80,8 +80,9 @@ assert "'/company/warehouses/stock/exclude-issue'" in trip_routes
 assert "'/company/warehouses/stock/restore-issue'" in trip_routes
 assert "/company/trips/departures/legacy" not in trip_routes
 statistics_routes = (ROOT / "app/Http/Routes/company_statistics.php").read_text(encoding="utf-8")
-assert statistics_routes.count('$router->get(') == 3
+assert statistics_routes.count('$router->get(') == 4
 assert "'/company/statistics/managers'" in statistics_routes and "'company.statistics.managers'" in statistics_routes
+assert "'/company/statistics/work'" in statistics_routes and "'company.statistics.work'" in statistics_routes
 assert "'/company/statistics/feo-share'" in statistics_routes and "'company.statistics.feo_share'" in statistics_routes
 assert "'/company/statistics/cargo-balance'" in statistics_routes and "'company.statistics.cargo_balance'" in statistics_routes
 max_routes = (ROOT / "app/Http/Routes/company_max_messaging.php").read_text(encoding="utf-8")
@@ -104,4 +105,4 @@ activation = index_source[index_source.index("if ($rolesAccessEnabled)"):index_s
 assert "catch (" not in activation
 for route_file in ("company_document_generator.php", "company_switch.php", "company_roles_access.php"):
     assert route_file in index_source
-print(f"roles access complete route registry: PASS ({len(company_routes)} routes; four review endpoints; three statistics ACLs; 1 retired legacy writer)")
+print(f"roles access complete route registry: PASS ({len(company_routes)} routes; four review endpoints; four statistics ACLs; 1 retired legacy writer)")

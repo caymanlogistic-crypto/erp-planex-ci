@@ -70,7 +70,7 @@ $check(
     'rolling 8-week 4-month and 12-month windows'
 );
 $check(
-    str_contains($view, '<th colspan="3" scope="colgroup" class="is-total">Итого</th>')
+    str_contains($view, "\$personalMode ? 'Компания' : 'Итого'")
     && str_contains($css, '.manager-stats__period-table .is-total { font-weight:800; }')
     && str_contains($css, '.manager-stats__period-table.is-all-metrics .is-series-colored')
     && str_contains($js, "style.setProperty('--period-series-color', color)"),

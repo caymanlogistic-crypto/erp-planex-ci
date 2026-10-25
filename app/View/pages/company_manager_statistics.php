@@ -1,5 +1,7 @@
 <?php
 $metric = (string)$filters['metric'];
+$personalMode = (bool)($personalMode ?? false);
+$reportRoute = $personalMode ? '/company/statistics/work' : '/company/statistics/managers';
 $metricMeta = [
     'trips'=>['label'=>'Рейсы','long'=>'Рейсы поставлены на погрузку','color'=>'#C07830'],
     'requests'=>['label'=>'Заявки','long'=>'Заявки в начатых рейсах','color'=>'#4A7A9B'],
@@ -13,13 +15,13 @@ $metricValue = static fn(array $row, string $key): float => $key === 'weight' ? 
 $metricFormat = static fn(float $value, string $key): string => $key === 'weight'
     ? number_format($value, 2, ',', ' ').' т'
     : number_format($value, 0, ',', ' ');
-$queryFor = static function(array $changes) use ($filters, $metric): string {
+$queryFor = static function(array $changes) use ($filters, $metric, $reportRoute): string {
     $query = ['mode'=>(string)$filters['mode'],'metric'=>$metric];
     if (!empty($filters['include_warehouse_loads'])) $query['warehouse'] = '1';
     foreach ($changes as $key=>$value) {
         if ($value === null) unset($query[$key]); else $query[$key] = $value;
     }
-    return app_url('/company/statistics/managers').'?'.http_build_query($query);
+    return app_url($reportRoute).'?'.http_build_query($query);
 };
 $chart = static function(array $current, string $key, callable $valueOf): array {
     $width=920.0;$height=171.6;$left=58.0;$right=58.0;$top=12.0;$bottom=27.6;
@@ -72,12 +74,17 @@ $kpis = [
     ['label'=>'Вес заявок','value'=>$fmtWeight($statistics['totals']['weight']),'current'=>(float)$statistics['totals']['weight'],'previous'=>(float)$statistics['previous_totals']['weight'],'class'=>'is-patina','note'=>'Вес по зафиксированному составу'],
     ['label'=>'Логисты с результатом','value'=>$fmtInt($statistics['totals']['active_managers']),'current'=>(float)$statistics['totals']['active_managers'],'previous'=>(float)$statistics['previous_totals']['active_managers'],'class'=>'is-asphalt','note'=>'Только активная роль «Логист»'],
 ];
+if ($personalMode) {
+    $myTrips = (int)($statistics['managers'][0]['trips'] ?? 0);
+    $kpis[3] = ['label'=>'Мои рейсы','value'=>$fmtInt($myTrips),'current'=>(float)$myTrips,
+        'previous'=>0.0,'class'=>'is-asphalt','note'=>'С 38-й недели'];
+}
 ?>
 <div class="manager-stats" data-manager-statistics>
     <div class="page-head manager-stats__head">
         <div class="page-head-left">
-            <h1 class="page-title">Работа логистов</h1>
-            <div class="page-summary"><span>Динамика компании и вклад каждого логиста по фактическому началу вывоза.</span></div>
+            <h1 class="page-title"><?= $personalMode ? 'Статистика работы' : 'Работа логистов' ?></h1>
+            <div class="page-summary"><span><?= $personalMode ? 'Мои показатели и общий результат компании по фактическому началу вывоза.' : 'Динамика компании и вклад каждого логиста по фактическому началу вывоза.' ?></span></div>
         </div>
     </div>
 
@@ -90,7 +97,7 @@ $kpis = [
 
         <div class="manager-stats__charts">
             <section class="manager-stats__card manager-stats__trend">
-                <header class="manager-stats__card-head"><div><h2>Динамика компании и логистов</h2><p><?=e($periodLabel)?> · <?=e($metricMeta[$metric]['long'])?></p></div><div class="manager-stats__chart-controls"><div class="manager-stats__field manager-stats__field--mode manager-stats__warehouse-field erp-segmented-field--compact"><span class="manager-stats__field-label">Загрузки со склада</span><nav class="manager-stats__segments erp-segments--equal" aria-label="Загрузки со склада"><a class="<?=!empty($filters['include_warehouse_loads'])?'is-active':''?>" href="<?=e($queryFor(['warehouse'=>'1']))?>" <?=!empty($filters['include_warehouse_loads'])?'aria-current="true"':''?>>Да</a><a class="<?=empty($filters['include_warehouse_loads'])?'is-active':''?>" href="<?=e($queryFor(['warehouse'=>null]))?>" <?=empty($filters['include_warehouse_loads'])?'aria-current="true"':''?>>Нет</a></nav></div><div class="manager-stats__field manager-stats__field--mode"><span class="manager-stats__field-label">Режим отчёта</span><nav class="manager-stats__segments" aria-label="Режим отчёта"><?php foreach($modeLabels as$value=>$label):?><a class="<?=$filters['mode']===$value?'is-active':''?>" href="<?=e($queryFor(['mode'=>$value]))?>"><?=e($label)?></a><?php endforeach;?></nav></div><nav class="manager-stats__metric-tabs" aria-label="Показатель графиков"><?php foreach($metricMeta as$key=>$meta):?><a class="<?=$metric===$key?'is-active':''?>" href="<?=e($queryFor(['metric'=>$key]))?>"><?=e($meta['label'])?></a><?php endforeach;?></nav></div></header>
+                <header class="manager-stats__card-head"><div><h2><?= $personalMode ? 'Динамика компании и моя' : 'Динамика компании и логистов' ?></h2><p><?=e($periodLabel)?> · <?=e($metricMeta[$metric]['long'])?></p></div><div class="manager-stats__chart-controls"><div class="manager-stats__field manager-stats__field--mode manager-stats__warehouse-field erp-segmented-field--compact"><span class="manager-stats__field-label">Загрузки со склада</span><nav class="manager-stats__segments erp-segments--equal" aria-label="Загрузки со склада"><a class="<?=!empty($filters['include_warehouse_loads'])?'is-active':''?>" href="<?=e($queryFor(['warehouse'=>'1']))?>" <?=!empty($filters['include_warehouse_loads'])?'aria-current="true"':''?>>Да</a><a class="<?=empty($filters['include_warehouse_loads'])?'is-active':''?>" href="<?=e($queryFor(['warehouse'=>null]))?>" <?=empty($filters['include_warehouse_loads'])?'aria-current="true"':''?>>Нет</a></nav></div><div class="manager-stats__field manager-stats__field--mode"><span class="manager-stats__field-label">Режим отчёта</span><nav class="manager-stats__segments" aria-label="Режим отчёта"><?php foreach($modeLabels as$value=>$label):?><a class="<?=$filters['mode']===$value?'is-active':''?>" href="<?=e($queryFor(['mode'=>$value]))?>"><?=e($label)?></a><?php endforeach;?></nav></div><nav class="manager-stats__metric-tabs" aria-label="Показатель графиков"><?php foreach($metricMeta as$key=>$meta):?><a class="<?=$metric===$key?'is-active':''?>" href="<?=e($queryFor(['metric'=>$key]))?>"><?=e($meta['label'])?></a><?php endforeach;?></nav></div></header>
                 <div class="manager-stats__chart-body">
                     <?php if($statistics['trend']===[]):?><div class="manager-stats__empty">Нет данных для построения графика.</div><?php else:?>
                     <svg class="manager-stats__line-chart" viewBox="0 0 <?=$chartData['width']?> <?=$chartData['height']?>" role="img" aria-label="Динамика показателя <?=e($metricMeta[$metric]['label'])?>">
@@ -114,9 +121,9 @@ $kpis = [
         </div>
 
         <section class="manager-stats__card manager-stats__periods">
-            <header class="manager-stats__card-head"><div><h2>Точные значения по периодам</h2><p>Каждая строка показывает результат каждого логиста и общий итог за <?= $filters['group']==='month'?'месяц':'неделю' ?>.</p></div><span class="manager-stats__card-meta">Рейсы · Заявки · Вес</span></header>
-            <div class="table-scroll"><table class="table manager-stats__period-table is-all-metrics" style="min-width:<?=max(1020,174+(count($managerChartSeries)+1)*225)?>px"><thead>
-                <tr><th rowspan="2" scope="col">Период</th><?php foreach($managerChartSeries as$series):?><th colspan="3" scope="colgroup"><?=e($series['name'])?></th><?php endforeach;?><th colspan="3" scope="colgroup" class="is-total">Итого</th></tr>
+            <header class="manager-stats__card-head"><div><h2>Точные значения по периодам</h2><p><?= $personalMode ? 'Каждая строка показывает мои показатели и общий итог компании.' : 'Каждая строка показывает результат каждого логиста и общий итог за '.($filters['group']==='month'?'месяц':'неделю').'.' ?></p></div><span class="manager-stats__card-meta">Рейсы · Заявки · Вес</span></header>
+            <div class="table-scroll"><?php if($personalMode): ?><table class="table manager-stats__period-table is-all-metrics"><?php else: ?><table class="table manager-stats__period-table is-all-metrics" style="min-width:<?=max(1020,174+(count($managerChartSeries)+1)*225)?>px"><?php endif; ?><thead>
+                <tr><th rowspan="2" scope="col">Период</th><?php foreach($managerChartSeries as$series):?><th colspan="3" scope="colgroup"><?=e($series['name'])?></th><?php endforeach;?><th colspan="3" scope="colgroup" class="is-total"><?= $personalMode ? 'Компания' : 'Итого' ?></th></tr>
                 <tr><?php foreach($managerChartSeries as$series):foreach($tableMeasures as$measure=>$label):?><th class="num <?=$measure==='trips'?'is-group-start':''?>" scope="col"><?=e($label)?></th><?php endforeach;endforeach;?><?php foreach($tableMeasures as$measure=>$label):?><th class="num is-total <?=$measure==='trips'?'is-group-start':''?>" scope="col"><?=e($label)?></th><?php endforeach;?></tr>
             </thead><tbody>
                 <?php foreach($visiblePeriodRows as$row):?><tr><td><div class="manager-stats__period-label"><strong><?=e($row['label'])?></strong><span><?=e(date('d.m',strtotime($row['from'])).($row['from']!==$row['to']?'–'.date('d.m',strtotime($row['to'])):''))?></span></div></td><?php foreach($managerChartSeries as$series):$value=$row['manager_values'][(int)$series['membership_id']]??[];foreach($tableMeasures as$measure=>$label):?><td class="num <?=$measure==='trips'?'is-group-start':''?>"><?=e($metricFormat($metricValue($value,$measure),$measure))?></td><?php endforeach;endforeach;?><?php foreach($tableMeasures as$measure=>$label):?><td class="num is-total <?=$measure==='trips'?'is-group-start':''?>"><?=e($metricFormat($metricValue($row,$measure),$measure))?></td><?php endforeach;?></tr><?php endforeach;?>
