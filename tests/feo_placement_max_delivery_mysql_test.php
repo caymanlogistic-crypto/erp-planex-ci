@@ -129,6 +129,25 @@ try{
     $ok((int)$pdo->query("SELECT attempts FROM max_event_deliveries WHERE id=".$failId)->fetchColumn()===1,'failed supplemental attempted once');
     $ok((int)$pdo->query("SELECT attempts FROM max_event_deliveries WHERE id=".$okId)->fetchColumn()===1,'successful supplemental attempted once');
 
+    $transferKey='feo.transfer.created';
+    $events->saveRule(['event_key'=>$transferKey,'is_enabled'=>1,'chat_config_id'=>$chat,
+        'message_template'=>MaxEventCatalog::event($transferKey)['template'],
+        'message_format'=>'plain','notify'=>1],77);
+    $pdo->beginTransaction();
+    $transferMain=$events->enqueue($transferKey,'2000',MaxEventCatalog::example($transferKey),77);
+    $transferPart=$events->enqueuePrepared($transferKey,'b2000:main:p1','ЗАЯВКИ: **310501**','markdown',77);
+    $transferWarning=$events->enqueuePrepared($transferKey,'b2000:route_warning:r0:p1','ПЕРЕМЕЩЕННЫЕ ЗАЯВКИ: #376','markdown',77);
+    $pdo->commit();
+    $before=count($sent);
+    $blocked=$events->dispatch($transferWarning,true);
+    $ok($blocked['status']==='failed'&&count($sent)===$before,'Route warning waits for root transfer message');
+    $ok($events->dispatch($transferMain)['status']==='sent','Root transfer message sends first');
+    $blocked=$events->dispatch($transferWarning,true);
+    $ok($blocked['status']==='failed'&&str_contains((string)$blocked['error_message'],'Части основного уведомления')&&count($sent)===$before+1,'Route warning waits for every main continuation');
+    $ok($events->dispatch($transferPart)['status']==='sent','Transfer continuation sends second');
+    $ok($events->dispatch($transferWarning,true)['status']==='sent'&&count($sent)===$before+3,'Route warning sends after all main parts');
+    $ok($sent[$before]['format']==='markdown','Approved transfer main uses Markdown despite old plain setting');
+
     echo "FEO_PLACEMENT_MAX_DELIVERY_MYSQL=PASS\n";
 }finally{
     if($pdo->inTransaction())$pdo->rollBack();
