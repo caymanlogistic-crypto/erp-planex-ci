@@ -12,7 +12,6 @@ require_once base_path('app/View/components/registry_tabler_icons.php');
   <?php else: ?>
     <div class="page-head"><div class="page-head-left"><h1 class="page-title"><?= e($pageTitle) ?></h1><div class="page-summary">Найдите адрес и узнайте, насколько точно определены координаты.</div></div></div>
   <?php endif; ?>
-  <div class="form-alert" data-page-message role="status" hidden></div>
   <?php if ($dbError): ?><div class="form-alert alert-warning"><?= e($dbError) ?></div><?php else: ?>
   <?php if (!$keyConfigured): ?><div class="form-alert alert-warning">Геокодер пока не настроен. <?php if ($isOwner): ?>Укажите ключ в <a href="<?= e(app_url('/company/settings/services')) ?>">Настройки → Ключи и сервисы</a>.<?php else: ?>Обратитесь к руководителю для настройки Яндекс Геокодера.<?php endif; ?><?php if (!$coordinatesOnly): ?> Перемещение к другой заявке доступно.<?php endif; ?></div><?php endif; ?>
 
@@ -72,4 +71,5 @@ require_once base_path('app/View/components/registry_tabler_icons.php');
 </div>
 <script src="<?= app_url('/assets/js/registry-components.js') ?>?v=<?= filemtime(base_path('public/assets/js/registry-components.js')) ?>" defer></script>
 <script src="<?= app_url('/assets/js/table-reference-select.js') ?>?v=<?= filemtime(base_path('public/assets/js/table-reference-select.js')) ?>" defer></script>
+<script src="<?= app_url('/assets/js/system-notifications.js') ?>?v=<?= filemtime(base_path('public/assets/js/system-notifications.js')) ?>" defer></script>
 <script src="<?= app_url('/assets/js/feo-transfers.js') ?>?v=<?= filemtime(__DIR__.'/../../../public/assets/js/feo-transfers.js') ?>" defer></script>

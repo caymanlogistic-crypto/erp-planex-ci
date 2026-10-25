@@ -240,11 +240,13 @@ def render_gallery(data: dict, *, hosted: bool = False) -> str:
     """One complete live composition; the role index never repeats controls."""
     asset_prefix = "/assets/" if hosted else "../../public/assets/"
     gallery_prefix = "/__ui_standard__/" if hosted else ""
-    css_paths = ["public/assets/css/erp-ui.css", "public/assets/css/route-executor-review-workflow.css", "public/assets/css/route-executor-list-v016.css", *(x["styles"] for x in data["families"])]
+    preview_family = next(family for family in data["families"] if family["id"] == "registry")
+    css_paths = ["public/assets/css/erp-ui.css", "public/assets/css/route-executor-review-workflow.css", "public/assets/css/route-executor-list-v016.css", preview_family["styles"]]
     css_links = ''.join(f'<link rel="stylesheet" href="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}">' for path in css_paths)
-    js_links = ''.join(f'<script src="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}"></script>' for path in dict.fromkeys(path for family in data["families"] for path in family["behavior"]))
+    js_links = ''.join(f'<script src="{html.escape(asset_prefix + path.removeprefix("public/assets/"), quote=True)}"></script>' for path in preview_family["behavior"])
     js_links += f'<script src="{asset_prefix}js/route-executor-list-v016.js"></script>'
     specimen = safe_file("docs/ui/specimens/registry.composition.html").read_text(encoding="utf-8")
+    notification_specimen = safe_file("docs/ui/specimens/notifications.toast.html").read_text(encoding="utf-8")
     document = ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+css_links+f'<link rel="stylesheet" href="{gallery_prefix}preview.css"></head><body><main data-specimen-root>'+specimen+'</main>'+js_links+f'<script src="{gallery_prefix}gallery.js"></script></body></html>')
     roles = ''.join(f'<li><strong>{html.escape(item["role"])}</strong> — {html.escape(item["description"])} <code>{html.escape(item["id"])}</code></li>' for item in data['components'])
     return ('<!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>PLANEX — согласованный канон</title>'
@@ -252,6 +254,7 @@ def render_gallery(data: dict, *, hosted: bool = False) -> str:
             +'<header class="gallery-intro"><p class="gallery-kicker">PLANEX · действующий канон OWNER</p><h1>Согласованный вид реестров</h1><p>Одна цельная композиция за раз. Поиск, списки, наведение и «Сбросить фильтр» работают на вымышленных данных. Это образцы общих ролей; состав и расчёты реальных страниц сохраняются при адаптации.</p>'
             +'<nav aria-label="Примеры реестров">'+''.join(f'<button type="button" data-gallery-scene="{key}" aria-pressed="{str(key=="executors").lower()}">{label}</button>' for key,label in [('executors','Исполнители'),('finance','Получено/оплачено'),('trips','Выезды'),('documents','Закрывающие документы')])+'</nav></header>'
             +f'<iframe class="gallery-preview" data-preview="registry.composition" title="Цельный пример согласованного реестра" srcdoc="{html.escape(document,quote=True)}"></iframe>'
+            +'<section class="gallery-family"><h2>Системные уведомления</h2><p>Статичные образцы общего компонента; живое появление и очередь проверяются на подключённой странице.</p>'+notification_specimen+'</section>'
             +'<details class="gallery-family"><summary>Что здесь утверждено — роли и правила для агента</summary><ul>'+roles+'</ul><p>Используйте общий CSS/JS и docs/ui/REGISTRY_CANON.md. Новые визуальные решения: предложение → песочница → решение OWNER → общий компонент → тест → каталог и витрина.</p></details>'
             +'<section class="gallery-family"><h2>Границы согласования</h2><p>Здесь показаны четыре переключаемых образца; полный перечень подключённых страниц находится в каталоге. Формы, подтверждение удаления, загрузки файлов и ожидание серверных операций требуют отдельных примеров. Функциональные фильтры «Компания» и «Квартал» руководителя в «Закрывающих документах» уже реализованы на утверждённом select; отдельно ожидает визуального решения только самостоятельный универсальный прототип таких фильтров.</p><p>Новая страница обязана использовать действующие решения из REGISTRY_CANON.md и каталога и пройти собственную проверку данных, поведения и отрисовки. Одно имя класса или пример витрины не доказывают соответствие.</p></section></main>'
             +f'<script src="{gallery_prefix}gallery.js"></script></body></html>\n')

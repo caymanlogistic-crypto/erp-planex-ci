@@ -15,6 +15,7 @@ body{overflow-x:hidden;overflow-y:auto;background:var(--app-bg)}
 .gallery-family summary{cursor:pointer;font-weight:600}
 .gallery-family code{overflow-wrap:anywhere}
 .gallery-family h2{font-size:19px;margin:0 0 10px}
+.notification-specimen{display:grid;gap:8px;max-width:420px}
 .gallery-item{border-top:1px solid var(--line-hair);padding:20px 0 8px}
 .gallery-copy{margin-bottom:12px}
 .gallery-copy h3{font-size:15px;margin:0 0 6px}

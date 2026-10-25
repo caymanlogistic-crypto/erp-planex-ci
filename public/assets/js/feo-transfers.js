@@ -24,11 +24,8 @@
     if (!response.ok || !result.success) throw new Error(result.message || 'Не удалось выполнить действие.');
     return result;
   };
-  const pageMessage = (message, warning = false) => {
-    const box = find('[data-page-message]');
-    box.textContent = message;
-    box.className = `form-alert ${warning ? 'alert-warning' : 'alert-success'}`;
-    box.hidden = false;
+  const pageMessage = (message, tone = 'success') => {
+    window.PlanexNotifications.show({tone, message});
   };
   const qualityLevels = {
     exact:['Точное','Найден запрошенный дом, включая указанный корпус или строение.','badge-ok'],
@@ -265,7 +262,7 @@
       detailDialog.classList.remove('registry-ui-modal--confirmation');
       detailDialog.classList.add('registry-ui-modal--reading');
       detailDialog.showModal();
-    } catch(e) { pageMessage(e.message,true); }
+    } catch(e) { pageMessage(e.message,'danger'); }
   }
   detailRevert.addEventListener('click',() => {
     detailBody.innerHTML = `<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">На прежние адреса и координаты вернутся заявки: ${idsHtml(detailIds)}.</p><div class="field-msg is-error" data-revert-error role="alert" hidden></div></div>`;
@@ -312,5 +309,5 @@
     update();
   }
   const saved=sessionStorage.getItem('feo-transfer-result');
-  if (saved) {sessionStorage.removeItem('feo-transfer-result');try {const value=JSON.parse(saved);pageMessage(value.message,value.warning);}catch {}}
+  if (saved) {sessionStorage.removeItem('feo-transfer-result');try {const value=JSON.parse(saved);pageMessage(value.message,value.warning ? 'warning' : 'success');}catch {}}
 })();
