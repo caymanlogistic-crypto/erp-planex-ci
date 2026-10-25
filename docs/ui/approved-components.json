@@ -12,6 +12,15 @@
         "public/assets/js/registry-components.js",
         "public/assets/js/table-reference-select.js"
       ]
+    },
+    {
+      "id": "notifications",
+      "description": "Общие временные уведомления ERP PLANEX",
+      "approval": "OWNER 2026-10-25; docs/ui/decisions-20261025-notification-center.json",
+      "canon": "docs/ui/DESIGN_STANDARD.md",
+      "reference_route": "/erpv2/company/feo/requests/transfers",
+      "styles": "public/assets/css/erp-ui.css",
+      "behavior": ["public/assets/js/system-notifications.js"]
     }
   ],
   "components": [
@@ -267,6 +276,15 @@
       "approval": "OWNER 2026-10-24; docs/ui/decisions-20261024-feo-transfer-popups.json",
       "description": "IBM Plex Sans 12/700, #131210, табличные цифры; все номера заявок показываются целиком и переносятся по границам номеров.",
       "specimen": "docs/ui/specimens/registry.transfer-popup.html"
+    },
+    {
+      "id": "notifications.toast",
+      "family": "notifications",
+      "role": "Системное временное уведомление",
+      "selector": ".toast--system",
+      "approval": "OWNER 2026-10-25; notification-center-design-20261025:v003; docs/ui/decisions-20261025-notification-center.json",
+      "description": "Верхняя цветная карточка с системными зелёной/жёлтой/красной заливками, чёрным текстом и контуром, без обводки знака; одно сообщение на 5 секунд, FIFO-очередь, крестик и доступные роли.",
+      "specimen": "docs/ui/specimens/notifications.toast.html"
     }
   ],
   "pages": [

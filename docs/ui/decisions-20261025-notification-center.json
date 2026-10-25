@@ -1,0 +1,22 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "system-notification-center-20261025",
+  "date": "2026-10-25",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "quote": "Давай вариант 1 как  системны, но без обводки значков уву в третьем варианте",
+    "reference": "notification-center-design-20261025:v003",
+    "acceptance": "C:/plan-ex/ERP-PLANEX/local/design-lab/notification-center-design-20261025/acceptance.json"
+  },
+  "scope": ["Shared opt-in transient notifications", "/erpv2/company/feo/requests/transfers result and page-level errors"],
+  "shared_style_owner": "public/assets/css/erp-ui.css",
+  "shared_behavior_owner": "public/assets/js/system-notifications.js",
+  "approved": {
+    "appearance": "Color the full card with the approved static badge fills: success #CDEBD7, warning #FFF1BD, danger #FFD6CC. Text and 1px card outline #131210. IBM Plex Sans; title 12/600, detail 11/500. The 18px sign has no surrounding border. No new hue or page-local lookalike.",
+    "geometry": "One compact card at a time, fixed at the upper right: 16px viewport inset, maximum 420px width; 8px inset on screens up to 480px. Card padding 11px 12px, 10px content gap, 22px close target and system focus ring.",
+    "behavior": "Slide down from above; each card starts its own 5-second timer when it becomes visible, then closes. The close button removes it immediately. Other messages wait in FIFO order; notifications never move page content. Respect reduced-motion preference.",
+    "accessibility": "Errors use role=alert; success and warning use role=status. The close button is a native button labelled Закрыть уведомление with visible keyboard focus.",
+    "boundary": "Field-specific validation errors and durable configuration/blocking alerts remain beside the relevant control or in the page; only transient operation results move to the notification center. Existing MAX settings toasts keep their previous opt-in appearance and timeout until separately adapted."
+  }
+}
