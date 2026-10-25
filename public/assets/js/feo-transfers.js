@@ -57,7 +57,7 @@
   const errorField = message => {
     if (/^Заявки не найдены|^Введите номера|^Не найдено самостоятельных|^В одном блоке|^Слишком большой список/.test(message)) return 'ids';
     if (/^Заявка не найдена|^Введите шестизначный номер|^Заявка с нужным адресом/.test(message)) return 'source';
-    if (/^Сначала определите координаты|^Введите адрес|^Адрес не найден|^Подождите секунду/.test(message)) return 'address';
+    if (/^Сначала определите координаты|^Введите адрес|^Адрес не найден|^Адрес изменился после определения координат|^Подождите секунду/.test(message)) return 'address';
     return 'form';
   };
   const showError = message => showFieldError(errorField(message), message);
@@ -150,7 +150,6 @@
   };
   const renderPreview = result => {
     const destination = result.preview.destination;
-    find('[data-preview-summary]').textContent = `Заявок: ${result.preview.count}.${result.duplicates ? ` Повторов объединено: ${result.duplicates}.` : ''}`;
     find('[data-preview-rows]').innerHTML = result.preview.rows.map(row => rowHtml(row,destination)).join('');
     preview.hidden = false;
     previewToken = result.preview_token;
@@ -162,6 +161,7 @@
     data.set('mode',mode());
     data.set('source_request_id',sourceInput.value.trim());
     data.set('geo_token',geoToken);
+    if (mode() === 'address') data.set('address',form.elements.address.value);
     try {
       const result = await request(`${base}/preview`,data);
       if (revision === atRevision) renderPreview(result);
@@ -242,13 +242,11 @@
     let destination = null;
     try { destination = JSON.parse(batch.destination_json); } catch {}
     const requests = result.items.map(item => String(item.zayavka_id));
-    let summary = `<div class="field"><span class="field-label">Заявки</span><p class="registry-ui-modal-text">${idsHtml(requests)}</p></div>`;
-    if (batch.mode === 'request' || batch.mode === 'address') summary += `<div class="field"><span class="field-label">Куда переместить</span><p class="registry-ui-modal-text">${batch.mode === 'request' ? 'К другой заявке' : 'По адресу'}</p></div>`;
+    const summary = `<div class="field"><span class="page-eyebrow">Заявки</span><p class="registry-ui-modal-text">${idsHtml(requests)}</p></div>`;
     let destinationHtml = '';
-    if (batch.mode === 'request' && batch.source_request_id) destinationHtml += `<div class="field"><span class="field-label">Номер заявки с нужным адресом</span><p class="registry-ui-modal-text">${idsHtml([batch.source_request_id])}</p></div>`;
+    if (batch.mode === 'request' && batch.source_request_id) destinationHtml = `<div class="field"><span class="page-eyebrow">Перемещены по адресу</span><p class="registry-ui-modal-text">${idsHtml([batch.source_request_id])}<br>${escape(destination?.address)}</p></div>`;
     if (batch.mode === 'address' && destination?.address) {
-      summary += `<div class="field"><span class="field-label">Адрес места погрузки</span><p class="registry-ui-modal-text">${escape(destination.query || destination.address)}</p></div>`;
-      destinationHtml += `<div class="registry-ui-modal-geo"><div class="field"><span class="field-label">Найденный адрес</span><p class="registry-ui-modal-text">${escape(destination.address)}</p></div><p class="registry-ui-modal-text">Широта ${escape(destination.latitude)} · Долгота ${escape(destination.longitude)}</p>${destination.precision ? qualityHtml(destination) : ''}</div>`;
+      destinationHtml = `<div class="registry-ui-modal-geo"><div class="field"><span class="page-eyebrow">Перемещены по адресу</span><p class="registry-ui-modal-text">${escape(destination.address)}</p></div><p class="registry-ui-modal-text">Широта ${escape(destination.latitude)} · Долгота ${escape(destination.longitude)}</p>${destination.precision ? qualityHtml(destination) : ''}</div>`;
     }
     let html = `<div class="registry-ui-modal-grid${destinationHtml ? ' registry-ui-modal-grid--reading' : ''}"><div class="registry-ui-modal-grid">${summary}</div>${destinationHtml ? `<div class="registry-ui-modal-grid">${destinationHtml}</div>` : ''}`;
     html += `<section class="registry-ui-modal-preview"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Вес нетто</th><th>Было</th><th>Стало</th></tr></thead><tbody>${result.items.map(item => rowHtml(item)).join('')}</tbody></table></div></section></div>`;
@@ -270,7 +268,7 @@
     } catch(e) { pageMessage(e.message,true); }
   }
   detailRevert.addEventListener('click',() => {
-    detailBody.innerHTML = `<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">На прежние адреса и координаты вернутся заявки: ${idsHtml(detailIds)}.</p><p class="registry-ui-modal-text">Если какая-либо заявка перемещена более поздним блоком, отмена переноса остановится. История сохранится.</p><div class="field-msg is-error" data-revert-error role="alert" hidden></div></div>`;
+    detailBody.innerHTML = `<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">На прежние адреса и координаты вернутся заявки: ${idsHtml(detailIds)}.</p><div class="field-msg is-error" data-revert-error role="alert" hidden></div></div>`;
     detailDialog.classList.remove('registry-ui-modal--reading');
     detailDialog.classList.add('registry-ui-modal--confirmation');
     detailRevert.hidden = true; confirmRevert.hidden = false;

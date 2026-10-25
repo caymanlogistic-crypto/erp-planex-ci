@@ -61,6 +61,7 @@ final class FeoTransferService
             }
         } else {
             $destination = $geocoded ?? throw new RuntimeException('Сначала определите координаты адреса.');
+            $destination['address'] = (string)($destination['query'] ?? '');
         }
         $this->validateDestination($destination);
         $rows=[];

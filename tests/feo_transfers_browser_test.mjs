@@ -25,6 +25,7 @@ try {
   const page = await browser.newPage();
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
   let createCalls=0,previewCalls=0;
+  const previewPayloads=[];
   const destination={address:'Новый адрес <img src=x onerror=alert(1)>',latitude:'55.456',longitude:'37.123',quality:'Только улица, дом не определён',precision:'street'};
   const addressDestination={query:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',address:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',latitude:'66.071007',longitude:'76.560232',precision:'exact',quality:'Найден запрошенный дом, включая указанный корпус или строение.'};
   const detailFixture=[{zayavka_id:'100001',net_kg:1250,before:{mno_adres_pogruzki:'Короткий адрес',mno_d:'55',mno_sh:'37'},after:{mno_adres_pogruzki:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',mno_d:'56',mno_sh:'38'}},{zayavka_id:'100002',net_kg:0,before:{mno_adres_pogruzki:'Россия, Ханты-Мансийский автономный округ, Сургут, Промышленная улица, 4',mno_d:'61',mno_sh:'73'},after:{mno_adres_pogruzki:'Короткий итоговый адрес',mno_d:'62',mno_sh:'74'}}];
@@ -36,7 +37,7 @@ try {
     const url=route.request().url();
     let result;
     if(url.endsWith('/geocode')) result={success:true,geo_token:'fixture-geo',result:destination};
-    else if(url.endsWith('/preview')) {previewCalls++; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination,rows:[{zayavka_id:'100001',net_kg:1250,mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',net_kg:null,mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
+    else if(url.endsWith('/preview')) {previewCalls++; const payload=route.request().postData()??'';previewPayloads.push(payload);const mode=payload.match(/name="mode"\r?\n\r?\n([^\r\n]*)/)?.[1];const enteredAddress=payload.match(/name="address"\r?\n\r?\n([^\r\n]*)/)?.[1];const previewDestination=mode==='address'?{...destination,address:enteredAddress}:destination; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination:previewDestination,rows:[{zayavka_id:'100001',net_kg:1250,mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',net_kg:null,mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
     else if(url.endsWith('/create')) {createCalls++; result={success:true,batch_id:19,notification:'failed'};}
     else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',mode:shownDetailMode,source_request_id:shownDetailMode==='request'?shownTargetId:null,destination_json:JSON.stringify(shownDetailMode==='address'?shownAddressDestination:destination),created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:shownDetailItems};
     else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего блока остановлен.'};
@@ -64,7 +65,7 @@ try {
     await page.locator('[name=request_ids]').fill('100001\n100002');
     await page.locator('[name=source_request_id]').fill('100003');
     await page.locator('[data-preview-result]').waitFor({state:'visible'});
-    assert.match(await page.locator('[data-preview-summary]').innerText(),/Заявок: 2/);
+    assert.equal(await page.locator('[data-preview-summary]').count(),0,'Create preview omits request count');
     assert.deepEqual((await page.locator('[data-preview-result] thead th').allInnerTexts()).map(x=>x.toLocaleLowerCase('ru')),['заявка','вес нетто','было','станет'],'Future create preview uses «Станет»');
     assert.match(await page.locator('[data-preview-rows] tr').first().innerText(),/1\s*250 кг/);
     assert.match(await page.locator('[data-preview-rows] tr').last().innerText(),/—/);
@@ -83,6 +84,8 @@ try {
   await page.locator('[data-geocode]').click(); await page.locator('[data-geo-result]').waitFor({state:'visible'});
   assert.equal(await page.locator('[data-geo-lat]').innerText(),'55.456');
   await page.locator('[data-preview-result]').waitFor({state:'visible'});
+  assert.match(previewPayloads.at(-1),/name="address"\r?\n\r?\nМосква, улица Примерная/,'Preview binds current entered address to geocode token');
+  assert.match(await page.locator('[data-preview-rows] tr').first().innerText(),/Москва, улица Примерная/,'Future address is entered text');
   assert.equal(await page.locator('[data-commit]').isEnabled(),true,'Imprecise coordinate warning does not block');
   await page.locator('[data-commit]').click();
   await page.waitForFunction(()=>document.querySelector('[data-page-message]')?.textContent.includes('сохранён'));
@@ -93,6 +96,7 @@ try {
   assert.match(await page.locator('[data-detail-dialog] .modal-title').innerText(),/^Перенос заявок #\d+$/);
   assert.equal(await page.locator('[data-detail-dialog] .transfer-detail-meta').count(),0);
   assert.equal(await page.locator('[data-detail-dialog] .registry-ui-modal-summary').count(),0,'Read-only history omits request count');
+  assert.deepEqual((await page.locator('[data-detail-dialog] .page-eyebrow').allInnerTexts()),['ЗАЯВКИ','ПЕРЕМЕЩЕНЫ ПО АДРЕСУ'],'History headings use common system role');
   assert.match(await page.locator('[data-detail-dialog] [data-detail-body]').innerText(),/Вес нетто/i);
   assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').first().evaluate(e=>getComputedStyle(e).fontWeight),'700');
   assert.equal(await page.locator('[data-detail-dialog] .registry-ui-entity-id').count(),3,'Request and destination IDs use the shared bold role');
@@ -113,6 +117,7 @@ try {
   }
   await page.locator('[data-detail-dialog] [data-revert]').click();
   assert.match(await page.locator('[data-detail-body]').innerText(),/На прежние адреса и координаты вернутся заявки: 100001/);
+  assert.doesNotMatch(await page.locator('[data-detail-body]').innerText(),/Если какая-либо заявка перемещена более поздним блоком/);
   assert.equal(await page.locator('[data-confirm-revert]').innerText(),'Выполнить возврат');
   await page.locator('[data-confirm-revert]').click();
   await page.locator('[data-revert-error]').waitFor({state:'visible'});
@@ -177,11 +182,11 @@ try {
       assert.equal(await detail.locator('.registry-ui-modal-summary').count(),0,`History omits count ${mode} ${variant} ${width}`);
       if(width===390) assert.equal(await detail.locator('.registry-ui-compact-table-scroll').evaluate(e=>e.scrollWidth>e.clientWidth),true,`History table scrolls horizontally ${mode} ${variant}`);
       if (mode==='address') {
-        assert.equal(await detail.locator('.registry-ui-modal-geo .registry-ui-modal-text').first().innerText(),addressDestination.address,`Full found address ${variant} ${width}`);
+        assert.equal(await detail.locator('.registry-ui-modal-geo .registry-ui-modal-text').first().innerText(),addressDestination.address,`Full entered address ${variant} ${width}`);
         assert.match(await detail.locator('.registry-ui-modal-geo').innerText(),/Широта 66\.071007 · Долгота 76\.560232/,`Coordinates ${variant} ${width}`);
         assert.equal(await detail.locator('.registry-ui-modal-geo .badge').innerText(),'Точное',`Precision badge ${variant} ${width}`);
       } else {
-        assert.match(await detail.locator('[data-detail-body]').innerText(),/Номер заявки с нужным адресом\s+100003/,`Target request ${variant} ${width}`);
+        assert.match(await detail.locator('[data-detail-body]').innerText(),/ПЕРЕМЕЩЕНЫ ПО АДРЕСУ\s+100003\s+Новый адрес/,`Target request and address ${variant} ${width}`);
       }
       if (variant==='many') assert.equal(await detail.locator('.registry-ui-compact-table-scroll').evaluate(e=>e.scrollHeight>e.clientHeight),true,`History table scroll ${width}`);
       if(screenshotDir) await detail.screenshot({path:path.join(screenshotDir,`transfer-history-${mode}-${variant}-${width}.png`)});

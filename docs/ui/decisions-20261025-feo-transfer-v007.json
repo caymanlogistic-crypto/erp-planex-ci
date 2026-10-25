@@ -1,0 +1,29 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "feo-transfer-v007-20261025",
+  "date": "2026-10-25",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "checkpoint": "transfer-local-canon-20261025:v007",
+    "acceptance": "C:/plan-ex/ERP-PLANEX/local/design-lab/transfer-local-canon-20261025/acceptance.json",
+    "instruction": "Согласованно, фиксируйте документацию и выкладывайте в продакшен"
+  },
+  "scope": ["/erpv2/company/feo/requests/transfers — create, preview, history, revert confirmation and persisted address"],
+  "supersedes": ["The create preview count, history layout, confirmation warning and address-mode persistence clauses of feo-transfer-popups-20261024"],
+  "shared_style_owner": "public/assets/css/registry-components.css",
+  "approved": {
+    "create_form": "Use the existing .field-textarea role for the 96px requests box with the system line height and existing .field-label/.radio-item roles. The destination legend has 6px bottom spacing before the radios. No new one-page field or font role.",
+    "create_preview": "Automatic preview has no Заявок: N. caption above the four-column bordered table. The future-result column is Станет. Existing shared table, border, cell padding and scroll rules remain.",
+    "history": "Read-only desktop layout has two groups: left .page-eyebrow ЗАЯВКИ and every request ID, right .page-eyebrow ПЕРЕМЕЩЕНЫ ПО АДРЕСУ. Request mode shows bold destination ID followed by its full stored address. Address mode shows the entered full address, Yandex coordinates and static precision badge/description. No old mode, form-field or found-address labels. The completed-result column is Стало. Address-to-coordinate gap is 4px; precision row follows 8px after coordinates. Mobile groups stack using existing .registry-ui-modal-grid--reading.",
+    "revert_confirmation": "One sentence lists every affected request ID in shared bold type and says they return to prior addresses and coordinates. Remove the extra sentence about later transfers; server-side conflict protection still applies. Existing red .btn-danger Выполнить возврат and secondary Отменить remain.",
+    "address_persistence": "For a new address-mode transfer, preserve the exact trimmed text entered by the user as destination address, table Стало, feo_requests.mno_adres_pogruzki, history, after_json and any enabled legacy mirror payload. Yandex supplies longitude, latitude, precision and quality; its normalized address is not the saved destination. Current address input must match the original query in the server-issued, account/company-bound geo token at preview. A changed value requires a fresh geocode. Server preview token and state hash bind the result through commit. Request-mode transfers and existing historical records are not rewritten."
+  },
+  "implementation": {
+    "view": "app/View/pages/company_feo_transfers.php",
+    "behavior": "public/assets/js/feo-transfers.js",
+    "style": "public/assets/css/registry-components.css",
+    "controller": "app/Http/Controllers/Company/FeoTransferController.php",
+    "data": "app/Service/FeoTransferService.php"
+  }
+}
