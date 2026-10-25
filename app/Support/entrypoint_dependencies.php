@@ -87,6 +87,7 @@ require_once base_path('app/Service/FinanceDashboardService.php');
 require_once base_path('app/Service/ClosingDocumentService.php');
 require_once base_path('app/Service/ClosingDocumentComplianceService.php');
 require_once base_path('app/Service/NavigationCounterService.php');
+require_once base_path('app/Service/FeoTransferTripWarningService.php');
 
 require_once base_path('app/Support/runtime_migration_policy.php');
 require_once base_path('app/Support/core_runtime.php');
