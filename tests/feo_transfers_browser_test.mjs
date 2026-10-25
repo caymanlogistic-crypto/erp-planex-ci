@@ -24,12 +24,13 @@ if (screenshotDir) fs.mkdirSync(screenshotDir,{recursive:true});
 try {
   const page = await browser.newPage();
   const errors=[]; page.on('pageerror',e=>errors.push(e.message));
-  let createCalls=0,previewCalls=0;
+  let createCalls=0,previewCalls=0,deleteCalls=0,deletePayload='';
   const previewPayloads=[];
   const destination={address:'Новый адрес <img src=x onerror=alert(1)>',latitude:'55.456',longitude:'37.123',quality:'Только улица, дом не определён',precision:'street'};
   const addressDestination={query:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',address:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',latitude:'66.071007',longitude:'76.560232',precision:'exact',quality:'Найден запрошенный дом, включая указанный корпус или строение.'};
   const detailFixture=[{zayavka_id:'100001',net_kg:1250,before:{mno_adres_pogruzki:'Короткий адрес',mno_d:'55',mno_sh:'37'},after:{mno_adres_pogruzki:'Россия, Ямало-Ненецкий автономный округ, Новый Уренгой, Таёжная улица, 177',mno_d:'56',mno_sh:'38'}},{zayavka_id:'100002',net_kg:0,before:{mno_adres_pogruzki:'Россия, Ханты-Мансийский автономный округ, Сургут, Промышленная улица, 4',mno_d:'61',mno_sh:'73'},after:{mno_adres_pogruzki:'Короткий итоговый адрес',mno_d:'62',mno_sh:'74'}}];
   let shownDetailItems=detailFixture;
+  let shownDetailStatus='applied';
   let shownDetailMode='request';
   let shownTargetId='100003';
   let shownAddressDestination=addressDestination;
@@ -39,8 +40,9 @@ try {
     if(url.endsWith('/geocode')) result={success:true,geo_token:'fixture-geo',result:destination};
     else if(url.endsWith('/preview')) {previewCalls++; const payload=route.request().postData()??'';previewPayloads.push(payload);const mode=payload.match(/name="mode"\r?\n\r?\n([^\r\n]*)/)?.[1];const enteredAddress=payload.match(/name="address"\r?\n\r?\n([^\r\n]*)/)?.[1];const previewDestination=mode==='address'?{...destination,address:enteredAddress}:destination; result={success:true,preview_token:'fixture-preview',duplicates:0,preview:{count:2,destination:previewDestination,rows:[{zayavka_id:'100001',net_kg:1250,mno_adres_pogruzki:'Исходный адрес',mno_d:'55',mno_sh:'37'},{zayavka_id:'100002',net_kg:null,mno_adres_pogruzki:'Второй адрес',mno_d:null,mno_sh:null}]}};}
     else if(url.endsWith('/create')) {createCalls++; result={success:true,batch_id:19,notification:'failed'};}
-    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',mode:shownDetailMode,source_request_id:shownDetailMode==='request'?shownTargetId:null,destination_json:JSON.stringify(shownDetailMode==='address'?shownAddressDestination:destination),created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:'applied',reverted_at:null},items:shownDetailItems};
+    else if(url.endsWith('/json')) result={success:true,batch:{name:'Перемещение на склад',mode:shownDetailMode,source_request_id:shownDetailMode==='request'?shownTargetId:null,destination_json:JSON.stringify(shownDetailMode==='address'?shownAddressDestination:destination),created_by_name:'Владимир С.',created_at:'18.10.2026 15:30',comment:'',status:shownDetailStatus,reverted_at:null},items:shownDetailItems};
     else if(url.endsWith('/revert')) result={success:false,message:'Заявка перемещена позже. Возврат всего блока остановлен.'};
+    else if(url.endsWith('/delete')) {deleteCalls++;deletePayload=route.request().postData()??'';result={success:true,batch_id:18,already_deleted:false};}
     else result={success:true};
     await route.fulfill({status:result.success?200:422,contentType:'application/json',body:JSON.stringify(result)});
   });
@@ -354,6 +356,34 @@ try {
   assert.equal(await page.locator('[data-key-status]').innerText(),'Ключ сохранён');
   assert.equal(await page.locator('[name=api_key]').inputValue(),'','Secret cleared after save');
   assert.equal(await page.locator('[data-key-form]').isVisible(),false);
+  shownDetailStatus='reverted';
+  await page.setViewportSize({width:390,height:900}); await page.goto(url);
+  await page.locator('[data-batch-row] [data-detail]').click();
+  const deleteDialog=page.locator('[data-detail-dialog]');
+  await deleteDialog.waitFor({state:'visible'});
+  assert.equal(await deleteDialog.locator('[data-revert]').isVisible(),false,'Returned block has no revert action');
+  assert.equal(await deleteDialog.locator('[data-delete-returned]').isVisible(),true,'Returned block has delete action');
+  assert.equal(await deleteDialog.locator('[data-delete-returned]').evaluate(e=>getComputedStyle(e).color),'rgb(255, 255, 255)','Delete uses the shared danger button');
+  const footerOrder=await deleteDialog.locator('.modal-foot-actions button:visible').evaluateAll(buttons=>buttons.map(button=>button.textContent.trim()));
+  assert.deepEqual(footerOrder,['Удалить отключённый блок','Отменить'],'Delete sits left of Cancel');
+  if(screenshotDir) await deleteDialog.screenshot({path:path.join(screenshotDir,'transfer-returned-delete-390.png')});
+  await page.setViewportSize({width:1366,height:900});
+  assert.equal(await deleteDialog.evaluate(e=>e.scrollWidth>e.clientWidth),false,'Desktop returned dialog has no horizontal overflow');
+  if(screenshotDir) await deleteDialog.screenshot({path:path.join(screenshotDir,'transfer-returned-delete-1366.png')});
+  await deleteDialog.locator('[data-delete-returned]').click();
+  assert.match(await deleteDialog.locator('[data-detail-body]').innerText(),/адреса и координаты не изменятся/);
+  assert.match(await deleteDialog.locator('[data-detail-body]').innerText(),/История сохранится\./);
+  assert.doesNotMatch(await deleteDialog.locator('[data-detail-body]').innerText(),/журнал обмена/);
+  assert.equal(await deleteDialog.locator('[data-confirm-delete-returned]').isVisible(),true,'Confirmation uses separate action');
+  assert.equal(await deleteDialog.evaluate(e=>e.scrollWidth>e.clientWidth),false,'Delete confirmation has no horizontal overflow');
+  if(screenshotDir) await deleteDialog.screenshot({path:path.join(screenshotDir,'transfer-returned-delete-confirm-1366.png')});
+  await page.setViewportSize({width:390,height:900});
+  assert.equal(await deleteDialog.evaluate(e=>e.scrollWidth>e.clientWidth),false,'Mobile delete confirmation has no horizontal overflow');
+  if(screenshotDir) await deleteDialog.screenshot({path:path.join(screenshotDir,'transfer-returned-delete-confirm-390.png')});
+  await deleteDialog.locator('[data-confirm-delete-returned]').click();
+  await page.waitForLoadState('load');
+  assert.equal(deleteCalls,1,'Delete sent once');
+  assert.match(deletePayload,/name="_csrf_token"\r?\n\r?\nfixture-csrf/,'Delete POST carries CSRF');
   assert.deepEqual(errors,[]);
-  console.log(`FEO_TRANSFER_BROWSER=PASS synthetic API UI fixture; 1920/1366/800/390, preview invalidation, quality, XSS, create, revert conflict, coordinates; previews=${previewCalls}`);
+  console.log(`FEO_TRANSFER_BROWSER=PASS synthetic API UI fixture; 1920/1366/800/390, preview invalidation, quality, XSS, create, revert conflict, returned-delete confirmation, coordinates; previews=${previewCalls}`);
 } finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
