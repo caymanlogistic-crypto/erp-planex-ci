@@ -33,6 +33,22 @@ if (($argv[1] ?? '') === '--registry-scope-subprocess') {
     exit(0);
 }
 
+if (($argv[1] ?? '') === '--feo-transfer-subprocess') {
+    require __DIR__ . '/../bootstrap/app.php';
+    require BASE_PATH . '/app/Support/entrypoint_dependencies.php';
+    if (!class_exists(\App\Service\FeoTransferTripWarningService::class, false)) {
+        echo "FEO_TRANSFER_TRIP_WARNING_ENTRYPOINT_FAILED\n";
+        exit(1);
+    }
+    $service = new \App\Service\FeoTransferTripWarningService();
+    if (!($service instanceof \App\Service\FeoTransferTripWarningService)) {
+        echo "FEO_TRANSFER_TRIP_WARNING_ENTRYPOINT_FAILED\n";
+        exit(1);
+    }
+    echo "FEO_TRANSFER_TRIP_WARNING_ENTRYPOINT_PASS\n";
+    exit(0);
+}
+
 // ---------------------------------------------------------------------------
 // Subprocess mode: load CS-01 classes and prove class_exists().
 // ---------------------------------------------------------------------------
@@ -222,6 +238,14 @@ $scopeCode = 0;
 exec($scopeCmd . ' 2>&1', $scopeOut, $scopeCode);
 check('registry scope partial works with production entrypoint and no autoloader', $scopeCode === 0 && in_array('REGISTRY_SCOPE_ENTRYPOINT_PASS', $scopeOut, true));
 if ($scopeCode !== 0) echo "  scope subprocess output: " . trim(implode("\n", $scopeOut)) . "\n";
+
+$transferCmd = escapeshellarg(PHP_BINARY) . ' ' . escapeshellarg(__FILE__) . ' --feo-transfer-subprocess';
+$transferOut = [];
+$transferCode = 0;
+exec($transferCmd . ' 2>&1', $transferOut, $transferCode);
+check('transfer trip warning service loads in production entrypoint without an autoloader',
+    $transferCode === 0 && in_array('FEO_TRANSFER_TRIP_WARNING_ENTRYPOINT_PASS', $transferOut, true));
+if ($transferCode !== 0) echo "  transfer subprocess output: " . trim(implode("\n", $transferOut)) . "\n";
 
 // 7. No persistent artifacts created by this test.
 $artifacts = glob(sys_get_temp_dir() . '/cs01_*');

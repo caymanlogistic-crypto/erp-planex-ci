@@ -184,7 +184,8 @@
     } else {
       if (!form.elements.address.value.trim()) return;
       if (!geoToken) {
-        previewTimer = setTimeout(() => showFieldError('address','Сначала определите координаты адреса.'),250);
+        // Keep the action available so validation happens on an explicit create attempt.
+        commit.disabled = false;
         return;
       }
       showFieldError('address','');
@@ -193,7 +194,10 @@
     previewTimer = setTimeout(() => fetchPreview(atRevision),250);
   }
   form.addEventListener('input', event => {
-    if (event.target.name === 'address') {geoToken=''; geoResult=null; geo.hidden=true;}
+    if (event.target.name === 'address') {
+      geoToken=''; geoResult=null; geo.hidden=true;
+      showFieldError('address','');
+    }
     if (['request_ids','source_request_id','address'].includes(event.target.name)) schedulePreview();
   });
   form.addEventListener('change', event => { if (event.target.name === 'mode') updateMode(); });
@@ -221,7 +225,12 @@
     location.reload();
   }
   commit.addEventListener('click', async () => {
-    if (!previewToken || commit.disabled || saving) return;
+    if (commit.disabled || saving) return;
+    if (mode() === 'address' && !geoToken) {
+      showFieldError('address','Сначала определите координаты адреса.');
+      return;
+    }
+    if (!previewToken) return;
     saving = true; commit.disabled = true;
     try {
       const data = new FormData(); data.set('preview_token',previewToken);
