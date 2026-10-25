@@ -11,7 +11,7 @@
     "registry_toolbar_decision": "docs/ui/decisions-20261023-toolbar.json",
     "feo_transfers_table_decision": "docs/ui/decisions-20261023-feo-transfers-table.json",
     "popup_shell_decision": "docs/ui/decisions-20261024-popup-shell.json",
-    "feo_transfer_popup_decision": "docs/ui/decisions-20261024-feo-transfer-popups.json",
+    "feo_transfer_popup_decision": "docs/ui/decisions-20261025-feo-transfer-v007.json",
     "feo_weight_popup_decision": "docs/ui/decisions-20261024-feo-weight-popups.json",
     "manager_display_decision": "docs/ui/decisions-20261020-manager-display.json",
     "manager_table_extension": "docs/ui/decisions-20261020-manager-tables.json",
@@ -23,7 +23,7 @@
   "local_continuations": "C:/plan-ex/ERP-PLANEX/local/evidence/*/designer-handoff.json",
   "focus": null,
   "backlog": [
-    {"id": "forms-and-dialogs", "status": "partially_approved", "topic": "Общая оболочка и полные предметные сценарии попапов перемещения и изменения веса утверждены; прочие формы, подтверждение удаления, загрузка и удаление файлов требуют отдельного решения с состояниями", "authority": "docs/ui/decisions-20261024-popup-shell.json; docs/ui/decisions-20261024-feo-transfer-popups.json; docs/ui/decisions-20261024-feo-weight-popups.json; docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"},
+    {"id": "forms-and-dialogs", "status": "partially_approved", "topic": "Общая оболочка и полные предметные сценарии попапов перемещения и изменения веса утверждены; прочие формы, подтверждение удаления, загрузка и удаление файлов требуют отдельного решения с состояниями", "authority": "docs/ui/decisions-20261024-popup-shell.json; docs/ui/decisions-20261025-feo-transfer-v007.json; docs/ui/decisions-20261024-feo-weight-popups.json; docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"},
     {"id": "action-menus", "status": "partially_approved", "topic": "Общее устройство и типографика меню действий. Согласованные цвета не утверждают всё меню", "authority": "docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"},
     {"id": "feedback-states", "status": "not_approved", "topic": "Общее отображение ожидания, серверных ошибок и восстановления; сохранить утверждённую семантику цветов", "authority": "docs/ui/REGISTRY_WORKFLOW.md#ещё-не-согласовано"}
   ]

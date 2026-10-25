@@ -61,7 +61,12 @@ final class FeoTransferController
             [$company,$pdo]=$this->context();
             $parsed=FeoTransferService::parseIds((string)($_POST['request_ids']??''));
             $mode=(string)($_POST['mode']??''); $geo=null;
-            if ($mode==='address') $geo=$this->record((string)($_POST['geo_token']??''),(int)$company['id'],'geocode')['result'];
+            if ($mode==='address') {
+                $geo=$this->record((string)($_POST['geo_token']??''),(int)$company['id'],'geocode')['result'];
+                if (trim((string)($_POST['address']??'')) !== (string)($geo['query']??'')) {
+                    throw new RuntimeException('Адрес изменился после определения координат. Определите координаты снова.');
+                }
+            }
             $preview=$this->service->preview($pdo,$parsed['ids'],$mode,trim((string)($_POST['source_request_id']??'')),$geo);
             $token=$this->remember(['kind'=>'transfer','company_id'=>(int)$company['id'],'preview'=>$preview,
                 'name'=>trim((string)($_POST['name']??'')),'comment'=>trim((string)($_POST['comment']??''))]);

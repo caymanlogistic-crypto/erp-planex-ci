@@ -78,9 +78,16 @@ try {
     $ok($pdo->query("SELECT mno_adres_pogruzki FROM feo_requests WHERE zayavka_id='100001'")->fetchColumn()==='Адрес назначения','Import rollback preserves override');
     $requestService->restoreRolledBackImport($pdo,$import['import_id'],['user_id'=>11]);
     $ok($pdo->query("SELECT mno_adres_pogruzki FROM feo_requests WHERE zayavka_id='100001'")->fetchColumn()==='Адрес назначения','Import restore preserves override');
-    $geo=['address'=>'Новый адрес','longitude'=>'40.000','latitude'=>'60.000','precision'=>'street','quality'=>'Только улица, дом не определён','provider'=>'yandex'];
+    $geo=['query'=>'Введённый адрес','address'=>'Нормализованный адрес Яндекса','longitude'=>'40.000','latitude'=>'60.000','precision'=>'street','quality'=>'Только улица, дом не определён','provider'=>'yandex'];
     $bPreview=$s->preview($pdo,['100002'],'address','',$geo);
+    $ok($bPreview['destination']['address']==='Введённый адрес' && $bPreview['destination']['longitude']==='40.000' && $bPreview['destination']['latitude']==='60.000','Address preview retains entered text and Yandex coordinates');
     $b=$s->create($pdo,$bPreview,$actor,hash('sha256','b'),'Пакет Б','');
+    $ok($pdo->query("SELECT mno_adres_pogruzki FROM feo_requests WHERE zayavka_id='100002'")->fetchColumn()==='Введённый адрес','Address transfer stores entered text');
+    $savedDestination=json_decode($pdo->query('SELECT destination_json FROM feo_transfer_batches WHERE id='.(int)$b['batch_id'])->fetchColumn(),true);
+    $savedAfter=json_decode($pdo->query('SELECT after_json FROM feo_transfer_items WHERE batch_id='.(int)$b['batch_id'])->fetchColumn(),true);
+    $ok($savedDestination['address']==='Введённый адрес' && $savedAfter['mno_adres_pogruzki']==='Введённый адрес' && $savedAfter['mno_sh']==='40.000' && $savedAfter['mno_d']==='60.000','History and legacy payload source use entered text with Yandex coordinates');
+    $savedOutbox=json_decode($pdo->query("SELECT payload_json FROM feo_transfer_outbox WHERE batch_id=".(int)$b['batch_id']." AND operation='transfer'")->fetchColumn(),true);
+    $ok($savedOutbox['items'][0]['after']['mno_adres_pogruzki']==='Введённый адрес','Legacy outbox retains entered address');
     $reject(fn()=>$s->revert($pdo,$a['batch_id'],$actor),'Reject older intersecting batch revert');
     $ok($pdo->query("SELECT mno_adres_pogruzki FROM feo_requests WHERE zayavka_id='100001'")->fetchColumn()==='Адрес назначения','Conflict after first row rolls back entire batch');
     $s->revert($pdo,$b['batch_id'],$actor);

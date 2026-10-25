@@ -28,6 +28,14 @@ try {
     };
     foreach ([['GET','/company/settings/services'],['POST','/company/settings/services/yandex'],['GET','/company/feo/requests/transfers'],['POST','/company/feo/requests/transfers/preview'],['POST','/company/feo/requests/transfers/create'],['GET','/company/feo/requests/transfers/1/json'],['POST','/company/feo/requests/transfers/1/revert'],['GET','/company/feo/requests/transfers/1/export'],['GET','/company/feo/requests/weights'],['POST','/company/feo/requests/weights/preview'],['POST','/company/feo/requests/weights/create'],['GET','/company/feo/requests/weights/1/json'],['POST','/company/feo/requests/weights/1/revert'],['GET','/company/feo/requests/coordinates'],['POST','/company/feo/requests/coordinates/geocode'],['POST','/company/feo/requests/coordinates/settings']] as [$method,$path]) $ok($call($method,$path)['status']===403,'Direct URL denied: '.$path);
     $pdo->exec("INSERT INTO role_page_permissions(role_id,page_key,is_allowed) VALUES(2,'company.feo.transfers',1)");
+    $geoToken=str_repeat('a',48);
+    $_SESSION['feo_transfer_previews'][$geoToken]=['kind'=>'geocode','company_id'=>7,'result'=>['query'=>'Введённый адрес','address'=>'Адрес Яндекса','longitude'=>'40.000','latitude'=>'60.000','precision'=>'exact','quality'=>'Точное совпадение','provider'=>'yandex'],'created_at'=>time(),'account_id'=>103];
+    $geoPost=['mode'=>'address','request_ids'=>'100001','geo_token'=>$geoToken,'address'=>'Подменённый адрес'];
+    $r=$call('POST','/company/feo/requests/transfers/preview',$geoPost);
+    $ok($r['status']===422 && str_contains((string)($r['body']['message']??''),'Адрес изменился'),'Changed address cannot reuse geocode token');
+    $geoPost['address']='Введённый адрес';
+    $r=$call('POST','/company/feo/requests/transfers/preview',$geoPost);
+    $ok($r['status']===200 && $r['body']['preview']['destination']['address']==='Введённый адрес' && $r['body']['preview']['destination']['longitude']==='40.000','Matching token retains entered address and Yandex coordinates');
     $r=$call('POST','/company/feo/requests/transfers/preview',['mode'=>'request','request_ids'=>'100001','source_request_id'=>'100002']);
     $ok($r['status']===200 && $r['body']['success'],'Role-granted preview');
     $token=$r['body']['preview_token'];
