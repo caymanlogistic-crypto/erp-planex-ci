@@ -10,6 +10,7 @@ $router->post('/company/feo/requests/transfers/preview',[$feoTransferController,
 $router->post('/company/feo/requests/transfers/create',[$feoTransferController,'create'],$feoTransfersPage);
 $router->get('/company/feo/requests/transfers/{id}/json',[$feoTransferController,'detail'],$feoTransfersPage);
 $router->post('/company/feo/requests/transfers/{id}/revert',[$feoTransferController,'revert'],$feoTransfersPage);
+$router->post('/company/feo/requests/transfers/{id}/delete',[$feoTransferController,'deleteReturned'],$feoTransfersPage);
 $router->get('/company/feo/requests/transfers/{id}/export',[$feoTransferController,'export'],$feoTransfersPage);
 $router->get('/company/feo/requests/coordinates',[$feoTransferController,'coordinates'],$feoCoordinatesPage);
 $router->post('/company/feo/requests/coordinates/geocode',[$feoTransferController,'geocode'],[$feoCoordinatesPage,$feoTransfersPage]);

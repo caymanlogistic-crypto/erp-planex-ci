@@ -116,6 +116,14 @@ final class FeoTransferController
         });
     }
 
+    public function deleteReturned(string $id): void
+    {
+        $this->respond(function () use ($id): array {
+            [, $pdo]=$this->context();
+            return $this->service->deleteReturned($pdo,$this->id($id));
+        });
+    }
+
     public function detail(string $id): void
     {
         $this->respond(function () use ($id): array {
@@ -123,6 +131,7 @@ final class FeoTransferController
             $q=$pdo->prepare('SELECT * FROM feo_transfer_batches WHERE id=?'); $q->execute([$batchId]);
             $batch=$q->fetch(PDO::FETCH_ASSOC);
             if (!$batch) throw new RuntimeException('Блок не найден.');
+            if ($batch['status']==='deleted') throw new RuntimeException('Блок удалён.');
             $q=$pdo->prepare('SELECT operation,status,created_at FROM feo_transfer_outbox WHERE batch_id=? ORDER BY id'); $q->execute([$batchId]);
             return ['batch'=>$batch,'items'=>$this->service->items($pdo,$batchId),'legacy'=>$q->fetchAll(PDO::FETCH_ASSOC)];
         });
@@ -132,7 +141,12 @@ final class FeoTransferController
     {
         try {
             [$company,$pdo]=$this->context();
-            $q=$pdo->prepare('SELECT id,operation,payload_json,status FROM feo_transfer_outbox WHERE batch_id=? ORDER BY id'); $q->execute([$this->id($id)]);
+            $batchId=$this->id($id);
+            $q=$pdo->prepare('SELECT status FROM feo_transfer_batches WHERE id=?'); $q->execute([$batchId]);
+            $status=$q->fetchColumn();
+            if ($status===false) throw new RuntimeException('Блок не найден.');
+            if ($status==='deleted') throw new RuntimeException('Блок удалён.');
+            $q=$pdo->prepare('SELECT id,operation,payload_json,status FROM feo_transfer_outbox WHERE batch_id=? ORDER BY id'); $q->execute([$batchId]);
             $operations=$q->fetchAll(PDO::FETCH_ASSOC);
             if (!$operations) throw new RuntimeException('Блок не найден.');
             foreach ($operations as &$row) { $row['payload']=json_decode($row['payload_json'],true,32,JSON_THROW_ON_ERROR); unset($row['payload_json']); } unset($row);

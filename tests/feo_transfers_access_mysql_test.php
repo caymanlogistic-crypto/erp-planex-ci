@@ -26,7 +26,7 @@ try {
         $_POST=$post; http_response_code(200); ob_start(); $router->dispatch($method,$path); $body=ob_get_clean();
         return ['status'=>http_response_code(),'body'=>json_decode($body,true),'raw'=>$body];
     };
-    foreach ([['GET','/company/settings/services'],['POST','/company/settings/services/yandex'],['GET','/company/feo/requests/transfers'],['POST','/company/feo/requests/transfers/preview'],['POST','/company/feo/requests/transfers/create'],['GET','/company/feo/requests/transfers/1/json'],['POST','/company/feo/requests/transfers/1/revert'],['GET','/company/feo/requests/transfers/1/export'],['GET','/company/feo/requests/weights'],['POST','/company/feo/requests/weights/preview'],['POST','/company/feo/requests/weights/create'],['GET','/company/feo/requests/weights/1/json'],['POST','/company/feo/requests/weights/1/revert'],['GET','/company/feo/requests/coordinates'],['POST','/company/feo/requests/coordinates/geocode'],['POST','/company/feo/requests/coordinates/settings']] as [$method,$path]) $ok($call($method,$path)['status']===403,'Direct URL denied: '.$path);
+    foreach ([['GET','/company/settings/services'],['POST','/company/settings/services/yandex'],['GET','/company/feo/requests/transfers'],['POST','/company/feo/requests/transfers/preview'],['POST','/company/feo/requests/transfers/create'],['GET','/company/feo/requests/transfers/1/json'],['POST','/company/feo/requests/transfers/1/revert'],['POST','/company/feo/requests/transfers/1/delete'],['GET','/company/feo/requests/transfers/1/export'],['GET','/company/feo/requests/weights'],['POST','/company/feo/requests/weights/preview'],['POST','/company/feo/requests/weights/create'],['GET','/company/feo/requests/weights/1/json'],['POST','/company/feo/requests/weights/1/revert'],['GET','/company/feo/requests/coordinates'],['POST','/company/feo/requests/coordinates/geocode'],['POST','/company/feo/requests/coordinates/settings']] as [$method,$path]) $ok($call($method,$path)['status']===403,'Direct URL denied: '.$path);
     $pdo->exec("INSERT INTO role_page_permissions(role_id,page_key,is_allowed) VALUES(2,'company.feo.transfers',1)");
     $geoToken=str_repeat('a',48);
     $_SESSION['feo_transfer_previews'][$geoToken]=['kind'=>'geocode','company_id'=>7,'result'=>['query'=>'Введённый адрес','address'=>'Адрес Яндекса','longitude'=>'40.000','latitude'=>'60.000','precision'=>'exact','quality'=>'Точное совпадение','provider'=>'yandex'],'created_at'=>time(),'account_id'=>103];
@@ -52,6 +52,12 @@ try {
     $_SESSION['company_id']=7;
     $ok($call('POST','/company/feo/requests/coordinates/settings',['api_key'=>'abcdefghijklmnopqrstuv'])['status']===403,'Manager cannot change API key');
     $ok($call('POST',"/company/feo/requests/transfers/$batch/revert")['body']['success'],'Real package revert endpoint');
+    $r=$call('POST',"/company/feo/requests/transfers/$batch/delete");
+    $ok($r['status']===200 && $r['body']['success'] && !$r['body']['already_deleted'],'Role-granted manager can delete returned block');
+    $ok($call('POST',"/company/feo/requests/transfers/$batch/delete")['body']['already_deleted'],'Delete retry is idempotent');
+    $ok($call('GET',"/company/feo/requests/transfers/$batch/json")['status']===422,'Deleted detail is unavailable');
+    $ok($call('GET',"/company/feo/requests/transfers/$batch/export")['status']===422,'Deleted export is unavailable');
+    $ok($call('POST',"/company/feo/requests/transfers/$batch/revert")['status']===422,'Deleted block cannot be reverted');
     $pdo->exec("INSERT INTO role_page_permissions(role_id,page_key,is_allowed) VALUES(2,'company.feo.weights',1)");
     $r=$call('POST','/company/feo/requests/weights/preview',['request_ids'=>'100001 100002']);
     $ok($r['status']===200 && $r['body']['success'],'Role-granted weight preview');

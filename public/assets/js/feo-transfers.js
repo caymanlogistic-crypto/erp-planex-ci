@@ -233,6 +233,8 @@
   const detailTitle = find('#transfer-detail-title');
   const detailRevert = find('[data-revert]');
   const confirmRevert = find('[data-confirm-revert]');
+  const detailDelete = find('[data-delete-returned]');
+  const confirmDelete = find('[data-confirm-delete-returned]');
   let detailId = 0, detailIds = [];
   const historyContent = result => {
     const batch = result.batch;
@@ -259,6 +261,8 @@
       detailBody.innerHTML = view.html;
       detailRevert.hidden = result.batch.status !== 'applied';
       confirmRevert.hidden = true;
+      if (detailDelete) detailDelete.hidden = result.batch.status !== 'reverted';
+      if (confirmDelete) confirmDelete.hidden = true;
       detailDialog.classList.remove('registry-ui-modal--confirmation');
       detailDialog.classList.add('registry-ui-modal--reading');
       detailDialog.showModal();
@@ -270,11 +274,28 @@
     detailDialog.classList.add('registry-ui-modal--confirmation');
     detailRevert.hidden = true; confirmRevert.hidden = false;
   });
+  detailDelete?.addEventListener('click',() => {
+    detailBody.innerHTML = `<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">Удалить отключённый блок #${detailId} из списка? Заявки уже возвращены; их адреса и координаты не изменятся. История сохранится.</p><div class="field-msg is-error" data-delete-error role="alert" hidden></div></div>`;
+    detailDialog.classList.remove('registry-ui-modal--reading');
+    detailDialog.classList.add('registry-ui-modal--confirmation');
+    detailDelete.hidden = true;
+    confirmDelete.hidden = false;
+  });
   confirmRevert.addEventListener('click',async () => {
     if (saving) return;
     saving = true; confirmRevert.disabled = true;
     try { const result = await request(`${base}/${detailId}/revert`,new FormData()); completed(result,'возвращён'); }
     catch(e) { const box=find('[data-revert-error]'); box.textContent=e.message;box.hidden=false; saving=false;confirmRevert.disabled=false; }
+  });
+  confirmDelete?.addEventListener('click',async () => {
+    if (saving) return;
+    saving = true; confirmDelete.disabled = true;
+    try {
+      const result = await request(`${base}/${detailId}/delete`,new FormData());
+      sessionStorage.setItem('feo-transfer-result',JSON.stringify({message:`Отключённый блок #${result.batch_id} удалён из списка.`,warning:false}));
+      location.reload();
+    }
+    catch(e) { const box=find('[data-delete-error]'); box.textContent=e.message;box.hidden=false; saving=false;confirmDelete.disabled=false; }
   });
   root.addEventListener('click',event => {
     const detail=event.target.closest('[data-detail]');

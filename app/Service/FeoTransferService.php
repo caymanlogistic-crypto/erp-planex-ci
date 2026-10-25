@@ -82,8 +82,12 @@ final class FeoTransferService
         $name=trim($name); $comment=trim($comment);
         if (mb_strlen($name)>180 || mb_strlen($comment)>2000) throw new RuntimeException('Сократите название или комментарий блока.');
         return $this->transaction($pdo, function (?FeoLegacyImportSync $mirror) use ($pdo,$preview,$actor,$operationKey,$name,$comment,$event): array {
-            $q=$pdo->prepare('SELECT id FROM feo_transfer_batches WHERE operation_key=?'); $q->execute([$operationKey]);
-            if ($id=$q->fetchColumn()) return ['batch_id'=>(int)$id,'already_applied'=>true,'legacy_synced'=>$this->wasMirrored($pdo,(int)$id,'transfer')];
+            $q=$pdo->prepare('SELECT id,status FROM feo_transfer_batches WHERE operation_key=?'); $q->execute([$operationKey]);
+            if ($existing=$q->fetch(PDO::FETCH_ASSOC)) {
+                if ($existing['status']==='deleted') throw new RuntimeException('Блок удалён. Повторите операцию с новым списком заявок.');
+                $id=(int)$existing['id'];
+                return ['batch_id'=>$id,'already_applied'=>true,'legacy_synced'=>$this->wasMirrored($pdo,$id,'transfer')];
+            }
             $fresh=$this->preview($pdo,array_column($preview['rows'],'zayavka_id'),$preview['mode'],(string)($preview['source_request_id']??''),$preview['destination'],true);
             if (!hash_equals($preview['state_hash'],$fresh['state_hash'])) throw new RuntimeException('Адреса или история заявок изменились после проверки. Проверьте блок заново.');
             if ((int)($actor['created_by_user_id']??0)<=0) throw new RuntimeException('Не удалось определить автора перемещения.');
@@ -115,7 +119,9 @@ final class FeoTransferService
             $q=$pdo->prepare('SELECT * FROM feo_transfer_batches WHERE id=? FOR UPDATE'); $q->execute([$batchId]);
             $batch=$q->fetch(PDO::FETCH_ASSOC);
             if (!$batch) throw new RuntimeException('Блок не найден.');
+            if ($batch['status']==='deleted') throw new RuntimeException('Блок удалён.');
             if ($batch['status']==='reverted') return ['batch_id'=>$batchId,'already_reverted'=>true,'legacy_synced'=>$this->wasMirrored($pdo,$batchId,'revert')];
+            if ($batch['status']!=='applied') throw new RuntimeException('Блок недоступен для возврата.');
             $items=$this->items($pdo,$batchId);
             $payload=[];
             foreach ($items as $item) {
@@ -140,10 +146,29 @@ final class FeoTransferService
         });
     }
 
+    public function deleteReturned(PDO $pdo, int $batchId): array
+    {
+        return $this->transaction($pdo,function (?FeoLegacyImportSync $mirror) use ($pdo,$batchId): array {
+            $q=$pdo->prepare('SELECT status FROM feo_transfer_batches WHERE id=? FOR UPDATE');
+            $q->execute([$batchId]);
+            $status=$q->fetchColumn();
+            if ($status===false) throw new RuntimeException('Блок не найден.');
+            if ($status==='deleted') return ['batch_id'=>$batchId,'already_deleted'=>true];
+            if ($status!=='reverted') throw new RuntimeException('Удалить можно только возвращённый блок. Сначала отмените перенос.');
+            $q=$pdo->prepare('SELECT COUNT(*) FROM feo_location_overrides WHERE batch_id=?');
+            $q->execute([$batchId]);
+            if ((int)$q->fetchColumn()>0) throw new RuntimeException('Блок ещё связан с текущими адресами заявок. Удаление остановлено.');
+            $q=$pdo->prepare("UPDATE feo_transfer_batches SET status='deleted' WHERE id=? AND status='reverted'");
+            $q->execute([$batchId]);
+            if ($q->rowCount()!==1) throw new RuntimeException('Состояние блока изменилось. Обновите страницу.');
+            return ['batch_id'=>$batchId,'already_deleted'=>false];
+        },false);
+    }
+
     public function batches(PDO $pdo, int $page = 1): array
     {
         $offset=(max(1,$page)-1)*50;
-        return $pdo->query("SELECT * FROM feo_transfer_batches ORDER BY id DESC LIMIT 50 OFFSET $offset")->fetchAll(PDO::FETCH_ASSOC);
+        return $pdo->query("SELECT * FROM feo_transfer_batches WHERE status IN ('applied','reverted') ORDER BY id DESC LIMIT 50 OFFSET $offset")->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /** Complete request IDs and current weights for the visible history page. */
@@ -182,7 +207,7 @@ final class FeoTransferService
         return array_map(static function(array $row): array { $row['before']=json_decode($row['before_json'],true,16,JSON_THROW_ON_ERROR); $row['after']=json_decode($row['after_json'],true,16,JSON_THROW_ON_ERROR); $row['net_kg']=$row['mass_netto']===null?null:round((float)$row['mass_netto']*1000,1); unset($row['before_json'],$row['after_json'],$row['mass_netto']); return $row; },$q->fetchAll(PDO::FETCH_ASSOC));
     }
 
-    private function transaction(PDO $pdo, callable $action): array
+    private function transaction(PDO $pdo, callable $action, bool $requiresMirror = true): array
     {
         if ($pdo->inTransaction()) throw new RuntimeException('Перемещение должно выполняться отдельной операцией.');
         $lock='planex_feo_'.substr(hash('sha256',(string)$pdo->query('SELECT DATABASE()')->fetchColumn()),0,24);
@@ -190,9 +215,9 @@ final class FeoTransferService
         if ((int)$q->fetchColumn()!==1) throw new RuntimeException('Заявки сейчас изменяются. Повторите позже.');
         $transaction=null;
         try {
-            FeoImportTransaction::recoverPending($pdo);
-            $target=(string)env('FEO_LEGACY_SYNC_TENANT_DATABASE','');
-            $enabled=(string)env('FEO_LEGACY_TRANSFER_SYNC_ENABLED','0')==='1';
+            if ($requiresMirror) FeoImportTransaction::recoverPending($pdo);
+            $target=$requiresMirror?(string)env('FEO_LEGACY_SYNC_TENANT_DATABASE',''):'';
+            $enabled=$requiresMirror && (string)env('FEO_LEGACY_TRANSFER_SYNC_ENABLED','0')==='1';
             if ($enabled && $target==='') throw new RuntimeException('Зеркало перемещений ФЭО включено без привязки компании к старой базе.');
             $mirrorRequired=$enabled && (string)$pdo->query('SELECT DATABASE()')->fetchColumn()===$target;
             if ($mirrorRequired) {
