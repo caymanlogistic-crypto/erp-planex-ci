@@ -35,7 +35,7 @@ final class MaxEventNotificationService
                 $row['message_template'] = $row['feo_templates']['main'];
             }
             $row['message_template'] = MaxEventCatalog::currentTemplate($key, (string)$row['message_template']);
-            $row['message_format'] = MaxEventCatalog::systemFormat($key, (string)$row['message_format']);
+            $row['message_format'] = MaxEventCatalog::formatForTemplate($key, (string)$row['message_format'], (string)$row['message_template']);
             if (MaxEventCatalog::isSystemRequired($key)) {
                 $row['is_enabled'] = 1;
                 $row['message_format'] = MaxEventCatalog::systemFormat($key, (string)$row['message_format']);
@@ -66,7 +66,7 @@ final class MaxEventNotificationService
             foreach (array_keys(MaxFeoMessageTemplates::definitions()) as $kind) MaxFeoMessageTemplates::preview($templates,$kind);
             $template = MaxFeoMessageTemplates::encode($templates);
         }
-        $format = MaxEventCatalog::systemFormat($key, (string)($data['message_format'] ?? 'plain'));
+        $format = MaxEventCatalog::formatForTemplate($key, (string)($data['message_format'] ?? 'plain'), $template);
         MaxEventCatalog::render($key, $template, $format, MaxEventCatalog::example($key));
         $enabled = $systemRequired || !empty($data['is_enabled']);
         $chatId = max(0, (int)($data['chat_config_id'] ?? 0));
@@ -94,7 +94,7 @@ final class MaxEventNotificationService
         $chat = $this->chat((int)$rule['chat_config_id']);
         $error = null;
         $text = '';
-        $format = MaxEventCatalog::systemFormat($key, (string)$rule['message_format']);
+        $format = MaxEventCatalog::formatForTemplate($key, (string)$rule['message_format'], (string)$rule['message_template']);
         try {
             $template = MaxEventCatalog::currentTemplate($key, (string)$rule['message_template']);
             $text = MaxEventCatalog::render($key, $template, $format, $values);
@@ -127,10 +127,10 @@ final class MaxEventNotificationService
         $rule = $this->ruleForEvent($key);
         if (!$rule) return null;
         $chat = $this->chat((int)$rule['chat_config_id']);
-        if (!$chat) throw new RuntimeException('Чат события MAX не найден.');
+        if ($error === null && !$chat) $error = 'Чат события MAX не найден. Проверьте настройки MAX.';
         if ($error === null && !$this->chatActive($chat)) $error = 'Чат или бот отключён. Проверьте настройки MAX.';
         $stmt = $this->pdo->prepare('INSERT INTO max_event_deliveries (event_key,entity_key,chat_config_id,bot_id,external_chat_id,message_text,message_format,notify,initiated_by_user_id,status,error_message) VALUES (?,?,?,?,?,?,?,?,?,?,?) ON DUPLICATE KEY UPDATE id=LAST_INSERT_ID(id)');
-        $stmt->execute([$key,$entityKey,(int)$rule['chat_config_id'],(int)$chat['bot_id'],(string)$chat['chat_id'],$text,$format,(int)$rule['notify'],$userId,$error===null?'pending':'failed',$error]);
+        $stmt->execute([$key,$entityKey,(int)$rule['chat_config_id'],(int)($chat['bot_id'] ?? 0),(string)($chat['chat_id'] ?? ''),$text,$format,(int)$rule['notify'],$userId,$error===null?'pending':'failed',$error]);
         return (int)$this->pdo->lastInsertId();
     }
 
@@ -163,6 +163,17 @@ final class MaxEventNotificationService
                     ->execute([$error, $id]);
                 $q->execute([$id]);
                 return $q->fetch(PDO::FETCH_ASSOC);
+            }
+            if (str_contains((string)$delivery['entity_key'], ':route_warning:')) {
+                $parts = $this->pdo->prepare("SELECT COUNT(*) FROM max_event_deliveries WHERE event_key=? AND entity_key LIKE ? AND status<>'sent'");
+                $parts->execute([$delivery['event_key'], 'b'.$match[1].':main:p%']);
+                if ((int)$parts->fetchColumn() > 0) {
+                    $error = 'Части основного уведомления блока не доставлены. Сначала повторите их отправку.';
+                    $this->pdo->prepare("UPDATE max_event_deliveries SET status='failed',error_message=?,updated_at=NOW() WHERE id=? AND status<>'sent'")
+                        ->execute([$error, $id]);
+                    $q->execute([$id]);
+                    return $q->fetch(PDO::FETCH_ASSOC);
+                }
             }
         }
         // Diagnostic deliveries (for example, a missing responsible MAX ID) deliberately have no sendable body.

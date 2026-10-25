@@ -5,6 +5,7 @@ require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Support/company_database.php';
 require_once BASE_PATH.'/app/Core/Database.php';
 foreach (['FeoXlsxParser','FeoRequestService','FeoRequestInteractionService','FeoLocationOverrideService','FeoTransferService','YandexGeocodingService','MaxEventCatalog','MaxEventNotificationService','FeoWeightChangeNotificationService'] as $class) require_once BASE_PATH.'/app/Service/'.$class.'.php';
+require_once BASE_PATH.'/app/Http/Controllers/Company/FeoTransferController.php';
 use App\Service\FeoTransferService;
 use App\Service\FeoRequestService;
 use App\Service\FeoRequestInteractionService;
@@ -165,5 +166,71 @@ try {
     $weightDeliveries=$pdo->query("SELECT entity_key,message_text FROM max_event_deliveries WHERE event_key='feo.request.weight_changed' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
     $ok(count($weightDeliveries)===5,'All weight mutation paths create deliveries');
     foreach ($weightDeliveries as $delivery) $ok(str_contains($delivery['message_text'],'№100003:') && str_contains($delivery['message_text'],'кг'),'Weight delivery contains request and kilogram delta');
+
+    $transferController=(new ReflectionClass(\App\Http\Controllers\Company\FeoTransferController::class))->newInstanceWithoutConstructor();
+    $enqueueMain=new ReflectionMethod($transferController,'enqueueMain');
+    $largeItems=[];
+    for($i=0;$i<600;$i++) {
+        $number=(string)(310000+$i);
+        $largeItems[]=['request_number'=>$number,
+            'before'=>['mno_adres_pogruzki'=>str_repeat('Исходный адрес ',8).$number],
+            'after'=>['mno_adres_pogruzki'=>'Липецкая область, Липецк, улица Передельческая, 5Б']];
+    }
+    $largeResult=['batch_id'=>900,'count'=>count($largeItems),'destination'=>[
+        'address'=>'Липецкая область, Липецк, улица Передельческая, 5Б',
+        'quality'=>'Точное совпадение дома','source_request_id'=>'345356'], 'items'=>$largeItems];
+    $pdo->beginTransaction();
+    $mainIds=$enqueueMain->invoke($transferController,$pdo,$events,'feo.transfer.created',$largeResult,'','',$company,$weightActor);
+    $pdo->commit();
+    $ok(count($mainIds)>1,'Large transfer splits into MAX messages');
+    $marks=implode(',',array_fill(0,count($mainIds),'?'));
+    $q=$pdo->prepare("SELECT message_text,message_format FROM max_event_deliveries WHERE id IN ($marks) ORDER BY id");
+    $q->execute($mainIds); $mainDeliveries=$q->fetchAll(PDO::FETCH_ASSOC);
+    $allText=implode("\n",array_column($mainDeliveries,'message_text'));
+    foreach ($mainDeliveries as $delivery) $ok(mb_strlen($delivery['message_text'])<=4000 && $delivery['message_format']==='markdown','Every main transfer part uses bounded Markdown');
+    foreach ($largeItems as $item) $ok(str_contains($allText,(string)$item['request_number']),'Every transferred request appears in MAX');
+    $longAddress=str_repeat('А',1000).str_repeat('Б',1000).str_repeat('В',1000).str_repeat('Г',500);
+    $longResult=$largeResult; $longResult['batch_id']=903; $longResult['count']=1;
+    $longResult['items']=[$largeItems[0]]; $longResult['destination']['address']=$longAddress;
+    $pdo->beginTransaction();
+    $longIds=$enqueueMain->invoke($transferController,$pdo,$events,'feo.transfer.created',$longResult,'','',$company,$weightActor);
+    $pdo->commit();
+    $ok(count($longIds)===4,'Full 3500-character entered address has deterministic MAX continuations');
+    $marks=implode(',',array_fill(0,count($longIds),'?'));
+    $q=$pdo->prepare("SELECT entity_key,message_text FROM max_event_deliveries WHERE id IN ($marks) ORDER BY id");
+    $q->execute($longIds); $longRows=$q->fetchAll(PDO::FETCH_ASSOC);
+    $ok(array_column($longRows,'entity_key')===['903','b903:main:p1','b903:main:p2','b903:main:p3'],'Long address continuation keys are deterministic');
+    foreach (['А'=>1000,'Б'=>1000,'В'=>1000,'Г'=>500] as $character=>$length) {
+        $ok(str_contains(implode("\n",array_column($longRows,'message_text')),str_repeat($character,$length)),'No entered-address segment is lost');
+    }
+    $largeResult['batch_id']=901;
+    $pdo->beginTransaction();
+    $returnIds=$enqueueMain->invoke($transferController,$pdo,$events,'feo.transfer.reverted',$largeResult,'','',$company,$weightActor);
+    $pdo->commit();
+    $ok(count($returnIds)>1,'Large return splits into MAX messages');
+    $marks=implode(',',array_fill(0,count($returnIds),'?'));
+    $q=$pdo->prepare("SELECT message_text FROM max_event_deliveries WHERE id IN ($marks) ORDER BY id");
+    $q->execute($returnIds); $returnTexts=$q->fetchAll(PDO::FETCH_COLUMN);
+    $allText=implode("\n",$returnTexts);
+    foreach ($returnTexts as $text) $ok(mb_strlen((string)$text)<=4000,'Every return part fits MAX');
+    foreach ($largeItems as $item) $ok(str_contains($allText,(string)$item['request_number'].':') && str_contains($allText,(string)$item['after']['mno_adres_pogruzki']),'Every returned request and restored address appears in MAX');
+
+    $events->saveRule(['event_key'=>'feo.transfer.created','is_enabled'=>1,'chat_config_id'=>1,
+        'message_template'=>'CUSTOM: {{request_ids}}','message_format'=>'plain'],11);
+    $customResult=$largeResult; $customResult['batch_id']=902; $customResult['count']=1;
+    $customResult['items']=[$largeItems[0]];
+    $pdo->beginTransaction();
+    $customIds=$enqueueMain->invoke($transferController,$pdo,$events,'feo.transfer.created',$customResult,'','',$company,$weightActor);
+    $pdo->commit();
+    $ok(count($customIds)===1,'OWNER custom template remains one original delivery');
+    $q=$pdo->prepare('SELECT message_text,message_format FROM max_event_deliveries WHERE id=?'); $q->execute($customIds); $customDelivery=$q->fetch(PDO::FETCH_ASSOC);
+    $ok($customDelivery['message_text']==='CUSTOM: '.$largeItems[0]['request_number'] && $customDelivery['message_format']==='plain','OWNER custom template and format preserved');
+
+    $pdo->exec('DELETE FROM max_chats WHERE id=1');
+    $pdo->beginTransaction();
+    $failedId=$events->enqueuePrepared('feo.transfer.created','stale-chat-test','Сохранённое сообщение','markdown',11);
+    $pdo->commit();
+    $q=$pdo->prepare('SELECT status,error_message FROM max_event_deliveries WHERE id=?'); $q->execute([$failedId]); $failedDelivery=$q->fetch(PDO::FETCH_ASSOC);
+    $ok($failedDelivery['status']==='failed' && str_contains($failedDelivery['error_message'],'Чат события MAX не найден'),'Missing MAX chat records failure without rolling back business transaction');
     echo "FEO_TRANSFER_MYSQL=PASS ($count assertions)\n";
 } finally { cleanCompanyPoolDatabase($pdo); }

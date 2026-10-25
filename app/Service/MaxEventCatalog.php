@@ -15,6 +15,8 @@ final class MaxEventCatalog
     private const LEGACY_TRANSFER_REVERTED_TEMPLATE = "Возвращён пакет переноса №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
     private const PREVIOUS_TRANSFER_CREATED_TEMPLATE = "Создан пакет перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
     private const PREVIOUS_TRANSFER_REVERTED_TEMPLATE = "Возвращён пакет перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
+    private const CURRENT_TRANSFER_CREATED_TEMPLATE = "Создан блок перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
+    private const CURRENT_TRANSFER_REVERTED_TEMPLATE = "Возвращён блок перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
 
     public static function all(): array
     {
@@ -98,12 +100,17 @@ final class MaxEventCatalog
             'changes'=>['Изменения места','№123456: Старый адрес → Новый адрес'],
             'author'=>['Автор','Владимир С.'], 'company'=>['Компания','Пример компании'],
             'created_at'=>['Дата и время','18.09.2026 15:30'], 'comment'=>['Комментарий','Изменение места погрузки'],
+            'destination_intro'=>['Подпись адреса назначения','Перемещены на новый адрес:'],
+            'source_request_id'=>['Заявка с адресом назначения','345356'],
+            'returned_requests'=>['Заявки и восстановленные адреса','310500: Липецкая область, Липецк, улица Передельческая, 5Б'],
         ];
         $events=[];
         foreach (['created'=>['ФЭО — создан блок перемещения','Создан блок перемещения'], 'reverted'=>['ФЭО — возвращён блок перемещения','Возвращён блок перемещения']] as $action=>$labels) {
             $events['feo.transfer.'.$action]=['title'=>$labels[0],
-                'description'=>'После успешного '.($action==='created'?'перемещения':'возврата').' всего блока. Качество координат обязательно присутствует в сообщении.',
-                'template'=>$labels[1]." №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}",
+                 'description'=>'После успешного '.($action==='created'?'перемещения':'возврата').' всего блока.',
+                 'template'=>$action==='created'
+                     ? "ПЕРЕМЕЩЕНИЕ ЗАЯВОК\nЗАЯВКИ\n**{{request_ids}}**\n{{destination_intro}}\n**{{address}}**"
+                     : "ВОЗВРАТ ЗАЯВОК НА ИЗНАЧАЛЬНЫЕ АДРЕСА\nЗаявки возвращены на изначальные адреса\n{{returned_requests}}",
                 'variables'=>$variables];
         }
         return $events;
@@ -158,8 +165,8 @@ final class MaxEventCatalog
                 || $stored === "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг"
                 || $stored === "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг") return self::FEO_TEMPLATE;
         }
-        if ($key === 'feo.transfer.created' && ($stored === '' || $stored === self::LEGACY_TRANSFER_CREATED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_CREATED_TEMPLATE)) return self::event($key)['template'];
-        if ($key === 'feo.transfer.reverted' && ($stored === '' || $stored === self::LEGACY_TRANSFER_REVERTED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_REVERTED_TEMPLATE)) return self::event($key)['template'];
+        if ($key === 'feo.transfer.created' && ($stored === '' || $stored === self::LEGACY_TRANSFER_CREATED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_CREATED_TEMPLATE || $stored === self::CURRENT_TRANSFER_CREATED_TEMPLATE)) return self::event($key)['template'];
+        if ($key === 'feo.transfer.reverted' && ($stored === '' || $stored === self::LEGACY_TRANSFER_REVERTED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_REVERTED_TEMPLATE || $stored === self::CURRENT_TRANSFER_REVERTED_TEMPLATE)) return self::event($key)['template'];
         if ($key === 'feo.request.weight_changed' && ($stored === '' || $stored === "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}")) return self::event($key)['template'];
         return $stored;
     }
@@ -172,6 +179,13 @@ final class MaxEventCatalog
     public static function systemFormat(string $key, string $stored): string
     {
         return self::isSystemRequired($key) || in_array($key,['route_executor.partial','route_executor.full'],true) ? 'markdown' : $stored;
+    }
+
+    public static function formatForTemplate(string $key, string $stored, string $template): string
+    {
+        if (in_array($key, ['feo.transfer.created', 'feo.transfer.reverted'], true)
+            && self::currentTemplate($key, $template) === self::event($key)['template']) return 'markdown';
+        return self::systemFormat($key, $stored);
     }
 
     public static function requestCountText(int $count): string
@@ -194,7 +208,6 @@ final class MaxEventCatalog
             $values['request_word'] = explode(' ', self::requestCountText((int)($values['request_count'] ?? 0)), 2)[1];
             $values['count_label'] = self::requestCountText((int)($values['request_count'] ?? 0));
         }
-        if (str_starts_with($key, 'feo.transfer.') && !preg_match('/\{\{\s*quality\s*\}\}/', $template)) throw new RuntimeException('Добавьте в шаблон качество координат: {{quality}}.');
         if (!in_array($format, ['plain', 'html', 'markdown'], true)) throw new RuntimeException('Неизвестный формат MAX.');
         if (trim($template) === '' || mb_strlen($template) > 4000) throw new RuntimeException('Шаблон должен содержать от 1 до 4000 символов.');
         $literal = preg_replace('/\{\{\s*([^{}]+?)\s*\}\}/u', '', $template);
@@ -204,6 +217,15 @@ final class MaxEventCatalog
             if (!isset($event['variables'][$name])) throw new RuntimeException('Неизвестная переменная: {{' . $name . '}}.');
             if (!array_key_exists($name, $values) || !is_scalar($values[$name])) throw new RuntimeException('Нет значения переменной: ' . $name . '.');
             $value = (string)$values[$name];
+            if ($key === 'feo.transfer.created' && $name === 'destination_intro') {
+                $sourceId = (string)($values['source_request_id'] ?? '');
+                if ($sourceId !== '' && !preg_match('/^[0-9]{6}$/D', $sourceId)) throw new RuntimeException('Некорректный номер заявки назначения.');
+                return $sourceId === '' ? 'Перемещены на новый адрес:'
+                    : 'Перемещены на адрес заявки ' . ($format === 'markdown' ? '**'.$sourceId.'**' : $sourceId) . ':';
+            }
+            if ($key === 'feo.transfer.reverted' && $name === 'returned_requests' && $format === 'markdown') {
+                return implode("\n", array_map(static fn(string $line): string => '**' . preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $line) . '**', explode("\n", $value)));
+            }
             if (in_array($key,['route_executor.partial','route_executor.full'],true) && $name==='missing') return $value;
             if ($format === 'html') return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
             if ($format === 'markdown') return preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $value);

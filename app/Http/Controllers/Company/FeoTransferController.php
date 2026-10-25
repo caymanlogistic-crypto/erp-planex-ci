@@ -9,6 +9,8 @@ use App\Service\FeoTransferService;
 use App\Service\FeoPlacementAuthorService;
 use App\Service\YandexGeocodingService;
 use App\Service\MaxEventNotificationService;
+use App\Service\MaxEventCatalog;
+use App\Service\FeoTransferTripWarningService;
 use PDO;
 use RuntimeException;
 
@@ -81,14 +83,23 @@ final class FeoTransferController
             $token=(string)($_POST['preview_token']??'');
             $record=$this->record($token,(int)$company['id'],'transfer');
             $actor=$this->actor($pdo,(int)$company['id']);
-            $events=new MaxEventNotificationService($pdo); $deliveryId=null;
+            $events=new MaxEventNotificationService($pdo); $deliveryIds=[];
             $result=$this->service->create($pdo,$record['preview'],$actor,hash('sha256',$token),$record['name'],$record['comment'],
-                function(array $created) use ($events,&$deliveryId,$company,$actor,$record): void {
-                    $deliveryId=$events->enqueue('feo.transfer.created',(string)$created['batch_id'],$this->eventValues($created,$record['name'],$record['comment'],$company,$actor),$actor['created_by_user_id']);
+                function(array $created) use ($pdo,$events,&$deliveryIds,$company,$actor,$record): void {
+                    $deliveryIds=$this->enqueueMain($pdo,$events,'feo.transfer.created',$created,$record['name'],$record['comment'],$company,$actor);
+                    if ($deliveryIds) {
+                        $requestNumbers=array_column($created['items'],'request_number');
+                        foreach ((new FeoTransferTripWarningService())->intents($pdo,$requestNumbers) as $intent) {
+                            $id=$events->enqueuePrepared('feo.transfer.created',
+                                'b'.$created['batch_id'].':route_warning:p'.$intent['part'],
+                                $intent['text'],$intent['format'],(int)$actor['created_by_user_id']);
+                            if ($id!==null) $deliveryIds[]=$id;
+                        }
+                    }
                 });
             // Keep the short-lived server record so a network retry returns the same batch.
-            if ($deliveryId===null && !empty($result['already_applied'])) $deliveryId=$this->deliveryId($pdo,'feo.transfer.created',$result['batch_id']);
-            return $result+['notification'=>$this->dispatch($events,$deliveryId)];
+            if (!$deliveryIds && !empty($result['already_applied'])) $deliveryIds=$this->deliveryIds($pdo,'feo.transfer.created',$result['batch_id']);
+            return $result+['notification'=>$this->dispatchAll($events,$deliveryIds)];
         });
     }
 
@@ -96,15 +107,12 @@ final class FeoTransferController
     {
         $this->respond(function () use ($id): array {
             [$company,$pdo]=$this->context(); $actor=$this->actor($pdo,(int)$company['id']);
-            $events=new MaxEventNotificationService($pdo); $deliveryId=null;
-            $result=$this->service->revert($pdo,$this->id($id),$actor,function(array $reverted) use ($events,&$deliveryId,$company,$actor): void {
-                $values=$this->eventValues($reverted,$reverted['name'],'',$company,$actor);
-                $values['quality']='Восстановлены исходные координаты каждой заявки; точность не подтверждена';
-                $values['address']='Исходный адрес каждой заявки';
-                $deliveryId=$events->enqueue('feo.transfer.reverted',(string)$reverted['batch_id'],$values,$actor['created_by_user_id']);
+            $events=new MaxEventNotificationService($pdo); $deliveryIds=[];
+            $result=$this->service->revert($pdo,$this->id($id),$actor,function(array $reverted) use ($pdo,$events,&$deliveryIds,$company,$actor): void {
+                $deliveryIds=$this->enqueueMain($pdo,$events,'feo.transfer.reverted',$reverted,$reverted['name'],'',$company,$actor);
             });
-            if ($deliveryId===null && !empty($result['already_reverted'])) $deliveryId=$this->deliveryId($pdo,'feo.transfer.reverted',$result['batch_id']);
-            return $result+['notification'=>$this->dispatch($events,$deliveryId)];
+            if (!$deliveryIds && !empty($result['already_reverted'])) $deliveryIds=$this->deliveryIds($pdo,'feo.transfer.reverted',$result['batch_id']);
+            return $result+['notification'=>$this->dispatchAll($events,$deliveryIds)];
         });
     }
 
@@ -187,7 +195,89 @@ final class FeoTransferController
             'request_ids'=>$requestList?:'—','changes'=>$changes?implode("\n",$changes):'—',
             'address'=>mb_substr($result['destination']['address'],0,1000),'quality'=>$result['destination']['quality'],
             'author'=>$actor['created_by_display_name'],'company'=>$company['name'],'created_at'=>date('d.m.Y H:i'),
-            'comment'=>mb_substr($comment,0,800)];
+            'comment'=>mb_substr($comment,0,800),
+            'destination_intro'=>'', 'source_request_id'=>(string)($result['destination']['source_request_id']??''),
+            'returned_requests'=>implode("\n",array_map(static fn(array $item): string =>
+                (string)($item['request_number']??'').': '.(string)($item['after']['mno_adres_pogruzki']??''),$items))];
+    }
+
+    /** Preserve an OWNER-custom MAX template; split the approved default without losing requests. */
+    private function enqueueMain(PDO $pdo, MaxEventNotificationService $events, string $key, array $result,
+        string $name, string $comment, array $company, array $actor): array
+    {
+        if (!$events->ready()) return [];
+        $q=$pdo->prepare('SELECT message_template,message_format FROM max_event_rules WHERE event_key=? AND is_enabled=1');
+        $q->execute([$key]); $rule=$q->fetch(PDO::FETCH_ASSOC);
+        if (!$rule) return [];
+        $values=$this->eventValues($result,$name,$comment,$company,$actor);
+        if ($key==='feo.transfer.reverted') {
+            $values['quality']='Восстановлены исходные координаты каждой заявки; точность не подтверждена';
+            $values['address']='Исходный адрес каждой заявки';
+        }
+        $template=MaxEventCatalog::currentTemplate($key,(string)$rule['message_template']);
+        $userId=(int)$actor['created_by_user_id'];
+        if ($template!==MaxEventCatalog::event($key)['template']) {
+            $id=$events->enqueue($key,(string)$result['batch_id'],$values,$userId);
+            return $id===null?[]:[$id];
+        }
+        $format=MaxEventCatalog::formatForTemplate($key,(string)$rule['message_format'],$template);
+        $entries=[];
+        foreach ($result['items'] as $item) {
+            $number=(string)$item['request_number'];
+            if ($key==='feo.transfer.created') { $entries[]=$number; continue; }
+            $address=trim(preg_replace('/\s+/u',' ',(string)($item['after']['mno_adres_pogruzki']??''))??'');
+            // The historic address can be longer than one MAX message. Repeat its ID in each segment.
+            do {
+                $part=mb_substr($address,0,1000);
+                $entries[]=$number.': '.$part;
+                $address=mb_substr($address,mb_strlen($part));
+            } while ($address!=='');
+        }
+        $parts=[]; $current=[];
+        foreach ($entries as $entry) {
+            $candidate=[...$current,$entry];
+            try { $text=$this->renderMainPart($key,$template,$format,$values,$candidate); }
+            catch (RuntimeException $e) {
+                if (!str_contains($e->getMessage(),'4000 символов')) throw $e;
+                $text=null;
+            }
+            if ($current && ($text===null || mb_strlen($text,'UTF-8')>3900)) {
+                $parts[]=$current; $current=[$entry];
+            } else {
+                if ($text===null) throw new RuntimeException('Один адрес не помещается в сообщение MAX.');
+                $current=$candidate;
+            }
+        }
+        if ($current) $parts[]=$current;
+        $ids=[];
+        foreach ($parts as $index=>$part) {
+            $text=$this->renderMainPart($key,$template,$format,$values,$part);
+            $entityKey=$index===0?(string)$result['batch_id']:'b'.$result['batch_id'].':main:p'.$index;
+            $id=$events->enqueuePrepared($key,$entityKey,$text,$format,$userId);
+            if ($id!==null) $ids[]=$id;
+        }
+        if ($key==='feo.transfer.created') {
+            $fullAddress=(string)$result['destination']['address'];
+            $offset=mb_strlen((string)$values['address']);
+            $partNumber=count($parts);
+            while ($offset<mb_strlen($fullAddress)) {
+                $segment=mb_substr($fullAddress,$offset,1000);
+                $continuationValues=$values;
+                $continuationValues['address']=$segment;
+                $text=MaxEventCatalog::render($key,"ПЕРЕМЕЩЕНИЕ ЗАЯВОК\nАдрес назначения (продолжение):\n**{{address}}**",$format,$continuationValues);
+                $id=$events->enqueuePrepared($key,'b'.$result['batch_id'].':main:p'.$partNumber,$text,$format,$userId);
+                if ($id!==null) $ids[]=$id;
+                $partNumber++;
+                $offset+=mb_strlen($segment);
+            }
+        }
+        return $ids;
+    }
+
+    private function renderMainPart(string $key, string $template, string $format, array $values, array $entries): string
+    {
+        $values[$key==='feo.transfer.created'?'request_ids':'returned_requests']=implode($key==='feo.transfer.created'?', ':"\n",$entries);
+        return MaxEventCatalog::render($key,$template,$format,$values);
     }
     private function shortAddress(string $address): string
     {
@@ -199,11 +289,20 @@ final class FeoTransferController
         if ($deliveryId===null) return 'disabled';
         try { return $events->dispatch($deliveryId)['status']; } catch (\Throwable) { return 'failed'; }
     }
-    private function deliveryId(PDO $pdo, string $event, int $batchId): ?int
+    private function dispatchAll(MaxEventNotificationService $events, array $deliveryIds): string
     {
-        if (!(new MaxEventNotificationService($pdo))->ready()) return null;
-        $q=$pdo->prepare('SELECT id FROM max_event_deliveries WHERE event_key=? AND entity_key=?'); $q->execute([$event,(string)$batchId]);
-        $id=$q->fetchColumn(); return $id!==false?(int)$id:null;
+        if (!$deliveryIds) return 'disabled';
+        $statuses=array_map(fn(int $id): string => $this->dispatch($events,$id),$deliveryIds);
+        if (in_array('failed',$statuses,true)) return 'failed';
+        if (in_array('sending',$statuses,true) || in_array('pending',$statuses,true)) return 'sending';
+        return 'sent';
+    }
+    private function deliveryIds(PDO $pdo, string $event, int $batchId): array
+    {
+        if (!(new MaxEventNotificationService($pdo))->ready()) return [];
+        $q=$pdo->prepare("SELECT id FROM max_event_deliveries WHERE event_key=? AND (entity_key=? OR entity_key LIKE ? OR entity_key LIKE ?) ORDER BY id");
+        $q->execute([$event,(string)$batchId,'b'.$batchId.':main:p%','b'.$batchId.':route_warning:p%']);
+        return array_map('intval',$q->fetchAll(PDO::FETCH_COLUMN));
     }
     private function id(string $id): int { if (!ctype_digit($id) || (int)$id<=0) throw new RuntimeException('Некорректный номер блока.'); return (int)$id; }
     private function respond(callable $action): void

@@ -246,9 +246,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "2025d47059b07188f8858e9c9d933bc52a626e51",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/2025d47059b07188f8858e9c9d933bc52a626e51/tests/feo_transfers_browser_test.mjs",
-      "verification_note": "2026-10-25: OWNER-approved transfer-local-canon-20261025:v007 implemented. Local FEO transfer browser fixture PASS at 1920/1366/800/390, isolated MySQL service PASS (193 assertions), controller access/token mismatch PASS, registry component contract PASS. Address entered by user persists with Yandex coordinates; history and confirmation match approved popup canon.",
+      "verified_sha": "d00ff9baa4717dc1d64829cd22a9b0caeb622e6c",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/d00ff9baa4717dc1d64829cd22a9b0caeb622e6c/tests/feo_transfers_mysql_test.php",
+      "verification_note": "2026-10-25: OWNER-approved MAX text for transfer by entered/request address and return with each original address. Separate aggregated warning for affected planned, formed and in-progress trips uses the same MAX route after main delivery. Local transfer contract, 1416-assertion MySQL, trip warning MySQL, MAX routing/delivery and access tests PASS; long addresses and large batches preserve all values through bounded continuation messages. Previous approved v007 page UI remains unchanged.",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",
