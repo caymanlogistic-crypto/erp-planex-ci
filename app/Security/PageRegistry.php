@@ -61,6 +61,7 @@ final class PageRegistry
             self::definition('company.documents.tn_review', 'Проверка ТН', 'Операции', '', 43, '/company/tn-review', badgeProvider: 'tn_review_pending'),
             self::definition('company.documents.trip_closing', 'Сбор закрывающих документов', 'Операции', '', 44, '/company/trips/closing-documents'),
             self::definition('company.documents.trip_closing_registry', 'Закрывающие документы', 'Логисты', '', 280, '/company/logistics/closing-documents', badgeProvider: 'trip_closing_blocked_unloaded'),
+            self::definition('company.statistics.work', 'Статистика работы', 'Логисты', '', 290, '/company/statistics/work'),
             self::definition('company.registration_journal', 'Регистрация заявок', 'Операции', 'Журналы', 45, '/company/registration-journal'),
             self::definition('company.feo.requests', 'Все заявки', 'Операции', 'Заявки ФЭО', 50, '/company/feo/requests', badgeProvider: 'feo_freshness', badgeDisplay: 'self_parent'),
             self::definition('company.feo.costs', 'Стоимость заявок', 'Операции', 'Заявки ФЭО', 61, '/company/feo/requests/costs', badgeProvider: 'feo_cost_problem', badgeDisplay: 'self_parent'),

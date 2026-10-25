@@ -4,7 +4,7 @@ $root = dirname(__DIR__, 2);
 function base_path(string $path=''): string { global $root; return $root.($path!==''?'/'.ltrim($path,'/'):''); }
 function app_url(string $path): string { return $path; }
 function app_base_path(): string { return ''; }
-function current_app_path(): string { return '/company/statistics/managers'; }
+function current_app_path(): string { return getenv('PLANEX_MANAGER_STATISTICS_PERSONAL') === '1' ? '/company/statistics/work' : '/company/statistics/managers'; }
 function csrfToken(): string { return str_repeat('a', 64); }
 function e(mixed $value): string { return htmlspecialchars((string)$value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8'); }
 
@@ -72,7 +72,42 @@ if (getenv('PLANEX_MANAGER_STATISTICS_EMPTY') === '1') {
     $statistics['details'] = [];
     $eligibleManagers = [];
 }
+if (getenv('PLANEX_MANAGER_STATISTICS_PERSONAL') === '1') {
+    $personalMode = true;
+    $dates = ['2026-09-14','2026-09-21','2026-09-28','2026-10-05','2026-10-12','2026-10-19'];
+    $companyValues = [[5,65,46300],[6,65,51140],[9,113,90290],[5,69,29660],[6,136,76880],[9,162,77460]];
+    $ownValues = [[2,30,29930],[0,0,0],[5,68,65290],[0,0,0],[3,52,40050],[3,61,37130]];
+    $statistics['trend'] = [];
+    $statistics['period_rows'] = [];
+    $ownTrend = [];
+    foreach ($dates as $index => $date) {
+        $start = new DateTimeImmutable($date);
+        $end = min($start->modify('+6 days'), new DateTimeImmutable('2026-10-24'));
+        $common = ['key'=>$date,'label'=>'Нед. '.$start->format('W').' · '.$start->format('d.m'),
+            'from'=>$date,'to'=>$end->format('Y-m-d')];
+        $companyRow = $common + ['trips'=>$companyValues[$index][0], 'requests'=>$companyValues[$index][1],
+            'weight'=>(float)$companyValues[$index][2]];
+        $ownRow = $common + ['trips'=>$ownValues[$index][0], 'requests'=>$ownValues[$index][1],
+            'weight'=>(float)$ownValues[$index][2]];
+        $statistics['trend'][] = $companyRow;
+        $statistics['period_rows'][] = $companyRow + ['manager_values'=>[101=>$ownRow]];
+        $ownTrend[] = $ownRow;
+    }
+    $statistics['totals'] = ['trips'=>40,'requests'=>610,'weight'=>371730.0,'active_managers'=>3];
+    $statistics['managers'] = [['membership_id'=>101,'name'=>'Анна Белова','trips'=>13,
+        'requests'=>211,'weight'=>172400.0]];
+    $statistics['manager_trends'] = [['membership_id'=>101,'name'=>'Мои показатели','values'=>$ownTrend]];
+    $statistics['details'] = [];
+    $filters['from'] = '2026-09-14';
+    $filters['to'] = '2026-10-24';
+    $topbarCrumbs = [
+        ['label'=>'ООО «ПЛАНЭКС»','url'=>'/company/dashboard'],
+        ['label'=>'Логисты','url'=>null],
+        ['label'=>'Статистика работы','url'=>null],
+    ];
+}
 $pageTitle = 'Работа логистов';
+$pageTitle = !empty($personalMode) ? 'Статистика работы' : $pageTitle;
 $pageContext = 'Статистика › Работа логистов › Компания: ООО «ПЛАНЭКС»';
 $config = ['app'=>['app_name'=>'ERP PLANEX']];
 $db = new stdClass();

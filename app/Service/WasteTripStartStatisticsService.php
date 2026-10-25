@@ -156,6 +156,19 @@ final class WasteTripStartStatisticsService
         ];
     }
 
+    /** The personal report is cumulative from ISO week 38 of 2026. */
+    public static function normalizePersonalFilters(array $query, ?DateTimeImmutable $today = null): array
+    {
+        $filters = self::normalizeFilters($query, $today);
+        $filters['from'] = '2026-09-14';
+        $filters['duration_days'] = max(1, (int)(new DateTimeImmutable($filters['from']))
+            ->diff(new DateTimeImmutable($filters['to']))->days + 1);
+        $previousTo = (new DateTimeImmutable($filters['from']))->modify('-1 day');
+        $filters['previous_to'] = $previousTo->format('Y-m-d');
+        $filters['previous_from'] = $previousTo->modify('-'.($filters['duration_days'] - 1).' days')->format('Y-m-d');
+        return $filters;
+    }
+
     private static function shiftMonthsClamped(DateTimeImmutable $date, int $months): DateTimeImmutable
     {
         $target = $date->modify('first day of this month')->modify(($months >= 0 ? '+' : '').$months.' months');
@@ -202,6 +215,33 @@ final class WasteTripStartStatisticsService
             'period_rows'=>self::periodRows($trend, $managerTrends),
             'details'=>self::details($pdo, $filters, $allowedIds),
         ];
+    }
+
+    /** Company totals with a single server-selected membership series. */
+    public static function personalDashboard(PDO $pdo, array $filters, array $eligibleManagers, int $membershipId): array
+    {
+        $companyFilters = $filters;
+        $companyFilters['manager_ids'] = [];
+        $company = self::dashboard($pdo, $companyFilters, $eligibleManagers);
+
+        $personalFilters = $filters;
+        $personalFilters['manager_ids'] = [$membershipId];
+        $personal = self::dashboard($pdo, $personalFilters, $eligibleManagers);
+        $series = $personal['manager_trends'];
+        foreach ($series as &$item) {
+            $item['name'] = 'Мои показатели';
+        }
+        unset($item);
+
+        $company['managers'] = $personal['managers'];
+        $company['manager_trends'] = $series;
+        foreach ($company['period_rows'] as &$row) {
+            $row['manager_values'] = isset($row['manager_values'][$membershipId])
+                ? [$membershipId => $row['manager_values'][$membershipId]] : [];
+        }
+        unset($row);
+        $company['details'] = [];
+        return $company;
     }
 
     /** @return array{totals:array<string,int|float>,managers:list<array<string,mixed>>,daily:list<array<string,mixed>>,daily_managers:list<array<string,mixed>>} */

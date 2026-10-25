@@ -153,6 +153,12 @@ function company_breadcrumbs(array $route, string $companyName, ?array $company 
         return $crumbs;
     }
 
+    if ($page === 'statistics' && ($parts[2] ?? '') === 'work') {
+        $crumbs[] = ['label' => 'Логисты', 'url' => null];
+        $crumbs[] = ['label' => 'Статистика работы', 'url' => null];
+        return $crumbs;
+    }
+
     // /company/clients
     if ($page === 'clients') {
         $crumbs[] = ['label' => 'Клиенты', 'url' => app_url('/company/clients')];

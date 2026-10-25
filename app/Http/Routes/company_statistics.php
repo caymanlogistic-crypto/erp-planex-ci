@@ -16,6 +16,11 @@ $router->get(
     [$managerStatisticsController, 'index'],
     'company.statistics.managers'
 );
+$router->get(
+    '/company/statistics/work',
+    [$managerStatisticsController, 'personal'],
+    'company.statistics.work'
+);
 
 $router->get('/company/statistics/feo-share', [$feoShareStatisticsController, 'index'], 'company.statistics.feo_share');
 $router->get('/company/statistics/cargo-balance', [$cargoBalanceStatisticsController, 'index'], 'company.statistics.cargo_balance');

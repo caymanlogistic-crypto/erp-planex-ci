@@ -17,19 +17,35 @@ final class ManagerStatisticsController
 
     public function index(): void
     {
+        $this->render(false);
+    }
+
+    public function personal(): void
+    {
+        $this->render(true);
+    }
+
+    private function render(bool $personalMode): void
+    {
         // When the roles/access registry is active, the route's page grant is
         // authoritative. Keep the legacy role gate only for installations
         // where that registry has not been enabled.
         if (!AccessRuntime::current()->isActive()) {
+            if ($personalMode) {
+                http_response_code(403);
+                return;
+            }
             requireRole(['company_owner','senior_logist','logist']);
         }
 
-        $pageTitle = 'Работа логистов';
-        $pageContext = 'Статистика › Работа логистов';
+        $pageTitle = $personalMode ? 'Статистика работы' : 'Работа логистов';
+        $pageContext = $personalMode ? 'Логисты › Статистика работы' : 'Статистика › Работа логистов';
         $company = null;
         $dbError = null;
         $eligibleManagers = [];
-        $filters = WasteTripStartStatisticsService::normalizeFilters($_GET);
+        $filters = $personalMode
+            ? WasteTripStartStatisticsService::normalizePersonalFilters($_GET)
+            : WasteTripStartStatisticsService::normalizeFilters($_GET);
         $statistics = [
             'totals'=>['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0],
             'previous_totals'=>['trips'=>0,'requests'=>0,'weight'=>0.0,'active_managers'=>0,'completed'=>0,'cancelled'=>0],
@@ -54,7 +70,11 @@ final class ManagerStatisticsController
                         $dbError = 'Раздел ожидает обновление схемы статистики (141).';
                     } else {
                         $eligibleManagers = WasteTripStartStatisticsService::eligibleLogists($central, $companyId);
-                        $statistics = WasteTripStartStatisticsService::dashboard($local, $filters, $eligibleManagers);
+                        $statistics = $personalMode
+                            ? WasteTripStartStatisticsService::personalDashboard(
+                                $local, $filters, $eligibleManagers, (int)(AccessRuntime::current()->membershipId() ?? 0)
+                            )
+                            : WasteTripStartStatisticsService::dashboard($local, $filters, $eligibleManagers);
                         $pageContext .= ' › Компания: '.(string)$company['name'];
                     }
                 }
