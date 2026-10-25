@@ -44,8 +44,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "19a8b730bd9ca04fb4f0fc1705ce32b1f9e934da",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/19a8b730bd9ca04fb4f0fc1705ce32b1f9e934da/tests/roles_access_route_registry_test.py",
+      "verified_sha": "30d7a1fc888f295d8ce15344d7811c2fa28e86db",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/30d7a1fc888f295d8ce15344d7811c2fa28e86db/tests/roles_access_route_registry_test.py",
+      "verification_note": "2026-10-25: transfer delete adds one page-gated company route; complete route registry passes with 432 entries. Real transfer access test confirms denial without the page grant and permitted delete with the existing grant. No role model change.",
       "owning_paths": [
         "app/Security/**",
         "app/Service/AccessControlService.php",
@@ -320,8 +321,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "19a8b730bd9ca04fb4f0fc1705ce32b1f9e934da",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/19a8b730bd9ca04fb4f0fc1705ce32b1f9e934da/tests/employee_mail_contract_test.php",
+      "verified_sha": "30d7a1fc888f295d8ce15344d7811c2fa28e86db",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/30d7a1fc888f295d8ce15344d7811c2fa28e86db/tests/employee_mail_contract_test.php",
+      "verification_note": "2026-10-25: shared security.access ownership drift came only from the route-inventory test change. Employee-mail contract and browser at 1366/390 PASS; its runtime code is unchanged.",
       "owning_paths": [
         "app/Service/EmployeeMail*.php",
         "app/Http/Controllers/Company/EmployeeMailController.php",
