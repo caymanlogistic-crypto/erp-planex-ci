@@ -31,6 +31,7 @@ try{
     page.on('pageerror',error=>errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/company/statistics/work`,{waitUntil:'networkidle'});
     assert.equal(await page.locator('.page-title').innerText(),'Статистика работы');
+    assert.equal(await page.locator('.manager-stats__kpis').count(),0,'personal page has no KPI card block');
     assert.deepEqual(await page.locator('.manager-stats__period-table thead tr').first().locator('th').allTextContents(),
       ['Период','Мои показатели','Компания']);
     assert.equal(await page.locator('.manager-stats__period-table tbody tr').count(),6);
