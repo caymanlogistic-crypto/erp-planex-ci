@@ -557,6 +557,7 @@
 .registry-ui-modal .modal-foot{min-height:48px;padding:7px 16px;background:#f0ede6;border-top:1px solid #dedad0}
 .registry-ui-modal .modal-foot-actions{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;margin-left:auto}
 .registry-ui-modal .field-label{display:block;margin-bottom:3px}
+.registry-ui-modal.transfer-dialog .transfer-modes .field-label{margin-bottom:6px}
 .registry-ui-modal .field-input{min-height:32px}
 .registry-ui-modal textarea.registry-ui-request-ids{height:96px;min-height:96px;max-height:none;resize:vertical}
 .registry-ui-modal .radio-item input[type=radio]{width:15px;height:15px;min-height:0;padding:0;margin:0;border:0}
@@ -572,6 +573,8 @@
 .registry-ui-modal .badge.badge-danger{background:#ffd6cc}
 .registry-ui-modal .badge:is(.badge-ok,.badge-warning,.badge-danger):hover{border-color:#131210;color:#131210}
 .registry-ui-modal-geo{display:flex;flex-direction:column;gap:8px;margin-top:8px;padding:0;border:0}
+.registry-ui-modal-grid--reading .registry-ui-modal-geo{gap:4px}
+.registry-ui-modal-grid--reading .registry-ui-modal-quality{margin-top:4px}
 .registry-ui-modal-geo .field{margin:0}
 .registry-ui-modal-preview{min-width:0;margin-top:0;padding-top:0;border-top:0}
 .registry-ui-modal .registry-ui-compact-table-scroll{max-height:300px;overflow:auto;border:1px solid #a8a196}

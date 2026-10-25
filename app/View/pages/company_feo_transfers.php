@@ -49,7 +49,7 @@ require_once base_path('app/View/components/registry_tabler_icons.php');
     <?= csrfField() ?>
     <?php if (!$coordinatesOnly): ?><div class="modal-body transfer-form-body"><div class="registry-ui-modal-grid"><?php endif; ?>
     <?php if (!$coordinatesOnly): ?>
-      <div class="field"><label class="field-label" for="transfer-ids">Заявки</label><textarea class="field-input registry-ui-request-ids" id="transfer-ids" name="request_ids" rows="5" required placeholder="Вставьте шестизначные номера заявок"></textarea><div class="field-msg is-error" data-ids-error role="alert" hidden></div></div>
+      <div class="field"><label class="field-label" for="transfer-ids">Заявки</label><textarea class="field-textarea registry-ui-request-ids" id="transfer-ids" name="request_ids" rows="5" required placeholder="Вставьте шестизначные номера заявок"></textarea><div class="field-msg is-error" data-ids-error role="alert" hidden></div></div>
       <fieldset class="field transfer-modes"><legend class="field-label">Куда переместить</legend><div class="radio-group is-horizontal"><label class="radio-item"><input type="radio" name="mode" value="request" checked><span class="radio-mark" aria-hidden="true"></span><span class="radio-text"><span class="radio-label">К другой заявке</span></span></label><label class="radio-item"><input type="radio" name="mode" value="address"><span class="radio-mark" aria-hidden="true"></span><span class="radio-text"><span class="radio-label">По адресу</span></span></label></div></fieldset>
       <div data-request-destination class="field"><label class="field-label" for="transfer-source">Номер заявки с нужным адресом</label><input class="field-input" id="transfer-source" name="source_request_id" inputmode="numeric"><div class="field-msg is-error" data-source-error role="alert" hidden></div></div>
     <?php endif; ?>
@@ -63,7 +63,7 @@ require_once base_path('app/View/components/registry_tabler_icons.php');
       <?php endif; ?>
     </div>
     <div class="field-msg is-error" data-form-error role="alert" hidden></div>
-    <section data-preview-result class="registry-ui-modal-preview" hidden aria-live="polite"><div class="registry-ui-modal-summary" data-preview-summary></div><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Вес нетто</th><th>Было</th><th>Станет</th></tr></thead><tbody data-preview-rows></tbody></table></div></section>
+    <section data-preview-result class="registry-ui-modal-preview" hidden aria-live="polite"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Вес нетто</th><th>Было</th><th>Станет</th></tr></thead><tbody data-preview-rows></tbody></table></div></section>
     <?php if (!$coordinatesOnly): ?></div></div><div class="modal-foot"><div class="modal-foot-actions"><button class="btn btn-ghost" type="button" data-close-dialog>Отменить</button><button class="btn btn-primary" type="button" data-commit disabled>Создать блок и переместить заявки</button></div></div><?php endif; ?>
   </form>
   <?php if (!$coordinatesOnly): ?></dialog><?php endif; ?>

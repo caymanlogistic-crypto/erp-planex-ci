@@ -3,6 +3,7 @@
   "id": "feo-transfer-popups-20261024",
   "date": "2026-10-24",
   "status": "OWNER_APPROVED",
+  "partially_superseded_by": "decisions-20261025-feo-transfer-v007.json — create preview count, history layout and wording, confirmation warning, address persistence and compact spacing",
   "source": {
     "actor": "OWNER",
     "checkpoint": "popup-body-current-canon-lab-20261024:v010",
