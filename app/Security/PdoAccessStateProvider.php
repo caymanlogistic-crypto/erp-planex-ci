@@ -73,16 +73,20 @@ final class PdoAccessStateProvider implements AccessStateProvider
         $membershipId = (int) $row['id'];
 
         $pages = $this->pdo->prepare(
-            'SELECT page_key
+            'SELECT page_key, is_allowed
              FROM role_page_permissions
-             WHERE role_id = ? AND is_allowed = 1
+             WHERE role_id = ?
              ORDER BY page_key'
         );
         $pages->execute([$roleId]);
-        $rolePageKeys = array_values(array_filter(
-            array_map('strval', $pages->fetchAll(PDO::FETCH_COLUMN)),
-            static fn (string $key): bool => $key !== ''
-        ));
+        $rolePageKeys = [];
+        $configuredRolePageKeys = [];
+        foreach ($pages->fetchAll(PDO::FETCH_ASSOC) as $page) {
+            $pageKey = (string) ($page['page_key'] ?? '');
+            if ($pageKey === '') continue;
+            $configuredRolePageKeys[] = $pageKey;
+            if ((bool) ($page['is_allowed'] ?? false)) $rolePageKeys[] = $pageKey;
+        }
 
         $pageOverridesStmt = $this->pdo->prepare(
             'SELECT page_key, effect
@@ -143,6 +147,7 @@ final class PdoAccessStateProvider implements AccessStateProvider
             $roleDataScopes,
             $dataScopeOverrides,
             self::compatibilityRoleCode((string) ($row['system_key'] ?? ''), (string) ($row['normalized_name'] ?? '')),
+            $configuredRolePageKeys,
         );
     }
 

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
-import {readFileSync} from 'node:fs';
+import {mkdirSync,readFileSync} from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
 import {createRequire} from 'node:module';
@@ -39,6 +39,8 @@ try {
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
     await page.goto(`${origin}/company/warehouses/addresses?role=${role}`);
     await page.waitForSelector('[data-registry-ready="true"]');
+    assert.equal(await page.locator('.nav-sub-item[href="/company/warehouses/addresses"]').count(),1);
+    if(role==='logist') assert.equal(await page.locator('.nav-sub-item[href="/company/warehouses/stock"]').count(),0);
     const bounds=await page.evaluate(()=>{
       const head=document.querySelector('[data-warehouse-directory] .registry-ui-head').getBoundingClientRect();
       const card=document.querySelector('[data-warehouse-directory] .registry-ui-card').getBoundingClientRect();
@@ -61,14 +63,29 @@ try {
     assert.ok(await dialog.evaluate(element=>element.scrollWidth-element.clientWidth)<=1);
     assert.equal(await dialog.locator('form').count(),role==='owner'?1:0);
     if(role==='owner'){
+      if(process.env.PLANEX_WAREHOUSE_SCREENSHOT_DIR){
+        mkdirSync(process.env.PLANEX_WAREHOUSE_SCREENSHOT_DIR,{recursive:true});
+        await dialog.screenshot({path:path.join(process.env.PLANEX_WAREHOUSE_SCREENSHOT_DIR,`warehouse-dialog-${width}.png`)});
+      }
+      const contactLayout=await dialog.evaluate(element=>{
+        const section=element.querySelector('[data-warehouse-contacts]').previousElementSibling.getBoundingClientRect();
+        const group=element.querySelector('[data-warehouse-contact]');
+        const heading=group.querySelector('legend').getBoundingClientRect();
+        const label=group.querySelector('.field-label:not(legend)').getBoundingClientRect();
+        const input=group.querySelector('.field-input').getBoundingClientRect();
+        return {sectionGap:heading.top-section.bottom,headingGap:label.top-heading.bottom,labelGap:input.top-label.bottom,aligned:Math.abs(label.left-input.left)<=1};
+      });
+      assert.ok(contactLayout.sectionGap>=7 && contactLayout.headingGap>=7 && contactLayout.labelGap>=2 && contactLayout.aligned,
+        `warehouse contact captions overlap or misalign ${width}: ${JSON.stringify(contactLayout)}`);
       assert.equal(await dialog.locator('[name="latitude"]').inputValue(),'55.75');
       assert.equal(await dialog.locator('[name="longitude"]').inputValue(),'37.62');
       await dialog.locator('[data-warehouse-add-contact]').click();
       assert.equal(await dialog.locator('[data-warehouse-contact]').count(),3);
       await dialog.locator('[data-warehouse-add-contact]').click();
       assert.equal(await dialog.locator('[data-warehouse-contact]').count(),4);
-      await dialog.locator('[data-warehouse-remove-contact]').last().click();
+      await dialog.locator('[data-warehouse-remove-contact]').nth(1).click();
       assert.equal(await dialog.locator('[data-warehouse-contact]').count(),3);
+      assert.deepEqual(await dialog.locator('[data-warehouse-contact] legend').allTextContents(),['Контакт 1','Контакт 2','Контакт 3']);
     }else assert.match(await dialog.innerText(),/Петров Пётр/);
     await dialog.locator('[data-warehouse-close]').first().click();
     await page.locator('[data-warehouse-open="7"]').focus();

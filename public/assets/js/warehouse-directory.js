@@ -18,6 +18,11 @@
     const dialog = page.querySelector(`[data-warehouse-dialog="${id}"]`);
     if (dialog && !dialog.open) dialog.showModal();
   };
+  const numberContacts = holder => {
+    holder.querySelectorAll('[data-warehouse-contact]').forEach((contact, index) => {
+      contact.querySelector('legend').textContent = `Контакт ${index + 1}`;
+    });
+  };
   page.addEventListener('click', event => {
     const open = event.target.closest('[data-warehouse-open], [data-warehouse-row]');
     if (open) {
@@ -33,12 +38,16 @@
       const holder = add.closest('dialog').querySelector('[data-warehouse-contacts]');
       if (holder.querySelectorAll('[data-warehouse-contact]').length >= 20) return;
       const fragment = page.querySelector('[data-warehouse-contact-template]').content.cloneNode(true);
-      fragment.querySelector('legend').textContent = `Контакт ${holder.querySelectorAll('[data-warehouse-contact]').length + 1}`;
       holder.append(fragment);
+      numberContacts(holder);
       holder.lastElementChild.querySelector('[name="contact_name[]"]')?.focus();
     }
     const remove = event.target.closest('[data-warehouse-remove-contact]');
-    if (remove) remove.closest('[data-warehouse-contact]')?.remove();
+    if (remove) {
+      const holder = remove.closest('[data-warehouse-contacts]');
+      remove.closest('[data-warehouse-contact]')?.remove();
+      numberContacts(holder);
+    }
   });
   page.addEventListener('dblclick', event => {
     const row = event.target.closest('[data-warehouse-row]');

@@ -85,6 +85,8 @@ expect(!$registry->isGrantable('company.vehicle_units'), 'Dead vehicle_unit page
 expect(($registry->page('company.vehicle_sets')['label'] ?? '') === 'ТС', 'VehicleSet must be shown as ТС.');
 expect(in_array('company.vehicle_sets', array_column($registry->navigationPages(), 'key'), true), 'VehicleSet must remain visible in navigation.');
 expect(in_array('company.vehicle_sets', $registry->grantablePageKeys(), true), 'VehicleSet must remain configurable in role administration.');
+expect(in_array('company.warehouses.addresses', $registry->grantablePageKeys(), true), 'Warehouse addresses must be configurable in role administration.');
+expect(in_array('company.warehouses.addresses', array_column($registry->grantableTree()['Операции']['Склады'] ?? [], 'key'), true), 'Warehouse addresses must appear in the warehouse role group.');
 expect(count($registry->pageKeys()) === count(array_unique($registry->pageKeys())), 'Page keys must be unique.');
 expect(($registry->page('company.documents.trip_closing')['path'] ?? '') === '/company/trips/closing-documents', 'Original collection route must remain unchanged.');
 expect(($registry->page('company.documents.trip_closing_registry')['path'] ?? '') === '/company/logistics/closing-documents', 'New logistics registry must have its own route.');
@@ -96,6 +98,17 @@ expect($closingAccess->canAccessPage('company.documents.trip_closing') && $closi
 $provider->snapshot = memberSnapshot(['company.documents.trip_closing'], ['company.documents.trip_closing_registry' => 'deny']);
 $closingAccess = $resolver->resolve(new AccessRequestContext(4, 7));
 expect($closingAccess->canAccessPage('company.documents.trip_closing') && !$closingAccess->canAccessPage('company.documents.trip_closing_registry'), 'Explicit registry denial must override compatibility grant.');
+
+$provider->snapshot = memberSnapshot(['company.warehouses.stock']);
+expect($resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.warehouses.addresses'), 'Existing warehouse stock grant must keep address access until the role is saved.');
+$provider->snapshot = new MembershipAccessSnapshot(91, 7, 'active', 12, '', ['company.warehouses.stock'], [], [], [], 'logist', ['company.warehouses.stock', 'company.warehouses.addresses']);
+$warehouseAccess = $resolver->resolve(new AccessRequestContext(4, 7));
+expect($warehouseAccess->canAccessPage('company.warehouses.stock') && !$warehouseAccess->canAccessPage('company.warehouses.addresses'), 'Explicitly disabled warehouse address permission must not inherit stock access.');
+$provider->snapshot = memberSnapshot(['company.warehouses.addresses']);
+$warehouseAccess = $resolver->resolve(new AccessRequestContext(4, 7));
+expect($warehouseAccess->canAccessPage('company.warehouses.addresses') && !$warehouseAccess->canAccessPage('company.warehouses.stock'), 'Address permission must work independently of warehouse stock.');
+$provider->snapshot = memberSnapshot(['company.warehouses.stock'], ['company.warehouses.addresses'=>'deny']);
+expect(!$resolver->resolve(new AccessRequestContext(4, 7))->canAccessPage('company.warehouses.addresses'), 'Personal address denial must override inherited warehouse access.');
 
 expect(in_array('company.trips.gps_coverage', $registry->grantablePageKeys(), true), 'GPS page must be configurable in roles.');
 $provider->snapshot = memberSnapshot(['company.trips.waste'], [], ['waste_trip'=>'own']);

@@ -134,6 +134,10 @@ try {
     // ROLE CRUD: create -> rename/pages/6 scopes -> readback -> copy -> cleanup.
     $role = $roleService->create(7, 'QA Temporary Role');
     $roleId = (int) $role['id'];
+    $pdo->prepare("INSERT INTO role_page_permissions(role_id,page_key,is_allowed) VALUES(?,'company.warehouses.stock',1)")->execute([$roleId]);
+    $legacyRole = null;
+    foreach ($roleService->listForCompany(7, $pageKeys) as $candidate) if ((int) $candidate['id'] === $roleId) $legacyRole = $candidate;
+    $ok(($legacyRole['pages']['company.warehouses.addresses'] ?? false) === true, 'existing warehouse role must show inherited address access before first save');
     $scopes = [
         'client' => 'own', 'contractor' => 'all', 'vehicle_unit' => 'none',
         'driver' => 'own', 'linear_trip' => 'all', 'waste_trip' => 'none',
@@ -145,6 +149,7 @@ try {
     foreach ($roles as $candidate) if ((int) $candidate['id'] === $roleId) $savedRole = $candidate;
     $ok(is_array($savedRole) && $savedRole['name'] === 'QA Temporary Role Renamed', 'role rename/readback failed');
     foreach ($pages as $pageKey => $allowed) $ok(($savedRole['pages'][$pageKey] ?? null) === $allowed, 'role page readback failed ' . $pageKey);
+    $ok(($savedRole['pages']['company.warehouses.addresses'] ?? null) === false, 'saved role must keep warehouse addresses independently disabled');
     foreach ($scopes as $entityType => $scope) $ok(($savedRole['data_scopes'][$entityType] ?? null) === $scope, 'role scope readback failed ' . $entityType);
     $ok(($savedRole['default_page_key'] ?? null) === 'company.finance.dashboard', 'role default page readback failed');
     $copy = $roleService->copy(7, $roleId, 'QA Temporary Role Copy', $pageKeys);
@@ -185,6 +190,13 @@ try {
     $access = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
     $ok(!$access->canAccessPage('company.clients') && $access->canAccessPage('company.finance.dashboard'), 'personal page overrides not effective on next resolve');
     $ok($access->dataScope('client') === 'all' && $access->dataScope('driver') === 'none', 'personal data overrides not effective on next resolve');
+    $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages + ['company.warehouses.stock'=>true], $scopes, 'company.finance.dashboard', $grantablePageKeys, $landingPageKeys);
+    $warehouseAccess = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
+    $ok($warehouseAccess->canAccessPage('company.warehouses.stock') && !$warehouseAccess->canAccessPage('company.warehouses.addresses'), 'saved role must deny addresses independently of stock');
+    $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages + ['company.warehouses.addresses'=>true], $scopes, 'company.finance.dashboard', $grantablePageKeys, $landingPageKeys);
+    $warehouseAccess = $resolver->resolve(new AccessRequestContext($tempAccountId, 7));
+    $ok($warehouseAccess->canAccessPage('company.warehouses.addresses') && !$warehouseAccess->canAccessPage('company.warehouses.stock'), 'saved role must grant addresses independently of stock');
+    $roleService->save(7, $roleId, 'QA Temporary Role Renamed', $pages, $scopes, 'company.finance.dashboard', $grantablePageKeys, $landingPageKeys);
     $landingService = new CompanyLandingPageService($pdo, $registry);
     $ok($landingService->pathForAccount($tempAccountId, 7) === '/company/finance/dashboard', 'ordinary role default landing not resolved');
     $ok($landingService->pathForAccess(EffectiveAccess::systemOwner(11, 7, $pageKeys)) === '/company/dashboard', 'owner landing is not fixed to dashboard');

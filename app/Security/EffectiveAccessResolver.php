@@ -76,6 +76,15 @@ final class EffectiveAccessResolver
             $pages[$registryKey] = true;
         }
 
+        // Preserve existing warehouse access until the new address permission
+        // is explicitly saved for a role; afterward the two pages are independent.
+        $addressKey = 'company.warehouses.addresses';
+        if (($pages['company.warehouses.stock'] ?? false)
+            && !in_array($addressKey, $snapshot->configuredRolePageKeys, true)
+            && ($snapshot->pageOverrides[$addressKey] ?? 'inherit') === 'inherit') {
+            $pages[$addressKey] = true;
+        }
+
         $scopes = [];
         foreach (['client', 'contractor', 'vehicle_unit', 'driver', 'linear_trip', 'waste_trip'] as $entityType) {
             $roleScope = $snapshot->roleDataScopes[$entityType] ?? EffectiveAccess::SCOPE_NONE;

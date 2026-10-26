@@ -104,9 +104,6 @@ final class EffectiveAccess
         if ($pageKey === 'company.finance.received_paid') {
             $pageKey = 'company.finance.invoices';
         }
-        if ($pageKey === 'company.warehouses.addresses') {
-            $pageKey = 'company.warehouses.stock';
-        }
         return $this->active && ($this->pagePermissions[$pageKey] ?? false) === true;
     }
 

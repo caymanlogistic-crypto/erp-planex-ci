@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
+use App\Security\AccessRuntime;
 use App\Service\WarehouseDirectoryService;
 use App\Service\WarehouseStockService;
 use App\Service\WarehouseTripCorrectionService;
@@ -22,7 +23,7 @@ final class WarehouseDirectoryController
         $pageContext = 'Склады › Адреса складов';
         $warehouses = [];
         $dbError = null;
-        $isOwner = (string)($_SESSION['role_code'] ?? '') === 'company_owner';
+        $isOwner = AccessRuntime::current()->isSystemOwner();
         $successFlash = $_SESSION['warehouse_directory_success'] ?? null;
         $errorFlash = $_SESSION['warehouse_directory_error'] ?? null;
         unset($_SESSION['warehouse_directory_success'], $_SESSION['warehouse_directory_error']);
@@ -51,6 +52,11 @@ final class WarehouseDirectoryController
     public function save(): void
     {
         requireRole(['company_owner']);
+        if (!AccessRuntime::current()->isSystemOwner()) {
+            http_response_code(403);
+            echo 'Доступ запрещён.';
+            return;
+        }
         verifyCsrfRequest();
         try {
             [$tenant, $legacy] = $this->connections();
