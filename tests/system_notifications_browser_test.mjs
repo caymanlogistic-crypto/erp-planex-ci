@@ -7,6 +7,7 @@ import {createRequire} from 'node:module';
 const require=createRequire(import.meta.url);
 const {chromium}=require('playwright');
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'..');
+const evidence=process.env.PLANEX_VISUAL_EVIDENCE_DIR;
 const server=http.createServer((request,response)=>{
   const files={'/assets/css/erp-ui.css':'public/assets/css/erp-ui.css','/assets/js/system-notifications.js':'public/assets/js/system-notifications.js'};
   const file=files[request.url];
@@ -17,10 +18,11 @@ const server=http.createServer((request,response)=>{
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const browser=await chromium.launch({headless:true});
 try{
-  for(const width of [390,1280]){
+  for(const width of [390,800,1280,1920]){
     const page=await browser.newPage({viewport:{width,height:800}});
     const errors=[];page.on('pageerror',error=>errors.push(error.message));
     await page.goto(`http://127.0.0.1:${server.address().port}/`);
+    const mainBefore=await page.locator('main').boundingBox();
     await page.evaluate(()=>{
       PlanexNotifications.show({tone:'success',message:'Блок #3 возвращён.'});
       PlanexNotifications.show({tone:'warning',message:'Следующее сообщение'});
@@ -30,11 +32,16 @@ try{
     const toast=page.locator('.toast-stack--system .toast--system');
     assert.equal(await toast.count(),1,'Only one visible message');
     assert.equal(await toast.getAttribute('role'),'status');
-    const first=await toast.evaluate(element=>({background:getComputedStyle(element).backgroundColor,border:getComputedStyle(element).borderColor,iconBorder:getComputedStyle(element.querySelector('.toast-icon')).borderWidth,right:element.getBoundingClientRect().right,top:element.getBoundingClientRect().top,bodyWidth:document.documentElement.scrollWidth,windowWidth:innerWidth}));
+    const first=await toast.evaluate(element=>{const box=element.getBoundingClientRect();const stack=element.parentElement.getBoundingClientRect();return {background:getComputedStyle(element).backgroundColor,border:getComputedStyle(element).borderColor,iconBorder:getComputedStyle(element.querySelector('.toast-icon')).borderWidth,left:box.left,right:box.right,top:box.top,stackTop:stack.top,animation:getComputedStyle(element).animationName,bodyWidth:document.documentElement.scrollWidth,windowWidth:innerWidth}});
     assert.equal(first.background,'rgb(205, 235, 215)');
     assert.equal(first.border,'rgb(19, 18, 16)');
     assert.equal(first.iconBorder,'0px');
-    assert.ok(first.top>=0 && first.right<=width && first.bodyWidth===first.windowWidth,'Top placement without horizontal overflow: '+JSON.stringify(first));
+    assert.ok(Math.abs((first.left+first.right)/2-width/2)<1,'Notification is centered in the viewport: '+JSON.stringify(first));
+    assert.equal(first.stackTop,width<=480?8:16,'Approved top inset');
+    assert.equal(first.animation,'system-toast-in','Notification slides down from above');
+    assert.ok(first.top>=0 && first.left>=0 && first.right<=width && first.bodyWidth===first.windowWidth,'Top placement without horizontal overflow: '+JSON.stringify(first));
+    assert.deepEqual(await page.locator('main').boundingBox(),mainBefore,'Fixed notification does not move page content');
+    if(evidence){fs.mkdirSync(evidence,{recursive:true});await page.screenshot({path:path.join(evidence,`system-notification-success-${width}.png`)});}
     const close=toast.getByRole('button',{name:'Закрыть уведомление'});
     await close.focus();
     assert.equal(await close.evaluate(element=>getComputedStyle(element).outlineWidth),'2px');

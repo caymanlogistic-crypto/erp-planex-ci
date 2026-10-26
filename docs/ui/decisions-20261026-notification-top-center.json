@@ -1,0 +1,19 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "system-notification-top-center-20261026",
+  "date": "2026-10-26",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "quote": "выезжающий блок с ошибками и подтверждениями сделай чтобы он сверху экрана выезжал и по середине"
+  },
+  "scope": ["Shared opt-in transient notifications .toast-stack--system / .toast--system"],
+  "supersedes": ["geometry: upper-right placement in system-notification-center-20261025"],
+  "shared_style_owner": "public/assets/css/erp-ui.css",
+  "shared_behavior_owner": "public/assets/js/system-notifications.js",
+  "approved": {
+    "geometry": "Center the existing 420px maximum-width notification stack horizontally in the viewport, fixed 16px from the top on desktop. At widths up to 480px, keep the approved 8px top and side insets. The card still overlays content without moving the page or causing horizontal scroll.",
+    "motion": "Keep the existing slide down from above, 5-second visible lifetime, immediate close button, FIFO queue and reduced-motion behavior.",
+    "retained": "Keep the approved shared success/warning/danger fills, black border/text, unbordered icon, IBM Plex Sans typography, accessible roles/focus, and existing distinction between transient and field-specific errors. Legacy MAX settings toasts remain outside this opt-in scope."
+  }
+}
