@@ -39,8 +39,8 @@ trait DocumentGeneratorTemplateTrait
 
         try {
             $defaults = [
-                'vehicle_lease_crew' => ['Договор-заявка аренды ТС с экипажем', 'contract_vehicle_lease_crew_v3.docx'],
-                'carrier_sublease_crew' => ['Договор-заявка субаренды ТС с экипажем', 'contract_carrier_sublease_crew_v1.docx'],
+                'vehicle_lease_crew' => ['Договор-заявка аренды ТС с экипажем', 'contract_vehicle_lease_crew_v4.docx'],
+                'carrier_sublease_crew' => ['Договор-заявка субаренды ТС с экипажем', 'contract_carrier_sublease_crew_v2.docx'],
                 'waybill_driver_assignment' => ['Приложение к путевому листу / задание водителю', 'waybill_driver_assignment_v1.docx'],
                 'client_sublease_crew' => ['Договор субаренды транспортного средства с экипажем', 'client_sublease_contract_v1.docx'],
                 'client_invoice' => ['Счёт клиенту', 'client_invoice_v1.docx'],
@@ -55,7 +55,12 @@ trait DocumentGeneratorTemplateTrait
                 $existing = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
                 if ($existing !== null) {
                     // Upgrade only the original ERP builtin; leave owner-uploaded versions untouched.
-                    if ($type === 'client_upd_status2' && (string)($existing['sha256'] ?? '') === 'ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312') {
+                    $previousBuiltInSha = [
+                        'vehicle_lease_crew' => '87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',
+                        'carrier_sublease_crew' => '074d6a082e1a07b823bf156814842e3cb345f1724bca1656e13e8be0d053719e',
+                        'client_upd_status2' => 'ef01e14c54913c2c140674ed04ecaff14b832521c3bbd8105127c3c5443ec312',
+                    ];
+                    if (isset($previousBuiltInSha[$type]) && (string)($existing['sha256'] ?? '') === $previousBuiltInSha[$type]) {
                         $source = self::materializeBuiltInTemplate($filename);
                         try {
                             self::createTemplateVersionFromFile($pdo, $companyId, (int)$existing['id'], $type, $name, $source, $filename, $userId, $role);
@@ -102,7 +107,9 @@ trait DocumentGeneratorTemplateTrait
             'contract_vehicle_lease_crew_v1.docx' => '0e3e7a3ca4d81face23fa070bcabffacc86636d08affdda91faa3c725d4e8adc',
             'contract_vehicle_lease_crew_v2.docx' => '7b79a9ac558af1633b1ed2d6414bef1efe0222c67a543d1b4a8e802e6267a1fa',
             'contract_vehicle_lease_crew_v3.docx' => '87584e74a9cfd6bc150fc5ea2c4f7b7045e8ff4b2fba7a5fb80b03ccfc97dff2',
+            'contract_vehicle_lease_crew_v4.docx' => '11c72fa3206d86d490f71aa88c47fb79cde9e06e0774c12793c89f9948f33e43',
             'contract_carrier_sublease_crew_v1.docx' => '074d6a082e1a07b823bf156814842e3cb345f1724bca1656e13e8be0d053719e',
+            'contract_carrier_sublease_crew_v2.docx' => 'b3f1068c42b9a9659f4774934eeb8924cf20c58e83e44a9298df98f3e35c0be7',
             'waybill_driver_assignment_v1.docx' => '5a45e855c6fb47dbc96e6d8b9185d7032b5ca86a9baefbb78fdc6419749f73ab',
             'client_sublease_contract_v1.docx' => '01ebdc8bb56beb11b20abc787bd6067c7ae3379274e1143cf3e4cf1258f7230c',
             'client_invoice_v1.docx' => '10b5f47f51e50d894475f2360dd921f3104ddd0ea048e4c64f27f93ff189e2dd',
