@@ -7,6 +7,8 @@ require_once base_path('app/Service/WarehouseStockService.php');
 require_once base_path('app/Service/WarehouseTripCorrectionService.php');
 require_once base_path('app/Service/WarehouseTripRequestReconciliationService.php');
 require_once base_path('app/Http/Controllers/Company/WarehouseStockController.php');
+require_once base_path('app/Service/WarehouseDirectoryService.php');
+require_once base_path('app/Http/Controllers/Company/WarehouseDirectoryController.php');
 require_once base_path('app/Service/WasteTripIncidentService.php');
 require_once base_path('app/Service/WasteTripCustomerPaymentService.php');
 require_once base_path('app/Service/WasteTripGeneralPaymentService.php');
@@ -27,7 +29,10 @@ $controller = new \App\Http\Controllers\Company\LinearTripController($config, $d
 $wasteTripController = new \App\Http\Controllers\Company\WasteTripController($config, $db);
 $gpsCoverageController = new \App\Http\Controllers\Company\GpsCoverageController($config, $db);
 $warehouseStockController = new \App\Http\Controllers\Company\WarehouseStockController($config, $db);
+$warehouseDirectoryController = new \App\Http\Controllers\Company\WarehouseDirectoryController($config, $db);
 
+$router->get('/company/warehouses/addresses', [$warehouseDirectoryController, 'index'], 'company.warehouses.addresses');
+$router->post('/company/warehouses/addresses', [$warehouseDirectoryController, 'save'], 'company.warehouses.addresses');
 $router->get('/company/warehouses/stock', [$warehouseStockController, 'index'], 'company.warehouses.stock');
 $router->get('/company/warehouses/stock/correction-preview', [$warehouseStockController, 'correctionPreview'], 'company.warehouses.stock');
 $router->post('/company/warehouses/stock/correction', [$warehouseStockController, 'correctionSubmit'], 'company.warehouses.stock');

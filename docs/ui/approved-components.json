@@ -821,6 +821,38 @@
       "required_contracts": []
     },
     {
+      "id": "warehouse-addresses",
+      "family": "registry",
+      "adaptation_status": "current_20261018",
+      "route": "/erpv2/company/warehouses/addresses",
+      "view": "app/View/pages/company_warehouse_directory.php",
+      "popup_decision": "docs/ui/decisions-20261026-warehouse-directory.json",
+      "popup_style_owner": "public/assets/css/registry-components.css",
+      "header_icon": {
+        "variant": "outline",
+        "source": "app/View/components/tabler/outline/map-pin.svg",
+        "version": "3.48.0",
+        "name": "map-pin",
+        "role": "registry.page-head",
+        "pack": "@tabler/icons"
+      },
+      "reference_select": false,
+      "sticky": true,
+      "asset_owner": "app/View/pages/company_warehouse_directory.php",
+      "browser_test": "tests/warehouse_directory_runtime_browser_test.mjs",
+      "runtime_browser_test": "tests/warehouse_directory_runtime_browser_test.mjs",
+      "data_roles": ["id", "name", "primary", "secondary", "missing"],
+      "table_surfaces": [{
+        "id": "main",
+        "selector": ".registry-ui-card > :is(.table-scroll,.rp-v010-table-wrap) > table",
+        "row_selector": "tbody > tr:not(:has(td[colspan]))"
+      }],
+      "table_states": [{"id": "initial", "visible": ["main"], "data": {"main": "populated"}}],
+      "async_search": {"applicable": false, "reason": "Search filters loaded warehouse rows locally."},
+      "contract_sources": ["app/View/pages/company_warehouse_directory.php", "tests/fixtures/warehouse_directory_runtime.php"],
+      "required_contracts": ["tests/warehouse_directory_mysql_test.php"]
+    },
+    {
       "id": "feo-weights",
       "family": "registry",
       "adaptation_status": "current_20261018",
