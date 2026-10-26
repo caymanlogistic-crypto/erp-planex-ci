@@ -24,9 +24,9 @@ if ($command === 'seed') {
         $pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
         $pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)')->execute(['ООО Synthetic','active',$schema]);
     }
-    $pdo->exec('CREATE TABLE warehouses(id BIGINT UNSIGNED PRIMARY KEY,name VARCHAR(255),full_address VARCHAR(500)) ENGINE=InnoDB');
-    $pdo->exec("INSERT INTO warehouses VALUES(7,'Склад Север','Москва, Складская улица, 1, корпус 2'),(8,'Склад Юг','Тула, Южная улица, 2')");
-    $insert = $pdo->prepare('INSERT INTO warehouses VALUES(?,?,?)');
+    $pdo->exec('CREATE TABLE warehouses(id BIGINT UNSIGNED PRIMARY KEY,name VARCHAR(255),full_address VARCHAR(500),latitude DECIMAL(10,7) NULL,longitude DECIMAL(10,7) NULL) ENGINE=InnoDB');
+    $pdo->exec("INSERT INTO warehouses VALUES(7,'Склад Север','Москва, Складская улица, 1, корпус 2',55.7500000,37.6200000),(8,'Склад Юг','Тула, Южная улица, 2',NULL,NULL)");
+    $insert = $pdo->prepare('INSERT INTO warehouses VALUES(?,?,?,NULL,NULL)');
     for ($id=9; $id<58; $id++) $insert->execute([$id,'Склад '.$id,'Регион, Промышленная улица, '.$id]);
     $insert->execute([58,'Склад без адреса','']);
     $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-legacy/001_warehouse_contacts.sql'));
@@ -49,7 +49,7 @@ if ($command === 'seed') {
         ['name'=>'Иванов Иван','position'=>'Заведующий','phone'=>'+7 900 000-00-01','email'=>'ivanov@example.test'],
         ['name'=>'Петров Пётр','position'=>'Приёмщик','phone'=>'+7 900 000-00-02','email'=>'petrov@example.test'],
     ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-    $pdo->prepare('INSERT INTO warehouse_contacts (warehouse_id,contacts_json,updated_by_user_id,updated_at,latitude,longitude) VALUES(?,?,12,CURRENT_TIMESTAMP(6),?,?)')->execute([7,$contacts,'55.7500000','37.6200000']);
+    $pdo->prepare('INSERT INTO warehouse_contacts (warehouse_id,contacts_json,updated_by_user_id,updated_at) VALUES(?,?,12,CURRENT_TIMESTAMP(6))')->execute([7,$contacts]);
     echo 'SEEDED'; exit;
 }
 if ($command === 'cleanup') {

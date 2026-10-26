@@ -23,24 +23,21 @@ final class WarehouseDirectoryService
     public static function list(PDO $legacy): array
     {
         $column = self::addressColumn($legacy);
-        $coordinatesAvailable = self::coordinatesAvailable($legacy);
-        $warehouses = $legacy->query('SELECT id,name,`'.$column.'` AS address FROM warehouses ORDER BY name,id')->fetchAll(PDO::FETCH_ASSOC);
-        $contacts = $legacy->query('SELECT warehouse_id,contacts_json'.($coordinatesAvailable ? ',latitude,longitude' : '').' FROM warehouse_contacts')->fetchAll(PDO::FETCH_ASSOC);
+        self::assertWarehouseCoordinates($legacy);
+        $warehouses = $legacy->query('SELECT id,name,`'.$column.'` AS address,latitude,longitude FROM warehouses ORDER BY name,id')->fetchAll(PDO::FETCH_ASSOC);
+        $contacts = $legacy->query('SELECT warehouse_id,contacts_json FROM warehouse_contacts')->fetchAll(PDO::FETCH_ASSOC);
         $byId = [];
         foreach ($contacts as $row) {
             $decoded = json_decode((string)$row['contacts_json'], true, 512, JSON_THROW_ON_ERROR);
             if (!is_array($decoded) || !array_is_list($decoded)) throw new RuntimeException('Некорректная запись контактов склада.');
-            $byId[(int)$row['warehouse_id']] = [
-                'contacts'=>$decoded,
-                'latitude'=>self::coordinateDisplay($row['latitude'] ?? null),
-                'longitude'=>self::coordinateDisplay($row['longitude'] ?? null),
-            ];
+            $byId[(int)$row['warehouse_id']] = $decoded;
         }
         foreach ($warehouses as &$row) {
             $row['id'] = (int)$row['id'];
             $row['address'] = trim((string)($row['address'] ?? ''));
-            $details = $byId[$row['id']] ?? ['contacts'=>[], 'latitude'=>null, 'longitude'=>null];
-            $row += $details;
+            $row['latitude'] = self::coordinateDisplay($row['latitude']);
+            $row['longitude'] = self::coordinateDisplay($row['longitude']);
+            $row['contacts'] = $byId[$row['id']] ?? [];
         }
         unset($row);
         return $warehouses;
@@ -72,39 +69,35 @@ final class WarehouseDirectoryService
             $valid[] = compact('name', 'position', 'phone', 'email');
         }
         $column = self::addressColumn($legacyReader);
-        $coordinatesAvailable = self::coordinatesAvailable($legacyReader);
-        if (!$coordinatesAvailable && $latitude !== null) throw new RuntimeException('Сохранение координат пока недоступно.');
+        self::assertWarehouseCoordinates($legacyReader);
         $table = '`'.$legacyDatabase.'`.`warehouses`';
         $contactTable = '`'.$legacyDatabase.'`.`warehouse_contacts`';
         $legacyWriter->beginTransaction();
         try {
-            $select = $legacyWriter->prepare('SELECT `'.$column.'` AS address FROM '.$table.' WHERE id=? FOR UPDATE');
+            $select = $legacyWriter->prepare('SELECT `'.$column.'` AS address,latitude,longitude FROM '.$table.' WHERE id=? FOR UPDATE');
             $select->execute([$warehouseId]);
             $current = $select->fetch(PDO::FETCH_ASSOC);
             if (!$current) throw new RuntimeException('Склад не найден.');
             if (trim((string)($current['address'] ?? '')) !== trim($expectedAddress)) throw new RuntimeException('Адрес склада изменился. Обновите страницу и повторите сохранение.');
-            $contactSelect = $legacyWriter->prepare('SELECT contacts_json'.($coordinatesAvailable ? ',latitude,longitude' : '').' FROM '.$contactTable.' WHERE warehouse_id=? FOR UPDATE');
+            $currentCoordinatesHash = self::coordinatesHash(
+                self::coordinateDisplay($current['latitude']),
+                self::coordinateDisplay($current['longitude'])
+            );
+            if (!hash_equals($currentCoordinatesHash, $expectedCoordinatesHash)) throw new RuntimeException('Координаты склада изменились. Обновите страницу и повторите сохранение.');
+            $contactSelect = $legacyWriter->prepare('SELECT contacts_json FROM '.$contactTable.' WHERE warehouse_id=? FOR UPDATE');
             $contactSelect->execute([$warehouseId]);
             $currentDetails = $contactSelect->fetch(PDO::FETCH_ASSOC) ?: null;
             $currentContacts = $currentDetails === null ? [] : json_decode((string)$currentDetails['contacts_json'], true, 512, JSON_THROW_ON_ERROR);
             $currentHash = hash('sha256', json_encode($currentContacts, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR));
             if (!hash_equals($currentHash, $expectedContactsHash)) throw new RuntimeException('Контакты склада изменились. Обновите страницу и повторите сохранение.');
-            $currentCoordinatesHash = self::coordinatesHash(
-                self::coordinateDisplay($currentDetails['latitude'] ?? null),
-                self::coordinateDisplay($currentDetails['longitude'] ?? null)
-            );
-            if (!hash_equals($currentCoordinatesHash, $expectedCoordinatesHash)) throw new RuntimeException('Координаты склада изменились. Обновите страницу и повторите сохранение.');
-
-            $coordinateColumns = $coordinatesAvailable ? ',latitude,longitude' : '';
-            $coordinateValues = $coordinatesAvailable ? ',?,?' : '';
-            $coordinateUpdate = $coordinatesAvailable ? ',latitude=VALUES(latitude),longitude=VALUES(longitude)' : '';
-            $save = $legacyWriter->prepare('INSERT INTO '.$contactTable.' (warehouse_id,contacts_json,updated_by_user_id,updated_at'.$coordinateColumns.') VALUES (?,?,?,CURRENT_TIMESTAMP(6)'.$coordinateValues.') ON DUPLICATE KEY UPDATE contacts_json=VALUES(contacts_json),updated_by_user_id=VALUES(updated_by_user_id),updated_at=VALUES(updated_at)'.$coordinateUpdate);
+            $save = $legacyWriter->prepare('INSERT INTO '.$contactTable.' (warehouse_id,contacts_json,updated_by_user_id,updated_at) VALUES (?,?,?,CURRENT_TIMESTAMP(6)) ON DUPLICATE KEY UPDATE contacts_json=VALUES(contacts_json),updated_by_user_id=VALUES(updated_by_user_id),updated_at=VALUES(updated_at)');
             $params = [$warehouseId, json_encode($valid, JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR), $userId];
-            if ($coordinatesAvailable) array_push($params, $latitude, $longitude);
             $save->execute($params);
-            if ($address !== trim((string)($current['address'] ?? ''))) {
-                $update = $legacyWriter->prepare('UPDATE '.$table.' SET `'.$column.'`=? WHERE id=?');
-                $update->execute([$address, $warehouseId]);
+            if ($address !== trim((string)$current['address'])
+                || $latitude !== self::coordinateDisplay($current['latitude'])
+                || $longitude !== self::coordinateDisplay($current['longitude'])) {
+                $update = $legacyWriter->prepare('UPDATE '.$table.' SET `'.$column.'`=?,latitude=?,longitude=? WHERE id=?');
+                $update->execute([$address, $latitude, $longitude, $warehouseId]);
             }
             $legacyWriter->commit();
         } catch (Throwable $error) {
@@ -118,13 +111,12 @@ final class WarehouseDirectoryService
         return hash('sha256', json_encode([$latitude, $longitude], JSON_THROW_ON_ERROR));
     }
 
-    private static function coordinatesAvailable(PDO $legacy): bool
+    private static function assertWarehouseCoordinates(PDO $legacy): void
     {
-        $columns = $legacy->query('SHOW COLUMNS FROM warehouse_contacts')->fetchAll(PDO::FETCH_COLUMN);
-        $latitude = in_array('latitude', $columns, true);
-        $longitude = in_array('longitude', $columns, true);
-        if ($latitude !== $longitude) throw new RuntimeException('Поля координат склада установлены не полностью.');
-        return $latitude;
+        $columns = $legacy->query('SHOW COLUMNS FROM warehouses')->fetchAll(PDO::FETCH_COLUMN);
+        if (!in_array('latitude', $columns, true) || !in_array('longitude', $columns, true)) {
+            throw new RuntimeException('В складском справочнике нет полей координат.');
+        }
     }
 
     private static function coordinateDisplay(mixed $value): ?string
