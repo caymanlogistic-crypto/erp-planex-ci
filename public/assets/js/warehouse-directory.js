@@ -14,8 +14,11 @@
   registry?.querySelector('[data-registry-field="query"]')?.addEventListener('input', applySearch);
   applySearch();
   page.addEventListener('click', event => {
-    const open = event.target.closest('[data-warehouse-open]');
-    if (open) page.querySelector(`[data-warehouse-dialog="${open.dataset.warehouseOpen}"]`)?.showModal();
+    const open = event.target.closest('[data-warehouse-open], [data-warehouse-row]');
+    if (open) {
+      const id = open.dataset.warehouseOpen || open.dataset.registryRowId;
+      page.querySelector(`[data-warehouse-dialog="${id}"]`)?.showModal();
+    }
     const close = event.target.closest('[data-warehouse-close]');
     if (close) close.closest('dialog')?.close();
     const add = event.target.closest('[data-warehouse-add-contact]');

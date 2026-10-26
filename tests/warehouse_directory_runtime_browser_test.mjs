@@ -49,6 +49,14 @@ try {
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
     await page.goto(origin+'/company/warehouses/addresses');
     await page.waitForSelector('[data-registry-ready="true"]');
+    const bounds=await page.evaluate(()=>{
+      const head=document.querySelector('[data-warehouse-directory] .registry-ui-head').getBoundingClientRect();
+      const card=document.querySelector('[data-warehouse-directory] .registry-ui-card').getBoundingClientRect();
+      return {headX:head.x,cardX:card.x,headWidth:head.width,cardWidth:card.width};
+    });
+    assert.ok(bounds.cardWidth<=1691,`warehouse card exceeds canonical 1690px: ${bounds.cardWidth}`);
+    assert.ok(Math.abs(bounds.headX-bounds.cardX)<=1 && Math.abs(bounds.headWidth-bounds.cardWidth)<=1,
+      `warehouse header and card are not aligned: ${JSON.stringify(bounds)}`);
     await assertRegistryVisualContract(page,`warehouse-addresses ${actor} ${width}`);
     await assertRegistryDataContract(page,'warehouse-addresses');
     await assertRegistryTableState(page,'warehouse-addresses','initial',{runtime:true});
@@ -62,12 +70,15 @@ try {
     assert.deepEqual(await page.locator('[data-warehouse-row]:visible').evaluateAll(rows=>rows.map(row=>row.dataset.registryRowId)),['7']);
     await page.locator('.registry-ui-reset').click();
     assert.equal(await page.locator('[data-warehouse-row]:visible').count(),52);
-    await page.locator('[data-warehouse-open="7"]').focus();
-    await page.keyboard.press('Enter');
+    await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-name').click();
     const dialog=page.locator('[data-warehouse-dialog="7"]');
     assert.equal(await dialog.evaluate(el=>el.open),true);
     const dialogOverflow=await dialog.evaluate(el=>el.scrollWidth-el.clientWidth);
     assert.ok(dialogOverflow<=1,`dialog horizontal overflow ${actor} ${width}: ${dialogOverflow}`);
+    await dialog.locator('[data-warehouse-close]').first().click();
+    assert.equal(await dialog.evaluate(el=>el.open),false);
+    await page.locator('[data-warehouse-row][data-registry-row-id="7"] .registry-ui-secondary').click();
+    assert.equal(await dialog.evaluate(el=>el.open),true);
     if(actor==='owner'){
       assert.deepEqual(await dialog.locator('input[name="contact_name[]"]').evaluateAll(inputs=>inputs.map(input=>input.value)),['Иванов Иван','Петров Пётр']);
       assert.equal(await dialog.locator('input[name="address"]').inputValue(),'Москва, Складская улица, 1, корпус 2');
