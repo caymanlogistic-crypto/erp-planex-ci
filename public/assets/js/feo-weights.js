@@ -54,20 +54,11 @@
     if (!response.ok || !result.success) throw new Error(result.message || 'Не удалось выполнить действие.');
     return result;
   }
-  const parseIds = raw => {
-    if (raw.length > 100000) return {error:'Слишком большой список заявок.'};
-    if (!raw.trim()) return {error:'Введите номера заявок.'};
-    const matches = [];
-    for (const line of raw.split(/\r\n|\r|\n/u)) {
-      let cell = line.trim();
-      if (line.includes('\t')) cell = line.split('\t',1)[0].trim();
-      else if (line.includes('|')) cell = line.trim().replace(/^\|+|\|+$/g,'').split('|',1)[0].trim();
-      if (cell) matches.push(...(cell.match(/(?<!\d)\d{6}(?!\d)/gu) || []));
-    }
-    if (!matches.length) return {error:'Не найдено самостоятельных шестизначных номеров заявок.'};
-    const ids = [...new Set(matches)];
-    if (ids.length > 1000) return {error:'В одном блоке допускается до 1000 заявок.'};
-    return {ids,matches};
+  const parseId = raw => {
+    const value = raw.trim();
+    if (/^\d{6}$/u.test(value)) return {id:value};
+    if ((value.match(/(?<!\d)\d{6}(?!\d)/gu) || []).length > 1) return {error:'Укажите одну заявку.'};
+    return {error:'Введите шестизначный номер заявки.'};
   };
   function invalidate() {
     revision++;
@@ -80,19 +71,26 @@
   }
   function editorHtml(row) {
     const id = escape(row.zayavka_id);
-    return `<tr data-request-id="${id}"><td class="registry-ui-entity-id">${id}</td><td>${weight(row.mass_netto)}</td><td><input class="field-input" name="netto_kg" inputmode="decimal" aria-label="Новое нетто заявки ${id}, кг" value="${escape(kg(row.mass_netto))}"></td><td>${weight(row.mass_brutto)}</td><td><input class="field-input" name="brutto_kg" inputmode="decimal" aria-label="Новое брутто заявки ${id}, кг" value="${escape(kg(row.mass_brutto))}"></td></tr>`;
+    return `<tr><td class="registry-ui-primary">Нетто</td><td>${weight(row.mass_netto)}</td><td><input class="field-input" name="netto_kg" inputmode="decimal" aria-label="Новое нетто заявки ${id}, кг" value="${escape(kg(row.mass_netto))}"></td></tr><tr><td class="registry-ui-primary">Брутто</td><td>${weight(row.mass_brutto)}</td><td><input class="field-input" name="brutto_kg" inputmode="decimal" aria-label="Новое брутто заявки ${id}, кг" value="${escape(kg(row.mass_brutto))}"></td></tr>`;
+  }
+  function updateCommitState() {
+    if (!previewToken || rows.length !== 1 || saving) { commit.disabled = true; return; }
+    const row = rows[0];
+    const netto = editorRows.querySelector('[name="netto_kg"]')?.value ?? '';
+    const brutto = editorRows.querySelector('[name="brutto_kg"]')?.value ?? '';
+    commit.disabled = sameKg(netto,row.mass_netto) && sameKg(brutto,row.mass_brutto);
   }
   function renderPreview(result, atRevision) {
     if (atRevision !== revision) return;
+    if (!Array.isArray(result.preview?.rows) || result.preview.rows.length !== 1) {
+      setError('[data-ids-error]','Укажите одну заявку.');
+      return;
+    }
     rows = result.preview.rows;
     previewToken = result.preview_token;
-    const duplicateCount = Number(result.duplicates) || 0;
-    const summary = find('[data-edit-summary]');
-    summary.textContent = duplicateCount ? `Повторов объединено: ${duplicateCount}.` : '';
-    summary.hidden = !duplicateCount;
-    editorRows.innerHTML = rows.map(editorHtml).join('');
+    editorRows.innerHTML = editorHtml(rows[0]);
     section.hidden = false;
-    commit.disabled = false;
+    updateCommitState();
   }
   async function fetchPreview(atRevision, rawIds) {
     try {
@@ -105,7 +103,7 @@
   function schedulePreview() {
     clearTimeout(previewTimer);
     invalidate();
-    const parsed = parseIds(idsInput.value);
+    const parsed = parseId(idsInput.value);
     if (!idsInput.value.trim()) return;
     const atRevision = revision;
     if (parsed.error) {
@@ -115,19 +113,7 @@
     previewTimer = setTimeout(() => fetchPreview(atRevision,idsInput.value),250);
   }
   idsInput.addEventListener('input',schedulePreview);
-  idsInput.addEventListener('paste',event => {
-    const pasted = event.clipboardData?.getData('text/plain');
-    if (pasted === undefined) return;
-    event.preventDefault();
-    const start=idsInput.selectionStart,end=idsInput.selectionEnd;
-    const before=idsInput.value.slice(0,start),after=idsInput.value.slice(end);
-    const candidate=before+(before && !/[,\s|]$/u.test(before) ? ', ' : '')+pasted+
-      (after && !/^[,\s|]/u.test(after) ? ', ' : '')+after;
-    const parsed=parseIds(candidate);
-    idsInput.value=parsed.error ? candidate : parsed.matches.join(', ');
-    idsInput.dispatchEvent(new Event('input',{bubbles:true}));
-  });
-  editorRows.addEventListener('input',() => setError('[data-table-error]',''));
+  editorRows.addEventListener('input',() => { setError('[data-table-error]',''); updateCommitState(); });
   form.addEventListener('submit',event => event.preventDefault());
   root.querySelectorAll('[data-open-weight]').forEach(button => button.addEventListener('click',() => {
     createDialog.showModal(); idsInput.focus(); schedulePreview();
@@ -146,37 +132,37 @@
     return actual === original;
   }
   commit.addEventListener('click',async () => {
-    if (!previewToken || commit.disabled || saving) return;
-    const targets={}; let changed=false;
-    for (const tr of editorRows.querySelectorAll('tr')) {
-      const id=tr.dataset.requestId;
-      const row=rows.find(item=>String(item.zayavka_id)===id);
-      const netto=tr.querySelector('[name="netto_kg"]').value.trim();
-      const brutto=tr.querySelector('[name="brutto_kg"]').value.trim();
-      for (const [value,input] of [[netto,tr.querySelector('[name="netto_kg"]')],[brutto,tr.querySelector('[name="brutto_kg"]')]]) {
-        if (value && !/^\d{1,13}(?:[.,]\d)?$/.test(value.replace(/\s/g,''))) {
-          setError('[data-table-error]',`Заявка №${id}: укажите неотрицательный вес с точностью до 0,1 кг.`);
-          input.focus(); return;
-        }
+    if (!previewToken || commit.disabled || saving || rows.length !== 1) return;
+    const row=rows[0], id=String(row.zayavka_id);
+    const nettoInput=editorRows.querySelector('[name="netto_kg"]');
+    const bruttoInput=editorRows.querySelector('[name="brutto_kg"]');
+    const netto=nettoInput.value.trim(), brutto=bruttoInput.value.trim();
+    for (const [value,input] of [[netto,nettoInput],[brutto,bruttoInput]]) {
+      if (value && !/^\d{1,13}(?:[.,]\d)?$/.test(value.replace(/\s/g,''))) {
+        setError('[data-table-error]',`Заявка №${id}: укажите неотрицательный вес с точностью до 0,1 кг.`);
+        input.focus(); return;
       }
-      targets[id]={netto_kg:netto,brutto_kg:brutto};
-      if (!sameKg(netto,row.mass_netto) || !sameKg(brutto,row.mass_brutto)) changed=true;
     }
-    if (!changed) { setError('[data-table-error]','Вес не изменён ни у одной заявки.'); return; }
+    if (sameKg(netto,row.mass_netto) && sameKg(brutto,row.mass_brutto)) {
+      setError('[data-table-error]','Вес заявки не изменён.'); return;
+    }
     saving=true; commit.disabled=true; setError('[data-table-error]','');
     try {
       const data=new FormData();
-      data.set('preview_token',previewToken); data.set('targets',JSON.stringify(targets));
+      data.set('preview_token',previewToken); data.set('targets',JSON.stringify({[id]:{netto_kg:netto,brutto_kg:brutto}}));
       data.set('name',''); data.set('comment','');
       completed(await request('/create',data),'сохранён');
-    } catch(error) { setError('[data-table-error]',error.message); saving=false; commit.disabled=false; }
+    } catch(error) { setError('[data-table-error]',error.message); saving=false; updateCommitState(); }
   });
-  const detailHtml = () => `<div class="field"><span class="page-eyebrow">Заявки</span><p class="registry-ui-modal-text">${detailItems.map(item=>`<strong class="registry-ui-entity-id">${escape(item.zayavka_id)}</strong>`).join(', ')}</p></div><section class="registry-ui-modal-preview"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Нетто было</th><th>Нетто стало</th><th>Брутто было</th><th>Брутто стало</th></tr></thead><tbody>${detailItems.map(item=>`<tr><td class="registry-ui-entity-id">${escape(item.zayavka_id)}</td><td>${weight(item.before_netto)}</td><td>${weight(item.after_netto)}</td><td>${weight(item.before_brutto)}</td><td>${weight(item.after_brutto)}</td></tr>`).join('')}</tbody></table></div></section>`;
+  const detailHtml = () => detailItems.length === 1
+    ? `<div class="field"><span class="page-eyebrow">ЗАЯВКА</span><p class="registry-ui-modal-text"><strong class="registry-ui-entity-id">${escape(detailItems[0].zayavka_id)}</strong></p></div><section class="registry-ui-modal-preview"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table registry-ui-compact-table--weight-single"><thead><tr><th>Вес</th><th>Было</th><th>Стало</th></tr></thead><tbody><tr><td class="registry-ui-primary">Нетто</td><td>${weight(detailItems[0].before_netto)}</td><td>${weight(detailItems[0].after_netto)}</td></tr><tr><td class="registry-ui-primary">Брутто</td><td>${weight(detailItems[0].before_brutto)}</td><td>${weight(detailItems[0].after_brutto)}</td></tr></tbody></table></div></section>`
+    : `<div class="field"><span class="page-eyebrow">ЗАЯВКИ</span><p class="registry-ui-modal-text">${detailItems.map(item=>`<strong class="registry-ui-entity-id">${escape(item.zayavka_id)}</strong>`).join(', ')}</p></div><section class="registry-ui-modal-preview"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Нетто было</th><th>Нетто стало</th><th>Брутто было</th><th>Брутто стало</th></tr></thead><tbody>${detailItems.map(item=>`<tr><td class="registry-ui-entity-id">${escape(item.zayavka_id)}</td><td>${weight(item.before_netto)}</td><td>${weight(item.after_netto)}</td><td>${weight(item.before_brutto)}</td><td>${weight(item.after_brutto)}</td></tr>`).join('')}</tbody></table></div></section>`;
   function showDetail() {
     detailTitle.textContent=`Изменение веса #${detailBatch.id}`;
     detailBody.innerHTML=detailHtml();
     detailDialog.classList.remove('registry-ui-modal--confirmation');
-    detailDialog.classList.add('registry-ui-modal--reading');
+    detailDialog.classList.add(detailItems.length === 1 ? 'registry-ui-modal--weight-single' : 'registry-ui-modal--reading');
+    detailDialog.classList.remove(detailItems.length === 1 ? 'registry-ui-modal--reading' : 'registry-ui-modal--weight-single');
     detailRevert.hidden=detailBatch.status!=='applied';
     confirmRevert.hidden=true;
     if (!detailDialog.open) detailDialog.showModal();
@@ -184,7 +170,7 @@
   function showConfirm() {
     detailTitle.textContent=`Изменение веса #${detailBatch.id}`;
     detailBody.innerHTML=`<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">К прежним значениям веса нетто и брутто вернутся заявки: ${detailItems.map(item=>`<strong class="registry-ui-entity-id">${escape(item.zayavka_id)}</strong>`).join(', ')}.</p><div class="field-msg is-error" data-revert-error role="alert" hidden></div></div>`;
-    detailDialog.classList.remove('registry-ui-modal--reading');
+    detailDialog.classList.remove('registry-ui-modal--reading','registry-ui-modal--weight-single');
     detailDialog.classList.add('registry-ui-modal--confirmation');
     detailRevert.hidden=true;
     confirmRevert.hidden=false;

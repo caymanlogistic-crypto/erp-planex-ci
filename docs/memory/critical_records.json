@@ -248,9 +248,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "840443b98a0b5cb1b17db1ef1c97b3ba3a3a53e3",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/840443b98a0b5cb1b17db1ef1c97b3ba3a3a53e3/tests/feo_history_canon_browser_test.mjs",
-      "verification_note": "2026-10-26: weight MAX event retains approved compact transfer-message structure, CRLF-only recognition of known legacy default and untouched custom rules from the prior verification. Weight UI reuses the transfer history table and its CSS: the only change in feo-transfers.css is subject column geometry for weight, with no change to transfer selectors. After merging current canonical, transfer and weight history visual/data contract PASS at 390/1280/1920/3840, weight popup browser PASS, 1100px transfer/finance/map reset geometry PASS, UI style guard PASS and isolated weight-batch MySQL PASS (32 checks). Earlier transfer return, coordinate and trip-warning behavior remain covered.",
+      "verified_sha": "404ca7ec0dd5dc9ed235a9bbf889932f9cf3d795",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/404ca7ec0dd5dc9ed235a9bbf889932f9cf3d795/tests/feo_transfers_access_mysql_test.php",
+      "verification_note": "2026-10-26: single-request weight UI changes only the shared access test under this transfer ownership. Transfer and weight role/personal access, direct URL, revocation, tenant isolation and controller create/revert PASS in isolated MySQL; transfer and weight history visual/data contract PASS at 390/1280/1920/3840; real route/controller/service runtime browser PASS. Transfer runtime, CSS and business behavior unchanged.",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",

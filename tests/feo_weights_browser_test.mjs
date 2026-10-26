@@ -19,55 +19,90 @@ await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
 const browser = await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_BINARY ? {executablePath:process.env.PLANEX_BROWSER_BINARY} : {})});
 try {
   const page = await browser.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message));
-  let submitted;
+  let submitted, previewRequests = 0;
   await page.route('**/company/feo/requests/weights/**', async route => {
     const url = route.request().url(); let result;
-    if (url.endsWith('/preview')) result = route.request().postData()?.includes('999999')
-      ? {success:false,message:'Заявки не найдены: 999999. Блок не сохранён.'}
-      : {success:true,preview_token:'preview-1',duplicates:Math.max(0,(route.request().postData().match(/100001/g)?.length || 0)-1),preview:{rows:[{id:1,zayavka_id:'100001',mass_netto:'1.2500',mass_brutto:'1.5000'},{id:2,zayavka_id:'100002',mass_netto:null,mass_brutto:'0.0000'},{id:3,zayavka_id:'100003',mass_netto:'0.0001',mass_brutto:'0.0002'}],count:3,state_hash:'fixture'}};
+    if (url.endsWith('/preview')) {
+      previewRequests++;
+      const raw = route.request().postData() || '';
+      const id = raw.includes('100003') ? '100003' : raw.includes('100004') ? '100004' : '100001';
+      const row = id === '100003' ? {id:3,zayavka_id:id,mass_netto:null,mass_brutto:'0.0000'}
+        : id === '100004' ? {id:4,zayavka_id:id,mass_netto:'0.0001',mass_brutto:'0.0002'}
+        : {id:1,zayavka_id:id,mass_netto:'1.2500',mass_brutto:'1.5000'};
+      result = raw.includes('999999')
+        ? {success:false,message:'Заявки не найдены: 999999. Блок не сохранён.'}
+        : {success:true,preview_token:'preview-1',preview:{rows:[row],count:1,state_hash:'fixture'}};
+    }
     else if (url.endsWith('/create')) { submitted = route.request().postData(); result = {success:true,batch_id:8,notification:'disabled'}; }
     else if (url.endsWith('/revert')) result = {success:false,message:'Вес заявки изменён после блока.'};
-    else result = {success:true,batch:{id:7,status:'applied',name:'<img src=x onerror=alert(1)>',comment:'Проверка',created_by_name:'Менеджер',created_at:'2026-10-14',reverted_at:null},items:[{zayavka_id:'100001',before_netto:'1.2500',after_netto:'1.3000',before_brutto:'1.5000',after_brutto:'1.7000'},{zayavka_id:'100002',before_netto:null,after_netto:'0.0000',before_brutto:'0.0000',after_brutto:'2.4000'}]};
+    else {
+      const historical = url.includes('/6/json');
+      result = {success:true,batch:{id:historical?6:7,status:'applied',name:'<img src=x onerror=alert(1)>',comment:'Проверка',created_by_name:'Менеджер',created_at:'2026-10-14',reverted_at:null},items:historical
+        ? [{zayavka_id:'100001',before_netto:'1.2500',after_netto:'1.3000',before_brutto:'1.5000',after_brutto:'1.7000'},{zayavka_id:'100002',before_netto:null,after_netto:'0.0000',before_brutto:'0.0000',after_brutto:'2.4000'}]
+        : [{zayavka_id:'100001',before_netto:'1.2500',after_netto:'1.3000',before_brutto:'1.5000',after_brutto:'1.7000'}]};
+    }
     await route.fulfill({status:result.success?200:422,contentType:'application/json',body:JSON.stringify(result)});
   });
   const url = 'http://127.0.0.1:'+server.address().port;
-  for (const width of [1366,390]) {
-    submitted=undefined;
+  for (const width of [1280,390]) {
+    submitted=undefined; previewRequests=0;
     await page.setViewportSize({width,height:900}); await page.goto(url);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false,'Page horizontal overflow '+width);
     await page.locator('[data-open-weight]').click();
     assert.equal(await page.locator('.registry-ui-modal[open]').count(),1,'Shared modal class');
     assert.equal(await page.locator('[data-commit]').isDisabled(),true,'Commit disabled before preview');
-    await page.locator('[name="request_ids"]').fill('999999');
+    const requestInput = page.locator('[name="request_ids"]');
+    assert.equal(await requestInput.getAttribute('type'),'text','Leading zero safe text input');
+    assert.equal(await requestInput.getAttribute('maxlength'),null,'Pasted IDs are never silently truncated');
+    assert.equal(await requestInput.evaluate(node => document.activeElement === node),true,'Keyboard focus starts on request');
+    assert.equal(await requestInput.evaluate(node => Math.round(node.getBoundingClientRect().height)),32,'Approved 32px field');
+    await requestInput.fill('100001, 100002');
+    await page.locator('[data-ids-error]').getByText('Укажите одну заявку.').waitFor();
+    assert.equal(previewRequests,0,'Multiple IDs do not request preview');
+    await requestInput.fill('999999');
     await page.locator('[data-ids-error]').getByText('999999',{exact:false}).waitFor();
     assert.match(await page.locator('[data-ids-error]').innerText(),/не найдены в системе/);
-    await page.locator('[name="request_ids"]').fill('100001 100002 100003');
+    await requestInput.fill('100003');
     await page.locator('[data-edit-rows] tr').first().waitFor();
-    assert.equal(await page.locator('[data-edit-rows] tr').count(),3);
-    assert.equal(await page.locator('[data-commit]').isEnabled(),true,'Commit enabled by automatic preview');
-    assert.match(await page.locator('[data-edit-rows] tr').nth(1).locator('td').nth(1).innerText(),/—/,'NULL shown as missing');
-    assert.match(await page.locator('[data-edit-rows] tr').nth(1).locator('td').nth(3).innerText(),/0 кг/,'Zero distinct from NULL');
-    assert.equal(await page.locator('[data-edit-rows] tr').nth(2).locator('[name="netto_kg"]').inputValue(),'0.1','A tenth of a kilogram remains editable at exact precision');
-    assert.equal(await page.locator('[data-edit-summary]').isVisible(),false,'No count above preview');
-    await page.locator('[name="request_ids"]').fill('100001, 100002, 100003, 100001, 100001');
-    await page.waitForFunction(() => document.querySelector('[data-edit-summary]')?.textContent.includes('Повторов объединено: 2'));
-    await page.locator('[data-commit]').click();
-    assert.match(await page.locator('[data-table-error]').innerText(),/не изменён/,'No-change error under table');
-    await page.locator('[data-edit-rows] tr').first().locator('[name="netto_kg"]').fill('1300');
-    await page.locator('[data-edit-rows] tr').first().locator('[name="brutto_kg"]').fill('1700');
-    await page.locator('[data-edit-rows] tr').nth(1).locator('[name="brutto_kg"]').fill('2400');
+    assert.match(await page.locator('[data-edit-rows] tr').first().locator('td').nth(1).innerText(),/—/,'NULL shown as missing');
+    assert.match(await page.locator('[data-edit-rows] tr').nth(1).locator('td').nth(1).innerText(),/0 кг/,'Zero distinct from NULL');
+    await requestInput.fill('100004');
+    await page.waitForFunction(() => document.querySelector('[name="netto_kg"]')?.value === '0.1');
+    assert.equal(await page.locator('[name="netto_kg"]').inputValue(),'0.1','A tenth of a kilogram remains editable');
+    await requestInput.fill('100001');
+    await page.waitForFunction(() => document.querySelector('[name="netto_kg"]')?.value === '1250');
+    assert.equal(await page.locator('[data-ids-error]').isVisible(),false,'Corrected input clears error');
+    assert.equal(await page.locator('[data-edit-rows] tr').count(),2,'Net and gross use two rows');
+    assert.equal(await page.locator('[data-edit-rows] tr').first().locator('td').count(),3,'Three aligned columns');
+    assert.equal(await page.locator('[data-edit-summary]').count(),0,'No count above preview');
+    assert.equal(await page.locator('[data-commit]').isDisabled(),true,'Unchanged values keep save disabled');
+    const aligned = await page.locator('[data-edit-rows]').evaluate(body => [...body.rows].map(row => [...row.cells].map(cell => {
+      const box = cell.getBoundingClientRect(), style = getComputedStyle(cell);
+      return [Math.round(box.x),Math.round(box.width),Math.round(box.height),style.paddingTop,style.paddingBottom,style.paddingLeft];
+    })));
+    assert.deepEqual(aligned[0],aligned[1],`All weight cells align at ${width}px`);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false,`No page overflow at ${width}px`);
+    if (process.env.PLANEX_WEIGHT_SCREENSHOT_DIR) {
+      fs.mkdirSync(process.env.PLANEX_WEIGHT_SCREENSHOT_DIR,{recursive:true});
+      await page.screenshot({path:path.join(process.env.PLANEX_WEIGHT_SCREENSHOT_DIR,`weight-create-${width}.png`)});
+    }
+    await page.locator('[name="netto_kg"]').fill('1300');
+    assert.equal(await page.locator('[data-commit]').isEnabled(),true,'Editing net enables save');
+    await page.locator('[name="netto_kg"]').fill('1250');
+    assert.equal(await page.locator('[data-commit]').isDisabled(),true,'Restoring original net disables save');
+    await page.locator('[name="netto_kg"]').fill('1300');
+    await page.locator('[name="brutto_kg"]').fill('1700');
     await page.locator('[data-commit]').click();
     await page.waitForLoadState('load');
     assert.ok(submitted, `Create request missing: ${await page.locator('[data-table-error]').innerText()} / ${errors.join('; ')}`);
     assert.match(submitted, /"100001":\{"netto_kg":"1300","brutto_kg":"1700"\}/);
-    assert.match(submitted, /"100002":\{"netto_kg":"","brutto_kg":"2400"\}/);
-    assert.match(submitted, /"100003":\{"netto_kg":"0.1","brutto_kg":"0.2"\}/);
+    assert.doesNotMatch(submitted, /"100002":/,'Exactly one target submitted');
     assert.match(submitted, /name="name"\r\n\r\n\r\n/,'Name submitted blank by compact form');
     assert.match(submitted, /name="comment"\r\n\r\n\r\n/,'Comment submitted blank by compact form');
     await page.locator('.toast--system').waitFor();
     assert.match(await page.locator('.toast--system').innerText(),/Блок #8/,'Shared notification');
     await page.locator('[data-detail="7"]').click();
-    await page.locator('[data-detail-body] .registry-ui-compact-table').waitFor();
+    await page.locator('[data-detail-body] .registry-ui-compact-table--weight-single').waitFor();
     assert.equal(await page.locator('[data-detail-body] img').count(),0,'Detail escapes server data');
     assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table').count(),1,'Shared detail table');
     const weightTablePadding=await page.locator('[data-detail-body] .registry-ui-compact-table').evaluate(e=>[e.querySelector('th'),e.querySelector('td')].map(cell=>{
@@ -76,19 +111,28 @@ try {
     }));
     assert.deepEqual(weightTablePadding,[['8px','8px','10px','border-box'],['8px','8px','10px','border-box']],`Shared compact table padding ${width}`);
     assert.equal(await page.locator('[data-detail-body] .registry-ui-modal-summary').count(),0,'No count above history table');
-    assert.equal(await page.locator('[data-detail-dialog]').evaluate(node=>node.classList.contains('registry-ui-modal--reading')),true,'Shared reading width');
-    assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table tbody tr').nth(1).locator('td').nth(1).innerText(),'—');
-    assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table tbody tr').nth(1).locator('td').nth(2).innerText(),'0 кг');
+    assert.equal(await page.locator('[data-detail-dialog]').evaluate(node=>node.classList.contains('registry-ui-modal--weight-single')),true,'Single detail uses shared compact width');
+    assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table tbody tr').count(),2,'Single detail uses two-row matrix');
+    assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table-scroll').evaluate(node=>node.scrollWidth>node.clientWidth),false,'Single detail has no inner X-scroll');
+    if (process.env.PLANEX_WEIGHT_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.PLANEX_WEIGHT_SCREENSHOT_DIR,`weight-detail-${width}.png`)});
     await page.locator('[data-detail-revert]').click();
     assert.equal(await page.locator('[data-confirm-revert]').isVisible(),true,'Separate final confirmation');
     assert.equal(await page.locator('[data-confirm-revert]').innerText(),'Выполнить возврат');
     assert.equal(await page.locator('[data-detail-dialog]').evaluate(node=>node.classList.contains('registry-ui-modal--confirmation')),true,'Shared confirmation width');
+    const confirmationWidth = await page.locator('[data-detail-dialog]').evaluate(node=>Math.round(node.getBoundingClientRect().width));
+    assert.ok(confirmationWidth <= 640 && confirmationWidth < width,'Confirmation uses compact shared width');
     await page.locator('[data-detail-dialog] [data-close-dialog]').first().click();
     await page.locator('[data-detail="7"]').click();
     await page.locator('[data-detail-body] .registry-ui-compact-table').waitFor();
     assert.equal(await page.locator('[data-detail-revert]').isVisible(),true,'Primary action restored after cancel');
     await page.locator('[data-detail-dialog] [data-close-dialog]').first().click();
-    await page.locator('[data-detail="7"]').click();
+    await page.locator('[data-detail="7"]').evaluate(node=>node.dataset.detail='6');
+    await page.locator('[data-detail="6"]').click();
+    await page.locator('[data-detail-body] .registry-ui-compact-table').waitFor();
+    assert.equal(await page.locator('[data-detail-dialog]').evaluate(node=>node.classList.contains('registry-ui-modal--reading')),true,'Historical multi uses reading width');
+    assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table tbody tr').count(),2,'Historical multi keeps both rows');
+    assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table tbody tr').nth(1).locator('td').nth(1).innerText(),'—');
+    assert.equal(await page.locator('[data-detail-body] .registry-ui-compact-table tbody tr').nth(1).locator('td').nth(2).innerText(),'0 кг');
     await page.locator('[data-detail-revert]').click();
     await page.locator('[data-confirm-revert]:not([hidden])').waitFor();
     assert.match(await page.locator('[data-detail-body]').innerText(),/вернутся заявки: 100001, 100002/);

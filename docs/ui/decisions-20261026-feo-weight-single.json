@@ -1,0 +1,27 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "feo-weight-single-request-20261026",
+  "date": "2026-10-26",
+  "status": "OWNER_DELEGATED_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "instruction": "Менять вес за 1 раз мы можем только у 1 заявки не нужен большой бокс заявки при создании и так же адаптируй попап при просмотре. И если делаешь таблицу делай ее ровно. Как лучше оформить попапы — всё исправь и выкладывай, даю все разрешения.",
+    "supersedes": "docs/ui/decisions-20261026-feo-weight-canon.json: create and new-block detail multi-request editor geometry only",
+    "review_gate": "Independent ROOT review of local candidate before publication."
+  },
+  "scope": ["/erpv2/company/feo/requests/weights: create and detail popup"],
+  "visible_role_provenance": {
+    "shell": "Existing registry-ui-modal header, body and footer; approved 640px confirmation width reused as shared weight-single modal width, without new colors or typography.",
+    "request_field": "Existing field-label and field-input, 32px height. Exactly one six-digit request; explicit one-request field error on multiple input/paste.",
+    "editor": "Existing bordered registry-ui-compact-table with shared weight-single geometry variant. Three aligned columns Вес, Было, Стало, кг; two rows Нетто, Брутто. Existing field-input for editable cells, no new control skin.",
+    "detail": "Same three-column table read-only for single-request blocks; page-eyebrow and entity-id show the request. Historical multi-request blocks preserve the existing full table and 900px reading width.",
+    "validation": "Existing field-msg is-error under input/table. Server preview/create enforce exactly one request; empty mass is NULL and zero remains zero."
+  },
+  "implementation": {
+    "view": "app/View/pages/company_feo_weight_batches.php",
+    "behavior": "public/assets/js/feo-weights.js",
+    "service": "app/Service/FeoWeightBatchService.php",
+    "controller": "app/Http/Controllers/Company/FeoWeightBatchController.php",
+    "shared_style": "public/assets/css/registry-components.css"
+  }
+}

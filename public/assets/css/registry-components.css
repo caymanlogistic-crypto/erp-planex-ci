@@ -539,6 +539,7 @@
 .registry-ui-modal{box-sizing:border-box;width:min(1230px,calc(100vw - 32px));padding:0;transform:none;overflow:hidden}
 .registry-ui-modal--reading{width:min(900px,calc(100vw - 32px))}
 .registry-ui-modal--confirmation{width:min(640px,calc(100vw - 32px))}
+.registry-ui-modal--weight-single{width:min(640px,calc(100vw - 32px))}
 .registry-ui-modal--warehouse-directory{width:min(640px,calc(100vw - 32px))}
 .registry-ui-modal::backdrop{background:rgba(10,9,8,.58)}
 .registry-ui-modal-form{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;margin:0}
@@ -591,3 +592,10 @@
 .registry-ui-modal-confirm{display:grid;gap:8px}
 .registry-ui-modal-confirm .registry-ui-modal-text{margin:0}
 @media(max-width:700px){.registry-ui-modal{width:calc(100vw - 16px)}.registry-ui-modal-grid--reading{grid-template-columns:minmax(0,1fr)}.registry-ui-modal-address-row{flex-direction:column;align-items:stretch}.registry-ui-modal-address-row .btn{width:100%}.registry-ui-modal .registry-ui-compact-table{min-width:630px}}
+/* One-request weight editor and history use the shared compact table with a three-column matrix. */
+.registry-ui-modal .registry-ui-compact-table--weight-single{min-width:0}
+.registry-ui-modal .registry-ui-compact-table--weight-single th:first-child{width:20%}
+.registry-ui-modal .registry-ui-compact-table--weight-single th:nth-child(2){width:25%}
+.registry-ui-modal .registry-ui-compact-table--weight-single th:nth-child(3){width:55%}
+.registry-ui-modal .registry-ui-compact-table--weight-single tbody td{vertical-align:middle}
+.registry-ui-modal .registry-ui-compact-table--weight-single .field-input{width:100%;min-width:0}
