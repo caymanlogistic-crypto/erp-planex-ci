@@ -73,7 +73,7 @@ try{
 
     $reset();
     $userTemplate('waybill_driver_assignment','Пользовательский waybill','waybill_driver_assignment_v1.docx');
-    $s=$stash('contract_vehicle_lease_crew_v3.docx');
+    $s=$stash('contract_vehicle_lease_crew_v4.docx');
     try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq(count($rows()),8,'C all except missing carrier contract visible');$eq(count($warnings()),1,'C warning');$renderSaved('waybill_driver_assignment');$renderSaved('client_sublease_crew');$renderSaved('client_invoice');$renderSaved('client_act');}finally{$restore($s);}
     echo "SEED_CASE_C=PASS\n";
 
@@ -103,5 +103,17 @@ try{
     try{App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');$eq((int)$pdo->query("SELECT COUNT(*) FROM document_templates WHERE document_type='client_act'")->fetchColumn(),0,'G missing client act');$eq(count($rows()),8,'G other built-ins survive');$eq(count($warnings()),1,'G warning while missing client act');}finally{$restore($s);}
     App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
     $eq((int)$pdo->query("SELECT COUNT(*) FROM document_templates WHERE document_type='client_act'")->fetchColumn(),1,'G client act recovered');$eq(count($rows()),9,'G all built-ins recovered');$eq(count($warnings()),0,'G warnings cleared');$renderSaved('client_act');
-    echo "SEED_CASE_G=PASS\nDOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS\n";
+    echo "SEED_CASE_G=PASS\n";
+
+    $reset();
+    $userTemplate('vehicle_lease_crew','Договор аренды','contract_vehicle_lease_crew_v3.docx');
+    $userTemplate('carrier_sublease_crew','Договор субаренды','contract_carrier_sublease_crew_v1.docx');
+    App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
+    $active=[];foreach($rows() as $row)$active[$row['document_type']]=$row;
+    $eq((string)$active['vehicle_lease_crew']['sha256'],'11c72fa3206d86d490f71aa88c47fb79cde9e06e0774c12793c89f9948f33e43','H lease upgraded');
+    $eq((string)$active['carrier_sublease_crew']['sha256'],'b3f1068c42b9a9659f4774934eeb8924cf20c58e83e44a9298df98f3e35c0be7','H sublease upgraded');
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM document_template_versions")->fetchColumn(),11,'H old versions retained');
+    App\Service\DocumentGeneratorService::seedDefaultTemplates($pdo,$cid,0,'system');
+    $eq((int)$pdo->query("SELECT COUNT(*) FROM document_template_versions")->fetchColumn(),11,'H idempotent');
+    echo "SEED_CASE_H=PASS\nDOCUMENT_GENERATOR_BUILTIN_SEED_RESILIENCE=PASS\n";
 }finally{$rm($store);try{if($ownsDatabase)$admin->exec("DROP DATABASE IF EXISTS $qd");elseif(isset($pdo))cleanCompanyPoolDatabase($pdo);}catch(Throwable){}}
