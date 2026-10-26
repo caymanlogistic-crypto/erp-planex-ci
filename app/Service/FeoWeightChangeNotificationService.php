@@ -80,15 +80,19 @@ final class FeoWeightChangeNotificationService
             $lines = array_column($chunk, 'message_line');
             $part = count($chunks) > 1 ? 'Часть ' . ($index + 1) . ' из ' . count($chunks) : '';
             $batch = preg_match('/^batch:([0-9]+):(apply|revert)$/D', $entityPrefix, $batchMatch) === 1;
-            $scope = $batch ? 'Блок #' . $batchMatch[1] : mb_substr($source, 0, 300);
-            if ($part !== '') $scope .= ' · ' . $part;
+            $singleBatch = $batch && count($indexed) === 1;
+            $scope = $singleBatch ? (string)$chunk[0]['request_id']
+                : ($batch ? 'Блок #' . $batchMatch[1] : mb_substr($source, 0, 300));
+            if ($part !== '' && !$singleBatch) $scope .= ' · ' . $part;
             $deliveryId = $events->enqueue(
                 self::EVENT_KEY,
                 'weight:' . $entityPrefix . ':p' . ($index + 1),
                 [
                     'source' => mb_substr($source, 0, 300),
-                    'action_title' => $batch && $batchMatch[2] === 'revert' ? 'ВОЗВРАТ ЗАЯВОК К ИСХОДНОМУ ВЕСУ' : 'ИЗМЕНЕНИЕ ВЕСА ЗАЯВОК',
+                    'action_title' => $singleBatch && $batchMatch[2] === 'apply' ? 'ИЗМЕНЕНИЕ ВЕСА ЗАЯВКИ'
+                        : ($batch && $batchMatch[2] === 'revert' ? 'ВОЗВРАТ ЗАЯВОК К ИСХОДНОМУ ВЕСУ' : 'ИЗМЕНЕНИЕ ВЕСА ЗАЯВОК'),
                     'scope' => $scope,
+                    'weight_single_batch' => $singleBatch ? '1' : '',
                     'part' => $part,
                     'request_count' => (string)count($chunk),
                     'request_ids' => implode(', ', array_column($chunk, 'request_id')),
@@ -99,6 +103,9 @@ final class FeoWeightChangeNotificationService
                     'new_gross_kg' => self::formatKg($afterGrossKg),
                     'gross_difference_kg' => self::formatSignedKg($beforeGrossKg === null || $afterGrossKg === null ? null : $afterGrossKg - $beforeGrossKg),
                     'changes' => implode("\n", $lines),
+                    'standard_changes' => $singleBatch
+                        ? implode(";\n", self::changeParts($chunk[0]))
+                        : "ЗАЯВКИ\n" . implode("\n", $lines),
                     'author' => (string)($actor['created_by_display_name'] ?? '—'),
                     'company' => (string)($company['name'] ?? '—'),
                     'created_at' => date('d.m.Y H:i'),
@@ -156,6 +163,11 @@ final class FeoWeightChangeNotificationService
 
     private static function changeLine(array $change): string
     {
+        return '№' . $change['request_id'] . ': ' . implode('; ', self::changeParts($change));
+    }
+
+    private static function changeParts(array $change): array
+    {
         $parts = [];
         if ($change['before_kg'] !== $change['after_kg']) {
             $parts[] = 'нетто ' . self::formatKg($change['before_kg']) . ' → '
@@ -170,6 +182,6 @@ final class FeoWeightChangeNotificationService
                 . self::formatKg($afterGross) . ' кг'
                 . ($difference === null ? '' : ' (' . self::formatSignedKg($difference) . ' кг)');
         }
-        return '№' . $change['request_id'] . ': ' . implode('; ', $parts);
+        return $parts;
     }
 }

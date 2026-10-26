@@ -22,7 +22,7 @@ if ($command==='seed') {
   if (!in_array('id',$columns,true)) $pdo->exec('ALTER TABLE feo_requests ADD COLUMN id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT UNIQUE FIRST');
   if (!in_array('mass_brutto',$columns,true)) $pdo->exec('ALTER TABLE feo_requests ADD COLUMN mass_brutto DECIMAL(18,6) NULL AFTER mass_netto');
  }
- foreach (['139_create_feo_transfers.sql','160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql'] as $file) {
+ foreach (['139_create_feo_transfers.sql','160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql','163_feo_weight_deleted_status.sql'] as $file) {
   $migration=(string)file_get_contents(BASE_PATH.'/database/migrations-local/'.$file);
   foreach (array_filter(array_map('trim',preg_split('/;\s*(?:\R|$)/',$migration)?:[])) as $statement) $pdo->exec($statement);
  }

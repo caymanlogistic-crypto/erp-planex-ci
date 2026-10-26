@@ -10,7 +10,7 @@ ob_start();
 require __DIR__.'/roles_access_session_auth_mysql_test.php';
 try {
     foreach (['FeoXlsxParser','FeoRequestService','FeoPlacementAuthorService','MaxEventCatalog','MaxEventNotificationService'] as $class) require_once BASE_PATH.'/app/Service/'.$class.'.php';
-    foreach (['122_create_feo_requests.sql','139_create_feo_transfers.sql','160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql'] as $file) $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-local/'.$file));
+    foreach (['122_create_feo_requests.sql','139_create_feo_transfers.sql','160_create_feo_weight_batches.sql','162_feo_weight_legacy_snapshot.sql','163_feo_weight_deleted_status.sql'] as $file) $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-local/'.$file));
     $pdo->exec("INSERT INTO feo_requests(zayavka_id,mno_adres_pogruzki,mno_sh,mno_d) VALUES('100001','Исходный адрес','37','55'),('100002','Новый адрес','38','56')");
     $config=['database'=>['host'=>$host,'port'=>(string)$port,'database'=>$dbName,'username'=>$user,'password'=>$password]];
     $db=new App\Core\Database($config['database']);
@@ -26,7 +26,7 @@ try {
         $_POST=$post; http_response_code(200); ob_start(); $router->dispatch($method,$path); $body=ob_get_clean();
         return ['status'=>http_response_code(),'body'=>json_decode($body,true),'raw'=>$body];
     };
-    foreach ([['GET','/company/settings/services'],['POST','/company/settings/services/yandex'],['GET','/company/feo/requests/transfers'],['POST','/company/feo/requests/transfers/preview'],['POST','/company/feo/requests/transfers/create'],['GET','/company/feo/requests/transfers/1/json'],['POST','/company/feo/requests/transfers/1/revert'],['POST','/company/feo/requests/transfers/1/delete'],['GET','/company/feo/requests/transfers/1/export'],['GET','/company/feo/requests/weights'],['POST','/company/feo/requests/weights/preview'],['POST','/company/feo/requests/weights/create'],['GET','/company/feo/requests/weights/1/json'],['POST','/company/feo/requests/weights/1/revert'],['GET','/company/feo/requests/coordinates'],['POST','/company/feo/requests/coordinates/geocode'],['POST','/company/feo/requests/coordinates/settings']] as [$method,$path]) $ok($call($method,$path)['status']===403,'Direct URL denied: '.$path);
+    foreach ([['GET','/company/settings/services'],['POST','/company/settings/services/yandex'],['GET','/company/feo/requests/transfers'],['POST','/company/feo/requests/transfers/preview'],['POST','/company/feo/requests/transfers/create'],['GET','/company/feo/requests/transfers/1/json'],['POST','/company/feo/requests/transfers/1/revert'],['POST','/company/feo/requests/transfers/1/delete'],['GET','/company/feo/requests/transfers/1/export'],['GET','/company/feo/requests/weights'],['POST','/company/feo/requests/weights/preview'],['POST','/company/feo/requests/weights/create'],['GET','/company/feo/requests/weights/1/json'],['POST','/company/feo/requests/weights/1/revert'],['POST','/company/feo/requests/weights/1/delete'],['GET','/company/feo/requests/coordinates'],['POST','/company/feo/requests/coordinates/geocode'],['POST','/company/feo/requests/coordinates/settings']] as [$method,$path]) $ok($call($method,$path)['status']===403,'Direct URL denied: '.$path);
     $pdo->exec("INSERT INTO role_page_permissions(role_id,page_key,is_allowed) VALUES(2,'company.feo.transfers',1)");
     $geoToken=str_repeat('a',48);
     $_SESSION['feo_transfer_previews'][$geoToken]=['kind'=>'geocode','company_id'=>7,'result'=>['query'=>'Введённый адрес','address'=>'Адрес Яндекса','longitude'=>'40.000','latitude'=>'60.000','precision'=>'exact','quality'=>'Точное совпадение','provider'=>'yandex'],'created_at'=>time(),'account_id'=>103];
@@ -73,10 +73,17 @@ try {
     $ok($r['status']===200 && $r['body']['success'],'Personal allow weight commit: '.$r['raw']);
     $weightBatch=$r['body']['batch_id'];
     $ok($call('GET',"/company/feo/requests/weights/$weightBatch/json")['body']['success'],'Weight detail endpoint');
+    $ok($call('POST',"/company/feo/requests/weights/$weightBatch/delete")['status']===422,'Active weight block cannot be deleted');
     $_SESSION['company_id']=99;
     $ok($call('POST','/company/feo/requests/weights/create',['preview_token'=>$weightToken,'targets'=>$targets])['status']===403,'Foreign company cannot use weight preview');
+    $ok($call('POST',"/company/feo/requests/weights/$weightBatch/delete")['status']===403,'Foreign company cannot delete weight block');
     $_SESSION['company_id']=7;
     $ok($call('POST',"/company/feo/requests/weights/$weightBatch/revert")['body']['success'],'Real weight batch revert endpoint');
+    $r=$call('POST',"/company/feo/requests/weights/$weightBatch/delete");
+    $ok($r['status']===200 && $r['body']['success'] && !$r['body']['already_deleted'],'Role-granted member can archive returned weight block');
+    $ok($call('POST',"/company/feo/requests/weights/$weightBatch/delete")['body']['already_deleted'],'Weight archive retry is idempotent');
+    $ok($call('GET',"/company/feo/requests/weights/$weightBatch/json")['status']===422,'Archived weight detail unavailable');
+    $ok($call('POST',"/company/feo/requests/weights/$weightBatch/revert")['status']===422,'Archived weight block cannot be returned');
     $pdo->exec("INSERT INTO membership_page_overrides(membership_id,page_key,effect) VALUES(13,'company.feo.coordinates','allow')");
     $pdo->exec("UPDATE membership_page_overrides SET effect='deny' WHERE membership_id=13 AND page_key='company.feo.transfers'");
     $ok($call('POST','/company/feo/requests/transfers/preview')['status']===403,'Coordinate-only user cannot transfer');

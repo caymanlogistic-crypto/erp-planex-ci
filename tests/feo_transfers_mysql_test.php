@@ -159,17 +159,29 @@ try {
         ['zayavka_id'=>'310501','mass_netto'=>null,'mass_brutto'=>'0'],
         ['zayavka_id'=>'310501','mass_netto'=>'0','mass_brutto'=>null]
     );
+    $singleApply=FeoWeightChangeNotificationService::change(
+        ['zayavka_id'=>'314308','mass_netto'=>'1.000','mass_brutto'=>'1.075'],
+        ['zayavka_id'=>'314308','mass_netto'=>'111.000','mass_brutto'=>'111.075']
+    );
+    $singleRevert=FeoWeightChangeNotificationService::change(
+        ['zayavka_id'=>'314308','mass_netto'=>'111.000','mass_brutto'=>'111.075'],
+        ['zayavka_id'=>'314308','mass_netto'=>'1.000','mass_brutto'=>'1.075']
+    );
     $pdo->beginTransaction();
     $createdWeightId=$weightNotifications->enqueue($pdo,[$blockChange,$missingChange],'batch:5:apply','Изменение веса, блок #5',$company,$weightActor)[0];
-    $revertedWeightId=$weightNotifications->enqueue($pdo,[$blockChange],'batch:5:revert','Возврат веса, блок #5',$company,$weightActor)[0];
+    $singleApplyId=$weightNotifications->enqueue($pdo,[$singleApply],'batch:6:apply','Изменение веса, блок #6',$company,$weightActor)[0];
+    $revertedWeightId=$weightNotifications->enqueue($pdo,[$singleRevert],'batch:6:revert','Возврат веса, блок #6',$company,$weightActor)[0];
     $pdo->commit();
     $createdMessage=$pdo->query('SELECT message_text FROM max_event_deliveries WHERE id='.$createdWeightId)->fetchColumn();
+    $singleApplyDelivery=$pdo->query('SELECT message_text,message_format FROM max_event_deliveries WHERE id='.$singleApplyId)->fetch(PDO::FETCH_ASSOC);
     $revertedMessage=$pdo->query('SELECT message_text FROM max_event_deliveries WHERE id='.$revertedWeightId)->fetchColumn();
     $ok(str_contains($createdMessage,"ИЗМЕНЕНИЕ ВЕСА ЗАЯВОК\nБлок \\#5\nЗАЯВКИ\n**310500**:"),'Weight block creation follows compact MAX standard without duplicate ID list');
-    $ok(str_contains($revertedMessage,"ВОЗВРАТ ЗАЯВОК К ИСХОДНОМУ ВЕСУ\nБлок \\#5"),'Weight block revert has distinct title');
+    $ok($singleApplyDelivery['message_format']==='markdown' && $singleApplyDelivery['message_text']==="**ИЗМЕНЕНИЕ ВЕСА ЗАЯВКИ**\n**314308**\nнетто 1 000 → 111 000 кг (+110 000 кг);\nбрутто 1 075 → 111 075 кг (+110 000 кг)",'Single apply uses the exact approved MAX copy');
+    $ok($revertedMessage==="**ВОЗВРАТ ЗАЯВОК К ИСХОДНОМУ ВЕСУ**\n**314308**\nнетто 111 000 → 1 000 кг (-110 000 кг);\nбрутто 111 075 → 1 075 кг (-110 000 кг)",'Single revert uses the exact restored weights and approved title');
+    foreach ([$singleApplyDelivery['message_text'],$revertedMessage] as $singleMessage) $ok(!str_contains($singleMessage,'Блок #') && !str_contains($singleMessage,"\nЗАЯВКИ\n") && !str_contains($singleMessage,'СТАЛО'),'Single weight MAX message has no multi-request headings');
     $ok(str_contains($createdMessage,'**310501**: нетто — → 0 кг; брутто 0 → — кг'),'Missing weights remain distinct from real zero');
     $ok(!str_contains($createdMessage,'Ответственный:') && !str_contains($createdMessage,'Общая масса:'),'Standard MAX message omits legacy metadata and misleading totals');
-    $pdo->exec('DELETE FROM max_event_deliveries WHERE id IN ('.$createdWeightId.','.$revertedWeightId.')');
+    $pdo->exec('DELETE FROM max_event_deliveries WHERE id IN ('.$createdWeightId.','.$singleApplyId.','.$revertedWeightId.')');
     $events->saveRule(['event_key'=>FeoWeightChangeNotificationService::EVENT_KEY,'is_enabled'=>1,'chat_config_id'=>1,'message_template'=>'OWNER {{changes}}','message_format'=>'plain'],11);
     $pdo->beginTransaction();
     $customWeightId=$weightNotifications->enqueue($pdo,[$blockChange],'manual:310500:custom','Ручное редактирование заявки',$company,$weightActor)[0];

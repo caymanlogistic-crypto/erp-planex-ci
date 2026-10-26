@@ -21,7 +21,8 @@ final class MaxEventCatalog
     private const PREVIOUS_WEIGHT_TEMPLATE = "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nНетто: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\nБрутто: {{old_gross_kg}} → {{new_gross_kg}} кг ({{gross_difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}";
     // Exact previous production rule, read on 26.10.2026; OWNER approved replacing this old format.
     private const PRODUCTION_WEIGHT_TEMPLATE_20261026 = "ВЕС ЗАЯВКИ ИЗМЕНИСЯ\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}";
-    private const WEIGHT_TEMPLATE = "{{action_title}}\n{{scope}}\nЗАЯВКИ\n{{changes}}";
+    private const PREVIOUS_CURRENT_WEIGHT_TEMPLATE = "{{action_title}}\n{{scope}}\nЗАЯВКИ\n{{changes}}";
+    private const WEIGHT_TEMPLATE = "{{action_title}}\n{{scope}}\n{{standard_changes}}";
 
     public static function all(): array
     {
@@ -129,8 +130,8 @@ final class MaxEventCatalog
                 'description' => 'После фактического изменения массы нетто или брутто существующих заявок вручную, блоком либо через применение, откат, возврат или удаление импорта.',
                 'template' => self::WEIGHT_TEMPLATE,
                 'variables' => [
-                    'action_title'=>['Заголовок операции','ИЗМЕНЕНИЕ ВЕСА ЗАЯВОК'],
-                    'scope'=>['Блок или другой источник изменения','Блок #42'],
+                    'action_title'=>['Заголовок операции','ИЗМЕНЕНИЕ ВЕСА ЗАЯВКИ'],
+                    'scope'=>['Номер заявки или другой источник изменения','314308'],
                     'request_ids'=>['Номера заявок','123456, 123457'],
                     'source'=>['Источник изменения','Импорт ФЭО #42'],
                     'part'=>['Часть сообщения','Часть 1 из 2'],
@@ -141,7 +142,8 @@ final class MaxEventCatalog
                     'old_gross_kg'=>['Общая масса брутто до изменения, кг','25 900'],
                     'new_gross_kg'=>['Общая масса брутто после изменения, кг','26 600'],
                     'gross_difference_kg'=>['Изменение общей массы брутто, кг','+700'],
-                    'changes'=>['Заявки и изменение веса',"№123456: нетто 1 000 → 1 200 кг (+200 кг)\n№123457: брутто 1 100 → 1 300 кг (+200 кг)"],
+                    'changes'=>['Заявки и изменение веса','№314308: нетто 1 000 → 111 000 кг (+110 000 кг); брутто 1 075 → 111 075 кг (+110 000 кг)'],
+                    'standard_changes'=>['Стандартное оформление изменения веса',"нетто 1 000 → 111 000 кг (+110 000 кг);\nбрутто 1 075 → 111 075 кг (+110 000 кг)"],
                     'author'=>['Ответственный','Владимир С.'],
                     'company'=>['Компания','Пример компании'],
                     'created_at'=>['Дата и время','21.09.2026 15:30'],
@@ -157,7 +159,9 @@ final class MaxEventCatalog
 
     public static function example(string $key): array
     {
-        return array_map(static fn(array $v): string => $v[1], self::event($key)['variables']);
+        $values = array_map(static fn(array $v): string => $v[1], self::event($key)['variables']);
+        if ($key === 'feo.request.weight_changed') $values['weight_single_batch'] = '1';
+        return $values;
     }
 
     public static function currentTemplate(string $key, string $stored): string
@@ -184,7 +188,7 @@ final class MaxEventCatalog
         }
         if ($key === 'feo.request.weight_changed') {
             $knownDefault = str_replace("\r\n", "\n", $stored);
-            if ($knownDefault === '' || in_array($knownDefault, [self::LEGACY_WEIGHT_TEMPLATE, self::PREVIOUS_WEIGHT_TEMPLATE, self::PRODUCTION_WEIGHT_TEMPLATE_20261026], true)) return self::WEIGHT_TEMPLATE;
+            if ($knownDefault === '' || in_array($knownDefault, [self::LEGACY_WEIGHT_TEMPLATE, self::PREVIOUS_WEIGHT_TEMPLATE, self::PRODUCTION_WEIGHT_TEMPLATE_20261026, self::PREVIOUS_CURRENT_WEIGHT_TEMPLATE], true)) return self::WEIGHT_TEMPLATE;
         }
         return $stored;
     }
@@ -235,6 +239,11 @@ final class MaxEventCatalog
             if (!isset($event['variables'][$name])) throw new RuntimeException('Неизвестная переменная: {{' . $name . '}}.');
             if (!array_key_exists($name, $values) || !is_scalar($values[$name])) throw new RuntimeException('Нет значения переменной: ' . $name . '.');
             $value = (string)$values[$name];
+            if ($key === 'feo.request.weight_changed' && $template === self::WEIGHT_TEMPLATE
+                && $format === 'markdown' && !empty($values['weight_single_batch'])
+                && in_array($name, ['action_title', 'scope'], true)) {
+                return '**' . preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $value) . '**';
+            }
             if ($key === 'feo.transfer.created' && $name === 'destination_intro') {
                 $sourceId = (string)($values['source_request_id'] ?? '');
                 if ($sourceId !== '' && !preg_match('/^[0-9]{6}$/D', $sourceId)) throw new RuntimeException('Некорректный номер заявки назначения.');
@@ -244,7 +253,10 @@ final class MaxEventCatalog
             if ($key === 'feo.transfer.reverted' && $name === 'returned_requests' && $format === 'markdown') {
                 return implode("\n", array_map(static fn(string $line): string => '**' . preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $line) . '**', explode("\n", $value)));
             }
-            if ($key === 'feo.request.weight_changed' && $name === 'changes' && $format === 'markdown' && $template === self::WEIGHT_TEMPLATE) {
+            if ($key === 'feo.request.weight_changed' && $name === 'standard_changes' && $format === 'markdown' && $template === self::WEIGHT_TEMPLATE) {
+                // A one-request batch is composed only from validated numbers and fixed labels.
+                // Preserve its compact weight notation exactly; other sources keep escaping.
+                if (!empty($values['weight_single_batch'])) return $value;
                 return implode("\n", array_map(static function (string $line): string {
                     if (!preg_match('/^№([0-9]+): (.*)$/u', $line, $parts)) return preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $line);
                     $detail = preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $parts[2]);

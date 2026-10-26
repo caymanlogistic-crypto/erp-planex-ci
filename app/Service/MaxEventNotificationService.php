@@ -176,6 +176,19 @@ final class MaxEventNotificationService
                 }
             }
         }
+        if ($delivery['event_key'] === 'feo.request.weight_changed'
+            && preg_match('/^weight:batch:([1-9][0-9]*):route_warning:p[1-9][0-9]*$/D', (string)$delivery['entity_key'], $match) === 1) {
+            $parts = $this->pdo->prepare("SELECT COUNT(*) total, COALESCE(SUM(status<>'sent'),0) unsent FROM max_event_deliveries WHERE event_key=? AND entity_key LIKE ?");
+            $parts->execute([$delivery['event_key'], 'weight:batch:'.$match[1].':apply:p%']);
+            $main = $parts->fetch(PDO::FETCH_ASSOC);
+            if ((int)$main['total'] === 0 || (int)$main['unsent'] > 0) {
+                $error = 'Основное уведомление об изменении веса не доставлено. Сначала повторите его отправку.';
+                $this->pdo->prepare("UPDATE max_event_deliveries SET status='failed',error_message=?,updated_at=NOW() WHERE id=? AND status<>'sent'")
+                    ->execute([$error, $id]);
+                $q->execute([$id]);
+                return $q->fetch(PDO::FETCH_ASSOC);
+            }
+        }
         // Diagnostic deliveries (for example, a missing responsible MAX ID) deliberately have no sendable body.
         if (trim((string)$delivery['message_text']) === '') return $delivery;
         if ($retry) {

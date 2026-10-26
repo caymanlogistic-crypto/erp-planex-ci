@@ -19,7 +19,7 @@ await new Promise(resolve => server.listen(0,'127.0.0.1',resolve));
 const browser = await chromium.launch({headless:true,...(process.env.PLANEX_BROWSER_BINARY ? {executablePath:process.env.PLANEX_BROWSER_BINARY} : {})});
 try {
   const page = await browser.newPage(); const errors = []; page.on('pageerror', error => errors.push(error.message));
-  let submitted, previewRequests = 0;
+  let submitted, deleteSubmitted, previewRequests = 0;
   await page.route('**/company/feo/requests/weights/**', async route => {
     const url = route.request().url(); let result;
     if (url.endsWith('/preview')) {
@@ -35,9 +35,11 @@ try {
     }
     else if (url.endsWith('/create')) { submitted = route.request().postData(); result = {success:true,batch_id:8,notification:'disabled'}; }
     else if (url.endsWith('/revert')) result = {success:false,message:'Вес заявки изменён после блока.'};
+    else if (url.endsWith('/delete')) { deleteSubmitted = url; result = {success:true,batch_id:9,status:'deleted'}; }
     else {
       const historical = url.includes('/6/json');
-      result = {success:true,batch:{id:historical?6:7,status:'applied',name:'<img src=x onerror=alert(1)>',comment:'Проверка',created_by_name:'Менеджер',created_at:'2026-10-14',reverted_at:null},items:historical
+      const returned = url.includes('/9/json');
+      result = {success:true,batch:{id:returned?9:historical?6:7,status:returned?'reverted':'applied',name:'<img src=x onerror=alert(1)>',comment:'Проверка',created_by_name:'Менеджер',created_at:'2026-10-14',reverted_at:returned?'2026-10-15':null},items:historical
         ? [{zayavka_id:'100001',before_netto:'1.2500',after_netto:'1.3000',before_brutto:'1.5000',after_brutto:'1.7000'},{zayavka_id:'100002',before_netto:null,after_netto:'0.0000',before_brutto:'0.0000',after_brutto:'2.4000'}]
         : [{zayavka_id:'100001',before_netto:'1.2500',after_netto:'1.3000',before_brutto:'1.5000',after_brutto:'1.7000'}]};
     }
@@ -45,7 +47,7 @@ try {
   });
   const url = 'http://127.0.0.1:'+server.address().port;
   for (const width of [1280,390]) {
-    submitted=undefined; previewRequests=0;
+    submitted=undefined; deleteSubmitted=undefined; previewRequests=0;
     await page.setViewportSize({width,height:900}); await page.goto(url);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false,'Page horizontal overflow '+width);
     await page.locator('[data-open-weight]').click();
@@ -139,6 +141,23 @@ try {
     await page.locator('[data-confirm-revert]').click();
     await page.waitForFunction(() => document.querySelector('[data-revert-error]')?.textContent.includes('изменён'));
     assert.match(await page.locator('[data-revert-error]').innerText(),/изменён/);
+    await page.locator('[data-detail-dialog] [data-close-dialog]').first().click();
+    await page.locator('[data-detail="6"]').evaluate(node=>node.dataset.detail='9');
+    await page.locator('[data-detail="9"]').click();
+    await page.locator('[data-delete-returned]:not([hidden])').waitFor();
+    if (process.env.PLANEX_WEIGHT_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.PLANEX_WEIGHT_SCREENSHOT_DIR,`weight-returned-${width}.png`)});
+    assert.equal(await page.locator('[data-detail-revert]').isVisible(),false,'Returned block cannot be reverted again');
+    const footerOrder=await page.locator('[data-delete-returned]').evaluate(node=>node.getBoundingClientRect().left < node.closest('.modal-foot').querySelector('[data-close-dialog]').getBoundingClientRect().left);
+    assert.equal(footerOrder,true,'Approved red delete action precedes Cancel');
+    await page.locator('[data-delete-returned]').click();
+    assert.equal(await page.locator('[data-confirm-delete-returned]').isVisible(),true,'Returned block has separate delete confirmation');
+    assert.match(await page.locator('[data-detail-body]').innerText(),/Вес заявок уже возвращён; текущий вес не изменится/);
+    assert.equal(await page.locator('[data-detail-dialog]').evaluate(node=>node.classList.contains('registry-ui-modal--confirmation')),true,'Delete uses shared compact confirmation');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),false,`Delete confirmation has no overflow at ${width}px`);
+    if (process.env.PLANEX_WEIGHT_SCREENSHOT_DIR) await page.screenshot({path:path.join(process.env.PLANEX_WEIGHT_SCREENSHOT_DIR,`weight-delete-confirm-${width}.png`)});
+    await page.locator('[data-confirm-delete-returned]').click();
+    await page.waitForLoadState('load');
+    assert.match(deleteSubmitted||'',/\/9\/delete$/,'Returned archive is sent only after confirmation');
   }
   assert.deepEqual(errors,[]);
   console.log('FEO_WEIGHTS_BROWSER_PASS');

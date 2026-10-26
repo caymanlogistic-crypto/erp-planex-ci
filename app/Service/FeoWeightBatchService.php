@@ -65,9 +65,12 @@ final class FeoWeightBatchService
         if (mb_strlen($name) > 180 || mb_strlen($comment) > 2000) throw new RuntimeException('Сократите название или комментарий блока.');
         if ((int)($actor['created_by_user_id'] ?? 0) <= 0) throw new RuntimeException('Не удалось определить автора изменения.');
         return $this->transaction($pdo, function (?FeoLegacyImportSync $legacy) use ($pdo, $preview, $targets, $actor, $operationKey, $name, $comment, $event): array {
-            $query = $pdo->prepare('SELECT id FROM feo_weight_batches WHERE operation_key=?');
+            $query = $pdo->prepare('SELECT id,status FROM feo_weight_batches WHERE operation_key=?');
             $query->execute([$operationKey]);
-            if ($id = $query->fetchColumn()) return ['batch_id'=>(int)$id, 'already_applied'=>true];
+            if ($existing = $query->fetch(PDO::FETCH_ASSOC)) {
+                if ($existing['status'] === 'deleted') throw new RuntimeException('Блок удалён. Повторите операцию с новой проверкой заявки.');
+                return ['batch_id'=>(int)$existing['id'], 'already_applied'=>true];
+            }
             $fresh = $this->preview($pdo, array_column($preview['rows'], 'zayavka_id'), true);
             if (!hash_equals((string)$preview['state_hash'], $fresh['state_hash'])) throw new RuntimeException('Вес заявок изменился после проверки. Проверьте блок заново.');
             $changes = [];
@@ -107,6 +110,7 @@ final class FeoWeightBatchService
             $query->execute([$batchId]);
             $batch = $query->fetch(PDO::FETCH_ASSOC);
             if (!$batch) throw new RuntimeException('Блок не найден.');
+            if ($batch['status'] === 'deleted') throw new RuntimeException('Блок удалён.');
             if ($batch['status'] === 'reverted') return ['batch_id'=>$batchId, 'already_reverted'=>true];
             $items = $this->items($pdo, $batchId);
             $synced = array_filter($items, static fn(array $item): bool => $item['legacy_snapshot_json'] !== null);
@@ -135,10 +139,26 @@ final class FeoWeightBatchService
         });
     }
 
+    public function deleteReturned(PDO $pdo, int $batchId): array
+    {
+        return $this->transaction($pdo, function (?FeoLegacyImportSync $_legacy) use ($pdo, $batchId): array {
+            $query = $pdo->prepare('SELECT status FROM feo_weight_batches WHERE id=? FOR UPDATE');
+            $query->execute([$batchId]);
+            $status = $query->fetchColumn();
+            if ($status === false) throw new RuntimeException('Блок не найден.');
+            if ($status === 'deleted') return ['batch_id'=>$batchId, 'already_deleted'=>true];
+            if ($status !== 'reverted') throw new RuntimeException('Удалить можно только возвращённый блок. Сначала верните исходный вес заявки.');
+            $query = $pdo->prepare("UPDATE feo_weight_batches SET status='deleted' WHERE id=? AND status='reverted'");
+            $query->execute([$batchId]);
+            if ($query->rowCount() !== 1) throw new RuntimeException('Состояние блока изменилось. Обновите страницу.');
+            return ['batch_id'=>$batchId, 'already_deleted'=>false];
+        }, false);
+    }
+
     public function batches(PDO $pdo, int $page): array
     {
         $offset = (max(1, $page) - 1) * 50;
-        return $pdo->query("SELECT * FROM feo_weight_batches ORDER BY id DESC LIMIT 50 OFFSET $offset")->fetchAll(PDO::FETCH_ASSOC);
+        return $pdo->query("SELECT * FROM feo_weight_batches WHERE status IN ('applied','reverted') ORDER BY id DESC LIMIT 50 OFFSET $offset")->fetchAll(PDO::FETCH_ASSOC);
     }
 
     /** Complete request IDs and historic totals for the visible registry page. */
@@ -193,7 +213,7 @@ final class FeoWeightBatchService
         return $a === null && $b === null || $a !== null && $b !== null && number_format((float)$a, 4, '.', '') === number_format((float)$b, 4, '.', '');
     }
 
-    private function transaction(PDO $pdo, callable $action): array
+    private function transaction(PDO $pdo, callable $action, bool $syncLegacy = true): array
     {
         if ($pdo->inTransaction()) throw new RuntimeException('Изменение веса должно выполняться отдельной операцией.');
         $lock = 'planex_feo_'.substr(hash('sha256', (string)$pdo->query('SELECT DATABASE()')->fetchColumn()), 0, 24);
@@ -201,7 +221,7 @@ final class FeoWeightBatchService
         if ((int)$query->fetchColumn() !== 1) throw new RuntimeException('Заявки сейчас изменяются. Повторите позже.');
         try {
             $syncTenant = trim((string)env('FEO_LEGACY_SYNC_TENANT_DATABASE', ''));
-            if ($syncTenant !== '' && $syncTenant === (string)$pdo->query('SELECT DATABASE()')->fetchColumn()) {
+            if ($syncLegacy && $syncTenant !== '' && $syncTenant === (string)$pdo->query('SELECT DATABASE()')->fetchColumn()) {
                 return FeoImportTransaction::runWithLegacy($pdo, $action);
             }
             $pdo->beginTransaction();
