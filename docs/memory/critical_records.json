@@ -247,9 +247,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "f7b966e97c6e67309bc33401bcad362f0fbc397b",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/f7b966e97c6e67309bc33401bcad362f0fbc397b/tests/feo_transfers_browser_test.mjs",
-      "verification_note": "2026-10-25: returned transfer blocks can be logically deleted through the shared confirmation; only status changes to deleted and batch/items/outbox/MAX snapshots and previous_batch_id remain. Deleted blocks are absent from list/detail/export/revert; page-granted users retain the existing transfer access scope. Local transfer MySQL (1428 assertions), real route/access, browser at 1920/1366/800/390 and production-entrypoint loading tests PASS on the candidate after PR #462. Earlier coordinates and trip-warning fixes remain present.",
+      "verified_sha": "07acaaedc42360e1e52f20b38575d262191c0578",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/07acaaedc42360e1e52f20b38575d262191c0578/tests/feo_transfers_mysql_test.php",
+      "verification_note": "2026-10-26: exact production read-only MAX settings showed both transfer event rules contain the unchanged legacy default with Windows CRLF; creation uses stored html and return stored plain format. The LF-only comparison treated these defaults as custom and emitted old copy. MaxEventCatalog now normalizes CRLF only for exact recognition of three known standard transfer templates per event; true owner-custom text and format remain unchanged. Focused transfer contract and isolated MySQL (1436 assertions) PASS, including the controller enqueue path with production-shaped rules, new Markdown text/format and untouched stored rows. Prior returned-block deletion, coordinate and trip-warning behavior remains present.",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",
