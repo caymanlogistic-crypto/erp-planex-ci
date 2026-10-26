@@ -43,7 +43,7 @@ const expectedRows=[
   {id:58,cells:[['#58'],['Склад без адреса'],['—'],['0 контактов']]},
 ];
 try {
-  for(actor of ['owner','logist']) for(const width of [390,1280,1920]){
+  for(actor of ['owner','logist']) for(const width of [390,1280,1920,3840]){
     const page=await browser.newPage({viewport:{width,height:900}}),errors=[];
     page.on('pageerror',error=>errors.push(error.message));
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
@@ -92,4 +92,4 @@ try {
   assert.equal(fixture('fingerprint'),before,'read-only browser test changed business data');
   console.log('REGISTRY_RUNTIME_PAGE=warehouse-addresses');
   console.log('WAREHOUSE_DIRECTORY_RUNTIME_BROWSER=PASS');
-} finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); }
+} finally { await browser.close(); await new Promise(resolve=>server.close(resolve)); assert.equal(fixture('cleanup'),'CLEANED'); }

@@ -17,9 +17,13 @@ $db = new App\Core\Database($config['database']);
 $pdo = $db->connection();
 $command = $argv[1] ?? '';
 if ($command === 'seed') {
-    if ($pdo->query('SHOW TABLES')->fetchColumn() !== false) throw new RuntimeException('Fresh disposable schema required');
-    $pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
-    $pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)')->execute(['ООО Synthetic','active',$schema]);
+    foreach (['warehouses','warehouse_contacts'] as $table) {
+        if ($pdo->query("SHOW TABLES LIKE '".$table."'")->fetchColumn() !== false) throw new RuntimeException('Fresh warehouse fixture required');
+    }
+    if ($pdo->query("SHOW TABLES LIKE 'companies'")->fetchColumn() === false) {
+        $pdo->exec('CREATE TABLE companies(id INT PRIMARY KEY,name VARCHAR(255),status VARCHAR(20),db_identifier VARCHAR(255))');
+        $pdo->prepare('INSERT INTO companies VALUES(7,?,?,?)')->execute(['ООО Synthetic','active',$schema]);
+    }
     $pdo->exec('CREATE TABLE warehouses(id BIGINT UNSIGNED PRIMARY KEY,name VARCHAR(255),full_address VARCHAR(500)) ENGINE=InnoDB');
     $pdo->exec("INSERT INTO warehouses VALUES(7,'Склад Север','Москва, Складская улица, 1, корпус 2'),(8,'Склад Юг','Тула, Южная улица, 2')");
     $insert = $pdo->prepare('INSERT INTO warehouses VALUES(?,?,?)');
@@ -32,6 +36,11 @@ if ($command === 'seed') {
     ], JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
     $pdo->prepare('INSERT INTO warehouse_contacts VALUES(?,?,12,CURRENT_TIMESTAMP(6))')->execute([7,$contacts]);
     echo 'SEEDED'; exit;
+}
+if ($command === 'cleanup') {
+    $pdo->exec('DROP TABLE warehouse_contacts');
+    $pdo->exec('DROP TABLE warehouses');
+    echo 'CLEANED'; exit;
 }
 if ($command === 'fingerprint') {
     $data=[];

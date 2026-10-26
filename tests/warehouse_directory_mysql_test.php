@@ -36,4 +36,6 @@ $rejected(static fn() => Directory::save($pdo, $pdo, $database, 7, 'Москва
 $rejected(static fn() => Directory::save($pdo, $pdo, $database, 7, 'Москва, Складская, 3', $savedHash, 'Неверный адрес', [['name'=>'Без телефона','position'=>'','phone'=>'','email'=>'']], 12));
 $rejected(static fn() => Directory::save($pdo, $pdo, $database, 999, '', $emptyHash, 'Несуществующий склад', [], 12));
 if (Directory::list($pdo)[0]['address'] !== 'Москва, Складская, 3') throw new RuntimeException('Rejected save changed address.');
+$pdo->exec('DROP TABLE warehouse_contacts');
+$pdo->exec('DROP TABLE warehouses');
 echo "warehouse directory MySQL OK\n";
