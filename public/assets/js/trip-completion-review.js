@@ -25,7 +25,8 @@
     const term = (search?.value || '').trim().toLowerCase();
     let visible = 0;
     root.querySelectorAll('[data-review-group]').forEach((group) => {
-      const enabled = group.dataset.reviewGroup === (reviewerMode ? 'review' : 'work') || !!showAll?.checked;
+      const enabled = (reviewerMode && group.dataset.reviewGroup !== 'archive')
+        || group.dataset.reviewGroup === 'work' || !!showAll?.checked;
       let matches = 0;
       group.querySelectorAll('.logistics-trip').forEach((trip) => {
         const found = !term || trip.textContent.toLowerCase().includes(term);

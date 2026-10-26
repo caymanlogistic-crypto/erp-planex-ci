@@ -15,7 +15,17 @@ $statusChoice=static function(string $name,string $selected,array $options):void
 };
 ?>
 <link rel="stylesheet" href="<?=app_url('/assets/css/trip-completion.css')?>?v=<?=filemtime(base_path('public/assets/css/trip-completion.css'))?>">
-<div class="page-head"><div class="page-head-left"><h1 class="page-title"><?=$reviewerMode?'Проверка ТН':'Регистрация прибытия и убытия у отходообразователя'?></h1><div class="page-summary"><span><?=$reviewerMode?'Проверка переданных рейсов и перенос в архив.':'Дата и время загрузки по рейсам в процессе вывоза и сданным рейсам.'?></span></div></div><div class="page-head-actions"><a class="btn btn-ghost" href="<?=app_url('/company/documents/collection')?>">Документы перевозчика</a></div></div>
+<?php if($reviewerMode):
+    require_once base_path('app/View/components/registry_tabler_icons.php');
+    $registryHeadTitle='Проверка ТН';
+    $registryHeadSummary='Рейсы в работе и на проверке. Проверенные рейсы переносятся в архив.';
+    $registryHeadIconHtml=registry_tabler_header_icon('file-text');
+    $registryHeadActionsHtml='<a class="btn btn-ghost" href="'.e(app_url('/company/documents/collection')).'">Документы перевозчика</a>';
+?>
+<link rel="stylesheet" href="<?=app_url('/assets/css/registry-components.css')?>?v=<?=filemtime(base_path('public/assets/css/registry-components.css'))?>">
+<?php require base_path('app/View/partials/registry_ui_head.php'); else:?>
+<div class="page-head"><div class="page-head-left"><h1 class="page-title">Регистрация прибытия и убытия у отходообразователя</h1><div class="page-summary"><span>Дата и время загрузки по рейсам в процессе вывоза и сданным рейсам.</span></div></div><div class="page-head-actions"><a class="btn btn-ghost" href="<?=app_url('/company/documents/collection')?>">Документы перевозчика</a></div></div>
+<?php endif;?>
 <?php if($success):?><div class="notice success"><?=e((string)$success)?></div><?php endif;?>
 <?php if($formError):?><div class="notice warn"><?=e((string)$formError)?></div><?php endif;?>
 <?php if($error):?><div class="notice warn"><?=e((string)$error)?></div><?php else:?>
@@ -32,9 +42,9 @@ $statusChoice=static function(string $name,string $selected,array $options):void
   <div class="toolbar-right"><input class="toolbar-search" type="search" name="q" value="<?=e($query)?>" placeholder="Рейс, заявка, водитель, менеджер" aria-label="Поиск по рейсам и заявкам"></div>
 </form>
 <section class="logistics-workspace" aria-label="Рейсы для обработки" data-logistics-assistant data-reviewer-mode="<?=$reviewerMode?'1':'0'?>">
-  <?php foreach(($reviewerMode?['review'=>'На проверке','archive'=>'Проверено / архив']:['work'=>'В работе','review'=>'На проверке','archive'=>'Проверено / архив']) as $groupStatus=>$groupName):
+  <?php foreach(['work'=>'В работе','review'=>'На проверке','archive'=>'Проверено / архив'] as $groupStatus=>$groupName):
     $groupTrips=array_values(array_filter($trips,static fn(array $trip):bool=>$trip['review_status']===$groupStatus));?>
-  <section class="lab-review-group lab-review-group--<?=e($groupStatus)?>" data-review-group="<?=e($groupStatus)?>" <?=$groupStatus!==($reviewerMode?'review':'work')?'hidden':''?>>
+  <section class="lab-review-group lab-review-group--<?=e($groupStatus)?>" data-review-group="<?=e($groupStatus)?>" <?=($groupStatus==='archive'||(!$reviewerMode&&$groupStatus!=='work'))?'hidden':''?>>
     <div class="lab-review-group-head"><h2><?=e($groupName)?></h2><span class="lab-review-group-count" aria-label="Количество рейсов"><?=count($groupTrips)?></span></div>
     <div class="logistics-trip-list">
   <?php foreach($groupTrips as $trip):$open=(int)($openTripId??0)===(int)$trip['id'];$noTnCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)===1));$timeCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)!==1&&!empty($request['arrived_at'])&&!empty($request['departed_at'])));$processedCount=$timeCount+$noTnCount;?>
@@ -56,7 +66,7 @@ $statusChoice=static function(string $name,string $selected,array $options):void
             <?php if($reviewerMode&&$groupStatus==='review'):?>
               <form class="lab-review-form" method="post" action="<?=app_url($basePath.'/'.(int)$trip['id'].'/review')?>" data-review-form><?=csrfField()?><input type="hidden" name="action" value="return_work"><input type="hidden" name="version" value="<?=(int)$trip['review_version']?>"><button type="submit" class="btn btn-secondary lab-review-submit">Вернуть на доработку</button></form>
             <?php endif;?>
-            <?php if($reviewerMode||$groupStatus==='work'):?>
+            <?php if(($reviewerMode&&$groupStatus!=='work')||(!$reviewerMode&&$groupStatus==='work')):?>
               <form class="lab-review-form" method="post" action="<?=app_url($basePath.'/'.(int)$trip['id'].'/review')?>" data-review-form><?=csrfField()?><input type="hidden" name="action" value="<?=$reviewerMode?($groupStatus==='archive'?'restore':'archive'):'submit'?>"><input type="hidden" name="version" value="<?=(int)$trip['review_version']?>"><button type="submit" class="btn <?=(!$reviewerMode||$groupStatus==='review')?'btn-primary':'btn-secondary'?> lab-review-submit"><?=$reviewerMode?($groupStatus==='archive'?'Вернуть из архива':'Переместить в архив'):'Передать на проверку'?></button></form>
             <?php endif;?>
           </div>

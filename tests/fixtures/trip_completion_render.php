@@ -45,6 +45,13 @@ if(in_array($fixtureMode,['reviewer','registration-readonly'],true)){
  $trips[0]['review_status']='review';$trips[0]['review_version']=1;
  $trips[1]['review_status']='archive';$trips[1]['review_version']=2;
 }
+if($fixtureMode==='reviewer'){
+ $workTrip=$trips[1];
+ $workTrip['id']=3;$workTrip['business_id']=245;
+ $workTrip['review_status']='work';$workTrip['review_version']=0;
+ $workTrip['requests'][0]['id']=31;
+ $trips[]=$workTrip;
+}
 if($fixtureMode==='reviewer-empty'){$trips=[];$metrics=['trips'=>0,'requests'=>0,'ready'=>0,'problems'=>0];}
 $openTripId=0;
 ?><!doctype html><html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/assets/css/app.css"><link rel="stylesheet" href="/assets/css/erp-ui.css"><link rel="stylesheet" href="/assets/css/workspace-benchmark.css"><title>Регистрация времени загрузки</title></head><body><main class="<?=$reviewerMode?'content content--wide-workspace':''?>" style="padding:20px;max-width:1800px;margin:auto"><?php if($reviewerMode):?><div class="workspace-shell-1690"><?php endif;?><?php require BASE_PATH.'/app/View/pages/company_logistics_assistant.php';?><?php if($reviewerMode):?></div><?php endif;?></main></body></html>
