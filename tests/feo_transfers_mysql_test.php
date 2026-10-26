@@ -146,8 +146,38 @@ try {
     $bulkMarks=implode(',',array_fill(0,count($bulkIds),'?'));
     $bulkQuery=$pdo->prepare("SELECT message_text FROM max_event_deliveries WHERE id IN ($bulkMarks)");
     $bulkQuery->execute($bulkIds);
-    foreach($bulkQuery->fetchAll(PDO::FETCH_COLUMN) as $message) $ok(mb_strlen((string)$message)<=4000,'Every weight message fits MAX limit');
+    $bulkMessages=$bulkQuery->fetchAll(PDO::FETCH_COLUMN);
+    foreach($bulkMessages as $message) $ok(mb_strlen((string)$message)<=4000,'Every weight message fits MAX limit');
+    $bulkText=implode("\n",$bulkMessages);
+    foreach($bulkChanges as $change) $ok(str_contains($bulkText,'**'.$change['request_id'].'**:'),'Split weight messages retain each bold request ID');
     $pdo->prepare("DELETE FROM max_event_deliveries WHERE id IN ($bulkMarks)")->execute($bulkIds);
+    $blockChange=FeoWeightChangeNotificationService::change(
+        ['zayavka_id'=>'310500','mass_netto'=>'1.000','mass_brutto'=>'1.100'],
+        ['zayavka_id'=>'310500','mass_netto'=>'1.200','mass_brutto'=>'1.300']
+    );
+    $missingChange=FeoWeightChangeNotificationService::change(
+        ['zayavka_id'=>'310501','mass_netto'=>null,'mass_brutto'=>'0'],
+        ['zayavka_id'=>'310501','mass_netto'=>'0','mass_brutto'=>null]
+    );
+    $pdo->beginTransaction();
+    $createdWeightId=$weightNotifications->enqueue($pdo,[$blockChange,$missingChange],'batch:5:apply','Изменение веса, блок #5',$company,$weightActor)[0];
+    $revertedWeightId=$weightNotifications->enqueue($pdo,[$blockChange],'batch:5:revert','Возврат веса, блок #5',$company,$weightActor)[0];
+    $pdo->commit();
+    $createdMessage=$pdo->query('SELECT message_text FROM max_event_deliveries WHERE id='.$createdWeightId)->fetchColumn();
+    $revertedMessage=$pdo->query('SELECT message_text FROM max_event_deliveries WHERE id='.$revertedWeightId)->fetchColumn();
+    $ok(str_contains($createdMessage,"ИЗМЕНЕНИЕ ВЕСА ЗАЯВОК\nБлок \\#5\nЗАЯВКИ\n**310500**:"),'Weight block creation follows compact MAX standard without duplicate ID list');
+    $ok(str_contains($revertedMessage,"ВОЗВРАТ ЗАЯВОК К ИСХОДНОМУ ВЕСУ\nБлок \\#5"),'Weight block revert has distinct title');
+    $ok(str_contains($createdMessage,'**310501**: нетто — → 0 кг; брутто 0 → — кг'),'Missing weights remain distinct from real zero');
+    $ok(!str_contains($createdMessage,'Ответственный:') && !str_contains($createdMessage,'Общая масса:'),'Standard MAX message omits legacy metadata and misleading totals');
+    $pdo->exec('DELETE FROM max_event_deliveries WHERE id IN ('.$createdWeightId.','.$revertedWeightId.')');
+    $events->saveRule(['event_key'=>FeoWeightChangeNotificationService::EVENT_KEY,'is_enabled'=>1,'chat_config_id'=>1,'message_template'=>'OWNER {{changes}}','message_format'=>'plain'],11);
+    $pdo->beginTransaction();
+    $customWeightId=$weightNotifications->enqueue($pdo,[$blockChange],'manual:310500:custom','Ручное редактирование заявки',$company,$weightActor)[0];
+    $pdo->commit();
+    $customWeight=$pdo->query('SELECT message_text,message_format FROM max_event_deliveries WHERE id='.$customWeightId)->fetch(PDO::FETCH_ASSOC);
+    $ok(str_starts_with($customWeight['message_text'],'OWNER №310500:') && $customWeight['message_format']==='plain','Custom weight text and format keep their original request marker');
+    $pdo->exec('DELETE FROM max_event_deliveries WHERE id='.$customWeightId);
+    $events->saveRule(['event_key'=>FeoWeightChangeNotificationService::EVENT_KEY,'is_enabled'=>1,'chat_config_id'=>1,'message_template'=>$weightEvent['template'],'message_format'=>'plain'],11);
     $targetId=(int)$pdo->query("SELECT id FROM feo_requests WHERE zayavka_id='100003'")->fetchColumn();
     $reject(fn()=>$interaction->updateRequest($pdo,$targetId,['mass_netto'=>'91'],static function(): void { throw new RuntimeException('Synthetic event failure'); }),'Manual weight event failure rolls back request');
     $ok((float)$pdo->query("SELECT mass_netto FROM feo_requests WHERE zayavka_id='100003'")->fetchColumn()===90.0,'Manual weight rollback is atomic');
@@ -181,7 +211,9 @@ try {
     $ok((float)$pdo->query("SELECT mass_netto FROM feo_requests WHERE zayavka_id='100003'")->fetchColumn()===91.0,'Deleting applied import restores pre-import weight');
     $weightDeliveries=$pdo->query("SELECT entity_key,message_text FROM max_event_deliveries WHERE event_key='feo.request.weight_changed' ORDER BY id")->fetchAll(PDO::FETCH_ASSOC);
     $ok(count($weightDeliveries)===5,'All weight mutation paths create deliveries');
-    foreach ($weightDeliveries as $delivery) $ok(str_contains($delivery['message_text'],'№100003:') && str_contains($delivery['message_text'],'кг'),'Weight delivery contains request and kilogram delta');
+    foreach ($weightDeliveries as $delivery) $ok(str_contains($delivery['message_text'],'**100003**:') && str_contains($delivery['message_text'],'кг'),'Weight delivery contains request and kilogram delta');
+    $ok(str_contains($weightDeliveries[0]['message_text'],"Ручное редактирование заявки №100003\nЗАЯВКИ"),'Manual change keeps its source');
+    $ok(str_contains($weightDeliveries[1]['message_text'],"Применение импорта ФЭО \\#"),'Import change keeps its source');
 
     $transferController=(new ReflectionClass(\App\Http\Controllers\Company\FeoTransferController::class))->newInstanceWithoutConstructor();
     $enqueueMain=new ReflectionMethod($transferController,'enqueueMain');
