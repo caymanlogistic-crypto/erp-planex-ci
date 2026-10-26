@@ -39,6 +39,14 @@ try {
     await page.route('**/*',route=>route.request().url().startsWith(origin+'/')?route.continue():route.abort());
     await page.goto(`${origin}/company/warehouses/addresses?role=${role}`);
     await page.waitForSelector('[data-registry-ready="true"]');
+    const bounds=await page.evaluate(()=>{
+      const head=document.querySelector('[data-warehouse-directory] .registry-ui-head').getBoundingClientRect();
+      const card=document.querySelector('[data-warehouse-directory] .registry-ui-card').getBoundingClientRect();
+      return {headX:head.x,cardX:card.x,headWidth:head.width,cardWidth:card.width};
+    });
+    assert.ok(bounds.cardWidth<=1691,`warehouse card exceeds canonical 1690px: ${bounds.cardWidth}`);
+    assert.ok(Math.abs(bounds.headX-bounds.cardX)<=1 && Math.abs(bounds.headWidth-bounds.cardWidth)<=1,
+      `warehouse header and card are not aligned: ${JSON.stringify(bounds)}`);
     await assertRegistryVisualContract(page,`warehouse-addresses ${role} ${width}`);
     await assertRegistryDataContract(page,'warehouse-addresses');
     await assertRegistryTableState(page,'warehouse-addresses','initial');
