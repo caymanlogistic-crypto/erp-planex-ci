@@ -165,8 +165,15 @@ final class MaxEventCatalog
                 || $stored === "{{action_icon}} **{{action_title}}**\n{{count_label}} · {{mass_kg}} кг"
                 || $stored === "{{action_icon}} **{{action_title}}**\n**КОЛИЧЕСТВО:** {{count_label}}\n**ОБЩАЯ МАССА:** {{mass_kg}} кг") return self::FEO_TEMPLATE;
         }
-        if ($key === 'feo.transfer.created' && ($stored === '' || $stored === self::LEGACY_TRANSFER_CREATED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_CREATED_TEMPLATE || $stored === self::CURRENT_TRANSFER_CREATED_TEMPLATE)) return self::event($key)['template'];
-        if ($key === 'feo.transfer.reverted' && ($stored === '' || $stored === self::LEGACY_TRANSFER_REVERTED_TEMPLATE || $stored === self::PREVIOUS_TRANSFER_REVERTED_TEMPLATE || $stored === self::CURRENT_TRANSFER_REVERTED_TEMPLATE)) return self::event($key)['template'];
+        // Existing standard transfer rules can be stored with Windows CRLF. Normalize only for
+        // exact comparison with known defaults; preserve every owner-customized template verbatim.
+        if ($key === 'feo.transfer.created' || $key === 'feo.transfer.reverted') {
+            $knownDefault = str_replace("\r\n", "\n", $stored);
+            $knownTemplates = $key === 'feo.transfer.created'
+                ? [self::LEGACY_TRANSFER_CREATED_TEMPLATE, self::PREVIOUS_TRANSFER_CREATED_TEMPLATE, self::CURRENT_TRANSFER_CREATED_TEMPLATE]
+                : [self::LEGACY_TRANSFER_REVERTED_TEMPLATE, self::PREVIOUS_TRANSFER_REVERTED_TEMPLATE, self::CURRENT_TRANSFER_REVERTED_TEMPLATE];
+            if ($knownDefault === '' || in_array($knownDefault, $knownTemplates, true)) return self::event($key)['template'];
+        }
         if ($key === 'feo.request.weight_changed' && ($stored === '' || $stored === "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}")) return self::event($key)['template'];
         return $stored;
     }

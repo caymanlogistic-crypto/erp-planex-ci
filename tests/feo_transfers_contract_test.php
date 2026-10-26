@@ -55,6 +55,15 @@ $previous="Создан пакет перемещения №{{batch_id}}: {{bat
 expectTransfer(MaxEventCatalog::currentTemplate('feo.transfer.created',$previous)===MaxEventCatalog::event('feo.transfer.created')['template'],'Previous movement template upgrades from package to block wording');
 $current="Создан блок перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
 expectTransfer(MaxEventCatalog::currentTemplate('feo.transfer.created',$current)===MaxEventCatalog::event('feo.transfer.created')['template'],'Current system template upgrades to approved copy');
+foreach (['created'=>$legacy,'reverted'=>"Возвращён пакет переноса №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nАдрес: {{address}}\nКачество координат: {{quality}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}"] as $action=>$standard) {
+    $key='feo.transfer.'.$action;
+    $crlf=str_replace("\n","\r\n",$standard);
+    expectTransfer(MaxEventCatalog::currentTemplate($key,$crlf)===MaxEventCatalog::event($key)['template'],'Production CRLF legacy '.$action.' template upgrades to approved copy');
+    expectTransfer(MaxEventCatalog::formatForTemplate($key,$action==='created'?'html':'plain',$crlf)==='markdown','Production CRLF legacy '.$action.' format upgrades to Markdown');
+    $custom=str_replace('Заявок:', 'Наших заявок:', $crlf);
+    expectTransfer(MaxEventCatalog::currentTemplate($key,$custom)===$custom,'Owner-customized CRLF '.$action.' template remains unchanged');
+    expectTransfer(MaxEventCatalog::currentTemplate($key,$crlf."\r\n")===$crlf."\r\n",'Unknown extra line remains customized '.$action.' template');
+}
 expectTransfer(MaxEventCatalog::currentTemplate('feo.transfer.created','OWNER custom {{request_ids}}')==='OWNER custom {{request_ids}}','OWNER custom transfer copy preserved');
 expectTransfer(MaxEventCatalog::formatForTemplate('feo.transfer.created','plain','OWNER custom {{request_ids}}')==='plain','OWNER custom format preserved');
 expectTransfer(MaxEventCatalog::event('feo.transfer.created')['title']==='ФЭО — создан блок перемещения','Movement event uses block wording');
