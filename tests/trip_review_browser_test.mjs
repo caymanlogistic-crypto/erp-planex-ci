@@ -112,8 +112,7 @@ try {
   await page.locator('input[name="show_all_trips"]').check();
   await page.locator('.lab-review-group--archive summary').click();
   assert.equal(await page.locator('.lab-review-group--archive [data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Archive must be read only');
-  await page.getByRole('button',{name:'Вернуть из архива'}).click();
-  await page.waitForFunction(()=>document.querySelector('.lab-review-dialog')?.open===false);
+  await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Вернуть из архива'}).click()]);
   assert.deepEqual(reviewerActions,['archive','restore'],'Only reviewer can restore an archived trip');
   await page.locator('.lab-review-group--review summary').click();
   await Promise.all([page.waitForEvent('load'),page.getByRole('button',{name:'Вернуть на доработку'}).click()]);
