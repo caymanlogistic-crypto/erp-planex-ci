@@ -42,15 +42,15 @@ final class FeoWeightBatchController
     {
         $this->respond(function (): array {
             [$company, $pdo] = $this->context();
-            $parsed = FeoWeightBatchService::parseIds((string)($_POST['request_ids'] ?? ''));
-            $preview = $this->service->preview($pdo, $parsed['ids']);
+            $requestId = FeoWeightBatchService::parseSingleId((string)($_POST['request_ids'] ?? ''));
+            $preview = $this->service->preview($pdo, [$requestId]);
             $token = bin2hex(random_bytes(24));
             $records = $_SESSION['feo_weight_previews'] ?? [];
             foreach ($records as $key=>$record) if (($record['created_at'] ?? 0) < time()-1800) unset($records[$key]);
             while (count($records) >= 12) array_shift($records);
             $records[$token] = ['company_id'=>(int)$company['id'], 'account_id'=>(int)($_SESSION['account_id'] ?? 0), 'created_at'=>time(), 'preview'=>$preview];
             $_SESSION['feo_weight_previews'] = $records;
-            return ['preview'=>$preview, 'preview_token'=>$token, 'duplicates'=>$parsed['duplicates']];
+            return ['preview'=>$preview, 'preview_token'=>$token];
         });
     }
 

@@ -251,6 +251,15 @@
       "specimen": "docs/ui/specimens/registry.transfer-confirmation.html"
     },
     {
+      "id": "registry.modal-weight-single",
+      "family": "registry",
+      "role": "Компактная ширина создания и просмотра изменения веса одной заявки",
+      "selector": ".registry-ui-modal--weight-single",
+      "approval": "OWNER 2026-10-26; docs/ui/decisions-20261026-feo-weight-single.json",
+      "description": "Общий opt-in вариант модального shell шириной до 640 px для единственной заявки; сохраняет утверждённые шапку, тело, футер и цвета.",
+      "specimen": "docs/ui/specimens/registry.weight-single-popup.html"
+    },
+    {
       "id": "registry.modal-reading-grid",
       "family": "registry",
       "role": "Две группы данных в истории переноса",
@@ -267,6 +276,15 @@
       "approval": "OWNER 2026-10-24; docs/ui/decisions-20261024-feo-transfer-popups.json",
       "description": "Таблица с системной внешней обводкой, заголовком и внутренней прокруткой до 300 px. Заголовки и ячейки: 8 px сверху/снизу и 10 px сбоку, высота по содержимому; перед таблицей 8 px, до футера 12 px. Ячейки каждой строки начинаются на одном верхнем уровне. Предметные колонки определяет попап: при предпросмотре переноса Заявка, Вес нетто, Было, Станет; в истории выполненного переноса Заявка, Вес нетто, Было, Стало.",
       "specimen": "docs/ui/specimens/registry.transfer-popup.html"
+    },
+    {
+      "id": "registry.compact-table-weight-single",
+      "family": "registry",
+      "role": "Матрица весов одной заявки внутри попапа",
+      "selector": ".registry-ui-compact-table--weight-single",
+      "approval": "OWNER 2026-10-26; docs/ui/decisions-20261026-feo-weight-single.json",
+      "description": "Три ровные колонки Вес, Было, Стало; строки Нетто и Брутто. Наследует рамку, фон, шрифт и отступы общей compact-table. В создании последняя колонка содержит общие field-input; в просмотре — только текст. На 390 px помещается без горизонтальной прокрутки.",
+      "specimen": "docs/ui/specimens/registry.weight-single-popup.html"
     },
     {
       "id": "registry.entity-id",
@@ -858,7 +876,7 @@
       "adaptation_status": "current_20261018",
       "route": "/erpv2/company/feo/requests/weights",
       "view": "app/View/pages/company_feo_weight_batches.php",
-      "popup_decision": "docs/ui/decisions-20261026-feo-weight-canon.json",
+      "popup_decision": "docs/ui/decisions-20261026-feo-weight-single.json",
       "popup_style_owner": "public/assets/css/registry-components.css",
       "popup_browser_test": "tests/feo_weights_browser_test.mjs",
       "popup_service_test": "tests/feo_weight_batches_mysql_test.php",

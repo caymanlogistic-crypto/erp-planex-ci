@@ -59,13 +59,16 @@ try {
     $ok($call('GET',"/company/feo/requests/transfers/$batch/export")['status']===422,'Deleted export is unavailable');
     $ok($call('POST',"/company/feo/requests/transfers/$batch/revert")['status']===422,'Deleted block cannot be reverted');
     $pdo->exec("INSERT INTO role_page_permissions(role_id,page_key,is_allowed) VALUES(2,'company.feo.weights',1)");
-    $r=$call('POST','/company/feo/requests/weights/preview',['request_ids'=>'100001 100002']);
+    $ok($call('POST','/company/feo/requests/weights/preview',['request_ids'=>'100001 100002'])['status']===422,'Multiple weight IDs rejected by HTTP preview');
+    $r=$call('POST','/company/feo/requests/weights/preview',['request_ids'=>'100001']);
     $ok($r['status']===200 && $r['body']['success'],'Role-granted weight preview');
     $weightToken=$r['body']['preview_token'];
     $pdo->exec("INSERT INTO membership_page_overrides(membership_id,page_key,effect) VALUES(13,'company.feo.weights','deny')");
     $ok($call('POST','/company/feo/requests/weights/create',['preview_token'=>$weightToken])['status']===403,'Weight grant revocation blocks preview');
     $pdo->exec("UPDATE membership_page_overrides SET effect='allow' WHERE membership_id=13 AND page_key='company.feo.weights'");
-    $targets=json_encode(['100001'=>['netto_kg'=>'1000','brutto_kg'=>'1100'],'100002'=>['netto_kg'=>'2000','brutto_kg'=>'2200']]);
+    $targets=json_encode(['100001'=>['netto_kg'=>'1000','brutto_kg'=>'1100']]);
+    $multiTargets=json_encode(['100001'=>['netto_kg'=>'1000','brutto_kg'=>'1100'],'100002'=>['netto_kg'=>'2000','brutto_kg'=>'2200']]);
+    $ok($call('POST','/company/feo/requests/weights/create',['preview_token'=>$weightToken,'targets'=>$multiTargets])['status']===422,'Multiple weight IDs rejected by HTTP create');
     $r=$call('POST','/company/feo/requests/weights/create',['preview_token'=>$weightToken,'targets'=>$targets]);
     $ok($r['status']===200 && $r['body']['success'],'Personal allow weight commit: '.$r['raw']);
     $weightBatch=$r['body']['batch_id'];

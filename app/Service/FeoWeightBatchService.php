@@ -21,6 +21,16 @@ final class FeoWeightBatchService
         return FeoTransferService::parseIds($raw);
     }
 
+    public static function parseSingleId(string $raw): string
+    {
+        $value = trim($raw);
+        if (preg_match('/^\d{6}$/D', $value)) return $value;
+        if (preg_match_all('/(?<!\d)\d{6}(?!\d)/', $value) > 1) {
+            throw new RuntimeException('Укажите одну заявку.');
+        }
+        throw new RuntimeException('Введите шестизначный номер заявки.');
+    }
+
     public static function tonnesFromKg(mixed $input): ?string
     {
         if (!is_string($input) && !is_numeric($input) && $input !== null) throw new RuntimeException('Некорректный вес.');
@@ -35,7 +45,8 @@ final class FeoWeightBatchService
     public function preview(PDO $pdo, array $ids, bool $lock = false): array
     {
         if (!$this->ready($pdo)) throw new RuntimeException('Изменение веса ожидает обновления базы компании (162).');
-        $ids = self::parseIds(implode("\n", $ids))['ids'];
+        if (count($ids) !== 1) throw new RuntimeException('Укажите одну заявку.');
+        $ids = [self::parseSingleId((string)reset($ids))];
         $marks = implode(',', array_fill(0, count($ids), '?'));
         $query = $pdo->prepare("SELECT id,zayavka_id,mass_netto,mass_brutto FROM feo_requests WHERE zayavka_id IN ($marks) ORDER BY zayavka_id" . ($lock ? ' FOR UPDATE' : ''));
         $query->execute($ids);
@@ -48,6 +59,7 @@ final class FeoWeightBatchService
 
     public function create(PDO $pdo, array $preview, array $targets, array $actor, string $operationKey, string $name, string $comment, ?callable $event = null): array
     {
+        if (count($preview['rows'] ?? []) !== 1 || count($targets) !== 1) throw new RuntimeException('Укажите одну заявку.');
         if (!preg_match('/^[a-f0-9]{64}$/D', $operationKey)) throw new RuntimeException('Некорректный ключ операции.');
         $name = trim($name); $comment = trim($comment);
         if (mb_strlen($name) > 180 || mb_strlen($comment) > 2000) throw new RuntimeException('Сократите название или комментарий блока.');
@@ -70,7 +82,7 @@ final class FeoWeightBatchService
             if (count($targets) !== count($fresh['rows'])) throw new RuntimeException('Состав заявок изменился. Проверьте блок заново.');
             if (!$changes) throw new RuntimeException('Вес не изменён ни у одной заявки.');
             $query = $pdo->prepare('INSERT INTO feo_weight_batches(name,comment,request_count,operation_key,created_by_user_id,created_by_name) VALUES(?,?,?,?,?,?)');
-            $query->execute([$name ?: 'Изменение веса заявок', $comment, count($changes), $operationKey, $actor['created_by_user_id'], $actor['created_by_display_name']]);
+            $query->execute([$name ?: 'Изменение веса заявки', $comment, count($changes), $operationKey, $actor['created_by_user_id'], $actor['created_by_display_name']]);
             $batchId = (int)$pdo->lastInsertId();
             $insert = $pdo->prepare('INSERT INTO feo_weight_items(batch_id,zayavka_id,request_row_id,before_netto,before_brutto,after_netto,after_brutto,legacy_snapshot_json) VALUES(?,?,?,?,?,?,?,?)');
             $update = $pdo->prepare('UPDATE feo_requests SET mass_netto=?,mass_brutto=?,current_import_id=NULL WHERE id=?');
