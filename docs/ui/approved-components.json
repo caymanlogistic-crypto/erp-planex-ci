@@ -867,7 +867,7 @@
       }],
       "table_states": [{"id": "initial", "visible": ["main"], "data": {"main": "populated"}}],
       "async_search": {"applicable": false, "reason": "Search filters loaded warehouse rows locally."},
-      "contract_sources": ["app/View/pages/company_warehouse_directory.php", "tests/fixtures/warehouse_directory_runtime.php"],
+      "contract_sources": ["app/View/pages/company_warehouse_directory.php", "app/Service/WarehouseDirectoryService.php", "app/Service/WarehouseStockService.php", "tests/fixtures/warehouse_directory_runtime.php"],
       "required_contracts": []
     },
     {

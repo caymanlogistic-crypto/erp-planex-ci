@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Company;
 
 use App\Core\Database;
 use App\Service\WarehouseDirectoryService;
+use App\Service\WarehouseStockService;
 use App\Service\WarehouseTripCorrectionService;
 use App\Service\WasteTripLegacySourceService;
 use PDO;
@@ -26,8 +27,15 @@ final class WarehouseDirectoryController
         $errorFlash = $_SESSION['warehouse_directory_error'] ?? null;
         unset($_SESSION['warehouse_directory_success'], $_SESSION['warehouse_directory_error']);
         try {
-            [, $legacy] = $this->connections();
+            [$tenant, $legacy] = $this->connections();
             $warehouses = WarehouseDirectoryService::list($legacy);
+            $stock = WarehouseStockService::load($legacy, $tenant)['current'];
+            foreach ($warehouses as &$warehouse) {
+                $current = $stock[(int)$warehouse['id']] ?? [];
+                $warehouse['request_count'] = (int)($current['request_count'] ?? 0);
+                $warehouse['weight_kg'] = (int)($current['weight_kg'] ?? 0);
+            }
+            unset($warehouse);
         } catch (Throwable $error) {
             error_log('warehouse directory page failed: '.get_class($error));
             $dbError = 'Не удалось загрузить адреса и контакты складов. Данные не показаны.';
@@ -62,9 +70,10 @@ final class WarehouseDirectoryController
             }
             WarehouseDirectoryService::save($legacy, $writer, $database,
                 (int)($_POST['warehouse_id'] ?? 0), (string)($_POST['expected_address'] ?? ''),
-                (string)($_POST['expected_contacts_hash'] ?? ''),
-                (string)($_POST['address'] ?? ''), $contacts, (int)($_SESSION['user_id'] ?? 0));
-            $_SESSION['warehouse_directory_success'] = 'Адрес и контакты склада сохранены.';
+                (string)($_POST['expected_contacts_hash'] ?? ''), (string)($_POST['expected_coordinates_hash'] ?? ''),
+                (string)($_POST['address'] ?? ''), (string)($_POST['latitude'] ?? ''),
+                (string)($_POST['longitude'] ?? ''), $contacts, (int)($_SESSION['user_id'] ?? 0));
+            $_SESSION['warehouse_directory_success'] = 'Адрес, координаты и контакты склада сохранены.';
         } catch (Throwable $error) {
             error_log('warehouse directory save failed: '.get_class($error));
             $_SESSION['warehouse_directory_error'] = $error instanceof RuntimeException && !$error instanceof \PDOException

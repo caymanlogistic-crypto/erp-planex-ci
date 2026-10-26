@@ -13,11 +13,18 @@
   registry?.addEventListener('registry:state', applySearch);
   registry?.querySelector('[data-registry-field="query"]')?.addEventListener('input', applySearch);
   applySearch();
+  let rowClickTimer;
+  const showWarehouse = id => {
+    const dialog = page.querySelector(`[data-warehouse-dialog="${id}"]`);
+    if (dialog && !dialog.open) dialog.showModal();
+  };
   page.addEventListener('click', event => {
     const open = event.target.closest('[data-warehouse-open], [data-warehouse-row]');
     if (open) {
       const id = open.dataset.warehouseOpen || open.dataset.registryRowId;
-      page.querySelector(`[data-warehouse-dialog="${id}"]`)?.showModal();
+      clearTimeout(rowClickTimer);
+      if (event.detail === 0) showWarehouse(id);
+      else rowClickTimer = setTimeout(() => showWarehouse(id), 220);
     }
     const close = event.target.closest('[data-warehouse-close]');
     if (close) close.closest('dialog')?.close();
@@ -32,6 +39,12 @@
     }
     const remove = event.target.closest('[data-warehouse-remove-contact]');
     if (remove) remove.closest('[data-warehouse-contact]')?.remove();
+  });
+  page.addEventListener('dblclick', event => {
+    const row = event.target.closest('[data-warehouse-row]');
+    if (!row) return;
+    clearTimeout(rowClickTimer);
+    showWarehouse(row.dataset.registryRowId);
   });
   page.addEventListener('keydown', event => {
     if ((event.key === 'Enter' || event.key === ' ') && event.target.matches('[data-warehouse-open]')) {

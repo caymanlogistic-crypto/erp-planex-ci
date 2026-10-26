@@ -1,0 +1,5 @@
+/* Business-column geometry; shared registry presentation lives in registry-components.css. */
+col.warehouse-directory-name{width:210px}
+col.warehouse-directory-contacts{width:120px}
+col.warehouse-directory-requests{width:135px}
+col.warehouse-directory-weight{width:150px}
