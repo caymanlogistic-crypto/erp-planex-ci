@@ -1,5 +1,5 @@
 .logistics-metrics{margin-bottom:10px}
-.tn-review-shell{width:100%;margin:12px 0 18px;padding:10px 12px 12px;background:var(--surface-form)}
+.tn-review-shell{width:100%;padding:10px 12px 12px;background:var(--surface-form)}
 .lab-review-group[hidden],.lab-review-empty[hidden],.logistics-trip[hidden]{display:none!important}
 .lab-review-group-head{display:flex;align-items:center;gap:8px;min-height:34px;padding:7px 12px;border-bottom:1px solid var(--line-soft,#e4e7ec);background:var(--surface-form,#f8fafc)}
 .lab-review-group+.lab-review-group .lab-review-group-head{border-top:1px solid var(--line-soft,#e4e7ec)}

@@ -7,6 +7,12 @@
 
   const search = document.querySelector('.logistics-filter input[name="q"]');
   const showAll = document.querySelector('.lab-show-all input');
+  const reviewFilters = document.querySelector('[data-review-filters]');
+  const reviewTabStrip = document.querySelector('[data-review-tabs]');
+  const reviewTabs = [...document.querySelectorAll('[data-review-tab]')];
+  const foundCount = reviewFilters?.querySelector('[data-review-found]');
+  const resetFilter = reviewFilters?.querySelector('[data-review-reset]');
+  let activeTab = 'all';
   const body = dialog.querySelector('.lab-review-dialog-body');
   const confirm = dialog.querySelector('.lab-review-confirm');
   const cancel = dialog.querySelector('.lab-review-cancel');
@@ -24,26 +30,57 @@
   const refreshFilter = () => {
     const term = (search?.value || '').trim().toLowerCase();
     let visible = 0;
+    const tabCounts = {all: 0, work: 0, review: 0, archive: 0};
     root.querySelectorAll('[data-review-group]').forEach((group) => {
-      const enabled = (reviewerMode && group.dataset.reviewGroup !== 'archive')
-        || group.dataset.reviewGroup === 'work' || !!showAll?.checked;
+      const enabled = reviewerMode
+        ? activeTab === 'all' || group.dataset.reviewGroup === activeTab
+        : group.dataset.reviewGroup === 'work' || !!showAll?.checked;
       let matches = 0;
       group.querySelectorAll('.logistics-trip').forEach((trip) => {
         const found = !term || trip.textContent.toLowerCase().includes(term);
         trip.hidden = !enabled || !found;
-        if (enabled && found) matches++;
+        if (found) matches++;
       });
       group.hidden = !enabled || (term !== '' && matches === 0);
-      visible += matches;
+      if (enabled) visible += matches;
+      if (reviewerMode) {
+        tabCounts[group.dataset.reviewGroup] = matches;
+        tabCounts.all += matches;
+      }
     });
     root.querySelector('.lab-review-empty').hidden = visible > 0;
+    if (reviewerMode) {
+      foundCount.textContent = String(visible);
+      reviewTabs.forEach((button) => { button.querySelector('b').textContent = String(tabCounts[button.dataset.reviewTab]); });
+      resetFilter.hidden = !term && activeTab === 'all';
+    }
   };
   root.querySelectorAll('.logistics-trip[data-review-status]').forEach((trip) => {
     if (trip.dataset.reviewStatus === (reviewerMode ? 'review' : 'work')) return;
     trip.querySelectorAll('[data-autosave-form] input, [data-autosave-form] textarea, [data-upload-form] input, [data-upload-form] button, .lab-docs-remove, .lab-docs-no-tn').forEach((control) => { control.disabled = true; });
   });
   search?.addEventListener('input', refreshFilter);
+  reviewFilters?.addEventListener('submit', (event) => event.preventDefault());
   showAll?.addEventListener('change', refreshFilter);
+  const selectTab = (tab) => {
+    activeTab = tab;
+    reviewTabs.forEach((button) => {
+      button.classList.toggle('is-active', button.dataset.reviewTab === tab);
+      button.setAttribute('aria-pressed', String(button.dataset.reviewTab === tab));
+    });
+    refreshFilter();
+    const activeButton = reviewTabs.find((button) => button.dataset.reviewTab === activeTab);
+    const strip = reviewTabStrip.getBoundingClientRect();
+    const active = activeButton.getBoundingClientRect();
+    if (active.left < strip.left) reviewTabStrip.scrollLeft += active.left - strip.left;
+    else if (active.right > strip.right) reviewTabStrip.scrollLeft += active.right - strip.right;
+  };
+  reviewTabs.forEach((button) => button.addEventListener('click', () => selectTab(activeTab === button.dataset.reviewTab && activeTab !== 'all' ? 'all' : button.dataset.reviewTab)));
+  resetFilter?.addEventListener('click', () => {
+    search.value = '';
+    selectTab('all');
+    search.focus();
+  });
   refreshFilter();
 
   const close = () => { if (!busy) dialog.close(); };
