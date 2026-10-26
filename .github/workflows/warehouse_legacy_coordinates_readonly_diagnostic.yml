@@ -1,0 +1,93 @@
+name: Warehouse Legacy Coordinates Read-Only Diagnostic
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  statuses: read
+
+env:
+  CANONICAL_BRANCH: chatgpt/production-stabilization-20260802
+  LIVE_ROOT: /home/s/spugovxsim/planexp/public_html/erpv2
+  DEPLOY_MARKER: /home/s/spugovxsim/planexp/deploy/P07_erpv2_deployed_commit.txt
+  EXPECTED_LEGACY_DB: spugovxsim_frega
+
+jobs:
+  inspect:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Require exact canonical source and green CI
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote origin refs/heads/${CANONICAL_BRANCH} | awk '{print $1}')" = "$(git rev-parse HEAD)"
+          php -l scripts/warehouse_legacy_coordinates_readonly_probe.php
+          source_sha="$(git rev-parse HEAD)"
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?head_sha=$source_sha&event=push&per_page=20" > ci.json
+          SOURCE_SHA="$source_sha" CANONICAL_BRANCH="$CANONICAL_BRANCH" python3 - <<'PY'
+          import json, os
+          rows=[r for r in json.load(open('ci.json')).get('workflow_runs',[])
+                if r.get('head_sha')==os.environ['SOURCE_SHA'] and r.get('head_branch')==os.environ['CANONICAL_BRANCH']]
+          if not rows or max(rows,key=lambda r:r.get('run_number',0)).get('conclusion')!='success':
+              raise SystemExit('Exact canonical CI PASS required')
+          PY
+
+      - name: Configure isolated read-only SSH transport
+        env:
+          PRIVATE_KEY: ${{ secrets.ERPV2_SSH_PRIVATE_KEY }}
+          KNOWN_HOSTS: ${{ secrets.ERPV2_SSH_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 700 "$HOME/.ssh"
+          printf '%s\n' "$PRIVATE_KEY" > "$HOME/.ssh/warehouse_legacy_coordinates"
+          printf '%s\n' "$KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/warehouse_legacy_coordinates" "$HOME/.ssh/known_hosts"
+
+      - name: Inspect deployed legacy warehouse schema without writes
+        env:
+          SSH_HOST: ${{ secrets.ERPV2_SSH_HOST }}
+          SSH_PORT: ${{ secrets.ERPV2_SSH_PORT }}
+          SSH_USER: ${{ secrets.ERPV2_SSH_USER }}
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          remote=(ssh -p "$SSH_PORT" -i "$HOME/.ssh/warehouse_legacy_coordinates" -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "$SSH_USER@$SSH_HOST")
+          deployed_sha="$("${remote[@]}" "cat '$DEPLOY_MARKER'")"
+          [[ "$deployed_sha" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$deployed_sha" HEAD
+          gh api "repos/$GITHUB_REPOSITORY/commits/$deployed_sha/status" > deploy-status.json
+          python3 - <<'PY'
+          import json
+          rows=[r for r in json.load(open('deploy-status.json')).get('statuses',[])
+                if r.get('context')=='erpv2/deploy']
+          if not rows or rows[0].get('state')!='success':
+              raise SystemExit('Exact deployed status required')
+          PY
+          cat scripts/warehouse_legacy_coordinates_readonly_probe.php | \
+            "${remote[@]}" "PLANEX_ROOT='$LIVE_ROOT' PLANEX_DEPLOY_MARKER='$DEPLOY_MARKER' PLANEX_DEPLOYED_SHA='$deployed_sha' PLANEX_EXPECTED_LEGACY_DB='$EXPECTED_LEGACY_DB' /usr/bin/php8.5" | tee warehouse-legacy-coordinates.txt
+          grep -q '^WAREHOUSE_LEGACY_COORDINATES_READ_ONLY_PASS$' warehouse-legacy-coordinates.txt
+
+      - name: Save bounded schema evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warehouse-legacy-coordinates-${{ github.sha }}
+          path: warehouse-legacy-coordinates.txt
+          if-no-files-found: ignore
+          retention-days: 14
+
+      - name: Cleanup SSH transport
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/warehouse_legacy_coordinates"
