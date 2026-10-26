@@ -60,6 +60,8 @@ try {
     $ok(str_contains($text,'Дагестан \\*15 точ\\*'),'route markdown not escaped');
     $ok(str_contains($text,'Наталья Х\\.'),'manager short name missing');
     $ok(substr_count($text,'310500')===2,'cross-trip request must be listed under both trips');
+    $weightIntents = $service->intents($pdo,['310500','310501','310504','310505','310506'],FeoTransferTripWarningService::WEIGHT_HEADER);
+    $ok(count($weightIntents)===1 && $weightIntents[0]['text']==="ЗАЯВКИ С ИЗМЕНЁННЫМ ВЕСОМ\nнаходятся в следующих рейсах, будьте внимательны\n\n**\\#376 Дагестан \\*15 точ\\*** — Наталья Х\\.\nЗаявки: **310500**\n\n**\\#377 Ростов** — Полина В\\.\nЗаявки: **310500, 310501**",'Weight warning reuses transfer trip selection and exact compact message');
 
     // A large route exceeds one MAX body. Every request must survive deterministic splitting.
     $trip->execute([8,383,'Большой рейс',WasteTripService::STATUS_PLANNED,1,null]);

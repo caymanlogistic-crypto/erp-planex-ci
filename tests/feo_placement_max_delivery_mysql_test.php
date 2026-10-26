@@ -148,6 +148,24 @@ try{
     $ok($events->dispatch($transferWarning,true)['status']==='sent'&&count($sent)===$before+3,'Route warning sends after all main parts');
     $ok($sent[$before]['format']==='markdown','Approved transfer main uses Markdown despite old plain setting');
 
+    $weightKey='feo.request.weight_changed';
+    $events->saveRule(['event_key'=>$weightKey,'is_enabled'=>1,'chat_config_id'=>$chat,
+        'message_template'=>MaxEventCatalog::event($weightKey)['template'],
+        'message_format'=>'plain','notify'=>1],77);
+    $pdo->beginTransaction();
+    $weightMain=$events->enqueuePrepared($weightKey,'weight:batch:6:apply:p1','MAIN weight part 1','markdown',77);
+    $weightPart=$events->enqueuePrepared($weightKey,'weight:batch:6:apply:p2','MAIN weight part 2','markdown',77);
+    $weightWarning=$events->enqueuePrepared($weightKey,'weight:batch:6:route_warning:p1','WEIGHT trip warning','markdown',77);
+    $pdo->commit();
+    $before=count($sent);
+    $blocked=$events->dispatch($weightWarning,true);
+    $ok($blocked['status']==='failed' && count($sent)===$before,'Weight trip warning waits for the first main message');
+    $ok($events->dispatch($weightMain)['status']==='sent','First weight main part sends');
+    $blocked=$events->dispatch($weightWarning,true);
+    $ok($blocked['status']==='failed' && count($sent)===$before+1,'Weight trip warning waits for all main parts');
+    $ok($events->dispatch($weightPart)['status']==='sent','Second weight main part sends');
+    $ok($events->dispatch($weightWarning,true)['status']==='sent' && count($sent)===$before+3,'Weight trip warning follows all main parts on manual retry');
+
     echo "FEO_PLACEMENT_MAX_DELIVERY_MYSQL=PASS\n";
 }finally{
     if($pdo->inTransaction())$pdo->rollBack();

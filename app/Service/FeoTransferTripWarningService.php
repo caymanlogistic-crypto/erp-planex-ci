@@ -17,9 +17,10 @@ final class FeoTransferTripWarningService
         WasteTripService::STATUS_IN_PROGRESS,
     ];
     private const HEADER = "ПЕРЕМЕЩЕННЫЕ ЗАЯВКИ\nнаходятся в следующих рейсах, будьте внимательны";
+    public const WEIGHT_HEADER = "ЗАЯВКИ С ИЗМЕНЁННЫМ ВЕСОМ\nнаходятся в следующих рейсах, будьте внимательны";
 
     /** @return list<array{part:int,text:string,format:string}> */
-    public function intents(PDO $pdo, array $requestNumbers): array
+    public function intents(PDO $pdo, array $requestNumbers, string $header = self::HEADER): array
     {
         $numbers = array_values(array_unique(array_filter(array_map(
             static fn(mixed $value): string => trim((string)$value), $requestNumbers
@@ -91,7 +92,7 @@ final class FeoTransferTripWarningService
         $current = [];
         foreach ($blocks as $block) {
             $candidate = [...$current, $block];
-            if ($current !== [] && mb_strlen(self::HEADER . "\n\n" . implode("\n\n", $candidate), 'UTF-8') > 3800) {
+            if ($current !== [] && mb_strlen($header . "\n\n" . implode("\n\n", $candidate), 'UTF-8') > 3800) {
                 $parts[] = $current;
                 $current = [$block];
             } else {
@@ -104,7 +105,7 @@ final class FeoTransferTripWarningService
             $partLabel = count($parts) > 1 ? 'Часть ' . ($index + 1) . '/' . count($parts) . "\n" : '';
             $out[] = [
                 'part'=>$index + 1,
-                'text'=>$partLabel . self::HEADER . "\n\n" . implode("\n\n", $part),
+                'text'=>$partLabel . $header . "\n\n" . implode("\n\n", $part),
                 'format'=>'markdown',
             ];
         }

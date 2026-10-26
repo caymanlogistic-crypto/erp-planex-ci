@@ -84,6 +84,10 @@ expectTransfer(MaxEventCatalog::currentTemplate('feo.request.weight_changed',str
 $productionWeightDefault=str_replace('ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК','ВЕС ЗАЯВКИ ИЗМЕНИСЯ',$legacyWeightDefault);
 expectTransfer(MaxEventCatalog::currentTemplate('feo.request.weight_changed',str_replace("\n","\r\n",$productionWeightDefault))===MaxEventCatalog::event('feo.request.weight_changed')['template'],'Exact previous production weight template with CRLF upgrades');
 expectTransfer(MaxEventCatalog::formatForTemplate('feo.request.weight_changed','plain',str_replace("\n","\r\n",$productionWeightDefault))==='markdown','Exact previous production weight template uses Markdown');
+$previousCurrentWeight="{{action_title}}\n{{scope}}\nЗАЯВКИ\n{{changes}}";
+expectTransfer(MaxEventCatalog::currentTemplate('feo.request.weight_changed',str_replace("\n","\r\n",$previousCurrentWeight))===MaxEventCatalog::event('feo.request.weight_changed')['template'],'Previous approved weight template upgrades without a database write');
+expectTransfer(MaxEventCatalog::formatForTemplate('feo.request.weight_changed','plain',$previousCurrentWeight)==='markdown','Previous weight template switches to Markdown');
+expectTransfer(MaxEventCatalog::render('feo.request.weight_changed',$previousCurrentWeight,MaxEventCatalog::formatForTemplate('feo.request.weight_changed','plain',$previousCurrentWeight),MaxEventCatalog::example('feo.request.weight_changed'))==="**ИЗМЕНЕНИЕ ВЕСА ЗАЯВКИ**\n**314308**\nнетто 1 000 → 111 000 кг (+110 000 кг);\nбрутто 1 075 → 111 075 кг (+110 000 кг)",'Standard MAX preview shows the agreed one-request message');
 expectTransfer(MaxEventCatalog::currentTemplate('feo.request.weight_changed',str_replace('ИЗМЕНИСЯ','ИЗМЕНИЛСЯ',$productionWeightDefault))!==MaxEventCatalog::event('feo.request.weight_changed')['template'],'Similar owner-customized production template remains unchanged');
 $customWeight=str_replace('Ответственный:', 'Автор:', $oldWeightCrLf);
 expectTransfer(MaxEventCatalog::currentTemplate('feo.request.weight_changed',$customWeight)===$customWeight,'Customized weight template is preserved');
