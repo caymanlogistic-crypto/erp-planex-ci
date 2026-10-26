@@ -1,0 +1,22 @@
+<!-- OWNER 2026-10-26: illustrative values only. Both examples use the approved shared modal, field and table classes. -->
+<div class="modal registry-ui-modal registry-ui-modal--weight-single" role="dialog" aria-labelledby="weight-specimen-create-title">
+  <div class="modal-head"><span class="modal-title" id="weight-specimen-create-title">Новый блок изменения веса</span><button class="modal-close" type="button" aria-label="Закрыть">×</button></div>
+  <div class="modal-body registry-ui-modal-grid">
+    <div class="field"><label class="field-label" for="weight-specimen-id">Заявка</label><input class="field-input" id="weight-specimen-id" type="text" inputmode="numeric" value="301899"></div>
+    <section class="registry-ui-modal-preview"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table registry-ui-compact-table--weight-single"><thead><tr><th>Вес</th><th>Было</th><th>Стало, кг</th></tr></thead><tbody>
+      <tr><td class="registry-ui-primary">Нетто</td><td>370 кг</td><td><input class="field-input" aria-label="Новое нетто заявки 301899, кг" value="370"></td></tr>
+      <tr><td class="registry-ui-primary">Брутто</td><td>395 кг</td><td><input class="field-input" aria-label="Новое брутто заявки 301899, кг" value="395"></td></tr>
+    </tbody></table></div></section>
+    <p class="registry-ui-modal-text">Вес в килограммах с точностью до 0,1. Пустое поле удаляет значение.</p>
+  </div>
+  <div class="modal-foot"><div class="modal-foot-actions"><button class="btn btn-ghost" type="button">Отменить</button><button class="btn btn-primary" type="button">Сохранить изменения веса</button></div></div>
+</div>
+<div class="modal registry-ui-modal registry-ui-modal--weight-single" role="dialog" aria-labelledby="weight-specimen-detail-title">
+  <div class="modal-head"><span class="modal-title" id="weight-specimen-detail-title">Изменение веса #7</span><button class="modal-close" type="button" aria-label="Закрыть">×</button></div>
+  <div class="modal-body registry-ui-modal-grid"><div class="field"><span class="page-eyebrow">ЗАЯВКА</span><p class="registry-ui-modal-text"><strong class="registry-ui-entity-id">301899</strong></p></div>
+    <section class="registry-ui-modal-preview"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table registry-ui-compact-table--weight-single"><thead><tr><th>Вес</th><th>Было</th><th>Стало</th></tr></thead><tbody>
+      <tr><td class="registry-ui-primary">Нетто</td><td>370 кг</td><td>420 кг</td></tr><tr><td class="registry-ui-primary">Брутто</td><td>395 кг</td><td>445 кг</td></tr>
+    </tbody></table></div></section>
+  </div>
+  <div class="modal-foot"><div class="modal-foot-actions"><button class="btn btn-ghost" type="button">Отменить</button><button class="btn btn-primary" type="button">Отменить изменение веса</button></div></div>
+</div>
