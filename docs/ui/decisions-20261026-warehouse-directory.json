@@ -22,5 +22,5 @@
     "stock_values": "Reuse WarehouseStockService::load current request_count and weight_kg; ordinary registry-ui-primary typography",
     "coordinates": "Existing system field-input controls for latitude and longitude in the approved 640 px dialog; no new palette"
   },
-  "storage_boundary": "Existing warehouse address remains in the warehouse row; contacts and coordinates use the existing warehouse_contacts row linked to its ID. The additive coordinate columns need separate task-specific OWNER authorization for production schema migration."
+  "storage_boundary": "The address and coordinates use the existing warehouses row. Only contacts are read and written in warehouse_contacts. A read-only production schema check on 26.10.2026 confirmed pre-existing latitude and longitude in warehouses for all nine warehouses; the duplicate coordinate columns added to warehouse_contacts are deprecated and are not modified by this page."
 }
