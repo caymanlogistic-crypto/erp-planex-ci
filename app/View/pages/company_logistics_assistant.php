@@ -29,7 +29,20 @@ $statusChoice=static function(string $name,string $selected,array $options):void
 <?php if($success):?><div class="notice success"><?=e((string)$success)?></div><?php endif;?>
 <?php if($formError):?><div class="notice warn"><?=e((string)$formError)?></div><?php endif;?>
 <?php if($error):?><div class="notice warn"><?=e((string)$error)?></div><?php else:?>
-<?php if($reviewerMode):?><div class="panel tn-review-shell"><?php endif;?>
+<?php if($reviewerMode):
+  $reviewTabCounts=['all'=>0,'work'=>0,'review'=>0,'archive'=>0];
+  foreach($trips as $reviewTabTrip){
+    $reviewTabStatus=(string)$reviewTabTrip['review_status'];
+    if(isset($reviewTabCounts[$reviewTabStatus])){$reviewTabCounts[$reviewTabStatus]++;$reviewTabCounts['all']++;}
+  }
+?>
+<nav class="registry-ui-tabs" aria-label="Фильтр по статусу рейса" data-review-tabs>
+  <button type="button" data-review-tab="all" data-registry-tab="all" aria-pressed="true">Показать все <b><?=$reviewTabCounts['all']?></b></button>
+  <button type="button" data-review-tab="work" data-registry-tab="work" aria-pressed="false">В работе <b><?=$reviewTabCounts['work']?></b></button>
+  <button type="button" data-review-tab="review" data-registry-tab="review" aria-pressed="false">На проверке <b><?=$reviewTabCounts['review']?></b></button>
+  <button type="button" data-review-tab="archive" data-registry-tab="archive" aria-pressed="false">Архив <b><?=$reviewTabCounts['archive']?></b></button>
+</nav>
+<div class="panel tn-review-shell"><?php endif;?>
 <?php if(!$reviewerMode):?><div class="metric-grid logistics-metrics">
   <div class="metric-card"><div class="metric-label">Рейсов в работе</div><div class="metric-value"><?=(int)$metrics['trips']?></div></div>
   <div class="metric-card"><div class="metric-label">Заявок всего</div><div class="metric-value"><?=(int)$metrics['requests']?></div></div>
@@ -38,14 +51,7 @@ $statusChoice=static function(string $name,string $selected,array $options):void
 </div><?php endif;?>
 <?php if($reviewerMode):?>
 <form method="get" action="<?=app_url($basePath)?>" class="table-toolbar registry-ui-toolbar logistics-filter" data-review-filters>
-  <div class="registry-ui-checkboxes">
-    <div class="found-label">Найдено: <b data-review-found>0</b></div>
-    <span class="filter-sep" aria-hidden="true"></span>
-    <label class="registry-ui-checkbox"><input type="checkbox" name="all_statuses" value="1" data-review-all>Показать все</label>
-    <label class="registry-ui-checkbox"><input type="checkbox" name="status[]" value="work" data-review-status-filter checked>В работе</label>
-    <label class="registry-ui-checkbox"><input type="checkbox" name="status[]" value="review" data-review-status-filter checked>На проверке</label>
-    <label class="registry-ui-checkbox"><input type="checkbox" name="status[]" value="archive" data-review-status-filter>Архив</label>
-  </div>
+  <div class="found-label">Найдено: <b data-review-found><?=count($trips)?></b></div>
   <div class="toolbar-right"><button type="button" class="registry-ui-reset" hidden data-review-reset>Сбросить фильтр</button><input class="toolbar-search registry-ui-search" type="search" name="q" value="<?=e($query)?>" placeholder="Поиск" aria-label="Поиск по рейсам и заявкам"></div>
 </form>
 <?php else:?>
@@ -58,7 +64,7 @@ $statusChoice=static function(string $name,string $selected,array $options):void
 <section class="logistics-workspace" aria-label="Рейсы для обработки" data-logistics-assistant data-reviewer-mode="<?=$reviewerMode?'1':'0'?>">
   <?php foreach(['work'=>'В работе','review'=>'На проверке','archive'=>'Проверено / архив'] as $groupStatus=>$groupName):
     $groupTrips=array_values(array_filter($trips,static fn(array $trip):bool=>$trip['review_status']===$groupStatus));?>
-  <section class="lab-review-group lab-review-group--<?=e($groupStatus)?>" data-review-group="<?=e($groupStatus)?>" <?=($groupStatus==='archive'||(!$reviewerMode&&$groupStatus!=='work'))?'hidden':''?>>
+  <section class="lab-review-group lab-review-group--<?=e($groupStatus)?>" data-review-group="<?=e($groupStatus)?>" <?=(!$reviewerMode&&$groupStatus!=='work')?'hidden':''?>>
     <div class="lab-review-group-head"><h2><?=e($groupName)?></h2><span class="lab-review-group-count" aria-label="Количество рейсов"><?=count($groupTrips)?></span></div>
     <div class="logistics-trip-list">
   <?php foreach($groupTrips as $trip):$open=(int)($openTripId??0)===(int)$trip['id'];$noTnCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)===1));$timeCount=count(array_filter($trip['requests'],static fn(array $request):bool=>(int)($request['tn_absent']??0)!==1&&!empty($request['arrived_at'])&&!empty($request['departed_at'])));$processedCount=$timeCount+$noTnCount;?>
