@@ -31,3 +31,11 @@
 .feo-transfers .transfer-history td:nth-child(2){white-space:normal}
 .feo-transfers .transfer-history td:nth-child(n+3){white-space:nowrap}
 .feo-transfers .transfer-history td:nth-child(5){white-space:normal}
+/* Subject-specific widths of the weight history; appearance remains in registry-components.css. */
+.feo-weights .transfer-history col:nth-child(1){width:64px}
+.feo-weights .transfer-history col:nth-child(2){width:auto}
+.feo-weights .transfer-history col:nth-child(3){width:78px}
+.feo-weights .transfer-history col:nth-child(4),.feo-weights .transfer-history col:nth-child(5){width:136px}
+.feo-weights .transfer-history col:nth-child(6){width:152px}
+.feo-weights .transfer-history col:nth-child(7){width:138px}
+.feo-weights .transfer-history td:nth-child(5){white-space:nowrap}

@@ -29,17 +29,17 @@
   const weight = tonnes => tonnes === null || tonnes === ''
     ? '<span class="registry-ui-missing">—</span>'
     : `${escape(format.format(Number(tonnes) * 1000))} кг`;
+  const totalWeight = kilograms => kilograms === ''
+    ? '<span class="registry-ui-missing">—</span>'
+    : `${escape(format.format(Number(kilograms)))} кг`;
   const csrf = () => form.querySelector('[name="_csrf_token"]').value;
   const setError = (selector, message) => {
     const box = find(selector);
     box.textContent = message;
     box.hidden = !message;
   };
-  const pageMessage = (message, warning = false) => {
-    const box = find('[data-page-message]');
-    box.textContent = message;
-    box.className = `form-alert ${warning ? 'alert-warning' : 'alert-success'}`;
-    box.hidden = false;
+  const pageMessage = (message, tone = 'success') => {
+    window.PlanexNotifications.show({tone, message});
   };
   const normalizePreviewError = message => /^Заявки не найдены:/u.test(message)
     ? message.replace(/^Заявки не найдены:/u, 'Заявки не найдены в системе:').replace(/ Блок не сохранён\.$/u, '')
@@ -87,7 +87,9 @@
     rows = result.preview.rows;
     previewToken = result.preview_token;
     const duplicateCount = Number(result.duplicates) || 0;
-    find('[data-edit-summary]').textContent = `Заявок: ${rows.length}.${duplicateCount ? ` Повторов объединено: ${duplicateCount}.` : ''}`;
+    const summary = find('[data-edit-summary]');
+    summary.textContent = duplicateCount ? `Повторов объединено: ${duplicateCount}.` : '';
+    summary.hidden = !duplicateCount;
     editorRows.innerHTML = rows.map(editorHtml).join('');
     section.hidden = false;
     commit.disabled = false;
@@ -169,17 +171,21 @@
       completed(await request('/create',data),'сохранён');
     } catch(error) { setError('[data-table-error]',error.message); saving=false; commit.disabled=false; }
   });
-  const detailHtml = () => `<div class="field"><span class="field-label">Заявки</span><p class="registry-ui-modal-text">${detailItems.map(item=>`<strong class="registry-ui-entity-id">${escape(item.zayavka_id)}</strong>`).join(', ')}</p></div><section class="registry-ui-modal-preview"><div class="registry-ui-modal-summary">Заявок: ${detailItems.length}.</div><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Нетто было</th><th>Нетто стало</th><th>Брутто было</th><th>Брутто стало</th></tr></thead><tbody>${detailItems.map(item=>`<tr><td class="registry-ui-entity-id">${escape(item.zayavka_id)}</td><td>${weight(item.before_netto)}</td><td>${weight(item.after_netto)}</td><td>${weight(item.before_brutto)}</td><td>${weight(item.after_brutto)}</td></tr>`).join('')}</tbody></table></div></section>`;
+  const detailHtml = () => `<div class="field"><span class="page-eyebrow">Заявки</span><p class="registry-ui-modal-text">${detailItems.map(item=>`<strong class="registry-ui-entity-id">${escape(item.zayavka_id)}</strong>`).join(', ')}</p></div><section class="registry-ui-modal-preview"><div class="table-scroll registry-ui-compact-table-scroll"><table class="table registry-ui-table registry-ui-compact-table"><thead><tr><th>Заявка</th><th>Нетто было</th><th>Нетто стало</th><th>Брутто было</th><th>Брутто стало</th></tr></thead><tbody>${detailItems.map(item=>`<tr><td class="registry-ui-entity-id">${escape(item.zayavka_id)}</td><td>${weight(item.before_netto)}</td><td>${weight(item.after_netto)}</td><td>${weight(item.before_brutto)}</td><td>${weight(item.after_brutto)}</td></tr>`).join('')}</tbody></table></div></section>`;
   function showDetail() {
-    detailTitle.textContent=`Изменение веса №${detailBatch.id}`;
+    detailTitle.textContent=`Изменение веса #${detailBatch.id}`;
     detailBody.innerHTML=detailHtml();
+    detailDialog.classList.remove('registry-ui-modal--confirmation');
+    detailDialog.classList.add('registry-ui-modal--reading');
     detailRevert.hidden=detailBatch.status!=='applied';
     confirmRevert.hidden=true;
     if (!detailDialog.open) detailDialog.showModal();
   }
   function showConfirm() {
-    detailTitle.textContent=`Изменение веса №${detailBatch.id}`;
-    detailBody.innerHTML=`<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">Заявки ${detailItems.map(item=>`<strong class="registry-ui-entity-id">${escape(item.zayavka_id)}</strong>`).join(', ')} вернутся к прежним значениям веса нетто и брутто.</p><p class="registry-ui-modal-text">Если вес хотя бы одной заявки изменился позднее, отмена всего блока остановится. История сохранится.</p></div><div class="field-msg is-error" data-revert-error role="alert" hidden></div>`;
+    detailTitle.textContent=`Изменение веса #${detailBatch.id}`;
+    detailBody.innerHTML=`<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">К прежним значениям веса нетто и брутто вернутся заявки: ${detailItems.map(item=>`<strong class="registry-ui-entity-id">${escape(item.zayavka_id)}</strong>`).join(', ')}.</p><div class="field-msg is-error" data-revert-error role="alert" hidden></div></div>`;
+    detailDialog.classList.remove('registry-ui-modal--reading');
+    detailDialog.classList.add('registry-ui-modal--confirmation');
     detailRevert.hidden=true;
     confirmRevert.hidden=false;
     if (!detailDialog.open) detailDialog.showModal();
@@ -189,18 +195,21 @@
     detailBatch=result.batch; detailItems=result.items;
     if (confirm && detailBatch.status==='applied') showConfirm(); else showDetail();
   }
-  root.querySelectorAll('[data-detail]').forEach(button => button.addEventListener('click',async () => {
-    if (button.disabled) return; button.disabled=true;
-    try { await loadDetail(button.dataset.detail); }
-    catch(error) { pageMessage(error.message,true); }
-    finally { button.disabled=false; }
-  }));
-  root.querySelectorAll('[data-revert]').forEach(button => button.addEventListener('click',async () => {
-    if (button.disabled) return; button.disabled=true;
-    try { await loadDetail(button.dataset.revert,true); }
-    catch(error) { pageMessage(error.message,true); }
-    finally { button.disabled=false; }
-  }));
+  root.addEventListener('click',event => {
+    const detail=event.target.closest('[data-detail]');
+    if (detail) loadDetail(detail.dataset.detail).catch(error=>pageMessage(error.message,'danger'));
+  });
+  root.addEventListener('keydown',event => {
+    const detail=event.target.closest('[data-detail]');
+    if (detail && (event.key==='Enter'||event.key===' ')) {
+      event.preventDefault();
+      loadDetail(detail.dataset.detail).catch(error=>pageMessage(error.message,'danger'));
+    }
+  });
+  root.addEventListener('dblclick',event => {
+    const row=event.target.closest('[data-batch-row]');
+    if (row && !event.target.closest('[data-detail]')) loadDetail(row.dataset.registryRowId).catch(error=>pageMessage(error.message,'danger'));
+  });
   detailRevert.addEventListener('click',showConfirm);
   confirmRevert.addEventListener('click',async () => {
     if (confirmRevert.disabled || !detailBatch) return;
@@ -208,15 +217,26 @@
     try { completed(await request(`/${detailBatch.id}/revert`,new FormData()),'возвращён'); }
     catch(error) { setError('[data-revert-error]',error.message); confirmRevert.disabled=false; }
   });
-  find('[data-history-search]')?.addEventListener('input',event => {
-    const query=event.target.value.trim().toLocaleLowerCase('ru'); let found=0;
-    root.querySelectorAll('[data-batch-row]').forEach(row => {
-      const full=row.querySelector('[data-registry-full-text]')?.dataset.registryFullText||'';
-      row.hidden=!(row.textContent+' '+full).toLocaleLowerCase('ru').includes(query);
-      if (!row.hidden) found++;
-    });
-    find('[data-history-count]').textContent=found;
-  });
+  const historyRows=[...root.querySelectorAll('[data-batch-row]')];
+  const search=find('[data-history-search]'), returned=find('[data-show-returned]'), weightMode=find('[data-weight-mode]');
+  if (search && returned && weightMode) {
+    const update=() => {
+      const query=search.value.trim().toLocaleLowerCase('ru');
+      let visible=0;
+      for (const row of historyRows) {
+        row.hidden=(!returned.checked && row.dataset.batchStatus==='reverted') || !(row.textContent+' '+row.dataset.registrySearch).toLocaleLowerCase('ru').includes(query);
+        if (!row.hidden) visible++;
+        for (const node of row.querySelectorAll('[data-total-before],[data-total-after]')) {
+          node.innerHTML=totalWeight(node.dataset[weightMode.value==='gross'?'grossKg':'netKg']);
+        }
+      }
+      find('[data-history-count]').textContent=String(visible);
+    };
+    search.addEventListener('input',update);
+    returned.addEventListener('change',update);
+    weightMode.addEventListener('change',update);
+    update();
+  }
   const saved=sessionStorage.getItem('feo-weight-result');
-  if (saved) { sessionStorage.removeItem('feo-weight-result'); try { const result=JSON.parse(saved); pageMessage(result.message,result.warning); } catch {} }
+  if (saved) { sessionStorage.removeItem('feo-weight-result'); try { const result=JSON.parse(saved); pageMessage(result.message,result.warning?'warning':'success'); } catch {} }
 })();

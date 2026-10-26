@@ -53,6 +53,8 @@ try {
     $result = $service->create($pdo, $preview, $targets, $actor, hash('sha256','apply'), 'Клиентская корректировка', 'По просьбе клиента');
     $batchId = $result['batch_id'];
     $ok($result['count'] === 2, 'Per-request values saved in one block');
+    $history=$service->batchIndexItems($pdo, $service->batches($pdo, 1));
+    $ok($history[$batchId]['ids']===['100001','100002'] && $history[$batchId]['before_net_kg']===3250.0 && $history[$batchId]['after_net_kg']===3300.0 && $history[$batchId]['before_gross_kg']===3900.0 && $history[$batchId]['after_gross_kg']===4100.0, 'History registry lists complete IDs and independent historic net/gross totals');
     $rows = $pdo->query('SELECT zayavka_id,mass_netto,mass_brutto FROM feo_requests ORDER BY zayavka_id')->fetchAll(PDO::FETCH_ASSOC);
     $ok($rows[0]['mass_netto'] === '1.3000' && $rows[0]['mass_brutto'] === '1.7000' && $rows[1]['mass_brutto'] === '2.4000', 'Both weights persisted separately');
     $legacyRows = $pdo->query('SELECT zayavka_id,mass_netto,mass_brutto,legacy_note FROM feo ORDER BY zayavka_id')->fetchAll(PDO::FETCH_ASSOC);

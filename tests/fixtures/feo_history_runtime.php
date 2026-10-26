@@ -38,10 +38,16 @@ if ($command==='seed') {
   $item->execute([18,$number,$requestId,$before,$after]);
  }
  $pdo->exec("INSERT IGNORE INTO feo_weight_batches(id,name,request_count,operation_key,status,created_by_user_id,created_by_name,created_at) VALUES(18,'Проверка веса',12,'".str_repeat('b',64)."','applied',101,'Владимир С.','2026-10-18 15:30:00')");
+ $weightItem=$pdo->prepare('INSERT IGNORE INTO feo_weight_items(batch_id,zayavka_id,request_row_id,before_netto,before_brutto,after_netto,after_brutto) VALUES(?,?,?,?,?,?,?)');
+ for($i=1;$i<=12;$i++){
+  $number=(string)(100000+$i);
+  $requestId=(int)$pdo->query("SELECT id FROM feo_requests WHERE zayavka_id='".$number."'")->fetchColumn();
+  $weightItem->execute([18,$number,$requestId,'1.2500','1.5000','1.3000','1.7000']);
+ }
  echo 'SEEDED';exit;
 }
 if ($command==='fingerprint') {
- $data=[];foreach (['feo_transfer_batches','feo_transfer_items','feo_requests','feo_weight_batches'] as $table) $data[$table]=$pdo->query('SELECT * FROM '.$table.' ORDER BY '.($table==='feo_transfer_items'?'batch_id,zayavka_id':'id'))->fetchAll(PDO::FETCH_ASSOC);
+ $data=[];foreach (['feo_transfer_batches','feo_transfer_items','feo_requests','feo_weight_batches','feo_weight_items'] as $table) $data[$table]=$pdo->query('SELECT * FROM '.$table.' ORDER BY '.(str_ends_with($table,'_items')?'batch_id,zayavka_id':'id'))->fetchAll(PDO::FETCH_ASSOC);
  echo hash('sha256',json_encode($data,JSON_UNESCAPED_UNICODE|JSON_THROW_ON_ERROR));exit;
 }
 if ($command!=='render') throw new RuntimeException('Unknown fixture command');

@@ -123,7 +123,9 @@
       wrap.addEventListener('scroll',schedule,{passive:true});
       const observer=new ResizeObserver(schedule);[wrap,table,toolbar].filter(Boolean).forEach(element=>observer.observe(element));
       new MutationObserver(schedule).observe(table,{childList:true,subtree:true,attributes:true,attributeFilter:['hidden','class']});
-      schedule();
+      // Mark wide tables and establish their inner scroll before the registry
+      // advertises readiness. The first paint and browser gates use this state.
+      update();
     });
   }
   function mount(root) {
