@@ -7,6 +7,11 @@
 
   const search = document.querySelector('.logistics-filter input[name="q"]');
   const showAll = document.querySelector('.lab-show-all input');
+  const reviewFilters = document.querySelector('[data-review-filters]');
+  const allStatuses = reviewFilters?.querySelector('[data-review-all]');
+  const statusFilters = [...(reviewFilters?.querySelectorAll('[data-review-status-filter]') || [])];
+  const foundCount = reviewFilters?.querySelector('[data-review-found]');
+  const resetFilter = reviewFilters?.querySelector('[data-review-reset]');
   const body = dialog.querySelector('.lab-review-dialog-body');
   const confirm = dialog.querySelector('.lab-review-confirm');
   const cancel = dialog.querySelector('.lab-review-cancel');
@@ -25,8 +30,9 @@
     const term = (search?.value || '').trim().toLowerCase();
     let visible = 0;
     root.querySelectorAll('[data-review-group]').forEach((group) => {
-      const enabled = (reviewerMode && group.dataset.reviewGroup !== 'archive')
-        || group.dataset.reviewGroup === 'work' || !!showAll?.checked;
+      const enabled = reviewerMode
+        ? !!statusFilters.find((filter) => filter.value === group.dataset.reviewGroup)?.checked
+        : group.dataset.reviewGroup === 'work' || !!showAll?.checked;
       let matches = 0;
       group.querySelectorAll('.logistics-trip').forEach((trip) => {
         const found = !term || trip.textContent.toLowerCase().includes(term);
@@ -37,13 +43,30 @@
       visible += matches;
     });
     root.querySelector('.lab-review-empty').hidden = visible > 0;
+    if (reviewerMode) {
+      foundCount.textContent = String(visible);
+      allStatuses.checked = statusFilters.every((filter) => filter.checked);
+      resetFilter.hidden = !term && statusFilters.every((filter) => filter.checked === (filter.value !== 'archive'));
+    }
   };
   root.querySelectorAll('.logistics-trip[data-review-status]').forEach((trip) => {
     if (trip.dataset.reviewStatus === (reviewerMode ? 'review' : 'work')) return;
     trip.querySelectorAll('[data-autosave-form] input, [data-autosave-form] textarea, [data-upload-form] input, [data-upload-form] button, .lab-docs-remove, .lab-docs-no-tn').forEach((control) => { control.disabled = true; });
   });
   search?.addEventListener('input', refreshFilter);
+  reviewFilters?.addEventListener('submit', (event) => event.preventDefault());
   showAll?.addEventListener('change', refreshFilter);
+  allStatuses?.addEventListener('change', () => {
+    statusFilters.forEach((filter) => { filter.checked = allStatuses.checked; });
+    refreshFilter();
+  });
+  statusFilters.forEach((filter) => filter.addEventListener('change', refreshFilter));
+  resetFilter?.addEventListener('click', () => {
+    statusFilters.forEach((filter) => { filter.checked = filter.value !== 'archive'; });
+    search.value = '';
+    refreshFilter();
+    search.focus();
+  });
   refreshFilter();
 
   const close = () => { if (!busy) dialog.close(); };

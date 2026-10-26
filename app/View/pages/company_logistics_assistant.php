@@ -30,17 +30,31 @@ $statusChoice=static function(string $name,string $selected,array $options):void
 <?php if($formError):?><div class="notice warn"><?=e((string)$formError)?></div><?php endif;?>
 <?php if($error):?><div class="notice warn"><?=e((string)$error)?></div><?php else:?>
 <?php if($reviewerMode):?><div class="panel tn-review-shell"><?php endif;?>
-<div class="metric-grid logistics-metrics">
-  <div class="metric-card"><div class="metric-label"><?=$reviewerMode?'Рейсов на проверке':'Рейсов в работе'?></div><div class="metric-value"><?=(int)$metrics['trips']?></div></div>
+<?php if(!$reviewerMode):?><div class="metric-grid logistics-metrics">
+  <div class="metric-card"><div class="metric-label">Рейсов в работе</div><div class="metric-value"><?=(int)$metrics['trips']?></div></div>
   <div class="metric-card"><div class="metric-label">Заявок всего</div><div class="metric-value"><?=(int)$metrics['requests']?></div></div>
   <div class="metric-card"><div class="metric-label">Полностью собрано</div><div class="metric-value"><?=(int)$metrics['ready']?></div></div>
   <div class="metric-card"><div class="metric-label">Требуют дополнения</div><div class="metric-value"><?=(int)$metrics['problems']?></div></div>
-</div>
+</div><?php endif;?>
+<?php if($reviewerMode):?>
+<form method="get" action="<?=app_url($basePath)?>" class="table-toolbar registry-ui-toolbar logistics-filter" data-review-filters>
+  <div class="registry-ui-checkboxes">
+    <div class="found-label">Найдено: <b data-review-found>0</b></div>
+    <span class="filter-sep" aria-hidden="true"></span>
+    <label class="registry-ui-checkbox"><input type="checkbox" name="all_statuses" value="1" data-review-all>Показать все</label>
+    <label class="registry-ui-checkbox"><input type="checkbox" name="status[]" value="work" data-review-status-filter checked>В работе</label>
+    <label class="registry-ui-checkbox"><input type="checkbox" name="status[]" value="review" data-review-status-filter checked>На проверке</label>
+    <label class="registry-ui-checkbox"><input type="checkbox" name="status[]" value="archive" data-review-status-filter>Архив</label>
+  </div>
+  <div class="toolbar-right"><button type="button" class="registry-ui-reset" hidden data-review-reset>Сбросить фильтр</button><input class="toolbar-search registry-ui-search" type="search" name="q" value="<?=e($query)?>" placeholder="Поиск" aria-label="Поиск по рейсам и заявкам"></div>
+</form>
+<?php else:?>
 <form method="get" action="<?=app_url($basePath)?>" class="table-toolbar logistics-filter">
   <input type="hidden" name="filter" value="1">
-  <label class="logistics-check lab-show-all"><input type="checkbox" name="show_all_trips" value="1"> <?=$reviewerMode?'Показать архив':'Показать все рейсы'?></label>
+  <label class="logistics-check lab-show-all"><input type="checkbox" name="show_all_trips" value="1"> Показать все рейсы</label>
   <div class="toolbar-right"><input class="toolbar-search" type="search" name="q" value="<?=e($query)?>" placeholder="Рейс, заявка, водитель, менеджер" aria-label="Поиск по рейсам и заявкам"></div>
 </form>
+<?php endif;?>
 <section class="logistics-workspace" aria-label="Рейсы для обработки" data-logistics-assistant data-reviewer-mode="<?=$reviewerMode?'1':'0'?>">
   <?php foreach(['work'=>'В работе','review'=>'На проверке','archive'=>'Проверено / архив'] as $groupStatus=>$groupName):
     $groupTrips=array_values(array_filter($trips,static fn(array $trip):bool=>$trip['review_status']===$groupStatus));?>
