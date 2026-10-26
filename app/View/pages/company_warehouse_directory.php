@@ -71,15 +71,17 @@ $contactCount = static function (int $count): string {
                 <label class="field"><span class="field-label">Полный адрес</span><input class="field-input" name="address" maxlength="500" required value="<?= e((string)$warehouse['address']) ?>"></label>
                 <label class="field"><span class="field-label">Широта</span><input class="field-input" name="latitude" type="text" inputmode="decimal" value="<?= e((string)($warehouse['latitude'] ?? '')) ?>" aria-label="Широта склада"></label>
                 <label class="field"><span class="field-label">Долгота</span><input class="field-input" name="longitude" type="text" inputmode="decimal" value="<?= e((string)($warehouse['longitude'] ?? '')) ?>" aria-label="Долгота склада"></label>
-                <div class="field"><span class="field-label">Контакты склада</span><div class="registry-ui-modal-grid" data-warehouse-contacts>
+                <div class="registry-ui-modal-grid"><span class="field-label">Контакты склада</span><div class="registry-ui-modal-grid" data-warehouse-contacts>
                     <?php foreach ($contacts as $index => $contact): ?>
-                    <fieldset class="registry-ui-modal-grid" data-warehouse-contact>
-                        <legend class="field-label">Контакт <?= $index + 1 ?></legend>
+                    <fieldset data-warehouse-contact>
+                        <legend class="registry-ui-modal-summary">Контакт <?= $index + 1 ?></legend>
+                        <div class="registry-ui-modal-grid">
                         <label class="field"><span class="field-label">ФИО</span><input class="field-input" name="contact_name[]" maxlength="255" value="<?= e((string)($contact['name'] ?? '')) ?>"></label>
                         <label class="field"><span class="field-label">Должность</span><input class="field-input" name="contact_position[]" maxlength="255" value="<?= e((string)($contact['position'] ?? '')) ?>"></label>
                         <label class="field"><span class="field-label">Телефон</span><input class="field-input" name="contact_phone[]" type="tel" maxlength="80" value="<?= e((string)($contact['phone'] ?? '')) ?>"></label>
                         <label class="field"><span class="field-label">Email</span><input class="field-input" name="contact_email[]" type="email" maxlength="255" value="<?= e((string)($contact['email'] ?? '')) ?>"></label>
                         <button type="button" class="btn btn-ghost" data-warehouse-remove-contact>Удалить контакт</button>
+                        </div>
                     </fieldset>
                     <?php endforeach; ?>
                 </div><button type="button" class="btn btn-secondary" data-warehouse-add-contact>Добавить контакт</button></div>
@@ -104,13 +106,15 @@ $contactCount = static function (int $count): string {
         <?php endif; ?>
     </dialog>
     <?php endforeach; ?>
-    <template data-warehouse-contact-template><fieldset class="registry-ui-modal-grid" data-warehouse-contact>
-        <legend class="field-label">Контакт</legend>
+    <template data-warehouse-contact-template><fieldset data-warehouse-contact>
+        <legend class="registry-ui-modal-summary">Контакт</legend>
+        <div class="registry-ui-modal-grid">
         <label class="field"><span class="field-label">ФИО</span><input class="field-input" name="contact_name[]" maxlength="255"></label>
         <label class="field"><span class="field-label">Должность</span><input class="field-input" name="contact_position[]" maxlength="255"></label>
         <label class="field"><span class="field-label">Телефон</span><input class="field-input" name="contact_phone[]" type="tel" maxlength="80"></label>
         <label class="field"><span class="field-label">Email</span><input class="field-input" name="contact_email[]" type="email" maxlength="255"></label>
         <button type="button" class="btn btn-ghost" data-warehouse-remove-contact>Удалить контакт</button>
+        </div>
     </fieldset></template>
     <?php endif; ?>
 </div>
