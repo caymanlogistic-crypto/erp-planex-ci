@@ -18,9 +18,11 @@ final class WasteTripClosingTransportService
         require_once base_path('app/Support/core_runtime.php');
         $marks=implode(',',array_fill(0,count($tripIds),'?'));
         $stmt=$pdo->prepare("SELECT wt.id trip_id,vs.id set_id,vs.set_type,
+                responsible.membership_id responsible_membership_id,
                 vu1.id primary_id,vu1.plate_number primary_plate,vu1.brand primary_brand,
                 vu2.id secondary_id,vu2.plate_number secondary_plate,vu2.brand secondary_brand
             FROM waste_trips wt
+            LEFT JOIN users responsible ON responsible.id=wt.responsible_user_id
             LEFT JOIN crews c ON c.id=wt.route_executor_id AND c.deleted_at IS NULL
             LEFT JOIN driver_vehicle_blocks dvb ON dvb.id=c.driver_vehicle_block_id AND dvb.deleted_at IS NULL
             LEFT JOIN vehicle_sets vs ON vs.id=dvb.vehicle_set_id AND vs.deleted_at IS NULL
@@ -45,6 +47,10 @@ final class WasteTripClosingTransportService
             foreach ($query->fetchAll(PDO::FETCH_ASSOC) as $doc) $documents[(int)$doc['entity_id']][]=$doc;
         }
         $result=[];$editable=[];
+        $closingMembershipId=AccessRuntime::current()->isActive()
+            && WasteTripClosingService::isRegistryRoute()
+            && AccessControlService::canAccessPage('company.documents.trip_closing_registry')
+            ? AccessControlService::effectiveMembershipId() : null;
         $rules=vehicleSetTypeRules();
         foreach ($rows as $row) {
             $setType=(string)($row['set_type']??'');
@@ -55,7 +61,9 @@ final class WasteTripClosingTransportService
                 if ($unitId<=0) continue;
                 $accessKey=(int)$row['set_id'].':'.$unitId;
                 $editable[$accessKey]??=self::canEditUnit($pdo,(int)$row['set_id'],$unitId);
-                $canUpload=$editable[$accessKey];
+                $canUpload=$editable[$accessKey]
+                    || ($closingMembershipId!==null && $closingMembershipId>0
+                        && $closingMembershipId===(int)($row['responsible_membership_id']??0));
                 $units[]=[
                     'id'=>$unitId,'role'=>$role,'label'=>(string)$rule['label'],
                     'plate'=>(string)($row[$role.'_plate']??''),'brand'=>(string)($row[$role.'_brand']??''),

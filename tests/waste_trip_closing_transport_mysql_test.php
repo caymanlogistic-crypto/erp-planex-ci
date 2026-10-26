@@ -5,8 +5,12 @@ require_once dirname(__DIR__).'/bootstrap/app.php';
 require_once BASE_PATH.'/app/Support/company_database.php';
 require_once BASE_PATH.'/app/Security/EffectiveAccess.php';
 require_once BASE_PATH.'/app/Security/AccessRuntime.php';
+require_once BASE_PATH.'/app/Service/AccessControlService.php';
+require_once BASE_PATH.'/app/Service/WasteTripClosingService.php';
 require_once BASE_PATH.'/app/Service/WasteTripClosingTransportService.php';
 
+use App\Security\AccessRuntime;
+use App\Security\EffectiveAccess;
 use App\Service\WasteTripClosingTransportService as Transport;
 
 $database=(string)getenv('PLANEX_TEST_FIXED_DB');
@@ -19,7 +23,8 @@ cleanCompanyPoolDatabase($pdo);
 try {
     $_SESSION['role_code']='company_owner';
     $_SESSION['user_id']=1;
-    $pdo->exec("CREATE TABLE waste_trips(id INT PRIMARY KEY,route_executor_id INT,status VARCHAR(20),deleted_at DATETIME NULL) ENGINE=InnoDB;
+    $pdo->exec("CREATE TABLE users(id INT PRIMARY KEY,membership_id INT NOT NULL) ENGINE=InnoDB;
+        CREATE TABLE waste_trips(id INT PRIMARY KEY,route_executor_id INT,responsible_user_id INT,status VARCHAR(20),deleted_at DATETIME NULL) ENGINE=InnoDB;
         CREATE TABLE crews(id INT PRIMARY KEY,driver_vehicle_block_id INT,deleted_at DATETIME NULL) ENGINE=InnoDB;
         CREATE TABLE driver_vehicle_blocks(id INT PRIMARY KEY,vehicle_set_id INT,deleted_at DATETIME NULL) ENGINE=InnoDB;
         CREATE TABLE vehicle_sets(id INT PRIMARY KEY,set_type VARCHAR(20),primary_vehicle_unit_id INT,secondary_vehicle_unit_id INT NULL,deleted_at DATETIME NULL,created_by_user_id INT NULL) ENGINE=InnoDB;
@@ -27,7 +32,8 @@ try {
         CREATE TABLE document_types(id INT PRIMARY KEY,code VARCHAR(30)) ENGINE=InnoDB;
         CREATE TABLE entity_access_grants(id INT PRIMARY KEY,entity_type VARCHAR(30),entity_id INT,granted_to_user_id INT,access_level VARCHAR(20),revoked_at DATETIME NULL) ENGINE=InnoDB;
         CREATE TABLE documents(id INT PRIMARY KEY,entity_type VARCHAR(20),entity_id INT,document_type_id INT,original_name VARCHAR(100),deleted_at DATETIME NULL) ENGINE=InnoDB;
-        INSERT INTO waste_trips VALUES(1,11,'completed',NULL),(2,12,'completed',NULL),(3,13,'completed',NULL);
+        INSERT INTO users VALUES(10,71),(11,72);
+        INSERT INTO waste_trips VALUES(1,11,10,'completed',NULL),(2,12,10,'completed',NULL),(3,13,10,'completed',NULL),(4,11,11,'completed',NULL);
         INSERT INTO crews VALUES(11,21,NULL),(12,22,NULL),(13,23,NULL);
         INSERT INTO driver_vehicle_blocks VALUES(21,31,NULL),(22,32,NULL),(23,33,NULL);
         INSERT INTO vehicle_sets VALUES(31,'single',101,NULL,NULL,NULL),(32,'coupling',102,103,NULL,NULL),(33,'road_train',104,105,NULL,NULL);
@@ -55,7 +61,31 @@ try {
         || !empty($withoutEdit[2]['units'][1]['can_upload']) || $withoutEdit[2]['units'][1]['documents']!==[]) {
         throw new RuntimeException('Existing vehicle card must satisfy the trip without document edit access or exposing its files');
     }
+    $_SERVER['REQUEST_URI']='/company/logistics/closing-documents';
+    AccessRuntime::setCurrent(EffectiveAccess::member(71,1,
+        ['company.documents.trip_closing_registry'=>true,'company.vehicle_sets'=>false],
+        ['waste_trip'=>'none','vehicle_unit'=>'none'],'logist'));
+    $assigned=Transport::forTrips($pdo,[1,2,4]);
+    if (empty($assigned[1]['units'][0]['can_upload']) || empty($assigned[2]['units'][0]['can_upload'])
+        || empty($assigned[2]['units'][1]['can_upload']) || count($assigned[2]['units'][1]['documents'])!==2
+        || !empty($assigned[4]['units'][0]['can_upload'])) {
+        throw new RuntimeException('Closing card access must follow the assigned trip, including both units, without leaking a shared vehicle to another trip');
+    }
+    AccessRuntime::setCurrent(EffectiveAccess::member(71,1,
+        ['company.documents.trip_closing_registry'=>false,'company.vehicle_sets'=>false],
+        ['waste_trip'=>'none','vehicle_unit'=>'none'],'logist'));
+    if (!empty(Transport::forTrips($pdo,[1])[1]['units'][0]['can_upload'])) {
+        throw new RuntimeException('Closing card upload must require the closing registry page');
+    }
+    AccessRuntime::setCurrent(EffectiveAccess::member(71,1,
+        ['company.documents.trip_closing_registry'=>true,'company.vehicle_sets'=>false],
+        ['waste_trip'=>'none','vehicle_unit'=>'none'],'logist'));
+    $_SERVER['REQUEST_URI']='/company/trips/closing-documents';
+    if (!empty(Transport::forTrips($pdo,[1])[1]['units'][0]['can_upload'])) {
+        throw new RuntimeException('Closing registry permission must not extend to a different route');
+    }
     echo "WASTE_TRIP_CLOSING_TRANSPORT=PASS\n";
 } finally {
+    AccessRuntime::clear();
     cleanCompanyPoolDatabase($pdo);
 }
