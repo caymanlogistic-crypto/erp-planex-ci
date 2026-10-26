@@ -162,9 +162,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "07b7c974da4fb55d631688c3cebb5b48a2198490",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/07b7c974da4fb55d631688c3cebb5b48a2198490/tests/system_notifications_browser_test.mjs",
-      "verification_note": "2026-10-25: the approved v003 notification center was added to the shared UI catalog and generator. The existing registry iframe is byte-identical through its closing tag. Local catalog, gallery/lab browser, style guard and system notification browser checks PASS; prior owning control-plane paths remain unchanged.",
+      "verified_sha": "069b80bc3b1b075ff8b96db7f0bfb25f96575a5f",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/069b80bc3b1b075ff8b96db7f0bfb25f96575a5f/.github/workflows/ci.yml",
+      "verification_note": "2026-10-26: PR #475 static job reached its 15-minute limit after runner dependency setup and was canceled during approved UI browser QA. The existing static job timeout is 40 minutes in the implementation commit; the LOCAL CRITICAL preflight and approved UI browser checks pass before publication.",
       "owning_paths": [
         ".github/workflows/ci.yml",
         ".github/workflows/erpv2_fast_release.yml",
