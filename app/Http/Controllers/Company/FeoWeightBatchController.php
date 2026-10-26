@@ -8,6 +8,8 @@ use App\Service\FeoPlacementAuthorService;
 use App\Service\FeoRequestService;
 use App\Service\FeoWeightBatchService;
 use App\Service\FeoWeightChangeNotificationService;
+use App\Service\FeoTransferTripWarningService;
+use App\Service\MaxEventNotificationService;
 use PDO;
 use RuntimeException;
 
@@ -70,6 +72,16 @@ final class FeoWeightBatchController
                 (string)($_POST['name'] ?? ''), (string)($_POST['comment'] ?? ''),
                 function (int $batchId, array $changes) use ($notifications, $pdo, $company, $actor, &$deliveryIds): void {
                     $deliveryIds = $notifications->enqueue($pdo, $changes, 'batch:'.$batchId.':apply', 'Изменение веса, блок #'.$batchId, $company, $actor);
+                    if ($deliveryIds !== []) {
+                        $events = new MaxEventNotificationService($pdo);
+                        $requestNumbers = array_column($changes, 'request_id');
+                        foreach ((new FeoTransferTripWarningService())->intents($pdo, $requestNumbers, FeoTransferTripWarningService::WEIGHT_HEADER) as $intent) {
+                            $id = $events->enqueuePrepared(FeoWeightChangeNotificationService::EVENT_KEY,
+                                'weight:batch:'.$batchId.':route_warning:p'.$intent['part'],
+                                $intent['text'], $intent['format'], (int)$actor['created_by_user_id']);
+                            if ($id !== null) $deliveryIds[] = $id;
+                        }
+                    }
                 });
             return $result + ['notification'=>$notifications->dispatch($pdo, $deliveryIds)];
         });
@@ -89,6 +101,14 @@ final class FeoWeightBatchController
         });
     }
 
+    public function deleteReturned(string $id): void
+    {
+        $this->respond(function () use ($id): array {
+            [, $pdo] = $this->context();
+            return $this->service->deleteReturned($pdo, $this->id($id));
+        });
+    }
+
     public function detail(string $id): void
     {
         $this->respond(function () use ($id): array {
@@ -96,6 +116,7 @@ final class FeoWeightBatchController
             $query = $pdo->prepare('SELECT * FROM feo_weight_batches WHERE id=?'); $query->execute([$batchId]);
             $batch = $query->fetch(PDO::FETCH_ASSOC);
             if (!$batch) throw new RuntimeException('Блок не найден.');
+            if ($batch['status'] === 'deleted') throw new RuntimeException('Блок удалён.');
             $items = array_map(static function (array $item): array { unset($item['legacy_snapshot_json']); return $item; }, $this->service->items($pdo, $batchId));
             return ['batch'=>$batch, 'items'=>$items];
         });

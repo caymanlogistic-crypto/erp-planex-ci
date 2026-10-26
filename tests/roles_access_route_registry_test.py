@@ -37,11 +37,11 @@ for path in sorted((ROOT / "app/Http/Routes").glob("*.php")):
         company_routes.append(item)
         if argc < 3: unmapped.append(item)
 
-assert len(company_routes) == 434, f"company route inventory drift: {len(company_routes)}"
+assert len(company_routes) == 435, f"company route inventory drift: {len(company_routes)}"
 assert ("app/Http/Routes/company_linear_trips.php", "/company/warehouses/addresses") in company_routes
 assert ("app/Http/Routes/company_feo_transfers.php", "/company/feo/requests/transfers/{id}/delete") in company_routes
 assert "[$feoTransferController,'deleteReturned'],$feoTransfersPage" in (ROOT / "app/Http/Routes/company_feo_transfers.php").read_text(encoding="utf-8")
-for endpoint in ('/company/feo/requests/weights', '/company/feo/requests/weights/preview', '/company/feo/requests/weights/create', '/company/feo/requests/weights/{id}/json', '/company/feo/requests/weights/{id}/revert'):
+for endpoint in ('/company/feo/requests/weights', '/company/feo/requests/weights/preview', '/company/feo/requests/weights/create', '/company/feo/requests/weights/{id}/json', '/company/feo/requests/weights/{id}/revert', '/company/feo/requests/weights/{id}/delete'):
     assert ('app/Http/Routes/company_feo_weights.php', endpoint) in company_routes
 assert ("app/Http/Routes/company_linear_trips.php", "/company/trips/gps-coverage") in company_routes
 assert ("app/Http/Routes/company_linear_trips.php", "/company/trips/gps-coverage/{id}/coverage") in company_routes

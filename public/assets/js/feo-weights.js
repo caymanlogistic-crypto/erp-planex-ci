@@ -15,6 +15,8 @@
   const detailTitle = find('#weight-detail-title');
   const detailRevert = find('[data-detail-revert]');
   const confirmRevert = find('[data-confirm-revert]');
+  const detailDelete = find('[data-delete-returned]');
+  const confirmDelete = find('[data-confirm-delete-returned]');
   let previewToken = '';
   let rows = [];
   let revision = 0;
@@ -165,6 +167,8 @@
     detailDialog.classList.remove(detailItems.length === 1 ? 'registry-ui-modal--reading' : 'registry-ui-modal--weight-single');
     detailRevert.hidden=detailBatch.status!=='applied';
     confirmRevert.hidden=true;
+    detailDelete.hidden=detailBatch.status!=='reverted';
+    confirmDelete.hidden=true;
     if (!detailDialog.open) detailDialog.showModal();
   }
   function showConfirm() {
@@ -174,7 +178,20 @@
     detailDialog.classList.add('registry-ui-modal--confirmation');
     detailRevert.hidden=true;
     confirmRevert.hidden=false;
+    detailDelete.hidden=true;
+    confirmDelete.hidden=true;
     if (!detailDialog.open) detailDialog.showModal();
+  }
+  function showDeleteConfirm() {
+    if (!detailBatch || detailBatch.status!=='reverted') return;
+    detailTitle.textContent=`Изменение веса #${detailBatch.id}`;
+    detailBody.innerHTML=`<div class="registry-ui-modal-confirm"><p class="registry-ui-modal-text">Удалить отключённый блок #${escape(detailBatch.id)} из списка? Вес заявок уже возвращён; текущий вес не изменится. История сохранится.</p><div class="field-msg is-error" data-delete-error role="alert" hidden></div></div>`;
+    detailDialog.classList.remove('registry-ui-modal--reading','registry-ui-modal--weight-single');
+    detailDialog.classList.add('registry-ui-modal--confirmation');
+    detailRevert.hidden=true;
+    confirmRevert.hidden=true;
+    detailDelete.hidden=true;
+    confirmDelete.hidden=false;
   }
   async function loadDetail(id, confirm=false) {
     const result=await request(`/${id}/json`);
@@ -197,11 +214,21 @@
     if (row && !event.target.closest('[data-detail]')) loadDetail(row.dataset.registryRowId).catch(error=>pageMessage(error.message,'danger'));
   });
   detailRevert.addEventListener('click',showConfirm);
+  detailDelete.addEventListener('click',showDeleteConfirm);
   confirmRevert.addEventListener('click',async () => {
     if (confirmRevert.disabled || !detailBatch) return;
     confirmRevert.disabled=true; setError('[data-revert-error]','');
     try { completed(await request(`/${detailBatch.id}/revert`,new FormData()),'возвращён'); }
     catch(error) { setError('[data-revert-error]',error.message); confirmRevert.disabled=false; }
+  });
+  confirmDelete.addEventListener('click',async () => {
+    if (confirmDelete.disabled || !detailBatch || detailBatch.status!=='reverted') return;
+    confirmDelete.disabled=true; setError('[data-delete-error]','');
+    try {
+      const result=await request(`/${detailBatch.id}/delete`,new FormData());
+      sessionStorage.setItem('feo-weight-result',JSON.stringify({message:`Отключённый блок #${result.batch_id} удалён из списка.`,warning:false}));
+      location.reload();
+    } catch(error) { setError('[data-delete-error]',error.message); confirmDelete.disabled=false; }
   });
   const historyRows=[...root.querySelectorAll('[data-batch-row]')];
   const search=find('[data-history-search]'), returned=find('[data-show-returned]'), weightMode=find('[data-weight-mode]');

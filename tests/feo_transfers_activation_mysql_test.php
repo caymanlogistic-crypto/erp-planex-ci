@@ -32,7 +32,7 @@ try {
     foreach ($result['events'] as $event=>$state) {
         $ok($state['enabled'] && (int)$state['chat_config_id']===$chat,'Copy exact current-company placement routing');
         $s=$pdo->prepare('SELECT * FROM max_event_rules WHERE event_key=?');$s->execute([$event]);$r=$s->fetch(PDO::FETCH_ASSOC);
-        $requiredVariable = $event === 'feo.request.weight_changed' ? '{{changes}}'
+        $requiredVariable = $event === 'feo.request.weight_changed' ? '{{standard_changes}}'
             : ($event === 'feo.transfer.reverted' ? '{{returned_requests}}' : '{{request_ids}}');
         $ok(str_contains($r['message_template'],$requiredVariable) && (int)$r['notify']===0,'Event template and notify preference preserved');
     }

@@ -12,3 +12,4 @@ $router->post('/company/feo/requests/weights/preview', [$feoWeightController, 'p
 $router->post('/company/feo/requests/weights/create', [$feoWeightController, 'create'], $feoWeightPage);
 $router->get('/company/feo/requests/weights/{id}/json', [$feoWeightController, 'detail'], $feoWeightPage);
 $router->post('/company/feo/requests/weights/{id}/revert', [$feoWeightController, 'revert'], $feoWeightPage);
+$router->post('/company/feo/requests/weights/{id}/delete', [$feoWeightController, 'deleteReturned'], $feoWeightPage);

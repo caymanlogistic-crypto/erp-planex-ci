@@ -1,0 +1,25 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "id": "feo-weight-notifications-archive-20261026",
+  "date": "2026-10-26",
+  "status": "OWNER_APPROVED",
+  "source": {
+    "actor": "OWNER",
+    "instruction": "Сообщение MAX об изменении веса одной заявки: отдельные строки номера, нетто и брутто без блока и секции ЗАЯВКИ. Возврат к исходному весу тем же компактным способом. У возвращённого блока веса — удаление по аналогии с перемещением. При создании блока — отдельное предупреждение об активных рейсах по аналогии с переносом.",
+    "supersedes": "docs/FEO_WEIGHT_BATCHES.md: old default MAX body for single-request blocks; docs/ui/REGISTRY_CANON.md: returned weight block footer with only Cancel",
+    "release_gate": "Production schema migration 163 requires separate task-specific OWNER authorization; no runtime deploy of archival action before migration."
+  },
+  "scope": ["/erpv2/company/feo/requests/weights: returned detail and confirmation", "MAX weight change and active trip warning"],
+  "visible_role_provenance": {
+    "returned_detail": "Existing registry-ui-modal--weight-single/read-only table. Existing btn-danger only for returned status, left of existing btn-ghost Cancel.",
+    "delete_confirmation": "Existing registry-ui-modal--confirmation (<=640px), modal text, shared red btn-danger and field-msg is-error; no new one-off classes, colors, fonts or control dimensions.",
+    "messages": "Existing event rule and MAX chat. Single request Markdown has bold title and ID, separate net/gross lines. Historical multi-request body and custom templates preserved. Trip warning reuses FeoTransferTripWarningService selection, grouping, splitting and ordering."
+  },
+  "implementation": {
+    "view": "app/View/pages/company_feo_weight_batches.php",
+    "behavior": "public/assets/js/feo-weights.js",
+    "shared_style": "public/assets/css/registry-components.css",
+    "server": ["app/Service/FeoWeightBatchService.php", "app/Service/FeoWeightChangeNotificationService.php", "app/Service/MaxEventNotificationService.php", "app/Service/FeoTransferTripWarningService.php"],
+    "schema": "database/migrations-local/163_feo_weight_deleted_status.sql"
+  }
+}

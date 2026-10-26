@@ -24,7 +24,7 @@ cleanCompanyPoolDatabase($pdo);
 try {
     $service = new FeoWeightBatchService();
     $ok(!$service->ready($pdo), 'Pre-migration state');
-    foreach (['122_create_feo_requests.sql', '133_create_max_integration.sql', '136_create_max_event_notifications.sql', '160_create_feo_weight_batches.sql', '162_feo_weight_legacy_snapshot.sql'] as $file) $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-local/'.$file));
+    foreach (['122_create_feo_requests.sql', '133_create_max_integration.sql', '136_create_max_event_notifications.sql', '160_create_feo_weight_batches.sql', '162_feo_weight_legacy_snapshot.sql', '163_feo_weight_deleted_status.sql'] as $file) $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-local/'.$file));
     $ok($service->ready($pdo), 'Schema ready');
     $ddl=(string)$pdo->query('SHOW CREATE TABLE feo_requests')->fetchColumn(1);
     $ddl=preg_replace('/,\n\s+CONSTRAINT[^\n]+/','',$ddl);
@@ -72,6 +72,8 @@ try {
     $ok(count($snapshots)===1 && json_decode($snapshots[0]['legacy_snapshot_json'],true)['before']['mass_brutto']==='1.50','Legacy before values saved');
     $repeat = $service->create($pdo, $preview, $targets, $actor, hash('sha256','apply'), '', '');
     $ok(!empty($repeat['already_applied']) && $repeat['batch_id'] === $batchId, 'Retry is idempotent');
+    try { $service->deleteReturned($pdo, $batchId); throw new RuntimeException('Active block deleted'); }
+    catch (RuntimeException $error) { $ok(str_contains($error->getMessage(), 'только возвращённый блок'), 'Active block cannot be deleted'); }
     $pdo->exec("UPDATE feo_requests SET mass_brutto=1.8000 WHERE zayavka_id='100001'");
     $reject(fn()=>$service->revert($pdo, $batchId, $actor), 'Later gross change prevents revert');
     $ok($pdo->query("SELECT mass_netto FROM feo_requests WHERE zayavka_id='100001'")->fetchColumn() === '1.3000', 'Rejected revert leaves tenant net');
@@ -87,6 +89,22 @@ try {
     $ok($rows[0]['mass_netto'] === '1.2500' && $rows[0]['mass_brutto'] === '1.6000' && $rows[1]['mass_brutto'] === '2.3000', 'Original net and gross restored; second untouched');
     $ok($pdo->query("SELECT mass_brutto FROM feo WHERE zayavka_id='100001'")->fetchColumn() === '1.50', 'Original legacy gross restored');
     $ok(!empty($service->revert($pdo, $batchId, $actor)['already_reverted']), 'Revert retry is idempotent');
+    $tenantBeforeDelete=$pdo->query("SELECT mass_netto,mass_brutto FROM feo_requests WHERE zayavka_id='100001'")->fetch(PDO::FETCH_ASSOC);
+    $legacyBeforeDelete=$pdo->query("SELECT mass_netto,mass_brutto,legacy_note FROM feo WHERE zayavka_id='100001'")->fetch(PDO::FETCH_ASSOC);
+    $itemsBeforeDelete=count($service->items($pdo,$batchId));
+    $messagesBeforeDelete=(int)$pdo->query('SELECT COUNT(*) FROM max_event_deliveries')->fetchColumn();
+    $deleted=$service->deleteReturned($pdo,$batchId);
+    $ok($deleted['batch_id']===$batchId && !$deleted['already_deleted'],'Returned block archived');
+    $ok($pdo->query('SELECT status FROM feo_weight_batches WHERE id='.$batchId)->fetchColumn()==='deleted'
+        && count($service->items($pdo,$batchId))===$itemsBeforeDelete, 'Batch and item history retained after archive');
+    $ok(!in_array($batchId,array_column($service->batches($pdo,1),'id'),false),'Archived block hidden from registry');
+    $ok($pdo->query("SELECT mass_netto,mass_brutto FROM feo_requests WHERE zayavka_id='100001'")->fetch(PDO::FETCH_ASSOC)===$tenantBeforeDelete
+        && $pdo->query("SELECT mass_netto,mass_brutto,legacy_note FROM feo WHERE zayavka_id='100001'")->fetch(PDO::FETCH_ASSOC)===$legacyBeforeDelete,
+        'Archiving leaves tenant and legacy weights untouched');
+    $ok($service->deleteReturned($pdo,$batchId)['already_deleted'],'Archive retry is idempotent');
+    $ok((int)$pdo->query('SELECT COUNT(*) FROM max_event_deliveries')->fetchColumn()===$messagesBeforeDelete,'Archiving and retry create no MAX notification');
+    $reject(fn()=>$service->revert($pdo,$batchId,$actor),'Archived block cannot be returned again');
+    $reject(fn()=>$service->create($pdo,$preview,$targets,$actor,hash('sha256','apply'),'',''),'Archived operation key cannot resurrect the block');
     // The compact editor must preserve the service's distinction between empty, zero and 0.1 kg.
     putenv('FEO_LEGACY_SYNC_TENANT_DATABASE=');
     putenv('FEO_LEGACY_SYNC_DATABASE=');
