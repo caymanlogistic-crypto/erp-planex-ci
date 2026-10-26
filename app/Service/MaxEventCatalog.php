@@ -17,6 +17,11 @@ final class MaxEventCatalog
     private const PREVIOUS_TRANSFER_REVERTED_TEMPLATE = "Возвращён пакет перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
     private const CURRENT_TRANSFER_CREATED_TEMPLATE = "Создан блок перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
     private const CURRENT_TRANSFER_REVERTED_TEMPLATE = "Возвращён блок перемещения №{{batch_id}}: {{batch_name}}\nЗаявок: {{request_count}}\nНомера заявок: {{request_ids}}\nМесто назначения: {{address}}\nКачество координат: {{quality}}\nИзменения:\n{{changes}}\nАвтор: {{author}}\n{{company}} · {{created_at}}\n{{comment}}";
+    private const LEGACY_WEIGHT_TEMPLATE = "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}";
+    private const PREVIOUS_WEIGHT_TEMPLATE = "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nНетто: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\nБрутто: {{old_gross_kg}} → {{new_gross_kg}} кг ({{gross_difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}";
+    // Exact previous production rule, read on 26.10.2026; OWNER approved replacing this old format.
+    private const PRODUCTION_WEIGHT_TEMPLATE_20261026 = "ВЕС ЗАЯВКИ ИЗМЕНИСЯ\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}";
+    private const WEIGHT_TEMPLATE = "{{action_title}}\n{{scope}}\nЗАЯВКИ\n{{changes}}";
 
     public static function all(): array
     {
@@ -122,8 +127,11 @@ final class MaxEventCatalog
             'feo.request.weight_changed' => [
                 'title' => 'ФЭО — изменён вес заявок',
                 'description' => 'После фактического изменения массы нетто или брутто существующих заявок вручную, блоком либо через применение, откат, возврат или удаление импорта.',
-                'template' => "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nНетто: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\nБрутто: {{old_gross_kg}} → {{new_gross_kg}} кг ({{gross_difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}",
+                'template' => self::WEIGHT_TEMPLATE,
                 'variables' => [
+                    'action_title'=>['Заголовок операции','ИЗМЕНЕНИЕ ВЕСА ЗАЯВОК'],
+                    'scope'=>['Блок или другой источник изменения','Блок #42'],
+                    'request_ids'=>['Номера заявок','123456, 123457'],
                     'source'=>['Источник изменения','Импорт ФЭО #42'],
                     'part'=>['Часть сообщения','Часть 1 из 2'],
                     'request_count'=>['Число заявок','12'],
@@ -133,7 +141,7 @@ final class MaxEventCatalog
                     'old_gross_kg'=>['Общая масса брутто до изменения, кг','25 900'],
                     'new_gross_kg'=>['Общая масса брутто после изменения, кг','26 600'],
                     'gross_difference_kg'=>['Изменение общей массы брутто, кг','+700'],
-                    'changes'=>['Заявки и изменение веса','№123456: 1 000 → 1 200 кг (+200 кг)'],
+                    'changes'=>['Заявки и изменение веса',"№123456: нетто 1 000 → 1 200 кг (+200 кг)\n№123457: брутто 1 100 → 1 300 кг (+200 кг)"],
                     'author'=>['Ответственный','Владимир С.'],
                     'company'=>['Компания','Пример компании'],
                     'created_at'=>['Дата и время','21.09.2026 15:30'],
@@ -174,7 +182,10 @@ final class MaxEventCatalog
                 : [self::LEGACY_TRANSFER_REVERTED_TEMPLATE, self::PREVIOUS_TRANSFER_REVERTED_TEMPLATE, self::CURRENT_TRANSFER_REVERTED_TEMPLATE];
             if ($knownDefault === '' || in_array($knownDefault, $knownTemplates, true)) return self::event($key)['template'];
         }
-        if ($key === 'feo.request.weight_changed' && ($stored === '' || $stored === "ФЭО — ИЗМЕНЁН ВЕС ЗАЯВОК\n{{part}}\nИсточник: {{source}}\nЗаявок: {{request_count}}\nОбщая масса: {{old_mass_kg}} → {{new_mass_kg}} кг ({{difference_kg}} кг)\n{{changes}}\nОтветственный: {{author}}\n{{company}} · {{created_at}}")) return self::event($key)['template'];
+        if ($key === 'feo.request.weight_changed') {
+            $knownDefault = str_replace("\r\n", "\n", $stored);
+            if ($knownDefault === '' || in_array($knownDefault, [self::LEGACY_WEIGHT_TEMPLATE, self::PREVIOUS_WEIGHT_TEMPLATE, self::PRODUCTION_WEIGHT_TEMPLATE_20261026], true)) return self::WEIGHT_TEMPLATE;
+        }
         return $stored;
     }
 
@@ -190,7 +201,7 @@ final class MaxEventCatalog
 
     public static function formatForTemplate(string $key, string $stored, string $template): string
     {
-        if (in_array($key, ['feo.transfer.created', 'feo.transfer.reverted'], true)
+        if (in_array($key, ['feo.transfer.created', 'feo.transfer.reverted', 'feo.request.weight_changed'], true)
             && self::currentTemplate($key, $template) === self::event($key)['template']) return 'markdown';
         return self::systemFormat($key, $stored);
     }
@@ -219,7 +230,7 @@ final class MaxEventCatalog
         if (trim($template) === '' || mb_strlen($template) > 4000) throw new RuntimeException('Шаблон должен содержать от 1 до 4000 символов.');
         $literal = preg_replace('/\{\{\s*([^{}]+?)\s*\}\}/u', '', $template);
         if ($literal === null || str_contains($literal, '{{') || str_contains($literal, '}}')) throw new RuntimeException('Проверьте скобки переменных: {{название}}.');
-        $text = preg_replace_callback('/\{\{\s*([^{}]+?)\s*\}\}/u', static function (array $m) use ($event, $values, $format, $key): string {
+        $text = preg_replace_callback('/\{\{\s*([^{}]+?)\s*\}\}/u', static function (array $m) use ($event, $values, $format, $key, $template): string {
             $name = trim($m[1]);
             if (!isset($event['variables'][$name])) throw new RuntimeException('Неизвестная переменная: {{' . $name . '}}.');
             if (!array_key_exists($name, $values) || !is_scalar($values[$name])) throw new RuntimeException('Нет значения переменной: ' . $name . '.');
@@ -232,6 +243,13 @@ final class MaxEventCatalog
             }
             if ($key === 'feo.transfer.reverted' && $name === 'returned_requests' && $format === 'markdown') {
                 return implode("\n", array_map(static fn(string $line): string => '**' . preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $line) . '**', explode("\n", $value)));
+            }
+            if ($key === 'feo.request.weight_changed' && $name === 'changes' && $format === 'markdown' && $template === self::WEIGHT_TEMPLATE) {
+                return implode("\n", array_map(static function (string $line): string {
+                    if (!preg_match('/^№([0-9]+): (.*)$/u', $line, $parts)) return preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $line);
+                    $detail = preg_replace('/([\\\\`*_{}\[\]()#+.!>~|=\-^])/u', '\\\\$1', $parts[2]);
+                    return '**' . $parts[1] . '**: ' . $detail;
+                }, explode("\n", $value)));
             }
             if (in_array($key,['route_executor.partial','route_executor.full'],true) && $name==='missing') return $value;
             if ($format === 'html') return htmlspecialchars($value, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');

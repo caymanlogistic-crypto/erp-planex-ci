@@ -1,0 +1,22 @@
+{
+  "schema": "planex-approved-ui-decisions/v1",
+  "date": "2026-10-26",
+  "scope": "Склады → Адреса складов",
+  "owner_decisions": [
+    "Существующие склады из складского журнала; новый отдельный список складов не создавать.",
+    "Руководитель редактирует адрес и контакты, логисты просматривают.",
+    "У склада может быть несколько контактов: ФИО, должность, телефон, email.",
+    "Реестр показывает краткую сводку контактов; полный список открыт в попапе.",
+    "Компактный попап шириной до 640 px; системная иконка шапки map-pin."
+  ],
+  "approved_reuse": {
+    "page_head": "registry-ui-head; app/View/partials/registry_ui_head.php",
+    "registry": "registry-ui-card, registry-ui-toolbar, registry-ui-search, registry-ui-table, registry-ui-sticky-table",
+    "modal_shell": "registry-ui-modal with opt-in registry-ui-modal--warehouse-directory 640 px",
+    "modal_body": "registry-ui-modal-grid and system field-input fields",
+    "typography": "IBM Plex Sans; ordinary 12/500, name 12/600, secondary contacts 11/500",
+    "colors": "Existing registry-components.css and erp-ui.css semantic palette only",
+    "address": "Full text with natural wrapping in registry and dialog"
+  },
+  "storage_boundary": "Existing warehouse address remains in the warehouse row; contacts use a new table linked to its ID. Production schema and data writes require separate authorization."
+}

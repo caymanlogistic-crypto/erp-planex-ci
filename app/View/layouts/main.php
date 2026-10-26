@@ -46,7 +46,8 @@ $linearTripsActive = str_starts_with($requestPath, '/company/trips/linear');
 $departuresActive = str_starts_with($requestPath, '/company/trips/departures');
 $gpsCoverageActive = str_starts_with($requestPath, '/company/trips/gps-coverage');
 $warehouseStockActive = str_starts_with($requestPath, '/company/warehouses/stock');
-$warehousesOpen = $warehouseStockActive;
+$warehouseAddressesActive = str_starts_with($requestPath, '/company/warehouses/addresses');
+$warehousesOpen = $warehouseStockActive || $warehouseAddressesActive;
 $managerStatisticsActive = str_starts_with($requestPath, '/company/statistics/managers');
 $feoShareStatisticsActive = str_starts_with($requestPath, '/company/statistics/feo-share');
 $cargoBalanceStatisticsActive = str_starts_with($requestPath, '/company/statistics/cargo-balance');
@@ -429,7 +430,7 @@ if (empty($topbarCrumbs)) {
                     <a class="nav-sub-item<?= $gpsCoverageActive ? ' is-active' : '' ?>" href="<?= app_url('/company/trips/gps-coverage') ?>"><span>Покрытие GPS</span></a>
                 </div>
                 <div class="nav-item is-parent<?= $warehousesOpen ? ' is-open is-active' : '' ?>"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M1.5 4.5h5l1.5 2h6v6.5H1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span class="nav-label">Склады</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?><svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4"/></svg></div>
-                <div class="nav-sub<?= $warehousesOpen ? ' is-open' : '' ?>"><a class="nav-sub-item<?= $warehouseStockActive ? ' is-active' : '' ?>" href="<?=app_url('/company/warehouses/stock')?>"><span>Заявки на складе</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?></a></div>
+                <div class="nav-sub<?= $warehousesOpen ? ' is-open' : '' ?>"><a class="nav-sub-item<?= $warehouseStockActive ? ' is-active' : '' ?>" href="<?=app_url('/company/warehouses/stock')?>"><span>Заявки на складе</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?></a><a class="nav-sub-item<?= $warehouseAddressesActive ? ' is-active' : '' ?>" href="<?= app_url('/company/warehouses/addresses') ?>"><span>Адреса складов</span></a></div>
                 <div class="nav-item is-parent<?= $feoRequestsOpen ? ' is-open is-active' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
                         <path d="M3 2.5H10L13 5.5V13.5H3V2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>
@@ -664,7 +665,7 @@ if (empty($topbarCrumbs)) {
                     <a class="nav-sub-item<?= $gpsCoverageActive ? ' is-active' : '' ?>" href="<?= app_url('/company/trips/gps-coverage') ?>"><span>Покрытие GPS</span></a>
                 </div>
                 <div class="nav-item is-parent<?= $warehousesOpen ? ' is-open is-active' : '' ?>"><svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M1.5 4.5h5l1.5 2h6v6.5H1.5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg><span class="nav-label">Склады</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?><svg class="nav-chevron" viewBox="0 0 14 14" fill="none"><path d="M5 3L9 7L5 11" stroke="currentColor" stroke-width="1.4"/></svg></div>
-                <div class="nav-sub<?= $warehousesOpen ? ' is-open' : '' ?>"><a class="nav-sub-item<?= $warehouseStockActive ? ' is-active' : '' ?>" href="<?=app_url('/company/warehouses/stock')?>"><span>Заявки на складе</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?></a></div>
+                <div class="nav-sub<?= $warehousesOpen ? ' is-open' : '' ?>"><a class="nav-sub-item<?= $warehouseStockActive ? ' is-active' : '' ?>" href="<?=app_url('/company/warehouses/stock')?>"><span>Заявки на складе</span><?php if (($navigationCounters['warehouse_stock_problem'] ?? 0) > 0): ?><span class="nav-count is-alert"><?=(int)$navigationCounters['warehouse_stock_problem']?></span><?php endif; ?></a><a class="nav-sub-item<?= $warehouseAddressesActive ? ' is-active' : '' ?>" href="<?= app_url('/company/warehouses/addresses') ?>"><span>Адреса складов</span></a></div>
                 <div class="nav-item is-parent<?= $feoRequestsOpen ? ' is-open is-active' : '' ?>">
                     <svg class="nav-icon" viewBox="0 0 16 16" fill="none">
                         <path d="M3 2.5H10L13 5.5V13.5H3V2.5Z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/>

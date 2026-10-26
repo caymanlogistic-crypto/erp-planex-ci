@@ -539,6 +539,7 @@
 .registry-ui-modal{box-sizing:border-box;width:min(1230px,calc(100vw - 32px));padding:0;transform:none;overflow:hidden}
 .registry-ui-modal--reading{width:min(900px,calc(100vw - 32px))}
 .registry-ui-modal--confirmation{width:min(640px,calc(100vw - 32px))}
+.registry-ui-modal--warehouse-directory{width:min(640px,calc(100vw - 32px))}
 .registry-ui-modal::backdrop{background:rgba(10,9,8,.58)}
 .registry-ui-modal-form{display:flex;flex:1;min-height:0;flex-direction:column;padding:0;margin:0}
 .registry-ui-modal-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:8px;align-items:start}
