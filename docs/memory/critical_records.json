@@ -248,9 +248,9 @@
       "semantic_class": "IMPLEMENTATION",
       "truth_status": "VERIFIED",
       "criticality": "CRITICAL",
-      "verified_sha": "ce7d6c86ee634958d4581f50cc7ae8ba2689fc81",
-      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ce7d6c86ee634958d4581f50cc7ae8ba2689fc81/tests/feo_transfers_access_mysql_test.php",
-      "verification_note": "2026-10-26: shared access test covers returned weight block archival, tenant isolation and idempotency; transfer access and transfer MySQL contracts PASS. Shared active-trip warning selection is reused for weight; transfer warning text remains byte-identical. No transfer runtime or business behavior changed.",
+      "verified_sha": "ee01a1a6b0eee58c1dc4dd0298b967dd578a07c3",
+      "evidence": "https://github.com/caymanlogistic-crypto/erp-planex-ci/blob/ee01a1a6b0eee58c1dc4dd0298b967dd578a07c3/tests/feo_transfers_activation_mysql_test.php",
+      "verification_note": "2026-10-26: shared access test covers returned weight archive and isolation; transfer access/MySQL contracts PASS. Transfer activation test now expects the current weight standard variable `standard_changes` and preserves MAX routing/notify choice; focused activation MySQL PASS. Shared trip warning selection is reused for weight without changing transfer output.",
       "owning_paths": [
         "app/Service/FeoTransferService.php",
         "app/Service/FeoLocationOverrideService.php",
