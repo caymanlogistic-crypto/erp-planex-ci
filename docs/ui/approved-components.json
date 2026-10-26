@@ -839,7 +839,7 @@
       "reference_select": false,
       "sticky": true,
       "asset_owner": "app/View/pages/company_warehouse_directory.php",
-      "browser_test": "tests/warehouse_directory_runtime_browser_test.mjs",
+      "browser_test": "tests/warehouse_directory_canon_browser_test.mjs",
       "runtime_browser_test": "tests/warehouse_directory_runtime_browser_test.mjs",
       "data_roles": ["id", "name", "primary", "secondary", "missing"],
       "table_surfaces": [{
@@ -850,7 +850,7 @@
       "table_states": [{"id": "initial", "visible": ["main"], "data": {"main": "populated"}}],
       "async_search": {"applicable": false, "reason": "Search filters loaded warehouse rows locally."},
       "contract_sources": ["app/View/pages/company_warehouse_directory.php", "tests/fixtures/warehouse_directory_runtime.php"],
-      "required_contracts": ["tests/warehouse_directory_mysql_test.php"]
+      "required_contracts": []
     },
     {
       "id": "feo-weights",
