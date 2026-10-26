@@ -75,6 +75,10 @@ try {
   assert.equal(await page.locator('[data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Registrar cannot edit a trip under review');
   await page.goto('http://127.0.0.1:'+server.address().port+'/reviewer',{waitUntil:'networkidle'});
   assert.equal(await page.locator('.lab-review-status').count(),0,'Reviewer rows must not repeat review status badges');
+  const reviewHead=page.locator('.registry-ui-head');
+  assert.equal(await reviewHead.getByRole('heading',{name:'Проверка ТН'}).count(),1,'Reviewer uses the approved registry header');
+  assert.equal(await reviewHead.locator('svg.icon-tabler-file-text').count(),1,'Reviewer uses the selected named Tabler icon');
+  assert.equal(await reviewHead.locator('.page-summary').innerText(),'Рейсы в работе и на проверке. Проверенные рейсы переносятся в архив.');
   const layout=await page.evaluate(()=>{const box=selector=>document.querySelector(selector)?.getBoundingClientRect();const shell=box('.workspace-shell-1690'),head=box('.page-head'),panel=box('.tn-review-shell'),metrics=box('.logistics-metrics'),workspace=box('.logistics-workspace');return {shellWidth:shell?.width,headLeft:head?.left,panelLeft:panel?.left,panelWidth:panel?.width,metricsLeft:metrics?.left,workspaceLeft:workspace?.left,workspaceRight:workspace?.right,panelRight:panel?.right,bodyScroll:document.documentElement.scrollWidth,viewport:innerWidth,panelBorder:getComputedStyle(document.querySelector('.tn-review-shell')).borderLeftWidth};});
   assert.ok(layout.shellWidth<=1690 && layout.shellWidth>=1200,'Reviewer uses centered standard workspace width');
   assert.ok(Math.abs(layout.headLeft-layout.panelLeft)<=1,'Header and panel share one alignment grid');
@@ -82,13 +86,20 @@ try {
   assert.notEqual(layout.panelBorder,'0px','Reviewer panel retains standard box border');
   assert.ok(layout.bodyScroll<=layout.viewport+1,'Reviewer page has no horizontal overflow');
   await page.setViewportSize({width:1920,height:1080});
+  const headStyle=await reviewHead.evaluate(element=>({height:element.getBoundingClientRect().height,titleSize:getComputedStyle(element.querySelector('.page-title')).fontSize,iconWidth:element.querySelector('svg').getBoundingClientRect().width}));
+  assert.deepEqual(headStyle,{height:58,titleSize:'19px',iconWidth:30},'Reviewer header keeps approved desktop dimensions');
   const wideLayout=await page.evaluate(()=>{const main=document.querySelector('main').getBoundingClientRect(),shell=document.querySelector('.workspace-shell-1690').getBoundingClientRect();return {shellWidth:shell.width,leftGap:shell.left-main.left,rightGap:main.right-shell.right,scroll:document.documentElement.scrollWidth,viewport:innerWidth};});
   assert.ok(wideLayout.shellWidth<=1690 && Math.abs(wideLayout.leftGap-wideLayout.rightGap)<=1,'Reviewer box is capped and centered like MAX on a wide desktop');
   assert.ok(wideLayout.scroll<=wideLayout.viewport+1,'Wide reviewer page has no horizontal overflow');
-  if(process.env.PLANEX_SCREENSHOT_DIR){fs.mkdirSync(process.env.PLANEX_SCREENSHOT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-1920.png')});}
-  assert.equal(await page.locator('.lab-review-group--work').count(),0,'Reviewer must not see new work trips');
+  if(process.env.PLANEX_SCREENSHOT_DIR){fs.mkdirSync(process.env.PLANEX_SCREENSHOT_DIR,{recursive:true});await reviewHead.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-header-1920.png')});await reviewHead.locator('.page-head-left').screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-header-left-1920.png')});}
+  assert.equal(await page.locator('.lab-review-group--work').isVisible(),true,'Reviewer sees work trips alongside review trips');
   assert.equal(await page.locator('.lab-review-group--review').isVisible(),true);
   assert.equal(await page.locator('.lab-review-group--archive').isVisible(),false);
+  await page.locator('.lab-review-group--work summary').click();
+  assert.equal(await page.locator('.lab-review-group--work .lab-docs-name').count(),1,'Reviewer sees scans on work trips');
+  assert.equal(await page.locator('.lab-review-group--work .lab-docs-download').count(),1,'Reviewer can download scans on work trips');
+  assert.equal(await page.locator('.lab-review-group--work [data-autosave-form] input[name="pickup_interval"]').first().isDisabled(),true,'Work trips are read only for reviewer');
+  assert.equal(await page.locator('.lab-review-group--work [data-review-form]').count(),0,'Reviewer cannot move an unfinished trip to archive');
   await page.locator('.lab-review-group--review summary').click();
   assert.equal(await page.locator('.lab-review-group--review [data-autosave-form] input[name="pickup_interval"]').first().isEnabled(),true,'Reviewer must be able to edit a trip under review');
   assert.deepEqual((await page.locator('.lab-review-group--review .logistics-trip-toolbar button[type="submit"]').allTextContents()).map(text=>text.trim()),['Вернуть на доработку','Переместить в архив'],'Return action precedes archive');
@@ -111,6 +122,7 @@ try {
   await page.locator('.lab-review-group--review summary').click();
   const mobile=await page.evaluate(()=>({scroll:document.documentElement.scrollWidth,viewport:innerWidth}));
   assert.ok(mobile.scroll<=mobile.viewport+1,'Reviewer actions must not create mobile horizontal overflow');
+  if(process.env.PLANEX_SCREENSHOT_DIR){await reviewHead.screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-header-390.png')});await reviewHead.locator('.page-head-left').screenshot({path:path.join(process.env.PLANEX_SCREENSHOT_DIR,'reviewer-header-left-390.png')});}
   await page.goto('http://127.0.0.1:'+server.address().port+'/reviewer-empty',{waitUntil:'networkidle'});
   assert.equal(await page.locator('.tn-review-shell').isVisible(),true,'Empty reviewer state keeps the standard panel');
   assert.equal(await page.locator('.lab-review-group--review').isVisible(),true,'Empty reviewer state keeps its group heading');
