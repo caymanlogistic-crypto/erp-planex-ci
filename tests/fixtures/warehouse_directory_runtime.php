@@ -31,12 +31,18 @@ if ($command === 'seed') {
     $insert->execute([58,'Склад без адреса','']);
     $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-legacy/001_warehouse_contacts.sql'));
     $pdo->exec(file_get_contents(BASE_PATH.'/database/migrations-legacy/002_warehouse_coordinates.sql'));
-    $pdo->exec('CREATE TABLE drivers(id BIGINT PRIMARY KEY,full_name VARCHAR(255),vehicle_make_plate VARCHAR(255))');
+    if ($pdo->query("SHOW TABLES LIKE 'drivers'")->fetchColumn() === false) {
+        $pdo->exec('CREATE TABLE drivers(id BIGINT PRIMARY KEY,full_name VARCHAR(255),vehicle_make_plate VARCHAR(255))');
+    } elseif (!in_array('vehicle_make_plate', $pdo->query('SHOW COLUMNS FROM drivers')->fetchAll(PDO::FETCH_COLUMN), true)) {
+        $pdo->exec('ALTER TABLE drivers ADD COLUMN vehicle_make_plate VARCHAR(255) NULL');
+    }
     $pdo->exec('CREATE TABLE flights(id BIGINT PRIMARY KEY,comment VARCHAR(500),status VARCHAR(40),route_type VARCHAR(40),source_warehouse_id BIGINT,destination_warehouse_id BIGINT,actual_start_date DATETIME,actual_end_date DATETIME,zayavki_ids TEXT,direct_zayavki_ids TEXT,driver_id BIGINT)');
     $pdo->exec('CREATE TABLE warehouse_movements(id BIGINT PRIMARY KEY,movement_type VARCHAR(40),warehouse_id BIGINT,flight_id BIGINT,zayavka_id VARCHAR(80),mass_netto DECIMAL(12,3),movement_date DATETIME,created_at DATETIME,updated_at DATETIME,status VARCHAR(40),comment TEXT)');
     $pdo->exec('CREATE TABLE waste_trips(id BIGINT PRIMARY KEY,business_id BIGINT,comment VARCHAR(500),status VARCHAR(40),actual_start_date DATETIME,legacy_flight_id BIGINT,legacy_source_warehouse_id BIGINT,legacy_destination_warehouse_id BIGINT,deleted_at DATETIME)');
     $pdo->exec('CREATE TABLE waste_trip_requests(id BIGINT PRIMARY KEY,waste_trip_id BIGINT,removed_at DATETIME,feo_request_id BIGINT,snapshot_mass_kg INT,position_no INT)');
-    $pdo->exec('CREATE TABLE feo_requests(id BIGINT PRIMARY KEY,zayavka_id VARCHAR(80))');
+    if ($pdo->query("SHOW TABLES LIKE 'feo_requests'")->fetchColumn() === false) {
+        $pdo->exec('CREATE TABLE feo_requests(id BIGINT PRIMARY KEY,zayavka_id VARCHAR(80))');
+    }
     $pdo->exec("INSERT INTO flights VALUES(300,'Поставка на склад','completed','utilizer_to_warehouse',NULL,7,'2026-10-20 09:00:00','2026-10-20 11:00:00','З-1, З-2','З-1, З-2',NULL)");
     $pdo->exec("INSERT INTO warehouse_movements VALUES(1,'receipt',7,300,'З-1',1.250,'2026-10-20 11:00:00','2026-10-20 11:00:00','2026-10-20 11:00:00','active',NULL),(2,'receipt',7,300,'З-2',2.500,'2026-10-20 11:01:00','2026-10-20 11:01:00','2026-10-20 11:01:00','active',NULL)");
     $contacts = json_encode([
@@ -47,7 +53,7 @@ if ($command === 'seed') {
     echo 'SEEDED'; exit;
 }
 if ($command === 'cleanup') {
-    foreach (['feo_requests','waste_trip_requests','waste_trips','warehouse_movements','flights','drivers','warehouse_contacts','warehouses'] as $table) $pdo->exec('DROP TABLE '.$table);
+    foreach (['waste_trip_requests','waste_trips','warehouse_movements','flights','warehouse_contacts','warehouses'] as $table) $pdo->exec('DROP TABLE '.$table);
     echo 'CLEANED'; exit;
 }
 if ($command === 'fingerprint') {
